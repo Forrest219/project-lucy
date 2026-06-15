@@ -1,0 +1,584 @@
+{
+  "connectionId": "mysql-aliyun",
+  "accepted": [
+    {
+      "id": "openclaw_db.customers:(openclaw_db.customers.region_id)->openclaw_db.dim_region:(openclaw_db.dim_region.region_id)",
+      "status": "accepted",
+      "source": "formal",
+      "from": {
+        "tableId": "openclaw_db.customers",
+        "columnIds": [
+          "openclaw_db.customers.region_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "customers"
+        },
+        "columns": [
+          "region_id"
+        ]
+      },
+      "to": {
+        "tableId": "openclaw_db.dim_region",
+        "columnIds": [
+          "openclaw_db.dim_region.region_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "dim_region"
+        },
+        "columns": [
+          "region_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 1,
+      "pkScore": null,
+      "fkScore": null,
+      "score": 1,
+      "evidence": {
+        "source": "formal_metadata"
+      },
+      "validation": {
+        "status": "formal_metadata"
+      },
+      "graph": null,
+      "reasons": [
+        "formal_metadata_accepted"
+      ]
+    },
+    {
+      "id": "openclaw_db.orders:(openclaw_db.orders.customer_id)->openclaw_db.customers:(openclaw_db.customers.customer_id)",
+      "status": "accepted",
+      "source": "formal",
+      "from": {
+        "tableId": "openclaw_db.orders",
+        "columnIds": [
+          "openclaw_db.orders.customer_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "orders"
+        },
+        "columns": [
+          "customer_id"
+        ]
+      },
+      "to": {
+        "tableId": "openclaw_db.customers",
+        "columnIds": [
+          "openclaw_db.customers.customer_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "customers"
+        },
+        "columns": [
+          "customer_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 1,
+      "pkScore": null,
+      "fkScore": null,
+      "score": 1,
+      "evidence": {
+        "source": "formal_metadata"
+      },
+      "validation": {
+        "status": "formal_metadata"
+      },
+      "graph": null,
+      "reasons": [
+        "formal_metadata_accepted"
+      ]
+    },
+    {
+      "id": "openclaw_db.orders:(openclaw_db.orders.product_id)->openclaw_db.products:(openclaw_db.products.product_id)",
+      "status": "accepted",
+      "source": "formal",
+      "from": {
+        "tableId": "openclaw_db.orders",
+        "columnIds": [
+          "openclaw_db.orders.product_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "orders"
+        },
+        "columns": [
+          "product_id"
+        ]
+      },
+      "to": {
+        "tableId": "openclaw_db.products",
+        "columnIds": [
+          "openclaw_db.products.product_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "products"
+        },
+        "columns": [
+          "product_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 1,
+      "pkScore": null,
+      "fkScore": null,
+      "score": 1,
+      "evidence": {
+        "source": "formal_metadata"
+      },
+      "validation": {
+        "status": "formal_metadata"
+      },
+      "graph": null,
+      "reasons": [
+        "formal_metadata_accepted"
+      ]
+    },
+    {
+      "id": "openclaw_db.orders:(openclaw_db.orders.region_id)->openclaw_db.dim_region:(openclaw_db.dim_region.region_id)",
+      "status": "accepted",
+      "source": "formal",
+      "from": {
+        "tableId": "openclaw_db.orders",
+        "columnIds": [
+          "openclaw_db.orders.region_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "orders"
+        },
+        "columns": [
+          "region_id"
+        ]
+      },
+      "to": {
+        "tableId": "openclaw_db.dim_region",
+        "columnIds": [
+          "openclaw_db.dim_region.region_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "dim_region"
+        },
+        "columns": [
+          "region_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 1,
+      "pkScore": null,
+      "fkScore": null,
+      "score": 1,
+      "evidence": {
+        "source": "formal_metadata"
+      },
+      "validation": {
+        "status": "formal_metadata"
+      },
+      "graph": null,
+      "reasons": [
+        "formal_metadata_accepted"
+      ]
+    }
+  ],
+  "review": [
+    {
+      "id": "openclaw_db.bidm_ai_metric_summary_mth:(openclaw_db.bidm_ai_metric_summary_mth.region_id)->openclaw_db.dim_region:(openclaw_db.dim_region.region_id)",
+      "status": "review",
+      "source": "normalized_table_match",
+      "from": {
+        "tableId": "openclaw_db.bidm_ai_metric_summary_mth",
+        "columnIds": [
+          "openclaw_db.bidm_ai_metric_summary_mth.region_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "bidm_ai_metric_summary_mth"
+        },
+        "columns": [
+          "region_id"
+        ]
+      },
+      "to": {
+        "tableId": "openclaw_db.dim_region",
+        "columnIds": [
+          "openclaw_db.dim_region.region_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "openclaw_db",
+          "name": "dim_region"
+        },
+        "columns": [
+          "region_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 0.951,
+      "pkScore": 1,
+      "fkScore": 0.707,
+      "score": 0.571,
+      "evidence": {
+        "sourceColumnBase": "region",
+        "targetTableBase": "region",
+        "targetColumnBase": "region_id",
+        "targetKeyScore": 1,
+        "nameScore": 0.92,
+        "reasons": [
+          "foreign_key_suffix",
+          "target_key_like",
+          "normalized_table_name",
+          "exact_column_name",
+          "llm_proposal",
+          "llm_pk_proposal"
+        ],
+        "signalVector": {
+          "nameSimilarity": 0.92,
+          "typeCompatibility": 1,
+          "valueOverlap": 0,
+          "embeddingSimilarity": 0,
+          "profileUniqueness": 1,
+          "profileNullRate": 0.5,
+          "structuralPrior": 0.5
+        },
+        "scoreBreakdown": {
+          "score": 0.951,
+          "signals": {
+            "nameSimilarity": 0.92,
+            "typeCompatibility": 1,
+            "valueOverlap": 0,
+            "embeddingSimilarity": 0,
+            "profileUniqueness": 1,
+            "profileNullRate": 0.5,
+            "structuralPrior": 0.5
+          },
+          "weights": {
+            "nameSimilarity": 0.24000000000000002,
+            "typeCompatibility": 0.10000000000000002,
+            "valueOverlap": 0.22000000000000003,
+            "embeddingSimilarity": 0.10000000000000002,
+            "profileUniqueness": 0.22000000000000003,
+            "profileNullRate": 0.08000000000000002,
+            "structuralPrior": 0.04000000000000001
+          },
+          "contributions": {
+            "nameSimilarity": 0.2208,
+            "typeCompatibility": 0.1,
+            "valueOverlap": 0,
+            "embeddingSimilarity": 0,
+            "profileUniqueness": 0.22,
+            "profileNullRate": 0.04,
+            "structuralPrior": 0.02
+          }
+        },
+        "llmConfidence": 0.72,
+        "llmRationale": "Name match (region_id), same database (openclaw_db). Minor type mismatch: bigint in summary table vs int in dim_region — likely a safe implicit cast but needs validation. The summary table also carries region_name directly, suggesting it may be a denormalized aggregate rather than a strict FK relationship."
+      },
+      "validation": {
+        "targetUniqueness": 0,
+        "sourceCoverage": 0,
+        "violationCount": 0,
+        "violationRatio": 1,
+        "sourceNullRate": 0,
+        "targetNullRate": 0,
+        "childDistinct": 0,
+        "parentDistinct": 0,
+        "overlap": 0,
+        "checkedValues": 0,
+        "reasons": [
+          "profile_unavailable"
+        ]
+      },
+      "graph": {
+        "targetPkScore": 1,
+        "incomingCandidateCount": 0,
+        "conflictRank": 1,
+        "reasons": [
+          "validation_unavailable_review_only",
+          "target_pk_score_passed",
+          "fk_score_review"
+        ]
+      },
+      "reasons": [
+        "foreign_key_suffix",
+        "target_key_like",
+        "normalized_table_name",
+        "exact_column_name",
+        "llm_proposal",
+        "llm_pk_proposal",
+        "profile_unavailable",
+        "validation_unavailable_review_only",
+        "target_pk_score_passed",
+        "fk_score_review"
+      ]
+    },
+    {
+      "id": "yihe_poc_demo.v_feedback_detail:(yihe_poc_demo.v_feedback_detail.survey_id)->yihe_poc_demo.satisfaction_answer_detail:(yihe_poc_demo.satisfaction_answer_detail.survey_id)",
+      "status": "review",
+      "source": "llm_proposal",
+      "from": {
+        "tableId": "yihe_poc_demo.v_feedback_detail",
+        "columnIds": [
+          "yihe_poc_demo.v_feedback_detail.survey_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "yihe_poc_demo",
+          "name": "v_feedback_detail"
+        },
+        "columns": [
+          "survey_id"
+        ]
+      },
+      "to": {
+        "tableId": "yihe_poc_demo.satisfaction_answer_detail",
+        "columnIds": [
+          "yihe_poc_demo.satisfaction_answer_detail.survey_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "yihe_poc_demo",
+          "name": "satisfaction_answer_detail"
+        },
+        "columns": [
+          "survey_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 0.68,
+      "pkScore": 0.256,
+      "fkScore": 0.55,
+      "score": 0.408,
+      "evidence": {
+        "sourceColumnBase": "survey_id",
+        "targetTableBase": "satisfaction_answer_detail",
+        "targetColumnBase": "survey_id",
+        "targetKeyScore": 0.88,
+        "nameScore": 0.45,
+        "reasons": [
+          "llm_proposal",
+          "llm_pk_proposal"
+        ],
+        "llmConfidence": 0.68,
+        "llmRationale": "v_feedback_detail shares an identical column layout with satisfaction_answer_detail (survey_id, department, doctor, submit_date, hospital, survey_name, question_id, question_text, question_category, question_type, answer, standard_hospital). Almost certainly a view over the same base table, filtered for feedback-related records."
+      },
+      "validation": {
+        "targetUniqueness": 0,
+        "sourceCoverage": 0,
+        "violationCount": 0,
+        "violationRatio": 1,
+        "sourceNullRate": 0,
+        "targetNullRate": 0,
+        "childDistinct": 0,
+        "parentDistinct": 0,
+        "overlap": 0,
+        "checkedValues": 0,
+        "reasons": [
+          "profile_unavailable"
+        ]
+      },
+      "graph": {
+        "targetPkScore": 0.256,
+        "incomingCandidateCount": 3,
+        "conflictRank": 1,
+        "reasons": [
+          "validation_unavailable_review_only",
+          "target_pk_score_low",
+          "fk_score_review"
+        ]
+      },
+      "reasons": [
+        "llm_proposal",
+        "llm_pk_proposal",
+        "profile_unavailable",
+        "validation_unavailable_review_only",
+        "target_pk_score_low",
+        "fk_score_review"
+      ]
+    },
+    {
+      "id": "yihe_poc_demo.v_not_very_satisfied_detail:(yihe_poc_demo.v_not_very_satisfied_detail.survey_id)->yihe_poc_demo.satisfaction_answer_detail:(yihe_poc_demo.satisfaction_answer_detail.survey_id)",
+      "status": "review",
+      "source": "llm_proposal",
+      "from": {
+        "tableId": "yihe_poc_demo.v_not_very_satisfied_detail",
+        "columnIds": [
+          "yihe_poc_demo.v_not_very_satisfied_detail.survey_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "yihe_poc_demo",
+          "name": "v_not_very_satisfied_detail"
+        },
+        "columns": [
+          "survey_id"
+        ]
+      },
+      "to": {
+        "tableId": "yihe_poc_demo.satisfaction_answer_detail",
+        "columnIds": [
+          "yihe_poc_demo.satisfaction_answer_detail.survey_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "yihe_poc_demo",
+          "name": "satisfaction_answer_detail"
+        },
+        "columns": [
+          "survey_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 0.68,
+      "pkScore": 0.256,
+      "fkScore": 0.55,
+      "score": 0.408,
+      "evidence": {
+        "sourceColumnBase": "survey_id",
+        "targetTableBase": "satisfaction_answer_detail",
+        "targetColumnBase": "survey_id",
+        "targetKeyScore": 0.88,
+        "nameScore": 0.45,
+        "reasons": [
+          "llm_proposal",
+          "llm_pk_proposal"
+        ],
+        "llmConfidence": 0.68,
+        "llmRationale": "v_not_very_satisfied_detail has the same column structure as satisfaction_answer_detail. Logically a filtered view (e.g., WHERE answer != 'very satisfied'). survey_id is the shared identifier linking back to the base table."
+      },
+      "validation": {
+        "targetUniqueness": 0,
+        "sourceCoverage": 0,
+        "violationCount": 0,
+        "violationRatio": 1,
+        "sourceNullRate": 0,
+        "targetNullRate": 0,
+        "childDistinct": 0,
+        "parentDistinct": 0,
+        "overlap": 0,
+        "checkedValues": 0,
+        "reasons": [
+          "profile_unavailable"
+        ]
+      },
+      "graph": {
+        "targetPkScore": 0.256,
+        "incomingCandidateCount": 3,
+        "conflictRank": 1,
+        "reasons": [
+          "validation_unavailable_review_only",
+          "target_pk_score_low",
+          "fk_score_review"
+        ]
+      },
+      "reasons": [
+        "llm_proposal",
+        "llm_pk_proposal",
+        "profile_unavailable",
+        "validation_unavailable_review_only",
+        "target_pk_score_low",
+        "fk_score_review"
+      ]
+    },
+    {
+      "id": "yihe_poc_demo.v_wait_time_issue:(yihe_poc_demo.v_wait_time_issue.survey_id)->yihe_poc_demo.satisfaction_answer_detail:(yihe_poc_demo.satisfaction_answer_detail.survey_id)",
+      "status": "review",
+      "source": "llm_proposal",
+      "from": {
+        "tableId": "yihe_poc_demo.v_wait_time_issue",
+        "columnIds": [
+          "yihe_poc_demo.v_wait_time_issue.survey_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "yihe_poc_demo",
+          "name": "v_wait_time_issue"
+        },
+        "columns": [
+          "survey_id"
+        ]
+      },
+      "to": {
+        "tableId": "yihe_poc_demo.satisfaction_answer_detail",
+        "columnIds": [
+          "yihe_poc_demo.satisfaction_answer_detail.survey_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "yihe_poc_demo",
+          "name": "satisfaction_answer_detail"
+        },
+        "columns": [
+          "survey_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 0.68,
+      "pkScore": 0.256,
+      "fkScore": 0.55,
+      "score": 0.408,
+      "evidence": {
+        "sourceColumnBase": "survey_id",
+        "targetTableBase": "satisfaction_answer_detail",
+        "targetColumnBase": "survey_id",
+        "targetKeyScore": 0.88,
+        "nameScore": 0.45,
+        "reasons": [
+          "llm_proposal",
+          "llm_pk_proposal"
+        ],
+        "llmConfidence": 0.68,
+        "llmRationale": "v_wait_time_issue is a view in yihe_poc_demo with an identical column structure to satisfaction_answer_detail, strongly suggesting it is a filtered view over that base table. survey_id (int) is the common linking attribute. No enforced FK is possible on a view, but the logical dependency is high."
+      },
+      "validation": {
+        "targetUniqueness": 0,
+        "sourceCoverage": 0,
+        "violationCount": 0,
+        "violationRatio": 1,
+        "sourceNullRate": 0,
+        "targetNullRate": 0,
+        "childDistinct": 0,
+        "parentDistinct": 0,
+        "overlap": 0,
+        "checkedValues": 0,
+        "reasons": [
+          "profile_unavailable"
+        ]
+      },
+      "graph": {
+        "targetPkScore": 0.256,
+        "incomingCandidateCount": 3,
+        "conflictRank": 1,
+        "reasons": [
+          "validation_unavailable_review_only",
+          "target_pk_score_low",
+          "fk_score_review"
+        ]
+      },
+      "reasons": [
+        "llm_proposal",
+        "llm_pk_proposal",
+        "profile_unavailable",
+        "validation_unavailable_review_only",
+        "target_pk_score_low",
+        "fk_score_review"
+      ]
+    }
+  ],
+  "rejected": [],
+  "skipped": []
+}
