@@ -1,0 +1,208 @@
+tables:
+  customers:
+    table: openclaw_db.customers
+    columns:
+      - name: customer_id
+        type: number
+        pk: true
+        nullable: false
+      - name: customer_name
+        type: string
+        nullable: false
+      - name: customer_type
+        type: string
+        nullable: false
+      - name: customer_level
+        type: string
+        nullable: false
+      - name: region_id
+        type: number
+        nullable: false
+      - name: signup_date
+        type: time
+        nullable: false
+      - name: is_active
+        type: number
+        nullable: false
+      - name: created_at
+        type: time
+        nullable: false
+    joins:
+      - to: dim_region
+        "on": customers.region_id = dim_region.region_id
+        relationship: many_to_one
+        source: formal
+      - to: orders
+        "on": customers.customer_id = orders.customer_id
+        relationship: one_to_many
+        source: formal
+  bidm_ai_metric_summary_mth:
+    table: openclaw_db.bidm_ai_metric_summary_mth
+    columns:
+      - name: data_source
+        type: string
+      - name: updated_at
+        type: time
+      - name: created_at
+        type: time
+      - name: data_end_date
+        type: string
+      - name: data_start_date
+        type: string
+      - name: avg_order_amount
+        type: number
+      - name: unit_cost_avg
+        type: number
+      - name: profit_rate
+        type: number
+      - name: avg_discount_rate
+        type: number
+      - name: avg_unit_price
+        type: number
+      - name: stat_month
+        type: time
+      - name: region_id
+        type: number
+      - name: region_name
+        type: string
+      - name: channel_name
+        type: string
+      - name: category_name
+        type: string
+      - name: customer_type
+        type: string
+      - name: order_cnt
+        type: number
+      - name: row_cnt
+        type: number
+      - name: quantity
+        type: number
+      - name: gross_amount
+        type: number
+      - name: net_amount
+        type: number
+      - name: cost_amount
+        type: number
+      - name: profit_amount
+        type: number
+  dim_region:
+    table: openclaw_db.dim_region
+    columns:
+      - name: region_id
+        type: number
+        pk: true
+        nullable: false
+      - name: region_name
+        type: string
+        nullable: false
+      - name: region_level
+        type: string
+        nullable: false
+      - name: manager_name
+        type: string
+      - name: created_at
+        type: time
+        nullable: false
+    joins:
+      - to: customers
+        "on": dim_region.region_id = customers.region_id
+        relationship: one_to_many
+        source: formal
+      - to: orders
+        "on": dim_region.region_id = orders.region_id
+        relationship: one_to_many
+        source: formal
+  orders:
+    table: openclaw_db.orders
+    columns:
+      - name: order_id
+        type: number
+        pk: true
+        nullable: false
+      - name: order_date
+        type: time
+        nullable: false
+      - name: customer_id
+        type: number
+        nullable: false
+      - name: product_id
+        type: number
+        nullable: false
+      - name: region_id
+        type: number
+        nullable: false
+      - name: quantity
+        type: number
+        nullable: false
+      - name: unit_price
+        type: number
+        nullable: false
+      - name: discount_rate
+        type: number
+        nullable: false
+      - name: gross_amount
+        type: number
+        nullable: false
+      - name: net_amount
+        type: number
+        nullable: false
+      - name: cost_amount
+        type: number
+        nullable: false
+      - name: profit_amount
+        type: number
+        nullable: false
+      - name: order_status
+        type: string
+        nullable: false
+      - name: channel_name
+        type: string
+        nullable: false
+      - name: created_at
+        type: time
+        nullable: false
+    joins:
+      - to: customers
+        "on": orders.customer_id = customers.customer_id
+        relationship: many_to_one
+        source: formal
+      - to: products
+        "on": orders.product_id = products.product_id
+        relationship: many_to_one
+        source: formal
+      - to: dim_region
+        "on": orders.region_id = dim_region.region_id
+        relationship: many_to_one
+        source: formal
+  products:
+    table: openclaw_db.products
+    columns:
+      - name: product_id
+        type: number
+        pk: true
+        nullable: false
+      - name: product_name
+        type: string
+        nullable: false
+      - name: category_name
+        type: string
+        nullable: false
+      - name: subcategory_name
+        type: string
+      - name: unit_price
+        type: number
+        nullable: false
+      - name: unit_cost
+        type: number
+        nullable: false
+      - name: is_active
+        type: number
+        nullable: false
+      - name: created_at
+        type: time
+        nullable: false
+    joins:
+      - to: orders
+        "on": products.product_id = orders.product_id
+        relationship: one_to_many
+        source: formal
