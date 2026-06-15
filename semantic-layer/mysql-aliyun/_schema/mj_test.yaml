@@ -4,48 +4,94 @@ tables:
     columns:
       - name: updated_at
         type: time
+        descriptions:
+          ai: Timestamp of the most recent record modification.
       - name: created_at
         type: time
+        descriptions:
+          ai: Timestamp when the record was first created.
       - name: etl_batch_id
         type: string
+        descriptions:
+          ai: Identifier linking the record to its ETL ingestion batch.
       - name: stats_date
         type: time
+        descriptions:
+          ai: Exact date associated with the reported statistics.
       - name: period_amount
         type: number
+        descriptions:
+          ai: Financial metric value for the specific reporting period.
       - name: stats_yyyymm
         type: string
+        descriptions:
+          ai: Year and month of the statistics in YYYYMM format.
       - name: stats_year
         type: string
+        descriptions:
+          ai: Calendar year of the reported statistics.
       - name: report_period
         type: string
+        descriptions:
+          ai: Label describing the reporting period (e.g., monthly, quarterly).
       - name: report_period_range
         type: string
+        descriptions:
+          ai: Start and end date range covering the reporting period.
       - name: entity_code
         type: string
+        descriptions:
+          ai: Short code uniquely identifying the business entity.
       - name: entity_name
         type: string
+        descriptions:
+          ai: Full name of the business entity or organizational unit.
       - name: statement_section
         type: string
+        descriptions:
+          ai: Section of the financial statement the line item belongs to.
       - name: line_level
         type: number
+        descriptions:
+          ai: Hierarchical depth of the line item within the statement.
       - name: line_order
         type: number
+        descriptions:
+          ai: Numeric sort order for displaying line items sequentially.
       - name: line_code
         type: string
+        descriptions:
+          ai: Unique code identifying a specific financial statement line.
       - name: account_code
         type: string
+        descriptions:
+          ai: Code identifying the associated general ledger account.
       - name: account_name
         type: string
+        descriptions:
+          ai: Descriptive name of the associated general ledger account.
       - name: indicator_name
         type: string
+        descriptions:
+          ai: Name of the financial or performance indicator being measured.
       - name: indicator_unit
         type: string
+        descriptions:
+          ai: Unit of measurement for the indicator (e.g., currency, percentage).
       - name: ytd_amount
         type: number
+        descriptions:
+          ai: Cumulative financial amount from the start of the year.
       - name: load_time
         type: time
+        descriptions:
+          ai: Timestamp when the record was loaded into staging.
       - name: data_source
         type: string
+        descriptions:
+          ai: Name or identifier of the originating upstream data system.
+    descriptions:
+      ai: Staging table for Tableau Prep containing periodic financial statement metrics by entity, account, and reporting period.
   dm_fin_bs_fact:
     table: mj_test.dm_fin_bs_fact
     columns:
@@ -54,107 +100,130 @@ tables:
         nullable: false
         descriptions:
           db: 统计日期(YYYY-MM-DD)，核算月每月一号，例如 2025-09-01
+          ai: First day of the accounting month representing the reporting period.
       - name: stats_yyyymm
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 统计年月(YYYYMM)，例如 202509
+          ai: Year-month identifier (YYYYMM) for the reporting period.
       - name: stats_year
         type: string
         nullable: false
         descriptions:
           db: 统计年度(YYYY)，从统计日期提取，例如 2025
+          ai: Fiscal year extracted from the statistics date.
       - name: report_period
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 核算周期/报告类型标准化，例如 一季报/中报/三季报/年报
+          ai: "Standardized report type label: Q1, mid-year, Q3, or annual."
       - name: report_period_range
         type: string
         descriptions:
           db: 统计期间，例如 202501-202509（按报告期生成）
+          ai: Start-to-end month range covered by the report period.
       - name: entity_name
         type: string
         nullable: false
         descriptions:
           db: 核算主体（当前阶段单一主体）
+          ai: Legal name of the accounting and reporting entity.
       - name: entity_code
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 核算主体编码
+          ai: Unique identifier code for the reporting entity.
       - name: statement_section
         type: string
         descriptions:
           db: 指标类别/报表大类，例如 流动资产/非流动资产/流动负债/非流动负债/所有者权益
+          ai: "Balance sheet category: current assets, liabilities, non-current, or equity."
       - name: line_level
         type: number
         descriptions:
           db: 指标层级/科目层级，例如 1/2/3
+          ai: Hierarchy depth level of the balance sheet line item.
       - name: line_order
         type: number
         descriptions:
           db: 指标排序/展示顺序，例如 10
+          ai: Sequential number controlling the display order of line items.
       - name: line_code
         type: string
         nullable: false
         descriptions:
           db: 指标名称编码（用于指标配置的编码），例如 KM_0001
+          ai: Unique configuration code assigned to each balance sheet indicator.
       - name: account_code
         type: string
         descriptions:
           db: 科目编码（ERP取数），例如 600001（当前置为00）
+          ai: ERP source system chart-of-accounts code for the line item.
       - name: account_name
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 科目名称，例如 货币资金
+          ai: Official account name from the chart of accounts.
       - name: indicator_name
         type: string
         descriptions:
           db: 指标名称（用于前台展示），例如 货币资金
+          ai: Front-end display label for the balance sheet line item.
       - name: indicator_unit
         type: string
         descriptions:
           db: 指标单位，例如 元/%（一般金额单位）
+          ai: Measurement unit for reported values, typically currency or percentage.
       - name: opening_balance
         type: number
         descriptions:
           db: 期初余额（科目金额），例如 123456.78
+          ai: Account monetary balance at the start of the reporting period.
       - name: ending_balance
         type: number
         descriptions:
           db: 期末余额（科目金额），例如 234567.89
+          ai: Account monetary balance at the close of the reporting period.
       - name: data_source
         type: string
         nullable: false
         descriptions:
           db: 数据来源/来源记录，例如 财务报表
+          ai: Origin system or file providing the financial statement data.
       - name: load_time
         type: time
         nullable: false
         descriptions:
           db: 数据更新时间/ETL加载时间(YYYY-MM-DD HH:MM:SS)，例如 2026-01-28 10:30:00
+          ai: Timestamp of the most recent ETL data load or refresh.
       - name: etl_batch_id
         type: string
         descriptions:
           db: ETL批次号/任务实例ID（推荐，用于对账与排障）
+          ai: ETL pipeline batch identifier enabling reconciliation and issue tracing.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 记录创建时间
+          ai: Timestamp when this record row was first inserted.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 记录更新时间
+          ai: Timestamp when this record row was last modified.
     descriptions:
       db: 资产负债事实表；update_mode=monthly_overwrite；粒度=主体+统计年月+核算周期+指标行+科目
+      ai: Financial balance sheet fact table storing period-start and period-end balances per line item, entity, and reporting period.
   dm_fin_cf_fact:
     table: mj_test.dm_fin_cf_fact
     columns:
@@ -163,107 +232,130 @@ tables:
         nullable: false
         descriptions:
           db: 统计日期(YYYY-MM-DD)，核算月每月一号，例如 2025-09-01
+          ai: First day of the accounting month for the reporting period.
       - name: stats_yyyymm
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 统计年月(YYYYMM)，例如 202509
+          ai: Year-month identifier of the accounting period.
       - name: stats_year
         type: string
         nullable: false
         descriptions:
           db: 统计年度(YYYY)，从统计日期提取，例如 2025
+          ai: Fiscal year extracted from the accounting period.
       - name: report_period
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 核算周期/报告类型标准化，例如 一季报/中报/三季报/年报
+          ai: "Standardized financial report type: Q1, interim, Q3, or annual."
       - name: report_period_range
         type: string
         descriptions:
           db: 统计期间，例如 202501-202509（按报告期生成）
+          ai: Start-to-end month range covered by the report period.
       - name: entity_name
         type: string
         nullable: false
         descriptions:
           db: 核算主体（当前阶段单一主体）
+          ai: Legal name of the reporting company or business entity.
       - name: entity_code
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 核算主体编码
+          ai: Internal identifier code for the reporting entity.
       - name: statement_section
         type: string
         descriptions:
           db: 指标类别/报表大类（现金流量表分区/大类）
+          ai: "Cash flow category: operating, investing, or financing activities."
       - name: line_level
         type: number
         descriptions:
           db: 指标层级/科目层级，例如 1/2/3
+          ai: Hierarchy depth of the line item within the statement structure.
       - name: line_order
         type: number
         descriptions:
           db: 指标排序/展示顺序，例如 10
+          ai: Display sequence for ordering line items in reports.
       - name: line_code
         type: string
         nullable: false
         descriptions:
           db: 指标名称编码（用于指标配置的编码），例如 KM_0001
+          ai: Unique configuration code assigned to each financial indicator.
       - name: account_code
         type: string
         descriptions:
           db: 科目编码（ERP取数；当前可能为空）
+          ai: ERP system account code; may be empty in current stage.
       - name: account_name
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 科目名称（当前用于唯一键；科目名称基本稳定）
+          ai: ERP account name serving as the unique key for each line item.
       - name: indicator_name
         type: string
         descriptions:
           db: 指标名称（用于前台展示），例如 经营活动现金流入小计
+          ai: Front-end display label for the financial line item.
       - name: indicator_unit
         type: string
         descriptions:
           db: 指标单位，例如 元/%（一般金额单位）
+          ai: Measurement unit, typically currency (元) or percentage.
       - name: ytd_amount
         type: number
         descriptions:
           db: 累计值（金额类使用DECIMAL避免浮点误差），例如 123456.78
+          ai: Year-to-date cumulative cash flow amount for the indicator.
       - name: period_amount
         type: number
         descriptions:
           db: 当期值（金额类使用DECIMAL避免浮点误差），例如 12345.67
+          ai: Current period cash flow amount for the indicator.
       - name: data_source
         type: string
         nullable: false
         descriptions:
           db: 数据来源/来源记录，例如 财务报表
+          ai: Origin system or report supplying the financial data.
       - name: load_time
         type: time
         nullable: false
         descriptions:
           db: 数据更新时间/ETL加载时间(YYYY-MM-DD HH:MM:SS)，例如 2026-01-28 10:30:00
+          ai: Timestamp when the ETL process loaded this record.
       - name: etl_batch_id
         type: string
         descriptions:
           db: ETL批次号/任务实例ID（推荐，用于对账与排障）
+          ai: ETL job batch identifier used for reconciliation and troubleshooting.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 记录创建时间
+          ai: Timestamp when the record was first inserted into the table.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 记录更新时间
+          ai: Timestamp of the most recent update to this record.
     descriptions:
       db: 现金流量表事实表；update_mode=monthly_overwrite；粒度=主体+统计年月+核算周期+指标行/科目名称
+      ai: Cash flow statement fact table storing periodic line-item amounts by entity, reporting period, and indicator hierarchy.
   dm_fin_pl_fact:
     table: mj_test.dm_fin_pl_fact
     columns:
@@ -272,104 +364,127 @@ tables:
         nullable: false
         descriptions:
           db: 统计日期(YYYY-MM-DD)，核算月每月一号，例如 2025-09-01
+          ai: First day of the accounting month representing the reporting period.
       - name: stats_yyyymm
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 统计年月(YYYYMM)，例如 202509
+          ai: Year-month identifier for the accounting period in YYYYMM format.
       - name: stats_year
         type: string
         nullable: false
         descriptions:
           db: 统计年度(YYYY)，从统计日期提取，例如 2025
+          ai: Calendar year extracted from the statistics date.
       - name: report_period
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 核算周期/报告类型标准化，例如 一季报/中报/三季报/年报
+          ai: "Standardized reporting cycle label: quarterly, semi-annual, or annual report."
       - name: report_period_range
         type: string
         descriptions:
           db: 统计期间，例如 202501-202509（按报告期生成）
+          ai: Start-to-end month range covered by the report period, formatted YYYYMM-YYYYMM.
       - name: entity_name
         type: string
         nullable: false
         descriptions:
           db: 核算主体（当前阶段单一主体）
+          ai: Full legal name of the accounting entity being reported on.
       - name: entity_code
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 核算主体编码
+          ai: Unique numeric identifier for the accounting entity.
       - name: statement_section
         type: string
         descriptions:
           db: 指标类别/报表大类，例如 利润/成本费用
+          ai: High-level P&L category grouping line items, e.g., revenue or cost.
       - name: line_level
         type: number
         descriptions:
           db: 指标层级/科目层级，例如 1/2/3
+          ai: Hierarchy depth of the financial line item within the report structure.
       - name: line_order
         type: number
         descriptions:
           db: 指标排序/展示顺序，例如 10
+          ai: Display sequence number controlling sort order of indicators on reports.
       - name: line_code
         type: string
         nullable: false
         descriptions:
           db: 指标名称编码（用于指标配置的编码），例如 KM_0001
+          ai: Internal configuration code uniquely identifying each financial indicator.
       - name: account_code
         type: string
         descriptions:
           db: 科目编码（ERP取数；当前可能为空）
+          ai: ERP-sourced general ledger account code; may be empty currently.
       - name: account_name
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 科目名称（当前用于唯一键；科目名称基本稳定）
+          ai: General ledger account name; serves as the natural deduplication key.
       - name: indicator_name
         type: string
         descriptions:
           db: 指标名称（用于前台展示），例如 营业收入
+          ai: Front-end display label shown for the financial metric.
       - name: indicator_unit
         type: string
         descriptions:
           db: 指标单位，例如 元/%（一般金额单位）
+          ai: Unit of measurement for the indicator, typically CNY yuan or percentage.
       - name: ytd_amount
         type: number
         descriptions:
           db: 累计值（金额类使用DECIMAL避免浮点误差），例如 123456.78
+          ai: Cumulative year-to-date monetary value for the indicator.
       - name: period_amount
         type: number
         descriptions:
           db: 当期值（金额类使用DECIMAL避免浮点误差），例如 12345.67
+          ai: Single-period monetary value for the current reporting interval.
       - name: data_source
         type: string
         nullable: false
         descriptions:
           db: 数据来源/来源记录，例如 财务报表
+          ai: Origin system supplying the financial data, e.g., EBS_PL.
       - name: load_time
         type: time
         nullable: false
         descriptions:
           db: 数据更新时间/ETL加载时间(YYYY-MM-DD HH:MM:SS)，例如 2026-01-28 10:30:00
+          ai: Timestamp when the ETL process last loaded or refreshed this record.
       - name: etl_batch_id
         type: string
         descriptions:
           db: ETL批次号/任务实例ID（推荐，用于对账与排障）
+          ai: ETL job batch identifier used for reconciliation and troubleshooting.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 记录创建时间
+          ai: Timestamp when the record was first inserted into the table.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 记录更新时间
+          ai: Timestamp of the most recent modification to the record.
     descriptions:
       db: 利润表事实表；update_mode=monthly_overwrite；粒度=主体+统计年月+核算周期+指标行+科目名称
+      ai: Profit and loss fact table storing periodic financial statement line items by entity, reporting period, and account indicator.
