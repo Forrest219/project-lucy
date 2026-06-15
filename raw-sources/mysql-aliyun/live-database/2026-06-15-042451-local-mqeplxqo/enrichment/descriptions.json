@@ -1,0 +1,455 @@
+[
+  {
+    "table": {
+      "catalog": null,
+      "db": "openclaw_db",
+      "name": "customers"
+    },
+    "tableDescription": "Master registry of all customers, capturing identity, segmentation, regional assignment, and account lifecycle status.",
+    "columnDescriptions": {
+      "customer_id": "Unique numeric identifier for each customer record.",
+      "customer_name": "Official business name of the customer organization.",
+      "customer_type": "Business segment classification, such as Enterprise or SMB.",
+      "customer_level": "Tiered value or priority rating assigned to the customer, e.g., A or B.",
+      "region_id": "Foreign key linking the customer to a geographic sales region.",
+      "signup_date": "Date the customer formally enrolled or contracted with the business.",
+      "is_active": "Boolean flag indicating whether the customer account is currently active.",
+      "created_at": "System timestamp recording when the customer record was first inserted."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "openclaw_db",
+      "name": "bidm_ai_metric_summary_mth"
+    },
+    "tableDescription": "Monthly aggregated sales performance metrics segmented by region, sales channel, product category, and customer type for business intelligence analysis.",
+    "columnDescriptions": {
+      "data_source": "Identifies the originating system or dataset for traceability and multi-source management.",
+      "updated_at": "Timestamp of the most recent record update.",
+      "created_at": "Timestamp when the record was first inserted.",
+      "data_end_date": "End date of the source data extraction window in YYYYMMDD format.",
+      "data_start_date": "Start date of the source data extraction window in YYYYMMDD format.",
+      "avg_order_amount": "Average net revenue per order within the segment.",
+      "unit_cost_avg": "Average cost per unit sold within the segment.",
+      "profit_rate": "Net profit as a proportion of net revenue; the profit margin ratio.",
+      "avg_discount_rate": "Average discount percentage applied to orders in the segment.",
+      "avg_unit_price": "Average selling price per unit after discounts are applied.",
+      "stat_month": "Calendar month this summary record represents.",
+      "region_id": "Numeric identifier for the sales region.",
+      "region_name": "Name of the geographic sales region.",
+      "channel_name": "Sales channel classification such as Direct, Partner, or Online.",
+      "category_name": "Product or service category classification.",
+      "customer_type": "Customer segment classification such as Enterprise, SMB, or Individual.",
+      "order_cnt": "Total number of orders within the segment for the month.",
+      "row_cnt": "Number of source data rows aggregated into this record.",
+      "quantity": "Total units sold within the segment for the month.",
+      "gross_amount": "Total revenue before discounts are applied.",
+      "net_amount": "Total revenue after discounts are applied.",
+      "cost_amount": "Total cost of goods sold for the segment.",
+      "profit_amount": "Total profit after deducting costs from net revenue."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "openclaw_db",
+      "name": "dim_region"
+    },
+    "tableDescription": "Dimension table storing geographic sales regions, their hierarchy levels, and responsible managers for Chinese business operations.",
+    "columnDescriptions": {
+      "region_id": "Unique numeric identifier for each geographic region.",
+      "region_name": "Chinese name of the region, such as East or South China.",
+      "region_level": "Hierarchical tier of the region, such as major zone or sub-region.",
+      "manager_name": "Full name of the person accountable for the region.",
+      "created_at": "Timestamp recording when this region record was initially created."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "openclaw_db",
+      "name": "orders"
+    },
+    "tableDescription": "Records individual sales transactions including pricing, discounts, costs, and profit across customers, products, regions, and sales channels.",
+    "columnDescriptions": {
+      "order_id": "Unique identifier for each sales transaction.",
+      "order_date": "Calendar date when the customer placed the order.",
+      "customer_id": "References the customer who placed the order.",
+      "product_id": "References the product purchased in the transaction.",
+      "region_id": "References the geographic sales region associated with the order.",
+      "quantity": "Number of product units purchased in the order.",
+      "unit_price": "Selling price per single unit before any discount is applied.",
+      "discount_rate": "Proportional discount applied to the order; 0.05 equals 5% off.",
+      "gross_amount": "Pre-discount revenue; quantity multiplied by unit price.",
+      "net_amount": "Actual billed revenue after the discount rate is applied.",
+      "cost_amount": "Total cost of goods sold for the order.",
+      "profit_amount": "Financial gain from the order; net amount minus cost.",
+      "order_status": "Current fulfillment state of the order, e.g., completed or pending.",
+      "channel_name": "Sales channel through which the order was placed, e.g., Direct or Online.",
+      "created_at": "Timestamp when the order record was inserted into the system."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "openclaw_db",
+      "name": "products"
+    },
+    "tableDescription": "A catalog of sellable products with pricing, categorization, cost, and availability status.",
+    "columnDescriptions": {
+      "product_id": "Unique numeric identifier for each product.",
+      "product_name": "Full commercial name of the product offering.",
+      "category_name": "Top-level classification grouping products into broad types.",
+      "subcategory_name": "Secondary classification within a category for finer segmentation.",
+      "unit_price": "Customer-facing selling price charged per unit.",
+      "unit_cost": "Internal cost to produce or acquire one unit.",
+      "is_active": "1 means currently on sale; 0 means discontinued or hidden.",
+      "created_at": "Timestamp when the product record was first created."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "mj_test",
+      "name": "#tableau_426_sid_00783d43_4_prep"
+    },
+    "tableDescription": "Staging table for Tableau Prep containing periodic financial statement metrics by entity, account, and reporting period.",
+    "columnDescriptions": {
+      "updated_at": "Timestamp of the most recent record modification.",
+      "created_at": "Timestamp when the record was first created.",
+      "etl_batch_id": "Identifier linking the record to its ETL ingestion batch.",
+      "stats_date": "Exact date associated with the reported statistics.",
+      "period_amount": "Financial metric value for the specific reporting period.",
+      "stats_yyyymm": "Year and month of the statistics in YYYYMM format.",
+      "stats_year": "Calendar year of the reported statistics.",
+      "report_period": "Label describing the reporting period (e.g., monthly, quarterly).",
+      "report_period_range": "Start and end date range covering the reporting period.",
+      "entity_code": "Short code uniquely identifying the business entity.",
+      "entity_name": "Full name of the business entity or organizational unit.",
+      "statement_section": "Section of the financial statement the line item belongs to.",
+      "line_level": "Hierarchical depth of the line item within the statement.",
+      "line_order": "Numeric sort order for displaying line items sequentially.",
+      "line_code": "Unique code identifying a specific financial statement line.",
+      "account_code": "Code identifying the associated general ledger account.",
+      "account_name": "Descriptive name of the associated general ledger account.",
+      "indicator_name": "Name of the financial or performance indicator being measured.",
+      "indicator_unit": "Unit of measurement for the indicator (e.g., currency, percentage).",
+      "ytd_amount": "Cumulative financial amount from the start of the year.",
+      "load_time": "Timestamp when the record was loaded into staging.",
+      "data_source": "Name or identifier of the originating upstream data system."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "mj_test",
+      "name": "dm_fin_bs_fact"
+    },
+    "tableDescription": "Financial balance sheet fact table storing period-start and period-end balances per line item, entity, and reporting period.",
+    "columnDescriptions": {
+      "stats_date": "First day of the accounting month representing the reporting period.",
+      "stats_yyyymm": "Year-month identifier (YYYYMM) for the reporting period.",
+      "stats_year": "Fiscal year extracted from the statistics date.",
+      "report_period": "Standardized report type label: Q1, mid-year, Q3, or annual.",
+      "report_period_range": "Start-to-end month range covered by the report period.",
+      "entity_name": "Legal name of the accounting and reporting entity.",
+      "entity_code": "Unique identifier code for the reporting entity.",
+      "statement_section": "Balance sheet category: current assets, liabilities, non-current, or equity.",
+      "line_level": "Hierarchy depth level of the balance sheet line item.",
+      "line_order": "Sequential number controlling the display order of line items.",
+      "line_code": "Unique configuration code assigned to each balance sheet indicator.",
+      "account_code": "ERP source system chart-of-accounts code for the line item.",
+      "account_name": "Official account name from the chart of accounts.",
+      "indicator_name": "Front-end display label for the balance sheet line item.",
+      "indicator_unit": "Measurement unit for reported values, typically currency or percentage.",
+      "opening_balance": "Account monetary balance at the start of the reporting period.",
+      "ending_balance": "Account monetary balance at the close of the reporting period.",
+      "data_source": "Origin system or file providing the financial statement data.",
+      "load_time": "Timestamp of the most recent ETL data load or refresh.",
+      "etl_batch_id": "ETL pipeline batch identifier enabling reconciliation and issue tracing.",
+      "created_at": "Timestamp when this record row was first inserted.",
+      "updated_at": "Timestamp when this record row was last modified."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "mj_test",
+      "name": "dm_fin_cf_fact"
+    },
+    "tableDescription": "Cash flow statement fact table storing periodic line-item amounts by entity, reporting period, and indicator hierarchy.",
+    "columnDescriptions": {
+      "stats_date": "First day of the accounting month for the reporting period.",
+      "stats_yyyymm": "Year-month identifier of the accounting period.",
+      "stats_year": "Fiscal year extracted from the accounting period.",
+      "report_period": "Standardized financial report type: Q1, interim, Q3, or annual.",
+      "report_period_range": "Start-to-end month range covered by the report period.",
+      "entity_name": "Legal name of the reporting company or business entity.",
+      "entity_code": "Internal identifier code for the reporting entity.",
+      "statement_section": "Cash flow category: operating, investing, or financing activities.",
+      "line_level": "Hierarchy depth of the line item within the statement structure.",
+      "line_order": "Display sequence for ordering line items in reports.",
+      "line_code": "Unique configuration code assigned to each financial indicator.",
+      "account_code": "ERP system account code; may be empty in current stage.",
+      "account_name": "ERP account name serving as the unique key for each line item.",
+      "indicator_name": "Front-end display label for the financial line item.",
+      "indicator_unit": "Measurement unit, typically currency (元) or percentage.",
+      "ytd_amount": "Year-to-date cumulative cash flow amount for the indicator.",
+      "period_amount": "Current period cash flow amount for the indicator.",
+      "data_source": "Origin system or report supplying the financial data.",
+      "load_time": "Timestamp when the ETL process loaded this record.",
+      "etl_batch_id": "ETL job batch identifier used for reconciliation and troubleshooting.",
+      "created_at": "Timestamp when the record was first inserted into the table.",
+      "updated_at": "Timestamp of the most recent update to this record."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "mj_test",
+      "name": "dm_fin_pl_fact"
+    },
+    "tableDescription": "Profit and loss fact table storing periodic financial statement line items by entity, reporting period, and account indicator.",
+    "columnDescriptions": {
+      "stats_date": "First day of the accounting month representing the reporting period.",
+      "stats_yyyymm": "Year-month identifier for the accounting period in YYYYMM format.",
+      "stats_year": "Calendar year extracted from the statistics date.",
+      "report_period": "Standardized reporting cycle label: quarterly, semi-annual, or annual report.",
+      "report_period_range": "Start-to-end month range covered by the report period, formatted YYYYMM-YYYYMM.",
+      "entity_name": "Full legal name of the accounting entity being reported on.",
+      "entity_code": "Unique numeric identifier for the accounting entity.",
+      "statement_section": "High-level P&L category grouping line items, e.g., revenue or cost.",
+      "line_level": "Hierarchy depth of the financial line item within the report structure.",
+      "line_order": "Display sequence number controlling sort order of indicators on reports.",
+      "line_code": "Internal configuration code uniquely identifying each financial indicator.",
+      "account_code": "ERP-sourced general ledger account code; may be empty currently.",
+      "account_name": "General ledger account name; serves as the natural deduplication key.",
+      "indicator_name": "Front-end display label shown for the financial metric.",
+      "indicator_unit": "Unit of measurement for the indicator, typically CNY yuan or percentage.",
+      "ytd_amount": "Cumulative year-to-date monetary value for the indicator.",
+      "period_amount": "Single-period monetary value for the current reporting interval.",
+      "data_source": "Origin system supplying the financial data, e.g., EBS_PL.",
+      "load_time": "Timestamp when the ETL process last loaded or refreshed this record.",
+      "etl_batch_id": "ETL job batch identifier used for reconciliation and troubleshooting.",
+      "created_at": "Timestamp when the record was first inserted into the table.",
+      "updated_at": "Timestamp of the most recent modification to the record."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "accrual_demo"
+    },
+    "tableDescription": "Hospital medical revenue accrual records tracking charges by department, doctor, visit type, and billing category for financial reporting.",
+    "columnDescriptions": {
+      "date": "Date on which the patient visit or medical service occurred.",
+      "hospital": "Name or campus of the hospital where care was delivered.",
+      "visit_department": "Clinical department where the patient physically received treatment.",
+      "finance_department": "Accounting department responsible for cost allocation and revenue booking.",
+      "visit_type": "Outpatient, inpatient, or emergency classification of the encounter.",
+      "doctor": "Attending physician who provided the clinical service.",
+      "visit_content": "Specific clinical purpose or procedure performed during the visit.",
+      "bill_subtype": "High-level billing category used to classify the charge type.",
+      "order_subtype": "Secondary classification of the medical order for financial reporting.",
+      "order_item": "Specific billable service item or procedure charged to the patient.",
+      "amount": "Revenue amount accrued for the service item in local currency."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "inpatient_demo"
+    },
+    "tableDescription": "Daily inpatient admission counts by hospital branch, department, doctor, and admission category.",
+    "columnDescriptions": {
+      "date": "Calendar date on which the inpatient admissions were recorded.",
+      "hospital": "Name of the hospital branch or campus where admissions occurred.",
+      "visit_department": "Clinical department that clinically managed and treated the inpatient.",
+      "finance_department": "Department responsible for billing and financial accounting of the stay.",
+      "doctor": "Attending physician's name assigned to the inpatient admissions.",
+      "admission_type": "Classification of the stay, e.g., day, regular, or obstetric inpatient.",
+      "quantity": "Count of inpatient admissions for the given date and attribute combination."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "outpatient_demo"
+    },
+    "tableDescription": "Daily outpatient visit records across hospital departments, tracking patient volume, doctor assignments, and new customer status by multiple dimensions.",
+    "columnDescriptions": {
+      "date": "Calendar date on which the outpatient visits occurred.",
+      "hospital": "Name of the hospital branch or campus where visits took place.",
+      "visit_department": "Clinical department where the patient physically received care.",
+      "finance_department": "Department used for billing and financial classification of the visit.",
+      "visit_content": "Specific type of medical service or treatment provided during the visit.",
+      "doctor": "Name of the attending physician who provided care.",
+      "is_group_new_customer": "Y/N flag indicating if the patient is new to the entire hospital group.",
+      "is_hospital_new_customer": "Y/N flag indicating if the patient is new to this specific hospital.",
+      "is_dept_new_customer": "Y/N flag indicating if the patient is new to this department.",
+      "employee_flag": "Distinguishes hospital employees from general non-employee patients.",
+      "quantity": "Total outpatient visit count for this combination of dimension values."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "satisfaction_answer_detail"
+    },
+    "tableDescription": "Stores individual question-answer pairs from patient satisfaction surveys submitted across hospital departments and doctors.",
+    "columnDescriptions": {
+      "survey_id": "Unique identifier linking all answers belonging to one survey submission.",
+      "department": "Clinical department where the patient received care.",
+      "doctor": "Name of the treating physician associated with the survey.",
+      "submit_date": "Date the patient submitted the satisfaction survey.",
+      "hospital": "Branch or campus where the patient visit occurred.",
+      "survey_name": "Full title of the satisfaction questionnaire administered to the patient.",
+      "question_id": "Short code identifying a specific question within the survey form.",
+      "question_text": "Full wording of the survey question presented to the patient.",
+      "question_category": "Numeric grouping that classifies the question into a survey section.",
+      "question_type": "Service area or staff type the question evaluates, e.g., doctor, ultrasound.",
+      "answer": "Patient's response to the corresponding survey question.",
+      "standard_hospital": "Normalized hospital name for consistent cross-branch reporting and analysis."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "settlement_demo"
+    },
+    "tableDescription": "Daily hospital revenue settlement records broken down by branch, department, fee category, and payment method.",
+    "columnDescriptions": {
+      "date": "Calendar date on which the settlement transaction was recorded.",
+      "hospital": "Hospital branch or campus where the revenue was collected.",
+      "finance_department": "Clinical or administrative department generating the settled revenue.",
+      "fee_type": "Charge category, such as product, package, stored-value card, or bill.",
+      "payment_method": "How the patient paid: cash, bank card, remittance, etc.",
+      "amount": "Total monetary value settled for the given date and category combination."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "v_wait_time_issue"
+    },
+    "tableDescription": "View of patient survey responses focused on wait time perception questions across hospital departments and branches.",
+    "columnDescriptions": {
+      "survey_id": "Unique identifier for each individual patient survey submission.",
+      "department": "Clinical department where the patient received care.",
+      "doctor": "Name of the attending physician seen by the patient.",
+      "submit_date": "Date the patient submitted the satisfaction survey.",
+      "hospital": "Hospital branch or campus where care was received.",
+      "survey_name": "Full title of the patient satisfaction survey administered.",
+      "question_id": "Unique code identifying the specific survey question.",
+      "question_text": "Full text of the wait time question posed to patients.",
+      "question_category": "Numeric category grouping this question belongs to.",
+      "question_type": "Classification type of the survey question format.",
+      "answer": "Patient's selected response to the wait time question.",
+      "standard_hospital": "Normalized hospital branch name for consistent cross-branch reporting."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "v_doctor_satisfaction_metric"
+    },
+    "tableDescription": "Aggregated patient satisfaction survey results per doctor, department, and hospital, grouped by submission date and month.",
+    "columnDescriptions": {
+      "submit_date": "The date on which patient surveys were submitted and recorded.",
+      "month": "Year-month period the survey results are attributed to.",
+      "hospital": "Name of the hospital branch where the doctor is stationed.",
+      "department": "Clinical department within the hospital that the doctor belongs to.",
+      "doctor": "Full name of the individual doctor being evaluated by patients.",
+      "survey_count": "Total number of patient satisfaction surveys submitted for this doctor.",
+      "very_satisfied_count": "Number of patients who responded with the highest satisfaction rating.",
+      "valid_answer_count": "Number of submitted surveys containing valid, scoreable responses.",
+      "very_satisfied_rate": "Proportion of very satisfied responses out of all valid answers."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "v_feedback_detail"
+    },
+    "tableDescription": "Detailed view of patient survey responses per question, linked to doctor, department, and hospital.",
+    "columnDescriptions": {
+      "survey_id": "Unique numeric identifier for each completed patient satisfaction survey submission.",
+      "department": "Clinical department where the patient received care during the visit.",
+      "doctor": "Name of the physician associated with the patient's survey.",
+      "submit_date": "Date the patient submitted the satisfaction survey.",
+      "hospital": "Hospital branch or campus name where the service was provided.",
+      "survey_name": "Full title of the patient satisfaction questionnaire administered.",
+      "question_id": "Unique code identifying a specific question within the survey.",
+      "question_text": "Verbatim text of the survey question presented to the patient.",
+      "question_category": "Numeric category grouping questions by topic within the survey.",
+      "question_type": "Classification of question format, such as rating scale or open-ended.",
+      "answer": "Patient's free-text or selected response to the survey question.",
+      "standard_hospital": "Normalized hospital name used for consistent cross-branch reporting and analysis."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "v_not_very_satisfied_detail"
+    },
+    "tableDescription": "Detailed view of patient satisfaction survey responses, capturing per-question answers for less-than-fully-satisfied feedback analysis across hospital branches.",
+    "columnDescriptions": {
+      "survey_id": "Unique identifier for each patient-submitted satisfaction survey instance.",
+      "department": "Clinical department where the patient received care, e.g., Obstetrics.",
+      "doctor": "Name of the treating or responsible doctor linked to the survey.",
+      "submit_date": "Date the patient submitted the satisfaction survey.",
+      "hospital": "Hospital branch or campus where the patient visit occurred.",
+      "survey_name": "Full title of the satisfaction survey questionnaire administered to the patient.",
+      "question_id": "Short code identifying a specific question within the survey.",
+      "question_text": "Full wording of the satisfaction question presented to the patient.",
+      "question_category": "Numeric code grouping questions into broader satisfaction categories.",
+      "question_type": "Topic label classifying the service aspect evaluated, e.g., environment, breakfast.",
+      "answer": "Patient's selected satisfaction rating or response for the question.",
+      "standard_hospital": "Normalized hospital branch name used for consistent cross-branch reporting."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "v_nps_metric"
+    },
+    "tableDescription": "Monthly Net Promoter Score metrics aggregated by hospital campus and department, tracking patient survey satisfaction.",
+    "columnDescriptions": {
+      "month": "Reporting period in YYYY-MM format for monthly NPS aggregation.",
+      "hospital": "Hospital campus or branch where patient surveys were collected.",
+      "department": "Clinical department or care unit within the hospital campus.",
+      "nps_answer_count": "Total number of valid NPS survey responses received in the period.",
+      "promoter_count": "Number of survey respondents classified as promoters (high satisfaction).",
+      "detractor_count": "Number of survey respondents classified as detractors (low satisfaction).",
+      "nps": "Net Promoter Score ratio: (promoters minus detractors) divided by total responses."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "yihe_poc_demo",
+      "name": "v_survey_recovery_metric"
+    },
+    "tableDescription": "Monthly patient survey recovery rates broken down by hospital campus, department, and visit type.",
+    "columnDescriptions": {
+      "month": "Year-month reporting period for survey and visit data aggregation.",
+      "hospital": "Name of the hospital campus or branch location.",
+      "department": "Clinical specialty or department within the hospital.",
+      "visit_type": "Classification of patient visit, such as outpatient or inpatient.",
+      "survey_count": "Number of patient satisfaction surveys collected during the period.",
+      "visit_count": "Total patient visits recorded during the reporting period.",
+      "recovery_rate": "Proportion of visits that resulted in a completed survey response."
+    }
+  }
+]
