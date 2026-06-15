@@ -1,0 +1,264 @@
+tables:
+  accrual_demo:
+    table: yihe_poc_demo.accrual_demo
+    columns:
+      - name: date
+        type: string
+      - name: hospital
+        type: string
+      - name: visit_department
+        type: string
+      - name: finance_department
+        type: string
+      - name: visit_type
+        type: string
+      - name: doctor
+        type: string
+      - name: visit_content
+        type: string
+      - name: bill_subtype
+        type: string
+      - name: order_subtype
+        type: string
+      - name: order_item
+        type: string
+      - name: amount
+        type: number
+  inpatient_demo:
+    table: yihe_poc_demo.inpatient_demo
+    columns:
+      - name: date
+        type: string
+      - name: hospital
+        type: string
+      - name: visit_department
+        type: string
+      - name: finance_department
+        type: string
+      - name: doctor
+        type: string
+      - name: admission_type
+        type: string
+      - name: quantity
+        type: number
+  outpatient_demo:
+    table: yihe_poc_demo.outpatient_demo
+    columns:
+      - name: date
+        type: string
+      - name: hospital
+        type: string
+      - name: visit_department
+        type: string
+      - name: finance_department
+        type: string
+      - name: visit_content
+        type: string
+      - name: doctor
+        type: string
+      - name: is_group_new_customer
+        type: string
+      - name: is_hospital_new_customer
+        type: string
+      - name: is_dept_new_customer
+        type: string
+      - name: employee_flag
+        type: string
+      - name: quantity
+        type: number
+  satisfaction_answer_detail:
+    table: yihe_poc_demo.satisfaction_answer_detail
+    columns:
+      - name: survey_id
+        type: number
+      - name: department
+        type: string
+      - name: doctor
+        type: string
+      - name: submit_date
+        type: string
+      - name: hospital
+        type: string
+      - name: survey_name
+        type: string
+      - name: question_id
+        type: string
+      - name: question_text
+        type: string
+      - name: question_category
+        type: string
+      - name: question_type
+        type: string
+      - name: answer
+        type: string
+      - name: standard_hospital
+        type: string
+  settlement_demo:
+    table: yihe_poc_demo.settlement_demo
+    columns:
+      - name: date
+        type: string
+      - name: hospital
+        type: string
+      - name: finance_department
+        type: string
+      - name: fee_type
+        type: string
+      - name: payment_method
+        type: string
+      - name: amount
+        type: number
+  v_wait_time_issue:
+    table: yihe_poc_demo.v_wait_time_issue
+    columns:
+      - name: survey_id
+        type: number
+      - name: department
+        type: string
+      - name: doctor
+        type: string
+      - name: submit_date
+        type: string
+      - name: hospital
+        type: string
+      - name: survey_name
+        type: string
+      - name: question_id
+        type: string
+      - name: question_text
+        type: string
+      - name: question_category
+        type: string
+      - name: question_type
+        type: string
+      - name: answer
+        type: string
+      - name: standard_hospital
+        type: string
+    descriptions:
+      db: VIEW
+  v_doctor_satisfaction_metric:
+    table: yihe_poc_demo.v_doctor_satisfaction_metric
+    columns:
+      - name: submit_date
+        type: string
+      - name: month
+        type: string
+      - name: hospital
+        type: string
+      - name: department
+        type: string
+      - name: doctor
+        type: string
+      - name: survey_count
+        type: number
+        nullable: false
+      - name: very_satisfied_count
+        type: number
+      - name: valid_answer_count
+        type: number
+        nullable: false
+      - name: very_satisfied_rate
+        type: number
+    descriptions:
+      db: VIEW
+  v_feedback_detail:
+    table: yihe_poc_demo.v_feedback_detail
+    columns:
+      - name: survey_id
+        type: number
+      - name: department
+        type: string
+      - name: doctor
+        type: string
+      - name: submit_date
+        type: string
+      - name: hospital
+        type: string
+      - name: survey_name
+        type: string
+      - name: question_id
+        type: string
+      - name: question_text
+        type: string
+      - name: question_category
+        type: string
+      - name: question_type
+        type: string
+      - name: answer
+        type: string
+      - name: standard_hospital
+        type: string
+    descriptions:
+      db: VIEW
+  v_not_very_satisfied_detail:
+    table: yihe_poc_demo.v_not_very_satisfied_detail
+    columns:
+      - name: survey_id
+        type: number
+      - name: department
+        type: string
+      - name: doctor
+        type: string
+      - name: submit_date
+        type: string
+      - name: hospital
+        type: string
+      - name: survey_name
+        type: string
+      - name: question_id
+        type: string
+      - name: question_text
+        type: string
+      - name: question_category
+        type: string
+      - name: question_type
+        type: string
+      - name: answer
+        type: string
+      - name: standard_hospital
+        type: string
+    descriptions:
+      db: VIEW
+  v_nps_metric:
+    table: yihe_poc_demo.v_nps_metric
+    columns:
+      - name: month
+        type: string
+      - name: hospital
+        type: string
+      - name: department
+        type: string
+      - name: nps_answer_count
+        type: number
+        nullable: false
+      - name: promoter_count
+        type: number
+      - name: detractor_count
+        type: number
+      - name: nps
+        type: number
+    descriptions:
+      db: VIEW
+  v_survey_recovery_metric:
+    table: yihe_poc_demo.v_survey_recovery_metric
+    columns:
+      - name: month
+        type: string
+      - name: hospital
+        type: string
+      - name: department
+        type: string
+      - name: visit_type
+        type: string
+        nullable: false
+      - name: survey_count
+        type: number
+        nullable: false
+      - name: visit_count
+        type: number
+        nullable: false
+      - name: recovery_rate
+        type: number
+    descriptions:
+      db: VIEW
