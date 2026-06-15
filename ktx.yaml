@@ -1,0 +1,40 @@
+connections: {}
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    author: ktx <ktx@example.com>
+llm:
+  provider:
+    backend: none
+  models: {}
+ingest:
+  embeddings:
+    backend: none
+    dimensions: 8
+  workUnits:
+    stepBudget: 40
+    maxConcurrency: 1
+    failureMode: continue
+agent:
+  run_research:
+    enabled: false
+    max_iterations: 20
+    default_toolset:
+      - sl_query
+      - wiki_search
+      - sl_read_source
+scan:
+  enrichment:
+    mode: none
+  relationships:
+    enabled: true
+    llmProposals: true
+    validationRequiredForManifest: true
+    acceptThreshold: 0.85
+    reviewThreshold: 0.55
+    maxLlmTablesPerBatch: 40
+    maxCandidatesPerColumn: 25
+    profileSampleRows: 10000
+    profileConcurrency: 4
+    validationConcurrency: 4
