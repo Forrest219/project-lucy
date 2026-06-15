@@ -1,0 +1,65 @@
+{
+  "catalog": null,
+  "db": "yihe_poc_demo",
+  "name": "settlement_demo",
+  "kind": "table",
+  "comment": null,
+  "estimatedRows": 45145,
+  "columns": [
+    {
+      "name": "date",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "hospital",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "finance_department",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "fee_type",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "payment_method",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "amount",
+      "nativeType": "double",
+      "normalizedType": "double",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    }
+  ],
+  "foreignKeys": []
+}

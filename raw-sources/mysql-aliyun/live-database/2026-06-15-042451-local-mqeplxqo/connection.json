@@ -1,0 +1,24 @@
+{
+  "connectionId": "mysql-aliyun",
+  "driver": "mysql",
+  "extractedAt": "2026-06-15T04:24:51.656Z",
+  "scope": {
+    "schemas": [
+      "mj_test",
+      "openclaw_db",
+      "yihe_poc_demo"
+    ]
+  },
+  "metadata": {
+    "database": "openclaw_db",
+    "schemas": [
+      "mj_test",
+      "openclaw_db",
+      "yihe_poc_demo"
+    ],
+    "host": "rm-bp1t0ie3sj4g7561hpo.mysql.rds.aliyuncs.com",
+    "table_count": 20,
+    "total_columns": 253
+  },
+  "tableCount": 20
+}

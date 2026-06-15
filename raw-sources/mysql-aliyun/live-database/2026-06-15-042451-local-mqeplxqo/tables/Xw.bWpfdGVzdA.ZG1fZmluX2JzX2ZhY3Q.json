@@ -1,0 +1,209 @@
+{
+  "catalog": null,
+  "db": "mj_test",
+  "name": "dm_fin_bs_fact",
+  "kind": "table",
+  "comment": "资产负债事实表；update_mode=monthly_overwrite；粒度=主体+统计年月+核算周期+指标行+科目",
+  "estimatedRows": 2584,
+  "columns": [
+    {
+      "name": "stats_date",
+      "nativeType": "date",
+      "normalizedType": "date",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "统计日期(YYYY-MM-DD)，核算月每月一号，例如 2025-09-01"
+    },
+    {
+      "name": "stats_yyyymm",
+      "nativeType": "char",
+      "normalizedType": "char",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "统计年月(YYYYMM)，例如 202509"
+    },
+    {
+      "name": "stats_year",
+      "nativeType": "char",
+      "normalizedType": "char",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "统计年度(YYYY)，从统计日期提取，例如 2025"
+    },
+    {
+      "name": "report_period",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "核算周期/报告类型标准化，例如 一季报/中报/三季报/年报"
+    },
+    {
+      "name": "report_period_range",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "统计期间，例如 202501-202509（按报告期生成）"
+    },
+    {
+      "name": "entity_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "核算主体（当前阶段单一主体）"
+    },
+    {
+      "name": "entity_code",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "核算主体编码"
+    },
+    {
+      "name": "statement_section",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "指标类别/报表大类，例如 流动资产/非流动资产/流动负债/非流动负债/所有者权益"
+    },
+    {
+      "name": "line_level",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "指标层级/科目层级，例如 1/2/3"
+    },
+    {
+      "name": "line_order",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "指标排序/展示顺序，例如 10"
+    },
+    {
+      "name": "line_code",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "指标名称编码（用于指标配置的编码），例如 KM_0001"
+    },
+    {
+      "name": "account_code",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "科目编码（ERP取数），例如 600001（当前置为00）"
+    },
+    {
+      "name": "account_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "科目名称，例如 货币资金"
+    },
+    {
+      "name": "indicator_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "指标名称（用于前台展示），例如 货币资金"
+    },
+    {
+      "name": "indicator_unit",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "指标单位，例如 元/%（一般金额单位）"
+    },
+    {
+      "name": "opening_balance",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "期初余额（科目金额），例如 123456.78"
+    },
+    {
+      "name": "ending_balance",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "期末余额（科目金额），例如 234567.89"
+    },
+    {
+      "name": "data_source",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "数据来源/来源记录，例如 财务报表"
+    },
+    {
+      "name": "load_time",
+      "nativeType": "datetime",
+      "normalizedType": "datetime",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "数据更新时间/ETL加载时间(YYYY-MM-DD HH:MM:SS)，例如 2026-01-28 10:30:00"
+    },
+    {
+      "name": "etl_batch_id",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "ETL批次号/任务实例ID（推荐，用于对账与排障）"
+    },
+    {
+      "name": "created_at",
+      "nativeType": "datetime",
+      "normalizedType": "datetime",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "记录创建时间"
+    },
+    {
+      "name": "updated_at",
+      "nativeType": "datetime",
+      "normalizedType": "datetime",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "记录更新时间"
+    }
+  ],
+  "foreignKeys": []
+}

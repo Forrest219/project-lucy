@@ -1,0 +1,209 @@
+{
+  "catalog": null,
+  "db": "mj_test",
+  "name": "#tableau_426_sid_00783d43_4_prep",
+  "kind": "table",
+  "comment": null,
+  "estimatedRows": 0,
+  "columns": [
+    {
+      "name": "updated_at",
+      "nativeType": "datetime",
+      "normalizedType": "datetime",
+      "dimensionType": "time",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "created_at",
+      "nativeType": "datetime",
+      "normalizedType": "datetime",
+      "dimensionType": "time",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "etl_batch_id",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "stats_date",
+      "nativeType": "date",
+      "normalizedType": "date",
+      "dimensionType": "time",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "period_amount",
+      "nativeType": "double",
+      "normalizedType": "double",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "stats_yyyymm",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "stats_year",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "report_period",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "report_period_range",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "entity_code",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "entity_name",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "statement_section",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "line_level",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "line_order",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "line_code",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "account_code",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "account_name",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "indicator_name",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "indicator_unit",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "ytd_amount",
+      "nativeType": "double",
+      "normalizedType": "double",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "load_time",
+      "nativeType": "datetime",
+      "normalizedType": "datetime",
+      "dimensionType": "time",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "data_source",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    }
+  ],
+  "foreignKeys": []
+}
