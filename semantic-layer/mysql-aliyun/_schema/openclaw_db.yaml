@@ -6,45 +6,27 @@ tables:
         type: number
         pk: true
         nullable: false
-        descriptions:
-          ai: Unique numeric identifier for each customer record.
       - name: customer_name
         type: string
         nullable: false
-        descriptions:
-          ai: Official business name of the customer organization.
       - name: customer_type
         type: string
         nullable: false
-        descriptions:
-          ai: Business segment classification, such as Enterprise or SMB.
       - name: customer_level
         type: string
         nullable: false
-        descriptions:
-          ai: Tiered value or priority rating assigned to the customer, e.g., A or B.
       - name: region_id
         type: number
         nullable: false
-        descriptions:
-          ai: Foreign key linking the customer to a geographic sales region.
       - name: signup_date
         type: time
         nullable: false
-        descriptions:
-          ai: Date the customer formally enrolled or contracted with the business.
       - name: is_active
         type: number
         nullable: false
-        descriptions:
-          ai: Boolean flag indicating whether the customer account is currently active.
       - name: created_at
         type: time
         nullable: false
-        descriptions:
-          ai: System timestamp recording when the customer record was first inserted.
-    descriptions:
-      ai: Master registry of all customers, capturing identity, segmentation, regional assignment, and account lifecycle status.
     joins:
       - to: dim_region
         "on": customers.region_id = dim_region.region_id
@@ -59,98 +41,50 @@ tables:
     columns:
       - name: data_source
         type: string
-        descriptions:
-          ai: Identifies the originating system or dataset for traceability and multi-source management.
       - name: updated_at
         type: time
-        descriptions:
-          ai: Timestamp of the most recent record update.
       - name: created_at
         type: time
-        descriptions:
-          ai: Timestamp when the record was first inserted.
       - name: data_end_date
         type: string
-        descriptions:
-          ai: End date of the source data extraction window in YYYYMMDD format.
       - name: data_start_date
         type: string
-        descriptions:
-          ai: Start date of the source data extraction window in YYYYMMDD format.
       - name: avg_order_amount
         type: number
-        descriptions:
-          ai: Average net revenue per order within the segment.
       - name: unit_cost_avg
         type: number
-        descriptions:
-          ai: Average cost per unit sold within the segment.
       - name: profit_rate
         type: number
-        descriptions:
-          ai: Net profit as a proportion of net revenue; the profit margin ratio.
       - name: avg_discount_rate
         type: number
-        descriptions:
-          ai: Average discount percentage applied to orders in the segment.
       - name: avg_unit_price
         type: number
-        descriptions:
-          ai: Average selling price per unit after discounts are applied.
       - name: stat_month
         type: time
-        descriptions:
-          ai: Calendar month this summary record represents.
       - name: region_id
         type: number
-        descriptions:
-          ai: Numeric identifier for the sales region.
       - name: region_name
         type: string
-        descriptions:
-          ai: Name of the geographic sales region.
       - name: channel_name
         type: string
-        descriptions:
-          ai: Sales channel classification such as Direct, Partner, or Online.
       - name: category_name
         type: string
-        descriptions:
-          ai: Product or service category classification.
       - name: customer_type
         type: string
-        descriptions:
-          ai: Customer segment classification such as Enterprise, SMB, or Individual.
       - name: order_cnt
         type: number
-        descriptions:
-          ai: Total number of orders within the segment for the month.
       - name: row_cnt
         type: number
-        descriptions:
-          ai: Number of source data rows aggregated into this record.
       - name: quantity
         type: number
-        descriptions:
-          ai: Total units sold within the segment for the month.
       - name: gross_amount
         type: number
-        descriptions:
-          ai: Total revenue before discounts are applied.
       - name: net_amount
         type: number
-        descriptions:
-          ai: Total revenue after discounts are applied.
       - name: cost_amount
         type: number
-        descriptions:
-          ai: Total cost of goods sold for the segment.
       - name: profit_amount
         type: number
-        descriptions:
-          ai: Total profit after deducting costs from net revenue.
-    descriptions:
-      ai: Monthly aggregated sales performance metrics segmented by region, sales channel, product category, and customer type for business intelligence analysis.
   dim_region:
     table: openclaw_db.dim_region
     columns:
@@ -158,29 +92,17 @@ tables:
         type: number
         pk: true
         nullable: false
-        descriptions:
-          ai: Unique numeric identifier for each geographic region.
       - name: region_name
         type: string
         nullable: false
-        descriptions:
-          ai: Chinese name of the region, such as East or South China.
       - name: region_level
         type: string
         nullable: false
-        descriptions:
-          ai: Hierarchical tier of the region, such as major zone or sub-region.
       - name: manager_name
         type: string
-        descriptions:
-          ai: Full name of the person accountable for the region.
       - name: created_at
         type: time
         nullable: false
-        descriptions:
-          ai: Timestamp recording when this region record was initially created.
-    descriptions:
-      ai: Dimension table storing geographic sales regions, their hierarchy levels, and responsible managers for Chinese business operations.
     joins:
       - to: customers
         "on": dim_region.region_id = customers.region_id
@@ -197,80 +119,48 @@ tables:
         type: number
         pk: true
         nullable: false
-        descriptions:
-          ai: Unique identifier for each sales transaction.
       - name: order_date
         type: time
         nullable: false
-        descriptions:
-          ai: Calendar date when the customer placed the order.
       - name: customer_id
         type: number
         nullable: false
-        descriptions:
-          ai: References the customer who placed the order.
       - name: product_id
         type: number
         nullable: false
-        descriptions:
-          ai: References the product purchased in the transaction.
       - name: region_id
         type: number
         nullable: false
-        descriptions:
-          ai: References the geographic sales region associated with the order.
       - name: quantity
         type: number
         nullable: false
-        descriptions:
-          ai: Number of product units purchased in the order.
       - name: unit_price
         type: number
         nullable: false
-        descriptions:
-          ai: Selling price per single unit before any discount is applied.
       - name: discount_rate
         type: number
         nullable: false
-        descriptions:
-          ai: Proportional discount applied to the order; 0.05 equals 5% off.
       - name: gross_amount
         type: number
         nullable: false
-        descriptions:
-          ai: Pre-discount revenue; quantity multiplied by unit price.
       - name: net_amount
         type: number
         nullable: false
-        descriptions:
-          ai: Actual billed revenue after the discount rate is applied.
       - name: cost_amount
         type: number
         nullable: false
-        descriptions:
-          ai: Total cost of goods sold for the order.
       - name: profit_amount
         type: number
         nullable: false
-        descriptions:
-          ai: Financial gain from the order; net amount minus cost.
       - name: order_status
         type: string
         nullable: false
-        descriptions:
-          ai: Current fulfillment state of the order, e.g., completed or pending.
       - name: channel_name
         type: string
         nullable: false
-        descriptions:
-          ai: Sales channel through which the order was placed, e.g., Direct or Online.
       - name: created_at
         type: time
         nullable: false
-        descriptions:
-          ai: Timestamp when the order record was inserted into the system.
-    descriptions:
-      ai: Records individual sales transactions including pricing, discounts, costs, and profit across customers, products, regions, and sales channels.
     joins:
       - to: customers
         "on": orders.customer_id = customers.customer_id
@@ -291,44 +181,26 @@ tables:
         type: number
         pk: true
         nullable: false
-        descriptions:
-          ai: Unique numeric identifier for each product.
       - name: product_name
         type: string
         nullable: false
-        descriptions:
-          ai: Full commercial name of the product offering.
       - name: category_name
         type: string
         nullable: false
-        descriptions:
-          ai: Top-level classification grouping products into broad types.
       - name: subcategory_name
         type: string
-        descriptions:
-          ai: Secondary classification within a category for finer segmentation.
       - name: unit_price
         type: number
         nullable: false
-        descriptions:
-          ai: Customer-facing selling price charged per unit.
       - name: unit_cost
         type: number
         nullable: false
-        descriptions:
-          ai: Internal cost to produce or acquire one unit.
       - name: is_active
         type: number
         nullable: false
-        descriptions:
-          ai: 1 means currently on sale; 0 means discontinued or hidden.
       - name: created_at
         type: time
         nullable: false
-        descriptions:
-          ai: Timestamp when the product record was first created.
-    descriptions:
-      ai: A catalog of sellable products with pricing, categorization, cost, and availability status.
     joins:
       - to: orders
         "on": products.product_id = orders.product_id
