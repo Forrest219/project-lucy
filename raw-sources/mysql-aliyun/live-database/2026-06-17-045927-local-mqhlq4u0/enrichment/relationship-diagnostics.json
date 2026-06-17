@@ -1,0 +1,70 @@
+{
+  "connectionId": "mysql-aliyun",
+  "generatedAt": "2026-06-17T05:04:28.546Z",
+  "summary": {
+    "accepted": 4,
+    "review": 3,
+    "rejected": 0,
+    "skipped": 0
+  },
+  "noAcceptedReason": null,
+  "candidateCountsBySource": {
+    "exact_column_match": 1,
+    "formal": 4,
+    "llm_proposal": 1,
+    "normalized_table_match": 1
+  },
+  "validation": {
+    "available": true,
+    "sqlAvailable": true,
+    "queryCount": 0
+  },
+  "thresholds": {
+    "acceptThreshold": 0.85,
+    "reviewThreshold": 0.55
+  },
+  "policy": {
+    "validationRequiredForManifest": true,
+    "maxCandidatesPerColumn": 25,
+    "profileSampleRows": 10000,
+    "profileConcurrency": 4,
+    "validationConcurrency": 4
+  },
+  "warnings": [
+    {
+      "code": "description_fallback_used",
+      "message": "Generated table description without sample rows for #tableau_426_sid_00783d43_4_prep (reason: empty_sample)",
+      "table": "#tableau_426_sid_00783d43_4_prep",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun",
+        "reason": "empty_sample"
+      }
+    }
+  ],
+  "profileWarnings": [
+    "profile_failed:superstore_orders:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `row_id` AS value FROM (SELECT * FROM `dataforai`.`supers' at line 1",
+    "profile_failed:superstore_people:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `region` AS value FROM (SELECT * FROM `dataforai`.`supers' at line 1",
+    "profile_failed:superstore_returns:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `id` AS value FROM (SELECT * FROM `dataforai`.`superstore' at line 1",
+    "profile_failed:customers:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `customer_id` AS value FROM (SELECT * FROM `openclaw_db`.' at line 1",
+    "profile_failed:bidm_ai_metric_summary_mth:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `data_source` AS value FROM (SELECT * FROM `openclaw_db`.' at line 1",
+    "profile_failed:dim_region:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `region_id` AS value FROM (SELECT * FROM `openclaw_db`.`d' at line 1",
+    "profile_failed:orders:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `order_id` AS value FROM (SELECT * FROM `openclaw_db`.`or' at line 1",
+    "profile_failed:products:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `product_id` AS value FROM (SELECT * FROM `openclaw_db`.`' at line 1",
+    "profile_failed:#tableau_426_sid_00783d43_4_prep:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `updated_at` AS value FROM (SELECT * FROM `mj_test`.`#tab' at line 1",
+    "profile_failed:dm_fin_bs_fact:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `stats_date` AS value FROM (SELECT * FROM `mj_test`.`dm_f' at line 1",
+    "profile_failed:dm_fin_cf_fact:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `stats_date` AS value FROM (SELECT * FROM `mj_test`.`dm_f' at line 1",
+    "profile_failed:dm_fin_pl_fact:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `stats_date` AS value FROM (SELECT * FROM `mj_test`.`dm_f' at line 1",
+    "profile_failed:accrual_demo:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `date` AS value FROM (SELECT * FROM `yihe_poc_demo`.`accr' at line 1",
+    "profile_failed:inpatient_demo:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `date` AS value FROM (SELECT * FROM `yihe_poc_demo`.`inpa' at line 1",
+    "profile_failed:outpatient_demo:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `date` AS value FROM (SELECT * FROM `yihe_poc_demo`.`outp' at line 1",
+    "profile_failed:satisfaction_answer_detail:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `survey_id` AS value FROM (SELECT * FROM `yihe_poc_demo`.' at line 1",
+    "profile_failed:settlement_demo:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `date` AS value FROM (SELECT * FROM `yihe_poc_demo`.`sett' at line 1",
+    "profile_failed:v_wait_time_issue:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `survey_id` AS value FROM (SELECT * FROM `yihe_poc_demo`.' at line 1",
+    "profile_failed:v_doctor_satisfaction_metric:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `submit_date` AS value FROM (SELECT * FROM `yihe_poc_demo' at line 1",
+    "profile_failed:v_feedback_detail:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `survey_id` AS value FROM (SELECT * FROM `yihe_poc_demo`.' at line 1",
+    "profile_failed:v_not_very_satisfied_detail:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `survey_id` AS value FROM (SELECT * FROM `yihe_poc_demo`.' at line 1",
+    "profile_failed:v_nps_metric:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `month` AS value FROM (SELECT * FROM `yihe_poc_demo`.`v_n' at line 1",
+    "profile_failed:v_survey_recovery_metric:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `month` AS value FROM (SELECT * FROM `yihe_poc_demo`.`v_s' at line 1"
+  ]
+}
