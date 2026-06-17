@@ -1,0 +1,28 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# KTX runtime state (daemon pid, ports, logs, transient config)
+.ktx/logs/
+.ktx/runtime/
+.ktx/mcp.json
+
+# Secrets — never commit; ktx.yaml references via file: URI
+.ktx/secrets/
+
+# temp scratch space
+temp/
+
+# Build / dependency outputs (webui ships its own .gitignore, this is the root fallback)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python / venv (KTX curator tooling uses them locally)
+__pycache__/
+*.pyc
+.venv/
+venv/
