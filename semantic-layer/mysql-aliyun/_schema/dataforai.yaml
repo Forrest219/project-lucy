@@ -8,136 +8,167 @@ tables:
         nullable: false
         descriptions:
           db: 行 ID
+          ai: Unique surrogate key identifying each individual order line item.
       - name: order_id
         type: string
         nullable: false
         descriptions:
           db: 订单 ID
+          ai: Business identifier grouping multiple line items under one customer order.
       - name: order_date
         type: time
         nullable: false
         descriptions:
           db: 订单日期
+          ai: Calendar date when the customer placed the order.
       - name: ship_date
         type: time
         nullable: false
         descriptions:
           db: 发货日期
+          ai: Calendar date when the order was dispatched for delivery.
       - name: ship_mode
         type: string
         descriptions:
           db: 装运模式
+          ai: Shipping speed tier selected for the order, such as standard or express.
       - name: customer_id
         type: string
         descriptions:
           db: 客户 ID
+          ai: Unique identifier for the purchasing customer.
       - name: customer_name
         type: string
         descriptions:
           db: 客户名称
+          ai: Full name of the customer who placed the order.
       - name: segment
         type: string
         descriptions:
           db: 细分
+          ai: Market segment classifying the customer, such as consumer or small business.
       - name: city
         type: string
         descriptions:
           db: 城市
+          ai: City of the delivery destination or customer location.
       - name: province
         type: string
         descriptions:
           db: 省/自治区
+          ai: Province or autonomous region of the delivery destination.
       - name: country_region
         type: string
         descriptions:
           db: 国家/地区
+          ai: Country or top-level region of the delivery destination.
       - name: region
         type: string
         descriptions:
           db: 区域
+          ai: Broader geographic sales territory grouping multiple provinces together.
       - name: product_id
         type: string
         descriptions:
           db: 产品 ID
+          ai: Unique identifier for the sold product SKU.
       - name: category
         type: string
         descriptions:
           db: 类别
+          ai: Top-level product classification, such as office supplies or furniture.
       - name: sub_category
         type: string
         descriptions:
           db: 子类别
+          ai: Granular product grouping nested within a top-level category.
       - name: product_name
         type: string
         descriptions:
           db: 产品名称
+          ai: Full descriptive name of the sold product.
       - name: sales
         type: number
         descriptions:
           db: 销售额
+          ai: Total revenue for this line item after applying the discount.
       - name: quantity
         type: number
         descriptions:
           db: 数量
+          ai: Number of product units ordered in this line item.
       - name: discount
         type: number
         descriptions:
           db: 折扣
+          ai: Fractional discount rate applied to the line item price.
       - name: profit
         type: number
         descriptions:
           db: 利润
+          ai: Net profit on this line item after all costs and discounts.
       - name: postal_code
         type: string
         descriptions:
           db: 邮政编码
+          ai: Postal code of the shipping destination address.
       - name: source_system
         type: string
         nullable: false
         descriptions:
           db: 来源系统
+          ai: Name of the originating system that provided the raw data.
       - name: source_file
         type: string
         nullable: false
         descriptions:
           db: 来源文件
+          ai: File path of the source spreadsheet used during data loading.
       - name: source_sheet
         type: string
         nullable: false
         descriptions:
           db: 来源工作表
+          ai: Worksheet name within the source file containing this data.
       - name: source_row_number
         type: number
         nullable: false
         descriptions:
           db: 来源文件行号
+          ai: Row number in the source file for end-to-end traceability.
       - name: batch_id
         type: string
         nullable: false
         descriptions:
           db: 导入批次 ID
+          ai: Identifier for the ETL import batch that loaded this record.
       - name: row_hash
         type: string
         nullable: false
         descriptions:
           db: 业务字段 SHA-256 哈希
+          ai: SHA-256 hash of business fields used to detect record changes.
       - name: is_deleted
         type: number
         nullable: false
         descriptions:
           db: 逻辑删除标记
+          ai: Soft-delete flag; 1 marks a logically deleted record, 0 is active.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 入库时间
+          ai: Timestamp when the record was first inserted into the database.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
+          ai: Timestamp of the most recent modification to this record.
     descriptions:
       db: Tableau 示例超市订单 ODS 明细表
+      ai: Line-item retail sales transactions for a Chinese superstore, tracking orders, customers, products, shipping, revenue, and profit.
   superstore_people:
     table: dataforai.superstore_people
     columns:
@@ -147,58 +178,70 @@ tables:
         nullable: false
         descriptions:
           db: 区域
+          ai: Geographic sales region name, such as Northeast or Central-South.
       - name: regional_manager
         type: string
         nullable: false
         descriptions:
           db: 区域经理
+          ai: Full name of the manager responsible for the sales region.
       - name: source_system
         type: string
         nullable: false
         descriptions:
           db: 来源系统
+          ai: Identifier of the upstream system that provided this data.
       - name: source_file
         type: string
         nullable: false
         descriptions:
           db: 来源文件
+          ai: Full file path of the original data source file.
       - name: source_sheet
         type: string
         nullable: false
         descriptions:
           db: 来源工作表
+          ai: Worksheet name within the source file where data was extracted.
       - name: source_row_number
         type: number
         nullable: false
         descriptions:
           db: 来源文件行号
+          ai: Row position of this record within the original source file.
       - name: batch_id
         type: string
         nullable: false
         descriptions:
           db: 导入批次 ID
+          ai: Unique identifier for the ETL import batch run.
       - name: row_hash
         type: string
         nullable: false
         descriptions:
           db: 业务字段 SHA-256 哈希
+          ai: SHA-256 hash of business fields used for change detection.
       - name: is_deleted
         type: number
         nullable: false
         descriptions:
           db: 逻辑删除标记
+          ai: Soft-delete flag; 1 indicates logically deleted, 0 indicates active.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 入库时间
+          ai: Timestamp when the record was first inserted into the database.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
+          ai: Timestamp of the most recent modification to this record.
     descriptions:
       db: Tableau 示例超市区域人员 ODS 表
+      ai: Maps each sales region to its assigned regional manager, sourced from the Tableau Superstore sample dataset.
   superstore_returns:
     table: dataforai.superstore_returns
     columns:
@@ -208,60 +251,73 @@ tables:
         nullable: false
         descriptions:
           db: 退货记录代理主键
+          ai: Surrogate primary key uniquely identifying each return record.
       - name: order_id
         type: string
         nullable: false
         descriptions:
           db: 订单 ID
+          ai: Business key linking this return entry to a specific customer order.
       - name: returned
         type: string
         nullable: false
         descriptions:
           db: 退回
+          ai: Indicates the order was returned; Chinese value '是' means Yes.
       - name: source_system
         type: string
         nullable: false
         descriptions:
           db: 来源系统
+          ai: Name of the upstream system that supplied the return data.
       - name: source_file
         type: string
         nullable: false
         descriptions:
           db: 来源文件
+          ai: Full file path of the Excel workbook the record was extracted from.
       - name: source_sheet
         type: string
         nullable: false
         descriptions:
           db: 来源工作表
+          ai: Worksheet tab name within the source workbook containing return rows.
       - name: source_row_number
         type: number
         nullable: false
         descriptions:
           db: 来源文件行号
+          ai: Row position in the source file where this record originated.
       - name: batch_id
         type: string
         nullable: false
         descriptions:
           db: 导入批次 ID
+          ai: Identifier grouping all records loaded together in one import run.
       - name: row_hash
         type: string
         nullable: false
         descriptions:
           db: 业务字段 SHA-256 哈希
+          ai: SHA-256 hash of business fields used for deduplication and change detection.
       - name: is_deleted
         type: number
         nullable: false
         descriptions:
           db: 逻辑删除标记
+          ai: Soft-delete flag; 1 marks the record logically removed, 0 is active.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 入库时间
+          ai: Timestamp when the record was first inserted into the database.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
+          ai: Timestamp of the most recent modification to this record.
     descriptions:
       db: Tableau 示例超市退货 ODS 表
+      ai: Tracks orders marked as returned from the Tableau Superstore sample dataset, including ETL lineage and audit metadata.
