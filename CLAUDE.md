@@ -1,6 +1,11 @@
 # KTX Project — Claude Code Context
 
-> 若你在本仓库做开发 / 改代码（而非回答数据问题），先读 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。本文件其余内容是 KTX 数据问答运行时上下文，不要混入开发治理规则。
+> **本文件是 KTX 数据问答运行时 prompt，由 `ktx.yaml` 自动注入，不含开发规则。**
+>
+> | 你要做什么 | 读哪里 |
+> |---|---|
+> | 在本仓库写代码 / 改配置 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
+> | 使用 KTX 数据问答 | 继续阅读本文件 ↓ |
 
 本项目是一个本地自服务数据分析 Agent 栈，底座为 KTX 语义层 + Aliyun RDS MySQL 8.0.34。
 

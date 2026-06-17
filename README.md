@@ -12,6 +12,20 @@
 | 适用范围 | 项目入口说明，供 AI coding agent 理解仓库定位、目录边界与本地运行入口 |
 | 输出位置 | /Users/zhangxingchen/Projects/project-lucy/README.md |
 
+## 两个语境，不要混读
+
+本仓库同时服务两类 agent，语境完全独立，混读会导致 prompt 污染：
+
+| 语境 | 入口文件 | 读者 | 注入方式 |
+|------|---------|------|---------|
+| **运行时**：KTX 数据问答 | [`CLAUDE.md`](CLAUDE.md) | KTX 内置 LLM agent | `ktx.yaml → llm.provider.backend: claude-code` 自动注入 |
+| **开发态**：改代码 / 改配置 | [`AGENTS.md`](AGENTS.md) → [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Claude Code、Codex 等 coding agent | agent 启动时读取 AGENTS.md |
+| **Vibe coding**：多角色协作 | [`agents/README.md`](agents/README.md) | 同上，按需调用角色 | 同上 |
+
+> `CLAUDE.md` 由 ktx.yaml 自动注入给数据问答 LLM，**不是给 coding agent 读的**。coding agent 的入口是 `AGENTS.md`。
+
+---
+
 `project-lucy` 是一个基于 KTX MCP Server 的语义、Skill 与 Wiki 管理平台，旨在为 Claude Code、Codex 等 data agent 提供可维护的上下文、业务知识和数据问答能力。
 
 本仓库关注的不是单一数据源，而是一套可迁移的 agent context 工程：用 `ktx.yaml` 管理 KTX MCP Server 运行配置，用 `semantic-layer/` 管理数据语义，用 `.ktx/skills/` 承载可复用能力，用 `wiki/` 沉淀业务知识。

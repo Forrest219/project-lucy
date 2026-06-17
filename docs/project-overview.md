@@ -256,6 +256,8 @@ npm run dev        # 启动 Vite 前端（3000 端口）
 npm run server     # 启动 Fastify API（3001 端口）
 ```
 
+**子模块文档索引**：webui 的架构 / API spec / 数据模型 / 导航 IA 见 [`../webui/docs/`](../webui/docs/)（`01-architecture` ~ `06-navigation-ia`）；M0–M5 执行包 `webui/docs/codex/` 已完工归档，不再领取。
+
 ---
 
 ### 4.4 Eval & Ops（质量门禁）

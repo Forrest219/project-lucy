@@ -1,7 +1,20 @@
 # project-lucy 开发治理（Development Governance）
 
 > 本文档面向**在本仓库写代码 / 改配置的 agent**（Claude Code、Codex 等）。
-> 与 `CLAUDE.md`（KTX 数据问答运行时上下文）是两套独立语境，互不同步、互不替代。
+
+## 双轨语境：先看这里
+
+本仓库有**两套独立语境**，混读会导致 prompt 污染或规则错配。其中开发态语境拆成两个并行入口（本规则文档 + 角色库），所以下表列 3 行：
+
+| 文件 | 语境 | 谁读 | 注入方式 |
+|------|------|------|---------|
+| `CLAUDE.md` | **运行时**：KTX 数据问答规则 | KTX 内置 LLM agent | `ktx.yaml → llm.provider.backend: claude-code` 自动注入 |
+| `AGENTS.md` → 本文件 | **开发态**（规则）：代码 / 配置修改治理 | Claude Code、Codex 等 coding agent | agent 启动时读取 AGENTS.md |
+| `agents/README.md` | **开发态**（角色库）：vibe coding 多角色协作 | 同上，按需调用 | 同上 |
+
+**规则**：两套语境只做单向引用，不互相复制内容。开发规则不得写入 `CLAUDE.md`；数据问答规则不得写入本文件。
+
+---
 
 ## 适用范围
 
@@ -30,8 +43,9 @@
 
 ## Spec 落位规则
 
-- 设计文档/工单（PRD、架构、任务拆分）落在 `docs/`，作为本仓库的事实来源
-- `webui` 开发通过 `docs/` 下的工单（wo-M0 ~ wo-M5）交给 Codex 执行；任何 agent 在本仓库改代码时同样遵循工单边界，不擅自扩大范围
+- 仓库级 spec / 治理 / 跨模块产品视图落在 `docs/`，作为本仓库的事实来源
+- 子模块自带的架构 / API / 数据模型等实现细节允许放在 `<module>/docs/`（当前实例：`webui/docs/01–06`），并在 `docs/project-overview.md` 注册索引
+- `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
 
 ## Onboarding（首次拉取本仓库）
@@ -68,12 +82,11 @@
 - 修改 KTX 源码属于**上游变更**，在 `/Users/zhangxingchen/Projects/ktx` 内进行，遵循该仓库自身的协作规则，不在本仓库提交。
 - 本仓库只引用 KTX，**不复制** KTX 内部规则 / prompt 到本仓库。
 
-## CLAUDE.md / AGENTS.md 分工
+## 语境分工（详细说明）
 
-| 文件 | 用途 | 谁读 |
-|------|------|------|
-| `CLAUDE.md` | KTX 产品运行时上下文（数据问答规则），由 `ktx.yaml` 的 `llm.provider.backend: claude-code` 注入 | KTX 内置 agent |
-| `AGENTS.md` | 开发态入口，指向本文档 | Codex / 支持 AGENTS.md 的工具，以及打开本仓库做开发的 Claude Code |
-| `docs/DEVELOPMENT.md`（本文件） | 实际的开发治理规则 | 同上 |
+双轨设计概览见文档开头"双轨语境"表。本节补充维护约定：
 
-两者都只做单行引用，不整段复制对方内容，避免运行时 prompt 被开发态规则污染，也避免开发治理规则散落在产品语境里维护两份。
+- 两套语境只做单行引用，不整段复制对方内容。
+- 新增开发规则 → 只写本文件或 `agents/` 下；不写入 `CLAUDE.md`。
+- 新增数据问答规则（口径、表路由、Gotcha）→ 只写 `CLAUDE.md` 或 `.ktx/prompts/`；不写入本文件。
+- 修改 `CLAUDE.md` 属于治理类文件变更，需走 Plan Mode（见上方"强制流程"）。
