@@ -82,6 +82,16 @@
 - 修改 KTX 源码属于**上游变更**，在 `/Users/zhangxingchen/Projects/ktx` 内进行，遵循该仓库自身的协作规则，不在本仓库提交。
 - 本仓库只引用 KTX，**不复制** KTX 内部规则 / prompt 到本仓库。
 
+## Skills 当前状态
+
+`skills/` 是 project-lucy 的增量能力补齐，**当前不被 KTX MCP server 自动加载**。data agent 仅能通过 Read 工具主动读取 `skills/**/SKILL.md`。
+
+- `skills/` = single source of truth（lucy 增量补齐能力）
+- `.ktx/skills/` 已废弃移除，不要再写入
+- 自动加载 / 按需触发能力将由独立的 `lucy-skills` MCP server 提供（P1.5 立项中）
+
+KTX 上游不承担 skill 加载职责（KTX 定位是语义层 + wiki 通用 MCP server）；skill 由 lucy 自行起 MCP server 暴露，与 KTX 并列向 data agent 提供服务。
+
 ## 语境分工（详细说明）
 
 双轨设计概览见文档开头"双轨语境"表。本节补充维护约定：

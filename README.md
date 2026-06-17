@@ -36,7 +36,7 @@
 |---|---|
 | `ktx.yaml` | KTX MCP Server 配置入口，包含连接、存储、模型、扫描和 agent 运行设置。数据库连接可按环境替换。 |
 | `semantic-layer/` | 语义层定义，描述 schema、表、字段、关系与业务含义，是 data agent 理解数据结构的主要来源。 |
-| `.ktx/skills/` | KTX Skill 目录，用于放置面向 agent 的可复用操作能力。 |
+| `skills/` | lucy 增量 skill 库；当前由 LLM 主动读取，未来由独立 `lucy-skills` MCP server 暴露（见 `docs/DEVELOPMENT.md` §Skills 当前状态）。 |
 | `.ktx/prompts/` | KTX 运行时 prompt 目录，用于承载产品运行时上下文。 |
 | `wiki/` | 业务知识库目录，用于沉淀跨数据表、跨场景的解释性知识。 |
 | `raw-sources/` | 数据源扫描与抽取产生的原始材料，作为语义层建设和回溯的输入。 |
