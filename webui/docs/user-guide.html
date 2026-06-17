@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KTX WebUI 产品使用说明书</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #18202c;
+      --muted: #5f6b7a;
+      --line: #d9dee7;
+      --accent: #2563eb;
+      --accent-soft: #e8f0ff;
+      --ok: #0f766e;
+      --warn: #b45309;
+      --code: #101828;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #111827;
+      color: #ffffff;
+      padding: 56px 24px 48px;
+    }
+
+    .wrap {
+      width: min(1080px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: #a9c4ff;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 820px;
+      font-size: 42px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 820px;
+      margin: 18px 0 0;
+      color: #d6deeb;
+      font-size: 18px;
+    }
+
+    main {
+      padding: 28px 0 56px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    nav {
+      position: sticky;
+      top: 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    nav strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 15px;
+    }
+
+    nav a {
+      display: block;
+      padding: 7px 0;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    nav a:hover {
+      color: var(--accent);
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 18px;
+      padding: 24px;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      line-height: 1.3;
+    }
+
+    h3 {
+      margin: 22px 0 8px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 7px 0;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fbfcfe;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #1d4ed8;
+      padding: 3px 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .step {
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfe;
+    }
+
+    .step b {
+      display: block;
+      color: var(--accent);
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 15px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 11px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #344054;
+      background: #f3f5f8;
+      font-weight: 700;
+    }
+
+    code {
+      background: #eef2f7;
+      color: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92em;
+    }
+
+    .note {
+      border-left: 4px solid var(--accent);
+      background: #f2f6ff;
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+
+    .ok {
+      color: var(--ok);
+      font-weight: 700;
+    }
+
+    .warn {
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    footer {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 16px 0 44px;
+    }
+
+    @media (max-width: 860px) {
+      h1 {
+        font-size: 32px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      nav {
+        position: static;
+      }
+
+      .cards,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .skip-link {
+      position: absolute;
+      left: -999px;
+      top: 0;
+      z-index: 20;
+      background: #ffffff;
+      color: var(--accent);
+      padding: 8px 14px;
+      border-radius: 6px;
+    }
+
+    .skip-link:focus {
+      left: 12px;
+      top: 12px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #ffffff33;
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 13px;
+      color: #cdd7e6;
+    }
+
+    dl.glossary {
+      margin: 4px 0 0;
+    }
+
+    dl.glossary dt {
+      margin-top: 14px;
+      font-weight: 700;
+    }
+
+    dl.glossary dd {
+      margin: 3px 0 0;
+      color: var(--muted);
+    }
+
+    .status-pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .s-none { background: #eef1f5; color: #475467; }
+    .s-partial { background: #fef3c7; color: #92400e; }
+    .s-done { background: #dcfce7; color: #166534; }
+    .s-fail { background: #fee2e2; color: #b42318; }
+
+    @media print {
+      header { background: #ffffff; color: #111827; }
+      header .eyebrow,
+      header .lead,
+      header .badge { color: #344054; }
+      nav,
+      .skip-link,
+      .badges { display: none; }
+      .grid { grid-template-columns: 1fr; }
+      section { break-inside: avoid; border-color: #cccccc; }
+      a { color: #111827; text-decoration: underline; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#overview">跳到正文内容</a>
+  <header>
+    <div class="wrap">
+      <p class="eyebrow">KTX Local WebUI</p>
+      <h1>KTX WebUI 产品使用说明书</h1>
+      <p class="lead">KTX WebUI 是一个在本机运行的语义补充工作台，用可视化界面帮助维护 KTX 语义层的团队成员补充表描述、字段口径、指标、分群、Join 关系与 Wiki 文档，同时保留 YAML、Markdown 和 Git 作为最终事实源。日常补充无需手写 YAML，但会接触表、字段、指标等概念（不熟悉的术语见文末<a href="#glossary" style="color:#a9c4ff">术语表</a>）。</p>
+      <div class="badges">
+        <span class="badge">本机运行 · 127.0.0.1</span>
+        <span class="badge">面向语义层维护者</span>
+        <span class="badge">更新于 2026-06-16</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap grid">
+    <nav aria-label="页面目录">
+      <strong>目录</strong>
+      <a href="#overview">产品定位</a>
+      <a href="#start">快速开始</a>
+      <a href="#capabilities">核心能力</a>
+      <a href="#workflow">典型流程</a>
+      <a href="#pages">功能页面</a>
+      <a href="#editing">编辑与保存</a>
+      <a href="#review">校验与审阅</a>
+      <a href="#safety">安全边界</a>
+      <a href="#troubleshoot">故障排查</a>
+      <a href="#faq">常见问题</a>
+      <a href="#glossary">术语表</a>
+    </nav>
+
+    <div>
+      <section id="overview">
+        <h2>产品定位</h2>
+        <p>KTX WebUI 面向需要维护 KTX 语义层的团队成员（数据工程、分析与业务口径维护者）。它把原本需要手写的 <code>semantic-layer/**/*.yaml</code> 和 <code>wiki/**/*.md</code> 转成可浏览、可编辑、可预览差异的页面。</p>
+        <p>它不是云端 BI 平台，也不是数据库管理工具。它更像一个本地工作台：帮助用户把表、字段、指标和业务口径整理清楚，再通过 KTX 校验和 Git diff 完成交付审阅。</p>
+        <div class="tag-row">
+          <span class="tag">本机运行</span>
+          <span class="tag">文件优先</span>
+          <span class="tag">保存前 diff</span>
+          <span class="tag">保存后 validate</span>
+          <span class="tag">不读取 secrets</span>
+        </div>
+      </section>
+
+      <section id="start">
+        <h2>快速开始</h2>
+        <h3>开始前你需要</h3>
+        <ul>
+          <li>一个 KTX 项目目录（根目录含 <code>ktx.yaml</code>）。</li>
+          <li>本机已安装 Node（≥20）。</li>
+          <li><code>ktx</code> 命令行工具已在 PATH 中（用于保存后的校验）。</li>
+        </ul>
+        <h3>启动 WebUI</h3>
+        <ol>
+          <li>在 WebUI 目录执行 <code>npm install</code>（仅首次需要，需联网）。</li>
+          <li>执行 <code>npm run dev</code> 启动本地服务。</li>
+          <li>打开浏览器访问 <code>http://localhost:5173</code>。</li>
+        </ol>
+        <h3>它怎么知道编辑哪个项目</h3>
+        <p>WebUI 默认从当前目录向上查找 <code>ktx.yaml</code> 来定位你的 KTX 项目；也可以用 <code>--project &lt;目录&gt;</code> 参数或 <code>KTX_PROJECT_ROOT</code> 环境变量显式指定。</p>
+        <div class="note">
+          <p>WebUI 只在本机运行并绑定 <code>127.0.0.1</code>，不对外暴露，也不会上传任何数据。</p>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin-top:14px">界面截图将在后续版本补充。</p>
+      </section>
+
+      <section id="capabilities">
+        <h2>核心能力</h2>
+        <div class="cards">
+          <article class="card">
+            <h3>表目录工作队列</h3>
+            <p>扫描当前 KTX 项目中的语义层表，按 schema、完成状态、表名和字段名筛选，快速找到需要补充的对象。</p>
+          </article>
+          <article class="card">
+            <h3>单表语义编辑</h3>
+            <p>编辑表描述、行粒度、字段描述、指标 measures 和过滤分群 segments，并实时查看拟写入的 YAML 和 diff。</p>
+          </article>
+          <article class="card">
+            <h3>Join 关系治理</h3>
+            <p>查看正式 Join，基于字段名生成候选 Join，可标记 candidate、rejected，确认后再写入正式语义层。</p>
+          </article>
+          <article class="card">
+            <h3>业务 Wiki 沉淀</h3>
+            <p>创建和编辑 Markdown Wiki，维护 frontmatter、业务摘要、标签、引用关系，并可从表页面创建关联 Wiki。</p>
+          </article>
+          <article class="card">
+            <h3>保存前审阅</h3>
+            <p>任何编辑都会先生成 diff preview，用户可以在落盘前看到具体修改内容，降低误改 YAML 的风险。</p>
+          </article>
+          <article class="card">
+            <h3>保存后校验</h3>
+            <p>保存语义层后调用 <code>ktx sl validate</code>，并在 Review 页面集中查看改动文件和校验结果。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="workflow">
+        <h2>典型使用流程</h2>
+        <div class="flow">
+          <div class="step">
+            <b>1. 找表</b>
+            从 Catalog 搜索或筛选待补充的表。
+          </div>
+          <div class="step">
+            <b>2. 补语义</b>
+            在 Table Editor 中补充描述、grain、指标和分群。
+          </div>
+          <div class="step">
+            <b>3. 看 diff</b>
+            保存前检查右侧 diff preview 和 proposed YAML。
+          </div>
+          <div class="step">
+            <b>4. 保存校验</b>
+            点击 Save 写回文件，并自动触发 KTX 校验。
+          </div>
+          <div class="step">
+            <b>5. Review</b>
+            到 Review 页面查看所有改动，再交给 Git 流程审阅。
+          </div>
+        </div>
+      </section>
+
+      <section id="pages">
+        <h2>功能页面说明</h2>
+        <table>
+          <caption class="sr-only">功能页面及其用途</caption>
+          <thead>
+            <tr>
+              <th>页面</th>
+              <th>主要用途</th>
+              <th>适合做什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Catalog</td>
+              <td>表目录与工作队列</td>
+              <td>查看全部表，按 schema、状态、关键词筛选，了解字段数、Join 数、指标数和完成状态。</td>
+            </tr>
+            <tr>
+              <td>Table Editor</td>
+              <td>单表语义编辑</td>
+              <td>维护表描述、行粒度 grain、字段描述、measures、segments，并查看 YAML 预览。</td>
+            </tr>
+            <tr>
+              <td>Join Editor</td>
+              <td>表关系编辑</td>
+              <td>查看正式 Join，处理基于字段名推断出的候选 Join，确认可信关系后写入正式 YAML。</td>
+            </tr>
+            <tr>
+              <td>Wiki Editor</td>
+              <td>业务口径文档编辑</td>
+              <td>创建或编辑 Wiki Markdown，维护摘要、标签、语义层引用和正文说明。</td>
+            </tr>
+            <tr>
+              <td>Review</td>
+              <td>改动复核与批量校验</td>
+              <td>查看 editable 目录下的文件 diff，运行 changed sources 校验，确认交付前状态。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 id="status">完成状态的含义</h3>
+        <p>Catalog 可按完成状态筛选，帮助你优先处理未补充的表。各状态含义如下：</p>
+        <table>
+          <caption class="sr-only">完成状态说明</caption>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>含义</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="status-pill s-none">未开始</span></td>
+              <td>没有表描述、没有行粒度，字段也没有任何描述。</td>
+            </tr>
+            <tr>
+              <td><span class="status-pill s-partial">部分完成</span></td>
+              <td>已有表描述或行粒度，但核心字段尚未全部补齐描述。</td>
+            </tr>
+            <tr>
+              <td><span class="status-pill s-done">已完成</span></td>
+              <td>表描述、行粒度、主键、核心字段描述与指标齐备。</td>
+            </tr>
+            <tr>
+              <td><span class="status-pill s-fail">校验失败</span></td>
+              <td>最近一次 KTX 校验未通过，需要回到对应表修正。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="editing">
+        <h2>编辑与保存说明</h2>
+        <h3>表和字段描述</h3>
+        <p>人工补充的描述会写入 <code>descriptions.human</code>，不会覆盖已有的 <code>descriptions.ai</code>。展示时优先使用人工描述，未填写时回退到 AI 描述。</p>
+
+        <h3>Grain、Measures、Segments</h3>
+        <p>行粒度、指标和分群会写入表级 overlay 文件，例如 <code>semantic-layer/&lt;connection&gt;/&lt;table&gt;.yaml</code>。这样可以在不破坏原始 schema YAML 的前提下扩展语义定义。</p>
+
+        <h3>Join</h3>
+        <p>候选或拒绝的 Join 会保存在 <code>.ktx-ui/join-candidates.json</code>。只有用户确认的 formal Join 才会写入正式语义层 YAML。</p>
+
+        <h3>Wiki</h3>
+        <p>Wiki 页面保存在 <code>wiki/**/*.md</code>。页面支持 frontmatter 和 Markdown 正文，可用于沉淀业务口径、指标解释、使用场景和外部引用。</p>
+
+        <div class="note">
+          <p><strong>保存前请看 diff。</strong> 右侧 diff preview 展示的是本次编辑即将写入的内容。确认无误后再点击 Save。</p>
+        </div>
+      </section>
+
+      <section id="review">
+        <h2>校验与审阅</h2>
+        <p>保存表语义后，系统会调用 KTX CLI 对对应 source 做校验。Review 页面会列出本次可编辑目录内的改动文件，并提供 <code>Validate changed</code> 做集中校验。</p>
+        <table>
+          <caption class="sr-only">校验状态及建议动作</caption>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>含义</th>
+              <th>建议动作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="ok">通过</span></td>
+              <td>KTX 能读取并校验当前语义定义。</td>
+              <td>继续检查 diff，准备提交 Git review。</td>
+            </tr>
+            <tr>
+              <td><span class="warn">校验失败</span></td>
+              <td>写入内容不符合 KTX 语义层规则，或引用的字段/表不存在。</td>
+              <td>回到对应表页面修正表达式、字段名、Join 条件或 YAML 内容。</td>
+            </tr>
+            <tr>
+              <td><span class="warn">无改动</span></td>
+              <td>当前 editable 目录没有可展示的 diff。</td>
+              <td>确认是否已经保存，或检查是否编辑了非白名单目录。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="safety">
+        <h2>安全边界</h2>
+        <p>KTX WebUI 按本地单用户工具设计，只绑定 <code>127.0.0.1</code>。它会直接读写当前 KTX 项目文件，因此核心安全策略是限制可读写范围。</p>
+        <table>
+          <caption class="sr-only">可读写范围与安全边界</caption>
+          <thead>
+            <tr>
+              <th>范围</th>
+              <th>行为</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>semantic-layer/</code></td>
+              <td>允许读写，用于正式语义层和 overlay。</td>
+            </tr>
+            <tr>
+              <td><code>wiki/</code></td>
+              <td>允许读写，用于业务口径 Markdown。</td>
+            </tr>
+            <tr>
+              <td><code>.ktx-ui/</code></td>
+              <td>允许读写，用于 WebUI 自身 sidecar，例如候选 Join。</td>
+            </tr>
+            <tr>
+              <td><code>.ktx/secrets/</code></td>
+              <td>禁止读取和展示，避免泄露连接密码或密钥。</td>
+            </tr>
+            <tr>
+              <td><code>raw-sources/</code></td>
+              <td>禁止写入，避免污染扫描得到的原始证据。</td>
+            </tr>
+            <tr>
+              <td><code>.git/</code></td>
+              <td>禁止写入，版本历史和提交动作仍由用户自己控制。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="troubleshoot">
+        <h2>故障排查</h2>
+        <table>
+          <caption class="sr-only">常见故障与处理</caption>
+          <thead>
+            <tr>
+              <th>现象</th>
+              <th>可能原因</th>
+              <th>处理</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>页面打不开</td>
+              <td>本地服务未启动，或端口被占用。</td>
+              <td>确认已执行 <code>npm run dev</code>，并访问 <code>http://localhost:5173</code>。</td>
+            </tr>
+            <tr>
+              <td>表目录是空的</td>
+              <td>没有定位到 KTX 项目，或 <code>semantic-layer/</code> 下没有语义层文件。</td>
+              <td>在含 <code>ktx.yaml</code> 的项目下启动，或用 <code>--project</code> / <code>KTX_PROJECT_ROOT</code> 指定项目目录。</td>
+            </tr>
+            <tr>
+              <td>保存后校验失败</td>
+              <td>表达式、字段名或 Join 条件不符合 KTX 规则，或 <code>ktx</code> 命令不在 PATH。</td>
+              <td>按 Review 页提示修正语义；确认 <code>ktx</code> 命令可用。</td>
+            </tr>
+            <tr>
+              <td>某些字段属性保存不了</td>
+              <td>visibility、已有列的 role 覆盖等暂不作为正式落盘能力。</td>
+              <td>这是预期行为；详见下方常见问题。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="faq">
+        <h2>常见问题</h2>
+        <h3>WebUI 会替我提交 Git 吗？</h3>
+        <p>不会。WebUI 只负责编辑文件、展示 diff 和运行校验。提交、创建 PR、回滚版本仍由用户通过 Git 完成。</p>
+
+        <h3>为什么要先看 diff 再保存？</h3>
+        <p>语义层 YAML 是项目事实源。diff 能让用户在写入前确认具体变化，避免误改字段、Join 或业务口径。</p>
+
+        <h3>为什么有些字段属性不能保存？</h3>
+        <p>当前 KTX 已确认支持 grain、measures、segments 的 overlay 合并；部分字段属性如 visibility 或已有列 role 覆盖暂不作为正式落盘能力。</p>
+
+        <h3>Wiki 和表语义有什么区别？</h3>
+        <p>表语义用于 KTX 结构化理解和校验，Wiki 用于沉淀更长的业务说明、指标口径、背景解释和使用建议。两者可以通过 <code>sl_refs</code> 关联。</p>
+
+        <h3>普通用户需要懂 YAML 吗？</h3>
+        <p>日常补充语义不需要直接手写 YAML。YAML preview 和 diff 主要用于审阅，让用户知道系统最终会改哪些文件。</p>
+      </section>
+
+      <section id="glossary">
+        <h2>术语表</h2>
+        <dl class="glossary">
+          <dt>语义层 / semantic layer</dt>
+          <dd>用 YAML 描述表、字段、指标等结构化语义的文件集合，位于 <code>semantic-layer/</code>。</dd>
+          <dt>schema</dt>
+          <dd>数据库中的一组表的命名空间；语义层按 schema 组织文件。</dd>
+          <dt>行粒度 / grain</dt>
+          <dd>一行数据代表的业务粒度，例如"每天每家医院一行"。</dd>
+          <dt>指标 / measure</dt>
+          <dd>可聚合计算的业务度量，例如 <code>sum(amount)</code> 表示金额合计。</dd>
+          <dt>分群 / segment</dt>
+          <dd>常用的过滤条件，例如"仅正向金额"。</dd>
+          <dt>关系 / join</dt>
+          <dd>表之间的关联条件与方向（多对一、一对多、一对一）。</dd>
+          <dt>overlay（扩展文件）</dt>
+          <dd>不改动原始 schema 文件、单独存放 grain/指标/分群的补充 YAML，路径形如 <code>semantic-layer/&lt;连接&gt;/&lt;表&gt;.yaml</code>。</dd>
+          <dt>frontmatter</dt>
+          <dd>Markdown 文件顶部的结构化元信息（摘要、标签、引用等）。</dd>
+          <dt>diff（差异预览）</dt>
+          <dd>保存前展示"将要写入的内容与现有内容的区别"。</dd>
+          <dt>事实源 / source of truth</dt>
+          <dd>最终以文件（YAML/Markdown）和 Git 为准，WebUI 只是编辑器。</dd>
+        </dl>
+      </section>
+
+      <footer>
+        <p>本说明为产品使用草案，具体功能以实际发布版本为准。更新时间：2026-06-16。</p>
+      </footer>
+    </div>
+  </main>
+</body>
+</html>

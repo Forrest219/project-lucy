@@ -1,0 +1,44 @@
+{
+  "name": "webui",
+  "version": "1.0.0",
+  "description": "为当前 KTX 项目提供一个本地运行的语义补充工作台，降低直接手写 `semantic-layer/**/*.yaml` 和 `wiki/**/*.md` 的成本。",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
+    "build": "vite build",
+    "test": "vitest run",
+    "acceptance:api": "tsx scripts/api-acceptance.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.0",
+    "diff": "^9.0.0",
+    "fastify": "^5.8.5",
+    "gray-matter": "^4.0.3",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.79.0",
+    "react-router-dom": "^7.17.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^25.9.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/supertest": "^7.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^10.0.3",
+    "jsdom": "^29.1.1",
+    "supertest": "^7.2.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
+  }
+}
