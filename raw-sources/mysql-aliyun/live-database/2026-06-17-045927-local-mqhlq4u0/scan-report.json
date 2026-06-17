@@ -1,0 +1,82 @@
+{
+  "connectionId": "mysql-aliyun",
+  "driver": "mysql",
+  "syncId": "2026-06-17-045927-local-mqhlq4u0",
+  "runId": "local-mqhlq4u0",
+  "trigger": "cli",
+  "mode": "enriched",
+  "dryRun": false,
+  "artifactPaths": {
+    "rawSourcesDir": "raw-sources/mysql-aliyun/live-database/2026-06-17-045927-local-mqhlq4u0",
+    "reportPath": "raw-sources/mysql-aliyun/live-database/2026-06-17-045927-local-mqhlq4u0/scan-report.json",
+    "manifestShards": [
+      "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+      "semantic-layer/mysql-aliyun/_schema/mj_test.yaml",
+      "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+      "semantic-layer/mysql-aliyun/_schema/yihe_poc_demo.yaml"
+    ],
+    "enrichmentArtifacts": [
+      "raw-sources/mysql-aliyun/live-database/2026-06-17-045927-local-mqhlq4u0/enrichment/descriptions.json",
+      "raw-sources/mysql-aliyun/live-database/2026-06-17-045927-local-mqhlq4u0/enrichment/embeddings.json",
+      "raw-sources/mysql-aliyun/live-database/2026-06-17-045927-local-mqhlq4u0/enrichment/relationships.json",
+      "raw-sources/mysql-aliyun/live-database/2026-06-17-045927-local-mqhlq4u0/enrichment/relationship-profile.json",
+      "raw-sources/mysql-aliyun/live-database/2026-06-17-045927-local-mqhlq4u0/enrichment/relationship-diagnostics.json"
+    ]
+  },
+  "diffSummary": {
+    "tablesAdded": 3,
+    "tablesModified": 0,
+    "tablesDeleted": 0,
+    "tablesUnchanged": 20,
+    "columnsAdded": 0,
+    "columnsModified": 0,
+    "columnsDeleted": 0
+  },
+  "manifestShardsWritten": 4,
+  "structuralSyncStats": {
+    "tablesCreated": 0,
+    "tablesUpdated": 0,
+    "tablesDeleted": 0,
+    "columnsCreated": 0,
+    "columnsUpdated": 0,
+    "columnsDeleted": 0
+  },
+  "enrichment": {
+    "dataDictionary": "completed",
+    "tableDescriptions": "completed",
+    "columnDescriptions": "completed",
+    "embeddings": "completed",
+    "deterministicRelationships": "completed",
+    "llmRelationshipValidation": "completed",
+    "statisticalValidation": "completed"
+  },
+  "capabilityGaps": [],
+  "warnings": [
+    {
+      "code": "description_fallback_used",
+      "message": "Generated table description without sample rows for #tableau_426_sid_00783d43_4_prep (reason: empty_sample)",
+      "table": "#tableau_426_sid_00783d43_4_prep",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun",
+        "reason": "empty_sample"
+      }
+    }
+  ],
+  "relationships": {
+    "accepted": 4,
+    "review": 3,
+    "rejected": 0,
+    "skipped": 0
+  },
+  "enrichmentState": {
+    "resumedStages": [],
+    "completedStages": [
+      "descriptions",
+      "embeddings",
+      "relationships"
+    ],
+    "failedStages": []
+  },
+  "createdAt": "2026-06-17T04:59:31.690Z"
+}
