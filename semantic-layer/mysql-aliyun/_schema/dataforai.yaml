@@ -102,11 +102,13 @@ tables:
         descriptions:
           db: 折扣
           ai: Fractional discount rate applied to the line item price.
+          human: 折扣率（0-1）。聚合时必须使用销售额加权平均：SUM(discount*sales)/SUM(sales)。严禁使用 AVG(discount)——简单平均不反映销售额权重，结果偏高。
       - name: profit
         type: number
         descriptions:
           db: 利润
           ai: Net profit on this line item after all costs and discounts.
+          human: 行级净利润，可为负值（亏损行）。分析利润率时必须用 SUM(profit)/SUM(sales) 重算，严禁 AVG(profit/sales)。负值行不可过滤排除，否则高估整体利润。
       - name: postal_code
         type: string
         descriptions:
