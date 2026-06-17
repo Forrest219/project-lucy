@@ -1,0 +1,187 @@
+# Superstore Eval Cases
+# 版本：v1.0 · 2026-06-17
+# 快照基准：batch=superstore_20260617_120212（10194 行）
+# 运行方式：人工执行 SQL，对照 expected_result 逐条验证
+
+cases:
+
+  # ── 折扣类（高优先级，AVG 陷阱防线）──────────────────────────────
+
+  - id: superstore-discount-001
+    question: superstore_orders 的整体加权平均折扣率是多少？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - weighted_discount
+    required_sql_pattern:
+      - "SUM(discount * sales)"
+      - "NULLIF(SUM(sales), 0)"
+    forbidden_sql_pattern:
+      - "AVG(discount)"
+      - "avg(discount)"
+    expected_result:
+      weighted_discount: "0.1398"   # 13.98%
+    snapshot_date: 2026-06-17
+    notes: 最基础的折扣聚合用例，验证是否使用加权平均口径。
+
+  - id: superstore-discount-002
+    question: 各品类（category）的加权平均折扣率分别是多少？按折扣从高到低排序。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - weighted_discount
+    required_sql_pattern:
+      - "SUM(discount * sales)"
+      - "NULLIF(SUM(sales), 0)"
+      - "GROUP BY"
+      - "category"
+    forbidden_sql_pattern:
+      - "AVG(discount)"
+      - "avg(discount)"
+    expected_result:
+      # 预期品类顺序（折扣从高到低，数值为近似值）
+      - category: 家具
+        weighted_discount_approx: "0.17"
+      - category: 办公用品
+        weighted_discount_approx: "0.14"
+      - category: 技术
+        weighted_discount_approx: "0.12"
+    snapshot_date: 2026-06-17
+    notes: 验证分组场景下仍使用加权平均，不退化为 AVG。
+
+  - id: superstore-discount-003
+    question: 折扣超过 20% 的订单，平均利润率是多少？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - profit_margin
+    required_sql_pattern:
+      - "SUM(profit)"
+      - "NULLIF(SUM(sales), 0)"
+      - "discount > 0.2"
+    forbidden_sql_pattern:
+      - "AVG(discount)"
+      - "AVG(profit / sales)"
+      - "AVG(profit/sales)"
+    expected_result:
+      profit_margin_sign: negative    # 折扣>20% 时利润率预期为负
+    snapshot_date: 2026-06-17
+    notes: 验证高折扣段利润率为负，同时验证利润率公式正确。profit 亏损行不可过滤。
+
+  # ── 订单数类（COUNT(*) 陷阱防线）────────────────────────────────
+
+  - id: superstore-ordercount-001
+    question: superstore_orders 共有多少笔订单？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - order_count
+    required_sql_pattern:
+      - "COUNT(DISTINCT order_id)"
+    forbidden_sql_pattern:
+      - "COUNT(*)"
+      - "count(*)"
+    expected_result:
+      order_count: 5009
+    snapshot_date: 2026-06-17
+    notes: superstore_orders 是明细表（10194行），订单数应为 5009 而非 10194。
+
+  - id: superstore-ordercount-002
+    question: 各区域（region）的订单数和总销售额分别是多少？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - order_count
+      - total_sales
+    required_sql_pattern:
+      - "COUNT(DISTINCT order_id)"
+      - "SUM(sales)"
+      - "GROUP BY"
+      - "region"
+    forbidden_sql_pattern:
+      - "COUNT(*)"
+      - "count(*)"
+    expected_result:
+      total_order_count_sum: 5009    # 各区域订单数之和应等于总订单数
+      total_sales_approx: "16867374" # SUM(sales) 四舍五入
+    snapshot_date: 2026-06-17
+    notes: 验证分组后 COUNT(DISTINCT) 正确，且各区域订单数之和 = 总订单数。
+
+  # ── 利润率类（复合防线）──────────────────────────────────────────
+
+  - id: superstore-profit-001
+    question: superstore_orders 整体利润率是多少？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - profit_margin
+    required_sql_pattern:
+      - "SUM(profit)"
+      - "NULLIF(SUM(sales), 0)"
+    forbidden_sql_pattern:
+      - "AVG(profit"
+      - "AVG(profit / sales)"
+      - "AVG(profit/sales)"
+      - "WHERE profit > 0"
+      - "WHERE profit>0"
+    expected_result:
+      profit_margin_approx: "0.1257"   # 约 12.57%
+    snapshot_date: 2026-06-17
+    notes: 验证利润率公式；profit < 0 的行不可被过滤；亏损行纳入分母。
+
+  # ── 表路由类（歧义防线）──────────────────────────────────────────
+
+  - id: superstore-routing-001
+    question: 查询所有订单，取前 5 行看看数据长什么样。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    required_sql_pattern:
+      - "dataforai.superstore_orders"
+      - "LIMIT 5"
+    forbidden_sql_pattern:
+      - "openclaw_db.orders"
+      - "`orders`"    # 裸表名（未加 schema 前缀，歧义风险）
+    expected_result:
+      row_count: 5
+    snapshot_date: 2026-06-17
+    notes: 验证在有歧义时选择正确的 canonical table，不使用 openclaw_db.orders。
+
+  # ── is_deleted 过滤类 ─────────────────────────────────────────────
+
+  - id: superstore-filter-001
+    question: superstore_orders 总共有多少行数据？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    required_sql_pattern:
+      - "is_deleted = 0"
+    forbidden_sql_pattern: []
+    expected_result:
+      row_count: 10194
+    snapshot_date: 2026-06-17
+    notes: >
+      验证 is_deleted 过滤。当前只有一个批次（120212），is_deleted=0 行数 = 总行数 10194。
+      当未来重新导入新批次后，is_deleted=1 行会出现，此 case 仍应返回 10194（最新批次）。
