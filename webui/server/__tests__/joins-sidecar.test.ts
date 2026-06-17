@@ -21,11 +21,11 @@ describe("join candidate sidecar", () => {
     const data = await writeJoinCandidates(projectRoot, [
       {
         conn: "mysql-aliyun",
-        schema: "openclaw_db",
-        fromTable: "orders",
+        schema: "dataforai",
+        fromTable: "superstore_returns",
         join: {
-          to: "customers",
-          on: "orders.customer_id = customers.customer_id",
+          to: "superstore_orders",
+          on: "superstore_returns.order_id = superstore_orders.order_id",
           relationship: "many_to_one",
           source: "candidate"
         },
@@ -36,7 +36,7 @@ describe("join candidate sidecar", () => {
 
     expect(data.candidates).toHaveLength(1);
     await expect(readJoinCandidates(projectRoot)).resolves.toEqual(data);
-    await expect(readFile(path.join(projectRoot, ".ktx-ui", "join-candidates.json"), "utf8")).resolves.toContain("orders.customer_id");
-    await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "orders.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(path.join(projectRoot, ".ktx-ui", "join-candidates.json"), "utf8")).resolves.toContain("superstore_returns.order_id");
+    await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_returns.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

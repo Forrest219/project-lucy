@@ -20,14 +20,14 @@
 | 单元/API 测试 | 通过 | `npm test`：10 个测试文件、30 个用例通过。 |
 | 类型检查 | 通过 | `npx tsc --noEmit` 通过。 |
 | 构建 | 通过 | `npm run build` 通过；`dist/` 为验证产物，不纳入交付。 |
-| 真实 ktx validate | 通过 | `POSTHOG_DISABLED=1 ktx sl validate accrual_demo --connection-id mysql-aliyun --json` 成功。 |
+| 真实 ktx validate | 通过 | `POSTHOG_DISABLED=1 ktx sl validate superstore_orders --connection-id mysql-aliyun --json` 成功。 |
 | API 全链路验收 | 通过 | `npm run acceptance:api` 覆盖 project/sources/dryRun/save/diff/validate-changed/join sidecar/wiki/护栏。沙箱内 `tsx` IPC 会被拒，已用提权执行通过。 |
 
 ## 真实验收产物
 
 | 路径 | 说明 |
 | --- | --- |
-| `semantic-layer/mysql-aliyun/accrual_demo.yaml` | M4 overlay 验收产物，含 grain/measures/segments。 |
+| `semantic-layer/mysql-aliyun/superstore_orders.yaml` | M4 overlay 验收产物，含 grain/measures/segments。 |
 | `.ktx-ui/join-candidates.json` | M4 candidate join sidecar 验收产物。 |
 | `wiki/global/m5-acceptance.md` | M5 wiki/frontmatter 验收产物。 |
 

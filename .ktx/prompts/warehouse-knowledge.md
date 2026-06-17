@@ -16,7 +16,8 @@ Step 3  上述均不能覆盖时，才允许 raw SQL，必须标注假设
 ## 表路由
 
 超市零售分析 → `dataforai.superstore_orders`（10,194 行）
-不要使用 `openclaw_db.orders`（32 行演示数据）
+退货分析 → `dataforai.superstore_returns` JOIN `dataforai.superstore_orders`
+区域经理 → `dataforai.superstore_people`
 所有查询默认加 `WHERE is_deleted = 0`。
 
 ## 指标口径（强制）

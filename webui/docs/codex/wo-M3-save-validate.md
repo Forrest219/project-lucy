@@ -41,7 +41,7 @@ server/__tests__/api.save.test.ts   # supertest: dryRun 不落盘 / 落盘 / sec
 ## 自验
 ```bash
 npm run dev
-# 编辑 yihe_poc_demo 某表描述 → Save → 文件落盘 → 自动 validate 通过 → Review 页见改动
+# 编辑 dataforai 某表描述 → Save → 文件落盘 → 自动 validate 通过 → Review 页见改动
 git -C /Users/forrest/Projects/project-lucy diff --stat   # 能看到 webui 改动
 npm test   # dryRun 不落盘 / 落盘 / secrets 403 / ktx 封装 用例绿
 ```

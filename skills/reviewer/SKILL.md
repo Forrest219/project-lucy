@@ -37,7 +37,7 @@ publish_targets:
 
 ```
 □  1. 是否使用了 canonical table？
-       超市分析 → dataforai.superstore_orders（非 openclaw_db.orders）
+       超市分析 → dataforai.superstore_orders（非 dataforai.superstore_orders）
 
 □  2. 是否使用了 KTX measure，而非手写公式？
        若手写：核对公式是否与 KTX measure 一致

@@ -15,11 +15,11 @@ describe("validateSource", () => {
     const result = await validateSource(
       "/project",
       "mysql-aliyun",
-      "yihe_poc_demo",
-      "accrual_demo",
+      "dataforai",
+      "superstore_orders",
       fakeExecFile((command, args, options) => {
         expect(command).toBe("ktx");
-        expect(args).toEqual(["sl", "validate", "accrual_demo", "--connection-id", "mysql-aliyun"]);
+        expect(args).toEqual(["sl", "validate", "superstore_orders", "--connection-id", "mysql-aliyun"]);
         expect(options).toMatchObject({ cwd: "/project", timeout: 60_000 });
         expect(options.env?.POSTHOG_DISABLED).toBe("1");
         return { error: null, stdout: "Valid semantic-layer source", stderr: "" };
@@ -41,7 +41,7 @@ describe("validateSource", () => {
     const result = await validateSource(
       "/project",
       "mysql-aliyun",
-      "yihe_poc_demo",
+      "dataforai",
       "missing",
       fakeExecFile(() => ({ error, stdout: "", stderr: "source not found" }))
     );
@@ -59,8 +59,8 @@ describe("validateSource", () => {
       validateSource(
         "/project",
         "mysql-aliyun",
-        "yihe_poc_demo",
-        "accrual_demo",
+        "dataforai",
+        "superstore_orders",
         fakeExecFile(() => ({ error, stdout: "", stderr: "" }))
       )
     ).rejects.toBeInstanceOf(KtxCliError);

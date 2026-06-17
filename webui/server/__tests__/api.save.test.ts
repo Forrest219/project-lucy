@@ -19,10 +19,10 @@ vi.mock("../ktx", () => ({
 let projectRoot: string;
 let previousRoot: string | undefined;
 
-const schemaRelPath = "semantic-layer/mysql-aliyun/_schema/yihe_poc_demo.yaml";
+const schemaRelPath = "semantic-layer/mysql-aliyun/_schema/dataforai.yaml";
 const schemaYaml = `tables:
-  accrual_demo:
-    table: yihe_poc_demo.accrual_demo
+  superstore_orders:
+    table: dataforai.superstore_orders
     columns:
       - name: id
         type: number
@@ -61,7 +61,7 @@ describe("source save API", () => {
     const app = buildServer();
     await app.ready();
     const response = await request(app.server)
-      .put("/api/sources/mysql-aliyun/yihe_poc_demo/accrual_demo")
+      .put("/api/sources/mysql-aliyun/dataforai/superstore_orders")
       .send({ patch: { tableDescription: "Human description." } })
       .expect(200);
 
@@ -75,7 +75,7 @@ describe("source save API", () => {
     const app = buildServer();
     await app.ready();
     const response = await request(app.server)
-      .put("/api/sources/mysql-aliyun/yihe_poc_demo/accrual_demo")
+      .put("/api/sources/mysql-aliyun/dataforai/superstore_orders")
       .send({
         dryRun: false,
         patch: {
@@ -88,9 +88,9 @@ describe("source save API", () => {
 
     expect(response.body.data.written).toBe(true);
     expect(response.body.data.validation.ok).toBe(true);
-    expect(validateSource).toHaveBeenCalledWith(projectRoot, "mysql-aliyun", "yihe_poc_demo", "accrual_demo");
+    expect(validateSource).toHaveBeenCalledWith(projectRoot, "mysql-aliyun", "dataforai", "superstore_orders");
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toContain("human: Human description.");
-    await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "accrual_demo.yaml"), "utf8")).resolves.toContain("grain:");
+    await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"), "utf8")).resolves.toContain("grain:");
     await app.close();
   });
 
@@ -98,7 +98,7 @@ describe("source save API", () => {
     const app = buildServer();
     await app.ready();
     const response = await request(app.server)
-      .put("/api/sources/bad..conn/yihe_poc_demo/accrual_demo")
+      .put("/api/sources/bad..conn/dataforai/superstore_orders")
       .send({ dryRun: false, patch: { tableDescription: "Nope" } })
       .expect(403);
 

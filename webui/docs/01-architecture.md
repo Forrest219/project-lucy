@@ -132,7 +132,7 @@ GET /api/diff → git diff（限定 semantic-layer/、wiki/、.ktx-ui/）或会�
 
 ## 8. 与真实 semantic-layer 布局的对齐
 
-基于对 `semantic-layer/mysql-aliyun/_schema/*.yaml` 的核对（openclaw_db=5表 / yihe_poc_demo=11表 / mj_test=3表）：
+基于对 `semantic-layer/mysql-aliyun/_schema/*.yaml` 的核对（dataforai=5表 / dataforai=11表 / dataforai=3表）：
 
 | 项 | 原 README 假设 | 真实情况 | 处理 |
 | --- | --- | --- | --- |
@@ -147,7 +147,7 @@ GET /api/diff → git diff（限定 semantic-layer/、wiki/、.ktx-ui/）或会�
 | 风险 | 影响 | 缓解 / 待确认 |
 | --- | --- | --- |
 | ktx schema 是否支持 grain/measures/segments/visibility | 决定 M2/M4 能否落地 | **已探测 2026-06-15**：`grain/measures/segments` 支持在独立 overlay 文件中合并并 validate；`visibility` 不支持；已有列 `role` 不能通过 overlay 覆盖 |
-| `ktx` 二进制定位与调用约定 | validate 能否工作 | **已探测 2026-06-15**：`ktx sl validate <sourceName> --connection-id <conn>`，其中 `sourceName` 是短表名（如 `accrual_demo`），不是 `schema.table` 或 `conn/source`；成功退出码 0，找不到 source / schema compose 失败退出码 1 |
+| `ktx` 二进制定位与调用约定 | validate 能否工作 | **已探测 2026-06-15**：`ktx sl validate <sourceName> --connection-id <conn>`，其中 `sourceName` 是短表名（如 `superstore_orders`），不是 `schema.table` 或 `conn/source`；成功退出码 0，找不到 source / schema compose 失败退出码 1 |
 | 前端/后端框架大版本漂移 | M1/M2 才会真正覆盖路由、查询、表单链路 | M0 lockfile 实际解析为 React 19 / Vite 8 / TypeScript 6 / Fastify 5 / React Router 7。M1 验证 React Router + TanStack Query；M2 验证 react-hook-form + zod。优先按当前 lockfile 修复，阻塞时再回退大版本 |
 | 300 表目录扫描性能 | Catalog 加载慢 | 扫描结果缓存 + 文件 mtime 失效；必要时增量 |
 | Document 就地补丁对新增嵌套结构的支持 | measures/joins 写入复杂度 | M4 前做 spike 验证 yaml 包 Document API 增删节点 |
@@ -157,12 +157,12 @@ GET /api/diff → git diff（限定 semantic-layer/、wiki/、.ktx-ui/）或会�
 
 探测命令在 `/private/tmp/ktx-schema-probe` 项目副本中执行，避免修改真实语义层：
 
-- 原始真实 source：`POSTHOG_DISABLED=1 ktx sl validate accrual_demo --connection-id mysql-aliyun --json` → `Valid semantic-layer source: mysql-aliyun/accrual_demo`，退出码 0。
-- 错误 source 标识：`yihe_poc_demo.accrual_demo` 与 `mysql-aliyun/accrual_demo` 都找不到；前者被解析为 `mysql-aliyun/yihe_poc_demo.accrual_demo`，后者被解析为 `mysql-aliyun/mysql-aliyun/accrual_demo`，退出码 1。
-- 在 `_schema/yihe_poc_demo.yaml` 的表节点直接添加 `grain/measures/segments/role/visibility` 不会触发 validate 失败，但 `ktx sl read accrual_demo` 不消费这些值；不要把这当成支持。
-- 新建 `semantic-layer/mysql-aliyun/accrual_demo.yaml` overlay，只包含 `name/grain/measures/segments` 时，`sl read` 能合并输出这些字段，`sl validate` 退出码 0。
-- overlay 中加入 `visibility: public` 时，`sl read` 报 `composeOverlay: overlay for 'accrual_demo' has unhandled keys [visibility]`，退出码 1。
-- overlay 中重复声明已存在列 `columns.date` 并加 `role: time` 时，`sl read` 报 `column 'date' in columns already exists on manifest source 'accrual_demo'`，退出码 1。
+- 原始真实 source：`POSTHOG_DISABLED=1 ktx sl validate superstore_orders --connection-id mysql-aliyun --json` → `Valid semantic-layer source: mysql-aliyun/superstore_orders`，退出码 0。
+- 错误 source 标识：`dataforai.superstore_orders` 与 `mysql-aliyun/superstore_orders` 都找不到；前者被解析为 `mysql-aliyun/dataforai.superstore_orders`，后者被解析为 `mysql-aliyun/mysql-aliyun/superstore_orders`，退出码 1。
+- 在 `_schema/dataforai.yaml` 的表节点直接添加 `grain/measures/segments/role/visibility` 不会触发 validate 失败，但 `ktx sl read superstore_orders` 不消费这些值；不要把这当成支持。
+- 新建 `semantic-layer/mysql-aliyun/superstore_orders.yaml` overlay，只包含 `name/grain/measures/segments` 时，`sl read` 能合并输出这些字段，`sl validate` 退出码 0。
+- overlay 中加入 `visibility: public` 时，`sl read` 报 `composeOverlay: overlay for 'superstore_orders' has unhandled keys [visibility]`，退出码 1。
+- overlay 中重复声明已存在列 `columns.date` 并加 `role: time` 时，`sl read` 报 `column 'date' in columns already exists on manifest source 'superstore_orders'`，退出码 1。
 
 ---
 _架构设计 by Claude (architect) · 2026-06-15_

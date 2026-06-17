@@ -517,9 +517,9 @@
           <div class="arch-box" style="border-style:dashed;opacity:.7;">
             <div class="arch-box-title" style="color:var(--text-dim);">StarRocks — 未来生产环境</div>
             <div class="arch-box-body">
-              <span class="tag" style="border-style:dashed;">dataforai.*（异步 MV，派生自 DM 层）</span><br>
+              <span class="tag" style="border-style:dashed;">dataforai.superstore_orders · dataforai.superstore_returns · dataforai.superstore_people</span><br>
               ODS / DWD / DM 不暴露给 AI<br>
-              <span style="font-size:11px;color:var(--text-dim)">KTX enabled_tables 只列 dataforai.*</span>
+              <span style="font-size:11px;color:var(--text-dim)">KTX enabled_tables 只列 dataforai.superstore_* 三表</span>
             </div>
           </div>
         </div>
@@ -603,7 +603,7 @@
         <tr><td>P3</td><td class="mono bad">AVG(profit/sales)</td><td class="mono hi">SUM(profit)/NULLIF(SUM(sales),0)</td><td class="dim">权重失真</td></tr>
         <tr><td>P4</td><td class="mono bad">WHERE profit &gt; 0</td><td class="mono hi">不过滤，亏损行纳入分母</td><td class="dim">高估利润率</td></tr>
         <tr><td>P5</td><td class="mono bad">无 WHERE is_deleted=0</td><td class="mono hi">所有查询加 is_deleted=0</td><td class="dim">混入历史批次</td></tr>
-        <tr><td>P6</td><td class="mono bad">openclaw_db.orders</td><td class="mono hi">dataforai.superstore_orders</td><td class="dim">32行 vs 10194行</td></tr>
+        <tr><td>P6</td><td class="mono bad">裸表名 orders</td><td class="mono hi">dataforai.superstore_orders</td><td class="dim">必须使用 schema 限定名</td></tr>
         <tr><td>P7</td><td class="mono bad">returned = 'Yes'</td><td class="mono hi">returned = '是'</td><td class="dim">源数据为中文</td></tr>
       </tbody>
     </table>
@@ -648,12 +648,6 @@
         <div class="eval-q">superstore_orders 整体利润率是多少？</div>
         <div class="eval-forbidden">forbidden: AVG(profit/sales) · WHERE profit &gt; 0</div>
         <div class="eval-required">required: SUM(profit) / NULLIF(SUM(sales), 0)</div>
-      </div>
-      <div class="eval-card">
-        <div class="eval-id">superstore-routing-001</div>
-        <div class="eval-q">查询所有订单，取前 5 行看看数据长什么样。</div>
-        <div class="eval-forbidden">forbidden: openclaw_db.orders · 裸 `orders`</div>
-        <div class="eval-required">required: dataforai.superstore_orders</div>
       </div>
       <div class="eval-card">
         <div class="eval-id">superstore-discount-003 / ordercount-002 / profit / filter</div>
@@ -783,10 +777,10 @@ Q: superstore_orders 的加权平均折扣率是多少？
         </div>
       </div>
       <div class="status-item">
-        <div class="status-dot plan"></div>
+        <div class="status-dot done"></div>
         <div>
-          <div class="status-item-name">openclaw_db measures</div>
-          <div class="status-item-desc">非当前 MVP 范围，P1 完成后扩展</div>
+          <div class="status-item-name">Dataforai-only scope</div>
+          <div class="status-item-desc">仅保留 dataforai.superstore_* 三表</div>
         </div>
       </div>
       <div class="status-item">

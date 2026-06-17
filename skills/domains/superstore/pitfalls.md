@@ -33,11 +33,11 @@
 **正确**：`WHERE is_deleted = 0`
 **原因**：全量重导入时旧批次数据不物理删除，is_deleted=1 的行是历史批次残留。
 
-## P6 — orders 表歧义
+## P6 — 裸表名缺少 schema
 
-**错误**：直接使用 `openclaw_db.orders` 做超市分析
+**错误**：直接使用 `superstore_orders` 或 `orders`
 **正确**：超市分析必须用 `dataforai.superstore_orders`
-**原因**：两张表都叫 orders，但数据完全不同。openclaw_db.orders 是约 32 行的演示数据。
+**原因**：本项目只保留 `dataforai`，回答和 SQL 中仍应使用 schema 限定名，避免跨环境解析到错误默认库。
 
 ## P7 — 退货表误用 returned 字段值
 

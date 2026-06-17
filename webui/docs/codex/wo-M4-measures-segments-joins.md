@@ -42,7 +42,7 @@ server/__tests__/{semantic-layer.measures,joins-sidecar}.test.ts
 ```bash
 npm test   # measures 写入 round-trip / sidecar 读写 / confirmed-only 入正式 YAML 用例绿
 npm run dev
-# 在 customers 标一个 candidate join → 只进 sidecar，YAML 不变
+# 在 superstore_orders 标一个 candidate join → 只进 sidecar，YAML 不变
 # confirm 后 → 进 YAML 且 validate 通过
 ```
 

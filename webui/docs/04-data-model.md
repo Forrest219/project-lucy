@@ -7,20 +7,20 @@
 文件：`semantic-layer/<conn>/_schema/<schema>.yaml`
 ```yaml
 tables:
-  customers:                      # ← 表名是 key，编辑单元
-    table: openclaw_db.customers  # schema.table 限定名
+  superstore_orders:                      # ← 表名是 key，编辑单元
+    table: dataforai.superstore_orders  # schema.table 限定名
     columns:
-      - name: customer_id
+      - name: order_id
         type: number              # number | string | time | boolean
         pk: true
         nullable: false
         descriptions:
           ai: "Unique numeric identifier ..."   # ← 按作者分桶
     descriptions:
-      ai: "Master registry of all customers ..."
+      ai: "Master registry of all superstore_orders ..."
     joins:
-      - to: dim_region
-        "on": customers.region_id = dim_region.region_id   # ← 引号必须保留
+      - to: superstore_people
+        "on": superstore_orders.region = superstore_people.region   # ← 引号必须保留
         relationship: many_to_one                          # many_to_one|one_to_many|one_to_one
         source: formal                                     # formal|manual|candidate
 ```
@@ -29,17 +29,16 @@ tables:
 
 独立 overlay 文件示例（ktx 会与 `_schema` manifest 合并）：
 ```yaml
-name: accrual_demo
+name: superstore_orders
 grain:
-  - date
-  - hospital
+  - order_id
 measures:
-  - name: total_amount
-    expr: sum(amount)
-    description: Total accrued amount.
+  - name: total_sales
+    expr: sum(sales)
+    description: Total sales amount.
 segments:
-  - name: positive_amount
-    expr: amount > 0
+  - name: profitable_rows
+    expr: profit > 0
 ```
 
 ## 2. 内部模型（前后端共享 `model.ts`）
@@ -118,8 +117,8 @@ validation_failed  : 最近一次 ktx sl validate 失败（覆盖上述状态）
 
 ```jsonc
 { "version": 1, "candidates": [{
-  "conn": "mysql-aliyun", "schema": "openclaw_db", "fromTable": "orders",
-  "join": { "to": "customers", "on": "orders.customer_id = customers.customer_id",
+  "conn": "mysql-aliyun", "schema": "dataforai", "fromTable": "superstore_returns",
+  "join": { "to": "superstore_orders", "on": "superstore_returns.order_id = superstore_orders.order_id",
             "relationship": "many_to_one", "source": "candidate" },
   "confidence": "candidate", "note": "由字段名推断" }]}
 ```

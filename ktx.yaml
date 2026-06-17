@@ -2,20 +2,16 @@ connections:
   mysql-aliyun:
     driver: mysql
     enabled_tables:
-      # 本期问答范围（M2.1 决策）：仅 dataforai 超市 domain。
-      # mj_test / openclaw_db / yihe_poc_demo 已暂停启用 — 若后续接入，
-      # 在此追加表名并补 semantic-layer 路由 / CLAUDE.md 指引即可，
-      # 各 schema 的 yaml shard 仍保留在 semantic-layer/，避免重新 scan。
+      # 本项目仅保留 dataforai 超市 domain。
       - dataforai.superstore_orders
       - dataforai.superstore_returns
       - dataforai.superstore_people
     host: rm-bp1t0ie3sj4g7561hpo.mysql.rds.aliyuncs.com
     port: 3306
-    database: openclaw_db
+    database: dataforai
     username: bi_zy
     password: file:/Users/zhangxingchen/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
     # NOTE: `schemas` 控制 scan 范围；`enabled_tables`（上方）控制问答可见范围。
-    # 本期仅启用 dataforai；其它 schema 暂停 scan，已 ingest 的快照保留在 raw-sources/。
     schemas:
       - dataforai
 storage:

@@ -1,7 +1,7 @@
 import { mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const ALLOW = ["semantic-layer", "knowledge", "skills", ".ktx-ui"];
+const ALLOW = ["semantic-layer", "knowledge", "skills", "wiki", ".ktx-ui"];
 const DENY = [".ktx/secrets", "raw-sources", ".git"];
 
 export class ForbiddenPathError extends Error {

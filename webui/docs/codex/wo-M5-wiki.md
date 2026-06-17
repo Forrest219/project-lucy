@@ -42,7 +42,7 @@ server/__tests__/wiki.test.ts
 npm test   # frontmatter round-trip / key 防穿越 / 仅写 wiki 用例绿
 npm run dev
 # 新建 wiki/global/revenue.md，填 frontmatter+正文 → diff → 保存落盘
-# 从 customers 表「创建关联 wiki」→ 预填 sl_refs
+# 从 superstore_orders 表「创建关联 wiki」→ 预填 sl_refs
 ```
 
 ## DoD

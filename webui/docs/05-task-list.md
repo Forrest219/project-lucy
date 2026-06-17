@@ -16,7 +16,7 @@
 - [ ] T1.3 `readSource`（parseDocument→规范化）→ `GET /api/sources/:conn/:schema/:table`
 - [ ] T1.4 前端 Catalog 页：列表 + connection/schema 过滤 + 表名/字段名搜索 + 状态筛选
 - [ ] T1.5 前端单表只读详情 + YAML preview
-- **验收**：能列出 20 张真实表（mj_test 4 + openclaw_db 5 + yihe_poc_demo 11）、搜索筛选、打开只读单表；不展示任何 secrets
+- **验收**：能列出 3 张 dataforai 真实表、搜索筛选、打开只读单表；不展示任何 secrets
 
 ## M2 · 单表编辑与 diff
 - [ ] T2.1 `applyPatch` 就地补丁 + `serialize`；round-trip 单测（保 `"on"`/注释/顺序/未知键）

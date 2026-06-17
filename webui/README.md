@@ -237,7 +237,7 @@ MVP 写入策略：
 ktx sl validate <table> --connection-id <connectionId>
 ```
 
-其中 `<table>` 是 `ktx sl --connection-id <connectionId>` 列表中的短 `name`，例如 `accrual_demo`；不要传 `schema.table` 或 `connection/table`。
+其中 `<table>` 是 `ktx sl --connection-id <connectionId>` 列表中的短 `name`，例如 `superstore_orders`；不要传 `schema.table` 或 `connection/table`。
 
 - 展示校验结果。
 - 展示建议 Git 命令，但不自动提交：

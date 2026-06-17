@@ -47,21 +47,21 @@ async function main() {
 
     const sources = await ok<{ tables: Array<{ schema: string; table: string }> }>(app, "GET", "/api/sources");
     assert(sources.tables.length > 0, "/api/sources returned no tables");
-    assert(sources.tables.some((source) => source.schema === "openclaw_db" && source.table === "customers"), "customers source missing");
+    assert(sources.tables.some((source) => source.schema === "dataforai" && source.table === "superstore_orders"), "superstore_orders source missing");
 
-    const customers = await ok<{ rawYaml: string; model: { columns: unknown[] } }>(
+    const superstore_orders = await ok<{ rawYaml: string; model: { columns: unknown[] } }>(
       app,
       "GET",
-      "/api/sources/mysql-aliyun/openclaw_db/customers"
+      "/api/sources/mysql-aliyun/dataforai/superstore_orders"
     );
-    assert(customers.model.columns.length > 0, "customers has no columns");
-    assert(customers.rawYaml.includes('"on"'), "customers raw YAML did not preserve quoted on");
+    assert(superstore_orders.model.columns.length > 0, "superstore_orders has no columns");
+    assert(superstore_orders.rawYaml.includes('"on"'), "superstore_orders raw YAML did not preserve quoted on");
 
-    const dryRun = await ok<{ diff: string }>(app, "PUT", "/api/sources/mysql-aliyun/openclaw_db/customers", {
+    const dryRun = await ok<{ diff: string }>(app, "PUT", "/api/sources/mysql-aliyun/dataforai/superstore_orders", {
       dryRun: true,
       patch: {
-        columns: [{ name: "customer_id", description: "API acceptance dry-run description." }],
-        grain: ["customer_id"]
+        columns: [{ name: "order_id", description: "API acceptance dry-run description." }],
+        grain: ["order_id"]
       }
     });
     assert(dryRun.diff.includes("API acceptance dry-run description"), "dryRun diff did not include edited description");
@@ -69,13 +69,13 @@ async function main() {
     const save = await ok<{ written: boolean; validation: { ok: boolean }; changedFiles: unknown[] }>(
       app,
       "PUT",
-      "/api/sources/mysql-aliyun/yihe_poc_demo/accrual_demo",
+      "/api/sources/mysql-aliyun/dataforai/superstore_orders",
       {
         dryRun: false,
         patch: {
-          grain: ["date", "hospital"],
-          measures: [{ name: "total_amount", expr: "sum(amount)", description: "Total accrued amount." }],
-          segments: [{ name: "positive_amount", expr: "amount > 0", description: "Rows with positive accrued amount." }]
+          grain: ["order_id"],
+          measures: [{ name: "total_sales", expr: "sum(sales)", description: "Total sales amount." }],
+          segments: [{ name: "profitable_rows", expr: "profit > 0", description: "Rows with positive profit." }]
         }
       }
     );
@@ -93,11 +93,11 @@ async function main() {
       candidates: [
         {
           conn: "mysql-aliyun",
-          schema: "openclaw_db",
-          fromTable: "orders",
+          schema: "dataforai",
+          fromTable: "superstore_returns",
           join: {
-            to: "customers",
-            on: "orders.customer_id = customers.customer_id",
+            to: "superstore_orders",
+            on: "superstore_returns.order_id = superstore_orders.order_id",
             relationship: "many_to_one",
             source: "candidate"
           },
@@ -114,7 +114,7 @@ async function main() {
       frontmatter: {
         summary: "M5 acceptance wiki page",
         tags: ["acceptance", "m5"],
-        sl_refs: ["mysql-aliyun/yihe_poc_demo/accrual_demo"],
+        sl_refs: ["mysql-aliyun/dataforai/superstore_orders"],
         usage_mode: "acceptance"
       },
       content: "# M5 Acceptance\n\nCreated through the WebUI wiki API to verify frontmatter and markdown persistence.\n"
@@ -124,7 +124,7 @@ async function main() {
     assert(wiki.frontmatter.summary === "M5 acceptance wiki page", "wiki frontmatter did not round-trip");
     assert(wiki.content.includes("# M5 Acceptance"), "wiki markdown did not round-trip");
 
-    const forbiddenSource = await request(app, "PUT", "/api/sources/bad..conn/yihe_poc_demo/accrual_demo", {
+    const forbiddenSource = await request(app, "PUT", "/api/sources/bad..conn/dataforai/superstore_orders", {
       dryRun: false,
       patch: { tableDescription: "bad" }
     });

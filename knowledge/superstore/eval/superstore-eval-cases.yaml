@@ -147,26 +147,6 @@ cases:
     snapshot_date: 2026-06-17
     notes: 验证利润率公式；profit < 0 的行不可被过滤；亏损行纳入分母。
 
-  # ── 表路由类（歧义防线）──────────────────────────────────────────
-
-  - id: superstore-routing-001
-    question: 查询所有订单，取前 5 行看看数据长什么样。
-    domain: superstore
-    skill_version: v1.0
-    semantic_version: v1.0
-    model_id: claude-sonnet-4-6
-    expected_source: semantic_layer
-    required_sql_pattern:
-      - "dataforai.superstore_orders"
-      - "LIMIT 5"
-    forbidden_sql_pattern:
-      - "openclaw_db.orders"
-      - "`orders`"    # 裸表名（未加 schema 前缀，歧义风险）
-    expected_result:
-      row_count: 5
-    snapshot_date: 2026-06-17
-    notes: 验证在有歧义时选择正确的 canonical table，不使用 openclaw_db.orders。
-
   # ── is_deleted 过滤类 ─────────────────────────────────────────────
 
   - id: superstore-filter-001

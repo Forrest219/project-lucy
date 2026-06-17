@@ -49,7 +49,7 @@ PUT  /api/joins/candidates
 ```jsonc
 { "ok": true, "data": {
   "root": "/Users/forrest/Projects/project-lucy",
-  "connections": [{ "id": "mysql-aliyun", "driver": "mysql", "passwordSource": "file", "schemas": ["mj_test","openclaw_db","yihe_poc_demo"] }],
+  "connections": [{ "id": "mysql-aliyun", "driver": "mysql", "passwordSource": "file", "schemas": ["dataforai"] }],
   "ktxAvailable": true
 }}
 ```
@@ -58,8 +58,8 @@ PUT  /api/joins/candidates
 扫描全部 `_schema/*.yaml`，返回逐表目录摘要（供 Catalog）。
 ```jsonc
 { "ok": true, "data": { "tables": [{
-  "conn": "mysql-aliyun", "schema": "openclaw_db", "table": "customers",
-  "filePath": "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+  "conn": "mysql-aliyun", "schema": "dataforai", "table": "superstore_orders",
+  "filePath": "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
   "columnCount": 8, "hasTableDesc": true, "hasGrain": false,
   "measureCount": 0, "joinCount": 2, "wikiRefCount": 0,
   "completion": "partial", "mtime": "2026-06-15T08:00:00Z"
@@ -70,7 +70,7 @@ PUT  /api/joins/candidates
 ```jsonc
 { "ok": true, "data": {
   "model": { /* TableModel，见 04-data-model.md */ },
-  "rawYaml": "tables:\n  customers:\n    ...",
+  "rawYaml": "tables:\n  superstore_orders:\n    ...",
   "completion": "partial"
 }}
 ```

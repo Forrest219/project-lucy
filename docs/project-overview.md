@@ -17,7 +17,7 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │  CLAUDE.md（加载器）                                                  │
 │  · 查询优先级强制链（semantic layer first → ref docs → raw SQL last） │
-│  · 表路由规则（superstore_orders vs openclaw_db.orders）              │
+│  · 表路由规则（dataforai.superstore_* 三表）                         │
 │  · 指标口径白名单（禁止 AVG(discount)、AVG(profit/sales) 等）         │
 │  · Reviewer 触发条件（财务/跨表 JOIN/领导汇报）                        │
 └──────────────────────────────┬──────────────────────────────────────┘
@@ -62,8 +62,6 @@
 │  · dataforai.superstore_orders   10,194 行  （Tableau 超市 4 年）    │
 │  · dataforai.superstore_returns    296 行                            │
 │  · dataforai.superstore_people       6 行                            │
-│  · openclaw_db.*                  演示库（非超市分析主库）             │
-│  · yihe_poc_demo.*               医疗 POC 数据                       │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
                                ▼
@@ -71,7 +69,7 @@
 │  Layer 4 · 验证层（发布门禁）                                         │
 │                                                                      │
 │  knowledge/superstore/eval/superstore-eval-cases.yaml                     │
-│  · 8 条 Eval Case（折扣 / 订单数 / 利润率 / 表路由 / is_deleted）    │
+│  · 7 条 Eval Case（折扣 / 订单数 / 利润率 / is_deleted）             │
 │  · forbidden_sql_pattern 防止换一种方式写错                           │
 │  · snapshot_date 锚定快照，避免 live data 漂移                        │
 │                                                                      │
@@ -118,17 +116,13 @@ project-lucy/
 ├── semantic-layer/mysql-aliyun/
 │   ├── _schema/
 │   │   ├── dataforai.yaml             ← KTX 扫描生成（含 human override）
-│   │   ├── openclaw_db.yaml
-│   │   ├── mj_test.yaml
-│   │   └── yihe_poc_demo.yaml
 │   ├── superstore_orders.yaml         ← 手工 overlay（9 measures / 3 segments / 2 joins）
-│   └── accrual_demo.yaml
 │
 ├── skills/
 │   ├── warehouse/
 │   │   ├── SKILL.md                   ← Knowledge Skill（路由器）
 │   │   └── references/
-│   │       ├── table-routing.md       ← 表选择规则 + 歧义解决
+│   │       ├── table-routing.md       ← dataforai 表选择规则
 │   │       └── metrics-policy.md      ← 聚合口径强制规范
 │   ├── superstore/
 │   │   ├── SKILL.md                   ← Superstore 领域 Skill
@@ -215,7 +209,7 @@ ktx wiki search <keyword> # 检索 wiki / reference docs
 3. raw SQL（最后手段，须标注假设）
 
 配套 Reference Docs：
-- `table-routing.md`：解决 `orders` vs `superstore_orders` 歧义
+- `table-routing.md`：定义 `dataforai.superstore_*` 三表选择规则
 - `metrics-policy.md`：折扣率 / 利润率 / 订单数 / 客单价强制口径
 
 #### Superstore Domain Skill（`skills/superstore/SKILL.md`）
@@ -278,7 +272,6 @@ npm run server     # 启动 Fastify API（3001 端口）
 | `superstore-ordercount-001` | 总订单数 | `COUNT(*)` |
 | `superstore-ordercount-002` | 按区域订单数 | `COUNT(*)` |
 | `superstore-profit-001` | 整体利润率 | `AVG(profit/sales)` + `WHERE profit > 0` |
-| `superstore-routing-001` | 表路由歧义 | `openclaw_db.orders` |
 | `superstore-filter-001` | is_deleted 过滤 | 无（验证过滤是否存在） |
 
 **每条 Eval 字段**：
@@ -369,11 +362,10 @@ cd project-lucy/webui && npm run dev && npm run server
 | KTX Semantic Layer — dataforai | **完成**（3 表 / 9 measures / human override） |
 | Skills — warehouse / superstore / reviewer | **完成**（3 类 Skill + 5 份 Reference Docs） |
 | CLAUDE.md（加载器） | **完成** |
-| Eval Cases — superstore | **完成**（8 条，覆盖 4 类高危模式） |
+| Eval Cases — superstore | **完成**（7 条，覆盖 4 类高危模式） |
 | WebUI — M0~M5 | **完成**（30 项测试通过） |
 | WebUI — M6 SkillsEditor | 待开发（`skills/` 编辑页） |
 | MySQL COMMENT 补全 | 待执行（`discount` / `profit` 字段级注释） |
-| openclaw_db measures | 未覆盖（非当前 MVP 范围） |
 | Ops Dashboard | 待规划（需遥测数据源先建立） |
 
 ---

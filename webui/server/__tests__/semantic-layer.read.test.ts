@@ -10,40 +10,40 @@ beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-sl-"));
   await mkdir(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await writeFile(
-    path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "openclaw_db.yaml"),
+    path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),
     `tables:
-  customers:
-    table: openclaw_db.customers
+  superstore_orders:
+    table: dataforai.superstore_orders
     x_custom:
       keep: true
     columns:
-      - name: customer_id
+      - name: order_id
         type: number
         pk: true
         nullable: false
         descriptions:
-          ai: Unique customer identifier.
-      - name: customer_name
+          ai: Unique order identifier.
+      - name: order_name
         type: string
         descriptions:
-          human: Customer display name.
+          human: Order display name.
     descriptions:
-      ai: Customer registry.
+      ai: Order registry.
     joins:
-      - to: orders
-        "on": customers.customer_id = orders.customer_id
+      - to: superstore_returns
+        "on": superstore_orders.order_id = superstore_returns.order_id
         relationship: one_to_many
         source: formal
 `,
     "utf8"
   );
   await writeFile(
-    path.join(projectRoot, "semantic-layer", "mysql-aliyun", "customers.yaml"),
-    `name: customers
+    path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"),
+    `name: superstore_orders
 grain:
-  - customer_id
+  - order_id
 measures:
-  - name: customer_count
+  - name: order_count
     expr: count(*)
 `,
     "utf8"
@@ -61,8 +61,8 @@ describe("semantic-layer read", () => {
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toMatchObject({
       conn: "mysql-aliyun",
-      schema: "openclaw_db",
-      table: "customers",
+      schema: "dataforai",
+      table: "superstore_orders",
       columnCount: 2,
       hasTableDesc: true,
       hasGrain: true,
@@ -73,16 +73,16 @@ describe("semantic-layer read", () => {
   });
 
   it("normalizes one table and preserves raw yaml and unknown keys", async () => {
-    const result = await readSource(projectRoot, "mysql-aliyun", "openclaw_db", "customers");
+    const result = await readSource(projectRoot, "mysql-aliyun", "dataforai", "superstore_orders");
 
-    expect(result.model.descriptions.ai).toBe("Customer registry.");
-    expect(result.model.columns.map((column) => column.name)).toEqual(["customer_id", "customer_name"]);
-    expect(result.model.columns[1].descriptions.human).toBe("Customer display name.");
-    expect(result.model.grain).toEqual(["customer_id"]);
-    expect(result.model.measures).toEqual([{ name: "customer_count", expr: "count(*)", filter: undefined, description: undefined }]);
+    expect(result.model.descriptions.ai).toBe("Order registry.");
+    expect(result.model.columns.map((column) => column.name)).toEqual(["order_id", "order_name"]);
+    expect(result.model.columns[1].descriptions.human).toBe("Order display name.");
+    expect(result.model.grain).toEqual(["order_id"]);
+    expect(result.model.measures).toEqual([{ name: "order_count", expr: "count(*)", filter: undefined, description: undefined }]);
     expect(result.model.joins?.[0]).toMatchObject({
-      to: "orders",
-      on: "customers.customer_id = orders.customer_id",
+      to: "superstore_returns",
+      on: "superstore_orders.order_id = superstore_returns.order_id",
       relationship: "one_to_many"
     });
     expect(result.model.unknownKeys).toContain("x_custom");
@@ -91,7 +91,7 @@ describe("semantic-layer read", () => {
   });
 
   it("raises not found for missing tables", async () => {
-    await expect(readSource(projectRoot, "mysql-aliyun", "openclaw_db", "missing")).rejects.toMatchObject({
+    await expect(readSource(projectRoot, "mysql-aliyun", "dataforai", "missing")).rejects.toMatchObject({
       code: "SOURCE_NOT_FOUND"
     });
   });

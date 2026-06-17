@@ -38,8 +38,7 @@ Step 3  以上均不能覆盖时，才允许 raw SQL
 
 ## 表路由（关键）
 
-本期数据问答仅启用 **`dataforai`** 超市 domain（M2.1 决策）。
-`mj_test` / `openclaw_db` / `yihe_poc_demo` 暂不暴露给问答，若用户问到，回答："本期未启用该 domain"。
+本项目数据问答仅启用 **`dataforai`** 超市 domain。
 
 | 分析意图 | 路由 |
 |---|---|

@@ -80,7 +80,7 @@ validateSource(projectRoot, conn, schema, table): Promise<ValidationResult>;
 // 实现：execFile('ktx', ['sl','validate', table, '--connection-id', conn],
 //        { cwd: projectRoot, timeout: 60_000 })  ← 无 shell，参数数组
 ```
-> 已确认：`sourceName` 是 ktx 列表里的短 `name`（本项目等于表名，如 `accrual_demo`），不是 `schema.table`，也不要带 `conn/` 前缀。成功退出码 0；找不到 source 或 compose/validate 失败退出码 1。若未来出现同 connection 下重名表，后端必须先检测冲突并拒绝自动 validate。
+> 已确认：`sourceName` 是 ktx 列表里的短 `name`（本项目等于表名，如 `superstore_orders`），不是 `schema.table`，也不要带 `conn/` 前缀。成功退出码 0；找不到 source 或 compose/validate 失败退出码 1。若未来出现同 connection 下重名表，后端必须先检测冲突并拒绝自动 validate。
 
 ### 3.4 `diff.ts`
 ```ts
@@ -122,7 +122,7 @@ readProject(root): { root; connections: ConnectionInfo[]; schemas: string[] }
 | completion | vitest | 四态边界 |
 | API | supertest | 错误 envelope 形态；dryRun 不落盘；secrets 路径 403 |
 | 前端 | RTL | error envelope 被正确处理（不渲染脏数据，呼应 ADR-09） |
-| 端到端冒烟 | 手动/脚本 | 读→编辑→diff→保存→validate 全链路（用 yihe_poc_demo 真实表） |
+| 端到端冒烟 | 手动/脚本 | 读→编辑→diff→保存→validate 全链路（用 dataforai 真实表） |
 
 ## 6. 非目标（本规格不覆盖）
 

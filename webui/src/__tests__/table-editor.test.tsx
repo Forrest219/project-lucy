@@ -15,7 +15,7 @@ function renderEditor() {
 
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/sources/mysql-aliyun/openclaw_db/customers"]}>
+      <MemoryRouter initialEntries={["/sources/mysql-aliyun/dataforai/superstore_orders"]}>
         <Routes>
           <Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
         </Routes>
@@ -40,11 +40,11 @@ describe("TableEditor", () => {
               tables: [
                 {
                   conn: "mysql-aliyun",
-                  schema: "openclaw_db",
-                  table: "customers",
-                  filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+                  schema: "dataforai",
+                  table: "superstore_orders",
+                  filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
                   columnCount: 1,
-                  columnNames: ["customer_id"],
+                  columnNames: ["order_id"],
                   hasTableDesc: true,
                   hasGrain: false,
                   measureCount: 0,
@@ -58,29 +58,29 @@ describe("TableEditor", () => {
           })
         );
       }
-      if (url === "/api/sources/mysql-aliyun/openclaw_db/customers" && !init) {
+      if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders" && !init) {
         return new Response(
           JSON.stringify({
             ok: true,
             data: {
               model: {
                 conn: "mysql-aliyun",
-                schema: "openclaw_db",
-                table: "customers",
-                filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
-                qualifiedName: "openclaw_db.customers",
+                schema: "dataforai",
+                table: "superstore_orders",
+                filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+                qualifiedName: "dataforai.superstore_orders",
                 descriptions: { ai: "AI table description" },
-                columns: [{ name: "customer_id", type: "number", pk: true, descriptions: { ai: "AI column description" } }],
+                columns: [{ name: "order_id", type: "number", pk: true, descriptions: { ai: "AI column description" } }],
                 joins: [],
                 unknownKeys: []
               },
-              rawYaml: "table: openclaw_db.customers\n",
+              rawYaml: "table: dataforai.superstore_orders\n",
               completion: "partial"
             }
           })
         );
       }
-      if (url === "/api/sources/mysql-aliyun/openclaw_db/customers" && init?.method === "PUT") {
+      if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders" && init?.method === "PUT") {
         return new Response(
           JSON.stringify({
             ok: true,
@@ -107,7 +107,7 @@ describe("TableEditor", () => {
       const body = JSON.parse(String(putCall?.[1]?.body));
       expect(body.dryRun).toBe(true);
       expect(body.patch.columns[0]).toEqual({
-        name: "customer_id",
+        name: "order_id",
         description: "Human column description"
       });
     });

@@ -39,18 +39,18 @@ server/__tests__/{completion,semantic-layer.read}.test.ts
 
 ## 约束（重点）
 - `descriptions` 渲染优先 `human` 回退 `ai`。
-- 真实数据 20 表（mj_test 4 含 `#tableau_426_sid...` + openclaw_db 5 + yihe_poc_demo 11）；按真实语义层展示，勿为凑数过滤；扫描结果可按文件 mtime 缓存。
+- 真实数据 3 表（`dataforai.superstore_orders` / `superstore_returns` / `superstore_people`）；按真实语义层展示，勿为凑数过滤；扫描结果可按文件 mtime 缓存。
 - 严禁任何写操作；严禁返回 secrets。
 
 ## 自验
 ```bash
 npm run dev
-# Catalog 列出 20 表，能按 schema 过滤、搜 customers、按状态筛选
-# 打开 customers 看到只读 YAML，无 password 泄漏
+# Catalog 列出 20 表，能按 schema 过滤、搜 superstore_orders、按状态筛选
+# 打开 superstore_orders 看到只读 YAML，无 password 泄漏
 npm test   # completion 四态 + readSource 规范化用例绿
 # password 断言：每个连接都不得含 password 字段（passwordSource 允许保留，不算泄漏）
 curl -s localhost:5174/api/project | jq '[.data.connections[] | has("password")] | any | not'  # 期望 true
 ```
 
 ## DoD
-总纲 §3 全项 + 列出真实 20 表 + 单表只读可看 + `/api/project` 无 password 值。完成后**停下交回**。
+总纲 §3 全项 + 列出 3 张 dataforai 真实表 + 单表只读可看 + `/api/project` 无 password 值。完成后**停下交回**。

@@ -40,14 +40,14 @@ src/__tests__/table-editor.test.tsx
 6. TableEditor 三栏：左表/字段导航，中表单（react-hook-form + zod），右 preview+diff；表单变更防抖触发 dryRun。
 
 ## 约束（重点）
-- ROUND-TRIP 是验收红线：对 `openclaw_db.customers` 只改一条描述，diff 必须**只有那一行**变化，`"on"`/注释/顺序/其它表纹丝不动。
+- ROUND-TRIP 是验收红线：对 `dataforai.superstore_orders` 只改一条描述，diff 必须**只有那一行**变化，`"on"`/注释/顺序/其它表纹丝不动。
 - dryRun 期间磁盘文件 mtime/内容不得改变。
 
 ## 自验
 ```bash
 npm test   # roundtrip 用例：单字段改动 diff 最小化；human 不覆盖 ai；未知键保留
 npm run dev
-# 编辑 customers.customer_id 描述 → 右侧 diff 只显示该行；磁盘文件未变
+# 编辑 superstore_orders.order_id 描述 → 右侧 diff 只显示该行；磁盘文件未变
 ```
 
 ## DoD

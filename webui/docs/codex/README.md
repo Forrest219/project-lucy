@@ -56,7 +56,7 @@ git -C /Users/forrest/Projects/project-lucy status --short   # 记录开工前�
 - [ ] 工单列出的交付文件均已创建/修改
 - [ ] 相关单元测试存在且 `npm test` 全绿
 - [ ] 涉及护栏的安全/round-trip 用例有覆盖
-- [ ] 用**真实数据**（`yihe_poc_demo` / `openclaw_db`）跑过冒烟，并在收尾说明里贴结果
+- [ ] 用**真实数据**（`dataforai` / `dataforai`）跑过冒烟，并在收尾说明里贴结果
 - [ ] 不引入对后续里程碑的破坏；改动可被 `git diff` 清晰看到
 - [ ] 收尾给出：改了哪些文件、怎么验证的、已知遗留
 

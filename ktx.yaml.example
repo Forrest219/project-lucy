@@ -14,39 +14,17 @@ connections:
   mysql-aliyun:
     driver: mysql
     enabled_tables:
-      - mj_test.dm_fin_bs_fact
-      - mj_test.dm_fin_cf_fact
-      - mj_test.dm_fin_pl_fact
-      - openclaw_db.bidm_ai_metric_summary_mth
-      - openclaw_db.customers
-      - openclaw_db.dim_region
-      - openclaw_db.orders
-      - openclaw_db.products
-      - yihe_poc_demo.accrual_demo
-      - yihe_poc_demo.inpatient_demo
-      - yihe_poc_demo.outpatient_demo
-      - yihe_poc_demo.satisfaction_answer_detail
-      - yihe_poc_demo.settlement_demo
-      - yihe_poc_demo.v_doctor_satisfaction_metric
-      - yihe_poc_demo.v_feedback_detail
-      - yihe_poc_demo.v_not_very_satisfied_detail
-      - yihe_poc_demo.v_nps_metric
-      - yihe_poc_demo.v_survey_recovery_metric
-      - yihe_poc_demo.v_wait_time_issue
       - dataforai.superstore_orders
       - dataforai.superstore_returns
       - dataforai.superstore_people
     host: <CHANGE-ME-MYSQL-HOST>
     port: 3306
-    database: <CHANGE-ME-DEFAULT-DB>
+    database: dataforai
     username: <CHANGE-ME-USERNAME>
     # 密码以本地文件形式注入，文件路径替换为你的绝对路径。
     # 该路径下的文件已在 .ktx/.gitignore 排除，不会进 git。
     password: file:<CHANGE-ME-ABS-PATH-TO-PROJECT>/.ktx/secrets/mysql-aliyun-password
     schemas:
-      - mj_test
-      - openclaw_db
-      - yihe_poc_demo
       - dataforai
 storage:
   state: sqlite

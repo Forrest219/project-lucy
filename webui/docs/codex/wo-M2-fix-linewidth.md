@@ -11,10 +11,10 @@
 ```
 
 ## 背景(已交叉验证确认)
-M2 的 round-trip 红线在**真实数据**上被破坏:只改一行(给 `customer_id` 加 `human` 描述),实测 diff 却把 **7 处无关的超长 `ai:` 描述跨多张表全部重新折行**:
+M2 的 round-trip 红线在**真实数据**上被破坏:只改一行(给 `order_id` 加 `human` 描述),实测 diff 却把 **7 处无关的超长 `ai:` 描述跨多张表全部重新折行**:
 ```diff
--      ai: Master registry of all customers, capturing identity, segmentation, regional assignment, and account lifecycle status.
-+      ai: Master registry of all customers, capturing identity, segmentation, regional
+-      ai: Master registry of all superstore_orders, capturing identity, segmentation, regional assignment, and account lifecycle status.
++      ai: Master registry of all superstore_orders, capturing identity, segmentation, regional
 +        assignment, and account lifecycle status.
 ```
 **根因**:`serialize()` = `doc.toString()` 用 yaml 默认 `lineWidth: 80`,把长标量按 80 列折叠。已实测:
@@ -62,9 +62,9 @@ mkdir -p "$TMP/semantic-layer" "$TMP/wiki" "$TMP/.ktx-ui"
 cp -R /Users/forrest/Projects/project-lucy/semantic-layer/* "$TMP/semantic-layer/"
 KTX_PROJECT_ROOT="$TMP" npx tsx server/index.ts &   # 起服务
 # 改一行描述,dryRun 预览:
-curl -s -X PUT http://127.0.0.1:5174/api/sources/mysql-aliyun/openclaw_db/customers \
+curl -s -X PUT http://127.0.0.1:5174/api/sources/mysql-aliyun/dataforai/superstore_orders \
   -H 'content-type: application/json' \
-  -d '{"dryRun":true,"patch":{"columns":[{"name":"customer_id","description":"人工：客户主键"}]}}'
+  -d '{"dryRun":true,"patch":{"columns":[{"name":"order_id","description":"人工：客户主键"}]}}'
 # 期望:diff 的 +/- 业务行只有 1 行(新增 human:),无任何 ai: 折行
 pkill -f "tsx server/index.ts"; rm -rf "$TMP"
 ```

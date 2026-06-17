@@ -5,9 +5,9 @@ import type { TableModel } from "../model";
 function model(overrides: Partial<TableModel>): TableModel {
   return {
     conn: "mysql-aliyun",
-    schema: "openclaw_db",
-    table: "customers",
-    filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+    schema: "dataforai",
+    table: "superstore_orders",
+    filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
     descriptions: {},
     columns: [],
     ...overrides
@@ -29,7 +29,7 @@ describe("computeCompletion", () => {
     expect(
       computeCompletion(
         model({
-          descriptions: { ai: "Customer table" },
+          descriptions: { ai: "Order table" },
           columns: [
             { name: "id", type: "number", pk: true, descriptions: { ai: "Identifier" } },
             { name: "name", type: "string", descriptions: {} }
@@ -43,13 +43,13 @@ describe("computeCompletion", () => {
     expect(
       computeCompletion(
         model({
-          descriptions: { human: "Customer table" },
+          descriptions: { human: "Order table" },
           grain: ["id"],
           columns: [
             { name: "id", type: "number", pk: true, descriptions: { ai: "Identifier" } },
             { name: "name", type: "string", descriptions: { human: "Display name" } }
           ],
-          measures: [{ name: "count_customers", expr: "count(*)" }]
+          measures: [{ name: "order_count", expr: "count(*)" }]
         })
       )
     ).toBe("done");
@@ -59,13 +59,13 @@ describe("computeCompletion", () => {
     expect(
       computeCompletion(
         model({
-          descriptions: { ai: "Customer table" },
+          descriptions: { ai: "Order table" },
           grain: ["id"],
           columns: [
             { name: "id", type: "number", pk: true, descriptions: { ai: "Identifier" } },
             { name: "internal_note", type: "string", visibility: "hidden", descriptions: {} }
           ],
-          measures: [{ name: "count_customers", expr: "count(*)" }]
+          measures: [{ name: "order_count", expr: "count(*)" }]
         })
       )
     ).toBe("done");
