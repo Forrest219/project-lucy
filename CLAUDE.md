@@ -38,31 +38,29 @@ Step 3  以上均不能覆盖时，才允许 raw SQL
 
 ## 表路由（关键）
 
-超市零售分析 → **`dataforai.superstore_orders`**（10194 行，Tableau 4 年样本）
-不要使用 `openclaw_db.orders`（约 32 行演示数据，与超市分析无关）
+本期数据问答仅启用 **`dataforai`** 超市 domain（M2.1 决策）。
+`mj_test` / `openclaw_db` / `yihe_poc_demo` 暂不暴露给问答，若用户问到，回答："本期未启用该 domain"。
 
-月度趋势 / 汇总 → `openclaw_db.bidm_ai_metric_summary_mth`
+| 分析意图 | 路由 |
+|---|---|
+| 超市零售明细（订单、折扣、利润、客户、产品、区域） | `dataforai.superstore_orders` (10194 行，4 年样本) |
+| 月度 / 季度 / 年度趋势 | `dataforai.superstore_orders` 按 `order_date` 聚合（如 `DATE_FORMAT(order_date,'%Y-%m')`），不要依赖外部汇总表 |
+| 退货关联 | `dataforai.superstore_returns` JOIN `superstore_orders` ON `order_id`（join 已在 sl yaml 中声明） |
+| 区域经理 | `dataforai.superstore_people`（按 region 维表） |
 
-所有查询默认加 `WHERE is_deleted = 0`。
+所有查询默认加 `WHERE is_deleted = 0`；查 returns 时再加 `returned = '是'`。
 
 ---
 
-## 指标口径（强制）
+## 指标口径
 
-| 指标 | 正确写法 | 禁止 |
-|------|---------|------|
-| 折扣率 | `SUM(discount * sales) / NULLIF(SUM(sales), 0)` | `AVG(discount)` |
-| 利润率 | `SUM(profit) / NULLIF(SUM(sales), 0)` | `AVG(profit/sales)` |
-| 订单数 | `COUNT(DISTINCT order_id)` | `COUNT(*)` |
-| 客单价 | `SUM(sales) / NULLIF(COUNT(DISTINCT order_id), 0)` | `AVG(sales)` |
-
-profit 可为负值（亏损行），**禁止** `WHERE profit > 0` 后再统计利润率。
+指标公式以 `sl_read` 返回的 `measures` 为单一事实源（`dataforai.superstore_orders`），禁止跳过语义层手写聚合公式。详细口径与 Gotcha 见 `wiki/global/discount-policy.md`、`wiki/global/profit-rule.md`。
 
 ---
 
 ## 高风险场景触发 Reviewer
 
-涉及以下情况时，输出前执行 `.ktx/skills/reviewer/SKILL.md` 的 9 项检查清单：
+涉及以下情况时，输出前调用 reviewer skill（若存在）；否则将其 9 项检查清单内联到回答前：
 
 - 财务指标（利润率、折扣、收入）
 - 跨表 JOIN
@@ -82,31 +80,4 @@ Measures    : <measure_name>
 Freshness   : MAX(<date_field>) = <value>
 Validation  : SQL executed · metric checks passed
 Assumptions : <raw SQL fallback 时列出假设>
-```
-
----
-
-## Skill 文件位置
-
-```
-.ktx/prompts/
-  warehouse-knowledge.md          ← MCP 通道注入（与本文件内容同源）
-
-skills/                           ← 顶层目录（可见，WebUI 可编辑）
-  warehouse/
-    SKILL.md                      ← Knowledge Skill（路由器）
-    references/
-      table-routing.md            ← 表选择规则（新增 domain 时在此追加）
-      metrics-policy.md           ← 指标聚合口径
-  domains/                        ← Domain Reference Docs（不是 Skill）
-    superstore/
-      domain.md                   ← 超市领域参考文档
-      pitfalls.md                 ← 7 个常见错误
-      discount-policy.md          ← 折扣字段完整说明
-    [future-domain/domain.md]     ← 接入新 domain 时新增此文件
-  analysis/                       ← 分析工作流 Skill（跨 domain 复用）
-    discount-analysis.md          ← 折扣分析程序
-    profit-decomposition.md       ← 利润拆解程序
-  reviewer/
-    SKILL.md                      ← 9 项高风险审查清单
 ```

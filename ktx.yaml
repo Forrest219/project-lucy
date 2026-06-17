@@ -2,26 +2,10 @@ connections:
   mysql-aliyun:
     driver: mysql
     enabled_tables:
-      - mj_test.#tableau_426_sid_00783d43_4_prep
-      - mj_test.dm_fin_bs_fact
-      - mj_test.dm_fin_cf_fact
-      - mj_test.dm_fin_pl_fact
-      - openclaw_db.bidm_ai_metric_summary_mth
-      - openclaw_db.customers
-      - openclaw_db.dim_region
-      - openclaw_db.orders
-      - openclaw_db.products
-      - yihe_poc_demo.accrual_demo
-      - yihe_poc_demo.inpatient_demo
-      - yihe_poc_demo.outpatient_demo
-      - yihe_poc_demo.satisfaction_answer_detail
-      - yihe_poc_demo.settlement_demo
-      - yihe_poc_demo.v_doctor_satisfaction_metric
-      - yihe_poc_demo.v_feedback_detail
-      - yihe_poc_demo.v_not_very_satisfied_detail
-      - yihe_poc_demo.v_nps_metric
-      - yihe_poc_demo.v_survey_recovery_metric
-      - yihe_poc_demo.v_wait_time_issue
+      # 本期问答范围（M2.1 决策）：仅 dataforai 超市 domain。
+      # mj_test / openclaw_db / yihe_poc_demo 已暂停启用 — 若后续接入，
+      # 在此追加表名并补 semantic-layer 路由 / CLAUDE.md 指引即可，
+      # 各 schema 的 yaml shard 仍保留在 semantic-layer/，避免重新 scan。
       - dataforai.superstore_orders
       - dataforai.superstore_returns
       - dataforai.superstore_people
@@ -29,11 +13,10 @@ connections:
     port: 3306
     database: openclaw_db
     username: bi_zy
-    password: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
+    password: file:/Users/zhangxingchen/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
+    # NOTE: `schemas` 控制 scan 范围；`enabled_tables`（上方）控制问答可见范围。
+    # 本期仅启用 dataforai；其它 schema 暂停 scan，已 ingest 的快照保留在 raw-sources/。
     schemas:
-      - mj_test
-      - openclaw_db
-      - yihe_poc_demo
       - dataforai
 storage:
   state: sqlite
@@ -45,11 +28,14 @@ llm:
     backend: claude-code
   models:
     default: sonnet
-    triage: sonnet
+    # triage 是轻量分流，haiku 即可，省成本省延迟。
+    triage: haiku
+    # 候选抽取 / 整理 / 调和 / 修复属于结构化生成，保持 sonnet。
     candidateExtraction: sonnet
     curator: sonnet
     reconcile: sonnet
     repair: sonnet
+    # NOTE: 高风险审查（reviewer skill）跑在 Claude Code 主会话里，模型由用户 /model 选定，不在此处控制。
 ingest:
   embeddings:
     backend: sentence-transformers

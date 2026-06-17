@@ -1,0 +1,103 @@
+# ktx.yaml — 模板（M3.4）
+#
+# Onboarding：
+#   1. cp ktx.yaml.example ktx.yaml
+#   2. 替换下方所有 <CHANGE-ME> 占位符为本地实际值
+#   3. 在 .ktx/secrets/mysql-aliyun-password 写入密码（不进 git）
+#
+# 当前阶段 ktx.yaml 仍 tracked in git（M3.4 未把它移出 git 索引）。
+# 若团队希望严格隔离凭据，后续可执行：
+#   git rm --cached ktx.yaml && echo 'ktx.yaml' >> .gitignore
+# 该操作涉及 git 索引变更，需团队对齐后再做。
+
+connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - mj_test.dm_fin_bs_fact
+      - mj_test.dm_fin_cf_fact
+      - mj_test.dm_fin_pl_fact
+      - openclaw_db.bidm_ai_metric_summary_mth
+      - openclaw_db.customers
+      - openclaw_db.dim_region
+      - openclaw_db.orders
+      - openclaw_db.products
+      - yihe_poc_demo.accrual_demo
+      - yihe_poc_demo.inpatient_demo
+      - yihe_poc_demo.outpatient_demo
+      - yihe_poc_demo.satisfaction_answer_detail
+      - yihe_poc_demo.settlement_demo
+      - yihe_poc_demo.v_doctor_satisfaction_metric
+      - yihe_poc_demo.v_feedback_detail
+      - yihe_poc_demo.v_not_very_satisfied_detail
+      - yihe_poc_demo.v_nps_metric
+      - yihe_poc_demo.v_survey_recovery_metric
+      - yihe_poc_demo.v_wait_time_issue
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+      - dataforai.superstore_people
+    host: <CHANGE-ME-MYSQL-HOST>
+    port: 3306
+    database: <CHANGE-ME-DEFAULT-DB>
+    username: <CHANGE-ME-USERNAME>
+    # 密码以本地文件形式注入，文件路径替换为你的绝对路径。
+    # 该路径下的文件已在 .ktx/.gitignore 排除，不会进 git。
+    password: file:<CHANGE-ME-ABS-PATH-TO-PROJECT>/.ktx/secrets/mysql-aliyun-password
+    schemas:
+      - mj_test
+      - openclaw_db
+      - yihe_poc_demo
+      - dataforai
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    author: ktx <ktx@example.com>
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: sonnet
+    reconcile: sonnet
+    repair: sonnet
+ingest:
+  embeddings:
+    backend: sentence-transformers
+    model: all-MiniLM-L6-v2
+    dimensions: 384
+  workUnits:
+    stepBudget: 40
+    maxConcurrency: 1
+    failureMode: continue
+agent:
+  run_research:
+    enabled: false
+    max_iterations: 20
+    default_toolset:
+      - sl_query
+      - wiki_search
+      - sl_read_source
+scan:
+  enrichment:
+    mode: llm
+    embeddings:
+      backend: sentence-transformers
+      model: all-MiniLM-L6-v2
+      dimensions: 384
+  relationships:
+    enabled: true
+    llmProposals: true
+    validationRequiredForManifest: true
+    acceptThreshold: 0.85
+    reviewThreshold: 0.55
+    maxLlmTablesPerBatch: 40
+    maxCandidatesPerColumn: 25
+    profileSampleRows: 10000
+    profileConcurrency: 4
+    validationConcurrency: 4
+setup:
+  database_connection_ids:
+    - mysql-aliyun

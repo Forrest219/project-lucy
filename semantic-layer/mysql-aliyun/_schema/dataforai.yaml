@@ -102,13 +102,13 @@ tables:
         descriptions:
           db: 折扣
           ai: Fractional discount rate applied to the line item price.
-          human: 折扣率（0-1）。聚合时必须使用销售额加权平均：SUM(discount*sales)/SUM(sales)。严禁使用 AVG(discount)——简单平均不反映销售额权重，结果偏高。
+          human: 折扣（0-1），聚合口径见 measures.discount_rate。
       - name: profit
         type: number
         descriptions:
           db: 利润
           ai: Net profit on this line item after all costs and discounts.
-          human: 行级净利润，可为负值（亏损行）。分析利润率时必须用 SUM(profit)/SUM(sales) 重算，严禁 AVG(profit/sales)。负值行不可过滤排除，否则高估整体利润。
+          human: 行级净利润，可为负值（亏损行），口径见 measures.profit_margin。
       - name: postal_code
         type: string
         descriptions:
@@ -171,6 +171,8 @@ tables:
     descriptions:
       db: Tableau 示例超市订单 ODS 明细表
       ai: Line-item retail sales transactions for a Chinese superstore, tracking orders, customers, products, shipping, revenue, and profit.
+    # 真实 measure / join / grain 落在 semantic-layer/mysql-aliyun/superstore_orders.yaml
+    # (这是 KTX 识别的 standalone source；_schema/ 下仅承载 column 描述与 manifest 入口)
   superstore_people:
     table: dataforai.superstore_people
     columns:

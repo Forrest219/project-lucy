@@ -1,0 +1,161 @@
+# Golden Questions — dataforai 超市 domain
+#
+# 用途：作为 sl_validate / 后续 CI 的端到端 smoke。
+# 每条 case 描述一个常见数据问题，并列出 SQL 必须命中 / 禁止出现的模式，
+# 以及（当数据集稳定时）期望的数值范围。
+#
+# 评估方式（未来 CI / 手动跑）：
+#   1. 把 question 文本喂给 KTX agent（或 sl_query 工具）。
+#   2. 拿到生成的 SQL（或 sl_query 的最终下发 SQL）。
+#   3. 对照 expected_sql_patterns（regex 必须全部命中）和
+#      forbidden_sql_patterns（regex 必须全部不命中）。
+#   4. 若 expected_rows / expected_metric_range 有值，执行 SQL 并比对。
+#
+# 数据集说明：Tableau 超市 2014–2017 共 9994 行（live 表当前 10194 含追加），
+# 字段 sales / profit / discount / quantity 均为数值，profit 可为负。
+#
+# 维护：当 measures / joins / 表名变更时，本文件必须同步更新；
+# 任一 case 失败 → block 数据问答路径上线。
+
+version: 2
+domain: dataforai
+
+# KTX semantic-layer 真实 measure 名称（源：semantic-layer/mysql-aliyun/superstore_orders.yaml）
+# 当 standalone source 改动时同步；本字段用作 case.expected_measure 的引用合法性检查。
+available_measures:
+  - total_sales
+  - total_profit
+  - profit_margin
+  - weighted_discount
+  - order_count
+  - customer_count
+  - avg_order_value
+  - total_quantity
+  - loss_row_count
+
+# 软删过滤：standalone source 未提供 default_filters 槽位，由 agent 生成 SQL 时叠加
+default_filters:
+  - "is_deleted = 0"
+
+cases:
+  - id: discount_rate_weighted
+    question: "2023 年整体折扣率是多少？"
+    intent: discount_rate
+    expected_measure: weighted_discount
+    expected_sql_patterns:
+      - "sum\\s*\\(\\s*discount\\s*\\*\\s*sales\\s*\\)"
+      - "nullif\\s*\\(\\s*sum\\s*\\(\\s*sales\\s*\\)"
+      - "is_deleted\\s*=\\s*0"
+    forbidden_sql_patterns:
+      - "AVG\\s*\\(\\s*discount\\s*\\)"
+    notes: "对应 KTX measure weighted_discount。SQL 模式用 lowercase（与 standalone source expr 一致）。"
+
+  - id: profit_margin_keep_negative
+    question: "2023 年公司利润率是多少？"
+    intent: profit_margin
+    expected_measure: profit_margin
+    expected_sql_patterns:
+      - "sum\\s*\\(\\s*profit\\s*\\)"
+      - "nullif\\s*\\(\\s*sum\\s*\\(\\s*sales\\s*\\)"
+      - "is_deleted\\s*=\\s*0"
+    forbidden_sql_patterns:
+      - "WHERE[^;]*profit\\s*>\\s*0"
+      - "HAVING[^;]*SUM\\s*\\(\\s*profit\\s*\\)\\s*>\\s*0"
+      - "AVG\\s*\\(\\s*profit\\s*/\\s*sales"
+    notes: "亏损行必须保留参与分子分母，禁止 profit > 0 过滤。"
+
+  - id: order_count_distinct
+    question: "2023 年一共有多少笔订单？"
+    intent: order_count
+    expected_measure: order_count
+    expected_sql_patterns:
+      - "count\\s*\\(\\s*distinct\\s+order_id"
+      - "is_deleted\\s*=\\s*0"
+    forbidden_sql_patterns:
+      - "COUNT\\s*\\(\\s*\\*\\s*\\)\\s+AS\\s+order"
+      - "COUNT\\s*\\(\\s*row_id"
+    notes: "对应 KTX measure order_count；row_id 是行级 grain 不可作订单计数。"
+
+  - id: aov_weighted
+    question: "2023 年客单价是多少？"
+    intent: avg_order_value
+    expected_measure: avg_order_value
+    expected_sql_patterns:
+      - "sum\\s*\\(\\s*sales\\s*\\)"
+      - "count\\s*\\(\\s*distinct\\s+order_id"
+    forbidden_sql_patterns:
+      - "AVG\\s*\\(\\s*sales\\s*\\)"
+    notes: "对应 KTX measure avg_order_value = SUM(sales) / COUNT(DISTINCT order_id)。"
+
+  - id: region_profit_top3
+    question: "2023 年利润最高的前三个区域，以及对应的区域经理是谁？"
+    intent: region_ranking
+    expected_measure: total_profit
+    expected_sql_patterns:
+      - "sum\\s*\\(\\s*profit\\s*\\)"
+      - "GROUP\\s+BY[^;]*region"
+      - "ORDER\\s+BY[^;]*DESC"
+      - "LIMIT\\s+3"
+      - "superstore_people"
+    forbidden_sql_patterns:
+      - "WHERE[^;]*profit\\s*>\\s*0"
+    notes: "对应 KTX measure total_profit。JOIN superstore_people 拿区域经理（join 在 standalone source 已声明，relationship=many_to_one）。"
+
+  - id: category_discount_rate
+    question: "2023 年各类目（category）折扣率分别是多少？"
+    intent: category_discount
+    expected_measure: weighted_discount
+    expected_sql_patterns:
+      - "sum\\s*\\(\\s*discount\\s*\\*\\s*sales\\s*\\)"
+      - "GROUP\\s+BY[^;]*category"
+    forbidden_sql_patterns:
+      - "AVG\\s*\\(\\s*discount\\s*\\)"
+    notes: "类目维度 + 对应 KTX measure weighted_discount。"
+
+  - id: monthly_sales_trend
+    question: "2023 年每月销售额趋势"
+    intent: monthly_trend
+    expected_measure: total_sales
+    expected_sql_patterns:
+      - "sum\\s*\\(\\s*sales\\s*\\)"
+      - "DATE_FORMAT\\s*\\(\\s*order_date\\s*,\\s*'%Y-%m'\\s*\\)"
+      - "GROUP\\s+BY"
+    forbidden_sql_patterns:
+      - "MONTH\\s*\\(\\s*order_date\\s*\\)\\s*$"
+    notes: "对应 KTX measure total_sales；月度聚合必须含年份避免跨年混淆。"
+
+  - id: return_rate_with_join
+    question: "2023 年订单退货率是多少？"
+    intent: return_rate
+    expected_measure: order_count
+    expected_sql_patterns:
+      - "superstore_returns"
+      - "superstore_orders"
+      - "returned\\s*=\\s*'是'"
+      - "count\\s*\\(\\s*distinct\\s+(orders\\.)?order_id"
+    forbidden_sql_patterns:
+      - "JOIN[^;]*ON[^;]*row_id"
+    notes: "退货率 = 退货订单数 / 总订单数（两个子查询都依赖 order_count 派生）。returns→orders 是 many_to_one。"
+
+  - id: negative_profit_customers
+    question: "2023 年哪些客户产生过亏损订单？列出客户和亏损金额。"
+    intent: negative_profit_filter
+    expected_measure: loss_row_count
+    expected_sql_patterns:
+      - "profit\\s*<\\s*0"
+      - "customer"
+    forbidden_sql_patterns:
+      - "ABS\\s*\\(\\s*profit\\s*\\)\\s+AS\\s+profit"
+    notes: "对应 KTX measure loss_row_count（filter 形式）。profit < 0 用于筛行是合理过滤。"
+
+  - id: subcategory_profit_ranking
+    question: "2023 年各子类目（sub_category）利润排名"
+    intent: subcategory_ranking
+    expected_measure: total_profit
+    expected_sql_patterns:
+      - "sum\\s*\\(\\s*profit\\s*\\)"
+      - "GROUP\\s+BY[^;]*sub_category"
+      - "ORDER\\s+BY[^;]*DESC"
+    forbidden_sql_patterns:
+      - "WHERE[^;]*profit\\s*>\\s*0"
+    notes: "对应 KTX measure total_profit。亏损子类目必须出现在排名末尾，不能被过滤。"

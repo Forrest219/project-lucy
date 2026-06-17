@@ -34,6 +34,40 @@
 - `webui` 开发通过 `docs/` 下的工单（wo-M0 ~ wo-M5）交给 Codex 执行；任何 agent 在本仓库改代码时同样遵循工单边界，不擅自扩大范围
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
 
+## Onboarding（首次拉取本仓库）
+
+1. `cp ktx.yaml.example ktx.yaml`（如已存在 `ktx.yaml` 则跳过；当前 `ktx.yaml` 仍 tracked，新机器可以直接用）
+2. 替换 `ktx.yaml` 中的 `<CHANGE-ME-*>` 占位符为本地实际值（host / db / username / 密码文件绝对路径）
+3. `mkdir -p .ktx/secrets && echo '<your-mysql-password>' > .ktx/secrets/mysql-aliyun-password`（该目录已在 `.ktx/.gitignore` 排除）
+4. 安装 KTX CLI：`npm install -g @kaelio/ktx@latest`（或在 `/Users/zhangxingchen/Projects/ktx` 跑 `pnpm install && pnpm run link:dev` 链入开发版本）
+5. 启动本地 MCP daemon：`ktx mcp start --project-dir /Users/zhangxingchen/Projects/project-lucy`
+   - 仓库已附带 `.mcp.json`（HTTP 端点 `http://localhost:7878/mcp`），Claude Code 启动时会自动连接；daemon 不运行则连接失败。
+   - 仅 Claude Desktop 走 stdio（`ktx mcp stdio`），本仓库不预置该配置。
+6. 验证：`ktx status` 报告 `Agent integration ready: yes`，并跑一次 `ktx sl "<keyword>"` 看连接是否通
+
+> **凭据/路径漂移防护**：`ktx.yaml.example` 由 M3.4 维护；当 `ktx.yaml` 中的 host/user/路径字段发生变化时，请同步更新 `.example`。
+
+## 上游依赖：KTX
+
+本仓库不包含 KTX 本体（CLI / MCP server / 语义层引擎），运行依赖外部 KTX 安装。
+
+| 项 | 值 |
+|---|---|
+| 上游仓库 | https://github.com/kaelio/ktx |
+| 本机 clone | `/Users/zhangxingchen/Projects/ktx` |
+
+何时查阅 KTX 源码：
+
+- 注册 / 调试 KTX MCP server（启动命令、传输方式、可用 tool 列表）
+- 验证 `sl_read` / `sl_query` / `wiki_search` / `sl_validate` 的实际行为与 `CLAUDE.md` 描述是否一致
+- 排查 `ktx.yaml` 字段含义、scan / ingest / agent 行为
+- 在 KTX 本身有 bug / 缺特性时定位上游 issue
+
+约定：
+
+- 修改 KTX 源码属于**上游变更**，在 `/Users/zhangxingchen/Projects/ktx` 内进行，遵循该仓库自身的协作规则，不在本仓库提交。
+- 本仓库只引用 KTX，**不复制** KTX 内部规则 / prompt 到本仓库。
+
 ## CLAUDE.md / AGENTS.md 分工
 
 | 文件 | 用途 | 谁读 |
