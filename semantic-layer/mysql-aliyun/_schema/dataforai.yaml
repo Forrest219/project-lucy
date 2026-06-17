@@ -1,0 +1,267 @@
+tables:
+  superstore_orders:
+    table: dataforai.superstore_orders
+    columns:
+      - name: row_id
+        type: number
+        pk: true
+        nullable: false
+        descriptions:
+          db: 行 ID
+      - name: order_id
+        type: string
+        nullable: false
+        descriptions:
+          db: 订单 ID
+      - name: order_date
+        type: time
+        nullable: false
+        descriptions:
+          db: 订单日期
+      - name: ship_date
+        type: time
+        nullable: false
+        descriptions:
+          db: 发货日期
+      - name: ship_mode
+        type: string
+        descriptions:
+          db: 装运模式
+      - name: customer_id
+        type: string
+        descriptions:
+          db: 客户 ID
+      - name: customer_name
+        type: string
+        descriptions:
+          db: 客户名称
+      - name: segment
+        type: string
+        descriptions:
+          db: 细分
+      - name: city
+        type: string
+        descriptions:
+          db: 城市
+      - name: province
+        type: string
+        descriptions:
+          db: 省/自治区
+      - name: country_region
+        type: string
+        descriptions:
+          db: 国家/地区
+      - name: region
+        type: string
+        descriptions:
+          db: 区域
+      - name: product_id
+        type: string
+        descriptions:
+          db: 产品 ID
+      - name: category
+        type: string
+        descriptions:
+          db: 类别
+      - name: sub_category
+        type: string
+        descriptions:
+          db: 子类别
+      - name: product_name
+        type: string
+        descriptions:
+          db: 产品名称
+      - name: sales
+        type: number
+        descriptions:
+          db: 销售额
+      - name: quantity
+        type: number
+        descriptions:
+          db: 数量
+      - name: discount
+        type: number
+        descriptions:
+          db: 折扣
+      - name: profit
+        type: number
+        descriptions:
+          db: 利润
+      - name: postal_code
+        type: string
+        descriptions:
+          db: 邮政编码
+      - name: source_system
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源系统
+      - name: source_file
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源文件
+      - name: source_sheet
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源工作表
+      - name: source_row_number
+        type: number
+        nullable: false
+        descriptions:
+          db: 来源文件行号
+      - name: batch_id
+        type: string
+        nullable: false
+        descriptions:
+          db: 导入批次 ID
+      - name: row_hash
+        type: string
+        nullable: false
+        descriptions:
+          db: 业务字段 SHA-256 哈希
+      - name: is_deleted
+        type: number
+        nullable: false
+        descriptions:
+          db: 逻辑删除标记
+      - name: created_at
+        type: time
+        nullable: false
+        descriptions:
+          db: 入库时间
+      - name: updated_at
+        type: time
+        nullable: false
+        descriptions:
+          db: 更新时间
+    descriptions:
+      db: Tableau 示例超市订单 ODS 明细表
+  superstore_people:
+    table: dataforai.superstore_people
+    columns:
+      - name: region
+        type: string
+        pk: true
+        nullable: false
+        descriptions:
+          db: 区域
+      - name: regional_manager
+        type: string
+        nullable: false
+        descriptions:
+          db: 区域经理
+      - name: source_system
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源系统
+      - name: source_file
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源文件
+      - name: source_sheet
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源工作表
+      - name: source_row_number
+        type: number
+        nullable: false
+        descriptions:
+          db: 来源文件行号
+      - name: batch_id
+        type: string
+        nullable: false
+        descriptions:
+          db: 导入批次 ID
+      - name: row_hash
+        type: string
+        nullable: false
+        descriptions:
+          db: 业务字段 SHA-256 哈希
+      - name: is_deleted
+        type: number
+        nullable: false
+        descriptions:
+          db: 逻辑删除标记
+      - name: created_at
+        type: time
+        nullable: false
+        descriptions:
+          db: 入库时间
+      - name: updated_at
+        type: time
+        nullable: false
+        descriptions:
+          db: 更新时间
+    descriptions:
+      db: Tableau 示例超市区域人员 ODS 表
+  superstore_returns:
+    table: dataforai.superstore_returns
+    columns:
+      - name: id
+        type: number
+        pk: true
+        nullable: false
+        descriptions:
+          db: 退货记录代理主键
+      - name: order_id
+        type: string
+        nullable: false
+        descriptions:
+          db: 订单 ID
+      - name: returned
+        type: string
+        nullable: false
+        descriptions:
+          db: 退回
+      - name: source_system
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源系统
+      - name: source_file
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源文件
+      - name: source_sheet
+        type: string
+        nullable: false
+        descriptions:
+          db: 来源工作表
+      - name: source_row_number
+        type: number
+        nullable: false
+        descriptions:
+          db: 来源文件行号
+      - name: batch_id
+        type: string
+        nullable: false
+        descriptions:
+          db: 导入批次 ID
+      - name: row_hash
+        type: string
+        nullable: false
+        descriptions:
+          db: 业务字段 SHA-256 哈希
+      - name: is_deleted
+        type: number
+        nullable: false
+        descriptions:
+          db: 逻辑删除标记
+      - name: created_at
+        type: time
+        nullable: false
+        descriptions:
+          db: 入库时间
+      - name: updated_at
+        type: time
+        nullable: false
+        descriptions:
+          db: 更新时间
+    descriptions:
+      db: Tableau 示例超市退货 ODS 表
