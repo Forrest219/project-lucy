@@ -4,489 +4,261 @@ tables:
     columns:
       - name: date
         type: string
-        descriptions:
-          ai: Date on which the patient visit or medical service occurred.
       - name: hospital
         type: string
-        descriptions:
-          ai: Name or campus of the hospital where care was delivered.
       - name: visit_department
         type: string
-        descriptions:
-          ai: Clinical department where the patient physically received treatment.
       - name: finance_department
         type: string
-        descriptions:
-          ai: Accounting department responsible for cost allocation and revenue booking.
       - name: visit_type
         type: string
-        descriptions:
-          ai: Outpatient, inpatient, or emergency classification of the encounter.
       - name: doctor
         type: string
-        descriptions:
-          ai: Attending physician who provided the clinical service.
       - name: visit_content
         type: string
-        descriptions:
-          ai: Specific clinical purpose or procedure performed during the visit.
       - name: bill_subtype
         type: string
-        descriptions:
-          ai: High-level billing category used to classify the charge type.
       - name: order_subtype
         type: string
-        descriptions:
-          ai: Secondary classification of the medical order for financial reporting.
       - name: order_item
         type: string
-        descriptions:
-          ai: Specific billable service item or procedure charged to the patient.
       - name: amount
         type: number
-        descriptions:
-          ai: Revenue amount accrued for the service item in local currency.
-    descriptions:
-      ai: Hospital medical revenue accrual records tracking charges by department, doctor, visit type, and billing category for financial reporting.
   inpatient_demo:
     table: yihe_poc_demo.inpatient_demo
     columns:
       - name: date
         type: string
-        descriptions:
-          ai: Calendar date on which the inpatient admissions were recorded.
       - name: hospital
         type: string
-        descriptions:
-          ai: Name of the hospital branch or campus where admissions occurred.
       - name: visit_department
         type: string
-        descriptions:
-          ai: Clinical department that clinically managed and treated the inpatient.
       - name: finance_department
         type: string
-        descriptions:
-          ai: Department responsible for billing and financial accounting of the stay.
       - name: doctor
         type: string
-        descriptions:
-          ai: Attending physician's name assigned to the inpatient admissions.
       - name: admission_type
         type: string
-        descriptions:
-          ai: Classification of the stay, e.g., day, regular, or obstetric inpatient.
       - name: quantity
         type: number
-        descriptions:
-          ai: Count of inpatient admissions for the given date and attribute combination.
-    descriptions:
-      ai: Daily inpatient admission counts by hospital branch, department, doctor, and admission category.
   outpatient_demo:
     table: yihe_poc_demo.outpatient_demo
     columns:
       - name: date
         type: string
-        descriptions:
-          ai: Calendar date on which the outpatient visits occurred.
       - name: hospital
         type: string
-        descriptions:
-          ai: Name of the hospital branch or campus where visits took place.
       - name: visit_department
         type: string
-        descriptions:
-          ai: Clinical department where the patient physically received care.
       - name: finance_department
         type: string
-        descriptions:
-          ai: Department used for billing and financial classification of the visit.
       - name: visit_content
         type: string
-        descriptions:
-          ai: Specific type of medical service or treatment provided during the visit.
       - name: doctor
         type: string
-        descriptions:
-          ai: Name of the attending physician who provided care.
       - name: is_group_new_customer
         type: string
-        descriptions:
-          ai: Y/N flag indicating if the patient is new to the entire hospital group.
       - name: is_hospital_new_customer
         type: string
-        descriptions:
-          ai: Y/N flag indicating if the patient is new to this specific hospital.
       - name: is_dept_new_customer
         type: string
-        descriptions:
-          ai: Y/N flag indicating if the patient is new to this department.
       - name: employee_flag
         type: string
-        descriptions:
-          ai: Distinguishes hospital employees from general non-employee patients.
       - name: quantity
         type: number
-        descriptions:
-          ai: Total outpatient visit count for this combination of dimension values.
-    descriptions:
-      ai: Daily outpatient visit records across hospital departments, tracking patient volume, doctor assignments, and new customer status by multiple dimensions.
   satisfaction_answer_detail:
     table: yihe_poc_demo.satisfaction_answer_detail
     columns:
       - name: survey_id
         type: number
-        descriptions:
-          ai: Unique identifier linking all answers belonging to one survey submission.
       - name: department
         type: string
-        descriptions:
-          ai: Clinical department where the patient received care.
       - name: doctor
         type: string
-        descriptions:
-          ai: Name of the treating physician associated with the survey.
       - name: submit_date
         type: string
-        descriptions:
-          ai: Date the patient submitted the satisfaction survey.
       - name: hospital
         type: string
-        descriptions:
-          ai: Branch or campus where the patient visit occurred.
       - name: survey_name
         type: string
-        descriptions:
-          ai: Full title of the satisfaction questionnaire administered to the patient.
       - name: question_id
         type: string
-        descriptions:
-          ai: Short code identifying a specific question within the survey form.
       - name: question_text
         type: string
-        descriptions:
-          ai: Full wording of the survey question presented to the patient.
       - name: question_category
         type: string
-        descriptions:
-          ai: Numeric grouping that classifies the question into a survey section.
       - name: question_type
         type: string
-        descriptions:
-          ai: Service area or staff type the question evaluates, e.g., doctor, ultrasound.
       - name: answer
         type: string
-        descriptions:
-          ai: Patient's response to the corresponding survey question.
       - name: standard_hospital
         type: string
-        descriptions:
-          ai: Normalized hospital name for consistent cross-branch reporting and analysis.
-    descriptions:
-      ai: Stores individual question-answer pairs from patient satisfaction surveys submitted across hospital departments and doctors.
   settlement_demo:
     table: yihe_poc_demo.settlement_demo
     columns:
       - name: date
         type: string
-        descriptions:
-          ai: Calendar date on which the settlement transaction was recorded.
       - name: hospital
         type: string
-        descriptions:
-          ai: Hospital branch or campus where the revenue was collected.
       - name: finance_department
         type: string
-        descriptions:
-          ai: Clinical or administrative department generating the settled revenue.
       - name: fee_type
         type: string
-        descriptions:
-          ai: Charge category, such as product, package, stored-value card, or bill.
       - name: payment_method
         type: string
-        descriptions:
-          ai: "How the patient paid: cash, bank card, remittance, etc."
       - name: amount
         type: number
-        descriptions:
-          ai: Total monetary value settled for the given date and category combination.
-    descriptions:
-      ai: Daily hospital revenue settlement records broken down by branch, department, fee category, and payment method.
   v_wait_time_issue:
     table: yihe_poc_demo.v_wait_time_issue
     columns:
       - name: survey_id
         type: number
-        descriptions:
-          ai: Unique identifier for each individual patient survey submission.
       - name: department
         type: string
-        descriptions:
-          ai: Clinical department where the patient received care.
       - name: doctor
         type: string
-        descriptions:
-          ai: Name of the attending physician seen by the patient.
       - name: submit_date
         type: string
-        descriptions:
-          ai: Date the patient submitted the satisfaction survey.
       - name: hospital
         type: string
-        descriptions:
-          ai: Hospital branch or campus where care was received.
       - name: survey_name
         type: string
-        descriptions:
-          ai: Full title of the patient satisfaction survey administered.
       - name: question_id
         type: string
-        descriptions:
-          ai: Unique code identifying the specific survey question.
       - name: question_text
         type: string
-        descriptions:
-          ai: Full text of the wait time question posed to patients.
       - name: question_category
         type: string
-        descriptions:
-          ai: Numeric category grouping this question belongs to.
       - name: question_type
         type: string
-        descriptions:
-          ai: Classification type of the survey question format.
       - name: answer
         type: string
-        descriptions:
-          ai: Patient's selected response to the wait time question.
       - name: standard_hospital
         type: string
-        descriptions:
-          ai: Normalized hospital branch name for consistent cross-branch reporting.
     descriptions:
       db: VIEW
-      ai: View of patient survey responses focused on wait time perception questions across hospital departments and branches.
   v_doctor_satisfaction_metric:
     table: yihe_poc_demo.v_doctor_satisfaction_metric
     columns:
       - name: submit_date
         type: string
-        descriptions:
-          ai: The date on which patient surveys were submitted and recorded.
       - name: month
         type: string
-        descriptions:
-          ai: Year-month period the survey results are attributed to.
       - name: hospital
         type: string
-        descriptions:
-          ai: Name of the hospital branch where the doctor is stationed.
       - name: department
         type: string
-        descriptions:
-          ai: Clinical department within the hospital that the doctor belongs to.
       - name: doctor
         type: string
-        descriptions:
-          ai: Full name of the individual doctor being evaluated by patients.
       - name: survey_count
         type: number
         nullable: false
-        descriptions:
-          ai: Total number of patient satisfaction surveys submitted for this doctor.
       - name: very_satisfied_count
         type: number
-        descriptions:
-          ai: Number of patients who responded with the highest satisfaction rating.
       - name: valid_answer_count
         type: number
         nullable: false
-        descriptions:
-          ai: Number of submitted surveys containing valid, scoreable responses.
       - name: very_satisfied_rate
         type: number
-        descriptions:
-          ai: Proportion of very satisfied responses out of all valid answers.
     descriptions:
       db: VIEW
-      ai: Aggregated patient satisfaction survey results per doctor, department, and hospital, grouped by submission date and month.
   v_feedback_detail:
     table: yihe_poc_demo.v_feedback_detail
     columns:
       - name: survey_id
         type: number
-        descriptions:
-          ai: Unique numeric identifier for each completed patient satisfaction survey submission.
       - name: department
         type: string
-        descriptions:
-          ai: Clinical department where the patient received care during the visit.
       - name: doctor
         type: string
-        descriptions:
-          ai: Name of the physician associated with the patient's survey.
       - name: submit_date
         type: string
-        descriptions:
-          ai: Date the patient submitted the satisfaction survey.
       - name: hospital
         type: string
-        descriptions:
-          ai: Hospital branch or campus name where the service was provided.
       - name: survey_name
         type: string
-        descriptions:
-          ai: Full title of the patient satisfaction questionnaire administered.
       - name: question_id
         type: string
-        descriptions:
-          ai: Unique code identifying a specific question within the survey.
       - name: question_text
         type: string
-        descriptions:
-          ai: Verbatim text of the survey question presented to the patient.
       - name: question_category
         type: string
-        descriptions:
-          ai: Numeric category grouping questions by topic within the survey.
       - name: question_type
         type: string
-        descriptions:
-          ai: Classification of question format, such as rating scale or open-ended.
       - name: answer
         type: string
-        descriptions:
-          ai: Patient's free-text or selected response to the survey question.
       - name: standard_hospital
         type: string
-        descriptions:
-          ai: Normalized hospital name used for consistent cross-branch reporting and analysis.
     descriptions:
       db: VIEW
-      ai: Detailed view of patient survey responses per question, linked to doctor, department, and hospital.
   v_not_very_satisfied_detail:
     table: yihe_poc_demo.v_not_very_satisfied_detail
     columns:
       - name: survey_id
         type: number
-        descriptions:
-          ai: Unique identifier for each patient-submitted satisfaction survey instance.
       - name: department
         type: string
-        descriptions:
-          ai: Clinical department where the patient received care, e.g., Obstetrics.
       - name: doctor
         type: string
-        descriptions:
-          ai: Name of the treating or responsible doctor linked to the survey.
       - name: submit_date
         type: string
-        descriptions:
-          ai: Date the patient submitted the satisfaction survey.
       - name: hospital
         type: string
-        descriptions:
-          ai: Hospital branch or campus where the patient visit occurred.
       - name: survey_name
         type: string
-        descriptions:
-          ai: Full title of the satisfaction survey questionnaire administered to the patient.
       - name: question_id
         type: string
-        descriptions:
-          ai: Short code identifying a specific question within the survey.
       - name: question_text
         type: string
-        descriptions:
-          ai: Full wording of the satisfaction question presented to the patient.
       - name: question_category
         type: string
-        descriptions:
-          ai: Numeric code grouping questions into broader satisfaction categories.
       - name: question_type
         type: string
-        descriptions:
-          ai: Topic label classifying the service aspect evaluated, e.g., environment, breakfast.
       - name: answer
         type: string
-        descriptions:
-          ai: Patient's selected satisfaction rating or response for the question.
       - name: standard_hospital
         type: string
-        descriptions:
-          ai: Normalized hospital branch name used for consistent cross-branch reporting.
     descriptions:
       db: VIEW
-      ai: Detailed view of patient satisfaction survey responses, capturing per-question answers for less-than-fully-satisfied feedback analysis across hospital branches.
   v_nps_metric:
     table: yihe_poc_demo.v_nps_metric
     columns:
       - name: month
         type: string
-        descriptions:
-          ai: Reporting period in YYYY-MM format for monthly NPS aggregation.
       - name: hospital
         type: string
-        descriptions:
-          ai: Hospital campus or branch where patient surveys were collected.
       - name: department
         type: string
-        descriptions:
-          ai: Clinical department or care unit within the hospital campus.
       - name: nps_answer_count
         type: number
         nullable: false
-        descriptions:
-          ai: Total number of valid NPS survey responses received in the period.
       - name: promoter_count
         type: number
-        descriptions:
-          ai: Number of survey respondents classified as promoters (high satisfaction).
       - name: detractor_count
         type: number
-        descriptions:
-          ai: Number of survey respondents classified as detractors (low satisfaction).
       - name: nps
         type: number
-        descriptions:
-          ai: "Net Promoter Score ratio: (promoters minus detractors) divided by total responses."
     descriptions:
       db: VIEW
-      ai: Monthly Net Promoter Score metrics aggregated by hospital campus and department, tracking patient survey satisfaction.
   v_survey_recovery_metric:
     table: yihe_poc_demo.v_survey_recovery_metric
     columns:
       - name: month
         type: string
-        descriptions:
-          ai: Year-month reporting period for survey and visit data aggregation.
       - name: hospital
         type: string
-        descriptions:
-          ai: Name of the hospital campus or branch location.
       - name: department
         type: string
-        descriptions:
-          ai: Clinical specialty or department within the hospital.
       - name: visit_type
         type: string
         nullable: false
-        descriptions:
-          ai: Classification of patient visit, such as outpatient or inpatient.
       - name: survey_count
         type: number
         nullable: false
-        descriptions:
-          ai: Number of patient satisfaction surveys collected during the period.
       - name: visit_count
         type: number
         nullable: false
-        descriptions:
-          ai: Total patient visits recorded during the reporting period.
       - name: recovery_rate
         type: number
-        descriptions:
-          ai: Proportion of visits that resulted in a completed survey response.
     descriptions:
       db: VIEW
-      ai: Monthly patient survey recovery rates broken down by hospital campus, department, and visit type.
