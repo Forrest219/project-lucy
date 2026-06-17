@@ -1,0 +1,74 @@
+{
+  "catalog": null,
+  "db": "yihe_poc_demo",
+  "name": "inpatient_demo",
+  "kind": "table",
+  "comment": null,
+  "estimatedRows": 20480,
+  "columns": [
+    {
+      "name": "date",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "hospital",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "visit_department",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "finance_department",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "doctor",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "admission_type",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "quantity",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    }
+  ],
+  "foreignKeys": []
+}

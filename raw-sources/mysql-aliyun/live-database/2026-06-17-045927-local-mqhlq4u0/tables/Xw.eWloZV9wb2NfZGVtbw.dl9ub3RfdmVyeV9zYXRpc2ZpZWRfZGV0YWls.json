@@ -1,0 +1,119 @@
+{
+  "catalog": null,
+  "db": "yihe_poc_demo",
+  "name": "v_not_very_satisfied_detail",
+  "kind": "view",
+  "comment": "VIEW",
+  "estimatedRows": null,
+  "columns": [
+    {
+      "name": "survey_id",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "department",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "doctor",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "submit_date",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "hospital",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "survey_name",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "question_id",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "question_text",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "question_category",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "question_type",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "answer",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "standard_hospital",
+      "nativeType": "longtext",
+      "normalizedType": "longtext",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    }
+  ],
+  "foreignKeys": []
+}
