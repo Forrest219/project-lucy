@@ -1,0 +1,16 @@
+# Lucy MCP Proxy — 用户访问配置
+# Phase 1: tokens 使用明文 value（Phase 2 将改为 sha256 hash）
+# 修改后 30 秒内自动生效（缓存 TTL）
+
+users:
+  - id: zhangsan
+    name: 张三
+    tokens:
+      - value: "tk_zhangsan_changeme"   # 部署时替换为随机字符串
+        label: hermes-laptop
+
+  - id: lisi
+    name: 李四
+    tokens:
+      - value: "tk_lisi_changeme"       # 部署时替换为随机字符串
+        label: cursor-mac
