@@ -56,10 +56,46 @@
 4. 安装 KTX CLI：`npm install -g @kaelio/ktx@latest`（或在 `/Users/zhangxingchen/Projects/ktx` 跑 `pnpm install && pnpm run link:dev` 链入开发版本）
 5. 启动本地 MCP daemon：`ktx mcp start --project-dir /Users/zhangxingchen/Projects/project-lucy`
    - 仓库已附带 `.mcp.json`（HTTP 端点 `http://localhost:7878/mcp`），Claude Code 启动时会自动连接；daemon 不运行则连接失败。
-   - 仅 Claude Desktop 走 stdio（`ktx mcp stdio`），本仓库不预置该配置。
+   - Claude Desktop 走 stdio 接入，详见下方 §Claude Desktop / 云端 Claude 接入。
 6. 验证：`ktx status` 报告 `Agent integration ready: yes`，并跑一次 `ktx sl "<keyword>"` 看连接是否通
 
 > **凭据/路径漂移防护**：`ktx.yaml.example` 由 M3.4 维护；当 `ktx.yaml` 中的 host/user/路径字段发生变化时，请同步更新 `.example`。
+
+## Claude Desktop / 云端 Claude 接入
+
+Claude Desktop 的"添加自定义连接器" UI 要求 HTTPS，且 URL 由 Anthropic 云端做 MCP discovery / OAuth 探测——`localhost` 系列地址（localhost / 127.0.0.1 / *.local）从云端不可达，**本地 HTTPS 反代也救不回来**（验证过：表单接受 `https://localhost:7880/mcp` 但提交后静默卡死）。按客户端分两条路：
+
+**Claude Desktop → stdio**（推荐，无暴露风险）
+
+编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`，在顶层合并：
+
+```json
+{
+  "mcpServers": {
+    "ktx": {
+      "command": "/Users/zhangxingchen/.local/bin/ktx",
+      "args": ["mcp", "stdio", "--project-dir", "/Users/zhangxingchen/Projects/project-lucy"]
+    }
+  }
+}
+```
+
+重启 Claude Desktop。每个 stdio 客户端独占一个 KTX 进程；Claude Code 仍走 7878 HTTP，互不影响。
+
+> `command` 必须用绝对路径——GUI 应用启动时 PATH 不含 `~/.local/bin`。
+
+**Web Claude / 云端 agent → cloudflared**（公网可达，**有暴露风险**）
+
+仅在确实需要从云端访问 KTX 时考虑。KTX 连的是 Aliyun RDS 生产库，直接暴露 endpoint 等同暴露生产数据，**必须配 Cloudflare Access**（Email OTP / GitHub，Audience 限定到自己邮箱）：
+
+```bash
+brew install cloudflared
+cloudflared tunnel login                       # 浏览器绑定域名
+cloudflared tunnel create ktx-local
+# 在 Cloudflare Zero Trust 控制台配 Self-hosted application + Access policy
+```
+
+Quick tunnel（`cloudflared tunnel --url http://localhost:7878`，无鉴权）域名虽随机但会落在 Claude Desktop config / 进程列表 / 浏览器 prefetch 等处，**不算秘密**，仅适合不涉敏数据的一次性调试。本仓库当前未预置 cloudflared 配置。
 
 ## 上游依赖：KTX
 
