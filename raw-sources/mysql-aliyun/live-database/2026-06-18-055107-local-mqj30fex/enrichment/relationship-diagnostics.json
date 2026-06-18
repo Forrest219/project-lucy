@@ -1,0 +1,37 @@
+{
+  "connectionId": "mysql-aliyun",
+  "generatedAt": "2026-06-18T05:52:57.510Z",
+  "summary": {
+    "accepted": 0,
+    "review": 2,
+    "rejected": 0,
+    "skipped": 0
+  },
+  "noAcceptedReason": "validation unavailable; review candidates written",
+  "candidateCountsBySource": {
+    "exact_column_match": 1,
+    "llm_proposal": 1
+  },
+  "validation": {
+    "available": true,
+    "sqlAvailable": true,
+    "queryCount": 0
+  },
+  "thresholds": {
+    "acceptThreshold": 0.85,
+    "reviewThreshold": 0.55
+  },
+  "policy": {
+    "validationRequiredForManifest": true,
+    "maxCandidatesPerColumn": 25,
+    "profileSampleRows": 10000,
+    "profileConcurrency": 4,
+    "validationConcurrency": 4
+  },
+  "warnings": [],
+  "profileWarnings": [
+    "profile_failed:superstore_orders:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `row_id` AS value FROM (SELECT * FROM `dataforai`.`supers' at line 1",
+    "profile_failed:superstore_people:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `region` AS value FROM (SELECT * FROM `dataforai`.`supers' at line 1",
+    "profile_failed:superstore_returns:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `id` AS value FROM (SELECT * FROM `dataforai`.`superstore' at line 1"
+  ]
+}
