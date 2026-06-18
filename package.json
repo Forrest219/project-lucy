@@ -1,0 +1,17 @@
+{
+  "name": "project-lucy-eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Project Lucy eval runner — wraps Claude Code CLI to exercise KTX MCP tools against knowledge/superstore/eval cases.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "eval": "node scripts/eval-runner.mjs",
+    "eval:list": "node scripts/eval-runner.mjs --list-cases"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0"
+  }
+}
