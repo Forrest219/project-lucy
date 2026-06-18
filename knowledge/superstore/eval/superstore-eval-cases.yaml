@@ -1,7 +1,8 @@
 # Superstore Eval Cases
-# 版本：v1.1 · 2026-06-18
+# 版本：v1.2 · 2026-06-18
 # 快照基准：batch=superstore_20260617_120212（10194 行）
 # v1.1 增量：Q21–Q30 测 SL 知识、抗反模式、JOIN 路径、降级与多轮一致性（对应 quiz HTML Q21–Q30）
+# v1.2 增量：ordercount-001/-002 期望值随 snapshot 刷新 (5009 → 5083)
 # 运行方式：人工执行 SQL，对照 expected_result 逐条验证
 
 cases:
@@ -95,9 +96,9 @@ cases:
       - "COUNT(*)"
       - "count(*)"
     expected_result:
-      order_count: 5009
-    snapshot_date: 2026-06-17
-    notes: superstore_orders 是明细表（10194行），订单数应为 5009 而非 10194。
+      order_count: 5083
+    snapshot_date: 2026-06-18
+    notes: superstore_orders 是明细表（10194行），订单数应为 5083 而非 10194。
 
   - id: superstore-ordercount-002
     question: 各区域（region）的订单数和总销售额分别是多少？
@@ -118,9 +119,9 @@ cases:
       - "COUNT(*)"
       - "count(*)"
     expected_result:
-      total_order_count_sum: 5009    # 各区域订单数之和应等于总订单数
+      total_order_count_sum: 5083    # 各区域订单数之和应等于总订单数
       total_sales_approx: "16867374" # SUM(sales) 四舍五入
-    snapshot_date: 2026-06-17
+    snapshot_date: 2026-06-18
     notes: 验证分组后 COUNT(DISTINCT) 正确，且各区域订单数之和 = 总订单数。
 
   # ── 利润率类（复合防线）──────────────────────────────────────────

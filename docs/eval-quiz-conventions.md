@@ -139,7 +139,7 @@ eval YAML 与 quiz HTML 的 metadata 必须包含：
 `expected_result` 中的数值若与当前 `ktx sl query --execute` 不一致，先标记为"data drift"，再决定是否更新文档（更新时 bump 版本）。
 
 当前 superstore 的已知 drift：
-- `superstore-ordercount-001` / `-002` 期望 `order_count: 5009`，今日实测 5083（+74）
+- ~~`superstore-ordercount-001` / `-002` 期望 `order_count: 5009`，今日实测 5083（+74）~~ — **v1.2 (2026-06-18) 已刷新至 5083**
 - 其他 case 数值一致
 
 ---
@@ -202,7 +202,7 @@ HTML 顶部 metadata 注释必含（per AGENTS.md §文档输出元数据要求�
 
 | 项 | 说明 | 优先级 |
 |---|---|---|
-| 刷新 v1.0 老 case 的 data drift | superstore-ordercount-001 / -002 的 5009 → 5083；其他保持 | P0 |
+| ~~刷新 v1.0 老 case 的 data drift~~ | ~~superstore-ordercount-001 / -002 的 5009 → 5083；其他保持~~ — **v1.2 已完成** | ~~P0~~ |
 | 季度 eval 节奏 | 若每季度跑一次 regression，本约定可补"季度 checklist"章节 | P2 |
 | 自动批改 quiz | 当前 quiz HTML 是手动 `grade()`，未来可考虑 LLM 评分 | P3 |
 | 跨数据集模板验证 | 当前只覆盖 superstore；下个 domain（人 / 财 / 流程）落地时验证模板通用性 | P2 |
