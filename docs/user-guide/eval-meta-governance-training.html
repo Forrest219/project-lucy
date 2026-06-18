@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Eval 元治理培训材料 |
+| 文档类型 | Other |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-06-19 |
+| 撰写人 | Codex |
+| 委托人 | 待确认 |
+| 基于材料 | docs/eval-quiz-conventions.md v1.4 |
+| 适用范围 | BI 中心理解 eval 的价值、定义与落地最佳实践 |
+| 输出位置 | docs/user-guide/eval-meta-governance-training.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eval 元治理培训材料 · BI 中心</title>
+<style>
+  :root {
+    --bg: #10131a;
+    --bg2: #171b24;
+    --bg3: #202633;
+    --line: #30384a;
+    --text: #e7ecf5;
+    --muted: #a6b0c3;
+    --dim: #737f96;
+    --blue: #4f8ef7;
+    --cyan: #20b8d8;
+    --green: #34c779;
+    --amber: #f2aa3b;
+    --red: #ef6a6a;
+    --code: #0b0e14;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.72;
+  }
+
+  a { color: inherit; }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 32px 88px;
+  }
+
+  .hero {
+    padding: 28px 0 42px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 3px 11px;
+    border: 1px solid rgba(79, 142, 247, .45);
+    border-radius: 6px;
+    color: var(--blue);
+    background: rgba(79, 142, 247, .10);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 20px 0 16px;
+    max-width: 980px;
+    color: #f6f8fc;
+    font-size: clamp(34px, 5vw, 58px);
+    line-height: 1.12;
+    letter-spacing: 0;
+  }
+
+  .lead {
+    max-width: 820px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 19px;
+  }
+
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 28px;
+  }
+
+  .guide-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 22px;
+  }
+
+  .guide-links a {
+    border: 1px solid rgba(79, 142, 247, .34);
+    border-radius: 6px;
+    color: var(--muted);
+    padding: 5px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .guide-links a:hover {
+    background: rgba(79, 142, 247, .10);
+    color: var(--text);
+  }
+
+  .guide-bottom {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-top: 58px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+  }
+
+  .guide-bottom a {
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .guide-bottom a:hover {
+    border-color: var(--blue);
+  }
+
+  .guide-bottom span {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg2);
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin: 0 -32px;
+    padding: 10px 32px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(16, 19, 26, .92);
+    backdrop-filter: blur(12px);
+  }
+
+  .nav-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nav a {
+    padding: 6px 10px;
+    border-radius: 5px;
+    color: var(--muted);
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  .nav a:hover {
+    background: var(--bg2);
+    color: var(--text);
+  }
+
+  .page-toc {
+    position: fixed;
+    top: 92px;
+    right: 22px;
+    z-index: 20;
+    width: 220px;
+    padding: 14px;
+    border: 1px solid rgba(79, 142, 247, .24);
+    border-radius: 10px;
+    background: rgba(16, 19, 26, .86);
+    backdrop-filter: blur(12px);
+  }
+  .page-toc strong {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .page-toc a {
+    display: block;
+    padding: 6px 0;
+    color: var(--dim);
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .page-toc a:hover { color: var(--blue); }
+
+  section {
+    margin-top: 64px;
+  }
+
+  h2 {
+    margin: 0 0 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+    color: #f6f8fc;
+    font-size: 26px;
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+
+  h3 {
+    margin: 28px 0 10px;
+    color: #f6f8fc;
+    font-size: 18px;
+    line-height: 1.3;
+  }
+
+  p {
+    margin: 0 0 14px;
+    color: var(--muted);
+  }
+
+  strong { color: var(--text); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+  }
+
+  .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .panel {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    padding: 20px;
+  }
+
+  .panel h3 {
+    margin-top: 0;
+  }
+
+  .panel p:last-child,
+  .panel ul:last-child,
+  .panel ol:last-child {
+    margin-bottom: 0;
+  }
+
+  .accent-blue { border-top: 3px solid var(--blue); }
+  .accent-cyan { border-top: 3px solid var(--cyan); }
+  .accent-green { border-top: 3px solid var(--green); }
+  .accent-amber { border-top: 3px solid var(--amber); }
+  .accent-red { border-top: 3px solid var(--red); }
+
+  ul, ol {
+    margin: 0 0 12px 20px;
+    padding: 0;
+    color: var(--muted);
+  }
+
+  li { margin: 7px 0; }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 20px 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+
+  th, td {
+    padding: 15px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    text-align: left;
+  }
+
+  th {
+    background: linear-gradient(180deg, #252c3b 0%, #1f2634 100%);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  td {
+    background: var(--bg2);
+    color: var(--muted);
+  }
+
+  tr:last-child td { border-bottom: 0; }
+
+  code {
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: var(--code);
+    color: #d9e6ff;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: .92em;
+  }
+
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .step {
+    min-height: 118px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    padding: 16px;
+  }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    background: rgba(79, 142, 247, .16);
+    color: var(--blue);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .step-title {
+    color: var(--text);
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .step-note {
+    margin-top: 7px;
+    color: var(--dim);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .callout {
+    margin-top: 22px;
+    padding: 20px 22px;
+    border-left: 4px solid var(--blue);
+    border-radius: 6px;
+    background: rgba(79, 142, 247, .10);
+  }
+
+  .callout p { margin: 0; color: var(--text); }
+
+  .quote {
+    margin: 22px 0;
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    color: var(--text);
+    font-size: 19px;
+    line-height: 1.65;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1.05fr .95fr;
+    gap: 18px;
+    align-items: start;
+  }
+
+  .metadata td:first-child {
+    width: 160px;
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .tag {
+    display: inline-flex;
+    margin: 2px 6px 2px 0;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: var(--code);
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .opening-scene {
+    margin-top: 36px;
+    padding-bottom: 8px;
+  }
+
+  .scene-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 20px;
+  }
+
+  .scene-card {
+    min-height: 220px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(32, 38, 51, .9), rgba(23, 27, 36, .95));
+    padding: 22px;
+  }
+
+  .scene-label {
+    display: inline-flex;
+    padding: 3px 9px;
+    border-radius: 5px;
+    background: rgba(239, 106, 106, .14);
+    color: #ff9a9a;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .scene-title {
+    margin: 18px 0 12px;
+    color: #f6f8fc;
+    font-size: 23px;
+    line-height: 1.35;
+  }
+
+  .scene-card p {
+    color: var(--muted);
+  }
+
+  .scene-after {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .live-quiz {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+  }
+
+  .quiz-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    padding: 20px;
+  }
+
+  .quiz-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: var(--dim);
+    font-size: 13px;
+  }
+
+  .quiz-question {
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+
+  .quiz-options {
+    display: grid;
+    gap: 8px;
+    margin: 16px 0;
+  }
+
+  .quiz-options span {
+    display: block;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--code);
+    color: var(--muted);
+  }
+
+  details.answer {
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+    color: var(--muted);
+  }
+
+  details.answer summary {
+    cursor: pointer;
+    color: var(--blue);
+    font-weight: 700;
+  }
+
+  pre {
+    margin: 14px 0 0;
+    position: relative;
+    padding: 44px 16px 16px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: #0d1117;
+    color: #e6edf3;
+    overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 13.5px;
+    line-height: 1.72;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+  }
+
+  .copy-code {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    min-height: 26px;
+    padding: 3px 9px;
+    border: 1px solid #3d4656;
+    border-radius: 5px;
+    background: #161b22;
+    color: #9fb1c7;
+    font: 700 12px/1 "SFMono-Regular", Consolas, monospace;
+    cursor: pointer;
+  }
+
+  .copy-code:hover {
+    border-color: var(--blue);
+    color: #d9e6ff;
+  }
+
+  .command-hint {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid rgba(79, 142, 247, .28);
+    border-radius: 8px;
+    background: rgba(79, 142, 247, .08);
+  }
+
+  .command-hint strong {
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .snippet-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+  }
+
+  .state-flow {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1fr;
+    gap: 14px;
+    margin-top: 22px;
+    align-items: stretch;
+  }
+
+  .state-box {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    padding: 18px;
+  }
+
+  .state-box h3 {
+    margin: 0 0 10px;
+  }
+
+  .state-routes {
+    display: grid;
+    gap: 10px;
+  }
+
+  .route {
+    border: 1px solid var(--line);
+    border-left-width: 4px;
+    border-radius: 7px;
+    background: var(--bg2);
+    padding: 12px 14px;
+  }
+
+  .route.pass { border-left-color: var(--green); }
+  .route.data { border-left-color: var(--amber); }
+  .route.schema { border-left-color: var(--red); }
+  .route.logic { border-left-color: var(--blue); }
+  .route.tool { border-left-color: var(--dim); }
+
+  .route strong {
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  @media (max-width: 900px) {
+    .grid,
+    .grid.two,
+    .grid.four,
+    .split,
+    .flow,
+    .scene-grid,
+    .live-quiz,
+    .snippet-grid,
+    .state-flow {
+      grid-template-columns: 1fr;
+    }
+
+    .step { min-height: auto; }
+    .page-toc { display: none; }
+  }
+
+  @media (max-width: 640px) {
+    .page { padding: 32px 18px 72px; }
+    .nav { margin: 0 -18px; padding: 8px 18px; }
+    h1 { font-size: 34px; }
+    .lead { font-size: 17px; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <aside class="page-toc" aria-label="文内目录">
+    <strong>On this page</strong>
+    <a href="#scene">开场场景</a>
+    <a href="#metadata">元数据</a>
+    <a href="#why">为什么要 eval</a>
+    <a href="#what">什么是 eval</a>
+    <a href="#meta-governance">元治理</a>
+    <a href="#practice">最佳实践</a>
+    <a href="#workflow">落地流程</a>
+    <a href="#drift">漂移判定</a>
+    <a href="#anti-patterns">反模式</a>
+    <a href="#checklist">检查清单</a>
+  </aside>
+  <div class="guide-links" aria-label="帮助中心导航">
+    <a href="index.html">帮助中心</a>
+    <a href="product-intro.html">产品介绍</a>
+    <a href="webui-guide.html">WebUI 说明</a>
+    <a href="trust.html">可信机制</a>
+  </div>
+  <header class="hero">
+    <span class="eyebrow">BI Center Training</span>
+    <h1>Eval 不是测试题库，而是数据智能的元治理框架</h1>
+    <p class="lead">这份材料面向 BI 中心，讲清楚为什么要 eval、eval 到底是什么，以及如何把它作为跨财务、人力、法务等业务域都能复用的治理方法。</p>
+    <div class="hero-meta">
+      <span class="pill">受众：BI 中心、数据产品、语义层维护者</span>
+      <span class="pill">目标：建立可执行、可复查、可漂移维护的评测体系</span>
+      <span class="pill">依据：docs/eval-quiz-conventions.md v1.4</span>
+    </div>
+  </header>
+
+  <section id="scene" class="opening-scene">
+    <span class="eyebrow">Section 0</span>
+    <h2>名场面还原：BI 中心最怕的不是报错，而是不报错</h2>
+    <p>Eval 的开场不应该从术语开始，而应该从线上口径撕扯开始。下面两个场景，任何一个都足够让一个自动化数据产品失去信任。</p>
+    <div class="scene-grid">
+      <article class="scene-card">
+        <span class="scene-label">场景 A · 口径撕扯</span>
+        <div class="scene-title">CEO 凌晨在群里截了一张 Agent 图：“为什么这个月利润率比财务报表低了 3 个点？”</div>
+        <p>SQL 没报错，图也画出来了。事后发现模型把 <code>profit_margin</code> 编译成了 <code>AVG(profit / sales)</code>，每一行都合法，但整体口径已经错了。</p>
+        <div class="scene-after">eval 要提前拦住：measure lineage 必须是 <code>SUM(profit) / SUM(sales)</code>。</div>
+      </article>
+      <article class="scene-card">
+        <span class="scene-label">场景 B · 静默漂移</span>
+        <div class="scene-title">语义层本周更新了字段名，底层没有报错，第二天所有自动化周报的维度全部串行。</div>
+        <p>字段仍然存在，join 仍然成功，Runner 仍然返回结果。真正坏掉的是“业务维度和事实表之间的路径选择”。</p>
+        <div class="scene-after">eval 要能区分：这是 schema drift、logic regression，还是 data drift。</div>
+      </article>
+    </div>
+  </section>
+
+  <nav class="nav" aria-label="目录">
+    <div class="nav-inner">
+      <a href="#scene">名场面</a>
+      <a href="#metadata">元数据</a>
+      <a href="#why">为什么要 eval</a>
+      <a href="#what">什么是 eval</a>
+      <a href="#meta-governance">元治理框架</a>
+      <a href="#safety">安全红线</a>
+      <a href="#practice">最佳实践</a>
+      <a href="#workflow">落地流程</a>
+      <a href="#drift">漂移判定</a>
+      <a href="#checklist">检查清单</a>
+    </div>
+  </nav>
+
+  <section id="metadata">
+    <h2>文档元数据</h2>
+    <table class="metadata">
+      <tbody>
+        <tr><td>文档名称</td><td>Eval 元治理培训材料</td></tr>
+        <tr><td>文档类型</td><td>Other</td></tr>
+        <tr><td>版本</td><td>v1.2</td></tr>
+        <tr><td>撰写日期</td><td>2026-06-19</td></tr>
+        <tr><td>撰写人</td><td>Codex</td></tr>
+        <tr><td>委托人</td><td>待确认</td></tr>
+        <tr><td>基于材料</td><td><code>docs/eval-quiz-conventions.md v1.4</code></td></tr>
+        <tr><td>适用范围</td><td>BI 中心理解 eval 的价值、定义与落地最佳实践</td></tr>
+        <tr><td>输出位置</td><td><code>docs/user-guide/eval-meta-governance-training.html</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="why">
+    <h2>一、为什么要 eval</h2>
+    <div class="quote">当 BI 从“人写报表”进入“人问问题、Agent 生成 SQL 和解释”的阶段，治理对象就不再只是字段、模型和仪表盘，而是大模型对业务语义的理解过程。</div>
+
+    <div class="grid">
+      <article class="panel accent-red">
+        <h3>1. 防止口径被悄悄改写</h3>
+        <p>同一句“订单数”，可能被模型编译成 <code>COUNT(*)</code>、<code>COUNT(order_id)</code> 或 <code>COUNT(DISTINCT order_id)</code>。没有 eval，团队只能在结果出错后人工排查。</p>
+      </article>
+      <article class="panel accent-amber">
+        <h3>2. 防止 SQL 合法但业务错误</h3>
+        <p>SQL 能跑不等于分析正确。财务的加权折扣、人力的时点人数、法务的流程状态，都可能因为错误聚合或错误过滤而产生看似合理的错答案。</p>
+      </article>
+      <article class="panel accent-blue">
+        <h3>3. 防止版本漂移无人感知</h3>
+        <p>数据快照、schema、semantic layer、measure 定义都会变化。eval 把变化分成 <code>data_drift</code>、<code>schema_drift</code>、<code>logic_regression</code> 等状态，避免把所有失败都混成“再看一下”。</p>
+      </article>
+    </div>
+
+    <h3>BI 中心的核心收益</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>没有 eval</th>
+          <th>有 eval</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>依赖专家临时复核，难以规模化。</td>
+          <td>把专家判断沉淀成可重复运行的用例。</td>
+        </tr>
+        <tr>
+          <td>只知道答案错了，不知道错在语义、SQL、数据还是工具。</td>
+          <td>用结构化断言定位失败类型。</td>
+        </tr>
+        <tr>
+          <td>新业务域上线靠经验迁移。</td>
+          <td>用同一套覆盖矩阵迁移到财务、人力、法务等域。</td>
+        </tr>
+        <tr>
+          <td>人类培训和机器评测割裂。</td>
+          <td>eval 测机器会不会做，quiz 测人会不会想，两者主题对齐。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="what">
+    <h2>二、什么是 eval</h2>
+    <p><strong>Eval 是一组可执行的业务理解契约。</strong>它不是“问几个问题看模型准不准”，而是把业务问题、语义来源、SQL 安全约束、结果断言和漂移处理规则写成可持续运行的标准。</p>
+
+    <div class="split">
+      <article class="panel accent-green">
+        <h3>Eval cases：机器测</h3>
+        <p>面向 Agent / LLM / Runner，通常是 YAML。它验证模型是否能用正确语义层、正确 measure、正确 SQL 结构和正确上下文，生成可信答案。</p>
+        <p><span class="tag">expected_source</span><span class="tag">expected_measures</span><span class="tag">sql_assertions</span><span class="tag">result_assertions</span><span class="tag">context_assertions</span></p>
+      </article>
+      <article class="panel accent-cyan">
+        <h3>Quiz cases：人类测</h3>
+        <p>面向业务、BI、培训和验收，通常是 HTML。它验证人是否理解指标口径、边界条件、反模式和分析路径。</p>
+        <p><span class="tag">题目类型</span><span class="tag">正确选项</span><span class="tag">answer_binding</span><span class="tag">解析</span><span class="tag">stale_status</span></p>
+      </article>
+    </div>
+
+    <h3>现场对齐测试：先让 BI 同学亲手踩一次坑</h3>
+    <p>下面两题来自 <code>knowledge/superstore/superstore-quiz-cases.html</code>。培训现场可以让大家举手或扫码作答，再展开答案；目的不是考记忆，而是让大家体会“模型的反模式，人也会踩”。</p>
+    <div class="live-quiz">
+      <article class="quiz-card">
+        <div class="quiz-top"><span>Superstore Q23 · 对错 · 2★</span><span>answer_binding: boolean</span></div>
+        <div class="quiz-question">用 <code>COUNT(*)</code> 统计 <code>superstore_orders</code> 的“订单数”会得到 5083。</div>
+        <div class="quiz-options">
+          <span>A. 正确</span>
+          <span>B. 错误</span>
+        </div>
+        <details class="answer">
+          <summary>展开答案</summary>
+          <p>正确答案：B。<code>COUNT(*)</code> 得到的是明细行数，不是订单数；订单数应使用 <code>COUNT(DISTINCT order_id)</code> 或语义层 <code>order_count</code>。</p>
+        </details>
+      </article>
+      <article class="quiz-card">
+        <div class="quiz-top"><span>Superstore Q24 · 单选 · 2.5★</span><span>answer_binding: conceptual</span></div>
+        <div class="quiz-question">“利润率”指标的语义层规范写法是？</div>
+        <div class="quiz-options">
+          <span>A. AVG(profit / sales)</span>
+          <span>B. SUM(profit) / SUM(sales)（即 profit_margin）</span>
+          <span>C. AVG(profit) / AVG(sales)</span>
+          <span>D. SUM(profit / sales)</span>
+        </div>
+        <details class="answer">
+          <summary>展开答案</summary>
+          <p>正确答案：B。利润率必须先汇总利润和销售额再相除；逐行比率再平均会让高低金额订单获得相同权重。</p>
+        </details>
+      </article>
+    </div>
+
+    <h3>一个 eval case 需要回答的五个问题</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>问题</th>
+          <th>对应设计</th>
+          <th>BI 中心关注点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>用户到底在问什么？</td>
+          <td><code>question</code> 或 <code>turns[].user</code></td>
+          <td>自然语言是否贴近真实业务提问。</td>
+        </tr>
+        <tr>
+          <td>应该优先用什么语义能力？</td>
+          <td><code>semantic_layer</code> 优先，必要时 <code>raw_sql_fallback</code></td>
+          <td>不要绕过语义层拿数据库直连结果当标准答案。</td>
+        </tr>
+        <tr>
+          <td>必须使用哪些业务口径？</td>
+          <td><code>expected_measures</code></td>
+          <td>指标 ID、过滤、粒度、去重口径不能漂移。</td>
+        </tr>
+        <tr>
+          <td>SQL 应该长什么样？</td>
+          <td><code>sql_assertions</code></td>
+          <td>优先 AST / parser 断言，避免脆弱的字符串包含判断。</td>
+        </tr>
+        <tr>
+          <td>结果应该如何判定？</td>
+          <td><code>result_assertions</code></td>
+          <td>明确 exact、approx、schema_only、subset、unordered_rows 等比较模式。</td>
+        </tr>
+      </tbody>
+    </table>
+
+  </section>
+
+  <section id="meta-governance">
+    <h2>三、为什么说它是“元治理”</h2>
+    <p>传统数据治理管的是表、字段、指标和权限。Eval 进一步治理“模型如何理解、如何编译、如何解释、如何随版本变化”。它不绑定 Superstore 字段，因此可以迁移到任何业务域。</p>
+
+    <div class="grid four">
+      <article class="panel accent-blue">
+        <h3>语义理解治理</h3>
+        <p>把自然语言问题映射到正确 measure、dimension、filter 和 time grain。重点不是字段名，而是业务意图是否稳定。</p>
+      </article>
+      <article class="panel accent-green">
+        <h3>SQL 编译治理</h3>
+        <p>用结构化断言约束生成 SQL，禁止错误聚合、错误 join、错误去重和危险 fallback。</p>
+      </article>
+      <article class="panel accent-cyan">
+        <h3>人机认知对齐</h3>
+        <p>同一主题既有机器 eval，也有人类 quiz，确保 Agent 会做，业务和 BI 也知道为什么这样做。</p>
+      </article>
+      <article class="panel accent-amber">
+        <h3>生命周期治理</h3>
+        <p>用 snapshot、版本、data_source、answer_binding 和 stale_status 管理数据与题目的长期演进。</p>
+      </article>
+    </div>
+
+    <h3>跨域适配示例</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>业务域</th>
+          <th>容易出错的点</th>
+          <th>eval 关注的治理问题</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>财务</td>
+          <td>数字极度敏感，金额、折扣、利润率不能误聚合。</td>
+          <td>加权口径、币种、期间、精度、容差、反模式如 <code>AVG(discount)</code>。</td>
+        </tr>
+        <tr>
+          <td>人力</td>
+          <td>很多指标是时点快照，不是累计流水。</td>
+          <td>快照日期、在职状态、组织层级、期初期末口径、追问中的时间继承。</td>
+        </tr>
+        <tr>
+          <td>法务</td>
+          <td>流程状态和节点时效比单纯数值更重要。</td>
+          <td>状态枚举、当前节点、SLA aging、关闭条件、跨流程 join 路径。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>黄金落地 Case：三类业务域的核心断言模板</h3>
+    <p>下面不是完整 case，而是每个业务域最值得优先固化的“红线断言”。BI 中心可以把这些片段作为首版 eval 的抄作业模板。</p>
+    <div class="snippet-grid">
+      <article class="panel accent-blue">
+        <h3>财务：利润率不能逐行平均</h3>
+        <pre><code>sql_assertions:
+  - type: measure_lineage
+    value: profit_margin
+    reason: 利润率必须继承 SL measure
+  - type: forbidden_ast
+    value: AVG(profit / sales)
+    reason: 禁止逐行利润率平均</code></pre>
+      </article>
+      <article class="panel accent-green">
+        <h3>人力：追问必须继承快照时点</h3>
+        <pre><code>context_assertions:
+  inherit_measures:
+    - active_headcount
+  inherit_filters:
+    - snapshot_date = 2026-06-30
+  inherit_time_grain: month</code></pre>
+      </article>
+      <article class="panel accent-amber">
+        <h3>法务：流程状态和 SLA 不能混口径</h3>
+        <pre><code>sql_assertions:
+  - type: required_ast
+    value: current_status IN open_states
+    reason: 只统计当前未关闭案件
+  - type: required_ast
+    value: datediff(now(), node_entered_at)
+    reason: aging 从当前节点进入时间计算</code></pre>
+      </article>
+    </div>
+  </section>
+
+  <section id="safety">
+    <h2>四、安全红线：从声明升级为强阻断契约</h2>
+    <p>企业级 Agent 评测不能只在产品介绍里声明“只读”和“禁止读取凭证”。这些边界必须进入 eval 文件的 <code>safety_contract</code>，并在 Runner 编译期和运行时都执行。</p>
+    <div class="grid two">
+      <article class="panel accent-red">
+        <h3>必须阻断的行为</h3>
+        <ul>
+          <li>写操作：<code>UPDATE / DELETE / INSERT / DROP / ALTER / TRUNCATE</code></li>
+          <li>读取或暴露 <code>.ktx/secrets/</code> 下的凭证。</li>
+          <li>未声明的跨源 Join 或联邦查询。</li>
+          <li>未标记为 <code>raw_sql_fallback</code> 的长尾探索。</li>
+        </ul>
+      </article>
+      <article class="panel accent-amber">
+        <h3>Runner 判定</h3>
+        <p>命中安全红线时，Runner 必须标记为 <code>logic_regression</code>，返回 exit code <code>30</code>，并阻断 CI。无法完成安全判定时返回 <code>tool_error</code>，exit code <code>40</code>，不得执行 SQL。</p>
+      </article>
+    </div>
+    <div class="command-hint">
+      <strong>本地一键校验</strong>
+      <pre><code>npm run eval:list -- --cases knowledge/&lt;domain&gt;/eval/&lt;domain&gt;-eval-cases.yaml</code></pre>
+    </div>
+    <pre><code>safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - ".ktx/secrets/"
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: "UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE"
+      reason: "eval / fallback 只能只读，不允许 DDL 或 DML"
+    - type: forbidden_ast
+      value: "cross_source_join"
+      reason: "禁止跨数据源 Join；跨源分析必须拆成单源结果后人工解释"</code></pre>
+  </section>
+
+  <section id="practice">
+    <h2>五、最佳实践</h2>
+    <div class="grid two">
+      <article class="panel accent-blue">
+        <h3>1. 从覆盖矩阵开始，而不是从题目开始</h3>
+        <p>每个数据集至少覆盖基础、Anti-pattern、边界/异常、降级/健壮性、多轮一致性、路径选择六类。先画矩阵，再写 case。</p>
+      </article>
+      <article class="panel accent-green">
+        <h3>2. 语义层优先，fallback 要留痕</h3>
+        <p>自动化首选 KTX MCP 的 <code>sl_query</code> / <code>sl_read</code>。SL 不覆盖时才用 <code>raw_sql_fallback</code>，并记录原因、query 和结果摘要。</p>
+      </article>
+      <article class="panel accent-cyan">
+        <h3>3. 断言要结构化</h3>
+        <p>新增 case 不使用裸字符串 <code>required_sql_pattern</code>。优先声明 AST matcher、normalized regex 或 measure lineage，并写清楚断言目的。</p>
+      </article>
+      <article class="panel accent-amber">
+        <h3>4. 结果断言不是只写一个数字</h3>
+        <p>结果可能是 scalar、dataframe、text 或 empty_result。比较方式要明确是 exact、approx、schema_only、checksum、subset 还是 unordered_rows。</p>
+      </article>
+      <article class="panel accent-red">
+        <h3>5. 多轮 case 必须真的多轮</h3>
+        <p>不要把“第一轮、第二轮”塞进一个 question。使用 <code>case_type: multi_turn</code> 和 <code>turns[]</code>，逐轮校验上下文继承。</p>
+      </article>
+      <article class="panel accent-blue">
+        <h3>6. Quiz 要声明 answer_binding</h3>
+        <p>硬编码数值、排名、布尔判断、区间桶和概念题，对数据漂移的反应不同。没有 <code>answer_binding</code>，就无法自动判断题目是否 stale。</p>
+      </article>
+    </div>
+
+    <h3>推荐覆盖矩阵</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>它在测什么</th>
+          <th>典型问题</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>基础</td>
+          <td>单测点查询是否稳定。</td>
+          <td>总销售额、订单数、员工人数、合同数。</td>
+        </tr>
+        <tr>
+          <td>Anti-pattern</td>
+          <td>模型是否避开常见错误写法。</td>
+          <td>禁止 <code>AVG(discount)</code>，要求 <code>COUNT(DISTINCT order_id)</code>。</td>
+        </tr>
+        <tr>
+          <td>边界 / 异常</td>
+          <td>过滤、空结果、未知枚举是否处理正确。</td>
+          <td>未知 segment、已删除记录、关闭状态、空筛选。</td>
+        </tr>
+        <tr>
+          <td>降级 / 健壮性</td>
+          <td>SL 不覆盖时是否说明限制并安全 fallback。</td>
+          <td>LTV、cohort、窗口函数、跨年趋势。</td>
+        </tr>
+        <tr>
+          <td>多轮一致性</td>
+          <td>追问中 measure、filter、time grain 是否继承。</td>
+          <td>“那上个月呢”“按部门拆一下”“只看华东”。</td>
+        </tr>
+        <tr>
+          <td>路径选择</td>
+          <td>跨表查询是否选对 join 和事实表。</td>
+          <td>订单到客户、员工到组织、合同到审批节点。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="workflow">
+    <h2>六、BI 中心落地流程</h2>
+    <div class="flow" aria-label="落地流程">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-title">定义业务域</div>
+        <div class="step-note">明确数据集、语义层、核心指标和使用场景。</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-title">画覆盖矩阵</div>
+        <div class="step-note">六类覆盖先齐，再补高风险 case。</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-title">获取 ground truth</div>
+        <div class="step-note">优先 SL，fallback 必须说明原因并留痕。</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-title">编写 eval YAML</div>
+        <div class="step-note">写清 expected_source、measure、SQL 和结果断言。</div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-title">编写 quiz HTML</div>
+        <div class="step-note">主题对齐 eval，用人话解释业务口径。</div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-title">运行最小检查</div>
+        <div class="step-note">命名、metadata、覆盖、ground truth、漂移联动。</div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p><strong>一句话工作法：</strong>先让专家判断变成 case，再让 case 变成可执行检查，最后让检查结果能区分数据漂移、schema 漂移、逻辑回归和工具错误。</p>
+    </div>
+  </section>
+
+  <section id="drift">
+    <h2>七、Runner 漂移判定流</h2>
+    <p>大屏宣讲时，不建议只讲状态表。更有效的方式是把 Runner 想象成一个分诊台：同样是“断言失败”，它必须先判断失败属于数据、schema、逻辑还是工具。</p>
+    <div class="state-flow">
+      <article class="state-box accent-blue">
+        <h3>输入</h3>
+        <ul>
+          <li>当前问题与上下文</li>
+          <li>生成 SQL / 工具调用</li>
+          <li><code>sql_assertions</code></li>
+          <li><code>result_assertions</code></li>
+          <li><code>snapshot_date</code></li>
+        </ul>
+      </article>
+      <div class="state-routes">
+        <div class="route pass">
+          <strong>pass · exit 0</strong>
+          <span>SQL 结构和结果断言都满足。Runner 放行，不改文档。</span>
+        </div>
+        <div class="route data">
+          <strong>data_drift · exit 10</strong>
+          <span>SQL / measure / schema 未变，仅结果值变化。Runner 生成待更新 diff，并触发 quiz stale 级联判定。</span>
+        </div>
+        <div class="route schema">
+          <strong>schema_drift · exit 20</strong>
+          <span>表、字段、measure 或 dimension 缺失 / 重命名。Runner 阻断自动更新，要求人工修订 schema 或 SL。</span>
+        </div>
+        <div class="route logic">
+          <strong>logic_regression · exit 30</strong>
+          <span>SQL 违反 matcher，或多轮追问中口径漂移。Runner 保留原 ground truth，不刷新断言。</span>
+        </div>
+        <div class="route tool">
+          <strong>tool_error · exit 40</strong>
+          <span>工具不可用、超时或权限失败。Runner 标记 inconclusive，不把失败误判成 drift。</span>
+        </div>
+      </div>
+      <article class="state-box accent-green">
+        <h3>输出</h3>
+        <ul>
+          <li>明确失败类型</li>
+          <li>可复查的 query / 结果摘要</li>
+          <li>必要时 bump eval / quiz 版本</li>
+          <li>按 <code>answer_binding</code> 判断题目是否 stale</li>
+          <li>保留逻辑回归证据</li>
+        </ul>
+      </article>
+    </div>
+    <div class="callout">
+      <p><strong>关键点：</strong>Runner 的价值不是“发现失败”，而是把失败分诊成可执行动作。只有这样，BI 中心才能把回归测试变成长期治理机制。</p>
+    </div>
+  </section>
+
+  <section id="anti-patterns">
+    <h2>八、常见反模式</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>反模式</th>
+          <th>为什么有问题</th>
+          <th>推荐做法</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>直接拿数据库查询结果当所有标准答案。</td>
+          <td>绕过 semantic layer，会让 eval 失去语义治理价值。</td>
+          <td>优先 SL；SL 不覆盖时使用 parser-validated read-only SQL fallback。</td>
+        </tr>
+        <tr>
+          <td>只校验最终数字。</td>
+          <td>SQL 口径可能错但数字短期碰巧接近。</td>
+          <td>同时校验 measure lineage、SQL 结构和结果断言。</td>
+        </tr>
+        <tr>
+          <td>把 data drift 当成模型失败。</td>
+          <td>会把正常数据变化误判为逻辑回归。</td>
+          <td>按状态机区分 <code>data_drift</code>、<code>schema_drift</code>、<code>logic_regression</code>、<code>tool_error</code>。</td>
+        </tr>
+        <tr>
+          <td>Quiz 题干写技术腔。</td>
+          <td>人类培训目标是认知对齐，不是背字段名。</td>
+          <td>题干用自然中文，必要时保留 measure 名并配人话说明。</td>
+        </tr>
+        <tr>
+          <td>多选题不标“多选”。</td>
+          <td>用户体验差，验收结果不可解释。</td>
+          <td>题目类型、选项数量、正确条件和 answer_binding 都要明确。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="checklist">
+    <h2>九、BI 中心检查清单</h2>
+    <div class="grid two">
+      <article class="panel accent-green">
+        <h3>设计前</h3>
+        <ul>
+          <li>已明确业务域和数据快照日期。</li>
+          <li>已列出核心 measure、dimension、filter、time grain。</li>
+          <li>已识别最容易出错的反模式。</li>
+          <li>已确认哪些问题必须 fallback，以及 fallback 原因。</li>
+        </ul>
+      </article>
+      <article class="panel accent-blue">
+        <h3>交付前</h3>
+        <ul>
+          <li>eval 与 quiz 主题对齐，覆盖矩阵无明显缺口。</li>
+          <li>metadata 字段完整，版本和关联文件可追溯。</li>
+          <li>SQL 断言结构化，新增 case 不依赖裸 substring match。</li>
+          <li>Quiz 题目声明 <code>answer_binding</code>，漂移后可判断是否 stale。</li>
+        </ul>
+      </article>
+    </div>
+
+    <h3>培训建议议程</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>模块</th>
+          <th>建议时长</th>
+          <th>产出</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>为什么要 eval</td>
+          <td>15 分钟</td>
+          <td>统一“eval 是治理，不是刷题”的认知。</td>
+        </tr>
+        <tr>
+          <td>规范解读</td>
+          <td>25 分钟</td>
+          <td>理解 eval YAML、quiz HTML、coverage matrix、drift 状态机。</td>
+        </tr>
+        <tr>
+          <td>跨域练习</td>
+          <td>30 分钟</td>
+          <td>任选财务、人力或法务域，画出首版覆盖矩阵。</td>
+        </tr>
+        <tr>
+          <td>复盘与清单</td>
+          <td>20 分钟</td>
+          <td>形成该业务域的首批 eval/quiz 建设任务。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  <nav class="guide-bottom" aria-label="上一篇和下一篇">
+    <a class="prev" href="trust.html"><span>上一篇</span>可信机制</a>
+  </nav>
+  <script>
+    document.querySelectorAll('pre').forEach((pre) => {
+      const button = document.createElement('button');
+      button.className = 'copy-code';
+      button.type = 'button';
+      button.textContent = 'Copy';
+      button.addEventListener('click', async () => {
+        const code = pre.querySelector('code');
+        const text = code ? code.innerText : pre.textContent.replace(button.textContent, '');
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          textarea.remove();
+        }
+        button.textContent = 'Copied';
+        setTimeout(() => { button.textContent = 'Copy'; }, 1000);
+      });
+      pre.appendChild(button);
+    });
+  </script>
+</main>
+</body>
+</html>

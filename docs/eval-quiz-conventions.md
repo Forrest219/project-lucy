@@ -4,11 +4,11 @@
 |---|---|
 | 文档名称 | Eval & Quiz 设计约定 |
 | 文档类型 | Spec |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-06-18 |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-06-19 |
 | 撰写人 | Claude / Codex |
 | 委托人 | project-lucy 团队 |
-| 基于材料 | superstore-eval-cases.yaml (v1.2, 17 cases) / superstore-quiz-cases.html (v1.0, 30 题) / docs/DEVELOPMENT.md / 本轮 4 条 feedback memory / 2026-06-18 Runner 可执行性评审意见 |
+| 基于材料 | superstore-eval-cases.yaml (v1.3, 17 cases) / superstore-quiz-cases.html (v1.1, 30 题) / docs/DEVELOPMENT.md / 2026-06-18 Runner 可执行性评审意见 / 2026-06-19 安全边界与 CI 退出码评审意见 |
 | 适用范围 | 项目内任何为数据集设计 eval cases（YAML，agent 测）和 quiz HTML（人类测）的 agent 必读 |
 | 输出位置 | docs/eval-quiz-conventions.md |
 
@@ -136,17 +136,19 @@ eval YAML 与 quiz HTML 的 metadata 必须包含：
 | schema 变更（表 / 列）| 刷新 ground truth | 同步刷新 |
 | snapshot drift（数据值漂移）| 更新 `result_assertions` | 按 answer binding 判断是否标记 stale |
 
-### 6.3 漂移检测
+### 6.3 漂移检测与 CI 退出码
 
 `result_assertions` 若与当前 ground truth 查询不一致，按以下状态机处理，不使用"再决定"类人工模糊步骤：
 
-| 状态 | 触发条件 | Agent / Runner 动作 | 产物状态 |
-|---|---|---|---|
-| `pass` | 当前结果满足 `result_assertions` | 通过 | 不改文档 |
-| `data_drift` | SQL / measure / schema 未变，仅结果断言失败 | 标记 drift，生成待更新 diff，bump 对应产物版本，并执行 quiz 级联判定 | 允许人工确认后合并 |
-| `schema_drift` | 表、字段、measure、dimension 缺失或重命名 | 标记 schema drift，阻断自动更新 | 需要人工修订 schema / SL |
-| `logic_regression` | 生成 SQL 违反 matcher 或口径漂移 | 标记 regression，保留原 `result_assertions` | 不更新 ground truth |
-| `tool_error` | 工具不可用、超时、权限失败 | 标记 inconclusive，记录错误 | 不更新文档，不判失败为 drift |
+| 状态 | Exit code | 触发条件 | Agent / Runner 动作 | CI 策略 | 产物状态 |
+|---|---:|---|---|---|---|
+| `pass` | `0` | 当前结果满足 `result_assertions` 且满足安全红线 | 通过 | 放行 | 不改文档 |
+| `data_drift` | `10` | SQL / measure / schema 未变，仅结果断言失败 | 标记 drift，生成待更新 diff，bump 对应产物版本，并执行 quiz 级联判定 | 阻断自动合并；允许人工确认 drift diff 后重跑放行 | 允许人工确认后合并 |
+| `schema_drift` | `20` | 表、字段、measure、dimension 缺失或重命名 | 标记 schema drift，阻断自动更新 | 阻断；通知 schema / SL owner | 需要人工修订 schema / SL |
+| `logic_regression` | `30` | 生成 SQL 违反 matcher、违反安全红线或口径漂移 | 标记 regression，保留原 `result_assertions` | 阻断；PR 不得合并 | 不更新 ground truth |
+| `tool_error` | `40` | 工具不可用、超时、权限失败 | 标记 inconclusive，记录错误 | 阻断本次判定；允许基础设施重试 | 不更新文档，不判失败为 drift |
+
+Runner 只能输出上表中的状态和退出码；同一次运行出现多类失败时，按 `logic_regression` → `schema_drift` → `data_drift` → `tool_error` → `pass` 的优先级归类。安全红线失败一律归为 `logic_regression`，不得降级为 `tool_error` 或 `data_drift`。
 
 示例：`superstore-ordercount-001` / `-002` 曾因 snapshot drift 从 `order_count: 5009` 刷新到 `5083`；处理方式是标记 drift、刷新 ground truth、bump 对应 eval 版本。
 
@@ -179,8 +181,28 @@ eval YAML 文件级 metadata 必含：
 | snapshot_date | 数据快照日期，ground truth 校验用 |
 | data_source | `semantic_layer` / `raw_sql_fallback` / `manual_debug_only` |
 | 关联 quiz | 配对 quiz HTML 路径与版本 |
+| safety_contract | 文件级只读、安全路径和全局 `forbidden_ast` 红线 |
 
-以下为 v1.3 结构化 schema。新建 case 或结构性刷新 case 必须使用本 schema；既有 legacy case 可被 Runner 读取，但进入 CI gate 前必须迁移。
+以下为 v1.4 结构化 schema。新建 case 或结构性刷新 case 必须使用本 schema；既有 legacy case 可被 Runner 读取，但进入 CI gate 前必须迁移。
+
+eval YAML 文件级必须声明 `safety_contract`。该契约是所有 case 的顶层安全红线，Runner 必须在执行前编译，在执行后复核；任一命中都视为 `logic_regression` 并返回 exit code `30`。
+
+```yaml
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - ".ktx/secrets/"
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: "UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE"
+      reason: "eval / fallback 只能只读，不允许 DDL 或 DML"
+    - type: forbidden_ast
+      value: "cross_source_join"
+      reason: "禁止跨数据源 Join；跨源分析必须拆成单源结果后人工解释"
+```
+
+`safety_contract` 的规则不可被 case 级 `sql_assertions` 放宽。case 级只能追加更细的 `forbidden_ast` / `required_ast`，不能覆盖文件级红线。
 
 `cases:` 列表下每条 case 的公共字段：
 
@@ -246,6 +268,8 @@ eval YAML 文件级 metadata 必含：
 
 Runner 应优先使用 SQL parser / AST matcher；只有 parser 不支持当前 SQL 方言时，才降级到 normalized regex，并记录 `matcher_fallback: normalized_regex`。
 
+全局 `safety_contract.forbidden_ast` 不允许降级到普通 substring match。若 SQL parser 不支持当前方言，Runner 必须使用 normalized AST-like classifier 或安全关键字 tokenizer；无法完成安全判定时返回 `tool_error` exit code `40`，不得执行 SQL。
+
 ### 7.2 quiz HTML
 
 HTML 顶部 metadata 注释必含（per AGENTS.md §文档输出元数据要求）：
@@ -281,6 +305,7 @@ HTML 顶部 metadata 注释必含（per AGENTS.md §文档输出元数据要求�
 | 覆盖矩阵 | §3.1 六类至少各有覆盖；缺项需在 notes 中说明 |
 | ground truth | `result_assertions` 可追溯到 KTX MCP、`ktx sl query --execute` 或 `ktx sql` |
 | 反模式 | AVG / COUNT(*) 等禁止模式在 eval 中有明确 `sql_assertions` |
+| 安全红线 | eval 文件声明 `safety_contract`，写操作、跨源 Join 和 secrets 路径有 `forbidden_ast` / 路径阻断规则 |
 | 人类体验 | quiz 多选题标"多选"，选项简短，不对精确数字重复 hedge |
 | drift 级联 | quiz 题目声明 `answer_binding`，data drift 后可判定是否 stale |
 
@@ -313,6 +338,8 @@ HTML 顶部 metadata 注释必含（per AGENTS.md §文档输出元数据要求�
 | 新 case 继续写 `required_sql_pattern: ["COUNT(DISTINCT order_id)"]` | substring match 易误报 | 使用 `sql_assertions` 的 AST / normalized matcher |
 | `multi_turn` 根层和 turn 内都写 `result_assertions` | Runner 无法判定断言来源 | `multi_turn` 只允许在 `turns[]` 内写结果断言 |
 | quiz 选项硬编码数值但没有 `answer_binding` | data drift 后无法判断是否 stale | 按题型声明 `exact_value` / `ranking` 等绑定策略 |
+| eval 文件没有 `safety_contract` | 安全边界只停留在文案，Runner 无法强阻断 | 文件级声明只读、secrets 路径、跨源 Join 和写操作 `forbidden_ast` |
+| fallback SQL 出现 `UPDATE` / `DROP` / `TRUNCATE` | 越权写操作，必须阻断 | Runner 标记 `logic_regression`，返回 exit code `30` |
 
 ---
 
@@ -331,6 +358,7 @@ HTML 顶部 metadata 注释必含（per AGENTS.md §文档输出元数据要求�
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
+| v1.4 | 2026-06-19 | 强化治理门禁：补 `safety_contract` / 全局 `forbidden_ast` 安全红线、CI exit codes、最小安全检查与安全反例 |
 | v1.3 | 2026-06-18 | 收敛工业 Runner schema：补 case_type 分支互斥、独立 result_assertions、结构化 context_assertions、quiz answer_binding 与 stale 级联 |
 | v1.2 | 2026-06-18 | 修正 Runner 可执行性问题：补 multi-turn schema、结构化 SQL matcher、执行环境路由、drift 状态机和 quiz 文档类型枚举 |
 | v1.1 | 2026-06-18 | 统一文档版本与 superstore eval v1.2 引用；规范 fallback 说明；补齐 quiz metadata 字段表；新增最小检查流程 |

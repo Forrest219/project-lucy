@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Lucy 可信机制 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-19 |
+| 撰写人 | Codex |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | docs/eval-quiz-conventions.md / knowledge/superstore |
+| 适用范围 | 用户理解 Lucy 答案可信边界 |
+| 输出位置 | docs/user-guide/trust.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lucy 可信机制</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy Guide</strong><span>用户帮助中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link" href="product-intro.html">Lucy 产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">使用</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 使用说明</a>
+      <a class="nav-link" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">失败处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">可信</p>
+      <a class="nav-link active" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">可信评测培训</a>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <span class="eyebrow">Trust</span>
+      <h1>Lucy 是企业数据开放给 Agent 前的可信网关。</h1>
+      <p class="lead">智能系统不能只靠“看起来合理”。Lucy 通过 semantic layer、eval、quiz、fallback provenance 和 drift 状态机，在数据被 Agent 消费之前校验口径、路径、边界与结果。</p>
+    </header>
+
+    <section>
+      <h2>可信链路</h2>
+      <div class="grid">
+        <article class="card"><h3>Semantic Layer</h3><p>先用标准指标和 join 路径，减少同名指标多口径。</p></article>
+        <article class="card"><h3>Eval</h3><p>机器测 Agent 是否会按正确 SQL 结构、measure lineage 和结果断言回答。</p></article>
+        <article class="card"><h3>Quiz</h3><p>人类测业务团队是否理解正确口径，避免只让机器懂。</p></article>
+      </div>
+      <div class="grid two">
+        <article class="card"><h3>Fallback Provenance</h3><p>SL 不覆盖时，记录 raw SQL fallback 的原因、假设和 trace。</p></article>
+        <article class="card"><h3>Data Drift</h3><p>区分数据变化、schema 变化、逻辑回归和工具错误，避免把正常漂移误判为模型失败。</p></article>
+      </div>
+    </section>
+
+    <section>
+      <h2>组织价值</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>Skill 固化分析主权</h3>
+          <p>Skill 把资深分析师、财务负责人和业务专家的判断路径沉淀为 Agent 可重复调用的分析肌肉记忆，形成通用模型无法替代的组织智能资产。</p>
+        </article>
+        <article class="card">
+          <h3>Runner 构成免疫系统</h3>
+          <p>Runner 不只是 pass/fail 检查，而是把异常分诊为 <code>data_drift</code>、<code>schema_drift</code>、<code>logic_regression</code> 或 <code>tool_error</code>，并判断关联 Quiz 是否 stale。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>深入培训</h2>
+      <div class="callout">
+        <p><strong>Eval 元治理培训</strong> 是 BI 中心理解 eval/quiz 制度的深度材料，已整合为帮助中心子页。</p>
+        <p><a href="eval-meta-governance-training.html">打开 Eval 元治理培训材料</a></p>
+      </div>
+      <div class="callout">
+        <p><strong>内部架构参考</strong> 保留在 docs 顶层，不并入用户帮助中心主导航。</p>
+        <p><a href="../project-overview.html">打开 project-overview.html</a></p>
+      </div>
+    </section>
+
+    <nav class="section-nav" aria-label="上一篇和下一篇">
+      <a class="prev" href="troubleshooting.html"><span class="nav-kicker">上一篇</span><span class="nav-label">失败处理</span></a>
+      <a class="next" href="eval-meta-governance-training.html"><span class="nav-kicker">下一篇</span><span class="nav-label">可信评测培训</span></a>
+    </nav>
+
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
+  </main>
+</div>
+</body>
+</html>

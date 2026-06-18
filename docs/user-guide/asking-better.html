@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | 如何向 Lucy 提好问题 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-19 |
+| 撰写人 | Codex |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | project-lucy docs / 用户讨论 |
+| 适用范围 | 提升用户提问质量 |
+| 输出位置 | docs/user-guide/asking-better.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如何向 Lucy 提好问题</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy Guide</strong><span>用户帮助中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link" href="product-intro.html">Lucy 产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">使用</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 使用说明</a>
+      <a class="nav-link active" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">失败处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">可信</p>
+      <a class="nav-link" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">可信评测培训</a>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <span class="eyebrow">Prompting</span>
+      <h1>好问题会把 Lucy 从“回答机器”变成“分析伙伴”。</h1>
+      <p class="lead">问题越接近业务决策，Lucy 越容易选择正确口径、维度和解释方式。</p>
+    </header>
+
+    <section>
+      <h2>五条规则</h2>
+      <ol>
+        <li>说清时间范围：最近 30 天、2023-2026、当前快照。</li>
+        <li>说清指标：销售额、订单数、利润率、客户数。</li>
+        <li>说清维度：按区域、品类、客户细分、年份。</li>
+        <li>说清判断目标：找最高、最低、异常、改善优先级。</li>
+        <li>要求 Lucy 说明口径和限制。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>从模糊到可验证</h2>
+      <table>
+        <thead><tr><th>不要这样问</th><th>改成这样问</th></tr></thead>
+        <tbody>
+          <tr><td>销售怎么样？</td><td>按年份和区域比较 2023-2026 年销售额、订单数和利润率，指出需要复盘的区域。</td></tr>
+          <tr><td>客户好不好？</td><td>按客户细分比较总利润和利润率，并解释规模与效率的差异。</td></tr>
+          <tr><td>折扣是不是太高？</td><td>用加权平均折扣率按品类排序，并说明是否影响利润率。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <nav class="section-nav" aria-label="上一篇和下一篇">
+      <a class="prev" href="webui-guide.html"><span class="nav-kicker">上一篇</span><span class="nav-label">WebUI 使用说明</span></a>
+      <a class="next" href="troubleshooting.html"><span class="nav-kicker">下一篇</span><span class="nav-label">失败处理</span></a>
+    </nav>
+
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Lucy 核心概念 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-19 |
+| 撰写人 | Codex |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | docs/eval-quiz-conventions.md |
+| 适用范围 | 用户理解 Lucy 的关键机制 |
+| 输出位置 | docs/user-guide/concepts.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lucy 核心概念</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy Guide</strong><span>用户帮助中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link" href="product-intro.html">Lucy 产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link active" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">使用</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 使用说明</a>
+      <a class="nav-link" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">失败处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">可信</p>
+      <a class="nav-link" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">可信评测培训</a>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <span class="eyebrow">Concepts</span>
+      <h1>先理解概念，再相信答案。</h1>
+      <p class="lead">Lucy 的回答质量来自一组约束：标准指标、数据路径、评测用例、人类测验和漂移治理。</p>
+    </header>
+
+    <section>
+      <h2>关键术语</h2>
+      <table>
+        <thead><tr><th>概念</th><th>含义</th><th>用户应该关心什么</th></tr></thead>
+        <tbody>
+          <tr><td>Semantic Layer</td><td>指标、维度、过滤条件和 join 路径的标准定义。</td><td>优先要求 Lucy 使用标准口径。</td></tr>
+          <tr><td>Measure</td><td>可计算指标，例如 <code>order_count</code>、<code>profit_margin</code>。</td><td>同名业务指标必须口径一致。</td></tr>
+          <tr><td>Fallback</td><td>语义层暂时表达不了的问题，使用受控 raw SQL 补充。</td><td>必须说明原因、假设和可追溯来源。</td></tr>
+          <tr><td>Eval</td><td>给 Agent 跑的机器评测题。</td><td>验证模型会不会按正确方式做。</td></tr>
+          <tr><td>Quiz</td><td>给人做的训练题。</td><td>验证团队是否理解正确业务口径。</td></tr>
+          <tr><td>Data Drift</td><td>底层数据变化导致结果值变化。</td><td>不要把正常数据漂移误判为模型错误。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>最容易误解的三件事</h2>
+      <div class="grid">
+        <article class="card"><h3>订单数不是行数</h3><p>明细表一笔订单可能有多行，订单数通常需要 <code>COUNT(DISTINCT order_id)</code>。</p></article>
+        <article class="card"><h3>平均折扣不是简单平均</h3><p>折扣率通常要按销售额加权，避免小额订单扭曲结论。</p></article>
+        <article class="card"><h3>利润率不是逐行平均</h3><p>标准利润率应使用 <code>SUM(profit) / SUM(sales)</code>。</p></article>
+      </div>
+    </section>
+
+    <nav class="section-nav" aria-label="上一篇和下一篇">
+      <a class="prev" href="getting-started.html"><span class="nav-kicker">上一篇</span><span class="nav-label">5 分钟理解 Lucy</span></a>
+      <a class="next" href="workflows.html"><span class="nav-kicker">下一篇</span><span class="nav-label">常见任务流</span></a>
+    </nav>
+
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
+  </main>
+</div>
+</body>
+</html>
