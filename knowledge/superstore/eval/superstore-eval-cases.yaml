@@ -1,6 +1,7 @@
 # Superstore Eval Cases
-# 版本：v1.0 · 2026-06-17
+# 版本：v1.1 · 2026-06-18
 # 快照基准：batch=superstore_20260617_120212（10194 行）
+# v1.1 增量：Q21–Q30 测 SL 知识、抗反模式、JOIN 路径、降级与多轮一致性（对应 quiz HTML Q21–Q30）
 # 运行方式：人工执行 SQL，对照 expected_result 逐条验证
 
 cases:
@@ -165,3 +166,210 @@ cases:
     notes: >
       验证 is_deleted 过滤。当前只有一个批次（120212），is_deleted=0 行数 = 总行数 10194。
       当未来重新导入新批次后，is_deleted=1 行会出现，此 case 仍应返回 10194（最新批次）。
+
+  # ── Measure 名识别（v1.1 增量：基础 SL 知识）──────────────────────────
+
+  - id: superstore-discount-004
+    question: superstore_orders 的"加权平均折扣率"对应哪个 measure？请写出 measure 名及其等价 SQL 表达式。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - weighted_discount
+    required_sql_pattern:
+      - "SUM(discount * sales)"
+      - "NULLIF(SUM(sales), 0)"
+    forbidden_sql_pattern:
+      - "AVG(discount)"
+    expected_result:
+      measure_name: weighted_discount
+      value_approx: "0.1398"
+    snapshot_date: 2026-06-18
+    notes: 验证 LLM 能正确识别 measure 名并写出等价 SQL（与 discount-001 同义，新增于 v1.1）。
+
+  - id: superstore-ordercount-003
+    question: 统计"订单数"应使用哪个 measure？底层 SQL 是什么？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - order_count
+    required_sql_pattern:
+      - "COUNT(DISTINCT order_id)"
+    forbidden_sql_pattern:
+      - "COUNT(*)"
+    expected_result:
+      measure_name: order_count
+      value: 5083
+    snapshot_date: 2026-06-18
+    notes: 验证 LLM 知道订单数必须用 COUNT(DISTINCT)。注：今日实际值 5083（v1.0 快照 5009，可能已变更）。
+
+  - id: superstore-ordercount-004
+    question: 用 COUNT(*) 统计订单数会得到什么结果？为什么错误？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - order_count
+    forbidden_sql_pattern:
+      - "COUNT(*)"
+    expected_result:
+      wrong_value: 10194
+      correct_value: 5083
+      explanation: "grain=row_id 而非 order_id，COUNT(*) 算的是明细行数"
+    snapshot_date: 2026-06-18
+    notes: 抗 COUNT(*) 陷阱防线（open-ended 解释题）。
+
+  - id: superstore-profit-002
+    question: 计算整体利润率的正确 SL measure 是？写出等价 SQL。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - profit_margin
+    required_sql_pattern:
+      - "SUM(profit)"
+      - "NULLIF(SUM(sales), 0)"
+    forbidden_sql_pattern:
+      - "AVG(profit / sales)"
+      - "AVG(profit/sales)"
+      - "AVG(profit)"
+    expected_result:
+      measure_name: profit_margin
+      value_approx: "0.1256"
+    snapshot_date: 2026-06-18
+    notes: 抗 AVG(profit/sales) 陷阱防线。
+
+  # ── is_deleted 必加过滤（v1.1 增量：边界 case）──────────────────────
+
+  - id: superstore-filter-002
+    question: 查询"所有有效订单"时，如果不加 is_deleted=0 过滤，结果会如何？正确的过滤做法是什么？
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    required_sql_pattern:
+      - "is_deleted = 0"
+      - "active_rows"
+    forbidden_sql_pattern: []
+    expected_result:
+      filter_pattern: "WHERE is_deleted = 0 OR segment active_rows"
+      today_observed: "is_deleted=1 行数为 0，过滤与不过滤结果一致"
+    snapshot_date: 2026-06-18
+    notes: 验证 LLM 默认会加 is_deleted=0 过滤。即使当前样本下加与不加结果一致（无 is_deleted=1 行），LLM 仍应默认添加。
+
+  # ── Segment 定义（v1.1 增量：SL 知识边界）──────────────────────────
+
+  - id: superstore-segment-001
+    question: SL 中 segment `high_discount` 的定义是什么？列出它对应的 SQL 表达式。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    required_sql_pattern:
+      - "discount > 0.2"
+    forbidden_sql_pattern: []
+    expected_result:
+      segment_name: high_discount
+      expr: "discount > 0.2"
+      description: "折扣超过 20% 的行"
+    snapshot_date: 2026-06-18
+    notes: 验证 LLM 能正确读取 SL YAML 中的 segment 定义。
+
+  # ── SL 覆盖边界 / Degradation（v1.1 增量：降级处理）────────────────────
+
+  - id: superstore-degradation-001
+    question: 用户问"客户的平均回购间隔天数（avg days between orders）"。SL 中没有对应 measure。LLM 应如何回应？请写出回应要素与等价 raw SQL 方案。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql  # SL 不覆盖，必须降级
+    required_response_components:
+      - "明示 SL 未覆盖"
+      - "说明可用 raw SQL 计算"
+      - "列出关键假设（如按 customer_id 分组 + DATEDIFF 相邻订单）"
+    expected_result:
+      must_mention:
+        - "semantic layer 未覆盖"
+        - "raw SQL"
+        - "假设"
+    snapshot_date: 2026-06-18
+    notes: 验证 LLM 在 SL 不覆盖时的降级处理能力：诚实声明边界 + 给替代方案 + 列假设。
+
+  # ── 跨表 JOIN 路径选择（v1.1 增量）────────────────────────────
+
+  - id: superstore-join-001
+    question: 列出每个区域经理的客户数。需要 join 几张表？分别是哪几张？请写出 SQL。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - customer_count
+    required_sql_pattern:
+      - "JOIN superstore_people"
+      - "region"
+    forbidden_sql_pattern: []
+    expected_result:
+      join_count: 2
+      tables: [superstore_orders, superstore_people]
+      row_count: 6
+    snapshot_date: 2026-06-18
+    notes: 验证 LLM 知道 superstore_people 是区域经理维表，需通过 region 关联。
+
+  - id: superstore-join-002
+    question: 列出每个区域经理辖区的销售额（含经理姓名）。请写出 SQL。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - total_sales
+    required_sql_pattern:
+      - "JOIN superstore_people"
+      - "SUM(sales)"
+      - "regional_manager"
+    forbidden_sql_pattern: []
+    expected_result:
+      row_count: 6
+    snapshot_date: 2026-06-18
+    notes: 验证跨表 JOIN 写出正确。
+
+  # ── 多轮对话口径保持（v1.1 增量）──────────────────────────────
+
+  - id: superstore-multiturn-001
+    question: 前序对话已答"整体利润率 12.56%"（使用 profit_margin）。本轮追问"按区域拆分利润率"。请保持与前序完全相同的 measure 口径，写出 SQL。
+    domain: superstore
+    skill_version: v1.0
+    semantic_version: v1.0
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures:
+      - profit_margin
+    required_sql_pattern:
+      - "SUM(profit)"
+      - "NULLIF(SUM(sales), 0)"
+      - "GROUP BY"
+      - "region"
+    forbidden_sql_pattern:
+      - "AVG(profit / sales)"
+      - "AVG(profit/sales)"
+      - "AVG(profit)"
+    expected_result:
+      row_count: 6
+      must_use_same_measure_as_predecessor: true
+    snapshot_date: 2026-06-18
+    notes: 验证多轮对话中 LLM 保持 measure 口径一致，不退化为 AVG(profit/sales)。
