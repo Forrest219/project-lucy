@@ -47,6 +47,7 @@
 - 子模块自带的架构 / API / 数据模型等实现细节允许放在 `<module>/docs/`（当前实例：`webui/docs/01–06`），并在 `docs/project-overview.md` 注册索引
 - `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
+- eval cases（YAML，agent 测）与 quiz HTML（人类测）的设计原则、命名约定、数据获取路径见 `docs/eval-quiz-conventions.md`；新增 dataset 的 eval/quiz 前必读
 
 ## Onboarding（首次拉取本仓库）
 
