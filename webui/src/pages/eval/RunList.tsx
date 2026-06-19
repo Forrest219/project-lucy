@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { EvalRun, EvalDomainInfo } from "../../lib/types";
+import type { EvalCase, EvalRun, EvalDomainInfo } from "../../lib/types";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type RunsResponse = { total: number; runs: EvalRun[] };
+type CasesResponse = { cases: EvalCase[] };
 
 const STATUS_LABELS: Record<string, string> = {
   queued: "等待中",
@@ -33,6 +34,7 @@ export function RunList() {
   const [triggerForm, setTriggerForm] = useState({
     domain: "",
     caseSelectionMode: "all",
+    selectedCaseId: "",
     ktxMcpUrl: "http://localhost:7878/mcp",
     triggerReason: ""
   });
@@ -48,13 +50,26 @@ export function RunList() {
     queryFn: () => apiGet<RunsResponse>(`/api/eval/runs${domain ? `?domain=${domain}` : ""}`)
   });
 
+  const { data: triggerCasesData } = useQuery({
+    queryKey: ["eval", "cases", triggerForm.domain],
+    queryFn: () => apiGet<CasesResponse>(`/api/eval/cases/${triggerForm.domain}`),
+    enabled: showTrigger && Boolean(triggerForm.domain)
+  });
+
+  const triggerCases = triggerCasesData?.cases ?? [];
+
   const triggerMutation = useMutation({
-    mutationFn: () => apiPost<{ runId: number; status: string }>("/api/eval/runs", {
-      domain: triggerForm.domain,
-      caseSelection: { mode: triggerForm.caseSelectionMode },
-      ktxMcpUrl: triggerForm.ktxMcpUrl,
-      triggerReason: triggerForm.triggerReason || undefined
-    }),
+    mutationFn: () => {
+      const caseSelection = triggerForm.caseSelectionMode === "ids"
+        ? { mode: "ids", ids: [triggerForm.selectedCaseId] }
+        : { mode: triggerForm.caseSelectionMode };
+      return apiPost<{ runId: number; status: string }>("/api/eval/runs", {
+        domain: triggerForm.domain,
+        caseSelection,
+        ktxMcpUrl: triggerForm.ktxMcpUrl,
+        triggerReason: triggerForm.triggerReason || undefined
+      });
+    },
     onSuccess: (data) => {
       toast.success(`Run #${data.runId} 已启动`);
       setShowTrigger(false);
@@ -65,6 +80,10 @@ export function RunList() {
       const code = (err as { code?: string }).code;
       if (code === "RUNNER_BUSY") {
         toast.error("当前已有 run 正在执行，请等待完成后再触发");
+      } else if (code === "RUNNER_PRECHECK_FAILED") {
+        toast.error(`Claude preflight 失败：${(err as Error).message}`);
+      } else if (code === "NO_CASES_SELECTED") {
+        toast.error("上次成功运行中没有失败 case，未触发回归 run");
       } else {
         toast.error(`触发失败：${(err as Error).message}`);
       }
@@ -84,7 +103,7 @@ export function RunList() {
           type="button"
           className="pl-btn pl-btn--primary text-sm"
           onClick={() => {
-            setTriggerForm((p) => ({ ...p, domain: domains[0]?.domain ?? "" }));
+            setTriggerForm((p) => ({ ...p, domain: domains[0]?.domain ?? "", selectedCaseId: "" }));
             setShowTrigger(true);
           }}
         >
@@ -101,7 +120,7 @@ export function RunList() {
             <select
               className="pl-input"
               value={triggerForm.domain}
-              onChange={(e) => setTriggerForm((p) => ({ ...p, domain: e.target.value }))}
+              onChange={(e) => setTriggerForm((p) => ({ ...p, domain: e.target.value, selectedCaseId: "" }))}
             >
               <option value="">— 选择 domain —</option>
               {domains.map((d) => <option key={d.domain} value={d.domain}>{d.domain}</option>)}
@@ -115,9 +134,25 @@ export function RunList() {
               onChange={(e) => setTriggerForm((p) => ({ ...p, caseSelectionMode: e.target.value }))}
             >
               <option value="all">全部</option>
+              <option value="ids">单个 Case</option>
               <option value="failed_in_last">上次失败回归</option>
             </select>
           </div>
+          {triggerForm.caseSelectionMode === "ids" && (
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">Case ID <span className="text-red-500">*</span></label>
+              <select
+                className="pl-input"
+                value={triggerForm.selectedCaseId}
+                onChange={(e) => setTriggerForm((p) => ({ ...p, selectedCaseId: e.target.value }))}
+              >
+                <option value="">— 选择 case —</option>
+                {triggerCases.map((c) => (
+                  <option key={c.id} value={c.id}>{c.id}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="grid gap-1">
             <label className="text-sm font-medium">KTX MCP URL</label>
             <input
@@ -143,7 +178,7 @@ export function RunList() {
               type="button"
               className="pl-btn pl-btn--primary text-sm"
               onClick={() => triggerMutation.mutate()}
-              disabled={!triggerForm.domain || triggerMutation.isPending}
+              disabled={!triggerForm.domain || (triggerForm.caseSelectionMode === "ids" && !triggerForm.selectedCaseId) || triggerMutation.isPending}
             >
               {triggerMutation.isPending ? "启动中…" : "开始"}
             </button>

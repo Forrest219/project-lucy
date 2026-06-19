@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { stringify as yamlStringify } from "yaml";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPut, apiPost } from "../../lib/apiClient";
 import type { EvalCase, EvalDomainInfo } from "../../lib/types";
@@ -25,18 +25,28 @@ function emptyCase(domain: string): EvalCase {
 
 export function CaseEditor() {
   const { domain = "", caseId } = useParams<{ domain: string; caseId?: string }>();
+  const [searchParams] = useSearchParams();
+  const copyFrom = searchParams.get("copyFrom") ?? "";
   const isNew = !caseId || caseId === "new";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
   const [form, setForm] = useState<EvalCase>(emptyCase(domain));
   const [diffPreview, setDiffPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"meta" | "question" | "sql" | "result" | "yaml">("meta");
+  const [activeTab, setActiveTab] = useState<"meta" | "question" | "sql" | "result" | "advanced" | "yaml" | "raw">("meta");
+  const [rawText, setRawText] = useState("");
+  const [rawError, setRawError] = useState<string | null>(null);
 
   const { data: caseData, isLoading } = useQuery({
     queryKey: ["eval", "case", domain, caseId],
     queryFn: () => apiGet<EvalCase>(`/api/eval/cases/${domain}/${caseId}`),
     enabled: !isNew && Boolean(domain) && Boolean(caseId)
+  });
+
+  const { data: copySource, isLoading: loadingCopySource } = useQuery({
+    queryKey: ["eval", "case", domain, copyFrom],
+    queryFn: () => apiGet<EvalCase>(`/api/eval/cases/${domain}/${copyFrom}`),
+    enabled: isNew && Boolean(domain) && Boolean(copyFrom)
   });
 
   useEffect(() => {
@@ -45,10 +55,23 @@ export function CaseEditor() {
     }
   }, [caseData]);
 
+  useEffect(() => {
+    if (copySource) {
+      setForm({
+        ...copySource,
+        id: `${copySource.id}-copy`,
+        notes: copySource.notes ? `${copySource.notes}\nUAT copy test` : "UAT copy test"
+      });
+    }
+  }, [copySource]);
+
   const saveMutation = useMutation({
     mutationFn: async (dryRun: boolean) => {
       if (isNew) {
-        return apiPost<unknown>(`/api/eval/cases/${domain}`, { case: form });
+        return apiPost<{ diff?: string; proposedYaml?: string; written?: boolean }>(
+          `/api/eval/cases/${domain}`,
+          { dryRun, case: form }
+        );
       }
       return apiPut<{ diff?: string; proposedYaml?: string; written?: boolean }>(
         `/api/eval/cases/${domain}/${caseId}`,
@@ -57,9 +80,15 @@ export function CaseEditor() {
     },
     onSuccess: (data, dryRun) => {
       if (isNew) {
-        toast.success("Case 已创建");
-        void qc.invalidateQueries({ queryKey: ["eval", "cases", domain] });
-        navigate(`/eval/cases/${domain}`);
+        if (dryRun) {
+          const result = data as { diff?: string; proposedYaml?: string };
+          setDiffPreview({ diff: result.diff ?? "", proposedYaml: result.proposedYaml ?? "" });
+        } else {
+          toast.success("Case 已创建");
+          setDiffPreview(null);
+          void qc.invalidateQueries({ queryKey: ["eval", "cases", domain] });
+          navigate(`/eval/cases/${domain}`);
+        }
         return;
       }
       if (dryRun) {
@@ -79,14 +108,16 @@ export function CaseEditor() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
   };
 
-  if (!isNew && isLoading) return <div className="pl-notice">加载中…</div>;
+  if ((!isNew && isLoading) || loadingCopySource) return <div className="pl-notice">加载中…</div>;
 
   const tabs = [
     { key: "meta", label: "元数据" },
     { key: "question", label: "问题 & 期望" },
     { key: "sql", label: "SQL 断言" },
     { key: "result", label: "结果断言" },
-    { key: "yaml", label: "YAML 预览" }
+    { key: "advanced", label: "关联 & 上下文" },
+    { key: "yaml", label: "YAML 预览" },
+    { key: "raw", label: "Raw JSON" }
   ] as const;
 
   return (
@@ -103,12 +134,20 @@ export function CaseEditor() {
             <button
               type="button"
               className="pl-btn pl-btn--ghost text-sm"
-              onClick={() => saveMutation.mutate(true)}
+              onClick={() => navigate(`/eval/cases/${domain}/new?copyFrom=${encodeURIComponent(form.id)}`)}
               disabled={saveMutation.isPending}
             >
-              预览 Diff
+              复制
             </button>
           )}
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost text-sm"
+            onClick={() => saveMutation.mutate(true)}
+            disabled={saveMutation.isPending}
+          >
+            预览 Diff
+          </button>
           <button
             type="button"
             className="pl-btn pl-btn--primary text-sm"
@@ -155,7 +194,13 @@ export function CaseEditor() {
             key={t.key}
             type="button"
             className={`px-4 py-2 text-sm ${activeTab === t.key ? "border-b-2 border-fg font-medium" : "text-fg-muted hover:text-fg"}`}
-            onClick={() => setActiveTab(t.key)}
+            onClick={() => {
+              if (t.key === "raw") {
+                setRawText(JSON.stringify(form, null, 2));
+                setRawError(null);
+              }
+              setActiveTab(t.key);
+            }}
           >
             {t.label}
           </button>
@@ -235,6 +280,18 @@ export function CaseEditor() {
                 value={(form.expected_measures ?? []).join(", ")}
                 onChange={(e) => setForm((p) => ({ ...p, expected_measures: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
                 placeholder="weighted_discount, profit_margin"
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">linked_quiz_questions（逗号分隔）</label>
+              <input
+                className="pl-input"
+                value={(form.linked_quiz_questions ?? []).join(", ")}
+                onChange={(e) => setForm((p) => ({
+                  ...p,
+                  linked_quiz_questions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                }))}
+                placeholder="Q1, Q6"
               />
             </div>
           </div>
@@ -431,12 +488,69 @@ export function CaseEditor() {
           </div>
         )}
 
+        {activeTab === "advanced" && (
+          <div className="grid gap-4">
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">turns (JSON)</label>
+              <textarea
+                className="pl-input font-mono text-xs min-h-[140px]"
+                value={JSON.stringify(form.turns ?? [], null, 2)}
+                onChange={(e) => {
+                  try {
+                    const turns = JSON.parse(e.target.value) as unknown[];
+                    setForm((p) => ({ ...p, turns }));
+                  } catch {
+                    // keep last valid value
+                  }
+                }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">context_assertions (JSON)</label>
+              <textarea
+                className="pl-input font-mono text-xs min-h-[120px]"
+                value={JSON.stringify(form.context_assertions ?? {}, null, 2)}
+                onChange={(e) => {
+                  try {
+                    const context_assertions = JSON.parse(e.target.value);
+                    setForm((p) => ({ ...p, context_assertions }));
+                  } catch {
+                    // keep last valid value
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         {activeTab === "yaml" && (
           <div className="grid gap-2">
             <p className="text-sm text-fg-muted">当前表单对应的 YAML 序列化（预览，不可直接编辑）</p>
             <pre className="text-xs font-mono bg-bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap">
               {yamlStringify(form)}
             </pre>
+          </div>
+        )}
+
+        {activeTab === "raw" && (
+          <div className="grid gap-2">
+            <p className="text-sm text-fg-muted">编辑完整 EvalCase JSON；用于保留或修改表单尚未建模的字段。</p>
+            {rawError && <div className="text-sm text-red-500">{rawError}</div>}
+            <textarea
+              className="pl-input font-mono text-xs min-h-[420px]"
+              value={rawText}
+              onChange={(e) => {
+                const next = e.target.value;
+                setRawText(next);
+                try {
+                  const parsed = JSON.parse(next) as EvalCase;
+                  setForm(parsed);
+                  setRawError(null);
+                } catch (error) {
+                  setRawError((error as Error).message);
+                }
+              }}
+            />
           </div>
         )}
       </div>

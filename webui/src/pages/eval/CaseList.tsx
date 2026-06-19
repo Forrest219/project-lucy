@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiDelete } from "../../lib/apiClient";
-import type { EvalDomainInfo, EvalCase } from "../../lib/types";
+import type { EvalDomainInfo, EvalCase, EvalRun, EvalRunWithResults } from "../../lib/types";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type CasesResponse = { cases: EvalCase[] };
+type RunsResponse = { total: number; runs: EvalRun[] };
 
 export function CaseList() {
   const { domain: paramDomain } = useParams<{ domain?: string }>();
@@ -28,6 +29,22 @@ export function CaseList() {
   });
 
   const cases = casesData?.cases ?? [];
+
+  const { data: latestRunsData } = useQuery({
+    queryKey: ["eval", "runs", activeDomain, "latest"],
+    queryFn: () => apiGet<RunsResponse>(`/api/eval/runs?domain=${activeDomain}&limit=1`),
+    enabled: Boolean(activeDomain)
+  });
+
+  const latestRun = latestRunsData?.runs[0];
+
+  const { data: latestRunDetail } = useQuery({
+    queryKey: ["eval", "run", latestRun?.id],
+    queryFn: () => apiGet<EvalRunWithResults>(`/api/eval/runs/${latestRun?.id}`),
+    enabled: Boolean(latestRun?.id)
+  });
+
+  const latestStatusByCase = new Map((latestRunDetail?.results ?? []).map((r) => [r.caseId, r.status]));
 
   const [search, setSearch] = useState("");
   const filteredCases = search
@@ -106,14 +123,15 @@ export function CaseList() {
                 <th className="px-3 py-2">类型</th>
                 <th className="px-3 py-2">问题</th>
                 <th className="px-3 py-2">指标</th>
-                <th className="px-3 py-2">覆盖维度</th>
+                <th className="px-3 py-2">关联 Quiz</th>
+                <th className="px-3 py-2">最近运行</th>
                 <th className="px-3 py-2">操作</th>
               </tr>
             </thead>
             <tbody>
               {filteredCases.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-fg-muted">暂无 Case</td>
+                  <td colSpan={7} className="px-3 py-6 text-center text-fg-muted">暂无 Case</td>
                 </tr>
               ) : (
                 filteredCases.map((c) => (
@@ -126,8 +144,22 @@ export function CaseList() {
                     <td className="px-3 py-2 text-xs text-fg-muted">{c.case_type}</td>
                     <td className="px-3 py-2 max-w-xs truncate text-fg-muted">{c.question ?? "(multi_turn)"}</td>
                     <td className="px-3 py-2 text-xs text-fg-muted">{c.expected_measures?.join(", ") ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs text-fg-muted">{c.coverage ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs text-fg-muted">{c.linked_quiz_questions?.join(", ") ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {latestStatusByCase.get(c.id) ? (
+                        <span className={`pl-status-badge ${latestStatusByCase.get(c.id) === "PASS" ? "pl-status-done" : "pl-status-validation_failed"}`}>
+                          {latestStatusByCase.get(c.id)}
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--ghost text-xs mr-2"
+                        onClick={() => navigate(`/eval/cases/${activeDomain}/new?copyFrom=${encodeURIComponent(c.id)}`)}
+                      >
+                        复制
+                      </button>
                       <button
                         type="button"
                         className="pl-btn pl-btn--ghost text-xs text-red-500"

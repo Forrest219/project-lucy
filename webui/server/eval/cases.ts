@@ -246,14 +246,25 @@ export async function getCase(projectRoot: string, domain: string, caseId: strin
   return found;
 }
 
-export async function addCase(projectRoot: string, domain: string, caseData: EvalCase): Promise<void> {
+export async function addCase(
+  projectRoot: string,
+  domain: string,
+  caseData: EvalCase,
+  dryRun = false
+): Promise<{ diff: string; proposedYaml: string } | { written: true }> {
   const { doc, text, relPath } = await readCasesDoc(projectRoot, domain);
   const cases = extractCases(doc);
   if (cases.some((c) => c.id === caseData.id)) {
     throw new CaseIdTakenError(`Case id ${caseData.id} already exists`);
   }
   upsertCaseInDoc(doc, caseData, true);
-  await safeWrite(projectRoot, relPath, doc.toString({ lineWidth: 0 }));
+  const proposedYaml = doc.toString({ lineWidth: 0 });
+  const diff = previewDiff(text, proposedYaml, relPath);
+  if (dryRun) {
+    return { diff, proposedYaml };
+  }
+  await safeWrite(projectRoot, relPath, proposedYaml);
+  return { written: true };
 }
 
 export async function updateCase(
@@ -323,11 +334,12 @@ export function registerCaseRoutes(app: FastifyInstance) {
   // POST /api/eval/cases/:domain
   app.post<{
     Params: { domain: string };
-    Body: { case: EvalCase };
+    Body: { dryRun?: boolean; case: EvalCase };
   }>("/api/eval/cases/:domain", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
-    await addCase(projectRoot, request.params.domain, request.body.case);
-    return reply.status(201).send({ ok: true, data: { created: true } });
+    const dryRun = request.body.dryRun === true;
+    const result = await addCase(projectRoot, request.params.domain, request.body.case, dryRun);
+    return reply.status(dryRun ? 200 : 201).send({ ok: true, data: result });
   });
 
   // PUT /api/eval/cases/:domain/:caseId

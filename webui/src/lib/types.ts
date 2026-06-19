@@ -377,6 +377,29 @@ export type EvalRunResult = {
   }>;
 };
 
+export type EvalRunCompare = {
+  left: { runId: number };
+  right: { runId: number };
+  byCase: Array<{
+    caseId: string;
+    left?: "PASS" | "FAIL";
+    right?: "PASS" | "FAIL";
+    delta: "regressed" | "fixed" | "unchanged" | "added" | "removed";
+  }>;
+  summary: {
+    regressed: number;
+    fixed: number;
+    unchanged: number;
+  };
+};
+
+export type EvalDriftDistribution = {
+  items: Array<{
+    drift: string;
+    count: number;
+  }>;
+};
+
 export type EvalTrendPoint = {
   date: string;
   passRate: number;

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPut } from "../../lib/apiClient";
-import type { EvalDomainInfo, EvalTrendPoint, MonitorConfig } from "../../lib/types";
+import type { EvalDomainInfo, EvalDriftDistribution, EvalTrendPoint, MonitorConfig } from "../../lib/types";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type TrendResponse = { points: EvalTrendPoint[]; thresholds: { yellow: number; red: number } };
@@ -151,6 +151,12 @@ export function Monitor() {
     enabled: Boolean(activeDomain)
   });
 
+  const { data: driftData } = useQuery({
+    queryKey: ["eval", "monitor", "drift-distribution", activeDomain, days],
+    queryFn: () => apiGet<EvalDriftDistribution>(`/api/eval/monitor/drift-distribution?domain=${activeDomain}&days=${days}`),
+    enabled: Boolean(activeDomain)
+  });
+
   const { data: configData } = useQuery({
     queryKey: ["eval", "monitor", "config"],
     queryFn: () => apiGet<ConfigResponse>("/api/eval/monitor/config")
@@ -172,6 +178,8 @@ export function Monitor() {
   const points = trendData?.points ?? [];
   const thresholds = trendData?.thresholds ?? { yellow: 0.9, red: 0.8 };
   const topFails = topFailData?.items ?? [];
+  const driftItems = driftData?.items ?? [];
+  const driftTotal = driftItems.reduce((sum, item) => sum + item.count, 0);
 
   // Alert banner: check last point vs threshold
   const lastPoint = points[points.length - 1];
@@ -246,6 +254,28 @@ export function Monitor() {
           </table>
         </div>
       )}
+
+      <div className="border border-border rounded p-4">
+        <h2 className="font-medium text-sm mb-3">Drift 分类分布（近 {days} 天）</h2>
+        {driftItems.length === 0 ? (
+          <div className="text-sm text-fg-muted">暂无 drift 数据</div>
+        ) : (
+          <div className="grid gap-2">
+            {driftItems.map((item) => {
+              const pct = driftTotal > 0 ? (item.count / driftTotal) * 100 : 0;
+              return (
+                <div key={item.drift} className="grid grid-cols-[160px_minmax(0,1fr)_64px] items-center gap-3 text-sm">
+                  <span className="font-mono text-xs">{item.drift}</span>
+                  <div className="h-2 rounded bg-bg-muted overflow-hidden">
+                    <div className="h-full bg-blue-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-fg-muted text-right">{item.count}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Threshold config */}
       <div className="border border-border rounded p-4">
