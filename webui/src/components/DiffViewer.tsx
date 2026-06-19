@@ -1,20 +1,23 @@
+import clsx from "clsx";
+
 export function DiffViewer({ diff }: { diff: string }) {
   if (!diff.trim()) {
-    return <p className="notice">暂无可预览的变更。</p>;
+    return <p className="pl-notice">暂无可预览的变更。</p>;
   }
 
   return (
-    <pre className="diff-viewer">
+    <pre className="pl-diff-viewer">
       {diff.split("\n").map((line, index) => {
-        const className = line.startsWith("+") && !line.startsWith("+++")
-          ? "diff-added"
-          : line.startsWith("-") && !line.startsWith("---")
-            ? "diff-removed"
-            : line.startsWith("@@")
-              ? "diff-hunk"
-              : undefined;
+        const variant =
+          line.startsWith("+") && !line.startsWith("+++")
+            ? "pl-diff-added"
+            : line.startsWith("-") && !line.startsWith("---")
+              ? "pl-diff-removed"
+              : line.startsWith("@@")
+                ? "pl-diff-hunk"
+                : undefined;
         return (
-          <span className={className} key={`${index}-${line}`}>
+          <span className={clsx(variant)} key={`${index}-${line}`}>
             {line || " "}
             {"\n"}
           </span>

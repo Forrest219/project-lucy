@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import type { CompletionStatus } from "../lib/types";
 
 const LABELS: Record<CompletionStatus, string> = {
@@ -8,5 +9,5 @@ const LABELS: Record<CompletionStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: CompletionStatus }) {
-  return <span className={`status-badge status-${status}`}>{LABELS[status]}</span>;
+  return <span className={clsx("pl-status-badge", `pl-status-${status}`)}>{LABELS[status]}</span>;
 }

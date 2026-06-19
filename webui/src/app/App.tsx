@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "sonner";
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { Catalog } from "../pages/Catalog";
 import { JoinEditor } from "../pages/JoinEditor";
@@ -33,35 +34,35 @@ function AppFrame() {
   const breadcrumbs = breadcrumbItems(location.pathname);
 
   return (
-    <div className="workspace-shell">
-      <aside className="primary-nav">
-        <div className="brand-block">
+    <div className="pl-shell grid grid-cols-[248px_minmax(0,1fr)] min-h-screen">
+      <aside className="pl-nav">
+        <div className="pl-brand-block">
           <strong>KTX WebUI</strong>
           <span>语义维护工作台</span>
         </div>
 
-        <nav className="primary-nav-groups" aria-label="主导航">
+        <nav className="grid gap-4" aria-label="主导航">
           <section>
-            <h2>语义层维护</h2>
-            <NavLink to="/" end>表目录</NavLink>
+            <h2 className="pl-nav-section-title">语义层维护</h2>
+            <NavLink to="/" end className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>表目录</NavLink>
           </section>
           <section>
-            <h2>业务文档</h2>
-            <NavLink to="/wiki">Wiki 文档</NavLink>
+            <h2 className="pl-nav-section-title">业务文档</h2>
+            <NavLink to="/wiki" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>Wiki 文档</NavLink>
           </section>
           <section>
-            <h2>审阅与校验</h2>
-            <NavLink to="/review">变更审阅</NavLink>
+            <h2 className="pl-nav-section-title">审阅与校验</h2>
+            <NavLink to="/review" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>变更审阅</NavLink>
           </section>
         </nav>
       </aside>
 
-      <main className="workspace-main">
-        <nav className="breadcrumbs" aria-label="当前位置">
+      <main className="p-6">
+        <nav className="flex items-center gap-2 text-sm text-fg-muted mb-4" aria-label="当前位置">
           {breadcrumbs.map((item, index) => (
-            <span key={`${index}-${item}`}>
-              {index > 0 ? <span className="breadcrumb-separator">/</span> : null}
-              {item}
+            <span key={`${index}-${item}`} className="flex items-center gap-2">
+              {index > 0 ? <span>/</span> : null}
+              <span>{item}</span>
             </span>
           ))}
         </nav>
@@ -82,6 +83,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AppFrame />
+        <Toaster richColors position="top-right" />
       </BrowserRouter>
     </QueryClientProvider>
   );

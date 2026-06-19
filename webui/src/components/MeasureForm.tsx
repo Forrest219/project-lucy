@@ -7,29 +7,29 @@ type Props = {
 
 export function MeasureForm({ measures, onChange }: Props) {
   return (
-    <section className="read-panel">
-      <div className="review-actions">
-        <h2>指标</h2>
-        <button type="button" onClick={() => onChange([...measures, { name: "", expr: "" }])}>新增</button>
+    <section className="pl-panel">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="pl-panel-title">指标</h2>
+        <button type="button" className="pl-btn pl-btn--secondary" onClick={() => onChange([...measures, { name: "", expr: "" }])}>新增</button>
       </div>
-      <div className="field-editor-list">
+      <div className="pl-field-editor-list">
         {measures.map((measure, index) => (
-          <div className="inline-grid" key={index}>
-            <label>
-              名称
-              <input value={measure.name} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
+          <div className="pl-measure-grid" key={index}>
+            <label className="pl-field-label">
+              <span>名称</span>
+              <input className="pl-input" value={measure.name} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} />
             </label>
-            <label>
-              表达式
-              <input value={measure.expr} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, expr: event.target.value } : item))} />
+            <label className="pl-field-label">
+              <span>表达式</span>
+              <input className="pl-input" value={measure.expr} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, expr: event.target.value } : item))} />
             </label>
-            <label>
-              过滤条件
-              <input value={measure.filter ?? ""} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, filter: event.target.value } : item))} />
+            <label className="pl-field-label">
+              <span>过滤条件</span>
+              <input className="pl-input" value={measure.filter ?? ""} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, filter: event.target.value } : item))} />
             </label>
-            <label>
-              描述
-              <input value={measure.description ?? ""} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))} />
+            <label className="pl-field-label">
+              <span>描述</span>
+              <input className="pl-input" value={measure.description ?? ""} onChange={(event) => onChange(measures.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))} />
             </label>
           </div>
         ))}

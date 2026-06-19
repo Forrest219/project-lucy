@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
+import { toast } from "sonner";
 import type { Join, JoinCandidate, JoinCandidatesResponse, SourceDetail } from "../lib/types";
 
 const RELATIONSHIP_LABELS: Record<Join["relationship"], string> = {
@@ -57,7 +58,13 @@ export function JoinEditor() {
   const suggestions = useMemo(() => suggestedJoins(sourceQuery.data), [sourceQuery.data]);
   const writeCandidates = useMutation({
     mutationFn: (next: JoinCandidate[]) => apiPut<JoinCandidatesResponse>("/api/joins/candidates", { candidates: next }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.joinCandidates })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.joinCandidates });
+      toast.success("候选已保存");
+    },
+    onError: (error) => {
+      toast.error(`保存候选失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
   });
   const confirmJoin = useMutation({
     mutationFn: (join: Join) =>
@@ -69,7 +76,11 @@ export function JoinEditor() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.source(conn, schema, table) });
+      toast.success("已写入语义层");
       navigate("/review");
+    },
+    onError: (error) => {
+      toast.error(`确认失败：${error instanceof Error ? error.message : "未知错误"}`);
     }
   });
 
@@ -88,51 +99,55 @@ export function JoinEditor() {
   }
 
   return (
-    <section className="page-section">
-      <div className="section-heading">
+    <section className="pl-panel">
+      <div className="pl-section-heading">
         <div>
-          <p className="eyebrow">语义层维护 / 关联关系</p>
-          <h1>维护关联关系：{table}</h1>
+          <p className="pl-eyebrow">语义层维护 / 关联关系</p>
+          <h1 className="text-xl font-semibold">维护关联关系：{table}</h1>
         </div>
-        <Link className="back-link" to={`/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`}>
+        <Link className="pl-btn pl-btn--ghost" to={`/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`}>
           返回表编辑
         </Link>
       </div>
-      <p className="page-intro">候选关系先保存在 .ktx-ui sidecar，只有确认后的正式关系才写入 semantic-layer。</p>
+      <p className="pl-page-intro">候选关系先保存在 .ktx-ui sidecar，只有确认后的正式关系才写入 semantic-layer。</p>
 
-      <div className="editor-columns">
-        <section className="read-panel">
-          <h2>已确认关系</h2>
-          {(sourceQuery.data?.model.joins ?? []).map((join) => (
-            <div className="join-row" key={`${join.to}-${join.on}`}>
-              <strong>{join.to}</strong>
-              <span>{join.on}</span>
-              <span>{RELATIONSHIP_LABELS[join.relationship]}</span>
-            </div>
-          ))}
+      <div className="grid gap-4">
+        <section className="pl-panel">
+          <h2 className="pl-panel-title">已确认关系</h2>
+          <div className="grid gap-2">
+            {(sourceQuery.data?.model.joins ?? []).map((join) => (
+              <div className="pl-join-row" key={`${join.to}-${join.on}`}>
+                <strong>{join.to}</strong>
+                <span>{join.on}</span>
+                <span>{RELATIONSHIP_LABELS[join.relationship]}</span>
+                <span />
+              </div>
+            ))}
+          </div>
         </section>
 
-        <section className="read-panel">
-          <h2>候选关系</h2>
-          {[...tableCandidates, ...suggestions].map((candidate) => (
-            <div className="join-row" key={`${candidate.join.to}-${candidate.join.on}-${candidate.note}`}>
-              <strong>{candidate.join.to}</strong>
-              <span>{candidate.join.on}</span>
-              <span>{RELATIONSHIP_LABELS[candidate.join.relationship]}</span>
-              <div className="heading-actions">
-                <button type="button" onClick={() => upsertCandidate({ ...candidate, confidence: "candidate", join: { ...candidate.join, source: "candidate" } })}>
-                  保留为候选
-                </button>
-                <button type="button" onClick={() => upsertCandidate({ ...candidate, confidence: "rejected", join: { ...candidate.join, source: "candidate" } })}>
-                  标记为不采用
-                </button>
-                <button type="button" onClick={() => confirmJoin.mutate(candidate.join)} disabled={confirmJoin.isPending}>
-                  确认写入语义层
-                </button>
+        <section className="pl-panel">
+          <h2 className="pl-panel-title">候选关系</h2>
+          <div className="grid gap-2">
+            {[...tableCandidates, ...suggestions].map((candidate) => (
+              <div className="pl-join-row" key={`${candidate.join.to}-${candidate.join.on}-${candidate.note}`}>
+                <strong>{candidate.join.to}</strong>
+                <span>{candidate.join.on}</span>
+                <span>{RELATIONSHIP_LABELS[candidate.join.relationship]}</span>
+                <div className="flex items-center gap-2 justify-end">
+                  <button type="button" className="pl-btn pl-btn--ghost" onClick={() => upsertCandidate({ ...candidate, confidence: "candidate", join: { ...candidate.join, source: "candidate" } })}>
+                    保留为候选
+                  </button>
+                  <button type="button" className="pl-btn pl-btn--ghost" onClick={() => upsertCandidate({ ...candidate, confidence: "rejected", join: { ...candidate.join, source: "candidate" } })}>
+                    标记为不采用
+                  </button>
+                  <button type="button" className="pl-btn pl-btn--primary" onClick={() => confirmJoin.mutate(candidate.join)} disabled={confirmJoin.isPending}>
+                    确认写入语义层
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-          {confirmJoin.error ? <p className="error">{confirmJoin.error instanceof Error ? confirmJoin.error.message : "确认失败"}</p> : null}
+            ))}
+          </div>
         </section>
       </div>
     </section>

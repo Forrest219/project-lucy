@@ -6,11 +6,34 @@ users:
   - id: zhangsan
     name: 张三
     tokens:
-      - value: "tk_zhangsan_changeme"   # 部署时替换为随机字符串
+      - hash: "sha256:b552dcabddbba25e148d05d8c2470c1f0d5f9585624c292afc9d57c78e4e5498"
         label: hermes-laptop
+        created: 2026-06-18
+    allow:
+      tables:
+        - dataforai.superstore_orders
+      tools:
+        - sl_query
+        - sl_read_source
+        - wiki_search
+        - wiki_read
+        - entity_details
+        - dictionary_search
+        - discover_data
+        - connection_list
 
   - id: lisi
     name: 李四
     tokens:
-      - value: "tk_lisi_changeme"       # 部署时替换为随机字符串
+      - hash: "sha256:e845c2d9554bfb020dd1e8ec718d505bf891efc3e1c40d4c7c4c86cd766f138c"
         label: cursor-mac
+        created: 2026-06-18
+    allow:
+      tables: ["*"]
+      tools: ["*"]
+
+defaults:
+  deny_tools:
+    - sql_execution
+    - memory_ingest
+    - memory_ingest_status

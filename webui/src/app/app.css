@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+/* 原值层：私有，主题切换或租户覆盖时改这一层 */
+:root {
+  --token-color-bg-base: #f7f8fb;
+  --token-color-bg-surface: #ffffff;
+  --token-color-bg-elevated: #ffffff;
+  --token-color-bg-muted: #edf3fa;
+  --token-color-fg-default: #172033;
+  --token-color-fg-muted: #49627c;
+  --token-color-fg-inverse: #ffffff;
+  --token-color-border-default: #d8dde8;
+  --token-color-border-strong: #b9c1cf;
+  --token-color-primary: #2563eb;
+  --token-color-primary-hover: #1d4ed8;
+  --token-color-primary-fg: #ffffff;
+  --token-color-accent: #7c3aed;
+  --token-color-danger: #dc2626;
+  --token-color-warning: #d97706;
+  --token-color-success: #15803d;
+  --token-color-diff-added-bg: #dcfce7;
+  --token-color-diff-removed-bg: #fee2e2;
+}
+
+/* @theme 层：暴露给 Tailwind utility 和 BEM 命名 */
+@theme {
+  --color-bg-base: var(--token-color-bg-base);
+  --color-bg-surface: var(--token-color-bg-surface);
+  --color-bg-elevated: var(--token-color-bg-elevated);
+  --color-bg-muted: var(--token-color-bg-muted);
+  --color-fg-default: var(--token-color-fg-default);
+  --color-fg-muted: var(--token-color-fg-muted);
+  --color-fg-inverse: var(--token-color-fg-inverse);
+  --color-border-default: var(--token-color-border-default);
+  --color-border-strong: var(--token-color-border-strong);
+  --color-primary: var(--token-color-primary);
+  --color-primary-hover: var(--token-color-primary-hover);
+  --color-primary-fg: var(--token-color-primary-fg);
+  --color-accent: var(--token-color-accent);
+  --color-danger: var(--token-color-danger);
+  --color-warning: var(--token-color-warning);
+  --color-success: var(--token-color-success);
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-pill: 9999px;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas,
+    monospace;
+}
+
+@layer base {
+  body {
+    background: var(--color-bg-base);
+    color: var(--color-fg-default);
+    font-family: var(--font-sans);
+  }
+}
+
+@layer components {
+  /* shell + 主布局 */
+  .pl-shell { @apply min-h-screen bg-bg-base text-fg-default; }
+  .pl-nav { @apply sticky top-0 h-screen overflow-auto border-r border-border-default bg-bg-surface px-4 py-5; }
+  .pl-nav-section { @apply mb-6; }
+  .pl-nav-section-title { @apply mb-2 px-2 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  .pl-nav-link { @apply flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-fg-default; }
+  .pl-nav-link:hover { @apply bg-bg-muted; }
+  .pl-nav-link--active { @apply bg-bg-muted text-primary font-medium; }
+  .pl-brand-block { @apply grid gap-0.5 mb-6 px-2; }
+  .pl-brand-block strong { @apply text-base; }
+  .pl-brand-block span { @apply text-xs text-fg-muted; }
+
+  /* 面板/卡片 */
+  .pl-panel { @apply rounded-lg border border-border-default bg-bg-surface p-6 mb-4; }
+  .pl-panel-title { @apply mb-3 text-base font-semibold; }
+  .pl-section-heading { @apply mb-4 flex items-start justify-between gap-4; }
+  .pl-page-intro { @apply mb-4 text-sm text-fg-muted; }
+  .pl-eyebrow { @apply mb-1 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+
+  /* 按钮 */
+  .pl-btn { @apply inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium; }
+  .pl-btn--primary { @apply bg-primary text-primary-fg hover:bg-primary-hover border border-transparent; }
+  .pl-btn--secondary { @apply border border-border-default bg-bg-surface hover:bg-bg-muted text-fg-default; }
+  .pl-btn--ghost { @apply text-fg-default hover:bg-bg-muted; }
+  .pl-btn:disabled { @apply opacity-50 cursor-not-allowed; }
+
+  /* 表单 */
+  .pl-field-label { @apply grid gap-1.5 mb-3 text-sm; }
+  .pl-field-label > span { @apply font-medium text-fg-default; }
+  .pl-input,
+  .pl-textarea,
+  .pl-select-trigger { @apply w-full rounded-md border border-border-default bg-bg-surface px-3 py-2 text-sm text-fg-default; }
+  .pl-textarea { @apply font-mono leading-relaxed; }
+  .pl-input:focus,
+  .pl-textarea:focus { @apply outline-none ring-2 ring-primary border-primary; }
+
+  /* 工具栏 */
+  .pl-toolbar { @apply mb-4 flex flex-wrap items-end gap-4; }
+  .pl-toolbar label { @apply grid gap-1.5 text-sm; }
+
+  /* 表格/列表 */
+  .pl-table-list { @apply grid gap-2; }
+  .pl-table-row { @apply grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 rounded-md border border-border-default bg-bg-surface px-4 py-3 no-underline text-fg-default; }
+  .pl-table-row:hover { @apply border-border-strong; }
+  .pl-table-row strong { @apply font-medium; }
+  .pl-table-row span { @apply text-sm text-fg-muted; }
+
+  /* 状态徽章 */
+  .pl-status-badge { @apply inline-flex items-center rounded-pill px-2 py-0.5 text-xs font-medium; }
+  .pl-status-not_started { @apply bg-bg-muted text-fg-muted; }
+  .pl-status-partial { @apply bg-[#fef3c7] text-[#92400e]; }
+  .pl-status-done { @apply bg-[#dcfce7] text-[#166534]; }
+  .pl-status-validation_failed { @apply bg-[#fee2e2] text-[#b42318]; }
+
+  /* 通知 */
+  .pl-notice { @apply text-sm text-fg-muted; }
+  .pl-error { @apply text-sm text-danger; }
+
+  /* 字段描述列表 */
+  .pl-field-editor-list { @apply grid gap-3; }
+  .pl-inline-grid { @apply grid gap-2; }
+  .pl-measure-grid { @apply grid gap-3 md:grid-cols-4; }
+  .pl-segment-grid { @apply grid gap-3 md:grid-cols-3; }
+
+  /* 编辑器布局 */
+  .pl-editor-layout { @apply grid grid-cols-[240px_minmax(0,1fr)] gap-6; }
+  .pl-editor-three-panel { @apply grid gap-4; }
+  .pl-metadata-grid { @apply grid grid-cols-2 gap-3 mb-4 md:grid-cols-4; }
+  .pl-metadata-grid > div { @apply grid gap-0.5; }
+  .pl-metadata-grid span { @apply text-xs text-fg-muted; }
+  .pl-metadata-grid strong { @apply text-sm; }
+
+  /* Diff / YAML preview */
+  .pl-diff-viewer { @apply rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed overflow-auto; }
+  .pl-diff-added { @apply text-success bg-[var(--token-color-diff-added-bg)]; }
+  .pl-diff-removed { @apply text-danger bg-[var(--token-color-diff-removed-bg)]; }
+  .pl-diff-hunk { @apply text-warning; }
+  .pl-yaml-preview { @apply rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed overflow-auto whitespace-pre-wrap; }
+
+  /* 审核页 */
+  .pl-review-layout { @apply grid grid-cols-[260px_minmax(0,1fr)] gap-4; }
+  .pl-file-list { @apply grid gap-1; }
+  .pl-file-button { @apply grid grid-cols-[auto_1fr] items-center gap-2 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm; }
+  .pl-file-button:hover { @apply bg-bg-muted; }
+  .pl-file-button--active { @apply bg-bg-muted border-border-default; }
+  .pl-file-button > span:first-child { @apply rounded bg-bg-elevated border border-border-default px-1.5 py-0.5 text-xs text-fg-muted font-mono; }
+
+  /* 关联关系 */
+  .pl-join-row { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3 md:grid-cols-[1fr_2fr_auto_auto]; }
+  .pl-join-row strong { @apply font-medium; }
+  .pl-join-row span { @apply text-sm text-fg-muted; }
+
+  /* Radix Select 内容 */
+  .pl-select-content { @apply z-50 overflow-hidden rounded-md border border-border-default bg-bg-elevated shadow-lg; }
+  .pl-select-viewport { @apply p-1; }
+  .pl-select-item { @apply relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none; }
+  .pl-select-item[data-highlighted] { @apply bg-bg-muted text-fg-default; }
+  .pl-select-item[data-state="checked"] { @apply font-medium; }
+  .pl-select-trigger[data-placeholder] { @apply text-fg-muted; }
+}

@@ -1,6 +1,7 @@
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { identifyRequest, setSessionClient } from "./identity.js";
 import { writeLog } from "./audit.js";
+import { check as aclCheck, extractTables } from "./acl.js";
 
 const KTX_HOST = "127.0.0.1";
 const KTX_PORT = 7878;
@@ -69,6 +70,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
   let rpcMethod: string | undefined;
   let toolName: string | undefined;
+  let toolArgs: unknown;
   let requestId: string | number = "";
   let argsSummary: Record<string, unknown> | undefined;
 
@@ -87,6 +89,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (rpcMethod === "tools/call") {
       const params = parsed.params as Record<string, unknown> | undefined;
       toolName = params?.name as string | undefined;
+      toolArgs = params?.arguments;
       const args = params?.arguments as Record<string, unknown> | undefined;
       if (args) {
         // Keep only a safe subset of args for logging
@@ -99,6 +102,35 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     }
   } catch {
     // non-JSON body; proxy as-is
+  }
+
+  // ACL check for tool calls
+  if (rpcMethod === "tools/call" && toolName) {
+    const decision = await aclCheck(identity, toolName, toolArgs);
+    if (!decision.allowed) {
+      const errorMsg = decision.reason ?? "denied";
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: `Access denied: ${errorMsg}` }]
+        }
+      }));
+      writeLog({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary,
+        outcome: "denied",
+        errorDetail: errorMsg,
+        durationMs: Date.now() - start,
+        requestId,
+      }).catch(() => undefined);
+      return;
+    }
   }
 
   const upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, body);
@@ -120,6 +152,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
     let outcome: "ok" | "error" = "ok";
     let errorDetail: string | undefined;
+    let tables: string[] | undefined;
     try {
       const contentType = upstream.headers["content-type"] ?? "";
       if (contentType.includes("application/json")) {
@@ -133,11 +166,22 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       // best-effort sniff; don't fail the request
     }
 
+    // Extract tables for logging (best-effort)
+    if (toolName) {
+      try {
+        const extracted = await extractTables(toolName, toolArgs);
+        if (extracted.length > 0) tables = extracted;
+      } catch {
+        // don't fail the request
+      }
+    }
+
     writeLog({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
       tool: toolName ?? "tools/call",
+      tables,
       argsSummary,
       outcome,
       errorDetail,

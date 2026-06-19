@@ -53,6 +53,13 @@ async function getDb(): Promise<Database.Database> {
 
 let insertStmt: Database.Statement | null = null;
 
+export function isTokenRevoked(tokenHash: string): Promise<boolean> {
+  return getDb().then((database) => {
+    const row = database.prepare("SELECT 1 FROM revoked_tokens WHERE token_hash = ?").get(tokenHash);
+    return row !== undefined;
+  });
+}
+
 export async function writeLog(entry: AccessLogEntry): Promise<void> {
   const database = await getDb();
   if (!insertStmt) {

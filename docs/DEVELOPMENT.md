@@ -62,6 +62,87 @@
 
 > **凭据/路径漂移防护**：`ktx.yaml.example` 由 M3.4 维护；当 `ktx.yaml` 中的 host/user/路径字段发生变化时，请同步更新 `.example`。
 
+## 语义层（semantic-layer）分层
+
+`semantic-layer/<connection>/` 下的 yaml 看似两份重名文件，实际是 ktx 的
+**manifest / overlay 双层设计**，由 loader 合并（参考
+[`ktx-sl` 的 `loader.py::_compose`](https://github.com/kaelio/ktx/blob/main/python/ktx-sl/semantic_layer/loader.py)）。
+**manifest/overlay 的归类错误会导致引擎按物理列查表，触发 `Unknown column`
+却 validate 通过**——本节明确每类改动落哪、怎么让 MCP 检索到。
+
+### 文件分类
+
+| 文件 | 角色 | 谁写 | 内容 |
+|---|---|---|---|
+| `_schema/<schema>.yaml` | **manifest**：仓库物理表结构 | ktx 扫描 warehouse 自动生成 | 表名、列名、类型、nullable、双语描述 |
+| `<table>.yaml` | **overlay**：lucy 的业务扩展 | 人工维护 | grain、columns（含 `expr` 派生列）、measures、segments、joins |
+
+### 改什么落哪
+
+| 改动 | 落点 | 例子 |
+|---|---|---|
+| 加一条业务指标 | overlay `measures:` | `total_profit: sum(profit)` |
+| 加一个常用过滤 | overlay `segments:` | `active_rows: is_deleted = 0` |
+| 加一个派生维度 | overlay `columns:` | `order_year: type: time, expr: YEAR(order_date)` |
+| 改物理列的描述/类型 | overlay `column_overrides:` | （不要改 manifest） |
+| 新增物理列 | 等下次 ktx 扫描重生成 manifest | — |
+
+### 关键 gotcha
+
+- **manifest 的列模型叫 `ManifestColumn`，不接受 `expr` / `role`**——把派生列写在
+  manifest 里 `ktx sl validate` 不会报错，但 `expr` 被静默丢弃，引擎按物理列查就
+  `Unknown column`。**派生列只能落在 overlay 的 `columns:` 块。**
+- **不要手改 manifest**：下次 ktx 扫描 warehouse 会被覆盖掉。
+- **不要在 overlay 里"新建"与 manifest 同名的列**——要用 `column_overrides:`
+  增量补丁。loader 注释明说「Manifest column names cannot be reused here」。
+- `columns:` 块里的 `expr` 由 `_expand_computed_columns` 在 SQL 生成时内联展开，
+  生成形如 `(YEAR(superstore_orders.order_date)) AS order_year` 的合法 SQL。
+
+### 改完 yaml 的标准流程（必走）
+
+`semantic-layer/` 文件夹是**磁盘**；MCP server / `ktx sl <搜索词>` 读的是
+**本地 SQLite 索引**（`ktxLocalStateDbPath`）。改 yaml 后必须**手动重建索引**，
+否则 MCP agent 用 `sl_search` 找不到新增的列/measure/segment。
+
+```bash
+# 1. 重建索引（扫盘 → 写 SQLite）
+ktx --project-dir /Users/zhangxingchen/Projects/project-lucy admin reindex
+
+# 2. 验证（任一即可）
+ktx sl validate superstore_orders           # YAML 语法 + 合并结果合法
+ktx sl read superstore_orders              # 列出列/measure/segment 实际可见
+ktx sl "order_year"                        # 搜索索引能命中
+```
+
+**关键事实**：
+
+- 索引输出按 scope 分行报告：`sl/mysql-aliyun` 的 `scanned/updated/embeddings` 反映
+  这次到底改了几条。
+- `admin reindex` 默认是**增量更新**；彻底重建用 `admin reindex --force`（清空后
+  全量重写，谨慎用）。
+- 改完 yaml **不需要重启 MCP daemon**——daemon 通过 SQLite 文件读取，下次查询
+  立即生效。
+- 如果配了 embedding provider，reindex 会重新计算 embeddings；未配置则只做
+  lexical 索引（warn 级别提示，不阻塞）。
+
+### 反例
+
+```yaml
+# ❌ 错：把派生列写在 manifest，expr 被 ManifestColumn 静默丢弃
+# 文件：_schema/dataforai.yaml
+- name: order_year
+  type: time
+  expr: YEAR(order_date)        # ← 生效无效
+
+# ✅ 对：派生列写在 overlay，SourceColumn 支持 expr
+# 文件：superstore_orders.yaml
+columns:
+  - name: order_year
+    type: time
+    role: time
+    expr: YEAR(order_date)
+```
+
 ## Claude Desktop / 云端 Claude 接入
 
 Claude Desktop 的"添加自定义连接器" UI 要求 HTTPS，且 URL 由 Anthropic 云端做 MCP discovery / OAuth 探测——`localhost` 系列地址（localhost / 127.0.0.1 / *.local）从云端不可达，**本地 HTTPS 反代也救不回来**（验证过：表单接受 `https://localhost:7880/mcp` 但提交后静默卡死）。按客户端分两条路：

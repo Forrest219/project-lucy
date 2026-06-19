@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -5,6 +6,7 @@ import { DiffViewer } from "../components/DiffViewer";
 import { FrontmatterForm } from "../components/FrontmatterForm";
 import { apiGet, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
+import { toast } from "sonner";
 import type { WikiFrontmatter, WikiListResponse, WikiPage, WikiPreview } from "../lib/types";
 
 function defaultKey(ref: string | null) {
@@ -44,6 +46,10 @@ export function WikiEditor() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+      toast.success("Wiki 已保存");
+    },
+    onError: (error) => {
+      toast.error(`保存失败：${error instanceof Error ? error.message : "未知错误"}`);
     }
   });
 
@@ -79,13 +85,14 @@ export function WikiEditor() {
   }, [key, previewBody]);
 
   return (
-    <section className="editor-layout">
-      <aside className="left-nav">
-        <Link className="back-link" to="/">表目录</Link>
-        <h2>业务 Wiki</h2>
-        <label>
-          页面路径
+    <section className="pl-editor-layout">
+      <aside className="grid gap-3 content-start">
+        <Link className="pl-btn pl-btn--ghost justify-start" to="/">表目录</Link>
+        <h2 className="text-base font-semibold">业务 Wiki</h2>
+        <label className="pl-field-label">
+          <span>页面路径</span>
           <input
+            className="pl-input"
             value={key}
             onChange={(event) => {
               setKey(event.target.value);
@@ -93,10 +100,10 @@ export function WikiEditor() {
             }}
           />
         </label>
-        <nav>
+        <nav className="grid gap-1">
           {pages.map((page) => (
             <button
-              className={page.key === key ? "file-button active" : "file-button"}
+              className={clsx("pl-file-button", page.key === key && "pl-file-button--active")}
               key={page.key}
               type="button"
               onClick={() => {
@@ -105,44 +112,43 @@ export function WikiEditor() {
               }}
             >
               <span>md</span>
-              {page.key}
+              <span className="truncate">{page.key}</span>
             </button>
           ))}
         </nav>
       </aside>
 
-      <div className="detail-panel">
-        <div className="section-heading">
+      <div className="grid gap-4">
+        <div className="pl-section-heading">
           <div>
-            <p className="eyebrow">业务文档</p>
-            <h1>业务文档：{key}</h1>
+            <p className="pl-eyebrow">业务文档</p>
+            <h1 className="text-xl font-semibold">业务文档：{key}</h1>
           </div>
-          <button type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <button type="button" className="pl-btn pl-btn--primary" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             保存
           </button>
         </div>
-        <p className="page-intro">Wiki 用于维护人可阅读的业务口径、使用场景和注意事项，不替代表字段描述。</p>
-        {previewError ? <p className="error">{previewError}</p> : null}
-        {saveMutation.error ? <p className="error">{saveMutation.error instanceof Error ? saveMutation.error.message : "保存失败"}</p> : null}
+        <p className="pl-page-intro">Wiki 用于维护人可阅读的业务口径、使用场景和注意事项，不替代表字段描述。</p>
+        {previewError ? <p className="pl-error">{previewError}</p> : null}
 
-        <div className="editor-columns">
-          <div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4">
             <FrontmatterForm value={frontmatter} onChange={setFrontmatter} />
-            <section className="read-panel">
-              <h2>正文 Markdown</h2>
-              <textarea rows={18} value={content} onChange={(event) => setContent(event.target.value)} />
+            <section className="pl-panel">
+              <h2 className="pl-panel-title">正文 Markdown</h2>
+              <textarea className="pl-textarea" rows={18} value={content} onChange={(event) => setContent(event.target.value)} />
             </section>
           </div>
-          <aside className="preview-panel">
-            <section className="read-panel">
-              <h2>变更预览</h2>
+          <div className="grid gap-4">
+            <section className="pl-panel">
+              <h2 className="pl-panel-title">变更预览</h2>
               <DiffViewer diff={preview?.diff ?? ""} />
             </section>
-            <section className="read-panel">
-              <h2>拟写入 Markdown</h2>
-              <pre className="yaml-preview">{preview?.proposedMarkdown ?? ""}</pre>
+            <section className="pl-panel">
+              <h2 className="pl-panel-title">拟写入 Markdown</h2>
+              <pre className="pl-yaml-preview">{preview?.proposedMarkdown ?? ""}</pre>
             </section>
-          </aside>
+          </div>
         </div>
       </div>
     </section>

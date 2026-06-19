@@ -1,21 +1,35 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
+import { isTokenRevoked } from "./audit.js";
 
 interface UserToken {
-  value: string; // Phase 1: plaintext; Phase 2: sha256 hash
+  hash: string; // format: "sha256:<hex>"
   label: string;
+  created?: string;
+}
+
+interface UserAllow {
+  tables?: string[];
+  tools?: string[];
 }
 
 interface UserConfig {
   id: string;
   name?: string;
   tokens: UserToken[];
+  allow?: UserAllow;
+}
+
+interface Defaults {
+  deny_tools?: string[];
 }
 
 interface AccessConfig {
   users: UserConfig[];
+  defaults?: Defaults;
 }
 
 export interface Identity {
@@ -39,6 +53,14 @@ async function loadConfig(): Promise<AccessConfig> {
   return configCache;
 }
 
+export async function getAccessConfig(): Promise<AccessConfig> {
+  return loadConfig();
+}
+
+function hashToken(token: string): string {
+  return "sha256:" + createHash("sha256").update(token).digest("hex");
+}
+
 // session id -> client name (populated from MCP initialize handshake)
 const sessionClients = new Map<string, string>();
 
@@ -56,10 +78,14 @@ export async function identifyRequest(
 ): Promise<Identity | null> {
   if (!authHeader?.startsWith("Bearer ")) return null;
   const token = authHeader.slice(7);
+  const tokenHash = hashToken(token);
+
+  if (await isTokenRevoked(tokenHash)) return null;
+
   const config = await loadConfig();
   for (const user of config.users) {
     for (const t of user.tokens) {
-      if (t.value === token) {
+      if (t.hash === tokenHash) {
         return {
           userId: user.id,
           tokenLabel: t.label,

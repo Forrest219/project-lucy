@@ -2,10 +2,7 @@
   "mcpServers": {
     "ktx": {
       "type": "http",
-      "url": "http://localhost:7879/mcp",
-      "headers": {
-        "Authorization": "Bearer tk_zhangsan_changeme"
-      }
+      "url": "http://localhost:7878/mcp"
     }
   }
 }

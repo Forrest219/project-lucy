@@ -4,6 +4,15 @@ name: superstore_orders
 grain:
   - row_id
 
+columns:
+  - name: order_year
+    type: time
+    role: time
+    expr: YEAR(order_date)
+    descriptions:
+      db: 订单年份
+      ai: Year extracted from order_date; preferred grain for year-over-year analysis.
+
 measures:
   - name: total_sales
     expr: sum(sales)

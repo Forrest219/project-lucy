@@ -1,3 +1,4 @@
+import * as Label from "@radix-ui/react-label";
 import type { WikiFrontmatter } from "../lib/types";
 
 type Props = {
@@ -14,19 +15,21 @@ function splitLines(value: string): string[] {
 
 export function FrontmatterForm({ value, onChange }: Props) {
   return (
-    <section className="read-panel">
-      <h2>页面元信息</h2>
-      <label>
-        摘要
+    <section className="pl-panel">
+      <h2 className="pl-panel-title">页面元信息</h2>
+      <Label.Root className="pl-field-label">
+        <Label.Label>摘要</Label.Label>
         <textarea
           rows={3}
+          className="pl-textarea"
           value={value.summary ?? ""}
           onChange={(event) => onChange({ ...value, summary: event.target.value })}
         />
-      </label>
-      <label>
-        标签
+      </Label.Root>
+      <Label.Root className="pl-field-label">
+        <Label.Label>标签</Label.Label>
         <input
+          className="pl-input"
           value={(value.tags ?? []).join(", ")}
           onChange={(event) =>
             onChange({
@@ -38,30 +41,33 @@ export function FrontmatterForm({ value, onChange }: Props) {
             })
           }
         />
-      </label>
-      <label>
-        关联语义对象
+      </Label.Root>
+      <Label.Root className="pl-field-label">
+        <Label.Label>关联语义对象</Label.Label>
         <textarea
           rows={3}
+          className="pl-textarea"
           value={(value.sl_refs ?? []).join("\n")}
           onChange={(event) => onChange({ ...value, sl_refs: splitLines(event.target.value) })}
         />
-      </label>
-      <label>
-        外部引用
+      </Label.Root>
+      <Label.Root className="pl-field-label">
+        <Label.Label>外部引用</Label.Label>
         <textarea
           rows={3}
+          className="pl-textarea"
           value={(value.refs ?? []).join("\n")}
           onChange={(event) => onChange({ ...value, refs: splitLines(event.target.value) })}
         />
-      </label>
-      <label>
-        使用方式
+      </Label.Root>
+      <Label.Root className="pl-field-label">
+        <Label.Label>使用方式</Label.Label>
         <input
+          className="pl-input"
           value={value.usage_mode ?? ""}
           onChange={(event) => onChange({ ...value, usage_mode: event.target.value })}
         />
-      </label>
+      </Label.Root>
     </section>
   );
 }
