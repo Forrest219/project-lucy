@@ -5,6 +5,7 @@ import { assertReadable, safeWrite } from "../fs-safe.js";
 import { previewDiff } from "../diff.js";
 import { resolveProjectRoot } from "../project.js";
 import type { FastifyInstance } from "fastify";
+import { getEvalDb } from "./db.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,11 @@ export type EvalDomainInfo = {
   filePath: string;
   caseCount: number;
   metadata?: Record<string, unknown>;
+  lastRun?: {
+    runId: number;
+    passRate: number;
+    startedAt: string;
+  };
 };
 
 // ─── error classes ──────────────────────────────────────────────────────────
@@ -204,6 +210,28 @@ export async function listDomains(projectRoot: string): Promise<EvalDomainInfo[]
   return results;
 }
 
+async function attachLastRuns(domains: EvalDomainInfo[]): Promise<EvalDomainInfo[]> {
+  const db = await getEvalDb();
+  return domains.map((domain) => {
+    const row = db.prepare(`
+      SELECT id, started_at, pass_count, total_cases
+      FROM eval_run
+      WHERE domain = ? AND status = 'succeeded'
+      ORDER BY started_at DESC
+      LIMIT 1
+    `).get(domain.domain) as { id: number; started_at: string; pass_count: number; total_cases: number } | undefined;
+    if (!row) return domain;
+    return {
+      ...domain,
+      lastRun: {
+        runId: row.id,
+        passRate: row.total_cases > 0 ? row.pass_count / row.total_cases : 0,
+        startedAt: row.started_at
+      }
+    };
+  });
+}
+
 export async function listCases(projectRoot: string, domain: string): Promise<EvalCase[]> {
   const { doc } = await readCasesDoc(projectRoot, domain);
   return extractCases(doc);
@@ -263,8 +291,19 @@ export function registerCaseRoutes(app: FastifyInstance) {
   // GET /api/eval/domains
   app.get("/api/eval/domains", async () => {
     const projectRoot = await resolveProjectRoot();
-    const domains = await listDomains(projectRoot);
+    const domains = await attachLastRuns(await listDomains(projectRoot));
     return { ok: true, data: { domains } };
+  });
+
+  // GET /api/eval/domains/:domain
+  app.get<{ Params: { domain: string } }>("/api/eval/domains/:domain", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const domains = await attachLastRuns(await listDomains(projectRoot));
+    const domain = domains.find((d) => d.domain === request.params.domain);
+    if (!domain) {
+      throw new CaseNotFoundError(`Domain ${request.params.domain} not found`);
+    }
+    return { ok: true, data: domain };
   });
 
   // GET /api/eval/cases/:domain

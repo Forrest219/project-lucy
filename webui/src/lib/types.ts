@@ -276,6 +276,11 @@ export type EvalDomainInfo = {
   filePath: string;
   caseCount: number;
   metadata?: Record<string, unknown>;
+  lastRun?: {
+    runId: number;
+    passRate: number;
+    startedAt: string;
+  };
 };
 
 export type SqlAssertion = {
@@ -344,11 +349,16 @@ export type EvalRunWithResults = EvalRun & {
   results: Array<{
     caseId: string;
     status: "PASS" | "FAIL";
+    drift?: string;
+    exitCode?: number;
+    durationMs?: number;
     sql?: string;
+    resultRaw?: unknown;
+    expected?: unknown;
+    actual?: unknown;
     failedAssertions?: string[];
     errorMessage?: string;
     finalText?: string;
-    durationMs?: number;
   }>;
 };
 
@@ -370,6 +380,8 @@ export type EvalRunResult = {
 export type EvalTrendPoint = {
   date: string;
   passRate: number;
+  runs?: number;
+  lowestPassRate?: number;
   totalRuns: number;
 };
 

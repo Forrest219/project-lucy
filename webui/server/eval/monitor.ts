@@ -47,13 +47,14 @@ export function registerMonitorRoutes(app: FastifyInstance) {
 
     const config = await readMonitorConfig(projectRoot);
 
-    let rows: Array<{ date: string; pass_count: number; fail_count: number; runs: number }>;
+    let rows: Array<{ date: string; pass_count: number; fail_count: number; runs: number; lowest_pass_rate: number }>;
     if (domain) {
       rows = db.prepare(`
         SELECT DATE(started_at) AS date,
                SUM(pass_count)  AS pass_count,
                SUM(fail_count)  AS fail_count,
-               COUNT(*)         AS runs
+               COUNT(*)         AS runs,
+               MIN(CASE WHEN total_cases > 0 THEN CAST(pass_count AS REAL) / total_cases ELSE 0 END) AS lowest_pass_rate
         FROM eval_run
         WHERE domain = ? AND DATE(started_at) >= ? AND status = 'succeeded'
         GROUP BY DATE(started_at)
@@ -64,7 +65,8 @@ export function registerMonitorRoutes(app: FastifyInstance) {
         SELECT DATE(started_at) AS date,
                SUM(pass_count)  AS pass_count,
                SUM(fail_count)  AS fail_count,
-               COUNT(*)         AS runs
+               COUNT(*)         AS runs,
+               MIN(CASE WHEN total_cases > 0 THEN CAST(pass_count AS REAL) / total_cases ELSE 0 END) AS lowest_pass_rate
         FROM eval_run
         WHERE DATE(started_at) >= ? AND status = 'succeeded'
         GROUP BY DATE(started_at)
@@ -77,6 +79,8 @@ export function registerMonitorRoutes(app: FastifyInstance) {
       return {
         date: r.date,
         passRate: total > 0 ? r.pass_count / total : 0,
+        runs: r.runs,
+        lowestPassRate: r.lowest_pass_rate,
         totalRuns: r.runs
       };
     });
@@ -134,6 +138,49 @@ export function registerMonitorRoutes(app: FastifyInstance) {
     }));
 
     return { ok: true, data: { items } };
+  });
+
+  // GET /api/eval/monitor/drift-distribution
+  app.get<{
+    Querystring: { domain?: string; days?: string };
+  }>("/api/eval/monitor/drift-distribution", async (request) => {
+    const db = await getEvalDb();
+    const { domain, days: daysStr = "7" } = request.query;
+    const days = parseInt(daysStr, 10) || 7;
+    const since = new Date(Date.now() - days * 86400_000).toISOString();
+
+    let rows: Array<{ drift: string | null; count: number }>;
+    if (domain) {
+      rows = db.prepare(`
+        SELECT COALESCE(erc.drift, CASE WHEN erc.status = 'PASS' THEN 'pass' ELSE 'data_drift' END) AS drift,
+               COUNT(*) AS count
+        FROM eval_run_case erc
+        JOIN eval_run er ON er.id = erc.run_id
+        WHERE er.domain = ? AND er.started_at >= ? AND er.status = 'succeeded'
+        GROUP BY COALESCE(erc.drift, CASE WHEN erc.status = 'PASS' THEN 'pass' ELSE 'data_drift' END)
+        ORDER BY count DESC
+      `).all(domain, since) as typeof rows;
+    } else {
+      rows = db.prepare(`
+        SELECT COALESCE(erc.drift, CASE WHEN erc.status = 'PASS' THEN 'pass' ELSE 'data_drift' END) AS drift,
+               COUNT(*) AS count
+        FROM eval_run_case erc
+        JOIN eval_run er ON er.id = erc.run_id
+        WHERE er.started_at >= ? AND er.status = 'succeeded'
+        GROUP BY COALESCE(erc.drift, CASE WHEN erc.status = 'PASS' THEN 'pass' ELSE 'data_drift' END)
+        ORDER BY count DESC
+      `).all(since) as typeof rows;
+    }
+
+    return {
+      ok: true,
+      data: {
+        items: rows.map((row) => ({
+          drift: row.drift ?? "data_drift",
+          count: row.count
+        }))
+      }
+    };
   });
 
   // GET /api/eval/monitor/config
