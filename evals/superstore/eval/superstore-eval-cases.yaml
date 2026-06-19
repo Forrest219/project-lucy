@@ -1,25 +1,572 @@
 metadata:
   document_name: Superstore Eval Cases
   document_type: Eval
-  version: v1.3
+  version: v1.4
   runner_schema_version: v1.3
-  written_date: 2026-06-18
+  written_date: 2026-06-19
   author: Claude / Codex
   requester: project-lucy 团队
   based_on:
     - superstore semantic layer
     - docs/eval-quiz-conventions.md v1.3
     - superstore-eval-cases.yaml v1.2 legacy migration
-  scope: Superstore 数据集 agent eval cases，供 CI gate / regression Runner 使用
+  scope: Superstore 数据集 agent eval cases（含 quiz_cases 人工测验题）；eval cases 供 CI gate / regression Runner 使用；quiz_cases 由 scripts/render-quiz.mjs 渲染为 HTML
   output_path: evals/superstore/eval/superstore-eval-cases.yaml
   snapshot_date: 2026-06-18
   snapshot_batch: superstore_20260617_120212
   snapshot_rows: 10194
   data_source: semantic_layer
-  linked_quiz: evals/superstore/superstore-quiz-cases.html (v1.1)
   legacy_migration:
     from_version: v1.2
     legacy_fields_removed: true
+
+quiz_cases:
+  - id: Q1
+    stem: "样本期内所有正常订单的总销售额是多少？"
+    difficulty: 0.5
+    question_type: single
+    display_type: exact_value
+    eval_refs:
+      - superstore-ordercount-002
+    options:
+      - key: A
+        text: "1687 万元"
+      - key: B
+        text: "2280 万元"
+      - key: C
+        text: "3300 万元"
+      - key: D
+        text: "5500 万元"
+    answer: "A"
+    explanation: "total_sales = 16,867,374.07 元（约 1687 万元）"
+
+  - id: Q2
+    stem: "哪个客户细分的总利润最高？"
+    difficulty: 1
+    question_type: single
+    display_type: ranking
+    eval_refs: []
+    options:
+      - key: A
+        text: "消费者"
+      - key: B
+        text: "公司"
+      - key: C
+        text: "小型企业"
+      - key: D
+        text: "三者差不多"
+    answer: "A"
+    explanation: "消费者 988K > 公司 683K > 小型企业 447K"
+
+  - id: Q3
+    stem: "哪个客户细分的利润率最高？"
+    difficulty: 1
+    question_type: single
+    display_type: ranking
+    eval_refs: []
+    options:
+      - key: A
+        text: "消费者"
+      - key: B
+        text: "公司"
+      - key: C
+        text: "小型企业"
+      - key: D
+        text: "三者差不多"
+    answer: "C"
+    explanation: "小型企业 14.02% > 公司 13.17% > 消费者 11.65%"
+
+  - id: Q4
+    stem: "按年份看，哪一年的总销售额最高？"
+    difficulty: 1.5
+    question_type: single
+    display_type: ranking
+    eval_refs: []
+    options:
+      - key: A
+        text: "2023"
+      - key: B
+        text: "2024"
+      - key: C
+        text: "2025"
+      - key: D
+        text: "2026"
+    answer: "D"
+    explanation: "2026 年销售额 5.41M（峰值）"
+
+  - id: Q5
+    stem: "2024 年的总销售额高于 2023 年。"
+    difficulty: 1.5
+    question_type: boolean
+    display_type: boolean
+    eval_refs: []
+    options:
+      - key: A
+        text: "正确（2024 比 2023 高）"
+      - key: B
+        text: "错误（2024 比 2023 低）"
+    answer: "B"
+    explanation: "2024 (3.43M) < 2023 (3.58M)，2024 同比下滑"
+
+  - id: Q6
+    stem: "哪个区域的总销售额最高？"
+    difficulty: 2
+    question_type: single
+    display_type: ranking
+    eval_refs:
+      - superstore-ordercount-002
+    options:
+      - key: A
+        text: "华东"
+      - key: B
+        text: "华北"
+      - key: C
+        text: "中南"
+      - key: D
+        text: "西北"
+    answer: "A"
+    explanation: "华东 5.02M 销售领先"
+
+  - id: Q7
+    stem: "西北区域的利润率在所有区域中最高。"
+    difficulty: 2
+    question_type: boolean
+    display_type: boolean
+    eval_refs:
+      - superstore-profit-001
+    options:
+      - key: A
+        text: "正确"
+      - key: B
+        text: "错误"
+    answer: "A"
+    explanation: "西北 24.58% 利润率最高"
+
+  - id: Q8
+    stem: "哪个子类别累计亏损最严重？"
+    difficulty: 2.5
+    question_type: single
+    display_type: ranking
+    eval_refs: []
+    options:
+      - key: A
+        text: "桌子"
+      - key: B
+        text: "书架"
+      - key: C
+        text: "椅子"
+      - key: D
+        text: "电话"
+    answer: "A"
+    explanation: "桌子 -12.9 万亏损最严重（书架 -2.6 万）"
+
+  - id: Q9
+    stem: "以下哪些子类别累计是亏损的？（多选）"
+    difficulty: 3
+    question_type: multi
+    display_type: ranking
+    eval_refs: []
+    options:
+      - key: A
+        text: "桌子"
+      - key: B
+        text: "书架"
+      - key: C
+        text: "用品"
+      - key: D
+        text: "电话"
+      - key: E
+        text: "椅子"
+    answer: "A,B,C"
+    explanation: "桌子 / 书架 / 用品累计亏损；电话与椅子均盈利"
+
+  - id: Q10
+    stem: "哪个区域经理所辖区域的利润率最高？"
+    difficulty: 3
+    question_type: single
+    display_type: ranking
+    eval_refs:
+      - superstore-join-002
+    options:
+      - key: A
+        text: "杨健（西北）"
+      - key: B
+        text: "殷莲（华北）"
+      - key: C
+        text: "洪光（华东）"
+      - key: D
+        text: "楚杰（东北）"
+    answer: "A"
+    explanation: "杨健（西北）24.58% 利润率最高"
+
+  - id: Q11
+    stem: "所有订单明细行中，亏损订单（profit<0）占多少？"
+    difficulty: 3.5
+    question_type: single
+    display_type: exact_value
+    eval_refs: []
+    options:
+      - key: A
+        text: "5%"
+      - key: B
+        text: "10%"
+      - key: C
+        text: "19%"
+      - key: D
+        text: "30%"
+    answer: "C"
+    explanation: "1901 / 10194 ≈ 18.65%"
+
+  - id: Q12
+    stem: "高折扣订单（discount>0.2）的销售额贡献按品类排序，家具类排第一。"
+    difficulty: 3.5
+    question_type: boolean
+    display_type: boolean
+    eval_refs:
+      - superstore-discount-003
+    options:
+      - key: A
+        text: "正确"
+      - key: B
+        text: "错误"
+    answer: "A"
+    explanation: "高折扣销售额：家具 1.42M > 技术 0.93M > 办公用品 0.29M"
+
+  - id: Q13
+    stem: "被退货的订单（returned='是'）有多少笔？"
+    difficulty: 4
+    question_type: single
+    display_type: exact_value
+    eval_refs: []
+    options:
+      - key: A
+        text: "50 笔"
+      - key: B
+        text: "150 笔"
+      - key: C
+        text: "300 笔"
+      - key: D
+        text: "800 笔"
+    answer: "C"
+    explanation: "退货订单 296 笔（注意 SL join 会因 fan-out 略有放大）"
+
+  - id: Q14
+    stem: "以下哪些区域经理所辖区域的整体利润率低于 10%？（多选）"
+    difficulty: 4
+    question_type: multi
+    display_type: ranking
+    eval_refs: []
+    options:
+      - key: A
+        text: "杨健（西北）"
+      - key: B
+        text: "楚杰（东北）"
+      - key: C
+        text: "殷莲（华北）"
+      - key: D
+        text: "白德伟（西南）"
+      - key: E
+        text: "洪光（华东）"
+    answer: "B,D"
+    explanation: "楚杰（东北）3.21%、白德伟（西南）2.16% 均 < 10%"
+
+  - id: Q15
+    stem: '综合"销售规模"与"利润率"，你认为哪个区域是最佳经营区域？'
+    difficulty: 4.5
+    question_type: single
+    display_type: ranking
+    eval_refs: []
+    options:
+      - key: A
+        text: "华东：销售额最大但利润率中等"
+      - key: B
+        text: "西北：销售额最小但利润率最高"
+      - key: C
+        text: "华北：销售额较大且利润率较高"
+      - key: D
+        text: "西南：销售额中等但利润率最低"
+    answer: "C"
+    explanation: "华北 3.36M 销售 + 18.23% 利润率，规模与效益平衡最优"
+
+  - id: Q16
+    stem: "2025 年下过单的客户里，有多少比例在 2026 年没有再下单（视为年度流失）？"
+    difficulty: 3.5
+    question_type: single
+    display_type: exact_value
+    provenance: raw_sql_fallback
+    eval_refs: []
+    options:
+      - key: A
+        text: "5%"
+      - key: B
+        text: "12%"
+      - key: C
+        text: "25%"
+      - key: D
+        text: "40%"
+    answer: "B"
+    explanation: "2025 活跃 653 人，2026 流失 80 人，流失率 = 80/653 = 12.3%"
+
+  - id: Q17
+    stem: "以下哪个子类别连续 4 年利润逐年增长？"
+    difficulty: 3.5
+    question_type: single
+    display_type: ranking
+    provenance: raw_sql_fallback
+    eval_refs: []
+    options:
+      - key: A
+        text: "复印机"
+      - key: B
+        text: "配件"
+      - key: C
+        text: "电话"
+      - key: D
+        text: "设备"
+    answer: "A"
+    explanation: "复印机 4 年利润 24512 → 71995 → 128635 → 181539 持续增长"
+
+  - id: Q18
+    stem: "以下哪个子类别在样本期 4 年内全部处于亏损状态？"
+    difficulty: 4
+    question_type: single
+    display_type: ranking
+    provenance: raw_sql_fallback
+    eval_refs: []
+    options:
+      - key: A
+        text: "桌子"
+      - key: B
+        text: "书架"
+      - key: C
+        text: "用品"
+      - key: D
+        text: "设备"
+    answer: "A"
+    explanation: "桌子 4 年利润全部为负（-23275 / -25376 / -21390 / -58669）"
+
+  - id: Q19
+    stem: "在销量前 20% 的子类别（椅子、电话、收纳具、桌子）中，哪个的销售额加权折扣率最高、最值得提价止血？"
+    difficulty: 4.5
+    question_type: single
+    display_type: ranking
+    provenance: raw_sql_fallback
+    eval_refs: []
+    options:
+      - key: A
+        text: "椅子"
+      - key: B
+        text: "电话"
+      - key: C
+        text: "收纳具"
+      - key: D
+        text: "桌子"
+    answer: "D"
+    explanation: "销量前 20% 的 4 个子类别加权折扣率：桌子 0.214 > 椅子 0.152 > 电话 0.145 > 收纳具 0.060"
+
+  - id: Q20
+    stem: "样本期 4 年（2023–2026）内，每一年都有过订单的客户有多少个？"
+    difficulty: 4
+    question_type: single
+    display_type: exact_value
+    provenance: raw_sql_fallback
+    eval_refs: []
+    options:
+      - key: A
+        text: "50 客户"
+      - key: B
+        text: "316 客户"
+      - key: C
+        text: "600 客户"
+      - key: D
+        text: "800 客户"
+    answer: "B"
+    explanation: "总客户 804，4 年皆活跃 316，占 39.3%"
+
+  - id: Q21
+    stem: '语义层中"加权平均折扣率"对应的 measure 名是？'
+    difficulty: 2
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - superstore-discount-001
+      - superstore-discount-004
+    options:
+      - key: A
+        text: "discount"
+      - key: B
+        text: "avg_discount"
+      - key: C
+        text: "weighted_discount"
+      - key: D
+        text: "discount_avg"
+    answer: "C"
+    explanation: "SL 中 weighted_discount = sum(discount*sales)/nullif(sum(sales),0)；禁止 AVG(discount)"
+
+  - id: Q22
+    stem: '语义层中"订单数"对应的 measure 名是？'
+    difficulty: 2
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - superstore-ordercount-001
+      - superstore-ordercount-003
+    options:
+      - key: A
+        text: "order_count"
+      - key: B
+        text: "orders"
+      - key: C
+        text: "row_count"
+      - key: D
+        text: "count_star"
+    answer: "A"
+    explanation: "order_count = count(distinct order_id)；grain=row_id 时必须去重"
+
+  - id: Q23
+    stem: '用 COUNT(*) 统计 superstore_orders 的"订单数"会得到 5083。'
+    difficulty: 2
+    question_type: boolean
+    display_type: boolean
+    eval_refs:
+      - superstore-ordercount-001
+      - superstore-ordercount-004
+    options:
+      - key: A
+        text: "正确"
+      - key: B
+        text: "错误"
+    answer: "B"
+    explanation: "COUNT(*) 得到 10194（行数），不是 5083（订单数）。订单数 = COUNT(DISTINCT order_id)"
+
+  - id: Q24
+    stem: '"利润率"指标的语义层规范写法是？'
+    difficulty: 2.5
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - superstore-profit-001
+      - superstore-profit-002
+    options:
+      - key: A
+        text: "AVG(profit / sales)"
+      - key: B
+        text: "SUM(profit) / SUM(sales)（即 profit_margin）"
+      - key: C
+        text: "AVG(profit) / AVG(sales)"
+      - key: D
+        text: "SUM(profit / sales)"
+    answer: "B"
+    explanation: "profit_margin 公式 sum(profit)/nullif(sum(sales),0)；AVG(profit/sales) 是反模式"
+
+  - id: Q25
+    stem: '查询"所有有效订单"时，必须显式加什么过滤？'
+    difficulty: 2.5
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - superstore-filter-001
+      - superstore-filter-002
+    options:
+      - key: A
+        text: "不需要，SL 会自动过滤"
+      - key: B
+        text: "WHERE is_deleted=0 或使用 segment active_rows"
+      - key: C
+        text: "WHERE profit>0"
+      - key: D
+        text: "WHERE order_id IS NOT NULL"
+    answer: "B"
+    explanation: "SL 不自动加 is_deleted=0 过滤；必须显式声明（filter 或 segment active_rows）"
+
+  - id: Q26
+    stem: "语义层中 segment high_discount 的定义是 discount > 0.2。"
+    difficulty: 2.5
+    question_type: boolean
+    display_type: boolean
+    eval_refs:
+      - superstore-segment-001
+    options:
+      - key: A
+        text: "正确"
+      - key: B
+        text: "错误"
+    answer: "A"
+    explanation: 'YAML 中明确定义为 discount > 0.2，描述"折扣超过 20% 的行"'
+
+  - id: Q27
+    stem: '用户问"客户终身价值（LTV）"，SL 中没有对应 measure。最佳回应是？'
+    difficulty: 3
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - superstore-degradation-001
+    options:
+      - key: A
+        text: "编一个 measure 名直接用"
+      - key: B
+        text: "明示 SL 未覆盖，说明可用 raw SQL 计算（需列假设）"
+      - key: C
+        text: "用 total_sales 替代"
+      - key: D
+        text: "拒绝回答"
+    answer: "B"
+    explanation: "SL 未覆盖时，诚实声明 + 给 raw SQL 替代 + 列假设；不编 measure、不凑数、不拒绝"
+
+  - id: Q28
+    stem: '"每个区域经理辖区的客户数"这个查询，最少需要 join 几张表？'
+    difficulty: 3.5
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - superstore-join-001
+    options:
+      - key: A
+        text: "0（单表）"
+      - key: B
+        text: "1（仅 superstore_orders）"
+      - key: C
+        text: "2（superstore_orders + superstore_people）"
+      - key: D
+        text: "3（三表全 join）"
+    answer: "C"
+    explanation: "经理名在 superstore_people；客户数在 superstore_orders；通过 region 关联，需 2 张表"
+
+  - id: Q29
+    stem: '"列出每个区域经理的销售额（含经理姓名）"应该用什么 join 路径？'
+    difficulty: 3
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - superstore-join-002
+    options:
+      - key: A
+        text: "仅 superstore_orders 单表"
+      - key: B
+        text: "superstore_orders JOIN superstore_people ON region"
+      - key: C
+        text: "三表全 LEFT JOIN"
+      - key: D
+        text: "仅 superstore_people 维表"
+    answer: "B"
+    explanation: "orders.region = people.region（已在 SL YAML 中 declared join）；不需要 3 表"
+
+  - id: Q30
+    stem: '同一 session 中，先问"总利润率"再追问"按区域拆分的利润率"，LLM 必须保持 measure 口径一致（始终用 profit_margin 而非 AVG(profit/sales)）。'
+    difficulty: 3.5
+    question_type: boolean
+    display_type: boolean
+    eval_refs:
+      - superstore-profit-001
+      - superstore-profit-002
+      - superstore-multiturn-001
+    options:
+      - key: A
+        text: "正确"
+      - key: B
+        text: "错误"
+    answer: "A"
+    explanation: "追问中口径一致是基本要求；不应退化为 AVG(profit/sales)"
 
 cases:
   - id: superstore-discount-001

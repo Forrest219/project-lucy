@@ -32,7 +32,7 @@
 | 产物 | 格式 | 路径模板 | 测试对象 | 触发 |
 |---|---|---|---|---|
 | Eval cases | YAML | `evals/{domain}/eval/{domain}-eval-cases.yaml` | Agent（LLM 跑 SQL / 工具调用）| CI gate / regression |
-| Quiz cases | HTML | `evals/{domain}/{domain}-quiz-cases.html` | 人类（业务 / 培训）| 培训 / 验收 |
+| Quiz cases | YAML（嵌入 eval cases）→ HTML（渲染生成） | `evals/{domain}/eval/{domain}-eval-cases.yaml`（quiz_cases section）；渲染：`node scripts/render-quiz.mjs` | 人类（业务 / 培训）| 培训 / 验收 |
 
 **配对原则**：同一数据集的 eval 与 quiz **主题对齐**——eval 测机器会不会做，quiz 测人会不会想（覆盖矩阵一致，形式不同）。
 

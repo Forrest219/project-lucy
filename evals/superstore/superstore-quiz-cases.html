@@ -2,23 +2,22 @@
 meta:
   文档名称: 超市数据 Quiz · 30 题
   文档类型: Quiz
-  文档说明: HTML quiz, 人类测试用
+  文档说明: HTML quiz, 人类测试用（由 scripts/render-quiz.mjs 从 superstore-eval-cases.yaml 渲染生成）
   版本: v1.1
   撰写日期: 2026-06-18
-  撰写人: Claude / Codex
+  撰写人: render-quiz.mjs
   委托人: project-lucy 团队
-  基于材料: project-lucy semantic layer (superstore_orders / superstore_returns / superstore_people) / docs/eval-quiz-conventions.md v1.3
+  基于材料: /Users/zhangxingchen/Projects/project-lucy/evals/superstore/eval/superstore-eval-cases.yaml
   适用范围: 超市数据问答能力的人工测验 / 培训；30 题覆盖 SQL 基础、反模式、SL 知识、JOIN 路径、降级处理与多轮一致性
-  输出位置: knowledge/superstore/superstore-quiz-cases.html
+  输出位置: /Users/zhangxingchen/Projects/project-lucy/evals/superstore/superstore-quiz-cases.html
   命名约定: {domain}-{purpose}-{variant}.{ext}，与 superstore-eval-cases.yaml 保持并行
-  关联 eval: knowledge/superstore/eval/superstore-eval-cases.yaml (v1.3, 17 cases 机器测)
+  关联 eval: /Users/zhangxingchen/Projects/project-lucy/evals/superstore/eval/superstore-eval-cases.yaml
   题目类型: 单选 / 对错 / 多选
   难度系数: 0.5–5★
   数据来源: semantic_layer / raw_sql_fallback
   answer_binding: 每题通过 data-answer-binding 声明 exact_value / ranking / boolean / range_bucket / conceptual
   stale_status: fresh
-  fallback_provenance: Q16–Q20 使用 raw_sql_fallback；query_trace=pending_rebuild，需重建后补全逐题 SQL trace
-  unmapped_quiz_questions: Q2 / Q3 / Q4 / Q5 / Q8 / Q9 / Q11 / Q13 / Q14 / Q15 / Q16 / Q17 / Q18 / Q19 / Q20
+  snapshot_rows: 10194
 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -100,11 +99,11 @@ meta:
 </div>
 
 <div class="q" data-question-id="Q5" data-answer="B" data-answer-binding="boolean" data-stale-status="fresh" data-eval-refs="unmapped">
-  <div class="qhead"><span class="qnum">Q5</span><span class="stars">1.5★</span><span class="qtype">对错</span></div>
+  <div class="qhead"><span class="qnum">Q5</span><span class="stars">1.5★</span><span class="qtype tf">对错</span></div>
   <div>2024 年的总销售额高于 2023 年。</div>
   <div class="opts">
-    <label><input type="radio" name="q5" value="A"> 正确（2024 比 2023 高）</label>
-    <label><input type="radio" name="q5" value="B"> 错误（2024 比 2023 低）</label>
+    <label><input type="radio" name="q5" value="A"> A. 正确（2024 比 2023 高）</label>
+    <label><input type="radio" name="q5" value="B"> B. 错误（2024 比 2023 低）</label>
   </div>
 </div>
 
@@ -120,11 +119,11 @@ meta:
 </div>
 
 <div class="q" data-question-id="Q7" data-answer="A" data-answer-binding="boolean" data-stale-status="fresh" data-eval-refs="superstore-profit-001">
-  <div class="qhead"><span class="qnum">Q7</span><span class="stars">2★</span><span class="qtype">对错</span></div>
+  <div class="qhead"><span class="qnum">Q7</span><span class="stars">2★</span><span class="qtype tf">对错</span></div>
   <div>西北区域的利润率在所有区域中最高。</div>
   <div class="opts">
-    <label><input type="radio" name="q7" value="A"> 正确</label>
-    <label><input type="radio" name="q7" value="B"> 错误</label>
+    <label><input type="radio" name="q7" value="A"> A. 正确</label>
+    <label><input type="radio" name="q7" value="B"> B. 错误</label>
   </div>
 </div>
 
@@ -174,11 +173,11 @@ meta:
 </div>
 
 <div class="q" data-question-id="Q12" data-answer="A" data-answer-binding="boolean" data-stale-status="fresh" data-eval-refs="superstore-discount-003">
-  <div class="qhead"><span class="qnum">Q12</span><span class="stars">3.5★</span><span class="qtype">对错</span></div>
+  <div class="qhead"><span class="qnum">Q12</span><span class="stars">3.5★</span><span class="qtype tf">对错</span></div>
   <div>高折扣订单（discount&gt;0.2）的销售额贡献按品类排序，家具类排第一。</div>
   <div class="opts">
-    <label><input type="radio" name="q12" value="A"> 正确</label>
-    <label><input type="radio" name="q12" value="B"> 错误</label>
+    <label><input type="radio" name="q12" value="A"> A. 正确</label>
+    <label><input type="radio" name="q12" value="B"> B. 错误</label>
   </div>
 </div>
 
@@ -207,7 +206,7 @@ meta:
 
 <div class="q" data-question-id="Q15" data-answer="C" data-answer-binding="ranking" data-stale-status="fresh" data-eval-refs="unmapped">
   <div class="qhead"><span class="qnum">Q15</span><span class="stars">4.5★</span><span class="qtype">单选</span></div>
-  <div>综合"销售规模"与"利润率"，你认为哪个区域是最佳经营区域？</div>
+  <div>综合&quot;销售规模&quot;与&quot;利润率&quot;，你认为哪个区域是最佳经营区域？</div>
   <div class="opts">
     <label><input type="radio" name="q15" value="A"> A. 华东：销售额最大但利润率中等</label>
     <label><input type="radio" name="q15" value="B"> B. 西北：销售额最小但利润率最高</label>
@@ -216,7 +215,7 @@ meta:
   </div>
 </div>
 
-<div class="q" data-question-id="Q16" data-answer="B" data-answer-binding="exact_value" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback:pending_rebuild">
+<div class="q" data-question-id="Q16" data-answer="B" data-answer-binding="exact_value" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback">
   <div class="qhead"><span class="qnum">Q16</span><span class="stars">3.5★</span><span class="qtype">单选</span></div>
   <div>2025 年下过单的客户里，有多少比例在 2026 年没有再下单（视为年度流失）？</div>
   <div class="opts">
@@ -227,7 +226,7 @@ meta:
   </div>
 </div>
 
-<div class="q" data-question-id="Q17" data-answer="A" data-answer-binding="ranking" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback:pending_rebuild">
+<div class="q" data-question-id="Q17" data-answer="A" data-answer-binding="ranking" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback">
   <div class="qhead"><span class="qnum">Q17</span><span class="stars">3.5★</span><span class="qtype">单选</span></div>
   <div>以下哪个子类别连续 4 年利润逐年增长？</div>
   <div class="opts">
@@ -238,7 +237,7 @@ meta:
   </div>
 </div>
 
-<div class="q" data-question-id="Q18" data-answer="A" data-answer-binding="boolean" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback:pending_rebuild">
+<div class="q" data-question-id="Q18" data-answer="A" data-answer-binding="ranking" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback">
   <div class="qhead"><span class="qnum">Q18</span><span class="stars">4★</span><span class="qtype">单选</span></div>
   <div>以下哪个子类别在样本期 4 年内全部处于亏损状态？</div>
   <div class="opts">
@@ -249,7 +248,7 @@ meta:
   </div>
 </div>
 
-<div class="q" data-question-id="Q19" data-answer="D" data-answer-binding="ranking" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback:pending_rebuild">
+<div class="q" data-question-id="Q19" data-answer="D" data-answer-binding="ranking" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback">
   <div class="qhead"><span class="qnum">Q19</span><span class="stars">4.5★</span><span class="qtype">单选</span></div>
   <div>在销量前 20% 的子类别（椅子、电话、收纳具、桌子）中，哪个的销售额加权折扣率最高、最值得提价止血？</div>
   <div class="opts">
@@ -260,7 +259,7 @@ meta:
   </div>
 </div>
 
-<div class="q" data-question-id="Q20" data-answer="B" data-answer-binding="exact_value" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback:pending_rebuild">
+<div class="q" data-question-id="Q20" data-answer="B" data-answer-binding="exact_value" data-stale-status="fresh" data-eval-refs="unmapped" data-provenance="raw_sql_fallback">
   <div class="qhead"><span class="qnum">Q20</span><span class="stars">4★</span><span class="qtype">单选</span></div>
   <div>样本期 4 年（2023–2026）内，每一年都有过订单的客户有多少个？</div>
   <div class="opts">
@@ -273,7 +272,7 @@ meta:
 
 <div class="q" data-question-id="Q21" data-answer="C" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-discount-001 superstore-discount-004">
   <div class="qhead"><span class="qnum">Q21</span><span class="stars">2★</span><span class="qtype">单选</span></div>
-  <div>语义层中"加权平均折扣率"对应的 measure 名是？</div>
+  <div>语义层中&quot;加权平均折扣率&quot;对应的 measure 名是？</div>
   <div class="opts">
     <label><input type="radio" name="q21" value="A"> A. discount</label>
     <label><input type="radio" name="q21" value="B"> B. avg_discount</label>
@@ -284,7 +283,7 @@ meta:
 
 <div class="q" data-question-id="Q22" data-answer="A" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-ordercount-001 superstore-ordercount-003">
   <div class="qhead"><span class="qnum">Q22</span><span class="stars">2★</span><span class="qtype">单选</span></div>
-  <div>语义层中"订单数"对应的 measure 名是？</div>
+  <div>语义层中&quot;订单数&quot;对应的 measure 名是？</div>
   <div class="opts">
     <label><input type="radio" name="q22" value="A"> A. order_count</label>
     <label><input type="radio" name="q22" value="B"> B. orders</label>
@@ -294,17 +293,17 @@ meta:
 </div>
 
 <div class="q" data-question-id="Q23" data-answer="B" data-answer-binding="boolean" data-stale-status="fresh" data-eval-refs="superstore-ordercount-001 superstore-ordercount-004">
-  <div class="qhead"><span class="qnum">Q23</span><span class="stars">2★</span><span class="qtype">对错</span></div>
-  <div>用 COUNT(*) 统计 superstore_orders 的"订单数"会得到 5083。</div>
+  <div class="qhead"><span class="qnum">Q23</span><span class="stars">2★</span><span class="qtype tf">对错</span></div>
+  <div>用 COUNT(*) 统计 superstore_orders 的&quot;订单数&quot;会得到 5083。</div>
   <div class="opts">
-    <label><input type="radio" name="q23" value="A"> 正确</label>
-    <label><input type="radio" name="q23" value="B"> 错误</label>
+    <label><input type="radio" name="q23" value="A"> A. 正确</label>
+    <label><input type="radio" name="q23" value="B"> B. 错误</label>
   </div>
 </div>
 
 <div class="q" data-question-id="Q24" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-profit-001 superstore-profit-002">
   <div class="qhead"><span class="qnum">Q24</span><span class="stars">2.5★</span><span class="qtype">单选</span></div>
-  <div>"利润率"指标的语义层规范写法是？</div>
+  <div>&quot;利润率&quot;指标的语义层规范写法是？</div>
   <div class="opts">
     <label><input type="radio" name="q24" value="A"> A. AVG(profit / sales)</label>
     <label><input type="radio" name="q24" value="B"> B. SUM(profit) / SUM(sales)（即 profit_margin）</label>
@@ -315,27 +314,27 @@ meta:
 
 <div class="q" data-question-id="Q25" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-filter-001 superstore-filter-002">
   <div class="qhead"><span class="qnum">Q25</span><span class="stars">2.5★</span><span class="qtype">单选</span></div>
-  <div>查询"所有有效订单"时，必须显式加什么过滤？</div>
+  <div>查询&quot;所有有效订单&quot;时，必须显式加什么过滤？</div>
   <div class="opts">
     <label><input type="radio" name="q25" value="A"> A. 不需要，SL 会自动过滤</label>
-    <label><input type="radio" name="q25" value="B"> B. <code>WHERE is_deleted=0</code> 或使用 segment <code>active_rows</code></label>
-    <label><input type="radio" name="q25" value="C"> C. <code>WHERE profit&gt;0</code></label>
-    <label><input type="radio" name="q25" value="D"> D. <code>WHERE order_id IS NOT NULL</code></label>
+    <label><input type="radio" name="q25" value="B"> B. WHERE is_deleted=0 或使用 segment active_rows</label>
+    <label><input type="radio" name="q25" value="C"> C. WHERE profit&gt;0</label>
+    <label><input type="radio" name="q25" value="D"> D. WHERE order_id IS NOT NULL</label>
   </div>
 </div>
 
 <div class="q" data-question-id="Q26" data-answer="A" data-answer-binding="boolean" data-stale-status="fresh" data-eval-refs="superstore-segment-001">
-  <div class="qhead"><span class="qnum">Q26</span><span class="stars">2.5★</span><span class="qtype">对错</span></div>
-  <div>语义层中 segment <code>high_discount</code> 的定义是 <code>discount &gt; 0.2</code>。</div>
+  <div class="qhead"><span class="qnum">Q26</span><span class="stars">2.5★</span><span class="qtype tf">对错</span></div>
+  <div>语义层中 segment high_discount 的定义是 discount &gt; 0.2。</div>
   <div class="opts">
-    <label><input type="radio" name="q26" value="A"> 正确</label>
-    <label><input type="radio" name="q26" value="B"> 错误</label>
+    <label><input type="radio" name="q26" value="A"> A. 正确</label>
+    <label><input type="radio" name="q26" value="B"> B. 错误</label>
   </div>
 </div>
 
 <div class="q" data-question-id="Q27" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-degradation-001">
   <div class="qhead"><span class="qnum">Q27</span><span class="stars">3★</span><span class="qtype">单选</span></div>
-  <div>用户问"客户终身价值（LTV）"，SL 中没有对应 measure。最佳回应是？</div>
+  <div>用户问&quot;客户终身价值（LTV）&quot;，SL 中没有对应 measure。最佳回应是？</div>
   <div class="opts">
     <label><input type="radio" name="q27" value="A"> A. 编一个 measure 名直接用</label>
     <label><input type="radio" name="q27" value="B"> B. 明示 SL 未覆盖，说明可用 raw SQL 计算（需列假设）</label>
@@ -346,7 +345,7 @@ meta:
 
 <div class="q" data-question-id="Q28" data-answer="C" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-join-001">
   <div class="qhead"><span class="qnum">Q28</span><span class="stars">3.5★</span><span class="qtype">单选</span></div>
-  <div>"每个区域经理辖区的客户数"这个查询，最少需要 join 几张表？</div>
+  <div>&quot;每个区域经理辖区的客户数&quot;这个查询，最少需要 join 几张表？</div>
   <div class="opts">
     <label><input type="radio" name="q28" value="A"> A. 0（单表）</label>
     <label><input type="radio" name="q28" value="B"> B. 1（仅 superstore_orders）</label>
@@ -357,7 +356,7 @@ meta:
 
 <div class="q" data-question-id="Q29" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-join-002">
   <div class="qhead"><span class="qnum">Q29</span><span class="stars">3★</span><span class="qtype">单选</span></div>
-  <div>"列出每个区域经理的销售额（含经理姓名）"应该用什么 join 路径？</div>
+  <div>&quot;列出每个区域经理的销售额（含经理姓名）&quot;应该用什么 join 路径？</div>
   <div class="opts">
     <label><input type="radio" name="q29" value="A"> A. 仅 superstore_orders 单表</label>
     <label><input type="radio" name="q29" value="B"> B. superstore_orders JOIN superstore_people ON region</label>
@@ -366,12 +365,12 @@ meta:
   </div>
 </div>
 
-<div class="q" data-question-id="Q30" data-answer="A" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="superstore-profit-001 superstore-profit-002 superstore-multiturn-001">
-  <div class="qhead"><span class="qnum">Q30</span><span class="stars">3.5★</span><span class="qtype">对错</span></div>
-  <div>同一 session 中，先问"总利润率"再追问"按区域拆分的利润率"，LLM 必须保持 measure 口径一致（始终用 profit_margin 而非 AVG(profit/sales)）。</div>
+<div class="q" data-question-id="Q30" data-answer="A" data-answer-binding="boolean" data-stale-status="fresh" data-eval-refs="superstore-profit-001 superstore-profit-002 superstore-multiturn-001">
+  <div class="qhead"><span class="qnum">Q30</span><span class="stars">3.5★</span><span class="qtype tf">对错</span></div>
+  <div>同一 session 中，先问&quot;总利润率&quot;再追问&quot;按区域拆分的利润率&quot;，LLM 必须保持 measure 口径一致（始终用 profit_margin 而非 AVG(profit/sales)）。</div>
   <div class="opts">
-    <label><input type="radio" name="q30" value="A"> 正确</label>
-    <label><input type="radio" name="q30" value="B"> 错误</label>
+    <label><input type="radio" name="q30" value="A"> A. 正确</label>
+    <label><input type="radio" name="q30" value="B"> B. 错误</label>
   </div>
 </div>
 
@@ -392,24 +391,24 @@ meta:
 <li><span class="correct">A</span> — 华东 5.02M 销售领先</li>
 <li><span class="correct">A</span> — 西北 24.58% 利润率最高</li>
 <li><span class="correct">A</span> — 桌子 -12.9 万亏损最严重（书架 -2.6 万）</li>
-<li><span class="correct">A, B, C</span> — 桌子 / 书架 / 用品累计亏损；电话与椅子均盈利</li>
+<li><span class="correct">A</span>, <span class="correct">B</span>, <span class="correct">C</span> — 桌子 / 书架 / 用品累计亏损；电话与椅子均盈利</li>
 <li><span class="correct">A</span> — 杨健（西北）24.58% 利润率最高</li>
 <li><span class="correct">C</span> — 1901 / 10194 ≈ 18.65%</li>
 <li><span class="correct">A</span> — 高折扣销售额：家具 1.42M &gt; 技术 0.93M &gt; 办公用品 0.29M</li>
 <li><span class="correct">C</span> — 退货订单 296 笔（注意 SL join 会因 fan-out 略有放大）</li>
-<li><span class="correct">B, D</span> — 楚杰（东北）3.21%、白德伟（西南）2.16% 均 &lt; 10%</li>
+<li><span class="correct">B</span>, <span class="correct">D</span> — 楚杰（东北）3.21%、白德伟（西南）2.16% 均 &lt; 10%</li>
 <li><span class="correct">C</span> — 华北 3.36M 销售 + 18.23% 利润率，规模与效益平衡最优</li>
 <li><span class="correct">B</span> <em>(SL fallback)</em> — 2025 活跃 653 人，2026 流失 80 人，流失率 = 80/653 = 12.3%</li>
-<li><span class="correct">A</span> <em>(SL fallback)</em> — 复印机 4 年利润 24512 → 71995 → 128635 → 181539 持续增长；用具（16645→23153→29657→31259）也满足但选项未含</li>
-<li><span class="correct">A</span> <em>(SL fallback)</em> — 桌子 4 年利润全部为负（-23275 / -25376 / -21390 / -58669）；用品 2023 是正，不符合；书架 2025 转正，不符合；设备仅 2026 转亏，不符合</li>
-<li><span class="correct">D</span> <em>(SL fallback)</em> — 销量前 20% 的 4 个子类别加权折扣率：桌子 0.214 &gt; 椅子 0.152 &gt; 电话 0.145 &gt; 收纳具 0.060；全样本加权折扣率 0.140，桌子显著高于，是最优先提价止血对象</li>
-<li><span class="correct">B</span> <em>(SL fallback)</em> — 总客户 804，4 年皆活跃 316，占 39.3%；其余 488 客户至少有一年缺席</li>
+<li><span class="correct">A</span> <em>(SL fallback)</em> — 复印机 4 年利润 24512 → 71995 → 128635 → 181539 持续增长</li>
+<li><span class="correct">A</span> <em>(SL fallback)</em> — 桌子 4 年利润全部为负（-23275 / -25376 / -21390 / -58669）</li>
+<li><span class="correct">D</span> <em>(SL fallback)</em> — 销量前 20% 的 4 个子类别加权折扣率：桌子 0.214 &gt; 椅子 0.152 &gt; 电话 0.145 &gt; 收纳具 0.060</li>
+<li><span class="correct">B</span> <em>(SL fallback)</em> — 总客户 804，4 年皆活跃 316，占 39.3%</li>
 <li><span class="correct">C</span> — SL 中 weighted_discount = sum(discount*sales)/nullif(sum(sales),0)；禁止 AVG(discount)</li>
 <li><span class="correct">A</span> — order_count = count(distinct order_id)；grain=row_id 时必须去重</li>
 <li><span class="correct">B</span> — COUNT(*) 得到 10194（行数），不是 5083（订单数）。订单数 = COUNT(DISTINCT order_id)</li>
-<li><span class="correct">B</span> — profit_margin 公式 sum(profit)/nullif(sum(sales),0)；AVG(profit/sales) 是反模式（被高 sales 行拉低）</li>
+<li><span class="correct">B</span> — profit_margin 公式 sum(profit)/nullif(sum(sales),0)；AVG(profit/sales) 是反模式</li>
 <li><span class="correct">B</span> — SL 不自动加 is_deleted=0 过滤；必须显式声明（filter 或 segment active_rows）</li>
-<li><span class="correct">A</span> — YAML 中明确定义为 discount > 0.2，描述"折扣超过 20% 的行"</li>
+<li><span class="correct">A</span> — YAML 中明确定义为 discount &gt; 0.2，描述&quot;折扣超过 20% 的行&quot;</li>
 <li><span class="correct">B</span> — SL 未覆盖时，诚实声明 + 给 raw SQL 替代 + 列假设；不编 measure、不凑数、不拒绝</li>
 <li><span class="correct">C</span> — 经理名在 superstore_people；客户数在 superstore_orders；通过 region 关联，需 2 张表</li>
 <li><span class="correct">B</span> — orders.region = people.region（已在 SL YAML 中 declared join）；不需要 3 表</li>
