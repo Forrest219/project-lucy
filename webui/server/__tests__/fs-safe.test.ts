@@ -56,6 +56,10 @@ describe("fs-safe writable paths", () => {
     await expectForbidden(() => safeWrite(projectRoot, "semantic-layer/../.ktx/secrets/p", "secret"));
   });
 
+  it("rejects webui/config path traversal to outside allowed dirs", async () => {
+    await expectForbidden(() => safeWrite(projectRoot, "webui/config/../../../secrets", "secret"));
+  });
+
   it("rejects symlinks that resolve into denied directories", async () => {
     await symlink(path.join(projectRoot, ".ktx", "secrets"), path.join(projectRoot, "semantic-layer", "secret-link"));
 

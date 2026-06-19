@@ -187,3 +187,201 @@ export type JoinCandidatesResponse = {
   version: 1;
   candidates: JoinCandidate[];
 };
+
+export type Agent = {
+  id: string;
+  name: string;
+  note?: string;
+  enabled: boolean;
+  tokens: TokenSummary[];
+  allow: { tables: string[] | ["*"]; tools: string[] | ["*"] };
+  stats?: AgentStats;
+};
+
+export type TokenSummary = {
+  hash: string;
+  label: string;
+  created: string;
+  expires_at?: string | null;
+  last_used?: string | null;
+  revoked?: boolean;
+  revoked_at?: string;
+  revoke_reason?: string;
+};
+
+export type AgentStats = {
+  callsLast7d: number;
+  deniedLast7d: number;
+  lastSeen?: string;
+  topTables: Array<{ table: string; calls: number }>;
+};
+
+export type AgentPatch = {
+  name?: string;
+  note?: string;
+  enabled?: boolean;
+  allow?: { tables?: string[] | ["*"]; tools?: string[] | ["*"] };
+};
+
+export type CreateAgentBody = {
+  id: string;
+  name: string;
+  note?: string;
+  allow: { tables: string[] | ["*"]; tools: string[] | ["*"] };
+};
+
+export type CreateTokenBody = { label: string; expires_at?: string | null };
+
+export type CreateTokenResponse = {
+  token: string;
+  hash: string;
+  label: string;
+  created: string;
+  expires_at?: string | null;
+};
+
+export type AuditLogEntry = {
+  id: number;
+  ts: string;
+  userId: string;
+  client?: string;
+  tool: string;
+  tables?: string[];
+  argsSummary?: Record<string, unknown>;
+  outcome: "ok" | "error" | "denied";
+  errorDetail?: string;
+  durationMs: number;
+  requestId: string | number;
+};
+
+export type AuditQuery = {
+  user?: string;
+  tool?: string;
+  outcome?: "ok" | "error" | "denied";
+  since?: string;
+  until?: string;
+  tableSearch?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type AuditResponse = { total: number; entries: AuditLogEntry[] };
+
+export type McpToolInfo = { name: string; description?: string; globalDenied: boolean };
+
+// ─── Eval types ──────────────────────────────────────────────────────────────
+
+export type EvalDomainInfo = {
+  domain: string;
+  filePath: string;
+  caseCount: number;
+  metadata?: Record<string, unknown>;
+};
+
+export type SqlAssertion = {
+  type: "measure_lineage" | "required_ast" | "forbidden_ast" | "required_sql_pattern";
+  value: string;
+  normalize?: boolean;
+  reason: string;
+};
+
+export type ResultAssertion = {
+  value_type: "scalar" | "dataframe" | "text" | "empty_result";
+  compare_mode?: string;
+  data?: unknown;
+  numeric_tolerance?: number;
+  check_schema?: boolean;
+  check_row_count?: boolean;
+  key_columns?: string[];
+};
+
+export type EvalCase = {
+  id: string;
+  case_type: string;
+  question?: string;
+  turns?: unknown[];
+  domain: string;
+  skill_version?: string;
+  semantic_version?: string;
+  model_id?: string;
+  expected_source?: string;
+  expected_measures?: string[];
+  linked_quiz_questions?: string[];
+  sql_assertions?: SqlAssertion[];
+  result_assertions?: ResultAssertion[];
+  context_assertions?: unknown;
+  snapshot_date?: string;
+  coverage?: string;
+  notes?: string;
+};
+
+export type EvalRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export type CaseSelection =
+  | { mode: "all" }
+  | { mode: "ids"; ids: string[] }
+  | { mode: "coverage"; coverage: string }
+  | { mode: "failed_in_last" };
+
+export type EvalRun = {
+  id: number;
+  domain: string;
+  status: EvalRunStatus;
+  startedAt: string;
+  finishedAt?: string;
+  triggeredBy: string;
+  trigger: string;
+  triggerReason?: string;
+  ktxMcpUrl: string;
+  caseSelection: CaseSelection;
+  totalCases: number;
+  passCount: number;
+  failCount: number;
+  passRate?: number;
+};
+
+export type EvalRunWithResults = EvalRun & {
+  results: Array<{
+    caseId: string;
+    status: "PASS" | "FAIL";
+    sql?: string;
+    failedAssertions?: string[];
+    errorMessage?: string;
+    finalText?: string;
+    durationMs?: number;
+  }>;
+};
+
+export type EvalRunResult = {
+  runId: number;
+  passed: number;
+  failed: number;
+  total: number;
+  passRate: number;
+  cases: Array<{
+    id: string;
+    passed: boolean;
+    failedAssertions?: string[];
+    errorMessage?: string;
+    durationMs?: number;
+  }>;
+};
+
+export type EvalTrendPoint = {
+  date: string;
+  passRate: number;
+  totalRuns: number;
+};
+
+export type EvalThreshold = {
+  domain: string;
+  minPassRate: number;
+};
+
+export type MonitorConfig = {
+  domains: Record<string, {
+    passRateYellow: number;
+    passRateRed: number;
+    consecutiveFailThreshold: number;
+  }>;
+};

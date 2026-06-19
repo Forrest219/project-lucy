@@ -7,6 +7,13 @@ import { readProject, resolveProjectRoot } from "./project";
 import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
+import { registerAgentRoutes } from "./admin/agents.js";
+import { registerTokenRoutes } from "./admin/tokens.js";
+import { registerAuditRoutes } from "./admin/audit.js";
+import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
+import { registerCaseRoutes } from "./eval/cases.js";
+import { registerRunnerRoutes } from "./eval/runner.js";
+import { registerMonitorRoutes } from "./eval/monitor.js";
 
 type ErrorEnvelope = {
   ok: false;
@@ -192,6 +199,14 @@ export function buildServer() {
       data
     };
   });
+
+  registerAgentRoutes(app);
+  registerTokenRoutes(app);
+  registerAuditRoutes(app);
+  registerMcpToolsRoutes(app);
+  registerCaseRoutes(app);
+  registerRunnerRoutes(app);
+  registerMonitorRoutes(app);
 
   return app;
 }

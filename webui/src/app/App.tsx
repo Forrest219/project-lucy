@@ -6,6 +6,15 @@ import { JoinEditor } from "../pages/JoinEditor";
 import { Review } from "../pages/Review";
 import { TableEditor } from "../pages/TableEditor";
 import { WikiEditor } from "../pages/WikiEditor";
+import { AgentList } from "../pages/admin/AgentList";
+import { AgentDetail } from "../pages/admin/AgentDetail";
+import { NewToken } from "../pages/admin/NewToken";
+import { Audit } from "../pages/admin/Audit";
+import { CaseList } from "../pages/eval/CaseList";
+import { CaseEditor } from "../pages/eval/CaseEditor";
+import { RunList } from "../pages/eval/RunList";
+import { RunDetail } from "../pages/eval/RunDetail";
+import { Monitor } from "../pages/eval/Monitor";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +34,42 @@ function breadcrumbItems(pathname: string): string[] {
   }
   if (parts[0] === "review") {
     return ["审阅与校验", "变更审阅"];
+  }
+  if (parts[0] === "eval") {
+    if (parts[1] === "cases" && parts[2] && parts[3]) {
+      return ["质量评测", "Case 管理", parts[2], parts[3]];
+    }
+    if (parts[1] === "cases" && parts[2]) {
+      return ["质量评测", "Case 管理", parts[2]];
+    }
+    if (parts[1] === "cases") {
+      return ["质量评测", "Case 管理"];
+    }
+    if (parts[1] === "runs" && parts[2]) {
+      return ["质量评测", "运行历史", `Run #${parts[2]}`];
+    }
+    if (parts[1] === "runs") {
+      return ["质量评测", "运行历史"];
+    }
+    if (parts[1] === "monitor") {
+      return ["质量评测", "趋势监控"];
+    }
+    return ["质量评测"];
+  }
+  if (parts[0] === "admin") {
+    if (parts[1] === "agents" && parts[2] && parts[3] === "tokens") {
+      return ["访问治理", "Agent 实例", parts[2], "新建 Token"];
+    }
+    if (parts[1] === "agents" && parts[2]) {
+      return ["访问治理", "Agent 实例", parts[2]];
+    }
+    if (parts[1] === "agents") {
+      return ["访问治理", "Agent 实例"];
+    }
+    if (parts[1] === "audit") {
+      return ["访问治理", "访问日志"];
+    }
+    return ["访问治理"];
   }
   return ["KTX WebUI"];
 }
@@ -54,6 +99,17 @@ function AppFrame() {
             <h2 className="pl-nav-section-title">审阅与校验</h2>
             <NavLink to="/review" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>变更审阅</NavLink>
           </section>
+          <section>
+            <h2 className="pl-nav-section-title">质量评测</h2>
+            <NavLink to="/eval/cases" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>Case 管理</NavLink>
+            <NavLink to="/eval/runs" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>运行历史</NavLink>
+            <NavLink to="/eval/monitor" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>趋势监控</NavLink>
+          </section>
+          <section>
+            <h2 className="pl-nav-section-title">访问治理</h2>
+            <NavLink to="/admin/agents" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>Agent 实例</NavLink>
+            <NavLink to="/admin/audit" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>访问日志</NavLink>
+          </section>
         </nav>
       </aside>
 
@@ -72,6 +128,17 @@ function AppFrame() {
           <Route path="/joins/:conn/:schema/:table" element={<JoinEditor />} />
           <Route path="/review" element={<Review />} />
           <Route path="/wiki" element={<WikiEditor />} />
+          <Route path="/admin/agents" element={<AgentList />} />
+          <Route path="/admin/agents/:userId" element={<AgentDetail />} />
+          <Route path="/admin/agents/:userId/tokens/new" element={<NewToken />} />
+          <Route path="/admin/audit" element={<Audit />} />
+          <Route path="/eval/cases" element={<CaseList />} />
+          <Route path="/eval/cases/:domain" element={<CaseList />} />
+          <Route path="/eval/cases/:domain/new" element={<CaseEditor />} />
+          <Route path="/eval/cases/:domain/:caseId" element={<CaseEditor />} />
+          <Route path="/eval/runs" element={<RunList />} />
+          <Route path="/eval/runs/:runId" element={<RunDetail />} />
+          <Route path="/eval/monitor" element={<Monitor />} />
         </Routes>
       </main>
     </div>
