@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Project Lucy eval runner — wraps Claude Code CLI to exercise KTX MCP tools against knowledge/superstore/eval cases.",
+  "description": "Project Lucy eval runner — wraps Claude Code CLI to exercise KTX MCP tools against evals/superstore/eval cases.",
   "engines": {
     "node": ">=22"
   },

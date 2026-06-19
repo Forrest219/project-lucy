@@ -41,7 +41,7 @@ export type WikiPreview = {
 function normalizeKey(key: string): string {
   const decoded = decodeURIComponent(key);
   if (!decoded || decoded.startsWith("/") || path.isAbsolute(decoded)) {
-    throw new ForbiddenPathError("Wiki key must be relative to knowledge/");
+    throw new ForbiddenPathError("Wiki key must be relative to wiki/");
   }
   const normalized = path.posix.normalize(decoded).replaceAll("\\", "/");
   if (
@@ -51,7 +51,7 @@ function normalizeKey(key: string): string {
     normalized.includes("/../") ||
     !normalized.endsWith(".md")
   ) {
-    throw new ForbiddenPathError("Wiki key must be a markdown path under knowledge/");
+    throw new ForbiddenPathError("Wiki key must be a markdown path under wiki/");
   }
   return normalized;
 }

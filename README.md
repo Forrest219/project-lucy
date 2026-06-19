@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-06-18 |
 | 撰写人 | Claude |
 | 委托人 | 待确认 |
-| 基于材料 | AGENTS.md、docs/DEVELOPMENT.md、docs/project-overview.md、ktx.yaml、.mcp.json、lucy-skills/docs/01-spec.md、skills/、knowledge/ |
+| 基于材料 | AGENTS.md、docs/DEVELOPMENT.md、docs/project-overview.md、ktx.yaml、.mcp.json、lucy-skills/docs/01-spec.md、skills/、evals/ |
 | 适用范围 | 项目入口说明，供 AI coding agent 理解仓库定位、目录边界与本地运行入口 |
 | 输出位置 | /Users/zhangxingchen/Projects/project-lucy/README.md |
 
@@ -27,7 +27,7 @@
 
 `project-lucy` 是一个基于 KTX MCP Server 的语义、Skill 与 Wiki 管理平台，旨在为 Claude Code、Codex 等 data agent 提供可维护的上下文、业务知识和数据问答能力。
 
-本仓库关注的不是单一数据源，而是一套可迁移的 agent context 工程：用 `ktx.yaml` 管理 KTX MCP Server 运行配置，用 `semantic-layer/` 管理数据语义，用 `skills/` 承载可复用能力，用 `wiki/` 沉淀业务知识，用 `knowledge/` 做质量门禁。
+本仓库关注的不是单一数据源，而是一套可迁移的 agent context 工程：用 `ktx.yaml` 管理 KTX MCP Server 运行配置，用 `semantic-layer/` 管理数据语义，用 `skills/` 承载可复用能力，用 `wiki/` 沉淀业务知识，用 `evals/` 做质量门禁。
 
 ## 核心目录
 
@@ -39,7 +39,7 @@
 | `lucy-skills/` | 独立 MCP server，用于将 `skills/` 以标准 MCP Resource 形式暴露给 data agent（P1.5 立项中，spec 见 `lucy-skills/docs/01-spec.md`，尚未实现）。 |
 | `.ktx/prompts/` | KTX 运行时 prompt 目录，用于承载产品运行时上下文。 |
 | `wiki/` | 业务知识库目录（`global/`），沉淀跨数据表、跨场景的解释性知识（折扣策略、利润规则、退货语义）。 |
-| `knowledge/` | Eval Case 目录（`superstore/eval/superstore-eval-cases.yaml`），7 条覆盖折扣 / 订单数 / 利润率 / is_deleted 的发布前门禁测试。 |
+| `evals/` | Eval Case 目录（`superstore/eval/superstore-eval-cases.yaml`），7 条覆盖折扣 / 订单数 / 利润率 / is_deleted 的发布前门禁测试。 |
 | `webui/` | 治理工作台（React 19 + Vite + Fastify），提供 Catalog / TableEditor / JoinEditor / WikiEditor / Review 五个页面，M0–M5 全部完成。 |
 | `raw-sources/` | 数据源扫描与抽取产生的原始材料，作为语义层建设和回溯的输入。 |
 | `docs/` | 开发治理与项目概览。`docs/DEVELOPMENT.md` 是开发规则权威源；`docs/project-overview.md` 是全组件索引。 |
@@ -57,7 +57,7 @@
 |------|----------|------|
 | `semantic-layer/` | `sl_read_source` / `sl_query` | 语义层定义，含扫描生成的 `_schema/` 和手工 overlay YAML |
 | `wiki/` | `wiki_search` / `wiki_read` | 业务知识库，`wiki/global/` 为跨场景业务知识 |
-| `knowledge/` | `memory_ingest`（写入） | 内存索引与 eval 门禁用例 |
+| `evals/` | `memory_ingest`（写入） | 内存索引与 eval 门禁用例 |
 
 #### 维护规则
 
@@ -66,7 +66,7 @@
 | `semantic-layer/mysql-aliyun/_schema/` | **否**，`ktx ingest` 自动生成，手动改会被覆盖 | 跑 `ktx ingest mysql-aliyun` 后自动更新 |
 | `semantic-layer/mysql-aliyun/superstore_orders.yaml` | **是**，手工 overlay | 数据库表结构变化、measures / joins / segments 定义调整时 |
 | `wiki/global/` | **是**，全部手写 | 业务口径变化、发现新 Gotcha、折扣 / 利润 / 退货规则更新时 |
-| `knowledge/superstore/eval/` | **是**，手写 eval 用例 | 扩充测试覆盖、发现新边界场景、发布前门禁不足时 |
+| `evals/superstore/eval/` | **是**，手写 eval 用例 | 扩充测试覆盖、发现新边界场景、发布前门禁不足时 |
 
 ### 运行时（daemon 维护，不直接对外暴露）
 

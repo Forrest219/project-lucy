@@ -11,12 +11,12 @@ metadata:
     - docs/eval-quiz-conventions.md v1.3
     - superstore-eval-cases.yaml v1.2 legacy migration
   scope: Superstore 数据集 agent eval cases，供 CI gate / regression Runner 使用
-  output_path: knowledge/superstore/eval/superstore-eval-cases.yaml
+  output_path: evals/superstore/eval/superstore-eval-cases.yaml
   snapshot_date: 2026-06-18
   snapshot_batch: superstore_20260617_120212
   snapshot_rows: 10194
   data_source: semantic_layer
-  linked_quiz: knowledge/superstore/superstore-quiz-cases.html (v1.1)
+  linked_quiz: evals/superstore/superstore-quiz-cases.html (v1.1)
   legacy_migration:
     from_version: v1.2
     legacy_fields_removed: true

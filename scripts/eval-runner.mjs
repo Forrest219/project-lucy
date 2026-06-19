@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..');
 
-const DEFAULT_CASES_PATH = 'knowledge/superstore/eval/superstore-eval-cases.yaml';
+const DEFAULT_CASES_PATH = 'evals/superstore/eval/superstore-eval-cases.yaml';
 const EVAL_MCP_PATH = process.env.EVAL_MCP_CONFIG || '/tmp/eval-mcp.json';
 const KTX_MCP_URL = process.env.EVAL_KTX_MCP_URL || 'http://localhost:7878/mcp';
 

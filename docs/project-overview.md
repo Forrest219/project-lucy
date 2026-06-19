@@ -68,7 +68,7 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Layer 4 · 验证层（发布门禁）                                         │
 │                                                                      │
-│  knowledge/superstore/eval/superstore-eval-cases.yaml                     │
+│  evals/superstore/eval/superstore-eval-cases.yaml                     │
 │  · 7 条 Eval Case（折扣 / 订单数 / 利润率 / is_deleted）             │
 │  · forbidden_sql_pattern 防止换一种方式写错                           │
 │  · snapshot_date 锚定快照，避免 live data 漂移                        │
@@ -84,7 +84,7 @@
 │  Catalog      · 浏览所有表、字段、measure、join、freshness            │
 │  TableEditor  · 编辑 grain/measures/segments/joins，保存前 diff       │
 │  JoinEditor   · 管理跨表关系，候选列表来自 KTX 关系检测               │
-│  WikiEditor   · 编辑 knowledge/ 下的 Reference Docs                       │
+│  WikiEditor   · 编辑 evals/ 下的 Reference Docs                       │
 │  Review       · 提交前人工审核语义变更                                │
 │                                                                      │
 │  技术栈：React 19 + Vite 8 + TypeScript 6 + Fastify 5               │
@@ -132,7 +132,7 @@ project-lucy/
 │   └── reviewer/
 │       └── SKILL.md                   ← 9 项高风险审查清单
 │
-├── knowledge/
+├── evals/
 │   ├── global/                        ← 跨领域公共文档
 │   └── superstore/
 │       └── eval/
@@ -237,13 +237,13 @@ ktx wiki search <keyword> # 检索 wiki / reference docs
 | Catalog | `/` | 浏览所有 schema / 表 / 字段 / measure，显示完整度和 eval 覆盖率 |
 | TableEditor | `/table/:id` | 编辑 grain / measures / segments，保存前显示 YAML diff，保存后触发 validate |
 | JoinEditor | `/joins/:table` | 管理跨表关系，候选列表来自 KTX 关系检测结果 |
-| WikiEditor | `/knowledge/:page` | 编辑 `knowledge/` 下的 Reference Docs（支持 frontmatter + Markdown） |
+| WikiEditor | `/evals/:page` | 编辑 `evals/` 下的 Reference Docs（支持 frontmatter + Markdown） |
 | Review | `/review` | 人工审核待提交的语义变更，支持 diff 预览 |
 
 **文件安全网关**（`server/fs-safe.ts`）：
 
 ```
-ALLOW:  semantic-layer/  knowledge/  .ktx-ui/
+ALLOW:  semantic-layer/  evals/  .ktx-ui/
 DENY:   .ktx/secrets/  raw-sources/  .git/
 ```
 
@@ -264,7 +264,7 @@ npm run server     # 启动 Fastify API（3001 端口）
 
 **职责**：证明精准率"仍然"为真，而不是一次性达标。Eval 是 Skill / 语义变更的发布前门禁。
 
-**当前 Eval Cases**（`knowledge/superstore/eval/superstore-eval-cases.yaml`）：
+**当前 Eval Cases**（`evals/superstore/eval/superstore-eval-cases.yaml`）：
 
 | Case ID | 测试重点 | 关键 forbidden_pattern |
 |---------|---------|----------------------|
@@ -331,7 +331,7 @@ cd project-lucy/webui && npm run dev && npm run server
 ### 场景 C：新增 Eval Case（新错误出现后）
 
 ```yaml
-# 追加到 knowledge/superstore/eval/superstore-eval-cases.yaml
+# 追加到 evals/superstore/eval/superstore-eval-cases.yaml
 - id: superstore-new-001
   question: <用户问的问题>
   forbidden_sql_pattern:

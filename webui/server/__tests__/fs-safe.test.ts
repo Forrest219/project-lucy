@@ -9,12 +9,13 @@ let projectRoot: string;
 async function makeProjectRoot() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-"));
   await mkdir(path.join(root, "semantic-layer"), { recursive: true });
-  await mkdir(path.join(root, "knowledge"), { recursive: true });
+  await mkdir(path.join(root, "evals"), { recursive: true });
   await mkdir(path.join(root, "skills"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
   await mkdir(path.join(root, ".ktx", "secrets"), { recursive: true });
   await mkdir(path.join(root, "raw-sources"), { recursive: true });
   await mkdir(path.join(root, ".git"), { recursive: true });
+  await mkdir(path.join(root, "webui", "config"), { recursive: true });
   return root;
 }
 
@@ -31,16 +32,18 @@ afterEach(async () => {
 });
 
 describe("fs-safe writable paths", () => {
-  it("allows writes under semantic-layer, knowledge, skills, and .ktx-ui", async () => {
+  it("allows writes under semantic-layer, evals, skills, .ktx-ui, and webui/config", async () => {
     await safeWrite(projectRoot, "semantic-layer/x.yaml", "a: 1\n");
-    await safeWrite(projectRoot, "knowledge/a.md", "# A\n");
+    await safeWrite(projectRoot, "evals/a.md", "# A\n");
     await safeWrite(projectRoot, "skills/warehouse/SKILL.md", "# S\n");
     await safeWrite(projectRoot, ".ktx-ui/b.json", "{}\n");
+    await safeWrite(projectRoot, "webui/config/access.yaml", "users: []\n");
 
     await expect(readFile(path.join(projectRoot, "semantic-layer/x.yaml"), "utf8")).resolves.toBe("a: 1\n");
-    await expect(readFile(path.join(projectRoot, "knowledge/a.md"), "utf8")).resolves.toBe("# A\n");
+    await expect(readFile(path.join(projectRoot, "evals/a.md"), "utf8")).resolves.toBe("# A\n");
     await expect(readFile(path.join(projectRoot, "skills/warehouse/SKILL.md"), "utf8")).resolves.toBe("# S\n");
     await expect(readFile(path.join(projectRoot, ".ktx-ui/b.json"), "utf8")).resolves.toBe("{}\n");
+    await expect(readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8")).resolves.toBe("users: []\n");
   });
 
   it("rejects denied directories before writing", async () => {
@@ -66,8 +69,8 @@ describe("fs-safe readable paths", () => {
   });
 
   it("rejects symlink reads that resolve into .ktx/secrets", async () => {
-    await symlink(path.join(projectRoot, ".ktx", "secrets"), path.join(projectRoot, "knowledge", "secret-link"));
+    await symlink(path.join(projectRoot, ".ktx", "secrets"), path.join(projectRoot, "evals", "secret-link"));
 
-    await expectForbidden(() => assertReadable(projectRoot, "knowledge/secret-link/p"));
+    await expectForbidden(() => assertReadable(projectRoot, "evals/secret-link/p"));
   });
 });
