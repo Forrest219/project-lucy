@@ -43,7 +43,7 @@ Step 3  以上均不能覆盖时，才允许 raw SQL
 
 ## 表路由（关键）
 
-本项目数据问答仅启用 **`dataforai`** 超市 domain。
+本项目数据问答启用 **`dataforai`** 下的超市样例 domain 与 KX 财务报表 domain。
 
 | 分析意图 | 路由 |
 |---|---|
@@ -51,8 +51,14 @@ Step 3  以上均不能覆盖时，才允许 raw SQL
 | 月度 / 季度 / 年度趋势 | `dataforai.superstore_orders` 按 `order_date` 聚合（如 `DATE_FORMAT(order_date,'%Y-%m')`），不要依赖外部汇总表 |
 | 退货关联 | `dataforai.superstore_returns` JOIN `superstore_orders` ON `order_id`（join 已在 sl yaml 中声明） |
 | 区域经理 | `dataforai.superstore_people`（按 region 维表） |
+| KX 财报金额明细（公司、期间、报表项目、金额） | `dataforai.kx_fact_financial_amount` JOIN `kx_dim_company` / `kx_dim_financial_item` |
+| KX 公司维度 | `dataforai.kx_dim_company`（按 `company_id` 关联事实表） |
+| KX 财报项目维度 | `dataforai.kx_dim_financial_item`（按 `item_id` 关联事实表） |
+| KX 资产负债表明细视图 | `dataforai.kx_vw_balance_sheet_detail` |
+| KX 现金流量表明细视图 | `dataforai.kx_vw_cash_flow_statement_detail` |
+| KX 利润表明细视图 | `dataforai.kx_vw_income_statement_detail` |
 
-所有查询默认加 `WHERE is_deleted = 0`；查 returns 时再加 `returned = '是'`。
+超市表查询默认加 `WHERE is_deleted = 0`；查 returns 时再加 `returned = '是'`。KX 财务表不含 `is_deleted`，不要套用超市软删除过滤。
 
 ---
 

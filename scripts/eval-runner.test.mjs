@@ -3,12 +3,14 @@
 // Run with: node scripts/eval-runner.test.mjs (no test framework; asserts via process.exit).
 
 import {
+  parseArgs,
   parseClaudeOutput,
   checkSqlPatterns,
   checkSqlAssertions,
   checkToolAssertions,
   checkResultMatch,
   checkResultAssertions,
+  chooseBestCandidate,
   checkTextResponse,
   normalizeText,
   composeQuestion,
@@ -29,6 +31,28 @@ function assert(name, cond, detail) {
     fail++;
     failures.push({ name, detail });
   }
+}
+
+{
+  const parsed = parseArgs(['node', 'eval-runner', '--retries', '2', '--case', 'kx-cashflow-001']);
+  assert('parseArgs supports --retries', parsed.retries === 2 && parsed.cases[0] === 'kx-cashflow-001', JSON.stringify(parsed));
+}
+{
+  const oldRetries = process.env.EVAL_RETRIES;
+  process.env.EVAL_RETRIES = '3';
+  const parsed = parseArgs(['node', 'eval-runner']);
+  if (oldRetries === undefined) delete process.env.EVAL_RETRIES;
+  else process.env.EVAL_RETRIES = oldRetries;
+  assert('parseArgs supports EVAL_RETRIES default', parsed.retries === 3, JSON.stringify(parsed));
+}
+{
+  let threw = false;
+  try {
+    parseArgs(['node', 'eval-runner', '--retries', '-1']);
+  } catch {
+    threw = true;
+  }
+  assert('parseArgs rejects negative retries', threw, 'expected parseArgs to throw');
 }
 
 {
@@ -306,6 +330,50 @@ function assert(name, cond, detail) {
     }]
   );
   assert('v1.4 dataframe assertions choose matching duplicate-key row', r.ok, JSON.stringify(r));
+}
+{
+  const selected = chooseBestCandidate(
+    {
+      result_assertions: [{
+        value_type: 'dataframe',
+        data: {
+          rows: [
+            { source_name: 'kx_vw_balance_sheet_detail', row_count: 310 },
+            { source_name: 'kx_vw_cash_flow_statement_detail', row_count: 125 },
+          ],
+        },
+        compare_mode: 'unordered_rows',
+        key_columns: ['source_name'],
+        check_row_count: true,
+      }],
+    },
+    {
+      finalText: '',
+      toolCalls: [],
+      sql: 'SELECT one source',
+      result: { source_name: 'kx_vw_cash_flow_statement_detail', row_count: 125 },
+      resultRaw: {},
+      toolCandidates: [
+        {
+          toolName: 'mcp__ktx__sql_execution',
+          sql: 'SELECT balance',
+          result: { source_name: 'kx_vw_balance_sheet_detail', row_count: 310 },
+          resultRaw: {},
+        },
+        {
+          toolName: 'mcp__ktx__sql_execution',
+          sql: 'SELECT cashflow',
+          result: { source_name: 'kx_vw_cash_flow_statement_detail', row_count: 125 },
+          resultRaw: {},
+        },
+      ],
+    }
+  );
+  assert(
+    'chooseBestCandidate can merge rows across multiple tool candidates',
+    selected.ok && selected.candidate.toolName === 'merged_tool_candidates',
+    JSON.stringify(selected)
+  );
 }
 {
   const r = checkResultAssertions(

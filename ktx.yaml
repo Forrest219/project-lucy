@@ -2,15 +2,21 @@ connections:
   mysql-aliyun:
     driver: mysql
     enabled_tables:
-      # 本项目仅保留 dataforai 超市 domain。
+      # dataforai 当前启用超市样例与 KX 财务报表 source。
       - dataforai.superstore_orders
       - dataforai.superstore_returns
       - dataforai.superstore_people
+      - dataforai.kx_dim_company
+      - dataforai.kx_dim_financial_item
+      - dataforai.kx_fact_financial_amount
+      - dataforai.kx_vw_balance_sheet_detail
+      - dataforai.kx_vw_cash_flow_statement_detail
+      - dataforai.kx_vw_income_statement_detail
     host: rm-bp1t0ie3sj4g7561hpo.mysql.rds.aliyuncs.com
     port: 3306
     database: dataforai
     username: bi_zy
-    password: file:/Users/zhangxingchen/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
+    password: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
     # NOTE: `schemas` 控制 scan 范围；`enabled_tables`（上方）控制问答可见范围。
     schemas:
       - dataforai

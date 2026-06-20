@@ -18,7 +18,13 @@ Step 3  上述均不能覆盖时，才允许 raw SQL，必须标注假设
 超市零售分析 → `dataforai.superstore_orders`（10,194 行）
 退货分析 → `dataforai.superstore_returns` JOIN `dataforai.superstore_orders`
 区域经理 → `dataforai.superstore_people`
-所有查询默认加 `WHERE is_deleted = 0`。
+KX 财报金额明细 → `dataforai.kx_fact_financial_amount` JOIN `kx_dim_company` / `kx_dim_financial_item`
+KX 公司维度 → `dataforai.kx_dim_company`
+KX 财报项目维度 → `dataforai.kx_dim_financial_item`
+KX 资产负债表明细视图 → `dataforai.kx_vw_balance_sheet_detail`
+KX 现金流量表明细视图 → `dataforai.kx_vw_cash_flow_statement_detail`
+KX 利润表明细视图 → `dataforai.kx_vw_income_statement_detail`
+超市表查询默认加 `WHERE is_deleted = 0`。KX 财务表不含 `is_deleted`，不要套用超市软删除过滤。
 
 ## 指标口径（强制）
 

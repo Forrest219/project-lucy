@@ -17,6 +17,12 @@ connections:
       - dataforai.superstore_orders
       - dataforai.superstore_returns
       - dataforai.superstore_people
+      - dataforai.kx_dim_company
+      - dataforai.kx_dim_financial_item
+      - dataforai.kx_fact_financial_amount
+      - dataforai.kx_vw_balance_sheet_detail
+      - dataforai.kx_vw_cash_flow_statement_detail
+      - dataforai.kx_vw_income_statement_detail
     host: <CHANGE-ME-MYSQL-HOST>
     port: 3306
     database: dataforai

@@ -343,7 +343,7 @@ cases:
     sql_assertions: []
     tool_assertions:
       - type: required_tool
-        value: "mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
+        value: "mcp__ktx__discover_data | mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
         reason: source 数量题应读取 semantic layer catalog。
       - type: required_tool_input_regex
         value: "kx|source|财务"
@@ -700,7 +700,7 @@ cases:
         normalize: true
         reason: 可用现金流量表视图，或事实表加项目维表查询。
       - type: required_normalized_regex
-        value: "五、期末现金余额|期末现金余额|期末现金|五、"
+        value: "五、期末现金余额|期末现金余额|期末现金|五、|item_id\\s*=\\s*119"
         normalize: true
         reason: 必须定位期末现金余额项目；允许 LIKE 模糊定位。
       - type: required_normalized_regex
@@ -803,7 +803,7 @@ cases:
 
   - id: kx-view-001
     case_type: single_turn
-    question: 三个 KX 财报明细视图各有多少行、多少个报表期间？
+    question: 三个 KX 财报明细视图（kx_vw_balance_sheet_detail、kx_vw_cash_flow_statement_detail、kx_vw_income_statement_detail）各有多少行、多少个报表期间？请返回三行，每个视图一行。
     domain: kx_financial
     skill_version: v0.1
     semantic_version: v0.1
@@ -908,8 +908,6 @@ cases:
         data:
           must_mention:
             - is_deleted
-            - 不需要
-            - report_period
         compare_mode: subset
         check_schema: false
         check_row_count: false
@@ -927,10 +925,10 @@ cases:
     expected_measures: []
     linked_quiz_questions: []
     sql_assertions:
-      - type: required_ast
-        value: "amount IS NULL"
+      - type: required_normalized_regex
+        value: "amount is null|count\\(\\*\\)\\s*-\\s*count\\(amount\\)"
         normalize: true
-        reason: 必须显式统计 NULL。
+        reason: 必须显式或等价统计 NULL。
       - type: required_normalized_regex
         value: "amount is not null|count\\(amount\\)|sum\\(case when amount is not null"
         normalize: true

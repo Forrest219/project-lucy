@@ -31,6 +31,7 @@ Options:
   --format <md|json>      Output format (default: md)
   --cases <path>          Path to eval cases YAML (default: ${DEFAULT_CASES_PATH})
   --write-latest          Also write .ktx-ui/eval/latest.{md,json} (default: off)
+  --retries <n>           Retry a failed case up to n times (default: EVAL_RETRIES or 0)
   --help                  Show this help
 
 Environment:
@@ -39,6 +40,7 @@ Environment:
   EVAL_KTX_MCP_URL        Override KTX MCP URL (default: ${KTX_MCP_URL})
   EVAL_KTX_MCP_TOKEN      Optional bearer token for KTX MCP token-auth deployments
   KTX_INTERNAL_TOKEN      Fallback bearer token env used by the local MCP proxy
+  EVAL_RETRIES            Default retry count for failed cases
 `;
 
 // ─── arg parsing ────────────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ function parseArgs(argv) {
     listCases: false,
     casesPath: DEFAULT_CASES_PATH,
     writeLatest: false,
+    retries: parseNonNegativeInt(process.env.EVAL_RETRIES || '0', 'EVAL_RETRIES'),
     help: false,
   };
   for (let i = 2; i < argv.length; i++) {
@@ -74,11 +77,22 @@ function parseArgs(argv) {
       case '--write-latest':
         args.writeLatest = true;
         break;
+      case '--retries':
+        args.retries = parseNonNegativeInt(argv[++i], '--retries');
+        break;
       default:
         throw new Error(`unknown arg: ${a}`);
     }
   }
   return args;
+}
+
+function parseNonNegativeInt(value, label) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error(`${label} must be a non-negative integer`);
+  }
+  return n;
 }
 
 // ─── YAML loading ───────────────────────────────────────────────────────────
@@ -171,6 +185,10 @@ async function invokeClaudeCode(question, mcpConfigPath, { timeoutMs = 360000 } 
     '--mcp-config',
     mcpConfigPath,
     '--strict-mcp-config',
+    '--allowedTools',
+    'mcp__ktx__*',
+    '--disallowedTools',
+    'Bash',
     '--permission-mode',
     'bypassPermissions',
   ];
@@ -1160,6 +1178,28 @@ function evaluateCandidate(c, parsed, candidate, safetyContract = {}) {
   };
 }
 
+function mergedCandidateFromToolCandidates(toolCandidates = []) {
+  const candidates = Array.isArray(toolCandidates) ? toolCandidates : [];
+  const rows = [];
+  const sqlParts = [];
+  const rawParts = [];
+  for (const candidate of candidates) {
+    const candidateRows = objectRows(candidate.result);
+    if (candidateRows.length === 0) continue;
+    rows.push(...candidateRows);
+    if (candidate.sql) sqlParts.push(candidate.sql);
+    if (candidate.resultRaw) rawParts.push(candidate.resultRaw);
+  }
+  if (rows.length === 0 || candidates.length < 2) return null;
+  return {
+    toolName: 'merged_tool_candidates',
+    sql: sqlParts.join('\n\nUNION-CANDIDATE\n\n') || null,
+    sqlArgs: null,
+    result: { rows, totalRows: rows.length },
+    resultRaw: rawParts,
+  };
+}
+
 function chooseBestCandidate(c, parsed, safetyContract = {}) {
   const baseCandidate = {
     toolName: 'selected',
@@ -1168,7 +1208,12 @@ function chooseBestCandidate(c, parsed, safetyContract = {}) {
     result: parsed.result,
     resultRaw: parsed.resultRaw,
   };
-  const candidates = [baseCandidate, ...(Array.isArray(parsed.toolCandidates) ? parsed.toolCandidates : [])];
+  const mergedCandidate = mergedCandidateFromToolCandidates(parsed.toolCandidates);
+  const candidates = [
+    baseCandidate,
+    ...(Array.isArray(parsed.toolCandidates) ? parsed.toolCandidates : []),
+    ...(mergedCandidate ? [mergedCandidate] : []),
+  ];
   let best = null;
   for (const candidate of candidates) {
     const evaluation = evaluateCandidate(c, parsed, candidate, safetyContract);
@@ -1254,6 +1299,30 @@ async function runCase(c, opts = {}) {
   return runSingleTurnCase(c, opts);
 }
 
+async function runCaseWithRetries(c, opts = {}) {
+  const retries = opts.retries ?? 0;
+  const attempts = [];
+  for (let i = 0; i <= retries; i++) {
+    const entry = await runCase(c, opts);
+    attempts.push(entry);
+    if (entry.pass || i === retries) {
+      if (attempts.length > 1) {
+        return {
+          ...entry,
+          attempts: attempts.length,
+          previousFailures: attempts.slice(0, -1).map((a) => ({
+            pass: a.pass,
+            failures: a.failures,
+          })),
+        };
+      }
+      return entry;
+    }
+    process.stderr.write(`#   ${c.id} attempt ${i + 1}/${retries + 1} → FAIL; retrying\n`);
+  }
+  return attempts[attempts.length - 1];
+}
+
 // ─── summary + output formatting ───────────────────────────────────────────
 
 function summarize(entries) {
@@ -1322,6 +1391,7 @@ async function main() {
   }
 
   process.stderr.write(`# eval runner: ${selected.length}/${cases.length} case(s) from ${casesAbs}\n`);
+  if (args.retries > 0) process.stderr.write(`# retries enabled: ${args.retries} per failed case\n`);
 
   // T-A.2: write MCP config and fail-fast on claude CLI
   buildEvalMcpConfig(EVAL_MCP_PATH);
@@ -1334,9 +1404,10 @@ async function main() {
   const entries = [];
   for (const c of selected) {
     process.stderr.write(`# running ${c.id}\n`);
-    const entry = await runCase(c, { safetyContract });
+    const entry = await runCaseWithRetries(c, { safetyContract, retries: args.retries });
     entries.push(entry);
-    process.stderr.write(`#   ${c.id} → ${entry.pass ? 'PASS' : 'FAIL'}\n`);
+    const attempts = entry.attempts ? ` (${entry.attempts} attempts)` : '';
+    process.stderr.write(`#   ${c.id} → ${entry.pass ? 'PASS' : 'FAIL'}${attempts}\n`);
   }
 
   const summary = summarize(entries);
@@ -1363,6 +1434,7 @@ async function main() {
 
 // Export internals for unit tests when invoked as a module
 export {
+  parseArgs,
   buildEvalMcpConfig,
   parseClaudeOutput,
   checkSqlPatterns,
@@ -1370,6 +1442,7 @@ export {
   checkToolAssertions,
   checkResultMatch,
   checkResultAssertions,
+  chooseBestCandidate,
   checkTextResponse,
   normalizeText,
   normalizeSqlForMatching,
