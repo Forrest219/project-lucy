@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPut } from "../../lib/apiClient";
@@ -19,7 +19,7 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
 
   if (points.length === 0) {
     return (
-      <div className="flex items-center justify-center h-48 border border-border rounded text-fg-muted text-sm">
+      <div className="flex h-48 items-center justify-center rounded-md border border-border-default text-sm text-fg-muted">
         暂无数据
       </div>
     );
@@ -61,7 +61,7 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
             x2={W - PAD.right}
             y1={yPos(t)}
             y2={yPos(t)}
-            stroke="var(--color-border, #e5e7eb)"
+            stroke="var(--color-border-default)"
             strokeDasharray="4 4"
             strokeWidth={0.5}
           />
@@ -70,7 +70,7 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
             y={yPos(t) + 4}
             fontSize={10}
             textAnchor="end"
-            fill="var(--color-fg-muted, #6b7280)"
+            fill="var(--color-fg-muted)"
           >
             {Math.round(t * 100)}%
           </text>
@@ -81,18 +81,18 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
       <line
         x1={PAD.left} x2={W - PAD.right}
         y1={yellowY} y2={yellowY}
-        stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="6 3"
+        stroke="var(--color-warning)" strokeWidth={1.5} strokeDasharray="6 3"
       />
-      <text x={W - PAD.right + 3} y={Number(yellowY) + 4} fontSize={9} fill="#f59e0b">黄线</text>
+      <text x={W - PAD.right + 3} y={Number(yellowY) + 4} fontSize={9} fill="var(--color-warning)">黄线</text>
       <line
         x1={PAD.left} x2={W - PAD.right}
         y1={redY} y2={redY}
-        stroke="#ef4444" strokeWidth={1.5} strokeDasharray="6 3"
+        stroke="var(--color-danger)" strokeWidth={1.5} strokeDasharray="6 3"
       />
-      <text x={W - PAD.right + 3} y={Number(redY) + 4} fontSize={9} fill="#ef4444">红线</text>
+      <text x={W - PAD.right + 3} y={Number(redY) + 4} fontSize={9} fill="var(--color-danger)">红线</text>
 
       {/* Pass rate line */}
-      <path d={pathD} fill="none" stroke="#3b82f6" strokeWidth={2} />
+      <path d={pathD} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
 
       {/* Data points */}
       {points.map((p) => (
@@ -101,7 +101,7 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
           cx={xPos(p.date)}
           cy={yPos(p.passRate)}
           r={3}
-          fill="#3b82f6"
+          fill="var(--color-accent)"
         >
           <title>{p.date}: {Math.round(p.passRate * 100)}% ({p.totalRuns} runs)</title>
         </circle>
@@ -117,13 +117,35 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
             y={H - PAD.bottom + 15}
             fontSize={9}
             textAnchor="middle"
-            fill="var(--color-fg-muted, #6b7280)"
+            fill="var(--color-fg-muted)"
           >
             {p.date.slice(5)}
           </text>
         ))}
     </svg>
   );
+}
+
+function pct(value: number | undefined) {
+  return typeof value === "number" ? `${Math.round(value * 100)}%` : "-";
+}
+
+function MetricCard({ label, value, hint, tone = "default" }: { label: string; value: string | number; hint: string; tone?: "default" | "warning" | "danger" | "success" }) {
+  return (
+    <div className={`pl-metric-card pl-metric-card--${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
+    </div>
+  );
+}
+
+function clampNumber(rawValue: string, min: number, max: number): number | null {
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.min(max, Math.max(min, parsed));
 }
 
 export function Monitor() {
@@ -164,6 +186,7 @@ export function Monitor() {
 
   const [configEdit, setConfigEdit] = useState<MonitorConfig | null>(null);
   const currentConfig = configEdit ?? configData?.config ?? { domains: {} };
+  const invalidThresholdConfig = Object.values(currentConfig.domains).some((item) => item.passRateYellow <= item.passRateRed);
 
   const saveConfigMutation = useMutation({
     mutationFn: () => apiPut<unknown>("/api/eval/monitor/config", { config: currentConfig }),
@@ -171,12 +194,16 @@ export function Monitor() {
       toast.success("阈值配置已保存");
       setConfigEdit(null);
       void qc.invalidateQueries({ queryKey: ["eval", "monitor", "config"] });
+      void qc.invalidateQueries({ queryKey: ["eval", "monitor"] });
     },
     onError: (err) => toast.error(`保存失败：${(err as Error).message}`)
   });
 
-  const points = trendData?.points ?? [];
-  const thresholds = trendData?.thresholds ?? { yellow: 0.9, red: 0.8 };
+  const points = useMemo(() => [...(trendData?.points ?? [])].sort((a, b) => a.date.localeCompare(b.date)), [trendData?.points]);
+  const activeDomainConfig = activeDomain ? currentConfig.domains[activeDomain] : undefined;
+  const thresholds = activeDomainConfig
+    ? { yellow: activeDomainConfig.passRateYellow, red: activeDomainConfig.passRateRed }
+    : trendData?.thresholds ?? { yellow: 0.9, red: 0.8 };
   const topFails = topFailData?.items ?? [];
   const driftItems = driftData?.items ?? [];
   const driftTotal = driftItems.reduce((sum, item) => sum + item.count, 0);
@@ -185,56 +212,89 @@ export function Monitor() {
   const lastPoint = points[points.length - 1];
   const showAlert = lastPoint && lastPoint.passRate < thresholds.red;
   const showWarning = lastPoint && !showAlert && lastPoint.passRate < thresholds.yellow;
+  const statusTone = showAlert ? "danger" : showWarning ? "warning" : lastPoint ? "success" : "default";
+  const statusText = showAlert ? "红线" : showWarning ? "黄线" : lastPoint ? "正常" : "无数据";
 
   return (
-    <div className="grid gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">趋势监控</h1>
-        <p className="text-sm text-fg-muted mt-1">查看 eval 质量趋势，配置告警阈值。</p>
-      </div>
-
-      {/* Alert banner */}
-      {showAlert && (
-        <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
-          当前 {activeDomain} 通过率 {Math.round(lastPoint.passRate * 100)}%，已跌破红线（{Math.round(thresholds.red * 100)}%）
+    <div className="pl-page-stack">
+      <div className="pl-section-heading">
+        <div>
+          <p className="pl-eyebrow">质量评测</p>
+          <h1 className="text-xl font-semibold">趋势监控</h1>
+          <p className="pl-page-intro">查看 eval 质量趋势、失败集中度与 drift 分布。</p>
         </div>
-      )}
-      {showWarning && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-700">
-          当前 {activeDomain} 通过率 {Math.round(lastPoint.passRate * 100)}%，已低于黄线（{Math.round(thresholds.yellow * 100)}%）
+        <div className="pl-monitor-controls">
+          <label>
+            <span>Domain</span>
+            <select className="pl-input" value={activeDomain} onChange={(e) => setDomain(e.target.value)}>
+              {domains.map((d) => <option key={d.domain} value={d.domain}>{d.domain}</option>)}
+            </select>
+          </label>
+          <div className="pl-segmented-control" role="tablist" aria-label="时间窗口">
+            {[7, 30, 90].map((value) => (
+              <button
+                aria-selected={days === value}
+                className={days === value ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                key={value}
+                onClick={() => setDays(value)}
+                role="tab"
+                type="button"
+              >
+                {value}d
+              </button>
+            ))}
+          </div>
+          <button
+            className="pl-btn pl-btn--secondary"
+            onClick={() => void qc.invalidateQueries({ queryKey: ["eval", "monitor"] })}
+            type="button"
+          >
+            刷新
+          </button>
         </div>
-      )}
-
-      {/* Controls */}
-      <div className="flex gap-3 flex-wrap">
-        <select className="pl-input w-40" value={domain} onChange={(e) => setDomain(e.target.value)}>
-          {domains.map((d) => <option key={d.domain} value={d.domain}>{d.domain}</option>)}
-        </select>
-        <select className="pl-input w-24" value={days} onChange={(e) => setDays(parseInt(e.target.value, 10))}>
-          <option value={7}>7 天</option>
-          <option value={14}>14 天</option>
-          <option value={30}>30 天</option>
-          <option value={90}>90 天</option>
-        </select>
       </div>
 
-      {/* Trend chart */}
-      <div className="border border-border rounded p-4">
-        <h2 className="font-medium text-sm mb-3">通过率趋势（近 {days} 天）</h2>
-        {loadingTrend ? (
-          <div className="pl-notice">加载中…</div>
-        ) : (
-          <TrendChart points={points} thresholds={thresholds} />
-        )}
+      <div className="pl-metric-grid">
+        <MetricCard label="最新通过率" value={pct(lastPoint?.passRate)} hint={lastPoint?.date ?? "暂无趋势数据"} tone={statusTone} />
+        <MetricCard label="最近 run" value={lastPoint?.totalRuns ?? 0} hint={`近 ${days} 天最后统计点`} />
+        <MetricCard label="失败 case" value={topFails.length} hint={topFails.length > 0 ? "见 Top failures" : "暂无失败集中项"} tone={topFails.length > 0 ? "warning" : "success"} />
+        <MetricCard label="红线状态" value={statusText} hint={`红线 ${pct(thresholds.red)} / 黄线 ${pct(thresholds.yellow)}`} tone={statusTone} />
       </div>
 
-      {/* Top failures */}
-      {topFails.length > 0 && (
-        <div className="border border-border rounded p-4">
-          <h2 className="font-medium text-sm mb-3">失败 Top-{topFails.length}（近 {days} 天）</h2>
-          <table className="w-full text-sm">
+      <div className="pl-monitor-grid">
+        <section className="pl-panel pl-monitor-trend">
+          <h2 className="pl-panel-title">通过率趋势（近 {days} 天）</h2>
+          {loadingTrend ? <div className="pl-notice">加载中...</div> : <TrendChart points={points} thresholds={thresholds} />}
+        </section>
+
+        <section className="pl-panel">
+          <h2 className="pl-panel-title">Drift 分布</h2>
+          {driftItems.length === 0 ? (
+            <div className="pl-empty-state">暂无 drift 数据</div>
+          ) : (
+            <div className="grid gap-2">
+              {driftItems.map((item) => {
+                const percent = driftTotal > 0 ? (item.count / driftTotal) * 100 : 0;
+                return (
+                  <div key={item.drift} className="pl-distribution-row">
+                    <span>{item.drift}</span>
+                    <div><i style={{ width: `${percent}%` }} /></div>
+                    <strong>{item.count}</strong>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="pl-panel">
+          <h2 className="pl-panel-title">失败 Top-{topFails.length}</h2>
+          {topFails.length === 0 ? (
+            <div className="pl-empty-state">暂无失败 case</div>
+          ) : (
+            <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs text-fg-muted">
+              <tr className="border-b border-border-default text-left text-xs text-fg-muted">
                 <th className="px-3 py-2">Case ID</th>
                 <th className="px-3 py-2">失败次数</th>
                 <th className="px-3 py-2">最近失败</th>
@@ -242,9 +302,9 @@ export function Monitor() {
             </thead>
             <tbody>
               {topFails.map((item) => (
-                <tr key={item.caseId} className="border-b border-border">
+                <tr key={item.caseId} className="border-b border-border-default">
                   <td className="px-3 py-2 font-mono text-xs">{item.caseId}</td>
-                  <td className="px-3 py-2 font-medium text-red-500">{item.failCount}</td>
+                  <td className="px-3 py-2 font-medium text-danger">{item.failCount}</td>
                   <td className="px-3 py-2 text-xs text-fg-muted">
                     {new Date(item.lastFailAt).toLocaleString("zh-CN")}
                   </td>
@@ -252,41 +312,19 @@ export function Monitor() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      <div className="border border-border rounded p-4">
-        <h2 className="font-medium text-sm mb-3">Drift 分类分布（近 {days} 天）</h2>
-        {driftItems.length === 0 ? (
-          <div className="text-sm text-fg-muted">暂无 drift 数据</div>
-        ) : (
-          <div className="grid gap-2">
-            {driftItems.map((item) => {
-              const pct = driftTotal > 0 ? (item.count / driftTotal) * 100 : 0;
-              return (
-                <div key={item.drift} className="grid grid-cols-[160px_minmax(0,1fr)_64px] items-center gap-3 text-sm">
-                  <span className="font-mono text-xs">{item.drift}</span>
-                  <div className="h-2 rounded bg-bg-muted overflow-hidden">
-                    <div className="h-full bg-blue-500" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-xs text-fg-muted text-right">{item.count}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+          )}
+        </section>
       </div>
 
-      {/* Threshold config */}
-      <div className="border border-border rounded p-4">
-        <h2 className="font-medium text-sm mb-3">告警阈值配置</h2>
+      <section className="pl-panel">
+        <h2 className="pl-panel-title">告警阈值配置</h2>
         {domains.length === 0 ? (
-          <div className="text-sm text-fg-muted">无 domain</div>
+          <div className="pl-empty-state">无 domain</div>
         ) : (
           <div className="grid gap-3">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-left text-xs text-fg-muted">
+                <tr className="border-b border-border-default text-left text-xs text-fg-muted">
                   <th className="px-3 py-2">Domain</th>
                   <th className="px-3 py-2">黄线（%）</th>
                   <th className="px-3 py-2">红线（%）</th>
@@ -297,7 +335,7 @@ export function Monitor() {
                 {domains.map((d) => {
                   const dc = currentConfig.domains[d.domain] ?? { passRateYellow: 0.9, passRateRed: 0.8, consecutiveFailThreshold: 3 };
                   return (
-                    <tr key={d.domain} className="border-b border-border">
+                    <tr key={d.domain} className="border-b border-border-default">
                       <td className="px-3 py-2 font-medium">{d.domain}</td>
                       <td className="px-3 py-2">
                         <input
@@ -307,7 +345,11 @@ export function Monitor() {
                           max={100}
                           value={Math.round(dc.passRateYellow * 100)}
                           onChange={(e) => {
-                            const v = parseInt(e.target.value, 10) / 100;
+                            const percent = clampNumber(e.target.value, 0, 100);
+                            if (percent === null) {
+                              return;
+                            }
+                            const v = percent / 100;
                             setConfigEdit((prev) => {
                               const cfg = prev ?? { ...currentConfig };
                               return {
@@ -326,7 +368,11 @@ export function Monitor() {
                           max={100}
                           value={Math.round(dc.passRateRed * 100)}
                           onChange={(e) => {
-                            const v = parseInt(e.target.value, 10) / 100;
+                            const percent = clampNumber(e.target.value, 0, 100);
+                            if (percent === null) {
+                              return;
+                            }
+                            const v = percent / 100;
                             setConfigEdit((prev) => {
                               const cfg = prev ?? { ...currentConfig };
                               return {
@@ -345,7 +391,10 @@ export function Monitor() {
                           max={20}
                           value={dc.consecutiveFailThreshold}
                           onChange={(e) => {
-                            const v = parseInt(e.target.value, 10);
+                            const v = clampNumber(e.target.value, 1, 20);
+                            if (v === null) {
+                              return;
+                            }
                             setConfigEdit((prev) => {
                               const cfg = prev ?? { ...currentConfig };
                               return {
@@ -362,18 +411,19 @@ export function Monitor() {
               </tbody>
             </table>
             <div className="flex justify-end">
+              {invalidThresholdConfig ? <p className="pl-error mr-auto">黄线必须高于红线。</p> : null}
               <button
                 type="button"
                 className="pl-btn pl-btn--primary text-sm"
                 onClick={() => saveConfigMutation.mutate()}
-                disabled={saveConfigMutation.isPending || !configEdit}
+                disabled={saveConfigMutation.isPending || !configEdit || invalidThresholdConfig}
               >
                 {saveConfigMutation.isPending ? "保存中…" : "保存阈值"}
               </button>
             </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
