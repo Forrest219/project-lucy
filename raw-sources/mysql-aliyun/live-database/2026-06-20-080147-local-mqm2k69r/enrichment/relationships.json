@@ -1,0 +1,318 @@
+{
+  "connectionId": "mysql-aliyun",
+  "accepted": [
+    {
+      "id": "dataforai.kx_fact_financial_amount:(dataforai.kx_fact_financial_amount.company_id)->dataforai.kx_dim_company:(dataforai.kx_dim_company.company_id)",
+      "status": "accepted",
+      "source": "formal",
+      "from": {
+        "tableId": "dataforai.kx_fact_financial_amount",
+        "columnIds": [
+          "dataforai.kx_fact_financial_amount.company_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "kx_fact_financial_amount"
+        },
+        "columns": [
+          "company_id"
+        ]
+      },
+      "to": {
+        "tableId": "dataforai.kx_dim_company",
+        "columnIds": [
+          "dataforai.kx_dim_company.company_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "kx_dim_company"
+        },
+        "columns": [
+          "company_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 1,
+      "pkScore": null,
+      "fkScore": null,
+      "score": 1,
+      "evidence": {
+        "source": "formal_metadata"
+      },
+      "validation": {
+        "status": "formal_metadata"
+      },
+      "graph": null,
+      "reasons": [
+        "formal_metadata_accepted"
+      ]
+    },
+    {
+      "id": "dataforai.kx_fact_financial_amount:(dataforai.kx_fact_financial_amount.item_id)->dataforai.kx_dim_financial_item:(dataforai.kx_dim_financial_item.item_id)",
+      "status": "accepted",
+      "source": "formal",
+      "from": {
+        "tableId": "dataforai.kx_fact_financial_amount",
+        "columnIds": [
+          "dataforai.kx_fact_financial_amount.item_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "kx_fact_financial_amount"
+        },
+        "columns": [
+          "item_id"
+        ]
+      },
+      "to": {
+        "tableId": "dataforai.kx_dim_financial_item",
+        "columnIds": [
+          "dataforai.kx_dim_financial_item.item_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "kx_dim_financial_item"
+        },
+        "columns": [
+          "item_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 1,
+      "pkScore": null,
+      "fkScore": null,
+      "score": 1,
+      "evidence": {
+        "source": "formal_metadata"
+      },
+      "validation": {
+        "status": "formal_metadata"
+      },
+      "graph": null,
+      "reasons": [
+        "formal_metadata_accepted"
+      ]
+    }
+  ],
+  "review": [
+    {
+      "id": "dataforai.superstore_orders:(dataforai.superstore_orders.region)->dataforai.superstore_people:(dataforai.superstore_people.region)",
+      "status": "review",
+      "source": "llm_proposal",
+      "from": {
+        "tableId": "dataforai.superstore_orders",
+        "columnIds": [
+          "dataforai.superstore_orders.region"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "superstore_orders"
+        },
+        "columns": [
+          "region"
+        ]
+      },
+      "to": {
+        "tableId": "dataforai.superstore_people",
+        "columnIds": [
+          "dataforai.superstore_people.region"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "superstore_people"
+        },
+        "columns": [
+          "region"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 0.9,
+      "pkScore": 1,
+      "fkScore": 0.685,
+      "score": 0.54,
+      "evidence": {
+        "sourceColumnBase": "region",
+        "targetTableBase": "superstore_people",
+        "targetColumnBase": "region",
+        "targetKeyScore": 0.88,
+        "nameScore": 0.45,
+        "reasons": [
+          "llm_proposal",
+          "llm_pk_proposal"
+        ],
+        "llmConfidence": 0.9,
+        "llmRationale": "Identical column name and type (varchar); superstore_people.region is its declared PK (natural key for regional manager lookup). superstore_orders.region is nullable, meaning unassigned rows are allowed. Pending validation that all non-null region values in orders exist in superstore_people."
+      },
+      "validation": {
+        "targetUniqueness": 0,
+        "sourceCoverage": 0,
+        "violationCount": 0,
+        "violationRatio": 1,
+        "sourceNullRate": 0,
+        "targetNullRate": 0,
+        "childDistinct": 0,
+        "parentDistinct": 0,
+        "overlap": 0,
+        "checkedValues": 0,
+        "reasons": [
+          "profile_unavailable"
+        ]
+      },
+      "graph": {
+        "targetPkScore": 1,
+        "incomingCandidateCount": 0,
+        "conflictRank": 1,
+        "reasons": [
+          "validation_unavailable_review_only",
+          "target_pk_score_passed",
+          "fk_score_review"
+        ]
+      },
+      "reasons": [
+        "llm_proposal",
+        "llm_pk_proposal",
+        "profile_unavailable",
+        "validation_unavailable_review_only",
+        "target_pk_score_passed",
+        "fk_score_review"
+      ]
+    },
+    {
+      "id": "dataforai.superstore_returns:(dataforai.superstore_returns.order_id)->dataforai.superstore_orders:(dataforai.superstore_orders.order_id)",
+      "status": "review",
+      "source": "exact_column_match",
+      "from": {
+        "tableId": "dataforai.superstore_returns",
+        "columnIds": [
+          "dataforai.superstore_returns.order_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "superstore_returns"
+        },
+        "columns": [
+          "order_id"
+        ]
+      },
+      "to": {
+        "tableId": "dataforai.superstore_orders",
+        "columnIds": [
+          "dataforai.superstore_orders.order_id"
+        ],
+        "table": {
+          "catalog": null,
+          "db": "dataforai",
+          "name": "superstore_orders"
+        },
+        "columns": [
+          "order_id"
+        ]
+      },
+      "relationshipType": "many_to_one",
+      "confidence": 0.933,
+      "pkScore": 0.277,
+      "fkScore": 0.55,
+      "score": 0.56,
+      "evidence": {
+        "sourceColumnBase": "order",
+        "targetTableBase": "superstore_order",
+        "targetColumnBase": "order_id",
+        "targetKeyScore": 0.9,
+        "nameScore": 0.9,
+        "reasons": [
+          "foreign_key_suffix",
+          "target_key_like",
+          "inflection",
+          "exact_column_name",
+          "llm_proposal"
+        ],
+        "signalVector": {
+          "nameSimilarity": 0.9,
+          "typeCompatibility": 1,
+          "valueOverlap": 0,
+          "embeddingSimilarity": 0,
+          "profileUniqueness": 0.9,
+          "profileNullRate": 0.5,
+          "structuralPrior": 0.5
+        },
+        "scoreBreakdown": {
+          "score": 0.933,
+          "signals": {
+            "nameSimilarity": 0.9,
+            "typeCompatibility": 1,
+            "valueOverlap": 0,
+            "embeddingSimilarity": 0,
+            "profileUniqueness": 0.9,
+            "profileNullRate": 0.5,
+            "structuralPrior": 0.5
+          },
+          "weights": {
+            "nameSimilarity": 0.24000000000000002,
+            "typeCompatibility": 0.10000000000000002,
+            "valueOverlap": 0.22000000000000003,
+            "embeddingSimilarity": 0.10000000000000002,
+            "profileUniqueness": 0.22000000000000003,
+            "profileNullRate": 0.08000000000000002,
+            "structuralPrior": 0.04000000000000001
+          },
+          "contributions": {
+            "nameSimilarity": 0.216,
+            "typeCompatibility": 0.1,
+            "valueOverlap": 0,
+            "embeddingSimilarity": 0,
+            "profileUniqueness": 0.198,
+            "profileNullRate": 0.04,
+            "structuralPrior": 0.02
+          }
+        },
+        "llmConfidence": 0.88,
+        "llmRationale": "Identical column name and type (varchar, NOT NULL in returns). Business logic requires a return to reference an existing order. Note: order_id is NOT the declared PK of superstore_orders (row_id is), implying order_id repeats across line items; a unique/composite index on superstore_orders.order_id must be confirmed before enforcing a strict FK constraint."
+      },
+      "validation": {
+        "targetUniqueness": 0,
+        "sourceCoverage": 0,
+        "violationCount": 0,
+        "violationRatio": 1,
+        "sourceNullRate": 0,
+        "targetNullRate": 0,
+        "childDistinct": 0,
+        "parentDistinct": 0,
+        "overlap": 0,
+        "checkedValues": 0,
+        "reasons": [
+          "profile_unavailable"
+        ]
+      },
+      "graph": {
+        "targetPkScore": 0.277,
+        "incomingCandidateCount": 1,
+        "conflictRank": 1,
+        "reasons": [
+          "validation_unavailable_review_only",
+          "target_pk_score_low",
+          "fk_score_review"
+        ]
+      },
+      "reasons": [
+        "foreign_key_suffix",
+        "target_key_like",
+        "inflection",
+        "exact_column_name",
+        "llm_proposal",
+        "profile_unavailable",
+        "validation_unavailable_review_only",
+        "target_pk_score_low",
+        "fk_score_review"
+      ]
+    }
+  ],
+  "rejected": [],
+  "skipped": []
+}
