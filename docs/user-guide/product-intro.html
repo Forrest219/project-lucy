@@ -1,9 +1,52 @@
 <!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Lucy 产品介绍 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-18 |
+| 撰写人 | Codex |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | project-lucy docs / 产品设计 |
+| 适用范围 | 面向新用户的产品定位说明 |
+| 输出位置 | docs/user-guide/product-intro.html |
+-->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucy — AI 数据资产的可信网关与治理海关</title>
+<title>产品介绍 · Lucy 帮助文档</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+<style>
+  /* Override shared CSS to support this dark-theme page inside .product-content */
+  .product-content {
+    --bg: #0f1117;
+    --bg2: #161b27;
+    --bg3: #1e2433;
+    --border: #2a3347;
+    --accent: #4f8ef7;
+    --accent2: #7c3aed;
+    --accent3: #06b6d4;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --pred: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --radius: 12px;
+    background: var(--bg);
+    color: var(--text);
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .product-content * { box-sizing: border-box; }
+  .product-content h1, .product-content h2, .product-content h3 {
+    letter-spacing: inherit;
+  }
+</style>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -586,6 +629,43 @@
 </style>
 </head>
 <body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy</strong><span>帮助文档中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link active" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">用户指南</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">故障处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">管理员指南</p>
+      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
+      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">治理与安全</p>
+      <a class="nav-link" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">参考</p>
+      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="glossary.html">术语表</a>
+      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+    </div>
+  </aside>
+  <div class="product-content">
 
 <!-- Nav -->
 <nav>
@@ -997,5 +1077,7 @@
   <div class="footer-note">AI 数据资产可信网关与治理海关 · BI 中心评审材料 · 2026-06-18</div>
 </footer>
 
+  </div><!-- /.product-content -->
+</div><!-- /.shell -->
 </body>
 </html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | 快速部署指南 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-20 |
+| 撰写人 | Claude |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | Lucy 管理员部署流程 |
+| 适用范围 | BI 管理员完成 Lucy 初次部署 |
+| 输出位置 | docs/user-guide/quickstart-admin.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>快速部署指南 · Lucy 帮助文档</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy</strong><span>帮助文档中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">用户指南</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">故障处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">管理员指南</p>
+      <a class="nav-link active" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
+      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">治理与安全</p>
+      <a class="nav-link" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">参考</p>
+      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="glossary.html">术语表</a>
+      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <span class="eyebrow">Admin Guide</span>
+      <h1>五步完成 Lucy 部署</h1>
+      <p class="lead">从零到可用。完成以下五步后，你的团队就可以通过 Agent 发起数据问答请求了。</p>
+    </header>
+
+    <section>
+      <h2>准备工作</h2>
+      <p>开始部署前，请确认以下条件已满足：</p>
+      <table>
+        <thead>
+          <tr><th>条件</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>KTX 实例</td><td>ktx CLI 已安装 (>=v0.4)，运行 <code>ktx version</code> 验证</td></tr>
+          <tr><td>数据库账号</td><td>目标数据库的只读账号（SELECT 权限，无写权限）</td></tr>
+          <tr><td>Agent 接入</td><td>Claude Code / Codex / Cursor 其中之一已配置好</td></tr>
+          <tr><td>Git 仓库</td><td>用于存储语义层 YAML 与 Wiki 配置文件</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>五步部署流程</h2>
+      <div class="step-list">
+
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h3>连接数据源</h3>
+            <p>在 KTX WebUI 的「数据源」页填写连接字符串，点击「测试连接」验证。支持 MySQL 8.0+、PostgreSQL、Oracle、StarRocks。建议用只读账号。详见<a href="data-sources.html">「数据源接入」</a>文档。</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h3>Schema 扫描</h3>
+            <p>连接成功后点击「扫描 Schema」，KTX 会自动读取所有表和字段，生成语义层 YAML 草稿。</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h3>完善语义层</h3>
+            <p>在 KTX WebUI「语义层」页为关键字段补充中文描述、定义官方 Measures（指标公式）、配置 Joins。参见<a href="webui-guide.html">「KTX WebUI 使用说明」</a>。</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h3>运行 Eval</h3>
+            <p>配置完成后在「Eval」页点击「运行」。评测通过后，配置进入服务侧，Agent 可以开始查询。</p>
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <h3>接入 Agent</h3>
+            <p>将 KTX MCP Server 地址添加到 Agent 配置（Claude Code 的 <code>.claude/settings.json</code>，或 Cursor 的 MCP 配置）。</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="callout warning">
+        ⚠️ 配置上线前必须通过 Eval。Eval 失败时，原有配置仍在服务侧，新配置不会上线。
+      </div>
+    </section>
+
+    <section>
+      <h2>下一步</h2>
+      <p>完成基础部署后，建议继续完善以下配置：</p>
+      <ul>
+        <li><a href="webui-guide.html">KTX WebUI 使用说明</a> — 深入学习如何维护语义层、Wiki 和 Join 关系</li>
+        <li><a href="data-sources.html">数据源接入</a> — 了解各数据库的详细连接配置和只读账号设置</li>
+        <li><a href="permissions.html">权限与 ACL</a> — 配置 Agent 身份认证和表级访问控制</li>
+      </ul>
+    </section>
+
+    <nav class="section-nav" aria-label="上一篇和下一篇">
+      <a class="prev" href="index.html"><span class="nav-kicker">上一篇</span><span class="nav-label">帮助中心首页</span></a>
+      <a class="next" href="data-sources.html"><span class="nav-kicker">下一篇</span><span class="nav-label">数据源接入</span></a>
+    </nav>
+
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
+  </main>
+</div>
+</body>
+</html>

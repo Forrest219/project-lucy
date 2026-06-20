@@ -2,21 +2,21 @@
 <!--
 | 元数据 | 内容 |
 |---|---|
-| 文档名称 | Lucy 失败处理 |
-| 文档类型 | Other |
+| 文档名称 | 更新日志 |
+| 文档类型 | Release Notes |
 | 版本 | v1.0 |
-| 撰写日期 | 2026-06-19 |
-| 撰写人 | Codex |
+| 撰写日期 | 2026-06-20 |
+| 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
-| 基于材料 | docs/eval-quiz-conventions.md |
-| 适用范围 | 用户处理 Lucy 回答失败、模糊或不可信场景 |
-| 输出位置 | docs/user-guide/troubleshooting.html |
+| 基于材料 | Lucy 版本历史 |
+| 适用范围 | 了解 Lucy 及 KTX 引擎版本变更 |
+| 输出位置 | docs/user-guide/release-notes.html |
 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucy 失败处理</title>
+<title>更新日志 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -34,7 +34,7 @@
       <p class="nav-title">用户指南</p>
       <a class="nav-link" href="workflows.html">常见任务流</a>
       <a class="nav-link" href="asking-better.html">如何问得更好</a>
-      <a class="nav-link active" href="troubleshooting.html">故障处理</a>
+      <a class="nav-link" href="troubleshooting.html">故障处理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
@@ -53,39 +53,55 @@
       <p class="nav-title">参考</p>
       <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link active" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
-      <span class="eyebrow">Troubleshooting</span>
-      <h1>失败不是终点，失败要能分类处理。</h1>
-      <p class="lead">当 Lucy 的回答不符合预期，先判断是问题不清、语义层未覆盖、数据漂移、逻辑回归，还是工具错误。</p>
+      <span class="eyebrow">Reference</span>
+      <h1>更新日志</h1>
+      <p class="lead">Lucy 及 KTX 引擎的版本历史与重要变更。当前为早期版本，持续迭代中。</p>
     </header>
 
+    <div class="callout">
+      📌 此页面正在完善中。如需了解具体版本的变更细节，请查阅 Git 仓库 CHANGELOG 或联系 BI 中心。
+    </div>
+
     <section>
-      <h2>常见问题</h2>
+      <h2>当前版本</h2>
       <table>
-        <thead><tr><th>现象</th><th>可能原因</th><th>处理方式</th></tr></thead>
+        <thead>
+          <tr><th>版本</th><th>发布日期</th><th>状态</th><th>主要变更</th></tr>
+        </thead>
         <tbody>
-          <tr><td>Lucy 给了数字但没有口径</td><td>问题没有要求说明 measure 或来源。</td><td>追问：请说明使用的 measure、过滤条件和数据来源。</td></tr>
-          <tr><td>Lucy 说 SL 不覆盖</td><td>问题需要 cohort、窗口函数或尚未建模指标。</td><td>要求给出 fallback 假设，并说明是否适合沉淀为新 measure。</td></tr>
-          <tr><td>同一问题今天答案变了</td><td>可能是 data drift，也可能是逻辑回归。</td><td>要求区分数据快照变化和 SQL/口径变化。</td></tr>
-          <tr><td>多轮追问口径变了</td><td>上下文继承失败。</td><td>明确要求沿用上一轮 measure、filter、dimension。</td></tr>
+          <tr>
+            <td>v1.x（当前）</td>
+            <td>2026 Q2</td>
+            <td><span class="badge badge-teal">生产可用</span></td>
+            <td>架构图重构、Eval 质量闭环、表级 ACL、Provenance Footer</td>
+          </tr>
         </tbody>
       </table>
     </section>
 
     <section>
-      <h2>推荐追问</h2>
-      <div class="callout warning">
-        请重新回答，并列出：使用的 measure、SQL 口径、过滤条件、是否 fallback、当前数据快照。如果与上一轮不同，请说明差异原因。
-      </div>
+      <h2>路线图（计划中）</h2>
+      <table>
+        <thead>
+          <tr><th>功能</th><th>预计版本</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>SSO / 企业身份集成</td><td>v2.0</td><td>支持 SAML 2.0、Okta</td></tr>
+          <tr><td>Skill 版本管理</td><td>v2.0</td><td>Skill 灰度发布与回滚</td></tr>
+          <tr><td>多租户 API Key</td><td>v2.1</td><td>MCP Server 多客户端认证</td></tr>
+          <tr><td>更多数据源</td><td>v2.x</td><td>ClickHouse、BigQuery 支持</td></tr>
+          <tr><td>审计日志导出</td><td>v2.1</td><td>支持导出到 S3 / 本地文件</td></tr>
+        </tbody>
+      </table>
     </section>
 
-    <nav class="section-nav" aria-label="上一篇和下一篇">
-      <a class="prev" href="asking-better.html"><span class="nav-kicker">上一篇</span><span class="nav-label">如何问得更好</span></a>
-      <a class="next" href="trust.html"><span class="nav-kicker">下一篇</span><span class="nav-label">可信机制</span></a>
+    <nav class="section-nav" aria-label="上一篇">
+      <a class="prev only" href="glossary.html"><span class="nav-kicker">上一篇</span><span class="nav-label">术语表</span></a>
     </nav>
 
     <p class="footer"><a href="index.html">返回帮助中心首页</a></p>

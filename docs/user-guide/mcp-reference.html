@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | MCP 接入参考 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-20 |
+| 撰写人 | Claude |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | KTX MCP Server 工具规范 |
+| 适用范围 | 开发者和 BI 管理员配置 Agent MCP 接入 |
+| 输出位置 | docs/user-guide/mcp-reference.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP 接入参考 · Lucy 帮助文档</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy</strong><span>帮助文档中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">用户指南</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">故障处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">管理员指南</p>
+      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
+      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">治理与安全</p>
+      <a class="nav-link" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">参考</p>
+      <a class="nav-link active" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="glossary.html">术语表</a>
+      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <span class="eyebrow">Reference</span>
+      <h1>MCP 接入参考</h1>
+      <p class="lead">Lucy 通过 Model Context Protocol (MCP) 向 Agent 暴露数据能力。以下是当前可用的所有工具及其调用规范。</p>
+    </header>
+
+    <section>
+      <h2>协议概述</h2>
+      <p>MCP 是 AI Agent 与 Context Server 之间通信的开放标准协议。Lucy 的 MCP Server 作为本地进程运行（或远端端点），Agent 在配置地址处连接。所有工具调用均为 JSON-RPC，通过 stdio 或 HTTP 传输。</p>
+
+      <p>Claude Code 的配置示例（<code>.claude/settings.json</code>）：</p>
+      <pre>{
+  "mcpServers": {
+    "lucy": {
+      "command": "ktx",
+      "args": ["mcp", "serve"],
+      "env": {
+        "KTX_PROJECT": "/path/to/your/ktx-project"
+      }
+    }
+  }
+}</pre>
+
+      <div class="callout">
+        配置文件路径：Claude Code 使用 <code>.claude/settings.json</code>（项目级）或 <code>~/.claude/settings.json</code>（全局）。Cursor 使用项目根目录的 <code>cursor.json</code>。
+      </div>
+    </section>
+
+    <section>
+      <h2>工具一览</h2>
+      <table>
+        <thead>
+          <tr><th>工具名</th><th>用途</th><th>查询优先级</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>sl_read</code></td><td>读取语义层定义（表描述、字段、Measures、Joins）</td><td>Step 1（必须先调用）</td></tr>
+          <tr><td><code>sl_query</code></td><td>使用语义层生成 SQL 并执行</td><td>Step 2（核心查询工具）</td></tr>
+          <tr><td><code>wiki_search</code></td><td>检索 Wiki 业务文档</td><td>Step 2（与 sl_query 并列）</td></tr>
+          <tr><td><code>sl_validate</code></td><td>验证语义层 YAML 格式合法性</td><td>Eval 流程专用</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>工具详细说明</h2>
+
+      <h3>sl_read</h3>
+      <p>返回指定 domain 的语义层结构，包含所有表、字段定义、Measures 和 Join 关系。每次查询前必须调用此工具，获取 canonical 表名和 Measure 定义，禁止直接猜测字段名。</p>
+      <pre>{
+  "tool": "sl_read",
+  "params": {
+    "domain": "dataforai"
+  }
+}</pre>
+
+      <h3>sl_query</h3>
+      <p>基于语义层生成 SQL 并在只读连接上执行。返回结果集和实际执行的 SQL。禁止绕过此工具手写等价聚合 SQL。</p>
+      <pre>{
+  "tool": "sl_query",
+  "params": {
+    "domain": "dataforai",
+    "measures": ["total_sales", "profit_rate"],
+    "dimensions": ["region", "order_year"],
+    "filters": ["is_deleted = 0"],
+    "sort": [{"field": "profit_rate", "order": "ASC"}]
+  }
+}</pre>
+
+      <h3>wiki_search</h3>
+      <p>全文搜索 <code>wiki/*.md</code> 文档，用于获取业务口径说明、Gotcha 规则和异常处理指引。</p>
+      <pre>{
+  "tool": "wiki_search",
+  "params": {
+    "query": "折扣政策 口径"
+  }
+}</pre>
+
+      <h3>sl_validate</h3>
+      <p>验证语义层 YAML 文件的合法性，在 Eval 流程中使用。返回校验结果和错误列表。</p>
+      <pre>{
+  "tool": "sl_validate",
+  "params": {
+    "domain": "dataforai",
+    "file": "semantic-layer/superstore_orders.yaml"
+  }
+}</pre>
+    </section>
+
+    <section>
+      <h2>查询优先级（强制）</h2>
+      <div class="callout">
+        <pre style="margin:0; background:transparent; padding:0; font-size:14px;">Step 1  先查语义层（sl_read）
+        → 获取 canonical 表名、字段描述、Measures、Joins
+
+Step 2  再查 Wiki（wiki_search）
+        → 获取业务口径、Gotcha、路由规则
+
+Step 3  以上均不能覆盖时，才允许 raw SQL fallback
+        → 必须标注：「以下基于 raw SQL，假设：…」</pre>
+      </div>
+
+      <div class="callout warning">
+        禁止跳过 Step 1 直接写 SQL。跳过语义层可能导致字段名错误、Measure 口径不一致或触发 Safety Contract 阻断。
+      </div>
+    </section>
+
+    <section>
+      <h2>认证与多租户</h2>
+      <div class="callout" style="border-left-color: var(--gold);">
+        当前版本 MCP Server 通过本地进程绑定，无需额外认证。多租户身份认证（API Key 模式）正在开发中。
+      </div>
+    </section>
+
+    <nav class="section-nav" aria-label="上一篇和下一篇">
+      <a class="prev" href="skills.html"><span class="nav-kicker">上一篇</span><span class="nav-label">Skill 管理</span></a>
+      <a class="next" href="glossary.html"><span class="nav-kicker">下一篇</span><span class="nav-label">术语表</span></a>
+    </nav>
+
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | 数据源接入 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-20 |
+| 撰写人 | Claude |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | Lucy 数据源接入规范 |
+| 适用范围 | BI 管理员配置企业数据库连接 |
+| 输出位置 | docs/user-guide/data-sources.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据源接入 · Lucy 帮助文档</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy</strong><span>帮助文档中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">用户指南</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">故障处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">管理员指南</p>
+      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
+      <a class="nav-link active" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
+      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">治理与安全</p>
+      <a class="nav-link" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">参考</p>
+      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="glossary.html">术语表</a>
+      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <span class="eyebrow">Admin Guide</span>
+      <h1>连接你的数据源</h1>
+      <p class="lead">Lucy 支持主流企业数据库。连接建立后，KTX 会扫描 Schema 并生成语义层草稿，BI 管理员再补充业务口径即可。</p>
+    </header>
+
+    <section>
+      <h2>支持的数据库</h2>
+      <table>
+        <thead>
+          <tr><th>数据库</th><th>版本要求</th><th>连接协议</th><th>备注</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>MySQL</td><td>8.0+</td><td>mysql2</td><td>推荐，完整测试覆盖</td></tr>
+          <tr><td>PostgreSQL</td><td>13+</td><td>pg</td><td>支持</td></tr>
+          <tr><td>Oracle</td><td>19c+</td><td>oracledb</td><td>需额外安装 Oracle Instant Client</td></tr>
+          <tr><td>StarRocks</td><td>2.5+</td><td>mysql2</td><td>兼容 MySQL 协议</td></tr>
+          <tr><td>更多</td><td>—</td><td>—</td><td>进行中，联系支持团队</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>只读账号设置</h2>
+      <p>强烈建议为 Lucy 创建专用只读账号，不要使用具有写权限的数据库账号。</p>
+
+      <h3>MySQL</h3>
+      <pre>-- 创建只读用户
+CREATE USER 'lucy_readonly'@'%' IDENTIFIED BY '&lt;strong-password&gt;';
+GRANT SELECT ON your_database.* TO 'lucy_readonly'@'%';
+FLUSH PRIVILEGES;</pre>
+
+      <h3>PostgreSQL</h3>
+      <pre>-- 创建只读用户
+CREATE USER lucy_readonly WITH PASSWORD '&lt;strong-password&gt;';
+GRANT CONNECT ON DATABASE your_database TO lucy_readonly;
+GRANT USAGE ON SCHEMA public TO lucy_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
+
+      <div class="callout">
+        Lucy 物理上只使用只读账号。治理网关会拒绝任何包含 INSERT/UPDATE/DELETE/DROP 的 SQL，即使用户手动构造也会被阻断。
+      </div>
+    </section>
+
+    <section>
+      <h2>连接字符串格式</h2>
+      <p>在 KTX WebUI 的「数据源」页填写连接字符串时，请使用以下格式：</p>
+
+      <h3>MySQL / StarRocks</h3>
+      <pre>mysql://lucy_readonly:&lt;password&gt;@&lt;host&gt;:3306/&lt;database&gt;</pre>
+
+      <h3>PostgreSQL</h3>
+      <pre>postgresql://lucy_readonly:&lt;password&gt;@&lt;host&gt;:5432/&lt;database&gt;</pre>
+    </section>
+
+    <section>
+      <h2>Schema 扫描</h2>
+      <p>连接测试通过后，KTX 会对目标数据库执行 Schema 扫描，读取所有表和字段并生成 YAML 草稿。扫描过程全程只读（运行 <code>SHOW TABLES</code> / <code>information_schema</code> 查询），不会修改数据库内容。</p>
+      <p>扫描完成后，前往 KTX WebUI 为关键字段补充中文描述，并定义 Measure（指标公式），这些内容将成为 Agent 理解业务数据的标准口径。</p>
+    </section>
+
+    <section>
+      <h2>常见问题</h2>
+
+      <div class="callout">
+        <strong>连接测试失败怎么办？</strong>
+        <p>请检查：1）防火墙是否开放数据库端口；2）只读账号密码是否正确；3）账号是否有 SELECT 权限。</p>
+      </div>
+
+      <div class="callout">
+        <strong>能同时连多个数据库吗？</strong>
+        <p>可以。每个数据库作为独立 Domain 配置，语义层文件按 domain 目录隔离。</p>
+      </div>
+    </section>
+
+    <nav class="section-nav" aria-label="上一篇和下一篇">
+      <a class="prev" href="quickstart-admin.html"><span class="nav-kicker">上一篇</span><span class="nav-label">快速部署</span></a>
+      <a class="next" href="permissions.html"><span class="nav-kicker">下一篇</span><span class="nav-label">权限与 ACL</span></a>
+    </nav>
+
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
+  </main>
+</div>
+</body>
+</html>

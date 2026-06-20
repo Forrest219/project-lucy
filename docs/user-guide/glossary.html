@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Lucy 术语表 |
+| 文档类型 | Other |
+| 版本 | v1.0 |
+| 撰写日期 | 2026-06-20 |
+| 撰写人 | Claude |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | project-lucy docs / KTX 语义层设计 / concepts.html |
+| 适用范围 | 所有 Lucy 用户角色 |
+| 输出位置 | docs/user-guide/glossary.html |
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>术语表 · Lucy 帮助文档</title>
+<link rel="stylesheet" href="assets/user-guide.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><strong>Lucy</strong><span>帮助文档中心</span></a>
+    <div class="nav-group">
+      <p class="nav-title">开始</p>
+      <a class="nav-link" href="index.html">帮助中心首页</a>
+      <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
+      <a class="nav-link" href="concepts.html">核心概念</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">用户指南</p>
+      <a class="nav-link" href="workflows.html">常见任务流</a>
+      <a class="nav-link" href="asking-better.html">如何问得更好</a>
+      <a class="nav-link" href="troubleshooting.html">故障处理</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">管理员指南</p>
+      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
+      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">治理与安全</p>
+      <a class="nav-link" href="trust.html">可信机制</a>
+      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+    </div>
+    <div class="nav-group">
+      <p class="nav-title">参考</p>
+      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link active" href="glossary.html">术语表</a>
+      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+    </div>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <span class="eyebrow">Reference</span>
+      <h1>术语表</h1>
+      <p class="lead">Lucy 与 KTX 生态中的关键术语，按字母与主题排列。读懂这些术语，才能读懂 Lucy 的答案在说什么。</p>
+    </header>
+
+    <section>
+      <h2>核心概念</h2>
+      <table>
+        <thead><tr><th>术语</th><th>全称 / 英文</th><th>解释</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Lucy</strong></td>
+            <td>—</td>
+            <td>本系统名称。企业 AI 数据问答的可信网关，底座为 KTX MCP Server。负责治理 Agent 对数据源的访问，保证答案可溯、可审计、只读安全。</td>
+          </tr>
+          <tr>
+            <td><strong>KTX</strong></td>
+            <td>kaelio/ktx</td>
+            <td>开源上下文层，把数据库 schema、BI 指标定义、Wiki 文档整合成 Agent 可读取、可执行的结构化上下文。Lucy 以 KTX 为核心引擎。</td>
+          </tr>
+          <tr>
+            <td><strong>MCP</strong></td>
+            <td>Model Context Protocol</td>
+            <td>Agent 与 Lucy 之间的标准接口协议。Agent 通过 MCP 工具（<code>sl_read</code>、<code>sl_query</code> 等）访问 Lucy 的上下文能力，而不需要直接操作数据库。</td>
+          </tr>
+          <tr>
+            <td><strong>语义层</strong></td>
+            <td>Semantic Layer</td>
+            <td>把数据库裸字段翻译成业务语言的配置层。以 YAML 文件存储，定义字段描述、指标（Measures）、维度（Dimensions）和表关联（Joins）。是 Lucy 回答"公司标准口径"的依据来源。</td>
+          </tr>
+          <tr>
+            <td><strong>上下文层</strong></td>
+            <td>Context Layer</td>
+            <td>Lucy 服务侧可读取的全部知识文件，包含：<code>semantic-layer/*.yaml</code>（指标定义）、<code>wiki/*.md</code>（业务规则文档）、<code>skills/*.yaml</code>（分析模板）。经过 Eval 质量门控后才能进入服务侧。</td>
+          </tr>
+          <tr>
+            <td><strong>Wiki</strong></td>
+            <td>—</td>
+            <td>以 Markdown 格式存储的业务口径说明文档，例如折扣政策、利润计算规则、退货逻辑。Agent 通过 <code>wiki_search</code> 工具检索。</td>
+          </tr>
+          <tr>
+            <td><strong>Skill</strong></td>
+            <td>—</td>
+            <td>固化的分析逻辑模板，存储为 <code>skills/*.yaml</code>。相当于企业级"分析肌肉记忆"——把高频、高价值的分析过程标准化，让 Agent 执行时不用每次重新推理步骤。</td>
+          </tr>
+          <tr>
+            <td><strong>治理网关</strong></td>
+            <td>Governance Gateway</td>
+            <td>Lucy 在 Agent 与数据源之间的管控层，负责认证（Auth）、表级访问控制（ACL）和操作审计（Audit Log）。已折叠进 KTX MCP Server 节点实现。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>查询与执行</h2>
+      <table>
+        <thead><tr><th>术语</th><th>解释</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>sl_read</strong></td>
+            <td>MCP 工具。读取语义层定义：表描述、字段、Measures、Joins。查询前必须先调用，获取 canonical 表名和字段口径。</td>
+          </tr>
+          <tr>
+            <td><strong>sl_query</strong></td>
+            <td>MCP 工具。使用语义层生成 SQL 并在只读连接上执行，返回结果集。所有数据问答的核心执行工具。</td>
+          </tr>
+          <tr>
+            <td><strong>wiki_search</strong></td>
+            <td>MCP 工具。全文检索 Wiki 文档，获取业务口径、Gotcha 规则和路由说明。</td>
+          </tr>
+          <tr>
+            <td><strong>sl_validate</strong></td>
+            <td>MCP 工具。验证语义层 YAML 定义的合法性，在 Eval 流程中使用。</td>
+          </tr>
+          <tr>
+            <td><strong>Measure（指标）</strong></td>
+            <td>语义层中声明的聚合计算公式，例如 <code>total_sales</code>、<code>profit_rate</code>。是 Lucy 回答指标问题时唯一的权威计算口径，禁止绕过语义层手写等价 SQL。</td>
+          </tr>
+          <tr>
+            <td><strong>Dimension（维度）</strong></td>
+            <td>用于分组和筛选的字段，例如区域、产品类目、客户类型。</td>
+          </tr>
+          <tr>
+            <td><strong>Grain（粒度）</strong></td>
+            <td>语义层表定义的最细分析单元，例如"每条订单行"。决定 Measures 的聚合基础。</td>
+          </tr>
+          <tr>
+            <td><strong>Raw SQL fallback</strong></td>
+            <td>当语义层和 Wiki 均无法覆盖问题时，才允许直接写 SQL 的兜底路径。必须在回答中标注"以下基于 raw SQL，假设：…"。</td>
+          </tr>
+          <tr>
+            <td><strong>只读保证</strong></td>
+            <td>Lucy 对数据源的所有访问均使用只读账号执行，物理上不可能发生写操作。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>质量与治理</h2>
+      <table>
+        <thead><tr><th>术语</th><th>解释</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Eval（评测）</strong></td>
+            <td>配置侧每次变更后自动触发的质量门控。包含 Safety Contract 检查、SQL 断言、结果断言三层验证。通过后配置才允许进入服务侧。</td>
+          </tr>
+          <tr>
+            <td><strong>Safety Contract</strong></td>
+            <td>Eval 中的强阻断契约声明。定义哪些查询结果、行为模式或数据访问模式属于不可越过的红线，触发即阻断，不降级处理。</td>
+          </tr>
+          <tr>
+            <td><strong>数据漂移（data_drift）</strong></td>
+            <td>Eval 判定的漂移类型之一：源数据的值分布发生了变化（例如新增了大量空值、数值范围异常），但 SQL 和逻辑本身没有问题。</td>
+          </tr>
+          <tr>
+            <td><strong>Schema 漂移（schema_drift）</strong></td>
+            <td>源数据库的表结构发生了变化（字段改名、类型变更、表被删除），导致原有语义层定义失效。</td>
+          </tr>
+          <tr>
+            <td><strong>逻辑回归（logic_regression）</strong></td>
+            <td>语义层或 Wiki 的改动导致之前能正确回答的问题变得错误。</td>
+          </tr>
+          <tr>
+            <td><strong>Provenance Footer（来源注脚）</strong></td>
+            <td>Lucy 每个数据回答末尾附带的标准化元数据块，包含：数据来源层级（semantic layer / raw SQL）、表名、Measure 名称、数据新鲜度（MAX date_field）、假设说明。</td>
+          </tr>
+          <tr>
+            <td><strong>ACL</strong></td>
+            <td>Access Control List，访问控制列表。Lucy 在表级别设置权限，不同角色的 Agent 只能查询被授权的表。</td>
+          </tr>
+          <tr>
+            <td><strong>审计日志（Audit Log）</strong></td>
+            <td>Lucy 记录的每次 Agent 查询的完整日志：查询时间、调用的工具、生成的 SQL、返回结果摘要、执行账号。用于事后审计与合规证明。</td>
+          </tr>
+          <tr>
+            <td><strong>字典外安全探索</strong></td>
+            <td>当问题超出语义层覆盖范围时，Lucy 被允许以 raw SQL fallback 方式回答，但必须明确标注假设。"字典外"指不在官方 Measures 定义内。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>生态与集成</h2>
+      <table>
+        <thead><tr><th>术语</th><th>解释</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Agent</strong></td>
+            <td>通过 MCP 协议调用 Lucy 的 AI 推理系统。当前支持：Claude Code、Codex、Openclaw、Hermes、Cursor。</td>
+          </tr>
+          <tr>
+            <td><strong>KTX WebUI</strong></td>
+            <td>语义层和 Wiki 的可视化编辑界面，供 BI 管理员维护字段描述、指标口径和业务文档，无需直接编辑 YAML 文件。</td>
+          </tr>
+          <tr>
+            <td><strong>KTX MCP Server</strong></td>
+            <td>暴露 MCP 工具的服务进程，是 Agent 访问 Lucy 上下文能力的统一入口，同时内置治理网关逻辑。</td>
+          </tr>
+          <tr>
+            <td><strong>Superstore（超市域）</strong></td>
+            <td>Lucy 当前启用的示例数据域（dataforai），包含 superstore_orders、superstore_returns、superstore_people 三张表，10194 行 4 年零售样本数据。</td>
+          </tr>
+          <tr>
+            <td><strong>is_deleted</strong></td>
+            <td>软删除字段。Lucy 的所有查询默认加 <code>WHERE is_deleted = 0</code>，不查询已标记删除的记录。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <nav class="section-nav" aria-label="上一篇和下一篇">
+      <a class="prev" href="mcp-reference.html"><span class="nav-kicker">上一篇</span><span class="nav-label">MCP 接入参考</span></a>
+      <a class="next" href="release-notes.html"><span class="nav-kicker">下一篇</span><span class="nav-label">更新日志</span></a>
+    </nav>
+
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
+  </main>
+</div>
+</body>
+</html>
