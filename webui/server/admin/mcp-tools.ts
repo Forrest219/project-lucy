@@ -19,6 +19,7 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "dictionary_search", description: "搜索数据字典" },
   { name: "discover_data", description: "发现可用数据源" },
   { name: "connection_list", description: "列出可用数据库连接" },
+  { name: "kx_catalog", description: "列出当前 agent 可访问的 KX 财务语义层 source" },
   { name: "sql_execution", description: "执行原始 SQL（受限）" },
   { name: "memory_ingest", description: "注入记忆" },
   { name: "memory_ingest_status", description: "查询记忆注入状态" }

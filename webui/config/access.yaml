@@ -22,6 +22,48 @@ users:
         - discover_data
         - connection_list
 
+  - id: kx_guard_tester
+    name: KX Guardrail Tester
+    enabled: true
+    note: "Security test agent: no tokens; limited to KX financial tables only."
+    tokens: []
+    allow:
+      connections:
+        - mysql-aliyun
+      tables:
+        - dataforai.kx_dim_company
+        - dataforai.kx_dim_financial_item
+        - dataforai.kx_fact_financial_amount
+        - dataforai.kx_vw_balance_sheet_detail
+        - dataforai.kx_vw_cash_flow_statement_detail
+        - dataforai.kx_vw_income_statement_detail
+      tools:
+        - kx_catalog
+        - sl_query
+        - sl_read_source
+        - entity_details
+
+  - id: workhorse
+    name: Hermes Workhorse
+    enabled: true
+    note: "Hermes workhorse profile; limited to KX financial tables only."
+    tokens:
+      - hash: "sha256:f5d0c6a8139acae01f5490ff159c4d378cf3b1b2904e83ba1748e1381d082ada"
+        label: hermes-workhorse
+        created: 2026-06-20
+    allow:
+      tables:
+        - dataforai.kx_dim_company
+        - dataforai.kx_dim_financial_item
+        - dataforai.kx_fact_financial_amount
+        - dataforai.kx_vw_balance_sheet_detail
+        - dataforai.kx_vw_cash_flow_statement_detail
+        - dataforai.kx_vw_income_statement_detail
+      tools:
+        - sl_query
+        - sl_read_source
+        - entity_details
+
   - id: lisi
     name: 李四
     tokens:
@@ -37,3 +79,27 @@ defaults:
     - sql_execution
     - memory_ingest
     - memory_ingest_status
+  known_tools:
+    - sl_query
+    - sl_read_source
+    - sl_validate
+    - wiki_search
+    - wiki_read
+    - entity_details
+    - dictionary_search
+    - discover_data
+    - connection_list
+    - kx_catalog
+    - sql_execution
+    - memory_ingest
+    - memory_ingest_status
+  table_touching_tools:
+    - sl_query
+    - sl_read_source
+    - sl_validate
+    - entity_details
+  sensitive_metadata_tools:
+    - dictionary_search
+    - discover_data
+  sensitive_table_prefixes:
+    - dataforai.kx_

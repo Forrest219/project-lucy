@@ -33,6 +33,10 @@ export interface YamlAccessConfig {
   users: YamlUser[];
   defaults?: {
     deny_tools?: string[];
+    known_tools?: string[];
+    table_touching_tools?: string[];
+    sensitive_metadata_tools?: string[];
+    sensitive_table_prefixes?: string[];
   };
 }
 

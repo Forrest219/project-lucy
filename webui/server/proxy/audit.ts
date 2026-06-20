@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
@@ -60,6 +61,13 @@ export function isTokenRevoked(tokenHash: string): Promise<boolean> {
   });
 }
 
+function truncateErrorDetail(value: string): string {
+  if (value.length <= 500) return value;
+  const digest = createHash("sha256").update(value).digest("hex").slice(0, 16);
+  const marker = ` <truncated sha256:${digest}>`;
+  return `${value.slice(0, 500 - marker.length)}${marker}`;
+}
+
 export async function writeLog(entry: AccessLogEntry): Promise<void> {
   const database = await getDb();
   if (!insertStmt) {
@@ -78,7 +86,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<void> {
     tables: entry.tables ? JSON.stringify(entry.tables) : null,
     argsSummary: entry.argsSummary ? JSON.stringify(entry.argsSummary) : null,
     outcome: entry.outcome,
-    errorDetail: entry.errorDetail ? entry.errorDetail.slice(0, 500) : null,
+    errorDetail: entry.errorDetail ? truncateErrorDetail(entry.errorDetail) : null,
     durationMs: entry.durationMs,
     requestId: String(entry.requestId),
   });

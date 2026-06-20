@@ -291,12 +291,12 @@ async function start() {
   const app = buildServer();
   await app.listen({ host: "127.0.0.1", port: 5174 });
 
-  const { server: proxy, port: proxyPort } = buildProxy();
+  const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy();
   await new Promise<void>((resolve, reject) => {
-    proxy.listen(proxyPort, "127.0.0.1", resolve);
+    proxy.listen(proxyPort, proxyHost, resolve);
     proxy.on("error", reject);
   });
-  console.log(`MCP proxy listening on http://127.0.0.1:${proxyPort}/mcp`);
+  console.log(`MCP proxy listening on http://${proxyHost}:${proxyPort}/mcp`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

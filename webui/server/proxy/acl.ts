@@ -8,7 +8,66 @@ import type { Identity } from "./identity.js";
 
 export interface AclDecision {
   allowed: boolean;
-  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_default_deny'
+  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_default_deny' | 'agent_disabled' | 'raw_query_forbidden' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>'
+}
+
+const DEFAULT_DENY_TOOLS = ["sql_execution", "memory_ingest", "memory_ingest_status"] as const;
+
+const DEFAULT_KNOWN_TOOLS = [
+  "sl_query",
+  "sl_read_source",
+  "sl_validate",
+  "wiki_search",
+  "wiki_read",
+  "entity_details",
+  "dictionary_search",
+  "discover_data",
+  "connection_list",
+  "kx_catalog",
+  "sql_execution",
+  "memory_ingest",
+  "memory_ingest_status"
+] as const;
+
+const DEFAULT_TABLE_TOUCHING_TOOLS = ["sl_query", "sl_read_source", "sl_validate", "entity_details"] as const;
+const DEFAULT_SENSITIVE_METADATA_TOOLS = ["dictionary_search", "discover_data"] as const;
+const DEFAULT_SENSITIVE_TABLE_PREFIXES = ["dataforai.kx_"] as const;
+const MAX_ENTITY_REF_DEPTH = 5;
+
+type AccessConfig = Awaited<ReturnType<typeof getAccessConfig>>;
+
+interface AclPolicy {
+  denyTools: Set<string>;
+  knownTools: Set<string>;
+  tableTouchingTools: Set<string>;
+  sensitiveMetadataTools: Set<string>;
+  sensitiveTablePrefixes: string[];
+}
+
+function configList(value: string[] | undefined, fallback: readonly string[], options: { normalize?: boolean } = {}): string[] {
+  const source = Array.isArray(value) ? value : fallback;
+  return source
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => options.normalize ? normalizeRef(item) : item.trim())
+    .filter(Boolean);
+}
+
+function mergedConfigList(value: string[] | undefined, fallback: readonly string[], options: { normalize?: boolean } = {}): string[] {
+  return [...new Set([
+    ...configList(undefined, fallback, options),
+    ...configList(value, [], options)
+  ])];
+}
+
+function aclPolicy(config: AccessConfig): AclPolicy {
+  const defaults = config.defaults ?? {};
+  return {
+    denyTools: new Set(mergedConfigList(defaults.deny_tools, DEFAULT_DENY_TOOLS)),
+    knownTools: new Set(mergedConfigList(defaults.known_tools, DEFAULT_KNOWN_TOOLS)),
+    tableTouchingTools: new Set(mergedConfigList(defaults.table_touching_tools, DEFAULT_TABLE_TOUCHING_TOOLS)),
+    sensitiveMetadataTools: new Set(mergedConfigList(defaults.sensitive_metadata_tools, DEFAULT_SENSITIVE_METADATA_TOOLS)),
+    sensitiveTablePrefixes: mergedConfigList(defaults.sensitive_table_prefixes, DEFAULT_SENSITIVE_TABLE_PREFIXES, { normalize: true })
+  };
 }
 
 // ─── sourceName → "schema.table" cache ───────────────────────────────────────
@@ -25,9 +84,9 @@ interface SchemaYaml {
   tables?: Record<string, { table?: string }>;
 }
 
-async function loadSourceMap(): Promise<Map<string, SourceMapEntry>> {
+async function loadSourceMap(options: { fresh?: boolean } = {}): Promise<Map<string, SourceMapEntry>> {
   const now = Date.now();
-  if (sourceMap.size > 0 && now - sourceMapLoadedAt < SOURCE_MAP_TTL) return sourceMap;
+  if (!options.fresh && sourceMap.size > 0 && now - sourceMapLoadedAt < SOURCE_MAP_TTL) return sourceMap;
 
   const projectRoot = await resolveProjectRoot();
   const semanticLayerDir = path.join(projectRoot, "semantic-layer");
@@ -52,7 +111,7 @@ async function loadSourceMap(): Promise<Map<string, SourceMapEntry>> {
       if (!yaml?.tables) continue;
       for (const [sourceName, tableDef] of Object.entries(yaml.tables)) {
         if (tableDef?.table) {
-          newMap.set(sourceName, { physicalTable: tableDef.table });
+          newMap.set(normalizeRef(sourceName), { physicalTable: normalizeRef(tableDef.table) });
         }
       }
     } catch {
@@ -65,29 +124,208 @@ async function loadSourceMap(): Promise<Map<string, SourceMapEntry>> {
   return sourceMap;
 }
 
-function sourceNameToTable(sourceName: string, map: Map<string, SourceMapEntry>): string {
-  return map.get(sourceName)?.physicalTable ?? sourceName;
+function normalizeRef(value: string): string {
+  return value.trim().replace(/[`"']/g, "").toLowerCase();
 }
 
-export async function extractTables(toolName: string, args: unknown): Promise<string[]> {
-  const a = args as Record<string, unknown> | undefined;
-  if (!a) return [];
+function sourceNameToTable(sourceName: string, map: Map<string, SourceMapEntry>): string {
+  const normalized = normalizeRef(sourceName);
+  return map.get(normalized)?.physicalTable ?? normalized;
+}
 
-  const map = await loadSourceMap();
+function sourceMapEntries(map: Map<string, SourceMapEntry>): Array<{ source: string; physical: string }> {
+  return [...map.entries()].map(([source, entry]) => ({
+    source: normalizeRef(source),
+    physical: normalizeRef(entry.physicalTable)
+  }));
+}
+
+function hasDelimitedRef(text: string, ref: string): boolean {
+  if (!ref) return false;
+  const escaped = ref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_])${escaped}(?=$|[^A-Za-z0-9_])`).test(normalizeRef(text));
+}
+
+function addTableRefsFromText(text: string, tables: Set<string>, map: Map<string, SourceMapEntry>, options: { fallbackUnknown?: boolean } = {}): void {
+  const entries = sourceMapEntries(map);
+  let matchedKnownRef = false;
+  for (const { source, physical } of entries) {
+    if (hasDelimitedRef(text, physical) || hasDelimitedRef(text, source)) {
+      tables.add(physical);
+      matchedKnownRef = true;
+    }
+  }
+
+  if (matchedKnownRef || options.fallbackUnknown === false) return;
+
+  const dottedRef = normalizeRef(text).match(/[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+/);
+  if (!dottedRef?.[0]) return;
+  const parts = dottedRef[0].split(".");
+  const candidate = parts.length >= 3 ? `${parts[0]}.${parts[1]}` : parts[0];
+  tables.add(sourceNameToTable(candidate, map));
+}
+
+function collectTableRefs(value: unknown, tables: Set<string>, map: Map<string, SourceMapEntry>): void {
+  if (typeof value === "string") {
+    addTableRefsFromText(value, tables, map, { fallbackUnknown: false });
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectTableRefs(item, tables, map);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) collectTableRefs(item, tables, map);
+  }
+}
+
+function collectMetricRefs(value: unknown, tables: Set<string>, map: Map<string, SourceMapEntry>): void {
+  if (typeof value === "string") {
+    addTableRefsFromText(value, tables, map);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectMetricRefs(item, tables, map);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) collectMetricRefs(item, tables, map);
+  }
+}
+
+function hasRawQueryArg(args: Record<string, unknown>): boolean {
+  return ["query", "sql"].some((key) => typeof args[key] === "string" && String(args[key]).trim().length > 0);
+}
+
+function addConnectionRef(value: unknown, connections: Set<string>): void {
+  if (typeof value === "string" && value.trim()) {
+    connections.add(normalizeRef(value));
+  }
+}
+
+function collectConnectionRefs(value: unknown, connections: Set<string>, options: { depth?: number } = {}): void {
+  const depth = options.depth ?? 0;
+  if (depth > MAX_ENTITY_REF_DEPTH || !value) return;
+  if (typeof value === "string") {
+    addConnectionRef(value, connections);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectConnectionRefs(item, connections, { depth: depth + 1 });
+    return;
+  }
+  if (typeof value !== "object") return;
+
+  const record = value as Record<string, unknown>;
+  for (const key of ["connectionId", "connection_id", "connection", "database"]) {
+    addConnectionRef(record[key], connections);
+  }
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === "object") collectConnectionRefs(nested, connections, { depth: depth + 1 });
+  }
+}
+
+function extractConnectionRefs(toolName: string, args: unknown): string[] {
+  const a = args as Record<string, unknown> | undefined;
+  if (!a || typeof a !== "object" || Array.isArray(a)) return [];
+
+  const connections = new Set<string>();
+  switch (toolName) {
+    case "sl_query":
+      for (const key of ["connectionId", "connection_id", "connection", "database"]) {
+        addConnectionRef(a[key], connections);
+      }
+      for (const key of ["joins", "join"]) {
+        collectConnectionRefs(a[key], connections);
+      }
+      break;
+    case "sl_read_source":
+    case "sl_validate":
+    case "entity_details":
+      for (const key of ["connectionId", "connection_id", "connection", "database"]) {
+        addConnectionRef(a[key], connections);
+      }
+      collectConnectionRefs(a, connections);
+      break;
+    default:
+      break;
+  }
+  return [...connections].filter(Boolean);
+}
+
+function isSensitiveTable(table: string, prefixes: string[]): boolean {
+  const normalized = normalizeRef(table);
+  return prefixes.some((prefix) => normalized.startsWith(prefix));
+}
+
+function sensitiveTables(map: Map<string, SourceMapEntry>, prefixes: string[]): string[] {
+  return [...new Set([...map.values()].map((entry) => entry.physicalTable).filter((table) => isSensitiveTable(table, prefixes)))];
+}
+
+function hasExplicitAccessToAllSensitiveTables(allowedTables: string[], map: Map<string, SourceMapEntry>, prefixes: string[]): boolean {
+  const required = sensitiveTables(map, prefixes);
+  return required.length > 0 && required.every((table) => allowedTables.includes(table));
+}
+
+function allowedConnections(user: AccessConfig["users"][number]): string[] {
+  const allow = user.allow as { connections?: string[] } | undefined;
+  return configList(allow?.connections, [], { normalize: true });
+}
+
+function firstString(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function addEntityDetailRef(value: unknown, tables: Set<string>, map: Map<string, SourceMapEntry>, options: { depth?: number; directString?: boolean } = {}): void {
+  const depth = options.depth ?? 0;
+  if (depth > MAX_ENTITY_REF_DEPTH || !value) return;
+  if (typeof value === "string") {
+    if (options.directString) tables.add(sourceNameToTable(value, map));
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) addEntityDetailRef(item, tables, map, { depth: depth + 1, directString: true });
+    return;
+  }
+  if (typeof value !== "object") return;
+
+  const record = value as Record<string, unknown>;
+
+  const directRef = firstString(record, ["table", "sourceName", "source", "source_name", "tableName", "table_name"]);
+  if (directRef) tables.add(sourceNameToTable(directRef, map));
+
+  const schema = firstString(record, ["schema", "schemaName", "schema_name"]);
+  const name = firstString(record, ["name", "entityName", "entity_name", "tableName", "table_name"]);
+  if (schema && name) tables.add(sourceNameToTable(`${schema}.${name}`, map));
+
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === "object") {
+      addEntityDetailRef(nested, tables, map, { depth: depth + 1 });
+    }
+  }
+}
+
+export async function extractTables(toolName: string, args: unknown, options: { fresh?: boolean } = {}): Promise<string[]> {
+  const a = args as Record<string, unknown> | undefined;
+  if (!a || typeof a !== "object" || Array.isArray(a)) return [];
+
+  const map = await loadSourceMap(options);
   const tables = new Set<string>();
 
   switch (toolName) {
     case "sl_query": {
       // measures: ["superstore_orders.total_sales", "sum(superstore_orders.sales)"]
       // dimensions: [{field: "superstore_orders.region"}, ...]
-      for (const m of (a.measures as string[] | undefined) ?? []) {
-        const raw = m.replace(/^[a-z_]+\(/, "").replace(/\)$/, ""); // strip aggregate fn
-        const sourceName = raw.split(".")[0];
-        if (sourceName) tables.add(sourceNameToTable(sourceName, map));
-      }
+      collectMetricRefs(a.measures, tables, map);
       for (const d of (a.dimensions as Array<{ field?: string }> | undefined) ?? []) {
-        const sourceName = d?.field?.split(".")[0];
-        if (sourceName) tables.add(sourceNameToTable(sourceName, map));
+        if (d?.field) addTableRefsFromText(d.field, tables, map);
+      }
+      for (const key of ["filters", "where", "segments", "joins", "join", "orderBy", "order_by", "sort", "sorts", "having", "groupBy", "group_by"]) {
+        collectTableRefs(a[key], tables, map);
       }
       break;
     }
@@ -96,10 +334,14 @@ export async function extractTables(toolName: string, args: unknown): Promise<st
       if (sourceName) tables.add(sourceNameToTable(sourceName, map));
       break;
     }
+    case "sl_validate": {
+      const sourceName = (a.sourceName ?? a.source ?? a.table) as string | undefined;
+      if (sourceName) tables.add(sourceNameToTable(sourceName, map));
+      break;
+    }
     case "entity_details": {
-      for (const e of (a.entities as Array<{ table?: string }> | undefined) ?? []) {
-        if (e?.table) tables.add(e.table);
-      }
+      addEntityDetailRef(a, tables, map);
+      addEntityDetailRef(a.entities, tables, map, { directString: true });
       break;
     }
     default:
@@ -109,6 +351,32 @@ export async function extractTables(toolName: string, args: unknown): Promise<st
   return [...tables].filter(Boolean);
 }
 
+export async function kxCatalog(identity: Identity): Promise<{
+  connections: string[];
+  sources: Array<{ sourceName: string; table: string }>;
+  examples: string[];
+}> {
+  const config = await getAccessConfig({ fresh: true });
+  const user = config.users.find((u) => u.id === identity.userId);
+  const allowedTables = user?.allow?.tables ?? [];
+  const connections = allowedConnections(user ?? ({ allow: {} } as AccessConfig["users"][number]));
+  const map = await loadSourceMap({ fresh: true });
+  const allowedSet = new Set(allowedTables.map(normalizeRef));
+  const sources = [...map.entries()]
+    .map(([sourceName, entry]) => ({ sourceName, table: entry.physicalTable }))
+    .filter((entry) => allowedSet.has(entry.table))
+    .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+
+  return {
+    connections,
+    sources,
+    examples: [
+      "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
+      "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
+    ]
+  };
+}
+
 // ─── ACL check ────────────────────────────────────────────────────────────────
 
 export async function check(
@@ -116,32 +384,73 @@ export async function check(
   toolName: string,
   args: unknown
 ): Promise<AclDecision> {
-  const config = await getAccessConfig();
-
-  // 1. Global deny_tools
-  const denyTools = config.defaults?.deny_tools ?? [];
-  if (denyTools.includes(toolName)) {
-    return { allowed: false, reason: "tool_default_deny" };
-  }
+  const config = await getAccessConfig({ fresh: true });
+  const policy = aclPolicy(config);
 
   const user = config.users.find((u) => u.id === identity.userId);
   if (!user?.allow) {
     // No allow block = deny everything
     return { allowed: false, reason: "tool_forbidden" };
   }
+  if (user.enabled === false) {
+    return { allowed: false, reason: "agent_disabled" };
+  }
 
-  const { tools: allowedTools, tables: allowedTables } = user.allow;
+  // 1. Global deny_tools
+  if (policy.denyTools.has(toolName)) {
+    return { allowed: false, reason: "tool_default_deny" };
+  }
+
+  const allowedTools = user.allow.tools ?? [];
+  const allowedTables = user.allow.tables ?? [];
+  const connections = allowedConnections(user);
 
   // 2. Tool-level check
   if (allowedTools && !allowedTools.includes("*") && !allowedTools.includes(toolName)) {
     return { allowed: false, reason: "tool_forbidden" };
   }
+  if (allowedTools.includes("*") && !policy.knownTools.has(toolName)) {
+    return { allowed: false, reason: "tool_forbidden" };
+  }
+
+  const sourceMap = policy.tableTouchingTools.has(toolName) || policy.sensitiveMetadataTools.has(toolName)
+    ? await loadSourceMap({ fresh: true })
+    : undefined;
+
+  if (policy.sensitiveMetadataTools.has(toolName) && sourceMap && !hasExplicitAccessToAllSensitiveTables(allowedTables, sourceMap, policy.sensitiveTablePrefixes)) {
+    return { allowed: false, reason: "sensitive_metadata_forbidden:kx" };
+  }
 
   // 3. Table-level check (only for tools that touch tables)
-  const tableTouchingTools = new Set(["sl_query", "sl_read_source", "entity_details"]);
-  if (tableTouchingTools.has(toolName)) {
-    if (allowedTables && !allowedTables.includes("*")) {
-      const requested = await extractTables(toolName, args);
+  if (policy.tableTouchingTools.has(toolName)) {
+    const argsRecord = args as Record<string, unknown> | undefined;
+    if (toolName === "sl_query" && argsRecord && hasRawQueryArg(argsRecord)) {
+      return { allowed: false, reason: "raw_query_forbidden" };
+    }
+    if (connections.length > 0) {
+      const requestedConnections = extractConnectionRefs(toolName, args);
+      if (requestedConnections.length === 0) {
+        return { allowed: false, reason: "unknown_or_forbidden_connection:<missing>" };
+      }
+      for (const connection of requestedConnections) {
+        if (!connections.includes(connection)) {
+          return { allowed: false, reason: `unknown_or_forbidden_connection:${connection}` };
+        }
+      }
+    }
+    const requested = await extractTables(toolName, args, { fresh: true });
+    if (toolName === "sl_query" && requested.length === 0 && !allowedTables.includes("*")) {
+      return { allowed: false, reason: "explicit_table_required:<empty>" };
+    }
+    if ((toolName === "sl_validate" || toolName === "entity_details") && requested.length === 0 && sourceMap && !hasExplicitAccessToAllSensitiveTables(allowedTables, sourceMap, policy.sensitiveTablePrefixes)) {
+      return { allowed: false, reason: "sensitive_metadata_forbidden:kx" };
+    }
+    for (const table of requested) {
+      if (isSensitiveTable(table, policy.sensitiveTablePrefixes) && !allowedTables.includes(table)) {
+        return { allowed: false, reason: `explicit_table_required:${table}` };
+      }
+    }
+    if (!allowedTables.includes("*")) {
       for (const table of requested) {
         if (!allowedTables.includes(table)) {
           return { allowed: false, reason: `table_forbidden:${table}` };

@@ -19,12 +19,17 @@ interface UserAllow {
 interface UserConfig {
   id: string;
   name?: string;
+  enabled?: boolean;
   tokens: UserToken[];
   allow?: UserAllow;
 }
 
 interface Defaults {
   deny_tools?: string[];
+  known_tools?: string[];
+  table_touching_tools?: string[];
+  sensitive_metadata_tools?: string[];
+  sensitive_table_prefixes?: string[];
 }
 
 interface AccessConfig {
@@ -41,10 +46,11 @@ export interface Identity {
 let configCache: AccessConfig | null = null;
 let configLoadedAt = 0;
 const CACHE_TTL = 30_000;
+const SESSION_CLIENT_TTL = 24 * 60 * 60 * 1000;
 
-async function loadConfig(): Promise<AccessConfig> {
+async function loadConfig(options: { fresh?: boolean } = {}): Promise<AccessConfig> {
   const now = Date.now();
-  if (configCache && now - configLoadedAt < CACHE_TTL) return configCache;
+  if (!options.fresh && configCache && now - configLoadedAt < CACHE_TTL) return configCache;
   const projectRoot = await resolveProjectRoot();
   const configPath = path.join(projectRoot, "webui", "config", "access.yaml");
   const content = await readFile(configPath, "utf-8");
@@ -53,23 +59,42 @@ async function loadConfig(): Promise<AccessConfig> {
   return configCache;
 }
 
-export async function getAccessConfig(): Promise<AccessConfig> {
-  return loadConfig();
+export async function getAccessConfig(options: { fresh?: boolean } = {}): Promise<AccessConfig> {
+  return loadConfig(options);
 }
 
 function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
 
-// session id -> client name (populated from MCP initialize handshake)
-const sessionClients = new Map<string, string>();
+// session/user/token -> client name (populated from MCP initialize handshake)
+const sessionClients = new Map<string, { clientName: string; lastSeen: number }>();
 
-export function setSessionClient(sessionId: string, clientName: string): void {
-  sessionClients.set(sessionId, clientName);
+function sessionClientKey(sessionId: string, userId: string, tokenLabel: string): string {
+  return `${sessionId}:${userId}:${tokenLabel}`;
 }
 
-export function getSessionClient(sessionId: string | undefined): string | undefined {
-  return sessionId ? sessionClients.get(sessionId) : undefined;
+function purgeExpiredSessionClients(now = Date.now()): void {
+  for (const [key, value] of sessionClients.entries()) {
+    if (now - value.lastSeen > SESSION_CLIENT_TTL) sessionClients.delete(key);
+  }
+}
+
+export function setSessionClient(sessionId: string, userId: string, tokenLabel: string, clientName: string): void {
+  const now = Date.now();
+  purgeExpiredSessionClients(now);
+  sessionClients.set(sessionClientKey(sessionId, userId, tokenLabel), { clientName, lastSeen: now });
+}
+
+export function getSessionClient(sessionId: string | undefined, userId: string, tokenLabel: string): string | undefined {
+  if (!sessionId) return undefined;
+  const now = Date.now();
+  purgeExpiredSessionClients(now);
+  const key = sessionClientKey(sessionId, userId, tokenLabel);
+  const value = sessionClients.get(key);
+  if (!value) return undefined;
+  value.lastSeen = now;
+  return value.clientName;
 }
 
 export async function identifyRequest(
@@ -89,7 +114,7 @@ export async function identifyRequest(
         return {
           userId: user.id,
           tokenLabel: t.label,
-          client: getSessionClient(sessionId),
+          client: getSessionClient(sessionId, user.id, t.label),
         };
       }
     }
