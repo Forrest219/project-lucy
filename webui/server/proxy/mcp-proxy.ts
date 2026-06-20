@@ -157,7 +157,8 @@ async function writeToolsListResponse(upstream: IncomingMessage, res: ServerResp
 
   const headers: Record<string, string | string[] | number> = {};
   for (const [k, v] of Object.entries(upstream.headers)) {
-    if (v !== undefined && k.toLowerCase() !== "content-length") headers[k] = v;
+    const lower = k.toLowerCase();
+    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding") headers[k] = v;
   }
   headers["content-length"] = Buffer.byteLength(body);
   res.writeHead(upstream.statusCode ?? 200, headers);
