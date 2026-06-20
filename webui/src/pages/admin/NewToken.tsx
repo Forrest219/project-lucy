@@ -71,7 +71,7 @@ export function NewToken() {
       <div className="grid gap-6 max-w-xl">
         <div>
           <h1 className="text-xl font-semibold">Token 已生成</h1>
-          <p className="text-sm text-amber-600 mt-1">一旦关闭本页面，将无法再看到 token 明文。请立即复制保存。</p>
+          <p className="text-sm text-warning-strong mt-1">一旦关闭本页面，将无法再看到 token 明文。请立即复制保存。</p>
         </div>
 
         <div className="pl-card grid gap-3">
@@ -114,7 +114,7 @@ export function NewToken() {
 
       <div className="pl-card grid gap-4">
         <label className="grid gap-1">
-          <span className="text-sm font-medium">Token 标签 <span className="text-red-500">*</span></span>
+          <span className="text-sm font-medium">Token 标签 <span className="text-danger">*</span></span>
           <input
             className="pl-input"
             placeholder="例：hermes-laptop"

@@ -8,6 +8,10 @@ import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
 import type { ChangedFilesResponse, ValidateChangedResponse } from "../lib/types";
 
+function tableNameFromPath(filePath: string) {
+  return filePath.split("/").pop()?.replace(/\.ya?ml$/, "") ?? filePath;
+}
+
 export function Review() {
   const [selected, setSelected] = useState<string | null>(null);
   const diffQuery = useQuery({
@@ -31,20 +35,30 @@ export function Review() {
 
   const files = diffQuery.data?.files ?? [];
   const active = files.find((file) => file.filePath === (selected ?? files[0]?.filePath));
+  const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
+  function validationForFile(filePath: string) {
+    const tableName = tableNameFromPath(filePath);
+    return validateMutation.data?.results.find((item) => item.table === tableName)?.validation;
+  }
 
   return (
-    <section className="pl-panel">
+    <div className="pl-page-stack">
       <div className="pl-section-heading">
         <div>
           <p className="pl-eyebrow">审阅与校验</p>
           <h1 className="text-xl font-semibold">变更审阅与校验</h1>
+          <p className="pl-page-intro">集中查看可编辑目录中的文件变更，并对本次保存过的语义对象运行校验。WebUI 不执行 git commit。</p>
         </div>
-        <Link className="pl-btn pl-btn--ghost" to="/">表目录</Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="pl-btn pl-btn--primary" onClick={() => validateMutation.mutate()} disabled={validateMutation.isPending}>
+            {validateMutation.isPending ? "校验中..." : "Validate changed"}
+          </button>
+          <Link className="pl-btn pl-btn--secondary" to="/">表目录</Link>
+        </div>
       </div>
-      <p className="pl-page-intro">集中查看本次可编辑目录中的文件变更，并对本次保存过的语义对象运行校验。</p>
 
       <div className="pl-review-layout">
-        <aside className="pl-panel">
+        <aside className="pl-review-sidebar">
           <h2 className="pl-panel-title">文件</h2>
           {diffQuery.isLoading ? <p className="pl-notice">正在加载变更...</p> : null}
           {diffQuery.error ? <p className="pl-error">变更加载失败：{diffQuery.error instanceof Error ? diffQuery.error.message : "未知错误"}</p> : null}
@@ -59,44 +73,53 @@ export function Review() {
               >
                 <span>{file.status}</span>
                 <span className="truncate">{file.filePath}</span>
+                {validationForFile(file.filePath)?.ok === false ? (
+                  <small>校验失败</small>
+                ) : null}
               </button>
             ))}
           </div>
         </aside>
 
-        <div className="grid gap-4">
-          <section className="pl-panel">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="pl-panel-title">校验</h2>
-              <button type="button" className="pl-btn pl-btn--primary" onClick={() => validateMutation.mutate()} disabled={validateMutation.isPending}>
-                校验本次变更
-              </button>
+        <section className="pl-review-main">
+          <div className="pl-review-main-header">
+            <div>
+              <h2 className="pl-panel-title">{active?.filePath ?? "变更详情"}</h2>
+              <p className="pl-notice">{active ? `状态：${active.status}` : "请选择左侧文件查看 diff。"}</p>
             </div>
+          </div>
+          <DiffViewer diff={active?.diff || "该文件暂无可展示的补丁内容。"} />
+        </section>
+
+        <aside className="pl-review-sidebar">
+          <section className="grid gap-3">
+            <h2 className="pl-panel-title">Validate changed</h2>
             {validateMutation.data ? (
               <div className="grid gap-2">
+                <div className={failedCount > 0 ? "pl-validation-banner pl-validation-banner--danger" : "pl-validation-banner pl-validation-banner--success"}>
+                  {failedCount > 0 ? `${failedCount} 张表未通过` : `${validateMutation.data.results.length} 张表全部通过`}
+                </div>
                 {validateMutation.data.results.map((item) => (
-                  <div className={clsx("flex items-center justify-between rounded-md border px-3 py-2 text-sm", item.validation.ok ? "border-border-default bg-bg-surface" : "border-[#fecaca] bg-[#fef2f2]")} key={`${item.conn}/${item.schema}/${item.table}`}>
-                    <strong>{item.conn}/{item.schema}/{item.table}</strong>
-                    <span className="text-fg-muted">退出码 {item.validation.exitCode}</span>
+                  <div className={clsx("pl-validation-row", item.validation.ok ? "pl-validation-row--ok" : "pl-validation-row--failed")} key={`${item.conn}/${item.schema}/${item.table}`}>
+                    <div>
+                      <strong>{item.conn}/{item.schema}/{item.table}</strong>
+                      <span>退出码 {item.validation.exitCode}</span>
+                    </div>
+                    <span>{item.validation.ok ? "OK" : "FAIL"}</span>
                   </div>
                 ))}
               </div>
             ) : (
               <p className="pl-notice">对本次服务会话中保存过的表运行校验。</p>
             )}
-            </section>
-
-          <section className="pl-panel">
-            <h2 className="pl-panel-title">{active?.filePath ?? "变更详情"}</h2>
-            <DiffViewer diff={active?.diff || "该文件暂无可展示的补丁内容。"} />
           </section>
 
-          <section className="pl-panel">
+          <section className="grid gap-3">
             <h2 className="pl-panel-title">建议命令</h2>
             <pre className="pl-yaml-preview">git diff{"\n"}git status --short</pre>
           </section>
-        </div>
+        </aside>
       </div>
-    </section>
+    </div>
   );
 }

@@ -6,6 +6,8 @@ import type { AuditResponse, AuditLogEntry } from "../../lib/types";
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
+const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
+const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
 
 function buildQuery(params: Record<string, string | undefined | number>): string {
   const q = new URLSearchParams();
@@ -15,14 +17,35 @@ function buildQuery(params: Record<string, string | undefined | number>): string
   return q.toString() ? `?${q.toString()}` : "";
 }
 
+function redactValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(redactValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
+        key,
+        SENSITIVE_KEY.test(key) ? "[REDACTED]" : redactValue(nested)
+      ])
+    );
+  }
+  return value;
+}
+
+function redactErrorDetail(detail: string) {
+  const firstLine = detail.split("\n")[0] ?? detail;
+  return firstLine.replace(SENSITIVE_PAIR, "$1=[REDACTED]");
+}
+
 function EntryRow({ entry }: { entry: AuditLogEntry }) {
   const [expanded, setExpanded] = useState(false);
   const outcomeClass =
-    entry.outcome === "ok" ? "pl-status-done" : entry.outcome === "denied" ? "pl-status-not_started" : "pl-status-validation_failed";
+    entry.outcome === "ok" ? "pl-status-done" : entry.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed";
+  const redactedArgs = entry.argsSummary ? redactValue(entry.argsSummary) : null;
 
   return (
     <>
-      <tr className="border-b border-border hover:bg-bg-muted/50 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+      <tr className="pl-audit-row" onClick={() => setExpanded(!expanded)}>
         <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.ts).toLocaleString("zh-CN")}</td>
         <td className="px-3 py-2 text-sm">{entry.userId}</td>
         <td className="px-3 py-2 text-sm font-mono">{entry.tool}</td>
@@ -33,19 +56,19 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
         <td className="px-3 py-2 text-xs text-fg-muted">{entry.durationMs}ms</td>
       </tr>
       {expanded && (
-        <tr className="border-b border-border bg-bg-muted/30">
+        <tr className="pl-audit-detail">
           <td colSpan={6} className="px-3 py-3 text-xs">
-            <div className="grid gap-2">
-              {entry.argsSummary && (
+            <div className="pl-audit-detail-grid">
+              {redactedArgs !== null && (
                 <div>
                   <span className="font-medium">Args：</span>
-                  <code className="ml-2">{JSON.stringify(entry.argsSummary)}</code>
+                  <code className="ml-2">{JSON.stringify(redactedArgs)}</code>
                 </div>
               )}
               {entry.errorDetail && (
                 <div>
-                  <span className="font-medium text-red-500">错误：</span>
-                  <span className="ml-2 text-fg-muted">{entry.errorDetail}</span>
+                  <span className="font-medium text-danger">错误：</span>
+                  <span className="ml-2 text-fg-muted">{redactErrorDetail(entry.errorDetail)}</span>
                 </div>
               )}
               <div>
@@ -104,16 +127,17 @@ export function Audit() {
   const exportUrl = `/api/admin/audit/export${buildQuery({ user: user || undefined, tool: tool || undefined, outcome: outcome || undefined, since: since || undefined, until: until || undefined, tableSearch: tableSearch || undefined })}`;
 
   return (
-    <div className="grid gap-6">
+    <div className="pl-page-stack">
       <div className="flex items-start justify-between gap-4">
         <div>
+          <p className="pl-eyebrow">访问治理</p>
           <h1 className="text-xl font-semibold">访问日志</h1>
-          <p className="text-sm text-fg-muted mt-1">查看 MCP Proxy 记录的所有工具调用，可按用户、工具、状态过滤。</p>
+          <p className="pl-page-intro">查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。</p>
         </div>
-        <a href={exportUrl} download className="pl-btn pl-btn--ghost text-sm">导出 CSV</a>
+        <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="pl-admin-filterbar">
         <input
           className="pl-input w-36"
           placeholder="用户 ID"
@@ -165,9 +189,9 @@ export function Audit() {
         <>
           <div className="text-sm text-fg-muted">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} / 共 {total} 条</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="pl-audit-table w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-left text-xs text-fg-muted">
+                <tr className="border-b border-border-default text-left text-xs text-fg-muted">
                   <th className="px-3 py-2">时间</th>
                   <th className="px-3 py-2">用户</th>
                   <th className="px-3 py-2">工具</th>

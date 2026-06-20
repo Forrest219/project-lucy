@@ -143,11 +143,12 @@ export function AgentDetail() {
   const hasEdits = editName !== null || editNote !== null || editEnabled !== null || editAllowTools !== null || editAllowTables !== null || wildcardTools !== null || wildcardTables !== null;
 
   return (
-    <div className="grid gap-6">
+    <div className="pl-page-stack">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link to="/admin/agents" className="text-sm text-fg-muted hover:text-fg">‹ 返回列表</Link>
           <h1 className="text-xl font-semibold mt-1">{agent.name} <span className="text-fg-muted font-normal text-base">({agent.id})</span></h1>
+          <p className="pl-page-intro">编辑前先生成变更预览，确认后写入访问配置。</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -161,18 +162,18 @@ export function AgentDetail() {
           >
             {(editEnabled !== null ? editEnabled : agent.enabled) ? "禁用" : "启用"}
           </button>
-          <button type="button" className="pl-btn pl-btn--ghost text-sm text-red-500" onClick={handleDelete} disabled={deleteMutation.isPending}>
+          <button type="button" className="pl-btn pl-btn--danger text-sm" onClick={handleDelete} disabled={deleteMutation.isPending}>
             删除
           </button>
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-border">
+      <div className="pl-admin-tabbar">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
-            className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${activeTab === tab.key ? "border-accent text-fg font-medium" : "border-transparent text-fg-muted hover:text-fg"}`}
+            className={`pl-admin-tab ${activeTab === tab.key ? "pl-admin-tab--active" : ""}`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
@@ -233,7 +234,7 @@ export function AgentDetail() {
                     {token.expires_at && <div className="text-xs text-fg-muted">过期：{token.expires_at}</div>}
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <button
+                  <button
                       type="button"
                       className="pl-btn pl-btn--ghost text-xs"
                       onClick={() => void navigator.clipboard.writeText(token.hash).then(() => toast.success("Hash 已复制"))}
@@ -242,7 +243,7 @@ export function AgentDetail() {
                     </button>
                     <button
                       type="button"
-                      className="pl-btn pl-btn--ghost text-xs text-red-500"
+                      className="pl-btn pl-btn--danger text-xs"
                       onClick={() => handleRevokeToken(token.label)}
                     >
                       撤销
@@ -359,7 +360,7 @@ export function AgentDetail() {
       </div>
 
       {hasEdits && activeTab !== "diff" && (
-        <div className="flex justify-end gap-2 pt-4 border-t border-border">
+        <div className="flex justify-end gap-2 pt-4 border-t border-border-default">
           <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
             setEditName(null); setEditNote(null); setEditEnabled(null);
             setEditAllowTools(null); setEditAllowTables(null);

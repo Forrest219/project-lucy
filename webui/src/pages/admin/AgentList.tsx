@@ -7,6 +7,16 @@ import type { Agent, CreateAgentBody } from "../../lib/types";
 
 type AgentsResponse = { agents: Agent[]; version: string };
 
+function MetricCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
+  return (
+    <div className="pl-metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
+    </div>
+  );
+}
+
 function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void }) {
   const tableCount = agent.allow.tables.includes("*") ? "*" : agent.allow.tables.length;
   const toolCount = agent.allow.tools.includes("*") ? "*" : agent.allow.tools.length;
@@ -26,12 +36,10 @@ function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void
           <div className="text-sm text-fg-muted mt-1">
             {tokenCount} 个 token · {tableCount === "*" ? "*(全部表)" : `${tableCount} 张表`} · {toolCount === "*" ? "*(全部工具)" : `${toolCount} 个工具`}
           </div>
-          {agent.stats && (
-            <div className="text-sm text-fg-muted mt-0.5">
-              {agent.stats.lastSeen ? `最近访问 ${new Date(agent.stats.lastSeen).toLocaleString("zh-CN")} · ` : ""}
-              共 {agent.stats.callsLast7d} 次调用（近 7 天）
-            </div>
-          )}
+          <div className="text-sm text-fg-muted mt-0.5">
+            {agent.stats?.lastSeen ? `最近访问 ${new Date(agent.stats.lastSeen).toLocaleString("zh-CN")} · ` : "最近访问 — · "}
+            近 7 天 {agent.stats?.callsLast7d ?? 0} 次调用 / {agent.stats?.deniedLast7d ?? 0} 次拒绝
+          </div>
           {agent.note && <div className="text-sm text-fg-muted mt-0.5">{agent.note}</div>}
         </div>
         <div className="flex gap-2 shrink-0">
@@ -93,18 +101,18 @@ function NewAgentModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-bg-surface rounded-lg shadow-xl p-6 w-full max-w-lg">
+    <div className="pl-modal-backdrop">
+      <div className="pl-modal-panel">
         <h2 className="text-lg font-semibold mb-4">新建 Agent</h2>
         {step === "form" ? (
           <div className="grid gap-4">
             <label className="grid gap-1">
-              <span className="text-sm font-medium">用户 ID <span className="text-red-500">*</span></span>
+              <span className="text-sm font-medium">用户 ID <span className="text-danger">*</span></span>
               <input className="pl-input" placeholder="例：wangwu" value={id} onChange={(e) => setId(e.target.value)} />
               <span className="text-xs text-fg-muted">1-32 位，仅 A-Z a-z 0-9 _ -</span>
             </label>
             <label className="grid gap-1">
-              <span className="text-sm font-medium">显示名 <span className="text-red-500">*</span></span>
+              <span className="text-sm font-medium">显示名 <span className="text-danger">*</span></span>
               <input className="pl-input" placeholder="例：王五" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="grid gap-1">
@@ -170,6 +178,9 @@ export function AgentList() {
   });
 
   const agents = data?.agents ?? [];
+  const enabledCount = agents.filter((agent) => agent.enabled).length;
+  const tokenCount = agents.reduce((sum, agent) => sum + agent.tokens.length, 0);
+  const deniedLast7d = agents.reduce((sum, agent) => sum + (agent.stats?.deniedLast7d ?? 0), 0);
   const filtered = agents.filter((a) => {
     const matchSearch = !search || a.id.includes(search) || a.name.includes(search);
     const matchEnabled =
@@ -183,16 +194,24 @@ export function AgentList() {
   if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
 
   return (
-    <div className="grid gap-6">
+    <div className="pl-page-stack">
       <div className="flex items-start justify-between gap-4">
         <div>
+          <p className="pl-eyebrow">访问治理</p>
           <h1 className="text-xl font-semibold">Agent 实例</h1>
-          <p className="text-sm text-fg-muted mt-1">配置每个 Agent 实例能用哪些 MCP 工具和访问哪些表。</p>
+          <p className="pl-page-intro">配置每个 Agent 实例能用哪些 MCP 工具和访问哪些表。</p>
         </div>
         <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
       </div>
 
-      <div className="flex gap-3">
+      <div className="pl-metric-grid">
+        <MetricCard label="Agent 数" value={agents.length} hint="access.yaml 中的实例" />
+        <MetricCard label="启用数" value={enabledCount} hint={`${agents.length - enabledCount} 个禁用`} />
+        <MetricCard label="Token 数" value={tokenCount} hint="不含明文 token" />
+        <MetricCard label="7d denied" value={deniedLast7d} hint="来自 Agent stats 汇总" />
+      </div>
+
+      <div className="pl-admin-filterbar">
         <input
           className="pl-input flex-1"
           placeholder="按用户 id / 名称搜索"

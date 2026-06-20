@@ -116,6 +116,7 @@
   .pl-btn--primary { @apply bg-primary text-primary-fg hover:bg-primary-hover border border-transparent; }
   .pl-btn--secondary { @apply border border-border-default bg-bg-surface hover:bg-bg-muted text-fg-default; }
   .pl-btn--ghost { @apply text-fg-default hover:bg-bg-muted; }
+  .pl-btn--danger { @apply border border-danger-strong bg-danger-soft text-danger-strong hover:bg-danger-soft; }
   .pl-btn:disabled { @apply opacity-50 cursor-not-allowed; }
 
   /* 表单 */
@@ -219,11 +220,45 @@
 
   /* 审核页 */
   .pl-review-layout { @apply grid grid-cols-[260px_minmax(0,1fr)] gap-4; }
+  .pl-review-layout { @apply xl:grid-cols-[280px_minmax(0,1fr)_340px]; }
+  .pl-review-sidebar,
+  .pl-review-main { @apply rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-review-main { @apply min-w-0; }
+  .pl-review-main-header { @apply mb-3 flex flex-wrap items-start justify-between gap-3; }
   .pl-file-list { @apply grid gap-1; }
   .pl-file-button { @apply grid grid-cols-[auto_1fr] items-center gap-2 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm; }
   .pl-file-button:hover { @apply bg-bg-muted; }
   .pl-file-button--active { @apply bg-bg-muted border-border-default; }
   .pl-file-button > span:first-child { @apply rounded bg-bg-elevated border border-border-default px-1.5 py-0.5 text-xs text-fg-muted font-mono; }
+  .pl-file-button small { @apply col-span-2 text-xs text-danger-strong; }
+  .pl-validation-row { @apply flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm; }
+  .pl-validation-row div { @apply grid gap-0.5; }
+  .pl-validation-row strong { @apply font-medium; }
+  .pl-validation-row div span { @apply text-xs text-fg-muted; }
+  .pl-validation-row > span { @apply text-xs font-semibold; }
+  .pl-validation-row--ok { @apply border-success-strong bg-success-soft; }
+  .pl-validation-row--ok > span { @apply text-success-strong; }
+  .pl-validation-row--failed { @apply border-danger-strong bg-danger-soft; }
+  .pl-validation-row--failed > span { @apply text-danger-strong; }
+  .pl-validation-banner { @apply rounded-md border px-3 py-2 text-sm font-medium; }
+  .pl-validation-banner--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-validation-banner--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+
+  /* Admin */
+  .pl-card { @apply rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-admin-filterbar { @apply flex flex-wrap gap-3 rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-admin-tabbar { @apply flex flex-wrap gap-1 border-b border-border-default; }
+  .pl-admin-tab { @apply -mb-px border-b-2 border-transparent px-4 py-2 text-sm text-fg-muted; }
+  .pl-admin-tab--active { @apply border-accent text-fg-default font-medium; }
+  .pl-modal-backdrop { @apply fixed inset-0 z-50 flex items-center justify-center bg-fg-default/40 p-4; }
+  .pl-modal-panel { @apply w-full max-w-lg rounded-md bg-bg-surface p-6 shadow-lg; }
+  .pl-audit-table th,
+  .pl-audit-table td { @apply px-3 py-2; }
+  .pl-audit-row { @apply cursor-pointer border-b border-border-default; }
+  .pl-audit-row:hover { @apply bg-bg-muted; }
+  .pl-audit-detail { @apply border-b border-border-default bg-bg-muted; }
+  .pl-audit-detail-grid { @apply grid gap-2 text-xs; }
+  .pl-audit-detail-grid code { @apply break-all rounded bg-bg-base px-2 py-1 font-mono; }
 
   /* 关联关系 */
   .pl-join-row { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3 md:grid-cols-[1fr_2fr_auto_auto]; }
