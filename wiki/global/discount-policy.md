@@ -7,7 +7,7 @@
 折扣率 = **销售额加权折扣**：
 
 ```
-discount_rate = SUM(discount * sales) / NULLIF(SUM(sales), 0)
+weighted_discount = SUM(discount * sales) / NULLIF(SUM(sales), 0)
 ```
 
 `discount` 字段语义：**折扣率（0–1 之间的小数）**，表示该行折让占原价的比例。已在销售额 `sales` 中扣减（`sales` 已是折后金额）。
@@ -28,9 +28,9 @@ discount_rate = SUM(discount * sales) / NULLIF(SUM(sales), 0)
 
 ## 用法
 
-优先调用 `superstore_orders.discount_rate` measure（M1.1 后定义），不要在 SQL 里手写公式 — 避免漂移。
+优先调用 `superstore_orders.weighted_discount` measure，不要在 SQL 里手写公式 — 避免漂移。
 
 ## 参考
 
-- `semantic-layer/mysql-aliyun/_schema/dataforai.yaml` → `superstore_orders.measures.discount_rate`
+- `semantic-layer/mysql-aliyun/superstore_orders.yaml` → `superstore_orders.measures.weighted_discount`
 - `CLAUDE.md` 指标口径段（M1.4 完成后将引用本文件而非内联公式）
