@@ -65,15 +65,26 @@ export type SourceSummary = {
   mtime: string;
 };
 
+export type ConnectionInfo = {
+  id: string;
+  driver?: string;
+  passwordSource?: "file" | "inline" | "env";
+  schemas: string[];
+  enabledTables: string[];
+};
+
 export type ProjectInfo = {
   root: string;
-  connections: Array<{
-    id: string;
-    driver?: string;
-    passwordSource?: "file" | "inline" | "env";
-    schemas: string[];
-  }>;
+  connections: ConnectionInfo[];
   ktxAvailable: boolean;
+};
+
+export type ConnectionsResponse = {
+  connections: ConnectionInfo[];
+};
+
+export type ConnectionTablesResponse = {
+  tables: string[];
 };
 
 export type SourcesResponse = {

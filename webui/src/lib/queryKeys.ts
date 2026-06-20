@@ -5,5 +5,7 @@ export const queryKeys = {
   diff: ["diff"] as const,
   wiki: ["wiki"] as const,
   wikiPage: (key: string) => ["wiki", key] as const,
-  joinCandidates: ["joins", "candidates"] as const
+  joinCandidates: ["joins", "candidates"] as const,
+  connections: ["connections"] as const,
+  connectionTables: (connId: string) => ["connections", connId, "tables"] as const
 };

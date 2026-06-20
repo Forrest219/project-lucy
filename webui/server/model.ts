@@ -72,6 +72,7 @@ export type ConnectionInfo = {
   driver?: string;
   passwordSource?: "file" | "inline" | "env";
   schemas: string[];
+  enabledTables: string[];
 };
 
 export type ProjectInfo = {

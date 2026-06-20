@@ -89,13 +89,15 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
   const connections: ConnectionInfo[] = Object.entries(connectionsConfig).map(([id, raw]) => {
     const conn = valueAsRecord(raw);
     const explicitSchemas = stringArray(conn.schemas);
-    const enabledSchemas = stringArray(conn.enabled_tables).map((table) => table.split(".")[0]).filter(Boolean);
+    const enabledTables = stringArray(conn.enabled_tables);
+    const enabledSchemas = enabledTables.map((table) => table.split(".")[0]).filter(Boolean);
     const schemas = Array.from(new Set([...explicitSchemas, ...enabledSchemas])).sort();
     return {
       id,
       driver: typeof conn.driver === "string" ? conn.driver : undefined,
       passwordSource: passwordSource(conn.password),
-      schemas
+      schemas,
+      enabledTables
     };
   });
 
@@ -104,4 +106,8 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
     connections,
     ktxAvailable: true
   };
+}
+
+export async function readConnections(projectRoot: string): Promise<ConnectionInfo[]> {
+  return (await readProject(projectRoot)).connections;
 }

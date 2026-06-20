@@ -32,6 +32,72 @@ function issuesFromOutput(stdout: string, stderr: string): Issue[] {
     .map((message) => ({ message }));
 }
 
+export type ConnectionTestResult = {
+  status: "ok" | "error";
+  latencyMs?: number;
+  detail?: string;
+  reason?: string;
+};
+
+export type IngestResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+export async function testConnection(
+  projectRoot: string,
+  connId: string,
+  execFileImpl: ExecFileImpl = execFile
+): Promise<ConnectionTestResult> {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      "ktx",
+      ["connection", "test", connId],
+      { cwd: projectRoot, timeout: 30_000, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
+      (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
+        const latencyMs = Date.now() - start;
+        const out = stdout.toString();
+        const err = stderr.toString();
+        if (!error) {
+          resolve({ status: "ok", latencyMs, detail: out.trim() || undefined });
+          return;
+        }
+        if (error.code === "ENOENT") {
+          reject(new KtxCliError("ktx CLI was not found in PATH"));
+          return;
+        }
+        resolve({ status: "error", latencyMs, reason: (err || out).trim() || "Connection failed" });
+      }
+    );
+  });
+}
+
+export async function runIngest(
+  projectRoot: string,
+  connId: string,
+  execFileImpl: ExecFileImpl = execFile
+): Promise<IngestResult> {
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      "ktx",
+      ["ingest", connId],
+      { cwd: projectRoot, timeout: 120_000, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
+      (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
+        const out = stdout.toString();
+        const err = stderr.toString();
+        if (error?.code === "ENOENT") {
+          reject(new KtxCliError("ktx CLI was not found in PATH"));
+          return;
+        }
+        const exitCode = !error ? 0 : (typeof error.code === "number" ? error.code : 1);
+        resolve({ exitCode, stdout: out, stderr: err });
+      }
+    );
+  });
+}
+
 export async function validateSource(
   projectRoot: string,
   conn: string,

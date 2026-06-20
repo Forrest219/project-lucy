@@ -1,9 +1,12 @@
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
 import Fastify, { type FastifyError } from "fastify";
+import { parse, stringify } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
 import { changedFiles, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
-import { validateSource, type ValidationResult } from "./ktx";
-import { readProject, resolveProjectRoot } from "./project";
+import { validateSource, testConnection, runIngest, type ValidationResult } from "./ktx";
+import { readProject, readConnections, resolveProjectRoot } from "./project";
 import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
@@ -14,6 +17,7 @@ import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
+import { safeWrite } from "./fs-safe.js";
 
 type ErrorEnvelope = {
   ok: false;
@@ -198,6 +202,78 @@ export function buildServer() {
       ok: true,
       data
     };
+  });
+
+  // ─── Database connection routes ───────────────────────────────────────────
+
+  app.get("/api/connections", async () => {
+    const projectRoot = await resolveProjectRoot();
+    const connections = await readConnections(projectRoot);
+    return { ok: true, data: { connections } };
+  });
+
+  app.get<{
+    Params: { connId: string };
+  }>("/api/connections/:connId/tables", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const schemaDir = path.join(projectRoot, "semantic-layer", connId, "_schema");
+    const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
+    const tables: string[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".yaml")) {
+        continue;
+      }
+      const schemaName = entry.name.replace(/\.yaml$/, "");
+      const text = await readFile(path.join(schemaDir, entry.name), "utf8").catch(() => "");
+      const doc = parse(text) as Record<string, unknown> | null;
+      if (doc && typeof doc === "object" && doc.tables && typeof doc.tables === "object") {
+        for (const tableName of Object.keys(doc.tables as Record<string, unknown>)) {
+          tables.push(`${schemaName}.${tableName}`);
+        }
+      }
+    }
+    return { ok: true, data: { tables: tables.sort() } };
+  });
+
+  app.put<{
+    Params: { connId: string };
+    Body: { enabledTables: string[] };
+  }>("/api/connections/:connId/enabled-tables", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const { enabledTables } = request.body ?? {};
+    const yamlPath = path.join(projectRoot, "ktx.yaml");
+    const yamlText = await readFile(yamlPath, "utf8");
+    const config = parse(yamlText) as Record<string, unknown>;
+    const connections = config.connections as Record<string, Record<string, unknown>> | undefined;
+    if (!connections || !connections[connId]) {
+      const err = new Error(`Connection '${connId}' not found in ktx.yaml`) as Error & { statusCode: number; code: string };
+      err.statusCode = 404;
+      err.code = "CONNECTION_NOT_FOUND";
+      throw err;
+    }
+    connections[connId].enabled_tables = Array.isArray(enabledTables) ? enabledTables : [];
+    await safeWrite(projectRoot, "ktx.yaml", stringify(config));
+    return { ok: true };
+  });
+
+  app.post<{
+    Params: { connId: string };
+  }>("/api/connections/:connId/test", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const result = await testConnection(projectRoot, connId);
+    return { ok: true, data: result };
+  });
+
+  app.post<{
+    Params: { connId: string };
+  }>("/api/connections/:connId/ingest", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const result = await runIngest(projectRoot, connId);
+    return { ok: true, data: result };
   });
 
   registerAgentRoutes(app);

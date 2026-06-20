@@ -3,6 +3,7 @@ import path from "node:path";
 
 const ALLOW = ["semantic-layer", "evals", "skills", "wiki", ".ktx-ui", "webui/config"];
 const DENY = [".ktx/secrets", "raw-sources", ".git"];
+const ALLOW_FILES = ["ktx.yaml"];
 
 export class ForbiddenPathError extends Error {
   code = "FORBIDDEN_PATH";
@@ -59,6 +60,16 @@ export async function resolveWritable(projectRoot: string, relPath: string): Pro
   if (matchesPrefix(normalized, DENY)) {
     throw new ForbiddenPathError(`Writing ${normalized} is forbidden`);
   }
+
+  if (ALLOW_FILES.includes(normalized)) {
+    const rootReal = await realpath(projectRoot);
+    const target = path.join(rootReal, normalized);
+    if (!isWithin(target, rootReal)) {
+      throw new ForbiddenPathError("Resolved path escapes the project root");
+    }
+    return target;
+  }
+
   if (!matchesPrefix(normalized, ALLOW)) {
     throw new ForbiddenPathError(`Writing ${normalized} is outside allowed directories`);
   }
