@@ -1,0 +1,24 @@
+{
+  "foreignKeys": [
+    {
+      "fromTable": "kx_fact_financial_amount",
+      "fromTablePath": "tables/Xw.ZGF0YWZvcmFp.a3hfZmFjdF9maW5hbmNpYWxfYW1vdW50.json",
+      "fromColumn": "company_id",
+      "toCatalog": null,
+      "toDb": "dataforai",
+      "toTable": "kx_dim_company",
+      "toColumn": "company_id",
+      "constraintName": "fk_kx_amount_company"
+    },
+    {
+      "fromTable": "kx_fact_financial_amount",
+      "fromTablePath": "tables/Xw.ZGF0YWZvcmFp.a3hfZmFjdF9maW5hbmNpYWxfYW1vdW50.json",
+      "fromColumn": "item_id",
+      "toCatalog": null,
+      "toDb": "dataforai",
+      "toTable": "kx_dim_financial_item",
+      "toColumn": "item_id",
+      "constraintName": "fk_kx_amount_item"
+    }
+  ]
+}

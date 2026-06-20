@@ -1,0 +1,92 @@
+{
+  "catalog": null,
+  "db": "dataforai",
+  "name": "kx_dim_financial_item",
+  "kind": "table",
+  "comment": "KX财报项目维度表",
+  "estimatedRows": 123,
+  "columns": [
+    {
+      "name": "item_id",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "财报项目ID"
+    },
+    {
+      "name": "statement_type",
+      "nativeType": "enum",
+      "normalizedType": "enum",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "报表类型：balance_sheet=资产负债表，income_statement=利润表，cash_flow=现金流量表"
+    },
+    {
+      "name": "item_side",
+      "nativeType": "enum",
+      "normalizedType": "enum",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "项目归属：asset=资产，liability_equity=负债及所有者权益，income=利润表项目，cash_flow=现金流量项目"
+    },
+    {
+      "name": "item_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "财报项目名称"
+    },
+    {
+      "name": "row_no",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "原报表行次"
+    },
+    {
+      "name": "display_order",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "展示顺序，按原始报表行顺序排序"
+    },
+    {
+      "name": "is_total",
+      "nativeType": "tinyint",
+      "normalizedType": "tinyint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "是否为合计或小计项目"
+    },
+    {
+      "name": "created_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "创建时间"
+    },
+    {
+      "name": "updated_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "更新时间"
+    }
+  ],
+  "foreignKeys": []
+}

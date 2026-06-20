@@ -1,0 +1,181 @@
+{
+  "catalog": null,
+  "db": "dataforai",
+  "name": "kx_fact_financial_amount",
+  "kind": "table",
+  "comment": "KX财报金额事实表",
+  "estimatedRows": 2278,
+  "columns": [
+    {
+      "name": "amount_id",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "金额记录ID"
+    },
+    {
+      "name": "company_id",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "公司ID，关联kx_dim_company.company_id"
+    },
+    {
+      "name": "item_id",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "财报项目ID，关联kx_dim_financial_item.item_id"
+    },
+    {
+      "name": "report_period",
+      "nativeType": "char",
+      "normalizedType": "char",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "报表期间，格式YYYYMM，例如202605"
+    },
+    {
+      "name": "report_date",
+      "nativeType": "date",
+      "normalizedType": "date",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "报表日期，例如2026-05-31"
+    },
+    {
+      "name": "fiscal_year",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "会计年度"
+    },
+    {
+      "name": "fiscal_month",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "会计月份"
+    },
+    {
+      "name": "statement_type",
+      "nativeType": "enum",
+      "normalizedType": "enum",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "报表类型：balance_sheet=资产负债表，income_statement=利润表，cash_flow=现金流量表"
+    },
+    {
+      "name": "amount_type",
+      "nativeType": "enum",
+      "normalizedType": "enum",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "金额类型：begin_balance=年初余额，end_balance=期末余额，current_month=本月金额，year_to_date=本年累计，quarter=季度金额"
+    },
+    {
+      "name": "quarter_no",
+      "nativeType": "tinyint",
+      "normalizedType": "tinyint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "季度编号，非季度数据为0，第一季度为1"
+    },
+    {
+      "name": "amount",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "金额，单位元；原始报表为空时为NULL"
+    },
+    {
+      "name": "currency",
+      "nativeType": "char",
+      "normalizedType": "char",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "币种"
+    },
+    {
+      "name": "source_file_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "来源Excel文件名，仅用于追溯"
+    },
+    {
+      "name": "source_sheet_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "来源工作表名称，仅用于追溯"
+    },
+    {
+      "name": "source_cell",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "来源单元格位置，仅用于追溯"
+    },
+    {
+      "name": "created_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "创建时间"
+    },
+    {
+      "name": "updated_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "更新时间"
+    }
+  ],
+  "foreignKeys": [
+    {
+      "fromColumn": "company_id",
+      "toCatalog": null,
+      "toDb": "dataforai",
+      "toTable": "kx_dim_company",
+      "toColumn": "company_id",
+      "constraintName": "fk_kx_amount_company"
+    },
+    {
+      "fromColumn": "item_id",
+      "toCatalog": null,
+      "toDb": "dataforai",
+      "toTable": "kx_dim_financial_item",
+      "toColumn": "item_id",
+      "constraintName": "fk_kx_amount_item"
+    }
+  ]
+}
