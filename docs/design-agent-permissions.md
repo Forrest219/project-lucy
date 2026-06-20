@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy WebUI Agent 权限管控模块设计 |
 | 文档类型 | Design |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-06-19 |
 | 撰写人 | Claude Thinker |
 | 委托人 | zhangxingchen |
@@ -362,12 +362,50 @@ export type McpToolInfo = {
 
 ### 3.3 SQLite schema 增量
 
-沿用 spec 07 §5.2 的 `access_log` / `revoked_tokens`，新增视图便于 stats 查询：
+不新增表。沿用 spec 07 §5.2 定义的两张表，完整 DDL（由 `webui/server/admin/audit.ts` 在启动时 `CREATE TABLE IF NOT EXISTS` 建立，与 MCP Proxy 共享同一文件）：
 
 ```sql
--- 不新增表；仅在后端 audit.ts 内提供查询函数
--- SELECT user_id, COUNT(*) FROM access_log WHERE ts >= datetime('now','-7 days') GROUP BY user_id;
--- SELECT user_id, MAX(ts) AS last_seen FROM access_log GROUP BY user_id;
+CREATE TABLE IF NOT EXISTS access_log (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts           TEXT    NOT NULL,          -- ISO datetime
+  user_id      TEXT    NOT NULL,
+  client       TEXT,
+  tool         TEXT    NOT NULL,
+  tables       TEXT,                      -- JSON array string
+  args_summary TEXT,                      -- JSON object string
+  outcome      TEXT    NOT NULL,          -- 'ok' | 'error' | 'denied'
+  error_detail TEXT,
+  duration_ms  INTEGER NOT NULL,
+  request_id   TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_al_user_ts ON access_log(user_id, ts);
+CREATE INDEX IF NOT EXISTS idx_al_tool_ts ON access_log(tool, ts);
+
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  token_hash TEXT PRIMARY KEY,            -- 'sha256:<hex>'
+  revoked_at TEXT NOT NULL,              -- ISO datetime
+  reason     TEXT                         -- 'manual_revoke' | 'agent_deleted'
+);
+```
+
+Module 1 不新增表或视图；stats 查询以 SQL 函数形式内联在后端路由处理函数中：
+
+```sql
+-- per-user stats (callsLast7d / deniedLast7d / lastSeen)
+SELECT user_id,
+       COUNT(*)                                          AS calls7,
+       SUM(CASE WHEN outcome='denied' THEN 1 ELSE 0 END) AS denied7,
+       MAX(ts)                                           AS last_seen
+FROM access_log
+WHERE ts >= datetime('now', '-7 days')
+GROUP BY user_id;
+
+-- top tables per user (limit 3)
+SELECT user_id, tables, COUNT(*) AS cnt
+FROM access_log
+WHERE ts >= datetime('now', '-7 days') AND tables IS NOT NULL
+GROUP BY user_id, tables
+ORDER BY user_id, cnt DESC;
 ```
 
 ### 3.4 文件落盘策略
@@ -559,17 +597,27 @@ ORDER BY ts DESC LIMIT :limit OFFSET :offset;
 
 **`GET /api/admin/mcp-tools`**
 
+Query: 无。
+
 Response:
 ```jsonc
 { "ok": true, "data": {
   "tools": [
-    { "name": "sl_query", "description": "Query semantic layer", "globalDenied": false },
-    { "name": "sql_execution", "description": "Raw SQL", "globalDenied": true }
+    { "name": "sl_query",       "description": "Query semantic layer", "globalDenied": false },
+    { "name": "sql_execution",  "description": "Raw SQL",              "globalDenied": true  },
+    { "name": "memory_ingest",  "description": "Ingest memory",        "globalDenied": true  }
   ]
 }}
 ```
-实现：从代理启动时缓存的 KTX `tools/list` 调用结果读取，叠加 `defaults.deny_tools`。
-[假设：MCP Proxy 启动时已调用 KTX `tools/list` 并缓存。] 如未缓存，需要在 proxy 内新增一次启动期 fetch。
+
+实现路径（按优先级降级）：
+
+1. **优先**：从 MCP Proxy 在启动期缓存的 KTX `tools/list` 结果读取（[假设 A1]）。
+2. **降级**：若 Proxy 未提供缓存接口，后端在请求时发一次 HTTP POST 到 `:7879/mcp`（`method: "tools/list"`）；响应超时 2s，失败则返回 `503 MCP_TOOLS_UNAVAILABLE`，前端置灰工具网格并显示"无法获取工具列表，工具权限将以文本输入替代"。
+
+`globalDenied` 计算：`defaults.deny_tools` 列表命中即为 `true`，前端将这些工具渲染为置灰 checkbox，tooltip 显示「全局禁用」。
+
+错误码：`MCP_TOOLS_UNAVAILABLE`（HTTP 503）。
 
 ---
 
@@ -626,9 +674,12 @@ Response:
 管理员 → 点 token 卡片「撤销」 → 弹确认（红色危险动作） → 确认
       → DELETE /api/admin/agents/zhangsan/tokens/hermes-laptop
       → 后端：
-          1. fs-safe 写 access.yaml，移除 tokens[label=hermes-laptop]
-          2. better-sqlite3 INSERT INTO revoked_tokens (token_hash, revoked_at, reason='manual_revoke')
+          1. better-sqlite3 INSERT INTO revoked_tokens (token_hash, revoked_at, reason='manual_revoke')
+          2. fs-safe 写 access.yaml，移除 tokens[label=hermes-laptop]
           3. （可选）通知 proxy 立即刷新缓存
+      ⚠️ 顺序约束（与 §6.4.7 一致）：必须先写 revoked_tokens，再写 yaml。
+         若 yaml 写失败，token hash 已在黑名单，下次 TTL 刷新后代理仍会拒绝该 token（安全侧失效）。
+         若 sqlite INSERT 失败，放弃本次撤销，向前端返回 500。
       → 响应 { written: true, revokedAt }
       → 前端 toast "已撤销。代理可能在 30 秒内仍接受该 token。"
 ```
@@ -695,13 +746,52 @@ Top tables 单独一条 query（每 user 限 3 行）。
 - 旧 `tokens[].hash` 已有 sha256，无需迁移。
 - `last_used` 是派生字段，不写入 yaml；UI 加载时 join 一次 sqlite。
 
-### 6.4 安全约束
+### 6.4 安全约束与接入边界
 
-- WebUI 仍只绑 `127.0.0.1`，admin 路由不引入额外鉴权（依赖本机假设）。
-- 明文 token 仅在 `POST .../tokens` 的 HTTP 响应里返回一次，绝不写入任何日志（前端 RTL 测试需验证 console / network log 不含明文）。
-- `GET /api/admin/audit` 不返回 token、不返回密码。
-- 删除 Agent 时，关联 token hash 必须写入 `revoked_tokens`，避免 yaml TTL 未刷新导致 30s 内仍可用。
-- 所有 fs-safe 防护（路径白名单、`..` 穿越）继续生效。
+Module 1 只定义 Lucy 自身的 Agent MCP 接入与授权边界；当前不承担第三方产品接入、外部身份源集成或多租户管理员隔离。
+
+1. **MCP Token 是 Agent 接入凭据**
+   - Agent 通过 Lucy 发放的 MCP token 调用 `127.0.0.1:7879/mcp`。
+   - 未带 token、未知 token、已撤销 token、已禁用 Agent 的 token 都必须拒绝。
+   - WebUI 仍只绑 `127.0.0.1`，admin 路由不引入额外鉴权（依赖本机假设）。
+2. **Token 明文只显示一次**
+   - 明文 token 仅在 `POST .../tokens` 的 HTTP 响应里返回一次。
+   - token 明文不得写入 yaml、sqlite、audit、console log、network log 或测试快照。
+   - `GET /api/admin/audit` 不返回 token、不返回密码。
+3. **Agent 不直接持有系统内部凭据**
+   - Agent 只持有 MCP token，不持有数据库密码、服务端密钥或本地配置写权限。
+   - 内部凭据由 Lucy MCP Proxy / 后端服务持有并代为执行。
+4. **权限裁决发生在 Lucy MCP Proxy**
+   - 工具级、表级 ACL 必须在 MCP Proxy 层统一裁决。
+   - 上游工具、数据库、模型返回前必须先通过 Proxy 授权检查。
+   - 被拒绝请求不得继续下发给上游执行。
+5. **默认拒绝**
+   - 未显式授权的 tool/table 一律拒绝。
+   - `allow.tables: []` 表示无任何表权限，不是通配。
+   - 不存在、未配置、解析失败或无法归属到授权对象的访问请求必须按拒绝处理。
+6. **审计以 Agent 为归因主体**
+   - 每次 MCP `tools/call` 必须写入 audit，包含 `user_id`、tool、table、outcome、reason、request id、时间戳。
+   - allow 与 denied 都要可查询；denied 必须能说明拒绝原因。
+   - audit 不得包含 token 明文、数据库密码或其他内部凭据。
+7. **撤销优先于 YAML 删除**
+   - 删除 token 时，必须先写入 `revoked_tokens`，再从 yaml 删除 token hash。
+   - 删除 Agent 时，关联 token hash 必须写入 `revoked_tokens`，避免 yaml TTL 未刷新导致 30s 内仍可用。
+8. **配置事实源保持简单**
+   - Agent、token hash、ACL 的事实源仍是 `webui/config/access.yaml`。
+   - audit 与 revoked token 的事实源仍是 `.ktx-ui/audit.sqlite`。
+   - 本阶段不引入额外策略引擎、外部 IAM 或多份权限配置。
+9. **缓存延迟必须显式暴露**
+   - 当前 proxy 配置读取存在最长 30 秒缓存窗口。
+   - 禁用、撤销、删除相关 UAT 必须等待缓存窗口后复验。
+   - 若后续改为主动失效，需同步更新 UAT 等待条件。
+10. **攻击面测试是上线门槛**
+    - 除正向授权测试外，必须保留无表权限攻击方测试。
+    - 任一攻击用例能返回非授权业务数据，即阻断上线。
+11. **当前非目标明确排除**
+    - 不做 WebUI 登录、多管理员 RBAC、外部身份源同步。
+    - 不做第三方产品专用令牌模型或接入协议。
+    - 不承诺完整 SQL/parser 级策略引擎；复杂自然语言、join 改写、上游自动补表由 UAT 攻击用例持续暴露风险。
+    - 所有 fs-safe 防护（路径白名单、`..` 穿越）继续生效。
 
 ---
 
