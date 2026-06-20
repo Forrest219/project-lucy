@@ -15,6 +15,9 @@ import { CaseEditor } from "../pages/eval/CaseEditor";
 import { RunList } from "../pages/eval/RunList";
 import { RunDetail } from "../pages/eval/RunDetail";
 import { Monitor } from "../pages/eval/Monitor";
+import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
+import { TableWhitelist } from "../pages/connections/TableWhitelist";
+import { ConnectionTest } from "../pages/connections/ConnectionTest";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +59,15 @@ function breadcrumbItems(pathname: string): string[] {
     }
     return ["质量评测"];
   }
+  if (parts[0] === "connections") {
+    if (parts[1] === "whitelist") {
+      return ["数据库接入", "表白名单"];
+    }
+    if (parts[1] === "test") {
+      return ["数据库接入", "连通测试"];
+    }
+    return ["数据库接入", "连接概览"];
+  }
   if (parts[0] === "admin") {
     if (parts[1] === "agents" && parts[2] && parts[3] === "tokens") {
       return ["访问治理", "Agent 实例", parts[2], "新建 Token"];
@@ -87,6 +99,12 @@ function AppFrame() {
         </div>
 
         <nav className="grid gap-4" aria-label="主导航">
+          <section>
+            <h2 className="pl-nav-section-title">数据库接入</h2>
+            <NavLink to="/connections" end className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>连接概览</NavLink>
+            <NavLink to="/connections/whitelist" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>表白名单</NavLink>
+            <NavLink to="/connections/test" className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>连通测试</NavLink>
+          </section>
           <section>
             <h2 className="pl-nav-section-title">语义层维护</h2>
             <NavLink to="/" end className={({ isActive }) => `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`}>表目录</NavLink>
@@ -123,6 +141,9 @@ function AppFrame() {
           ))}
         </nav>
         <Routes>
+          <Route path="/connections" element={<ConnectionOverview />} />
+          <Route path="/connections/whitelist" element={<TableWhitelist />} />
+          <Route path="/connections/test" element={<ConnectionTest />} />
           <Route path="/" element={<Catalog />} />
           <Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
           <Route path="/joins/:conn/:schema/:table" element={<JoinEditor />} />
