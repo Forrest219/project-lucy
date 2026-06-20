@@ -38,6 +38,7 @@ const ACCESS_YAML = `users:
       tables:
         - dataforai.superstore_orders
       tools:
+        - kx_catalog
         - sl_read_source
 defaults:
   deny_tools: []
@@ -171,6 +172,64 @@ describe("MCP proxy smoke", () => {
       expect(audit.tool).toBe("sl_read_source");
       expect(audit.outcome).toBe("ok");
       expect(JSON.parse(String(audit.tables))).toEqual(["dataforai.superstore_orders"]);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("injects kx_catalog into tools/list and serves it from the proxy", async () => {
+    const upstreamSeen: string[] = [];
+    const upstream = createServer(async (req, res) => {
+      upstreamSeen.push(await readRequestBody(req));
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: "tools-list",
+        result: { tools: [{ name: "sl_read_source", inputSchema: { type: "object" } }] }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const listRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "tools-list", method: "tools/list" })
+      });
+      expect(listRes.status).toBe(200);
+      const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
+      expect(listBody.result.tools.map((tool) => tool.name)).toContain("kx_catalog");
+
+      const catalogRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "catalog",
+          method: "tools/call",
+          params: { name: "kx_catalog", arguments: {} }
+        })
+      });
+      expect(catalogRes.status).toBe(200);
+      const catalogBody = await catalogRes.json() as { result: { content: Array<{ text: string }> } };
+      expect(catalogBody.result.content[0]?.text).toContain("superstore_orders");
+      expect(upstreamSeen).toHaveLength(1);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
