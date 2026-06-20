@@ -33,6 +33,7 @@ const doc = YAML.parse(raw);
 
 const meta = doc.metadata ?? {};
 const quizCases = doc.quiz_cases ?? [];
+const domainName = basename(dirname(dirname(casesPath)));
 
 // Sort by numeric part of id (Q1, Q2, ...)
 quizCases.sort((a, b) => {
@@ -99,19 +100,24 @@ function renderAnswerItem(q) {
 }
 
 // Build HTML
-const documentName = meta.document_name ?? 'Quiz';
+const documentName = meta.document_name ?? `${domainName} Eval Cases`;
 const snapshotDate = meta.snapshot_date ?? '';
 const snapshotRows = meta.snapshot_rows ?? '';
-const title = `超市数据 Quiz · ${quizCases.length} 题`;
+const datasetName = String(documentName)
+  .replace(/\s*Eval Cases\s*$/i, '')
+  .replace(/\s*Eval\s*$/i, '')
+  .trim() || domainName;
+const title = `${datasetName} Quiz · ${quizCases.length} 题`;
 
 const questionsHtml = quizCases.map(renderQuestion).join('\n\n');
 const answersHtml = quizCases.map(renderAnswerItem).join('\n');
 
 // Provenance footer note
 const hasFallback = quizCases.some(q => q.provenance === 'raw_sql_fallback');
+const provenanceLabels = Array.from(new Set(quizCases.map(q => q.provenance || meta.data_source || 'semantic_layer')));
 const fallbackNote = hasFallback
-  ? `Q1–Q15 数据来自 <code>semantic_layer</code>；Q16–Q20 通过 <code>raw_sql_fallback</code> 走 ktx 体系 read-only 入口，当前 trace 标记为 <code>pending_rebuild</code>；Q21–Q30 为 SL 知识 / 反模式 / JOIN 路径 / 降级 / 多轮一致性考察题。`
-  : `数据来自 <code>semantic_layer</code>。`;
+  ? `题目数据来源包含 ${provenanceLabels.map(p => `<code>${escapeHtml(p)}</code>`).join('、')}；raw SQL fallback 题必须走 KTX read-only 入口。`
+  : `题目数据来源：${provenanceLabels.map(p => `<code>${escapeHtml(p)}</code>`).join('、')}。`;
 
 const html = `<!--
 meta:
@@ -123,7 +129,7 @@ meta:
   撰写人: render-quiz.mjs
   委托人: project-lucy 团队
   基于材料: ${casesPath}
-  适用范围: 超市数据问答能力的人工测验 / 培训；${quizCases.length} 题覆盖 SQL 基础、反模式、SL 知识、JOIN 路径、降级处理与多轮一致性
+  适用范围: ${datasetName} 数据问答能力的人工测验 / 培训；${quizCases.length} 题覆盖基础、反模式、边界、降级、路径选择与多轮一致性
   输出位置: ${outputPath}
   命名约定: {domain}-{purpose}-{variant}.{ext}，与 superstore-eval-cases.yaml 保持并行
   关联 eval: ${casesPath}
@@ -165,7 +171,7 @@ meta:
 <body>
 
 <h1>${title}</h1>
-<p class="meta">基于 superstore_orders + superstore_returns + superstore_people（4 年 5083 笔订单样本）。难度系数用 ★ 表示（0.5–5★）。Q1–Q15 走 SL measures；Q16–Q20 走 <code>raw_sql_fallback</code>（time-grain / cohort，trace 待重建）；Q21–Q30 测 SL 知识、抗反模式、JOIN 路径、降级与多轮一致性。</p>
+<p class="meta">基于 ${escapeHtml(documentName)}；快照日期 ${escapeHtml(snapshotDate || '未声明')}。难度系数用 ★ 表示（0.5–5★）。题目覆盖基础、反模式、边界、降级、路径选择与多轮一致性。</p>
 
 <form id="quiz">
 

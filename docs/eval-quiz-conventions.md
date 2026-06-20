@@ -212,7 +212,8 @@ safety_contract:
 | case_type | `single_turn` 或 `multi_turn` |
 | expected_source | `semantic_layer` 或 `raw_sql_fallback` |
 | expected_measures | case 级 measure 名列表；多轮 case 可在 turn 内补充 |
-| sql_assertions | 结构化 SQL 断言列表；新 case 必填 |
+| sql_assertions | 结构化 SQL 断言列表；会生成 SQL 的新 case 必填 |
+| tool_assertions | 结构化工具调用断言；semantic catalog/source 读取类 case 可用它替代 SQL 断言 |
 | snapshot_date | 数据快照日期 |
 | notes | 设计意图 / 反模式说明 |
 
@@ -242,7 +243,7 @@ safety_contract:
 | numeric_tolerance | 数值容差；仅适用于 numeric scalar 或 numeric columns |
 | compare_mode | `exact`, `approx`, `schema_only`, `checksum`, `subset`, `unordered_rows` |
 | key_columns | DataFrame 行匹配主键；`unordered_rows` / `subset` 时必填 |
-| check_schema | 是否校验列名和类型 |
+| check_schema | 是否校验结果中至少包含期望列；需要强制列全集时在 `data.columns` 显式声明 |
 | check_row_count | 是否校验行数 |
 
 `context_assertions` 用于多轮口径继承，必须是 Runner 可编译结构：
@@ -254,6 +255,7 @@ safety_contract:
 | inherit_dimensions | 必须继承的分组 / 维度 ID 列表 |
 | inherit_time_grain | 必须继承的时间粒度，例如 `month` / `year` |
 | sql_assertions | 本轮额外 SQL 断言；Runner 与本轮 `sql_assertions` 合并编译 |
+| tool_assertions | 本轮额外工具调用断言；Runner 与本轮 `tool_assertions` 合并编译 |
 
 `required_sql_pattern` / `forbidden_sql_pattern` 是 legacy 字段：Runner 可读取旧文件并迁移，但新增 case 不再使用裸字符串列表。
 
@@ -269,6 +271,16 @@ safety_contract:
 Runner 应优先使用 SQL parser / AST matcher；只有 parser 不支持当前 SQL 方言时，才降级到 normalized regex，并记录 `matcher_fallback: normalized_regex`。
 
 全局 `safety_contract.forbidden_ast` 不允许降级到普通 substring match。若 SQL parser 不支持当前方言，Runner 必须使用 normalized AST-like classifier 或安全关键字 tokenizer；无法完成安全判定时返回 `tool_error` exit code `40`，不得执行 SQL。
+
+`tool_assertions` 用于不一定产生 SQL 的 semantic catalog/source 读取类 case，例如检查是否调用 `sl_search` / `sl_read_source` 并面向指定 domain 检索：
+
+| 字段 | 说明 |
+|---|---|
+| type | `required_tool`, `forbidden_tool`, `required_tool_input_regex`, `forbidden_tool_input_regex` |
+| value | 工具名或针对工具输入的 regex；多个工具名可用 `|` 分隔 |
+| reason | 断言目的，例如要求读取 KX source 定义而不是凭记忆回答 |
+
+`raw_sql_fallback` 或 `sl_query` 等会产生 SQL 的 case 仍应使用 `sql_assertions` 校验 SQL 结构；`tool_assertions` 只补充工具路径，不替代结果断言。
 
 ### 7.2 quiz HTML
 

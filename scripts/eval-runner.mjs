@@ -3,7 +3,7 @@
 // T-A.2~T-A.8: MCP config gen · claude CLI spawn · output parsing · SQL pattern checks
 //              · 9-type result matchers · text response matcher · shell wrapper is sibling
 
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { chmodSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -16,6 +16,9 @@ const REPO_ROOT = resolve(__dirname, '..');
 const DEFAULT_CASES_PATH = 'evals/superstore/eval/superstore-eval-cases.yaml';
 const EVAL_MCP_PATH = process.env.EVAL_MCP_CONFIG || '/tmp/eval-mcp.json';
 const KTX_MCP_URL = process.env.EVAL_KTX_MCP_URL || 'http://localhost:7878/mcp';
+const KTX_MCP_TOKEN =
+  process.env.EVAL_KTX_MCP_TOKEN || process.env.KTX_INTERNAL_TOKEN || process.env.KTX_MCP_TOKEN || '';
+const SHOULD_CLEANUP_EVAL_MCP_CONFIG = !process.env.EVAL_MCP_CONFIG;
 
 const USAGE = `Usage: node scripts/eval-runner.mjs [options]
 
@@ -34,6 +37,8 @@ Environment:
   EVAL_MCP_CONFIG         Override path for generated MCP config file
                           (default: /tmp/eval-mcp.json)
   EVAL_KTX_MCP_URL        Override KTX MCP URL (default: ${KTX_MCP_URL})
+  EVAL_KTX_MCP_TOKEN      Optional bearer token for KTX MCP token-auth deployments
+  KTX_INTERNAL_TOKEN      Fallback bearer token env used by the local MCP proxy
 `;
 
 // ─── arg parsing ────────────────────────────────────────────────────────────
@@ -85,23 +90,34 @@ function loadCases(casesPath) {
   if (!doc || !Array.isArray(doc.cases)) {
     throw new Error(`bad cases yaml: expected top-level 'cases' array at ${abs}`);
   }
-  return { abs, cases: doc.cases };
+  return { abs, cases: doc.cases, safetyContract: doc.safety_contract || {} };
 }
 
 // ─── T-A.2: buildEvalMcpConfig + invokeClaudeCode ──────────────────────────
 
 function buildEvalMcpConfig(targetPath = EVAL_MCP_PATH) {
-  // Bypass MCP Auth Proxy (.mcp.json points to 7879 with Bearer; we want direct 7878).
+  // Bypass MCP Auth Proxy by default; add a bearer header only when the caller
+  // provides one. Never log or persist the token anywhere except this temp MCP config.
+  const server = {
+    type: 'http',
+    url: KTX_MCP_URL,
+  };
+  if (KTX_MCP_TOKEN) {
+    server.headers = { Authorization: `Bearer ${KTX_MCP_TOKEN}` };
+  }
   const cfg = {
     mcpServers: {
-      ktx: {
-        type: 'http',
-        url: KTX_MCP_URL,
-      },
+      ktx: server,
     },
   };
-  writeFileSync(targetPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+  writeFileSync(targetPath, JSON.stringify(cfg, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+  chmodSync(targetPath, 0o600);
   return targetPath;
+}
+
+function cleanupEvalMcpConfig(targetPath = EVAL_MCP_PATH) {
+  if (!SHOULD_CLEANUP_EVAL_MCP_CONFIG) return;
+  rmSync(targetPath, { force: true });
 }
 
 function runCliCapture(cmd, args, { timeoutMs = 30000 } = {}) {
@@ -269,10 +285,36 @@ function parseClaudeOutput(stdout) {
     }
   }
 
-  // Find the sl_query call (last one wins if multiple)
-  let sqlTool = null;
+  function candidateFromTool(c) {
+    const toolRes = c.id ? toolResults.get(c.id) : null;
+    if (!toolRes) return null;
+    const candidate = {
+      toolName: c.name,
+      sqlArgs: c.input,
+      sql: extractSqlFromToolInput(c.input),
+      resultRaw: toolRes,
+      result: rowsToObjects(toolRes),
+    };
+    if (typeof toolRes.sql === 'string') candidate.sql = toolRes.sql;
+    if (!candidate.sql && toolRes && typeof toolRes === 'object' && toolRes.sql) candidate.sql = toolRes.sql;
+    return candidate;
+  }
+
+  const toolCandidates = [];
   for (const c of toolCalls) {
-    if (c.name === 'mcp__ktx__sl_query') sqlTool = c;
+    if (!c.name.startsWith('mcp__ktx__')) continue;
+    const candidate = candidateFromTool(c);
+    if (candidate) toolCandidates.push(candidate);
+  }
+
+  // Find the data-bearing KTX tool call (last one wins for the default view).
+  // sl_query returns generated SQL in its result; sql_execution usually carries
+  // SQL in the tool input and result rows in the tool result.
+  let sqlTool = null;
+  let lastKtxTool = null;
+  for (const c of toolCalls) {
+    if (c.name.startsWith('mcp__ktx__')) lastKtxTool = c;
+    if (c.name === 'mcp__ktx__sl_query' || c.name === 'mcp__ktx__sql_execution') sqlTool = c;
   }
 
   let sql = null;
@@ -282,6 +324,7 @@ function parseClaudeOutput(stdout) {
 
   if (sqlTool) {
     sqlArgs = sqlTool.input;
+    sql = extractSqlFromToolInput(sqlArgs);
     // The SQL is returned in tool_result.content.sql when include:["sql"] is set;
     // fall back to extracting from text if present.
     const toolRes = sqlTool.id ? toolResults.get(sqlTool.id) : null;
@@ -298,16 +341,31 @@ function parseClaudeOutput(stdout) {
     }
   } else {
     // No sl_query called — try to recover from any tool_result (e.g. sql_execution)
-    const last = Array.from(toolResults.entries()).pop();
-    if (last) {
-      resultRaw = last[1];
+    if (lastKtxTool) {
+      sqlArgs = lastKtxTool.input;
+      sql = extractSqlFromToolInput(sqlArgs);
+      resultRaw = lastKtxTool.id ? toolResults.get(lastKtxTool.id) : null;
+    }
+    if (!resultRaw) {
+      const last = Array.from(toolResults.entries()).pop();
+      if (last) resultRaw = last[1];
+    }
+    if (resultRaw) {
       if (resultRaw && resultRaw.sql) sql = resultRaw.sql;
       result = rowsToObjects(resultRaw);
     }
   }
 
   const finalText = textChunks.length > 0 ? textChunks[textChunks.length - 1] : '';
-  return { sql, sqlArgs, result, resultRaw, finalText, toolCalls };
+  return { sql, sqlArgs, result, resultRaw, finalText, toolCalls, toolCandidates };
+}
+
+function extractSqlFromToolInput(input) {
+  if (!input || typeof input !== 'object') return null;
+  for (const key of ['sql', 'query', 'statement']) {
+    if (typeof input[key] === 'string') return input[key];
+  }
+  return null;
 }
 
 // ─── T-A.4: SQL pattern checks ─────────────────────────────────────────────
@@ -321,6 +379,14 @@ function normalizeSqlForMatching(sql) {
   s = s.replace(/\b[A-Za-z_][A-Za-z0-9_]*\./g, ''); // strip any alias.column
   s = s.replace(/\s+/g, ' ');
   return s;
+}
+
+function normalizeSqlAssertionText(value) {
+  return normalizeSqlForMatching(value)
+    .replace(/[`"“”‘’]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function escapeRegexLiteral(s) {
@@ -348,6 +414,131 @@ function checkSqlPatterns(sql, required, forbidden) {
       failures.push(`forbidden hit: ${p}`);
     }
   }
+  return { ok: failures.length === 0, failures, requiredHits, forbiddenHits };
+}
+
+function astLikeRegex(value) {
+  const parts = String(value)
+    .split('|')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map(escapeRegexLiteral);
+  return parts.length > 1 ? new RegExp(`\\b(${parts.join('|')})\\b`, 'i') : null;
+}
+
+function assertionTarget(sql, normalize = true) {
+  const raw = sql == null ? '' : String(sql);
+  return normalize ? normalizeSqlAssertionText(raw) : raw;
+}
+
+function checkSqlAssertions(sql, assertions = [], legacyRequired = [], legacyForbidden = []) {
+  const normalizedAssertions = Array.isArray(assertions) ? assertions : [];
+  const failures = [];
+  const requiredHits = [];
+  const forbiddenHits = [];
+
+  const legacy = checkSqlPatterns(sql, legacyRequired, legacyForbidden);
+  failures.push(...legacy.failures);
+  requiredHits.push(...legacy.requiredHits);
+  forbiddenHits.push(...legacy.forbiddenHits);
+
+  const rawSql = sql == null ? '' : String(sql);
+  for (const a of normalizedAssertions) {
+    if (!a || typeof a !== 'object') continue;
+    const type = String(a.type || '');
+    const value = a.value == null ? '' : String(a.value);
+    const normalize = a.normalize !== false;
+    const target = assertionTarget(rawSql, normalize);
+    const pattern = normalize ? normalizeSqlAssertionText(value) : value;
+    const label = `${type}: ${value}`;
+    const isRequired = type === 'required_ast' || type === 'required_sql_pattern' || type === 'measure_lineage';
+    const isForbidden = type === 'forbidden_ast';
+
+    if (type === 'required_normalized_regex' || type === 'forbidden_normalized_regex') {
+      const regexTarget = normalizeSqlAssertionText(rawSql);
+      const re = new RegExp(value, 'i');
+      const hit = re.test(regexTarget);
+      if (type === 'required_normalized_regex') {
+        if (hit) requiredHits.push(value);
+        else failures.push(`required regex missing: ${value}`);
+      } else if (hit) {
+        forbiddenHits.push(value);
+        failures.push(`forbidden regex hit: ${value}`);
+      }
+      continue;
+    }
+
+    const pipeRegex = astLikeRegex(pattern);
+    const hit = pipeRegex ? pipeRegex.test(target) : target.includes(pattern);
+    if (isRequired) {
+      if (hit) requiredHits.push(value);
+      else failures.push(`required missing: ${label}`);
+      continue;
+    }
+    if (isForbidden) {
+      if (hit) {
+        forbiddenHits.push(value);
+        failures.push(`forbidden hit: ${label}`);
+      }
+      continue;
+    }
+  }
+
+  return { ok: failures.length === 0, failures, requiredHits, forbiddenHits };
+}
+
+function toolAssertionTarget(toolCalls = []) {
+  return toolCalls
+    .map((c) => `${c.name || ''} ${JSON.stringify(c.input || {})}`)
+    .join('\n');
+}
+
+function checkToolAssertions(toolCalls = [], assertions = []) {
+  if (!Array.isArray(assertions) || assertions.length === 0) {
+    return { ok: true, failures: [], requiredHits: [], forbiddenHits: [] };
+  }
+
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  const target = toolAssertionTarget(calls);
+  const failures = [];
+  const requiredHits = [];
+  const forbiddenHits = [];
+
+  for (const a of assertions) {
+    if (!a || typeof a !== 'object') continue;
+    const type = String(a.type || '');
+    const value = a.value == null ? '' : String(a.value);
+    const label = `${type}: ${value}`;
+
+    if (type === 'required_tool' || type === 'forbidden_tool') {
+      const re = astLikeRegex(value) || new RegExp(`^${escapeRegexLiteral(value)}$`, 'i');
+      const hit = calls.some((c) => re.test(c.name || ''));
+      if (type === 'required_tool') {
+        if (hit) requiredHits.push(value);
+        else failures.push(`required tool missing: ${value}`);
+      } else if (hit) {
+        forbiddenHits.push(value);
+        failures.push(`forbidden tool hit: ${value}`);
+      }
+      continue;
+    }
+
+    if (type === 'required_tool_input_regex' || type === 'forbidden_tool_input_regex') {
+      const re = new RegExp(value, 'i');
+      const hit = re.test(target);
+      if (type === 'required_tool_input_regex') {
+        if (hit) requiredHits.push(value);
+        else failures.push(`required tool input regex missing: ${value}`);
+      } else if (hit) {
+        forbiddenHits.push(value);
+        failures.push(`forbidden tool input regex hit: ${value}`);
+      }
+      continue;
+    }
+
+    failures.push(`unsupported tool_assertion: ${label}`);
+  }
+
   return { ok: failures.length === 0, failures, requiredHits, forbiddenHits };
 }
 
@@ -459,6 +650,209 @@ function matchListSet(actualList, expectedList) {
 
 function matchBoolean(actual, expected) {
   return Boolean(actual) === Boolean(expected);
+}
+
+function objectRows(actual) {
+  if (actual == null) return [];
+  if (Array.isArray(actual)) return actual.filter((r) => r && typeof r === 'object');
+  if (Array.isArray(actual.rows)) return actual.rows.filter((r) => r && typeof r === 'object');
+  if (typeof actual === 'object') return [actual];
+  return [];
+}
+
+function valuesMatch(actual, expected, { tolerance = 0, mode = 'exact' } = {}) {
+  if (expected === null) return actual === null || actual === undefined;
+  const na = normalizeNumber(actual);
+  const ne = normalizeNumber(expected);
+  if (na != null && ne != null) {
+    if (mode === 'exact' && tolerance === 0) return na === ne;
+    return Math.abs(na - ne) <= tolerance;
+  }
+  return matchTextEqual(actual, expected);
+}
+
+const FIELD_ALIASES = {
+  report_period: ['报表期间'],
+  item_name: ['项目名称'],
+  company_name: ['公司名称'],
+  end_balance: ['期末余额'],
+  begin_balance: ['年初余额'],
+  year_to_date_amount: ['本年累计金额', 'amount_ytd', 'ytd_amount', 'amount_cumulative_ytd'],
+  current_month_amount: ['本月金额', 'amount_month', 'month_amount', 'amount_mtd', 'amount_current_month'],
+  amount: [
+    '本年累计金额',
+    '期末余额',
+    'cumulative_amount',
+    'current_month_amount',
+    'year_to_date_amount',
+    'amount_ytd',
+    'ytd_amount',
+    'amount_cumulative_ytd',
+    'amount_month',
+    'month_amount',
+    'amount_current_month',
+    'amount_mtd',
+  ],
+};
+
+function valueFromRow(row, key) {
+  if (!row || typeof row !== 'object') return undefined;
+  if (row[key] !== undefined) return row[key];
+  for (const alias of FIELD_ALIASES[key] || []) {
+    if (row[alias] !== undefined) return row[alias];
+  }
+  if (key === 'current_month_amount' && row.amount_type === 'current_month') return row.amount;
+  if (key === 'year_to_date_amount' && row.amount_type === 'year_to_date') return row.amount;
+  if (key === 'end_balance' && row.amount_type === 'end_balance') return row.amount;
+  if (key === 'begin_balance' && row.amount_type === 'begin_balance') return row.amount;
+  return undefined;
+}
+
+function compareObjectFields(actual, expected, opts = {}) {
+  const mismatches = [];
+  const act = actual || {};
+  for (const [key, exp] of Object.entries(expected || {})) {
+    const actualValue = valueFromRow(act, key);
+    if (!valuesMatch(actualValue, exp, opts)) {
+      mismatches.push(`${key}: actual=${actualValue} expected=${exp}`);
+    }
+  }
+  return { ok: mismatches.length === 0, mismatches };
+}
+
+function rowKey(row, keyColumns = []) {
+  return keyColumns.map((k) => String(valueFromRow(row, k))).join('\u0001');
+}
+
+function checkDataFrameAssertion(actual, assertion) {
+  const expectedRows = assertion?.data?.rows;
+  if (!Array.isArray(expectedRows)) {
+    return { ok: false, mismatches: ['dataframe: expected data.rows array'] };
+  }
+  const actualRows = objectRows(actual);
+  const keyColumns = Array.isArray(assertion.key_columns) ? assertion.key_columns : [];
+  const compareMode = assertion.compare_mode || 'exact';
+  const tolerance = normalizeNumber(assertion.numeric_tolerance) ?? 0;
+  const mismatches = [];
+  const expectedColumns = Array.isArray(assertion?.data?.columns)
+    ? assertion.data.columns.map(String)
+    : Array.from(new Set(expectedRows.flatMap((row) => Object.keys(row || {}))));
+
+  if (assertion.check_row_count !== false && compareMode !== 'subset' && actualRows.length !== expectedRows.length) {
+    mismatches.push(`dataframe: row_count actual=${actualRows.length} expected=${expectedRows.length}`);
+  }
+
+  if (assertion.check_schema === true && expectedColumns.length > 0) {
+    const actualColumns = new Set(actualRows.flatMap((row) => Object.keys(row || {})));
+    for (const col of expectedColumns) {
+      const hasColumn = actualColumns.has(col) || actualRows.some((row) => valueFromRow(row, col) !== undefined);
+      if (!hasColumn) mismatches.push(`dataframe schema: missing column ${col}`);
+    }
+  }
+
+  const remaining = [...actualRows];
+  for (const exp of expectedRows) {
+    let idx = -1;
+    if (keyColumns.length > 0) {
+      const expectedKey = rowKey(exp, keyColumns);
+      idx = remaining.findIndex(
+        (row) => rowKey(row, keyColumns) === expectedKey && compareObjectFields(row, exp, { tolerance, mode: compareMode }).ok
+      );
+      if (idx < 0) idx = remaining.findIndex((row) => rowKey(row, keyColumns) === expectedKey);
+    } else {
+      idx = remaining.findIndex((row) => compareObjectFields(row, exp, { tolerance, mode: compareMode }).ok);
+    }
+    if (idx < 0) {
+      mismatches.push(`dataframe: missing row ${JSON.stringify(exp)}`);
+      continue;
+    }
+    const row = remaining[idx];
+    const cmp = compareObjectFields(row, exp, { tolerance, mode: compareMode });
+    if (!cmp.ok) {
+      mismatches.push(...cmp.mismatches.map((m) => `dataframe row ${JSON.stringify(exp)}: ${m}`));
+    }
+    remaining.splice(idx, 1);
+  }
+
+  return { ok: mismatches.length === 0, mismatches };
+}
+
+function extractScalarFromText(finalText, key) {
+  if (!finalText) return undefined;
+  if (key === 'source_count') {
+    const text = String(finalText);
+    const match =
+      text.match(/(?:共|共有|当前共有)\s*(?:\*\*)?(\d+)(?:\*\*)?\s*个\s*(?:semantic layer\s*)?source/i) ||
+      text.match(/source[^\n]{0,80}(?:共|共有|当前共有)\s*(?:\*\*)?(\d+)(?:\*\*)?\s*个/i) ||
+      text.match(/(?:共|共有|当前共有)\s*(?:\*\*)?(\d+)(?:\*\*)?\s*个[^\n]{0,80}source/i);
+    if (match) return Number(match[1]);
+  }
+  return undefined;
+}
+
+function checkScalarAssertion(actual, assertion, finalText = '') {
+  const expected = assertion?.data || {};
+  const rows = objectRows(actual);
+  const actualObj = rows.length === 1 ? { ...rows[0] } : { ...(actual && typeof actual === 'object' ? actual : {}) };
+  if (Array.isArray(actual?.refs) && actualObj.source_count === undefined) actualObj.source_count = actual.refs.length;
+  if (Array.isArray(actual?.rows) && actualObj.row_count === undefined) actualObj.row_count = actual.rows.length;
+  for (const key of Object.keys(expected)) {
+    if (actualObj[key] === undefined) {
+      const textValue = extractScalarFromText(finalText, key);
+      if (textValue !== undefined) actualObj[key] = textValue;
+    }
+  }
+  const tolerance = normalizeNumber(assertion.numeric_tolerance) ?? 0;
+  const mode = assertion.compare_mode || 'exact';
+  return compareObjectFields(actualObj, expected, { tolerance, mode });
+}
+
+function checkTextAssertion(finalText, assertion) {
+  const data = assertion?.data || {};
+  const missing = [];
+  const normFinal = normalizeText(finalText);
+  if (Array.isArray(data.must_mention)) {
+    for (const kw of data.must_mention) {
+      if (!normFinal.includes(normalizeText(kw))) missing.push(`must_mention: ${kw}`);
+    }
+  }
+  if (Array.isArray(data.must_not_mention)) {
+    for (const kw of data.must_not_mention) {
+      if (normFinal.includes(normalizeText(kw))) missing.push(`must_not_mention: ${kw}`);
+    }
+  }
+  return { ok: missing.length === 0, mismatches: missing };
+}
+
+function checkResultAssertions(actual, finalText, assertions) {
+  if (!Array.isArray(assertions) || assertions.length === 0) {
+    return { ok: true, mismatches: [] };
+  }
+  const mismatches = [];
+  for (const assertion of assertions) {
+    if (!assertion || typeof assertion !== 'object') continue;
+    let r;
+    switch (assertion.value_type) {
+      case 'text':
+        r = checkTextAssertion(finalText, assertion);
+        break;
+      case 'scalar':
+        r = checkScalarAssertion(actual, assertion, finalText);
+        break;
+      case 'dataframe':
+        r = checkDataFrameAssertion(actual, assertion);
+        break;
+      case 'empty_result': {
+        const rows = objectRows(actual);
+        r = { ok: rows.length === 0, mismatches: rows.length === 0 ? [] : [`empty_result: actual row_count=${rows.length}`] };
+        break;
+      }
+      default:
+        r = { ok: false, mismatches: [`unsupported result_assertion value_type: ${assertion.value_type}`] };
+    }
+    if (!r.ok) mismatches.push(...r.mismatches);
+  }
+  return { ok: mismatches.length === 0, mismatches };
 }
 
 function checkResultMatch(actual, expected) {
@@ -604,27 +998,124 @@ function checkTextResponse(finalText, expectedResult) {
 
 // ─── compose question with system hint ─────────────────────────────────────
 
-function composeQuestion(c) {
-  const base = c.question || '';
-  const hint =
-    '\n\n必须实际调用 `mcp__ktx__sl_query` 工具，禁止凭记忆回答。' +
-    '\n调用格式：`{connectionId: "mysql-aliyun", measures: ["superstore_orders.<measure>"], include: ["sql"]}`；' +
-    '分组 `dimensions: [{field: "superstore_orders.<dim>"}]`；' +
-    '过滤 `filters: ["superstore_orders.is_deleted = 0"]`。' +
-    '\n`include: ["sql"]` 让 KTX 在返回中附带生成的 SQL（用于校验）。' +
-    '\n最后用一句话说明 measure 名或计算口径。';
-  return base + hint;
+function expectedColumnsFromAssertions(assertions = []) {
+  const cols = new Set();
+  for (const a of assertions || []) {
+    if (!a || typeof a !== 'object') continue;
+    if (a.value_type === 'scalar' && a.data && typeof a.data === 'object') {
+      for (const k of Object.keys(a.data)) cols.add(k);
+    }
+    if (a.value_type === 'dataframe' && Array.isArray(a.data?.rows)) {
+      for (const row of a.data.rows) {
+        for (const k of Object.keys(row || {})) cols.add(k);
+      }
+    }
+  }
+  return Array.from(cols);
+}
+
+function composeQuestion(c, { priorTurns = [] } = {}) {
+  const base = c.question || c.user || '';
+  const domain = c.domain || 'superstore';
+  const expectedSource = c.expected_source || 'semantic_layer';
+  const expectedColumns = expectedColumnsFromAssertions(c.result_assertions);
+  const shared =
+    '\n\n必须实际调用 KTX MCP 工具，禁止凭记忆回答。' +
+    '\n只能做只读查询或读取语义层定义；禁止读取本地密钥目录，禁止 DDL/DML。' +
+    '\n回答中请简要说明使用的数据源/表和关键过滤条件；不要编造工具未返回的 freshness、snapshot 或数据差异原因。';
+
+  const priorHint =
+    priorTurns.length > 0
+      ? `\n\n前序轮次上下文：\n${priorTurns
+          .map((t) => `- 第 ${t.turnId} 轮：问题=${t.user}; 摘要=${t.finalTextSnippet || ''}`)
+          .join('\n')}`
+      : '';
+
+  if (expectedSource === 'raw_sql_fallback') {
+    const columnsHint =
+      expectedColumns.length > 0
+        ? `\n结果列请使用清晰别名，至少包含这些业务列名：${expectedColumns.join(', ')}。`
+        : '';
+    return (
+      base +
+      priorHint +
+      shared +
+      '\n本 case 预期使用 raw SQL fallback：请调用 `mcp__ktx__sql_execution`（或 KTX MCP 暴露的等价只读 SQL 工具），connection 为 `mysql-aliyun`。' +
+      '\nSQL 必须是 SELECT/只读语句；KX 财务问题优先使用 `kx_fact_financial_amount`、`kx_dim_company`、`kx_dim_financial_item` 和 `kx_vw_*_detail`，不要查询 superstore。' +
+      columnsHint
+    );
+  }
+
+  if (domain === 'kx_financial') {
+    return (
+      base +
+      priorHint +
+      shared +
+      '\n本 case 预期使用 semantic layer：请调用 KTX 的语义层工具，例如 `mcp__ktx__sl_search` / `mcp__ktx__sl_read_source` / `mcp__ktx__sl_validate`，读取 KX 财务 source 定义后回答。' +
+      '\nKX 财务 source 以 `kx_` 开头；不要套用 superstore 表、measure 或 `is_deleted = 0` 过滤。'
+    );
+  }
+
+  const measures = Array.isArray(c.expected_measures) && c.expected_measures.length > 0
+    ? c.expected_measures.map((m) => `superstore_orders.${m}`)
+    : ['superstore_orders.<measure>'];
+  return (
+    base +
+    priorHint +
+    shared +
+    '\n本 case 预期使用 semantic layer：请调用 `mcp__ktx__sl_query` 工具，connectionId 为 `mysql-aliyun`，并设置 `include: ["sql"]`。' +
+    `\n候选 measures：${measures.join(', ')}。分组字段使用 \`superstore_orders.<dim>\`，正常订单过滤使用 \`superstore_orders.is_deleted = 0\`。` +
+    '\n最后用一句话说明 measure 名或计算口径。'
+  );
 }
 
 // ─── run a single case ─────────────────────────────────────────────────────
 
-async function runCase(c) {
-  const question = composeQuestion(c);
+function safetyAssertions(safetyContract = {}) {
+  const assertions = [];
+  if (Array.isArray(safetyContract.forbidden_ast)) assertions.push(...safetyContract.forbidden_ast);
+  return assertions;
+}
+
+function checkSecretPathSafety(sql, finalText, safetyContract = {}) {
+  const failures = [];
+  const paths = Array.isArray(safetyContract.forbid_secret_paths) ? safetyContract.forbid_secret_paths : [];
+  const haystack = normalizeText(`${sql || ''}\n${finalText || ''}`);
+  for (const p of paths) {
+    if (haystack.includes(normalizeText(p))) failures.push(`forbidden secret path mentioned: ${p}`);
+  }
+  return { ok: failures.length === 0, failures };
+}
+
+function collectSqlAssertions(c, safetyContract = {}) {
+  return [
+    ...safetyAssertions(safetyContract),
+    ...(Array.isArray(c.sql_assertions) ? c.sql_assertions : []),
+  ];
+}
+
+function collectTurnSqlAssertions(turn, safetyContract = {}) {
+  return [
+    ...safetyAssertions(safetyContract),
+    ...(Array.isArray(turn.context_assertions?.sql_assertions) ? turn.context_assertions.sql_assertions : []),
+    ...(Array.isArray(turn.sql_assertions) ? turn.sql_assertions : []),
+  ];
+}
+
+function collectTurnToolAssertions(turn) {
+  return [
+    ...(Array.isArray(turn.context_assertions?.tool_assertions) ? turn.context_assertions.tool_assertions : []),
+    ...(Array.isArray(turn.tool_assertions) ? turn.tool_assertions : []),
+  ];
+}
+
+async function executePrompt(question) {
   let raw;
   let parseErr = null;
-  let parsed = { sql: null, sqlArgs: null, result: null, resultRaw: null, finalText: '' };
+  let parsed = { sql: null, sqlArgs: null, result: null, resultRaw: null, finalText: '', toolCandidates: [] };
   let cliErr = null;
   try {
+    buildEvalMcpConfig(EVAL_MCP_PATH);
     raw = await invokeClaudeCode(question, EVAL_MCP_PATH, { timeoutMs: 360000 });
     if (raw.code !== 0) {
       cliErr = `claude exited code=${raw.code}; stderr=${(raw.err || '').slice(0, 400)}`;
@@ -638,30 +1129,129 @@ async function runCase(c) {
   } catch (e) {
     cliErr = e.message;
   }
+  return { raw, parseErr, parsed, cliErr };
+}
 
-  const sqlCheck = checkSqlPatterns(parsed.sql, c.required_sql_pattern, c.forbidden_sql_pattern);
-  const resultCheck = checkResultMatch(parsed.result || {}, c.expected_result || {});
-  const textCheck = checkTextResponse(parsed.finalText, c.expected_result || {});
-  const ok = !cliErr && !parseErr && sqlCheck.ok && resultCheck.ok && textCheck.ok;
+function evaluateCandidate(c, parsed, candidate, safetyContract = {}) {
+  const sqlCheck = checkSqlAssertions(
+    candidate.sql,
+    collectSqlAssertions(c, safetyContract),
+    c.required_sql_pattern,
+    c.forbidden_sql_pattern
+  );
+  const structuredResultCheck = checkResultAssertions(candidate.result || {}, parsed.finalText, c.result_assertions || []);
+  const legacyResultCheck = c.expected_result ? checkResultMatch(candidate.result || {}, c.expected_result || {}) : { ok: true, mismatches: [] };
+  const legacyTextCheck = c.expected_result ? checkTextResponse(parsed.finalText, c.expected_result || {}) : { ok: true, missing: [] };
+  const safetyCheck = checkSecretPathSafety(candidate.sql, parsed.finalText, safetyContract);
+  const toolCheck = checkToolAssertions(parsed.toolCalls || [], c.tool_assertions || []);
+  const failures = [];
+  failures.push(...sqlCheck.failures);
+  failures.push(...toolCheck.failures);
+  failures.push(...structuredResultCheck.mismatches);
+  failures.push(...legacyResultCheck.mismatches);
+  failures.push(...legacyTextCheck.missing);
+  failures.push(...safetyCheck.failures);
+  return {
+    candidate,
+    ok: failures.length === 0,
+    failures,
+    requiredHits: [...sqlCheck.requiredHits, ...toolCheck.requiredHits],
+    forbiddenHits: [...sqlCheck.forbiddenHits, ...toolCheck.forbiddenHits],
+  };
+}
+
+function chooseBestCandidate(c, parsed, safetyContract = {}) {
+  const baseCandidate = {
+    toolName: 'selected',
+    sql: parsed.sql,
+    sqlArgs: parsed.sqlArgs,
+    result: parsed.result,
+    resultRaw: parsed.resultRaw,
+  };
+  const candidates = [baseCandidate, ...(Array.isArray(parsed.toolCandidates) ? parsed.toolCandidates : [])];
+  let best = null;
+  for (const candidate of candidates) {
+    const evaluation = evaluateCandidate(c, parsed, candidate, safetyContract);
+    if (!best || evaluation.failures.length < best.failures.length) best = evaluation;
+    if (evaluation.ok) return evaluation;
+  }
+  return best || evaluateCandidate(c, parsed, baseCandidate, safetyContract);
+}
+
+async function runSingleTurnCase(c, { safetyContract = {}, priorTurns = [] } = {}) {
+  const question = composeQuestion(c, { priorTurns });
+  const { parseErr, parsed, cliErr } = await executePrompt(question);
+  const selected = chooseBestCandidate(c, parsed, safetyContract);
 
   const failures = [];
   if (cliErr) failures.push(`cli: ${cliErr}`);
   if (parseErr) failures.push(`parse: ${parseErr}`);
-  failures.push(...sqlCheck.failures);
-  failures.push(...resultCheck.mismatches);
-  failures.push(...textCheck.missing);
+  failures.push(...(selected.failures || []));
+  const ok = !cliErr && !parseErr && selected.ok;
+  const selectedCandidate = selected.candidate || {};
 
   return {
     id: c.id,
     pass: ok,
     failures,
-    sql: parsed.sql,
+    sql: selectedCandidate.sql,
     finalText: parsed.finalText,
     finalTextSnippet: parsed.finalText ? parsed.finalText.slice(0, 200) : '',
-    result: parsed.result,
-    requiredHits: sqlCheck.requiredHits,
-    forbiddenHits: sqlCheck.forbiddenHits,
+    result: selectedCandidate.result,
+    resultRaw: selectedCandidate.resultRaw,
+    actual: selectedCandidate.result,
+    expected: c.result_assertions || c.expected_result,
+    requiredHits: selected.requiredHits,
+    forbiddenHits: selected.forbiddenHits,
   };
+}
+
+async function runMultiTurnCase(c, { safetyContract = {} } = {}) {
+  const turnEntries = [];
+  const priorTurns = [];
+  for (const turn of c.turns || []) {
+    const turnCase = {
+      ...c,
+      id: `${c.id}#turn-${turn.turn_id}`,
+      question: turn.user,
+      user: turn.user,
+      expected_measures: turn.expected_measures || c.expected_measures,
+      result_assertions: turn.result_assertions || [],
+      sql_assertions: collectTurnSqlAssertions(turn, {}),
+      tool_assertions: collectTurnToolAssertions(turn),
+    };
+    const entry = await runSingleTurnCase(turnCase, { safetyContract, priorTurns });
+    turnEntries.push(entry);
+    priorTurns.push({
+      turnId: turn.turn_id,
+      user: turn.user,
+      finalTextSnippet: entry.finalTextSnippet,
+    });
+  }
+
+  const failures = [];
+  for (const entry of turnEntries) {
+    failures.push(...entry.failures.map((f) => `${entry.id}: ${f}`));
+  }
+  return {
+    id: c.id,
+    pass: turnEntries.every((e) => e.pass),
+    failures,
+    sql: turnEntries.map((e) => e.sql).filter(Boolean).join('\n\n-- next turn --\n\n') || null,
+    finalText: turnEntries.map((e) => e.finalText || '').join('\n\n'),
+    finalTextSnippet: turnEntries.map((e) => e.finalTextSnippet || '').join('\n').slice(0, 200),
+    result: turnEntries.map((e) => ({ id: e.id, result: e.result })),
+    resultRaw: turnEntries.map((e) => ({ id: e.id, resultRaw: e.resultRaw })),
+    actual: turnEntries.map((e) => e.actual),
+    expected: (c.turns || []).map((t) => t.result_assertions || []),
+    requiredHits: turnEntries.flatMap((e) => e.requiredHits || []),
+    forbiddenHits: turnEntries.flatMap((e) => e.forbiddenHits || []),
+  };
+}
+
+async function runCase(c, opts = {}) {
+  if (c.case_type === 'multi_turn') return runMultiTurnCase(c, opts);
+  return runSingleTurnCase(c, opts);
 }
 
 // ─── summary + output formatting ───────────────────────────────────────────
@@ -722,7 +1312,7 @@ async function main() {
     return;
   }
 
-  const { abs: casesAbs, cases } = loadCases(args.casesPath);
+  const { abs: casesAbs, cases, safetyContract } = loadCases(args.casesPath);
   const selected = args.cases.length > 0 ? cases.filter((c) => args.cases.includes(c.id)) : cases;
 
   if (args.listCases) {
@@ -735,14 +1325,16 @@ async function main() {
 
   // T-A.2: write MCP config and fail-fast on claude CLI
   buildEvalMcpConfig(EVAL_MCP_PATH);
-  process.stderr.write(`# wrote MCP config → ${EVAL_MCP_PATH} (url=${KTX_MCP_URL})\n`);
+  process.stderr.write(
+    `# wrote MCP config → ${EVAL_MCP_PATH} (url=${KTX_MCP_URL}, auth=${KTX_MCP_TOKEN ? 'bearer' : 'none'})\n`
+  );
   const pre = await preflightClaude();
   process.stderr.write(`# preflight ok: ${pre.version}\n`);
 
   const entries = [];
   for (const c of selected) {
     process.stderr.write(`# running ${c.id}\n`);
-    const entry = await runCase(c);
+    const entry = await runCase(c, { safetyContract });
     entries.push(entry);
     process.stderr.write(`#   ${c.id} → ${entry.pass ? 'PASS' : 'FAIL'}\n`);
   }
@@ -765,6 +1357,7 @@ async function main() {
     process.stdout.write(md);
   }
 
+  cleanupEvalMcpConfig(EVAL_MCP_PATH);
   process.exit(summary.fail === 0 ? 0 : 1);
 }
 
@@ -773,10 +1366,14 @@ export {
   buildEvalMcpConfig,
   parseClaudeOutput,
   checkSqlPatterns,
+  checkSqlAssertions,
+  checkToolAssertions,
   checkResultMatch,
+  checkResultAssertions,
   checkTextResponse,
   normalizeText,
   normalizeSqlForMatching,
+  composeQuestion,
   matchExact,
   matchApprox,
   matchSign,
@@ -803,9 +1400,8 @@ const isEntry = (() => {
 
 if (isEntry) {
   main().catch((err) => {
+    cleanupEvalMcpConfig(EVAL_MCP_PATH);
     console.error(`fatal: ${err.stack || err.message || err}`);
     process.exit(2);
   });
 }
-
-

@@ -1,17 +1,17 @@
 <!--
 meta:
-  文档名称: 超市数据 Quiz · 30 题
+  文档名称: Superstore Quiz · 30 题
   文档类型: Quiz
   文档说明: HTML quiz, 人类测试用（由 scripts/render-quiz.mjs 从 superstore-eval-cases.yaml 渲染生成）
   版本: v1.1
   撰写日期: 2026-06-18
   撰写人: render-quiz.mjs
   委托人: project-lucy 团队
-  基于材料: /Users/zhangxingchen/Projects/project-lucy/evals/superstore/eval/superstore-eval-cases.yaml
-  适用范围: 超市数据问答能力的人工测验 / 培训；30 题覆盖 SQL 基础、反模式、SL 知识、JOIN 路径、降级处理与多轮一致性
-  输出位置: /Users/zhangxingchen/Projects/project-lucy/evals/superstore/superstore-quiz-cases.html
+  基于材料: /Users/forrest/Projects/project-lucy/evals/superstore/eval/superstore-eval-cases.yaml
+  适用范围: Superstore 数据问答能力的人工测验 / 培训；30 题覆盖基础、反模式、边界、降级、路径选择与多轮一致性
+  输出位置: /Users/forrest/Projects/project-lucy/evals/superstore/superstore-quiz-cases.html
   命名约定: {domain}-{purpose}-{variant}.{ext}，与 superstore-eval-cases.yaml 保持并行
-  关联 eval: /Users/zhangxingchen/Projects/project-lucy/evals/superstore/eval/superstore-eval-cases.yaml
+  关联 eval: /Users/forrest/Projects/project-lucy/evals/superstore/eval/superstore-eval-cases.yaml
   题目类型: 单选 / 对错 / 多选
   难度系数: 0.5–5★
   数据来源: semantic_layer / raw_sql_fallback
@@ -23,7 +23,7 @@ meta:
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>超市数据 Quiz · 30 题</title>
+<title>Superstore Quiz · 30 题</title>
 <style>
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; color: #222; line-height: 1.6; }
   h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
@@ -49,8 +49,8 @@ meta:
 </head>
 <body>
 
-<h1>超市数据 Quiz · 30 题</h1>
-<p class="meta">基于 superstore_orders + superstore_returns + superstore_people（4 年 5083 笔订单样本）。难度系数用 ★ 表示（0.5–5★）。Q1–Q15 走 SL measures；Q16–Q20 走 <code>raw_sql_fallback</code>（time-grain / cohort，trace 待重建）；Q21–Q30 测 SL 知识、抗反模式、JOIN 路径、降级与多轮一致性。</p>
+<h1>Superstore Quiz · 30 题</h1>
+<p class="meta">基于 Superstore Eval Cases；快照日期 2026-06-18。难度系数用 ★ 表示（0.5–5★）。题目覆盖基础、反模式、边界、降级、路径选择与多轮一致性。</p>
 
 <form id="quiz">
 
@@ -414,7 +414,7 @@ meta:
 <li><span class="correct">B</span> — orders.region = people.region（已在 SL YAML 中 declared join）；不需要 3 表</li>
 <li><span class="correct">A</span> — 追问中口径一致是基本要求；不应退化为 AVG(profit/sales)</li>
 </ol>
-<p style="color:#666;font-size:13px;margin-top:16px;">Q1–Q15 数据来自 <code>semantic_layer</code>；Q16–Q20 通过 <code>raw_sql_fallback</code> 走 ktx 体系 read-only 入口，当前 trace 标记为 <code>pending_rebuild</code>；Q21–Q30 为 SL 知识 / 反模式 / JOIN 路径 / 降级 / 多轮一致性考察题。</p>
+<p style="color:#666;font-size:13px;margin-top:16px;">题目数据来源包含 <code>semantic_layer</code>、<code>raw_sql_fallback</code>；raw SQL fallback 题必须走 KTX read-only 入口。</p>
 </div>
 </details>
 

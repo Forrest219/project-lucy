@@ -5,9 +5,13 @@
 import {
   parseClaudeOutput,
   checkSqlPatterns,
+  checkSqlAssertions,
+  checkToolAssertions,
   checkResultMatch,
+  checkResultAssertions,
   checkTextResponse,
   normalizeText,
+  composeQuestion,
   matchApprox,
   matchListOfObjects,
   matchListSet,
@@ -25,6 +29,44 @@ function assert(name, cond, detail) {
     fail++;
     failures.push({ name, detail });
   }
+}
+
+{
+  const stdout = JSON.stringify({
+    type: 'assistant',
+    message: {
+      content: [
+        {
+          type: 'tool_use',
+          id: 'call_sql',
+          name: 'mcp__ktx__sql_execution',
+          input: {
+            connectionId: 'mysql-aliyun',
+            sql: 'SELECT COUNT(*) AS row_count FROM kx_fact_financial_amount',
+          },
+        },
+      ],
+    },
+  }) + '\n' + JSON.stringify({
+    type: 'user',
+    message: {
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'call_sql',
+          content: [{ type: 'text', text: JSON.stringify({
+            headers: ['row_count'],
+            rows: [[2330]],
+          }) }],
+        },
+      ],
+    },
+  });
+
+  const parsed = parseClaudeOutput(stdout);
+  assert('parseClaudeOutput extracts sql_execution input SQL', parsed.sql.includes('kx_fact_financial_amount'), parsed.sql);
+  assert('parseClaudeOutput parses sql_execution rows', parsed.result.row_count === 2330, JSON.stringify(parsed.result));
+  assert('parseClaudeOutput records KTX tool candidates', parsed.toolCandidates.length === 1, JSON.stringify(parsed.toolCandidates));
 }
 
 // ── T-A.3: parseClaudeOutput ───────────────────────────────────────────────
@@ -87,6 +129,34 @@ function assert(name, cond, detail) {
   const r = checkSqlPatterns('SELECT AVG(discount) FROM orders', [], ['AVG(discount)']);
   assert('T-A.4 forbidden hit detected', !r.ok && r.failures.some((f) => f.includes('forbidden hit')), JSON.stringify(r));
 }
+{
+  const r = checkSqlAssertions(
+    "SELECT COUNT(*) AS row_count, COUNT(DISTINCT report_period) AS periods FROM kx_fact_financial_amount",
+    [
+      { type: 'required_ast', value: 'COUNT(*)', normalize: true },
+      { type: 'required_normalized_regex', value: 'count\\(distinct report_period\\)', normalize: true },
+      { type: 'forbidden_ast', value: 'UPDATE | DELETE | DROP', normalize: true },
+    ]
+  );
+  assert('v1.4 SQL assertions support required_ast and normalized regex', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkSqlAssertions('SELECT SUM(amount) FROM kx_fact_financial_amount', [
+    { type: 'forbidden_ast', value: 'SUM(amount)', normalize: true },
+  ]);
+  assert('v1.4 SQL assertions detect forbidden_ast', !r.ok && r.failures.some((f) => f.includes('forbidden hit')), JSON.stringify(r));
+}
+{
+  const r = checkToolAssertions(
+    [{ name: 'mcp__ktx__sl_search', input: { query: 'kx 财务 source' } }],
+    [
+      { type: 'required_tool', value: 'mcp__ktx__sl_search | mcp__ktx__sl_read_source' },
+      { type: 'required_tool_input_regex', value: 'kx' },
+      { type: 'forbidden_tool', value: 'mcp__ktx__sql_execution' },
+    ]
+  );
+  assert('v1.4 tool assertions support required/forbidden tools and input regex', r.ok, JSON.stringify(r));
+}
 
 // ── T-A.5: 9-way result matcher ────────────────────────────────────────────
 
@@ -144,6 +214,127 @@ function assert(name, cond, detail) {
   const r = checkResultMatch({ must_use_same_measure_as_predecessor: true }, { must_use_same_measure_as_predecessor: true });
   assert('T-A.5 boolean matches', r.ok, JSON.stringify(r));
 }
+{
+  const r = checkResultAssertions(
+    { rows: [{ report_period: '202605', row_count: 466 }, { report_period: '202604', row_count: 466 }] },
+    '',
+    [{
+      value_type: 'dataframe',
+      data: { rows: [{ report_period: '202604', row_count: 466 }, { report_period: '202605', row_count: 466 }] },
+      compare_mode: 'unordered_rows',
+      key_columns: ['report_period'],
+      numeric_tolerance: 0,
+      check_row_count: true,
+    }]
+  );
+  assert('v1.4 dataframe assertions support unordered_rows keyed compare', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    { rows: [{ report_period: '202605' }] },
+    '',
+    [{
+      value_type: 'dataframe',
+      data: { rows: [{ report_period: '202605', row_count: 466 }] },
+      compare_mode: 'unordered_rows',
+      key_columns: ['report_period'],
+      check_schema: true,
+      check_row_count: false,
+    }]
+  );
+  assert('v1.4 dataframe schema check fails missing expected columns', !r.ok && r.mismatches.some((m) => m.includes('missing column row_count')), JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    { rows: [{ 报表期间: '202605', 项目名称: '货币资金', 期末余额: 25872.08, 年初余额: 15871.88 }] },
+    '',
+    [{
+      value_type: 'dataframe',
+      data: { rows: [{ report_period: '202605', item_name: '货币资金', end_balance: 25872.08, begin_balance: 15871.88 }] },
+      compare_mode: 'unordered_rows',
+      key_columns: ['report_period', 'item_name'],
+      numeric_tolerance: 0.01,
+      check_row_count: true,
+    }]
+  );
+  assert('v1.4 dataframe assertions map Chinese KX view columns to canonical aliases', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    { rows: [{ report_period: '202605', item_name: '一、营业收入', amount_type: 'current_month', amount: null }] },
+    '',
+    [{
+      value_type: 'dataframe',
+      data: { rows: [{ report_period: '202605', item_name: '一、营业收入', current_month_amount: null }] },
+      compare_mode: 'subset',
+      key_columns: ['report_period', 'item_name'],
+      check_row_count: false,
+    }]
+  );
+  assert('v1.4 dataframe assertions map amount+amount_type to current_month_amount', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    { rows: [{ report_period: '202605', item_name: '五、期末现金余额', amount_cumulative_ytd: 25872.08, amount_current_month: 25872.08 }] },
+    '',
+    [{
+      value_type: 'dataframe',
+      data: { rows: [{ report_period: '202605', item_name: '五、期末现金余额', amount: 25872.08 }] },
+      compare_mode: 'unordered_rows',
+      key_columns: ['report_period', 'item_name'],
+      numeric_tolerance: 0.01,
+      check_schema: true,
+      check_row_count: false,
+    }]
+  );
+  assert('v1.4 dataframe assertions map KX cumulative/current aliases to amount', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    { rows: [
+      { report_period: '202605', item_name: '五、期末现金余额', amount: 0 },
+      { report_period: '202605', item_name: '五、期末现金余额', amount: 25872.08 },
+    ] },
+    '',
+    [{
+      value_type: 'dataframe',
+      data: { rows: [{ report_period: '202605', item_name: '五、期末现金余额', amount: 25872.08 }] },
+      compare_mode: 'unordered_rows',
+      key_columns: ['report_period', 'item_name'],
+      numeric_tolerance: 0.01,
+      check_row_count: false,
+    }]
+  );
+  assert('v1.4 dataframe assertions choose matching duplicate-key row', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    { row_count: 2330, periods: 5 },
+    '',
+    [{ value_type: 'scalar', data: { row_count: 2330, periods: 5 }, numeric_tolerance: 0, compare_mode: 'exact' }]
+  );
+  assert('v1.4 scalar assertions compare single-row object', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    {},
+    '通过 KTX 语义层检索 kx_ 前缀的 source，共 **6 个**：',
+    [{ value_type: 'scalar', data: { source_count: 6 }, numeric_tolerance: 0, compare_mode: 'exact' }]
+  );
+  assert('v1.4 scalar assertions can extract source_count from final text', r.ok, JSON.stringify(r));
+}
+{
+  const r = checkResultAssertions(
+    {},
+    'KX 财务表不含 is_deleted，不要套用超市软删除过滤，应按 report_period 过滤',
+    [{
+      value_type: 'text',
+      data: { must_mention: ['KX 财务表不含 is_deleted', 'report_period'], must_not_mention: ['WHERE is_deleted = 0'] },
+      compare_mode: 'subset',
+    }]
+  );
+  assert('v1.4 text assertions support must_mention and must_not_mention', r.ok, JSON.stringify(r));
+}
 
 // ── T-A.6: checkTextResponse ───────────────────────────────────────────────
 
@@ -171,6 +362,30 @@ function assert(name, cond, detail) {
 {
   assert('matchApprox basic', matchApprox(0.13981, '0.1398', 4) === true, 'approx should match');
   assert('matchApprox tolerance', matchApprox(0.14, '0.1399', 4) === false, 'approx at 4dp should reject');
+}
+
+// ── composeQuestion domain/source routing ──────────────────────────────────
+
+{
+  const q = composeQuestion({
+    question: 'KX 财报金额事实表有多少行？',
+    domain: 'kx_financial',
+    expected_source: 'raw_sql_fallback',
+    result_assertions: [{ value_type: 'scalar', data: { row_count: 2330 } }],
+  });
+  assert('composeQuestion KX raw SQL uses sql_execution', q.includes('sql_execution'), q);
+  assert('composeQuestion KX raw SQL does not hardcode superstore_orders', !q.includes('superstore_orders.<measure>'), q);
+  assert('composeQuestion KX raw SQL includes expected result aliases only, not values', q.includes('row_count') && !q.includes('2330'), q);
+}
+
+{
+  const q = composeQuestion({
+    question: 'KTX 里 KX 财务域现在有几个 source？',
+    domain: 'kx_financial',
+    expected_source: 'semantic_layer',
+  });
+  assert('composeQuestion KX semantic layer routes to sl_read/sl_search', q.includes('sl_read_source') && q.includes('sl_search'), q);
+  assert('composeQuestion KX semantic layer warns against is_deleted', q.includes('不要套用 superstore') && q.includes('is_deleted'), q);
 }
 
 // ── summarize ──────────────────────────────────────────────────────────────

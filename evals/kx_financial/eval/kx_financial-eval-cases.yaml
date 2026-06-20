@@ -1,0 +1,1070 @@
+metadata:
+  document_name: KX Financial Eval Cases
+  document_type: Eval
+  version: v0.1
+  runner_schema_version: v1.4
+  written_date: 2026-06-20
+  author: Codex
+  requester: project-lucy 团队
+  based_on:
+    - semantic-layer/mysql-aliyun/_schema/dataforai.yaml
+    - CLAUDE.md
+    - .ktx/prompts/warehouse-knowledge.md
+    - docs/eval-quiz-conventions.md v1.4
+    - KTX read-only SQL profile on 2026-06-20
+  scope: KX 财务报表数据集 agent eval cases；覆盖 KX source 路由、表/视图选择、join、金额类型、NULL 边界和多轮一致性。
+  output_path: evals/kx_financial/eval/kx_financial-eval-cases.yaml
+  snapshot_date: 2026-06-20
+  snapshot_batch: mysql-aliyun_20260620_080147
+  snapshot_rows:
+    kx_fact_financial_amount: 2330
+    kx_dim_company: 1
+    kx_dim_financial_item: 123
+    kx_vw_balance_sheet_detail: 310
+    kx_vw_cash_flow_statement_detail: 125
+    kx_vw_income_statement_detail: 160
+  data_source: raw_sql_fallback
+  paired_quiz:
+    path: evals/kx_financial/kx_financial-quiz-cases.html
+    version: v0.1
+  coverage_matrix:
+    basic:
+      - kx-rowcount-001
+      - kx-period-001
+      - kx-balance-001
+      - kx-income-001
+      - kx-cashflow-001
+    anti_pattern:
+      - kx-amount-type-001
+      - kx-quarter-001
+      - kx-filter-001
+      - kx-null-001
+    boundary:
+      - kx-view-001
+      - kx-view-gap-001
+      - kx-income-null-001
+    degradation:
+      - kx-routing-001
+      - kx-schema-001
+    multi_turn:
+      - kx-multiturn-001
+    path_selection:
+      - kx-join-001
+      - kx-join-002
+      - kx-source-file-001
+
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - ".ktx/secrets/"
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: "UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE"
+      reason: eval / fallback 只能只读，不允许 DDL 或 DML。
+    - type: forbidden_ast
+      value: "cross_source_join"
+      reason: 禁止跨数据源 Join；跨源分析必须拆成单源结果后人工解释。
+
+quiz_cases:
+  - id: Q1
+    stem: "KX 财务域当前应该看到几个 semantic layer source？"
+    difficulty: 0.5
+    question_type: single
+    display_type: exact_value
+    eval_refs:
+      - kx-schema-001
+    options:
+      - key: A
+        text: "3 个"
+      - key: B
+        text: "6 个"
+      - key: C
+        text: "9 个"
+      - key: D
+        text: "只允许 superstore"
+    answer: "B"
+    explanation: "KX 当前包含 3 张表和 3 个明细视图，共 6 个 source。"
+
+  - id: Q2
+    stem: "KX 财报金额事实表有多少行？"
+    difficulty: 1
+    question_type: single
+    display_type: exact_value
+    eval_refs:
+      - kx-rowcount-001
+    options:
+      - key: A
+        text: "466 行"
+      - key: B
+        text: "700 行"
+      - key: C
+        text: "2330 行"
+      - key: D
+        text: "5083 行"
+    answer: "C"
+    explanation: "kx_fact_financial_amount 当前快照为 2330 行。"
+
+  - id: Q3
+    stem: "每个 report_period 在 KX 财报事实表中有多少行？"
+    difficulty: 1.5
+    question_type: single
+    display_type: exact_value
+    eval_refs:
+      - kx-period-001
+    options:
+      - key: A
+        text: "125 行"
+      - key: B
+        text: "160 行"
+      - key: C
+        text: "310 行"
+      - key: D
+        text: "466 行"
+    answer: "D"
+    explanation: "202601 到 202605 每期都是 466 行。"
+
+  - id: Q4
+    stem: "查公司名称时，正确的数据路径是什么？"
+    difficulty: 2
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - kx-join-001
+    options:
+      - key: A
+        text: "从 source_file_name 解析"
+      - key: B
+        text: "按 company_id 关联 kx_dim_company"
+      - key: C
+        text: "按 item_id 关联公司维表"
+      - key: D
+        text: "默认使用 superstore_people"
+    answer: "B"
+    explanation: "公司名来自 kx_dim_company，事实表通过 company_id 关联。"
+
+  - id: Q5
+    stem: "202605 利润表“一、营业收入”的本年累计金额是多少？"
+    difficulty: 2
+    question_type: single
+    display_type: exact_value
+    eval_refs:
+      - kx-income-001
+      - kx-join-002
+    options:
+      - key: A
+        text: "0"
+      - key: B
+        text: "25872.08"
+      - key: C
+        text: "69339.62"
+      - key: D
+        text: "99456.98"
+    answer: "C"
+    explanation: "202605 一、营业收入 year_to_date 金额为 69339.62。"
+
+  - id: Q6
+    stem: "202605 利润表“一、营业收入”的本月金额为空时，应该怎么处理？"
+    difficulty: 2.5
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - kx-income-null-001
+    options:
+      - key: A
+        text: "明确保留为 NULL"
+      - key: B
+        text: "自动当作 0"
+      - key: C
+        text: "用本年累计金额填充"
+      - key: D
+        text: "删除该项目"
+    answer: "A"
+    explanation: "来源空单元格保留为 NULL，不能用 0 替代。"
+
+  - id: Q7
+    stem: "计算资产负债表余额时，为什么不能直接 SUM(amount)？"
+    difficulty: 3
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - kx-amount-type-001
+    options:
+      - key: A
+        text: "会混加不同 amount_type"
+      - key: B
+        text: "amount 不是数值列"
+      - key: C
+        text: "只能查 superstore"
+      - key: D
+        text: "必须按 source_file_name 分组"
+    answer: "A"
+    explanation: "资产负债表同时有 begin_balance 和 end_balance，必须先限定 amount_type。"
+
+  - id: Q8
+    stem: "202605 资产负债表中“货币资金”的期末余额是多少？"
+    difficulty: 2
+    question_type: single
+    display_type: exact_value
+    eval_refs:
+      - kx-balance-001
+    options:
+      - key: A
+        text: "15871.88"
+      - key: B
+        text: "25872.08"
+      - key: C
+        text: "34505.28"
+      - key: D
+        text: "69339.62"
+    answer: "B"
+    explanation: "货币资金 202605 期末余额为 25872.08。"
+
+  - id: Q9
+    stem: "202605 现金流量表“五、期末现金余额”是多少？"
+    difficulty: 2
+    question_type: single
+    display_type: exact_value
+    eval_refs:
+      - kx-cashflow-001
+      - kx-multiturn-001
+    options:
+      - key: A
+        text: "25872.08"
+      - key: B
+        text: "34505.28"
+      - key: C
+        text: "69339.62"
+      - key: D
+        text: "99456.98"
+    answer: "A"
+    explanation: "现金流量表五、期末现金余额为 25872.08。"
+
+  - id: Q10
+    stem: "查询 KX 财务表时是否需要加 is_deleted=0？"
+    difficulty: 2.5
+    question_type: boolean
+    display_type: boolean
+    eval_refs:
+      - kx-filter-001
+    options:
+      - key: A
+        text: "需要"
+      - key: B
+        text: "不需要"
+    answer: "B"
+    explanation: "KX 财务表不含 is_deleted，不能套用 superstore 软删除过滤。"
+
+  - id: Q11
+    stem: "以下哪些字段只用于追溯，不能替代业务维表？（多选）"
+    difficulty: 3
+    question_type: multi
+    display_type: conceptual
+    eval_refs:
+      - kx-source-file-001
+    options:
+      - key: A
+        text: "source_file_name"
+      - key: B
+        text: "source_sheet_name"
+      - key: C
+        text: "company_id"
+      - key: D
+        text: "item_id"
+    answer: "A,B"
+    explanation: "source_file_name 和 source_sheet_name 只用于 lineage，不是业务 join key。"
+
+  - id: Q12
+    stem: "利润表项目维表有 36 个项目，但利润表明细视图每期只有 32 个项目。缺少哪些项目？（多选）"
+    difficulty: 4
+    question_type: multi
+    display_type: exact_value
+    eval_refs:
+      - kx-view-gap-001
+    options:
+      - key: A
+        text: "城市建设维护税"
+      - key: B
+        text: "二、营业利润"
+      - key: C
+        text: "三、利润总额"
+      - key: D
+        text: "四、净利润"
+      - key: E
+        text: "一、营业收入"
+    answer: "A,B,C,D"
+    explanation: "缺少城市建设维护税、二、营业利润、三、利润总额、四、净利润。"
+
+cases:
+  - id: kx-routing-001
+    case_type: single_turn
+    question: 查询 KX 财报数据时，应该使用哪些 dataforai 表或视图？不要查询 superstore。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions: []
+    tool_assertions:
+      - type: required_tool
+        value: "mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
+        reason: source 路由题应读取 semantic layer 定义或搜索结果。
+      - type: required_tool_input_regex
+        value: "kx|财报|财务"
+        reason: semantic layer 检索必须面向 KX 财务域。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - kx_fact_financial_amount
+            - kx_dim_company
+            - kx_dim_financial_item
+            - kx_vw_balance_sheet_detail
+            - kx_vw_cash_flow_statement_detail
+            - kx_vw_income_statement_detail
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 路由围栏；财报问题必须进入 KX source，不得沿用超市样例表。
+
+  - id: kx-schema-001
+    case_type: single_turn
+    question: KTX 里 KX 财务域现在有几个 source？分别是什么？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions: []
+    tool_assertions:
+      - type: required_tool
+        value: "mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
+        reason: source 数量题应读取 semantic layer catalog。
+      - type: required_tool_input_regex
+        value: "kx|source|财务"
+        reason: semantic layer 检索必须面向 KX 财务 source。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - kx_dim_company
+            - kx_dim_financial_item
+            - kx_fact_financial_amount
+            - kx_vw_balance_sheet_detail
+            - kx_vw_cash_flow_statement_detail
+            - kx_vw_income_statement_detail
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+      - value_type: scalar
+        data:
+          source_count: 6
+        numeric_tolerance: 0
+        compare_mode: exact
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 接入冒烟；确保新增 3 张表和 3 个视图都可被 semantic layer 读取。
+
+  - id: kx-rowcount-001
+    case_type: single_turn
+    question: KX 财报金额事实表有多少行、多少个期间、期间范围是什么？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_ast
+        value: "COUNT(*)"
+        normalize: true
+        reason: 行数画像需要统计事实表记录数。
+      - type: required_ast
+        value: "COUNT(DISTINCT report_period)"
+        normalize: true
+        reason: 必须统计 distinct 报表期间。
+      - type: required_ast
+        value: "MIN(report_period)"
+        normalize: true
+        reason: 必须给出最早期间。
+      - type: required_ast
+        value: "MAX(report_period)"
+        normalize: true
+        reason: 必须给出最新期间。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - row_count: 2330
+              periods: 5
+              min_period: "202601"
+              max_period: "202605"
+        numeric_tolerance: 0
+        compare_mode: unordered_rows
+        key_columns:
+          - min_period
+          - max_period
+        check_schema: true
+        check_row_count: true
+    snapshot_date: 2026-06-20
+    notes: 基础规模画像；用于快速发现 ingest 或表范围漂移。KX 事实表当前没有 SL measures，ground truth 用 ktx sql read-only fallback 计算。
+
+  - id: kx-period-001
+    case_type: single_turn
+    question: KX 财报事实表每个 report_period 各有多少行？是否每期都是 466 行？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_ast
+        value: "GROUP BY report_period"
+        normalize: true
+        reason: 必须按报表期间分组。
+      - type: required_ast
+        value: "COUNT(*)"
+        normalize: true
+        reason: 必须统计每期事实行数。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202601"
+              row_count: 466
+            - report_period: "202602"
+              row_count: 466
+            - report_period: "202603"
+              row_count: 466
+            - report_period: "202604"
+              row_count: 466
+            - report_period: "202605"
+              row_count: 466
+        numeric_tolerance: 0
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+        check_schema: true
+        check_row_count: true
+    snapshot_date: 2026-06-20
+    notes: 基础期间完整性；每月 466 行来自 5 个 source sheets。
+
+  - id: kx-join-001
+    case_type: single_turn
+    question: KX 事实表里的公司是谁？请通过 company_id 关联公司维表回答。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_ast
+        value: "JOIN kx_dim_company | kx_dim_company"
+        normalize: true
+        reason: 公司名必须从公司维表取得，可通过 JOIN 或等价 EXISTS/subquery。
+      - type: required_ast
+        value: "company_id"
+        normalize: true
+        reason: 必须用 company_id 关联事实表和公司维表。
+      - type: forbidden_ast
+        value: "source_file_name"
+        normalize: true
+        reason: 禁止从文件名解析公司名作为业务 join 替代。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - 深圳市柯西信息科技有限公司
+            - company_id
+            - "1"
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: join 路径围栏；公司名来自维表而不是源文件名。
+
+  - id: kx-join-002
+    case_type: single_turn
+    question: 查 202605 的“一、营业收入”本年累计金额是多少？必须通过 item_id 关联财报项目维表。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_ast
+        value: "JOIN kx_dim_financial_item"
+        normalize: true
+        reason: 财报项目名必须从项目维表取得。
+      - type: required_ast
+        value: "item_id"
+        normalize: true
+        reason: 必须用 item_id 关联事实表和财报项目维表。
+      - type: required_ast
+        value: "report_period = '202605'"
+        normalize: true
+        reason: 必须限定报表期间。
+      - type: required_ast
+        value: "amount_type = 'year_to_date'"
+        normalize: true
+        reason: 本年累计金额必须限定 year_to_date。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - item_name: 一、营业收入
+              amount: 69339.62
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - item_name
+        check_schema: true
+        check_row_count: true
+    snapshot_date: 2026-06-20
+    notes: 典型项目查询；防止直接猜项目列或混用 amount_type。
+
+  - id: kx-balance-001
+    case_type: single_turn
+    question: 202605 资产负债表中“货币资金”的期末余额和年初余额分别是多少？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_balance_sheet_detail|kx_fact_financial_amount"
+        normalize: true
+        reason: 可用资产负债表视图，或事实表加 item 维表查询。
+      - type: required_normalized_regex
+        value: "期末余额|end_balance"
+        normalize: true
+        reason: 必须区分期末余额。
+      - type: required_normalized_regex
+        value: "年初余额|begin_balance"
+        normalize: true
+        reason: 必须区分年初余额。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202605"
+              item_name: 货币资金
+              end_balance: 25872.08
+              begin_balance: 15871.88
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 资产负债表金额类型围栏；不能混加 begin/end balance。
+
+  - id: kx-balance-002
+    case_type: single_turn
+    question: 202605 资产合计是否等于负债和所有者权益合计？请给出两个期末余额。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "期末余额|end_balance"
+        normalize: true
+        reason: 本题比较期末余额。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - item_name: 资产合计
+              end_balance: 99456.98
+            - item_name: 负债和所有者权益合计
+              end_balance: 99456.98
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 财报勾稽基础检查；两个合计项期末余额一致。
+
+  - id: kx-income-001
+    case_type: single_turn
+    question: 202605 利润表“一、营业收入”的本年累计金额是多少？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "一、营业收入"
+        normalize: true
+        reason: 必须精确匹配利润表项目名，不能省略中文序号造成错配。
+      - type: required_normalized_regex
+        value: "本年累计金额|year_to_date"
+        normalize: true
+        reason: 必须查询本年累计金额。
+      - type: required_normalized_regex
+        value: "202605"
+        normalize: true
+        reason: 必须限定 202605。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202605"
+              item_name: 一、营业收入
+              year_to_date_amount: 69339.62
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 利润表基础 exact-value case；当前本月金额为空，本年累计有值。
+
+  - id: kx-income-null-001
+    case_type: single_turn
+    question: 202605 利润表“一、营业收入”的本月金额是多少？如果为空，请明确说是 NULL，不要当 0。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: forbidden_ast
+        value: "COALESCE(amount, 0)"
+        normalize: true
+        reason: 本题不允许把 NULL 强制当 0。
+      - type: forbidden_ast
+        value: "IFNULL(amount, 0)"
+        normalize: true
+        reason: 本题不允许把 NULL 强制当 0。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202605"
+              item_name: 一、营业收入
+              current_month_amount: null
+        compare_mode: subset
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: NULL 边界；财报空单元格保留为 NULL，不能默认为 0。
+
+  - id: kx-cashflow-001
+    case_type: single_turn
+    question: 202605 现金流量表“五、期末现金余额”是多少？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_cash_flow_statement_detail|kx_fact_financial_amount"
+        normalize: true
+        reason: 可用现金流量表视图，或事实表加项目维表查询。
+      - type: required_normalized_regex
+        value: "五、期末现金余额|期末现金余额|期末现金|五、"
+        normalize: true
+        reason: 必须定位期末现金余额项目；允许 LIKE 模糊定位。
+      - type: required_normalized_regex
+        value: "202605"
+        normalize: true
+        reason: 必须限定 202605。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202605"
+              item_name: 五、期末现金余额
+              amount: 25872.08
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 现金流量表基础 exact-value case。
+
+  - id: kx-amount-type-001
+    case_type: single_turn
+    question: 计算 202605 资产负债表余额时，为什么不能直接 SUM(amount)？正确做法是什么？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions: []
+    tool_assertions:
+      - type: required_tool
+        value: "mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
+        reason: amount_type 反模式题应读取 KX source 定义。
+      - type: required_tool_input_regex
+        value: "kx|amount_type|资产负债表|财务"
+        reason: 检索应围绕 KX 金额类型规则。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - amount_type
+            - begin_balance
+            - end_balance
+            - 不能直接 SUM(amount)
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 金额类型反模式；防止不同口径金额混加。
+
+  - id: kx-quarter-001
+    case_type: single_turn
+    question: 202605 利润表“四、净利润”的第二季度金额是多少？注意不要把四个季度相加。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: forbidden_ast
+        value: "SUM(amount)"
+        normalize: true
+        reason: 禁止把 Q1-Q4 或多个季度直接相加。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202605"
+              amount_type: quarter
+              quarter_no: 2
+              amount: 34505.28
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+          - amount_type
+          - quarter_no
+        check_schema: true
+        check_row_count: false
+      - value_type: text
+        data:
+          must_mention:
+            - 四、净利润
+            - quarter_no
+            - amount_type
+          must_not_mention:
+            - SUM(amount)
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 季度金额反模式；quarter_no 是必需过滤条件。
+
+  - id: kx-view-001
+    case_type: single_turn
+    question: 三个 KX 财报明细视图各有多少行、多少个报表期间？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_balance_sheet_detail"
+        normalize: true
+        reason: 必须检查资产负债表视图。
+      - type: required_normalized_regex
+        value: "kx_vw_cash_flow_statement_detail"
+        normalize: true
+        reason: 必须检查现金流量表视图。
+      - type: required_normalized_regex
+        value: "kx_vw_income_statement_detail"
+        normalize: true
+        reason: 必须检查利润表视图。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - source_name: kx_vw_balance_sheet_detail
+              row_count: 310
+              periods: 5
+            - source_name: kx_vw_cash_flow_statement_detail
+              row_count: 125
+              periods: 5
+            - source_name: kx_vw_income_statement_detail
+              row_count: 160
+              periods: 5
+        numeric_tolerance: 0
+        compare_mode: unordered_rows
+        key_columns:
+          - source_name
+        check_schema: true
+        check_row_count: true
+    snapshot_date: 2026-06-20
+    notes: 视图接入和行数围栏。
+
+  - id: kx-view-gap-001
+    case_type: single_turn
+    question: 利润表项目维表有 36 个项目，但利润表明细视图每期只有 32 个项目。少了哪些项目？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_dim_financial_item"
+        normalize: true
+        reason: 必须从项目维表取完整利润表项目。
+      - type: required_normalized_regex
+        value: "kx_vw_income_statement_detail"
+        normalize: true
+        reason: 必须与利润表明细视图做覆盖对比。
+      - type: required_normalized_regex
+        value: "LEFT JOIN|NOT EXISTS|NOT IN"
+        normalize: true
+        reason: 必须找出维表有但视图没有的项目。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - item_name: 城市建设维护税
+            - item_name: 二、营业利润
+            - item_name: 三、利润总额
+            - item_name: 四、净利润
+        compare_mode: unordered_rows
+        key_columns:
+          - item_name
+        check_schema: true
+        check_row_count: true
+    snapshot_date: 2026-06-20
+    notes: view/base 不等价边界；防止把利润表视图误认为全量项目表。
+
+  - id: kx-filter-001
+    case_type: single_turn
+    question: 查询 KX 财务表时是否需要加 is_deleted=0？请说明原因，并给出正确过滤方式。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions: []
+    tool_assertions:
+      - type: required_tool
+        value: "mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
+        reason: filter 规则题应读取 KX source 定义。
+      - type: required_tool_input_regex
+        value: "kx|is_deleted|财务"
+        reason: 检索应围绕 KX 财务过滤规则。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - is_deleted
+            - 不需要
+            - report_period
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 从 superstore 迁移过来的常见误用；KX 应按 report_period / statement_type / amount_type 等过滤。
+
+  - id: kx-null-001
+    case_type: single_turn
+    question: KX 财报事实表 amount 非空的记录有多少行？NULL 有多少行？回答时不要把 NULL 当 0。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_ast
+        value: "amount IS NULL"
+        normalize: true
+        reason: 必须显式统计 NULL。
+      - type: required_normalized_regex
+        value: "amount is not null|count\\(amount\\)|sum\\(case when amount is not null"
+        normalize: true
+        reason: 必须显式或等价统计非空金额。
+      - type: forbidden_ast
+        value: "COALESCE(amount, 0)"
+        normalize: true
+        reason: 本题不允许把 NULL 强制为 0。
+    result_assertions:
+      - value_type: scalar
+        data:
+          row_count: 2330
+          non_null_amount_rows: 700
+          null_amount_rows: 1630
+        numeric_tolerance: 0
+        compare_mode: exact
+        check_schema: true
+        check_row_count: true
+    snapshot_date: 2026-06-20
+    notes: 空值规模围栏；NULL 是来源空单元格，不是 0。
+
+  - id: kx-source-file-001
+    case_type: single_turn
+    question: KX 财报数据的 source_file_name / source_sheet_name 应该用于什么？能否用它们替代公司维表或项目维表？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: semantic_layer
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: forbidden_ast
+        value: "JOIN source_file_name"
+        normalize: true
+        reason: 禁止使用 source_file_name 作为业务 join key。
+      - type: forbidden_ast
+        value: "JOIN source_sheet_name"
+        normalize: true
+        reason: 禁止使用 source_sheet_name 作为业务 join key。
+    tool_assertions:
+      - type: required_tool
+        value: "mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
+        reason: lineage 字段题应读取 KX source 定义。
+      - type: required_tool_input_regex
+        value: "source_file_name|source_sheet_name|kx"
+        reason: 检索应围绕 KX lineage 字段。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - 仅用于追溯
+            - company_id
+            - item_id
+            - kx_dim_company
+            - kx_dim_financial_item
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: lineage 字段围栏；source_* 字段不可替代业务维表。
+
+  - id: kx-multiturn-001
+    case_type: multi_turn
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    turns:
+      - turn_id: 1
+        user: 先看 202605 的资产负债表，货币资金期末余额是多少？
+        expected_measures: []
+        result_assertions:
+          - value_type: dataframe
+            data:
+              rows:
+                - report_period: "202605"
+                  item_name: 货币资金
+                  end_balance: 25872.08
+            numeric_tolerance: 0.01
+            compare_mode: unordered_rows
+            key_columns:
+              - report_period
+              - item_name
+            check_schema: true
+            check_row_count: true
+        context_assertions:
+          inherit_filters: []
+          inherit_dimensions: []
+          inherit_time_grain: null
+          sql_assertions:
+            - type: required_normalized_regex
+              value: "202605"
+              normalize: true
+              reason: 第一轮必须限定期间。
+            - type: required_normalized_regex
+              value: "货币资金"
+              normalize: true
+              reason: 第一轮必须限定项目。
+            - type: required_normalized_regex
+              value: "期末余额|end_balance"
+              normalize: true
+              reason: 第一轮必须查询期末余额。
+      - turn_id: 2
+        user: 那同一个期间现金流量表里的期末现金余额是多少？
+        expected_measures: []
+        result_assertions:
+          - value_type: dataframe
+            data:
+              rows:
+                - report_period: "202605"
+                  item_name: 五、期末现金余额
+                  amount: 25872.08
+            numeric_tolerance: 0.01
+            compare_mode: unordered_rows
+            key_columns:
+              - report_period
+              - item_name
+            check_schema: true
+            check_row_count: false
+        context_assertions:
+          inherit_filters:
+            - field: report_period
+              op: "="
+              value: "202605"
+          inherit_dimensions: []
+          inherit_time_grain: null
+          sql_assertions:
+            - type: required_normalized_regex
+              value: "202605"
+              normalize: true
+              reason: 第二轮必须继承第一轮期间。
+    snapshot_date: 2026-06-20
+    notes: 多轮一致性；追问“同一个期间”必须继承 202605，不得漂移到最新期间或全期。
