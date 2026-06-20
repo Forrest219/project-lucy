@@ -16,6 +16,18 @@
 
 `superstore_orders` 是订单明细表，粒度是 `row_id`，一笔 `order_id` 可能有多行商品明细。
 
+## 当前数据快照
+
+当前 `dataforai` 超市域的基准规模：
+
+| 表 | 当前记录数 | 说明 |
+|---|---:|---|
+| `dataforai.superstore_orders` | 10,194 明细行 | 不是订单数；订单数应使用 `order_count = count(distinct order_id)`，当前为 5,083 |
+| `dataforai.superstore_returns` | 296 行 | 每行是一笔已退货订单记录 |
+| `dataforai.superstore_people` | 6 行 | 区域到区域经理的映射表 |
+
+因此，`10,194` 与 `5,083` 不是冲突：前者是订单商品明细行数，后者是去重订单数。凡是用户问“订单数”，必须使用 `order_count`，不能用 `COUNT(*)`。
+
 ## 默认过滤
 
 所有 `superstore_*` 表默认排除逻辑删除行：
