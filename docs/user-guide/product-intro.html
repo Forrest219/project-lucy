@@ -238,47 +238,32 @@
   .tag-p1 { background: rgba(79,142,247,0.12); color: var(--accent); }
   .tag-value { background: rgba(124,58,237,0.12); color: #a78bfa; }
 
-  /* ── Workflow ── */
-  #workflow { background: var(--bg); }
-  .workflow-wrap { margin-top: 56px; display: grid; grid-template-columns: 1fr 360px; gap: 48px; align-items: start; }
-  .flow-diagram { display: flex; flex-direction: column; gap: 0; }
-  .flow-row { display: flex; align-items: stretch; }
-  .flow-node {
-    flex: 1;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    position: relative;
-  }
-  .flow-node.highlight { border-color: var(--accent); background: rgba(79,142,247,0.06); }
-  .flow-node h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-  .flow-node p { font-size: 13px; color: var(--text2); }
-  .flow-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    flex-shrink: 0;
-  }
-  .flow-arrow svg { color: var(--text3); }
-  .flow-connector {
-    width: 1px;
-    background: linear-gradient(to bottom, var(--border), transparent);
-    margin: 0 auto;
-    height: 20px;
-  }
-  .flow-bridge {
-    display: flex;
-    justify-content: center;
-  }
+  /* ── Eval box ── */
   .eval-box {
     background: var(--bg2);
     border: 1px solid rgba(16,185,129,0.3);
     border-radius: var(--radius);
     padding: 24px;
-    position: sticky;
-    top: 80px;
+  }
+  .eval-box-wide {
+    margin-top: 28px;
+  }
+  .eval-wide-header { margin-bottom: 16px; }
+  .eval-steps-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+  }
+  .eval-steps-row .eval-step {
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+    padding: 0 16px 0 0;
+    margin-right: 16px;
+  }
+  .eval-steps-row .eval-step:last-child {
+    border-right: none;
+    margin-right: 0;
+    padding-right: 0;
   }
   .eval-box h3 {
     font-size: 16px;
@@ -449,9 +434,149 @@
     margin-bottom: 4px;
   }
 
+  /* ── Architecture Diagrams ── */
+  #architecture { background: var(--bg2); }
+
+  .arch-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    margin-top: 56px;
+  }
+  .arch-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+  }
+  .arch-block-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--accent3); margin-bottom: 6px;
+  }
+  .arch-block-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .arch-block-desc { font-size: 13px; color: var(--text2); line-height: 1.65; margin-bottom: 22px; }
+
+  /* -- Serving flow -- */
+  .serving-flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; }
+
+  .sf-agents {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .sf-section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 10px;
+  }
+  .sf-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .sf-chip {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 11px; font-size: 12px; color: var(--text2);
+  }
+
+  .sf-mid-arrow {
+    display: flex; justify-content: center; gap: 32px;
+    padding: 6px 0; font-size: 11px; color: var(--text3);
+  }
+  .sf-mid-arrow .up { color: var(--accent3); }
+
+  .sf-lucy {
+    background: var(--bg3); border: 1px solid var(--accent3);
+    border-radius: 10px; padding: 18px;
+  }
+  .sf-lucy-header { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
+  .sf-lucy-logo {
+    width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 900; color: #fff;
+  }
+  .sf-lucy-name { font-size: 14px; font-weight: 700; }
+  .sf-lucy-badge {
+    margin-left: auto; background: rgba(6,182,212,.15); border: 1px solid rgba(6,182,212,.3);
+    border-radius: 4px; padding: 2px 7px; font-size: 10px; color: var(--accent3); font-family: monospace;
+  }
+  .sf-gateway {
+    background: rgba(79,142,247,.08); border: 1px solid rgba(79,142,247,.2);
+    border-radius: 6px; padding: 7px 11px; font-size: 12px; color: var(--text2); margin-bottom: 11px;
+  }
+  .sf-features { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+  .sf-features li { font-size: 12px; color: var(--text2); padding-left: 14px; position: relative; }
+  .sf-features li::before { content: '•'; position: absolute; left: 3px; color: var(--accent3); }
+
+  .sf-bot-labels {
+    display: grid; grid-template-columns: 1fr 1fr;
+    font-size: 10px; color: var(--text3); padding: 4px 0; gap: 8px;
+  }
+  .sf-bot-labels span { text-align: center; }
+
+  .sf-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .sf-context {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-top: 2px solid var(--green); border-radius: 8px; padding: 13px;
+  }
+  .sf-db {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-top: 2px solid var(--accent); border-radius: 8px; padding: 13px;
+  }
+  .sf-box-title { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+  .sf-file { display: block; font-size: 11px; color: var(--accent3); font-family: monospace; line-height: 1.8; }
+  .sf-db-list { font-size: 11px; color: var(--text2); line-height: 1.85; }
+  .sf-readonly {
+    display: inline-block; margin-top: 6px;
+    background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25);
+    border-radius: 3px; padding: 1px 6px; font-size: 10px; color: var(--red);
+  }
+
+  /* -- Ingestion flow -- */
+  .ingestion-flow { display: flex; flex-direction: column; gap: 0; }
+
+  .if-sources {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .if-note { font-size: 11px; color: var(--text3); margin-top: 7px; }
+
+  .if-arrow {
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; padding: 5px 0; font-size: 11px; color: var(--text3);
+  }
+  .if-arrow.pass { color: var(--green); }
+
+  .if-step {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 13px 15px; display: flex; gap: 12px; align-items: flex-start;
+  }
+  .if-num {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent3);
+    color: #0f1117; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 900; flex-shrink: 0; margin-top: 1px;
+  }
+  .if-title { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .if-desc { font-size: 12px; color: var(--text2); }
+  .if-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .if-tag {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 8px; font-size: 11px; color: var(--text2);
+  }
+
+  .if-output {
+    background: var(--bg2); border: 1px solid var(--green);
+    border-radius: 8px; padding: 13px 15px;
+  }
+  .if-output-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--green); margin-bottom: 10px;
+  }
+  .if-output-files { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .if-output-path { font-size: 10px; color: var(--accent3); font-family: monospace; margin-bottom: 2px; }
+  .if-output-type { font-size: 11px; color: var(--text3); }
+
   @media (max-width: 900px) {
     .problem-grid, .features-grid { grid-template-columns: 1fr; }
-    .workflow-wrap { grid-template-columns: 1fr; }
+    .arch-pair { grid-template-columns: 1fr; }
+    .eval-steps-row { grid-template-columns: 1fr; }
+    .eval-steps-row .eval-step { border-right: none; margin-right: 0; padding-right: 0; border-bottom: 1px solid var(--border); }
     .hero-stat-row { gap: 32px; }
     .container, nav { padding: 0 24px; }
     .page-toc { display: none; }
@@ -479,7 +604,7 @@
   <a href="#hero">定位</a>
   <a href="#problem">风险根因</a>
   <a href="#features">治理能力</a>
-  <a href="#workflow">治理链路</a>
+  <a href="#architecture">系统架构</a>
   <a href="#compare">产品对比</a>
   <a href="#scope">边界声明</a>
 </aside>
@@ -602,64 +727,161 @@
   </div>
 </section>
 
-<!-- Workflow -->
-<section id="workflow">
+<!-- Architecture -->
+<section id="architecture">
   <div class="container">
-    <div class="section-label">工作流</div>
-    <h2 class="section-title">端到端数据治理链路</h2>
-    <p class="section-sub">从工程师在 WebUI 维护语义，到 Agent 获得高精准度的数据回答，中间经过完整的治理闭环。</p>
-    <div class="workflow-wrap">
-      <!-- Main flow -->
-      <div class="flow-diagram">
+    <div class="section-label">系统架构</div>
+    <h2 class="section-title">Lucy 如何工作</h2>
+    <p class="section-sub">两个互补的侧面：摄取侧把数据源整理成可信上下文；服务侧把上下文安全地交给 Agent 使用。</p>
 
-        <div class="flow-row">
-          <div class="flow-node highlight">
-            <h4>① 数据工程师 · 治理控制台</h4>
-            <p>在 Lucy WebUI 维护语义层（字段定义、measures、joins）、Wiki 业务知识、Skill 分析主权资产，配置 Agent 权限和 Token。</p>
+    <div class="arch-pair">
+
+      <!-- 图一：服务侧 -->
+      <div class="arch-block">
+        <div class="arch-block-label">SERVING FLOW</div>
+        <div class="arch-block-title">从提问到可信答案</div>
+        <div class="arch-block-desc">Agent 通过 MCP 提问；Lucy 校验权限、检索上下文、编译 SQL、执行只读查询，附 Provenance Footer 回答。</div>
+
+        <div class="serving-flow">
+
+          <div class="sf-agents">
+            <div class="sf-section-label">YOUR AGENT</div>
+            <div class="sf-chips">
+              <span class="sf-chip">Claude Code</span>
+              <span class="sf-chip">Codex</span>
+              <span class="sf-chip">Openclaw</span>
+              <span class="sf-chip">Hermes</span>
+              <span class="sf-chip">Cursor</span>
+            </div>
           </div>
-        </div>
-        <div class="flow-bridge"><svg width="2" height="28" viewBox="0 0 2 28"><line x1="1" y1="0" x2="1" y2="28" stroke="#2a3347" stroke-width="2" stroke-dasharray="4 3"/></svg></div>
 
-        <div class="flow-row">
-          <div class="flow-node">
-            <h4>② KTX MCP Server · 语义事实源</h4>
-            <p>将语义层、Wiki、Skill 封装为 MCP 工具集（sl_query、wiki_search、list_skills）。所有变更 git 版本化，可随时回溯。</p>
+          <div class="sf-mid-arrow">
+            <span>ask ↓</span>
+            <span class="up">↑ answer + Provenance Footer</span>
           </div>
-        </div>
-        <div class="flow-bridge"><svg width="2" height="28" viewBox="0 0 2 28"><line x1="1" y1="0" x2="1" y2="28" stroke="#2a3347" stroke-width="2" stroke-dasharray="4 3"/></svg></div>
 
-        <div class="flow-row">
-          <div class="flow-node highlight">
-            <h4>③ Governance Gateway · 鉴权 + 审计</h4>
-            <p>拦截所有 Agent MCP 请求：验证 Service Token → 检查表级 ACL → 通过后转发 → 异步写入审计日志（永久保留）。</p>
+          <div class="sf-lucy">
+            <div class="sf-lucy-header">
+              <div class="sf-lucy-logo">L</div>
+              <span class="sf-lucy-name">KTX MCP Server · Lucy</span>
+              <span class="sf-lucy-badge">MCP + CLI</span>
+            </div>
+            <div class="sf-gateway">⚙ 鉴权 + 表级 ACL + 审计日志（Governance Gateway）</div>
+            <ul class="sf-features">
+              <li>搜索 Wiki + 语义层</li>
+              <li>加载 Skill</li>
+              <li>编译指标 → SQL</li>
+            </ul>
           </div>
-        </div>
-        <div class="flow-bridge"><svg width="2" height="28" viewBox="0 0 2 28"><line x1="1" y1="0" x2="1" y2="28" stroke="#2a3347" stroke-width="2" stroke-dasharray="4 3"/></svg></div>
 
-        <div class="flow-row">
-          <div class="flow-node">
-            <h4>④ 数据源层 · MySQL / StarRocks</h4>
-            <p>只读 Service Account 执行受控 SQL。Agent 永远不直连数据库，所有查询经由 Gateway 代理，保证审计完整性。</p>
+          <div class="sf-bot-labels">
+            <span>← search + read</span>
+            <span>read-only SQL →</span>
           </div>
-        </div>
-        <div class="flow-bridge"><svg width="2" height="28" viewBox="0 0 2 28"><line x1="1" y1="0" x2="1" y2="28" stroke="#2a3347" stroke-width="2" stroke-dasharray="4 3"/></svg></div>
 
-        <div class="flow-row">
-          <div class="flow-node highlight">
-            <h4>⑤ AI Agent 消费 · 95%+ 准确率</h4>
-            <p>Claude Code、Codex 等 Agent 通过 MCP 获取语义上下文、Skill 和受控查询接口，回答精准度稳定超过 95%，并附 Provenance Footer 注明数据来源。</p>
+          <div class="sf-bottom">
+            <div class="sf-context">
+              <div class="sf-box-title">Context Layer</div>
+              <span class="sf-file">wiki/*.md</span>
+              <span class="sf-file">semantic-layer/*.yaml</span>
+              <span class="sf-file">skills/*.yaml</span>
+            </div>
+            <div class="sf-db">
+              <div class="sf-box-title">数据源</div>
+              <div class="sf-db-list">MySQL / StarRocks<br>Oracle / PostgreSQL 等</div>
+              <span class="sf-readonly">read-only</span>
+            </div>
           </div>
-        </div>
 
+        </div>
       </div>
 
-      <!-- Eval sidebar -->
-      <div class="eval-box">
+      <!-- 图二：摄取侧 -->
+      <div class="arch-block">
+        <div class="arch-block-label">INGESTION FLOW</div>
+        <div class="arch-block-title">从数据源到可信上下文</div>
+        <div class="arch-block-desc">BI 团队通过 WebUI 补充语义口径；提交后经 Eval Runner 质量门禁校验，通过才进入服务侧。</div>
+
+        <div class="ingestion-flow">
+
+          <div class="if-sources">
+            <div class="sf-section-label">数据源</div>
+            <div class="sf-chips">
+              <span class="sf-chip">MySQL</span>
+              <span class="sf-chip">StarRocks</span>
+              <span class="sf-chip">Oracle</span>
+              <span class="sf-chip">PostgreSQL 等</span>
+            </div>
+            <div class="if-note">Schema / 字段 / 行数 / 查询历史</div>
+          </div>
+
+          <div class="if-arrow">↓ Schema 扫描</div>
+
+          <div class="if-step">
+            <div class="if-num">1</div>
+            <div>
+              <div class="if-title">KTX WebUI · 人工补充语义</div>
+              <div class="if-desc">BI 团队维护字段口径、指标、Wiki 文档和 Skill</div>
+              <div class="if-tags">
+                <span class="if-tag">Table Editor</span>
+                <span class="if-tag">Wiki Editor</span>
+                <span class="if-tag">Join Editor</span>
+                <span class="if-tag">Skill Editor</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="if-arrow">↓ 提交 Git，版本化</div>
+
+          <div class="if-step">
+            <div class="if-num">2</div>
+            <div>
+              <div class="if-title">Eval Runner · 质量门禁</div>
+              <div class="if-desc">自动验证安全红线、SQL 结构与结果断言；失败时退回 WebUI 修正</div>
+              <div class="if-tags">
+                <span class="if-tag">安全红线校验</span>
+                <span class="if-tag">SQL 断言</span>
+                <span class="if-tag">结果断言</span>
+                <span class="if-tag">漂移分诊</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="if-arrow pass">↓ pass · 上线</div>
+
+          <div class="if-output">
+            <div class="if-output-label">Context Layer · 就绪</div>
+            <div class="if-output-files">
+              <div>
+                <div class="if-output-path">wiki/*.md</div>
+                <div class="if-output-type">业务口径</div>
+              </div>
+              <div>
+                <div class="if-output-path">semantic-layer/*.yaml</div>
+                <div class="if-output-type">结构化指标</div>
+              </div>
+              <div>
+                <div class="if-output-path">skills/*.yaml</div>
+                <div class="if-output-type">分析主权</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Eval 质量闭环 -->
+    <div class="eval-box eval-box-wide">
+      <div class="eval-wide-header">
         <h3>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Eval 质量闭环
         </h3>
-        <p class="sub">语义或 Skill 变更时自动触发，形成质量门禁。</p>
+        <p class="sub">配置侧每次变更自动触发，通过才允许进入服务侧。</p>
+      </div>
+      <div class="eval-steps-row">
         <div class="eval-step">
           <div class="eval-num">1</div>
           <p><strong>变更触发</strong><br>语义层或 Skill 提交变更 → Webhook 触发相关 Eval Case</p>
@@ -682,6 +904,7 @@
         </div>
       </div>
     </div>
+
   </div>
 </section>
 
