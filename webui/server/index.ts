@@ -1,5 +1,7 @@
-import { readFile, readdir } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
 import { parse, stringify } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
@@ -27,6 +29,47 @@ type ErrorEnvelope = {
     detail?: unknown;
   };
 };
+
+const DEFAULT_WEBUI_PORT = 5174;
+const STATIC_MIME_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".txt": "text/plain; charset=utf-8"
+};
+
+function distDir(): string {
+  return process.env.LUCY_WEBUI_DIST_DIR
+    ? path.resolve(process.env.LUCY_WEBUI_DIST_DIR)
+    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
+}
+
+function contentType(filePath: string): string {
+  return STATIC_MIME_TYPES[path.extname(filePath)] ?? "application/octet-stream";
+}
+
+async function staticFilePath(urlPath: string): Promise<string> {
+  const root = distDir();
+  const pathname = decodeURIComponent(urlPath.split("?")[0] ?? "/");
+  const relative = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  const candidate = path.resolve(root, relative);
+  const rootWithSep = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (candidate !== root && !candidate.startsWith(rootWithSep)) {
+    return path.join(root, "index.html");
+  }
+  try {
+    const info = await stat(candidate);
+    if (info.isFile()) return candidate;
+  } catch {
+    // Fall through to the SPA entry point.
+  }
+  return path.join(root, "index.html");
+}
 
 function makeDiff(oldText: string, newText: string): string {
   const oldLines = oldText.split("\n");
@@ -125,7 +168,11 @@ export function buildServer() {
 
   app.get("/api/health", async () => ({
     ok: true,
-    data: { status: "ok" }
+    data: {
+      status: "ok",
+      lucyVersion: process.env.npm_package_version ?? "unknown",
+      bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown"
+    }
   }));
 
   app.get("/api/project", async () => {
@@ -378,18 +425,44 @@ export function buildServer() {
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
 
+  app.setNotFoundHandler(async (request, reply) => {
+    if (request.url.startsWith("/api/")) {
+      return reply.status(404).send({
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: `Route ${request.method} ${request.url} not found`
+        }
+      } satisfies ErrorEnvelope);
+    }
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return reply.status(404).send({
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: `Route ${request.method} ${request.url} not found`
+        }
+      } satisfies ErrorEnvelope);
+    }
+    const filePath = await staticFilePath(request.url);
+    return reply.type(contentType(filePath)).send(createReadStream(filePath));
+  });
+
   return app;
 }
 
 async function start() {
   const app = buildServer();
-  await app.listen({ host: "127.0.0.1", port: 5174 });
+  const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
+  const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
+  await app.listen({ host, port });
 
   const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy();
   await new Promise<void>((resolve, reject) => {
     proxy.listen(proxyPort, proxyHost, resolve);
     proxy.on("error", reject);
   });
+  console.log(`Lucy WebUI listening on http://${host}:${port}`);
   console.log(`MCP proxy listening on http://${proxyHost}:${proxyPort}/mcp`);
 }
 

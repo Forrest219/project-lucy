@@ -1,0 +1,13 @@
+.git
+.DS_Store
+node_modules
+webui/node_modules
+webui/dist
+inbox
+temp
+.ktx
+.ktx-ui
+ktx.yaml
+*.log
+coverage
+webui/coverage

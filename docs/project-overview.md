@@ -4,11 +4,13 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21 |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
 project-lucy 是一个本地自服务数据分析 Agent 栈，底座为 KTX 语义层、wiki、eval cases、skills 和 Lucy WebUI 治理工作台。目标是在受控数据访问前提下，让 Claude Code / Codex 等 Agent 优先使用语义层和业务口径回答数据问题，并通过 eval/quiz 形成回归门禁。
+
+面向产品化交付，Lucy 的目标形态是位于数据库和 agents 之间的 MCP 服务管理平台：用户通过 Docker 部署 Lucy，接入数据库，配置语义层，并在 agents 平台配置 MCP endpoint/token 接入数据能力。该目标的验收合同见 `docs/lucy-platform-goal-checklist.md`。
 
 ## 1. 双轨语境
 
@@ -117,6 +119,8 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 
 | 主题 | 文档 |
 |---|---|
+| Lucy MCP 平台产品化目标 | `docs/lucy-platform-goal-checklist.md` |
+| Docker 部署 | `docs/deployment-docker.md` |
 | 开发治理 | `docs/DEVELOPMENT.md` |
 | WebUI 当前状态 | `docs/webui-impl-status.md` |
 | WebUI 模块使用 | `docs/webui-module-guide.md` |

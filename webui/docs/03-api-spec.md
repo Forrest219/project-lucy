@@ -79,7 +79,9 @@ GET    /api/admin/agents/:userId/effective-permissions
 POST   /api/admin/agents/:userId/tokens
 DELETE /api/admin/agents/:userId/tokens/:label
 GET    /api/admin/roles
+GET    /api/admin/config-audit
 GET    /api/admin/audit
+GET    /api/admin/audit/sources
 GET    /api/admin/audit/export
 GET    /api/admin/mcp-tools
 
@@ -271,9 +273,62 @@ Roles：
 
 Audit：
 
+- `GET /api/admin/config-audit`
 - `GET /api/admin/audit`
+- `GET /api/admin/audit/sources`
 - `GET /api/admin/audit/export`
 - `GET /api/admin/mcp-tools`
+
+`GET /api/admin/config-audit` 查询 `config_change_log`，用于追踪 WebUI 对 `ktx.yaml`、`webui/config/access.yaml` 等治理配置的写入记录。
+
+Query：
+
+- `targetId`：按目标 ID 精确过滤，例如 agent id 或 connection id。
+- `filePath`：按文件路径模糊过滤。
+- `limit`：默认 `50`，最大 `500`。
+- `offset`：默认 `0`。
+
+响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "total": 1,
+  "actorMode": "single_local_admin",
+  "actorNotice": "当前为单管理员模式，actor=local-admin 仅表示本机管理入口，不具备多人问责语义。",
+  "entries": [{
+    "id": 1,
+    "ts": "2026-06-21T10:00:00.000Z",
+    "actor": "local-admin",
+    "sessionId": "session-1",
+    "filePath": "webui/config/access.yaml",
+    "changeType": "agent_patch",
+    "targetId": "workhorse",
+    "oldSummary": {},
+    "newSummary": {},
+    "diff": "...",
+    "requestId": "req-1"
+  }]
+}}
+```
+
+`GET /api/admin/audit/sources` 从访问日志中聚合被 MCP tool 触达的表，供审计来源筛选和治理面板使用。协议类工具调用不计入统计。
+
+响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "connections": [{ "connection": "audit-derived", "calls": 3 }],
+  "schemas": [{ "schema": "dataforai", "calls": 3 }],
+  "topTables": [{ "table": "dataforai.superstore_orders", "calls": 3, "denied": 1 }],
+  "deniedTables": [{ "table": "dataforai.superstore_orders", "calls": 3, "denied": 1 }]
+}}
+```
+
+`GET /api/admin/audit` 查询 MCP access log；支持按 user、tool、outcome、时间范围、tableSearch、sessionId、turnId、platform 过滤。默认不包含协议类工具调用；传 `includeProtocol=true` 可包含 `tools/list`、`initialize`、`notifications/initialized`。
+
+`GET /api/admin/audit/export` 使用与 `/api/admin/audit` 相同过滤条件导出 CSV，并对 spreadsheet formula 前缀做转义。
+
+`GET /api/admin/mcp-tools` 返回当前已知 MCP tool 列表，并标记全局 deny 状态。
 
 ### MCP Proxy
 

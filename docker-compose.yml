@@ -1,0 +1,24 @@
+services:
+  lucy:
+    build:
+      context: .
+      args:
+        KTX_VERSION: "0.13.0"
+    image: project-lucy:local
+    environment:
+      KTX_PROJECT_ROOT: /data/lucy
+      LUCY_WEBUI_HOST: 0.0.0.0
+      LUCY_WEBUI_PORT: "5174"
+      LUCY_PROXY_HOST: 0.0.0.0
+      LUCY_PROXY_PORT: "7879"
+      LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
+      LUCY_PROXY_UPSTREAM_PORT: "7878"
+      POSTHOG_DISABLED: "1"
+    ports:
+      - "5174:5174"
+      - "7879:7879"
+    volumes:
+      - lucy-data:/data/lucy
+
+volumes:
+  lucy-data:
