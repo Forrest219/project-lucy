@@ -19,6 +19,22 @@ metadata:
   legacy_migration:
     from_version: v1.2
     legacy_fields_removed: true
+  paired_quiz:
+    path: evals/superstore/superstore-quiz-cases.html
+    version: v1.4
+
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - ".ktx/secrets/"
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: "UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE"
+      reason: eval / fallback 只能只读，不允许 DDL 或 DML。
+    - type: forbidden_ast
+      value: "cross_source_join"
+      reason: 禁止跨数据源 Join；跨源分析必须拆成单源结果后人工解释。
 
 quiz_cases:
   - id: Q1

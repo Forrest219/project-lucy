@@ -40,6 +40,50 @@ POST /api/validate-changed
 
 GET  /api/joins/candidates                       # .ktx-ui sidecar
 PUT  /api/joins/candidates
+
+GET  /api/connections
+GET  /api/connections/:connId/tables
+PUT  /api/connections/:connId/enabled-tables     # default dryRun
+POST /api/connections/:connId/test
+POST /api/connections/:connId/ingest
+
+GET    /api/eval/domains
+GET    /api/eval/domains/:domain
+GET    /api/eval/cases/:domain
+GET    /api/eval/cases/:domain/:caseId
+POST   /api/eval/cases/:domain
+PUT    /api/eval/cases/:domain/:caseId
+DELETE /api/eval/cases/:domain/:caseId
+POST   /api/eval/runs
+GET    /api/eval/runs
+GET    /api/eval/runs/:runId
+GET    /api/eval/runs/:runId/results
+GET    /api/eval/runs/:runId/artifact
+GET    /api/eval/runs/:runId/compare
+POST   /api/eval/runs/:runId/cancel
+GET    /api/eval/runs/:runId/stream
+GET    /api/eval/monitor/trend
+GET    /api/eval/monitor/top-failures
+GET    /api/eval/monitor/drift-distribution
+GET    /api/eval/monitor/config
+PUT    /api/eval/monitor/config
+GET    /api/eval/monitor/threshold
+PUT    /api/eval/monitor/threshold
+
+GET    /api/admin/agents
+POST   /api/admin/agents
+GET    /api/admin/agents/:userId
+PATCH  /api/admin/agents/:userId
+DELETE /api/admin/agents/:userId
+GET    /api/admin/agents/:userId/effective-permissions
+POST   /api/admin/agents/:userId/tokens
+DELETE /api/admin/agents/:userId/tokens/:label
+GET    /api/admin/roles
+GET    /api/admin/audit
+GET    /api/admin/audit/export
+GET    /api/admin/mcp-tools
+
+POST /mcp                                      # MCP proxy, port 7879
 ```
 
 ## 3. 端点细节
@@ -109,7 +153,133 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 ### `GET/PUT /api/joins/candidates`
 读写 `.ktx-ui/join-candidates.json`（candidate/rejected join），不写正式 YAML（ADR-02 写入策略）。
 
-## 4. 通用约定
+## 4. 当前扩展端点
+
+### 数据库连接
+
+`GET /api/connections` 返回 `ConnectionInfo[]`，字段见 `04-data-model.md`。
+
+`GET /api/connections/:connId/tables` 从 `semantic-layer/<connId>/_schema/*.yaml` 返回已扫描表名：
+
+```jsonc
+{ "ok": true, "data": { "tables": ["dataforai.superstore_orders"] } }
+```
+
+`PUT /api/connections/:connId/enabled-tables` 默认 `dryRun:true`。`enabledTables` 必须是已扫描物理表清单中的 `schema.table`，拒绝空串、路径字符、重复项和未扫描表。
+
+请求：
+
+```jsonc
+{ "dryRun": true, "enabledTables": ["dataforai.superstore_orders"] }
+```
+
+dryRun 响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "diff": "...",
+  "proposedYaml": "...",
+  "oldEnabledTables": [],
+  "newEnabledTables": ["dataforai.superstore_orders"]
+}}
+```
+
+`dryRun:false` 写 `ktx.yaml` 并记录 `config_change_log`：
+
+```jsonc
+{ "ok": true, "data": { "written": true, "auditId": 1, "oldEnabledTables": [], "newEnabledTables": ["dataforai.superstore_orders"] }}
+```
+
+错误码：`CONNECTION_NOT_FOUND` `INVALID_ENABLED_TABLE` `DUPLICATE_ENABLED_TABLE` `TABLE_NOT_SCANNED`。
+
+`POST /api/connections/:connId/test` 调用连接测试；`POST /api/connections/:connId/ingest` 触发 schema 扫描。两者返回 `{ exitCode, stdout, stderr }` 风格结果。
+
+### Eval / 质量评测
+
+`GET /api/eval/domains` 返回 domain 列表与最近运行摘要；`GET /api/eval/domains/:domain` 返回单个 domain。
+
+`GET /api/eval/cases/:domain` / `GET /api/eval/cases/:domain/:caseId` 读取 eval case。`POST /api/eval/cases/:domain` 新增 case；`PUT /api/eval/cases/:domain/:caseId` 更新 case，默认 dryRun；`DELETE` 删除 case。
+
+`POST /api/eval/runs` 创建运行：
+
+```jsonc
+{ "domain": "superstore", "caseSelection": { "mode": "all" }, "ktxMcpUrl": "http://127.0.0.1:7879/mcp", "triggeredBy": "local-admin" }
+```
+
+运行查询：
+
+- `GET /api/eval/runs`
+- `GET /api/eval/runs/:runId`
+- `GET /api/eval/runs/:runId/results`
+- `GET /api/eval/runs/:runId/artifact?type=json|md`
+- `GET /api/eval/runs/:runId/compare?with=<runId>`
+- `GET /api/eval/runs/:runId/stream`（SSE）
+- `POST /api/eval/runs/:runId/cancel`
+
+Monitor：
+
+- `GET /api/eval/monitor/trend?domain=&days=`
+- `GET /api/eval/monitor/top-failures?domain=&days=&limit=`
+- `GET /api/eval/monitor/drift-distribution?domain=&days=`
+- `GET/PUT /api/eval/monitor/config`
+- `GET/PUT /api/eval/monitor/threshold`
+
+常见错误码：`RUNNER_BUSY` `RUN_NOT_FOUND` `RUNNER_PRECHECK_FAILED` `NO_CASES_SELECTED` `UNSUPPORTED_SELECTION_MODE`。
+
+### Admin / 访问治理
+
+Agent 列表与详情：
+
+- `GET /api/admin/agents`
+- `GET /api/admin/agents/:userId`
+- `GET /api/admin/agents/:userId/effective-permissions`
+
+写入路径已是 role-first：
+
+- `POST /api/admin/agents`：必须传 `agent.role`，拒绝 `agent.allow`。
+- `PATCH /api/admin/agents/:userId`：只允许 `name`、`note`、`enabled`、`role`。
+- `DELETE /api/admin/agents/:userId`：删除 agent 前先撤销 token。
+
+新建请求：
+
+```jsonc
+{ "dryRun": true, "agent": { "id": "wangwu", "name": "王五", "note": "市场部分析助理", "role": "kx_readonly" }}
+```
+
+PATCH 请求：
+
+```jsonc
+{ "dryRun": true, "version": "mtime-hash", "patch": { "role": "kx_readonly", "enabled": true }}
+```
+
+拒绝：
+
+- `agent.allow` / `patch.allow` → `LEGACY_ALLOW_READONLY`
+- 缺 role → `ROLE_REQUIRED`
+- 无效 role → `INVALID_ROLE`
+- 启用 legacy wildcard agent 且未分配 role → `LEGACY_WILDCARD_AGENT_REQUIRES_ROLE`
+
+Token：
+
+- `POST /api/admin/agents/:userId/tokens` 只在响应中返回一次明文 token，yaml/audit 只保存 hash。
+- `DELETE /api/admin/agents/:userId/tokens/:label` 先写 `revoked_tokens`，再更新 yaml。
+
+Roles：
+
+- `GET /api/admin/roles` 返回 role 列表、工具、连接、展开 source 数与 warnings。
+- `GET /api/admin/agents/:userId/effective-permissions` 返回 role 展开后的 `tools`、`connections`、`sources`、`snapshotHash`、`sourceMapVersion`。
+
+Audit：
+
+- `GET /api/admin/audit`
+- `GET /api/admin/audit/export`
+- `GET /api/admin/mcp-tools`
+
+### MCP Proxy
+
+`POST /mcp` 在 7879 端口运行，使用 Bearer token 识别 agent，执行 ACL 裁决并写访问日志。代理工具包括 KTX MCP 上游工具和 `kx_catalog` 本地目录工具。
+
+## 5. 通用约定
 
 - 所有 `:conn/:schema/:table` 段做白名单存在性校验，不存在 → `404 SOURCE_NOT_FOUND`。
 - 写类端点统一支持 `dryRun`，默认 `true`（安全优先：必须显式 `false` 才落盘）。

@@ -5,7 +5,7 @@
 | 文档类型 | Builder 前置方案 |
 | 生成日期 | 2026-06-21 |
 | 目标命令 | `npm run lint:spec` |
-| 状态 | P1 前置方案；未实现脚本；不阻塞 P0 安全写路径 |
+| 状态 | 已实现首版脚本；不阻塞 P0 安全写路径 |
 
 ## 1. 目标
 
@@ -30,6 +30,13 @@ npm run lint:spec
 ```text
 scripts/lint-spec.mjs
 ```
+
+2026-06-21 已落地：
+
+- 根目录 `package.json` 增加 `npm run lint:spec`。
+- 首版脚本路径为 `scripts/lint-spec.mjs`。
+- 当前策略：FAIL 退出码为 1；WARN 只提示不阻断。
+- 当前允许保留的 warning：superstore eval `runner_schema_version: v1.3`、disabled legacy wildcard user `lisi`。
 
 退出码：
 
@@ -179,6 +186,14 @@ scripts/lint-spec.config.json
 3. `evals/superstore/eval/superstore-eval-cases.yaml` 使用较旧 runner schema。
 4. `webui/config/access.yaml` 中 disabled legacy wildcard user `lisi` 只能 warning，不能被静默视为安全。
 5. `webui/docs/03-api-spec.md` 缺 `/api/eval/*` 或 `/api/admin/*` 时输出 api-spec warning。
+
+2026-06-21 验收状态：
+
+- route-status：PASS。
+- api-spec：PASS，当前 40 个已注册 REST routes 已登记。
+- skill-dependency：PASS。
+- eval-schema-version：PASS + warning，superstore v1.3 仍提示 schema version older than v1.4；已补 `safety_contract`。
+- access-role-policy：PASS + warning，disabled legacy wildcard `lisi` 仍提示不得无 role 启用。
 
 ## 6. 非目标
 

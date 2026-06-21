@@ -9,7 +9,8 @@
   },
   "scripts": {
     "eval": "node scripts/eval-runner.mjs",
-    "eval:list": "node scripts/eval-runner.mjs --list-cases"
+    "eval:list": "node scripts/eval-runner.mjs --list-cases",
+    "lint:spec": "node scripts/lint-spec.mjs"
   },
   "dependencies": {
     "yaml": "^2.6.0"

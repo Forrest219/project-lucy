@@ -124,5 +124,286 @@ validation_failed  : 最近一次 ktx sl validate 失败（覆盖上述状态）
 ```
 仅 webui 内部使用，不污染语义层；用户在 Join Editor 把 candidate 提升为 confirmed 时才写正式 YAML。
 
+## 6. Connections / `ktx.yaml`
+
+`GET /api/project` 与 `GET /api/connections` 暴露连接摘要，永不返回 password 明文：
+
+```ts
+type ConnectionInfo = {
+  id: string;
+  driver?: string;
+  passwordSource?: "file" | "inline" | "env";
+  schemas: string[];
+  enabledTables: string[];
+};
+
+type ProjectInfo = {
+  root: string;
+  connections: ConnectionInfo[];
+  ktxAvailable: boolean;
+};
+```
+
+`enabledTables` 映射到 `ktx.yaml`：
+
+```yaml
+connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+```
+
+`PUT /api/connections/:connId/enabled-tables` 的写入模型：
+
+```ts
+type EnabledTablesPreview = {
+  diff: string;
+  proposedYaml: string;
+  oldEnabledTables: string[];
+  newEnabledTables: string[];
+};
+
+type EnabledTablesWrite = {
+  written: true;
+  auditId?: number;
+  oldEnabledTables: string[];
+  newEnabledTables: string[];
+};
+```
+
+校验规则：每项必须是 `schema.table`，且必须存在于 `semantic-layer/<connId>/_schema/*.yaml` 中已扫描 source 的物理表清单。
+
+## 7. Eval 模型
+
+Eval case 文件位于 `evals/<domain>/eval/*-eval-cases.yaml`。
+
+```ts
+type EvalDomainInfo = {
+  domain: string;
+  filePath: string;
+  caseCount: number;
+  metadata?: Record<string, unknown>;
+  lastRun?: { runId: number; passRate: number; startedAt: string };
+};
+
+type EvalCase = {
+  id: string;
+  case_type: string;
+  question?: string;
+  turns?: unknown[];
+  domain: string;
+  skill_version?: string;
+  semantic_version?: string;
+  model_id?: string;
+  expected_source?: string;
+  expected_measures?: string[];
+  linked_quiz_questions?: string[];
+  sql_assertions?: SqlAssertion[];
+  result_assertions?: ResultAssertion[];
+  context_assertions?: unknown;
+  snapshot_date?: string;
+  coverage?: string;
+  notes?: string;
+};
+
+type CaseSelection =
+  | { mode: "all" }
+  | { mode: "ids"; ids: string[] }
+  | { mode: "coverage"; coverage: string }
+  | { mode: "failed_in_last" };
+```
+
+Eval run 写入 SQLite（`.ktx-ui/eval/*.sqlite` 由 eval db helper 管理），前端使用：
+
+```ts
+type EvalRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+type EvalRun = {
+  id: number;
+  domain: string;
+  status: EvalRunStatus;
+  startedAt: string;
+  finishedAt?: string;
+  triggeredBy: string;
+  trigger: string;
+  triggerReason?: string;
+  ktxMcpUrl: string;
+  caseSelection: CaseSelection;
+  totalCases: number;
+  passCount: number;
+  failCount: number;
+  passRate?: number;
+};
+```
+
+Monitor config sidecar：
+
+```ts
+type MonitorConfig = {
+  domains: Record<string, {
+    passRateYellow: number;
+    passRateRed: number;
+    consecutiveFailThreshold: number;
+  }>;
+};
+```
+
+## 8. Access Governance 模型
+
+`webui/config/access.yaml` 是访问治理事实源。
+
+```yaml
+roles:
+  kx_readonly:
+    description: KX 财务数据只读问答
+    allow:
+      connections: [mysql-aliyun]
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [kx_fact_financial_amount]
+      tools: [kx_catalog, sl_query, sl_read_source, entity_details]
+
+users:
+  - id: workhorse
+    name: Hermes Workhorse
+    enabled: true
+    role: kx_readonly
+    tokens:
+      - hash: "sha256:..."
+        label: hermes-workhorse
+        created: 2026-06-20
+```
+
+Role-first 规则：
+
+- 新建 Agent 必须写 `role`，不得写 `allow`。
+- `users[].allow` deprecated，仅兼容历史配置读取。
+- 保存 role 到 legacy user 时删除该 user 的 `allow`。
+- role 解析失败 fail closed，不回退到 legacy `allow`。
+- `role.allow.tools` 不得包含 `*`。
+
+前端共享类型：
+
+```ts
+type Agent = {
+  id: string;
+  name: string;
+  note?: string;
+  enabled: boolean;
+  role?: string;
+  tokens: TokenSummary[];
+  allow?: { tables: string[] | ["*"]; tools: string[] | ["*"]; connections?: string[] };
+  effectivePermissions?: EffectivePermissionsPreview;
+  permissionWarnings?: string[];
+  stats?: AgentStats;
+};
+
+type Role = {
+  id: string;
+  description?: string;
+  tools: string[];
+  connections: string[];
+  sourceCount: number;
+  invalid: boolean;
+  warnings: string[];
+};
+
+type EffectivePermissionsPreview = {
+  roleIds: string[];
+  snapshotHash: string;
+  sourceMapVersion?: string;
+  tools: string[];
+  connections: string[];
+  sources: Array<{ connectionId: string; schema: string; sourceName: string; table: string }>;
+  legacyAllow: boolean;
+};
+
+type AgentPatch = {
+  name?: string;
+  note?: string;
+  enabled?: boolean;
+  role?: string;
+};
+
+type CreateAgentBody = {
+  id: string;
+  name: string;
+  note?: string;
+  role: string;
+};
+```
+
+Token 明文只在 `CreateTokenResponse.token` 返回一次：
+
+```ts
+type TokenSummary = {
+  hash: string;
+  label: string;
+  created: string;
+  expires_at?: string | null;
+  last_used?: string | null;
+  revoked?: boolean;
+  revoked_at?: string;
+  revoke_reason?: string;
+};
+```
+
+## 9. Audit / Config Change 模型
+
+访问日志表：
+
+```sql
+CREATE TABLE IF NOT EXISTS access_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  client TEXT,
+  tool TEXT NOT NULL,
+  tables TEXT,
+  args_summary TEXT,
+  outcome TEXT NOT NULL,
+  error_detail TEXT,
+  duration_ms INTEGER NOT NULL,
+  request_id TEXT NOT NULL,
+  role_ids TEXT,
+  permission_snapshot_hash TEXT,
+  effective_tables_count INTEGER,
+  decision_reason TEXT
+);
+```
+
+权限快照表：
+
+```sql
+CREATE TABLE IF NOT EXISTS permission_snapshots (
+  hash TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  roles_json TEXT NOT NULL,
+  resolved_json TEXT NOT NULL
+);
+```
+
+配置变更审计表：
+
+```sql
+CREATE TABLE IF NOT EXISTS config_change_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  session_id TEXT,
+  file_path TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  target_id TEXT,
+  old_summary TEXT,
+  new_summary TEXT,
+  diff TEXT,
+  request_id TEXT
+);
+```
+
+`actor` 当前固定为 `local-admin`。`change_type` 包括 `enabled_tables_update`、`agent_create`、`agent_patch`、`agent_delete`、`token_create`、`token_revoke`。token 明文不得进入 yaml、audit、日志。
+
 ---
 _架构设计 by Claude (architect) · 2026-06-15_

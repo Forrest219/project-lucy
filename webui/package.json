@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
     "build": "vite build",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1",
     "acceptance:api": "tsx scripts/api-acceptance.ts"
   },
   "keywords": [],

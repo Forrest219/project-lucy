@@ -83,6 +83,103 @@ cp /tmp/access.yaml.uat.bak webui/config/access.yaml
 
 > 2026-06-21 状态更新：本文仍可作为 legacy allow 链路的历史 UAT 参考，但不再代表访问治理的目标形态。当前目标已升级为 role-first：新建 Agent 必须选择 role，legacy `allow` 只读兼容，Admin 写入路径不得创建或重新启用 `tables:["*"]` / `tools:["*"]` 的全权 Agent。新的验收边界见 `inbox/spec-remediation-plan-2026-06-21.md` 和 `inbox/thinker-review-spec-delivery-2026-06-21.md`。
 
+## 2A. Role-first UAT（2026-06-21 起）
+
+本节替代下方 legacy allow 主链路，作为当前访问治理的人工验收入口。
+
+### RF-UAT-01 新建 role-first Agent
+
+操作：
+
+1. 打开 `http://127.0.0.1:5173/admin/agents`。
+2. 点击「新建 Agent」。
+3. 填写：
+   - 用户 ID：`uat-role-01`
+   - 显示名：`UAT Role Agent`
+   - 角色：`kx_readonly`
+4. 点击「预览变更」。
+5. 确认 diff 后点击「确认保存」。
+
+通过标准：
+
+- `webui/config/access.yaml` 出现 `id: uat-role-01`。
+- 该 user 有 `role: kx_readonly`。
+- 该 user 不生成 `allow:`。
+- `roles:` 与 `defaults:` 仍保留。
+
+### RF-UAT-02 API 拒绝 legacy allow
+
+操作：
+
+```bash
+curl -sS -X POST http://127.0.0.1:5173/api/admin/agents \
+  -H 'Content-Type: application/json' \
+  -d '{"dryRun":false,"agent":{"id":"uat-wildcard","name":"UAT Wildcard","allow":{"tables":["*"],"tools":["*"]}}}'
+```
+
+通过标准：
+
+- HTTP 400。
+- `error.code` 为 `LEGACY_ALLOW_READONLY` 或 `ROLE_REQUIRED`。
+- `webui/config/access.yaml` 未出现 `uat-wildcard`。
+
+### RF-UAT-03 禁止重新启用 legacy wildcard Agent
+
+前置：`webui/config/access.yaml` 中存在 disabled legacy wildcard user（如 `lisi`）。
+
+操作：
+
+```bash
+curl -sS -X PATCH http://127.0.0.1:5173/api/admin/agents/lisi \
+  -H 'Content-Type: application/json' \
+  -d '{"dryRun":false,"patch":{"enabled":true}}'
+```
+
+通过标准：
+
+- HTTP 400。
+- `error.code` 为 `LEGACY_WILDCARD_AGENT_REQUIRES_ROLE`。
+- `lisi.enabled` 不被改为 `true`。
+
+### RF-UAT-04 legacy user 迁移 role 时删除 allow
+
+操作：
+
+```bash
+curl -sS -X PATCH http://127.0.0.1:5173/api/admin/agents/lisi \
+  -H 'Content-Type: application/json' \
+  -d '{"dryRun":true,"patch":{"role":"kx_readonly"}}'
+```
+
+确认 dryRun diff 后执行：
+
+```bash
+curl -sS -X PATCH http://127.0.0.1:5173/api/admin/agents/lisi \
+  -H 'Content-Type: application/json' \
+  -d '{"dryRun":false,"patch":{"role":"kx_readonly"}}'
+```
+
+通过标准：
+
+- `lisi` 增加 `role: kx_readonly`。
+- `lisi` 的 legacy `allow:` 被移除。
+- 其他 user、`roles:`、`defaults:` 无变化。
+- `GET /api/admin/agents/lisi/effective-permissions` 返回 `snapshotHash`、`sourceMapVersion` 与展开后的 sources。
+
+### RF-UAT-05 Config audit
+
+操作：
+
+```bash
+sqlite3 .ktx-ui/audit.sqlite \
+  "select change_type,target_id,file_path from config_change_log order by id desc limit 5;"
+```
+
+通过标准：
+
+- 能看到 `agent_create` / `agent_patch` / `token_create` / `enabled_tables_update` 等配置变更记录。
+- `old_summary` / `new_summary` / `diff` 中不包含 token 明文。
+
 ---
 
 ## 3. 主链路 UAT：真实 Token 请求 MCP Proxy
