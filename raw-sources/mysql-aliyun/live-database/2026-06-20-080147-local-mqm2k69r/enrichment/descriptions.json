@@ -5,13 +5,13 @@
       "db": "dataforai",
       "name": "kx_dim_company"
     },
-    "tableDescription": "Dimension table storing company master data, including Chinese national business registration identity codes.",
+    "tableDescription": "Dimension table storing master company information for business entities.",
     "columnDescriptions": {
-      "company_id": "Unique surrogate key identifying each company record.",
-      "company_name": "Official registered legal name of the company.",
-      "unified_social_credit_code": "China's 18-character national business registration and tax identifier.",
-      "created_at": "Timestamp when the company record was first inserted.",
-      "updated_at": "Timestamp of the most recent modification to the record."
+      "company_id": "Unique identifier for each company record.",
+      "company_name": "Official registered company name.",
+      "unified_social_credit_code": "China unified social credit identifier code.",
+      "created_at": "Timestamp when company record was created.",
+      "updated_at": "Timestamp when company record was last modified."
     }
   },
   {
@@ -20,16 +20,16 @@
       "db": "dataforai",
       "name": "kx_dim_financial_item"
     },
-    "tableDescription": "Dimension table cataloguing financial statement line items across balance sheet, income statement, and cash flow statement.",
+    "tableDescription": "Financial statement line item dimension table for balance sheet, income, and cash flow items.",
     "columnDescriptions": {
-      "item_id": "Unique surrogate key identifying each financial statement line item.",
-      "statement_type": "Which financial statement the item belongs to: balance sheet, income statement, or cash flow.",
-      "item_side": "Section classification: asset, liability/equity, income, or cash flow grouping.",
-      "item_name": "Chinese display label of the financial statement line item.",
-      "row_no": "Official row number assigned to this item in the source regulatory statement template.",
-      "display_order": "Sort sequence for rendering items in their original statement order.",
-      "is_total": "Flags whether this item represents a subtotal or grand total row.",
-      "created_at": "Timestamp when the record was first inserted.",
+      "item_id": "Unique identifier for each financial line item.",
+      "statement_type": "Type of financial statement: balance sheet, income, or cash flow.",
+      "item_side": "Statement section: assets, liabilities/equity, income, or cash flow.",
+      "item_name": "Name of the financial line item as displayed.",
+      "row_no": "Original line number from the source financial statement.",
+      "display_order": "Sequential ordering for presenting items in reports.",
+      "is_total": "Flag indicating whether the item is a total or subtotal.",
+      "created_at": "Timestamp when the record was initially created.",
       "updated_at": "Timestamp when the record was last modified."
     }
   },
@@ -39,25 +39,25 @@
       "db": "dataforai",
       "name": "kx_fact_financial_amount"
     },
-    "tableDescription": "Fact table storing financial statement amounts by company, period, and line item, sourced from Excel reports.",
+    "tableDescription": "Stores company financial statement amounts across periods, items, and reporting types from Excel sources.",
     "columnDescriptions": {
-      "amount_id": "Unique surrogate key identifying each financial amount record.",
-      "company_id": "Foreign key referencing the company in kx_dim_company.",
-      "item_id": "Foreign key referencing the financial line item in kx_dim_financial_item.",
-      "report_period": "Reporting period in YYYYMM format, e.g., 202605.",
-      "report_date": "Last calendar date of the reporting period, e.g., 2026-05-31.",
-      "fiscal_year": "Accounting year to which this amount belongs.",
-      "fiscal_month": "Accounting month number within the fiscal year.",
-      "statement_type": "Financial statement category: balance sheet, income statement, or cash flow.",
-      "amount_type": "Balance or period classification: opening, closing, monthly, YTD, or quarterly.",
-      "quarter_no": "Quarter number (1–4); 0 for non-quarterly records.",
-      "amount": "Monetary value in the stated currency unit; NULL if source cell was blank.",
-      "currency": "ISO currency code of the reported amount, e.g., CNY.",
-      "source_file_name": "Original Excel filename retained for data lineage traceability only.",
-      "source_sheet_name": "Source Excel worksheet name for traceability; not for analytics.",
-      "source_cell": "Exact Excel cell reference for traceability; not for analytics.",
-      "created_at": "Timestamp when this record was first inserted.",
-      "updated_at": "Timestamp of the most recent update to this record."
+      "amount_id": "Unique identifier for each financial amount record",
+      "company_id": "Foreign key referencing the reporting company dimension",
+      "item_id": "Foreign key referencing the financial statement line item dimension",
+      "report_period": "Reporting period in YYYYMM format, such as 202605",
+      "report_date": "Exact calendar date of the financial report",
+      "fiscal_year": "Fiscal year component extracted from the reporting period",
+      "fiscal_month": "Fiscal month component extracted from the reporting period",
+      "statement_type": "Type of financial statement: balance sheet, income, or cash flow",
+      "amount_type": "Nature of the figure: balance, monthly, quarterly, or year-to-date",
+      "quarter_no": "Quarter number of the period; zero indicates non-quarterly data",
+      "amount": "Monetary value in original currency; null when source cell is empty",
+      "currency": "Currency code of the recorded monetary amount",
+      "source_file_name": "Original Excel file name used for data lineage tracing",
+      "source_sheet_name": "Original Excel worksheet name used for data lineage tracing",
+      "source_cell": "Original Excel cell coordinate used for data lineage tracing",
+      "created_at": "Timestamp when the record was first inserted",
+      "updated_at": "Timestamp when the record was last modified"
     }
   },
   {
@@ -66,16 +66,16 @@
       "db": "dataforai",
       "name": "kx_vw_cash_flow_statement_detail"
     },
-    "tableDescription": "Detailed line-item view of cash flow statements by company and period, covering operating, investing, and financing activities.",
+    "tableDescription": "Cash flow statement detail by line item, period, and reporting company.",
     "columnDescriptions": {
-      "公司名称": "Legal name of the company that filed the cash flow statement.",
-      "报表期间": "Reporting period in YYYYMM format, e.g., 202605 for May 2026.",
-      "报表日期": "Last calendar date of the reporting period, e.g., 2026-05-31.",
-      "展示顺序": "Sequential display order preserving the original financial report layout.",
-      "行次": "Original row number as printed in the source financial statement.",
-      "项目名称": "Cash flow line item label, e.g., receipts from sales or wage payments.",
-      "本年累计金额": "Year-to-date cumulative monetary amount for this cash flow line item.",
-      "本月金额": "Monetary amount for this cash flow line item in the current month."
+      "公司名称": "Name of the reporting entity",
+      "报表期间": "Reporting period in YYYYMM format",
+      "报表日期": "Reporting period end date",
+      "展示顺序": "Display order following original statement layout",
+      "行次": "Original line number from the statement",
+      "项目名称": "Cash flow line item name",
+      "本年累计金额": "Year-to-date cumulative amount",
+      "本月金额": "Amount for the current month"
     }
   },
   {
@@ -84,17 +84,17 @@
       "db": "dataforai",
       "name": "kx_vw_balance_sheet_detail"
     },
-    "tableDescription": "Balance sheet detail view listing financial statement line items with period-end and year-start balances per company and reporting period.",
+    "tableDescription": "Detailed balance sheet line items by company and reporting period for financial analysis.",
     "columnDescriptions": {
-      "公司名称": "Legal name of the reporting company.",
-      "报表期间": "Reporting period in YYYYMM format, e.g., 202605.",
-      "报表日期": "Last calendar day of the reporting period.",
-      "项目归属": "Classifies the line item as asset, liability/equity, income statement, or cash flow.",
-      "展示顺序": "Sequential display order following the original printed report layout.",
-      "行次": "Official row number as printed in the source financial statement.",
-      "项目名称": "Financial statement line item label, including section header rows.",
-      "期末余额": "Monetary balance at the end of the reporting period.",
-      "年初余额": "Monetary balance at the start of the current fiscal year."
+      "公司名称": "Name of the reporting company",
+      "报表期间": "Reporting period in YYYYMM format",
+      "报表日期": "Exact date of the financial statement",
+      "项目归属": "Line item category: assets, liabilities, income, or cash flow",
+      "展示顺序": "Display order following original statement row sequence",
+      "行次": "Original row number from the source financial report",
+      "项目名称": "Name of the financial statement line item",
+      "期末余额": "Balance amount at the end of the reporting period",
+      "年初余额": "Balance amount at the beginning of the reporting year"
     }
   },
   {
@@ -103,16 +103,16 @@
       "db": "dataforai",
       "name": "kx_vw_income_statement_detail"
     },
-    "tableDescription": "Detailed income statement view showing line-item financial figures per company and reporting period, sourced from original Chinese financial reports.",
+    "tableDescription": "Stores detailed income statement line items for companies with monthly and year-to-date amounts.",
     "columnDescriptions": {
-      "公司名称": "Legal name of the company reporting the financial statement.",
-      "报表期间": "Reporting period in YYYYMM format identifying the financial month.",
-      "报表日期": "Month-end calendar date corresponding to the reporting period.",
-      "展示顺序": "Display sequence number preserving the original report's row order.",
-      "行次": "Original row number as printed in the source financial report.",
-      "项目名称": "Income statement line item name as labeled in the original report.",
-      "本年累计金额": "Year-to-date cumulative monetary amount for the line item.",
-      "本月金额": "Current month monetary amount for the income statement line item."
+      "公司名称": "Name of the company reporting financials.",
+      "报表期间": "Reporting period in YYYYMM format.",
+      "报表日期": "Exact date of the financial statement.",
+      "展示顺序": "Display order following the original report sequence.",
+      "行次": "Original line number from the source report.",
+      "项目名称": "Name of the financial statement line item.",
+      "本年累计金额": "Cumulative year-to-date monetary amount.",
+      "本月金额": "Monetary amount for the current month."
     }
   },
   {
@@ -121,38 +121,38 @@
       "db": "dataforai",
       "name": "superstore_orders"
     },
-    "tableDescription": "Chinese superstore order line items tracking sales transactions with customer, product, geography, financial details, and ETL metadata.",
+    "tableDescription": "Superstore retail order line items with customer, product, geographic, financial, and ingestion audit fields.",
     "columnDescriptions": {
-      "row_id": "Surrogate integer key uniquely identifying each order line item row.",
-      "order_id": "Business key grouping multiple line items belonging to one order.",
-      "order_date": "Date the customer placed the order.",
-      "ship_date": "Date the order was dispatched for delivery.",
-      "ship_mode": "Delivery speed tier chosen for the shipment, e.g., standard class.",
-      "customer_id": "Unique business identifier for the purchasing customer.",
-      "customer_name": "Full name of the purchasing customer.",
-      "segment": "Market segment of the customer, e.g., consumer or small business.",
-      "city": "City of the delivery destination.",
-      "province": "Province or autonomous region of the delivery address.",
-      "country_region": "Country or territory of the delivery destination.",
-      "region": "Broad geographic sales region grouping multiple provinces.",
-      "product_id": "Unique identifier for the ordered product SKU.",
-      "category": "Top-level product classification, e.g., office supplies or furniture.",
-      "sub_category": "Second-level product classification within the parent category.",
-      "product_name": "Full descriptive name of the ordered product.",
-      "sales": "Total revenue for the line item after discount is applied.",
-      "quantity": "Number of product units ordered in this line item.",
-      "discount": "Fractional discount rate applied to the line item price.",
-      "profit": "Net profit earned on the line item after deducting costs.",
-      "postal_code": "Postal code of the delivery address; may be empty.",
-      "source_system": "Name of the originating system that provided this data.",
-      "source_file": "File path of the source document from which data was loaded.",
-      "source_sheet": "Worksheet name within the source file containing this data.",
-      "source_row_number": "Row number in the source file for lineage traceability.",
-      "batch_id": "Identifier for the ETL import batch that loaded this record.",
-      "row_hash": "SHA-256 hash of business fields used for change detection and deduplication.",
-      "is_deleted": "Soft-delete flag; 1 indicates logically deleted, 0 indicates active.",
-      "created_at": "Timestamp when the record was first inserted into the database.",
-      "updated_at": "Timestamp of the most recent update to this record."
+      "row_id": "Surrogate primary key identifying each order line.",
+      "order_id": "Business identifier grouping line items under one customer order.",
+      "order_date": "Calendar date when the customer placed the order.",
+      "ship_date": "Calendar date when the order line was shipped.",
+      "ship_mode": "Shipping service level chosen for delivery.",
+      "customer_id": "Unique identifier assigned to the purchasing customer.",
+      "customer_name": "Full name of the customer who placed the order.",
+      "segment": "Market segment classification of the customer.",
+      "city": "Destination city for the shipped order.",
+      "province": "Destination province or autonomous region for shipment.",
+      "country_region": "Country where the customer is located.",
+      "region": "Macro geographic region grouping provinces within China.",
+      "product_id": "Unique identifier of the purchased product.",
+      "category": "Top-level product category classification.",
+      "sub_category": "Detailed product subcategory beneath the category.",
+      "product_name": "Full descriptive name of the purchased product.",
+      "sales": "Revenue amount generated by the order line.",
+      "quantity": "Number of units sold on the order line.",
+      "discount": "Discount rate applied to the order line.",
+      "profit": "Net profit earned on the order line after discount.",
+      "postal_code": "Postal code of the customer shipping address.",
+      "source_system": "Originating system that supplied the record.",
+      "source_file": "Path of the source file the record was extracted from.",
+      "source_sheet": "Worksheet name within the source file containing the data.",
+      "source_row_number": "Row number of the record within the source worksheet.",
+      "batch_id": "Identifier of the ingestion batch that loaded the record.",
+      "row_hash": "SHA-256 hash of business fields for change detection.",
+      "is_deleted": "Soft-delete flag indicating whether the record is active.",
+      "created_at": "Timestamp when the record was first written to the warehouse.",
+      "updated_at": "Timestamp when the record was last modified in the warehouse."
     }
   },
   {
@@ -161,19 +161,19 @@
       "db": "dataforai",
       "name": "superstore_people"
     },
-    "tableDescription": "Maps each sales region to its assigned regional manager, sourced from the Tableau Superstore sample dataset.",
+    "tableDescription": null,
     "columnDescriptions": {
-      "region": "Geographic sales region name, such as Northeast or Central South.",
-      "regional_manager": "Full name of the manager responsible for overseeing this region.",
-      "source_system": "Identifier of the upstream system that provided the data.",
-      "source_file": "File path of the original Excel workbook containing the data.",
-      "source_sheet": "Worksheet name within the source file where data was extracted.",
-      "source_row_number": "Row position in the source file this record originated from.",
-      "batch_id": "Identifier grouping all records loaded together in one import run.",
-      "row_hash": "SHA-256 hash of business fields used to detect row changes.",
-      "is_deleted": "Soft-delete flag; 1 means the record is logically removed.",
-      "created_at": "Timestamp when the record was first inserted into the database.",
-      "updated_at": "Timestamp of the most recent modification to this record."
+      "region": null,
+      "regional_manager": null,
+      "source_system": null,
+      "source_file": null,
+      "source_sheet": null,
+      "source_row_number": null,
+      "batch_id": null,
+      "row_hash": null,
+      "is_deleted": null,
+      "created_at": null,
+      "updated_at": null
     }
   },
   {
@@ -182,20 +182,20 @@
       "db": "dataforai",
       "name": "superstore_returns"
     },
-    "tableDescription": "Records order return status from the Tableau Superstore sample dataset, including ETL lineage and soft-delete audit metadata.",
+    "tableDescription": null,
     "columnDescriptions": {
-      "id": "Surrogate primary key; auto-incrementing unique identifier for each return record.",
-      "order_id": "References the associated sales order that was returned.",
-      "returned": "Flag indicating whether the order was returned; '是' means yes.",
-      "source_system": "Name of the upstream system that originated this data.",
-      "source_file": "File path of the source spreadsheet from which data was extracted.",
-      "source_sheet": "Worksheet tab name within the source file where data resides.",
-      "source_row_number": "Row number in the source file for record-level traceability.",
-      "batch_id": "Identifier for the ETL import batch that loaded this record.",
-      "row_hash": "SHA-256 hash of business fields used to detect duplicate or changed rows.",
-      "is_deleted": "Soft-delete flag; 1 means logically deleted, 0 means active.",
-      "created_at": "Timestamp when the record was first inserted into the database.",
-      "updated_at": "Timestamp of the most recent update to this record."
+      "id": null,
+      "order_id": null,
+      "returned": null,
+      "source_system": null,
+      "source_file": null,
+      "source_sheet": null,
+      "source_row_number": null,
+      "batch_id": null,
+      "row_hash": null,
+      "is_deleted": null,
+      "created_at": null,
+      "updated_at": null
     }
   }
 ]
