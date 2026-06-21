@@ -27,17 +27,20 @@ storage:
     author: ktx <ktx@example.com>
 llm:
   provider:
-    backend: claude-code
+    backend: anthropic
+    anthropic:
+      api_key: env:MINIMAX_API_KEY
+      base_url: https://api.minimaxi.com/anthropic/v1
   models:
-    default: sonnet
-    # triage 是轻量分流，haiku 即可，省成本省延迟。
-    triage: haiku
-    # 候选抽取 / 整理 / 调和 / 修复属于结构化生成，保持 sonnet。
-    candidateExtraction: sonnet
-    curator: sonnet
-    reconcile: sonnet
-    repair: sonnet
+    default: MiniMax-M3
+    triage: MiniMax-M3
+    candidateExtraction: MiniMax-M3
+    curator: MiniMax-M3
+    reconcile: MiniMax-M3
+    repair: MiniMax-M3
     # NOTE: 高风险审查（reviewer skill）跑在 Claude Code 主会话里，模型由用户 /model 选定，不在此处控制。
+  promptCaching:
+    enabled: false
 ingest:
   embeddings:
     backend: sentence-transformers
