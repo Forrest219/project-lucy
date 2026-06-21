@@ -1,0 +1,40 @@
+connections:
+  demo-mysql:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+      - dataforai.superstore_people
+    host: demo-db
+    port: 3306
+    database: dataforai
+    username: lucy
+    password: lucy_demo
+    schemas:
+      - dataforai
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    author: ktx <ktx@example.com>
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: sonnet
+    reconcile: sonnet
+    repair: sonnet
+agent:
+  run_research:
+    enabled: false
+    max_iterations: 20
+    default_toolset:
+      - sl_query
+      - wiki_search
+      - sl_read_source
+setup:
+  database_connection_ids:
+    - demo-mysql

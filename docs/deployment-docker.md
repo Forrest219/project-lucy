@@ -38,6 +38,17 @@ docker compose build --build-arg KTX_VERSION=0.13.0
 docker compose exec lucy ktx --version
 ```
 
+当前 P0 smoke 期望 bundled KTX 为 `0.13.0`。如覆盖 build arg，请同步设置
+`LUCY_EXPECTED_KTX_VERSION` 后再运行 smoke。
+
+镜像构建时还会预安装 KTX Python runtime：
+
+```bash
+ktx admin runtime install --yes --feature core
+```
+
+这保证容器内 `ktx sl query --execute` 可直接运行，不需要客户进入容器后交互安装 runtime。
+
 ## 3. Ports
 
 | Port | Purpose | Container Env |
@@ -51,6 +62,12 @@ docker compose exec lucy ktx --version
 ```text
 WebUI: http://localhost:5174
 MCP:   http://localhost:7879/mcp
+```
+
+如宿主机端口冲突，可只改 compose 的宿主映射端口，容器内端口保持不变：
+
+```bash
+LUCY_WEBUI_HOST_PORT=55175 LUCY_PROXY_HOST_PORT=57880 docker compose up --build
 ```
 
 KTX upstream 默认只绑定容器内 `127.0.0.1:7878`。外部 agents 应接入 Lucy MCP Proxy，不直接接入 KTX upstream。
@@ -150,16 +167,87 @@ Agent 平台应接入 Lucy MCP Proxy：
 | `LUCY_PROXY_PORT` | `7879` | MCP Proxy port |
 | `LUCY_PROXY_UPSTREAM_HOST` | `127.0.0.1` | KTX upstream host for proxy forwarding |
 | `LUCY_PROXY_UPSTREAM_PORT` | `7878` | KTX upstream port for proxy forwarding |
+| `KTX_TELEMETRY_DISABLED` | `1` | 禁用 KTX telemetry |
+
+Compose 宿主端口映射变量：
+
+| Env | Default | Meaning |
+|---|---|---|
+| `LUCY_WEBUI_HOST_PORT` | `5174` | 宿主机映射到容器 `5174` 的 WebUI/API 端口 |
+| `LUCY_PROXY_HOST_PORT` | `7879` | 宿主机映射到容器 `7879` 的 MCP Proxy 端口 |
 
 ## 9. Current Limitations
 
 - 首版只定义单机 Docker Compose，不包含 Kubernetes/Helm。
 - 首次数据库配置仍需要编辑 `ktx.yaml` 或挂载配置文件。
+- 镜像内包含 `git`，因为 KTX 启动时需要初始化/访问项目 git repository。
 - WebUI production server 当前使用 `tsx` 运行 TypeScript server；后续可优化为编译后的 slim runtime image。
-- KTX compatibility smoke 目前只有 CLI/version 与进程级 healthcheck；后续应增加 MCP `tools/list`、semantic-layer validate、reindex smoke。
-- Demo 数据库尚未内置；业务 eval 仍依赖可访问的目标数据库和 agent CLI 环境。
+- P0 smoke 已覆盖 image build、compose up、WebUI health、MCP proxy 响应、镜像内 KTX version、本机真实 MySQL 连接、semantic-layer validate、KTX CLI 查询、临时 MCP `tools/list` 与 `sl_query`。
+- KTX 0.13.0 MCP `tools/list` 当前不暴露 `sl_validate`；validate gate 使用 CLI `ktx sl validate`。
+- Demo 数据库尚未内置；正式 CI/release 不应依赖生产或个人可访问数据库。
+- 业务 eval 仍依赖可访问的目标数据库和 agent CLI 环境。
 
-## 10. Troubleshooting
+## 10. P0 Smoke
+
+默认本地 gate：
+
+```bash
+npm run smoke:p0
+```
+
+Docker gate：
+
+```bash
+npm run smoke:p0:docker
+```
+
+Docker smoke 默认使用宿主端口 `55175` 和 `57880`，避免和本地开发服务的默认
+`5174` / `7879` 冲突。可用 `LUCY_DOCKER_SMOKE_WEB_PORT` 和
+`LUCY_DOCKER_SMOKE_PROXY_PORT` 覆盖。
+
+Demo Docker gate（不依赖个人或生产数据库）：
+
+```bash
+npm run smoke:p0:demo
+```
+
+该 gate 使用 `docker-compose.demo.yml` 启动 MySQL demo DB 与 Lucy，验证：
+
+- demo DB health。
+- Lucy WebUI `/api/health`。
+- `ktx connection test demo-mysql`。
+- `ktx admin reindex --force`。
+- `ktx sl validate`。
+- `ktx sl query --execute`。
+- 经 Lucy MCP Proxy bearer token 调用 `tools/list`、`sl_read_source`、`sl_query`。
+
+Business eval catalog gate：
+
+```bash
+npm run smoke:p0:business-eval
+```
+
+该 gate 验证核心 business eval suite 可被 runner 读取。完整 LLM/agent eval
+执行仍依赖外部 agent CLI、模型账号和目标数据库，应在人工验收或 CI secret 环境中运行。
+
+客户主链路 gate（依赖本机 `ktx.yaml` 的真实只读数据库连接）：
+
+```bash
+npm run smoke:p0:customer
+```
+
+该客户主链路 smoke 默认验证 `mysql-aliyun/superstore_orders`。可用环境变量覆盖：
+
+```bash
+LUCY_P0_CONNECTION_ID=<connection-id> \
+LUCY_P0_SOURCE_NAME=<source-name> \
+LUCY_P0_MEASURE=<source.measure> \
+LUCY_P0_DIMENSION=<source.dimension> \
+LUCY_P0_SEGMENT=<source.segment> \
+npm run smoke:p0:customer
+```
+
+## 11. Troubleshooting
 
 查看日志：
 

@@ -35,10 +35,10 @@ Lucy 的最终目标是成为位于数据库和 agents 之间的 MCP 服务管�
 |---|---|---|---|---|
 | P0-1 | 新增 Goal Checklist Spec | done | `docs/lucy-platform-goal-checklist.md` | spec 明确 goal、scope、non-goals、capability checklist、release gates、evidence links、open risks |
 | P0-2 | 明确产品边界 | done | `docs/lucy-platform-goal-checklist.md` §2；`docs/project-overview.md` | 文档明确 Lucy repo 不 fork KTX；Lucy Docker image 内置 pinned KTX runtime |
-| P0-3 | 补 Docker 交付骨架 | partial | `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `scripts/docker-entrypoint.sh`, `scripts/docker-healthcheck.sh`, `docs/deployment-docker.md` | 文件已落地；`npm run build`、`npm test`、脚本语法检查通过；待 Docker daemon 可用后验证 `docker compose up` 后 WebUI 和 MCP endpoint 可访问 |
-| P0-4 | 内置并锁定 KTX runtime | partial | `Dockerfile` pins `@kaelio/ktx@0.13.0`; `docs/deployment-docker.md` | 镜像构建逻辑已锁定 bundled KTX；待 Docker build 后验证镜像内 `ktx --version` 与 `/api/health` bundledKtxVersion |
-| P0-5 | 打通客户部署主链路 | pending | planned smoke/e2e | `docker compose up -> 配数据库 -> 扫 schema -> 配 semantic-layer -> validate/reindex -> 启 MCP -> agents 可查询数据` 可复验 |
-| P0-6 | 建立 P0 质量门禁 | pending | planned tests/evals | Docker smoke、KTX compatibility smoke、Lucy platform smoke、business eval smoke 均可运行并产出结果 |
+| P0-3 | 补 Docker 交付骨架 | done | `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `scripts/docker-entrypoint.sh`, `scripts/docker-healthcheck.sh`, `docs/deployment-docker.md`; `npm run smoke:p0:docker` | 文件已落地；Docker image 可构建；`docker compose up` 后 WebUI `/api/health` 可访问，MCP proxy 端口可响应，容器可执行 `ktx --version` |
+| P0-4 | 内置并锁定 KTX runtime | done | `Dockerfile` pins `@kaelio/ktx@0.13.0`; `npm run smoke:p0:docker` verifies `/api/health.data.bundledKtxVersion` and `ktx --version` | 镜像构建逻辑已锁定 bundled KTX；镜像内 `ktx --version` 与 `/api/health` bundledKtxVersion 均验证为 `0.13.0` |
+| P0-5 | 打通客户部署主链路 | done | `docker-compose.demo.yml`, `examples/docker-demo/`, `scripts/p0-demo-docker-smoke.mjs`; `npm run smoke:p0:demo`, `npm run smoke:p0:customer` | Demo Docker 路径已验证：MySQL demo DB、Lucy 镜像、KTX runtime、连接测试、reindex、SL validate/query、Lucy MCP Proxy bearer token、`sl_read_source`、`sl_query`；本机真实 MySQL 路径也已验证 |
+| P0-6 | 建立 P0 质量门禁 | done | `scripts/p0-smoke.mjs`, `scripts/p0-demo-docker-smoke.mjs`, `scripts/p0-customer-path-smoke.mjs`, `scripts/p0-business-eval-smoke.mjs`; `npm run smoke:p0`, `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:customer`, `npm run smoke:p0:business-eval` | P0 自动化 release baseline 已形成；完整 LLM/agent business eval 与 WebUI onboarding 体验升级转 P1/P2 |
 
 ## P1 Todo
 
@@ -76,9 +76,9 @@ Lucy 的最终目标是成为位于数据库和 agents 之间的 MCP 服务管�
 - Docker 后续是否增加 Kubernetes/Helm 路径？
 - 首版客户部署是否必须支持多数据库，还是先以当前 MySQL 路径打通闭环？
 - 是否需要支持高级用户直连 KTX MCP upstream？
-- 首个 P0 smoke 使用真实数据库、demo 数据库，还是二者都需要？
+- P0 smoke 数据源策略：已新增 demo MySQL compose，作为可重复 CI/release gate；真实 MySQL 仍作为人工验收补充。
 - secrets 管理是否补 Docker secrets / env var / WebUI secret onboarding？
-- Docker daemon 当前未运行，Batch 2/3A 的 image build / compose up 验证待补。
+- KTX 0.13.0 MCP `tools/list` 当前不暴露 `sl_validate`；P0 smoke 以 CLI `ktx sl validate` 覆盖 validate，MCP gate 只要求 `connection_list`、`sl_read_source`、`sl_query`、`wiki_search`。
 
 ## Progress Log
 
@@ -88,6 +88,8 @@ Lucy 的最终目标是成为位于数据库和 agents 之间的 MCP 服务管�
 - 2026-06-21：完成 Batch 1。新增正式 goal checklist spec：`docs/lucy-platform-goal-checklist.md`；更新 `docs/project-overview.md` 到 v1.2 并注册该 spec；P0-1、P0-2 标记为 done。
 - 2026-06-21：完成 Batch 2 文档与代码骨架。新增 Dockerfile、compose、entrypoint、healthcheck、Docker 部署文档；WebUI server 支持生产静态资源和 env host/port。`webui npm run build` 通过，`webui npm test` 通过（28 files / 152 tests），脚本 `bash -n` 通过，`docker compose config` 通过。Docker CLI 存在但 daemon 未运行，image build 未验证，因此 P0-3、P0-4 标记为 partial。
 - 2026-06-21：完成 Batch 3A/3B。3A 再次检查 Docker daemon，仍无法连接 `/Users/forrest/.docker/run/docker.sock`，Docker build / compose up 实测继续待补。3B 修复 `webui/docs/03-api-spec.md` 的既有 API spec 漂移，补 `/api/admin/audit/sources`、`/api/admin/config-audit`；`npm run lint:spec` 全部 PASS；定向测试 `server/__tests__/admin-audit.test.ts`、`server/__tests__/eval-api-contract.test.ts` 通过（2 files / 4 tests）。
+- 2026-06-21：完成 Batch 4 P0 smoke。修复 Dockerfile build cwd 问题；新增 `scripts/p0-smoke.mjs` 与 `scripts/p0-customer-path-smoke.mjs`。`npm run smoke:p0` 通过；`npm run smoke:p0:docker` 通过，验证 image build、compose up、WebUI health、MCP proxy 响应、镜像内 `@kaelio/ktx 0.13.0`；`npm run smoke:p0:customer` 通过，验证真实 MySQL 连接、SL validate、KTX CLI 查询、临时 MCP tools/list、MCP `sl_query` 返回 3 行。发现 KTX 0.13.0 MCP tools/list 不暴露 `sl_validate`，validate gate 改由 CLI 覆盖。
+- 2026-06-21：完成 Batch 5 P0 尾巴。新增 `docker-compose.demo.yml` 与 `examples/docker-demo/`，提供可重复 MySQL demo DB 与 demo KTX project template；Docker image 预装 `git` 与 KTX Python runtime，避免容器内 `sl query --execute` 交互安装。新增 `npm run smoke:p0:demo`，验证 demo DB、Lucy health、connection test、`admin reindex --force`、SL validate/query、Lucy MCP Proxy bearer token、`sl_read_source`、`sl_query`。新增 `npm run smoke:p0:business-eval`，验证 superstore/kx_financial eval case catalog 可读取。新增 security baseline 报告 `inbox/lucy-p0-security-baseline-2026-06-21.md`。P0-5、P0-6 标记为 done。
 
 ## Update Rule
 

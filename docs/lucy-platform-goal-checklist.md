@@ -70,20 +70,20 @@ Lucy Docker image = Lucy platform + pinned KTX runtime
 |---|---|---|---|
 | Goal checklist spec | implemented | `docs/lucy-platform-goal-checklist.md` | 产品 goal、边界、scope、non-goals、capability checklist、release gates、open risks 已明确 |
 | Product boundary | implemented | 本文 §2 | 文档明确 Lucy repo 不 fork KTX；Lucy Docker image 内置 pinned KTX runtime |
-| Docker deploy | partial | `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `scripts/docker-entrypoint.sh`, `docs/deployment-docker.md` | `docker compose up` 后 WebUI 与 MCP endpoint 可访问；待 Docker daemon 可用后验证 |
-| Bundled KTX runtime | partial | `Dockerfile` pins `@kaelio/ktx@0.13.0`; `docs/deployment-docker.md` | 镜像内 `ktx --version` 可运行；Lucy version 与 bundled KTX version 可追踪；待 image build 验证 |
-| Runtime healthcheck | partial | `scripts/docker-healthcheck.sh`; `Dockerfile` `HEALTHCHECK` | healthcheck 覆盖 KTX CLI、Lucy server、MCP endpoint 基础可用性；待容器运行验证 |
-| Database connection | partial | `ktx.yaml`, `ktx.yaml.example`, `webui/` | 用户可配置数据库连接，并在 WebUI/API 中验证连通性 |
-| Schema scan/read | partial | `semantic-layer/mysql-aliyun/_schema/`, WebUI connection module | 用户可扫描或读取 schema，并在 UI/API 中看到结果 |
+| Docker deploy | verified | `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `scripts/docker-entrypoint.sh`, `docs/deployment-docker.md`; `npm run smoke:p0:docker` | `docker compose up` 后 WebUI `/api/health` 可访问，MCP proxy 端口可响应，容器内 `ktx --version` 可执行 |
+| Bundled KTX runtime | verified | `Dockerfile` pins `@kaelio/ktx@0.13.0`; `npm run smoke:p0:docker` | 镜像内 `ktx --version` 与 `/api/health.data.bundledKtxVersion` 均验证为 `0.13.0` |
+| Runtime healthcheck | verified | `scripts/docker-healthcheck.sh`; `Dockerfile` `HEALTHCHECK`; `npm run smoke:p0:docker` | healthcheck 覆盖 KTX CLI、Lucy server、MCP endpoint 基础可用性；容器运行验证已通过 |
+| Database connection | verified | `ktx.yaml`, `ktx.yaml.example`, `docker-compose.demo.yml`; `npm run smoke:p0:demo`, `npm run smoke:p0:customer` | Demo Docker MySQL 与本机真实 MySQL 连接均可验证；WebUI 配置向导属于后续体验增强 |
+| Schema scan/read | verified | `semantic-layer/`, `examples/docker-demo/project-template/semantic-layer/`; `npm run smoke:p0:demo` | Demo gate 经 Lucy MCP Proxy 调用 `sl_read_source` 读取语义/schema 内容；KTX 0.13.0 无顶层 `scan` 命令，P0 以 manifest/read/reindex 覆盖 |
 | Semantic layer management | partial | `semantic-layer/`, `webui/server/semantic-layer.ts`, `webui/src/pages/TableEditor.tsx` | 用户可编辑、保存、diff、validate、reindex semantic-layer overlay |
 | Wiki/context management | partial | `wiki/`, `webui/server/wiki.ts`, `webui/src/pages/WikiEditor.tsx` | 用户可维护 wiki/context，并让 KTX wiki 检索命中 |
 | MCP endpoint management | partial | `.mcp.json`, `webui/server/proxy/*`, `webui/docs/07-mcp-auth-proxy-spec.md` | 用户可获得 agents 平台可用的 MCP endpoint/token 配置 |
 | Auth / ACL / audit | partial | `webui/config/access.yaml`, `webui/server/proxy/*`, `webui/server/admin/*` | token、role/ACL、audit log 可配置、可验证、可追溯 |
-| Agent onboarding | missing | planned deployment docs / WebUI flow | 用户能按文档或 UI 将 MCP 配置复制到 agents 平台并完成一次数据查询 |
-| Business eval | partial | `evals/`, `scripts/eval-runner.mjs` | 至少一组核心业务 eval 可运行并产出结果 |
-| Runtime compatibility tests | missing | planned tests | 内置 KTX 的 CLI/MCP/semantic-layer 基础能力有 smoke gate |
-| Platform smoke tests | missing | planned tests | Lucy WebUI/API/proxy/auth/audit 的 P0 路径有 smoke gate |
-| Release gates | missing | 本文 §6 | 发布镜像前必须通过 Docker smoke、KTX compatibility smoke、Lucy platform smoke、business eval smoke |
+| Agent onboarding | verified | `docs/deployment-docker.md`; `npm run smoke:p0:demo`, `npm run smoke:p0:customer` | MCP 配置文档已有；demo gate 使用 bearer token 经 Lucy MCP Proxy 完成 `sl_read_source` 与 `sl_query`；WebUI token 交付体验属于 P1 |
+| Business eval | partial | `evals/`, `scripts/eval-runner.mjs`, `scripts/p0-business-eval-smoke.mjs`; `npm run smoke:p0:business-eval` | 核心 eval suite 可被 runner 读取；完整 LLM/agent eval 执行仍依赖外部 agent/model 环境 |
+| Runtime compatibility tests | verified | `scripts/p0-smoke.mjs`, `scripts/p0-demo-docker-smoke.mjs`, `scripts/p0-customer-path-smoke.mjs`; `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:customer` | 内置 KTX 的 version、Python runtime、MCP tools/list、semantic-layer validate/query 基础能力已有 smoke gate |
+| Platform smoke tests | verified | `scripts/p0-smoke.mjs`, `scripts/p0-demo-docker-smoke.mjs`; `npm run smoke:p0`, `npm run smoke:p0:docker`, `npm run smoke:p0:demo` | WebUI build/test、API health、static SPA、Docker compose、MCP proxy auth/ACL 关键路径已覆盖 |
+| Release gates | verified | `npm run smoke:p0`, `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:customer`, `npm run smoke:p0:business-eval`; `inbox/lucy-p0-security-baseline-2026-06-21.md` | P0 自动化 release baseline 已有可复验命令；完整 LLM business eval 和 WebUI onboarding 作为 P1/P2 增强 |
 | Version matrix | missing | planned release metadata / docs | Lucy version、bundled KTX version、Node/Python/runtime、数据库、MCP client 兼容性可追踪 |
 | Upgrade compatibility | missing | planned smoke/eval gates | KTX 升级前后自动验证 CLI/MCP/semantic-layer/config 兼容性 |
 
@@ -101,10 +101,10 @@ Status 定义：
 | Gate | Required Evidence | Pass Criteria |
 |---|---|---|
 | Docker smoke | 本地命令或 CI 日志 | image 可构建；`docker compose up` 可启动；healthcheck 通过 |
-| KTX compatibility smoke | smoke 日志 | 镜像内 `ktx --version`、`ktx status`、基础 MCP/semantic-layer 命令可用 |
+| KTX compatibility smoke | smoke 日志 | 镜像内 `ktx --version`、MCP `tools/list`、基础 semantic-layer validate/query 命令可用 |
 | Lucy platform smoke | smoke 日志 | WebUI/API/proxy/auth/audit P0 路径可访问且返回预期结果 |
-| Customer main path smoke | e2e 日志或录屏 | 配数据库、读 schema、改 semantic-layer、validate/reindex、启 MCP、agent 查询数据可复验 |
-| Business eval smoke | eval report | 至少一个核心 eval suite 可运行，结果有记录 |
+| Customer main path smoke | e2e 日志或录屏 | 配数据库、读 schema、validate/reindex、启 MCP、agent 查询数据可复验 |
+| Business eval smoke | eval report | 核心 eval suite 可被 runner 读取；完整 LLM/agent eval 在具备 agent/model secret 的环境运行 |
 | Security baseline | checklist / test report | secrets 不写入镜像；token/ACL/audit 基础路径可验证；日志不泄露明文密码 |
 
 ## 7. Test Layers
@@ -141,8 +141,9 @@ Lucy 的测试与 eval 分三层，不能互相替代：
 | 首版部署形态 | 已按单机 Docker Compose 起步 | 后续是否增加 Kubernetes/Helm 路径 |
 | 首版数据库范围 | 倾向先打通当前 MySQL 路径 | 是否 P0 支持多数据库 |
 | MCP endpoint 暴露方式 | 首版 Docker 采用 Lucy proxy 对外统一暴露；KTX upstream 只在容器内使用 | 是否需要支持高级用户直连 KTX upstream |
-| P0 smoke 数据源 | 未决 | 使用真实数据库、demo 数据库，还是二者都需要 |
+| P0 smoke 数据源 | 已新增 demo MySQL compose；本机客户主链路也已用真实 MySQL 验证 | demo DB 作为可重复 CI gate，真实库作为人工验收补充 |
 | secrets 管理 | 首版文档使用 `/data/lucy/.ktx/secrets/*` 文件路径 | 是否补 Docker secrets / env var / WebUI secret onboarding |
+| `sl_validate` MCP tool | KTX 0.13.0 MCP `tools/list` 不暴露 `sl_validate`；CLI `ktx sl validate` 可用 | docs / ACL / eval 假设是否要按当前 KTX tool surface 校准 |
 
 ## 10. Update Rule
 

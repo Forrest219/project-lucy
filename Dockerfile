@@ -11,15 +11,18 @@ ENV NODE_ENV=production \
     LUCY_PROXY_PORT=7879 \
     LUCY_PROXY_UPSTREAM_HOST=127.0.0.1 \
     LUCY_PROXY_UPSTREAM_PORT=7878 \
+    KTX_TELEMETRY_DISABLED=1 \
     POSTHOG_DISABLED=1
 
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates curl tini \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl git tini \
   && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g "@kaelio/ktx@${KTX_VERSION}"
+
+RUN ktx admin runtime install --yes --feature core
 
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev
@@ -30,6 +33,7 @@ RUN cd webui && npm ci --include=dev
 COPY . .
 
 RUN cd webui && npm run build \
+  && cd /app \
   && mkdir -p /app/project-template/webui \
   && cp -R AGENTS.md CLAUDE.md README.md ktx.yaml.example semantic-layer skills wiki evals lucy-skills /app/project-template/ \
   && cp ktx.yaml.example /app/project-template/ktx.yaml \

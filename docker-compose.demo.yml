@@ -1,0 +1,45 @@
+services:
+  demo-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: lucy_demo_root
+      MYSQL_DATABASE: dataforai
+      MYSQL_USER: lucy
+      MYSQL_PASSWORD: lucy_demo
+    ports:
+      - "${LUCY_DEMO_MYSQL_HOST_PORT:-53306}:3306"
+    volumes:
+      - ./examples/docker-demo/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ulucy -plucy_demo --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  lucy:
+    build:
+      context: .
+      args:
+        KTX_VERSION: "0.13.0"
+    image: project-lucy:demo
+    environment:
+      KTX_PROJECT_ROOT: /data/lucy
+      LUCY_TEMPLATE_ROOT: /app/examples/docker-demo/project-template
+      LUCY_WEBUI_HOST: 0.0.0.0
+      LUCY_WEBUI_PORT: "5174"
+      LUCY_PROXY_HOST: 0.0.0.0
+      LUCY_PROXY_PORT: "7879"
+      LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
+      LUCY_PROXY_UPSTREAM_PORT: "7878"
+      POSTHOG_DISABLED: "1"
+    ports:
+      - "${LUCY_DEMO_WEBUI_HOST_PORT:-55176}:5174"
+      - "${LUCY_DEMO_PROXY_HOST_PORT:-57881}:7879"
+    volumes:
+      - lucy-demo-data:/data/lucy
+    depends_on:
+      demo-db:
+        condition: service_healthy
+
+volumes:
+  lucy-demo-data:

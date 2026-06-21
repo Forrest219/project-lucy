@@ -15,8 +15,8 @@ services:
       LUCY_PROXY_UPSTREAM_PORT: "7878"
       POSTHOG_DISABLED: "1"
     ports:
-      - "5174:5174"
-      - "7879:7879"
+      - "${LUCY_WEBUI_HOST_PORT:-5174}:5174"
+      - "${LUCY_PROXY_HOST_PORT:-7879}:7879"
     volumes:
       - lucy-data:/data/lucy
 

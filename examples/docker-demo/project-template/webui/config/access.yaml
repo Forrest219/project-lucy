@@ -1,0 +1,58 @@
+roles:
+  demo_readonly:
+    description: Demo Superstore readonly agent
+    allow:
+      connections:
+        - demo-mysql
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names:
+            - superstore_orders
+            - superstore_returns
+            - superstore_people
+      tools:
+        - kx_catalog
+        - sl_query
+        - sl_read_source
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+users:
+  - id: demo_agent
+    name: Demo Agent
+    enabled: true
+    note: "P0 demo smoke token; not for production."
+    tokens:
+      - hash: "sha256:8ccee2d00afbe164425d51333fe42a3e5a7381955e555a69c185edb8783018f7"
+        label: p0-demo
+        created: 2026-06-21
+    role: demo_readonly
+
+defaults:
+  deny_tools:
+    - sql_execution
+    - memory_ingest
+    - memory_ingest_status
+  known_tools:
+    - sl_query
+    - sl_read_source
+    - wiki_search
+    - wiki_read
+    - entity_details
+    - dictionary_search
+    - discover_data
+    - connection_list
+    - kx_catalog
+    - sql_execution
+    - memory_ingest
+    - memory_ingest_status
+  table_touching_tools:
+    - sl_query
+    - sl_read_source
+    - entity_details
+  sensitive_metadata_tools:
+    - dictionary_search
+    - discover_data
+  sensitive_table_prefixes: []
