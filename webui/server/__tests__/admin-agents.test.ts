@@ -5,10 +5,27 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 
+const auditRows = vi.hoisted(() => [] as Array<{
+  user_id: string;
+  token_hash_prefix: string;
+  ts: string;
+  tool: string;
+  outcome: string;
+}>);
+
 // Mock audit db so tests don't need a real sqlite
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
+    prepare: vi.fn((sql: string) => {
+      if (sql.includes("ROW_NUMBER() OVER")) {
+        return {
+          all: vi.fn((...userIds: string[]) => auditRows
+            .filter((row) => userIds.includes(row.user_id))
+            .sort((a, b) => b.ts.localeCompare(a.ts)))
+        };
+      }
+      return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() };
+    }),
     exec: vi.fn(),
     pragma: vi.fn()
   })),
@@ -72,6 +89,7 @@ beforeEach(async () => {
   projectRoot = await makeProject();
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  auditRows.length = 0;
 });
 
 afterEach(async () => {
@@ -89,6 +107,44 @@ describe("GET /api/admin/agents", () => {
     expect(res.body.data.agents).toHaveLength(2);
     expect(res.body.data.agents[0].id).toBe("zhangsan");
     expect(res.body.data.version).toBeTruthy();
+    await app.close();
+  });
+
+  it("attaches per-token last-used metadata from access_log", async () => {
+    auditRows.push(
+      {
+        user_id: "zhangsan",
+        token_hash_prefix: "sha256:aaaa",
+        ts: "2026-06-21T08:00:00.000Z",
+        tool: "tools/list",
+        outcome: "ok"
+      },
+      {
+        user_id: "zhangsan",
+        token_hash_prefix: "sha256:aaaa",
+        ts: "2026-06-21T09:00:00.000Z",
+        tool: "sl_query",
+        outcome: "ok"
+      },
+      {
+        user_id: "zhangsan",
+        token_hash_prefix: "sha256:other",
+        ts: "2026-06-21T10:00:00.000Z",
+        tool: "sl_query",
+        outcome: "denied"
+      }
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents/zhangsan").expect(200);
+    const token = res.body.data.agent.tokens[0];
+    expect(token).toMatchObject({
+      label: "hermes-laptop",
+      last_used: "2026-06-21T09:00:00.000Z",
+      last_tool: "sl_query",
+      last_outcome: "ok"
+    });
     await app.close();
   });
 

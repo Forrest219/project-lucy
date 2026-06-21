@@ -42,7 +42,17 @@ describe("AgentDetail", () => {
                 id: "zhangsan",
                 name: "张三",
                 enabled: true,
-                tokens: [],
+                tokens: [
+                  {
+                    hash: "sha256:aaaa0000bbbb1111cccc2222dddd3333",
+                    label: "hermes-laptop",
+                    created: "2026-06-18",
+                    expires_at: null,
+                    last_used: "2026-06-21T10:11:12.000Z",
+                    last_tool: "sl_query",
+                    last_outcome: "ok"
+                  }
+                ],
                 allow: { tables: ["dataforai.superstore_orders"], tools: ["sl_query"] },
                 stats: { callsLast7d: 1, deniedLast7d: 0, topTables: [] }
               }
@@ -72,6 +82,12 @@ describe("AgentDetail", () => {
     renderAgentDetail();
 
     expect(await screen.findByDisplayValue("张三")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Token" }));
+    expect(await screen.findByText("hermes-laptop")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent("最近使用：");
+    expect(document.body).toHaveTextContent("sl_query");
+    expect(document.body).toHaveTextContent("ok");
+    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
     expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
 
     fireEvent.change(await screen.findByDisplayValue("张三"), { target: { value: "张三编辑" } });

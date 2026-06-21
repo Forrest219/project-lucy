@@ -243,6 +243,8 @@ export type TokenSummary = {
   created: string;
   expires_at?: string | null;
   last_used?: string | null;
+  last_tool?: string | null;
+  last_outcome?: string | null;
   revoked?: boolean;
   revoked_at?: string;
   revoke_reason?: string;
@@ -283,6 +285,8 @@ export type AuditLogEntry = {
   id: number;
   ts: string;
   userId: string;
+  tokenLabel?: string;
+  tokenHashPrefix?: string;
   client?: string;
   tool: string;
   tables?: string[];
@@ -291,6 +295,10 @@ export type AuditLogEntry = {
   errorDetail?: string;
   durationMs: number;
   requestId: string | number;
+  roleIds?: string[];
+  permissionSnapshotHash?: string;
+  effectiveTablesCount?: number;
+  decisionReason?: string;
 };
 
 export type AuditQuery = {
@@ -300,11 +308,21 @@ export type AuditQuery = {
   since?: string;
   until?: string;
   tableSearch?: string;
+  includeProtocol?: boolean;
   limit?: number;
   offset?: number;
 };
 
-export type AuditResponse = { total: number; entries: AuditLogEntry[] };
+export type AuditResponse = {
+  total: number;
+  entries: AuditLogEntry[];
+  summary?: {
+    protocolCalls: number;
+    businessCalls: number;
+    deniedCalls: number;
+    dataBearingCalls: number;
+  };
+};
 
 export type McpToolInfo = { name: string; description?: string; globalDenied: boolean };
 

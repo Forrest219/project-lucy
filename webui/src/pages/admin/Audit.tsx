@@ -9,7 +9,7 @@ const PAGE_SIZE = 50;
 const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
 const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
 
-function buildQuery(params: Record<string, string | undefined | number>): string {
+function buildQuery(params: Record<string, string | undefined | number | boolean>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== "" && v !== null) q.set(k, String(v));
@@ -50,6 +50,7 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
         <td className="px-3 py-2 text-sm">{entry.userId}</td>
         <td className="px-3 py-2 text-sm font-mono">{entry.tool}</td>
         <td className="px-3 py-2 text-xs text-fg-muted">{entry.tables?.join(", ")}</td>
+        <td className="px-3 py-2 text-xs text-fg-muted">{entry.decisionReason ?? "—"}</td>
         <td className="px-3 py-2">
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
@@ -57,8 +58,16 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
-          <td colSpan={6} className="px-3 py-3 text-xs">
+          <td colSpan={7} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-grid">
+              {(entry.tokenLabel || entry.tokenHashPrefix) && (
+                <div>
+                  <span className="font-medium">Token：</span>
+                  <span className="ml-2 text-fg-muted">
+                    {entry.tokenLabel ?? "—"} {entry.tokenHashPrefix ? <span className="font-mono">({entry.tokenHashPrefix}…)</span> : null}
+                  </span>
+                </div>
+              )}
               {redactedArgs !== null && (
                 <div>
                   <span className="font-medium">Args：</span>
@@ -75,6 +84,27 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
                 <span className="font-medium">请求 ID：</span>
                 <span className="ml-2 text-fg-muted font-mono">{entry.requestId}</span>
               </div>
+              {entry.decisionReason && (
+                <div>
+                  <span className="font-medium">裁决原因：</span>
+                  <span className="ml-2 text-fg-muted font-mono">{entry.decisionReason}</span>
+                </div>
+              )}
+              {entry.roleIds && (
+                <div>
+                  <span className="font-medium">角色：</span>
+                  <span className="ml-2 text-fg-muted">{entry.roleIds.join(", ") || "—"}</span>
+                </div>
+              )}
+              {(entry.permissionSnapshotHash || entry.effectiveTablesCount !== undefined) && (
+                <div>
+                  <span className="font-medium">权限快照：</span>
+                  <span className="ml-2 text-fg-muted">
+                    {entry.permissionSnapshotHash ? <span className="font-mono">{entry.permissionSnapshotHash.slice(0, 16)}…</span> : "—"}
+                    {entry.effectiveTablesCount !== undefined ? ` · ${entry.effectiveTablesCount} 张有效表` : ""}
+                  </span>
+                </div>
+              )}
               {entry.client && (
                 <div>
                   <span className="font-medium">客户端：</span>
@@ -97,6 +127,7 @@ export function Audit() {
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
+  const includeProtocol = searchParams.get("includeProtocol") === "true";
 
   // Default: last 24h
   const [since, setSince] = useState(() => {
@@ -113,7 +144,17 @@ export function Audit() {
     setPage(0);
   }
 
-  const queryStr = buildQuery({ user: user || undefined, tool: tool || undefined, outcome: outcome || undefined, since: since || undefined, until: until || undefined, tableSearch: tableSearch || undefined, limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+  const queryStr = buildQuery({
+    user: user || undefined,
+    tool: tool || undefined,
+    outcome: outcome || undefined,
+    since: since || undefined,
+    until: until || undefined,
+    tableSearch: tableSearch || undefined,
+    includeProtocol,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "audit", queryStr],
@@ -124,7 +165,7 @@ export function Audit() {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const exportUrl = `/api/admin/audit/export${buildQuery({ user: user || undefined, tool: tool || undefined, outcome: outcome || undefined, since: since || undefined, until: until || undefined, tableSearch: tableSearch || undefined })}`;
+  const exportUrl = `/api/admin/audit/export${buildQuery({ user: user || undefined, tool: tool || undefined, outcome: outcome || undefined, since: since || undefined, until: until || undefined, tableSearch: tableSearch || undefined, includeProtocol })}`;
 
   return (
     <div className="pl-page-stack">
@@ -179,6 +220,14 @@ export function Audit() {
           value={tableSearch}
           onChange={(e) => updateParam("tableSearch", e.target.value)}
         />
+        <label className="flex items-center gap-2 text-sm text-fg-muted">
+          <input
+            type="checkbox"
+            checked={includeProtocol}
+            onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")}
+          />
+          显示协议调用
+        </label>
       </div>
 
       {isLoading ? (
@@ -187,6 +236,12 @@ export function Audit() {
         <div className="pl-notice">加载失败：{(error as Error).message}</div>
       ) : (
         <>
+          <div className="pl-metric-grid">
+            <div className="pl-metric-card"><span>业务调用</span><strong>{data?.summary?.businessCalls ?? 0}</strong><small>默认展示</small></div>
+            <div className="pl-metric-card"><span>协议调用</span><strong>{data?.summary?.protocolCalls ?? 0}</strong><small>{includeProtocol ? "已显示" : "已隐藏"}</small></div>
+            <div className="pl-metric-card"><span>拒绝</span><strong>{data?.summary?.deniedCalls ?? 0}</strong><small>ACL 拒绝</small></div>
+            <div className="pl-metric-card"><span>触达数据</span><strong>{data?.summary?.dataBearingCalls ?? 0}</strong><small>有表记录</small></div>
+          </div>
           <div className="text-sm text-fg-muted">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} / 共 {total} 条</div>
           <div className="overflow-x-auto">
             <table className="pl-audit-table w-full text-sm">
@@ -196,13 +251,14 @@ export function Audit() {
                   <th className="px-3 py-2">用户</th>
                   <th className="px-3 py-2">工具</th>
                   <th className="px-3 py-2">表</th>
+                  <th className="px-3 py-2">裁决原因</th>
                   <th className="px-3 py-2">状态</th>
                   <th className="px-3 py-2">耗时</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.length === 0 ? (
-                  <tr><td colSpan={6} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  <tr><td colSpan={7} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
                   entries.map((entry) => <EntryRow key={entry.id} entry={entry} />)
                 )}

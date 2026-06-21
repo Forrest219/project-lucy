@@ -7,6 +7,8 @@ import { resolveProjectRoot } from "../project.js";
 export interface AccessLogEntry {
   ts: string;
   userId: string;
+  tokenLabel?: string;
+  tokenHashPrefix?: string;
   client?: string;
   tool: string;
   tables?: string[];
@@ -31,7 +33,9 @@ const ACCESS_LOG_COLUMNS = [
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
   ["effective_tables_count", "INTEGER"],
-  ["decision_reason", "TEXT"]
+  ["decision_reason", "TEXT"],
+  ["token_label", "TEXT"],
+  ["token_hash_prefix", "TEXT"]
 ] as const;
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
@@ -53,6 +57,8 @@ async function getDb(): Promise<Database.Database> {
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       ts           TEXT    NOT NULL,
       user_id      TEXT    NOT NULL,
+      token_label  TEXT,
+      token_hash_prefix TEXT,
       client       TEXT,
       tool         TEXT    NOT NULL,
       tables       TEXT,
@@ -68,6 +74,7 @@ async function getDb(): Promise<Database.Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_al_user_ts ON access_log(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_tool_ts ON access_log(tool, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE TABLE IF NOT EXISTS revoked_tokens (
       token_hash TEXT PRIMARY KEY,
       revoked_at TEXT NOT NULL,
@@ -124,14 +131,16 @@ export async function writeLog(entry: AccessLogEntry): Promise<void> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, client, tool, tables, args_summary, outcome, error_detail, duration_ms, request_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
+        (ts, user_id, token_label, token_hash_prefix, client, tool, tables, args_summary, outcome, error_detail, duration_ms, request_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
       VALUES
-        (@ts, @userId, @client, @tool, @tables, @argsSummary, @outcome, @errorDetail, @durationMs, @requestId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @client, @tool, @tables, @argsSummary, @outcome, @errorDetail, @durationMs, @requestId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
     `);
   }
   insertStmt.run({
     ts: entry.ts,
     userId: entry.userId,
+    tokenLabel: entry.tokenLabel ?? null,
+    tokenHashPrefix: entry.tokenHashPrefix ?? null,
     client: entry.client ?? null,
     tool: entry.tool,
     tables: entry.tables ? JSON.stringify(entry.tables) : null,

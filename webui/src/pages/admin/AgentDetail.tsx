@@ -230,6 +230,11 @@ export function AgentDetail() {
                       创建 {token.created} · <span className="font-mono">{token.hash.slice(0, 20)}…</span>
                     </div>
                     {token.expires_at && <div className="text-xs text-fg-muted">过期：{token.expires_at}</div>}
+                    <div className="text-xs text-fg-muted">
+                      最近使用：{token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "—"}
+                      {token.last_tool ? ` · ${token.last_tool}` : ""}
+                      {token.last_outcome ? ` · ${token.last_outcome}` : ""}
+                    </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
                   <button

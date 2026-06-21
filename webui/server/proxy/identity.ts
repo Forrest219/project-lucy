@@ -61,6 +61,7 @@ interface AccessConfig {
 export interface Identity {
   userId: string;
   tokenLabel: string;
+  tokenHashPrefix: string;
   client?: string;
 }
 
@@ -135,6 +136,7 @@ export async function identifyRequest(
         return {
           userId: user.id,
           tokenLabel: t.label,
+          tokenHashPrefix: tokenHash.slice(0, 19),
           client: getSessionClient(sessionId, user.id, t.label),
         };
       }

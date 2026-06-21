@@ -139,16 +139,54 @@ async function getStats(userId: string): Promise<{
   }
 }
 
-async function getLastUsedMap(userIds: string[]): Promise<Map<string, Map<string, string>>> {
-  // Returns: userId -> (tokenHash -> lastUsed)
-  const result = new Map<string, Map<string, string>>();
+async function getLastUsedMap(
+  userIds: string[]
+): Promise<Map<string, Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>>> {
+  // Returns: userId -> (token hash prefix -> last usage snapshot)
+  const result = new Map<string, Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>>();
   if (userIds.length === 0) return result;
-  // We can't easily query per-token last_used from access_log (no token hash in log, only userId)
-  // So last_used per token is not available; we return per-user last_seen instead
+  try {
+    const db = await getAuditDb();
+    const placeholders = userIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare(
+        `SELECT user_id, token_hash_prefix, ts, tool, outcome
+         FROM (
+           SELECT
+             user_id,
+             token_hash_prefix,
+             ts,
+             tool,
+             outcome,
+             ROW_NUMBER() OVER (PARTITION BY user_id, token_hash_prefix ORDER BY ts DESC, id DESC) AS rn
+           FROM access_log
+           WHERE user_id IN (${placeholders}) AND token_hash_prefix IS NOT NULL
+         )
+         WHERE rn = 1`
+      )
+      .all(...userIds) as Array<{ user_id: string; token_hash_prefix: string; ts: string; tool: string; outcome: string }>;
+
+    for (const row of rows) {
+      if (!result.has(row.user_id)) result.set(row.user_id, new Map());
+      const byToken = result.get(row.user_id);
+      if (!byToken || byToken.has(row.token_hash_prefix)) continue;
+      byToken.set(row.token_hash_prefix, {
+        lastUsed: row.ts,
+        lastTool: row.tool,
+        lastOutcome: row.outcome
+      });
+    }
+  } catch {
+    return result;
+  }
   return result;
 }
 
-function userToAgent(user: YamlUser, stats?: Awaited<ReturnType<typeof getStats>>) {
+function userToAgent(
+  user: YamlUser,
+  stats?: Awaited<ReturnType<typeof getStats>>,
+  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>
+) {
   return {
     id: user.id,
     name: user.name,
@@ -159,7 +197,10 @@ function userToAgent(user: YamlUser, stats?: Awaited<ReturnType<typeof getStats>
       hash: t.hash,
       label: t.label,
       created: t.created,
-      expires_at: t.expires_at ?? null
+      expires_at: t.expires_at ?? null,
+      last_used: tokenUsage?.get(t.hash.slice(0, 19))?.lastUsed,
+      last_tool: tokenUsage?.get(t.hash.slice(0, 19))?.lastTool,
+      last_outcome: tokenUsage?.get(t.hash.slice(0, 19))?.lastOutcome
     })),
     allow: user.allow ? {
       tables: user.allow?.tables ?? [],
@@ -182,8 +223,12 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
   };
 }
 
-async function userToAgentWithPermissions(user: YamlUser, stats?: Awaited<ReturnType<typeof getStats>>) {
-  const agent = userToAgent(user, stats);
+async function userToAgentWithPermissions(
+  user: YamlUser,
+  stats?: Awaited<ReturnType<typeof getStats>>,
+  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>
+) {
+  const agent = userToAgent(user, stats, tokenUsage);
   const resolved = await resolveEffectivePermissionsForAdmin(user.id);
   return {
     ...agent,
@@ -231,10 +276,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
   app.get("/api/admin/agents", async () => {
     const projectRoot = await resolveProjectRoot();
     const { config, version } = await readAccessYaml(projectRoot);
+    const tokenUsage = await getLastUsedMap(config.users.map((user) => user.id));
     const agents = await Promise.all(
       config.users.map(async (user) => {
         const stats = await getStats(user.id);
-        return userToAgentWithPermissions(user, stats);
+        return userToAgentWithPermissions(user, stats, tokenUsage.get(user.id));
       })
     );
     return { ok: true, data: { agents, version } };
@@ -324,7 +370,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
     }
     const stats = await getStats(user.id);
-    return { ok: true, data: { agent: await userToAgentWithPermissions(user, stats), version } };
+    const tokenUsage = await getLastUsedMap([user.id]);
+    return { ok: true, data: { agent: await userToAgentWithPermissions(user, stats, tokenUsage.get(user.id)), version } };
   });
 
   // GET /api/admin/agents/:userId/effective-permissions

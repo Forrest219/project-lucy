@@ -171,6 +171,8 @@ describe("MCP proxy smoke", () => {
 
       const audit = await waitForAuditRow("proxy-smoke-allowed");
       expect(audit.user_id).toBe("smoke_agent");
+      expect(audit.token_label).toBe("smoke-token");
+      expect(audit.token_hash_prefix).toBe(tokenHash(TOKEN).slice(0, 19));
       expect(audit.tool).toBe("sl_read_source");
       expect(audit.outcome).toBe("ok");
       expect(audit.decision_reason).toBe("allowed");

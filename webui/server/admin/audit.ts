@@ -9,13 +9,54 @@ const ACCESS_LOG_COLUMNS = [
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
   ["effective_tables_count", "INTEGER"],
-  ["decision_reason", "TEXT"]
+  ["decision_reason", "TEXT"],
+  ["token_label", "TEXT"],
+  ["token_hash_prefix", "TEXT"]
 ] as const;
+const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
+const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
+const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
+const CSV_FORMULA_RE = /^[=+\-@]/;
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
   const rows = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (rows.some((row) => row.name === column)) return;
   database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+function csvCell(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  const raw = String(value);
+  const escaped = (CSV_FORMULA_RE.test(raw) ? `'${raw}` : raw).replace(/"/g, '""');
+  return `"${escaped}"`;
+}
+
+function redactText(value: string): string {
+  return value.replace(SENSITIVE_PAIR_RE, "$1=[REDACTED]");
+}
+
+function redactSensitive(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSensitive);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
+        key,
+        SENSITIVE_KEY_RE.test(key) ? "[REDACTED]" : redactSensitive(nested)
+      ])
+    );
+  }
+  if (typeof value === "string") return redactText(value);
+  return value;
+}
+
+function redactJsonString(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    return JSON.stringify(redactSensitive(JSON.parse(value)));
+  } catch {
+    return redactText(value);
+  }
 }
 
 export async function getAuditDb(): Promise<Database.Database> {
@@ -31,6 +72,8 @@ export async function getAuditDb(): Promise<Database.Database> {
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       ts           TEXT    NOT NULL,
       user_id      TEXT    NOT NULL,
+      token_label  TEXT,
+      token_hash_prefix TEXT,
       client       TEXT,
       tool         TEXT    NOT NULL,
       tables       TEXT,
@@ -46,6 +89,7 @@ export async function getAuditDb(): Promise<Database.Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_al_user_ts ON access_log(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_tool_ts ON access_log(tool, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE TABLE IF NOT EXISTS revoked_tokens (
       token_hash TEXT PRIMARY KEY,
       revoked_at TEXT NOT NULL,
@@ -114,6 +158,8 @@ interface QueryRow {
   id: number;
   ts: string;
   user_id: string;
+  token_label: string | null;
+  token_hash_prefix: string | null;
   client: string | null;
   tool: string;
   tables: string | null;
@@ -138,6 +184,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       since?: string;
       until?: string;
       tableSearch?: string;
+      includeProtocol?: string;
       limit?: string;
       offset?: string;
     };
@@ -148,7 +195,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     const database = await getAuditDb();
 
-    const conditions: string[] = [];
+    const baseConditions: string[] = [];
     const params: Record<string, string | null> = {
       user: q.user ?? null,
       tool: q.tool ?? null,
@@ -158,30 +205,44 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null
     };
 
-    if (params.user) conditions.push("user_id = @user");
-    if (params.tool) conditions.push("tool = @tool");
-    if (params.outcome) conditions.push("outcome = @outcome");
-    if (params.since) conditions.push("ts >= @since");
-    if (params.until) conditions.push("ts <= @until");
-    if (params.tableSearch) conditions.push("tables LIKE @tableSearch");
+    if (params.user) baseConditions.push("user_id = @user");
+    if (params.tool) baseConditions.push("tool = @tool");
+    if (params.outcome) baseConditions.push("outcome = @outcome");
+    if (params.since) baseConditions.push("ts >= @since");
+    if (params.until) baseConditions.push("ts <= @until");
+    if (params.tableSearch) baseConditions.push("tables LIKE @tableSearch");
 
+    const includeProtocol = q.includeProtocol === "true";
+    const conditions = [...baseConditions];
+    if (!includeProtocol) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+    const baseWhere = baseConditions.length > 0 ? `WHERE ${baseConditions.join(" AND ")}` : "";
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const totalRow = database.prepare(`SELECT COUNT(*) AS cnt FROM access_log ${where}`).get(params) as { cnt: number };
     const rows = database
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT ${limit} OFFSET ${offset}`)
       .all(params) as QueryRow[];
+    const summaryRow = database.prepare(`
+      SELECT
+        SUM(CASE WHEN tool IN (${PROTOCOL_TOOL_LIST}) THEN 1 ELSE 0 END) AS protocol_calls,
+        SUM(CASE WHEN tool NOT IN (${PROTOCOL_TOOL_LIST}) THEN 1 ELSE 0 END) AS business_calls,
+        SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) AS denied_calls,
+        SUM(CASE WHEN tool NOT IN (${PROTOCOL_TOOL_LIST}) AND tables IS NOT NULL THEN 1 ELSE 0 END) AS data_bearing_calls
+      FROM access_log ${baseWhere}
+    `).get(params) as { protocol_calls: number | null; business_calls: number | null; denied_calls: number | null; data_bearing_calls: number | null };
 
     const entries = rows.map((row) => ({
       id: row.id,
       ts: row.ts,
       userId: row.user_id,
+      tokenLabel: row.token_label ?? undefined,
+      tokenHashPrefix: row.token_hash_prefix ?? undefined,
       client: row.client ?? undefined,
       tool: row.tool,
       tables: row.tables ? (JSON.parse(row.tables) as string[]) : undefined,
-      argsSummary: row.args_summary ? (JSON.parse(row.args_summary) as Record<string, unknown>) : undefined,
+      argsSummary: row.args_summary ? (redactSensitive(JSON.parse(row.args_summary)) as Record<string, unknown>) : undefined,
       outcome: row.outcome as "ok" | "error" | "denied",
-      errorDetail: row.error_detail ?? undefined,
+      errorDetail: row.error_detail ? redactJsonString(row.error_detail) ?? undefined : undefined,
       durationMs: row.duration_ms,
       requestId: row.request_id,
       roleIds: row.role_ids ? (JSON.parse(row.role_ids) as string[]) : undefined,
@@ -190,7 +251,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       decisionReason: row.decision_reason ?? undefined
     }));
 
-    return { ok: true, data: { total: totalRow.cnt, entries } };
+    return {
+      ok: true,
+      data: {
+        total: totalRow.cnt,
+        entries,
+        summary: {
+          protocolCalls: summaryRow.protocol_calls ?? 0,
+          businessCalls: summaryRow.business_calls ?? 0,
+          deniedCalls: summaryRow.denied_calls ?? 0,
+          dataBearingCalls: summaryRow.data_bearing_calls ?? 0
+        }
+      }
+    };
   });
 
   // GET /api/admin/audit/export
@@ -202,6 +275,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       since?: string;
       until?: string;
       tableSearch?: string;
+      includeProtocol?: string;
     };
   }>("/api/admin/audit/export", async (request, reply) => {
     const q = request.query;
@@ -223,6 +297,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     if (params.since) conditions.push("ts >= @since");
     if (params.until) conditions.push("ts <= @until");
     if (params.tableSearch) conditions.push("tables LIKE @tableSearch");
+    if (q.includeProtocol !== "true") conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const rows = database
@@ -230,21 +305,46 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .all(params) as QueryRow[];
 
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const headers = ["id", "ts", "user_id", "client", "tool", "tables", "outcome", "error_detail", "duration_ms", "request_id"];
+    const headers = [
+      "id",
+      "ts",
+      "user_id",
+      "token_label",
+      "token_hash_prefix",
+      "client",
+      "tool",
+      "tables",
+      "args_summary",
+      "outcome",
+      "error_detail",
+      "duration_ms",
+      "request_id",
+      "role_ids",
+      "permission_snapshot_hash",
+      "effective_tables_count",
+      "decision_reason"
+    ];
     const csvLines = [
       headers.join(","),
       ...rows.map((row) =>
         [
           row.id,
-          `"${row.ts}"`,
-          `"${row.user_id}"`,
-          row.client ? `"${row.client}"` : "",
-          `"${row.tool}"`,
-          row.tables ? `"${row.tables.replace(/"/g, '""')}"` : "",
-          `"${row.outcome}"`,
-          row.error_detail ? `"${row.error_detail.replace(/"/g, '""')}"` : "",
+          csvCell(row.ts),
+          csvCell(row.user_id),
+          csvCell(row.token_label),
+          csvCell(row.token_hash_prefix),
+          csvCell(row.client),
+          csvCell(row.tool),
+          csvCell(row.tables),
+          csvCell(redactJsonString(row.args_summary)),
+          csvCell(row.outcome),
+          csvCell(redactJsonString(row.error_detail)),
           row.duration_ms,
-          `"${row.request_id}"`
+          csvCell(row.request_id),
+          csvCell(row.role_ids),
+          csvCell(row.permission_snapshot_hash),
+          row.effective_tables_count ?? "",
+          csvCell(row.decision_reason)
         ].join(",")
       )
     ];

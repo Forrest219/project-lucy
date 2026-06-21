@@ -37,6 +37,8 @@ describe("proxy audit log", () => {
     await writeLog({
       ts: new Date().toISOString(),
       userId: "audit-test",
+      tokenLabel: "hermes-laptop",
+      tokenHashPrefix: "sha256:abc123def",
       tool: "sl_query",
       outcome: "denied",
       errorDetail: longDetail,
@@ -46,9 +48,11 @@ describe("proxy audit log", () => {
 
     const db = new Database(auditDbPath, { readonly: true });
     try {
-      const row = db.prepare("SELECT error_detail FROM access_log WHERE request_id = ?").get("audit-long-error") as { error_detail: string };
+      const row = db.prepare("SELECT error_detail, token_label, token_hash_prefix FROM access_log WHERE request_id = ?").get("audit-long-error") as { error_detail: string; token_label: string; token_hash_prefix: string };
       expect(row.error_detail.length).toBeLessThanOrEqual(500);
       expect(row.error_detail).toContain("<truncated sha256:");
+      expect(row.token_label).toBe("hermes-laptop");
+      expect(row.token_hash_prefix).toBe("sha256:abc123def");
     } finally {
       db.close();
     }

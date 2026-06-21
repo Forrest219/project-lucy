@@ -82,12 +82,17 @@ function recordAudit(entry: Parameters<typeof writeLog>[0]): void {
 async function auditMeta(identity: Awaited<ReturnType<typeof identifyRequest>>, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
   if (!identity) return { decisionReason };
   const snapshot = await permissionSnapshot(identity).catch(() => undefined);
-  if (!snapshot) return { decisionReason };
+  const tokenMeta = {
+    tokenLabel: identity.tokenLabel,
+    tokenHashPrefix: identity.tokenHashPrefix,
+    decisionReason
+  };
+  if (!snapshot) return tokenMeta;
   return {
+    ...tokenMeta,
     roleIds: snapshot.roleIds,
     permissionSnapshotHash: snapshot.hash,
     effectiveTablesCount: snapshot.effectiveTablesCount,
-    decisionReason,
     permissionSnapshot: {
       hash: snapshot.hash,
       rolesJson: snapshot.rolesJson,
