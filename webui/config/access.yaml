@@ -2,6 +2,28 @@
 # Phase 1: tokens 使用明文 value（Phase 2 将改为 sha256 hash）
 # 修改后 30 秒内自动生效（缓存 TTL）
 
+roles:
+  kx_readonly:
+    description: KX 财务数据只读问答
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - kx_dim_company
+            - kx_dim_financial_item
+            - kx_fact_financial_amount
+            - kx_vw_balance_sheet_detail
+            - kx_vw_cash_flow_statement_detail
+            - kx_vw_income_statement_detail
+      tools:
+        - kx_catalog
+        - sl_query
+        - sl_read_source
+        - entity_details
+
 users:
   - id: zhangsan
     name: 张三
@@ -27,21 +49,7 @@ users:
     enabled: true
     note: "Security test agent: no tokens; limited to KX financial tables only."
     tokens: []
-    allow:
-      connections:
-        - mysql-aliyun
-      tables:
-        - dataforai.kx_dim_company
-        - dataforai.kx_dim_financial_item
-        - dataforai.kx_fact_financial_amount
-        - dataforai.kx_vw_balance_sheet_detail
-        - dataforai.kx_vw_cash_flow_statement_detail
-        - dataforai.kx_vw_income_statement_detail
-      tools:
-        - kx_catalog
-        - sl_query
-        - sl_read_source
-        - entity_details
+    role: kx_readonly
 
   - id: workhorse
     name: Hermes Workhorse
@@ -51,33 +59,20 @@ users:
       - hash: "sha256:f5d0c6a8139acae01f5490ff159c4d378cf3b1b2904e83ba1748e1381d082ada"
         label: hermes-workhorse
         created: 2026-06-20
-    allow:
-      connections:
-        - mysql-aliyun
-      tables:
-        - dataforai.kx_dim_company
-        - dataforai.kx_dim_financial_item
-        - dataforai.kx_fact_financial_amount
-        - dataforai.kx_vw_balance_sheet_detail
-        - dataforai.kx_vw_cash_flow_statement_detail
-        - dataforai.kx_vw_income_statement_detail
-      tools:
-        - kx_catalog
-        - sl_query
-        - sl_read_source
-        - entity_details
+    role: kx_readonly
 
   - id: lisi
     name: 李四
-    tokens:
-      - hash: "sha256:e845c2d9554bfb020dd1e8ec718d505bf891efc3e1c40d4c7c4c86cd766f138c"
-        label: cursor-mac
-        created: 2026-06-18
+    enabled: false
+    note: "High-privilege sample agent disabled after token rotation; create a new one-time token through the admin API only when explicitly needed."
+    tokens: []
     allow:
       tables: ["*"]
       tools: ["*"]
 
 defaults:
+  # ACL tool classification is a security boundary. When KTX adds a tool, decide
+  # whether it belongs in known_tools, table_touching_tools, or sensitive_metadata_tools.
   deny_tools:
     - sql_execution
     - memory_ingest

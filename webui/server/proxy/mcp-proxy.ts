@@ -1,7 +1,7 @@
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { identifyRequest, setSessionClient } from "./identity.js";
 import { writeLog } from "./audit.js";
-import { check as aclCheck, extractTables, kxCatalog, permissionSnapshot } from "./acl.js";
+import { allowedToolNames, check as aclCheck, extractTables, kxCatalog, permissionSnapshot } from "./acl.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -135,24 +135,47 @@ function decodeSseMessage(body: string): unknown | undefined {
   return JSON.parse(line.slice("data: ".length));
 }
 
-function addCatalogTool(payload: unknown): unknown {
+function filterAndAddAllowedTools(payload: unknown, visibleTools: Set<string>): unknown {
   if (!payload || typeof payload !== "object") return payload;
   const record = payload as Record<string, unknown>;
   const result = record.result as Record<string, unknown> | undefined;
   if (!result || !Array.isArray(result.tools)) return payload;
-  if (result.tools.some((tool) => tool && typeof tool === "object" && (tool as Record<string, unknown>).name === "kx_catalog")) {
-    return payload;
-  }
+  const filteredTools = result.tools.filter((tool) => {
+    if (!tool || typeof tool !== "object") return false;
+    const name = (tool as Record<string, unknown>).name;
+    return typeof name === "string" && visibleTools.has(name);
+  });
+  const hasCatalog = filteredTools.some((tool) => (tool as Record<string, unknown>).name === "kx_catalog");
+  const tools = visibleTools.has("kx_catalog") && !hasCatalog
+    ? [...filteredTools, kxCatalogTool()]
+    : filteredTools;
   return {
     ...record,
     result: {
       ...result,
-      tools: [...result.tools, kxCatalogTool()]
+      tools
     }
   };
 }
 
-async function writeToolsListResponse(upstream: IncomingMessage, res: ServerResponse): Promise<void> {
+function toolsListErrorResponse(requestId: string | number, detail: string): Record<string, unknown> {
+  return {
+    jsonrpc: "2.0",
+    id: requestId,
+    error: {
+      code: -32003,
+      message: "tools/list filtering failed",
+      data: { reason: detail }
+    }
+  };
+}
+
+async function writeToolsListResponse(
+  identity: NonNullable<Awaited<ReturnType<typeof identifyRequest>>>,
+  upstream: IncomingMessage,
+  res: ServerResponse,
+  requestId: string | number
+): Promise<{ filterFailed: boolean; errorDetail?: string }> {
   const chunks: Buffer[] = [];
   for await (const chunk of upstream as AsyncIterable<Buffer>) {
     chunks.push(chunk);
@@ -160,26 +183,38 @@ async function writeToolsListResponse(upstream: IncomingMessage, res: ServerResp
 
   const originalBody = Buffer.concat(chunks).toString();
   const contentType = String(upstream.headers["content-type"] ?? "");
+  const visibleTools = new Set(await allowedToolNames(identity));
   let body = originalBody;
+  let filterFailed = false;
+  let errorDetail: string | undefined;
+  let forceJson = false;
   try {
     if (contentType.includes("text/event-stream")) {
       const payload = decodeSseMessage(originalBody);
-      if (payload) body = encodeSseMessage(addCatalogTool(payload));
+      if (!payload) throw new Error("missing SSE data frame");
+      if (payload) body = encodeSseMessage(filterAndAddAllowedTools(payload, visibleTools));
     } else if (contentType.includes("application/json")) {
-      body = JSON.stringify(addCatalogTool(JSON.parse(originalBody)));
+      body = JSON.stringify(filterAndAddAllowedTools(JSON.parse(originalBody), visibleTools));
+    } else {
+      throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
-  } catch {
-    body = originalBody;
+  } catch (err) {
+    filterFailed = true;
+    errorDetail = `tools_list_filter_failed:${err instanceof Error ? err.message : String(err)}`;
+    body = JSON.stringify(toolsListErrorResponse(requestId, errorDetail));
+    forceJson = true;
   }
 
   const headers: Record<string, string | string[] | number> = {};
   for (const [k, v] of Object.entries(upstream.headers)) {
     const lower = k.toLowerCase();
-    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding") headers[k] = v;
+    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
   }
+  headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
   headers["content-length"] = Buffer.byteLength(body);
   res.writeHead(upstream.statusCode ?? 200, headers);
   res.end(body);
+  return { filterFailed, errorDetail };
 }
 
 async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -283,16 +318,17 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   const upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, body);
 
   if (rpcMethod === "tools/list") {
-    await writeToolsListResponse(upstream, res);
+    const toolsList = await writeToolsListResponse(identity, upstream, res, requestId);
     recordAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      errorDetail: toolsList.errorDetail,
       durationMs: Date.now() - start,
       requestId,
-      ...(await auditMeta(identity, "allowed")),
+      ...(await auditMeta(identity, toolsList.filterFailed ? "tools_list_filter_failed" : "allowed")),
     });
     return;
   }

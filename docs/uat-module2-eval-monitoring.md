@@ -209,11 +209,11 @@
 
 | 项目 | 结论 |
 |---|---|
-| 验收日期 | 待填写 |
-| 验收人 | 待填写 |
-| WebUI 版本或 commit | 待填写 |
-| 测试环境 | 待填写 |
-| 总体结论 | PASS / PASS WITH ISSUES / FAIL |
-| 阻塞问题 | 待填写 |
-| 非阻塞问题 | 待填写 |
-| 备注 | 待填写 |
+| 验收日期 | 2026-06-21 |
+| 验收人 | Codex 技术自检；业务验收人待签字 |
+| WebUI 版本或 commit | 3834f0d 基线，本轮 ACL/P2 补丁待提交 |
+| 测试环境 | macOS 本机；project-lucy；KTX MCP 默认 `http://localhost:7878/mcp` |
+| 总体结论 | PASS WITH ISSUES（技术自检通过后待人工 UAT 签字） |
+| 阻塞问题 | 无已知技术阻塞；生产 MySQL COMMENT DDL 需 DBA/库 owner 授权执行 |
+| 非阻塞问题 | 人工 UAT 记录仍需业务验收人补签；WebUI 连接管理页面文档状态不属本轮范围 |
+| 备注 | 本轮只补交付记录模板，不宣称已完成业务人工验收 |

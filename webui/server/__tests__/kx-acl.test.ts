@@ -536,7 +536,7 @@ describe("KX financial domain ACL guardrails", () => {
   });
 
   it("denies disabled agents even when their table and tool allowlists would otherwise match", async () => {
-    const { check } = await loadAcl();
+    const { check, kxCatalog, permissionSnapshot } = await loadAcl();
 
     await expect(check(identity("disabled_kx_agent"), "sl_read_source", {
       sourceName: "kx_fact_financial_amount"
@@ -545,6 +545,13 @@ describe("KX financial domain ACL guardrails", () => {
     await expect(check(identity("disabled_kx_agent"), "sql_execution", {
       query: "select * from dataforai.kx_fact_financial_amount limit 1"
     })).resolves.toEqual({ allowed: false, reason: "agent_disabled" });
+
+    await expect(permissionSnapshot(identity("disabled_kx_agent"))).resolves.toBeUndefined();
+    await expect(kxCatalog(identity("disabled_kx_agent"))).resolves.toMatchObject({
+      connections: [],
+      sources: [],
+      examples: []
+    });
   });
 
   it("reloads access config for ACL checks without waiting for the cache TTL", async () => {
@@ -621,6 +628,34 @@ describe("KX financial domain ACL guardrails", () => {
     await expect(check(identity("superstore_agent"), "entity_details", {
       entities: [{ schema: "dataforai", name: "kx_fact_financial_amount" }]
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
+
+    await expect(check(identity("superstore_agent"), "entity_details", {
+      entities: [{ type: "source", name: "kx_fact_financial_amount" }]
+    })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
+
+    await expect(check(identity("superstore_agent"), "entity_details", {
+      entities: [{ type: "table", name: "superstore_orders" }]
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("superstore_agent"), "entity_details", {
+      entities: [{ kind: "physical_table", id: "dataforai.kx_fact_financial_amount" }]
+    })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
+
+    await expect(check(identity("superstore_agent"), "entity_details", {
+      entities: [{ kind: "semantic_source", id: "superstore_orders" }]
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("superstore_agent"), "entity_details", {
+      entities: [{ qualifiedName: "dataforai.kx_fact_financial_amount" }]
+    })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
+
+    await expect(check(identity("superstore_agent"), "entity_details", {
+      entities: [{ qualifiedName: "dataforai.superstore_orders" }]
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("kx_guard_tester"), "entity_details", {
+      entities: [{ qualifiedName: "dataforai.superstore_orders" }]
+    })).resolves.toEqual({ allowed: false, reason: "table_forbidden:dataforai.superstore_orders" });
   });
 
   it("fails closed for entity_details string arrays, nested refs, and empty metadata requests", async () => {
@@ -662,6 +697,42 @@ describe("KX financial domain ACL guardrails", () => {
     await expect(check(identity("wildcard_agent"), "sl_read_source", {
       sourceName: "sec_private_table"
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.sec_private_table" });
+  });
+
+  it("uses configured tool classifications for future KTX tools", async () => {
+    const { check } = await loadAcl();
+    const updatedAccess = ACCESS_YAML
+      .replace(
+        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n",
+        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n    - future_table_export\n    - future_data_catalog\n"
+      )
+      .replace(
+        "  table_touching_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - entity_details\n",
+        "  table_touching_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - entity_details\n    - future_table_export\n"
+      )
+      .replace(
+        "  sensitive_metadata_tools:\n    - dictionary_search\n    - discover_data\n",
+        "  sensitive_metadata_tools:\n    - dictionary_search\n    - discover_data\n    - future_data_catalog\n"
+      );
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), updatedAccess, "utf8");
+
+    await expect(check(identity("wildcard_agent"), "future_table_export", {
+      sourceName: "superstore_orders"
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("wildcard_with_explicit_kx_agent"), "future_table_export", {
+      sourceName: "kx_fact_financial_amount"
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("wildcard_agent"), "future_table_export", {
+      sourceName: "kx_fact_financial_amount"
+    })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
+
+    await expect(check(identity("wildcard_agent"), "future_table_export", {}))
+      .resolves.toEqual({ allowed: false, reason: "explicit_table_required:<empty>" });
+
+    await expect(check(identity("wildcard_agent"), "future_data_catalog", {}))
+      .resolves.toEqual({ allowed: false, reason: "sensitive_metadata_forbidden:kx" });
   });
 
   it("keeps built-in deny, tool classification, and KX sensitivity when defaults are empty", async () => {

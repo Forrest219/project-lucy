@@ -367,7 +367,7 @@ cd project-lucy/webui && npm run dev && npm run server
 | Eval Cases — superstore | **完成**（7 条，覆盖 4 类高危模式） |
 | WebUI — M0~M5 | **完成**（30 项测试通过） |
 | WebUI — M6 SkillsEditor | 待开发（`skills/` 编辑页） |
-| MySQL COMMENT 补全 | 待执行（`discount` / `profit` 字段级注释） |
+| MySQL COMMENT 补全 | DBA 执行脚本已补（见 `docs/mysql-comment-maintenance.md`）；生产 DDL 待授权执行 |
 | Ops Dashboard | 待规划（需遥测数据源先建立） |
 
 ---

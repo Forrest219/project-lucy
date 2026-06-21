@@ -33,6 +33,7 @@ const DEFAULT_KNOWN_TOOLS = [
 const DEFAULT_TABLE_TOUCHING_TOOLS = ["sl_query", "sl_read_source", "sl_validate", "entity_details"] as const;
 const DEFAULT_SENSITIVE_METADATA_TOOLS = ["dictionary_search", "discover_data"] as const;
 const DEFAULT_SENSITIVE_TABLE_PREFIXES = ["dataforai.kx_"] as const;
+const BUILT_IN_TABLE_EXTRACTORS = new Set(["sl_query", "sl_read_source", "sl_validate", "entity_details"]);
 const MAX_ENTITY_REF_DEPTH = 5;
 
 type AccessConfig = Awaited<ReturnType<typeof getAccessConfig>>;
@@ -196,6 +197,11 @@ function collectTableRefs(value: unknown, tables: Set<string>, map: Map<string, 
   if (value && typeof value === "object") {
     for (const item of Object.values(value as Record<string, unknown>)) collectTableRefs(item, tables, map);
   }
+}
+
+function collectGenericToolTableRefs(value: unknown, tables: Set<string>, map: Map<string, SourceMapEntry>): void {
+  collectTableRefs(value, tables, map);
+  collectMetricRefs(value, tables, map);
 }
 
 function collectMetricRefs(value: unknown, tables: Set<string>, map: Map<string, SourceMapEntry>): void {
@@ -395,6 +401,7 @@ async function resolveEffectivePermissions(
 ): Promise<RoleResolutionResult> {
   const user = config.users.find((u) => u.id === identity.userId);
   if (!user) return { ok: false, reason: "tool_forbidden" };
+  if (user.enabled === false) return { ok: false, reason: "agent_disabled" };
 
   const map = await loadSourceMap({ fresh: options.freshSourceMap ?? true });
   const userRole = typeof user.role === "string" && user.role.trim() ? user.role.trim() : undefined;
@@ -497,12 +504,28 @@ function addEntityDetailRef(value: unknown, tables: Set<string>, map: Map<string
 
   const record = value as Record<string, unknown>;
 
-  const directRef = firstString(record, ["table", "sourceName", "source", "source_name", "tableName", "table_name"]);
+  const directRef = firstString(record, [
+    "table",
+    "sourceName",
+    "source",
+    "source_name",
+    "tableName",
+    "table_name",
+    "qualifiedName",
+    "qualified_name",
+    "ref"
+  ]);
   if (directRef) tables.add(sourceNameToTable(directRef, map));
 
   const schema = firstString(record, ["schema", "schemaName", "schema_name"]);
   const name = firstString(record, ["name", "entityName", "entity_name", "tableName", "table_name"]);
   if (schema && name) tables.add(sourceNameToTable(`${schema}.${name}`, map));
+
+  const kind = firstString(record, ["type", "kind", "entityType", "entity_type"]);
+  const typedName = firstString(record, ["name", "id", "entityId", "entity_id"]);
+  if (typedName && kind && ["source", "table", "semantic_source", "physical_table"].includes(normalizeRef(kind))) {
+    tables.add(sourceNameToTable(typedName, map));
+  }
 
   for (const nested of Object.values(record)) {
     if (nested && typeof nested === "object") {
@@ -547,6 +570,7 @@ export async function extractTables(toolName: string, args: unknown, options: { 
       break;
     }
     default:
+      collectGenericToolTableRefs(a, tables, map);
       break;
   }
 
@@ -561,19 +585,24 @@ export async function kxCatalog(identity: Identity): Promise<{
   const config = await getAccessConfig({ fresh: true });
   const policy = aclPolicy(config);
   const resolved = await resolveEffectivePermissions(identity, config, policy);
-  const permissions = resolved.ok ? resolved.permissions : undefined;
-  const connections = permissions?.connections ?? [];
-  const sources = (permissions?.sources ?? [])
+  if (!resolved.ok) {
+    return { connections: [], sources: [], examples: [] };
+  }
+  const connections = resolved.permissions.connections;
+  const sources = resolved.permissions.sources
     .map((source) => ({ sourceName: source.sourceName, table: source.table }))
     .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+  const hasKxSources = sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
 
   return {
     connections,
     sources,
-    examples: [
-      "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
-      "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
-    ]
+    examples: hasKxSources
+      ? [
+          "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
+          "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
+        ]
+      : []
   };
 }
 
@@ -595,6 +624,26 @@ export async function permissionSnapshot(identity: Identity): Promise<{
     rolesJson: resolved.permissions.rolesJson,
     resolvedJson: resolved.permissions.resolvedJson
   };
+}
+
+export async function allowedToolNames(identity: Identity): Promise<string[]> {
+  const config = await getAccessConfig({ fresh: true });
+  const policy = aclPolicy(config);
+  const user = config.users.find((u) => u.id === identity.userId);
+  if (!user || user.enabled === false) return [];
+
+  const resolved = await resolveEffectivePermissions(identity, config, policy);
+  if (!resolved.ok) return [];
+
+  const tools = resolved.permissions.tools.includes("*")
+    ? [...policy.knownTools]
+    : resolved.permissions.tools;
+
+  return uniqueSorted(tools.filter((tool) => {
+    if (!policy.knownTools.has(tool) || policy.denyTools.has(tool)) return false;
+    if (tool === "kx_catalog") return resolved.permissions.sources.length > 0;
+    return true;
+  }));
 }
 
 // ─── ACL check ────────────────────────────────────────────────────────────────
@@ -659,6 +708,9 @@ export async function check(
     }
     const requested = await extractTables(toolName, args, { fresh: true });
     if (toolName === "sl_query" && requested.length === 0 && !allowedTables.includes("*")) {
+      return { allowed: false, reason: "explicit_table_required:<empty>" };
+    }
+    if (!BUILT_IN_TABLE_EXTRACTORS.has(toolName) && requested.length === 0) {
       return { allowed: false, reason: "explicit_table_required:<empty>" };
     }
     if ((toolName === "sl_validate" || toolName === "entity_details") && requested.length === 0 && sourceMap && !hasExplicitAccessToAllSensitiveTables(allowedTables, sourceMap, policy.sensitiveTablePrefixes)) {

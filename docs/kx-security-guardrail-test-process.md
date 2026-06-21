@@ -344,11 +344,11 @@ Claude Code 列出的剩余 P2：
 5. `argsSummary` 可扩展敏感键过滤，如 password/token/secret/apiKey。
 6. proxy 默认监听所有接口，可考虑默认绑定 `127.0.0.1`。
 7. POST body size / upstream timeout 可加限制。
-8. 敏感表前缀和 metadata 工具列表未来可配置化。
-9. 新增 KTX 工具仍需维护工具分类。
-10. `entity_details` 参数契约可继续和 KTX zod schema 对齐。
+8. 敏感表前缀和 metadata 工具列表已配置化；新增高敏域仍需维护 `defaults.sensitive_table_prefixes`。
+9. 新增 KTX 工具仍需维护工具分类；本轮已补未来工具分类测试。
+10. `entity_details` 参数契约已补常见 source/table 形态；若 KTX zod schema 新增字段仍需同步。
 11. token revoke E2E 可补。
-12. `lisi` 现有 token 建议后续轮换。
+12. `lisi` 高权限样例 token 已从 `access.yaml` 移除，Agent 已禁用。
 
 整体判断：当前安全围栏已满足本次 KX 域上线前的核心验证；剩余项属于防御纵深、可观测性和未来扩展维护，不阻塞本轮交付。
 
@@ -439,9 +439,9 @@ git diff --check: success
 
 最终剩余 TODO：
 
-- 敏感表前缀与工具分类配置化：当前仍是代码常量。
-- `entity_details` 参数契约继续和 KTX zod schema 对齐：当前覆盖 `entities[].table`。
-- 现有样例 token 后续择机轮换，尤其是高权限 `lisi`。
+- 新增 KTX 工具时继续同步评估 `known_tools` / `table_touching_tools` / `sensitive_metadata_tools`。
+- `entity_details` 若 KTX zod schema 新增字段，继续同步 ACL 提取契约。
+- `zhangsan` 样例 token 后续择机轮换；高权限 `lisi` token 已移除并禁用。
 
 ## 14. 最终 Claude Code 复审
 
@@ -472,10 +472,10 @@ claude -p "请对 KX ACL 安全围栏最新状态做最终安全复审。请阅�
 
 | ID | 类别 | 说明 |
 |---|---|---|
-| R1 | 配置化 | `SENSITIVE_TABLE_PREFIXES` 仍硬编码 `dataforai.kx_`。 |
-| R2 | 配置化 | `KNOWN_TOOLS` / `TABLE_TOUCHING_TOOLS` / `SENSITIVE_METADATA_TOOLS` 仍是代码常量。 |
-| R3 | 契约对齐 | `entity_details` 当前覆盖 `entities[].table`，后续可与 KTX zod schema 继续对齐。 |
-| R4 | Token 轮换 | `zhangsan` / `lisi` 现有样例 token 建议后续轮换，尤其 `lisi` 是高权限 wildcard agent。 |
+| R1 | 配置化 | 已完成：`sensitive_table_prefixes` 进入 `access.yaml.defaults`，内置 KX 前缀仅作最低保护。 |
+| R2 | 配置化 | 已完成：`known_tools` / `table_touching_tools` / `sensitive_metadata_tools` 进入 `access.yaml.defaults`，并补未来工具分类测试。 |
+| R3 | 契约对齐 | 已补强：`entity_details` 覆盖 `sourceName`、`schema+name`、`type/kind+name/id`、`qualifiedName` 等常见 source/table 形态。 |
+| R4 | Token 轮换 | 已完成高风险项：`lisi` 高权限样例 token 已移除，Agent 已禁用；`zhangsan` 可后续按客户端窗口轮换。 |
 | R5 | 非阻塞观察 | 502 `detail: String(err)` 可能泄露本地错误细节，生产化可收敛错误详情。 |
 
 终审判断：本轮交付范围内无 P0/P1 阻断级漏洞；剩余事项不阻塞 KX 域安全围栏交付。
@@ -503,8 +503,8 @@ claude -p "请对 KX ACL 安全围栏最新状态做最终安全复审。请阅�
    - 502 响应固定为 `{ error: "Proxy error", detail: "Upstream unavailable" }`。
    - 413 oversized body 仍保留可行动的 `Request body too large`。
 4. token 轮换流程落盘
-   - 本轮不静默替换现有 token hash，避免破坏客户端。
-   - 建议优先轮换高权限 `lisi`，再轮换 `zhangsan`。
+   - 高权限 `lisi` 样例 token 已移除，Agent 已禁用。
+   - `zhangsan` 仍建议后续按客户端窗口轮换。
 
 建议的 token 轮换流程：
 
@@ -544,7 +544,7 @@ claude -p "只读复审 KX ACL 收尾..." --permission-mode dontAsk --allowedToo
 
 本轮后剩余非阻断维护口径：
 
-- token 轮换仍需由持有客户端配置的人执行；不能在代码变更中静默完成。
+- `zhangsan` token 轮换仍需由持有客户端配置的人执行；不能在代码变更中静默完成。
 - 后续新增 KTX 工具时，必须同步评估并更新 `defaults.known_tools`、`defaults.table_touching_tools`、`defaults.sensitive_metadata_tools`。
 - 若未来新增其他高敏业务域，优先通过 `defaults.sensitive_table_prefixes` 配置，不再改 ACL 代码常量。
 

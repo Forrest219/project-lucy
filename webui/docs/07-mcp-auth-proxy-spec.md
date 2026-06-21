@@ -49,9 +49,9 @@ project-lucy 以 KTX HTTP MCP server（`localhost:7878/mcp`）暴露数据问答
 ### 4.1 整体拓扑
 
 ```
-张三 Hermes  --Bearer tk_zhangsan-->  ┐
+张三 Hermes  --Bearer <token>-->      ┐
                                        ├─ Lucy MCP Proxy (:7879) ──> KTX MCP (:7878)
-李四 Cursor  --Bearer tk_lisi------->  ┘  识别 / 检查 / 转发 / 日志    内部 token
+Workhorse   --Bearer <token>-->       ┘  识别 / 检查 / 转发 / 日志    内部 token
 
                                               │
                                      .ktx-ui/audit.sqlite
@@ -118,10 +118,9 @@ users:
 
   - id: lisi
     name: 李四
-    tokens:
-      - hash: sha256:<hex>
-        label: cursor-mac
-        created: 2026-06-18
+    enabled: false
+    note: High-privilege sample agent; create token only when needed.
+    tokens: []
     allow:
       tables: ["*"]               # 通配 = 全部已配置表
       tools: ["*"]
@@ -326,7 +325,7 @@ CREATE TABLE permission_snapshots (
 |---|---|---|
 | `sl_query` | `arguments.measures[]` / `arguments.dimensions[].field` | 取 `.` 前的 sourceName，查内存 Map → 物理表名 |
 | `sl_read_source` | `arguments.sourceName` + `arguments.connectionId` | 同上查 Map |
-| `entity_details` | `arguments.entities[].table` | 直接读字段 |
+| `entity_details` | `arguments.sourceName` / `arguments.entities[].table` / `schema+name` / `type|kind + name|id` / `qualifiedName` | 规范化后查 source map |
 | `discover_data` / `dictionary_search` | 无具体表 | 仅做 tool 级权限检查 |
 | `wiki_search` / `wiki_read` | 与表无关 | 仅做 tool 级权限检查 |
 | `connection_list` | 无 | 无需检查 |
@@ -350,7 +349,7 @@ v1.2 增加连接裁决：
 
 ### 6.1 `tools/list` 与 `tools/call` 双重授权
 
-- `tools/list`：proxy 改写下行工具列表，只返回 token 有权看到的工具。若 `effectivePermissions.sources.length > 0`，proxy 可注入 `kx_catalog`。
+- `tools/list`：proxy 改写下行工具列表，只返回 token 有权看到的工具。若 effective permissions 允许 `kx_catalog`，proxy 可注入该自服务工具。
 - `tools/call`：proxy 对每次调用再次校验工具、connection、source/table；不能依赖客户端只调用 list 中出现过的工具。
 - `kx_catalog`：由 proxy 直接服务，返回内容按 effective permissions 过滤。没有任何数据权限的 token 不应看到或调用 `kx_catalog`。
 - 拒绝必须 fail-closed，并写 `access_log.outcome='denied'`。
