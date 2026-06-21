@@ -13,7 +13,7 @@ triggers:
   - 客单价
 dependencies:
   - ../warehouse/references/metrics-policy.md
-  - ../superstore/references/superstore-pitfalls.md
+  - ../domains/superstore/pitfalls.md
 eval_coverage: []
 last_pass_rate: ~
 publish_targets:
@@ -37,7 +37,7 @@ publish_targets:
 
 ```
 □  1. 是否使用了 canonical table？
-       超市分析 → dataforai.superstore_orders（非 dataforai.superstore_orders）
+       超市分析 → dataforai.superstore_orders（非裸表 superstore_orders、orders 或退货/经理维表）
 
 □  2. 是否使用了 KTX measure，而非手写公式？
        若手写：核对公式是否与 KTX measure 一致

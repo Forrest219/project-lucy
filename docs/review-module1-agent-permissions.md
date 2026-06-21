@@ -113,3 +113,29 @@ if (request.body?.version && request.body.version !== currentVersion) {
 1. **P1-1**：`tokens.ts` DELETE token — sqlite INSERT 移到 safeWrite 前，失败返回 500
 2. **P1-2**：`agents.ts` DELETE agent — sqlite INSERT 失败向上抛，yaml 删除在 INSERT 成功后执行
 3. **P1-3**：`AgentDetail.tsx` 禁用/启用按钮 — 走 diff 预览流程，不直接 dryRun:false
+
+---
+
+## 2026-06-21 状态更新
+
+本审查报告保留为历史 review 记录。后续 spec 审计与 Claude Code Opus / thinker 二次审阅已确认：当前访问治理的主要风险已从本报告原先的 P1/P2 实现问题，升级为 **role-first 设计与 legacy allow Admin 写入路径不一致的 P0 安全整改项**。
+
+当前处置状态：
+
+| 原条目 | 状态 | 说明 |
+|---|---|---|
+| P1-1 DELETE token 写入顺序 | 待复核 | 仍应在安全写路径整改前复核当前 `tokens.ts` 行为 |
+| P1-2 DELETE agent 写入顺序 | 待复核 | 仍应在安全写路径整改前复核当前 `agents.ts` 行为 |
+| P1-3 启用/禁用绕过 diff | 被新 P0 覆盖 | 新整改要求 PATCH 不得重新启用 legacy wildcard Agent，并需要 role-first / diff / 审计契约 |
+| P2-1 diff 实现 | 待复核 | 可作为后续代码质量项处理 |
+| P2-2 version 可绕过 | 待复核 | 与 access.yaml 无损回写和并发保护一并处理 |
+| P2-3 audit LIMIT/OFFSET | 待复核 | 非当前最高优先级 |
+| P3 项 | 可后置 | 不阻塞 P0 契约补齐 |
+
+新的优先级事实源：
+
+- 审计报告：`inbox/spec-audit-2026-06-21.md`
+- 整改计划：`inbox/spec-remediation-plan-2026-06-21.md`
+- Thinker 交付审阅：`inbox/thinker-review-spec-delivery-2026-06-21.md`
+
+在 P0 安全整改完成前，不应把本报告的“无 P0 安全漏洞”作为当前结论继续引用。

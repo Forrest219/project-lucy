@@ -44,7 +44,7 @@
 
 `runner.ts:75-85` — `CaseSelection.mode === "coverage"` 分支没有任何实现：未从 YAML 中按 `coverage` 字段过滤 case id，`caseIds` 保持空数组，导致最终行为与 `mode=all` 完全相同（runner 不传 `--case` 参数时跑全集）。
 
-设计文档 §4.B 明确定义了 `{ "mode": "coverage", "coverage": "anti_pattern" }` 语义（`types.ts:320-324` 也有对应类型）。前端 `RunList.tsx` 虽然目前 UI 只暴露 `all` 和 `failed_in_last` 两个选项，但后端接口已声明此模式，若外部 POST 进来会静默跑全集而非报错，语义欺骗性强。
+设计文档 §4.B 明确定义了 `{ "mode": "coverage", "coverage": "anti_pattern" }` 语义（`webui/src/lib/types.ts` 也有对应类型）。前端 `RunList.tsx` 虽然目前 UI 只暴露 `all` 和 `failed_in_last` 两个选项，但后端接口已声明此模式，若外部 POST 进来会静默跑全集而非报错，语义欺骗性强。
 
 → 建议：补充 `coverage` 分支，从 YAML 加载 cases 并按 `coverage` 字段过滤出 `caseIds`；或在接收到 `mode=coverage` 时返回 400 `UNSUPPORTED_SELECTION_MODE`，明确标记为未实现。
 
@@ -134,3 +134,27 @@ const status = code === 0 ? "succeeded" : (summary ? "succeeded" : "failed");
 |---|---|---|
 | 1 | `runner.ts:75-85` | `coverage` 模式静默退化为全跑，接口语义欺骗性强，需要补实现或返回明确错误 |
 | 2 | `runner.ts:176` | runner 退出码 1（有 FAIL case）但 JSON 可解析时被错误标记为 `succeeded`，exitCode=0 但 JSON 为空时也标为 `succeeded`，需修正状态判定逻辑 |
+
+---
+
+## 2026-06-21 状态更新
+
+本审查报告保留为历史 review 记录。后续静态核对显示，本报告的两条 CHANGE 已不再按原描述成立：
+
+| 原条目 | 当前状态 | 当前证据 |
+|---|---|---|
+| P1.1 `coverage` 模式静默退化为全跑 | 已处理为明确拒绝 | `webui/server/eval/runner.ts` 在 `caseSelection.mode === "coverage"` 时返回 `UNSUPPORTED_SELECTION_MODE` |
+| P1.2 runner status 判定 | 已按 summary 判定 | `webui/server/eval/runner.ts` 当前使用 `summary !== null ? "succeeded" : "failed"` |
+| P2.5 `GET /api/eval/domains/:domain` 缺失 | 已实现 | `webui/server/eval/cases.ts` 已注册 `GET /api/eval/domains/:domain` |
+
+仍需关注但不阻塞当前 spec 整改：
+
+- runner 输出中的 `sql` / `finalText` 是否稳定，需要 fixture 锁定。
+- CaseEditor “YAML 预览”是否仍显示 JSON，需在 UI 整理时复核。
+- SSE keepalive 与死 import 属代码质量项，可后置。
+
+新的整改事实源：
+
+- 审计报告：`inbox/spec-audit-2026-06-21.md`
+- 整改计划：`inbox/spec-remediation-plan-2026-06-21.md`
+- Thinker 交付审阅：`inbox/thinker-review-spec-delivery-2026-06-21.md`

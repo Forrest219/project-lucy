@@ -217,3 +217,21 @@
 | 阻塞问题 | 无已知技术阻塞；生产 MySQL COMMENT DDL 需 DBA/库 owner 授权执行 |
 | 非阻塞问题 | 人工 UAT 记录仍需业务验收人补签；WebUI 连接管理页面文档状态不属本轮范围 |
 | 备注 | 本轮只补交付记录模板，不宣称已完成业务人工验收 |
+
+---
+
+## 13. 2026-06-21 状态更新
+
+本文仍作为 Module 2 Eval 配置与监控的人工 UAT 模板使用，不表示业务人工验收已完成。
+
+后续静态核对显示，`docs/review-module2-eval-monitoring.md` 中两条原 CHANGE 已被后续实现处理或改为明确拒绝：
+
+- `coverage` 模式不再静默全跑，而是返回 `UNSUPPORTED_SELECTION_MODE`。
+- runner run status 已按 `summary !== null` 判定。
+- `GET /api/eval/domains/:domain` 已存在。
+
+实际执行 UAT 前仍需：
+
+- 启动 WebUI 和 KTX MCP。
+- 跑 `cd webui && npm test && npx tsc --noEmit && npm run build`。
+- 准备至少一次 eval run 数据，才能完整验证 RunDetail、artifact 下载、compare 和 monitor 趋势。

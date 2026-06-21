@@ -81,6 +81,8 @@ cp /tmp/access.yaml.uat.bak webui/config/access.yaml
 
 注意：创建 token 后，明文 token 只允许临时保存在当前 shell 变量或人工剪贴板中，不写入仓库文件、UAT 报告或聊天记录。
 
+> 2026-06-21 状态更新：本文仍可作为 legacy allow 链路的历史 UAT 参考，但不再代表访问治理的目标形态。当前目标已升级为 role-first：新建 Agent 必须选择 role，legacy `allow` 只读兼容，Admin 写入路径不得创建或重新启用 `tables:["*"]` / `tools:["*"]` 的全权 Agent。新的验收边界见 `inbox/spec-remediation-plan-2026-06-21.md` 和 `inbox/thinker-review-spec-delivery-2026-06-21.md`。
+
 ---
 
 ## 3. 主链路 UAT：真实 Token 请求 MCP Proxy
