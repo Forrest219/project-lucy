@@ -4,6 +4,7 @@
 
 import {
   parseArgs,
+  preflightKtxMcpEndpoint,
   parseClaudeOutput,
   checkSqlPatterns,
   checkSqlAssertions,
@@ -56,6 +57,76 @@ function assert(name, cond, detail) {
 }
 
 {
+  const oldFetch = globalThis.fetch;
+  let observed;
+  globalThis.fetch = async (url, opts) => {
+    observed = { url, opts };
+    return { status: 404 };
+  };
+  const res = await preflightKtxMcpEndpoint('http://127.0.0.1:7878/mcp', 'secret-token');
+  globalThis.fetch = oldFetch;
+  assert(
+    'preflightKtxMcpEndpoint accepts non-401 MCP GET response and sends bearer',
+    res.status === 404 && observed?.opts?.headers?.Authorization === 'Bearer secret-token',
+    JSON.stringify({ res, observed })
+  );
+}
+{
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 401 });
+  let threw = false;
+  try {
+    await preflightKtxMcpEndpoint('http://127.0.0.1:7878/mcp', 'stale-token');
+  } catch (err) {
+    threw = /rejected bearer auth/.test(err.message);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+  assert('preflightKtxMcpEndpoint rejects 401 auth failures', threw, 'expected rejected bearer auth error');
+}
+{
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 403 });
+  let threw = false;
+  try {
+    await preflightKtxMcpEndpoint('http://127.0.0.1:7878/mcp', 'denied-token');
+  } catch (err) {
+    threw = /rejected access/.test(err.message);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+  assert('preflightKtxMcpEndpoint rejects 403 access failures', threw, 'expected rejected access error');
+}
+{
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 503, text: async () => 'temporarily unavailable' });
+  let threw = false;
+  try {
+    await preflightKtxMcpEndpoint('http://127.0.0.1:7878/mcp', 'token');
+  } catch (err) {
+    threw = /unhealthy/.test(err.message) && /503/.test(err.message);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+  assert('preflightKtxMcpEndpoint rejects 5xx endpoint failures', threw, 'expected unhealthy endpoint error');
+}
+{
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error('ECONNREFUSED');
+  };
+  let threw = false;
+  try {
+    await preflightKtxMcpEndpoint('http://127.0.0.1:7878/mcp', '');
+  } catch (err) {
+    threw = /not reachable/.test(err.message);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+  assert('preflightKtxMcpEndpoint reports unreachable endpoint', threw, 'expected not reachable error');
+}
+
+{
   const stdout = JSON.stringify({
     type: 'assistant',
     message: {
@@ -91,6 +162,40 @@ function assert(name, cond, detail) {
   assert('parseClaudeOutput extracts sql_execution input SQL', parsed.sql.includes('kx_fact_financial_amount'), parsed.sql);
   assert('parseClaudeOutput parses sql_execution rows', parsed.result.row_count === 2330, JSON.stringify(parsed.result));
   assert('parseClaudeOutput records KTX tool candidates', parsed.toolCandidates.length === 1, JSON.stringify(parsed.toolCandidates));
+}
+{
+  const stdout = JSON.stringify({
+    type: 'assistant',
+    message: {
+      content: [
+        {
+          type: 'tool_use',
+          id: 'call_search',
+          name: 'mcp__ktx__wiki_search',
+          input: { query: 'source_file_name source_sheet_name 数据血缘 追溯' },
+        },
+      ],
+    },
+  }) + '\n' + JSON.stringify({
+    type: 'user',
+    message: {
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'call_search',
+          content: [{ type: 'text', text: JSON.stringify({ results: [{ key: 'kx-playbook' }] }) }],
+        },
+      ],
+    },
+  });
+
+  const parsed = parseClaudeOutput(stdout);
+  assert('parseClaudeOutput does not treat non-SQL tool query as SQL', parsed.sql === null, parsed.sql);
+  assert(
+    'parseClaudeOutput keeps non-SQL tool candidate without SQL',
+    parsed.toolCandidates.length === 1 && parsed.toolCandidates[0].sql === null,
+    JSON.stringify(parsed.toolCandidates)
+  );
 }
 
 // ── T-A.3: parseClaudeOutput ───────────────────────────────────────────────
@@ -371,7 +476,71 @@ function assert(name, cond, detail) {
   );
   assert(
     'chooseBestCandidate can merge rows across multiple tool candidates',
-    selected.ok && selected.candidate.toolName === 'merged_tool_candidates',
+    selected.ok &&
+      selected.candidate.toolName === 'merged_tool_candidates' &&
+      selected.candidate.synthetic === true &&
+      selected.candidate.sql === null &&
+      selected.candidate.assertionSql.includes('SELECT balance') &&
+      selected.candidate.sqlParts.length === 2,
+    JSON.stringify(selected)
+  );
+}
+{
+  const selected = chooseBestCandidate(
+    {
+      result_assertions: [{
+        value_type: 'dataframe',
+        data: {
+          rows: [
+            { source_name: 'kx_vw_balance_sheet_detail', row_count: 310, periods: 5 },
+            { source_name: 'kx_vw_cash_flow_statement_detail', row_count: 125, periods: 5 },
+            { source_name: 'kx_vw_income_statement_detail', row_count: 160, periods: 5 },
+          ],
+        },
+        compare_mode: 'unordered_rows',
+        key_columns: ['source_name'],
+        check_row_count: true,
+      }],
+    },
+    {
+      finalText: '',
+      toolCalls: [],
+      sql: null,
+      result: { sourceName: 'kx_vw_income_statement_detail', yaml: 'name: kx_vw_income_statement_detail' },
+      resultRaw: {},
+      toolCandidates: [
+        {
+          toolName: 'mcp__ktx__sl_read_source',
+          result: { sourceName: 'kx_vw_balance_sheet_detail', yaml: 'name: kx_vw_balance_sheet_detail' },
+          resultRaw: {},
+        },
+        {
+          toolName: 'mcp__ktx__sql_execution',
+          sql: 'SELECT balance',
+          result: { source_name: 'kx_vw_balance_sheet_detail', row_count: 310, periods: 5 },
+          resultRaw: {},
+        },
+        {
+          toolName: 'mcp__ktx__sql_execution',
+          sql: 'SELECT cashflow',
+          result: { source_name: 'kx_vw_cash_flow_statement_detail', row_count: 125, periods: 5 },
+          resultRaw: {},
+        },
+        {
+          toolName: 'mcp__ktx__sql_execution',
+          sql: 'SELECT income',
+          result: { source_name: 'kx_vw_income_statement_detail', row_count: 160, periods: 5 },
+          resultRaw: {},
+        },
+      ],
+    }
+  );
+  assert(
+    'chooseBestCandidate excludes metadata rows when merging tool candidates',
+    selected.ok &&
+      selected.candidate.result.rows.length === 3 &&
+      selected.candidate.sql === null &&
+      selected.candidate.assertionSql.includes('SELECT income'),
     JSON.stringify(selected)
   );
 }

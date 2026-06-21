@@ -16,8 +16,7 @@ const REPO_ROOT = resolve(__dirname, '..');
 const DEFAULT_CASES_PATH = 'evals/superstore/eval/superstore-eval-cases.yaml';
 const EVAL_MCP_PATH = process.env.EVAL_MCP_CONFIG || '/tmp/eval-mcp.json';
 const KTX_MCP_URL = process.env.EVAL_KTX_MCP_URL || 'http://localhost:7878/mcp';
-const KTX_MCP_TOKEN =
-  process.env.EVAL_KTX_MCP_TOKEN || process.env.KTX_INTERNAL_TOKEN || process.env.KTX_MCP_TOKEN || '';
+const KTX_MCP_TOKEN = process.env.EVAL_KTX_MCP_TOKEN || process.env.KTX_MCP_TOKEN || '';
 const SHOULD_CLEANUP_EVAL_MCP_CONFIG = !process.env.EVAL_MCP_CONFIG;
 
 const USAGE = `Usage: node scripts/eval-runner.mjs [options]
@@ -38,8 +37,8 @@ Environment:
   EVAL_MCP_CONFIG         Override path for generated MCP config file
                           (default: /tmp/eval-mcp.json)
   EVAL_KTX_MCP_URL        Override KTX MCP URL (default: ${KTX_MCP_URL})
-  EVAL_KTX_MCP_TOKEN      Optional bearer token for KTX MCP token-auth deployments
-  KTX_INTERNAL_TOKEN      Fallback bearer token env used by the local MCP proxy
+  EVAL_KTX_MCP_TOKEN      Optional bearer token for token-auth MCP endpoints
+  KTX_MCP_TOKEN           Fallback bearer token when EVAL_KTX_MCP_TOKEN is unset
   EVAL_RETRIES            Default retry count for failed cases
 `;
 
@@ -134,6 +133,31 @@ function cleanupEvalMcpConfig(targetPath = EVAL_MCP_PATH) {
   rmSync(targetPath, { force: true });
 }
 
+async function preflightKtxMcpEndpoint(url = KTX_MCP_URL, token = KTX_MCP_TOKEN) {
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  let res;
+  try {
+    res = await fetch(url, { method: 'GET', headers });
+  } catch (err) {
+    throw new Error(`KTX MCP endpoint is not reachable at ${url}: ${err.message}`);
+  }
+  if (res.status === 401) {
+    throw new Error(
+      `KTX MCP endpoint rejected bearer auth at ${url}. ` +
+        `Set EVAL_KTX_MCP_TOKEN to the daemon token, refresh KTX_MCP_TOKEN, or restart \`ktx mcp start\` with the expected token.`
+    );
+  }
+  if (res.status === 403) {
+    throw new Error(`KTX MCP endpoint rejected access at ${url} (HTTP 403). Check the eval MCP token and endpoint ACL.`);
+  }
+  if (res.status >= 500) {
+    const body = await res.text().catch(() => '');
+    const detail = body ? `: ${body.slice(0, 200)}` : '';
+    throw new Error(`KTX MCP endpoint is unhealthy at ${url} (HTTP ${res.status})${detail}`);
+  }
+  return { status: res.status };
+}
+
 function runCliCapture(cmd, args, { timeoutMs = 30000 } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -185,10 +209,6 @@ async function invokeClaudeCode(question, mcpConfigPath, { timeoutMs = 360000 } 
     '--mcp-config',
     mcpConfigPath,
     '--strict-mcp-config',
-    '--allowedTools',
-    'mcp__ktx__*',
-    '--disallowedTools',
-    'Bash',
     '--permission-mode',
     'bypassPermissions',
   ];
@@ -309,7 +329,7 @@ function parseClaudeOutput(stdout) {
     const candidate = {
       toolName: c.name,
       sqlArgs: c.input,
-      sql: extractSqlFromToolInput(c.input),
+      sql: extractSqlFromToolInput(c.input, c.name),
       resultRaw: toolRes,
       result: rowsToObjects(toolRes),
     };
@@ -342,7 +362,7 @@ function parseClaudeOutput(stdout) {
 
   if (sqlTool) {
     sqlArgs = sqlTool.input;
-    sql = extractSqlFromToolInput(sqlArgs);
+    sql = extractSqlFromToolInput(sqlArgs, sqlTool.name);
     // The SQL is returned in tool_result.content.sql when include:["sql"] is set;
     // fall back to extracting from text if present.
     const toolRes = sqlTool.id ? toolResults.get(sqlTool.id) : null;
@@ -361,7 +381,6 @@ function parseClaudeOutput(stdout) {
     // No sl_query called — try to recover from any tool_result (e.g. sql_execution)
     if (lastKtxTool) {
       sqlArgs = lastKtxTool.input;
-      sql = extractSqlFromToolInput(sqlArgs);
       resultRaw = lastKtxTool.id ? toolResults.get(lastKtxTool.id) : null;
     }
     if (!resultRaw) {
@@ -378,8 +397,11 @@ function parseClaudeOutput(stdout) {
   return { sql, sqlArgs, result, resultRaw, finalText, toolCalls, toolCandidates };
 }
 
-function extractSqlFromToolInput(input) {
+function extractSqlFromToolInput(input, toolName = '') {
   if (!input || typeof input !== 'object') return null;
+  if (toolName && toolName !== 'mcp__ktx__sl_query' && toolName !== 'mcp__ktx__sql_execution') {
+    return null;
+  }
   for (const key of ['sql', 'query', 'statement']) {
     if (typeof input[key] === 'string') return input[key];
   }
@@ -1151,8 +1173,9 @@ async function executePrompt(question) {
 }
 
 function evaluateCandidate(c, parsed, candidate, safetyContract = {}) {
+  const assertionSql = candidate.assertionSql ?? candidate.sql;
   const sqlCheck = checkSqlAssertions(
-    candidate.sql,
+    assertionSql,
     collectSqlAssertions(c, safetyContract),
     c.required_sql_pattern,
     c.forbidden_sql_pattern
@@ -1160,7 +1183,7 @@ function evaluateCandidate(c, parsed, candidate, safetyContract = {}) {
   const structuredResultCheck = checkResultAssertions(candidate.result || {}, parsed.finalText, c.result_assertions || []);
   const legacyResultCheck = c.expected_result ? checkResultMatch(candidate.result || {}, c.expected_result || {}) : { ok: true, mismatches: [] };
   const legacyTextCheck = c.expected_result ? checkTextResponse(parsed.finalText, c.expected_result || {}) : { ok: true, missing: [] };
-  const safetyCheck = checkSecretPathSafety(candidate.sql, parsed.finalText, safetyContract);
+  const safetyCheck = checkSecretPathSafety(assertionSql, parsed.finalText, safetyContract);
   const toolCheck = checkToolAssertions(parsed.toolCalls || [], c.tool_assertions || []);
   const failures = [];
   failures.push(...sqlCheck.failures);
@@ -1178,22 +1201,43 @@ function evaluateCandidate(c, parsed, candidate, safetyContract = {}) {
   };
 }
 
-function mergedCandidateFromToolCandidates(toolCandidates = []) {
+function rowHasAnyExpectedColumn(row, expectedColumns = []) {
+  if (!row || typeof row !== 'object') return false;
+  for (const col of expectedColumns) {
+    if (Object.prototype.hasOwnProperty.call(row, col)) return true;
+    for (const alias of FIELD_ALIASES[col] || []) {
+      if (Object.prototype.hasOwnProperty.call(row, alias)) return true;
+    }
+  }
+  return false;
+}
+
+function mergedCandidateFromToolCandidates(toolCandidates = [], c = {}) {
   const candidates = Array.isArray(toolCandidates) ? toolCandidates : [];
+  const expectedColumns = expectedColumnsFromAssertions(c.result_assertions || []);
   const rows = [];
   const sqlParts = [];
   const rawParts = [];
+  let mergedCandidateCount = 0;
   for (const candidate of candidates) {
-    const candidateRows = objectRows(candidate.result);
+    const allCandidateRows = objectRows(candidate.result);
+    const candidateRows =
+      expectedColumns.length > 0
+        ? allCandidateRows.filter((row) => rowHasAnyExpectedColumn(row, expectedColumns))
+        : allCandidateRows;
     if (candidateRows.length === 0) continue;
+    mergedCandidateCount++;
     rows.push(...candidateRows);
     if (candidate.sql) sqlParts.push(candidate.sql);
     if (candidate.resultRaw) rawParts.push(candidate.resultRaw);
   }
-  if (rows.length === 0 || candidates.length < 2) return null;
+  if (rows.length === 0 || mergedCandidateCount < 2) return null;
   return {
     toolName: 'merged_tool_candidates',
-    sql: sqlParts.join('\n\nUNION-CANDIDATE\n\n') || null,
+    synthetic: true,
+    sql: null,
+    assertionSql: sqlParts.join('\n\n') || null,
+    sqlParts,
     sqlArgs: null,
     result: { rows, totalRows: rows.length },
     resultRaw: rawParts,
@@ -1208,7 +1252,7 @@ function chooseBestCandidate(c, parsed, safetyContract = {}) {
     result: parsed.result,
     resultRaw: parsed.resultRaw,
   };
-  const mergedCandidate = mergedCandidateFromToolCandidates(parsed.toolCandidates);
+  const mergedCandidate = mergedCandidateFromToolCandidates(parsed.toolCandidates, c);
   const candidates = [
     baseCandidate,
     ...(Array.isArray(parsed.toolCandidates) ? parsed.toolCandidates : []),
@@ -1223,6 +1267,20 @@ function chooseBestCandidate(c, parsed, safetyContract = {}) {
   return best || evaluateCandidate(c, parsed, baseCandidate, safetyContract);
 }
 
+function jsonEqual(a, b) {
+  if (a === undefined || b === undefined) return a === b;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+function isTextOnlyResultCase(c = {}) {
+  const assertions = Array.isArray(c.result_assertions) ? c.result_assertions : [];
+  return assertions.length > 0 && assertions.every((a) => a?.value_type === 'text');
+}
+
 async function runSingleTurnCase(c, { safetyContract = {}, priorTurns = [] } = {}) {
   const question = composeQuestion(c, { priorTurns });
   const { parseErr, parsed, cliErr } = await executePrompt(question);
@@ -1234,17 +1292,26 @@ async function runSingleTurnCase(c, { safetyContract = {}, priorTurns = [] } = {
   failures.push(...(selected.failures || []));
   const ok = !cliErr && !parseErr && selected.ok;
   const selectedCandidate = selected.candidate || {};
+  const textOnlyResultCase = isTextOnlyResultCase(c);
+  const result = textOnlyResultCase ? undefined : selectedCandidate.result;
+  const resultRaw =
+    textOnlyResultCase || jsonEqual(selectedCandidate.resultRaw, selectedCandidate.result)
+      ? undefined
+      : selectedCandidate.resultRaw;
+  const actual = textOnlyResultCase ? undefined : selectedCandidate.result;
 
   return {
     id: c.id,
     pass: ok,
     failures,
     sql: selectedCandidate.sql,
+    syntheticSql: selectedCandidate.synthetic || undefined,
+    sqlParts: selectedCandidate.synthetic ? selectedCandidate.sqlParts : undefined,
     finalText: parsed.finalText,
     finalTextSnippet: parsed.finalText ? parsed.finalText.slice(0, 200) : '',
-    result: selectedCandidate.result,
-    resultRaw: selectedCandidate.resultRaw,
-    actual: selectedCandidate.result,
+    result,
+    resultRaw,
+    actual,
     expected: c.result_assertions || c.expected_result,
     requiredHits: selected.requiredHits,
     forbiddenHits: selected.forbiddenHits,
@@ -1278,6 +1345,13 @@ async function runMultiTurnCase(c, { safetyContract = {} } = {}) {
   for (const entry of turnEntries) {
     failures.push(...entry.failures.map((f) => `${entry.id}: ${f}`));
   }
+  const result = turnEntries
+    .map((e) => (e.result === undefined ? null : { id: e.id, result: e.result }))
+    .filter(Boolean);
+  const resultRaw = turnEntries
+    .map((e) => (e.resultRaw === undefined ? null : { id: e.id, resultRaw: e.resultRaw }))
+    .filter(Boolean);
+  const actual = turnEntries.map((e) => e.actual).filter((v) => v !== undefined);
   return {
     id: c.id,
     pass: turnEntries.every((e) => e.pass),
@@ -1285,9 +1359,9 @@ async function runMultiTurnCase(c, { safetyContract = {} } = {}) {
     sql: turnEntries.map((e) => e.sql).filter(Boolean).join('\n\n-- next turn --\n\n') || null,
     finalText: turnEntries.map((e) => e.finalText || '').join('\n\n'),
     finalTextSnippet: turnEntries.map((e) => e.finalTextSnippet || '').join('\n').slice(0, 200),
-    result: turnEntries.map((e) => ({ id: e.id, result: e.result })),
-    resultRaw: turnEntries.map((e) => ({ id: e.id, resultRaw: e.resultRaw })),
-    actual: turnEntries.map((e) => e.actual),
+    result: result.length > 0 ? result : undefined,
+    resultRaw: resultRaw.length > 0 ? resultRaw : undefined,
+    actual: actual.length > 0 ? actual : undefined,
     expected: (c.turns || []).map((t) => t.result_assertions || []),
     requiredHits: turnEntries.flatMap((e) => e.requiredHits || []),
     forbiddenHits: turnEntries.flatMap((e) => e.forbiddenHits || []),
@@ -1350,6 +1424,14 @@ function formatMarkdown(summary, { casesAbs } = {}) {
       lines.push('```sql');
       lines.push(String(e.sql).trim());
       lines.push('```');
+    } else if (Array.isArray(e.sqlParts) && e.sqlParts.length > 0) {
+      lines.push(`- sql: (synthetic candidate; ${e.sqlParts.length} captured SQL parts)`);
+      for (let i = 0; i < e.sqlParts.length; i++) {
+        lines.push(`  - sqlPart ${i + 1}:`);
+        lines.push('```sql');
+        lines.push(String(e.sqlParts[i]).trim());
+        lines.push('```');
+      }
     } else {
       lines.push('- sql: (none captured)');
     }
@@ -1398,6 +1480,8 @@ async function main() {
   process.stderr.write(
     `# wrote MCP config → ${EVAL_MCP_PATH} (url=${KTX_MCP_URL}, auth=${KTX_MCP_TOKEN ? 'bearer' : 'none'})\n`
   );
+  const mcp = await preflightKtxMcpEndpoint();
+  process.stderr.write(`# KTX MCP endpoint ok: HTTP ${mcp.status}\n`);
   const pre = await preflightClaude();
   process.stderr.write(`# preflight ok: ${pre.version}\n`);
 
@@ -1435,6 +1519,7 @@ async function main() {
 // Export internals for unit tests when invoked as a module
 export {
   parseArgs,
+  preflightKtxMcpEndpoint,
   buildEvalMcpConfig,
   parseClaudeOutput,
   checkSqlPatterns,

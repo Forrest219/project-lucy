@@ -887,7 +887,7 @@ cases:
 
   - id: kx-filter-001
     case_type: single_turn
-    question: 查询 KX 财务表时是否需要加 is_deleted=0？请说明原因，并给出正确过滤方式。
+    question: 查询 KX 财务表时是否需要加 is_deleted=0？请先读取 kx_fact_financial_amount、kx_dim_company、kx_dim_financial_item 的 source 定义，说明原因，并给出正确过滤方式。
     domain: kx_financial
     skill_version: v0.1
     semantic_version: v0.1
@@ -898,16 +898,28 @@ cases:
     sql_assertions: []
     tool_assertions:
       - type: required_tool
-        value: "mcp__ktx__sl_search | mcp__ktx__sl_read_source | mcp__ktx__sl_validate"
-        reason: filter 规则题应读取 KX source 定义。
+        value: mcp__ktx__sl_read_source
+        reason: filter 规则题必须读取 KX source 定义，不能只靠文字或失败的查询解释。
+      - type: forbidden_tool
+        value: mcp__ktx__sl_query
+        reason: is_deleted 是否存在属于 schema 定义判断，禁止用 sl_query 参数错误结果兜底。
       - type: required_tool_input_regex
-        value: "kx|is_deleted|财务"
-        reason: 检索应围绕 KX 财务过滤规则。
+        value: kx_fact_financial_amount
+        reason: 必须检查 KX 金额事实表列定义。
+      - type: required_tool_input_regex
+        value: kx_dim_company
+        reason: 必须检查 KX 公司维表列定义。
+      - type: required_tool_input_regex
+        value: kx_dim_financial_item
+        reason: 必须检查 KX 财报项目维表列定义。
     result_assertions:
       - value_type: text
         data:
           must_mention:
             - is_deleted
+            - kx_fact_financial_amount
+            - kx_dim_company
+            - kx_dim_financial_item
         compare_mode: subset
         check_schema: false
         check_row_count: false
