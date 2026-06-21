@@ -36,8 +36,9 @@ scripts/lint-spec.mjs
 - 根目录 `package.json` 增加 `npm run lint:spec`。
 - 首版脚本路径为 `scripts/lint-spec.mjs`。
 - 当前策略：FAIL 退出码为 1；脚本自身异常退出码为 2；WARN 只提示不阻断。
-- 当前允许保留的 warning：superstore eval `runner_schema_version: v1.3`、enabled legacy allow user `zhangsan`、disabled legacy wildcard user `lisi`。
+- 当前允许保留的 warning：disabled legacy wildcard user `lisi`。
 - 2026-06-21 复核后增强：`api-spec` 扫描范围已包含 `webui/server/proxy/*`；`route-status` 同时解析 `<Route path>` 和 nav `to:`；`access-role-policy` 对 enabled legacy allow user 输出 warning。
+- 2026-06-21 后续增强：`eval-schema-version` 已解析 `quiz_cases[].eval_refs` 与 `cases[].linked_quiz_questions`，并校验引用目标存在。
 
 退出码：
 
@@ -134,10 +135,13 @@ scripts/lint-spec.mjs
 - 读取 conventions 当前版本。
 - 读取 eval YAML 的 `metadata.runner_schema_version`。
 - 若版本低于 conventions 声明的当前 schema，warning 或 fail 由配置决定。
+- 解析 `quiz_cases[].eval_refs`，确保引用的 eval case id 存在。
+- 解析 `cases[].linked_quiz_questions`，确保引用的 quiz case id 存在。
+- 若声明 `metadata.paired_quiz` 但没有 `quiz_cases`，失败。
 
 首批规则：
 
-- `runner_schema_version: v1.3` 输出 warning。
+- `runner_schema_version` 低于当前 conventions 版本时输出 warning。
 - 缺失 `safety_contract` 输出 fail。
 - 缺失 `metadata.paired_quiz` 或等价配对信息输出 warning。
 
@@ -193,8 +197,8 @@ scripts/lint-spec.config.json
 - route-status：PASS。
 - api-spec：PASS，当前 40 个已注册 REST routes 已登记。
 - skill-dependency：PASS。
-- eval-schema-version：PASS + warning，superstore v1.3 仍提示 schema version older than v1.4；已补 `safety_contract`。
-- access-role-policy：PASS + warning，`zhangsan` 仍是 enabled legacy allow user，disabled legacy wildcard `lisi` 仍提示不得无 role 启用。
+- eval-schema-version：PASS，两个 eval 文件均为 v1.4；`safety_contract`、`paired_quiz` 和 quiz link 引用存在性校验通过。
+- access-role-policy：PASS + warning，disabled legacy wildcard `lisi` 仍提示不得无 role 启用。
 
 ## 6. 非目标
 

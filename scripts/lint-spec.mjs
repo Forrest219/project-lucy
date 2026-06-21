@@ -128,6 +128,47 @@ function parseVersion(value) {
   return match ? Number(match[1]) * 100 + Number(match[2]) : 0;
 }
 
+function listField(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function validateQuizLinks(check, file, doc) {
+  const cases = Array.isArray(doc.cases) ? doc.cases : [];
+  const quizCases = Array.isArray(doc.quiz_cases) ? doc.quiz_cases : [];
+  const caseIds = new Set(cases.map((item) => item?.id).filter((id) => typeof id === "string"));
+  const quizIds = new Set(quizCases.map((item) => item?.id).filter((id) => typeof id === "string"));
+
+  if (doc.metadata?.paired_quiz && quizCases.length === 0) {
+    add(check, "fail", `${file}: metadata.paired_quiz is set but quiz_cases is missing or empty`);
+  }
+
+  for (const quizCase of quizCases) {
+    const quizId = typeof quizCase?.id === "string" ? quizCase.id : "<missing quiz id>";
+    if (quizCase?.eval_refs !== undefined && !Array.isArray(quizCase.eval_refs)) {
+      add(check, "fail", `${file}: quiz ${quizId} eval_refs must be an array`);
+      continue;
+    }
+    for (const ref of listField(quizCase?.eval_refs)) {
+      if (typeof ref !== "string" || !caseIds.has(ref)) {
+        add(check, "fail", `${file}: quiz ${quizId} eval_refs references missing case ${ref}`);
+      }
+    }
+  }
+
+  for (const evalCase of cases) {
+    const caseId = typeof evalCase?.id === "string" ? evalCase.id : "<missing case id>";
+    if (evalCase?.linked_quiz_questions !== undefined && !Array.isArray(evalCase.linked_quiz_questions)) {
+      add(check, "fail", `${file}: case ${caseId} linked_quiz_questions must be an array`);
+      continue;
+    }
+    for (const ref of listField(evalCase?.linked_quiz_questions)) {
+      if (typeof ref !== "string" || !quizIds.has(ref)) {
+        add(check, "fail", `${file}: case ${caseId} linked_quiz_questions references missing quiz ${ref}`);
+      }
+    }
+  }
+}
+
 function evalSchemaVersion() {
   const check = "eval-schema-version";
   const conventions = read("docs/eval-quiz-conventions.md");
@@ -141,9 +182,10 @@ function evalSchemaVersion() {
     else if (parseVersion(version) < currentValue) add(check, "warn", `${file}: runner_schema_version ${version} is older than v${current}`);
     if (!doc.safety_contract) add(check, "fail", `${file}: safety_contract missing`);
     if (!doc.metadata?.paired_quiz) add(check, "warn", `${file}: metadata.paired_quiz missing`);
+    validateQuizLinks(check, file, doc);
   }
   if (!results.some((item) => item.check === check && item.level === "fail")) {
-    add(check, "pass", `${files.length} eval files are readable and have required safety_contract`);
+    add(check, "pass", `${files.length} eval files are readable with safety_contract and valid quiz links`);
   }
 }
 
