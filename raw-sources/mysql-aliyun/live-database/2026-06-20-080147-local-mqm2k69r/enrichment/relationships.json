@@ -100,90 +100,6 @@
   ],
   "review": [
     {
-      "id": "dataforai.superstore_orders:(dataforai.superstore_orders.region)->dataforai.superstore_people:(dataforai.superstore_people.region)",
-      "status": "review",
-      "source": "llm_proposal",
-      "from": {
-        "tableId": "dataforai.superstore_orders",
-        "columnIds": [
-          "dataforai.superstore_orders.region"
-        ],
-        "table": {
-          "catalog": null,
-          "db": "dataforai",
-          "name": "superstore_orders"
-        },
-        "columns": [
-          "region"
-        ]
-      },
-      "to": {
-        "tableId": "dataforai.superstore_people",
-        "columnIds": [
-          "dataforai.superstore_people.region"
-        ],
-        "table": {
-          "catalog": null,
-          "db": "dataforai",
-          "name": "superstore_people"
-        },
-        "columns": [
-          "region"
-        ]
-      },
-      "relationshipType": "many_to_one",
-      "confidence": 0.9,
-      "pkScore": 1,
-      "fkScore": 0.685,
-      "score": 0.54,
-      "evidence": {
-        "sourceColumnBase": "region",
-        "targetTableBase": "superstore_people",
-        "targetColumnBase": "region",
-        "targetKeyScore": 0.88,
-        "nameScore": 0.45,
-        "reasons": [
-          "llm_proposal",
-          "llm_pk_proposal"
-        ],
-        "llmConfidence": 0.9,
-        "llmRationale": "Identical column name and type (varchar); superstore_people.region is its declared PK (natural key for regional manager lookup). superstore_orders.region is nullable, meaning unassigned rows are allowed. Pending validation that all non-null region values in orders exist in superstore_people."
-      },
-      "validation": {
-        "targetUniqueness": 0,
-        "sourceCoverage": 0,
-        "violationCount": 0,
-        "violationRatio": 1,
-        "sourceNullRate": 0,
-        "targetNullRate": 0,
-        "childDistinct": 0,
-        "parentDistinct": 0,
-        "overlap": 0,
-        "checkedValues": 0,
-        "reasons": [
-          "profile_unavailable"
-        ]
-      },
-      "graph": {
-        "targetPkScore": 1,
-        "incomingCandidateCount": 0,
-        "conflictRank": 1,
-        "reasons": [
-          "validation_unavailable_review_only",
-          "target_pk_score_passed",
-          "fk_score_review"
-        ]
-      },
-      "reasons": [
-        "llm_proposal",
-        "llm_pk_proposal",
-        "profile_unavailable",
-        "validation_unavailable_review_only",
-        "target_pk_score_passed",
-        "fk_score_review"
-      ]
-    },
-    {
       "id": "dataforai.superstore_returns:(dataforai.superstore_returns.order_id)->dataforai.superstore_orders:(dataforai.superstore_orders.order_id)",
       "status": "review",
       "source": "exact_column_match",
@@ -230,8 +146,7 @@
           "foreign_key_suffix",
           "target_key_like",
           "inflection",
-          "exact_column_name",
-          "llm_proposal"
+          "exact_column_name"
         ],
         "signalVector": {
           "nameSimilarity": 0.9,
@@ -271,9 +186,7 @@
             "profileNullRate": 0.04,
             "structuralPrior": 0.02
           }
-        },
-        "llmConfidence": 0.88,
-        "llmRationale": "Identical column name and type (varchar, NOT NULL in returns). Business logic requires a return to reference an existing order. Note: order_id is NOT the declared PK of superstore_orders (row_id is), implying order_id repeats across line items; a unique/composite index on superstore_orders.order_id must be confirmed before enforcing a strict FK constraint."
+        }
       },
       "validation": {
         "targetUniqueness": 0,
@@ -305,7 +218,6 @@
         "target_key_like",
         "inflection",
         "exact_column_name",
-        "llm_proposal",
         "profile_unavailable",
         "validation_unavailable_review_only",
         "target_pk_score_low",
