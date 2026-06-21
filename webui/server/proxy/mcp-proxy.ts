@@ -53,9 +53,10 @@ function forwardToKtx(
     for (const [k, v] of Object.entries(incomingHeaders)) {
       if (v === undefined) continue;
       const lower = k.toLowerCase();
-      if (lower === "authorization" || lower === "host") continue;
+      if (!["content-type", "mcp-session-id", "mcp-protocol-version"].includes(lower)) continue;
       headers[k] = v;
     }
+    headers["accept"] = "application/json, text/event-stream";
     const internalToken = getInternalToken();
     if (internalToken) headers["authorization"] = `Bearer ${internalToken}`;
     if (body) headers["content-length"] = String(body.byteLength);

@@ -114,10 +114,11 @@ afterEach(async () => {
 
 describe("MCP proxy smoke", () => {
   it("forwards an allowed tool call to KTX upstream and writes an audit row", async () => {
-    const upstreamSeen: Array<{ authorization?: string; body: string }> = [];
+    const upstreamSeen: Array<{ authorization?: string; accept?: string; body: string }> = [];
     const upstream = createServer(async (req, res) => {
       upstreamSeen.push({
         authorization: req.headers.authorization,
+        accept: req.headers.accept,
         body: await readRequestBody(req)
       });
       res.writeHead(200, { "content-type": "application/json" });
@@ -164,6 +165,7 @@ describe("MCP proxy smoke", () => {
       });
       expect(upstreamSeen).toHaveLength(1);
       expect(upstreamSeen[0]?.authorization).toBe(`Bearer ${INTERNAL_TOKEN}`);
+      expect(upstreamSeen[0]?.accept).toBe("application/json, text/event-stream");
       expect(JSON.parse(upstreamSeen[0]?.body ?? "{}")).toMatchObject({
         method: "tools/call",
         params: { name: "sl_read_source" }
