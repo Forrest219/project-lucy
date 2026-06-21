@@ -129,6 +129,9 @@ export function AgentDetail() {
           <p className="pl-page-intro">编辑前先生成变更预览，确认后写入访问配置。</p>
         </div>
         <div className="flex gap-2">
+          <Link to={`/admin/config-audit?targetId=${encodeURIComponent(agent.id)}`} className="pl-btn pl-btn--secondary text-sm">
+            变更历史
+          </Link>
           <button
             type="button"
             className="pl-btn pl-btn--ghost text-sm"

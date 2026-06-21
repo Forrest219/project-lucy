@@ -10,6 +10,8 @@ import { AgentList } from "../pages/admin/AgentList";
 import { AgentDetail } from "../pages/admin/AgentDetail";
 import { NewToken } from "../pages/admin/NewToken";
 import { Audit } from "../pages/admin/Audit";
+import { ConfigAudit } from "../pages/admin/ConfigAudit";
+import { AuditSources } from "../pages/admin/AuditSources";
 import { CaseList } from "../pages/eval/CaseList";
 import { CaseEditor } from "../pages/eval/CaseEditor";
 import { RunList } from "../pages/eval/RunList";
@@ -84,6 +86,12 @@ export function breadcrumbItems(pathname: string): string[] {
     if (parts[1] === "audit") {
       return ["访问治理", "访问日志"];
     }
+    if (parts[1] === "config-audit") {
+      return ["访问治理", "配置变更日志"];
+    }
+    if (parts[1] === "audit-sources") {
+      return ["访问治理", "数据源热力视图"];
+    }
     return ["访问治理"];
   }
   return ["KTX WebUI"];
@@ -130,7 +138,9 @@ const navGroups: Array<{ title: string; items: NavItem[] }> = [
     title: "访问治理",
     items: [
       { label: "Agent 实例", to: "/admin/agents", active: (path) => path.startsWith("/admin/agents") },
-      { label: "访问日志", to: "/admin/audit", active: (path) => path === "/admin/audit" }
+      { label: "访问日志", to: "/admin/audit", active: (path) => path === "/admin/audit" },
+      { label: "数据源热力", to: "/admin/audit-sources", active: (path) => path === "/admin/audit-sources" },
+      { label: "配置变更", to: "/admin/config-audit", active: (path) => path === "/admin/config-audit" }
     ]
   }
 ];
@@ -253,6 +263,8 @@ export function AppFrame() {
             <Route path="/admin/agents/:userId" element={<AgentDetail />} />
             <Route path="/admin/agents/:userId/tokens/new" element={<NewToken />} />
             <Route path="/admin/audit" element={<Audit />} />
+            <Route path="/admin/audit-sources" element={<AuditSources />} />
+            <Route path="/admin/config-audit" element={<ConfigAudit />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />
             <Route path="/eval/cases/:domain/new" element={<CaseEditor />} />

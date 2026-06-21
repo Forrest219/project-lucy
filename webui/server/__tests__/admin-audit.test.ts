@@ -52,6 +52,9 @@ describe("GET /api/admin/audit", () => {
       userId: "workhorse",
       tokenLabel: "kx-readonly",
       tokenHashPrefix: "sha256:111122223333",
+      lucySessionId: "session-1",
+      lucyTurnId: "turn-1",
+      lucyPlatform: "telegram",
       client: "=hermes",
       tool: "sl_query",
       tables: ["dataforai.kx_fact_financial_amount"],
@@ -63,6 +66,14 @@ describe("GET /api/admin/audit", () => {
       },
       outcome: "ok",
       durationMs: 42,
+      queryHash: "a".repeat(64),
+      queryLength: 76,
+      queryOperation: "select",
+      queryPreview: "select * from dataforai.kx_fact_financial_amount where id = ?",
+      responseBytes: 512,
+      responseRowCount: 3,
+      responseColumnCount: 2,
+      responseTruncated: false,
       requestId: "business-1",
       roleIds: ["kx_readonly"],
       permissionSnapshotHash: "1".repeat(64),
@@ -105,9 +116,19 @@ describe("GET /api/admin/audit", () => {
       expect(business).toMatchObject({
         tokenLabel: "kx-readonly",
         tokenHashPrefix: "sha256:111122223333",
+        lucySessionId: "session-1",
+        lucyTurnId: "turn-1",
+        lucyPlatform: "telegram",
         roleIds: ["kx_readonly"],
         effectiveTablesCount: 7,
         decisionReason: "allowed",
+        queryHash: "a".repeat(64),
+        queryLength: 76,
+        queryOperation: "select",
+        responseBytes: 512,
+        responseRowCount: 3,
+        responseColumnCount: 2,
+        responseTruncated: false,
         argsSummary: {
           question: "=1+1",
           note: "password=[REDACTED]",
@@ -124,6 +145,9 @@ describe("GET /api/admin/audit", () => {
       const csv = csvRes.text;
       expect(csv).toContain("token_label");
       expect(csv).toContain("token_hash_prefix");
+      expect(csv).toContain("lucy_session_id");
+      expect(csv).toContain("query_hash");
+      expect(csv).toContain("response_bytes");
       expect(csv).toContain("permission_snapshot_hash");
       expect(csv).toContain("decision_reason");
       expect(csv).toContain("[REDACTED]");
@@ -133,6 +157,49 @@ describe("GET /api/admin/audit", () => {
       expect(csv).not.toContain("private123");
       expect(csv).not.toContain("hunter2");
       expect(csv).not.toContain("leaked");
+
+      const filtered = await request(app.server).get("/api/admin/audit?sessionId=session-1&limit=10").expect(200);
+      expect(filtered.body.data.total).toBe(1);
+      expect(filtered.body.data.entries[0].requestId).toBe("business-1");
+
+      const sources = await request(app.server).get("/api/admin/audit/sources").expect(200);
+      expect(sources.body.data.topTables).toContainEqual({
+        table: "dataforai.kx_fact_financial_amount",
+        calls: 1,
+        denied: 0
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("lists config changes with single-admin actor notice", async () => {
+    const { recordConfigChange } = await import("../admin/audit");
+    await recordConfigChange({
+      filePath: "webui/config/access.yaml",
+      changeType: "agent.patch",
+      targetId: "workhorse",
+      oldSummary: { role: "old" },
+      newSummary: { role: "kx_readonly" },
+      diff: "- role: old\n+ role: kx_readonly\n",
+      requestId: "config-1"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const res = await request(app.server).get("/api/admin/config-audit?targetId=workhorse").expect(200);
+      expect(res.body.data.actorMode).toBe("single_local_admin");
+      expect(res.body.data.actorNotice).toContain("不具备多人问责语义");
+      expect(res.body.data.total).toBe(1);
+      expect(res.body.data.entries[0]).toMatchObject({
+        actor: "local-admin",
+        filePath: "webui/config/access.yaml",
+        changeType: "agent.patch",
+        targetId: "workhorse",
+        requestId: "config-1"
+      });
     } finally {
       await app.close();
     }

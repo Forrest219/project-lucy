@@ -287,13 +287,24 @@ export type AuditLogEntry = {
   userId: string;
   tokenLabel?: string;
   tokenHashPrefix?: string;
+  lucySessionId?: string;
+  lucyTurnId?: string;
+  lucyPlatform?: string;
   client?: string;
   tool: string;
   tables?: string[];
   argsSummary?: Record<string, unknown>;
+  queryHash?: string;
+  queryLength?: number;
+  queryOperation?: string;
+  queryPreview?: string;
   outcome: "ok" | "error" | "denied";
   errorDetail?: string;
   durationMs: number;
+  responseBytes?: number;
+  responseRowCount?: number;
+  responseColumnCount?: number;
+  responseTruncated?: boolean;
   requestId: string | number;
   roleIds?: string[];
   permissionSnapshotHash?: string;
@@ -308,9 +319,40 @@ export type AuditQuery = {
   since?: string;
   until?: string;
   tableSearch?: string;
+  sessionId?: string;
+  turnId?: string;
+  platform?: string;
   includeProtocol?: boolean;
   limit?: number;
   offset?: number;
+};
+
+export type ConfigAuditEntry = {
+  id: number;
+  ts: string;
+  actor: string;
+  sessionId?: string;
+  filePath: string;
+  changeType: string;
+  targetId?: string;
+  oldSummary?: unknown;
+  newSummary?: unknown;
+  diff?: string;
+  requestId?: string;
+};
+
+export type ConfigAuditResponse = {
+  total: number;
+  actorMode: "single_local_admin";
+  actorNotice: string;
+  entries: ConfigAuditEntry[];
+};
+
+export type AuditSourcesResponse = {
+  connections: Array<{ connection: string; calls: number }>;
+  schemas: Array<{ schema: string; calls: number }>;
+  topTables: Array<{ table: string; calls: number; denied: number }>;
+  deniedTables: Array<{ table: string; calls: number; denied: number }>;
 };
 
 export type AuditResponse = {

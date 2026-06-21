@@ -9,14 +9,25 @@ export interface AccessLogEntry {
   userId: string;
   tokenLabel?: string;
   tokenHashPrefix?: string;
+  lucySessionId?: string;
+  lucyTurnId?: string;
+  lucyPlatform?: string;
   client?: string;
   tool: string;
   tables?: string[];
   argsSummary?: Record<string, unknown>;
+  queryHash?: string;
+  queryLength?: number;
+  queryOperation?: string;
+  queryPreview?: string;
   outcome: "ok" | "error" | "denied";
   errorDetail?: string;
   durationMs: number;
   requestId: string | number;
+  responseBytes?: number;
+  responseRowCount?: number;
+  responseColumnCount?: number;
+  responseTruncated?: boolean;
   roleIds?: string[];
   permissionSnapshotHash?: string;
   effectiveTablesCount?: number;
@@ -35,7 +46,18 @@ const ACCESS_LOG_COLUMNS = [
   ["effective_tables_count", "INTEGER"],
   ["decision_reason", "TEXT"],
   ["token_label", "TEXT"],
-  ["token_hash_prefix", "TEXT"]
+  ["token_hash_prefix", "TEXT"],
+  ["lucy_session_id", "TEXT"],
+  ["lucy_turn_id", "TEXT"],
+  ["lucy_platform", "TEXT"],
+  ["query_hash", "TEXT"],
+  ["query_length", "INTEGER"],
+  ["query_operation", "TEXT"],
+  ["query_preview", "TEXT"],
+  ["response_bytes", "INTEGER"],
+  ["response_row_count", "INTEGER"],
+  ["response_column_count", "INTEGER"],
+  ["response_truncated", "INTEGER"]
 ] as const;
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
@@ -59,13 +81,24 @@ async function getDb(): Promise<Database.Database> {
       user_id      TEXT    NOT NULL,
       token_label  TEXT,
       token_hash_prefix TEXT,
+      lucy_session_id TEXT,
+      lucy_turn_id TEXT,
+      lucy_platform TEXT,
       client       TEXT,
       tool         TEXT    NOT NULL,
       tables       TEXT,
       args_summary TEXT,
+      query_hash   TEXT,
+      query_length INTEGER,
+      query_operation TEXT,
+      query_preview TEXT,
       outcome      TEXT    NOT NULL,
       error_detail TEXT,
       duration_ms  INTEGER NOT NULL,
+      response_bytes INTEGER,
+      response_row_count INTEGER,
+      response_column_count INTEGER,
+      response_truncated INTEGER,
       request_id   TEXT    NOT NULL,
       role_ids     TEXT,
       permission_snapshot_hash TEXT,
@@ -74,7 +107,6 @@ async function getDb(): Promise<Database.Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_al_user_ts ON access_log(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_tool_ts ON access_log(tool, ts);
-    CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE TABLE IF NOT EXISTS revoked_tokens (
       token_hash TEXT PRIMARY KEY,
       revoked_at TEXT NOT NULL,
@@ -90,6 +122,10 @@ async function getDb(): Promise<Database.Database> {
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
   }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
+  `);
   return db;
 }
 
@@ -131,9 +167,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<void> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, client, tool, tables, args_summary, outcome, error_detail, duration_ms, request_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @client, @tool, @tables, @argsSummary, @outcome, @errorDetail, @durationMs, @requestId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
     `);
   }
   insertStmt.run({
@@ -141,13 +177,24 @@ export async function writeLog(entry: AccessLogEntry): Promise<void> {
     userId: entry.userId,
     tokenLabel: entry.tokenLabel ?? null,
     tokenHashPrefix: entry.tokenHashPrefix ?? null,
+    lucySessionId: entry.lucySessionId ?? null,
+    lucyTurnId: entry.lucyTurnId ?? null,
+    lucyPlatform: entry.lucyPlatform ?? null,
     client: entry.client ?? null,
     tool: entry.tool,
     tables: entry.tables ? JSON.stringify(entry.tables) : null,
     argsSummary: entry.argsSummary ? JSON.stringify(entry.argsSummary) : null,
+    queryHash: entry.queryHash ?? null,
+    queryLength: entry.queryLength ?? null,
+    queryOperation: entry.queryOperation ?? null,
+    queryPreview: entry.queryPreview ?? null,
     outcome: entry.outcome,
     errorDetail: entry.errorDetail ? truncateErrorDetail(entry.errorDetail) : null,
     durationMs: entry.durationMs,
+    responseBytes: entry.responseBytes ?? null,
+    responseRowCount: entry.responseRowCount ?? null,
+    responseColumnCount: entry.responseColumnCount ?? null,
+    responseTruncated: entry.responseTruncated === undefined ? null : (entry.responseTruncated ? 1 : 0),
     requestId: String(entry.requestId),
     roleIds: entry.roleIds ? JSON.stringify(entry.roleIds) : null,
     permissionSnapshotHash: entry.permissionSnapshotHash ?? entry.permissionSnapshot?.hash ?? null,

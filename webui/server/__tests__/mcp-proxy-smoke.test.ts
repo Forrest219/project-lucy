@@ -260,6 +260,84 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("records query intent, response size, and correlation headers", async () => {
+    const upstream = createServer(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: "query-audit",
+        result: {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              headers: ["customer_name", "total_sales"],
+              rows: [["Alice", "120.00"], ["Bob", "80.00"]],
+              totalRows: 2,
+              truncated: true
+            })
+          }]
+        }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const rawQuery = "select customer_name, sum(sales) from dataforai.superstore_orders where password='secret' and sales > 100 group by customer_name";
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`,
+          "x-lucy-session-id": "tg-session-1",
+          "x-lucy-turn-id": "turn-42",
+          "x-lucy-platform": "telegram"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "query-audit",
+          method: "tools/call",
+          params: {
+            name: "sl_read_source",
+            arguments: {
+              sourceName: "superstore_orders",
+              query: rawQuery
+            }
+          }
+        })
+      });
+
+      expect(res.status).toBe(200);
+      await res.text();
+      const audit = await waitForAuditRow("query-audit");
+      expect(audit.lucy_session_id).toBe("tg-session-1");
+      expect(audit.lucy_turn_id).toBe("turn-42");
+      expect(audit.lucy_platform).toBe("telegram");
+      expect(audit.query_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(audit.query_length).toBe(rawQuery.length);
+      expect(audit.query_operation).toBe("select");
+      expect(String(audit.query_preview)).toContain("dataforai.superstore_orders");
+      expect(String(audit.query_preview)).not.toContain("secret");
+      expect(String(audit.query_preview)).not.toContain("100");
+      expect(audit.response_bytes).toBeGreaterThan(0);
+      expect(audit.response_row_count).toBe(2);
+      expect(audit.response_column_count).toBe(2);
+      expect(audit.response_truncated).toBe(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("fails closed when tools/list cannot be parsed or filtered", async () => {
     const upstream = createServer(async (req, res) => {
       await readRequestBody(req);

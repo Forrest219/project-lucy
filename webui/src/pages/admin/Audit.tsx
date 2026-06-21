@@ -111,6 +111,38 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
                   <span className="ml-2 text-fg-muted">{entry.client}</span>
                 </div>
               )}
+              {(entry.lucySessionId || entry.lucyTurnId || entry.lucyPlatform) && (
+                <div>
+                  <span className="font-medium">关联会话：</span>
+                  <span className="ml-2 text-fg-muted">
+                    {entry.lucyPlatform ? `${entry.lucyPlatform} · ` : ""}
+                    {entry.lucySessionId ? <span className="font-mono">{entry.lucySessionId}</span> : "—"}
+                    {entry.lucyTurnId ? <span className="font-mono"> / {entry.lucyTurnId}</span> : ""}
+                  </span>
+                </div>
+              )}
+              {(entry.queryHash || entry.queryPreview) && (
+                <div>
+                  <span className="font-medium">Query 审计：</span>
+                  <span className="ml-2 text-fg-muted">
+                    {entry.queryOperation ?? "unknown"}
+                    {entry.queryLength !== undefined ? ` · ${entry.queryLength} chars` : ""}
+                    {entry.queryHash ? <span className="font-mono"> · {entry.queryHash.slice(0, 16)}…</span> : ""}
+                  </span>
+                  {entry.queryPreview ? <code className="ml-2">{entry.queryPreview}</code> : null}
+                </div>
+              )}
+              {(entry.responseBytes !== undefined || entry.responseRowCount !== undefined || entry.responseColumnCount !== undefined) && (
+                <div>
+                  <span className="font-medium">返回规模：</span>
+                  <span className="ml-2 text-fg-muted">
+                    {entry.responseBytes !== undefined ? `${entry.responseBytes} bytes` : "—"}
+                    {entry.responseRowCount !== undefined ? ` · ${entry.responseRowCount} rows` : ""}
+                    {entry.responseColumnCount !== undefined ? ` · ${entry.responseColumnCount} cols` : ""}
+                    {entry.responseTruncated ? " · truncated" : ""}
+                  </span>
+                </div>
+              )}
             </div>
           </td>
         </tr>
@@ -127,6 +159,9 @@ export function Audit() {
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
+  const sessionId = searchParams.get("sessionId") ?? "";
+  const turnId = searchParams.get("turnId") ?? "";
+  const platform = searchParams.get("platform") ?? "";
   const includeProtocol = searchParams.get("includeProtocol") === "true";
 
   // Default: last 24h
@@ -151,6 +186,9 @@ export function Audit() {
     since: since || undefined,
     until: until || undefined,
     tableSearch: tableSearch || undefined,
+    sessionId: sessionId || undefined,
+    turnId: turnId || undefined,
+    platform: platform || undefined,
     includeProtocol,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
@@ -165,7 +203,7 @@ export function Audit() {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const exportUrl = `/api/admin/audit/export${buildQuery({ user: user || undefined, tool: tool || undefined, outcome: outcome || undefined, since: since || undefined, until: until || undefined, tableSearch: tableSearch || undefined, includeProtocol })}`;
+  const exportUrl = `/api/admin/audit/export${buildQuery({ user: user || undefined, tool: tool || undefined, outcome: outcome || undefined, since: since || undefined, until: until || undefined, tableSearch: tableSearch || undefined, sessionId: sessionId || undefined, turnId: turnId || undefined, platform: platform || undefined, includeProtocol })}`;
 
   return (
     <div className="pl-page-stack">
@@ -219,6 +257,24 @@ export function Audit() {
           placeholder="搜索表名"
           value={tableSearch}
           onChange={(e) => updateParam("tableSearch", e.target.value)}
+        />
+        <input
+          className="pl-input w-40"
+          placeholder="Session ID"
+          value={sessionId}
+          onChange={(e) => updateParam("sessionId", e.target.value)}
+        />
+        <input
+          className="pl-input w-36"
+          placeholder="Turn ID"
+          value={turnId}
+          onChange={(e) => updateParam("turnId", e.target.value)}
+        />
+        <input
+          className="pl-input w-32"
+          placeholder="平台"
+          value={platform}
+          onChange={(e) => updateParam("platform", e.target.value)}
         />
         <label className="flex items-center gap-2 text-sm text-fg-muted">
           <input
