@@ -29,7 +29,7 @@ llm:
   provider:
     backend: anthropic
     anthropic:
-      api_key: env:MINIMAX_API_KEY
+      api_key: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/minimax-api-key
       base_url: https://api.minimaxi.com/anthropic/v1
   models:
     default: MiniMax-M3

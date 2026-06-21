@@ -28,7 +28,7 @@ llm:
   provider:
     backend: anthropic
     anthropic:
-      api_key: env:MINIMAX_API_KEY
+      api_key: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/minimax-api-key
       base_url: https://api.minimaxi.com/anthropic/v1
   models:
     default: MiniMax-M3
@@ -44,7 +44,8 @@ llm:
 
 关键点：
 
-- `MINIMAX_API_KEY` 只从环境变量读取，禁止写入代码库、`docs/`、`inbox/` 或 `ktx.yaml`。
+- MiniMax API key 存放在本机 `.ktx/secrets/minimax-api-key`，`ktx.yaml` 只保存 `file:` 引用。
+- `.ktx/secrets/` 已由 `.ktx/.gitignore` 忽略，禁止把 key 写入代码库、`docs/`、`inbox/` 或提交历史。
 - `base_url` 必须是 `https://api.minimaxi.com/anthropic/v1`。KTX 使用 Anthropic SDK/AI SDK provider
   时会在 base URL 后追加 `messages` 路径；不带 `/v1` 会导致 `404 Page not found`。
 - 6 个 KTX 内部 role 当前统一使用 `MiniMax-M3`。
@@ -84,10 +85,11 @@ ktx status --fast --json
 - KTX 能读取到 `backend: anthropic`。
 - KTX 能读取到 `model: MiniMax-M3`。
 
-带临时 `MINIMAX_API_KEY` 的验证结果：
+带本机 secret 文件的验证结果：
 
 - `ktx status` 显示 `Ready`。
 - KTX LLM health check 使用 `https://api.minimaxi.com/anthropic/v1` 返回 `{"ok":true}`。
+- 从实际 `ktx.yaml` 解析出的 KTX LLM config 显示 `backend: anthropic`、`model: MiniMax-M3`、`ok: true`。
 - `ktx wiki "test query"` 返回本地 wiki 检索结果。
 
 未完成 / 待继续验证：
@@ -97,15 +99,19 @@ ktx status --fast --json
 
 ## 5. 操作方法
 
-运行 KTX 前，在同一个 shell 中注入环境变量：
+本机运行 KTX 不需要再手工 export key；KTX 会通过 `file:` 引用读取：
+
+```yaml
+api_key: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/minimax-api-key
+```
+
+验证：
 
 ```bash
-export MINIMAX_API_KEY='...'
 ktx status
 ```
 
-不要把 key 写入仓库文件。如果需要长期使用，优先放在本机 shell secret 管理位置，并确保不会被 git
-跟踪或被日志输出。
+不要把 key 写入仓库文件或日志。如果迁移到新机器，需要在新机器上重新创建 `.ktx/secrets/minimax-api-key`。
 
 ## 6. 回滚
 
@@ -138,7 +144,7 @@ llm:
   provider:
     backend: anthropic
     anthropic:
-      api_key: env:MINIMAX_API_KEY
+      api_key: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/minimax-api-key
       base_url: https://api.minimaxi.com/anthropic/v1
   models:
     default: MiniMax-M2.7-highspeed
