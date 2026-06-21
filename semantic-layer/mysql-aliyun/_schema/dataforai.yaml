@@ -8,33 +8,27 @@ tables:
         nullable: false
         descriptions:
           db: 公司ID
-          ai: Unique surrogate key identifying each company record.
       - name: company_name
         type: string
         nullable: false
         descriptions:
           db: 公司名称
-          ai: Official registered legal name of the company.
       - name: unified_social_credit_code
         type: string
         descriptions:
           db: 统一社会信用代码
-          ai: China's 18-character national business registration and tax identifier.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 创建时间
-          ai: Timestamp when the company record was first inserted.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
-          ai: Timestamp of the most recent modification to the record.
     descriptions:
       db: KX公司维度表
-      ai: Dimension table storing company master data, including Chinese national business registration identity codes.
     joins:
       - to: kx_fact_financial_amount
         "on": kx_dim_company.company_id = kx_fact_financial_amount.company_id
@@ -49,56 +43,46 @@ tables:
         nullable: false
         descriptions:
           db: 财报项目ID
-          ai: Unique surrogate key identifying each financial statement line item.
       - name: statement_type
         type: string
         nullable: false
         descriptions:
           db: 报表类型：balance_sheet=资产负债表，income_statement=利润表，cash_flow=现金流量表
-          ai: "Which financial statement the item belongs to: balance sheet, income statement, or cash flow."
       - name: item_side
         type: string
         nullable: false
         descriptions:
           db: 项目归属：asset=资产，liability_equity=负债及所有者权益，income=利润表项目，cash_flow=现金流量项目
-          ai: "Section classification: asset, liability/equity, income, or cash flow grouping."
       - name: item_name
         type: string
         nullable: false
         descriptions:
           db: 财报项目名称
-          ai: Chinese display label of the financial statement line item.
       - name: row_no
         type: number
         descriptions:
           db: 原报表行次
-          ai: Official row number assigned to this item in the source regulatory statement template.
       - name: display_order
         type: number
         descriptions:
           db: 展示顺序，按原始报表行顺序排序
-          ai: Sort sequence for rendering items in their original statement order.
       - name: is_total
         type: number
         nullable: false
         descriptions:
           db: 是否为合计或小计项目
-          ai: Flags whether this item represents a subtotal or grand total row.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 创建时间
-          ai: Timestamp when the record was first inserted.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
-          ai: Timestamp when the record was last modified.
     descriptions:
       db: KX财报项目维度表
-      ai: Dimension table cataloguing financial statement line items across balance sheet, income statement, and cash flow statement.
     joins:
       - to: kx_fact_financial_amount
         "on": kx_dim_financial_item.item_id = kx_fact_financial_amount.item_id
@@ -113,102 +97,84 @@ tables:
         nullable: false
         descriptions:
           db: 金额记录ID
-          ai: Unique surrogate key identifying each financial amount record.
       - name: company_id
         type: number
         nullable: false
         descriptions:
           db: 公司ID，关联kx_dim_company.company_id
-          ai: Foreign key referencing the company in kx_dim_company.
       - name: item_id
         type: number
         nullable: false
         descriptions:
           db: 财报项目ID，关联kx_dim_financial_item.item_id
-          ai: Foreign key referencing the financial line item in kx_dim_financial_item.
       - name: report_period
         type: string
         nullable: false
         descriptions:
           db: 报表期间，格式YYYYMM，例如202605
-          ai: Reporting period in YYYYMM format, e.g., 202605.
       - name: report_date
         type: time
         nullable: false
         descriptions:
           db: 报表日期，例如2026-05-31
-          ai: Last calendar date of the reporting period, e.g., 2026-05-31.
       - name: fiscal_year
         type: number
         nullable: false
         descriptions:
           db: 会计年度
-          ai: Accounting year to which this amount belongs.
       - name: fiscal_month
         type: number
         nullable: false
         descriptions:
           db: 会计月份
-          ai: Accounting month number within the fiscal year.
       - name: statement_type
         type: string
         nullable: false
         descriptions:
           db: 报表类型：balance_sheet=资产负债表，income_statement=利润表，cash_flow=现金流量表
-          ai: "Financial statement category: balance sheet, income statement, or cash flow."
       - name: amount_type
         type: string
         nullable: false
         descriptions:
           db: 金额类型：begin_balance=年初余额，end_balance=期末余额，current_month=本月金额，year_to_date=本年累计，quarter=季度金额
-          ai: "Balance or period classification: opening, closing, monthly, YTD, or quarterly."
       - name: quarter_no
         type: number
         nullable: false
         descriptions:
           db: 季度编号，非季度数据为0，第一季度为1
-          ai: Quarter number (1–4); 0 for non-quarterly records.
       - name: amount
         type: number
         descriptions:
           db: 金额，单位元；原始报表为空时为NULL
-          ai: Monetary value in the stated currency unit; NULL if source cell was blank.
       - name: currency
         type: string
         nullable: false
         descriptions:
           db: 币种
-          ai: ISO currency code of the reported amount, e.g., CNY.
       - name: source_file_name
         type: string
         descriptions:
           db: 来源Excel文件名，仅用于追溯
-          ai: Original Excel filename retained for data lineage traceability only.
       - name: source_sheet_name
         type: string
         descriptions:
           db: 来源工作表名称，仅用于追溯
-          ai: Source Excel worksheet name for traceability; not for analytics.
       - name: source_cell
         type: string
         descriptions:
           db: 来源单元格位置，仅用于追溯
-          ai: Exact Excel cell reference for traceability; not for analytics.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 创建时间
-          ai: Timestamp when this record was first inserted.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
-          ai: Timestamp of the most recent update to this record.
     descriptions:
       db: KX财报金额事实表
-      ai: Fact table storing financial statement amounts by company, period, and line item, sourced from Excel reports.
     joins:
       - to: kx_dim_company
         "on": kx_fact_financial_amount.company_id = kx_dim_company.company_id
@@ -226,46 +192,35 @@ tables:
         nullable: false
         descriptions:
           db: 公司名称
-          ai: Legal name of the company that filed the cash flow statement.
       - name: 报表期间
         type: string
         nullable: false
         descriptions:
           db: 报表期间，格式YYYYMM，例如202605
-          ai: Reporting period in YYYYMM format, e.g., 202605 for May 2026.
       - name: 报表日期
         type: time
         nullable: false
         descriptions:
           db: 报表日期，例如2026-05-31
-          ai: Last calendar date of the reporting period, e.g., 2026-05-31.
       - name: 展示顺序
         type: number
         descriptions:
           db: 展示顺序，按原始报表行顺序排序
-          ai: Sequential display order preserving the original financial report layout.
       - name: 行次
         type: number
         descriptions:
           db: 原报表行次
-          ai: Original row number as printed in the source financial statement.
       - name: 项目名称
         type: string
         nullable: false
         descriptions:
           db: 财报项目名称
-          ai: Cash flow line item label, e.g., receipts from sales or wage payments.
       - name: 本年累计金额
         type: number
-        descriptions:
-          ai: Year-to-date cumulative monetary amount for this cash flow line item.
       - name: 本月金额
         type: number
-        descriptions:
-          ai: Monetary amount for this cash flow line item in the current month.
     descriptions:
       db: VIEW
-      ai: Detailed line-item view of cash flow statements by company and period, covering operating, investing, and financing activities.
   kx_vw_balance_sheet_detail:
     table: dataforai.kx_vw_balance_sheet_detail
     columns:
@@ -274,52 +229,40 @@ tables:
         nullable: false
         descriptions:
           db: 公司名称
-          ai: Legal name of the reporting company.
       - name: 报表期间
         type: string
         nullable: false
         descriptions:
           db: 报表期间，格式YYYYMM，例如202605
-          ai: Reporting period in YYYYMM format, e.g., 202605.
       - name: 报表日期
         type: time
         nullable: false
         descriptions:
           db: 报表日期，例如2026-05-31
-          ai: Last calendar day of the reporting period.
       - name: 项目归属
         type: string
         nullable: false
         descriptions:
           db: 项目归属：asset=资产，liability_equity=负债及所有者权益，income=利润表项目，cash_flow=现金流量项目
-          ai: Classifies the line item as asset, liability/equity, income statement, or cash flow.
       - name: 展示顺序
         type: number
         descriptions:
           db: 展示顺序，按原始报表行顺序排序
-          ai: Sequential display order following the original printed report layout.
       - name: 行次
         type: number
         descriptions:
           db: 原报表行次
-          ai: Official row number as printed in the source financial statement.
       - name: 项目名称
         type: string
         nullable: false
         descriptions:
           db: 财报项目名称
-          ai: Financial statement line item label, including section header rows.
       - name: 期末余额
         type: number
-        descriptions:
-          ai: Monetary balance at the end of the reporting period.
       - name: 年初余额
         type: number
-        descriptions:
-          ai: Monetary balance at the start of the current fiscal year.
     descriptions:
       db: VIEW
-      ai: Balance sheet detail view listing financial statement line items with period-end and year-start balances per company and reporting period.
   kx_vw_income_statement_detail:
     table: dataforai.kx_vw_income_statement_detail
     columns:
@@ -328,46 +271,35 @@ tables:
         nullable: false
         descriptions:
           db: 公司名称
-          ai: Legal name of the company reporting the financial statement.
       - name: 报表期间
         type: string
         nullable: false
         descriptions:
           db: 报表期间，格式YYYYMM，例如202605
-          ai: Reporting period in YYYYMM format identifying the financial month.
       - name: 报表日期
         type: time
         nullable: false
         descriptions:
           db: 报表日期，例如2026-05-31
-          ai: Month-end calendar date corresponding to the reporting period.
       - name: 展示顺序
         type: number
         descriptions:
           db: 展示顺序，按原始报表行顺序排序
-          ai: Display sequence number preserving the original report's row order.
       - name: 行次
         type: number
         descriptions:
           db: 原报表行次
-          ai: Original row number as printed in the source financial report.
       - name: 项目名称
         type: string
         nullable: false
         descriptions:
           db: 财报项目名称
-          ai: Income statement line item name as labeled in the original report.
       - name: 本年累计金额
         type: number
-        descriptions:
-          ai: Year-to-date cumulative monetary amount for the line item.
       - name: 本月金额
         type: number
-        descriptions:
-          ai: Current month monetary amount for the income statement line item.
     descriptions:
       db: VIEW
-      ai: Detailed income statement view showing line-item financial figures per company and reporting period, sourced from original Chinese financial reports.
   superstore_orders:
     table: dataforai.superstore_orders
     columns:
@@ -377,169 +309,138 @@ tables:
         nullable: false
         descriptions:
           db: 行 ID
-          ai: Surrogate integer key uniquely identifying each order line item row.
       - name: order_id
         type: string
         nullable: false
         descriptions:
           db: 订单 ID
-          ai: Business key grouping multiple line items belonging to one order.
       - name: order_date
         type: time
         nullable: false
         descriptions:
           db: 订单日期
-          ai: Date the customer placed the order.
       - name: ship_date
         type: time
         nullable: false
         descriptions:
           db: 发货日期
-          ai: Date the order was dispatched for delivery.
       - name: ship_mode
         type: string
         descriptions:
           db: 装运模式
-          ai: Delivery speed tier chosen for the shipment, e.g., standard class.
       - name: customer_id
         type: string
         descriptions:
           db: 客户 ID
-          ai: Unique business identifier for the purchasing customer.
       - name: customer_name
         type: string
         descriptions:
           db: 客户名称
-          ai: Full name of the purchasing customer.
       - name: segment
         type: string
         descriptions:
           db: 细分
-          ai: Market segment of the customer, e.g., consumer or small business.
       - name: city
         type: string
         descriptions:
           db: 城市
-          ai: City of the delivery destination.
       - name: province
         type: string
         descriptions:
           db: 省/自治区
-          ai: Province or autonomous region of the delivery address.
       - name: country_region
         type: string
         descriptions:
           db: 国家/地区
-          ai: Country or territory of the delivery destination.
       - name: region
         type: string
         descriptions:
           db: 区域
-          ai: Broad geographic sales region grouping multiple provinces.
       - name: product_id
         type: string
         descriptions:
           db: 产品 ID
-          ai: Unique identifier for the ordered product SKU.
       - name: category
         type: string
         descriptions:
           db: 类别
-          ai: Top-level product classification, e.g., office supplies or furniture.
       - name: sub_category
         type: string
         descriptions:
           db: 子类别
-          ai: Second-level product classification within the parent category.
       - name: product_name
         type: string
         descriptions:
           db: 产品名称
-          ai: Full descriptive name of the ordered product.
       - name: sales
         type: number
         descriptions:
           db: 销售额
-          ai: Total revenue for the line item after discount is applied.
       - name: quantity
         type: number
         descriptions:
           db: 数量
-          ai: Number of product units ordered in this line item.
       - name: discount
         type: number
         descriptions:
           human: 折扣（0-1），聚合口径见 measures.discount_rate。
           db: 折扣
-          ai: Fractional discount rate applied to the line item price.
       - name: profit
         type: number
         descriptions:
           human: 行级净利润，可为负值（亏损行），口径见 measures.profit_margin。
           db: 利润
-          ai: Net profit earned on the line item after deducting costs.
       - name: postal_code
         type: string
         descriptions:
           db: 邮政编码
-          ai: Postal code of the delivery address; may be empty.
       - name: source_system
         type: string
         nullable: false
         descriptions:
           db: 来源系统
-          ai: Name of the originating system that provided this data.
       - name: source_file
         type: string
         nullable: false
         descriptions:
           db: 来源文件
-          ai: File path of the source document from which data was loaded.
       - name: source_sheet
         type: string
         nullable: false
         descriptions:
           db: 来源工作表
-          ai: Worksheet name within the source file containing this data.
       - name: source_row_number
         type: number
         nullable: false
         descriptions:
           db: 来源文件行号
-          ai: Row number in the source file for lineage traceability.
       - name: batch_id
         type: string
         nullable: false
         descriptions:
           db: 导入批次 ID
-          ai: Identifier for the ETL import batch that loaded this record.
       - name: row_hash
         type: string
         nullable: false
         descriptions:
           db: 业务字段 SHA-256 哈希
-          ai: SHA-256 hash of business fields used for change detection and deduplication.
       - name: is_deleted
         type: number
         nullable: false
         descriptions:
           db: 逻辑删除标记
-          ai: Soft-delete flag; 1 indicates logically deleted, 0 indicates active.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 入库时间
-          ai: Timestamp when the record was first inserted into the database.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
-          ai: Timestamp of the most recent update to this record.
     descriptions:
       db: Tableau 示例超市订单 ODS 明细表
-      ai: Chinese superstore order line items tracking sales transactions with customer, product, geography, financial details, and ETL metadata.
   superstore_people:
     table: dataforai.superstore_people
     columns:
@@ -549,70 +450,58 @@ tables:
         nullable: false
         descriptions:
           db: 区域
-          ai: Geographic sales region name, such as Northeast or Central South.
       - name: regional_manager
         type: string
         nullable: false
         descriptions:
           db: 区域经理
-          ai: Full name of the manager responsible for overseeing this region.
       - name: source_system
         type: string
         nullable: false
         descriptions:
           db: 来源系统
-          ai: Identifier of the upstream system that provided the data.
       - name: source_file
         type: string
         nullable: false
         descriptions:
           db: 来源文件
-          ai: File path of the original Excel workbook containing the data.
       - name: source_sheet
         type: string
         nullable: false
         descriptions:
           db: 来源工作表
-          ai: Worksheet name within the source file where data was extracted.
       - name: source_row_number
         type: number
         nullable: false
         descriptions:
           db: 来源文件行号
-          ai: Row position in the source file this record originated from.
       - name: batch_id
         type: string
         nullable: false
         descriptions:
           db: 导入批次 ID
-          ai: Identifier grouping all records loaded together in one import run.
       - name: row_hash
         type: string
         nullable: false
         descriptions:
           db: 业务字段 SHA-256 哈希
-          ai: SHA-256 hash of business fields used to detect row changes.
       - name: is_deleted
         type: number
         nullable: false
         descriptions:
           db: 逻辑删除标记
-          ai: Soft-delete flag; 1 means the record is logically removed.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 入库时间
-          ai: Timestamp when the record was first inserted into the database.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
-          ai: Timestamp of the most recent modification to this record.
     descriptions:
       db: Tableau 示例超市区域人员 ODS 表
-      ai: Maps each sales region to its assigned regional manager, sourced from the Tableau Superstore sample dataset.
   superstore_returns:
     table: dataforai.superstore_returns
     columns:
@@ -622,73 +511,60 @@ tables:
         nullable: false
         descriptions:
           db: 退货记录代理主键
-          ai: Surrogate primary key; auto-incrementing unique identifier for each return record.
       - name: order_id
         type: string
         nullable: false
         descriptions:
           db: 订单 ID
-          ai: References the associated sales order that was returned.
       - name: returned
         type: string
         nullable: false
         descriptions:
           db: 退回
-          ai: Flag indicating whether the order was returned; '是' means yes.
       - name: source_system
         type: string
         nullable: false
         descriptions:
           db: 来源系统
-          ai: Name of the upstream system that originated this data.
       - name: source_file
         type: string
         nullable: false
         descriptions:
           db: 来源文件
-          ai: File path of the source spreadsheet from which data was extracted.
       - name: source_sheet
         type: string
         nullable: false
         descriptions:
           db: 来源工作表
-          ai: Worksheet tab name within the source file where data resides.
       - name: source_row_number
         type: number
         nullable: false
         descriptions:
           db: 来源文件行号
-          ai: Row number in the source file for record-level traceability.
       - name: batch_id
         type: string
         nullable: false
         descriptions:
           db: 导入批次 ID
-          ai: Identifier for the ETL import batch that loaded this record.
       - name: row_hash
         type: string
         nullable: false
         descriptions:
           db: 业务字段 SHA-256 哈希
-          ai: SHA-256 hash of business fields used to detect duplicate or changed rows.
       - name: is_deleted
         type: number
         nullable: false
         descriptions:
           db: 逻辑删除标记
-          ai: Soft-delete flag; 1 means logically deleted, 0 means active.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 入库时间
-          ai: Timestamp when the record was first inserted into the database.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 更新时间
-          ai: Timestamp of the most recent update to this record.
     descriptions:
       db: Tableau 示例超市退货 ODS 表
-      ai: Records order return status from the Tableau Superstore sample dataset, including ETL lineage and soft-delete audit metadata.
