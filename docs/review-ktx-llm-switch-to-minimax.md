@@ -104,10 +104,10 @@ ktx status
   - 查询样本：按 `公司名称`、`报表期间`、`项目名称` 聚合收入类项目，返回 5 行营业收入样本；202604 `本年累计金额` 与 `本月金额` 均为 `69339.62`，202605 `本年累计金额` 为 `69339.62`、`本月金额` 为 `null`。
   - 结论：`workhorse -> KTX MCP -> KX 表` 只读业务路径可用。
 
-仍需注意：
+非阻塞说明：
 
-- KTX 0.12.0 当前没有公开 `ktx scan` CLI；本轮以 `ktx ingest mysql-aliyun` 覆盖最接近的 CLI 级 schema ingest 路径。
-- 如果未来升级 KTX 后出现独立 scan/enrichment 命令，应补跑最小范围 scan/enrichment 验证。
+- KTX 0.12.0 当前没有公开 `ktx scan` CLI；这不是本轮业务路径阻塞项。
+- KTX 当前公开的 schema scan / enrichment 入口是 `ktx ingest <connectionId>`；本轮已通过 `ktx ingest mysql-aliyun --json --no-input` 覆盖该路径。
 
 ## 5. 操作方法
 

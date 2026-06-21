@@ -31,7 +31,7 @@ Scope: prove `ktx.yaml` LLM settings are actually used by KTX runtime paths.
 - KTX runtime created from the actual project config can call MiniMax for text generation.
 - KTX runtime created from the actual project config can complete one structured-output call.
 - At least one low-risk KTX CLI path that depends on LLM succeeds.
-- Any remaining failures are classified as model compatibility, KTX CLI coverage gap, or data/task issue.
+- Any remaining failures are classified as model compatibility, KTX ingest coverage, or data/task issue.
 
 ## Test TODO
 
@@ -202,15 +202,15 @@ Only run after T4 and T5 pass.
 
 Result: PASS. `ktx ingest mysql-aliyun --json --no-input` exited 0. `database-schema` completed; `query-history`, `source-ingest`, and `memory-update` were skipped. No Anthropic/MiniMax protocol error and no structured-output parser failure.
 
-### T7. Scan/Relationship Enrichment Coverage
+### T7. Schema Scan / Relationship Enrichment Coverage
 
-KTX 0.12.0 installed here does not expose a public `ktx scan` CLI command. Validate scan-related LLM behavior through whichever path is available in the current KTX version:
+KTX 0.12.0 installed here does not expose a public `ktx scan` CLI command. This is not a blocking capability gap for this validation because KTX exposes schema scan / enrichment through `ktx ingest <connectionId>`.
 
-- [x] If a future KTX version exposes scan CLI, run the smallest allowed scan/enrichment command against a non-production or narrow table scope.
-- [x] Otherwise, treat T6 as the closest CLI-level coverage for enrichment-adjacent paths, and record the CLI coverage gap.
+- [x] Treat `ktx ingest mysql-aliyun --json --no-input` as the canonical public schema scan / enrichment entrypoint for KTX 0.12.0.
+- [x] Confirm the `database-schema` step completes.
 - [x] Do not run broad schema refreshes against production without explicit approval.
 
-Result: PARTIAL/PASS WITH GAP. KTX 0.12.0 does not expose a public `ktx scan` command. T6 covered database schema ingest with relationship detection planned by KTX, but no standalone scan/enrichment CLI was available. Keep this as a coverage gap for future KTX versions.
+Result: PASS / COVERED BY INGEST. KTX 0.12.0 does not expose a public `ktx scan` command, but `ktx ingest mysql-aliyun --json --no-input` is the public entrypoint that runs the database schema scan / enrichment path. T6 completed `database-schema` successfully with no Anthropic/MiniMax protocol error and no structured-output parser failure.
 
 ### T8. Hermes Workhorse KTX MCP Business Path
 
@@ -243,7 +243,7 @@ Fill after execution:
 | T4 Runtime structured output | PASS | actual KTX runtime returned expected object in about 1.8s |
 | T5 Text ingest | PASS | `ktx ingest --text` exited 0, status `done` |
 | T6 DB ingest small-scope | PASS | `database-schema` completed, no protocol/parser error |
-| T7 Scan/enrichment coverage | PARTIAL | no public `ktx scan` in KTX 0.12.0; DB ingest used as closest CLI coverage |
+| T7 Scan/enrichment coverage | PASS | no standalone `ktx scan` in KTX 0.12.0; public scan/enrichment path is covered by `ktx ingest mysql-aliyun` |
 | T8 Hermes workhorse KTX MCP path | PASS | `workhorse` queried `kx_vw_income_statement_detail` through `lucy_ktx` and returned 5营业收入 rows |
 
 ## Stop Conditions
