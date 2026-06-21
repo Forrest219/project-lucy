@@ -1,0 +1,63 @@
+name: kx_fact_financial_amount
+
+descriptions:
+  human: KX 财报金额事实表。用于分析柯西公司（深圳市柯西信息科技有限公司，company_id=1）在 2026 年的经营情况、利润表、资产负债表和现金流量表。
+  ai: Financial amount fact table for KX financial analysis; includes aliases Kexi company / 柯西公司 / 深圳市柯西信息科技有限公司 via company_id=1.
+
+# 行粒度：每行是一家公司、一个报表期间、一个财报项目、一个金额类型的金额记录。
+grain:
+  - amount_id
+
+measures:
+  - name: total_amount
+    expr: sum(amount)
+    description: 金额合计。注意 amount 为 NULL 表示原始报表为空，不要在未说明时把 NULL 当 0。
+
+  - name: non_null_amount_count
+    expr: sum(case when amount is not null then 1 else 0 end)
+    description: amount 非空的记录数，用于检查报表项目覆盖与缺失情况。
+
+  - name: null_amount_count
+    expr: sum(case when amount is null then 1 else 0 end)
+    description: amount 为空的记录数。NULL 表示原始报表为空，不等同于 0。
+
+segments:
+  - name: kexi_company
+    expr: company_id = 1
+    description: 深圳市柯西信息科技有限公司；也称“柯西公司”“柯西”“KX 公司”。
+
+  - name: fiscal_year_2026
+    expr: fiscal_year = 2026
+    description: 2026 会计年度。
+
+  - name: income_statement
+    expr: statement_type = 'income_statement'
+    description: 利润表项目，用于收入、成本、费用、利润、净利润等经营情况分析。
+
+  - name: balance_sheet
+    expr: statement_type = 'balance_sheet'
+    description: 资产负债表项目，用于资产、负债、所有者权益等期末余额分析。
+
+  - name: cash_flow
+    expr: statement_type = 'cash_flow'
+    description: 现金流量表项目，用于经营、投资、筹资现金流分析。
+
+  - name: year_to_date_amount
+    expr: amount_type = 'year_to_date'
+    description: 本年累计金额。利润表与现金流量表分析“2026 年经营情况”时优先使用。
+
+  - name: current_month_amount
+    expr: amount_type = 'current_month'
+    description: 本月金额。需要月度表现时使用。
+
+  - name: end_balance_amount
+    expr: amount_type = 'end_balance'
+    description: 期末余额。资产负债表分析优先使用。
+
+  - name: begin_balance_amount
+    expr: amount_type = 'begin_balance'
+    description: 年初余额。资产负债表对比期初期末时使用。
+
+  - name: quarter_amount
+    expr: amount_type = 'quarter'
+    description: 季度金额。仅在用户明确询问季度口径时使用。
