@@ -2,11 +2,30 @@
 
 | 项 | 内容 |
 |---|---|
-| 文档类型 | Builder 契约草案 |
+| 文档类型 | Builder 冻结契约 |
 | 生成日期 | 2026-06-21 |
-| 基于材料 | `inbox/spec-remediation-plan-2026-06-21.md`、`inbox/thinker-review-spec-delivery-2026-06-21.md` |
+| 基于材料 | `inbox/spec-remediation-plan-2026-06-21.md`、`inbox/thinker-review-spec-delivery-2026-06-21.md`、`docs/design-agent-permissions.md v1.2`、`inbox/builder-review-first-delivery-2026-06-21.md` |
 | 适用范围 | P0-1 Admin role-first 写路径、P0-2 `ktx.yaml` enabled_tables 写路径 |
-| 状态 | 交付 builder 前置契约；未执行代码修改 |
+| 状态 | 已关闭 builder review B1-B3；冻结为 P0 安全写路径 builder 实施基线；未执行代码修改 |
+
+## 0. 第一批交付清单
+
+本契约属于第一批交付物的 P0 安全写路径实施基线。交付 builder 时必须同时提供下列路径，避免外部边界依赖：
+
+- `docs/webui-impl-status.md`
+- `docs/project-overview.md`
+- `docs/review-module1-agent-permissions.md`
+- `docs/review-module2-eval-monitoring.md`
+- `docs/uat-agent-permissions.md`
+- `docs/uat-module2-eval-monitoring.md`
+- `docs/design-agent-permissions.md`
+- `inbox/spec-audit-2026-06-21.md`
+- `inbox/spec-remediation-plan-2026-06-21.md`
+- `inbox/thinker-review-spec-delivery-2026-06-21.md`
+- `inbox/security-write-path-builder-contract-2026-06-21.md`
+- `inbox/spec-lint-plan-2026-06-21.md`
+
+`inbox/thinker-review-spec-delivery-2026-06-21.md` 只作为拆包与反对意见来源；本契约以下章节已经内联 P0 安全写路径的实施边界，builder 不需要再从 thinker 文档推断 Package A / B 范围。
 
 ## 1. 交付边界
 
@@ -20,7 +39,7 @@
 - `webui/server/proxy/acl.ts`
 - `webui/config/access.yaml` 的结构性内容
 
-可先执行的低风险项见 `inbox/thinker-review-spec-delivery-2026-06-21.md` 的“立即可交付包”。
+第一批低风险状态 / 文案修复已完成并纳入交付清单；P0 安全写路径只包含本契约的包 A / 包 B，不扩大到 API spec 全量补齐、spec lint 实现或长期治理文档。
 
 ## 2. P0-1 Admin Role-First 契约
 
@@ -33,6 +52,15 @@ Admin 写入路径必须与 `design-agent-permissions.md v1.2` 对齐：
 - legacy `users[].allow` 只读兼容，不通过 UI/API 继续生成。
 - Admin API 不得创建或重新启用 effective permissions 为全权通配的 Agent。
 - `roles:` 和 `defaults:` 必须无损保留。
+
+本契约内联 `docs/design-agent-permissions.md v1.2` 的 role-first 冻结规则，作为 builder 实施时的直接验收口径：
+
+- `users[].allow` 从 v1.2 起 deprecated；旧配置没有 `role` 时，仅兼容读取并在 UI 标记“旧 ACL”。
+- 同一 user 同时存在 `role` 和 `allow` 时，proxy / preview 按 `role` 生效，不回退到 `allow`。
+- 若 `role` 解析失败，运行时 fail closed，不回退到历史 `allow`。
+- `role.allow.tools` 必须显式列工具名；`["*"]` 只允许用于历史 `users[].allow`。
+- 授权表访问工具或 `tableSelectors` 的 role 必须配置非空 `allow.connections`；纯 wiki / 非数据工具 role 可以省略。
+- selector 匹配 0 source、role 缺 connections、role allow deny tool、role tool 为 `*` 均为 `INVALID_ROLE` / fail-closed。
 
 ### 2.2 Admin YAML 类型
 
@@ -111,6 +139,13 @@ type YamlAccessConfig = {
 #### `GET /api/admin/agents/:userId/effective-permissions`
 
 复用 `webui/server/proxy/acl.ts` 的 role resolver / permission snapshot 逻辑，不重写第二套解析。
+
+2026-06-21 前置核验结论：
+
+- `acl.ts` 已有内部 `resolveEffectivePermissions(...)`，可计算 `roleIds`、`tools`、`tables`、`connections`、`sources`、`sourceMapVersion`、`snapshotHash`、`legacyAllow`。
+- `acl.ts` 已导出 `permissionSnapshot(...)`，但该导出只返回审计所需摘要，不足以直接支撑 admin endpoint 的完整响应。
+- builder 必须在包 A 中把现有 resolver 安全暴露为 admin 可复用函数，例如 `resolveEffectivePermissionsForAdmin(identityOrUserId, { freshSourceMap: true })`，返回完整 `EffectivePermissions` 或结构等价数据；不得在 `admin/agents.ts` 新写第二套 role / selector 解析。
+- 该导出属于包 A 允许触碰 `webui/server/proxy/acl.ts` 的唯一目标；不得改变 `check(...)` 的运行时裁决语义，除非测试证明是 fail-closed bug 修复。
 
 返回：
 

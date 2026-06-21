@@ -5,7 +5,7 @@ import { stringify, parse } from "yaml";
 import type { FastifyInstance } from "fastify";
 import { safeWrite } from "../fs-safe.js";
 import { resolveProjectRoot } from "../project.js";
-import { getAuditDb } from "./audit.js";
+import { getAuditDb, recordConfigChange } from "./audit.js";
 import type { YamlAccessConfig } from "./agents.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
@@ -60,6 +60,13 @@ export function registerTokenRoutes(app: FastifyInstance) {
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
     const content = stringify(newConfig, { lineWidth: 0 });
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "token_create",
+      targetId: userId,
+      oldSummary: { tokenCount: user.tokens.length },
+      newSummary: { tokenCount: updatedUser.tokens.length, label, hashPrefix: tokenHash.slice(0, 19), expires_at: expires_at ?? null }
+    });
     await safeWrite(projectRoot, ACCESS_YAML_REL, content);
 
     return {
@@ -109,6 +116,13 @@ export function registerTokenRoutes(app: FastifyInstance) {
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
     const content = stringify(newConfig, { lineWidth: 0 });
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "token_revoke",
+      targetId: userId,
+      oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
+      newSummary: { tokenCount: updatedUser.tokens.length, label }
+    });
     await safeWrite(projectRoot, ACCESS_YAML_REL, content);
 
     return { ok: true, data: { written: true, revokedAt } };

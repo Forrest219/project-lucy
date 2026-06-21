@@ -12,7 +12,7 @@ import { listSources, previewSourcePatch, readSource, writeSourcePatch } from ".
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
 import { registerAgentRoutes } from "./admin/agents.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
-import { registerAuditRoutes } from "./admin/audit.js";
+import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
@@ -27,6 +27,82 @@ type ErrorEnvelope = {
     detail?: unknown;
   };
 };
+
+function makeDiff(oldText: string, newText: string): string {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+  const lines: string[] = [];
+  const maxLen = Math.max(oldLines.length, newLines.length);
+  for (let i = 0; i < maxLen; i += 1) {
+    const oldLine = oldLines[i];
+    const newLine = newLines[i];
+    if (oldLine === undefined) lines.push(`+${newLine}`);
+    else if (newLine === undefined) lines.push(`-${oldLine}`);
+    else if (oldLine !== newLine) {
+      lines.push(`-${oldLine}`);
+      lines.push(`+${newLine}`);
+    } else {
+      lines.push(` ${oldLine}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function enabledTableError(code: string, message: string) {
+  const err = new Error(message) as Error & { statusCode: number; code: string };
+  err.statusCode = code === "CONNECTION_NOT_FOUND" ? 404 : 400;
+  err.code = code;
+  return err;
+}
+
+async function scannedPhysicalTables(projectRoot: string, connId: string): Promise<Set<string>> {
+  const schemaDir = path.join(projectRoot, "semantic-layer", connId, "_schema");
+  const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
+  const tables = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".yaml")) continue;
+    const schemaName = entry.name.replace(/\.yaml$/, "");
+    const text = await readFile(path.join(schemaDir, entry.name), "utf8").catch(() => "");
+    const doc = parse(text) as Record<string, unknown> | null;
+    const rawTables = doc && typeof doc === "object" && doc.tables && typeof doc.tables === "object"
+      ? doc.tables as Record<string, unknown>
+      : {};
+    for (const [sourceName, value] of Object.entries(rawTables)) {
+      const tableDef = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+      const physical = typeof tableDef.table === "string" && tableDef.table.trim()
+        ? tableDef.table.trim()
+        : `${schemaName}.${sourceName}`;
+      tables.add(physical);
+    }
+  }
+  return tables;
+}
+
+function validateEnabledTables(enabledTables: unknown, scanned: Set<string>): string[] {
+  if (!Array.isArray(enabledTables)) {
+    throw enabledTableError("INVALID_ENABLED_TABLE", "enabledTables must be an array");
+  }
+  const seen = new Set<string>();
+  const valid: string[] = [];
+  for (const item of enabledTables) {
+    if (typeof item !== "string") {
+      throw enabledTableError("INVALID_ENABLED_TABLE", "enabled table must be a string");
+    }
+    const table = item.trim();
+    if (!table || /[\\/\u0000-\u001F]/.test(table) || table.includes("..") || !/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(table)) {
+      throw enabledTableError("INVALID_ENABLED_TABLE", `Invalid enabled table '${item}'`);
+    }
+    if (seen.has(table)) {
+      throw enabledTableError("DUPLICATE_ENABLED_TABLE", `Duplicate enabled table '${table}'`);
+    }
+    if (!scanned.has(table)) {
+      throw enabledTableError("TABLE_NOT_SCANNED", `Table '${table}' is not present in scanned semantic-layer schema`);
+    }
+    seen.add(table);
+    valid.push(table);
+  }
+  return valid;
+}
 
 export function buildServer() {
   const app = Fastify({ logger: true });
@@ -238,24 +314,42 @@ export function buildServer() {
 
   app.put<{
     Params: { connId: string };
-    Body: { enabledTables: string[] };
+    Body: { enabledTables?: string[]; dryRun?: boolean };
   }>("/api/connections/:connId/enabled-tables", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
     const { enabledTables } = request.body ?? {};
+    const dryRun = request.body?.dryRun !== false;
     const yamlPath = path.join(projectRoot, "ktx.yaml");
     const yamlText = await readFile(yamlPath, "utf8");
     const config = parse(yamlText) as Record<string, unknown>;
     const connections = config.connections as Record<string, Record<string, unknown>> | undefined;
     if (!connections || !connections[connId]) {
-      const err = new Error(`Connection '${connId}' not found in ktx.yaml`) as Error & { statusCode: number; code: string };
-      err.statusCode = 404;
-      err.code = "CONNECTION_NOT_FOUND";
-      throw err;
+      throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
     }
-    connections[connId].enabled_tables = Array.isArray(enabledTables) ? enabledTables : [];
-    await safeWrite(projectRoot, "ktx.yaml", stringify(config));
-    return { ok: true };
+    const scanned = await scannedPhysicalTables(projectRoot, connId);
+    const newEnabledTables = validateEnabledTables(enabledTables, scanned);
+    const oldEnabledTables = Array.isArray(connections[connId].enabled_tables)
+      ? connections[connId].enabled_tables.filter((item): item is string => typeof item === "string")
+      : [];
+    connections[connId].enabled_tables = newEnabledTables;
+    const proposedYaml = stringify(config, { lineWidth: 0 });
+    const diff = makeDiff(yamlText, proposedYaml);
+
+    if (dryRun) {
+      return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables } };
+    }
+
+    const auditId = await recordConfigChange({
+      filePath: "ktx.yaml",
+      changeType: "enabled_tables_update",
+      targetId: connId,
+      oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
+      newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
+      diff
+    });
+    await safeWrite(projectRoot, "ktx.yaml", proposedYaml);
+    return { ok: true, data: { written: true, auditId, oldEnabledTables, newEnabledTables } };
   });
 
   app.post<{

@@ -57,11 +57,57 @@ export async function getAuditDb(): Promise<Database.Database> {
       roles_json    TEXT NOT NULL,
       resolved_json TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS config_change_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      session_id TEXT,
+      file_path TEXT NOT NULL,
+      change_type TEXT NOT NULL,
+      target_id TEXT,
+      old_summary TEXT,
+      new_summary TEXT,
+      diff TEXT,
+      request_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ccl_ts ON config_change_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_ccl_file_ts ON config_change_log(file_path, ts);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
   }
   return db;
+}
+
+export async function recordConfigChange(input: {
+  filePath: string;
+  changeType: string;
+  targetId?: string;
+  oldSummary?: unknown;
+  newSummary?: unknown;
+  diff?: string;
+  requestId?: string;
+  sessionId?: string | null;
+}): Promise<number | undefined> {
+  const database = await getAuditDb();
+  const result = database.prepare(`
+    INSERT INTO config_change_log
+      (ts, actor, session_id, file_path, change_type, target_id, old_summary, new_summary, diff, request_id)
+    VALUES
+      (@ts, @actor, @session_id, @file_path, @change_type, @target_id, @old_summary, @new_summary, @diff, @request_id)
+  `).run({
+    ts: new Date().toISOString(),
+    actor: "local-admin",
+    session_id: input.sessionId ?? null,
+    file_path: input.filePath,
+    change_type: input.changeType,
+    target_id: input.targetId ?? null,
+    old_summary: input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary),
+    new_summary: input.newSummary === undefined ? null : JSON.stringify(input.newSummary),
+    diff: input.diff ?? null,
+    request_id: input.requestId ?? null
+  });
+  return typeof result.lastInsertRowid === "number" ? result.lastInsertRowid : Number(result.lastInsertRowid);
 }
 
 interface QueryRow {

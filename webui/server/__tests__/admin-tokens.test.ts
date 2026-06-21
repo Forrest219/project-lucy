@@ -22,6 +22,7 @@ vi.mock("../admin/audit.js", () => ({
     exec: vi.fn(),
     pragma: vi.fn()
   })),
+  recordConfigChange: vi.fn(async () => 1),
   registerAuditRoutes: vi.fn()
 }));
 

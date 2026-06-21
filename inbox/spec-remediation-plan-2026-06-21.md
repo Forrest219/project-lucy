@@ -275,3 +275,34 @@ P2 只在 P0/P1 完成后推进，避免在事实源仍漂移时继续制造新�
 | `lint:spec` 防漂移 | 已补齐 builder 前置方案，尚未实现脚本 | `inbox/spec-lint-plan-2026-06-21.md` |
 
 安全写路径包在 `security-write-path-builder-contract` 落地前不应直接交 builder 修改代码；当前可交付 builder 的是低风险状态/文案修复包。
+
+## 9. 2026-06-21 第一批交付封口
+
+已采纳 builder 对第一批交付物的 B1-B3 反对意见，并完成小修订包：
+
+| builder 反对意见 | 处理结果 | 关闭方式 |
+|---|---|---|
+| B1：`thinker-review` 是边界来源但未纳入本批次 | 已关闭 | 第一批交付清单显式纳入 `inbox/thinker-review-spec-delivery-2026-06-21.md`，并在 `security-write-path-builder-contract` 内联 Package A / B 边界，builder 不再需要从外部文档推断范围 |
+| B2：`effective-permissions` 端点依赖未验证的 ACL 能力 | 已关闭为实施约束 | 已核验 `webui/server/proxy/acl.ts` 存在内部 `resolveEffectivePermissions(...)`、`sourceMapVersion`、`snapshotHash` 和已导出的 `permissionSnapshot(...)`；契约改为要求 builder 在包 A 暴露 admin 可复用 resolver，不允许在 admin 层重写第二套解析 |
+| B3：role-first 权威 spec 未纳入批次 | 已关闭 | 第一批交付清单显式纳入 `docs/design-agent-permissions.md`，并在 `security-write-path-builder-contract` 内联 v1.2 冻结规则 |
+
+交付 builder 的第一批路径现在为：
+
+- `docs/webui-impl-status.md`
+- `docs/project-overview.md`
+- `docs/review-module1-agent-permissions.md`
+- `docs/review-module2-eval-monitoring.md`
+- `docs/uat-agent-permissions.md`
+- `docs/uat-module2-eval-monitoring.md`
+- `docs/design-agent-permissions.md`
+- `inbox/spec-audit-2026-06-21.md`
+- `inbox/spec-remediation-plan-2026-06-21.md`
+- `inbox/thinker-review-spec-delivery-2026-06-21.md`
+- `inbox/security-write-path-builder-contract-2026-06-21.md`
+- `inbox/spec-lint-plan-2026-06-21.md`
+
+交付状态：
+
+- 低风险状态 / 文案修复包：已落地，可交付。
+- P0 安全写路径 Package A / B：契约已冻结，可交付 builder 实施。
+- `lint:spec`：仍为 P1 builder 前置方案，未实现脚本，不阻塞 P0 安全写路径。

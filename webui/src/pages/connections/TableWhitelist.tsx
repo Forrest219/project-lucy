@@ -4,14 +4,28 @@ import { toast } from "sonner";
 import { apiGet, apiPut, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import type { ConnectionsResponse, ConnectionTablesResponse } from "../../lib/types";
+import { DiffViewer } from "../../components/DiffViewer";
 
 type IngestResult = { exitCode: number; stdout: string; stderr: string };
+type EnabledTablesPreview = {
+  diff: string;
+  proposedYaml: string;
+  oldEnabledTables: string[];
+  newEnabledTables: string[];
+};
+type EnabledTablesWrite = {
+  written: true;
+  auditId?: number;
+  oldEnabledTables: string[];
+  newEnabledTables: string[];
+};
 
 export function TableWhitelist() {
   const queryClient = useQueryClient();
   const [selectedConnId, setSelectedConnId] = useState<string>("");
   const [pendingEnabled, setPendingEnabled] = useState<string[] | null>(null);
   const [ingestLog, setIngestLog] = useState<string | null>(null);
+  const [preview, setPreview] = useState<EnabledTablesPreview | null>(null);
 
   const { data: connData, isLoading: connLoading } = useQuery({
     queryKey: queryKeys.connections,
@@ -31,12 +45,24 @@ export function TableWhitelist() {
   const allTables = tablesData?.tables ?? [];
   const currentEnabled: string[] = pendingEnabled ?? activeConn?.enabledTables ?? [];
 
+  const previewMutation = useMutation({
+    mutationFn: () =>
+      apiPut<EnabledTablesPreview>(`/api/connections/${encodeURIComponent(activeConnId)}/enabled-tables`, { dryRun: true, enabledTables: currentEnabled }),
+    onSuccess: (data) => {
+      setPreview(data);
+    },
+    onError: (err) => {
+      toast.error(`预览失败：${err instanceof Error ? err.message : "未知错误"}`);
+    }
+  });
+
   const saveMutation = useMutation({
     mutationFn: () =>
-      apiPut<void>(`/api/connections/${encodeURIComponent(activeConnId)}/enabled-tables`, { enabledTables: currentEnabled }),
-    onSuccess: () => {
+      apiPut<EnabledTablesWrite>(`/api/connections/${encodeURIComponent(activeConnId)}/enabled-tables`, { dryRun: false, enabledTables: currentEnabled }),
+    onSuccess: (data) => {
       toast.success("表白名单已保存");
-      setPendingEnabled(null);
+      setPendingEnabled(data.newEnabledTables);
+      setPreview(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
     },
     onError: (err) => {
@@ -67,6 +93,7 @@ export function TableWhitelist() {
       ? currentEnabled.filter((t) => t !== table)
       : [...currentEnabled, table];
     setPendingEnabled(next);
+    setPreview(null);
   }
 
   const isDirty = pendingEnabled !== null;
@@ -90,6 +117,7 @@ export function TableWhitelist() {
               onChange={(e) => {
                 setSelectedConnId(e.target.value);
                 setPendingEnabled(null);
+                setPreview(null);
                 setIngestLog(null);
               }}
               aria-label="选择连接"
@@ -108,10 +136,10 @@ export function TableWhitelist() {
           </button>
           <button
             className="pl-btn"
-            onClick={() => saveMutation.mutate()}
-            disabled={!isDirty || saveMutation.isPending}
+            onClick={() => previewMutation.mutate()}
+            disabled={!isDirty || previewMutation.isPending}
           >
-            {saveMutation.isPending ? "保存中..." : "保存白名单"}
+            {previewMutation.isPending ? "生成中..." : "预览保存"}
           </button>
         </div>
       </div>
@@ -155,6 +183,28 @@ export function TableWhitelist() {
           <pre className="text-xs bg-surface-muted p-3 rounded overflow-auto max-h-64 whitespace-pre-wrap">
             {ingestLog || "（无输出）"}
           </pre>
+        </div>
+      )}
+
+      {preview && (
+        <div className="mt-6 grid gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">
+              enabled_tables: {preview.oldEnabledTables.length} → {preview.newEnabledTables.length}
+            </p>
+            <div className="flex gap-2">
+              <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setPreview(null)}>取消</button>
+              <button
+                type="button"
+                className="pl-btn pl-btn--primary"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+              >
+                {saveMutation.isPending ? "保存中..." : "确认写入"}
+              </button>
+            </div>
+          </div>
+          <DiffViewer diff={preview.diff} />
         </div>
       )}
     </section>

@@ -204,9 +204,37 @@ export type Agent = {
   name: string;
   note?: string;
   enabled: boolean;
+  role?: string;
   tokens: TokenSummary[];
-  allow: { tables: string[] | ["*"]; tools: string[] | ["*"] };
+  allow?: { tables: string[] | ["*"]; tools: string[] | ["*"]; connections?: string[] };
+  effectivePermissions?: EffectivePermissionsPreview;
+  permissionWarnings?: string[];
   stats?: AgentStats;
+};
+
+export type Role = {
+  id: string;
+  description?: string;
+  tools: string[];
+  connections: string[];
+  sourceCount: number;
+  invalid: boolean;
+  warnings: string[];
+};
+
+export type EffectivePermissionsPreview = {
+  roleIds: string[];
+  snapshotHash: string;
+  sourceMapVersion?: string;
+  tools: string[];
+  connections: string[];
+  sources: Array<{
+    connectionId: string;
+    schema: string;
+    sourceName: string;
+    table: string;
+  }>;
+  legacyAllow: boolean;
 };
 
 export type TokenSummary = {
@@ -231,14 +259,14 @@ export type AgentPatch = {
   name?: string;
   note?: string;
   enabled?: boolean;
-  allow?: { tables?: string[] | ["*"]; tools?: string[] | ["*"] };
+  role?: string;
 };
 
 export type CreateAgentBody = {
   id: string;
   name: string;
   note?: string;
-  allow: { tables: string[] | ["*"]; tools: string[] | ["*"] };
+  role: string;
 };
 
 export type CreateTokenBody = { label: string; expires_at?: string | null };

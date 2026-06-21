@@ -292,14 +292,14 @@ function hasExplicitAccessToAllSensitiveTables(allowedTables: string[], map: Map
   return required.length > 0 && required.every((table) => allowedTables.includes(table));
 }
 
-interface EffectiveSource {
+export interface EffectiveSource {
   connectionId: string;
   schema: string;
   sourceName: string;
   table: string;
 }
 
-interface EffectivePermissions {
+export interface EffectivePermissions {
   roleIds: string[];
   tools: string[];
   tables: string[];
@@ -312,7 +312,7 @@ interface EffectivePermissions {
   legacyAllow: boolean;
 }
 
-type RoleResolutionResult = {
+export type RoleResolutionResult = {
   ok: true;
   permissions: EffectivePermissions;
 } | {
@@ -624,6 +624,36 @@ export async function permissionSnapshot(identity: Identity): Promise<{
     rolesJson: resolved.permissions.rolesJson,
     resolvedJson: resolved.permissions.resolvedJson
   };
+}
+
+export async function resolveEffectivePermissionsForAdmin(
+  userId: string,
+  options: { freshSourceMap?: boolean } = {}
+): Promise<RoleResolutionResult> {
+  const config = await getAccessConfig({ fresh: true });
+  const policy = aclPolicy(config);
+  return resolveEffectivePermissions({ userId, tokenLabel: "admin-preview" }, config, policy, {
+    freshSourceMap: options.freshSourceMap ?? true
+  });
+}
+
+export async function previewRolePermissionsForAdmin(
+  roleId: string,
+  options: { freshSourceMap?: boolean } = {}
+): Promise<RoleResolutionResult> {
+  const config = await getAccessConfig({ fresh: true });
+  const policy = aclPolicy(config);
+  const previewUserId = "__role_preview__";
+  const previewConfig: AccessConfig = {
+    ...config,
+    users: [
+      ...config.users.filter((user) => user.id !== previewUserId),
+      { id: previewUserId, role: roleId, enabled: true, tokens: [] }
+    ]
+  };
+  return resolveEffectivePermissions({ userId: previewUserId, tokenLabel: "admin-preview" }, previewConfig, policy, {
+    freshSourceMap: options.freshSourceMap ?? true
+  });
 }
 
 export async function allowedToolNames(identity: Identity): Promise<string[]> {

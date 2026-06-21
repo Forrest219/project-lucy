@@ -3,9 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, CreateAgentBody } from "../../lib/types";
+import type { Agent, CreateAgentBody, Role } from "../../lib/types";
 
 type AgentsResponse = { agents: Agent[]; version: string };
+type RolesResponse = { roles: Role[] };
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return (
@@ -18,9 +19,10 @@ function MetricCard({ label, value, hint }: { label: string; value: string | num
 }
 
 function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void }) {
-  const tableCount = agent.allow.tables.includes("*") ? "*" : agent.allow.tables.length;
-  const toolCount = agent.allow.tools.includes("*") ? "*" : agent.allow.tools.length;
+  const sourceCount = agent.effectivePermissions?.sources.length ?? agent.allow?.tables?.length ?? 0;
+  const toolCount = agent.effectivePermissions?.tools.length ?? agent.allow?.tools?.length ?? 0;
   const tokenCount = agent.tokens.length;
+  const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
 
   return (
     <div className="pl-card">
@@ -34,7 +36,7 @@ function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void
             </span>
           </div>
           <div className="text-sm text-fg-muted mt-1">
-            {tokenCount} 个 token · {tableCount === "*" ? "*(全部表)" : `${tableCount} 张表`} · {toolCount === "*" ? "*(全部工具)" : `${toolCount} 个工具`}
+            role: {agent.role ?? "旧 ACL"} · {tokenCount} 个 token · {legacyWildcard ? "legacy wildcard" : `${sourceCount} 个源`} · {toolCount} 个工具
           </div>
           <div className="text-sm text-fg-muted mt-0.5">
             {agent.stats?.lastSeen ? `最近访问 ${new Date(agent.stats.lastSeen).toLocaleString("zh-CN")} · ` : "最近访问 — · "}
@@ -51,14 +53,11 @@ function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void
   );
 }
 
-function NewAgentModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: () => void; onCreated: (id: string) => void }) {
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [tables, setTables] = useState("");
-  const [tools, setTools] = useState("");
-  const [wildcardTables, setWildcardTables] = useState(false);
-  const [wildcardTools, setWildcardTools] = useState(false);
+  const [role, setRole] = useState(roles.find((item) => !item.invalid)?.id ?? roles[0]?.id ?? "");
   const [preview, setPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
   const [step, setStep] = useState<"form" | "diff">("form");
 
@@ -85,10 +84,7 @@ function NewAgentModal({ onClose, onCreated }: { onClose: () => void; onCreated:
       id: id.trim(),
       name: name.trim(),
       note: note.trim() || undefined,
-      allow: {
-        tables: wildcardTables ? ["*"] : tables.split(",").map((s) => s.trim()).filter(Boolean),
-        tools: wildcardTools ? ["*"] : tools.split(",").map((s) => s.trim()).filter(Boolean)
-      }
+      role
     };
   }
 
@@ -119,26 +115,21 @@ function NewAgentModal({ onClose, onCreated }: { onClose: () => void; onCreated:
               <span className="text-sm font-medium">备注</span>
               <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
-            <div className="grid gap-1">
-              <span className="text-sm font-medium">授权表</span>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={wildcardTables} onChange={(e) => setWildcardTables(e.target.checked)} />
-                通配 (*) — 允许所有表
-              </label>
-              {!wildcardTables && (
-                <input className="pl-input" placeholder="逗号分隔，如 dataforai.superstore_orders" value={tables} onChange={(e) => setTables(e.target.value)} />
+            <label className="grid gap-1">
+              <span className="text-sm font-medium">角色 <span className="text-danger">*</span></span>
+              <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
+                {roles.map((item) => (
+                  <option key={item.id} value={item.id} disabled={item.invalid}>
+                    {item.id}{item.invalid ? " (invalid)" : ""}
+                  </option>
+                ))}
+              </select>
+              {role && (
+                <span className="text-xs text-fg-muted">
+                  {roles.find((item) => item.id === role)?.description ?? "角色模板"}
+                </span>
               )}
-            </div>
-            <div className="grid gap-1">
-              <span className="text-sm font-medium">授权工具</span>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={wildcardTools} onChange={(e) => setWildcardTools(e.target.checked)} />
-                通配 (*) — 允许所有工具
-              </label>
-              {!wildcardTools && (
-                <input className="pl-input" placeholder="逗号分隔，如 sl_query,wiki_search" value={tools} onChange={(e) => setTools(e.target.value)} />
-              )}
-            </div>
+            </label>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={onClose}>取消</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={previewMutation.isPending}>
@@ -175,6 +166,10 @@ export function AgentList() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "agents"],
     queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+  });
+  const { data: rolesData } = useQuery({
+    queryKey: ["admin", "roles"],
+    queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
   });
 
   const agents = data?.agents ?? [];
@@ -252,6 +247,7 @@ export function AgentList() {
 
       {showNew && (
         <NewAgentModal
+          roles={rolesData?.roles ?? []}
           onClose={() => setShowNew(false)}
           onCreated={(id) => {
             setShowNew(false);

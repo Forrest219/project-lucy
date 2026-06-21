@@ -5,7 +5,8 @@ import { stringify, parse } from "yaml";
 import type { FastifyInstance } from "fastify";
 import { safeWrite } from "../fs-safe.js";
 import { resolveProjectRoot } from "../project.js";
-import { getAuditDb } from "./audit.js";
+import { getAuditDb, recordConfigChange } from "./audit.js";
+import { previewRolePermissionsForAdmin, resolveEffectivePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -22,14 +23,29 @@ export interface YamlUser {
   name: string;
   note?: string;
   enabled?: boolean;
+  role?: string;
   tokens: YamlToken[];
-  allow: {
+  allow?: {
     tables: string[];
     tools: string[];
+    connections?: string[];
+  };
+}
+
+export interface YamlRole {
+  description?: string;
+  allow?: {
+    connections?: string[];
+    tableSelectors?: Array<
+      | { connection?: string; schema: string; names: string[] }
+      | { connection?: string; schema: string; prefix: string }
+    >;
+    tools?: string[];
   };
 }
 
 export interface YamlAccessConfig {
+  roles?: Record<string, YamlRole>;
   users: YamlUser[];
   defaults?: {
     deny_tools?: string[];
@@ -138,18 +154,54 @@ function userToAgent(user: YamlUser, stats?: Awaited<ReturnType<typeof getStats>
     name: user.name,
     note: user.note,
     enabled: user.enabled !== false,
+    role: user.role,
     tokens: user.tokens.map((t) => ({
       hash: t.hash,
       label: t.label,
       created: t.created,
       expires_at: t.expires_at ?? null
     })),
-    allow: {
+    allow: user.allow ? {
       tables: user.allow?.tables ?? [],
-      tools: user.allow?.tools ?? []
-    },
+      tools: user.allow?.tools ?? [],
+      connections: user.allow?.connections ?? []
+    } : undefined,
     stats
   };
+}
+
+function effectivePermissionsToPreview(permissions: EffectivePermissions) {
+  return {
+    roleIds: permissions.roleIds,
+    snapshotHash: permissions.snapshotHash,
+    sourceMapVersion: permissions.sourceMapVersion,
+    tools: permissions.tools,
+    connections: permissions.connections,
+    sources: permissions.sources,
+    legacyAllow: permissions.legacyAllow
+  };
+}
+
+async function userToAgentWithPermissions(user: YamlUser, stats?: Awaited<ReturnType<typeof getStats>>) {
+  const agent = userToAgent(user, stats);
+  const resolved = await resolveEffectivePermissionsForAdmin(user.id);
+  return {
+    ...agent,
+    effectivePermissions: resolved.ok ? effectivePermissionsToPreview(resolved.permissions) : undefined,
+    permissionWarnings: resolved.ok ? [] : [resolved.reason]
+  };
+}
+
+function bodyHasOwn(value: unknown, key: string): boolean {
+  return Boolean(value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function hasWildcardAllow(user: YamlUser): boolean {
+  return Boolean(user.allow?.tables?.includes("*") || user.allow?.tools?.includes("*"));
+}
+
+function assertRoleExists(config: YamlAccessConfig, role: string | undefined): role is string {
+  return Boolean(role && config.roles?.[role]?.allow);
 }
 
 function makeDiff(oldYaml: string, newYaml: string): string {
@@ -182,15 +234,37 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const agents = await Promise.all(
       config.users.map(async (user) => {
         const stats = await getStats(user.id);
-        return userToAgent(user, stats);
+        return userToAgentWithPermissions(user, stats);
       })
     );
     return { ok: true, data: { agents, version } };
   });
 
+  // GET /api/admin/roles
+  app.get("/api/admin/roles", async () => {
+    const projectRoot = await resolveProjectRoot();
+    const { config } = await readAccessYaml(projectRoot);
+    const entries = Object.entries(config.roles ?? {});
+    const roles = await Promise.all(
+      entries.map(async ([id, role]) => {
+        const resolved = await previewRolePermissionsForAdmin(id);
+        return {
+          id,
+          description: role.description,
+          tools: role.allow?.tools ?? [],
+          connections: role.allow?.connections ?? [],
+          sourceCount: resolved.ok ? resolved.permissions.sources.length : 0,
+          invalid: !resolved.ok,
+          warnings: resolved.ok ? [] : [resolved.reason]
+        };
+      })
+    );
+    return { ok: true, data: { roles } };
+  });
+
   // POST /api/admin/agents
   app.post<{
-    Body: { dryRun?: boolean; agent: { id: string; name: string; note?: string; allow: { tables: string[]; tools: string[] } } };
+    Body: { dryRun?: boolean; agent: { id: string; name: string; note?: string; role?: string; allow?: unknown } };
   }>("/api/admin/agents", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const agentInput = request.body?.agent;
@@ -200,8 +274,14 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (!AGENT_ID_RE.test(agentInput.id)) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "agent.id must match ^[A-Za-z0-9_-]{1,32}$" } });
     }
+    if (bodyHasOwn(agentInput, "allow")) {
+      return reply.status(400).send({ ok: false, error: { code: "LEGACY_ALLOW_READONLY", message: "agent.allow is deprecated and read-only; choose a role" } });
+    }
     const projectRoot = await resolveProjectRoot();
     const { config, raw } = await readAccessYaml(projectRoot);
+    if (!assertRoleExists(config, agentInput.role)) {
+      return reply.status(400).send({ ok: false, error: { code: agentInput.role ? "INVALID_ROLE" : "ROLE_REQUIRED", message: "agent.role is required and must reference an existing role" } });
+    }
 
     if (config.users.some((u) => u.id === agentInput.id)) {
       return reply.status(409).send({ ok: false, error: { code: "AGENT_ID_TAKEN", message: `Agent id '${agentInput.id}' already exists` } });
@@ -213,10 +293,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       note: agentInput.note,
       enabled: true,
       tokens: [],
-      allow: {
-        tables: agentInput.allow?.tables ?? [],
-        tools: agentInput.allow?.tools ?? []
-      }
+      role: agentInput.role
     };
     const newConfig: YamlAccessConfig = { ...config, users: [...config.users, newUser] };
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
@@ -226,8 +303,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
       return { ok: true, data: { diff, proposedYaml } };
     }
 
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "agent_create",
+      targetId: newUser.id,
+      oldSummary: { userIds: config.users.map((user) => user.id) },
+      newSummary: { userIds: newConfig.users.map((user) => user.id), role: newUser.role },
+      diff
+    });
     await writeAccessYaml(projectRoot, newConfig);
-    return { ok: true, data: { written: true, agent: userToAgent(newUser) } };
+    return { ok: true, data: { written: true, agent: await userToAgentWithPermissions(newUser) } };
   });
 
   // GET /api/admin/agents/:userId
@@ -239,13 +324,27 @@ export function registerAgentRoutes(app: FastifyInstance) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
     }
     const stats = await getStats(user.id);
-    return { ok: true, data: { agent: userToAgent(user, stats), version } };
+    return { ok: true, data: { agent: await userToAgentWithPermissions(user, stats), version } };
+  });
+
+  // GET /api/admin/agents/:userId/effective-permissions
+  app.get<{ Params: { userId: string } }>("/api/admin/agents/:userId/effective-permissions", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const { config } = await readAccessYaml(projectRoot);
+    if (!config.users.some((user) => user.id === request.params.userId)) {
+      return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
+    }
+    const resolved = await resolveEffectivePermissionsForAdmin(request.params.userId);
+    if (!resolved.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "ROLE_RESOLUTION_FAILED", message: resolved.reason } });
+    }
+    return { ok: true, data: effectivePermissionsToPreview(resolved.permissions) };
   });
 
   // PATCH /api/admin/agents/:userId
   app.patch<{
     Params: { userId: string };
-    Body: { dryRun?: boolean; version?: string; patch: { name?: string; note?: string; enabled?: boolean; allow?: { tables?: string[]; tools?: string[] } } };
+    Body: { dryRun?: boolean; version?: string; patch: { name?: string; note?: string; enabled?: boolean; role?: string; allow?: unknown; tokens?: unknown; id?: unknown } };
   }>("/api/admin/agents/:userId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
@@ -266,17 +365,31 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     const patch = request.body?.patch ?? {};
+    for (const forbidden of ["allow", "tokens", "id"]) {
+      if (bodyHasOwn(patch, forbidden)) {
+        return reply.status(400).send({ ok: false, error: { code: forbidden === "allow" ? "LEGACY_ALLOW_READONLY" : "BAD_REQUEST", message: `patch.${forbidden} is not editable` } });
+      }
+    }
     const existingUser = config.users[userIndex];
+    if (patch.role !== undefined && !assertRoleExists(config, patch.role)) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
+    }
+    const nextRole = patch.role !== undefined ? patch.role : existingUser.role;
+    const enabling = patch.enabled === true && existingUser.enabled === false;
+    if (enabling && !nextRole && hasWildcardAllow(existingUser)) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "LEGACY_WILDCARD_AGENT_REQUIRES_ROLE", message: "Assign a role before re-enabling a legacy wildcard agent" }
+      });
+    }
     const updatedUser: YamlUser = {
       ...existingUser,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.note !== undefined ? { note: patch.note } : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
-      allow: {
-        tables: patch.allow?.tables !== undefined ? patch.allow.tables : existingUser.allow?.tables ?? [],
-        tools: patch.allow?.tools !== undefined ? patch.allow.tools : existingUser.allow?.tools ?? []
-      }
+      ...(patch.role !== undefined ? { role: patch.role } : {})
     };
+    if (updatedUser.role) delete updatedUser.allow;
     const newUsers = [...config.users];
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
@@ -287,8 +400,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
       return { ok: true, data: { diff, proposedYaml } };
     }
 
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "agent_patch",
+      targetId: updatedUser.id,
+      oldSummary: { enabled: existingUser.enabled !== false, role: existingUser.role, hasLegacyAllow: Boolean(existingUser.allow) },
+      newSummary: { enabled: updatedUser.enabled !== false, role: updatedUser.role, hasLegacyAllow: Boolean(updatedUser.allow) },
+      diff
+    });
     await writeAccessYaml(projectRoot, newConfig);
-    return { ok: true, data: { written: true, agent: userToAgent(updatedUser) } };
+    return { ok: true, data: { written: true, agent: await userToAgentWithPermissions(updatedUser) } };
   });
 
   // DELETE /api/admin/agents/:userId
@@ -310,6 +431,13 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     const newConfig: YamlAccessConfig = { ...config, users: config.users.filter((u) => u.id !== request.params.userId) };
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "agent_delete",
+      targetId: user.id,
+      oldSummary: { userIds: config.users.map((item) => item.id), tokenCount: user.tokens.length },
+      newSummary: { userIds: newConfig.users.map((item) => item.id) }
+    });
     await writeAccessYaml(projectRoot, newConfig);
     return { ok: true, data: { written: true } };
   });

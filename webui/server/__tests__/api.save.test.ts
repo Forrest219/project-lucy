@@ -109,3 +109,72 @@ describe("source save API", () => {
     await app.close();
   });
 });
+
+describe("connection enabled_tables API", () => {
+  async function writeConnectionProject() {
+    await writeFile(path.join(projectRoot, "ktx.yaml"), `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+`, "utf8");
+  }
+
+  it("keeps dryRun as the default and returns a diff", async () => {
+    await writeConnectionProject();
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ enabledTables: [] })
+      .expect(200);
+
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.diff).toContain("-      - dataforai.superstore_orders");
+    expect(response.body.data.oldEnabledTables).toEqual(["dataforai.superstore_orders"]);
+    expect(response.body.data.newEnabledTables).toEqual([]);
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toContain("dataforai.superstore_orders");
+    await app.close();
+  });
+
+  it("rejects invalid enabled table input", async () => {
+    await writeConnectionProject();
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ dryRun: true, enabledTables: ["../bad"] })
+      .expect(400);
+
+    expect(response.body.error.code).toBe("INVALID_ENABLED_TABLE");
+    await app.close();
+  });
+
+  it("rejects tables that are not in scanned schema files", async () => {
+    await writeConnectionProject();
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ dryRun: true, enabledTables: ["dataforai.not_scanned"] })
+      .expect(400);
+
+    expect(response.body.error.code).toBe("TABLE_NOT_SCANNED");
+    await app.close();
+  });
+
+  it("writes only when dryRun:false and returns an audit id", async () => {
+    await writeConnectionProject();
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ dryRun: false, enabledTables: [] })
+      .expect(200);
+
+    expect(response.body.data.written).toBe(true);
+    expect(response.body.data.auditId).toBeTruthy();
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.not.toContain("dataforai.superstore_orders");
+    await app.close();
+  });
+});

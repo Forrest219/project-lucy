@@ -5,7 +5,7 @@
 | 文档类型 | Builder 前置方案 |
 | 生成日期 | 2026-06-21 |
 | 目标命令 | `npm run lint:spec` |
-| 状态 | 方案草案；未实现脚本 |
+| 状态 | P1 前置方案；未实现脚本；不阻塞 P0 安全写路径 |
 
 ## 1. 目标
 
@@ -46,7 +46,7 @@ scripts/lint-spec.mjs
   docs/webui-impl-status.md: database connection marked 待开发 but /connections route exists
 
 [spec-lint] FAIL skill-dependency
-  skills/reviewer/SKILL.md: dependency ../domains/superstore/pitfalls.md not found
+  skills/example-broken/SKILL.md: dependency ../missing/reference.md not found
 
 [spec-lint] PASS eval-schema-version
 ```
@@ -175,7 +175,7 @@ scripts/lint-spec.config.json
 实现首版 `lint:spec` 后，必须能捕获或报告以下已知历史问题：
 
 1. `docs/webui-impl-status.md` 将已实现的 `/connections` 标为待开发。
-2. `skills/reviewer/SKILL.md` dependency 指向不存在路径。
+2. skill dependency 指向不存在路径时输出 fail；`skills/reviewer/SKILL.md` 的历史错误路径已修复，当前应输出 pass。
 3. `evals/superstore/eval/superstore-eval-cases.yaml` 使用较旧 runner schema。
 4. `webui/config/access.yaml` 中 disabled legacy wildcard user `lisi` 只能 warning，不能被静默视为安全。
 5. `webui/docs/03-api-spec.md` 缺 `/api/eval/*` 或 `/api/admin/*` 时输出 api-spec warning。

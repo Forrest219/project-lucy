@@ -4,14 +4,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { DiffViewer } from "../../components/DiffViewer";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
-import type { Agent, AgentPatch, McpToolInfo } from "../../lib/types";
+import type { Agent, AgentPatch, Role } from "../../lib/types";
 
 type AgentDetailResponse = { agent: Agent; version: string };
 type PatchDryRunResponse = { diff: string; proposedYaml: string };
 type PatchSaveResponse = { written: boolean; agent: Agent };
-type McpToolsResponse = { tools: McpToolInfo[] };
+type RolesResponse = { roles: Role[] };
 
-type Tab = "info" | "tokens" | "tools" | "tables" | "diff";
+type Tab = "info" | "tokens" | "permissions" | "diff";
 
 export function AgentDetail() {
   const { userId } = useParams<{ userId: string }>();
@@ -24,43 +24,26 @@ export function AgentDetail() {
     queryFn: () => apiGet<AgentDetailResponse>(`/api/admin/agents/${userId}`)
   });
 
-  const { data: toolsData } = useQuery({
-    queryKey: ["admin", "mcp-tools"],
-    queryFn: () => apiGet<McpToolsResponse>("/api/admin/mcp-tools")
+  const { data: rolesData } = useQuery({
+    queryKey: ["admin", "roles"],
+    queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
   });
 
   const [editName, setEditName] = useState<string | null>(null);
   const [editNote, setEditNote] = useState<string | null>(null);
   const [editEnabled, setEditEnabled] = useState<boolean | null>(null);
-  const [editAllowTools, setEditAllowTools] = useState<string[] | null>(null);
-  const [editAllowTables, setEditAllowTables] = useState<string[] | null>(null);
-  const [wildcardTools, setWildcardTools] = useState<boolean | null>(null);
-  const [wildcardTables, setWildcardTables] = useState<boolean | null>(null);
+  const [editRole, setEditRole] = useState<string | null>(null);
   const [diffPreview, setDiffPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
 
   const agent = data?.agent;
   const version = data?.version;
-
-  function getToolsValue(): string[] | ["*"] {
-    if (wildcardTools !== null) return wildcardTools ? ["*"] : (editAllowTools ?? agent?.allow.tools ?? []);
-    return editAllowTools ?? agent?.allow.tools ?? [];
-  }
-
-  function getTablesValue(): string[] | ["*"] {
-    if (wildcardTables !== null) return wildcardTables ? ["*"] : (editAllowTables ?? agent?.allow.tables ?? []);
-    return editAllowTables ?? agent?.allow.tables ?? [];
-  }
 
   function buildPatch(): AgentPatch {
     const patch: AgentPatch = {};
     if (editName !== null) patch.name = editName;
     if (editNote !== null) patch.note = editNote;
     if (editEnabled !== null) patch.enabled = editEnabled;
-    const tools = getToolsValue();
-    const tables = getTablesValue();
-    if (editAllowTools !== null || wildcardTools !== null || editAllowTables !== null || wildcardTables !== null) {
-      patch.allow = { tools, tables };
-    }
+    if (editRole !== null) patch.role = editRole;
     return patch;
   }
 
@@ -86,10 +69,7 @@ export function AgentDetail() {
       setEditName(null);
       setEditNote(null);
       setEditEnabled(null);
-      setEditAllowTools(null);
-      setEditAllowTables(null);
-      setWildcardTools(null);
-      setWildcardTables(null);
+      setEditRole(null);
     },
     onError: (err: Error) => toast.error(err.message)
   });
@@ -126,21 +106,19 @@ export function AgentDetail() {
   if (isLoading) return <div className="pl-notice">加载中…</div>;
   if (error || !agent) return <div className="pl-notice">加载失败：{error ? (error as Error).message : "Agent 不存在"}</div>;
 
-  const allTools = toolsData?.tools ?? [];
-  const currentTools = getToolsValue();
-  const currentTables = getTablesValue();
-  const isWildcardTools = wildcardTools !== null ? wildcardTools : currentTools.includes("*");
-  const isWildcardTables = wildcardTables !== null ? wildcardTables : currentTables.includes("*");
+  const roles = rolesData?.roles ?? [];
+  const currentRole = editRole !== null ? editRole : agent.role;
+  const effective = agent.effectivePermissions;
+  const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "info", label: "基本信息" },
     { key: "tokens", label: "Token" },
-    { key: "tools", label: "工具权限" },
-    { key: "tables", label: "表权限" },
+    { key: "permissions", label: "权限预览" },
     { key: "diff", label: "变更预览" }
   ];
 
-  const hasEdits = editName !== null || editNote !== null || editEnabled !== null || editAllowTools !== null || editAllowTables !== null || wildcardTools !== null || wildcardTables !== null;
+  const hasEdits = editName !== null || editNote !== null || editEnabled !== null || editRole !== null;
 
   return (
     <div className="pl-page-stack">
@@ -216,6 +194,26 @@ export function AgentDetail() {
                 启用
               </label>
             </div>
+            <label className="grid gap-1">
+              <span className="text-sm font-medium">角色</span>
+              <select
+                className="pl-input"
+                value={currentRole ?? ""}
+                onChange={(e) => setEditRole(e.target.value)}
+              >
+                <option value="" disabled>选择角色</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id} disabled={role.invalid}>
+                    {role.id}{role.invalid ? " (invalid)" : ""}
+                  </option>
+                ))}
+              </select>
+              {!agent.role && agent.allow && (
+                <span className="text-xs text-fg-muted">
+                  旧 ACL 只读兼容；保存角色后会移除该 Agent 的 legacy allow。
+                </span>
+              )}
+            </label>
           </div>
         )}
 
@@ -258,79 +256,47 @@ export function AgentDetail() {
           </div>
         )}
 
-        {activeTab === "tools" && (
-          <div className="grid gap-4 max-w-2xl">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={isWildcardTools}
-                onChange={(e) => {
-                  setWildcardTools(e.target.checked);
-                  if (e.target.checked) setEditAllowTools(null);
-                }}
-              />
-              通配 (*) — 允许所有未在全局 deny 的工具
-            </label>
-            {!isWildcardTools && (
-              <div className="grid grid-cols-2 gap-2">
-                {allTools.map((tool) => {
-                  const currentToolsArr = currentTools as string[];
-                  const checked = currentToolsArr.includes("*") ? true : currentToolsArr.includes(tool.name);
-                  return (
-                    <label
-                      key={tool.name}
-                      className={`flex items-center gap-2 text-sm ${tool.globalDenied ? "opacity-50" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={tool.globalDenied}
-                        onChange={(e) => {
-                          const current = (editAllowTools ?? agent.allow.tools).filter((t) => t !== "*");
-                          if (e.target.checked) {
-                            setEditAllowTools([...current, tool.name]);
-                          } else {
-                            setEditAllowTools(current.filter((t) => t !== tool.name));
-                          }
-                        }}
-                      />
-                      {tool.name}
-                      {tool.globalDenied && <span className="text-xs text-fg-muted">（全局禁用）</span>}
-                    </label>
-                  );
-                })}
+        {activeTab === "permissions" && (
+          <div className="grid gap-4 max-w-3xl">
+            <div className="pl-card">
+              <div className="text-sm font-medium">当前角色</div>
+              <div className="text-sm text-fg-muted mt-1">
+                {agent.role ?? "旧 ACL"}{legacyWildcard ? " · legacy wildcard" : ""}
               </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "tables" && (
-          <div className="grid gap-4 max-w-2xl">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={isWildcardTables}
-                onChange={(e) => {
-                  setWildcardTables(e.target.checked);
-                  if (e.target.checked) setEditAllowTables(null);
-                }}
-              />
-              通配 (*) — 允许所有 ktx.yaml 中的 enabled_tables
-            </label>
-            {!isWildcardTables && (
-              <div className="grid gap-2">
-                <p className="text-xs text-fg-muted">当前授权表（逗号分隔输入）：</p>
-                <textarea
-                  className="pl-input font-mono text-sm"
-                  rows={4}
-                  value={(editAllowTables ?? agent.allow.tables.filter((t) => t !== "*")).join("\n")}
-                  onChange={(e) => {
-                    const vals = e.target.value.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
-                    setEditAllowTables(vals);
-                  }}
-                  placeholder="每行一个表名，如 dataforai.superstore_orders"
-                />
-              </div>
+              {agent.permissionWarnings && agent.permissionWarnings.length > 0 && (
+                <div className="text-sm text-danger mt-2">{agent.permissionWarnings.join(", ")}</div>
+              )}
+            </div>
+            {effective ? (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="pl-metric-card"><span>工具</span><strong>{effective.tools.length}</strong><small>{effective.roleIds.join(", ") || "legacy"}</small></div>
+                  <div className="pl-metric-card"><span>连接</span><strong>{effective.connections.length}</strong><small>{effective.connections.join(", ") || "—"}</small></div>
+                  <div className="pl-metric-card"><span>Source</span><strong>{effective.sources.length}</strong><small>{effective.snapshotHash.slice(0, 12)}</small></div>
+                </div>
+                <div className="grid gap-2">
+                  <div className="text-sm font-medium">工具</div>
+                  <div className="flex flex-wrap gap-2">
+                    {effective.tools.map((tool) => <span key={tool} className="pl-status-badge">{tool}</span>)}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <div className="text-sm font-medium">授权 Source</div>
+                  {effective.sources.length === 0 ? (
+                    <p className="text-sm text-fg-muted">无可展开 source。</p>
+                  ) : (
+                    <div className="grid gap-1">
+                      {effective.sources.map((source) => (
+                        <div key={`${source.connectionId}:${source.sourceName}`} className="text-sm font-mono text-fg-muted">
+                          {source.connectionId} / {source.sourceName} · {source.table}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-fg-muted">当前权限无法解析。请先迁移到有效角色。</p>
             )}
           </div>
         )}
@@ -363,8 +329,7 @@ export function AgentDetail() {
         <div className="flex justify-end gap-2 pt-4 border-t border-border-default">
           <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
             setEditName(null); setEditNote(null); setEditEnabled(null);
-            setEditAllowTools(null); setEditAllowTables(null);
-            setWildcardTools(null); setWildcardTables(null);
+            setEditRole(null);
           }}>
             取消
           </button>
