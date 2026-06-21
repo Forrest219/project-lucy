@@ -2,7 +2,7 @@
   "connectionId": "mysql-aliyun",
   "driver": "mysql",
   "syncId": "2026-06-20-080147-local-mqm2k69r",
-  "runId": "local-mqm2k69r",
+  "runId": "local-mqny7akp",
   "trigger": "cli",
   "mode": "enriched",
   "dryRun": false,
@@ -21,10 +21,10 @@
     ]
   },
   "diffSummary": {
-    "tablesAdded": 6,
+    "tablesAdded": 0,
     "tablesModified": 0,
-    "tablesDeleted": 20,
-    "tablesUnchanged": 3,
+    "tablesDeleted": 0,
+    "tablesUnchanged": 9,
     "columnsAdded": 0,
     "columnsModified": 0,
     "columnsDeleted": 0
@@ -44,14 +44,38 @@
     "columnDescriptions": "completed",
     "embeddings": "completed",
     "deterministicRelationships": "completed",
-    "llmRelationshipValidation": "completed",
+    "llmRelationshipValidation": "failed",
     "statisticalValidation": "completed"
   },
   "capabilityGaps": [],
-  "warnings": [],
+  "warnings": [
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table superstore_people: No object generated: could not parse the response.",
+      "table": "superstore_people",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    },
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table superstore_returns: No object generated: could not parse the response.",
+      "table": "superstore_returns",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    },
+    {
+      "code": "relationship_llm_proposal_failed",
+      "message": "ktx relationship LLM proposal failed: No object generated: response did not match schema.",
+      "recoverable": true
+    }
+  ],
   "relationships": {
     "accepted": 2,
-    "review": 2,
+    "review": 1,
     "rejected": 0,
     "skipped": 0
   },
@@ -64,5 +88,5 @@
     ],
     "failedStages": []
   },
-  "createdAt": "2026-06-20T08:01:50.233Z"
+  "createdAt": "2026-06-21T15:35:20.424Z"
 }
