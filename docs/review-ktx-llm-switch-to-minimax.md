@@ -77,6 +77,7 @@ llm:
 ```bash
 ktx status --validate
 ktx status --fast --json
+ktx status
 ```
 
 结果：
@@ -84,18 +85,29 @@ ktx status --fast --json
 - `ktx.yaml` schema valid。
 - KTX 能读取到 `backend: anthropic`。
 - KTX 能读取到 `model: MiniMax-M3`。
+- KTX 能通过 file secret 读取 MiniMax key，`ktx status` 返回 `Ready`。
 
 带本机 secret 文件的验证结果：
 
 - `ktx status` 显示 `Ready`。
 - KTX LLM health check 使用 `https://api.minimaxi.com/anthropic/v1` 返回 `{"ok":true}`。
 - 从实际 `ktx.yaml` 解析出的 KTX LLM config 显示 `backend: anthropic`、`model: MiniMax-M3`、`ok: true`。
+- 从实际 `ktx.yaml` 创建的 KTX runtime 文本生成通过，返回 `ktx-minimax-ok`。
+- 从实际 `ktx.yaml` 创建的 KTX runtime 结构化输出通过，返回 `{ ok: true, label: "ktx-minimax-structured", score: 1 }`。
+- `ktx ingest --text ... --json --no-input` 通过，状态 `done`。
+- `ktx ingest mysql-aliyun --json --no-input` 通过，`database-schema` 完成，无 Anthropic/MiniMax 协议错误或结构化输出解析错误。
 - `ktx wiki "test query"` 返回本地 wiki 检索结果。
+- Hermes `workhorse` profile 通过已绑定的 `lucy_ktx` MCP 成功查询 KX 财务表：
+  - MCP 连接：`http://localhost:7879/mcp`，发现 `kx_catalog`、`sl_read_source`、`sl_query`、`entity_details`。
+  - 使用工具：`kx_catalog`、`sl_read_source`、`sl_query`。
+  - 查询 source：`kx_vw_income_statement_detail` / `dataforai.kx_vw_income_statement_detail`。
+  - 查询样本：按 `公司名称`、`报表期间`、`项目名称` 聚合收入类项目，返回 5 行营业收入样本；202604 `本年累计金额` 与 `本月金额` 均为 `69339.62`，202605 `本年累计金额` 为 `69339.62`、`本月金额` 为 `null`。
+  - 结论：`workhorse -> KTX MCP -> KX 表` 只读业务路径可用。
 
-未完成 / 待继续验证：
+仍需注意：
 
-- 结构化输出最小测试曾超时，中断后未判定通过。
-- `scan.enrichment`、`candidateExtraction`、`curator`、`reconcile`、`repair` 仍需要用小样本继续验证。
+- KTX 0.12.0 当前没有公开 `ktx scan` CLI；本轮以 `ktx ingest mysql-aliyun` 覆盖最接近的 CLI 级 schema ingest 路径。
+- 如果未来升级 KTX 后出现独立 scan/enrichment 命令，应补跑最小范围 scan/enrichment 验证。
 
 ## 5. 操作方法
 
