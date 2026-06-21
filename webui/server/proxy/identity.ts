@@ -12,14 +12,34 @@ interface UserToken {
 }
 
 interface UserAllow {
+  connections?: string[];
   tables?: string[];
   tools?: string[];
+}
+
+interface TableSelector {
+  connection?: string;
+  schema: string;
+  prefix?: string;
+  names?: string[];
+}
+
+interface RoleAllow {
+  connections?: string[];
+  tableSelectors?: TableSelector[];
+  tools?: string[];
+}
+
+interface RoleConfig {
+  description?: string;
+  allow?: RoleAllow;
 }
 
 interface UserConfig {
   id: string;
   name?: string;
   enabled?: boolean;
+  role?: string;
   tokens: UserToken[];
   allow?: UserAllow;
 }
@@ -33,6 +53,7 @@ interface Defaults {
 }
 
 interface AccessConfig {
+  roles?: Record<string, RoleConfig>;
   users: UserConfig[];
   defaults?: Defaults;
 }

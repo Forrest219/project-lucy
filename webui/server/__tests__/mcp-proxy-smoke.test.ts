@@ -171,7 +171,16 @@ describe("MCP proxy smoke", () => {
       expect(audit.user_id).toBe("smoke_agent");
       expect(audit.tool).toBe("sl_read_source");
       expect(audit.outcome).toBe("ok");
+      expect(audit.decision_reason).toBe("allowed");
+      expect(audit.permission_snapshot_hash).toMatch(/^[0-9a-f]{64}$/);
       expect(JSON.parse(String(audit.tables))).toEqual(["dataforai.superstore_orders"]);
+      const auditDb = new Database(auditDbPath, { readonly: true });
+      try {
+        const snapshot = auditDb.prepare("SELECT * FROM permission_snapshots WHERE hash = ?").get(audit.permission_snapshot_hash) as Record<string, unknown> | undefined;
+        expect(snapshot).toBeTruthy();
+      } finally {
+        auditDb.close();
+      }
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));

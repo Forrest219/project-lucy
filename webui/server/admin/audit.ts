@@ -5,6 +5,18 @@ import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
 
 let db: Database.Database | null = null;
+const ACCESS_LOG_COLUMNS = [
+  ["role_ids", "TEXT"],
+  ["permission_snapshot_hash", "TEXT"],
+  ["effective_tables_count", "INTEGER"],
+  ["decision_reason", "TEXT"]
+] as const;
+
+function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
+  const rows = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (rows.some((row) => row.name === column)) return;
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
 
 export async function getAuditDb(): Promise<Database.Database> {
   if (db) return db;
@@ -26,7 +38,11 @@ export async function getAuditDb(): Promise<Database.Database> {
       outcome      TEXT    NOT NULL,
       error_detail TEXT,
       duration_ms  INTEGER NOT NULL,
-      request_id   TEXT    NOT NULL
+      request_id   TEXT    NOT NULL,
+      role_ids     TEXT,
+      permission_snapshot_hash TEXT,
+      effective_tables_count INTEGER,
+      decision_reason TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_al_user_ts ON access_log(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_tool_ts ON access_log(tool, ts);
@@ -35,7 +51,16 @@ export async function getAuditDb(): Promise<Database.Database> {
       revoked_at TEXT NOT NULL,
       reason     TEXT
     );
+    CREATE TABLE IF NOT EXISTS permission_snapshots (
+      hash          TEXT PRIMARY KEY,
+      created_at    TEXT NOT NULL,
+      roles_json    TEXT NOT NULL,
+      resolved_json TEXT NOT NULL
+    );
   `);
+  for (const [column, definition] of ACCESS_LOG_COLUMNS) {
+    ensureColumn(db, "access_log", column, definition);
+  }
   return db;
 }
 
@@ -51,6 +76,10 @@ interface QueryRow {
   error_detail: string | null;
   duration_ms: number;
   request_id: string;
+  role_ids: string | null;
+  permission_snapshot_hash: string | null;
+  effective_tables_count: number | null;
+  decision_reason: string | null;
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
@@ -108,7 +137,11 @@ export function registerAuditRoutes(app: FastifyInstance) {
       outcome: row.outcome as "ok" | "error" | "denied",
       errorDetail: row.error_detail ?? undefined,
       durationMs: row.duration_ms,
-      requestId: row.request_id
+      requestId: row.request_id,
+      roleIds: row.role_ids ? (JSON.parse(row.role_ids) as string[]) : undefined,
+      permissionSnapshotHash: row.permission_snapshot_hash ?? undefined,
+      effectiveTablesCount: row.effective_tables_count ?? undefined,
+      decisionReason: row.decision_reason ?? undefined
     }));
 
     return { ok: true, data: { total: totalRow.cnt, entries } };

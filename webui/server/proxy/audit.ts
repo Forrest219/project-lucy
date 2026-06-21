@@ -15,9 +15,30 @@ export interface AccessLogEntry {
   errorDetail?: string;
   durationMs: number;
   requestId: string | number;
+  roleIds?: string[];
+  permissionSnapshotHash?: string;
+  effectiveTablesCount?: number;
+  decisionReason?: string;
+  permissionSnapshot?: {
+    hash: string;
+    rolesJson: unknown;
+    resolvedJson: unknown;
+  };
 }
 
 let db: Database.Database | null = null;
+const ACCESS_LOG_COLUMNS = [
+  ["role_ids", "TEXT"],
+  ["permission_snapshot_hash", "TEXT"],
+  ["effective_tables_count", "INTEGER"],
+  ["decision_reason", "TEXT"]
+] as const;
+
+function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
+  const rows = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (rows.some((row) => row.name === column)) return;
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
 
 async function getDb(): Promise<Database.Database> {
   if (db) return db;
@@ -39,7 +60,11 @@ async function getDb(): Promise<Database.Database> {
       outcome      TEXT    NOT NULL,
       error_detail TEXT,
       duration_ms  INTEGER NOT NULL,
-      request_id   TEXT    NOT NULL
+      request_id   TEXT    NOT NULL,
+      role_ids     TEXT,
+      permission_snapshot_hash TEXT,
+      effective_tables_count INTEGER,
+      decision_reason TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_al_user_ts ON access_log(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_tool_ts ON access_log(tool, ts);
@@ -48,11 +73,21 @@ async function getDb(): Promise<Database.Database> {
       revoked_at TEXT NOT NULL,
       reason     TEXT
     );
+    CREATE TABLE IF NOT EXISTS permission_snapshots (
+      hash          TEXT PRIMARY KEY,
+      created_at    TEXT NOT NULL,
+      roles_json    TEXT NOT NULL,
+      resolved_json TEXT NOT NULL
+    );
   `);
+  for (const [column, definition] of ACCESS_LOG_COLUMNS) {
+    ensureColumn(db, "access_log", column, definition);
+  }
   return db;
 }
 
 let insertStmt: Database.Statement | null = null;
+let snapshotStmt: Database.Statement | null = null;
 
 export function isTokenRevoked(tokenHash: string): Promise<boolean> {
   return getDb().then((database) => {
@@ -70,12 +105,28 @@ function truncateErrorDetail(value: string): string {
 
 export async function writeLog(entry: AccessLogEntry): Promise<void> {
   const database = await getDb();
+  if (entry.permissionSnapshot) {
+    if (!snapshotStmt) {
+      snapshotStmt = database.prepare(`
+        INSERT OR IGNORE INTO permission_snapshots
+          (hash, created_at, roles_json, resolved_json)
+        VALUES
+          (@hash, @createdAt, @rolesJson, @resolvedJson)
+      `);
+    }
+    snapshotStmt.run({
+      hash: entry.permissionSnapshot.hash,
+      createdAt: entry.ts,
+      rolesJson: JSON.stringify(entry.permissionSnapshot.rolesJson),
+      resolvedJson: JSON.stringify(entry.permissionSnapshot.resolvedJson)
+    });
+  }
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, client, tool, tables, args_summary, outcome, error_detail, duration_ms, request_id)
+        (ts, user_id, client, tool, tables, args_summary, outcome, error_detail, duration_ms, request_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
       VALUES
-        (@ts, @userId, @client, @tool, @tables, @argsSummary, @outcome, @errorDetail, @durationMs, @requestId)
+        (@ts, @userId, @client, @tool, @tables, @argsSummary, @outcome, @errorDetail, @durationMs, @requestId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
     `);
   }
   insertStmt.run({
@@ -89,5 +140,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<void> {
     errorDetail: entry.errorDetail ? truncateErrorDetail(entry.errorDetail) : null,
     durationMs: entry.durationMs,
     requestId: String(entry.requestId),
+    roleIds: entry.roleIds ? JSON.stringify(entry.roleIds) : null,
+    permissionSnapshotHash: entry.permissionSnapshotHash ?? entry.permissionSnapshot?.hash ?? null,
+    effectiveTablesCount: entry.effectiveTablesCount ?? null,
+    decisionReason: entry.decisionReason ?? null,
   });
 }

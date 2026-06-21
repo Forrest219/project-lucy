@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy WebUI Agent 权限管控模块设计 |
 | 文档类型 | Design |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-19 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-06-19；v1.2 修订 2026-06-21 |
 | 撰写人 | Claude Thinker |
 | 委托人 | zhangxingchen |
 | 基于材料 | project-lucy/webui/config/access.yaml v1.0, project-lucy/webui/docs/07-mcp-auth-proxy-spec.md v1.0, project-lucy/docs/user-guide/product-intro.html v1.0 |
@@ -27,6 +27,8 @@
 
 本设计在 WebUI 内提供 Agent 实例 / Token / 权限策略的可视化管控，**事实源仍然是 `access.yaml`** + SQLite，UI 是 yaml/sqlite 的安全编辑器。
 
+v1.2 进一步把「逐表 / 逐工具 ACL」升级为「角色 / 权限模板优先」：普通同事拿到 token 后，只需要在 Codex app / Hermes / Claude Code 配 MCP URL + Bearer token，不需要知道 `mysql-aliyun`、`dataforai.kx_*` 或 tool include。
+
 ### 1.2 不做什么（与 spec 07 一致）
 
 - 不实现 OIDC / OAuth / SSO（v1.0 排除）。
@@ -40,6 +42,7 @@
 
 - [假设：管理员 = 当前在本机运行 webui 的人]，WebUI 不区分管理员与数据工程师身份。这与现有 ADR-05 "无登录"一致。
 - [假设：Agent 实例 = `access.yaml.users[]` 里的一项]，与现有 spec 07 一一对应。一个"用户"可挂多个 token（如 hermes-laptop + cursor-mac）。
+- [假设：新建 Agent 默认选择一个 role]，如 `kx_readonly`；`users[].allow` 仅作为历史配置兼容展示，不再作为新建流程的主入口。
 - [假设：Token 明文只在创建一次性返回，之后只保留 sha256]。与 spec 07 §11 风险缓解一致。
 - [推断：进入 WebUI 写 access.yaml 后，热加载机制（30s TTL）保持不变]，无需重启代理。依据：access.yaml 注释 "修改后 30 秒内自动生效（缓存 TTL）"。
 - [推断：MCP Proxy 已经在 7879 跑]，本模块不动 proxy 行为，只动 yaml/sqlite 管理面。
@@ -55,7 +58,7 @@
 | 路由 | 页面 | 默认目录归属 |
 |---|---|---|
 | `/admin/agents` | Agent 实例列表（替代 Catalog 作为 admin 默认页） | 左侧导航新分组「访问治理」 |
-| `/admin/agents/:userId` | Agent 实例详情（含工具/表 ACL 编辑、token 列表） | 同上 |
+| `/admin/agents/:userId` | Agent 实例详情（含角色、权限预览、token 列表） | 同上 |
 | `/admin/agents/:userId/tokens/new` | 创建新 token（一次性显示明文） | 同上 |
 | `/admin/audit` | 访问日志查询 | 同上 |
 
@@ -74,13 +77,13 @@
 ```
 ┌─ Header ─────────────────────────────────────────────────┐
 │ 访问治理 / Agent 实例                          [新建 Agent] │
-│ 配置每个 Agent 实例能用哪些 MCP 工具和访问哪些表。            │
+│ 用角色模板管理 Agent 的 MCP 数据访问权限。                   │
 ├──────────────────────────────────────────────────────────┤
 │ [搜索框: 按用户 id / 名称]   [状态: 全部 ▾]                │
 ├──────────────────────────────────────────────────────────┤
 │ ┌──────────────────────────────────────────────────────┐ │
 │ │ 张三 (zhangsan)                          ●启用       │ │
-│ │ 1 个 token · 1 张表 · 8 个工具                        │ │
+│ │ role: kx_readonly · 1 个 token · 4 个工具 · 5 个源      │ │
 │ │ 最近访问 2026-06-19 14:23 · 共 247 次调用             │ │
 │ │                                  [编辑]  [查看日志]   │ │
 │ └──────────────────────────────────────────────────────┘ │
@@ -97,7 +100,7 @@
 - 顶部：标题 + 「新建 Agent」CTA；过滤器（搜索 + 启用状态）。
 - 卡片网格：每个 Agent 一张卡，显示：
   - 用户 id / 显示名 / 启用状态徽章
-  - 摘要：token 数 / 授权表数（或 `*`）/ 授权工具数（或 `*`）
+  - 摘要：role / token 数 / 解析后的授权源数 / 授权工具数
   - 最近访问时间和总调用次数（来自 `audit.sqlite.access_log`）
   - 行内操作：编辑、查看日志（跳到 `/admin/audit?user=<id>`）
 - 空态：当 access.yaml 没有任何 user 时，显示引导文案 + 「新建第一个 Agent」按钮。
@@ -111,13 +114,14 @@
 │ ‹ 返回列表    张三 (zhangsan)        [禁用] [删除]         │
 │ 面包屑：访问治理 / Agent 实例 / 张三                       │
 ├─ 标签页 ─────────────────────────────────────────────────┤
-│ [基本信息]  [Token]  [工具权限]  [表权限]  [变更预览]      │
+│ [基本信息]  [Token]  [角色权限]  [权限预览]  [变更预览]    │
 ├──────────────────────────────────────────────────────────┤
 │ [基本信息]                                                │
 │   用户 id (不可改)  : zhangsan                            │
 │   显示名 (input)    : 张三                                │
 │   备注 (textarea)   : ...                                 │
 │   启用 (toggle)     : ●                                   │
+│   角色 (select)     : kx_readonly ▾                       │
 ├──────────────────────────────────────────────────────────┤
 │ [Token] (列表)                                            │
 │  ┌─────────────────────────────────────────────────────┐ │
@@ -127,19 +131,19 @@
 │  └─────────────────────────────────────────────────────┘ │
 │  [+ 新建 Token]                                           │
 ├──────────────────────────────────────────────────────────┤
-│ [工具权限]                                                │
-│  ☐ 通配 (*) — 允许所有未在全局 deny 的工具                 │
-│  或选择具体工具（多选 checkbox 网格）：                    │
-│   ☑ sl_query        ☑ sl_read_source   ☑ wiki_search    │
-│   ☑ wiki_read       ☑ entity_details    ☑ dictionary…   │
-│   ☐ memory_ingest (全局禁用，无法选)                      │
+│ [角色权限]                                                │
+│  当前角色：kx_readonly                                    │
+│  说明：KX 财务数据只读问答                                 │
+│  工具：kx_catalog, sl_query, sl_read_source, entity_details │
+│  连接：mysql-aliyun                                       │
+│  表选择器：dataforai.kx_*                                  │
 ├──────────────────────────────────────────────────────────┤
-│ [表权限]                                                  │
-│  ☐ 通配 (*) — 允许 ktx.yaml 中所有 enabled_tables         │
-│  或多选表（来自 GET /api/sources）：                       │
-│   ☑ dataforai.superstore_orders                          │
-│   ☐ dataforai.superstore_returns                         │
-│   ☐ dataforai.superstore_people                          │
+│ [权限预览]                                                │
+│  展开 role 后的 effective permissions：                   │
+│   connection: mysql-aliyun                                │
+│   source: dataforai.kx_fact_financial_amount              │
+│   ...                                                     │
+│  snapshot hash: 9f2a...                                   │
 ├──────────────────────────────────────────────────────────┤
 │ [变更预览]                                                │
 │  与磁盘 access.yaml 的 unified diff（复用 DiffViewer）    │
@@ -151,8 +155,9 @@
 
 - Tab 切换以避免单页过长。
 - 「保存」按钮先弹 diff 模态确认（沿用现有 dryRun 习惯）。
-- 工具选择网格从 `GET /api/mcp/tools` 拉（新增端点，见 §4），全局 deny 的工具置灰显示「全局禁用」。
-- 表选择从现有 `GET /api/sources` 拉，按 schema 折叠。
+- 角色选择从 `GET /api/admin/roles` 拉；全局 deny 的工具在角色详情中置灰显示「全局禁用」。
+- 权限预览由 `GET /api/admin/roles/:roleId/preview` 或 Agent 详情响应返回，按 connection/schema/source 分组。
+- 历史 `users[].allow` 配置只读显示为「旧 ACL」并提示迁移；新建和编辑流程不再生成逐表逐工具 allow。
 
 ### 2.4 页面 3：创建 Token `/admin/agents/:userId/tokens/new`
 
@@ -179,7 +184,7 @@
 │  │ tk_4f7a9c…(64 字符 hex)                  [复制]      │ │
 │  └─────────────────────────────────────────────────────┘ │
 │                                                          │
-│  这是给 Agent 客户端 (Hermes / Cursor / Claude Code)      │
+│  这是给 Agent 客户端 (Hermes / Cursor / Claude Code / Codex app) │
 │  的 Authorization Bearer Token。请按以下方式配置：        │
 │                                                          │
 │  .mcp.json:                                              │
@@ -197,6 +202,8 @@
 ```
 
 **关键交互**：明文 token 只在 `POST /api/admin/agents/:userId/tokens` 响应里返回一次，后端落盘只存 sha256；用户关闭页面后，列表里再点 token 只能看到 `sha256:b552…`。
+
+普通 token 交付页不展示 `mysql-aliyun`、`dataforai.kx_*`、tool include 或 role 内部实现。能力发现由 `tools/list` 和 `kx_catalog` 完成。
 
 ### 2.5 页面 4：访问日志 `/admin/audit`
 
@@ -231,18 +238,41 @@
 ### 3.1 access.yaml schema（在 spec 07 §5.1 基础上扩展）
 
 ```yaml
+roles:
+  kx_readonly:
+    description: KX 财务数据只读问答
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - kx_dim_company
+            - kx_dim_financial_item
+            - kx_fact_financial_amount
+            - kx_vw_balance_sheet_detail
+            - kx_vw_cash_flow_statement_detail
+            - kx_vw_income_statement_detail
+      tools:
+        - kx_catalog
+        - sl_query
+        - sl_read_source
+        - entity_details
+
 users:
   - id: zhangsan                     # ← 不可改主键，[A-Za-z0-9_-]{1,32}
     name: 张三                        # 显示名
     note: ""                         # 新增：备注
     enabled: true                    # 新增：启用开关；false 时代理直接 401
+    role: kx_readonly                # v1.2：新建 Agent 必填
     tokens:
       - hash: "sha256:b552dcab..."   # 64 hex
         label: hermes-laptop         # 必填，唯一在同一 user 内
         created: 2026-06-18          # ISO date
         expires_at: null             # 新增：可选 ISO date 或 null
         last_used: "2026-06-19T14:23:00Z"  # 新增，由 audit 表派生
-    allow:
+    allow:                           # deprecated：仅兼容历史配置
       tables:
         - dataforai.superstore_orders
       tools:
@@ -256,8 +286,18 @@ defaults:
     - memory_ingest_status
 ```
 
-新增字段：`enabled` / `note` / `tokens[].expires_at` / `tokens[].last_used`。
+新增字段：`roles` / `users[].role` / `enabled` / `note` / `tokens[].expires_at` / `tokens[].last_used`。
 **`last_used` 是只读派生字段**：保存时被剥离，加载时由 audit 表 `MAX(ts)` 算回填。
+
+`users[].allow` 从 v1.2 起 deprecated。兼容期内：
+
+- 旧配置没有 `role` 时，后端仍按 `allow` 计算权限并在 UI 标记「旧 ACL」。
+- 新建 Agent 必须选择 `role`，不得生成新的 `allow`。
+- 同一 Agent 同时存在 `role` 和 `allow` 时，UI 显示告警；proxy reload 按 `role` 生效。
+- 若 `role` 解析失败，不回退到 `allow`；reload fail-closed 并保留上一份已验证配置。
+- 迁移工具应把可复用的旧 `allow.connections/tables/tools` 抽成 role，再把 user 改为 `role: <id>`。
+- `role.allow.tools` 必须显式列工具名；`["*"]` 只允许用于历史 `users[].allow`。
+- 授权表访问工具或 `tableSelectors` 的 role 必须配置非空 `allow.connections`；纯 wiki / 非数据工具 role 可以省略。
 
 ### 3.2 前端共享类型 `webui/src/lib/types.ts` 增量
 
@@ -267,12 +307,42 @@ export type Agent = {
   name: string;
   note?: string;
   enabled: boolean;
+  role?: string;
   tokens: TokenSummary[];
-  allow: {
+  allow?: {                           // deprecated：旧 ACL 兼容显示
     tables: string[] | ["*"];        // "*" 即通配
     tools: string[] | ["*"];
   };
+  effectivePermissions?: EffectivePermissionsPreview;
   stats?: AgentStats;                // 由 audit 派生
+};
+
+export type Role = {
+  id: string;
+  description?: string;
+  allow: {
+    connections?: string[];
+    tableSelectors?: TableSelector[];
+    tools: string[];
+  };
+};
+
+export type TableSelector =
+  | { connection?: string; schema: string; prefix: string }
+  | { connection?: string; schema: string; names: string[] };
+
+export type EffectivePermissionsPreview = {
+  roleIds: string[];
+  snapshotHash: string;
+  sourceMapVersion?: string;
+  tools: string[];
+  connections: string[];
+  sources: Array<{
+    connectionId: string;
+    schema: string;
+    sourceName: string;
+    table: string;
+  }>;
 };
 
 export type TokenSummary = {
@@ -297,17 +367,14 @@ export type AgentPatch = {
   name?: string;
   note?: string;
   enabled?: boolean;
-  allow?: {
-    tables?: string[] | ["*"];
-    tools?: string[] | ["*"];
-  };
+  role?: string;
 };
 
 export type CreateAgentBody = {
   id: string;
   name: string;
   note?: string;
-  allow: { tables: string[] | ["*"]; tools: string[] | ["*"] };
+  role: string;
 };
 
 export type CreateTokenBody = {
@@ -335,6 +402,10 @@ export type AuditLogEntry = {
   errorDetail?: string;
   durationMs: number;
   requestId: string | number;
+  roleIds?: string[];
+  permissionSnapshotHash?: string;
+  effectiveTablesCount?: number;
+  decisionReason?: string;
 };
 
 export type AuditQuery = {
@@ -362,7 +433,7 @@ export type McpToolInfo = {
 
 ### 3.3 SQLite schema 增量
 
-不新增表。沿用 spec 07 §5.2 定义的两张表，完整 DDL（由 `webui/server/admin/audit.ts` 在启动时 `CREATE TABLE IF NOT EXISTS` 建立，与 MCP Proxy 共享同一文件）：
+新增 `permission_snapshots` 表，并扩展 spec 07 §5.2 的 `access_log`。完整 DDL（由 `webui/server/admin/audit.ts` 在启动时 `CREATE TABLE IF NOT EXISTS` / migration 建立，与 MCP Proxy 共享同一文件）：
 
 ```sql
 CREATE TABLE IF NOT EXISTS access_log (
@@ -376,7 +447,11 @@ CREATE TABLE IF NOT EXISTS access_log (
   outcome      TEXT    NOT NULL,          -- 'ok' | 'error' | 'denied'
   error_detail TEXT,
   duration_ms  INTEGER NOT NULL,
-  request_id   TEXT    NOT NULL
+  request_id   TEXT    NOT NULL,
+  role_ids     TEXT,                      -- JSON array string, v1.2
+  permission_snapshot_hash TEXT,           -- v1.2
+  effective_tables_count INTEGER,          -- v1.2
+  decision_reason TEXT                     -- v1.2
 );
 CREATE INDEX IF NOT EXISTS idx_al_user_ts ON access_log(user_id, ts);
 CREATE INDEX IF NOT EXISTS idx_al_tool_ts ON access_log(tool, ts);
@@ -386,9 +461,37 @@ CREATE TABLE IF NOT EXISTS revoked_tokens (
   revoked_at TEXT NOT NULL,              -- ISO datetime
   reason     TEXT                         -- 'manual_revoke' | 'agent_deleted'
 );
+
+CREATE TABLE IF NOT EXISTS permission_snapshots (
+  hash          TEXT PRIMARY KEY,
+  created_at    TEXT NOT NULL,
+  roles_json    TEXT NOT NULL,
+  resolved_json TEXT NOT NULL
+);
 ```
 
-Module 1 不新增表或视图；stats 查询以 SQL 函数形式内联在后端路由处理函数中：
+`permission_snapshots` 保存 role 解析后的 effective permissions 快照。`access_log.permission_snapshot_hash` 只存 hash，必须能关联到该表，否则未来 role / selector 变更后无法复盘当时的 allow / denied 决策。
+
+快照按 hash 去重；清理任务只能删除不再被近 90 天 `access_log.permission_snapshot_hash` 引用的快照。
+
+老库迁移：
+
+```sql
+ALTER TABLE access_log ADD COLUMN role_ids TEXT;
+ALTER TABLE access_log ADD COLUMN permission_snapshot_hash TEXT;
+ALTER TABLE access_log ADD COLUMN effective_tables_count INTEGER;
+ALTER TABLE access_log ADD COLUMN decision_reason TEXT;
+CREATE TABLE IF NOT EXISTS permission_snapshots (
+  hash TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  roles_json TEXT NOT NULL,
+  resolved_json TEXT NOT NULL
+);
+```
+
+历史记录这些新增列允许为 `NULL`，表示旧版本未采集；新记录必须写入 `decision_reason`，并在可解析 role 时写入 `permission_snapshot_hash`。
+
+Stats 查询以 SQL 函数形式内联在后端路由处理函数中：
 
 ```sql
 -- per-user stats (callsLast7d / deniedLast7d / lastSeen)
@@ -412,11 +515,12 @@ ORDER BY user_id, cnt DESC;
 
 | 数据 | 落盘位置 | 写入路径 |
 |---|---|---|
-| Agent 元数据、ACL | `webui/config/access.yaml` | `fs-safe` 新增白名单根 `webui/config` |
+| Role / Agent 元数据、ACL | `webui/config/access.yaml` | `fs-safe` 新增白名单根 `webui/config` |
 | Token sha256 hash | 同上，`users[].tokens[]` | 同上 |
 | Token 明文 | **从不落盘** | 仅 HTTP 响应一次 |
 | revoked token 记录 | `.ktx-ui/audit.sqlite.revoked_tokens` | better-sqlite3 |
 | 访问日志 | `.ktx-ui/audit.sqlite.access_log` | 同上 |
+| 权限快照 | `.ktx-ui/audit.sqlite.permission_snapshots` | 同上 |
 
 `fs-safe.ts` 当前白名单是 `['semantic-layer', 'wiki', '.ktx-ui']`。需要把 `webui/config` 加入：
 
@@ -434,7 +538,7 @@ const ALLOW = ['semantic-layer', 'wiki', '.ktx-ui', 'webui/config'];
 
 - 沿用现有 envelope `{ ok: true, data }` / `{ ok: false, error }`（ADR-09）。
 - 所有写类端点支持 `?dryRun=true` 返回 diff/proposedYaml，默认 `true`，与 `/api/sources` 一致。
-- 错误码新增：`AGENT_NOT_FOUND` `AGENT_ID_TAKEN` `TOKEN_NOT_FOUND` `TOKEN_LABEL_TAKEN` `INVALID_ACL`。
+- 错误码新增：`AGENT_NOT_FOUND` `AGENT_ID_TAKEN` `TOKEN_NOT_FOUND` `TOKEN_LABEL_TAKEN` `ROLE_NOT_FOUND` `INVALID_ROLE` `INVALID_ACL` `CONFIG_CONFLICT`。
 
 ### 4.2 端点清单
 
@@ -442,12 +546,14 @@ const ALLOW = ['semantic-layer', 'wiki', '.ktx-ui', 'webui/config'];
 GET    /api/admin/agents                       # 列表 + 统计
 POST   /api/admin/agents                       # 新建
 GET    /api/admin/agents/:userId               # 详情
-PATCH  /api/admin/agents/:userId               # 部分更新（name/note/enabled/allow）
+PATCH  /api/admin/agents/:userId               # 部分更新（name/note/enabled/role）
 DELETE /api/admin/agents/:userId               # 删除
 
 POST   /api/admin/agents/:userId/tokens                 # 生成新 token（返回明文一次）
 DELETE /api/admin/agents/:userId/tokens/:label          # 撤销
 
+GET    /api/admin/roles                        # 角色模板列表 + selector 摘要
+GET    /api/admin/roles/:roleId/preview         # role 展开后的 effective permissions 预览
 GET    /api/admin/audit                        # 访问日志查询
 GET    /api/admin/audit/export                 # CSV 导出
 GET    /api/admin/mcp-tools                    # 当前 MCP server 暴露的工具清单
@@ -467,6 +573,7 @@ Response:
       "name": "张三",
       "note": "",
       "enabled": true,
+      "role": "kx_readonly",
       "tokens": [{
         "hash": "sha256:b552...",
         "label": "hermes-laptop",
@@ -474,7 +581,20 @@ Response:
         "expires_at": null,
         "last_used": "2026-06-19T14:23:00Z"
       }],
-      "allow": { "tables": ["dataforai.superstore_orders"], "tools": ["sl_query", "..."] },
+      "effectivePermissions": {
+        "roleIds": ["kx_readonly"],
+        "snapshotHash": "9f2a...",
+        "tools": ["kx_catalog", "sl_query", "sl_read_source", "entity_details"],
+        "connections": ["mysql-aliyun"],
+        "sources": [
+          {
+            "connectionId": "mysql-aliyun",
+            "schema": "dataforai",
+            "sourceName": "kx_fact_financial_amount",
+            "table": "dataforai.kx_fact_financial_amount"
+          }
+        ]
+      },
       "stats": {
         "callsLast7d": 247,
         "deniedLast7d": 3,
@@ -496,11 +616,12 @@ Body:
     "id": "wangwu",
     "name": "王五",
     "note": "市场部分析助理",
-    "allow": { "tables": ["dataforai.superstore_orders"], "tools": ["sl_query", "wiki_search"] }
+    "role": "kx_readonly"
   }
 }
 ```
 - `id` 唯一，正则 `^[A-Za-z0-9_-]{1,32}$`，重复返回 `409 AGENT_ID_TAKEN`。
+- `role` 必须存在于 `roles`，否则返回 `400 ROLE_NOT_FOUND`。
 - `dryRun:true` 返回 `{ diff, proposedYaml }`；`false` 写回 access.yaml。
 - 创建后 `tokens` 为空数组；调用方必须再走 `POST .../tokens` 才能拿到明文。
 
@@ -513,11 +634,46 @@ Response (`dryRun:false`):
 
 Body:
 ```jsonc
-{ "dryRun": false, "patch": { "enabled": false, "allow": { "tools": ["*"] } } }
+{ "dryRun": false, "patch": { "enabled": false, "role": "kx_readonly" } }
 ```
-- 只允许 `name` / `note` / `enabled` / `allow` 更新。
+- 只允许 `name` / `note` / `enabled` / `role` 更新。
 - `id` 和 `tokens` 不可通过此端点改（tokens 用专属端点）。
 - 改完触发 `access.yaml` 30s TTL 自然刷新；可选 query `?reload=true` 主动通知代理刷新（POST `:7879/_admin/reload`，仅本机）。
+
+**`GET /api/admin/roles`**
+
+Response:
+```jsonc
+{ "ok": true, "data": {
+  "roles": [{
+    "id": "kx_readonly",
+    "description": "KX 财务数据只读问答",
+    "tools": ["kx_catalog", "sl_query", "sl_read_source", "entity_details"],
+    "connections": ["mysql-aliyun"],
+    "tableSelectors": [{
+      "connection": "mysql-aliyun",
+      "schema": "dataforai",
+      "names": [
+        "kx_dim_company",
+        "kx_dim_financial_item",
+        "kx_fact_financial_amount",
+        "kx_vw_balance_sheet_detail",
+        "kx_vw_cash_flow_statement_detail",
+        "kx_vw_income_statement_detail"
+      ]
+    }]
+  }]
+}}
+```
+
+**`GET /api/admin/roles/:roleId/preview`**
+
+展开 selector 后返回与 `EffectivePermissionsPreview` 相同结构。selector 匹配 0 个 source、role 不存在、tool 不存在时返回 `400 INVALID_ROLE`，并在保存前阻断。
+
+preview 与 reload 的分层语义：
+
+- preview 端：返回 `400 INVALID_ROLE`，UI 标红并阻止保存。
+- reload 端：fail-closed，不加载有错误的新配置；若已有上一份已验证配置，则继续使用旧配置并写 error log。
 
 **`DELETE /api/admin/agents/:userId`**
 
@@ -574,7 +730,11 @@ Response:
     "argsSummary": { "measures": ["weighted_discount"] },
     "outcome": "ok",
     "durationMs": 247,
-    "requestId": 42
+    "requestId": 42,
+    "roleIds": ["kx_readonly"],
+    "permissionSnapshotHash": "9f2a...",
+    "effectiveTablesCount": 5,
+    "decisionReason": "allowed"
   }]
 }}
 ```
@@ -613,7 +773,7 @@ Response:
 实现路径（按优先级降级）：
 
 1. **优先**：从 MCP Proxy 在启动期缓存的 KTX `tools/list` 结果读取（[假设 A1]）。
-2. **降级**：若 Proxy 未提供缓存接口，后端在请求时发一次 HTTP POST 到 `:7879/mcp`（`method: "tools/list"`）；响应超时 2s，失败则返回 `503 MCP_TOOLS_UNAVAILABLE`，前端置灰工具网格并显示"无法获取工具列表，工具权限将以文本输入替代"。
+2. **降级**：若 Proxy 未提供缓存接口，后端在请求时发一次 HTTP POST 到 `:7879/mcp`（`method: "tools/list"`）；响应超时 2s，失败则返回 `503 MCP_TOOLS_UNAVAILABLE`，前端置灰角色详情里的工具清单并显示"无法获取工具列表，角色预览暂不可用"。
 
 `globalDenied` 计算：`defaults.deny_tools` 列表命中即为 `true`，前端将这些工具渲染为置灰 checkbox，tooltip 显示「全局禁用」。
 
@@ -629,7 +789,7 @@ Response:
 管理员                WebUI 前端           Fastify API           fs-safe         access.yaml      audit.sqlite
   │                      │                    │                     │                  │                │
   │ 点「新建 Agent」     │                    │                     │                  │                │
-  │ 填表 id/name/allow   │                    │                     │                  │                │
+  │ 填表 id/name/role    │                    │                     │                  │                │
   │ 点「预览」           │                    │                     │                  │                │
   │                      │ POST /api/admin/agents?dryRun=true       │                  │                │
   │                      │─────────────────────▶                    │                  │                │
@@ -684,16 +844,29 @@ Response:
       → 前端 toast "已撤销。代理可能在 30 秒内仍接受该 token。"
 ```
 
-### 5.3 编辑 ACL 时的并发安全
+### 5.3 编辑角色时的并发安全
 
 [假设：单管理员单本机]，不做行级锁；但 `PATCH /api/admin/agents/:userId` 后端必须：
 1. 读取 access.yaml 当前 mtime + sha256 算"版本号"；
 2. 客户端在 GET 详情时收到 `version`，PATCH 时回传；
-3. 服务端比对，若不一致返回 `409 BAD_REQUEST` "yaml 已被其他来源修改，请刷新"。
+3. 服务端比对，若不一致返回 `409 CONFIG_CONFLICT` "yaml 已被其他来源修改，请刷新"。
 
 防止脚本/编辑器并行改 yaml 时丢失数据。
 
-### 5.4 page-1 列表的 stats 怎么算
+禁用用户或撤销 token 默认要主动刷新 proxy：
+
+- `PATCH /api/admin/agents/:userId` 将 `enabled` 改为 `false` 时，默认等价 `?reload=true`。
+- `DELETE /api/admin/agents/:userId/tokens/:label` 写入 `revoked_tokens` 后，应主动通知 proxy reload；若 reload 失败，响应必须提示最坏 30 秒 TTL 窗口。
+
+### 5.4 Role 生命周期
+
+- role 改名不支持原地 rename；应新增新 role、迁移 user 引用、再删除旧 role。
+- 删除仍被 user 引用的 role 返回 `400 INVALID_ROLE`。
+- 修改 role 后，后端重新计算 preview 和 snapshot hash；reload 后新请求按新 role 裁决。
+- 30 秒 TTL 窗口内，proxy 可能继续按上一份已验证配置处理请求；写类管理操作应默认触发主动 reload 缩短窗口。
+- role 解析失败时不回退历史 `users[].allow`。
+
+### 5.5 page-1 列表的 stats 怎么算
 
 后端 `GET /api/admin/agents` 一次性算所有 user 的 stats：
 
@@ -767,17 +940,18 @@ Module 1 只定义 Lucy 自身的 Agent MCP 接入与授权边界；当前不承
    - 被拒绝请求不得继续下发给上游执行。
 5. **默认拒绝**
    - 未显式授权的 tool/table 一律拒绝。
-   - `allow.tables: []` 表示无任何表权限，不是通配。
+   - v1.2 新建配置必须通过 `role` 授权；历史 `allow.tables: []` 表示无任何表权限，不是通配。
+   - `defaults.deny_tools` 是绝对否定，role 不可突破；命中时 `decision_reason=tool_forbidden_global`。
    - 不存在、未配置、解析失败或无法归属到授权对象的访问请求必须按拒绝处理。
 6. **审计以 Agent 为归因主体**
-   - 每次 MCP `tools/call` 必须写入 audit，包含 `user_id`、tool、table、outcome、reason、request id、时间戳。
+   - 每次 MCP `tools/call` 必须写入 audit，包含 `user_id`、tool、table、outcome、reason、request id、时间戳、role ids、permission snapshot hash。
    - allow 与 denied 都要可查询；denied 必须能说明拒绝原因。
    - audit 不得包含 token 明文、数据库密码或其他内部凭据。
 7. **撤销优先于 YAML 删除**
    - 删除 token 时，必须先写入 `revoked_tokens`，再从 yaml 删除 token hash。
    - 删除 Agent 时，关联 token hash 必须写入 `revoked_tokens`，避免 yaml TTL 未刷新导致 30s 内仍可用。
 8. **配置事实源保持简单**
-   - Agent、token hash、ACL 的事实源仍是 `webui/config/access.yaml`。
+   - Role、Agent、token hash、ACL 的事实源仍是 `webui/config/access.yaml`。
    - audit 与 revoked token 的事实源仍是 `.ktx-ui/audit.sqlite`。
    - 本阶段不引入额外策略引擎、外部 IAM 或多份权限配置。
 9. **缓存延迟必须显式暴露**
@@ -804,8 +978,31 @@ Module 1 只定义 Lucy 自身的 Agent MCP 接入与授权边界；当前不承
 | `admin/audit.ts` 单测 | 分页 / 过滤 / 大量数据下索引命中（解释 explain query plan） |
 | fs-safe 安全回归 | 新白名单 `webui/config` 仍拒 `..` 穿越；不允许写 `webui/config/../secret` |
 | API supertest | envelope 形态；token 创建响应只出现一次明文；DELETE Agent 同步触发 revoked_tokens |
-| RTL 前端 | NewToken 关闭后 token 不可恢复；ACL 通配/明细切换 yaml 形态正确 |
-| E2E 手动 | 新建 Agent → 生成 token → 配 .mcp.json → 拿 token 跑 sl_query → 在 Audit 页看到记录 |
+| RTL 前端 | NewToken 关闭后 token 不可恢复；角色选择和权限预览展示正确；旧 ACL 只读提示正确 |
+| E2E 手动 | 新建 Agent 选择 `kx_readonly` → 生成 token → 只配 URL/token → 拿 token 跑 `kx_catalog` 和 `sl_query` → 在 Audit 页看到记录 |
+
+Role 模型单测矩阵：
+
+| 用例 | 期望 |
+|---|---|
+| user 引用不存在 role | reload fail-closed；API preview 返回 `INVALID_ROLE` |
+| 同一 user 同时有 `role` 和历史 `allow` | UI 告警；proxy 按 role 生效，不回退 allow |
+| role selector 匹配 0 个 source | preview 400；reload fail-closed |
+| 表访问 role 缺少 connections | preview 400；reload fail-closed |
+| role.allow.tools 包含 `*` | preview 400；reload fail-closed |
+| role 显式 allow 全局 deny 工具 | 仍拒绝，reason `tool_forbidden_global` |
+| `tools/list` 注入 `kx_catalog` | 只对有数据权限 token 注入；无权限 token 不可见 |
+| role 变更前后 snapshot | role 未变时 hash 稳定；role 或 selector 解析结果变化时 hash 改变 |
+| source map 版本 | preview 返回解析所用 source map version / mtime |
+| role 改名 / 删除被引用 role | 改名不支持；删除被引用 role 被阻断 |
+
+fs-safe 额外覆盖：
+
+- 绝对路径写入被拒绝。
+- `..` 穿越被拒绝。
+- 符号链接逃逸被拒绝，必须使用 `realpath` 后做白名单前缀匹配。
+- dotfile 覆盖（如 `webui/config/.mcp.json`）被拒绝，除非显式加入允许文件清单。
+- Unicode 正规化或空字节路径被拒绝。
 
 ---
 
@@ -813,13 +1010,14 @@ Module 1 只定义 Lucy 自身的 Agent MCP 接入与授权边界；当前不承
 
 完成后可在本机验证：
 
-1. **新建 Agent 链路**：在 `/admin/agents` 点新建，填 `wangwu/王五/[sl_query]/[dataforai.superstore_orders]`，保存后 `git diff webui/config/access.yaml` 能看到新增段。
+1. **新建 Agent 链路**：在 `/admin/agents` 点新建，填 `wangwu/王五/kx_readonly`，保存后 `git diff webui/config/access.yaml` 能看到 `role: kx_readonly`，不新增 `allow`。
 2. **Token 生成**：进 `/admin/agents/wangwu`，生成 token，浏览器明文一次性显示；`grep "sha256:" webui/config/access.yaml` 能看到对应 hash；浏览器关闭后页面里看不到明文。
-3. **权限拦截**：用 wangwu 的 token 访问 `dataforai.superstore_returns` → 收到 JSON-RPC error；`/admin/audit?user=wangwu&outcome=denied` 显示该条 denied 记录。
-4. **撤销**：DELETE token → 30s 后再用旧 token 必然 401；`SELECT * FROM revoked_tokens` 有该 hash。
-5. **审计查询**：`/admin/audit` 默认 24h 视图能拉到 ≥ 当前 session 的所有调用，CSV 导出能下载。
-6. **安全回归**：尝试 `PUT /api/admin/agents` 修改一个穿越路径（如 `../secrets`）→ 403 FORBIDDEN_PATH。
-7. **回归原能力**：现有 Catalog / TableEditor / Wiki / Review 全部页面 + 测试集仍绿（`npm test` `npx tsc --noEmit` `npm run build`）。
+3. **最小客户端配置**：Codex app / Hermes / Claude Code 只配置 `http://localhost:7879/mcp` 和 Bearer token，不配置 tool include、connection 或表清单，`tools/list` 只显示 role 允许工具。
+4. **权限拦截**：用 wangwu 的 token 访问 `connectionId=warehouse`、非 `kx_` 表或无明确表引用 → 收到 JSON-RPC error；`/admin/audit?user=wangwu&outcome=denied` 显示该条 denied 记录和 decision reason。
+5. **撤销**：DELETE token → 30s 后再用旧 token 必然 401；`SELECT * FROM revoked_tokens` 有该 hash。
+6. **审计查询**：`/admin/audit` 默认 24h 视图能拉到 ≥ 当前 session 的所有调用，CSV 导出能下载，详情含 role ids / permission snapshot hash。
+7. **安全回归**：尝试 `PUT /api/admin/agents` 修改一个穿越路径（如 `../secrets`）→ 403 FORBIDDEN_PATH。
+8. **回归原能力**：现有 Catalog / TableEditor / Wiki / Review 全部页面 + 测试集仍绿（`npm test` `npx tsc --noEmit` `npm run build`）。
 
 ---
 

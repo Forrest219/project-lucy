@@ -1,7 +1,7 @@
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { identifyRequest, setSessionClient } from "./identity.js";
 import { writeLog } from "./audit.js";
-import { check as aclCheck, extractTables, kxCatalog } from "./acl.js";
+import { check as aclCheck, extractTables, kxCatalog, permissionSnapshot } from "./acl.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -77,6 +77,23 @@ function recordAudit(entry: Parameters<typeof writeLog>[0]): void {
   writeLog(entry).catch((err) => {
     console.error("[lucy-proxy] failed to write audit log", err);
   });
+}
+
+async function auditMeta(identity: Awaited<ReturnType<typeof identifyRequest>>, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
+  if (!identity) return { decisionReason };
+  const snapshot = await permissionSnapshot(identity).catch(() => undefined);
+  if (!snapshot) return { decisionReason };
+  return {
+    roleIds: snapshot.roleIds,
+    permissionSnapshotHash: snapshot.hash,
+    effectiveTablesCount: snapshot.effectiveTablesCount,
+    decisionReason,
+    permissionSnapshot: {
+      hash: snapshot.hash,
+      rolesJson: snapshot.rolesJson,
+      resolvedJson: snapshot.resolvedJson
+    }
+  };
 }
 
 function summarizeArgs(args: Record<string, unknown>): Record<string, unknown> {
@@ -214,6 +231,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     const decision = await aclCheck(identity, toolName, toolArgs);
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
+      const meta = await auditMeta(identity, errorMsg);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({
         jsonrpc: "2.0",
@@ -233,6 +251,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         errorDetail: errorMsg,
         durationMs: Date.now() - start,
         requestId,
+        ...meta,
       });
       return;
     }
@@ -255,6 +274,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         outcome: "ok",
         durationMs: Date.now() - start,
         requestId,
+        ...(await auditMeta(identity, "allowed")),
       });
       return;
     }
@@ -272,6 +292,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       outcome: "ok",
       durationMs: Date.now() - start,
       requestId,
+      ...(await auditMeta(identity, "allowed")),
     });
     return;
   }
@@ -328,6 +349,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       errorDetail,
       durationMs: Date.now() - start,
       requestId,
+      ...(await auditMeta(identity, outcome === "ok" ? "allowed" : "upstream_error")),
     });
   } else {
     pipeResponse(upstream, res);
@@ -340,6 +362,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         outcome: "ok",
         durationMs: Date.now() - start,
         requestId,
+        ...(await auditMeta(identity, "allowed")),
       });
     }
   }

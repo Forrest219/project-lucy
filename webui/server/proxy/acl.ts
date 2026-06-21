@@ -1,4 +1,5 @@
-import { readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { glob } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -8,7 +9,7 @@ import type { Identity } from "./identity.js";
 
 export interface AclDecision {
   allowed: boolean;
-  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_default_deny' | 'agent_disabled' | 'raw_query_forbidden' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>'
+  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'agent_disabled' | 'raw_query_forbidden' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>'
 }
 
 const DEFAULT_DENY_TOOLS = ["sql_execution", "memory_ingest", "memory_ingest_status"] as const;
@@ -74,10 +75,14 @@ function aclPolicy(config: AccessConfig): AclPolicy {
 
 interface SourceMapEntry {
   physicalTable: string; // e.g. "dataforai.superstore_orders"
+  connectionId: string;
+  schema: string;
+  sourceName: string;
 }
 
 let sourceMap: Map<string, SourceMapEntry> = new Map();
 let sourceMapLoadedAt = 0;
+let sourceMapVersion = "";
 const SOURCE_MAP_TTL = 60_000;
 
 interface SchemaYaml {
@@ -109,9 +114,19 @@ async function loadSourceMap(options: { fresh?: boolean } = {}): Promise<Map<str
       const content = await readFile(schemaFile, "utf-8");
       const yaml = parse(content) as SchemaYaml;
       if (!yaml?.tables) continue;
+      const rel = path.relative(semanticLayerDir, schemaFile);
+      const parts = rel.split(path.sep);
+      const connectionId = normalizeRef(parts[0] ?? "");
+      const schema = normalizeRef(path.basename(schemaFile, ".yaml"));
       for (const [sourceName, tableDef] of Object.entries(yaml.tables)) {
         if (tableDef?.table) {
-          newMap.set(normalizeRef(sourceName), { physicalTable: normalizeRef(tableDef.table) });
+          const normalizedSource = normalizeRef(sourceName);
+          newMap.set(normalizedSource, {
+            physicalTable: normalizeRef(tableDef.table),
+            connectionId,
+            schema,
+            sourceName: normalizedSource
+          });
         }
       }
     } catch {
@@ -121,6 +136,10 @@ async function loadSourceMap(options: { fresh?: boolean } = {}): Promise<Map<str
 
   sourceMap = newMap;
   sourceMapLoadedAt = now;
+  sourceMapVersion = createHash("sha256")
+    .update(JSON.stringify([...newMap.entries()].sort(([a], [b]) => a.localeCompare(b))))
+    .digest("hex")
+    .slice(0, 16);
   return sourceMap;
 }
 
@@ -267,9 +286,192 @@ function hasExplicitAccessToAllSensitiveTables(allowedTables: string[], map: Map
   return required.length > 0 && required.every((table) => allowedTables.includes(table));
 }
 
+interface EffectiveSource {
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+  table: string;
+}
+
+interface EffectivePermissions {
+  roleIds: string[];
+  tools: string[];
+  tables: string[];
+  connections: string[];
+  sources: EffectiveSource[];
+  sourceMapVersion: string;
+  snapshotHash: string;
+  rolesJson: unknown;
+  resolvedJson: unknown;
+  legacyAllow: boolean;
+}
+
+type RoleResolutionResult = {
+  ok: true;
+  permissions: EffectivePermissions;
+} | {
+  ok: false;
+  reason: string;
+};
+
 function allowedConnections(user: AccessConfig["users"][number]): string[] {
   const allow = user.allow as { connections?: string[] } | undefined;
   return configList(allow?.connections, [], { normalize: true });
+}
+
+function isWildcardList(value: string[] | undefined): boolean {
+  return Array.isArray(value) && value.includes("*");
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function makePermissions(input: Omit<EffectivePermissions, "snapshotHash">): EffectivePermissions {
+  const hashInput = {
+    roleIds: input.roleIds,
+    tools: input.tools,
+    tables: input.tables,
+    connections: input.connections,
+    sources: input.sources,
+    sourceMapVersion: input.sourceMapVersion,
+    rolesJson: input.rolesJson,
+    resolvedJson: input.resolvedJson,
+    legacyAllow: input.legacyAllow
+  };
+  return {
+    ...input,
+    snapshotHash: createHash("sha256").update(stableJson(hashInput)).digest("hex")
+  };
+}
+
+function roleToolsTouchTables(tools: string[], policy: AclPolicy): boolean {
+  return tools.some((tool) => policy.tableTouchingTools.has(tool));
+}
+
+function selectorMatches(
+  selector: { connection?: string; schema?: string; prefix?: string; names?: string[] },
+  entry: SourceMapEntry
+): boolean {
+  const connection = selector.connection ? normalizeRef(selector.connection) : undefined;
+  const schema = selector.schema ? normalizeRef(selector.schema) : undefined;
+  if (connection && entry.connectionId !== connection) return false;
+  if (schema && entry.schema !== schema) return false;
+  if (selector.prefix) return entry.sourceName.startsWith(normalizeRef(selector.prefix));
+  if (Array.isArray(selector.names)) {
+    const names = selector.names.map(normalizeRef);
+    return names.includes(entry.sourceName) || names.includes(entry.physicalTable);
+  }
+  return false;
+}
+
+function sourcesForTables(tables: string[], map: Map<string, SourceMapEntry>): EffectiveSource[] {
+  const allowed = new Set(tables.map(normalizeRef));
+  return [...map.entries()]
+    .filter(([, entry]) => allowed.has(entry.physicalTable))
+    .map(([sourceName, entry]) => ({
+      connectionId: entry.connectionId,
+      schema: entry.schema,
+      sourceName,
+      table: entry.physicalTable
+    }))
+    .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values.map(normalizeRef).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+async function resolveEffectivePermissions(
+  identity: Identity,
+  config: AccessConfig,
+  policy: AclPolicy,
+  options: { freshSourceMap?: boolean } = {}
+): Promise<RoleResolutionResult> {
+  const user = config.users.find((u) => u.id === identity.userId);
+  if (!user) return { ok: false, reason: "tool_forbidden" };
+
+  const map = await loadSourceMap({ fresh: options.freshSourceMap ?? true });
+  const userRole = typeof user.role === "string" && user.role.trim() ? user.role.trim() : undefined;
+  if (!userRole) {
+    const tools = configList(user.allow?.tools, []);
+    const tables = configList(user.allow?.tables, [], { normalize: true });
+    const connections = allowedConnections(user);
+    const sources = isWildcardList(tables) ? [] : sourcesForTables(tables, map);
+    const resolvedJson = { tools, tables, connections, sources, sourceMapVersion };
+    return {
+      ok: true,
+      permissions: makePermissions({
+        roleIds: [],
+        tools,
+        tables,
+        connections,
+        sources,
+        sourceMapVersion,
+        rolesJson: null,
+        resolvedJson,
+        legacyAllow: true
+      })
+    };
+  }
+
+  const role = config.roles?.[userRole];
+  if (!role?.allow) return { ok: false, reason: `role_resolution_failed:${userRole}` };
+
+  const roleTools = configList(role.allow.tools, []);
+  if (roleTools.length === 0 || roleTools.includes("*")) return { ok: false, reason: `role_resolution_failed:${userRole}` };
+  for (const tool of roleTools) {
+    if (!policy.knownTools.has(tool)) return { ok: false, reason: `role_resolution_failed:${userRole}` };
+  }
+
+  const selectors = Array.isArray(role.allow.tableSelectors) ? role.allow.tableSelectors : [];
+  const connections = configList(role.allow.connections, [], { normalize: true });
+  if ((selectors.length > 0 || roleToolsTouchTables(roleTools, policy)) && connections.length === 0) {
+    return { ok: false, reason: `role_resolution_failed:${userRole}` };
+  }
+
+  const sourceMatches: EffectiveSource[] = [];
+  for (const selector of selectors) {
+    const matches = [...map.entries()]
+      .filter(([, entry]) => selectorMatches(selector, entry))
+      .filter(([, entry]) => connections.length === 0 || connections.includes(entry.connectionId))
+      .map(([sourceName, entry]) => ({
+        connectionId: entry.connectionId,
+        schema: entry.schema,
+        sourceName,
+        table: entry.physicalTable
+      }));
+    if (matches.length === 0) return { ok: false, reason: `role_resolution_failed:${userRole}` };
+    sourceMatches.push(...matches);
+  }
+
+  const sources = [...new Map(sourceMatches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()]
+    .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+  const tables = uniqueSorted(sources.map((source) => source.table));
+  const tools = uniqueSorted(roleTools.filter((tool) => !policy.denyTools.has(tool)));
+  const deniedTools = roleTools.filter((tool) => policy.denyTools.has(tool));
+  const rolesJson = { [userRole]: role };
+  const resolvedJson = { tools, deniedTools, connections, tables, sources, sourceMapVersion };
+
+  return {
+    ok: true,
+    permissions: makePermissions({
+      roleIds: [userRole],
+      tools,
+      tables,
+      connections,
+      sources,
+      sourceMapVersion,
+      rolesJson,
+      resolvedJson,
+      legacyAllow: false
+    })
+  };
 }
 
 function firstString(record: Record<string, unknown>, keys: string[]): string | undefined {
@@ -357,14 +559,12 @@ export async function kxCatalog(identity: Identity): Promise<{
   examples: string[];
 }> {
   const config = await getAccessConfig({ fresh: true });
-  const user = config.users.find((u) => u.id === identity.userId);
-  const allowedTables = user?.allow?.tables ?? [];
-  const connections = allowedConnections(user ?? ({ allow: {} } as AccessConfig["users"][number]));
-  const map = await loadSourceMap({ fresh: true });
-  const allowedSet = new Set(allowedTables.map(normalizeRef));
-  const sources = [...map.entries()]
-    .map(([sourceName, entry]) => ({ sourceName, table: entry.physicalTable }))
-    .filter((entry) => allowedSet.has(entry.table))
+  const policy = aclPolicy(config);
+  const resolved = await resolveEffectivePermissions(identity, config, policy);
+  const permissions = resolved.ok ? resolved.permissions : undefined;
+  const connections = permissions?.connections ?? [];
+  const sources = (permissions?.sources ?? [])
+    .map((source) => ({ sourceName: source.sourceName, table: source.table }))
     .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
 
   return {
@@ -374,6 +574,26 @@ export async function kxCatalog(identity: Identity): Promise<{
       "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
       "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
     ]
+  };
+}
+
+export async function permissionSnapshot(identity: Identity): Promise<{
+  roleIds: string[];
+  hash: string;
+  effectiveTablesCount: number;
+  rolesJson: unknown;
+  resolvedJson: unknown;
+} | undefined> {
+  const config = await getAccessConfig({ fresh: true });
+  const policy = aclPolicy(config);
+  const resolved = await resolveEffectivePermissions(identity, config, policy);
+  if (!resolved.ok) return undefined;
+  return {
+    roleIds: resolved.permissions.roleIds,
+    hash: resolved.permissions.snapshotHash,
+    effectiveTablesCount: resolved.permissions.tables.length,
+    rolesJson: resolved.permissions.rolesJson,
+    resolvedJson: resolved.permissions.resolvedJson
   };
 }
 
@@ -388,22 +608,21 @@ export async function check(
   const policy = aclPolicy(config);
 
   const user = config.users.find((u) => u.id === identity.userId);
-  if (!user?.allow) {
-    // No allow block = deny everything
-    return { allowed: false, reason: "tool_forbidden" };
-  }
+  if (!user) return { allowed: false, reason: "tool_forbidden" };
   if (user.enabled === false) {
     return { allowed: false, reason: "agent_disabled" };
   }
 
   // 1. Global deny_tools
   if (policy.denyTools.has(toolName)) {
-    return { allowed: false, reason: "tool_default_deny" };
+    return { allowed: false, reason: "tool_forbidden_global" };
   }
 
-  const allowedTools = user.allow.tools ?? [];
-  const allowedTables = user.allow.tables ?? [];
-  const connections = allowedConnections(user);
+  const resolved = await resolveEffectivePermissions(identity, config, policy);
+  if (!resolved.ok) {
+    return { allowed: false, reason: resolved.reason };
+  }
+  const { tools: allowedTools, tables: allowedTables, connections } = resolved.permissions;
 
   // 2. Tool-level check
   if (allowedTools && !allowedTools.includes("*") && !allowedTools.includes(toolName)) {

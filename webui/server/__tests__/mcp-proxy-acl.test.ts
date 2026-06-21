@@ -204,7 +204,7 @@ describe("MCP proxy ACL enforcement", () => {
         id: "proxy-deny-global-tool",
         name: "sql_execution",
         args: {},
-        reason: "tool_default_deny"
+        reason: "tool_forbidden_global"
       });
 
       await expectDenied(port, {

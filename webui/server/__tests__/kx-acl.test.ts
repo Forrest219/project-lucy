@@ -13,7 +13,50 @@ const KX_TABLES = [
   "dataforai.kx_vw_income_statement_detail"
 ];
 
-const ACCESS_YAML = `users:
+const ACCESS_YAML = `roles:
+  kx_readonly:
+    description: KX read only
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+${KX_TABLES.map((table) => `            - ${table.replace("dataforai.", "")}`).join("\n")}
+      tools:
+        - kx_catalog
+        - sl_query
+        - sl_read_source
+        - entity_details
+  invalid_kx_missing_connections:
+    allow:
+      tableSelectors:
+        - schema: dataforai
+          prefix: kx_
+      tools:
+        - sl_query
+  invalid_wildcard_tools:
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+${KX_TABLES.map((table) => `            - ${table.replace("dataforai.", "")}`).join("\n")}
+      tools: ["*"]
+  empty_selector:
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          prefix: nope_
+      tools:
+        - sl_query
+users:
   - id: kx_guard_tester
     name: KX Guard Agent
     enabled: true
@@ -54,6 +97,34 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
         - sl_query
         - sl_read_source
         - entity_details
+  - id: role_workhorse
+    name: Role Workhorse
+    enabled: true
+    role: kx_readonly
+    tokens: []
+    allow:
+      tables: ["*"]
+      tools: ["*"]
+  - id: missing_role_agent
+    name: Missing Role Agent
+    enabled: true
+    role: missing_role
+    tokens: []
+  - id: missing_connections_role_agent
+    name: Missing Connections Role Agent
+    enabled: true
+    role: invalid_kx_missing_connections
+    tokens: []
+  - id: wildcard_role_agent
+    name: Wildcard Role Agent
+    enabled: true
+    role: invalid_wildcard_tools
+    tokens: []
+  - id: empty_selector_role_agent
+    name: Empty Selector Role Agent
+    enabled: true
+    role: empty_selector
+    tokens: []
   - id: superstore_agent
     name: Superstore Agent
     tokens: []
@@ -283,7 +354,7 @@ describe("KX financial domain ACL guardrails", () => {
 
     await expect(check(identity("kx_guard_tester"), "sql_execution", {
       query: "select * from dataforai.kx_fact_financial_amount limit 1"
-    })).resolves.toEqual({ allowed: false, reason: "tool_default_deny" });
+    })).resolves.toEqual({ allowed: false, reason: "tool_forbidden_global" });
   });
 
   it("does not allow wildcard tool grants to call unknown tools", async () => {
@@ -391,6 +462,49 @@ describe("KX financial domain ACL guardrails", () => {
       "kx_vw_cash_flow_statement_detail",
       "kx_vw_income_statement_detail"
     ]);
+  });
+
+  it("resolves role-based KX permissions and ignores deprecated allow when role is present", async () => {
+    const { check, kxCatalog, permissionSnapshot } = await loadAcl();
+
+    await expect(check(identity("role_workhorse"), "sl_query", {
+      connectionId: "mysql-aliyun",
+      measures: [{ $text: "kx_fact_financial_amount.amount" }]
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("role_workhorse"), "sl_query", {
+      connectionId: "mysql-aliyun",
+      measures: [{ $text: "superstore_orders.sales" }]
+    })).resolves.toEqual({ allowed: false, reason: "table_forbidden:dataforai.superstore_orders" });
+
+    await expect(check(identity("role_workhorse"), "sl_query", {
+      measures: [{ $text: "kx_fact_financial_amount.amount" }]
+    })).resolves.toEqual({ allowed: false, reason: "unknown_or_forbidden_connection:<missing>" });
+
+    const catalog = await kxCatalog(identity("role_workhorse"));
+    expect(catalog.connections).toEqual(["mysql-aliyun"]);
+    expect(catalog.sources.map((source) => source.sourceName)).toContain("kx_fact_financial_amount");
+
+    const snapshot = await permissionSnapshot(identity("role_workhorse"));
+    expect(snapshot?.roleIds).toEqual(["kx_readonly"]);
+    expect(snapshot?.effectiveTablesCount).toBe(KX_TABLES.length);
+    expect(snapshot?.hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("fails closed for invalid role references and invalid role definitions", async () => {
+    const { check } = await loadAcl();
+
+    await expect(check(identity("missing_role_agent"), "sl_query", {}))
+      .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:missing_role" });
+
+    await expect(check(identity("missing_connections_role_agent"), "sl_query", {}))
+      .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:invalid_kx_missing_connections" });
+
+    await expect(check(identity("wildcard_role_agent"), "sl_query", {}))
+      .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:invalid_wildcard_tools" });
+
+    await expect(check(identity("empty_selector_role_agent"), "sl_query", {}))
+      .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:empty_selector" });
   });
 
   it("extracts unauthorized table references from filters, where, and joins", async () => {
@@ -563,7 +677,7 @@ describe("KX financial domain ACL guardrails", () => {
 
     await expect(check(identity("kx_guard_tester"), "sql_execution", {
       query: "select * from dataforai.kx_fact_financial_amount limit 1"
-    })).resolves.toEqual({ allowed: false, reason: "tool_default_deny" });
+    })).resolves.toEqual({ allowed: false, reason: "tool_forbidden_global" });
 
     await expect(check(identity("wildcard_agent"), "sl_read_source", {
       sourceName: "kx_fact_financial_amount"
