@@ -31,18 +31,7 @@ users:
       - hash: "sha256:b552dcabddbba25e148d05d8c2470c1f0d5f9585624c292afc9d57c78e4e5498"
         label: hermes-laptop
         created: 2026-06-18
-    allow:
-      tables:
-        - dataforai.superstore_orders
-      tools:
-        - sl_query
-        - sl_read_source
-        - wiki_search
-        - wiki_read
-        - entity_details
-        - dictionary_search
-        - discover_data
-        - connection_list
+    role: kx_readonly
 
   - id: kx_guard_tester
     name: KX Guardrail Tester

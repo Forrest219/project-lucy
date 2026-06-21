@@ -5,6 +5,7 @@ import { parse } from "yaml";
 
 const root = process.cwd();
 const results = [];
+let scriptError = false;
 
 function rel(...parts) {
   return path.join(root, ...parts);
@@ -40,6 +41,8 @@ function routeStatus() {
   const check = "route-status";
   const app = read("webui/src/app/App.tsx");
   const status = read("docs/webui-impl-status.md");
+  const routePaths = new Set([...app.matchAll(/<Route\b[^>]*\bpath=["'`]([^"'`]+)["'`]/g)].map((match) => match[1]));
+  const navTargets = new Set([...app.matchAll(/\bto:\s*["'`]([^"'`]+)["'`]/g)].map((match) => match[1]));
   const routes = [
     "/connections",
     "/connections/whitelist",
@@ -52,7 +55,8 @@ function routeStatus() {
   ];
   for (const route of routes) {
     const routePath = route === "/" ? "/" : route.replace(/^\//, "");
-    if (!app.includes(`path="${routePath}"`) && !app.includes(`to="${route}"`) && !app.includes(`to: "${route}"`)) {
+    const routeRegistered = routePaths.has(route) || routePaths.has(routePath) || navTargets.has(route);
+    if (!routeRegistered) {
       add(check, "fail", `webui/src/app/App.tsx: expected route ${route} not found`);
     }
   }
@@ -78,7 +82,8 @@ function apiSpec() {
   const files = [
     "webui/server/index.ts",
     ...walk("webui/server/admin", (file) => file.endsWith(".ts")),
-    ...walk("webui/server/eval", (file) => file.endsWith(".ts"))
+    ...walk("webui/server/eval", (file) => file.endsWith(".ts")),
+    ...walk("webui/server/proxy", (file) => file.endsWith(".ts"))
   ];
   const routes = new Set();
   const routeRe = /app\.(?:get|post|put|patch|delete)(?:<[\s\S]*?>)?\(\s*["'`]([^"'`]+)["'`]/g;
@@ -205,6 +210,7 @@ function accessRolePolicy() {
   for (const user of users) {
     if (user.role && !roles[user.role]) add(check, "fail", `webui/config/access.yaml: user ${user.id} references missing role ${user.role}`);
     if (user.role && user.allow) add(check, "warn", `webui/config/access.yaml: user ${user.id} has both role and legacy allow`);
+    if (!user.role && user.allow && user.enabled !== false) add(check, "warn", `webui/config/access.yaml: enabled legacy allow user ${user.id} should migrate to role`);
     const wildcard = user.allow?.tables?.includes("*") || user.allow?.tools?.includes("*");
     if (wildcard && user.enabled !== false) add(check, "fail", `webui/config/access.yaml: enabled legacy wildcard user ${user.id}`);
     if (wildcard && user.enabled === false) add(check, "warn", `webui/config/access.yaml: disabled legacy wildcard user ${user.id} must not be re-enabled without role`);
@@ -220,7 +226,8 @@ for (const check of checks) {
   try {
     check();
   } catch (error) {
-    add(check.name, "fail", `${error.message}`);
+    scriptError = true;
+    add(check.name, "error", `${error.message}`);
   }
 }
 
@@ -228,8 +235,9 @@ let failed = false;
 for (const item of results) {
   const tag = item.level.toUpperCase();
   if (item.level === "fail") failed = true;
+  if (item.level === "error") scriptError = true;
   console.log(`[spec-lint] ${tag} ${item.check}`);
   console.log(`  ${item.message}`);
 }
 
-process.exit(failed ? 1 : 0);
+process.exit(scriptError ? 2 : failed ? 1 : 0);

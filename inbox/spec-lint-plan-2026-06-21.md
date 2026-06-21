@@ -35,8 +35,9 @@ scripts/lint-spec.mjs
 
 - 根目录 `package.json` 增加 `npm run lint:spec`。
 - 首版脚本路径为 `scripts/lint-spec.mjs`。
-- 当前策略：FAIL 退出码为 1；WARN 只提示不阻断。
-- 当前允许保留的 warning：superstore eval `runner_schema_version: v1.3`、disabled legacy wildcard user `lisi`。
+- 当前策略：FAIL 退出码为 1；脚本自身异常退出码为 2；WARN 只提示不阻断。
+- 当前允许保留的 warning：superstore eval `runner_schema_version: v1.3`、enabled legacy allow user `zhangsan`、disabled legacy wildcard user `lisi`。
+- 2026-06-21 复核后增强：`api-spec` 扫描范围已包含 `webui/server/proxy/*`；`route-status` 同时解析 `<Route path>` 和 nav `to:`；`access-role-policy` 对 enabled legacy allow user 输出 warning。
 
 退出码：
 
@@ -193,7 +194,7 @@ scripts/lint-spec.config.json
 - api-spec：PASS，当前 40 个已注册 REST routes 已登记。
 - skill-dependency：PASS。
 - eval-schema-version：PASS + warning，superstore v1.3 仍提示 schema version older than v1.4；已补 `safety_contract`。
-- access-role-policy：PASS + warning，disabled legacy wildcard `lisi` 仍提示不得无 role 启用。
+- access-role-policy：PASS + warning，`zhangsan` 仍是 enabled legacy allow user，disabled legacy wildcard `lisi` 仍提示不得无 role 启用。
 
 ## 6. 非目标
 

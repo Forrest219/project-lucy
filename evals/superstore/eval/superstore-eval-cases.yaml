@@ -3,6 +3,7 @@ metadata:
   document_type: Eval
   version: v1.4
   runner_schema_version: v1.3
+  runner_schema_note: "保留 v1.3 直到 Superstore case body 完成 v1.4 结构化迁移；文件级 safety_contract 已按 v1.4 补齐。"
   written_date: 2026-06-19
   author: Claude / Codex
   requester: project-lucy 团队
