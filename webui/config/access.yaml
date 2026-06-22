@@ -72,9 +72,10 @@ users:
     note: "CIO demo: region-scoped agent, view-based row filter"
     enabled: true
     tokens:
-      - hash: sha256:eeacf2dbd64409e7c091579509ba1f0e39a8fdcbf16605b8af03de50b12530ae
+      - hash: sha256:f20a97aef6305726634074edf7f7a2ad99566d7dba6023b686c6d3c53e4e9f30
         label: cio-demo
         created: 2026-06-22
+        expires_at: 2026-06-24T00:00:00Z
     role: superstore_region_huadong
 defaults:
   deny_tools:
