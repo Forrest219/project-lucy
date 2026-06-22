@@ -275,6 +275,78 @@ export function registerAuditRoutes(app: FastifyInstance) {
     };
   });
 
+  app.get<{
+    Querystring: {
+      targetId?: string;
+      filePath?: string;
+    };
+  }>("/api/admin/config-audit/export.csv", async (request, reply) => {
+    const q = request.query;
+    const database = await getAuditDb();
+    const conditions: string[] = [];
+    const params: Record<string, string | null> = {
+      targetId: q.targetId ?? null,
+      filePath: q.filePath ? `%${q.filePath}%` : null
+    };
+    if (params.targetId) conditions.push("target_id = @targetId");
+    if (params.filePath) conditions.push("file_path LIKE @filePath");
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const rows = database.prepare(`
+      SELECT id, ts, actor, session_id, file_path, change_type, target_id, old_summary, new_summary, diff, request_id
+      FROM config_change_log ${where}
+      ORDER BY ts DESC
+    `).all(params) as Array<{
+      id: number;
+      ts: string;
+      actor: string;
+      session_id: string | null;
+      file_path: string;
+      change_type: string;
+      target_id: string | null;
+      old_summary: string | null;
+      new_summary: string | null;
+      diff: string | null;
+      request_id: string | null;
+    }>;
+
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const headers = [
+      "id",
+      "ts",
+      "actor",
+      "session_id",
+      "file_path",
+      "change_type",
+      "target_id",
+      "old_summary",
+      "new_summary",
+      "diff",
+      "request_id"
+    ];
+    const csvLines = [
+      headers.join(","),
+      ...rows.map((row) =>
+        [
+          row.id,
+          csvCell(row.ts),
+          csvCell(row.actor),
+          csvCell(row.session_id),
+          csvCell(row.file_path),
+          csvCell(row.change_type),
+          csvCell(row.target_id),
+          csvCell(redactJsonString(row.old_summary)),
+          csvCell(redactJsonString(row.new_summary)),
+          csvCell(row.diff ? redactText(row.diff) : null),
+          csvCell(row.request_id)
+        ].join(",")
+      )
+    ];
+
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="config-audit-${dateStr}.csv"`);
+    return reply.send(`\uFEFF${csvLines.join("\n")}`);
+  });
+
   app.get("/api/admin/audit/sources", async () => {
     const database = await getAuditDb();
     const rows = database.prepare(`

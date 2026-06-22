@@ -207,7 +207,7 @@ export function AgentDetail() {
                 <option value="" disabled>选择角色</option>
                 {roles.map((role) => (
                   <option key={role.id} value={role.id} disabled={role.invalid}>
-                    {role.id}{role.invalid ? " (invalid)" : ""}
+                    {role.id}{role.source === "template" ? " (template)" : ""}{role.invalid ? " (invalid)" : ""}
                   </option>
                 ))}
               </select>

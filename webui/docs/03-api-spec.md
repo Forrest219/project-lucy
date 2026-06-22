@@ -80,6 +80,7 @@ POST   /api/admin/agents/:userId/tokens
 DELETE /api/admin/agents/:userId/tokens/:label
 GET    /api/admin/roles
 GET    /api/admin/config-audit
+GET    /api/admin/config-audit/export.csv
 GET    /api/admin/audit
 GET    /api/admin/audit/sources
 GET    /api/admin/audit/export
@@ -238,8 +239,8 @@ Agent 列表与详情：
 
 写入路径已是 role-first：
 
-- `POST /api/admin/agents`：必须传 `agent.role`，拒绝 `agent.allow`。
-- `PATCH /api/admin/agents/:userId`：只允许 `name`、`note`、`enabled`、`role`。
+- `POST /api/admin/agents`：必须传 `agent.role`，拒绝 `agent.allow`；当 role id 来自内置模板时，后端先展开为完整 yaml role 再写入，不保存 `role-template` / `templateId` 指针字段。
+- `PATCH /api/admin/agents/:userId`：只允许 `name`、`note`、`enabled`、`role`；role 可引用 yaml 中已有 role 或内置模板。
 - `DELETE /api/admin/agents/:userId`：删除 agent 前先撤销 token。
 
 新建请求：
@@ -268,12 +269,13 @@ Token：
 
 Roles：
 
-- `GET /api/admin/roles` 返回 role 列表、工具、连接、展开 source 数与 warnings。
+- `GET /api/admin/roles?includeTemplates=true` 返回 yaml role 与内置模板合并后的列表、工具、连接、展开 source 数与 warnings；返回项含 `source: "yaml" | "template"`，id 冲突时 yaml role 优先。`includeTemplates=false` 时只返回 yaml role。
 - `GET /api/admin/agents/:userId/effective-permissions` 返回 role 展开后的 `tools`、`connections`、`sources`、`snapshotHash`、`sourceMapVersion`。
 
 Audit：
 
 - `GET /api/admin/config-audit`
+- `GET /api/admin/config-audit/export.csv`
 - `GET /api/admin/audit`
 - `GET /api/admin/audit/sources`
 - `GET /api/admin/audit/export`
@@ -310,6 +312,8 @@ Query：
   }]
 }}
 ```
+
+`GET /api/admin/config-audit/export.csv` 使用与 `/api/admin/config-audit` 相同的 `targetId` / `filePath` 过滤条件导出 CSV；响应带 UTF-8 BOM 与 `Content-Disposition: attachment; filename="config-audit-YYYYMMDD.csv"`。
 
 `GET /api/admin/audit/sources` 从访问日志中聚合被 MCP tool 触达的表，供审计来源筛选和治理面板使用。协议类工具调用不计入统计。
 

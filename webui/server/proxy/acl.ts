@@ -632,26 +632,35 @@ export async function resolveEffectivePermissionsForAdmin(
 ): Promise<RoleResolutionResult> {
   const config = await getAccessConfig({ fresh: true });
   const policy = aclPolicy(config);
-  return resolveEffectivePermissions({ userId, tokenLabel: "admin-preview" }, config, policy, {
+  return resolveEffectivePermissions({ userId, tokenLabel: "admin-preview", tokenHashPrefix: "admin-preview" }, config, policy, {
     freshSourceMap: options.freshSourceMap ?? true
   });
 }
 
 export async function previewRolePermissionsForAdmin(
   roleId: string,
-  options: { freshSourceMap?: boolean } = {}
+  options: {
+    freshSourceMap?: boolean;
+    role?: NonNullable<AccessConfig["roles"]>[string];
+  } = {}
 ): Promise<RoleResolutionResult> {
   const config = await getAccessConfig({ fresh: true });
   const policy = aclPolicy(config);
   const previewUserId = "__role_preview__";
   const previewConfig: AccessConfig = {
     ...config,
+    roles: options.role
+      ? {
+          ...(config.roles ?? {}),
+          [roleId]: options.role
+        }
+      : config.roles,
     users: [
       ...config.users.filter((user) => user.id !== previewUserId),
       { id: previewUserId, role: roleId, enabled: true, tokens: [] }
     ]
   };
-  return resolveEffectivePermissions({ userId: previewUserId, tokenLabel: "admin-preview" }, previewConfig, policy, {
+  return resolveEffectivePermissions({ userId: previewUserId, tokenLabel: "admin-preview", tokenHashPrefix: "admin-preview" }, previewConfig, policy, {
     freshSourceMap: options.freshSourceMap ?? true
   });
 }

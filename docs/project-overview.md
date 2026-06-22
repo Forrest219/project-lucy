@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21 |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22 |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
 project-lucy 是一个本地自服务数据分析 Agent 栈，底座为 KTX 语义层、wiki、eval cases、skills 和 Lucy WebUI 治理工作台。目标是在受控数据访问前提下，让 Claude Code / Codex 等 Agent 优先使用语义层和业务口径回答数据问题，并通过 eval/quiz 形成回归门禁。
@@ -92,7 +92,7 @@ WebUI 是本地治理工作台，当前导航有 7 个一级模块：
 | 业务文档 | `/wiki` | 已实现 | Wiki frontmatter + Markdown 编辑 |
 | 审阅与校验 | `/review` | 已实现 | `GET /api/diff`、`POST /api/validate-changed` |
 | 质量评测 | `/eval/cases`、`/eval/runs`、`/eval/monitor` | 已实现 | Case 管理、运行历史、趋势监控 |
-| 访问治理 | `/admin/agents`、`/admin/audit` | 已实现；role-first admin UI 待整改 | Agent、Token、ACL、访问日志 |
+| 访问治理 | `/admin/agents`、`/admin/audit` | 已实现；role-first admin UI/API 已闭环，Role 模板库 P1 已落地 | Agent、Token、ACL、访问日志、配置审计 |
 
 详细状态表见 `docs/webui-impl-status.md`。`webui/docs/codex/*` 是 M0-M5 执行历史归档，不代表当前全部模块范围。
 
@@ -114,7 +114,7 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 - 工具级、connection 级、表级 ACL。
 - SQLite audit 记录。
 
-当前 `webui/config/access.yaml` 已含 v1.2 role 模型（例如 `kx_readonly`），但 Admin UI/API 仍主要按 legacy `users[].allow` 编辑。该差异已在 `inbox/spec-audit-2026-06-21.md` 和 `inbox/spec-remediation-plan-2026-06-21.md` 中列为 P0 安全整改项。
+当前 `webui/config/access.yaml` 已含 v1.2 role 模型（例如 `kx_readonly`），Admin UI/API 已按 role-first 写入路径闭环：新建/编辑 Agent 强制 role，legacy `allow` 只读，token 与配置写入进入审计。2026-06-22 P1 增量已补 Role 模板库、模板展开落盘、`lint:spec` 防模板指针漂移、Onboarding MCP 失败原因细分和 `config_change_log` CSV 导出。后续列级 / 行级权限仅作为长期 spec 锚点，见 `docs/access-governance-design.md`。
 
 ## 9. 关键文档索引
 
@@ -139,6 +139,7 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 | WebUI 基础架构 | `webui/docs/01-architecture.md`、`webui/docs/02-arch-spec.md`、`webui/docs/03-api-spec.md`、`webui/docs/04-data-model.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | Agent 权限设计 | `docs/design-agent-permissions.md` |
+| 访问治理闭环设计 | `docs/access-governance-design.md` |
 | Eval 设计 | `docs/design-eval-monitoring.md` |
 | Eval / Quiz 约定 | `docs/eval-quiz-conventions.md` |
 | DB 接入设计 | `docs/design-db-connection.md` |
@@ -146,8 +147,8 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 
 ## 10. 当前整改优先级
 
-1. 关闭 Admin 写入路径的过度授权风险：role-first API/UI、拒绝 wildcard allow、legacy allow 只读。
-2. 为 `ktx.yaml` / `access.yaml` 等配置写入补 dryRun、diff、输入校验与审计。
-3. 补全当前 API / Model 索引，避免 `webui/docs/03-04` 停留在 M0-M5。
-4. 建立 spec 防漂移检查：route/status、API/spec、skill dependencies、eval schema、access role selector。
+1. ✅ 2026-06-22 P0-1 Admin Role-First 已闭环；剩余长期 Policy 表达式锚点见 `docs/access-governance-design.md`。
+2. ✅ `ktx.yaml` / `access.yaml` 等配置写入已补 dryRun、diff、输入校验与审计；`config_change_log` 支持 CSV 导出。
+3. ✅ 建立 spec 防漂移检查：route/status、API/spec、skill dependencies、eval schema、access role selector，并新增模板指针字段 fail 规则。
+4. 补全当前 API / Model 索引，避免 `webui/docs/03-04` 与实现漂移。
 5. 在事实源稳定后补 semantic-layer、wiki、skills、domain index 的长期治理规范。

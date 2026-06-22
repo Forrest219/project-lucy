@@ -64,6 +64,10 @@ export function ConfigAudit() {
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
   });
+  const exportUrl = `/api/admin/config-audit/export.csv${buildQuery({
+    targetId: targetId || undefined,
+    filePath: filePath || undefined
+  })}`;
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "config-audit", queryStr],
     queryFn: () => apiGet<ConfigAuditResponse>(`/api/admin/config-audit${queryStr}`)
@@ -80,7 +84,10 @@ export function ConfigAudit() {
           <h1 className="text-xl font-semibold">配置变更日志</h1>
           <p className="pl-page-intro">查看访问配置写入历史，当前 actor 为单管理员本机语义。</p>
         </div>
-        <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
+        <div className="flex gap-2">
+          <a href={exportUrl} className="pl-btn pl-btn--ghost text-sm">导出 CSV</a>
+          <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
+        </div>
       </div>
 
       {data?.actorNotice ? <div className="pl-notice">{data.actorNotice}</div> : null}

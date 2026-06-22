@@ -5,8 +5,18 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Onboarding } from "../pages/Onboarding";
+import type { Agent } from "../lib/types";
 
-function renderPage() {
+const readyAgent: Agent = {
+  id: "analyst",
+  name: "Analyst",
+  enabled: true,
+  role: "analyst",
+  tokens: [{ hash: "abc", label: "default", created: "2026-06-21T00:00:00.000Z" }]
+};
+
+function renderPage(options: { agents?: Agent[] } = {}) {
+  const agents = options.agents ?? [readyAgent];
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -57,15 +67,7 @@ function renderPage() {
       return new Response(JSON.stringify({
         ok: true,
         data: {
-          agents: [
-            {
-              id: "analyst",
-              name: "Analyst",
-              enabled: true,
-              role: "analyst",
-              tokens: [{ hash: "abc", label: "default", created: "2026-06-21T00:00:00.000Z" }]
-            }
-          ]
+          agents
         }
       }));
     }
@@ -106,5 +108,16 @@ describe("Onboarding", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "复制 MCP 配置" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Bearer <LUCY_AGENT_TOKEN>"));
+  });
+
+  it.each([
+    ["尚未创建 Agent", []],
+    ["启用的 Agent 暂无可用 token", [{ ...readyAgent, tokens: [] }]],
+    ["所有 Agent 均已禁用", [{ ...readyAgent, enabled: false }]],
+    ["所有 Agent 仍为 legacy allow，需迁移到 role", [{ ...readyAgent, role: undefined, allow: { tables: ["*"], tools: ["*"] } }]]
+  ])("explains MCP setup gap: %s", async (message, agents) => {
+    renderPage({ agents: agents as Agent[] });
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
   });
 });

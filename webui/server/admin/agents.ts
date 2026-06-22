@@ -7,6 +7,7 @@ import { safeWrite } from "../fs-safe.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb, recordConfigChange } from "./audit.js";
 import { previewRolePermissionsForAdmin, resolveEffectivePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
+import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -249,6 +250,20 @@ function assertRoleExists(config: YamlAccessConfig, role: string | undefined): r
   return Boolean(role && config.roles?.[role]?.allow);
 }
 
+function roleForInput(config: YamlAccessConfig, role: string | undefined): { id: string; role: YamlRole; source: "yaml" | "template" } | undefined {
+  if (!role) return undefined;
+  const yamlRole = config.roles?.[role];
+  if (yamlRole?.allow) return { id: role, role: yamlRole, source: "yaml" };
+  const templateRole = expandTemplate(role);
+  if (templateRole?.allow) return { id: role, role: templateRole, source: "template" };
+  return undefined;
+}
+
+async function validateRoleForWrite(roleId: string, role: YamlRole): Promise<string | undefined> {
+  const resolved = await previewRolePermissionsForAdmin(roleId, { role });
+  return resolved.ok ? undefined : resolved.reason;
+}
+
 function makeDiff(oldYaml: string, newYaml: string): string {
   const oldLines = oldYaml.split("\n");
   const newLines = newYaml.split("\n");
@@ -287,19 +302,28 @@ export function registerAgentRoutes(app: FastifyInstance) {
   });
 
   // GET /api/admin/roles
-  app.get("/api/admin/roles", async () => {
+  app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const { config } = await readAccessYaml(projectRoot);
-    const entries = Object.entries(config.roles ?? {});
+    const includeTemplates = request.query.includeTemplates !== "false";
+    const entries = [
+      ...Object.entries(config.roles ?? {}).map(([id, role]) => ({ id, role, source: "yaml" as const })),
+      ...(includeTemplates
+        ? Object.entries(ROLE_TEMPLATES)
+            .filter(([id]) => !config.roles?.[id])
+            .map(([id, template]) => ({ id, role: expandTemplate(id) ?? template, source: "template" as const }))
+        : [])
+    ];
     const roles = await Promise.all(
-      entries.map(async ([id, role]) => {
-        const resolved = await previewRolePermissionsForAdmin(id);
+      entries.map(async ({ id, role, source }) => {
+        const resolved = await previewRolePermissionsForAdmin(id, source === "template" ? { role } : undefined);
         return {
           id,
           description: role.description,
           tools: role.allow?.tools ?? [],
           connections: role.allow?.connections ?? [],
           sourceCount: resolved.ok ? resolved.permissions.sources.length : 0,
+          source,
           invalid: !resolved.ok,
           warnings: resolved.ok ? [] : [resolved.reason]
         };
@@ -325,8 +349,13 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
     const projectRoot = await resolveProjectRoot();
     const { config, raw } = await readAccessYaml(projectRoot);
-    if (!assertRoleExists(config, agentInput.role)) {
+    const resolvedRole = roleForInput(config, agentInput.role);
+    if (!resolvedRole) {
       return reply.status(400).send({ ok: false, error: { code: agentInput.role ? "INVALID_ROLE" : "ROLE_REQUIRED", message: "agent.role is required and must reference an existing role" } });
+    }
+    const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
+    if (invalidReason) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
     }
 
     if (config.users.some((u) => u.id === agentInput.id)) {
@@ -339,9 +368,18 @@ export function registerAgentRoutes(app: FastifyInstance) {
       note: agentInput.note,
       enabled: true,
       tokens: [],
-      role: agentInput.role
+      role: resolvedRole.id
     };
-    const newConfig: YamlAccessConfig = { ...config, users: [...config.users, newUser] };
+    const newConfig: YamlAccessConfig = {
+      ...config,
+      roles: resolvedRole.source === "template"
+        ? {
+            ...(config.roles ?? {}),
+            [resolvedRole.id]: resolvedRole.role
+          }
+        : config.roles,
+      users: [...config.users, newUser]
+    };
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
@@ -418,6 +456,22 @@ export function registerAgentRoutes(app: FastifyInstance) {
       }
     }
     const existingUser = config.users[userIndex];
+    if (patch.role !== undefined) {
+      const resolvedRole = roleForInput(config, patch.role);
+      if (!resolvedRole) {
+        return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
+      }
+      const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
+      if (invalidReason) {
+        return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
+      }
+      if (resolvedRole.source === "template") {
+        config.roles = {
+          ...(config.roles ?? {}),
+          [resolvedRole.id]: resolvedRole.role
+        };
+      }
+    }
     if (patch.role !== undefined && !assertRoleExists(config, patch.role)) {
       return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
     }

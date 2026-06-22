@@ -200,6 +200,13 @@ describe("GET /api/admin/audit", () => {
         targetId: "workhorse",
         requestId: "config-1"
       });
+
+      const csvRes = await request(app.server).get("/api/admin/config-audit/export.csv?targetId=workhorse").expect(200);
+      expect(csvRes.headers["content-disposition"]).toMatch(/config-audit-\d{8}\.csv/);
+      expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
+      expect(csvRes.text).toContain("change_type");
+      expect(csvRes.text).toContain("agent.patch");
+      expect(csvRes.text).toContain("workhorse");
     } finally {
       await app.close();
     }

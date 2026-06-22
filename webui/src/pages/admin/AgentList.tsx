@@ -120,13 +120,13 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
               <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
                 {roles.map((item) => (
                   <option key={item.id} value={item.id} disabled={item.invalid}>
-                    {item.id}{item.invalid ? " (invalid)" : ""}
+                    {item.id}{item.source === "template" ? " (template)" : ""}{item.invalid ? " (invalid)" : ""}
                   </option>
                 ))}
               </select>
               {role && (
                 <span className="text-xs text-fg-muted">
-                  {roles.find((item) => item.id === role)?.description ?? "角色模板"}
+                  {roles.find((item) => item.id === role)?.description ?? "角色"}
                 </span>
               )}
             </label>

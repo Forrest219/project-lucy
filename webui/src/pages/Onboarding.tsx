@@ -9,6 +9,19 @@ import type { Agent, ChangedFilesResponse, ProjectInfo, SourcesResponse } from "
 
 type AgentsResponse = { agents: Agent[] };
 
+function isLegacyAllowAgent(agent: Agent): boolean {
+  return !agent.role && Boolean(agent.allow);
+}
+
+function mcpAccessReason(agents: Agent[], enabledTokenCount: number): string | undefined {
+  if (agents.length === 0) return "尚未创建 Agent";
+  const enabledAgents = agents.filter((agent) => agent.enabled);
+  if (enabledAgents.length === 0) return "所有 Agent 均已禁用";
+  if (agents.every(isLegacyAllowAgent)) return "所有 Agent 仍为 legacy allow，需迁移到 role";
+  if (enabledTokenCount === 0) return "启用的 Agent 暂无可用 token";
+  return undefined;
+}
+
 function StepStatus({ ready }: { ready: boolean }) {
   return (
     <span className={`pl-status-badge ${ready ? "pl-status-done" : "pl-status-partial"}`}>
@@ -99,7 +112,10 @@ export function Onboarding() {
   const doneSources = sources.filter((source) => source.completion === "done").length;
   const changedFiles = diffQuery.data?.files ?? [];
   const agents = agentsQuery.data?.agents ?? [];
+  const enabledAgents = agents.filter((agent) => agent.enabled);
   const tokenCount = agents.reduce((sum, agent) => sum + agent.tokens.filter((token) => !token.revoked).length, 0);
+  const enabledTokenCount = enabledAgents.reduce((sum, agent) => sum + agent.tokens.filter((token) => !token.revoked).length, 0);
+  const mcpNotReadyReason = mcpAccessReason(agents, enabledTokenCount);
   const endpoint = useMemo(defaultMcpEndpoint, []);
   const mcpConfig = useMemo(() => buildMcpConfig(endpoint), [endpoint]);
   const loading = projectQuery.isLoading || sourcesQuery.isLoading || diffQuery.isLoading || agentsQuery.isLoading;
@@ -108,7 +124,7 @@ export function Onboarding() {
   const tableScopeReady = enabledTables > 0;
   const semanticReady = sources.length > 0 && doneSources > 0;
   const validationReady = changedFiles.length === 0;
-  const mcpReady = agents.length > 0 && tokenCount > 0;
+  const mcpReady = !mcpNotReadyReason;
   const readyCount = [connectionReady, tableScopeReady, semanticReady, validationReady, mcpReady].filter(Boolean).length;
 
   async function copyConfig() {
@@ -231,9 +247,10 @@ export function Onboarding() {
           <div className="grid gap-3">
             <div className="pl-onboarding-facts">
               <span>{agents.length} 个 Agent</span>
-              <span>{tokenCount} 个可用 token</span>
+              <span>{enabledTokenCount} 个可用 token</span>
               <span>{endpoint}</span>
             </div>
+            {!mcpReady && <div className="pl-notice">{mcpNotReadyReason}</div>}
             <div className="pl-code-snippet">
               <span>MCP config</span>
               <code>{mcpConfig}</code>

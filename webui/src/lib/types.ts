@@ -215,6 +215,7 @@ export type Agent = {
 export type Role = {
   id: string;
   description?: string;
+  source?: "yaml" | "template";
   tools: string[];
   connections: string[];
   sourceCount: number;

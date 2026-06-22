@@ -222,6 +222,19 @@ function selectorMatches(selector, entry) {
   return false;
 }
 
+function isObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function checkAllowedKeys(check, object, allowed, location) {
+  if (!isObject(object)) return;
+  for (const key of Object.keys(object)) {
+    if (!allowed.has(key)) {
+      add(check, "fail", `webui/config/access.yaml: ${location} contains unsupported field ${key}`);
+    }
+  }
+}
+
 function accessRolePolicy() {
   const check = "access-role-policy";
   const config = parse(read("webui/config/access.yaml")) ?? {};
@@ -230,9 +243,28 @@ function accessRolePolicy() {
   const denyTools = new Set(config.defaults?.deny_tools ?? []);
   const tableTouching = new Set(config.defaults?.table_touching_tools ?? ["sl_query", "sl_read_source", "sl_validate", "entity_details"]);
   const sources = loadSourceEntries();
+  const topLevelKeys = new Set(["roles", "users", "defaults"]);
+  const roleKeys = new Set(["description", "allow"]);
+  const roleAllowKeys = new Set(["connections", "tableSelectors", "tools"]);
+  const selectorKeys = new Set(["connection", "schema", "names", "prefix"]);
+  const userKeys = new Set(["id", "name", "note", "enabled", "role", "tokens", "allow"]);
+  const userAllowKeys = new Set(["tables", "tools", "connections"]);
+  const tokenKeys = new Set(["hash", "label", "created", "expires_at"]);
+  const defaultsKeys = new Set([
+    "deny_tools",
+    "known_tools",
+    "table_touching_tools",
+    "sensitive_metadata_tools",
+    "sensitive_table_prefixes"
+  ]);
+
+  checkAllowedKeys(check, config, topLevelKeys, "top level");
+  checkAllowedKeys(check, config.defaults, defaultsKeys, "defaults");
 
   for (const [roleId, role] of Object.entries(roles)) {
+    checkAllowedKeys(check, role, roleKeys, `role ${roleId}`);
     const allow = role.allow ?? {};
+    checkAllowedKeys(check, allow, roleAllowKeys, `role ${roleId}.allow`);
     const tools = Array.isArray(allow.tools) ? allow.tools : [];
     if (tools.includes("*")) add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains *`);
     for (const tool of tools) {
@@ -244,12 +276,18 @@ function accessRolePolicy() {
       add(check, "fail", `webui/config/access.yaml: role ${roleId} touches tables but has no allow.connections`);
     }
     for (const selector of selectors) {
+      checkAllowedKeys(check, selector, selectorKeys, `role ${roleId}.allow.tableSelectors[]`);
       const matches = sources.filter((entry) => selectorMatches(selector, entry));
       if (matches.length === 0) add(check, "fail", `webui/config/access.yaml: role ${roleId} selector matches 0 sources`);
     }
   }
 
   for (const user of users) {
+    checkAllowedKeys(check, user, userKeys, `user ${user.id ?? "<missing id>"}`);
+    checkAllowedKeys(check, user.allow, userAllowKeys, `user ${user.id ?? "<missing id>"}.allow`);
+    for (const token of Array.isArray(user.tokens) ? user.tokens : []) {
+      checkAllowedKeys(check, token, tokenKeys, `user ${user.id ?? "<missing id>"}.tokens[]`);
+    }
     if (user.role && !roles[user.role]) add(check, "fail", `webui/config/access.yaml: user ${user.id} references missing role ${user.role}`);
     if (user.role && user.allow) add(check, "warn", `webui/config/access.yaml: user ${user.id} has both role and legacy allow`);
     if (!user.role && user.allow && user.enabled !== false) add(check, "warn", `webui/config/access.yaml: enabled legacy allow user ${user.id} should migrate to role`);

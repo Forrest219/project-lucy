@@ -228,7 +228,7 @@ let projectRoot: string;
 let previousRoot: string | undefined;
 
 function identity(userId: string): Identity {
-  return { userId, tokenLabel: "unit-test" };
+  return { userId, tokenLabel: "unit-test", tokenHashPrefix: "unit-test" };
 }
 
 async function makeProject() {
