@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | MCP Audit Source & Question Tracing Spec |
 | 文档类型 | Spec |
-| 版本 | v0.4 |
-| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现）；v0.4 修订 2026-06-22（二次代码审阅发现 5 处问题修复后，澄清 §8.1 "跟 kx_catalog 一起列" 为建议而非强制约束） |
+| 版本 | v0.5 |
+| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现）；v0.4 修订 2026-06-22（二次代码审阅发现 5 处问题修复后，澄清 §8.1 "跟 kx_catalog 一起列" 为建议而非强制约束）；v0.5 修订 2026-06-22（三次审阅 nit 跟进：detail 视图 accessLogs 排除自身、debounce key 修正、§8.4 purge 触发时机措辞与实现对齐） |
 | 委托人 | 张星晨 |
 | 基于材料 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/{mcp-proxy,acl,audit}.ts`、`semantic-layer/mysql-aliyun/_schema/dataforai.yaml`、2026-06-22 workhorse MCP 审计查询 |
 | 适用范围 | Lucy MCP Proxy 审计增强：调用数据源正规化、问题簇推断、可选自然语言问题上报 |
@@ -319,7 +319,7 @@ Proxy 在 `tools/list` 中注入一个本地工具：
 实现为一个轻量 purge 函数（不依赖后台 cron，本项目当前没有调度基础设施）：
 
 - `purgeExpiredConversationTurns(options?: { retentionDays?: number; dryRun?: boolean })`：清空 `created_at` 早于 `now - retentionDays` 的行的 `question_preview`/`question_summary`/`question_hash` 字段。
-- 触发时机：①每次 `writeLog`/`lucy_begin_question` 写入路径里做 lazy 触发（按比例采样，避免每次请求都全表扫描——如 1% 概率触发一次）；②admin 提供 `POST /api/admin/audit/conversation-turns/purge` 手动触发，供运维主动清理或验证退役配置后是否生效。
+- 触发时机：①`lucy_begin_question` 写入成功后按比例采样 lazy 触发（默认 1%，环境变量 `LUCY_QUESTION_PREVIEW_PURGE_SAMPLE_RATE` 可调；写入失败的请求不触发，因为还没有新行需要在意）；②admin 提供 `POST /api/admin/audit/conversation-turns/purge` 手动触发，供运维主动清理或验证退役配置后是否生效。**不**挂在 `writeLog`（业务调用审计写入）路径上——那是高频热路径，每次都判断+可能触发一次全表扫描不值得，且跟 purge 的对象（`conversation_turns`）无关。触发频率 ≈ `lucy_begin_question` 调用率 × 采样率，本来就是低频可选功能,实际触发不频繁是预期行为,不是缺陷。
 - 不删除整行：`turn_id` 可能被 `inferred_turns` 或审计 UI 历史视图引用，保留行结构、只清空敏感文本字段，避免外键/展示层出现悬空引用。
 
 ## 9. API 与 UI

@@ -11,10 +11,13 @@ const lastRebuildAt = new Map<string, number>();
 const REBUILD_DEBOUNCE_MS = Number(process.env.LUCY_TURN_INFER_REBUILD_DEBOUNCE_MS ?? 30_000);
 
 async function rebuildInferredTurnsDebounced(userId: string, options?: { lookbackHours?: number }): Promise<void> {
+  // Key on the resolved window size too: a recent rebuild over a narrower window doesn't cover
+  // a wider one, so a different lookbackHours must not be skipped by the debounce.
+  const key = `${userId}:${options?.lookbackHours ?? "default"}`;
   const now = Date.now();
-  const last = lastRebuildAt.get(userId);
+  const last = lastRebuildAt.get(key);
   if (last !== undefined && now - last < REBUILD_DEBOUNCE_MS) return;
-  lastRebuildAt.set(userId, now);
+  lastRebuildAt.set(key, now);
   await rebuildInferredTurns(userId, options);
 }
 
@@ -920,7 +923,11 @@ export function registerAuditRoutes(app: FastifyInstance) {
       reply.code(404);
       return { ok: false, error: "not found" };
     }
-    const accessLogs = database.prepare(`SELECT id, ts, tool, outcome, decision_reason FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC`).all(turnId) as Array<{ id: number }>;
+    const accessLogs = database.prepare(`
+      SELECT id, ts, tool, outcome, decision_reason FROM access_log
+      WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST})
+      ORDER BY ts ASC
+    `).all(turnId) as Array<{ id: number }>;
     const accessLogIds = accessLogs.map((l) => l.id);
     const sources = accessLogIds.length > 0
       ? database.prepare(`SELECT DISTINCT connection_id, schema_name, source_name, physical_table FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})`).all(...accessLogIds)

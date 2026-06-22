@@ -324,7 +324,13 @@ describe("GET /api/admin/audit/turns", () => {
     const now = Date.now();
     const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
     await writeLog({ ts: at(0), userId: "turns-detail-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-detail-1" });
-    await writeConversationTurn({ turnId: "lucy_turns_detail_1", userId: "turns-detail-user", questionSummary: "detail test", questionSource: "reported_tool" });
+    // Separate user for the reported-turn case, so its access_log rows don't bleed into the
+    // inferred-cluster assertion above (clustering is purely time-based per user).
+    await writeConversationTurn({ turnId: "lucy_turns_detail_1", userId: "turns-detail-reported-user", questionSummary: "detail test", questionSource: "reported_tool" });
+    // The report call itself also lands in access_log with lucy_turn_id set to its own turn id
+    // (mirrors mcp-proxy.ts) — the detail view's accessLogs must exclude it, same as the list view.
+    await writeLog({ ts: at(5_000), userId: "turns-detail-reported-user", tool: "lucy_begin_question", outcome: "ok", durationMs: 1, requestId: "turns-detail-report-call", lucyTurnId: "lucy_turns_detail_1" });
+    await writeLog({ ts: at(10_000), userId: "turns-detail-reported-user", tool: "sl_query", tables: ["dataforai.superstore_returns"], outcome: "ok", durationMs: 1, requestId: "turns-detail-linked", lucyTurnId: "lucy_turns_detail_1" });
 
     const { buildServer } = await import("../index");
     const app = buildServer();
@@ -339,10 +345,40 @@ describe("GET /api/admin/audit/turns", () => {
       expect(inferredDetail.body.data.accessLogs).toHaveLength(1);
 
       const reportedDetail = await request(app.server).get("/api/admin/audit/turns/lucy_turns_detail_1").expect(200);
-      expect(reportedDetail.body.data).toMatchObject({ id: "lucy_turns_detail_1", source: "reported", userId: "turns-detail-user", questionSummary: "detail test" });
+      expect(reportedDetail.body.data).toMatchObject({ id: "lucy_turns_detail_1", source: "reported", userId: "turns-detail-reported-user", questionSummary: "detail test" });
+      expect(reportedDetail.body.data.accessLogs).toHaveLength(1);
+      expect(reportedDetail.body.data.accessLogs[0].tool).toBe("sl_query");
 
       await request(app.server).get("/api/admin/audit/turns/inf_does_not_exist").expect(404);
       await request(app.server).get("/api/admin/audit/turns/lucy_does_not_exist").expect(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("does not let a narrow-lookbackHours rebuild debounce-skip a wider one for the same user", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+    // A cluster well outside the 1h window but inside the 24h window.
+    await writeLog({ ts: at(-20 * 60 * 60 * 1000), userId: "debounce-window-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "debounce-old-1" });
+    // A cluster inside the 1h window.
+    await writeLog({ ts: at(-5 * 60 * 1000), userId: "debounce-window-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "debounce-recent-1" });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      // First call: narrow window, only sees the recent cluster.
+      const narrow = await request(app.server).get("/api/admin/audit/turns?user=debounce-window-user&source=inferred&lookbackHours=1").expect(200);
+      expect(narrow.body.data.entries).toHaveLength(1);
+
+      // Second call, immediately after (well within any debounce window): wide lookback must
+      // still trigger its own rebuild and surface the older cluster too, not be skipped because
+      // a rebuild for this user "just happened" under a different window size.
+      const wide = await request(app.server).get("/api/admin/audit/turns?user=debounce-window-user&source=inferred&lookbackHours=24").expect(200);
+      expect(wide.body.data.entries).toHaveLength(2);
     } finally {
       await app.close();
     }
