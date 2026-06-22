@@ -1,0 +1,955 @@
+{
+  "generated_at": "2026-06-22T15:13:57+08:00",
+  "window": {
+    "days": 7,
+    "log_root": "/Users/forrest/.claude/projects",
+    "file_mtime_cutoff": "2026-06-15T15:13:57+08:00",
+    "timezone": "Asia/Shanghai"
+  },
+  "metadata": {
+    "project_root": "/Users/forrest/Projects/project-lucy",
+    "mcp_config_ktx_url": "http://localhost:7878/mcp",
+    "proxy_route_status": "direct_ktx_7878",
+    "ktx_cli_path": "/Users/forrest/.local/node-current/bin/ktx",
+    "ktx_cli_version": "@kaelio/ktx 0.12.0",
+    "claude_cli_path": "/Users/forrest/.local/bin/claude",
+    "claude_cli_version": "2.1.185 (Claude Code)",
+    "ktx_clone": "/Users/forrest/Projects/ktx/ktx",
+    "ktx_clone_branch": "main",
+    "ktx_clone_commit": "e550091a7631a119c6a2589ee282f7c79946deaf",
+    "ktx_clone_remote": "https://github.com/Kaelio/ktx.git",
+    "schema_basis": "source_read; live tools/list probe requires a valid KTX MCP bearer token"
+  },
+  "files": {
+    "count": 565,
+    "parse_errors": 0
+  },
+  "totals": {
+    "ktx_tool_use": 1965,
+    "ktx_tool_result_items": 1965,
+    "unmatched_uses": 0,
+    "input_bytes_json": 354294,
+    "result_bytes_json": 3007398,
+    "result_input_ratio": 8.488424867482937
+  },
+  "by_tool": [
+    {
+      "tool": "sql_execution",
+      "count": 863,
+      "share": 0.4391857506361323,
+      "input_bytes": 262751,
+      "result_bytes": 390878,
+      "avg_input_bytes": 304.46234067207416,
+      "avg_result_bytes": 452.92931633835457
+    },
+    {
+      "tool": "sl_read_source",
+      "count": 616,
+      "share": 0.31348600508905855,
+      "input_bytes": 43180,
+      "result_bytes": 1584827,
+      "avg_input_bytes": 70.09740259740259,
+      "avg_result_bytes": 2572.771103896104
+    },
+    {
+      "tool": "connection_list",
+      "count": 167,
+      "share": 0.08498727735368956,
+      "input_bytes": 334,
+      "result_bytes": 17034,
+      "avg_input_bytes": 2.0,
+      "avg_result_bytes": 102.0
+    },
+    {
+      "tool": "entity_details",
+      "count": 130,
+      "share": 0.06615776081424936,
+      "input_bytes": 28295,
+      "result_bytes": 542329,
+      "avg_input_bytes": 217.65384615384616,
+      "avg_result_bytes": 4171.761538461538
+    },
+    {
+      "tool": "discover_data",
+      "count": 105,
+      "share": 0.05343511450381679,
+      "input_bytes": 9943,
+      "result_bytes": 277932,
+      "avg_input_bytes": 94.6952380952381,
+      "avg_result_bytes": 2646.9714285714285
+    },
+    {
+      "tool": "wiki_search",
+      "count": 42,
+      "share": 0.021374045801526718,
+      "input_bytes": 2716,
+      "result_bytes": 127909,
+      "avg_input_bytes": 64.66666666666667,
+      "avg_result_bytes": 3045.4523809523807
+    },
+    {
+      "tool": "wiki_read",
+      "count": 24,
+      "share": 0.012213740458015267,
+      "input_bytes": 1030,
+      "result_bytes": 54004,
+      "avg_input_bytes": 42.916666666666664,
+      "avg_result_bytes": 2250.1666666666665
+    },
+    {
+      "tool": "sl_query",
+      "count": 15,
+      "share": 0.007633587786259542,
+      "input_bytes": 5796,
+      "result_bytes": 10769,
+      "avg_input_bytes": 386.4,
+      "avg_result_bytes": 717.9333333333333
+    },
+    {
+      "tool": "dictionary_search",
+      "count": 3,
+      "share": 0.0015267175572519084,
+      "input_bytes": 249,
+      "result_bytes": 1716,
+      "avg_input_bytes": 83.0,
+      "avg_result_bytes": 572.0
+    }
+  ],
+  "daily_counts": {
+    "2026-06-20": 1251,
+    "2026-06-21": 714
+  },
+  "daily_by_tool": [
+    {
+      "day": "2026-06-20",
+      "tool": "connection_list",
+      "count": 99
+    },
+    {
+      "day": "2026-06-20",
+      "tool": "dictionary_search",
+      "count": 3
+    },
+    {
+      "day": "2026-06-20",
+      "tool": "discover_data",
+      "count": 78
+    },
+    {
+      "day": "2026-06-20",
+      "tool": "entity_details",
+      "count": 106
+    },
+    {
+      "day": "2026-06-20",
+      "tool": "sl_query",
+      "count": 5
+    },
+    {
+      "day": "2026-06-20",
+      "tool": "sl_read_source",
+      "count": 353
+    },
+    {
+      "day": "2026-06-20",
+      "tool": "sql_execution",
+      "count": 585
+    },
+    {
+      "day": "2026-06-20",
+      "tool": "wiki_search",
+      "count": 22
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "connection_list",
+      "count": 68
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "discover_data",
+      "count": 27
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "entity_details",
+      "count": 24
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "sl_query",
+      "count": 10
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "sl_read_source",
+      "count": 263
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "sql_execution",
+      "count": 278
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "wiki_read",
+      "count": 24
+    },
+    {
+      "day": "2026-06-21",
+      "tool": "wiki_search",
+      "count": 20
+    }
+  ],
+  "connections": {
+    "mysql-aliyun": 1620,
+    "dataforai": 39,
+    "warehouse": 15
+  },
+  "sl_read_source": {
+    "top_sources": [
+      {
+        "sourceName": "kx_fact_financial_amount",
+        "count": 168
+      },
+      {
+        "sourceName": "kx_dim_financial_item",
+        "count": 141
+      },
+      {
+        "sourceName": "kx_dim_company",
+        "count": 96
+      },
+      {
+        "sourceName": "kx_vw_balance_sheet_detail",
+        "count": 84
+      },
+      {
+        "sourceName": "kx_vw_income_statement_detail",
+        "count": 70
+      },
+      {
+        "sourceName": "kx_vw_cash_flow_statement_detail",
+        "count": 57
+      }
+    ],
+    "connections": {
+      "mysql-aliyun": 567,
+      "dataforai": 38,
+      "warehouse": 11
+    },
+    "distinct_result_counts": [
+      {
+        "sourceName": "kx_fact_financial_amount",
+        "calls": 168,
+        "distinct_results": 3,
+        "largest_text_bytes": 6147
+      },
+      {
+        "sourceName": "kx_dim_financial_item",
+        "calls": 141,
+        "distinct_results": 2,
+        "largest_text_bytes": 2250
+      },
+      {
+        "sourceName": "kx_dim_company",
+        "calls": 96,
+        "distinct_results": 2,
+        "largest_text_bytes": 1259
+      },
+      {
+        "sourceName": "kx_vw_balance_sheet_detail",
+        "calls": 84,
+        "distinct_results": 2,
+        "largest_text_bytes": 2064
+      },
+      {
+        "sourceName": "kx_vw_income_statement_detail",
+        "calls": 70,
+        "distinct_results": 3,
+        "largest_text_bytes": 1851
+      },
+      {
+        "sourceName": "kx_vw_cash_flow_statement_detail",
+        "calls": 57,
+        "distinct_results": 2,
+        "largest_text_bytes": 1858
+      }
+    ],
+    "repeated_source_sessions": [
+      {
+        "session_id": "0ffddff1-d4fc-4698-8675-660c95fb7428",
+        "sourceName": "kx_vw_balance_sheet_detail",
+        "count": 2
+      },
+      {
+        "session_id": "0ffddff1-d4fc-4698-8675-660c95fb7428",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "148ba1fb-c4ae-4e60-91a4-b933cf2dd2ed",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "14e1e709-7193-4be8-8eee-73918e67dc25",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "14e1e709-7193-4be8-8eee-73918e67dc25",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "14e1e709-7193-4be8-8eee-73918e67dc25",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "17f3a887-ea91-47e2-95c3-48fc43f2a381",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "17f3a887-ea91-47e2-95c3-48fc43f2a381",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "17f3a887-ea91-47e2-95c3-48fc43f2a381",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "205e74b5-591f-47fc-be24-23536a457528",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "205e74b5-591f-47fc-be24-23536a457528",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "205e74b5-591f-47fc-be24-23536a457528",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "205e74b5-591f-47fc-be24-23536a457528",
+        "sourceName": "kx_vw_balance_sheet_detail",
+        "count": 2
+      },
+      {
+        "session_id": "205e74b5-591f-47fc-be24-23536a457528",
+        "sourceName": "kx_vw_income_statement_detail",
+        "count": 2
+      },
+      {
+        "session_id": "205e74b5-591f-47fc-be24-23536a457528",
+        "sourceName": "kx_vw_cash_flow_statement_detail",
+        "count": 2
+      },
+      {
+        "session_id": "4e4f5693-98f5-4922-a836-fb771448e24c",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "4e4f5693-98f5-4922-a836-fb771448e24c",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "4e4f5693-98f5-4922-a836-fb771448e24c",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "5f4aeb1e-bbc4-4867-98fb-9c69b881a4ec",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "5f4aeb1e-bbc4-4867-98fb-9c69b881a4ec",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "5f4aeb1e-bbc4-4867-98fb-9c69b881a4ec",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "888f92af-53e2-4598-b247-9884dc9a35c5",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "888f92af-53e2-4598-b247-9884dc9a35c5",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "888f92af-53e2-4598-b247-9884dc9a35c5",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "8daaa275-a809-49ec-8d84-792cc09edc99",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "8daaa275-a809-49ec-8d84-792cc09edc99",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "8daaa275-a809-49ec-8d84-792cc09edc99",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "90cd40e8-ae4a-4a1e-aac1-369e963570b0",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "98a7d6ef-9d30-4c1b-afe7-2da37978005f",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "98a7d6ef-9d30-4c1b-afe7-2da37978005f",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "98a7d6ef-9d30-4c1b-afe7-2da37978005f",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "9e85f2f8-484b-4c86-82ff-24671657ae3d",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "9e85f2f8-484b-4c86-82ff-24671657ae3d",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "9e85f2f8-484b-4c86-82ff-24671657ae3d",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "b91149d0-704d-4d9e-83b8-47d45fab5ad3",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "b91149d0-704d-4d9e-83b8-47d45fab5ad3",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "b91149d0-704d-4d9e-83b8-47d45fab5ad3",
+        "sourceName": "kx_vw_balance_sheet_detail",
+        "count": 2
+      },
+      {
+        "session_id": "dc31052a-7b85-41c1-9fda-906b384c3bf8",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "dc31052a-7b85-41c1-9fda-906b384c3bf8",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "dc31052a-7b85-41c1-9fda-906b384c3bf8",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "de0482e0-4b33-445d-be3c-6a9778143977",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "de0482e0-4b33-445d-be3c-6a9778143977",
+        "sourceName": "kx_dim_company",
+        "count": 2
+      },
+      {
+        "session_id": "de0482e0-4b33-445d-be3c-6a9778143977",
+        "sourceName": "kx_dim_financial_item",
+        "count": 2
+      },
+      {
+        "session_id": "e293e718-7641-4362-bac7-767aae7e8984",
+        "sourceName": "kx_vw_balance_sheet_detail",
+        "count": 2
+      },
+      {
+        "session_id": "e293e718-7641-4362-bac7-767aae7e8984",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      },
+      {
+        "session_id": "e9f7ce49-045b-4783-934b-0fda25b6df79",
+        "sourceName": "kx_fact_financial_amount",
+        "count": 2
+      }
+    ]
+  },
+  "connection_list": {
+    "distinct_results": 1,
+    "top_result_counts": [
+      167
+    ]
+  },
+  "entity_details": {
+    "entities_per_call": {
+      "1": 57,
+      "3": 34,
+      "4": 18,
+      "2": 16,
+      "unknown": 2,
+      "7": 2,
+      "6": 1
+    }
+  },
+  "sql_execution": {
+    "total": 863,
+    "keywords": {
+      "SELECT": 849,
+      "DESCRIBE": 10,
+      "SHOW": 4
+    },
+    "select": 849,
+    "select_star": 29,
+    "select_without_limit": 701,
+    "select_without_limit_non_aggregate": 421,
+    "select_without_limit_non_aggregate_share_of_select": 0.4958775029446408,
+    "maxRows_set": 717,
+    "avg_result_bytes": 452.92931633835457,
+    "max_result_bytes": 7105,
+    "aggregate_detection": "count/sum/avg/min/max/group_concat/json_arrayagg/json_objectagg/GROUP BY"
+  },
+  "largest_results": [
+    {
+      "tool": "entity_details",
+      "result_bytes": 19945,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_company"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_balance_sheet_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_income_statement_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_cash_flow_statement_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "superstore_orders"
+            }
+          }
+        ]
+      },
+      "session_id": "d2601353-ff3a-4ef4-92ca-a3c40778fb67",
+      "timestamp": "2026-06-20T13:25:47.576Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 11893,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": "dataforai",
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": "dataforai",
+              "name": "kx_dim_company"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": "dataforai",
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": "dataforai",
+              "name": "kx_vw_balance_sheet_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": "dataforai",
+              "name": "kx_vw_income_statement_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": "dataforai",
+              "name": "kx_vw_cash_flow_statement_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": "dataforai",
+              "name": "superstore_orders"
+            }
+          }
+        ]
+      },
+      "session_id": "d2601353-ff3a-4ef4-92ca-a3c40778fb67",
+      "timestamp": "2026-06-20T13:25:41.323Z"
+    },
+    {
+      "tool": "discover_data",
+      "result_bytes": 10466,
+      "input": {
+        "query": "KX 财报 财务 利润表 资产负债表 现金流量表",
+        "connectionId": "mysql-aliyun",
+        "kinds": [
+          "sl_source",
+          "table",
+          "column"
+        ],
+        "limit": 30
+      },
+      "session_id": "a46158f4-12d3-465b-ba15-fbb78e13e6df",
+      "timestamp": "2026-06-20T15:20:40.973Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 10252,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_company"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_balance_sheet_detail"
+            }
+          }
+        ]
+      },
+      "session_id": "6ec3e084-9509-4312-8815-44b49021d6d3",
+      "timestamp": "2026-06-21T00:48:30.977Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 10252,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_balance_sheet_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_company"
+            }
+          }
+        ]
+      },
+      "session_id": "aeb5aac1-f83a-4b44-8bb6-c131f11b7f5a",
+      "timestamp": "2026-06-20T12:34:38.065Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 10252,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_company"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_balance_sheet_detail"
+            }
+          }
+        ]
+      },
+      "session_id": "cb8bec21-1fb4-4d2c-8387-5f39c7eae0ac",
+      "timestamp": "2026-06-20T12:22:31.561Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 10252,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": "dataforai.kx_vw_balance_sheet_detail"
+          },
+          {
+            "table": "dataforai.kx_fact_financial_amount"
+          },
+          {
+            "table": "dataforai.kx_dim_company"
+          },
+          {
+            "table": "dataforai.kx_dim_financial_item"
+          }
+        ]
+      },
+      "session_id": "cdadfb75-0283-45b5-a5de-2166eaffdbfb",
+      "timestamp": "2026-06-20T11:39:52.608Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 10095,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": null,
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": null,
+              "name": "kx_dim_company"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": null,
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": null,
+              "name": "kx_vw_balance_sheet_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": null,
+              "name": "kx_vw_income_statement_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": "dataforai",
+              "db": null,
+              "name": "kx_vw_cash_flow_statement_detail"
+            }
+          }
+        ]
+      },
+      "session_id": "d2601353-ff3a-4ef4-92ca-a3c40778fb67",
+      "timestamp": "2026-06-20T13:25:34.888Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 9977,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_cash_flow_statement_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_company"
+            }
+          }
+        ]
+      },
+      "session_id": "9cd8cc10-932f-4862-a8d8-2e8129103824",
+      "timestamp": "2026-06-20T12:18:11.751Z"
+    },
+    {
+      "tool": "entity_details",
+      "result_bytes": 9971,
+      "input": {
+        "connectionId": "mysql-aliyun",
+        "entities": [
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_vw_income_statement_detail"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_fact_financial_amount"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_financial_item"
+            }
+          },
+          {
+            "table": {
+              "catalog": null,
+              "db": "dataforai",
+              "name": "kx_dim_company"
+            }
+          }
+        ]
+      },
+      "session_id": "0c3ae722-3e4f-4c59-a23f-4d4c70c580c1",
+      "timestamp": "2026-06-20T11:54:36.539Z"
+    }
+  ]
+}

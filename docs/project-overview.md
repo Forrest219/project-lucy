@@ -141,6 +141,7 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 | Agent 权限设计 | `docs/design-agent-permissions.md` |
 | 访问治理闭环设计 | `docs/access-governance-design.md` |
 | Eval 设计 | `docs/design-eval-monitoring.md` |
+| Eval Tool-Budget 设计 | `docs/design-eval-tool-budget.md` |
 | Eval / Quiz 约定 | `docs/eval-quiz-conventions.md` |
 | DB 接入设计 | `docs/design-db-connection.md` |
 | Spec 审计与整改 | `inbox/spec-audit-2026-06-21.md`、`inbox/spec-remediation-plan-2026-06-21.md` |
