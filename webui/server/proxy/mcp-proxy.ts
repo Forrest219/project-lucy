@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { identifyRequest, setSessionClient } from "./identity.js";
-import { writeLog } from "./audit.js";
-import { allowedToolNames, check as aclCheck, extractTables, kxCatalog, permissionSnapshot } from "./acl.js";
+import { writeLog, writeAccessLogSources, type AccessLogSourceRecord } from "./audit.js";
+import { allowedToolNames, check as aclCheck, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -77,10 +77,27 @@ function forwardToKtx(
   });
 }
 
-function recordAudit(entry: Parameters<typeof writeLog>[0]): void {
-  writeLog(entry).catch((err) => {
-    console.error("[lucy-proxy] failed to write audit log", err);
-  });
+function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
+  return refs.map((ref) => ({
+    connectionId: ref.connectionId,
+    schemaName: ref.schema,
+    sourceName: ref.sourceName,
+    physicalTable: ref.physicalTable,
+    extractionMethod: ref.extractionMethod,
+    confidence: ref.confidence
+  }));
+}
+
+function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
+  writeLog(entry)
+    .then((accessLogId) => {
+      if (sources && sources.length > 0) {
+        return writeAccessLogSources(accessLogId, entry.ts, entry.userId, entry.tool, toSourceRecords(sources));
+      }
+    })
+    .catch((err) => {
+      console.error("[lucy-proxy] failed to write audit log", err);
+    });
 }
 
 async function auditMeta(identity: Awaited<ReturnType<typeof identifyRequest>>, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
@@ -529,6 +546,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     }
 
     // Extract tables for logging (best-effort)
+    let sourceRefs: SourceRef[] = [];
     if (toolName) {
       try {
         const extracted = await extractTables(toolName, toolArgs);
@@ -538,6 +556,18 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         // don't fail the request
       }
       if (!tables && queryTables.length > 0) tables = queryTables;
+
+      // Structured source normalization for access_log_sources (best-effort, never blocks the response).
+      // kx_catalog is handled by its own local-response branch above and never reaches here.
+      try {
+        const structuredRefs = await extractSourceRefs(toolName, toolArgs);
+        const coveredTables = new Set(structuredRefs.map((ref) => ref.physicalTable));
+        const fallbackTables = queryTables.filter((table) => !coveredTables.has(table));
+        const fallbackRefs = fallbackTables.length > 0 ? await resolveSourceRefsForTables(fallbackTables) : [];
+        sourceRefs = [...structuredRefs, ...fallbackRefs];
+      } catch {
+        // source normalization is best-effort; never block the response
+      }
     }
 
     recordAudit({
@@ -555,7 +585,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, outcome === "ok" ? "allowed" : "upstream_error")),
-    });
+    }, outcome === "ok" ? sourceRefs : undefined);
   } else {
     pipeResponse(upstream, res);
     if (rpcMethod) {

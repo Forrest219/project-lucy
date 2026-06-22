@@ -278,6 +278,60 @@ describe("KX financial domain ACL guardrails", () => {
     ]);
   });
 
+  it("extractSourceRefs resolves sl_read_source to a single high-confidence args_source_name record", async () => {
+    const { extractSourceRefs } = await loadAcl();
+
+    await expect(extractSourceRefs("sl_read_source", { sourceName: "kx_fact_financial_amount" }))
+      .resolves.toEqual([{
+        connectionId: "mysql-aliyun",
+        schema: "dataforai",
+        sourceName: "kx_fact_financial_amount",
+        physicalTable: "dataforai.kx_fact_financial_amount",
+        extractionMethod: "args_source_name",
+        confidence: "high"
+      }]);
+  });
+
+  it("extractSourceRefs resolves sl_query measures/dimensions to multiple high-confidence field_ref records", async () => {
+    const { extractSourceRefs } = await loadAcl();
+
+    const refs = await extractSourceRefs("sl_query", {
+      measures: ["sum(kx_fact_financial_amount.amount)"],
+      dimensions: [
+        { field: "kx_dim_company.company_name" },
+        { field: "kx_dim_financial_item.item_name" }
+      ]
+    });
+
+    expect(refs).toHaveLength(3);
+    expect(refs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceName: "kx_fact_financial_amount", physicalTable: "dataforai.kx_fact_financial_amount", extractionMethod: "field_ref", confidence: "high" }),
+      expect.objectContaining({ sourceName: "kx_dim_company", physicalTable: "dataforai.kx_dim_company", extractionMethod: "field_ref", confidence: "high" }),
+      expect.objectContaining({ sourceName: "kx_dim_financial_item", physicalTable: "dataforai.kx_dim_financial_item", extractionMethod: "field_ref", confidence: "high" })
+    ]));
+  });
+
+  it("resolveSourceRefsForTables falls back to medium-confidence source_map_reverse for tables outside the source map", async () => {
+    const { resolveSourceRefsForTables } = await loadAcl();
+
+    await expect(resolveSourceRefsForTables(["dataforai.totally_unknown_table"]))
+      .resolves.toEqual([{
+        physicalTable: "dataforai.totally_unknown_table",
+        extractionMethod: "source_map_reverse",
+        confidence: "medium"
+      }]);
+
+    await expect(resolveSourceRefsForTables(["dataforai.superstore_orders"]))
+      .resolves.toEqual([{
+        connectionId: "mysql-aliyun",
+        schema: "dataforai",
+        sourceName: "superstore_orders",
+        physicalTable: "dataforai.superstore_orders",
+        extractionMethod: "query_ref",
+        confidence: "low"
+      }]);
+  });
+
   it("allows the KX test agent to access only the six KX tables", async () => {
     const { check } = await loadAcl();
 

@@ -9,7 +9,8 @@
     "build": "vite build",
     "start": "tsx server/index.ts",
     "test": "vitest run --maxWorkers=1",
-    "acceptance:api": "tsx scripts/api-acceptance.ts"
+    "acceptance:api": "tsx scripts/api-acceptance.ts",
+    "backfill:access-log-sources": "tsx scripts/backfill-access-log-sources.ts"
   },
   "keywords": [],
   "author": "",

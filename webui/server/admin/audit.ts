@@ -137,6 +137,25 @@ export async function getAuditDb(): Promise<Database.Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_ccl_ts ON config_change_log(ts);
     CREATE INDEX IF NOT EXISTS idx_ccl_file_ts ON config_change_log(file_path, ts);
+    CREATE TABLE IF NOT EXISTS access_log_sources (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      access_log_id     INTEGER NOT NULL,
+      ts                TEXT NOT NULL,
+      user_id           TEXT NOT NULL,
+      tool              TEXT NOT NULL,
+      connection_id     TEXT,
+      schema_name       TEXT,
+      source_name       TEXT,
+      physical_table    TEXT NOT NULL,
+      extraction_method TEXT NOT NULL,
+      confidence        TEXT NOT NULL,
+      created_at        TEXT NOT NULL,
+      FOREIGN KEY(access_log_id) REFERENCES access_log(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_als_log ON access_log_sources(access_log_id);
+    CREATE INDEX IF NOT EXISTS idx_als_user_ts ON access_log_sources(user_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_als_source ON access_log_sources(connection_id, schema_name, source_name);
+    CREATE INDEX IF NOT EXISTS idx_als_table ON access_log_sources(physical_table);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -389,6 +408,57 @@ export function registerAuditRoutes(app: FastifyInstance) {
         schemas: [...schemas.entries()].map(([schema, calls]) => ({ schema, calls })).sort((a, b) => b.calls - a.calls),
         topTables: byCount([...tables.values()]).slice(0, 50),
         deniedTables: [...tables.values()].filter((item) => item.denied > 0).sort((a, b) => b.denied - a.denied).slice(0, 50)
+      }
+    };
+  });
+
+  // GET /api/admin/audit/:id/sources — per-log-row source detail (distinct from the
+  // aggregate GET /api/admin/audit/sources above, which summarizes across all rows).
+  app.get<{ Params: { id: string } }>("/api/admin/audit/:id/sources", async (request, reply) => {
+    const accessLogId = Number(request.params.id);
+    if (!Number.isInteger(accessLogId) || accessLogId <= 0) {
+      reply.code(400);
+      return { ok: false, error: "invalid id" };
+    }
+    const database = await getAuditDb();
+    const rows = database.prepare(`
+      SELECT id, access_log_id, ts, user_id, tool, connection_id, schema_name, source_name,
+             physical_table, extraction_method, confidence, created_at
+      FROM access_log_sources
+      WHERE access_log_id = ?
+      ORDER BY id ASC
+    `).all(accessLogId) as Array<{
+      id: number;
+      access_log_id: number;
+      ts: string;
+      user_id: string;
+      tool: string;
+      connection_id: string | null;
+      schema_name: string | null;
+      source_name: string | null;
+      physical_table: string;
+      extraction_method: string;
+      confidence: string;
+      created_at: string;
+    }>;
+
+    return {
+      ok: true,
+      data: {
+        accessLogId,
+        sources: rows.map((row) => ({
+          id: row.id,
+          ts: row.ts,
+          userId: row.user_id,
+          tool: row.tool,
+          connectionId: row.connection_id,
+          schemaName: row.schema_name,
+          sourceName: row.source_name,
+          physicalTable: row.physical_table,
+          extractionMethod: row.extraction_method,
+          confidence: row.confidence,
+          createdAt: row.created_at
+        }))
       }
     };
   });

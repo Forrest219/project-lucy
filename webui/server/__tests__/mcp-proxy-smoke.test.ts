@@ -84,6 +84,23 @@ async function waitForAuditRow(requestId: string, timeoutMs = 1000): Promise<Rec
   throw new Error(`audit row not found for request_id=${requestId}`);
 }
 
+// Non-throwing on timeout: callers also use this to confirm the *absence* of rows
+// (e.g. kx_catalog must never produce access_log_sources rows).
+async function waitForAuditSources(accessLogId: number, timeoutMs = 300): Promise<Array<Record<string, unknown>>> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const rows = db.prepare("SELECT * FROM access_log_sources WHERE access_log_id = ?").all(accessLogId) as Array<Record<string, unknown>>;
+      if (rows.length > 0) return rows;
+    } finally {
+      db.close();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return [];
+}
+
 beforeEach(async () => {
   vi.resetModules();
   projectRoot = await makeProject();
@@ -193,6 +210,66 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("writes structured access_log_sources for a successful sl_read_source call", async () => {
+    const upstream = createServer(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: "proxy-smoke-sources",
+        result: { content: [{ type: "text", text: "ok" }] }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "proxy-smoke-sources",
+          method: "tools/call",
+          params: {
+            name: "sl_read_source",
+            arguments: { sourceName: "superstore_orders" }
+          }
+        })
+      });
+      expect(res.status).toBe(200);
+
+      const audit = await waitForAuditRow("proxy-smoke-sources");
+      const sources = await waitForAuditSources(Number(audit.id));
+      expect(sources).toHaveLength(1);
+      expect(sources[0]).toMatchObject({
+        access_log_id: audit.id,
+        user_id: "smoke_agent",
+        tool: "sl_read_source",
+        connection_id: "mysql-aliyun",
+        schema_name: "dataforai",
+        source_name: "superstore_orders",
+        physical_table: "dataforai.superstore_orders",
+        extraction_method: "args_source_name",
+        confidence: "high"
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("injects kx_catalog into tools/list and serves it from the proxy", async () => {
     const upstreamSeen: string[] = [];
     const upstream = createServer(async (req, res) => {
@@ -254,6 +331,10 @@ describe("MCP proxy smoke", () => {
       expect(catalogText).toContain("superstore_orders");
       expect(catalogText).not.toContain("kx_fact_financial_amount");
       expect(upstreamSeen).toHaveLength(1);
+
+      const catalogAudit = await waitForAuditRow("catalog");
+      const catalogSources = await waitForAuditSources(Number(catalogAudit.id));
+      expect(catalogSources).toHaveLength(0);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));

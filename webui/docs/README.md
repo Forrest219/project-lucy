@@ -11,6 +11,8 @@
 | [04-data-model.md](04-data-model.md) | 内部数据模型 ↔ 真实 YAML 映射、完成度算法 | 实现者 |
 | [05-task-list.md](05-task-list.md) | 里程碑任务拆分与验收标准 | 实现者 / 验收 |
 | [06-navigation-ia.md](06-navigation-ia.md) | 导航与信息架构优化，明确语义层/业务文档/审阅校验的用户口径 | 产品 / 前端 |
+| [07-mcp-auth-proxy-spec.md](07-mcp-auth-proxy-spec.md) | MCP Auth Proxy、访问日志、多用户权限与工具过滤 | 后端 / 安全 / 前端 |
+| [08-mcp-audit-question-tracing-spec.md](08-mcp-audit-question-tracing-spec.md) | MCP 审计增强：数据源正规化、问题簇推断、可选自然语言问题上报 | 后端 / 前端 / 审计 |
 
 ## 与原 README 的关键校正
 

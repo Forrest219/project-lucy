@@ -278,6 +278,92 @@ function extractConnectionRefs(toolName: string, args: unknown): string[] {
   return [...connections].filter(Boolean);
 }
 
+// ─── structured source resolution (for access_log_sources) ──────────────────
+
+export interface SourceRef {
+  connectionId?: string;
+  schema?: string;
+  sourceName?: string;
+  physicalTable: string;
+  extractionMethod: string; // 'args_source_name' | 'field_ref' | 'query_ref' | 'source_map_reverse' | 'unknown'
+  confidence: "high" | "medium" | "low";
+}
+
+function buildReverseSourceMap(map: Map<string, SourceMapEntry>): Map<string, SourceMapEntry> {
+  const reverse = new Map<string, SourceMapEntry>();
+  for (const entry of map.values()) reverse.set(normalizeRef(entry.physicalTable), entry);
+  return reverse;
+}
+
+function toSourceRef(
+  table: string,
+  reverse: Map<string, SourceMapEntry>,
+  method: string,
+  confidence: "high" | "medium" | "low"
+): SourceRef {
+  const entry = reverse.get(normalizeRef(table));
+  if (!entry) {
+    return { physicalTable: table, extractionMethod: "source_map_reverse", confidence: "medium" };
+  }
+  return {
+    connectionId: entry.connectionId,
+    schema: entry.schema,
+    sourceName: entry.sourceName,
+    physicalTable: table,
+    extractionMethod: method,
+    confidence
+  };
+}
+
+function structuredExtractionMethod(toolName: string): string {
+  switch (toolName) {
+    case "sl_read_source":
+    case "sl_validate":
+      return "args_source_name";
+    case "sl_query":
+    case "entity_details":
+      return "field_ref";
+    default:
+      return "unknown";
+  }
+}
+
+/**
+ * Like extractTables, but returns structured {connectionId, schema, sourceName, physicalTable}
+ * records with an extraction method/confidence, instead of collapsing to physical-table strings.
+ */
+export async function extractSourceRefs(
+  toolName: string,
+  args: unknown,
+  options: { fresh?: boolean } = {}
+): Promise<SourceRef[]> {
+  const tables = await extractTables(toolName, args, options);
+  if (tables.length === 0) return [];
+  const map = await loadSourceMap(options);
+  const reverse = buildReverseSourceMap(map);
+  const method = structuredExtractionMethod(toolName);
+  const confidence: "high" | "medium" = BUILT_IN_TABLE_EXTRACTORS.has(toolName) ? "high" : "medium";
+  return tables.map((table) => toSourceRef(table, reverse, method, confidence));
+}
+
+/**
+ * Resolves a flat list of physical table names (e.g. from raw-query regex sniffing,
+ * or from historical access_log.tables during backfill) into structured SourceRef records.
+ * Callers own the extraction_method/confidence semantics for their use case; this defaults
+ * to the raw-query best-effort tier ('query_ref' / 'low').
+ */
+export async function resolveSourceRefsForTables(
+  tables: string[],
+  options: { fresh?: boolean; extractionMethod?: string; confidence?: "high" | "medium" | "low" } = {}
+): Promise<SourceRef[]> {
+  if (tables.length === 0) return [];
+  const map = await loadSourceMap(options);
+  const reverse = buildReverseSourceMap(map);
+  const method = options.extractionMethod ?? "query_ref";
+  const confidence = options.confidence ?? "low";
+  return tables.map((table) => toSourceRef(table, reverse, method, confidence));
+}
+
 function isSensitiveTable(table: string, prefixes: string[]): boolean {
   const normalized = normalizeRef(table);
   return prefixes.some((prefix) => normalized.startsWith(prefix));

@@ -106,4 +106,65 @@ describe("proxy audit log", () => {
       db.close();
     }
   });
+
+  it("writeLog returns the inserted row id, usable as a foreign key for writeAccessLogSources", async () => {
+    const { writeLog, writeAccessLogSources } = await import("../proxy/audit");
+
+    const accessLogId = await writeLog({
+      ts: new Date().toISOString(),
+      userId: "sources-test",
+      tool: "sl_read_source",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "sources-fk-test"
+    });
+    expect(Number.isInteger(accessLogId)).toBe(true);
+    expect(accessLogId).toBeGreaterThan(0);
+
+    await writeAccessLogSources(accessLogId, new Date().toISOString(), "sources-test", "sl_read_source", [{
+      connectionId: "mysql-aliyun",
+      schemaName: "dataforai",
+      sourceName: "superstore_orders",
+      physicalTable: "dataforai.superstore_orders",
+      extractionMethod: "args_source_name",
+      confidence: "high"
+    }]);
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const rows = db.prepare("SELECT * FROM access_log_sources WHERE access_log_id = ?").all(accessLogId) as Array<Record<string, unknown>>;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        access_log_id: accessLogId,
+        user_id: "sources-test",
+        tool: "sl_read_source",
+        connection_id: "mysql-aliyun",
+        schema_name: "dataforai",
+        source_name: "superstore_orders",
+        physical_table: "dataforai.superstore_orders",
+        extraction_method: "args_source_name",
+        confidence: "high"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("creates the access_log_sources table and indexes idempotently", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    // getDb() runs its CREATE TABLE IF NOT EXISTS migration on every call; writing twice
+    // exercises that path without error.
+    await writeLog({ ts: new Date().toISOString(), userId: "idempotent-1", tool: "sl_query", outcome: "ok", durationMs: 1, requestId: "idempotent-1" });
+    await writeLog({ ts: new Date().toISOString(), userId: "idempotent-2", tool: "sl_query", outcome: "ok", durationMs: 1, requestId: "idempotent-2" });
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'access_log_sources'").all();
+      expect(tables).toHaveLength(1);
+      const indexes = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'access_log_sources'").all() as Array<{ name: string }>;
+      expect(indexes.map((idx) => idx.name)).toEqual(expect.arrayContaining(["idx_als_log", "idx_als_user_ts", "idx_als_source", "idx_als_table"]));
+    } finally {
+      db.close();
+    }
+  });
 });

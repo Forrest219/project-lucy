@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
+import { resolveSourceRefsForTables } from "./acl.js";
 
 export interface AccessLogEntry {
   ts: string;
@@ -37,6 +38,15 @@ export interface AccessLogEntry {
     rolesJson: unknown;
     resolvedJson: unknown;
   };
+}
+
+export interface AccessLogSourceRecord {
+  connectionId?: string;
+  schemaName?: string;
+  sourceName?: string;
+  physicalTable: string;
+  extractionMethod: string;
+  confidence: "high" | "medium" | "low";
 }
 
 let db: Database.Database | null = null;
@@ -118,6 +128,25 @@ async function getDb(): Promise<Database.Database> {
       roles_json    TEXT NOT NULL,
       resolved_json TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS access_log_sources (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      access_log_id     INTEGER NOT NULL,
+      ts                TEXT NOT NULL,
+      user_id           TEXT NOT NULL,
+      tool              TEXT NOT NULL,
+      connection_id     TEXT,
+      schema_name       TEXT,
+      source_name       TEXT,
+      physical_table    TEXT NOT NULL,
+      extraction_method TEXT NOT NULL,
+      confidence        TEXT NOT NULL,
+      created_at        TEXT NOT NULL,
+      FOREIGN KEY(access_log_id) REFERENCES access_log(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_als_log ON access_log_sources(access_log_id);
+    CREATE INDEX IF NOT EXISTS idx_als_user_ts ON access_log_sources(user_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_als_source ON access_log_sources(connection_id, schema_name, source_name);
+    CREATE INDEX IF NOT EXISTS idx_als_table ON access_log_sources(physical_table);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -146,7 +175,7 @@ function truncateErrorDetail(value: string): string {
   return `${value.slice(0, 500 - marker.length)}${marker}`;
 }
 
-export async function writeLog(entry: AccessLogEntry): Promise<void> {
+export async function writeLog(entry: AccessLogEntry): Promise<number> {
   const database = await getDb();
   if (entry.permissionSnapshot) {
     if (!snapshotStmt) {
@@ -172,7 +201,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<void> {
         (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
     `);
   }
-  insertStmt.run({
+  const result = insertStmt.run({
     ts: entry.ts,
     userId: entry.userId,
     tokenLabel: entry.tokenLabel ?? null,
@@ -201,4 +230,87 @@ export async function writeLog(entry: AccessLogEntry): Promise<void> {
     effectiveTablesCount: entry.effectiveTablesCount ?? null,
     decisionReason: entry.decisionReason ?? null,
   });
+  return Number(result.lastInsertRowid);
+}
+
+let sourceInsertStmt: Database.Statement | null = null;
+
+export async function writeAccessLogSources(
+  accessLogId: number,
+  ts: string,
+  userId: string,
+  tool: string,
+  sources: AccessLogSourceRecord[]
+): Promise<void> {
+  if (sources.length === 0) return;
+  const database = await getDb();
+  if (!sourceInsertStmt) {
+    sourceInsertStmt = database.prepare(`
+      INSERT INTO access_log_sources
+        (access_log_id, ts, user_id, tool, connection_id, schema_name, source_name, physical_table, extraction_method, confidence, created_at)
+      VALUES
+        (@accessLogId, @ts, @userId, @tool, @connectionId, @schemaName, @sourceName, @physicalTable, @extractionMethod, @confidence, @createdAt)
+    `);
+  }
+  const createdAt = new Date().toISOString();
+  for (const source of sources) {
+    sourceInsertStmt.run({
+      accessLogId,
+      ts,
+      userId,
+      tool,
+      connectionId: source.connectionId ?? null,
+      schemaName: source.schemaName ?? null,
+      sourceName: source.sourceName ?? null,
+      physicalTable: source.physicalTable,
+      extractionMethod: source.extractionMethod,
+      confidence: source.confidence,
+      createdAt
+    });
+  }
+}
+
+export async function backfillAccessLogSourcesFromTables(
+  options: { sinceDays?: number; dryRun?: boolean } = {}
+): Promise<{ scanned: number; inserted: number }> {
+  const sinceDays = options.sinceDays ?? 7;
+  const dryRun = options.dryRun ?? false;
+  const database = await getDb();
+  const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  const rows = database.prepare(`
+    SELECT al.id, al.ts, al.user_id, al.tool, al.tables
+    FROM access_log al
+    WHERE al.ts >= ?
+      AND al.tables IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM access_log_sources als WHERE als.access_log_id = al.id)
+  `).all(cutoff) as Array<{ id: number; ts: string; user_id: string; tool: string; tables: string }>;
+
+  let inserted = 0;
+  for (const row of rows) {
+    let tables: string[];
+    try {
+      tables = JSON.parse(row.tables) as string[];
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(tables) || tables.length === 0) continue;
+    const refs = await resolveSourceRefsForTables(tables, {
+      extractionMethod: "source_map_reverse",
+      confidence: "medium"
+    });
+    if (refs.length === 0) continue;
+    if (!dryRun) {
+      await writeAccessLogSources(row.id, row.ts, row.user_id, row.tool, refs.map((ref) => ({
+        connectionId: ref.connectionId,
+        schemaName: ref.schema,
+        sourceName: ref.sourceName,
+        physicalTable: ref.physicalTable,
+        extractionMethod: ref.extractionMethod,
+        confidence: ref.confidence
+      })));
+    }
+    inserted += refs.length;
+  }
+
+  return { scanned: rows.length, inserted };
 }

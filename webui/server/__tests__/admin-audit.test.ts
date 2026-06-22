@@ -212,3 +212,52 @@ describe("GET /api/admin/audit", () => {
     }
   });
 });
+
+describe("GET /api/admin/audit/:id/sources", () => {
+  it("returns structured source rows for a given access_log id", async () => {
+    const { writeLog, writeAccessLogSources } = await import("../proxy/audit");
+    const accessLogId = await writeLog({
+      ts: "2026-06-22T09:00:00.000Z",
+      userId: "workhorse",
+      tool: "sl_read_source",
+      outcome: "ok",
+      durationMs: 5,
+      requestId: "sources-detail-1"
+    });
+    await writeAccessLogSources(accessLogId, "2026-06-22T09:00:00.000Z", "workhorse", "sl_read_source", [{
+      connectionId: "mysql-aliyun",
+      schemaName: "dataforai",
+      sourceName: "kx_fact_financial_amount",
+      physicalTable: "dataforai.kx_fact_financial_amount",
+      extractionMethod: "args_source_name",
+      confidence: "high"
+    }]);
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const res = await request(app.server).get(`/api/admin/audit/${accessLogId}/sources`).expect(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.accessLogId).toBe(accessLogId);
+      expect(res.body.data.sources).toHaveLength(1);
+      expect(res.body.data.sources[0]).toMatchObject({
+        userId: "workhorse",
+        tool: "sl_read_source",
+        connectionId: "mysql-aliyun",
+        schemaName: "dataforai",
+        sourceName: "kx_fact_financial_amount",
+        physicalTable: "dataforai.kx_fact_financial_amount",
+        extractionMethod: "args_source_name",
+        confidence: "high"
+      });
+
+      const empty = await request(app.server).get(`/api/admin/audit/${accessLogId + 999}/sources`).expect(200);
+      expect(empty.body.data.sources).toEqual([]);
+
+      await request(app.server).get("/api/admin/audit/not-a-number/sources").expect(400);
+    } finally {
+      await app.close();
+    }
+  });
+});
