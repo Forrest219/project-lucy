@@ -1,0 +1,101 @@
+{
+  "connectionId": "mysql-aliyun",
+  "driver": "mysql",
+  "sqlAvailable": true,
+  "queryCount": 0,
+  "tables": [
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "kx_dim_company"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "kx_dim_financial_item"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "kx_fact_financial_amount"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "kx_vw_cash_flow_statement_detail"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "kx_vw_balance_sheet_detail"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "kx_vw_income_statement_detail"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "superstore_orders"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "superstore_orders_huadong"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "superstore_people"
+      },
+      "rowCount": 0
+    },
+    {
+      "table": {
+        "catalog": null,
+        "db": "dataforai",
+        "name": "superstore_returns"
+      },
+      "rowCount": 0
+    }
+  ],
+  "columns": {},
+  "warnings": [
+    "profile_failed:kx_dim_company:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `company_id` AS value FROM (SELECT * FROM `dataforai`.`kx' at line 1",
+    "profile_failed:kx_dim_financial_item:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `item_id` AS value FROM (SELECT * FROM `dataforai`.`kx_di' at line 1",
+    "profile_failed:kx_fact_financial_amount:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `amount_id` AS value FROM (SELECT * FROM `dataforai`.`kx_' at line 1",
+    "profile_failed:kx_vw_cash_flow_statement_detail:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `公司名称` AS value FROM (SELECT * FROM `dataforai`.`' at line 1",
+    "profile_failed:kx_vw_balance_sheet_detail:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `公司名称` AS value FROM (SELECT * FROM `dataforai`.`' at line 1",
+    "profile_failed:kx_vw_income_statement_detail:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `公司名称` AS value FROM (SELECT * FROM `dataforai`.`' at line 1",
+    "profile_failed:superstore_orders:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `row_id` AS value FROM (SELECT * FROM `dataforai`.`supers' at line 1",
+    "profile_failed:superstore_orders_huadong:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `row_id` AS value FROM (SELECT * FROM `dataforai`.`supers' at line 1",
+    "profile_failed:superstore_people:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `region` AS value FROM (SELECT * FROM `dataforai`.`supers' at line 1",
+    "profile_failed:superstore_returns:You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CHAR(31)) FROM (SELECT `id` AS value FROM (SELECT * FROM `dataforai`.`superstore' at line 1"
+  ]
+}
