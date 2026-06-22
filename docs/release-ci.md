@@ -76,7 +76,7 @@ The artifact contains:
 
 - `lucy-release-metadata.json`: Git commit, Docker image id, bundled KTX version, verified database matrix, required gates, and root/WebUI `npm audit --json` summaries with exit codes.
 - `lucy-release-notes.md`: concise customer-facing release summary.
-- `lucy-sbom.json`: local CycloneDX-lite dependency inventory for the Lucy root package, WebUI package, base image, and bundled KTX runtime.
+- `lucy-sbom.json`: local CycloneDX-lite runtime dependency inventory for the Lucy root package, WebUI package, base image, and bundled KTX runtime. Development-only dependencies marked `dev: true` in package-lock files are omitted; remaining npm components are labeled as `production`, `peer`, `optional`, or `bundled` from package-lock metadata.
 
 ## 5. Registry Publishing
 

@@ -37,12 +37,21 @@ function packageComponents(lock, scope) {
   for (const [pkgPath, meta] of Object.entries(packages)) {
     if (!pkgPath.startsWith("node_modules/")) continue;
     if (!meta?.version) continue;
+    if (meta.dev === true) continue;
+    const dependencyScope = meta.bundled === true || meta.inBundle === true
+      ? "bundled"
+      : meta.optional === true
+        ? "optional"
+        : meta.peer === true
+          ? "peer"
+          : "production";
     const name = pkgPath.replace(/^node_modules\//, "");
     components.push({
       type: "library",
       name,
       version: meta.version,
-      scope
+      scope,
+      dependencyScope
     });
   }
   return components.sort((a, b) => `${a.scope}/${a.name}`.localeCompare(`${b.scope}/${b.name}`));
@@ -212,7 +221,7 @@ Use docs/customer-deployment-guide.md and docs/deployment-docker.md for Docker C
 
 - lucy-release-metadata.json
 - lucy-release-notes.md
-- lucy-sbom.json
+- lucy-sbom.json (production/runtime dependencies; dev dependencies omitted)
 `;
 
   await mkdir(outDir, { recursive: true });
