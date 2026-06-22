@@ -25,6 +25,7 @@ const DEFAULT_KNOWN_TOOLS = [
   "discover_data",
   "connection_list",
   "kx_catalog",
+  "lucy_begin_question",
   "sql_execution",
   "memory_ingest",
   "memory_ingest_status"
@@ -766,7 +767,7 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
 
   return uniqueSorted(tools.filter((tool) => {
     if (!policy.knownTools.has(tool) || policy.denyTools.has(tool)) return false;
-    if (tool === "kx_catalog") return resolved.permissions.sources.length > 0;
+    if (tool === "kx_catalog" || tool === "lucy_begin_question") return resolved.permissions.sources.length > 0;
     return true;
   }));
 }

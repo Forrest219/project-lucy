@@ -26,6 +26,7 @@ const ACCESS_YAML = `roles:
 ${KX_TABLES.map((table) => `            - ${table.replace("dataforai.", "")}`).join("\n")}
       tools:
         - kx_catalog
+        - lucy_begin_question
         - sl_query
         - sl_read_source
         - entity_details
@@ -146,6 +147,7 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
         - sl_read_source
         - sl_validate
         - entity_details
+        - lucy_begin_question
   - id: missing_tables_agent
     name: Missing Tables Agent
     tokens: []
@@ -330,6 +332,28 @@ describe("KX financial domain ACL guardrails", () => {
         extractionMethod: "query_ref",
         confidence: "low"
       }]);
+  });
+
+  it("lucy_begin_question follows the same explicit allow-list + sources>0 visibility gate as kx_catalog", async () => {
+    const { allowedToolNames, check } = await loadAcl();
+
+    // role_workhorse uses the kx_readonly role, which now lists lucy_begin_question
+    // alongside kx_catalog and resolves to 6 KX sources -> visible.
+    const visibleForRoleWorkhorse = await allowedToolNames(identity("role_workhorse"));
+    expect(visibleForRoleWorkhorse).toContain("lucy_begin_question");
+    expect(visibleForRoleWorkhorse).toContain("kx_catalog");
+    await expect(check(identity("role_workhorse"), "lucy_begin_question", { intentSummary: "test" }))
+      .resolves.toEqual({ allowed: true });
+
+    // no_table_agent explicitly lists lucy_begin_question but resolves to zero tables/sources
+    // -> still listed in allow.tools, but filtered out of tools/list by the sources>0 gate.
+    const visibleForNoTableAgent = await allowedToolNames(identity("no_table_agent"));
+    expect(visibleForNoTableAgent).not.toContain("lucy_begin_question");
+
+    // superstore_agent never lists lucy_begin_question at all -> check() rejects it outright,
+    // same as calling any other tool that isn't in allow.tools.
+    await expect(check(identity("superstore_agent"), "lucy_begin_question", { intentSummary: "test" }))
+      .resolves.toEqual({ allowed: false, reason: "tool_forbidden" });
   });
 
   it("allows the KX test agent to access only the six KX tables", async () => {

@@ -261,3 +261,112 @@ describe("GET /api/admin/audit/:id/sources", () => {
     }
   });
 });
+
+describe("GET /api/admin/audit/turns", () => {
+  it("surfaces inferred and reported question clusters, individually and merged via source=all", async () => {
+    const { writeLog, writeAccessLogSources, writeConversationTurn } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+    // Inferred cluster: two close-together sl_read_source calls, no explicit turn id.
+    const inf1 = await writeLog({ ts: at(0), userId: "turns-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-inf-1" });
+    await writeAccessLogSources(inf1, at(0), "turns-user", "sl_read_source", [{
+      connectionId: "mysql-aliyun", schemaName: "dataforai", sourceName: "superstore_orders",
+      physicalTable: "dataforai.superstore_orders", extractionMethod: "args_source_name", confidence: "high"
+    }]);
+    await writeLog({ ts: at(30_000), userId: "turns-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-inf-2" });
+
+    // Reported turn: an explicit lucy_begin_question report, linked via lucy_turn_id.
+    await writeConversationTurn({
+      turnId: "lucy_turns_test_1",
+      userId: "turns-user",
+      questionSummary: "reported test question",
+      questionSource: "reported_tool"
+    });
+    await writeLog({ ts: at(60_000), userId: "turns-user", tool: "sl_query", tables: ["dataforai.superstore_returns"], outcome: "ok", durationMs: 1, requestId: "turns-rep-1", lucyTurnId: "lucy_turns_test_1" });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      // The reported call is only 30s after the inferred pair (well within the 120s gap), so
+      // inferred clustering — which doesn't know about explicit lucy_turn_id — merges all three
+      // business calls into a single cluster. This is expected: inferred and reported turns can
+      // legitimately overlap on the same underlying access_log rows.
+      const inferredRes = await request(app.server).get("/api/admin/audit/turns?user=turns-user&source=inferred").expect(200);
+      expect(inferredRes.body.data.entries).toHaveLength(1);
+      expect(inferredRes.body.data.entries[0]).toMatchObject({ source: "inferred", userId: "turns-user", businessCallCount: 3 });
+
+      const reportedRes = await request(app.server).get("/api/admin/audit/turns?user=turns-user&source=reported").expect(200);
+      expect(reportedRes.body.data.entries).toHaveLength(1);
+      expect(reportedRes.body.data.entries[0]).toMatchObject({
+        id: "lucy_turns_test_1",
+        source: "reported",
+        userId: "turns-user",
+        businessCallCount: 1,
+        questionSummary: "reported test question"
+      });
+
+      const allRes = await request(app.server).get("/api/admin/audit/turns?user=turns-user&source=all").expect(200);
+      expect(allRes.body.data.total).toBe(2);
+      expect(allRes.body.data.entries.map((e: { source: string }) => e.source).sort()).toEqual(["inferred", "reported"]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns turn detail for both inferred and reported ids, and 404s for unknown ids", async () => {
+    const { writeLog, writeConversationTurn } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await writeLog({ ts: at(0), userId: "turns-detail-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-detail-1" });
+    await writeConversationTurn({ turnId: "lucy_turns_detail_1", userId: "turns-detail-user", questionSummary: "detail test", questionSource: "reported_tool" });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const listRes = await request(app.server).get("/api/admin/audit/turns?user=turns-detail-user&source=inferred").expect(200);
+      const inferredId = listRes.body.data.entries[0].id as string;
+      expect(inferredId).toMatch(/^inf_/);
+
+      const inferredDetail = await request(app.server).get(`/api/admin/audit/turns/${inferredId}`).expect(200);
+      expect(inferredDetail.body.data).toMatchObject({ id: inferredId, source: "inferred", userId: "turns-detail-user" });
+      expect(inferredDetail.body.data.accessLogs).toHaveLength(1);
+
+      const reportedDetail = await request(app.server).get("/api/admin/audit/turns/lucy_turns_detail_1").expect(200);
+      expect(reportedDetail.body.data).toMatchObject({ id: "lucy_turns_detail_1", source: "reported", userId: "turns-detail-user", questionSummary: "detail test" });
+
+      await request(app.server).get("/api/admin/audit/turns/inf_does_not_exist").expect(404);
+      await request(app.server).get("/api/admin/audit/turns/lucy_does_not_exist").expect(404);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("POST /api/admin/audit/conversation-turns/purge", () => {
+  it("purges expired conversation turn previews via the admin API", async () => {
+    const { writeConversationTurn } = await import("../proxy/audit");
+    await writeConversationTurn({ turnId: "lucy_purge_api_1", userId: "purge-user", questionPreview: "preview", questionSummary: "summary", questionSource: "reported_tool" });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const dryRun = await request(app.server)
+        .post("/api/admin/audit/conversation-turns/purge")
+        .send({ retentionDays: 0, dryRun: true })
+        .expect(200);
+      expect(dryRun.body.data).toEqual({ scanned: 1, purged: 0 });
+
+      const real = await request(app.server)
+        .post("/api/admin/audit/conversation-turns/purge")
+        .send({ retentionDays: 0 })
+        .expect(200);
+      expect(real.body.data).toEqual({ scanned: 1, purged: 1 });
+    } finally {
+      await app.close();
+    }
+  });
+});

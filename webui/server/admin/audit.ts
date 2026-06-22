@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
+import { rebuildInferredTurns, purgeExpiredConversationTurns } from "../proxy/audit.js";
 
 let db: Database.Database | null = null;
 const ACCESS_LOG_COLUMNS = [
@@ -156,6 +157,42 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_als_user_ts ON access_log_sources(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_als_source ON access_log_sources(connection_id, schema_name, source_name);
     CREATE INDEX IF NOT EXISTS idx_als_table ON access_log_sources(physical_table);
+    CREATE TABLE IF NOT EXISTS conversation_turns (
+      turn_id               TEXT PRIMARY KEY,
+      session_id            TEXT,
+      user_id               TEXT NOT NULL,
+      token_hash_prefix     TEXT,
+      platform              TEXT,
+      client                TEXT,
+      question_hash         TEXT,
+      question_preview      TEXT,
+      question_summary      TEXT,
+      question_source       TEXT NOT NULL,
+      redaction_version     TEXT,
+      created_at            TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ct_user_created ON conversation_turns(user_id, created_at);
+    CREATE TABLE IF NOT EXISTS inferred_turns (
+      inferred_turn_id     TEXT PRIMARY KEY,
+      user_id              TEXT NOT NULL,
+      started_at           TEXT NOT NULL,
+      ended_at             TEXT NOT NULL,
+      call_count           INTEGER NOT NULL,
+      business_call_count  INTEGER NOT NULL,
+      tool_summary         TEXT NOT NULL,
+      source_summary       TEXT NOT NULL,
+      question_summary     TEXT,
+      confidence           TEXT NOT NULL,
+      evidence_json        TEXT NOT NULL,
+      created_at           TEXT NOT NULL,
+      updated_at           TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS inferred_turn_access_logs (
+      inferred_turn_id TEXT NOT NULL,
+      access_log_id    INTEGER NOT NULL,
+      PRIMARY KEY(inferred_turn_id, access_log_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -228,6 +265,20 @@ interface QueryRow {
   permission_snapshot_hash: string | null;
   effective_tables_count: number | null;
   decision_reason: string | null;
+}
+
+interface TurnEntry {
+  id: string;
+  source: "inferred" | "reported";
+  userId: string;
+  startedAt: string;
+  endedAt: string;
+  businessCallCount: number;
+  questionSummary?: string;
+  questionPreview?: string;
+  confidence: string;
+  tools: string[];
+  sources: Array<{ connectionId?: string; schema?: string; sourceName?: string; physicalTable: string }>;
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
@@ -691,5 +742,194 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Content-Type", "text/csv");
     reply.header("Content-Disposition", `attachment; filename="audit-${dateStr}.csv"`);
     return reply.send(csvLines.join("\n"));
+  });
+
+  // GET /api/admin/audit/turns — unified "question cluster" view: inferred (Phase 2)
+  // + reported (Phase 3), per spec 08 §9.1.
+  app.get<{
+    Querystring: {
+      user?: string;
+      since?: string;
+      until?: string;
+      source?: string;
+      lookbackHours?: string;
+      limit?: string;
+      offset?: string;
+    };
+  }>("/api/admin/audit/turns", async (request) => {
+    const q = request.query;
+    const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
+    const limit = Math.min(parseInt(q.limit ?? "50", 10) || 50, 500);
+    const offset = parseInt(q.offset ?? "0", 10) || 0;
+    const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : undefined;
+
+    const database = await getAuditDb();
+
+    if (source !== "reported") {
+      const cutoff = new Date(Date.now() - (lookbackHours ?? Number(process.env.LUCY_TURN_INFER_LOOKBACK_HOURS ?? 24)) * 60 * 60 * 1000).toISOString();
+      const targetUsers = q.user
+        ? [q.user]
+        : (database.prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`).all(cutoff) as Array<{ user_id: string }>).map((row) => row.user_id);
+      for (const userId of targetUsers) {
+        await rebuildInferredTurns(userId, lookbackHours ? { lookbackHours } : undefined);
+      }
+    }
+
+    const entries: TurnEntry[] = [];
+
+    if (source === "inferred" || source === "all") {
+      const conditions: string[] = [];
+      const params: Record<string, string | null> = { user: q.user ?? null, since: q.since ?? null, until: q.until ?? null };
+      if (params.user) conditions.push("user_id = @user");
+      if (params.since) conditions.push("started_at >= @since");
+      if (params.until) conditions.push("started_at <= @until");
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      const rows = database.prepare(`SELECT * FROM inferred_turns ${where} ORDER BY started_at DESC`).all(params) as Array<{
+        inferred_turn_id: string;
+        user_id: string;
+        started_at: string;
+        ended_at: string;
+        business_call_count: number;
+        tool_summary: string;
+        source_summary: string;
+        question_summary: string | null;
+        confidence: string;
+      }>;
+      for (const row of rows) {
+        entries.push({
+          id: row.inferred_turn_id,
+          source: "inferred",
+          userId: row.user_id,
+          startedAt: row.started_at,
+          endedAt: row.ended_at,
+          businessCallCount: row.business_call_count,
+          questionSummary: row.question_summary ?? undefined,
+          confidence: row.confidence,
+          tools: JSON.parse(row.tool_summary) as string[],
+          sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
+        });
+      }
+    }
+
+    if (source === "reported" || source === "all") {
+      const conditions: string[] = [];
+      const params: Record<string, string | null> = { user: q.user ?? null, since: q.since ?? null, until: q.until ?? null };
+      if (params.user) conditions.push("user_id = @user");
+      if (params.since) conditions.push("created_at >= @since");
+      if (params.until) conditions.push("created_at <= @until");
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      const rows = database.prepare(`SELECT * FROM conversation_turns ${where} ORDER BY created_at DESC`).all(params) as Array<{
+        turn_id: string;
+        user_id: string;
+        created_at: string;
+        question_summary: string | null;
+        question_preview: string | null;
+      }>;
+      for (const row of rows) {
+        const linked = database.prepare(`
+          SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${PROTOCOL_TOOL_LIST}) ORDER BY ts ASC
+        `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
+        const accessLogIds = linked.map((l) => l.id);
+        const sourceRows = accessLogIds.length > 0
+          ? database.prepare(`
+              SELECT DISTINCT connection_id, schema_name, source_name, physical_table
+              FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
+            `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
+          : [];
+        entries.push({
+          id: row.turn_id,
+          source: "reported",
+          userId: row.user_id,
+          startedAt: row.created_at,
+          endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
+          businessCallCount: linked.length,
+          questionSummary: row.question_summary ?? undefined,
+          questionPreview: row.question_preview ?? undefined,
+          confidence: "high",
+          tools: [...new Set(linked.map((l) => l.tool))],
+          sources: sourceRows.map((s) => ({
+            connectionId: s.connection_id ?? undefined,
+            schema: s.schema_name ?? undefined,
+            sourceName: s.source_name ?? undefined,
+            physicalTable: s.physical_table
+          }))
+        });
+      }
+    }
+
+    entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
+    const total = entries.length;
+    const paged = entries.slice(offset, offset + limit);
+
+    return { ok: true, data: { total, entries: paged } };
+  });
+
+  // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
+  app.get<{ Params: { turnId: string } }>("/api/admin/audit/turns/:turnId", async (request, reply) => {
+    const { turnId } = request.params;
+    const database = await getAuditDb();
+
+    if (turnId.startsWith("inf_")) {
+      const row = database.prepare(`SELECT * FROM inferred_turns WHERE inferred_turn_id = ?`).get(turnId) as Record<string, unknown> | undefined;
+      if (!row) {
+        reply.code(404);
+        return { ok: false, error: "not found" };
+      }
+      const links = database.prepare(`SELECT access_log_id FROM inferred_turn_access_logs WHERE inferred_turn_id = ?`).all(turnId) as Array<{ access_log_id: number }>;
+      const accessLogIds = links.map((l) => l.access_log_id);
+      const accessLogs = accessLogIds.length > 0
+        ? database.prepare(`SELECT id, ts, tool, outcome, decision_reason FROM access_log WHERE id IN (${accessLogIds.map(() => "?").join(",")}) ORDER BY ts ASC`).all(...accessLogIds)
+        : [];
+      return {
+        ok: true,
+        data: {
+          id: row.inferred_turn_id,
+          source: "inferred",
+          userId: row.user_id,
+          startedAt: row.started_at,
+          endedAt: row.ended_at,
+          callCount: row.call_count,
+          businessCallCount: row.business_call_count,
+          confidence: row.confidence,
+          tools: JSON.parse(row.tool_summary as string),
+          sources: JSON.parse(row.source_summary as string),
+          questionSummary: row.question_summary,
+          evidence: JSON.parse(row.evidence_json as string),
+          accessLogs
+        }
+      };
+    }
+
+    const row = database.prepare(`SELECT * FROM conversation_turns WHERE turn_id = ?`).get(turnId) as Record<string, unknown> | undefined;
+    if (!row) {
+      reply.code(404);
+      return { ok: false, error: "not found" };
+    }
+    const accessLogs = database.prepare(`SELECT id, ts, tool, outcome, decision_reason FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC`).all(turnId) as Array<{ id: number }>;
+    const accessLogIds = accessLogs.map((l) => l.id);
+    const sources = accessLogIds.length > 0
+      ? database.prepare(`SELECT DISTINCT connection_id, schema_name, source_name, physical_table FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})`).all(...accessLogIds)
+      : [];
+    return {
+      ok: true,
+      data: {
+        id: row.turn_id,
+        source: "reported",
+        userId: row.user_id,
+        questionSummary: row.question_summary,
+        questionPreview: row.question_preview,
+        questionSource: row.question_source,
+        createdAt: row.created_at,
+        accessLogs,
+        sources
+      }
+    };
+  });
+
+  // POST /api/admin/audit/conversation-turns/purge — manual retention trigger (spec §8.4).
+  app.post<{ Body: { retentionDays?: number; dryRun?: boolean } }>("/api/admin/audit/conversation-turns/purge", async (request) => {
+    const body = request.body ?? {};
+    const result = await purgeExpiredConversationTurns({ retentionDays: body.retentionDays, dryRun: body.dryRun });
+    return { ok: true, data: result };
   });
 }

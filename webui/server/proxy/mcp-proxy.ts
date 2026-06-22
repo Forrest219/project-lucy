@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
-import { identifyRequest, setSessionClient } from "./identity.js";
-import { writeLog, writeAccessLogSources, type AccessLogSourceRecord } from "./audit.js";
+import { identifyRequest, setSessionClient, type Identity } from "./identity.js";
+import { writeLog, writeAccessLogSources, writeConversationTurn, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
@@ -14,6 +14,25 @@ const QUERY_TABLE_RE = /\b(?:from|join|into|update|table)\s+[`"]?([a-zA-Z_][\w]*
 
 function getInternalToken(): string {
   return process.env.KTX_INTERNAL_TOKEN ?? "";
+}
+
+// ─── Phase 3: near-neighbor correlation for lucy_begin_question (spec §8.2) ──
+// In-memory only (not persisted) — mirrors identity.ts's sessionClients pattern.
+const reportedTurns = new Map<string, { turnId: string; createdAt: number }>();
+
+function reportedTurnKey(identity: Identity): string {
+  return `${identity.userId}:${identity.tokenHashPrefix}`;
+}
+
+function recordReportedTurn(identity: Identity, turnId: string): void {
+  reportedTurns.set(reportedTurnKey(identity), { turnId, createdAt: Date.now() });
+}
+
+function matchReportedTurn(identity: Identity): string | undefined {
+  const entry = reportedTurns.get(reportedTurnKey(identity));
+  if (!entry) return undefined;
+  const windowMs = Number(process.env.LUCY_REPORTED_TURN_ATTACH_WINDOW_MS ?? 600_000);
+  return Date.now() - entry.createdAt <= windowMs ? entry.turnId : undefined;
 }
 
 class BodyTooLargeError extends Error {
@@ -167,6 +186,22 @@ function redactQueryPreview(query: string): string {
     .slice(0, 180);
 }
 
+const QUESTION_SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential)\b\s*[:=]\s*([^,\s;]+)/gi;
+const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+const CN_ID_CARD_RE = /\b\d{17}[\dXx]\b/g;
+const CN_MOBILE_RE = /\b1[3-9]\d{9}\b/g;
+
+// Free-text redaction for lucy_begin_question's optional `question` field (spec §10).
+// Distinct from redactQueryPreview (SQL-oriented) and admin/audit.ts's redactSensitive
+// (JSON-key-oriented) — natural language needs pattern-based redaction instead.
+function redactQuestionText(text: string): string {
+  return text
+    .replace(QUESTION_SENSITIVE_PAIR_RE, "$1=[REDACTED]")
+    .replace(EMAIL_RE, "[REDACTED]")
+    .replace(CN_ID_CARD_RE, "[REDACTED]")
+    .replace(CN_MOBILE_RE, "[REDACTED]");
+}
+
 function queryOperation(query: string): string {
   const match = query.trim().match(/^([a-z]+)/i);
   const op = match?.[1]?.toLowerCase();
@@ -286,6 +321,40 @@ function kxCatalogTool() {
   };
 }
 
+function lucyBeginQuestionTool() {
+  return {
+    name: "lucy_begin_question",
+    description: "Optional. Call once at the beginning of a user business question to record the user's natural-language question for Lucy audit. Do not call for protocol checks or tool discovery only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string", maxLength: 2000 },
+        intentSummary: { type: "string", maxLength: 500 },
+        entities: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 20
+        }
+      },
+      required: ["intentSummary"],
+      additionalProperties: false
+    }
+  };
+}
+
+// Local tools the proxy serves itself (never forwarded to KTX). Each is only injected
+// into tools/list when visibleTools allows it — same explicit allow-list gate as any
+// other tool (spec 08 §15 decision 2: no derived/bypass condition).
+function localToolBuilders(): Array<{ name: string; build: () => Record<string, unknown> }> {
+  const builders: Array<{ name: string; build: () => Record<string, unknown> }> = [
+    { name: "kx_catalog", build: kxCatalogTool }
+  ];
+  if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
+    builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
+  }
+  return builders;
+}
+
 function encodeSseMessage(payload: unknown): string {
   return `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
 }
@@ -306,10 +375,11 @@ function filterAndAddAllowedTools(payload: unknown, visibleTools: Set<string>): 
     const name = (tool as Record<string, unknown>).name;
     return typeof name === "string" && visibleTools.has(name);
   });
-  const hasCatalog = filteredTools.some((tool) => (tool as Record<string, unknown>).name === "kx_catalog");
-  const tools = visibleTools.has("kx_catalog") && !hasCatalog
-    ? [...filteredTools, kxCatalogTool()]
-    : filteredTools;
+  const existingNames = new Set(filteredTools.map((tool) => (tool as Record<string, unknown>).name));
+  const injected = localToolBuilders()
+    .filter((local) => visibleTools.has(local.name) && !existingNames.has(local.name))
+    .map((local) => local.build());
+  const tools = [...filteredTools, ...injected];
   return {
     ...record,
     result: {
@@ -430,6 +500,15 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     // non-JSON body; proxy as-is
   }
 
+  // Near-neighbor turn correlation (spec §8.2): if the client didn't send an explicit
+  // x-lucy-turn-id header, fall back to the most recent lucy_begin_question report for
+  // this identity within the attach window. lucy_begin_question itself is the start of a
+  // turn, not a follow-up call, so it doesn't consume a match.
+  if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question" && !requestMeta.lucyTurnId) {
+    const matched = matchReportedTurn(identity);
+    if (matched) requestMeta.lucyTurnId = matched;
+  }
+
   // ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
     const decision = await aclCheck(identity, toolName, toolArgs);
@@ -487,6 +566,88 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
         ...requestMeta,
+        ...(await auditMeta(identity, "allowed")),
+      });
+      return;
+    }
+    if (toolName === "lucy_begin_question") {
+      const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
+      const intentSummary = typeof args.intentSummary === "string" ? args.intentSummary.trim() : "";
+      if (!intentSummary) {
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: { isError: true, content: [{ type: "text", text: "lucy_begin_question requires intentSummary" }] }
+        });
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(responseBody);
+        recordAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "error",
+          errorDetail: "missing_intent_summary",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, "allowed")),
+        });
+        return;
+      }
+
+      const turnId = `lucy_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const storePreview = process.env.LUCY_STORE_QUESTION_PREVIEW !== "false";
+      const rawQuestion = typeof args.question === "string" ? args.question : undefined;
+      const maxChars = Number(process.env.LUCY_QUESTION_PREVIEW_MAX_CHARS ?? 500);
+      const questionPreview = storePreview && rawQuestion ? redactQuestionText(rawQuestion).slice(0, maxChars) : undefined;
+      const questionHash = storePreview && rawQuestion ? createHash("sha256").update(rawQuestion).digest("hex") : undefined;
+
+      await writeConversationTurn({
+        turnId,
+        userId: identity.userId,
+        tokenHashPrefix: identity.tokenHashPrefix,
+        platform: requestMeta.lucyPlatform,
+        client: identity.client,
+        questionHash,
+        questionPreview,
+        questionSummary: intentSummary,
+        questionSource: "reported_tool",
+        redactionVersion: "v1"
+      }).catch((err) => {
+        console.error("[lucy-proxy] failed to write conversation turn", err);
+      });
+      recordReportedTurn(identity, turnId);
+
+      const responseBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              turnId,
+              note: "Subsequent tool calls within the attach window will be associated with this turn automatically; no need to pass extra params."
+            })
+          }]
+        }
+      });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(responseBody);
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary,
+        outcome: "ok",
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        lucyTurnId: turnId,
         ...(await auditMeta(identity, "allowed")),
       });
       return;

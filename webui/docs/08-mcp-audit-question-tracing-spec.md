@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | MCP Audit Source & Question Tracing Spec |
 | 文档类型 | Spec |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化） |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现） |
 | 委托人 | 张星晨 |
 | 基于材料 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/{mcp-proxy,acl,audit}.ts`、`semantic-layer/mysql-aliyun/_schema/dataforai.yaml`、2026-06-22 workhorse MCP 审计查询 |
 | 适用范围 | Lucy MCP Proxy 审计增强：调用数据源正规化、问题簇推断、可选自然语言问题上报 |
@@ -252,6 +252,12 @@ v0.1 采用规则摘要，不强依赖 LLM：
 
 ### 8.1 本地 MCP 工具：`lucy_begin_question`
 
+**注入条件（§15 决策 2，已按调研结果修正）**：跟 `kx_catalog` 走完全相同的机制，不是派生判断：
+1. `acl.ts` 的 `DEFAULT_KNOWN_TOOLS` 新增 `"lucy_begin_question"`。
+2. 管理员必须在角色的 `tools:` 里显式列出 `lucy_begin_question`（跟 `kx_catalog` 一起列）才会被任何用户看到——没有它就不出现在 `tools/list`，调用也会被 `check()` 判 `tool_forbidden`。
+3. `allowedToolNames()` 里 `acl.ts:769` 的可见性门槛从 `tool === "kx_catalog"` 扩成同时覆盖 `lucy_begin_question`：即使 role 配置里写了，只有 `resolved.permissions.sources.length > 0`（这个 role 至少能看到一个数据源）才会真正出现在 `tools/list`。
+`mcp-proxy.ts` 端复用现成的 `visibleTools.has("lucy_begin_question")` 判断，跟 `kx_catalog` 注入是同一段 `filterAndAddAllowedTools` 逻辑的扩展，不新增判断分支。
+
 Proxy 在 `tools/list` 中注入一个本地工具：
 
 ```json
@@ -303,6 +309,18 @@ Proxy 在 `tools/list` 中注入一个本地工具：
 | `LUCY_QUESTION_PREVIEW_MAX_CHARS` | `500` | 保存预览长度 |
 
 即使关闭 `LUCY_ENABLE_QUESTION_TOOL`，Source Normalization 和 Inferred Turns 仍必须工作。
+
+### 8.4 Retention 清理（§15 决策 4）
+
+| 环境变量 | 默认值 | 说明 |
+|---|---:|---|
+| `LUCY_QUESTION_PREVIEW_RETENTION_DAYS` | `30` | `conversation_turns.question_preview`/`question_summary` 超过这个天数后被清空（行保留，敏感字段置 null），不删整行——`inferred_turns` 等派生数据可能仍引用该 turn_id |
+
+实现为一个轻量 purge 函数（不依赖后台 cron，本项目当前没有调度基础设施）：
+
+- `purgeExpiredConversationTurns(options?: { retentionDays?: number; dryRun?: boolean })`：清空 `created_at` 早于 `now - retentionDays` 的行的 `question_preview`/`question_summary`/`question_hash` 字段。
+- 触发时机：①每次 `writeLog`/`lucy_begin_question` 写入路径里做 lazy 触发（按比例采样，避免每次请求都全表扫描——如 1% 概率触发一次）；②admin 提供 `POST /api/admin/audit/conversation-turns/purge` 手动触发，供运维主动清理或验证退役配置后是否生效。
+- 不删除整行：`turn_id` 可能被 `inferred_turns` 或审计 UI 历史视图引用，保留行结构、只清空敏感文本字段，避免外键/展示层出现悬空引用。
 
 ## 9. API 与 UI
 
@@ -383,7 +401,7 @@ UI 文案必须避免把 inferred summary 表述为用户原话。推荐：
 - 脱敏规则至少覆盖 token、password、secret、authorization、手机号、邮箱、身份证样式字符串。
 - `question_preview` 和 `args_summary` 一样，导出 CSV 时必须做公式注入防护。
 - 删除 / retention：
-  - `conversation_turns.question_preview` 默认保留 30 天，可配置。
+  - `conversation_turns.question_preview` 默认保留 30 天，通过 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS` 配置；清理机制见 §8.4。
   - `inferred_turns` 可长期保留，因为其来源是审计摘要而非用户原文。
 - `lucy_begin_question` 不参与 ACL 放权，不得让 agent 通过该工具改变权限或绕过 deny。
 
@@ -438,16 +456,18 @@ POST /api/admin/audit/rebuild-derived
 
 ### Phase 2：问题簇推断
 
-- 新增 `inferred_turns` / `inferred_turn_access_logs`。
-- 实现增量推断 worker 或查询时 lazy build。
-- Audit UI 增加「问题簇」视图。
+- 新增 `inferred_turns` / `inferred_turn_access_logs`（`proxy/audit.ts` 与 `admin/audit.ts` 两处镜像迁移，跟 Phase 1 的 `access_log_sources` 同样的重复模式）。
+- 实现查询时 lazy build（不做后台 worker——本项目无调度基础设施，跟 §8.4 的理由一致）：管理端点被查询时，对 `LUCY_TURN_INFER_LOOKBACK_HOURS` 回看窗口内尚未聚类的 `access_log` 增量跑一次 §7.2 聚类算法，写入 `inferred_turns`，再返回结果。
+- `GET /api/admin/audit/turns`、`GET /api/admin/audit/turns/:turnId`（§9.1）。
+- Audit UI 增加「问题簇」视图（§9.2）——本轮如时间不够可以先只交付 API，UI 留给后续。
 
 ### Phase 3：可选自然语言问题上报
 
-- 注入 `lucy_begin_question`。
-- 新增 `conversation_turns`。
-- 实现近邻关联和 UI 标注。
-- 增加隐私开关和 retention 清理。
+- 在 `mcp-proxy.ts` 按 §8.1 决策的权限条件注入 `lucy_begin_question`（复用 `allowedToolNames`），本地短路处理（不转发 KTX），写 `conversation_turns`。
+- 新增 `conversation_turns` 表迁移（同样两处镜像）。
+- 实现 §8.2 近邻关联（`LUCY_REPORTED_TURN_ATTACH_WINDOW_MS` 默认 10 分钟）：把 `conversation_turns.turn_id` 写入后续业务调用的 `access_log.lucy_turn_id`。
+- 实现 §8.4 retention purge 函数 + admin 手动触发端点。
+- Audit UI 标注 `reported` vs `inferred` 来源（§9.2 文案要求）。
 
 ## 14. 验收样例：workhorse 最近一小时
 
@@ -466,11 +486,11 @@ POST /api/admin/audit/rebuild-derived
   - `2` 个实质数据问题簇（利润表/收入；资产负债表）
   - `kx_catalog` 预检并入后续业务簇或标注为低置信度 preflight，不单独误报为正式问题
 
-## 15. 开放问题
+## 15. 开放问题 — 决策记录（v0.3）
 
-1. `lucy_begin_question` 近邻关联在同 token 并发/交织调用下可能错误归并问题（见 §8.2 已知限制）；是否需要要求上报方携带临时关联 id 来隔离并发会话？
-2. `lucy_begin_question` 是否默认注入给所有 agent，还是仅注入含 `kx_catalog` / 数据工具权限的 agent？
-3. `inferred_turn` 阈值默认 120 秒是否适合所有客户端？是否需要 per-agent 配置？
-4. 自然语言 preview retention 默认 30 天是否过长？本地单用户环境与客户部署环境是否应不同默认值？
-5. 是否需要把 `access_log_sources` 纳入 CSV 导出，或只在 UI/API 中展开？
+1. **并发归并风险是否需要临时关联 id？决策：不做。** v1 维持 §8.2 的近邻关联 + 已知限制声明。理由：当前唯一已知调用方（workhorse）是单 token 顺序提问场景，没有观测到并发交织调用；临时关联 id 需要上报方（模型）自己在后续调用里带回 `turn_id`，但当前没有客户端会这么做，先做这套机制是为假设场景增加复杂度。留作 Phase 3 上线后如果真观测到错误归并再评估（不是"做不到"，是"还不需要"）。
+2. **`lucy_begin_question` 默认注入范围。决策：完全照搬 `kx_catalog` 的显式 allow-list 机制，不做派生豁免。** 调研确认 `kx_catalog` 在 `acl.ts` 里没有任何绕过 `allow.tools` 的特殊通道——它必须像普通工具一样被显式列在某个 role/user 的 `tools:` 数组里才能通过 `check()`；唯一的"派生条件"只出现在 `allowedToolNames()` 的可见性过滤里（`acl.ts:769`：即使列在 `allow.tools`，也只有 `resolved.permissions.sources.length > 0` 时才出现在 `tools/list`）。`lucy_begin_question` 照此办理：① 加进 `DEFAULT_KNOWN_TOOLS`；② 管理员必须在对应 role 的 `tools:` 里显式加上它（跟 `kx_catalog` 一起列，语义上"有数据访问能力的 role 才配两者"）；③ 复用 `acl.ts:769` 的同一条 `sources.length > 0` 可见性门槛（把判断条件从 `tool === "kx_catalog"` 扩成 `tool === "kx_catalog" || tool === "lucy_begin_question"`）。这样"只有真正能查数据的 role 才会看到这个工具"的效果原样达成，但走的是现有架构本来就有的显式 allow-list + 可见性门槛，不引入新的派生逻辑分支，也避免"tools/list 能看见但 tools/call 会被 tool_forbidden 拒绝"的不一致。原计划中"在 mcp-proxy.ts 派生判断"的方案已否决：`check()` 的工具白名单判定在 `kx_catalog`/`lucy_begin_question` 本地短路分支之前执行，新工具名无法绕开它，强行绕开需要在 `check()` 里开一个特殊豁免分支，反而比方案 A 改动更大、更不一致。实现见 §8.1。
+3. **120 秒聚类阈值是否要 per-agent 配置？决策：v1 不做，维持全局 `LUCY_TURN_INFER_GAP_MS`。** 理由：还没有真实数据验证不同 agent 的调用节奏差异有多大；先用全局默认收集 Phase 2 上线后的实际簇分布，有证据再加 per-agent 配置面，避免无依据的过度设计。
+4. **30 天 preview retention 是否过长？决策：默认值不变，但补一个目前 spec 里"可配置"却没有对应开关的缺口。** 新增环境变量 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS`（默认 `30`），并设计一个轻量 purge 机制（见 §8.4）——本地单用户环境和客户部署环境用同一个默认值起步，部署侧需要更短窗口时改环境变量即可，不需要代码分支。
+5. **`access_log_sources` 要不要进 CSV 导出？决策：不做。** 维持只通过 UI/API（`GET /api/admin/audit/:id/sources`）展开。理由：现有 `GET /api/admin/audit/export` 是"一个 access_log 行 = 一行 CSV"的扁平语义；`access_log_sources` 是 1:N 关系，硬塞进同一份 CSV 要么逐 source 复制整行（冗余且容易让人误读成多条独立调用），要么改变现有 CSV 的行语义（破坏已有消费者假设）。如果未来真需要离线分析，应该开一个独立的 source 级 CSV 端点，不是本轮范围。
 

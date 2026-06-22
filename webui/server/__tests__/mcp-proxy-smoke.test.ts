@@ -8,6 +8,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const TOKEN = "proxy-smoke-token";
+const RESTRICTED_TOKEN = "proxy-smoke-restricted-token";
 const INTERNAL_TOKEN = "internal-smoke-token";
 
 function tokenHash(token: string): string {
@@ -39,6 +40,19 @@ const ACCESS_YAML = `users:
         - dataforai.superstore_orders
       tools:
         - kx_catalog
+        - lucy_begin_question
+        - sl_read_source
+  - id: restricted_agent
+    name: Restricted Agent
+    enabled: true
+    tokens:
+      - hash: "${tokenHash(RESTRICTED_TOKEN)}"
+        label: restricted-token
+        created: 2026-06-20
+    allow:
+      tables:
+        - dataforai.superstore_orders
+      tools:
         - sl_read_source
 defaults:
   deny_tools: []
@@ -310,7 +324,7 @@ describe("MCP proxy smoke", () => {
       expect(listRes.status).toBe(200);
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
       expect(listBody.result.tools.map((tool) => tool.name)).toContain("kx_catalog");
-      expect(listBody.result.tools.map((tool) => tool.name)).toEqual(["sl_read_source", "kx_catalog"]);
+      expect(listBody.result.tools.map((tool) => tool.name)).toEqual(["sl_read_source", "kx_catalog", "lucy_begin_question"]);
 
       const catalogRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -335,6 +349,143 @@ describe("MCP proxy smoke", () => {
       const catalogAudit = await waitForAuditRow("catalog");
       const catalogSources = await waitForAuditSources(Number(catalogAudit.id));
       expect(catalogSources).toHaveLength(0);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("injects lucy_begin_question, handles it locally, and auto-attaches its turnId to the next business call", async () => {
+    const upstreamSeen: string[] = [];
+    const upstream = createServer(async (req, res) => {
+      const body = await readRequestBody(req);
+      upstreamSeen.push(body);
+      const parsed = JSON.parse(body) as { id: string; method: string };
+      res.writeHead(200, { "content-type": "application/json" });
+      if (parsed.method === "tools/list") {
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: parsed.id,
+          result: { tools: [{ name: "sl_read_source", inputSchema: { type: "object" } }] }
+        }));
+        return;
+      }
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id,
+        result: { content: [{ type: "text", text: "ok" }] }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const listRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "tools-list-begin", method: "tools/list" })
+      });
+      const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
+      expect(listBody.result.tools.map((tool) => tool.name)).toContain("lucy_begin_question");
+
+      const beginRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "begin-q-1",
+          method: "tools/call",
+          params: {
+            name: "lucy_begin_question",
+            arguments: {
+              intentSummary: "查询客户邮箱相关的订单",
+              question: "contact me at alice@example.com about superstore orders"
+            }
+          }
+        })
+      });
+      expect(beginRes.status).toBe(200);
+      const beginBody = await beginRes.json() as { result: { content: Array<{ text: string }> } };
+      const { turnId } = JSON.parse(beginBody.result.content[0]?.text ?? "{}") as { turnId: string };
+      expect(typeof turnId).toBe("string");
+      expect(upstreamSeen).toHaveLength(1); // only the prior tools/list reached upstream; lucy_begin_question is local-only
+
+      const beginAudit = await waitForAuditRow("begin-q-1");
+      expect(beginAudit.tool).toBe("lucy_begin_question");
+      expect(beginAudit.lucy_turn_id).toBe(turnId);
+
+      const ctDb = new Database(auditDbPath, { readonly: true });
+      try {
+        const turnRow = ctDb.prepare("SELECT question_summary, question_preview, question_source FROM conversation_turns WHERE turn_id = ?").get(turnId) as Record<string, unknown>;
+        expect(turnRow.question_summary).toBe("查询客户邮箱相关的订单");
+        expect(turnRow.question_preview).not.toContain("alice@example.com");
+        expect(turnRow.question_preview).toContain("[REDACTED]");
+        expect(turnRow.question_source).toBe("reported_tool");
+      } finally {
+        ctDb.close();
+      }
+
+      const followUpRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "after-begin-1",
+          method: "tools/call",
+          params: { name: "sl_read_source", arguments: { sourceName: "superstore_orders" } }
+        })
+      });
+      expect(followUpRes.status).toBe(200);
+      expect(upstreamSeen).toHaveLength(2); // tools/list + the follow-up call
+
+      const followUpAudit = await waitForAuditRow("after-begin-1");
+      expect(followUpAudit.lucy_turn_id).toBe(turnId);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("does not inject lucy_begin_question or kx_catalog for an agent whose role doesn't list them", async () => {
+    const upstream = createServer(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: "tools-list-restricted",
+        result: { tools: [{ name: "sl_read_source", inputSchema: { type: "object" } }] }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const listRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${RESTRICTED_TOKEN}` },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "tools-list-restricted", method: "tools/list" })
+      });
+      const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
+      const names = listBody.result.tools.map((tool) => tool.name);
+      expect(names).toEqual(["sl_read_source"]);
+      expect(names).not.toContain("lucy_begin_question");
+      expect(names).not.toContain("kx_catalog");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));

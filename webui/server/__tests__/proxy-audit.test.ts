@@ -167,4 +167,105 @@ describe("proxy audit log", () => {
       db.close();
     }
   });
+
+  it("writeConversationTurn writes a row, and purgeExpiredConversationTurns only clears expired sensitive fields", async () => {
+    const { writeConversationTurn, purgeExpiredConversationTurns } = await import("../proxy/audit");
+
+    await writeConversationTurn({
+      turnId: "lucy_fresh_1",
+      userId: "workhorse",
+      tokenHashPrefix: "sha256:abc",
+      questionHash: "hash-fresh",
+      questionPreview: "fresh preview",
+      questionSummary: "fresh summary",
+      questionSource: "reported_tool"
+    });
+
+    // Backdate a second row directly (writeConversationTurn always stamps "now").
+    const oldDb = new Database(auditDbPath);
+    try {
+      const oldCreatedAt = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+      oldDb.prepare(`
+        INSERT INTO conversation_turns (turn_id, user_id, question_hash, question_preview, question_summary, question_source, created_at)
+        VALUES ('lucy_old_1', 'workhorse', 'hash-old', 'old preview', 'old summary', 'reported_tool', ?)
+      `).run(oldCreatedAt);
+    } finally {
+      oldDb.close();
+    }
+
+    const dryRun = await purgeExpiredConversationTurns({ retentionDays: 30, dryRun: true });
+    expect(dryRun).toEqual({ scanned: 1, purged: 0 });
+
+    const afterDryRun = new Database(auditDbPath, { readonly: true });
+    try {
+      const row = afterDryRun.prepare("SELECT question_preview FROM conversation_turns WHERE turn_id = 'lucy_old_1'").get() as { question_preview: string };
+      expect(row.question_preview).toBe("old preview");
+    } finally {
+      afterDryRun.close();
+    }
+
+    const real = await purgeExpiredConversationTurns({ retentionDays: 30 });
+    expect(real).toEqual({ scanned: 1, purged: 1 });
+
+    const afterPurge = new Database(auditDbPath, { readonly: true });
+    try {
+      const oldRow = afterPurge.prepare("SELECT question_preview, question_summary, question_hash FROM conversation_turns WHERE turn_id = 'lucy_old_1'").get() as Record<string, unknown>;
+      expect(oldRow).toEqual({ question_preview: null, question_summary: null, question_hash: null });
+      const freshRow = afterPurge.prepare("SELECT question_preview FROM conversation_turns WHERE turn_id = 'lucy_fresh_1'").get() as { question_preview: string };
+      expect(freshRow.question_preview).toBe("fresh preview");
+    } finally {
+      afterPurge.close();
+    }
+  });
+
+  it("rebuildInferredTurns clusters business calls by gap and skips isolated kx_catalog preflight calls", async () => {
+    const { writeLog, rebuildInferredTurns } = await import("../proxy/audit");
+    const base = Date.now() - 60 * 60 * 1000; // 1 hour ago, well within default 24h lookback
+    const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+
+    // Cluster 1: two calls 60s apart (within 120s gap), both data-bearing.
+    await writeLog({ ts: at(0), userId: "cluster-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "c1-1" });
+    await writeLog({ ts: at(60_000), userId: "cluster-user", tool: "sl_query", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "c1-2" });
+
+    // Cluster 2: a lone call 5 minutes after cluster 1's last call (> 120s gap).
+    await writeLog({ ts: at(360_000), userId: "cluster-user", tool: "sl_query", tables: ["dataforai.superstore_returns"], outcome: "ok", durationMs: 1, requestId: "c2-1" });
+
+    // Isolated kx_catalog call, far from anything else -> preflight_only, not written by default.
+    await writeLog({ ts: at(900_000), userId: "cluster-user", tool: "kx_catalog", outcome: "ok", durationMs: 1, requestId: "catalog-only" });
+
+    const result = await rebuildInferredTurns("cluster-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(result.turns).toBe(2);
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const turns = db.prepare("SELECT * FROM inferred_turns WHERE user_id = ? ORDER BY started_at ASC").all("cluster-user") as Array<{
+        call_count: number;
+        business_call_count: number;
+        confidence: string;
+      }>;
+      expect(turns).toHaveLength(2);
+      expect(turns[0]).toMatchObject({ call_count: 2, business_call_count: 2, confidence: "medium" });
+      expect(turns[1]).toMatchObject({ call_count: 1, business_call_count: 1, confidence: "medium" });
+
+      const links = db.prepare("SELECT COUNT(*) AS cnt FROM inferred_turn_access_logs").get() as { cnt: number };
+      expect(links.cnt).toBe(3); // 2 + 1, the isolated kx_catalog call is excluded entirely
+    } finally {
+      db.close();
+    }
+
+    // includeCatalogOnly=true should additionally surface the isolated catalog call as a low-confidence turn.
+    const withCatalog = await rebuildInferredTurns("cluster-user", { lookbackHours: 24, gapMs: 120_000, includeCatalogOnly: true });
+    expect(withCatalog.turns).toBe(3);
+
+    // Rebuilding again must not duplicate rows for the same window (full-window delete+reinsert).
+    const rebuiltAgain = await rebuildInferredTurns("cluster-user", { lookbackHours: 24, gapMs: 120_000, includeCatalogOnly: true });
+    expect(rebuiltAgain.turns).toBe(3);
+    const dbAfter = new Database(auditDbPath, { readonly: true });
+    try {
+      const count = dbAfter.prepare("SELECT COUNT(*) AS cnt FROM inferred_turns WHERE user_id = ?").get("cluster-user") as { cnt: number };
+      expect(count.cnt).toBe(3);
+    } finally {
+      dbAfter.close();
+    }
+  });
 });
