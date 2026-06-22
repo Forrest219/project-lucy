@@ -44,21 +44,21 @@ Lucy 的最终目标是成为位于数据库和 agents 之间的 MCP 服务管�
 
 | ID | Item | Status | Evidence | Acceptance Criteria |
 |---|---|---|---|---|
-| P1-1 | 将 diff 审计固化为持续监控脚本 | pending | current report: `inbox/ktx-lucy-diff-2026-06-21.md` | 可重复生成 KTX vs Lucy 一级/二级目录和文件差异 |
-| P1-2 | 完善 WebUI onboarding | pending | `webui/` | 数据库连接、语义层编辑、validate/reindex、MCP 配置复制形成完整 UI 流程 |
-| P1-3 | 补客户部署文档 | pending | planned docs | 包含 compose、env、持久化、数据库连接、agents MCP 配置、升级/回滚 |
-| P1-4 | 建立版本矩阵 | pending | planned docs/release metadata | Lucy version、bundled KTX version、Node/Python/runtime、数据库、MCP client 兼容性可追踪 |
-| P1-5 | 区分三层测试 | pending | planned tests | 明确 runtime compatibility tests、platform tests、business evals 的边界 |
+| P1-1 | 将 diff 审计固化为持续监控脚本 | done | `scripts/ktx-lucy-diff-audit.mjs`; `npm run audit:ktx-diff -- --out inbox/ktx-lucy-diff-2026-06-21-p1-check.md`; report: `inbox/ktx-lucy-diff-2026-06-21-p1-check.md` | 可重复生成 KTX vs Lucy 一级/二级目录和文件差异 |
+| P1-2 | 完善 WebUI onboarding | done | `webui/src/pages/Onboarding.tsx`; `webui/src/__tests__/onboarding.test.tsx`; `docs/webui-impl-status.md`; `webui/docs/06-navigation-ia.md` | 数据库连接、语义层编辑、validate/reindex、MCP 配置复制形成完整 UI 流程 |
+| P1-3 | 补客户部署文档 | done | `docs/customer-deployment-guide.md`, `docs/deployment-docker.md` | 已覆盖 compose、env、持久化、数据库连接、agents MCP 配置、升级/回滚、排障 |
+| P1-4 | 建立版本矩阵 | done | `docs/version-matrix.md` | Lucy version、bundled KTX version、Node/Python/runtime、数据库、MCP client 兼容性可追踪 |
+| P1-5 | 区分三层测试 | done | `docs/test-layers-and-release-gates.md` | 已明确 runtime compatibility tests、platform tests、business evals 的边界和 release gate 命令 |
 
 ## P2 Todo
 
 | ID | Item | Status | Evidence | Acceptance Criteria |
 |---|---|---|---|---|
-| P2-1 | 镜像发布 CI | pending | planned CI | 自动 build image、跑 smoke/eval、打 tag、输出 release notes |
-| P2-2 | 安全与权限体系强化 | pending | `webui/server/proxy/*` | token 生命周期、ACL、audit、secrets 挂载和脱敏策略可验证 |
-| P2-3 | KTX 升级兼容机制 | pending | planned smoke/eval gates | KTX 升级前后自动验证 CLI/MCP/semantic-layer/config 兼容性 |
-| P2-4 | Demo 数据库与示例项目 | pending | planned example compose | 无需客户生产库即可试用、演示、跑 CI smoke |
-| P2-5 | 产品文档体系 | pending | planned docs | Admin guide、User guide、Agent integration guide、Troubleshooting guide、Security guide |
+| P2-1 | 镜像发布 CI | done | `.github/workflows/lucy-release.yml`, `docs/release-ci.md`; validated by workflow YAML parse and `npm run lint:spec` | 自动 build image、跑 smoke/eval、打 tag、输出 release notes |
+| P2-2 | 安全与权限体系强化 | done | `docs/security-guide.md`, `scripts/security-baseline.mjs`, `npm run security:baseline`, `.github/workflows/lucy-release.yml`, `webui/server/proxy/*` | token 生命周期、ACL、audit、secrets 挂载和脱敏策略可验证 |
+| P2-3 | KTX 升级兼容机制 | done | `scripts/ktx-upgrade-compat.mjs`, `npm run compat:ktx-upgrade`, `docker-compose.yml`, `docker-compose.demo.yml`, `docs/release-ci.md` | KTX 升级前后自动验证 CLI/MCP/semantic-layer/config 兼容性 |
+| P2-4 | Demo 数据库与示例项目 | done | `docker-compose.demo.yml`, `examples/docker-demo/README.md`, `examples/docker-demo/mysql/01-init.sql`, `examples/docker-demo/project-template/ktx.yaml`, `npm run smoke:p0:demo` | 无需客户生产库即可试用、演示、跑 CI smoke |
+| P2-5 | 产品文档体系 | done | `docs/product-docs-index.md`, `docs/admin-guide.md`, `docs/user-guide.md`, `docs/agent-integration-guide.md`, `docs/troubleshooting-guide.md`, `docs/security-guide.md` | Admin guide、User guide、Agent integration guide、Troubleshooting guide、Security guide |
 
 ## Decisions
 
@@ -90,6 +90,11 @@ Lucy 的最终目标是成为位于数据库和 agents 之间的 MCP 服务管�
 - 2026-06-21：完成 Batch 3A/3B。3A 再次检查 Docker daemon，仍无法连接 `/Users/forrest/.docker/run/docker.sock`，Docker build / compose up 实测继续待补。3B 修复 `webui/docs/03-api-spec.md` 的既有 API spec 漂移，补 `/api/admin/audit/sources`、`/api/admin/config-audit`；`npm run lint:spec` 全部 PASS；定向测试 `server/__tests__/admin-audit.test.ts`、`server/__tests__/eval-api-contract.test.ts` 通过（2 files / 4 tests）。
 - 2026-06-21：完成 Batch 4 P0 smoke。修复 Dockerfile build cwd 问题；新增 `scripts/p0-smoke.mjs` 与 `scripts/p0-customer-path-smoke.mjs`。`npm run smoke:p0` 通过；`npm run smoke:p0:docker` 通过，验证 image build、compose up、WebUI health、MCP proxy 响应、镜像内 `@kaelio/ktx 0.13.0`；`npm run smoke:p0:customer` 通过，验证真实 MySQL 连接、SL validate、KTX CLI 查询、临时 MCP tools/list、MCP `sl_query` 返回 3 行。发现 KTX 0.13.0 MCP tools/list 不暴露 `sl_validate`，validate gate 改由 CLI 覆盖。
 - 2026-06-21：完成 Batch 5 P0 尾巴。新增 `docker-compose.demo.yml` 与 `examples/docker-demo/`，提供可重复 MySQL demo DB 与 demo KTX project template；Docker image 预装 `git` 与 KTX Python runtime，避免容器内 `sl query --execute` 交互安装。新增 `npm run smoke:p0:demo`，验证 demo DB、Lucy health、connection test、`admin reindex --force`、SL validate/query、Lucy MCP Proxy bearer token、`sl_read_source`、`sl_query`。新增 `npm run smoke:p0:business-eval`，验证 superstore/kx_financial eval case catalog 可读取。新增 security baseline 报告 `inbox/lucy-p0-security-baseline-2026-06-21.md`。P0-5、P0-6 标记为 done。
+- 2026-06-21：完成 P1 Batch 1。新增 `docs/customer-deployment-guide.md`、`docs/version-matrix.md`、`docs/test-layers-and-release-gates.md`，并在 `docs/project-overview.md` 注册索引。P1-3、P1-4、P1-5 标记为 done；P1 剩余 P1-1 diff 审计脚本化与 P1-2 WebUI onboarding。
+- 2026-06-21：完成 P1 Batch 2。新增 `scripts/ktx-lucy-diff-audit.mjs` 与 `npm run audit:ktx-diff`，可重复生成 KTX vs Lucy 一级/二级目录、文件和 `package.json` scripts 差异；验证报告为 `inbox/ktx-lucy-diff-2026-06-21-p1-check.md`。P1-1 标记为 done；P1 剩余 P1-2 WebUI onboarding。
+- 2026-06-21：完成 P1 Batch 3。新增 WebUI `/onboarding` 上线检查页与导航入口，聚合项目/连接、语义层、diff、Agent/token 状态，并提供 MCP config 复制；更新 WebUI 状态、导航 IA、project overview 和 goal checklist。定向验证 `webui npm test -- --run src/__tests__/app-shell.test.tsx src/__tests__/onboarding.test.tsx` 与 `webui npm run build` 通过。P1-2 标记为 done；P1 全部完成。
+- 2026-06-22：完成 P2 Batch 1。新增 `.github/workflows/lucy-release.yml` 与 `docs/release-ci.md`，覆盖 spec/webui、business eval catalog、KTX diff audit、Docker smoke、demo E2E、tag/manual release notes artifact；新增 `scripts/ktx-upgrade-compat.mjs` 和 `npm run compat:ktx-upgrade`，并让 `docker-compose.yml` / `docker-compose.demo.yml` 支持 `KTX_VERSION` 注入；新增 `examples/docker-demo/README.md`。验证：`node --check` 三个脚本、`npm run compat:ktx-upgrade -- --candidate 0.13.0 --skip-docker --skip-demo --skip-business-eval`、`docker compose config`、`docker compose -f docker-compose.demo.yml config`、workflow YAML parse、`npm run lint:spec` 均通过。P2-1、P2-3、P2-4 标记为 done；P2 剩余 P2-2、P2-5。
+- 2026-06-22：完成 P2 Batch 2。新增 `scripts/security-baseline.mjs` 与 `npm run security:baseline`，检查 token hash、enabled wildcard、role allow、deny tools、proxy audit/revocation hooks、secrets/dockerignore 和安全文档；将该门禁纳入 `.github/workflows/lucy-release.yml`。新增产品文档体系：`docs/product-docs-index.md`、`docs/admin-guide.md`、`docs/user-guide.md`、`docs/agent-integration-guide.md`、`docs/troubleshooting-guide.md`、`docs/security-guide.md`。验证：`node --check scripts/security-baseline.mjs`、`npm run security:baseline`、workflow YAML parse、`npm run lint:spec` 通过。P2-2、P2-5 标记为 done；P2 全部完成。
 
 ## Update Rule
 

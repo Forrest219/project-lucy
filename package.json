@@ -8,9 +8,12 @@
     "node": ">=22"
   },
   "scripts": {
+    "audit:ktx-diff": "node scripts/ktx-lucy-diff-audit.mjs",
+    "compat:ktx-upgrade": "node scripts/ktx-upgrade-compat.mjs",
     "eval": "node scripts/eval-runner.mjs",
     "eval:list": "node scripts/eval-runner.mjs --list-cases",
     "lint:spec": "node scripts/lint-spec.mjs",
+    "security:baseline": "node scripts/security-baseline.mjs",
     "smoke:p0": "node scripts/p0-smoke.mjs",
     "smoke:p0:docker": "node scripts/p0-smoke.mjs --docker",
     "smoke:p0:customer": "node scripts/p0-customer-path-smoke.mjs",

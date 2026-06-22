@@ -82,10 +82,11 @@ manifest / overlay 分层规则见 `docs/DEVELOPMENT.md`。人工维护的 grain
 
 ## 6. WebUI 模块现状
 
-WebUI 是本地治理工作台，当前导航有 6 个一级模块：
+WebUI 是本地治理工作台，当前导航有 7 个一级模块：
 
 | 模块 | 入口 | 状态 | 说明 |
 |---|---|---|---|
+| 部署向导 | `/onboarding` | 已实现 | 聚合客户上线主链路、MCP endpoint 和 agent 配置复制 |
 | 数据库接入 | `/connections` | 已实现；安全契约待补强 | 连接概览、表白名单、连通测试、ingest |
 | 语义层维护 | `/`、`/sources/:conn/:schema/:table`、`/joins/:conn/:schema/:table` | 已实现 | 表目录、表编辑、Join 管理 |
 | 业务文档 | `/wiki` | 已实现 | Wiki frontmatter + Markdown 编辑 |
@@ -121,6 +122,17 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 |---|---|
 | Lucy MCP 平台产品化目标 | `docs/lucy-platform-goal-checklist.md` |
 | Docker 部署 | `docs/deployment-docker.md` |
+| 客户部署 / 运维手册 | `docs/customer-deployment-guide.md` |
+| 版本矩阵 | `docs/version-matrix.md` |
+| 测试分层与发布门禁 | `docs/test-layers-and-release-gates.md` |
+| Release CI | `docs/release-ci.md` |
+| Docker demo | `examples/docker-demo/README.md` |
+| 产品文档索引 | `docs/product-docs-index.md` |
+| 管理员指南 | `docs/admin-guide.md` |
+| 用户指南 | `docs/user-guide.md` |
+| Agent 接入指南 | `docs/agent-integration-guide.md` |
+| 安全指南 | `docs/security-guide.md` |
+| 排障指南 | `docs/troubleshooting-guide.md` |
 | 开发治理 | `docs/DEVELOPMENT.md` |
 | WebUI 当前状态 | `docs/webui-impl-status.md` |
 | WebUI 模块使用 | `docs/webui-module-guide.md` |

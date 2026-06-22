@@ -121,7 +121,7 @@ async function dockerSmoke() {
     buildEnv = { DOCKER_CONFIG: tempDockerConfig };
   }
   await run("docker", ["info"], { capture: true });
-  await run("docker", ["build", "-t", "project-lucy:p0-smoke", "."], { env: buildEnv });
+  await run("docker", ["build", "--build-arg", `KTX_VERSION=${expectedKtxVersion}`, "-t", "project-lucy:p0-smoke", "."], { env: buildEnv });
   await run("docker", ["compose", "-p", "lucy-p0-smoke", "up", "-d", "--build"], { env: composeEnv });
   try {
     const health = await waitFor(`http://127.0.0.1:${dockerWebPort}/api/health`, { timeoutMs: 120_000 });

@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
 import { Catalog } from "../pages/Catalog";
 import { JoinEditor } from "../pages/JoinEditor";
+import { Onboarding } from "../pages/Onboarding";
 import { Review } from "../pages/Review";
 import { TableEditor } from "../pages/TableEditor";
 import { WikiEditor } from "../pages/WikiEditor";
@@ -30,6 +31,9 @@ export function breadcrumbItems(pathname: string): string[] {
   const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (parts.length === 0) {
     return ["语义层维护", "表目录"];
+  }
+  if (parts[0] === "onboarding") {
+    return ["部署向导", "上线检查"];
   }
   if (parts[0] === "sources") {
     return ["语义层维护", parts[2] ?? "表语义", parts[3] ?? "表语义"];
@@ -100,6 +104,10 @@ export function breadcrumbItems(pathname: string): string[] {
 type NavItem = { label: string; to: string; active: (pathname: string) => boolean };
 
 const navGroups: Array<{ title: string; items: NavItem[] }> = [
+  {
+    title: "部署向导",
+    items: [{ label: "上线检查", to: "/onboarding", active: (path) => path === "/onboarding" }]
+  },
   {
     title: "数据库接入",
     items: [
@@ -251,6 +259,7 @@ export function AppFrame() {
         </header>
         <div className="pl-workspace-body">
           <Routes>
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/connections" element={<ConnectionOverview />} />
             <Route path="/connections/whitelist" element={<TableWhitelist />} />
             <Route path="/connections/test" element={<ConnectionTest />} />

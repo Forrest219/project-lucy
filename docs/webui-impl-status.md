@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | WebUI 功能实现状态 |
 | 文档类型 | Other |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-20；v1.1 更新 2026-06-21 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-06-20；v1.2 更新 2026-06-21 |
 | 撰写人 | Claude Architect / Codex |
 
 ---
@@ -14,6 +14,7 @@
 
 | 一级模块 | 二级入口 | 状态 | 前端文件 | 后端 API | 测试覆盖 | 最后核对 |
 |---|---|---|---|---|---|---|
+| **部署向导** | 上线检查 | ✅ 已实现 | `src/pages/Onboarding.tsx` | `GET /api/project` · `GET /api/sources` · `GET /api/diff` · `GET /api/admin/agents` | `src/__tests__/onboarding.test.tsx` · `src/__tests__/app-shell.test.tsx` | 2026-06-21 |
 | **数据库接入** | 连接概览 | ✅ 已实现 | `src/pages/connections/ConnectionOverview.tsx` | `GET /api/connections` | `src/__tests__/connection-overview.test.tsx` | 2026-06-21 |
 | | 表白名单 | ✅ 已实现 | `src/pages/connections/TableWhitelist.tsx` | `GET /api/connections/:connId/tables` · `PUT /api/connections/:connId/enabled-tables` · `POST /api/connections/:connId/ingest` | `src/__tests__/connection-overview.test.tsx`（导航/入口覆盖） | 2026-06-21 |
 | | 连通测试 | ✅ 已实现 | `src/pages/connections/ConnectionTest.tsx` | `POST /api/connections/:connId/test` | `src/__tests__/connection-overview.test.tsx`（导航/入口覆盖） | 2026-06-21 |

@@ -8,6 +8,7 @@ const project = process.env.LUCY_DEMO_COMPOSE_PROJECT ?? "lucy-p0-demo";
 const webPort = process.env.LUCY_DEMO_WEBUI_HOST_PORT ?? "55176";
 const proxyPort = process.env.LUCY_DEMO_PROXY_HOST_PORT ?? "57881";
 const demoToken = process.env.LUCY_DEMO_AGENT_TOKEN ?? "lucy-demo-agent-token";
+const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.13.0";
 const composeFile = "docker-compose.demo.yml";
 let tempDockerConfig;
 
@@ -159,8 +160,8 @@ async function main() {
   try {
     const health = await waitForJson(`http://127.0.0.1:${webPort}/api/health`);
     if (health?.ok !== true) throw new Error("demo /api/health envelope was not ok");
-    if (health?.data?.bundledKtxVersion !== "0.13.0") {
-      throw new Error(`demo bundledKtxVersion expected 0.13.0, got ${health?.data?.bundledKtxVersion}`);
+    if (health?.data?.bundledKtxVersion !== expectedKtxVersion) {
+      throw new Error(`demo bundledKtxVersion expected ${expectedKtxVersion}, got ${health?.data?.bundledKtxVersion}`);
     }
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "connection", "test", "demo-mysql"]));
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "admin", "reindex", "--force", "--output", "json"]), { capture: true });

@@ -1,0 +1,254 @@
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { apiGet } from "../lib/apiClient";
+import { queryKeys } from "../lib/queryKeys";
+import type { Agent, ChangedFilesResponse, ProjectInfo, SourcesResponse } from "../lib/types";
+
+type AgentsResponse = { agents: Agent[] };
+
+function StepStatus({ ready }: { ready: boolean }) {
+  return (
+    <span className={`pl-status-badge ${ready ? "pl-status-done" : "pl-status-partial"}`}>
+      {ready ? "Ready" : "Needs setup"}
+    </span>
+  );
+}
+
+function OnboardingStep({
+  index,
+  title,
+  description,
+  ready,
+  action,
+  children
+}: {
+  index: number;
+  title: string;
+  description: string;
+  ready: boolean;
+  action: { label: string; to: string };
+  children: ReactNode;
+}) {
+  return (
+    <section className="pl-onboarding-step">
+      <div className="pl-onboarding-step-index">{index}</div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="pl-panel-title mb-0">{title}</h2>
+          <StepStatus ready={ready} />
+        </div>
+        <p className="pl-notice mt-1">{description}</p>
+        <div className="mt-4">{children}</div>
+      </div>
+      <div className="flex justify-end">
+        <Link className="pl-btn pl-btn--secondary" to={action.to}>{action.label}</Link>
+      </div>
+    </section>
+  );
+}
+
+function buildMcpConfig(endpoint: string) {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        lucy: {
+          url: endpoint,
+          headers: {
+            Authorization: "Bearer <LUCY_AGENT_TOKEN>"
+          }
+        }
+      }
+    },
+    null,
+    2
+  );
+}
+
+function defaultMcpEndpoint() {
+  if (typeof window === "undefined") return "http://127.0.0.1:7879/mcp";
+  const host = window.location.hostname || "127.0.0.1";
+  const protocol = window.location.protocol === "https:" ? "https:" : "http:";
+  return `${protocol}//${host}:7879/mcp`;
+}
+
+export function Onboarding() {
+  const [copied, setCopied] = useState(false);
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project,
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
+  });
+  const sourcesQuery = useQuery({
+    queryKey: queryKeys.sources,
+    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+  });
+  const diffQuery = useQuery({
+    queryKey: queryKeys.diff,
+    queryFn: () => apiGet<ChangedFilesResponse>("/api/diff")
+  });
+  const agentsQuery = useQuery({
+    queryKey: ["admin", "agents"],
+    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+  });
+
+  const connections = projectQuery.data?.connections ?? [];
+  const enabledTables = connections.reduce((sum, conn) => sum + conn.enabledTables.length, 0);
+  const sources = sourcesQuery.data?.tables ?? [];
+  const doneSources = sources.filter((source) => source.completion === "done").length;
+  const changedFiles = diffQuery.data?.files ?? [];
+  const agents = agentsQuery.data?.agents ?? [];
+  const tokenCount = agents.reduce((sum, agent) => sum + agent.tokens.filter((token) => !token.revoked).length, 0);
+  const endpoint = useMemo(defaultMcpEndpoint, []);
+  const mcpConfig = useMemo(() => buildMcpConfig(endpoint), [endpoint]);
+  const loading = projectQuery.isLoading || sourcesQuery.isLoading || diffQuery.isLoading || agentsQuery.isLoading;
+  const error = projectQuery.error ?? sourcesQuery.error ?? diffQuery.error ?? agentsQuery.error;
+  const connectionReady = connections.length > 0 && projectQuery.data?.ktxAvailable === true;
+  const tableScopeReady = enabledTables > 0;
+  const semanticReady = sources.length > 0 && doneSources > 0;
+  const validationReady = changedFiles.length === 0;
+  const mcpReady = agents.length > 0 && tokenCount > 0;
+  const readyCount = [connectionReady, tableScopeReady, semanticReady, validationReady, mcpReady].filter(Boolean).length;
+
+  async function copyConfig() {
+    try {
+      await navigator.clipboard.writeText(mcpConfig);
+      setCopied(true);
+      toast.success("MCP 配置已复制");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "复制失败");
+    }
+  }
+
+  if (loading) {
+    return <p className="pl-notice">正在加载上线检查...</p>;
+  }
+
+  if (error) {
+    return <p className="pl-error">上线检查加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
+  }
+
+  return (
+    <div className="pl-page-stack">
+      <div className="pl-section-heading">
+        <div>
+          <p className="pl-eyebrow">部署向导</p>
+          <h1 className="text-xl font-semibold">上线检查</h1>
+          <p className="pl-page-intro">按客户部署主链路检查 Lucy 是否已经可以作为 MCP 服务管理平台交付给 agent 使用。</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link className="pl-btn pl-btn--secondary" to="/connections">数据库接入</Link>
+          <Link className="pl-btn pl-btn--primary" to="/admin/agents">配置 Agent</Link>
+        </div>
+      </div>
+
+      <div className="pl-metric-grid">
+        <div className="pl-metric-card">
+          <span>Checklist</span>
+          <strong>{readyCount}/5</strong>
+          <small>上线主链路完成度</small>
+        </div>
+        <div className={projectQuery.data?.ktxAvailable ? "pl-metric-card pl-metric-card--success" : "pl-metric-card pl-metric-card--danger"}>
+          <span>KTX Runtime</span>
+          <strong>{projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</strong>
+          <small>{projectQuery.data?.root ?? "项目根未知"}</small>
+        </div>
+        <div className="pl-metric-card">
+          <span>Semantic Tables</span>
+          <strong>{doneSources}/{sources.length}</strong>
+          <small>已完成 / 已扫描</small>
+        </div>
+        <div className="pl-metric-card">
+          <span>MCP Access</span>
+          <strong>{agents.length}</strong>
+          <small>{tokenCount} 个可用 token</small>
+        </div>
+      </div>
+
+      <div className="pl-onboarding-list">
+        <OnboardingStep
+          index={1}
+          title="接入数据库"
+          description="确认 Lucy/KTX 能读取当前项目连接，并且 KTX runtime 在部署环境可用。"
+          ready={connectionReady}
+          action={{ label: "查看连接", to: "/connections" }}
+        >
+          <div className="pl-onboarding-facts">
+            <span>{connections.length} 个连接</span>
+            {connections[0] ? <span>{connections.map((conn) => conn.id).join(", ")}</span> : null}
+            <span>{connections.reduce((sum, conn) => sum + conn.schemas.length, 0)} 个 schema</span>
+            <span>KTX {projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</span>
+          </div>
+        </OnboardingStep>
+
+        <OnboardingStep
+          index={2}
+          title="限定表范围"
+          description="维护 enabled_tables，确保只有目标物理表进入语义层和 MCP 暴露范围。"
+          ready={tableScopeReady}
+          action={{ label: "表白名单", to: "/connections/whitelist" }}
+        >
+          <div className="pl-onboarding-facts">
+            <span>{enabledTables} 张 enabled table</span>
+            <span>{sources.length} 张 semantic table</span>
+          </div>
+        </OnboardingStep>
+
+        <OnboardingStep
+          index={3}
+          title="配置语义层"
+          description="补齐表描述、字段说明、指标、分段和关联关系，让 agent 使用稳定业务口径。"
+          ready={semanticReady}
+          action={{ label: "维护语义", to: "/" }}
+        >
+          <div className="pl-onboarding-facts">
+            <span>{doneSources} 张 done</span>
+            <span>{sources.length - doneSources} 张待完善</span>
+          </div>
+        </OnboardingStep>
+
+        <OnboardingStep
+          index={4}
+          title="校验并审阅变更"
+          description="上线前查看 semantic-layer/wiki/config 变更，并对本次保存过的表运行 validate。"
+          ready={validationReady}
+          action={{ label: "审阅校验", to: "/review" }}
+        >
+          <div className="pl-onboarding-facts">
+            <span>{changedFiles.length} 个待审阅文件</span>
+            <span>{validationReady ? "当前无未审阅变更" : "需要运行 Validate changed"}</span>
+          </div>
+        </OnboardingStep>
+
+        <OnboardingStep
+          index={5}
+          title="配置 Agent MCP"
+          description="创建 Agent 和 token，把 Lucy MCP endpoint 配到目标 agents 平台。"
+          ready={mcpReady}
+          action={{ label: "Agent 实例", to: "/admin/agents" }}
+        >
+          <div className="grid gap-3">
+            <div className="pl-onboarding-facts">
+              <span>{agents.length} 个 Agent</span>
+              <span>{tokenCount} 个可用 token</span>
+              <span>{endpoint}</span>
+            </div>
+            <div className="pl-code-snippet">
+              <span>MCP config</span>
+              <code>{mcpConfig}</code>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" className="pl-btn pl-btn--secondary" onClick={copyConfig}>
+                {copied ? "已复制" : "复制 MCP 配置"}
+              </button>
+              <Link className="pl-btn pl-btn--ghost" to={agents[0] ? `/admin/agents/${agents[0].id}/tokens/new` : "/admin/agents"}>
+                新建 Token
+              </Link>
+            </div>
+          </div>
+        </OnboardingStep>
+      </div>
+    </div>
+  );
+}

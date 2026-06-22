@@ -12,6 +12,7 @@ function StubPage({ name }: { name: string }) {
 
 vi.mock("../pages/Catalog", () => ({ Catalog: () => <StubPage name="Catalog" /> }));
 vi.mock("../pages/JoinEditor", () => ({ JoinEditor: () => <StubPage name="JoinEditor" /> }));
+vi.mock("../pages/Onboarding", () => ({ Onboarding: () => <StubPage name="Onboarding" /> }));
 vi.mock("../pages/Review", () => ({ Review: () => <StubPage name="Review" /> }));
 vi.mock("../pages/TableEditor", () => ({ TableEditor: () => <StubPage name="TableEditor" /> }));
 vi.mock("../pages/WikiEditor", () => ({ WikiEditor: () => <StubPage name="WikiEditor" /> }));
@@ -89,6 +90,7 @@ afterEach(() => {
 
 describe("AppFrame shell", () => {
   it.each([
+    ["/onboarding", "Onboarding", "上线检查"],
     ["/connections", "ConnectionOverview", "连接概览"],
     ["/connections/whitelist", "TableWhitelist", "表白名单"],
     ["/connections/test", "ConnectionTest", "连通测试"],

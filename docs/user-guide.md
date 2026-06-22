@@ -1,0 +1,57 @@
+# Lucy User Guide
+
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Lucy User Guide |
+| 文档类型 | Product / User Guide |
+| 版本 | v0.1 |
+| 撰写日期 | 2026-06-22 |
+| 适用范围 | 使用 agent 通过 Lucy 访问数据的业务用户 |
+
+## 1. What Lucy Gives You
+
+Lucy lets your agent answer database questions through governed semantic definitions:
+
+- approved tables only.
+- business metric definitions.
+- wiki/context retrieval.
+- audit trail for data access.
+- repeatable eval checks for answer quality.
+
+## 2. How To Ask
+
+Good questions include:
+
+- time range.
+- metric name.
+- grouping dimension.
+- filter/segment.
+- expected output shape.
+
+Example:
+
+```text
+按地区汇总 2024 年有效订单销售额，返回 region、total_sales，并说明使用的数据表和口径。
+```
+
+## 3. What To Expect
+
+The agent should:
+
+- use semantic-layer measures when available.
+- avoid raw SQL unless explicitly approved by policy.
+- cite source tables or semantic objects.
+- say when a requested table or tool is not allowed.
+
+## 4. When Something Looks Wrong
+
+Ask the agent to provide:
+
+- used tables.
+- measure definitions.
+- generated SQL if policy allows it.
+- row count and filters.
+
+Then send the case to the admin with the question, expected answer, and observed output.
+
+More user-facing HTML docs live under `docs/user-guide/`.

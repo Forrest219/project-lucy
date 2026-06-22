@@ -151,7 +151,14 @@
   .pl-action-list span { @apply text-xs text-fg-muted; }
   .pl-code-snippet { @apply mt-4 grid gap-1 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-code-snippet span { @apply text-xs font-medium text-fg-muted; }
-  .pl-code-snippet code { @apply overflow-auto font-mono text-xs text-fg-default; }
+  .pl-code-snippet code { @apply overflow-auto whitespace-pre-wrap font-mono text-xs text-fg-default; }
+
+  /* Onboarding */
+  .pl-onboarding-list { @apply grid gap-3; }
+  .pl-onboarding-step { @apply grid gap-4 rounded-md border border-border-default bg-bg-surface p-5 lg:grid-cols-[40px_minmax(0,1fr)_auto]; }
+  .pl-onboarding-step-index { @apply flex size-10 items-center justify-center rounded-md bg-bg-muted text-sm font-semibold text-fg-muted; }
+  .pl-onboarding-facts { @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
+  .pl-onboarding-facts span { @apply rounded-pill border border-border-default bg-bg-muted px-2 py-0.5; }
 
   /* 状态徽章 */
   .pl-status-badge { @apply inline-flex items-center rounded-pill px-2 py-0.5 text-xs font-medium; }
