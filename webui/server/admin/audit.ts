@@ -5,6 +5,19 @@ import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns } from "../proxy/audit.js";
 
+// Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
+// users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
+const lastRebuildAt = new Map<string, number>();
+const REBUILD_DEBOUNCE_MS = Number(process.env.LUCY_TURN_INFER_REBUILD_DEBOUNCE_MS ?? 30_000);
+
+async function rebuildInferredTurnsDebounced(userId: string, options?: { lookbackHours?: number }): Promise<void> {
+  const now = Date.now();
+  const last = lastRebuildAt.get(userId);
+  if (last !== undefined && now - last < REBUILD_DEBOUNCE_MS) return;
+  lastRebuildAt.set(userId, now);
+  await rebuildInferredTurns(userId, options);
+}
+
 let db: Database.Database | null = null;
 const ACCESS_LOG_COLUMNS = [
   ["role_ids", "TEXT"],
@@ -27,6 +40,8 @@ const ACCESS_LOG_COLUMNS = [
 ] as const;
 const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+// lucy_begin_question is the report call that *starts* a reported turn, not a linked business call.
+const NON_LINKED_CALL_TOOL_LIST = [...PROTOCOL_TOOLS, "lucy_begin_question"].map((tool) => `'${tool}'`).join(", ");
 const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
 const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
 const CSV_FORMULA_RE = /^[=+\-@]/;
@@ -771,7 +786,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         ? [q.user]
         : (database.prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`).all(cutoff) as Array<{ user_id: string }>).map((row) => row.user_id);
       for (const userId of targetUsers) {
-        await rebuildInferredTurns(userId, lookbackHours ? { lookbackHours } : undefined);
+        await rebuildInferredTurnsDebounced(userId, lookbackHours ? { lookbackHours } : undefined);
       }
     }
 
@@ -827,7 +842,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       }>;
       for (const row of rows) {
         const linked = database.prepare(`
-          SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${PROTOCOL_TOOL_LIST}) ORDER BY ts ASC
+          SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC
         `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
         const accessLogIds = linked.map((l) => l.id);
         const sourceRows = accessLogIds.length > 0

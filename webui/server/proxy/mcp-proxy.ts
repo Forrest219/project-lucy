@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { identifyRequest, setSessionClient, type Identity } from "./identity.js";
-import { writeLog, writeAccessLogSources, writeConversationTurn, type AccessLogSourceRecord } from "./audit.js";
+import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
@@ -24,15 +24,27 @@ function reportedTurnKey(identity: Identity): string {
   return `${identity.userId}:${identity.tokenHashPrefix}`;
 }
 
+function reportedTurnWindowMs(): number {
+  return Number(process.env.LUCY_REPORTED_TURN_ATTACH_WINDOW_MS ?? 600_000);
+}
+
+function purgeExpiredReportedTurns(now = Date.now()): void {
+  const windowMs = reportedTurnWindowMs();
+  for (const [key, value] of reportedTurns.entries()) {
+    if (now - value.createdAt > windowMs) reportedTurns.delete(key);
+  }
+}
+
 function recordReportedTurn(identity: Identity, turnId: string): void {
-  reportedTurns.set(reportedTurnKey(identity), { turnId, createdAt: Date.now() });
+  const now = Date.now();
+  purgeExpiredReportedTurns(now);
+  reportedTurns.set(reportedTurnKey(identity), { turnId, createdAt: now });
 }
 
 function matchReportedTurn(identity: Identity): string | undefined {
-  const entry = reportedTurns.get(reportedTurnKey(identity));
-  if (!entry) return undefined;
-  const windowMs = Number(process.env.LUCY_REPORTED_TURN_ATTACH_WINDOW_MS ?? 600_000);
-  return Date.now() - entry.createdAt <= windowMs ? entry.turnId : undefined;
+  const now = Date.now();
+  purgeExpiredReportedTurns(now);
+  return reportedTurns.get(reportedTurnKey(identity))?.turnId;
 }
 
 class BodyTooLargeError extends Error {
@@ -598,28 +610,58 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         return;
       }
 
-      const turnId = `lucy_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const turnId = `lucy_${randomUUID()}`;
       const storePreview = process.env.LUCY_STORE_QUESTION_PREVIEW !== "false";
       const rawQuestion = typeof args.question === "string" ? args.question : undefined;
       const maxChars = Number(process.env.LUCY_QUESTION_PREVIEW_MAX_CHARS ?? 500);
       const questionPreview = storePreview && rawQuestion ? redactQuestionText(rawQuestion).slice(0, maxChars) : undefined;
       const questionHash = storePreview && rawQuestion ? createHash("sha256").update(rawQuestion).digest("hex") : undefined;
 
-      await writeConversationTurn({
-        turnId,
-        userId: identity.userId,
-        tokenHashPrefix: identity.tokenHashPrefix,
-        platform: requestMeta.lucyPlatform,
-        client: identity.client,
-        questionHash,
-        questionPreview,
-        questionSummary: intentSummary,
-        questionSource: "reported_tool",
-        redactionVersion: "v1"
-      }).catch((err) => {
+      try {
+        await writeConversationTurn({
+          turnId,
+          userId: identity.userId,
+          tokenHashPrefix: identity.tokenHashPrefix,
+          platform: requestMeta.lucyPlatform,
+          client: identity.client,
+          questionHash,
+          questionPreview,
+          questionSummary: intentSummary,
+          questionSource: "reported_tool",
+          redactionVersion: "v1"
+        });
+      } catch (err) {
         console.error("[lucy-proxy] failed to write conversation turn", err);
-      });
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: { isError: true, content: [{ type: "text", text: "lucy_begin_question failed to persist; the turn was not recorded" }] }
+        });
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(responseBody);
+        recordAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "error",
+          errorDetail: "conversation_turn_write_failed",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, "allowed")),
+        });
+        return;
+      }
       recordReportedTurn(identity, turnId);
+      // spec §8.4: lazy, sampled purge trigger on the (low-frequency) report path — no background worker.
+      if (Math.random() < Number(process.env.LUCY_QUESTION_PREVIEW_PURGE_SAMPLE_RATE ?? 0.01)) {
+        purgeExpiredConversationTurns().catch((err) => {
+          console.error("[lucy-proxy] lazy conversation-turn purge failed", err);
+        });
+      }
 
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",

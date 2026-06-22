@@ -276,13 +276,17 @@ describe("GET /api/admin/audit/turns", () => {
     }]);
     await writeLog({ ts: at(30_000), userId: "turns-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-inf-2" });
 
-    // Reported turn: an explicit lucy_begin_question report, linked via lucy_turn_id.
+    // Reported turn: an explicit lucy_begin_question report, linked via lucy_turn_id. The
+    // report call itself also gets an access_log row with lucy_turn_id set to its own turn id
+    // (mirrors mcp-proxy.ts's recordAudit call for the lucy_begin_question branch) — it must NOT
+    // be counted as a linked business call.
     await writeConversationTurn({
       turnId: "lucy_turns_test_1",
       userId: "turns-user",
       questionSummary: "reported test question",
       questionSource: "reported_tool"
     });
+    await writeLog({ ts: at(50_000), userId: "turns-user", tool: "lucy_begin_question", outcome: "ok", durationMs: 1, requestId: "turns-rep-report-call", lucyTurnId: "lucy_turns_test_1" });
     await writeLog({ ts: at(60_000), userId: "turns-user", tool: "sl_query", tables: ["dataforai.superstore_returns"], outcome: "ok", durationMs: 1, requestId: "turns-rep-1", lucyTurnId: "lucy_turns_test_1" });
 
     const { buildServer } = await import("../index");

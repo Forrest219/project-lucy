@@ -257,15 +257,59 @@ describe("proxy audit log", () => {
     const withCatalog = await rebuildInferredTurns("cluster-user", { lookbackHours: 24, gapMs: 120_000, includeCatalogOnly: true });
     expect(withCatalog.turns).toBe(3);
 
-    // Rebuilding again must not duplicate rows for the same window (full-window delete+reinsert).
+    const dbBeforeRerun = new Database(auditDbPath, { readonly: true });
+    let idsBeforeRerun: string[];
+    try {
+      idsBeforeRerun = (dbBeforeRerun.prepare("SELECT inferred_turn_id FROM inferred_turns WHERE user_id = ? ORDER BY inferred_turn_id ASC").all("cluster-user") as Array<{ inferred_turn_id: string }>).map((r) => r.inferred_turn_id);
+    } finally {
+      dbBeforeRerun.close();
+    }
+
+    // Rebuilding again over unchanged input must not duplicate rows AND must regenerate the
+    // exact same inferred_turn_id set (rebuild is a pure function of the underlying access_log
+    // rows: deterministic ORDER BY + no randomness in id generation).
     const rebuiltAgain = await rebuildInferredTurns("cluster-user", { lookbackHours: 24, gapMs: 120_000, includeCatalogOnly: true });
     expect(rebuiltAgain.turns).toBe(3);
     const dbAfter = new Database(auditDbPath, { readonly: true });
     try {
       const count = dbAfter.prepare("SELECT COUNT(*) AS cnt FROM inferred_turns WHERE user_id = ?").get("cluster-user") as { cnt: number };
       expect(count.cnt).toBe(3);
+      const idsAfterRerun = (dbAfter.prepare("SELECT inferred_turn_id FROM inferred_turns WHERE user_id = ? ORDER BY inferred_turn_id ASC").all("cluster-user") as Array<{ inferred_turn_id: string }>).map((r) => r.inferred_turn_id);
+      expect(idsAfterRerun).toEqual(idsBeforeRerun);
     } finally {
       dbAfter.close();
+    }
+  });
+
+  it("rebuildInferredTurns derives question_summary/source_summary from real access_log_sources content, not a placeholder", async () => {
+    const { writeLog, writeAccessLogSources, rebuildInferredTurns } = await import("../proxy/audit");
+    const base = Date.now() - 30 * 60 * 1000;
+    const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+
+    const logId = await writeLog({
+      ts: at(0), userId: "source-content-user", tool: "sl_read_source",
+      tables: ["dataforai.kx_fact_financial_amount"], outcome: "ok", durationMs: 1, requestId: "source-content-1"
+    });
+    await writeAccessLogSources(logId, at(0), "source-content-user", "sl_read_source", [{
+      connectionId: "mysql-aliyun",
+      schemaName: "dataforai",
+      sourceName: "kx_fact_financial_amount",
+      physicalTable: "dataforai.kx_fact_financial_amount",
+      extractionMethod: "args_source_name",
+      confidence: "high"
+    }]);
+
+    const result = await rebuildInferredTurns("source-content-user", { lookbackHours: 24 });
+    expect(result.turns).toBe(1);
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const row = db.prepare("SELECT source_summary, question_summary FROM inferred_turns WHERE user_id = ?").get("source-content-user") as { source_summary: string; question_summary: string | null };
+      const sources = JSON.parse(row.source_summary) as Array<{ sourceName?: string }>;
+      expect(sources).toEqual(expect.arrayContaining([expect.objectContaining({ sourceName: "kx_fact_financial_amount" })]));
+      expect(row.question_summary).toContain("kx_fact_financial_amount");
+    } finally {
+      db.close();
     }
   });
 });

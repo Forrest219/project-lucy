@@ -465,7 +465,7 @@ export async function rebuildInferredTurns(
     SELECT id, ts, tool, tables, args_summary
     FROM access_log
     WHERE user_id = ? AND ts >= ? AND tool NOT IN (${protocolList})
-    ORDER BY ts ASC
+    ORDER BY ts ASC, id ASC
   `).all(userId, cutoff) as Array<{ id: number; ts: string; tool: string; tables: string | null; args_summary: string | null }>;
 
   type ClusterRow = (typeof rows)[number];

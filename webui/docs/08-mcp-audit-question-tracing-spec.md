@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | MCP Audit Source & Question Tracing Spec |
 | 文档类型 | Spec |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现） |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现）；v0.4 修订 2026-06-22（二次代码审阅发现 5 处问题修复后，澄清 §8.1 "跟 kx_catalog 一起列" 为建议而非强制约束） |
 | 委托人 | 张星晨 |
 | 基于材料 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/{mcp-proxy,acl,audit}.ts`、`semantic-layer/mysql-aliyun/_schema/dataforai.yaml`、2026-06-22 workhorse MCP 审计查询 |
 | 适用范围 | Lucy MCP Proxy 审计增强：调用数据源正规化、问题簇推断、可选自然语言问题上报 |
@@ -254,7 +254,7 @@ v0.1 采用规则摘要，不强依赖 LLM：
 
 **注入条件（§15 决策 2，已按调研结果修正）**：跟 `kx_catalog` 走完全相同的机制，不是派生判断：
 1. `acl.ts` 的 `DEFAULT_KNOWN_TOOLS` 新增 `"lucy_begin_question"`。
-2. 管理员必须在角色的 `tools:` 里显式列出 `lucy_begin_question`（跟 `kx_catalog` 一起列）才会被任何用户看到——没有它就不出现在 `tools/list`，调用也会被 `check()` 判 `tool_forbidden`。
+2. 管理员必须在角色的 `tools:` 里显式列出 `lucy_begin_question` 才会被任何用户看到——没有它就不出现在 `tools/list`，调用也会被 `check()` 判 `tool_forbidden`。**建议**跟 `kx_catalog` 一起列（语义上"有数据访问能力的 role 才配两者"），但这不是代码强制的约束——允许只给某个 role 配 `lucy_begin_question` 不配 `kx_catalog`（例如只想让模型上报意图、不想暴露 catalog 浏览能力的场景），两个工具的可见性门槛各自独立判定，不互相依赖。
 3. `allowedToolNames()` 里 `acl.ts:769` 的可见性门槛从 `tool === "kx_catalog"` 扩成同时覆盖 `lucy_begin_question`：即使 role 配置里写了，只有 `resolved.permissions.sources.length > 0`（这个 role 至少能看到一个数据源）才会真正出现在 `tools/list`。
 `mcp-proxy.ts` 端复用现成的 `visibleTools.has("lucy_begin_question")` 判断，跟 `kx_catalog` 注入是同一段 `filterAndAddAllowedTools` 逻辑的扩展，不新增判断分支。
 
@@ -489,7 +489,7 @@ POST /api/admin/audit/rebuild-derived
 ## 15. 开放问题 — 决策记录（v0.3）
 
 1. **并发归并风险是否需要临时关联 id？决策：不做。** v1 维持 §8.2 的近邻关联 + 已知限制声明。理由：当前唯一已知调用方（workhorse）是单 token 顺序提问场景，没有观测到并发交织调用；临时关联 id 需要上报方（模型）自己在后续调用里带回 `turn_id`，但当前没有客户端会这么做，先做这套机制是为假设场景增加复杂度。留作 Phase 3 上线后如果真观测到错误归并再评估（不是"做不到"，是"还不需要"）。
-2. **`lucy_begin_question` 默认注入范围。决策：完全照搬 `kx_catalog` 的显式 allow-list 机制，不做派生豁免。** 调研确认 `kx_catalog` 在 `acl.ts` 里没有任何绕过 `allow.tools` 的特殊通道——它必须像普通工具一样被显式列在某个 role/user 的 `tools:` 数组里才能通过 `check()`；唯一的"派生条件"只出现在 `allowedToolNames()` 的可见性过滤里（`acl.ts:769`：即使列在 `allow.tools`，也只有 `resolved.permissions.sources.length > 0` 时才出现在 `tools/list`）。`lucy_begin_question` 照此办理：① 加进 `DEFAULT_KNOWN_TOOLS`；② 管理员必须在对应 role 的 `tools:` 里显式加上它（跟 `kx_catalog` 一起列，语义上"有数据访问能力的 role 才配两者"）；③ 复用 `acl.ts:769` 的同一条 `sources.length > 0` 可见性门槛（把判断条件从 `tool === "kx_catalog"` 扩成 `tool === "kx_catalog" || tool === "lucy_begin_question"`）。这样"只有真正能查数据的 role 才会看到这个工具"的效果原样达成，但走的是现有架构本来就有的显式 allow-list + 可见性门槛，不引入新的派生逻辑分支，也避免"tools/list 能看见但 tools/call 会被 tool_forbidden 拒绝"的不一致。原计划中"在 mcp-proxy.ts 派生判断"的方案已否决：`check()` 的工具白名单判定在 `kx_catalog`/`lucy_begin_question` 本地短路分支之前执行，新工具名无法绕开它，强行绕开需要在 `check()` 里开一个特殊豁免分支，反而比方案 A 改动更大、更不一致。实现见 §8.1。
+2. **`lucy_begin_question` 默认注入范围。决策：完全照搬 `kx_catalog` 的显式 allow-list 机制，不做派生豁免。** 调研确认 `kx_catalog` 在 `acl.ts` 里没有任何绕过 `allow.tools` 的特殊通道——它必须像普通工具一样被显式列在某个 role/user 的 `tools:` 数组里才能通过 `check()`；唯一的"派生条件"只出现在 `allowedToolNames()` 的可见性过滤里（`acl.ts:769`：即使列在 `allow.tools`，也只有 `resolved.permissions.sources.length > 0` 时才出现在 `tools/list`）。`lucy_begin_question` 照此办理：① 加进 `DEFAULT_KNOWN_TOOLS`；② 管理员必须在对应 role 的 `tools:` 里显式加上它（建议跟 `kx_catalog` 一起列，语义上"有数据访问能力的 role 才配两者"，但两者可见性门槛各自独立判定，代码不强制二者必须同时出现）；③ 复用 `acl.ts:769` 的同一条 `sources.length > 0` 可见性门槛（把判断条件从 `tool === "kx_catalog"` 扩成 `tool === "kx_catalog" || tool === "lucy_begin_question"`）。这样"只有真正能查数据的 role 才会看到这个工具"的效果原样达成，但走的是现有架构本来就有的显式 allow-list + 可见性门槛，不引入新的派生逻辑分支，也避免"tools/list 能看见但 tools/call 会被 tool_forbidden 拒绝"的不一致。原计划中"在 mcp-proxy.ts 派生判断"的方案已否决：`check()` 的工具白名单判定在 `kx_catalog`/`lucy_begin_question` 本地短路分支之前执行，新工具名无法绕开它，强行绕开需要在 `check()` 里开一个特殊豁免分支，反而比方案 A 改动更大、更不一致。实现见 §8.1。
 3. **120 秒聚类阈值是否要 per-agent 配置？决策：v1 不做，维持全局 `LUCY_TURN_INFER_GAP_MS`。** 理由：还没有真实数据验证不同 agent 的调用节奏差异有多大；先用全局默认收集 Phase 2 上线后的实际簇分布，有证据再加 per-agent 配置面，避免无依据的过度设计。
 4. **30 天 preview retention 是否过长？决策：默认值不变，但补一个目前 spec 里"可配置"却没有对应开关的缺口。** 新增环境变量 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS`（默认 `30`），并设计一个轻量 purge 机制（见 §8.4）——本地单用户环境和客户部署环境用同一个默认值起步，部署侧需要更短窗口时改环境变量即可，不需要代码分支。
 5. **`access_log_sources` 要不要进 CSV 导出？决策：不做。** 维持只通过 UI/API（`GET /api/admin/audit/:id/sources`）展开。理由：现有 `GET /api/admin/audit/export` 是"一个 access_log 行 = 一行 CSV"的扁平语义；`access_log_sources` 是 1:N 关系，硬塞进同一份 CSV 要么逐 source 复制整行（冗余且容易让人误读成多条独立调用），要么改变现有 CSV 的行语义（破坏已有消费者假设）。如果未来真需要离线分析，应该开一个独立的 source 级 CSV 端点，不是本轮范围。
