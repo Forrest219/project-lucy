@@ -1,0 +1,56 @@
+{
+  "catalog": null,
+  "db": "dataforai",
+  "name": "kx_dim_company",
+  "kind": "table",
+  "comment": "KX公司维度表",
+  "estimatedRows": 1,
+  "columns": [
+    {
+      "name": "company_id",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "公司ID"
+    },
+    {
+      "name": "company_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "公司名称"
+    },
+    {
+      "name": "unified_social_credit_code",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "统一社会信用代码"
+    },
+    {
+      "name": "created_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "创建时间"
+    },
+    {
+      "name": "updated_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "更新时间"
+    }
+  ],
+  "foreignKeys": []
+}
