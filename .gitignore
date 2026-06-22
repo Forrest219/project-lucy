@@ -12,10 +12,12 @@ Thumbs.db
 
 # Secrets — never commit; ktx.yaml references via file: URI
 .ktx/secrets/
+secrets/
 
 # temp scratch space
 temp/
 dev-inbox/
+release/
 
 # Build / dependency outputs (webui ships its own .gitignore, this is the root fallback)
 node_modules/

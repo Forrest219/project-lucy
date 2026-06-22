@@ -5,6 +5,8 @@ webui/node_modules
 webui/dist
 inbox
 temp
+release
+secrets
 .ktx
 .ktx-ui
 ktx.yaml

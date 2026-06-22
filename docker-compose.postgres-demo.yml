@@ -1,0 +1,52 @@
+services:
+  postgres-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dataforai
+      POSTGRES_USER: lucy
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    ports:
+      - "${LUCY_DEMO_POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - ./examples/postgres-demo/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lucy -d dataforai"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    secrets:
+      - postgres_password
+
+  lucy:
+    build:
+      context: .
+      args:
+        KTX_VERSION: "${KTX_VERSION:-0.13.0}"
+    image: project-lucy:postgres-demo
+    environment:
+      KTX_PROJECT_ROOT: /data/lucy
+      LUCY_TEMPLATE_ROOT: /app/examples/postgres-demo/project-template
+      LUCY_WEBUI_HOST: 0.0.0.0
+      LUCY_WEBUI_PORT: "5174"
+      LUCY_PROXY_HOST: 0.0.0.0
+      LUCY_PROXY_PORT: "7879"
+      LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
+      LUCY_PROXY_UPSTREAM_PORT: "7878"
+      POSTHOG_DISABLED: "1"
+    ports:
+      - "${LUCY_POSTGRES_DEMO_WEBUI_HOST_PORT:-55177}:5174"
+      - "${LUCY_POSTGRES_DEMO_PROXY_HOST_PORT:-57882}:7879"
+    volumes:
+      - lucy-postgres-demo-data:/data/lucy
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+volumes:
+  lucy-postgres-demo-data:
+
+secrets:
+  postgres_password:
+    file: ${LUCY_POSTGRES_DEMO_SECRET_DIR:-./secrets}/postgres-password

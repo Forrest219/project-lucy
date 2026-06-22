@@ -37,8 +37,9 @@ Manual inputs:
 | `ktx-diff-audit` | clones upstream KTX and runs `npm run audit:ktx-diff` |
 | `docker-smoke` | `npm run smoke:p0:docker` |
 | `demo-e2e` | `npm run smoke:p0:demo` |
+| `postgres-demo-e2e` | `npm run smoke:p0:postgres-demo` |
 | `ktx-upgrade-compat` | manual candidate version only; runs `npm run compat:ktx-upgrade` |
-| `release-package` | tag/manual only; builds tagged Docker image and uploads release notes |
+| `release-package` | tag/manual only; builds tagged Docker image and uploads release metadata, notes, and SBOM |
 
 ## 3. KTX Upgrade Compatibility
 
@@ -61,7 +62,7 @@ The current compatibility surface is:
 
 - Docker image can install candidate KTX npm package.
 - `/api/health.data.bundledKtxVersion` reports the candidate version.
-- KTX CLI can run `connection test`, `admin reindex`, `sl validate`, and `sl query --execute` against demo MySQL.
+- KTX CLI can run `connection test`, `admin reindex`, `sl validate`, and `sl query --execute` against demo MySQL and demo PostgreSQL.
 - Lucy MCP Proxy still exposes and forwards `sl_read_source`, `sl_query`, `wiki_search`, and `kx_catalog`.
 - Business eval catalogs remain parseable.
 
@@ -69,16 +70,13 @@ The current compatibility surface is:
 
 For tag/manual release runs, `release-package` uploads:
 
-- `lucy-release-notes`
+- `lucy-release-artifacts`
 
-The notes record:
+The artifact contains:
 
-- Git commit.
-- Docker image tags built in CI.
-- Bundled KTX version.
-- Required gates.
-- Security baseline status.
-- Customer deployment docs.
+- `lucy-release-metadata.json`: Git commit, Docker image id, bundled KTX version, verified database matrix, required gates, and root/WebUI `npm audit --json` summaries with exit codes.
+- `lucy-release-notes.md`: concise customer-facing release summary.
+- `lucy-sbom.json`: local CycloneDX-lite dependency inventory for the Lucy root package, WebUI package, base image, and bundled KTX runtime.
 
 ## 5. Registry Publishing
 

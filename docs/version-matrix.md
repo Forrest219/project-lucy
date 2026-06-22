@@ -18,8 +18,8 @@
 | Bundled KTX npm package | `@kaelio/ktx@0.13.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
 | KTX Python runtime | `0.13.0`, feature `core` | `Dockerfile` runs `ktx admin runtime install --yes --feature core` |
 | Node runtime | `node:22-bookworm-slim` | `Dockerfile` |
-| Docker deployment | Single-node Docker Compose | `docker-compose.yml`, `docker-compose.demo.yml` |
-| Demo DB | `mysql:8.4` | `docker-compose.demo.yml` |
+| Docker deployment | Single-node Docker Compose | `docker-compose.yml`, `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml` |
+| Demo DB | `mysql:8.4`, `postgres:16-alpine` | `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml` |
 | Customer DB path | MySQL validated locally | `npm run smoke:p0:customer` |
 | MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/deployment-docker.md`, `npm run smoke:p0:demo` |
 | Release CI | GitHub Actions release gates | `.github/workflows/lucy-release.yml`, `docs/release-ci.md` |
@@ -29,9 +29,9 @@
 | Surface | Required Version / Behavior | Gate |
 |---|---|---|
 | KTX CLI | `ktx --version` returns `@kaelio/ktx 0.13.0` | `npm run smoke:p0:docker` |
-| KTX Python runtime | `ktx sl query --execute` runs without interactive install | `npm run smoke:p0:demo` |
-| KTX semantic layer validate | CLI `ktx sl validate` works | `npm run smoke:p0:demo`, `npm run smoke:p0:customer` |
-| KTX MCP tools | `connection_list`, `sl_read_source`, `sl_query`, `wiki_search` are available | `npm run smoke:p0:demo`, `npm run smoke:p0:customer` |
+| KTX Python runtime | `ktx sl query --execute` runs without interactive install | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` |
+| KTX semantic layer validate | CLI `ktx sl validate` works | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` |
+| KTX MCP tools | `connection_list`, `sl_read_source`, `sl_query`, `wiki_search` are available | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` |
 | `sl_validate` MCP tool | Not exposed by KTX `0.13.0` MCP `tools/list` | validate via CLI gate |
 | Lucy MCP Proxy | Bearer auth, ACL filtering, `kx_catalog`, `sl_read_source`, `sl_query` | `npm run smoke:p0:demo` |
 | KTX candidate upgrade | Candidate version must pass Docker/demo/business gates | `npm run compat:ktx-upgrade -- --candidate <version>` |
@@ -43,6 +43,7 @@
 | Docker Compose single node | supported baseline | P0 release baseline |
 | Docker Compose demo DB | supported smoke/demo path | MySQL demo DB + Lucy |
 | Docker Compose external MySQL | supported with manual config | edit `/data/lucy/ktx.yaml` and secret file |
+| Docker Compose external PostgreSQL | supported with manual config | edit `/data/lucy/ktx.yaml` and secret file |
 | Kubernetes / Helm | not supported | future P2/P3 |
 | Hosted SaaS / multi-tenant | not supported | future product line |
 
@@ -52,7 +53,7 @@
 |---|---|---|
 | MySQL demo (`mysql:8.4`) | verified | `npm run smoke:p0:demo` |
 | Aliyun RDS MySQL | verified locally | `npm run smoke:p0:customer` |
-| PostgreSQL | not verified for Lucy P0 | future compatibility gate |
+| PostgreSQL demo (`postgres:16-alpine`) | verified | `npm run smoke:p0:postgres-demo` |
 | ClickHouse | not verified for Lucy P0 | future compatibility gate |
 | Snowflake | not verified for Lucy P0 | future compatibility gate |
 
@@ -85,11 +86,13 @@ runtime:
 databases:
   verified:
     - mysql:8.4-demo
+    - postgres:16-alpine-demo
 gates:
   required:
     - npm run smoke:p0
     - npm run smoke:p0:docker
     - npm run smoke:p0:demo
+    - npm run smoke:p0:postgres-demo
     - npm run smoke:p0:business-eval
     - npm run audit:ktx-diff
   optional_customer:

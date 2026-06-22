@@ -89,7 +89,7 @@ async function checkSecretsAndDocs() {
   const ignoresKtxUi = ignoredPatterns.includes(".ktx-ui") || ignoredPatterns.some((pattern) => pattern.startsWith(".ktx-ui/*.sqlite"));
   if (!ignoresKtxSecrets) add("fail", ".dockerignore must exclude .ktx secrets");
   if (!ignoresKtxUi) add("fail", ".dockerignore must exclude .ktx-ui sqlite/audit files");
-  for (const pattern of ["ktx.yaml", "inbox"]) {
+  for (const pattern of ["ktx.yaml", "inbox", "secrets", "release"]) {
     if (!ignoredPatterns.includes(pattern)) {
       add("fail", `.dockerignore must exclude ${pattern}`);
     }
@@ -99,6 +99,7 @@ async function checkSecretsAndDocs() {
     "docs/security-guide.md",
     "docs/customer-deployment-guide.md",
     "docs/deployment-docker.md",
+    "docker-compose.secrets.yml",
     "webui/docs/07-mcp-auth-proxy-spec.md"
   ]) {
     if (!existsSync(rel(file))) add("fail", `${file} must exist`);

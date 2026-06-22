@@ -83,6 +83,7 @@ Do:
 
 - Mount customer KTX project data at `/data/lucy`.
 - Store DB passwords under `/data/lucy/.ktx/secrets/`.
+- For Docker Compose environments that standardize on Docker secrets, mount `docker-compose.secrets.yml` and reference `/run/secrets/<name>` from `ktx.yaml`.
 - Use read-only database users where possible.
 - Rotate tokens through WebUI/Admin API when an agent is retired.
 
@@ -101,6 +102,7 @@ npm run lint:spec
 npm run security:baseline
 npm run smoke:p0:docker
 npm run smoke:p0:demo
+npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval
 ```
 

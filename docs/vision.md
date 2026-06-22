@@ -124,7 +124,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 
 ## 6. 未决问题
 
-- PostgreSQL demo / smoke gate 是否必须在首个客户 release 前达到 CI verified。
+- 是否追加真实外部 PostgreSQL 客户环境验收；当前 demo PostgreSQL smoke gate 已作为 CI verified 路径。
 - StarRocks 协议兼容 spike 何时启动；spike 通过前不进入 MVP 支持范围。
 - Kubernetes / Helm 部署路径进入哪个 roadmap 阶段。
 - Release metadata 是否在首版强制包含 SBOM。

@@ -27,6 +27,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke |
 | `npm run smoke:p0:docker` | runtime + platform | Docker image build, compose up, `/api/health`, MCP proxy port, bundled KTX version |
 | `npm run smoke:p0:demo` | runtime + platform + customer path | demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
+| `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:business-eval` | business eval catalog | verifies core eval suites can be read by runner |
 | `npm run smoke:p0:customer` | customer/manual | verifies configured real DB path on this machine |
 | `npm run audit:ktx-diff` | governance | regenerates KTX vs Lucy first/second-level directory and file diff audit |
@@ -41,6 +42,7 @@ npm run smoke:p0
 npm run security:baseline
 npm run smoke:p0:docker
 npm run smoke:p0:demo
+npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval
 npm run audit:ktx-diff
 ```
@@ -129,6 +131,7 @@ Recommended CI jobs:
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker` |
 | demo-e2e | `npm run smoke:p0:demo` |
+| postgres-demo-e2e | `npm run smoke:p0:postgres-demo` |
 | business-eval-catalog | `npm run smoke:p0:business-eval` |
 | ktx-diff-audit | `npm run audit:ktx-diff -- --out inbox/ktx-lucy-diff-$(date +%F).md` |
 | ktx-upgrade-compat | `npm run compat:ktx-upgrade -- --candidate <version>` |

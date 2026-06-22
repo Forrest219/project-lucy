@@ -116,6 +116,21 @@ docker compose exec -T lucy sh -c 'cat > /data/lucy/.ktx/secrets/mysql-password'
 password: file:/data/lucy/.ktx/secrets/mysql-password
 ```
 
+Docker secrets 部署也可用同一套 `file:` 机制：
+
+```bash
+mkdir -p secrets
+printf '%s' '<mysql-password>' > secrets/mysql-password
+printf '%s' '<postgres-password>' > secrets/postgres-password
+docker compose -f docker-compose.yml -f docker-compose.secrets.yml up -d
+```
+
+对应 `ktx.yaml`：
+
+```yaml
+password: file:/run/secrets/mysql_password
+```
+
 5. 重启 Lucy：
 
 ```bash
@@ -261,4 +276,3 @@ docker compose logs -f demo-db
 | `ktx sl query --execute` 失败 | 数据库连接、semantic-layer validate、KTX Python runtime 是否正常 |
 | 查询不到新语义层内容 | 是否运行 `ktx admin reindex --force` |
 | 容器启动后 seed 不生效 | volume 中已有 `/data/lucy/ktx.yaml` 时不会覆盖已有项目 |
-

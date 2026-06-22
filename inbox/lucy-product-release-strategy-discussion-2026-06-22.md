@@ -31,11 +31,11 @@ P0-P2 工程底座已完成：
 
 | 议题 | 建议结论 | 需确认点 |
 |---|---|---|
-| Release policy | 首版记录 Lucy git commit、Docker image tag/digest、KTX npm version；KTX git SHA / SBOM 作为增强项 | 是否把 SBOM 作为首版 release 必填 |
+| Release policy | 首版记录 Lucy git commit、Docker image tag/digest、KTX npm version；已补 release metadata 与 SBOM artifact | 是否把 SBOM 作为客户交付包必填 |
 | 部署形态 | 首版正式承诺 Docker Compose single-node；Kubernetes/Helm 进 roadmap | Helm 优先级和目标客户场景 |
-| 数据库支持 | 首版 must-support MySQL + PostgreSQL；其他 DB 进入 candidate/roadmap | PostgreSQL demo/CI smoke 的验收范围 |
+| 数据库支持 | 首版 must-support MySQL + PostgreSQL；其他 DB 进入 candidate/roadmap | 是否要求外部真实 PostgreSQL 客户环境验收，还是 demo PostgreSQL CI gate 即可 |
 | KTX MCP upstream | 客户默认只开放 Lucy MCP Proxy；KTX upstream 只作开发/诊断模式 | 是否允许 enterprise support 场景临时启用 upstream |
-| Secrets 策略 | 首版支持 mounted secret files；Docker secrets 作为下一阶段；WebUI secret onboarding 暂缓 | 是否要求首版支持 Docker secrets |
+| Secrets 策略 | 首版支持 mounted secret files；已补 Docker secrets compose override；WebUI secret onboarding 暂缓 | 是否继续支持 env var secret source |
 | `sl_validate` 兼容 | KTX `0.13.0` 下继续用 CLI validate gate；MCP `sl_validate` 出现后再纳入 MCP gate | 是否要求向 KTX upstream 提 issue/PR |
 
 ## 3. Release Policy
@@ -125,20 +125,20 @@ Kubernetes/Helm 进入 roadmap，不进入首版 release 承诺。
 | Database | Product Status | Engineering Status | Release Requirement |
 |---|---|---|---|
 | MySQL | must-support | verified | 保留现有 demo + smoke |
-| PostgreSQL | must-support | not yet verified in Lucy CI | 补 PostgreSQL demo compose、sample project、smoke gate；KTX upstream 已有现成 `connectors/postgres/` 连接器，属于"接现有能力"而非"造新能力" |
+| PostgreSQL | must-support | verified | 已补 PostgreSQL demo compose、sample project、smoke gate、release CI job；`npm run smoke:p0:postgres-demo` 已在本机通过；KTX upstream 已有现成 `connectors/postgres/` 连接器，属于"接现有能力"而非"造新能力" |
 | StarRocks | **2026-06-22 决策：退出首版 MVP 范围**，转 roadmap candidate | 未实现：KTX upstream 无 `connectors/starrocks/`，仅 `docs/vision.md` 记录"走 MySQL Wire Protocol、不开发专用驱动"的设计意图，未经任何代码/测试验证 | 重新评估前必须先跑通一次独立 spike：用真实 StarRocks 容器验证 `driver: mysql` 复用是否在 KTX 现有 SQL 生成路径（含 join / measure / 派生列）下产出正确结果，而不是直接套用 PostgreSQL 的"接现有能力"工作量估算 |
 | ClickHouse | candidate | not verified | 不写 supported，按客户需求排期 |
 | Snowflake | candidate | not verified | 不写 supported，按客户需求排期 |
 
-换句话说：产品策略上 MySQL + PostgreSQL 是首版必须项；工程发布上，PostgreSQL 不能只写文档承诺，必须补 CI gate 才能标为 verified/supported。StarRocks 评估后判定风险与 PostgreSQL 不在同一量级（无现成连接器、协议兼容假设未验证），**主动退出首版范围**，不计入 MVP 时间线。
+换句话说：产品策略上 MySQL + PostgreSQL 是首版必须项；工程发布上，PostgreSQL 不能只写文档承诺，必须有 CI gate 才能标为 verified/supported。2026-06-22 已补 PostgreSQL demo/CI gate 路径。StarRocks 评估后判定风险与 PostgreSQL 不在同一量级（无现成连接器、协议兼容假设未验证），**主动退出首版范围**，不计入 MVP 时间线。
 
 > **文档漂移处理记录**：`docs/vision.md` 已于 2026-06-22 同步更新，MVP 数据库范围改为 MySQL + PostgreSQL，StarRocks 改为 roadmap candidate，待 DB-4 spike 通过后再重新评估。
 
-### PostgreSQL 需要补的工程项
+### PostgreSQL 工程项
 
-建议新增：
+2026-06-22 已新增：
 
-- `docker-compose.postgres-demo.yml` 或扩展现有 demo compose。
+- `docker-compose.postgres-demo.yml`。
 - `examples/postgres-demo/`。
 - PostgreSQL seed SQL。
 - PostgreSQL KTX project template。
@@ -173,9 +173,8 @@ Kubernetes/Helm 进入 roadmap，不进入首版 release 承诺。
 
 ### 建议架构师确认
 
-- PostgreSQL 是否必须在首个客户 release 前达到 CI verified。
-- PostgreSQL demo 是否复用 Superstore 语义，还是新建更小 schema。
 - PostgreSQL 支持范围是 “Docker demo verified” 还是也要接真实外部 PostgreSQL 验收。
+- 当前已复用 Superstore 语义；是否需要新增更小、更稳定的 PostgreSQL 专属 demo schema。
 
 ## 6. KTX MCP Upstream 暴露策略
 
@@ -222,12 +221,12 @@ KTX upstream 直连仅作为：
 
 - mounted secret files。
 - `.ktx/secrets/*`。
+- Docker secrets compose override。
 - Docker volume 持久化。
 - 文档化 token/DB secret 分离。
 
 下一阶段支持：
 
-- Docker secrets。
 - env var secret source。
 
 暂缓：
@@ -244,13 +243,12 @@ KTX upstream 直连仅作为：
 ### 缺点 / 风险
 
 - 客户首次配置体验没有完整 UI 化。
-- Docker secrets/env var 如果不支持，部分企业平台会觉得不够标准。
+- env var secret source 如果不支持，部分企业平台可能需要额外适配。
 - mounted file 权限、路径、备份策略需要客户运维配合。
 
 ### 建议架构师确认
 
-- 首版是否接受 mounted files 作为唯一正式 secrets path。
-- Docker secrets 是否作为下一阶段 must-have。
+- Docker secrets 已进入首版示例路径；是否继续补 env var secret source。
 - WebUI secret onboarding 是否明确不进首版 scope。
 
 ## 8. `sl_validate` 兼容策略
@@ -307,9 +305,9 @@ MCP gate 当前要求：
 
 1. Release metadata 首版是否必须包含 SBOM。
 2. 首版部署形态是否只正式承诺 Docker Compose。
-3. PostgreSQL 是否必须在首个客户 release 前补齐 CI verified gate。
+3. PostgreSQL demo CI gate 已补齐；是否追加真实外部 PostgreSQL 验收。
 4. KTX upstream 是否允许 break-glass 诊断入口。
-5. 首版 secrets 是否只正式支持 mounted secret files。
+5. 首版 secrets 已支持 mounted files + Docker secrets override；是否追加 env var secret source。
 6. CLI `sl_validate` gate 是否可作为首版正式 validate 策略。
 
 ## 10. 建议后续 Todo
@@ -318,12 +316,48 @@ MCP gate 当前要求：
 
 | ID | Item | Priority | Acceptance Criteria |
 |---|---|---|---|
-| DB-1 | PostgreSQL demo project | P0 for release | demo PostgreSQL compose + seed + KTX template |
-| DB-2 | PostgreSQL smoke gate | P0 for release | `npm run smoke:p0:postgres-demo` 验证 CLI + MCP Proxy |
-| DB-3 | Version matrix update | P0 for release | PostgreSQL 状态从 not verified 改为 verified |
-| REL-1 | Release metadata artifact | P1 | release notes 包含 Lucy commit、image digest、KTX npm version |
-| REL-2 | Optional SBOM | P1/P2 | 生成并上传 SBOM artifact |
-| SEC-1 | Docker secrets support | P1 | compose example + docs + smoke 或 manual validation |
+| DB-1 | PostgreSQL demo project | done | `docker-compose.postgres-demo.yml`, `examples/postgres-demo/`, PostgreSQL seed SQL, KTX `driver: postgres` project template |
+| DB-2 | PostgreSQL smoke gate | done | `npm run smoke:p0:postgres-demo` 已通过，验证 PostgreSQL demo DB、KTX CLI validate/query、Lucy MCP Proxy `sl_read_source` / `sl_query` |
+| DB-3 | Version matrix update | done | `docs/version-matrix.md` 已将 PostgreSQL demo 改为 verified，并纳入 required gates |
+| REL-1 | Release metadata artifact | done | `npm run release:artifacts` 生成 `lucy-release-metadata.json` 与 `lucy-release-notes.md`，记录 commit、image id、KTX npm version、verified DBs、required gates |
+| REL-2 | Optional SBOM | done | `npm run release:artifacts` 生成 `lucy-sbom.json`，CI release-package 上传 `lucy-release-artifacts` |
+| SEC-1 | Docker secrets support | done | `docker-compose.secrets.yml` + `docs/deployment-docker.md` / `docs/customer-deployment-guide.md` / `docs/security-guide.md`；`npm run security:baseline` 纳入文件存在校验 |
 | OPS-1 | Break-glass upstream policy | P2 | 若允许，必须显式 env flag、localhost bind、文档风险提示 |
 | DB-4 | StarRocks 协议兼容性 spike | Roadmap（不阻塞 MVP，2026-06-22 已确认退出首版范围） | 真实 StarRocks 容器 + `driver: mysql` 验证 KTX 现有 SQL 生成路径（join / measure / 派生列）结果正确；spike 报告作为是否启动正式工程化的前置依据 |
 | DOC-1 | 同步 `docs/vision.md` 多数据源接入状态 | done | 已把 StarRocks 从"P0 当前支持"改为"roadmap candidate，待 DB-4 spike 结果"，MVP 数据库范围同步为 MySQL + PostgreSQL |
+
+## 11. 2026-06-22 执行记录
+
+本轮已完成 P0/P1 release productization 尾项：
+
+- P0 DB-1/DB-2/DB-3：新增 PostgreSQL demo compose、seed SQL、KTX project template、`smoke:p0:postgres-demo`、release CI `postgres-demo-e2e`，并更新 version matrix。
+- P1 REL-1/REL-2：新增 `npm run release:artifacts`，生成 release metadata、release notes、SBOM，并由 release CI 上传 `lucy-release-artifacts`。
+- P1 SEC-1：新增 `docker-compose.secrets.yml`，文档化 `/run/secrets/*` 引用方式，并将 secrets override 纳入 security baseline 文件存在校验。
+- Post-review blocker fix：PostgreSQL demo 已移除 `ktx.yaml` 明文密码；`demo-postgres` 改为 `password: file:/run/secrets/postgres_password`；`docker-compose.postgres-demo.yml` 为 `postgres-db` 和 `lucy` 同时挂载 `postgres_password` secret，Postgres 使用 `POSTGRES_PASSWORD_FILE`；smoke 脚本自动创建临时 secret 文件并在结束后清理。
+- Post-review blocker fix：PostgreSQL smoke 不再手写 required tools；`scripts/p0-postgres-demo-smoke.mjs` 直接读取 `examples/postgres-demo/project-template/webui/config/access.yaml` 中 `demo_agent` 绑定 role 的 `allow.tools`，并要求 MCP `tools/list` 与 role allow.tools 精确一致，同时确认 `defaults.deny_tools` 未暴露。
+- Post-review recommendation fix：`release-artifacts.mjs` 已记录 root/WebUI `npm audit --json` exit code、severity 计数和漏洞包摘要；当前策略为 release artifact 可见但不阻塞，是否将 high/critical 设为强阻塞需后续依赖治理决策。
+- Post-review recommendation fix：MySQL/PostgreSQL demo README 均已补 `LUCY_TEMPLATE_ROOT` 说明，明确这是 demo-only bootstrap setting，客户自定义 compose 应删除该变量并回落到 `/data/lucy`。
+
+已执行验证：
+
+- `node --check scripts/p0-postgres-demo-smoke.mjs scripts/release-artifacts.mjs scripts/ktx-upgrade-compat.mjs scripts/security-baseline.mjs`
+- `docker compose -f docker-compose.postgres-demo.yml config`
+- `docker compose -f docker-compose.yml config`
+- `docker compose -f docker-compose.yml -f docker-compose.secrets.yml config`
+- `npm run release:artifacts -- --tag local-check --out /tmp/lucy-release-artifacts-check`
+- GitHub Actions workflow YAML parse。
+- `npm run security:baseline`
+- `npm run lint:spec`（仅保留既有 disabled legacy wildcard user warning）
+- `npm run compat:ktx-upgrade -- --candidate 0.13.0 --skip-docker --skip-demo --skip-postgres-demo`
+- `npm run smoke:p0:postgres-demo`
+
+`npm run smoke:p0:postgres-demo` 覆盖结果：
+
+- PostgreSQL `postgres:16-alpine` demo DB healthcheck 通过。
+- Lucy image 启动并健康。
+- `/api/health.data.bundledKtxVersion` 验证为 `0.13.0`。
+- `ktx connection test demo-postgres` 通过。
+- `ktx admin reindex --force` 通过。
+- `ktx sl validate superstore_orders --connection-id demo-postgres` 通过。
+- `ktx sl query --execute` 对 PostgreSQL 返回 4 行 region 汇总。
+- Lucy MCP Proxy `tools/list`、`sl_read_source`、`sl_query` 通过，且 denied `sql_execution` 未暴露。

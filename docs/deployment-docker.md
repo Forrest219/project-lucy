@@ -118,6 +118,25 @@ docker compose restart lucy
 
 后续应将数据库接入向导产品化到 WebUI，本节是首版部署路径。
 
+### Docker Secrets Override
+
+如果客户平台要求 Docker secrets，可使用仓库内的 override 文件：
+
+```bash
+mkdir -p secrets
+printf '%s' '<mysql-password>' > secrets/mysql-password
+printf '%s' '<postgres-password>' > secrets/postgres-password
+docker compose -f docker-compose.yml -f docker-compose.secrets.yml up -d
+```
+
+容器内 secret 路径为 `/run/secrets/mysql_password` 和 `/run/secrets/postgres_password`。在 `ktx.yaml` 中引用：
+
+```yaml
+password: file:/run/secrets/mysql_password
+```
+
+未使用的 secret 可以保留占位文件，或按客户实际数据库类型裁剪 override。
+
 ## 6. Healthcheck
 
 容器 healthcheck 执行：

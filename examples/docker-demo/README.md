@@ -37,6 +37,13 @@ The smoke test validates:
 | Lucy MCP Proxy | `57881` | `LUCY_DEMO_PROXY_HOST_PORT` |
 | Demo MySQL | `53306` | `LUCY_DEMO_MYSQL_HOST_PORT` |
 
+## Template Root
+
+`LUCY_TEMPLATE_ROOT` points Lucy at the demo project template baked into the
+Docker image. It is a demo-only bootstrap setting. Customers editing their own
+compose file should remove this variable; Lucy will fall back to the on-disk
+`/data/lucy` project root after the first initialization.
+
 ## KTX Candidate Version
 
 To test a candidate bundled KTX version:

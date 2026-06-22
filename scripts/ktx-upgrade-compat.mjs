@@ -9,6 +9,7 @@ function parseArgs(argv) {
     candidate: process.env.LUCY_CANDIDATE_KTX_VERSION ?? process.env.KTX_VERSION ?? DEFAULT_BASELINE,
     skipDocker: false,
     skipDemo: false,
+    skipPostgresDemo: false,
     skipBusinessEval: false
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -17,6 +18,7 @@ function parseArgs(argv) {
     else if (arg === "--candidate") options.candidate = argv[++i];
     else if (arg === "--skip-docker") options.skipDocker = true;
     else if (arg === "--skip-demo") options.skipDemo = true;
+    else if (arg === "--skip-postgres-demo") options.skipPostgresDemo = true;
     else if (arg === "--skip-business-eval") options.skipBusinessEval = true;
     else if (arg === "--help" || arg === "-h") {
       printHelp();
@@ -36,6 +38,7 @@ Options:
   --candidate <version>         Candidate bundled KTX npm version. Default: env KTX_VERSION or ${DEFAULT_BASELINE}
   --skip-docker                 Skip Docker image smoke.
   --skip-demo                   Skip demo DB E2E smoke.
+  --skip-postgres-demo          Skip PostgreSQL demo E2E smoke.
   --skip-business-eval          Skip business eval catalog smoke.
 
 The script does not edit source files. It injects KTX_VERSION and
@@ -86,6 +89,9 @@ async function main() {
   }
   if (!options.skipDemo) {
     await run("npm", ["run", "smoke:p0:demo"], { env: candidateEnv });
+  }
+  if (!options.skipPostgresDemo) {
+    await run("npm", ["run", "smoke:p0:postgres-demo"], { env: candidateEnv });
   }
   if (!options.skipBusinessEval) {
     await run("npm", ["run", "smoke:p0:business-eval"], { env: candidateEnv });
