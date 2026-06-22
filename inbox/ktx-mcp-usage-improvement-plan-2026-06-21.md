@@ -556,3 +556,50 @@ harness 改造，工作量和性质都会变化。
 - A2 修改 `CLAUDE.md`。
 - A4 proxy cache 开发。
 - 一次性给所有 eval case 批量添加预算断言。
+
+### Batch 3：A3 eval / tool-budget 最小开发
+
+状态：**已完成首批实现**。
+
+交付：
+
+- `scripts/eval-runner.mjs`
+- `scripts/eval-runner.test.mjs`
+- `webui/server/eval/db.ts`
+- `webui/server/eval/runner.ts`
+- `webui/server/__tests__/eval-runner-contract.test.ts`
+- `evals/kx_financial/eval/kx_financial-eval-cases.yaml`
+
+实现内容：
+
+- Runner 新增 `summarizeToolCalls()`，每个 case 输出 `toolSummary`。
+- `tool_assertions` 新增预算型断言：
+  - `max_total_tool_calls`
+  - `max_tool_calls`
+  - `max_repeated_tool_input`
+  - `max_tool_calls_by_input`
+- 预算失败统一输出 `budget:` 前缀，并作为 `budgetFailures` 返回。
+- WebUI eval DB 新增可空字段：
+  - `tool_calls_raw`
+  - `tool_summary_raw`
+  - `budget_failures`
+- WebUI runner mapping 保存 tool summary / budget failures。
+- WebUI drift 分类中，`budget:` failure 优先归为 `logic_regression`，避免被误判为
+  `tool_error`。
+- KX Financial 首批试点预算断言已加入：
+  - `kx-routing-001`
+  - `kx-schema-001`
+  - `kx-filter-001`
+
+验证：
+
+- `node scripts/eval-runner.test.mjs` 通过。
+- `npm run lint:spec` 通过；仅保留既有 `access-role-policy` warning。
+- `npm run smoke:p0:business-eval` 通过。
+- `cd webui && npm test -- eval-runner-contract` 通过。
+
+后续仍未放行：
+
+- A2 修改 `CLAUDE.md`。
+- A4 proxy cache 开发。
+- 将预算断言一次性扩展到所有 KX / Superstore case。

@@ -314,6 +314,15 @@ cases:
       - type: required_tool_input_regex
         value: "kx|财报|财务"
         reason: semantic layer 检索必须面向 KX 财务域。
+      - type: max_tool_calls
+        tool: mcp__ktx__connection_list
+        max: 0
+        reason: 已知单 connection KX 路由题不需要读取 connection_list。
+      - type: max_repeated_tool_input
+        tool: mcp__ktx__sl_read_source
+        input_path: sourceName
+        max_per_value: 1
+        reason: 同一 source 定义在单 case 内不应重复读取。
     result_assertions:
       - value_type: text
         data:
@@ -348,6 +357,15 @@ cases:
       - type: required_tool_input_regex
         value: "kx|source|财务"
         reason: semantic layer 检索必须面向 KX 财务 source。
+      - type: max_tool_calls
+        tool: mcp__ktx__connection_list
+        max: 0
+        reason: source 数量题已限定 KX 财务域，不需要列 connection。
+      - type: max_repeated_tool_input
+        tool: mcp__ktx__sl_read_source
+        input_path: sourceName
+        max_per_value: 1
+        reason: 同一 source 定义在单 case 内不应重复读取。
     result_assertions:
       - value_type: text
         data:
@@ -912,6 +930,19 @@ cases:
       - type: required_tool_input_regex
         value: kx_dim_financial_item
         reason: 必须检查 KX 财报项目维表列定义。
+      - type: max_tool_calls
+        tool: mcp__ktx__connection_list
+        max: 0
+        reason: 已知 KX source 规则题不需要重新列 connection。
+      - type: max_tool_calls
+        tool: mcp__ktx__discover_data
+        max: 1
+        reason: 已知 KX source 规则题最多允许一次 broad discovery。
+      - type: max_repeated_tool_input
+        tool: mcp__ktx__sl_read_source
+        input_path: sourceName
+        max_per_value: 1
+        reason: 同一 sourceName 不重复读取。
     result_assertions:
       - value_type: text
         data:

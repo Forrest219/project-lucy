@@ -21,7 +21,9 @@ describe("eval runner summary mapping", () => {
         failures: ["result mismatch: weighted_discount expected 0.1398 got 0.14"],
         sql: "SELECT SUM(discount * sales) / SUM(sales) FROM superstore_orders",
         result: { weighted_discount: 0.14 },
-        finalText: "weighted_discount is 0.14"
+        finalText: "weighted_discount is 0.14",
+        toolSummary: { total: 2, ktxByShortName: { sql_execution: 1, sl_read_source: 1 } },
+        budgetFailures: []
       },
       evalCase
     );
@@ -41,6 +43,11 @@ describe("eval runner summary mapping", () => {
     expect(JSON.parse(row.failed_assertions ?? "[]")).toEqual([
       "result mismatch: weighted_discount expected 0.1398 got 0.14"
     ]);
+    expect(JSON.parse(row.tool_summary_raw ?? "null")).toEqual({
+      total: 2,
+      ktxByShortName: { sql_execution: 1, sl_read_source: 1 }
+    });
+    expect(JSON.parse(row.budget_failures ?? "null")).toEqual([]);
   });
 
   it("classifies SQL failures as logic regressions", () => {
@@ -51,6 +58,20 @@ describe("eval runner summary mapping", () => {
     });
 
     expect(row.drift).toBe("logic_regression");
+  });
+
+  it("classifies budget failures as logic regressions, not tool errors", () => {
+    const row = mapSummaryCaseToRunCase(1, {
+      id: "case-budget",
+      pass: false,
+      failures: ["budget: max_tool_calls mcp__ktx__connection_list actual=1 max=0"],
+      budgetFailures: ["budget: max_tool_calls mcp__ktx__connection_list actual=1 max=0"]
+    });
+
+    expect(row.drift).toBe("logic_regression");
+    expect(JSON.parse(row.budget_failures ?? "[]")).toEqual([
+      "budget: max_tool_calls mcp__ktx__connection_list actual=1 max=0"
+    ]);
   });
 
   it("passes claude preflight only when auth status exits successfully", async () => {

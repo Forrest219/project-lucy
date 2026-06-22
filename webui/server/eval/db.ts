@@ -39,12 +39,30 @@ const SCHEMA = `
     failed_assertions TEXT,
     error_message     TEXT,
     final_text        TEXT,
+    tool_calls_raw    TEXT,
+    tool_summary_raw  TEXT,
+    budget_failures   TEXT,
     PRIMARY KEY (run_id, case_id)
   );
 
   CREATE INDEX IF NOT EXISTS idx_run_domain_started ON eval_run(domain, started_at);
   CREATE INDEX IF NOT EXISTS idx_run_case_status    ON eval_run_case(case_id, status);
 `;
+
+function ensureEvalRunCaseColumns(instance: Database.Database): void {
+  const rows = instance.prepare("PRAGMA table_info(eval_run_case)").all() as Array<{ name: string }>;
+  const columns = new Set(rows.map((row) => row.name));
+  const additions: Array<[string, string]> = [
+    ["tool_calls_raw", "TEXT"],
+    ["tool_summary_raw", "TEXT"],
+    ["budget_failures", "TEXT"]
+  ];
+  for (const [name, type] of additions) {
+    if (!columns.has(name)) {
+      instance.exec(`ALTER TABLE eval_run_case ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
 
 export async function getEvalDb(dbPath?: string): Promise<Database.Database> {
   if (db && !dbPath) return db;
@@ -56,6 +74,7 @@ export async function getEvalDb(dbPath?: string): Promise<Database.Database> {
   instance.pragma("journal_mode = WAL");
   instance.pragma("foreign_keys = ON");
   instance.exec(SCHEMA);
+  ensureEvalRunCaseColumns(instance);
   if (!dbPath) {
     db = instance;
   }
@@ -99,4 +118,7 @@ export interface EvalRunCaseRow {
   failed_assertions: string | null;
   error_message: string | null;
   final_text: string | null;
+  tool_calls_raw: string | null;
+  tool_summary_raw: string | null;
+  budget_failures: string | null;
 }

@@ -9,6 +9,7 @@ import {
   checkSqlPatterns,
   checkSqlAssertions,
   checkToolAssertions,
+  summarizeToolCalls,
   checkResultMatch,
   checkResultAssertions,
   chooseBestCandidate,
@@ -196,6 +197,48 @@ function assert(name, cond, detail) {
     parsed.toolCandidates.length === 1 && parsed.toolCandidates[0].sql === null,
     JSON.stringify(parsed.toolCandidates)
   );
+}
+
+{
+  const toolCalls = [
+    { name: 'mcp__ktx__sl_read_source', input: { sourceName: 'kx_fact_financial_amount', connectionId: 'mysql-aliyun' } },
+    { name: 'mcp__ktx__sl_read_source', input: { sourceName: 'kx_fact_financial_amount', connectionId: 'mysql-aliyun' } },
+    { name: 'mcp__ktx__connection_list', input: {} },
+    { name: 'mcp__ktx__sql_execution', input: { connectionId: 'mysql-aliyun', sql: 'select 1' } },
+  ];
+  const summary = summarizeToolCalls(toolCalls);
+  assert('summarizeToolCalls counts total calls', summary.total === 4, JSON.stringify(summary));
+  assert('summarizeToolCalls counts short KTX names', summary.ktxByShortName.sl_read_source === 2, JSON.stringify(summary));
+  assert(
+    'summarizeToolCalls tracks sourceName values',
+    summary.inputValueCounts['mcp__ktx__sl_read_source:sourceName'].kx_fact_financial_amount === 2,
+    JSON.stringify(summary)
+  );
+}
+{
+  const toolCalls = [
+    { name: 'mcp__ktx__sl_read_source', input: { sourceName: 'kx_fact_financial_amount' } },
+    { name: 'mcp__ktx__sl_read_source', input: { sourceName: 'kx_fact_financial_amount' } },
+    { name: 'mcp__ktx__connection_list', input: {} },
+  ];
+  const check = checkToolAssertions(toolCalls, [
+    { type: 'max_tool_calls', tool: 'mcp__ktx__connection_list', max: 0 },
+    { type: 'max_repeated_tool_input', tool: 'mcp__ktx__sl_read_source', input_path: 'sourceName', max_per_value: 1 },
+  ]);
+  assert('checkToolAssertions fails max_tool_calls budget', check.failures.some((f) => f.includes('max_tool_calls')), JSON.stringify(check));
+  assert('checkToolAssertions fails repeated input budget', check.failures.some((f) => f.includes('max_repeated_tool_input')), JSON.stringify(check));
+  assert('checkToolAssertions emits budgetFailures', check.budgetFailures.length === 2, JSON.stringify(check));
+}
+{
+  const toolCalls = [
+    { name: 'mcp__ktx__sql_execution', input: { connectionId: 'mysql-aliyun' } },
+    { name: 'mcp__ktx__sql_execution', input: { connectionId: 'mysql-aliyun' } },
+  ];
+  const check = checkToolAssertions(toolCalls, [
+    { type: 'max_total_tool_calls', max: 2 },
+    { type: 'max_tool_calls_by_input', tool: 'mcp__ktx__sql_execution', input_path: 'connectionId', value: 'mysql-aliyun', max: 2 },
+  ]);
+  assert('checkToolAssertions passes exact budget limits', check.ok, JSON.stringify(check));
 }
 
 // ── T-A.3: parseClaudeOutput ───────────────────────────────────────────────

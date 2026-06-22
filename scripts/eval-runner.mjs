@@ -533,9 +533,66 @@ function toolAssertionTarget(toolCalls = []) {
     .join('\n');
 }
 
+function shortToolName(name = '') {
+  return String(name).replace(/^mcp__ktx__/, '');
+}
+
+function inputValueAtPath(input = {}, inputPath = '') {
+  if (!inputPath || typeof input !== 'object' || input == null) return undefined;
+  const parts = String(inputPath).split('.').filter(Boolean);
+  let current = input;
+  for (const part of parts) {
+    if (!current || typeof current !== 'object' || !Object.prototype.hasOwnProperty.call(current, part)) {
+      return undefined;
+    }
+    current = current[part];
+  }
+  return current;
+}
+
+function summarizeToolCalls(toolCalls = []) {
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  const byTool = {};
+  const ktxByShortName = {};
+  const inputValueCounts = {};
+
+  for (const call of calls) {
+    const name = String(call?.name || '');
+    byTool[name] = (byTool[name] || 0) + 1;
+    if (name.startsWith('mcp__ktx__')) {
+      const shortName = shortToolName(name);
+      ktxByShortName[shortName] = (ktxByShortName[shortName] || 0) + 1;
+    }
+  }
+
+  for (const field of ['sourceName', 'connectionId']) {
+    for (const call of calls) {
+      const name = String(call?.name || '');
+      const value = inputValueAtPath(call?.input || {}, field);
+      if (value === undefined || value === null) continue;
+      const key = `${name}:${field}`;
+      inputValueCounts[key] ||= {};
+      const stringValue = String(value);
+      inputValueCounts[key][stringValue] = (inputValueCounts[key][stringValue] || 0) + 1;
+    }
+  }
+
+  return {
+    total: calls.length,
+    byTool,
+    ktxByShortName,
+    inputValueCounts,
+  };
+}
+
+function numericLimit(value, fallback = null) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function checkToolAssertions(toolCalls = [], assertions = []) {
   if (!Array.isArray(assertions) || assertions.length === 0) {
-    return { ok: true, failures: [], requiredHits: [], forbiddenHits: [] };
+    return { ok: true, failures: [], requiredHits: [], forbiddenHits: [], budgetFailures: [] };
   }
 
   const calls = Array.isArray(toolCalls) ? toolCalls : [];
@@ -543,6 +600,7 @@ function checkToolAssertions(toolCalls = [], assertions = []) {
   const failures = [];
   const requiredHits = [];
   const forbiddenHits = [];
+  const budgetFailures = [];
 
   for (const a of assertions) {
     if (!a || typeof a !== 'object') continue;
@@ -576,10 +634,87 @@ function checkToolAssertions(toolCalls = [], assertions = []) {
       continue;
     }
 
+    if (type === 'max_total_tool_calls') {
+      const max = numericLimit(a.max);
+      if (max == null) {
+        failures.push(`unsupported tool_assertion: ${label} missing numeric max`);
+        continue;
+      }
+      if (calls.length > max) {
+        const failure = `budget: max_total_tool_calls actual=${calls.length} max=${max}`;
+        failures.push(failure);
+        budgetFailures.push(failure);
+      }
+      continue;
+    }
+
+    if (type === 'max_tool_calls') {
+      const tool = String(a.tool || value || '');
+      const max = numericLimit(a.max);
+      if (!tool || max == null) {
+        failures.push(`unsupported tool_assertion: ${label} missing tool or numeric max`);
+        continue;
+      }
+      const actual = calls.filter((c) => c.name === tool).length;
+      if (actual > max) {
+        const failure = `budget: max_tool_calls ${tool} actual=${actual} max=${max}`;
+        failures.push(failure);
+        budgetFailures.push(failure);
+      }
+      continue;
+    }
+
+    if (type === 'max_repeated_tool_input') {
+      const tool = String(a.tool || value || '');
+      const inputPath = String(a.input_path || '');
+      const max = numericLimit(a.max_per_value, numericLimit(a.max));
+      if (!tool || !inputPath || max == null) {
+        failures.push(`unsupported tool_assertion: ${label} missing tool, input_path, or numeric max_per_value`);
+        continue;
+      }
+      const counts = new Map();
+      for (const call of calls) {
+        if (call.name !== tool) continue;
+        const inputValue = inputValueAtPath(call.input || {}, inputPath);
+        if (inputValue === undefined || inputValue === null) continue;
+        const stringValue = String(inputValue);
+        counts.set(stringValue, (counts.get(stringValue) || 0) + 1);
+      }
+      for (const [inputValue, actual] of counts.entries()) {
+        if (actual > max) {
+          const failure = `budget: max_repeated_tool_input ${tool}.${inputPath} value=${inputValue} actual=${actual} max=${max}`;
+          failures.push(failure);
+          budgetFailures.push(failure);
+        }
+      }
+      continue;
+    }
+
+    if (type === 'max_tool_calls_by_input') {
+      const tool = String(a.tool || '');
+      const inputPath = String(a.input_path || '');
+      const expectedValue = a.value;
+      const max = numericLimit(a.max);
+      if (!tool || !inputPath || expectedValue === undefined || max == null) {
+        failures.push(`unsupported tool_assertion: ${label} missing tool, input_path, value, or numeric max`);
+        continue;
+      }
+      const actual = calls.filter((call) => {
+        if (call.name !== tool) return false;
+        return String(inputValueAtPath(call.input || {}, inputPath)) === String(expectedValue);
+      }).length;
+      if (actual > max) {
+        const failure = `budget: max_tool_calls_by_input ${tool}.${inputPath} value=${expectedValue} actual=${actual} max=${max}`;
+        failures.push(failure);
+        budgetFailures.push(failure);
+      }
+      continue;
+    }
+
     failures.push(`unsupported tool_assertion: ${label}`);
   }
 
-  return { ok: failures.length === 0, failures, requiredHits, forbiddenHits };
+  return { ok: failures.length === 0, failures, requiredHits, forbiddenHits, budgetFailures };
 }
 
 // ─── T-A.5: 9-way result matcher ───────────────────────────────────────────
@@ -1198,6 +1333,7 @@ function evaluateCandidate(c, parsed, candidate, safetyContract = {}) {
     failures,
     requiredHits: [...sqlCheck.requiredHits, ...toolCheck.requiredHits],
     forbiddenHits: [...sqlCheck.forbiddenHits, ...toolCheck.forbiddenHits],
+    budgetFailures: toolCheck.budgetFailures || [],
   };
 }
 
@@ -1315,6 +1451,9 @@ async function runSingleTurnCase(c, { safetyContract = {}, priorTurns = [] } = {
     expected: c.result_assertions || c.expected_result,
     requiredHits: selected.requiredHits,
     forbiddenHits: selected.forbiddenHits,
+    budgetFailures: selected.budgetFailures || [],
+    toolCalls: parsed.toolCalls || [],
+    toolSummary: summarizeToolCalls(parsed.toolCalls || []),
   };
 }
 
@@ -1365,6 +1504,9 @@ async function runMultiTurnCase(c, { safetyContract = {} } = {}) {
     expected: (c.turns || []).map((t) => t.result_assertions || []),
     requiredHits: turnEntries.flatMap((e) => e.requiredHits || []),
     forbiddenHits: turnEntries.flatMap((e) => e.forbiddenHits || []),
+    budgetFailures: turnEntries.flatMap((e) => e.budgetFailures || []),
+    toolCalls: turnEntries.flatMap((e) => e.toolCalls || []),
+    toolSummary: summarizeToolCalls(turnEntries.flatMap((e) => e.toolCalls || [])),
   };
 }
 
@@ -1406,6 +1548,14 @@ function summarize(entries) {
   return { total, pass, fail, cases: entries };
 }
 
+function formatToolSummary(toolSummary = {}) {
+  const parts = Object.entries(toolSummary.ktxByShortName || {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([tool, count]) => `${tool} ${count}`);
+  const total = Number.isFinite(toolSummary.total) ? toolSummary.total : 0;
+  return parts.length > 0 ? `total ${total}; ${parts.join('; ')}` : `total ${total}`;
+}
+
 function formatMarkdown(summary, { casesAbs } = {}) {
   const lines = [];
   lines.push('# project-lucy eval report');
@@ -1419,6 +1569,9 @@ function formatMarkdown(summary, { casesAbs } = {}) {
   for (const e of summary.cases) {
     lines.push(`## ${e.id}`);
     lines.push(`- pass: ${e.pass ? 'PASS' : 'FAIL'}`);
+    if (e.toolSummary) {
+      lines.push(`- tools: ${formatToolSummary(e.toolSummary)}`);
+    }
     if (e.sql) {
       lines.push('- sql:');
       lines.push('```sql');
@@ -1525,6 +1678,7 @@ export {
   checkSqlPatterns,
   checkSqlAssertions,
   checkToolAssertions,
+  summarizeToolCalls,
   checkResultMatch,
   checkResultAssertions,
   chooseBestCandidate,

@@ -81,6 +81,9 @@ type EvalSummaryCase = {
   resultRaw?: unknown;
   actual?: unknown;
   expected?: unknown;
+  toolCalls?: unknown;
+  toolSummary?: unknown;
+  budgetFailures?: unknown;
   exitCode?: unknown;
   durationMs?: unknown;
 };
@@ -115,6 +118,7 @@ function expectedForCase(evalCase: EvalCase | undefined): unknown {
 function classifyDrift(pass: boolean, failures: string[]): string {
   if (pass) return "pass";
   const joined = failures.join("\n").toLowerCase();
+  if (joined.includes("budget:")) return "logic_regression";
   if (joined.includes("cli:") || joined.includes("tool") || joined.includes("timeout")) return "tool_error";
   if (joined.includes("parse:") || joined.includes("schema")) return "schema_drift";
   if (joined.includes("sql") || joined.includes("required") || joined.includes("forbidden") || joined.includes("lineage")) {
@@ -209,7 +213,10 @@ export function mapSummaryCaseToRunCase(
     actual_raw: toJsonText(actual),
     failed_assertions: failures.length > 0 ? JSON.stringify(failures) : null,
     error_message: failures.length > 0 ? failures[0] : null,
-    final_text: typeof summaryCase.finalText === "string" ? summaryCase.finalText : null
+    final_text: typeof summaryCase.finalText === "string" ? summaryCase.finalText : null,
+    tool_calls_raw: toJsonText(summaryCase.toolCalls),
+    tool_summary_raw: toJsonText(summaryCase.toolSummary),
+    budget_failures: toJsonText(summaryCase.budgetFailures)
   };
 }
 
@@ -374,9 +381,9 @@ export async function spawnEvalRun(
       const insertCase = db2.prepare(`
         INSERT OR REPLACE INTO eval_run_case (
           run_id, case_id, status, drift, exit_code, duration_ms, sql, result_raw, expected_raw, actual_raw,
-          failed_assertions, error_message, final_text
+          failed_assertions, error_message, final_text, tool_calls_raw, tool_summary_raw, budget_failures
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const insertMany = db2.transaction((cases: EvalSummaryCase[]) => {
@@ -395,7 +402,10 @@ export async function spawnEvalRun(
             mapped.actual_raw,
             mapped.failed_assertions,
             mapped.error_message,
-            mapped.final_text
+            mapped.final_text,
+            mapped.tool_calls_raw,
+            mapped.tool_summary_raw,
+            mapped.budget_failures
           );
         }
       });
@@ -474,6 +484,7 @@ export function registerRunnerRoutes(app: FastifyInstance) {
       case_id: string; status: string; drift: string | null; exit_code: number | null; duration_ms: number | null;
       sql: string | null; result_raw: string | null; expected_raw: string | null; actual_raw: string | null;
       failed_assertions: string | null; error_message: string | null; final_text: string | null;
+      tool_calls_raw: string | null; tool_summary_raw: string | null; budget_failures: string | null;
     }>;
 
     const results = caseRows.map((c) => ({
@@ -488,7 +499,10 @@ export function registerRunnerRoutes(app: FastifyInstance) {
       actual: parseJsonText(c.actual_raw),
       failedAssertions: c.failed_assertions ? JSON.parse(c.failed_assertions) as string[] : undefined,
       errorMessage: c.error_message ?? undefined,
-      finalText: c.final_text ?? undefined
+      finalText: c.final_text ?? undefined,
+      toolCalls: parseJsonText(c.tool_calls_raw),
+      toolSummary: parseJsonText(c.tool_summary_raw),
+      budgetFailures: parseJsonText(c.budget_failures)
     }));
 
     return { ok: true, data: { ...rowToRun(row), results } };
