@@ -1,0 +1,58 @@
+name: superstore_orders_huadong
+
+# 华东区域订单视图（生产库 VIEW：superstore_orders WHERE region = '华东'）。
+# 仅供区域经理角色使用，故意不声明 joins，避免间接拿到 returns/people 全表数据。
+# 行粒度：每行一条订单明细（一笔订单含多行，按 order_id 聚合得订单级指标）
+grain:
+  - row_id
+
+columns:
+  - name: order_year
+    type: time
+    role: time
+    expr: YEAR(order_date)
+    descriptions:
+      db: 订单年份
+      ai: Year extracted from order_date; preferred grain for year-over-year analysis.
+
+measures:
+  - name: total_sales
+    expr: sum(sales)
+    description: 销售总额（折扣后实收金额）。
+
+  - name: total_profit
+    expr: sum(profit)
+    description: 利润总额。可为负值（亏损行不可排除，否则高估利润）。
+
+  - name: profit_margin
+    expr: sum(profit) / nullif(sum(sales), 0)
+    description: 利润率。必须用 SUM/SUM 重算，禁止 AVG(profit/sales)。
+
+  - name: weighted_discount
+    expr: sum(discount * sales) / nullif(sum(sales), 0)
+    description: 销售额加权平均折扣率。默认折扣聚合口径，禁止 AVG(discount)。
+
+  - name: order_count
+    expr: count(distinct order_id)
+    description: 订单数。必须用 COUNT(DISTINCT order_id)，禁止 COUNT(*)。
+
+  - name: customer_count
+    expr: count(distinct customer_id)
+    description: 去重客户数。
+
+  - name: avg_order_value
+    expr: sum(sales) / nullif(count(distinct order_id), 0)
+    description: 客单价（每笔订单平均销售额）。
+
+  - name: total_quantity
+    expr: sum(quantity)
+    description: 销售总件数。
+
+  - name: loss_row_count
+    expr: sum(case when profit < 0 then 1 else 0 end)
+    description: 亏损明细行数（profit < 0）。用于定位高折扣或高成本商品。
+
+segments:
+  - name: active_rows
+    expr: is_deleted = 0
+    description: 排除逻辑删除行。所有分析查询的基础过滤条件。

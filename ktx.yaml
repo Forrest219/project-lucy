@@ -12,6 +12,7 @@ connections:
       - dataforai.kx_vw_balance_sheet_detail
       - dataforai.kx_vw_cash_flow_statement_detail
       - dataforai.kx_vw_income_statement_detail
+      - dataforai.superstore_orders_huadong
     host: rm-bp1t0ie3sj4g7561hpo.mysql.rds.aliyuncs.com
     port: 3306
     database: dataforai

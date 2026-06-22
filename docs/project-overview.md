@@ -116,6 +116,8 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 
 当前 `webui/config/access.yaml` 已含 v1.2 role 模型（例如 `kx_readonly`），Admin UI/API 已按 role-first 写入路径闭环：新建/编辑 Agent 强制 role，legacy `allow` 只读，token 与配置写入进入审计。2026-06-22 P1 增量已补 Role 模板库、模板展开落盘、`lint:spec` 防模板指针漂移、Onboarding MCP 失败原因细分和 `config_change_log` CSV 导出。后续列级 / 行级权限仅作为长期 spec 锚点，见 `docs/access-governance-design.md`。
 
+2026-06-22 另验证了「VIEW-as-pseudo-table」变通方案（CIO demo）：role `superstore_region_huadong` 通过 VIEW `dataforai.superstore_orders_huadong` 把表级 ACL 锁定到单一区域，零代理层代码改动；细节与局限见 `docs/access-governance-design.md` §3.2。
+
 ## 9. 关键文档索引
 
 | 主题 | 文档 |

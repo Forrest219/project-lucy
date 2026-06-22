@@ -155,6 +155,20 @@ roles:
 
 **非目标**：列级 / 行级权限 P0/P1 不实施；本节仅为后续 §6 演进留 spec 锚点。
 
+**已验证的运行时变通方案（VIEW-as-pseudo-table，不是本节方案的提前实施）**：
+
+不改 `acl.ts`、不新增 `row_filter` 字段，也能在表级 ACL 框架内做到「单角色只看一个数据切片」：
+在物理库对目标切片建 `CREATE VIEW`，把视图当普通 source 接入 `ktx.yaml` 的
+`enabled_tables` + 一份语义层 overlay，再用现有 `tableSelectors` 把角色锁定到这张
+视图。2026-06-22 已按此模式验证：VIEW `dataforai.superstore_orders_huadong`
+（华东区域订单）+ role `superstore_region_huadong`，经 Lucy MCP Proxy 验证非
+授权区域查询返回 `table_forbidden:dataforai.superstore_orders`。
+
+局限（记录是为了不让人误以为这是参数化方案）：每个切片需要单独建 VIEW + overlay
++ role，组合数随维度数量线性放大；不支持「一个 token 按运行时 claim 动态过滤」。
+需要真正参数化的行级权限时，仍应走本节 §3.2 的 `row_filter` spec，而不是继续堆
+VIEW。
+
 ### 3.3 增量 3：Role 模板与 lint 衔接（增量校验，非重新实施）
 
 **前提**：`scripts/lint-spec.mjs`（285 行，2026-06-21 由 ec5f561/e7695ca/84f21f2 落地）的 5 类检查（`routeStatus / apiSpec / skillDependency / evalSchemaVersion / accessRolePolicy`）已全部实现，并通过 `package.json` 第 15 行 `lint:spec` 与 `.github/workflows/lucy-release.yml` 第 34 行 `spec-and-webui` job 作为 release gate。`accessRolePolicy()`（`scripts/lint-spec.mjs:225-264`）当前实现 6 条 fail 规则 + 3 条 warn 规则，覆盖 role/selector/tool 配置合法性与 legacy 迁移状态；**具体规则以脚本本体为准，本文档不重复维护清单**——避免脚本演进时文档跟着漂移（这本身就是 §2.1.1「事实源单一」原则的延伸：方案文档复述代码细节，等于给代码开了第二个事实源，和要堵的 `role-template` 字段问题是同一类风险）。
