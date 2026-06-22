@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 产品愿景 |
 | 文档类型 | Design |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-18 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-22 |
 | 撰写人 | Claude |
 | 委托人 | zhangxingchen |
 | 基于材料 | 用户产品愿景输入、Anthropic 自助数据分析架构参考、project-lucy 现状 |
@@ -24,7 +24,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 
 | 模块名 | 说明 | 优先级 |
 |---|---|---|
-| 多数据源接入 | 统一 Adapter SPI，当前支持 MySQL 与 StarRocks；StarRocks 走 MySQL Wire Protocol 只读账号接入 | P0 |
+| 多数据源接入 | MVP 支持 MySQL 与 PostgreSQL；StarRocks 退出首版 MVP，转 roadmap candidate，待协议兼容 spike 后重新评估 | P0 |
 | 语义与知识治理 | 维护语义层（字段别名、业务定义）、Wiki 文档、Knowledge Base；解决概念-实体歧义 | P0 |
 | Skill 管理 | 将结构化程序性知识（查询模板、计算逻辑）封装为可版本化的 Skill，供 KTX MCP Server 分发 | P0 |
 | 权限管理 | 表级 ACL；Service Account + Token 手动分配；不支持列/行级权限，不支持 SSO | P0 |
@@ -65,7 +65,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
               ▼                                   ▼
 ┌─────────────────────────┐        ┌─────────────────────────────┐
 │   数据源层               │        │   审计存储层                 │
-│  MySQL / StarRocks      │        │  SQLite（热查）              │
+│  MySQL / PostgreSQL     │        │  SQLite（热查）              │
 │  （只读 Service Account）│        │  对象存储（冷归档 180 天+）  │
 └─────────────────────────┘        └─────────────────────────────┘
               ▲
@@ -90,7 +90,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 - **Lucy Core Services**：系统核心，维护语义/知识库、Skill 仓库和权限 & Token 管理三个子服务。
 - **KTX MCP Server**：将语义事实和 Skill 封装为 MCP 工具集，是 Agent 获取上下文的唯一入口。
 - **Governance Gateway**：拦截所有 Agent 请求，完成 Token 鉴权、审计日志写入和限流，实现零信任访问控制。
-- **数据源层**：当前支持 MySQL 和 StarRocks（MySQL Wire Protocol 只读账号），Gateway 代理查询，Agent 不直连数据库。
+- **数据源层**：MVP 支持 MySQL 和 PostgreSQL；StarRocks 退出首版 MVP，需完成协议兼容 spike 后再评估是否进入正式支持范围。Gateway 代理查询，Agent 不直连数据库。
 - **审计存储层**：SQLite 保留近期热数据用于快速查询；历史数据归档至对象存储，保留 180 天以上。
 - **Eval 闭环**：语义层或 Skill 发生变更时自动触发 Eval Runner，结果写入 Ops Dashboard，形成准确率质量门禁。
 
@@ -102,7 +102,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 |---|---|---|
 | Token 手动分配 | Service Account Token 由管理员在 WebUI 中手动创建和分配，不提供自助申请或自动颁发 | 初期用户规模小，手动管理成本可接受；避免过度设计 |
 | Audit 持久化策略 | 审计日志写入 SQLite 作为热存储供即时查询；定期批量归档至对象存储（S3 兼容），保留 180 天+ | 兼顾查询性能与存储成本，SQLite 免运维 |
-| StarRocks 接入方式 | 通过 MySQL Wire Protocol 以只读账号接入，不开发专用 StarRocks 驱动 | 协议兼容性好，降低接入成本，只读账号满足安全要求 |
+| StarRocks MVP 范围 | StarRocks 退出首版 MVP；不再把 MySQL Wire Protocol 兼容性假设直接写成支持承诺 | KTX upstream 当前无现成 StarRocks connector；协议兼容、SQL 生成、join/measure/派生列行为均需独立 spike 验证 |
 | 不做列/行级权限 | 权限粒度止步于表级 ACL，不实现列级掩码或行级过滤 | 需求复杂度远超收益；语义层本身可通过 Skill 封装规避敏感字段 |
 | Agent 不直连数据库 | 所有数据查询必须经过 Governance Gateway，Agent 无法绕过鉴权和审计 | 保证审计完整性，防止未授权的直接查询 |
 | Eval 触发机制 | 语义层或 Skill 变更时自动触发 Eval，同时保留定期调度（如每日）兜底 | 变更触发保证即时质量反馈，定期调度防止数据源漂移导致的隐性退化 |
@@ -111,9 +111,9 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 
 ## 5. 明确不做
 
-以下能力在 Lucy v1.0 范围内明确不实现，以防范围蔓延：
+以下能力在 Lucy 首版 MVP 范围内明确不实现，以防范围蔓延：
 
-- **跨源 Join**：不支持跨 MySQL 和 StarRocks 的联邦查询或结果合并，所有查询在单数据源内执行。
+- **跨源 Join**：不支持跨不同数据源的联邦查询或结果合并，所有查询在单数据源内执行。
 - **列级 / 行级权限**：不实现字段脱敏、行级过滤或动态数据掩码。
 - **SSO / 统一身份认证**：不集成 LDAP、SAML、OIDC 等企业 SSO 协议，Token 由管理员手动管理。
 - **SaaS 多租户**：不支持多组织隔离的 SaaS 部署模式，仅支持单组织私有部署。
@@ -124,4 +124,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 
 ## 6. 未决问题
 
-（待后续迭代中填入）
+- PostgreSQL demo / smoke gate 是否必须在首个客户 release 前达到 CI verified。
+- StarRocks 协议兼容 spike 何时启动；spike 通过前不进入 MVP 支持范围。
+- Kubernetes / Helm 部署路径进入哪个 roadmap 阶段。
+- Release metadata 是否在首版强制包含 SBOM。
