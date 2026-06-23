@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Docker Deployment |
 | 文档类型 | Deployment Guide |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-21 |
+| 版本 | v0.2（2026-06-23 增补：全链路测试用例矩阵、大陆网络环境、demo evals 挂载） |
+| 撰写日期 | 2026-06-21（v0.1）；2026-06-23（v0.2 增补） |
 | 适用范围 | Lucy 首版单机 Docker Compose 部署 |
 
 ## 1. Scope
@@ -292,3 +292,100 @@ docker compose exec lucy bash
 docker compose exec lucy ktx --version
 docker compose exec lucy ktx status --project-dir /data/lucy
 ```
+
+## 12. v0.2 增补：全链路测试用例矩阵
+
+> 本节于 2026-06-23 加入。覆盖镜像构建 → 启动 → 健康检查 → 数据接入 → 语义层 → Proxy 鉴权 → 业务查询 → 失败/边界 → 自动化门禁，~35 条 TC。
+
+### 12.1 用例组织
+
+- ID：`TC-<域>-<编号>`（如 `TC-DEMO-001`）
+- 优先级：P0 = 部署门禁；P1 = 业务验证；P2 = 边界 / 故障恢复
+- 执行方式：M = 手工；S = 脚本；A = 自动化（`smoke:p0:*`）
+
+### 12.2 数据基线单一事实源
+
+所有业务断言期望值必须来自 `_baseline.json`，不要在测试脚本里硬编码：
+
+```
+examples/docker-demo/mysql/_baseline.json
+examples/postgres-demo/postgres/_baseline.json
+```
+
+修改 seed 或 rows 后重跑生成器即可刷新基线。
+
+### 12.3 P0 用例速查（部署门禁）
+
+| 用例 | 校验点 | Pass 条件 |
+|---|---|---|
+| TC-BUILD-001 | `docker compose build --no-cache` | 退出码 0；镜像 `project-lucy:demo` 出现 |
+| TC-START-001 | demo stack 启动 | `lucy` 与 `demo-db` 均 `Up (healthy)` |
+| TC-NET-001 | WebUI `/api/health` | HTTP 200；`bundledKtxVersion` 与 `LUCY_EXPECTED_KTX_VERSION` 一致 |
+| TC-NET-003 | 内置 docker-healthcheck | `docker inspect` 返回 `healthy` |
+| TC-DATA-001 | demo MySQL 直连 | 行数与 `_baseline.json#counts` 一致（1000/4/60） |
+| TC-DATA-002 | `ktx connection test demo-mysql` | 退出码 0 |
+| TC-DATA-003 | `ktx admin reindex --force` | `--output json` 含 `"ok": true` |
+| TC-DATA-004 | `ktx sl validate superstore_orders` | 退出码 0 |
+| TC-PROXY-001 | Proxy initialize 握手 | HTTP 200；`mcp-session-id` 存在 |
+| TC-PROXY-003 | tools/list 必备工具 | 含 `kx_catalog / sl_query / sl_read_source / wiki_search`；**不含** `sql_execution` |
+| TC-PROXY-005 | sl_query 按 region 分组 | 4 行；`sales_by_region` 完全匹配 baseline |
+| TC-BIZ-001 | 总销售额 | `measures.total_sales` |
+| TC-BIZ-002 | 总订单数 | `counts.active_orders` |
+| TC-BIZ-003 | 利润率 | `measures.profit_margin` |
+| TC-BIZ-004 | East region 销售 | `sales_by_region.East` |
+| TC-AUTO-001 | `npm run smoke:p0:demo` | 末尾输出 `PASS` |
+
+### 12.4 P1 业务查询
+
+| 用例 | 工具 | 期望 |
+|---|---|---|
+| TC-BIZ-005 | sl_query + segment=`high_discount` | `counts.high_discount_rows` = 132 |
+| TC-BIZ-006 | sl_query + segment=`loss_rows` | `counts.loss_rows` = 49 |
+| TC-BIZ-007 | sl_query + segments=[high_discount, loss_rows] | 交集返回 ≥ 1 行 |
+| TC-BIZ-008 | join `superstore_returns` | 60 行；总销售额 < 200000 |
+| TC-BIZ-009 | join `superstore_people` | `Central South → Bob` |
+| TC-BIZ-010 | dimension=`YEAR(order_date)` | 4 年分布均匀 |
+| TC-AUTO-002 | `npm run smoke:p0:postgres-demo` | PASS |
+| TC-AUTO-003 | `npm run security:baseline` | 无 critical |
+
+### 12.5 P2 失败 / 边界
+
+| 用例 | 场景 | 处置 |
+|---|---|---|
+| TC-FAIL-002 | demo-db 短暂不可用 | 恢复后 `connection test` 重新通过 |
+| TC-FAIL-003 | 5174 端口被占 | lucy healthcheck 失败；改 `LUCY_DEMO_WEBUI_HOST_PORT` |
+| TC-FAIL-005 | DROP 表后 sl_query | 响应 error 含表名 |
+| TC-FAIL-007 | demo 卷残留导致旧状态 | `down -v` 后 `up` 解决 |
+
+### 12.6 完整用例文档
+
+完整 ~35 条 TC 含命令、参数、错误对照见 `docs/lucy-test-cases.md`，随发布产物输出到 `release/lucy-test-cases.md`。
+
+```bash
+npm run release:artifacts -- --out release/
+# 或直接调用：
+node scripts/release-artifacts.mjs --out release/
+```
+
+## 13. v0.2 增补：Demo Evals 挂载
+
+`docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 已挂载 `./evals:/data/lucy/evals:ro`，使 demo 容器内 KTX MCP 的 wiki_search / eval 工具能访问到仓库的 eval suites。
+
+挂载要点：
+
+- read-only，不影响 demo-data volume 的运行时状态
+- 不挂 evals 时，KTX MCP 在 demo 容器内找不到 superstore/kx_financial eval
+- 调整后无需重启 demo-db；只 `docker compose up -d lucy` 即可
+
+## 14. v0.2 增补：大陆网络环境
+
+针对中国大陆用户访问 Docker Hub / npmjs 受限的场景：
+
+| 受限项 | 处置 |
+|---|---|
+| `docker pull node:22-bookworm-slim` / `mysql:8.4` 慢 | `~/.docker/daemon.json` 加 `registry-mirrors`：`https://docker.m.daocloud.io` |
+| `npm ci` 慢 | `npm config set registry https://registry.npmmirror.com` |
+| 终端要走代理 | `export HTTPS_PROXY=http://127.0.0.1:7897` 后再 `docker compose up`；Docker Desktop 还要在 Settings → Resources → Proxies 同步 |
+
+Docker Desktop 用户在镜像构建时不会自动继承 shell 代理，必须显式配置 daemon.json 或 Docker Desktop UI，否则 build 阶段 apt-get / npm install 超时。
+

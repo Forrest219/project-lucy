@@ -3,16 +3,74 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const outDir = path.resolve(process.argv.includes("--out") ? process.argv[process.argv.indexOf("--out") + 1] : "release");
-const releaseTag = valueAfter("--tag") ?? process.env.LUCY_RELEASE_TAG ?? process.env.GITHUB_REF_NAME ?? "local";
-const ktxVersion = process.env.KTX_VERSION ?? process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.13.0";
-const imageTag = process.env.LUCY_DOCKER_IMAGE ?? `project-lucy:${releaseTag}`;
+// ---- arg parsing ----
+// Allowed flags: --out <dir>, --tag <tag>, --help / -h.
+// Anything else is rejected with a non-zero exit so we never silently
+// misinterpret a stray token as a value (e.g. previously `--help` was
+// treated as the directory passed to --out, which actually ran the
+// full release pipeline and polluted the working tree).
+const KNOWN_FLAGS = new Set(["--out", "--tag", "--help", "-h"]);
+const args = process.argv.slice(2);
 
-function valueAfter(flag) {
-  const index = process.argv.indexOf(flag);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
+function failUsage(message) {
+  console.error(`[release-artifacts] ${message}`);
+  console.error("Usage: node scripts/release-artifacts.mjs [--out <dir>] [--tag <tag>] [--help|-h]");
+  process.exit(2);
 }
+
+let outDir;
+let releaseTag;
+let help = false;
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (arg === "--help" || arg === "-h") {
+    help = true;
+    continue;
+  }
+  if (arg === "--out") {
+    const v = args[i + 1];
+    if (!v || v.startsWith("--")) failUsage(`--out requires a directory value (got '${v}')`);
+    outDir = path.resolve(v);
+    i++;
+    continue;
+  }
+  if (arg === "--tag") {
+    const v = args[i + 1];
+    if (!v || v.startsWith("--")) failUsage(`--tag requires a value (got '${v}')`);
+    releaseTag = v;
+    i++;
+    continue;
+  }
+  if (KNOWN_FLAGS.has(arg)) continue; // unreachable guard
+  failUsage(`unknown argument: ${arg}`);
+}
+
+// ---- required customer docs ----
+// Each entry has explicit src -> dest mapping; no mechanical prefixing.
+// Missing source files fail fast (see main loop).
+const REQUIRED_DOCS = [
+  { src: "docs/customer-deployment-guide.md", dest: "lucy-customer-deployment-guide.md" },
+  { src: "docs/deployment-docker.md",          dest: "lucy-deployment-docker.md" },
+  { src: "docs/lucy-test-cases.md",            dest: "lucy-test-cases.md" }
+];
+
+if (help) {
+  console.log("Usage: node scripts/release-artifacts.mjs [--out <dir>] [--tag <tag>] [--help|-h]");
+  console.log("");
+  console.log("Writes lucy-release-metadata.json, lucy-release-notes.md, lucy-sbom.json,");
+  console.log("and bundled customer docs to <dir> (default: release/).");
+  console.log("Required bundled docs (fail-fast if any is missing):");
+  for (const entry of REQUIRED_DOCS) {
+    console.log(`  ${entry.src} -> ${entry.dest}`);
+  }
+  process.exit(0);
+}
+
+// Apply defaults + env fallbacks AFTER --help short-circuit.
+const FINAL_OUT_DIR = outDir ?? path.resolve("release");
+const FINAL_RELEASE_TAG = releaseTag ?? process.env.LUCY_RELEASE_TAG ?? process.env.GITHUB_REF_NAME ?? "local";
+const ktxVersion = process.env.KTX_VERSION ?? process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.13.0";
+const imageTag = process.env.LUCY_DOCKER_IMAGE ?? `project-lucy:${FINAL_RELEASE_TAG}`;
 
 function run(command, args, fallback = "unknown") {
   try {
@@ -143,7 +201,7 @@ async function main() {
   ];
   const metadata = {
     generatedAt,
-    releaseTag,
+    releaseTag: FINAL_RELEASE_TAG,
     lucy: {
       gitCommit,
       gitShort,
@@ -203,7 +261,7 @@ async function main() {
       ...packageComponents(webuiLock, "webui")
     ]
   };
-  const notes = `# Lucy ${releaseTag}
+  const notes = `# Lucy ${FINAL_RELEASE_TAG}
 
 - Git commit: ${gitCommit}
 - Docker image: ${imageTag}
@@ -216,19 +274,41 @@ async function main() {
 ## Customer Deployment
 
 Use docs/customer-deployment-guide.md and docs/deployment-docker.md for Docker Compose deployment.
+Full P0/P1/P2 test case matrix: docs/lucy-test-cases.md (bundled as release/lucy-test-cases.md).
 
 ## Artifacts
 
 - lucy-release-metadata.json
 - lucy-release-notes.md
 - lucy-sbom.json (production/runtime dependencies; dev dependencies omitted)
+- lucy-customer-deployment-guide.md (copy of docs/customer-deployment-guide.md)
+- lucy-deployment-docker.md (copy of docs/deployment-docker.md)
+- lucy-test-cases.md (copy of docs/lucy-test-cases.md)
 `;
 
-  await mkdir(outDir, { recursive: true });
-  await writeFile(path.join(outDir, "lucy-release-metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
-  await writeFile(path.join(outDir, "lucy-sbom.json"), `${JSON.stringify(sbom, null, 2)}\n`, "utf8");
-  await writeFile(path.join(outDir, "lucy-release-notes.md"), notes, "utf8");
-  console.log(`[release-artifacts] wrote ${outDir}`);
+  await mkdir(FINAL_OUT_DIR, { recursive: true });
+  await writeFile(path.join(FINAL_OUT_DIR, "lucy-release-metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  await writeFile(path.join(FINAL_OUT_DIR, "lucy-sbom.json"), `${JSON.stringify(sbom, null, 2)}\n`, "utf8");
+  await writeFile(path.join(FINAL_OUT_DIR, "lucy-release-notes.md"), notes, "utf8");
+  // Bundle customer-facing docs as release artifacts.
+  // REQUIRED_DOCS use explicit src -> dest mapping (no mechanical prefixing)
+  // and fail fast on missing sources; release-notes above already advertises
+  // these files, so a partial release would mislead downstream consumers.
+  for (const entry of REQUIRED_DOCS) {
+    let content;
+    try {
+      content = await readFile(entry.src, "utf8");
+    } catch (error) {
+      if (error && error.code === "ENOENT") {
+        console.error(`[release-artifacts] required doc missing: ${entry.src}`);
+        process.exit(3);
+      }
+      throw error;
+    }
+    await writeFile(path.join(FINAL_OUT_DIR, entry.dest), content, "utf8");
+    console.log(`[release-artifacts] bundled ${entry.src} -> ${entry.dest}`);
+  }
+  console.log(`[release-artifacts] wrote ${FINAL_OUT_DIR}`);
 }
 
 main().catch((error) => {

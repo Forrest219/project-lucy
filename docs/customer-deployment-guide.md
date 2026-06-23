@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Customer Deployment Guide |
 | 文档类型 | Customer Deployment / Operations Guide |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-21 |
+| 版本 | v0.2（2026-06-23 增补：扩展 demo 数据集到 1000 行 + 全链路测试用例矩阵） |
+| 撰写日期 | 2026-06-21（v0.1）；2026-06-23（v0.2 增补） |
 | 适用范围 | 单机 Docker Compose 形态的 Lucy 客户部署、升级、回滚和排障 |
 
 ## 1. Deployment Model
@@ -276,3 +276,70 @@ docker compose logs -f demo-db
 | `ktx sl query --execute` 失败 | 数据库连接、semantic-layer validate、KTX Python runtime 是否正常 |
 | 查询不到新语义层内容 | 是否运行 `ktx admin reindex --force` |
 | 容器启动后 seed 不生效 | volume 中已有 `/data/lucy/ktx.yaml` 时不会覆盖已有项目 |
+
+## 12. v0.2 增补：扩展 demo 数据集
+
+> 本节于 2026-06-23 加入。背景：v0.1 描述的 demo 数据集仅 5 行 / 1 单退货，样本量不足以验证聚合查询、年度趋势、区域分布等业务口径。
+
+### 12.1 数据规模
+
+`docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 现在各承载 **1000 行订单 + 60 单退货 + 4 个区域经理 + ~294 个客户**，跨 4 年（2024-2027）。
+
+数据由生成器 `examples/docker-demo/scripts/gen-demo-data.mjs` 产出（确定性 PRNG，seed=42）。基线数字写入：
+
+```
+examples/docker-demo/mysql/_baseline.json
+examples/postgres-demo/postgres/_baseline.json
+```
+
+重跑生成器：
+
+```bash
+# MySQL demo（裸表名）
+node examples/docker-demo/scripts/gen-demo-data.mjs
+# Postgres demo（带 schema 前缀）
+node examples/docker-demo/scripts/gen-demo-data.mjs \
+  --schema=dataforai \
+  --out-dir=examples/postgres-demo/postgres
+```
+
+### 12.2 seed=42 快照（当前基线）
+
+| 字段 | 值 | 来源 |
+|---|---|---|
+| `counts.orders` | 1000 | `_baseline.json#counts.orders` |
+| `counts.returns` | 60 | `_baseline.json#counts.returns` |
+| `counts.high_discount_rows` | 132 | discount > 0.2 |
+| `counts.loss_rows` | 49 | profit < 0 |
+| `measures.total_sales` | 1459476.0953 | SUM(sales) |
+| `measures.total_profit` | 294190.223 | SUM(profit) |
+| `measures.profit_margin` | 0.201572 | total_profit / total_sales |
+| `measures.order_count` | 1000 | COUNT(DISTINCT order_id) |
+| `sales_by_region.East` | 550670.8159 | 单 region 最高 |
+| `sales_by_region.Central South` | 363958.9831 | |
+| `sales_by_region.Northeast` | 302200.0925 | |
+| `sales_by_region.Southwest` | 242646.2038 | |
+| `sales_by_year` | 2024/2025/2026/2027 各 ~36 万 | 4 年近似均匀 |
+
+### 12.3 业务验证期望值
+
+测试断言应直接读 `_baseline.json`，不要在脚本里硬编码数字。常见业务查询示例：
+
+| 查询 | 期望值来源 |
+|---|---|
+| 总销售额 | `measures.total_sales` |
+| 总利润 | `measures.total_profit` |
+| 利润率 | `measures.profit_margin` |
+| East region 销售 | `sales_by_region.East` |
+| 年度销售分布 | `sales_by_year` |
+| 高折扣行数 | `counts.high_discount_rows` |
+| 亏损行数 | `counts.loss_rows` |
+
+完整 P0/P1/P2 测试用例矩阵见 `docs/lucy-test-cases.md`，并在 `docs/deployment-docker.md` §12 给出 P0/P1/P2 速查表。
+
+### 12.4 客户部署时的兼容性注意
+
+- 数据规模扩大后，MySQL 8.4 初始化时间从 < 1s 增至 ~3-5s（容器健康检查间隔 5s，足够；如有 CI 严格 timeout，需要相应放宽）。
+- Postgres demo 同步扩容；`01-init.sql` 现在 ~1100 行。
+- 业务 eval case（`evals/superstore/eval/superstore-eval-cases.yaml`）原本基于 10194 行生产数据；接入 demo 链路时若数值类断言期望硬编码，会与新基线冲突。建议 eval case 改为读 `_baseline.json`（详见 `docs/deployment-docker.md` §12.4 测试用例矩阵与 `docs/lucy-test-cases.md`）。
+

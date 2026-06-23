@@ -93,6 +93,9 @@
 
 本项目依赖 KTX CLI，并通过 KTX MCP Server 向 Claude Code、Codex 等客户端提供语义层、Wiki 和 Skill 能力。首次运行前，请确保本机已经安装 KTX，并准备好当前环境需要的数据源连接、模型后端和本地密钥文件。
 
+**客户部署 / 运维**：见 [`docs/customer-deployment-guide.md`](docs/customer-deployment-guide.md) 与 [`docs/deployment-docker.md`](docs/deployment-docker.md)。
+**全链路测试用例**：见 [`docs/lucy-test-cases.md`](docs/lucy-test-cases.md)。
+
 **首次 Onboarding**（详见 `docs/DEVELOPMENT.md §Onboarding`）：
 
 ```bash

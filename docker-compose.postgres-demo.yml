@@ -38,6 +38,9 @@ services:
       - "${LUCY_POSTGRES_DEMO_PROXY_HOST_PORT:-57882}:7879"
     volumes:
       - lucy-postgres-demo-data:/data/lucy
+      # Mount the eval suites so wiki_search / KTX eval tools can reach them.
+      # Read-only; demo-data volume still owns runtime state.
+      - ./evals:/data/lucy/evals:ro
     secrets:
       - postgres_password
     depends_on:

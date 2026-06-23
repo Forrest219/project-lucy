@@ -1,0 +1,35 @@
+{
+  "seed": 42,
+  "rows": 1000,
+  "generated_at": "2026-06-23T03:30:34.279Z",
+  "counts": {
+    "orders": 1000,
+    "people": 4,
+    "returns": 60,
+    "customers": 294,
+    "active_orders": 1000,
+    "high_discount_rows": 132,
+    "loss_rows": 49,
+    "unique_orders": 1000
+  },
+  "measures": {
+    "total_sales": 1459476.0953,
+    "total_profit": 294190.223,
+    "profit_margin": 0.201572,
+    "order_count": 1000
+  },
+  "sales_by_region": {
+    "Northeast": 302200.0925,
+    "Southwest": 242646.2038,
+    "East": 550670.8159,
+    "Central South": 363958.9831
+  },
+  "sales_by_year": {
+    "2024": 366646.0565,
+    "2025": 364660.4159,
+    "2026": 355302.1758,
+    "2027": 372867.4471
+  },
+  "returns_for_loss_orders": 30,
+  "schema_columns": 31
+}
