@@ -34,16 +34,20 @@ MCP:   http://<host>:7879/mcp
 - 能从目标数据库网络访问数据库 host/port。
 - 能拉取 Lucy image 及其基础镜像。
 
-客户不需要安装：
+客户安装和 Docker-only demo 验收不需要安装：
 
 - KTX CLI。
 - Node.js。
 - Python。
 - pnpm / uv。
 
+`npm run smoke:*` 是仓库开发 / CI 自动化入口；只有使用 git checkout 并希望运行自动化 smoke 时才需要宿主机 Node.js。
+
 ## 3. First Deployment
 
-1. 获取 Lucy release 包或 git checkout。
+1. 获取 `lucy-docker-source-bundle.tar.gz` 或 git checkout。
+   - `lucy-docker-source-bundle.tar.gz` 是客户可安装包，包含 Dockerfile、compose、样例数据、运行时源码和客户文档。
+   - `lucy-release-artifacts` 中的 metadata / SBOM / docs 仅用于发布说明，不等同安装包。
 2. 启动服务：
 
 ```bash
@@ -98,6 +102,8 @@ docker run --rm \
 ## 5. Database Configuration
 
 首版客户部署通过编辑 `/data/lucy/ktx.yaml` 接入数据库。
+
+默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换数据库 host、用户和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 WebUI 启动。
 
 推荐流程：
 
@@ -187,7 +193,55 @@ Agent 应只接入 Lucy MCP Proxy：
 
 ## 8. Demo Deployment
 
-无需客户数据库即可跑 demo：
+无需客户数据库即可跑 demo。客户工程师只用 Docker Compose 即可完成最小验收：
+
+```bash
+docker compose -f docker-compose.demo.yml up -d --build
+docker compose -f docker-compose.demo.yml ps
+curl http://127.0.0.1:55176/api/health
+```
+
+验证 demo 数据行数：
+
+```bash
+docker compose -f docker-compose.demo.yml exec demo-db \
+  mysql -u lucy -plucy_demo dataforai -e \
+  "SELECT COUNT(*) AS orders FROM superstore_orders; SELECT COUNT(*) AS people FROM superstore_people; SELECT COUNT(*) AS returns_count FROM superstore_returns;"
+```
+
+期望输出与 `_baseline.json` 一致：orders = `1000`，people = `4`，returns_count = `60`。
+
+验证 KTX 与语义层：
+
+```bash
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy connection test demo-mysql
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy admin reindex --force --output json
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy sl validate superstore_orders --connection-id demo-mysql
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy sl --connection-id demo-mysql query \
+  --measure superstore_orders.total_sales \
+  --dimension superstore_orders.region \
+  --segment superstore_orders.active_rows \
+  --limit 5 \
+  --execute \
+  --max-rows 5
+```
+
+期望 region 销售额与 `_baseline.json#sales_by_region` 一致：East = `550670.8159`，Central South = `363958.9831`，Northeast = `302200.0925`，Southwest = `242646.2038`。
+
+清理 demo：
+
+```bash
+docker compose -f docker-compose.demo.yml down -v
+```
+
+仓库开发 / CI 可使用自动化 smoke：
 
 ```bash
 npm run smoke:p0:demo
@@ -218,7 +272,7 @@ docker compose pull
 docker compose up -d --build
 ```
 
-升级后：
+升级后，客户 Docker-only demo 验收按 §8 执行；仓库开发 / CI 环境可额外运行：
 
 ```bash
 npm run smoke:p0:docker
@@ -342,4 +396,3 @@ node examples/docker-demo/scripts/gen-demo-data.mjs \
 - 数据规模扩大后，MySQL 8.4 初始化时间从 < 1s 增至 ~3-5s（容器健康检查间隔 5s，足够；如有 CI 严格 timeout，需要相应放宽）。
 - Postgres demo 同步扩容；`01-init.sql` 现在 ~1100 行。
 - 业务 eval case（`evals/superstore/eval/superstore-eval-cases.yaml`）原本基于 10194 行生产数据；接入 demo 链路时若数值类断言期望硬编码，会与新基线冲突。建议 eval case 改为读 `_baseline.json`（详见 `docs/deployment-docker.md` §12.4 测试用例矩阵与 `docs/lucy-test-cases.md`）。
-

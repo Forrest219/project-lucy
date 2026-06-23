@@ -32,10 +32,12 @@ RUN cd webui && npm ci --include=dev
 
 COPY . .
 
+# The default runtime template intentionally seeds a CHANGE-ME ktx.yaml.
+# Customer deployments must edit /data/lucy/ktx.yaml after first start; demo
+# compose files override LUCY_TEMPLATE_ROOT with ready-to-run demo projects.
 RUN cd webui && npm run build \
   && cd /app \
-  && mkdir -p /app/project-template/webui \
-  && cp -R AGENTS.md CLAUDE.md README.md ktx.yaml.example semantic-layer skills wiki evals lucy-skills /app/project-template/ \
+  && mkdir -p /app/project-template/webui /app/project-template/semantic-layer /app/project-template/skills /app/project-template/wiki /app/project-template/evals \
   && cp ktx.yaml.example /app/project-template/ktx.yaml \
   && cp -R webui/config /app/project-template/webui/config \
   && mkdir -p /data/lucy

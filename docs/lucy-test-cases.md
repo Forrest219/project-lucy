@@ -31,6 +31,53 @@ examples/postgres-demo/postgres/_baseline.json
 
 这两份 JSON 由 `examples/docker-demo/scripts/gen-demo-data.mjs` 在 seed=42、rows=1000 下生成。修改基线 = 改 seed 或 rows 后重跑生成器。**不要在测试用例文档里硬编码数字**：业务查询 TC-BIZ-* 的「期望」栏改为引用 `_baseline.json` 字段，避免文档与种子漂移。
 
+### 0.2 客户 Docker-only 最小验收路径
+
+外部客户工程师只需要 Docker 与 Docker Compose；不需要在宿主机安装 Node/npm、KTX、Python、pnpm 或 uv。
+
+```bash
+docker compose -f docker-compose.demo.yml up -d --build
+docker compose -f docker-compose.demo.yml ps
+curl http://127.0.0.1:55176/api/health
+
+docker compose -f docker-compose.demo.yml exec demo-db \
+  mysql -u lucy -plucy_demo dataforai -e \
+  "SELECT COUNT(*) AS orders FROM superstore_orders; SELECT COUNT(*) AS people FROM superstore_people; SELECT COUNT(*) AS returns_count FROM superstore_returns;"
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy connection test demo-mysql
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy admin reindex --force --output json
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy sl validate superstore_orders --connection-id demo-mysql
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy sl --connection-id demo-mysql query \
+  --measure superstore_orders.total_sales \
+  --dimension superstore_orders.region \
+  --segment superstore_orders.active_rows \
+  --limit 5 \
+  --execute \
+  --max-rows 5
+```
+
+最小 Pass 条件：
+
+- WebUI `/api/health` 返回 `"ok": true`。
+- demo 数据行数为 orders = `1000`，people = `4`，returns_count = `60`。
+- KTX connection test / reindex / semantic-layer validate 均成功。
+- region 销售额与 `_baseline.json#sales_by_region` 一致：East `550670.8159`、Central South `363958.9831`、Northeast `302200.0925`、Southwest `242646.2038`。
+
+清理 demo：
+
+```bash
+docker compose -f docker-compose.demo.yml down -v
+```
+
+仓库开发 / CI 可运行 `npm run smoke:p0:demo` 自动覆盖上述主链路；客户安装验收不依赖 npm。
+
 ---
 
 ## 1. 测试数据基线（共用）
@@ -353,7 +400,7 @@ examples/postgres-demo/postgres/_baseline.json
 - 命令：`npm run eval`（前提：demo stack 已启动；`docker-compose.demo.yml` v0.2 起已挂载 `./evals:/data/lucy/evals:ro`，KTX MCP 在容器内可访问 evals）
 - Pass 条件：所有 P0 用例通过；非 P0 用例失败需记录但不阻断
 
-> 备注：`docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 已挂载 `./evals:/data/lucy/evals:ro`（read-only），demo stack 启动后 KTX MCP 在容器内可直接访问 `evals/superstore/eval/` 与 `evals/kx_financial/eval/`。无需手动 cp 或修改 entrypoint。
+> 备注：`docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 已挂载 `./evals:/data/lucy/evals:ro`（read-only），demo stack 启动后 KTX MCP 在容器内可直接访问 `evals/superstore/eval/`。无需手动 cp 或修改 entrypoint。
 
 ---
 
@@ -399,7 +446,7 @@ examples/postgres-demo/postgres/_baseline.json
 - 优先级：P2
 - 操作：临时屏蔽 `api.minimaxi.com`（或对应 `base_url`）后跑 `sl_validate`
 - 期望：`sl_validate` 仍通过（不依赖 LLM），但 `sl_query` 调用涉及 measure 推断时报 `llm unavailable`
-- Pass 条件：行为符合 CLAUDE.md「先 sl_read 再 sl_query」链路
+- Pass 条件：行为符合数据问答建议链路：先用 `sl_read_source` / 语义层读取确认 source、measure、segment，再用 `sl_query` 执行查询；LLM backend 不可达时不影响显式 `sl_validate`
 
 ### TC-FAIL-007 demo 卷残留导致旧状态
 
@@ -463,7 +510,7 @@ KTX 版本: 0.13.0
 
 | 现有脚本 | 是否覆盖本用例 | 备注 |
 |---|---|---|
-| `scripts/p0-demo-docker-smoke.mjs` | 覆盖 TC-START-001 / TC-NET-* / TC-DATA-002..004 / TC-PROXY-001/003..005 | 已绿即可视为 §2 §3 §4 §5 大部分用例通过 |
+| `scripts/p0-demo-docker-smoke.mjs` | 覆盖 TC-START-001 / TC-NET-* / TC-DATA-001..004 / TC-PROXY-001/003..005 / TC-BIZ-004 region baseline | 已绿即可视为 §2 §3 §4 §5 大部分用例通过 |
 | `scripts/p0-postgres-demo-smoke.mjs` | 覆盖 TC-START-002 / postgres 链路 | 与 demo 并行执行 |
 | `scripts/p0-business-eval-smoke.mjs` | 部分覆盖 TC-BIZ-009 | 业务侧 smoke 入口 |
 | `evals/superstore/eval/superstore-eval-cases.yaml` | 7 条 eval case | 与 TC-BIZ-001..008 对齐 |

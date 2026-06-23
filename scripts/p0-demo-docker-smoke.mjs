@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,6 +10,7 @@ const proxyPort = process.env.LUCY_DEMO_PROXY_HOST_PORT ?? "57881";
 const demoToken = process.env.LUCY_DEMO_AGENT_TOKEN ?? "lucy-demo-agent-token";
 const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.13.0";
 const composeFile = "docker-compose.demo.yml";
+const baselinePath = "examples/docker-demo/mysql/_baseline.json";
 let tempDockerConfig;
 
 function run(command, commandArgs, options = {}) {
@@ -69,6 +70,70 @@ function parseRpcBody(text) {
   return data ? JSON.parse(data) : null;
 }
 
+async function loadBaseline() {
+  return JSON.parse(await readFile(baselinePath, "utf8"));
+}
+
+function assertClose(label, actual, expected, tolerance = 0.01) {
+  const delta = Math.abs(Number(actual) - Number(expected));
+  if (!Number.isFinite(delta) || delta > tolerance) {
+    throw new Error(`${label} expected ${expected}, got ${actual}`);
+  }
+}
+
+function rowsByRegion(headers, rows) {
+  const map = new Map();
+  const regionIndex = Array.isArray(headers) ? headers.indexOf("region") : -1;
+  const salesIndex = Array.isArray(headers) ? headers.indexOf("total_sales") : -1;
+  for (const row of rows ?? []) {
+    if (Array.isArray(row)) {
+      const region = row[regionIndex >= 0 ? regionIndex : 0];
+      const sales = row[salesIndex >= 0 ? salesIndex : 1];
+      map.set(String(region), Number(sales));
+      continue;
+    }
+    if (row && typeof row === "object") {
+      const region = row.region ?? row["superstore_orders.region"];
+      const sales = row.total_sales ?? row["superstore_orders.total_sales"];
+      map.set(String(region), Number(sales));
+    }
+  }
+  return map;
+}
+
+function assertRegionSales(label, headers, rows, baseline) {
+  const expected = baseline.sales_by_region ?? {};
+  const actual = rowsByRegion(headers, rows);
+  const expectedRegions = Object.keys(expected).sort();
+  const actualRegions = [...actual.keys()].sort();
+  if (expectedRegions.join(",") !== actualRegions.join(",")) {
+    throw new Error(`${label} expected regions ${expectedRegions.join(", ")}, got ${actualRegions.join(", ")}`);
+  }
+  for (const [region, sales] of Object.entries(expected)) {
+    assertClose(`${label} ${region}`, actual.get(region), sales);
+  }
+}
+
+async function verifyDemoCounts(baseline) {
+  const sql = [
+    "SELECT 'orders', COUNT(*) FROM superstore_orders",
+    "UNION ALL SELECT 'people', COUNT(*) FROM superstore_people",
+    "UNION ALL SELECT 'returns', COUNT(*) FROM superstore_returns"
+  ].join(" ");
+  const result = await run("docker", composeArgs([
+    "exec", "-T", "demo-db",
+    "mysql", "-u", "lucy", "-plucy_demo", "-N", "-B", "dataforai", "-e", sql
+  ]), { capture: true });
+  const counts = Object.fromEntries(result.stdout.trim().split("\n").map((line) => {
+    const [key, value] = line.split("\t");
+    return [key, Number(value)];
+  }));
+  if (counts.orders !== baseline.counts.orders) throw new Error(`orders expected ${baseline.counts.orders}, got ${counts.orders}`);
+  if (counts.people !== baseline.counts.people) throw new Error(`people expected ${baseline.counts.people}, got ${counts.people}`);
+  if (counts.returns !== baseline.counts.returns) throw new Error(`returns expected ${baseline.counts.returns}, got ${counts.returns}`);
+  console.log(`[p0-demo-smoke] demo counts match baseline: orders=${counts.orders}, people=${counts.people}, returns=${counts.returns}`);
+}
+
 async function rpc(sessionId, method, params) {
   const headers = {
     "content-type": "application/json",
@@ -85,7 +150,7 @@ async function rpc(sessionId, method, params) {
   return { res, body: parseRpcBody(text), text };
 }
 
-async function verifyProxyAgentPath() {
+async function verifyProxyAgentPath(baseline) {
   const init = await rpc("", "initialize", {
     protocolVersion: "2025-03-26",
     capabilities: {},
@@ -140,13 +205,15 @@ async function verifyProxyAgentPath() {
     throw new Error(`proxy sl_query failed: HTTP ${call.res.status} ${JSON.stringify(call.body?.error ?? call.body)}`);
   }
   const structured = call.body?.result?.structuredContent;
-  if (!structured || !Array.isArray(structured.rows) || structured.rows.length < 3) {
+  if (!structured || !Array.isArray(structured.rows)) {
     throw new Error("proxy sl_query did not return expected demo rows");
   }
-  console.log(`[p0-demo-smoke] proxy sl_query returned ${structured.rows.length} rows`);
+  assertRegionSales("proxy sl_query", structured.headers, structured.rows, baseline);
+  console.log(`[p0-demo-smoke] proxy sl_query returned ${structured.rows.length} baseline-matched rows`);
 }
 
 async function main() {
+  const baseline = await loadBaseline();
   const env = {
     LUCY_DEMO_WEBUI_HOST_PORT: webPort,
     LUCY_DEMO_PROXY_HOST_PORT: proxyPort
@@ -163,10 +230,11 @@ async function main() {
     if (health?.data?.bundledKtxVersion !== expectedKtxVersion) {
       throw new Error(`demo bundledKtxVersion expected ${expectedKtxVersion}, got ${health?.data?.bundledKtxVersion}`);
     }
+    await verifyDemoCounts(baseline);
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "connection", "test", "demo-mysql"]));
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "admin", "reindex", "--force", "--output", "json"]), { capture: true });
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "superstore_orders", "--connection-id", "demo-mysql"]));
-    await run("docker", composeArgs([
+    const query = await run("docker", composeArgs([
       "exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy",
       "sl", "--connection-id", "demo-mysql", "query",
       "--measure", "superstore_orders.total_sales",
@@ -174,9 +242,13 @@ async function main() {
       "--segment", "superstore_orders.active_rows",
       "--limit", "5",
       "--execute",
-      "--max-rows", "5"
-    ]));
-    await verifyProxyAgentPath();
+      "--max-rows", "5",
+      "--format", "json"
+    ]), { capture: true });
+    const parsedQuery = JSON.parse(query.stdout);
+    assertRegionSales("cli sl query", parsedQuery.headers, parsedQuery.rows, baseline);
+    console.log("[p0-demo-smoke] cli sl query region totals match baseline");
+    await verifyProxyAgentPath(baseline);
     await run("docker", composeArgs(["ps"]));
     console.log("\n[p0-demo-smoke] PASS");
   } finally {

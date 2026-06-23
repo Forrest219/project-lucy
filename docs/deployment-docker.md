@@ -16,7 +16,8 @@
 - Lucy 镜像内置固定版本 KTX runtime。
 - Lucy repo 不 fork / vendor KTX 源码。
 - 项目数据、配置、语义层、wiki、audit/eval 状态持久化在 `/data/lucy`。
-- 客户不需要在宿主机安装 KTX、Node、Python、pnpm 或 uv。
+- 客户安装和 Docker-only demo 验收不需要在宿主机安装 KTX、Node、Python、pnpm 或 uv。
+- `npm run smoke:*` 是仓库开发 / CI 自动化入口；只有使用 git checkout 并希望运行自动化 smoke 时才需要宿主机 Node.js。
 
 ## 2. Bundled Runtime
 
@@ -99,6 +100,8 @@ lucy-data:/data/lucy
 
 首版仍需要编辑 `/data/lucy/ktx.yaml` 和挂载密码文件。
 
+默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换连接信息和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 WebUI 启动。
+
 推荐做法：
 
 1. 启动一次容器，让 `/data/lucy` 完成初始化。
@@ -107,7 +110,7 @@ lucy-data:/data/lucy
 4. 确保 `ktx.yaml` 的 `password:` 指向容器内路径，例如：
 
 ```yaml
-password: file:/data/lucy/.ktx/secrets/mysql-aliyun-password
+password: file:/data/lucy/.ktx/secrets/<password-file>
 ```
 
 5. 重启：
@@ -224,13 +227,51 @@ Docker smoke 默认使用宿主端口 `55175` 和 `57880`，避免和本地开�
 `5174` / `7879` 冲突。可用 `LUCY_DOCKER_SMOKE_WEB_PORT` 和
 `LUCY_DOCKER_SMOKE_PROXY_PORT` 覆盖。
 
-Demo Docker gate（不依赖个人或生产数据库）：
+Demo Docker gate（不依赖个人或生产数据库）可用纯 Docker 命令完成：
+
+```bash
+docker compose -f docker-compose.demo.yml up -d --build
+docker compose -f docker-compose.demo.yml ps
+curl http://127.0.0.1:55176/api/health
+
+docker compose -f docker-compose.demo.yml exec demo-db \
+  mysql -u lucy -plucy_demo dataforai -e \
+  "SELECT COUNT(*) AS orders FROM superstore_orders; SELECT COUNT(*) AS people FROM superstore_people; SELECT COUNT(*) AS returns_count FROM superstore_returns;"
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy connection test demo-mysql
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy admin reindex --force --output json
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy sl validate superstore_orders --connection-id demo-mysql
+
+docker compose -f docker-compose.demo.yml exec lucy \
+  ktx --project-dir /data/lucy sl --connection-id demo-mysql query \
+  --measure superstore_orders.total_sales \
+  --dimension superstore_orders.region \
+  --segment superstore_orders.active_rows \
+  --limit 5 \
+  --execute \
+  --max-rows 5
+```
+
+期望 demo 数据与 `examples/docker-demo/mysql/_baseline.json` 一致：orders = `1000`，people = `4`，returns_count = `60`；region 销售额为 East `550670.8159`、Central South `363958.9831`、Northeast `302200.0925`、Southwest `242646.2038`。
+
+清理 demo：
+
+```bash
+docker compose -f docker-compose.demo.yml down -v
+```
+
+仓库开发 / CI 环境可用自动化 smoke 跑同一主链路：
 
 ```bash
 npm run smoke:p0:demo
 ```
 
-该 gate 使用 `docker-compose.demo.yml` 启动 MySQL demo DB 与 Lucy，验证：
+该自动化 gate 使用 `docker-compose.demo.yml` 启动 MySQL demo DB 与 Lucy，验证：
 
 - demo DB health。
 - Lucy WebUI `/api/health`。
@@ -255,7 +296,7 @@ npm run smoke:p0:business-eval
 npm run smoke:p0:customer
 ```
 
-该客户主链路 smoke 默认验证 `mysql-aliyun/superstore_orders`。可用环境变量覆盖：
+该客户主链路 smoke 面向仓库开发 / CI 环境，默认值仅用于本仓库内部验证；客户项目应按自己的 connection/source/measure 覆盖：
 
 ```bash
 LUCY_P0_CONNECTION_ID=<connection-id> \
@@ -367,6 +408,8 @@ npm run release:artifacts -- --out release/
 node scripts/release-artifacts.mjs --out release/
 ```
 
+发布产物中的 `lucy-docker-source-bundle.tar.gz` 是客户可安装包；metadata、SBOM 和单独的 Markdown 文档只用于发布说明。
+
 ## 13. v0.2 增补：Demo Evals 挂载
 
 `docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 已挂载 `./evals:/data/lucy/evals:ro`，使 demo 容器内 KTX MCP 的 wiki_search / eval 工具能访问到仓库的 eval suites。
@@ -374,7 +417,7 @@ node scripts/release-artifacts.mjs --out release/
 挂载要点：
 
 - read-only，不影响 demo-data volume 的运行时状态
-- 不挂 evals 时，KTX MCP 在 demo 容器内找不到 superstore/kx_financial eval
+- 不挂 evals 时，KTX MCP 在 demo 容器内找不到 superstore eval
 - 调整后无需重启 demo-db；只 `docker compose up -d lucy` 即可
 
 ## 14. v0.2 增补：大陆网络环境
@@ -388,4 +431,3 @@ node scripts/release-artifacts.mjs --out release/
 | 终端要走代理 | `export HTTPS_PROXY=http://127.0.0.1:7897` 后再 `docker compose up`；Docker Desktop 还要在 Settings → Resources → Proxies 同步 |
 
 Docker Desktop 用户在镜像构建时不会自动继承 shell 代理，必须显式配置 daemon.json 或 Docker Desktop UI，否则 build 阶段 apt-get / npm install 超时。
-

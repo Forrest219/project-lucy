@@ -74,9 +74,11 @@ For tag/manual release runs, `release-package` uploads:
 
 The artifact contains:
 
+- `lucy-docker-source-bundle.tar.gz`: customer-installable Docker Compose source bundle. This is the artifact a customer engineer can unpack and run with Docker only.
 - `lucy-release-metadata.json`: Git commit, Docker image id, bundled KTX version, verified database matrix, required gates, and root/WebUI `npm audit --json` summaries with exit codes.
 - `lucy-release-notes.md`: concise customer-facing release summary.
 - `lucy-sbom.json`: local CycloneDX-lite runtime dependency inventory for the Lucy root package, WebUI package, base image, and bundled KTX runtime. Development-only dependencies marked `dev: true` in package-lock files are omitted; remaining npm components are labeled as `production`, `peer`, `optional`, or `bundled` from package-lock metadata.
+- `lucy-customer-deployment-guide.md`, `lucy-deployment-docker.md`, `lucy-test-cases.md`: customer-facing deployment and test documentation copied from `docs/`.
 
 ## 5. Registry Publishing
 

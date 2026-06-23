@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 // ---- arg parsing ----
@@ -53,16 +53,46 @@ const REQUIRED_DOCS = [
   { src: "docs/deployment-docker.md",          dest: "lucy-deployment-docker.md" },
   { src: "docs/lucy-test-cases.md",            dest: "lucy-test-cases.md" }
 ];
+const SOURCE_BUNDLE_NAME = "lucy-docker-source-bundle.tar.gz";
+const SOURCE_BUNDLE_ROOT = "lucy-docker-source-bundle";
+// Customer bundle allow-list. Intentionally excludes dev-only paths such as
+// webui/scripts, tests, webui docs, inbox, local secrets, and generated output.
+const SOURCE_BUNDLE_ENTRIES = [
+  ".dockerignore",
+  "Dockerfile",
+  "docker-compose.yml",
+  "docker-compose.demo.yml",
+  "docker-compose.postgres-demo.yml",
+  "docker-compose.secrets.yml",
+  "package.json",
+  "package-lock.json",
+  "ktx.yaml.example",
+  "examples",
+  "evals/superstore",
+  "scripts/docker-entrypoint.sh",
+  "scripts/docker-healthcheck.sh",
+  "webui/package.json",
+  "webui/package-lock.json",
+  "webui/index.html",
+  "webui/tsconfig.json",
+  "webui/tsconfig.node.json",
+  "webui/vite.config.ts",
+  "webui/src",
+  "webui/server",
+  "webui/config",
+  ...REQUIRED_DOCS.map((entry) => entry.src)
+];
 
 if (help) {
   console.log("Usage: node scripts/release-artifacts.mjs [--out <dir>] [--tag <tag>] [--help|-h]");
   console.log("");
   console.log("Writes lucy-release-metadata.json, lucy-release-notes.md, lucy-sbom.json,");
-  console.log("and bundled customer docs to <dir> (default: release/).");
+  console.log(`bundled customer docs, and ${SOURCE_BUNDLE_NAME} to <dir> (default: release/).`);
   console.log("Required bundled docs (fail-fast if any is missing):");
   for (const entry of REQUIRED_DOCS) {
     console.log(`  ${entry.src} -> ${entry.dest}`);
   }
+  console.log(`Installable Docker source bundle: ${SOURCE_BUNDLE_NAME}`);
   process.exit(0);
 }
 
@@ -152,6 +182,50 @@ function auditWorkspace(name, cwd) {
     counts,
     vulnerabilities
   };
+}
+
+function shouldCopySourceBundlePath(src) {
+  const parts = src.split(path.sep);
+  const base = parts[parts.length - 1];
+  if (base === ".DS_Store") return false;
+  if (base === ".gitkeep") return false;
+  if (base === "__pycache__") return false;
+  if (base.endsWith(".pyc")) return false;
+  if (parts.includes("smoke")) return false;
+  if (parts[0] === "webui" && base === "README.md") return false;
+  if (base === "node_modules" || base === "dist" || base === "coverage") return false;
+  if (base === "__tests__") return false;
+  if (base.endsWith(".test.ts") || base.endsWith(".test.tsx") || base.endsWith(".test.mjs")) return false;
+  if (parts.includes("docs") && !REQUIRED_DOCS.some((entry) => src.endsWith(entry.src))) return false;
+  return true;
+}
+
+async function createSourceBundle(outDir) {
+  const stagingRoot = path.join(outDir, `.${SOURCE_BUNDLE_ROOT}-${process.pid}`);
+  const bundleRoot = path.join(stagingRoot, SOURCE_BUNDLE_ROOT);
+  const bundlePath = path.join(outDir, SOURCE_BUNDLE_NAME);
+  await rm(stagingRoot, { recursive: true, force: true });
+  await mkdir(bundleRoot, { recursive: true });
+  try {
+    for (const entry of SOURCE_BUNDLE_ENTRIES) {
+      const dest = path.join(bundleRoot, entry);
+      await mkdir(path.dirname(dest), { recursive: true });
+      await cp(entry, dest, {
+        recursive: true,
+        filter: shouldCopySourceBundlePath
+      });
+    }
+    const result = spawnSync("tar", ["-czf", bundlePath, "-C", stagingRoot, SOURCE_BUNDLE_ROOT], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    if (result.status !== 0) {
+      throw new Error(`failed to create ${SOURCE_BUNDLE_NAME}: tar exited ${result.status}. ${result.stderr || result.stdout}`);
+    }
+    console.log(`[release-artifacts] bundled customer source -> ${SOURCE_BUNDLE_NAME}`);
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true });
+  }
 }
 
 function combinedAudit(workspaces) {
@@ -281,6 +355,7 @@ Full P0/P1/P2 test case matrix: docs/lucy-test-cases.md (bundled as release/lucy
 - lucy-release-metadata.json
 - lucy-release-notes.md
 - lucy-sbom.json (production/runtime dependencies; dev dependencies omitted)
+- lucy-docker-source-bundle.tar.gz (installable Docker Compose source bundle)
 - lucy-customer-deployment-guide.md (copy of docs/customer-deployment-guide.md)
 - lucy-deployment-docker.md (copy of docs/deployment-docker.md)
 - lucy-test-cases.md (copy of docs/lucy-test-cases.md)
@@ -290,6 +365,7 @@ Full P0/P1/P2 test case matrix: docs/lucy-test-cases.md (bundled as release/lucy
   await writeFile(path.join(FINAL_OUT_DIR, "lucy-release-metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
   await writeFile(path.join(FINAL_OUT_DIR, "lucy-sbom.json"), `${JSON.stringify(sbom, null, 2)}\n`, "utf8");
   await writeFile(path.join(FINAL_OUT_DIR, "lucy-release-notes.md"), notes, "utf8");
+  await createSourceBundle(FINAL_OUT_DIR);
   // Bundle customer-facing docs as release artifacts.
   // REQUIRED_DOCS use explicit src -> dest mapping (no mechanical prefixing)
   // and fail fast on missing sources; release-notes above already advertises

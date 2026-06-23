@@ -2,6 +2,8 @@
 -- DO NOT EDIT BY HAND. Re-run the generator to refresh.
 -- Seed=42 Rows=1000 Generated=2026-06-23T03:30:34.279Z
 
+CREATE SCHEMA IF NOT EXISTS dataforai;
+
 CREATE TABLE IF NOT EXISTS dataforai.superstore_orders (
   row_id INT PRIMARY KEY,
   order_id VARCHAR(64) NOT NULL,
@@ -30,7 +32,7 @@ CREATE TABLE IF NOT EXISTS dataforai.superstore_orders (
   source_row_number INT NOT NULL,
   batch_id VARCHAR(64) NOT NULL,
   row_hash VARCHAR(128) NOT NULL,
-  is_deleted TINYINT NOT NULL DEFAULT 0,
+  is_deleted SMALLINT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -44,7 +46,7 @@ CREATE TABLE IF NOT EXISTS dataforai.superstore_people (
   source_row_number INT NOT NULL,
   batch_id VARCHAR(64) NOT NULL,
   row_hash VARCHAR(128) NOT NULL,
-  is_deleted TINYINT NOT NULL DEFAULT 0,
+  is_deleted SMALLINT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -59,7 +61,7 @@ CREATE TABLE IF NOT EXISTS dataforai.superstore_returns (
   source_row_number INT NOT NULL,
   batch_id VARCHAR(64) NOT NULL,
   row_hash VARCHAR(128) NOT NULL,
-  is_deleted TINYINT NOT NULL DEFAULT 0,
+  is_deleted SMALLINT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

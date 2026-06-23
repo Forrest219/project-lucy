@@ -281,6 +281,11 @@ async function main() {
 
   // schema (unchanged)
   const t = (name) => (SCHEMA ? `${SCHEMA}.${name}` : name);
+  const deletedFlagType = SCHEMA ? "SMALLINT" : "TINYINT";
+  if (SCHEMA) {
+    lines.push(`CREATE SCHEMA IF NOT EXISTS ${SCHEMA};`);
+    lines.push("");
+  }
   lines.push(`CREATE TABLE IF NOT EXISTS ${t("superstore_orders")} (`);
   lines.push(`  row_id INT PRIMARY KEY,`);
   lines.push(`  order_id VARCHAR(64) NOT NULL,`);
@@ -309,7 +314,7 @@ async function main() {
   lines.push(`  source_row_number INT NOT NULL,`);
   lines.push(`  batch_id VARCHAR(64) NOT NULL,`);
   lines.push(`  row_hash VARCHAR(128) NOT NULL,`);
-  lines.push(`  is_deleted TINYINT NOT NULL DEFAULT 0,`);
+  lines.push(`  is_deleted ${deletedFlagType} NOT NULL DEFAULT 0,`);
   lines.push(`  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,`);
   lines.push(`  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
   lines.push(`);`);
@@ -324,7 +329,7 @@ async function main() {
   lines.push(`  source_row_number INT NOT NULL,`);
   lines.push(`  batch_id VARCHAR(64) NOT NULL,`);
   lines.push(`  row_hash VARCHAR(128) NOT NULL,`);
-  lines.push(`  is_deleted TINYINT NOT NULL DEFAULT 0,`);
+  lines.push(`  is_deleted ${deletedFlagType} NOT NULL DEFAULT 0,`);
   lines.push(`  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,`);
   lines.push(`  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
   lines.push(`);`);
@@ -340,7 +345,7 @@ async function main() {
   lines.push(`  source_row_number INT NOT NULL,`);
   lines.push(`  batch_id VARCHAR(64) NOT NULL,`);
   lines.push(`  row_hash VARCHAR(128) NOT NULL,`);
-  lines.push(`  is_deleted TINYINT NOT NULL DEFAULT 0,`);
+  lines.push(`  is_deleted ${deletedFlagType} NOT NULL DEFAULT 0,`);
   lines.push(`  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,`);
   lines.push(`  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
   lines.push(`);`);
