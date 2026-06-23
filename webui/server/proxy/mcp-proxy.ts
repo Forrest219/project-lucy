@@ -1,8 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
+import path from "node:path";
 import { identifyRequest, setSessionClient, type Identity } from "./identity.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { resolveProjectRoot } from "../project.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -367,6 +370,45 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
   return builders;
 }
 
+// ─── InitializeResult.instructions injection (wo-proxy-instructions-injection Task A) ───
+//
+// Lucy MCP Proxy rewrites upstream `initialize` responses to inject
+// `result.instructions` from `webui/config/data-qa-instructions.md`. This is the
+// single source of truth for the data-QA guidance that used to live in
+// `CLAUDE.md` — it travels with the MCP session so all clients (Codex, Cursor,
+// remote Claude Code) see the same instructions, not just Claude Code local
+// agents that auto-load CLAUDE.md.
+//
+// Failure semantics deliberately differ from `writeToolsListResponse`:
+// tools/list filter failures return JSON-RPC -32003 (fail-closed — wrong tool
+// visibility is a security boundary). instructions injection failures fall
+// back to pass-through of the original upstream body (fail-open) — instructions
+// are guidance, not a security boundary, and a buggy rewriter must not block
+// MCP session establishment for every client.
+//
+// The loader is one-shot at module init; if the file is missing or unreadable
+// we treat it as "injection unavailable" and silently pass-through rather than
+// crash the proxy.
+let cachedDataQaInstructions: string | undefined;
+let cachedDataQaInstructionsLoaded = false;
+async function loadDataQaInstructions(): Promise<string | undefined> {
+  if (cachedDataQaInstructionsLoaded) return cachedDataQaInstructions;
+  cachedDataQaInstructionsLoaded = true;
+  try {
+    const projectRoot = await resolveProjectRoot();
+    const filePath = path.join(projectRoot, "webui", "config", "data-qa-instructions.md");
+    cachedDataQaInstructions = (await readFile(filePath, "utf-8")).trim();
+  } catch (err) {
+    console.error("[lucy-proxy] failed to load data-qa-instructions.md; initialize will pass through", err);
+    cachedDataQaInstructions = undefined;
+  }
+  return cachedDataQaInstructions;
+}
+
+function instructionsInjectionEnabled(): boolean {
+  return process.env.LUCY_ENABLE_INSTRUCTIONS_INJECTION !== "false";
+}
+
 function encodeSseMessage(payload: unknown): string {
   return `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
 }
@@ -459,6 +501,72 @@ async function writeToolsListResponse(
   res.writeHead(upstream.statusCode ?? 200, headers);
   res.end(body);
   return { filterFailed, errorDetail, responseBytes };
+}
+
+// Rewrites the upstream `initialize` response so `result.instructions` is the
+// proxy's data-QA guidance text. On ANY failure (parse error, missing result,
+// unsupported content-type, instructions text not loaded) we pass the original
+// upstream body through unchanged. This is deliberately fail-open: a buggy
+// rewriter must not block MCP session establishment for every client.
+async function writeInitializeResponse(
+  upstream: IncomingMessage,
+  res: ServerResponse
+): Promise<{ injectionFailed: boolean; errorDetail?: string; responseBytes: number }> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of upstream as AsyncIterable<Buffer>) {
+    chunks.push(chunk);
+  }
+
+  const originalBody = Buffer.concat(chunks).toString();
+  const contentType = String(upstream.headers["content-type"] ?? "");
+  const instructions = await loadDataQaInstructions();
+  const isSse = contentType.includes("text/event-stream");
+
+  let body = originalBody;
+  let injectionFailed = false;
+  let errorDetail: string | undefined;
+  let forceJson = false;
+
+  if (!instructions) {
+    injectionFailed = true;
+    errorDetail = "instructions_text_unavailable";
+  } else {
+    try {
+      if (isSse) {
+        const payload = decodeSseMessage(originalBody);
+        if (!payload) throw new Error("missing SSE data frame");
+        const record = payload as Record<string, unknown>;
+        const result = record.result as Record<string, unknown> | undefined;
+        if (!result || typeof result !== "object") throw new Error("missing result object");
+        const rewritten = { ...record, result: { ...result, instructions } };
+        body = encodeSseMessage(rewritten);
+      } else if (contentType.includes("application/json")) {
+        const parsed = JSON.parse(originalBody) as Record<string, unknown>;
+        const result = parsed.result as Record<string, unknown> | undefined;
+        if (!result || typeof result !== "object") throw new Error("missing result object");
+        const rewritten = { ...parsed, result: { ...result, instructions } };
+        body = JSON.stringify(rewritten);
+      } else {
+        throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
+      }
+    } catch (err) {
+      injectionFailed = true;
+      errorDetail = `instructions_injection_failed:${err instanceof Error ? err.message : String(err)}`;
+      body = originalBody;
+    }
+  }
+
+  const headers: Record<string, string | string[] | number> = {};
+  for (const [k, v] of Object.entries(upstream.headers)) {
+    const lower = k.toLowerCase();
+    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
+  }
+  headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
+  const responseBytes = Buffer.byteLength(body);
+  headers["content-length"] = responseBytes;
+  res.writeHead(upstream.statusCode ?? 200, headers);
+  res.end(body);
+  return { injectionFailed, errorDetail, responseBytes };
 }
 
 async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -697,6 +805,24 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
 
   const upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, body);
+
+  if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
+    const initResult = await writeInitializeResponse(upstream, res);
+    recordAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: rpcMethod,
+      outcome: "ok",
+      errorDetail: initResult.injectionFailed ? initResult.errorDetail : undefined,
+      durationMs: Date.now() - start,
+      responseBytes: initResult.responseBytes,
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, initResult.injectionFailed ? "instructions_injection_failed" : "allowed")),
+    });
+    return;
+  }
 
   if (rpcMethod === "tools/list") {
     const toolsList = await writeToolsListResponse(identity, upstream, res, requestId);

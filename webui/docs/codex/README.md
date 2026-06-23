@@ -79,5 +79,13 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）。**每个里程碑结束后�
 
 每张工单顶部都有「codex 直投 prompt」块，可整段贴给 codex。建议一次只投一个里程碑的工单，跑完验收再投下一个。
 
+## 7. 独立工单（非 M0-M5 主线）
+
+以下工单改动范围在 `webui/server/proxy/` 等独立模块，与 M0-M5 语义层编辑器主线互不冲突，可并行领取：
+
+| 工单 | 主题 |
+| --- | --- |
+| [wo-proxy-instructions-injection.md](wo-proxy-instructions-injection.md) | Lucy MCP Proxy initialize instructions 注入（Task A）+ 本地仓库切换到走 proxy（Task B），两个 Task 串行 |
+
 ---
 _工单包 by Claude (特工队协调者) · 2026-06-15_

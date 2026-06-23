@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | MCP Auth Proxy — 访问日志与多用户权限 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23 |
 | 撰写人 | Claude (Opus 架构设计) |
 | 委托人 | 张星晨 |
 | 基于材料 | project-lucy 代码库、KTX 上游源码（/Users/zhangxingchen/Projects/ktx）、Opus 架构分析 |
@@ -43,15 +43,16 @@ project-lucy 以 KTX HTTP MCP server（`localhost:7878/mcp`）暴露数据问答
 - 不实现 Web UI 管理界面（Phase 3 可选）
 - 不把 skill 当作安全边界。skill 只指导模型怎么用工具；最终授权必须由 Lucy MCP Proxy 裁决
 - v1.2 不实现 token scope。后续若引入，只允许在 role 基础上做交集收窄，不能增加权限
+- v1.3 新增的 `initialize.result.instructions` 注入（见 §4.4）是"指导"职责的扩展，不具备安全边界效力——它只决定模型看到什么提示文字，不决定模型能调用什么工具或看到什么数据。真正的权限边界始终是 `acl.check()` 和 `tools/list` 改写；instructions 文本写错或缺失最多导致模型少一些路由提示，不会导致越权
 
 ## 4. 架构设计
 
 ### 4.1 整体拓扑
 
 ```
-张三 Hermes  --Bearer <token>-->      ┐
-                                       ├─ Lucy MCP Proxy (:7879) ──> KTX MCP (:7878)
-Workhorse   --Bearer <token>-->       ┘  识别 / 检查 / 转发 / 日志    内部 token
+张三 Hermes              --Bearer <token>-->      ┐
+Workhorse                --Bearer <token>-->      ├─ Lucy MCP Proxy (:7879) ──> KTX MCP (:7878)
+本地 Claude Code 开发会话 --Bearer <token>-->      ┘  识别 / 检查 / 转发 / 日志    内部 token
 
                                               │
                                      .ktx-ui/audit.sqlite
@@ -61,6 +62,7 @@ Workhorse   --Bearer <token>-->       ┘  识别 / 检查 / 转发 / 日志    
 - 客户端 `.mcp.json` 指向 `:7879`，每用户配置各自的 Bearer token
 - 代理是 KTX 的唯一上游客户端，用内部独立 token（`KTX_INTERNAL_TOKEN` 环境变量）
 - KTX 继续监听 `:7878`，对外部用户无感知
+- v1.3 起，"本地 Claude Code 开发会话"也是一个普通客户端，不再走仓库 `CLAUDE.md` 兜底的数据问答指导——它和张三 Hermes、Workhorse 一样，通过 `.mcp.json` 配 `lucy` server + 自己的 token 连 `:7879`，指导文字来自 §4.4 的 `initialize` instructions 注入，不是仓库文件
 
 ### 4.2 请求生命周期
 
@@ -90,6 +92,20 @@ POST /mcp (client)
 - 请求 body 可缓冲（每次工具调用是单个 JSON 对象，通常 < 10KB）
 - 非 `tools/list` 响应必须原样 pipe，不 buffer 完整响应，避免破坏 SSE/chunked 语义
 - `tools/list` 是协议发现面，proxy 对该响应做有限缓冲改写：过滤无权工具，注入 proxy 自服务工具（如 `kx_catalog`），并重写 `content-length` / `transfer-encoding`
+
+### 4.4 Initialize Instructions 注入（v1.3）
+
+**设计意图**：本仓库曾经把"数据问答指导文字"（查询优先级、表路由、指标口径、reviewer 触发条件、provenance footer）放在根目录 `CLAUDE.md` 里——这是 Claude Code 专有的自动加载约定，外部客户端（Codex、Cursor、其他 Claude Code 用户的 Hermes/Workhorse）从不读这个仓库的 `CLAUDE.md`，导致同一份指导只有"本地仓库内的 Claude Code 开发会话"能看到，其他走 proxy 的客户端完全没有。v1.3 把这份指导迁移到 MCP 协议原生支持的 `InitializeResult.instructions` 字段，由 Lucy MCP Proxy 在 `initialize` 响应里统一注入，使所有走 `:7879` 的客户端（含本地 Claude Code 开发会话，见 §4.1）拿到同一份指导。
+
+**内容来源**：`webui/config/data-qa-instructions.md`。这是事实源，模块加载时一次性读取并缓存到进程内存（不做 hot-reload，改完文件需要重启 proxy 才生效——MVP 范围内可接受，因为指导文字不是高频变更项）。
+
+**MVP 不做权限差异化**：所有通过鉴权的 token 拿到同一份 instructions 文本，不按 role 拆分。差异化（比如不同 role 看到不同的表路由小节）留作后续迭代，不在 v1.3 范围内。
+
+**覆盖策略**：KTX 上游 `initialize` 响应目前不填 `result.instructions`（字段为空或缺失）。proxy 无条件覆盖该字段为本地文本——这是"无中生有覆盖"，不是合并。若未来 KTX 上游也开始填充该字段，约定为整体替换、不做内容拼接（避免两份指导互相矛盾或重复）。
+
+**失败语义（与 `tools/list` 刻意不同）**：`tools/list` 改写失败时 fail-closed，返回 JSON-RPC error（§6.1，因为它涉及权限边界，过滤失败可能导致越权暴露工具）。`initialize` 的 instructions 注入失败（文件未加载到、JSON 解析失败、content-type 不识别等）必须 fail-open——退化为原样透传上游响应，不能阻断 MCP session 建立。原因：instructions 只是指导文案，不是权限裁决；一旦在这里 fail-closed，注入功能任何一个小 bug 都会导致所有客户端连不上 proxy，影响范围远大于"少了一段指导文字"。失败时 proxy 仍写 audit（`tool=initialize`，`outcome=ok`，`decision_reason=instructions_injection_failed`，`error_detail` 记录失败原因），供事后排查，但不影响客户端侧的请求结果。
+
+**Kill switch**：环境变量 `LUCY_ENABLE_INSTRUCTIONS_INJECTION`（默认 `!== "false"` 即启用）。关闭时 `initialize` 走原有透传分支，行为等价于 v1.3 上线前。
 
 ## 5. 数据结构
 
@@ -424,10 +440,11 @@ v1.2 增加连接裁决：
 ```
 webui/
 ├── config/
-│   └── access.yaml              # 用户/权限配置（人工维护）
+│   ├── access.yaml                  # 用户/权限配置（人工维护）
+│   └── data-qa-instructions.md      # v1.3 新增：initialize instructions 注入内容来源（Claude 维护，见 §4.4）
 └── server/
     └── proxy/
-        ├── mcp-proxy.ts         # Fastify app，核心拦截 + 转发
+        ├── mcp-proxy.ts         # Fastify app，核心拦截 + 转发；v1.3 新增 writeInitializeResponse()
         ├── identity.ts          # Bearer token → userId / label
         ├── acl.ts               # 权限判定 + 表名提取
         └── audit.ts             # better-sqlite3 日志写入
@@ -438,8 +455,9 @@ webui/
 | 文件 | 改动内容 |
 |---|---|
 | `webui/server/index.ts` | 导入并启动 proxy app（端口 7879） |
-| `.mcp.json` | `url` 改为 `http://localhost:7879/mcp`；加 `headers.Authorization` |
+| `.mcp.json` | `url` 改为 `http://localhost:7879/mcp`；加 `headers.Authorization`；v1.3：key 名改为 `lucy`，本地仓库切到走 proxy（见 §10） |
 | `webui/package.json` | 新增依赖：`better-sqlite3`、`@types/better-sqlite3` |
+| `webui/server/proxy/mcp-proxy.ts`（v1.3） | 新增 `loadDataQaInstructions()`、`instructionsInjectionEnabled()`、`writeInitializeResponse()`；`handlePost()` 新增 `initialize` 分支（见 §4.4） |
 
 ### 不改动
 
@@ -488,6 +506,7 @@ function writeLog(entry: AccessLogEntry): void
 | `KTX_INTERNAL_TOKEN` | 代理转发到 KTX 时使用的内部 Bearer token | 随机生成的 hex |
 | `LUCY_PROXY_PORT` | 代理监听端口，默认 7879 | `7879` |
 | `LUCY_AUDIT_DB` | SQLite 文件路径，默认 `.ktx-ui/audit.sqlite` | 可自定义 |
+| `LUCY_ENABLE_INSTRUCTIONS_INJECTION` | v1.3 新增：`initialize` instructions 注入开关，`!== "false"` 即启用，默认开启 | `false`（关闭时退化为 v1.3 上线前的透传行为） |
 
 ## 10. 实施阶段
 
@@ -535,6 +554,26 @@ function writeLog(entry: AccessLogEntry): void
 ### Phase 3：可运维（可选，半天）
 11. `webui/server/index.ts` 加 `GET /api/audit` 接口（分页、按 user/tool 过滤）
 12. yaml hot reload（fs.watch + 删 token 写 revoked_tokens）
+
+### Phase 4：Initialize Instructions 注入与本地切换（v1.3，2026-06-23）
+
+目标：把仓库 `CLAUDE.md` 里的数据问答指导迁移到 §4.4 描述的 proxy instructions 注入，并让本地仓库内的 Claude Code 开发会话也切到走 proxy。
+
+> 说明：「`.mcp.json` 切到 `:7879`」这件事，Phase 1 步骤 6 当时就写过预期，但实际只切了 proxy 的监听端口/转发骨架，根目录 `.mcp.json` 一直没有真的改成指向 `:7879` 并带认证头——本阶段是把这条欠了很久的待办补完，不是新增需求。
+
+13. 新增 `webui/config/data-qa-instructions.md`（内容来源，详见 §4.4），把原 `CLAUDE.md` 的查询优先级、表路由、指标口径、reviewer 触发条件、provenance footer 原样迁移过去。
+14. `mcp-proxy.ts` 新增 `writeInitializeResponse()`，在 `handlePost()` 里给 `initialize` 方法新增独立分支，结构参照 `tools/list` 的 `writeToolsListResponse()`，但失败语义相反（fail-open，见 §4.4）。
+15. `access.yaml` 新增 `local_dev_full_access` role（覆盖 `ktx.yaml` 全部 `enabled_tables`）+ `forrest_local` 用户，保证本地开发切换后数据访问范围不收紧。
+16. 根目录 `.mcp.json`：`mcpServers` key 名从 `ktx` 改为 `lucy`，`url` 改为 `http://localhost:7879/mcp`，`headers.Authorization` 用 `"Bearer ${LUCY_LOCAL_TOKEN}"` 环境变量插值（不写明文 token）。token 明文存放在 `.ktx/secrets/lucy-local-token`（已在 `.gitignore`）。
+17. 本机环境变量 `LUCY_LOCAL_TOKEN` 配置在用户级 shell 启动文件（如 `~/.zshrc`，不属于本仓库），从 `.ktx/secrets/lucy-local-token` 读取后导出，确保每个新开的 Claude Code 会话都能用。
+
+**实测结论（供后续同类配置参考）**：
+
+- Claude Code 对 HTTP transport `.mcp.json` 里 `headers.Authorization` 字段的 `${VAR}` 环境变量插值**确认生效**（用 `claude -p --mcp-config <file> --strict-mcp-config` 非交互模式实测，`kx_catalog` 调用成功返回数据域列表）。社区曾有的"插值不生效"顾虑在本机此版本上未复现。
+- 之前一度怀疑的"KTX upstream SSE 握手 gap 导致 initialize 永远 400"**不成立**——用包含 `protocolVersion`/`capabilities`/`clientInfo` 全部必填字段的完整 initialize 请求直接测试 `:7878` 和 `:7879`，两者均返回 200。此前的 400 是测试请求本身缺字段（MCP SDK 的 zod schema 在缺字段时直接拒绝），与 SSE 握手无关，KTX 上游没有需要修复的兼容性问题。
+- 本机日常通过 `claude` 命令启动的会话，实际由 `~/.zshrc` 里的 `claude()` shell 函数强制 `cd` 到 `~/Workspace` 再启动，因此真正生效的是 `~/Workspace/.mcp.json`（不在本仓库内），而不是 `project-lucy/.mcp.json`——这是本机 shell 配置的固有行为，不是本工单引入的问题。为了让"本地仓库内开发会话切到走 proxy"对日常工作流真正生效，额外把 `lucy` server 条目合并进 `~/Workspace/.mcp.json`（与已有的 `tableau` server 并列）。`project-lucy/.mcp.json` 本身仍按上述第 16 条切换、保持作为仓库内交付物的正确性，供任何显式 `--mcp-config` 指向该文件的场景使用。
+
+**验证**：本地用 `claude -p --model claude-haiku-4-5-20251001 ... "调用 lucy 的 kx_catalog"`（默认配置，不带任何覆盖参数）验证，返回 `connections: ["mysql-aliyun"]`，确认本地开发会话默认即可走 proxy 拿到全量数据访问能力和 §4.4 的 instructions 指导。
 
 ## 11. 风险与缓解
 

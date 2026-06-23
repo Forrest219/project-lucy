@@ -8,18 +8,18 @@
 
 | 文件 | 语境 | 谁读 | 注入方式 |
 |------|------|------|---------|
-| `CLAUDE.md` | **运行时**：KTX 数据问答规则 | KTX 内置 LLM agent | `ktx.yaml → llm.provider.backend: claude-code` 自动注入 |
+| Lucy MCP Proxy `initialize` instructions（内容来源 `webui/config/data-qa-instructions.md`） | **运行时**：数据问答规则 | 任何走 `:7879` 连接的客户端（Codex、Cursor、Claude Code 等） | MCP `initialize` 响应注入，见 `webui/docs/07-mcp-auth-proxy-spec.md` §4.4 |
 | `AGENTS.md` → 本文件 | **开发态**（规则）：代码 / 配置修改治理 | Claude Code、Codex 等 coding agent | agent 启动时读取 AGENTS.md |
 | `agents/README.md` | **开发态**（角色库）：vibe coding 多角色协作 | 同上，按需调用 | 同上 |
 
-**规则**：两套语境只做单向引用，不互相复制内容。开发规则不得写入 `CLAUDE.md`；数据问答规则不得写入本文件。
+**规则**：两套语境只做单向引用，不互相复制内容。开发规则不得写入 `CLAUDE.md` 或 `webui/config/data-qa-instructions.md`；数据问答规则不得写入本文件。`CLAUDE.md` 现在只做指引（指向 `AGENTS.md` 和 proxy instructions 机制），不再承载数据问答规则正文。
 
 ---
 
 ## 适用范围
 
 - **适用**：修改 `webui/`、`ktx.yaml`、`semantic-layer/`、`skills/`、`.ktx/` 等仓库源码与配置的任何会话
-- **不适用**：纯数据问答场景——那部分规则在 `CLAUDE.md` 和 `.ktx/prompts/warehouse-knowledge.md`，不要把本文档内容同步进去
+- **不适用**：纯数据问答场景——那部分规则在 `webui/config/data-qa-instructions.md`（由 Lucy MCP Proxy 注入，见 `webui/docs/07-mcp-auth-proxy-spec.md` §4.4），不要把本文档内容同步进去
 
 ## 强制流程：Plan Mode
 
@@ -27,8 +27,8 @@
 
 - 新功能、架构调整、跨文件改动
 - semantic-layer / 数据库 schema 相关变更
-- 修改 `skills/`、`CLAUDE.md`、`AGENTS.md`、`ktx.yaml` 等治理类文件
-- 任何会影响 KTX 数据问答运行时行为的改动
+- 修改 `skills/`、`CLAUDE.md`、`AGENTS.md`、`ktx.yaml`、`webui/config/access.yaml`、`webui/config/data-qa-instructions.md`、`webui/docs/07-mcp-auth-proxy-spec.md` 等治理类文件
+- 任何会影响 KTX 数据问答运行时行为或 Lucy MCP Proxy 鉴权/指导内容的改动
 
 例外（无需先出计划，可直接执行，范围保持窄）：
 
@@ -56,9 +56,24 @@
 3. `mkdir -p .ktx/secrets && echo '<your-mysql-password>' > .ktx/secrets/mysql-aliyun-password`（该目录已在 `.ktx/.gitignore` 排除）
 4. 安装 KTX CLI：`npm install -g @kaelio/ktx@latest`（或在 `/Users/zhangxingchen/Projects/ktx` 跑 `pnpm install && pnpm run link:dev` 链入开发版本）
 5. 启动本地 MCP daemon：`ktx mcp start --project-dir /Users/zhangxingchen/Projects/project-lucy`
-   - 仓库已附带 `.mcp.json`（HTTP 端点 `http://localhost:7878/mcp`），Claude Code 启动时会自动连接；daemon 不运行则连接失败。
-   - Claude Desktop 走 stdio 接入，详见下方 §Claude Desktop / 云端 Claude 接入。
 6. 验证：`ktx status` 报告 `Agent integration ready: yes`，并跑一次 `ktx sl "<keyword>"` 看连接是否通
+7. 启动 Lucy MCP Proxy（`:7879`，对外发 token，承担鉴权 + 数据问答 instructions 注入；KTX daemon 本身的 `:7878` 不对外暴露、不带鉴权）：`cd webui && npm run dev` 或走已有的 `com.project-lucy.webui` launchd 服务。
+8. 申请本地开发 token：找仓库维护者（或走 `webui/server/admin/tokens.ts` 的 token 生成流程）在 `webui/config/access.yaml` 里建一个用户 + token，参考 `local_dev_full_access` role 的范围。token 明文只在生成时出现一次，存到 `.ktx/secrets/<自定义文件名>`（该目录已在 `.gitignore`），不要写进任何会被提交的文件。
+9. 配置 `.mcp.json`，指向 Lucy MCP Proxy 而不是直连 KTX daemon：
+   ```json
+   {
+     "mcpServers": {
+       "lucy": {
+         "type": "http",
+         "url": "http://localhost:7879/mcp",
+         "headers": { "Authorization": "Bearer ${LUCY_LOCAL_TOKEN}" }
+       }
+     }
+   }
+   ```
+   `${LUCY_LOCAL_TOKEN}` 用环境变量插值（已验证 Claude Code 支持，见 `webui/docs/07-mcp-auth-proxy-spec.md` §10 Phase 4 实测结论），本机 shell 配置（如 `~/.zshrc`）里从 `.ktx/secrets/` 下的文件读取后 `export`，不要把明文写进 `.mcp.json`。
+   - 如果你日常通过某个 shell 函数/alias 启动 `claude`（比如强制 `cd` 到某个固定工作目录再启动），要注意 Claude Code 实际加载的 `.mcp.json` 是那个固定目录下的文件，不一定是本仓库根目录这份——遇到这种情况，把 `lucy` 这个 server 条目同时配置到该固定目录的 `.mcp.json` 里，否则切换不会在日常会话里生效。
+   - Claude Desktop 走 stdio 接入 KTX daemon（不经过 Lucy MCP Proxy），详见下方 §Claude Desktop / 云端 Claude 接入；该路径目前还没有鉴权/审计层，仅建议本机调试用。
 
 > **凭据/路径漂移防护**：`ktx.yaml.example` 由 M3.4 维护；当 `ktx.yaml` 中的 host/user/路径字段发生变化时，请同步更新 `.example`。
 
@@ -215,6 +230,6 @@ KTX 上游不承担 skill 加载职责（KTX 定位是语义层 + wiki 通用 MC
 双轨设计概览见文档开头"双轨语境"表。本节补充维护约定：
 
 - 两套语境只做单行引用，不整段复制对方内容。
-- 新增开发规则 → 只写本文件或 `agents/` 下；不写入 `CLAUDE.md`。
-- 新增数据问答规则（口径、表路由、Gotcha）→ 只写 `CLAUDE.md` 或 `.ktx/prompts/`；不写入本文件。
-- 修改 `CLAUDE.md` 属于治理类文件变更，需走 Plan Mode（见上方"强制流程"）。
+- 新增开发规则 → 只写本文件或 `agents/` 下；不写入 `CLAUDE.md` 或 `webui/config/data-qa-instructions.md`。
+- 新增数据问答规则（口径、表路由、Gotcha）→ 只写 `webui/config/data-qa-instructions.md`（由 Lucy MCP Proxy 注入，见 `webui/docs/07-mcp-auth-proxy-spec.md` §4.4）；不写入本文件或 `CLAUDE.md`。
+- 修改 `CLAUDE.md`、`AGENTS.md`、`webui/config/data-qa-instructions.md`、`webui/config/access.yaml`、`webui/docs/07-mcp-auth-proxy-spec.md` 均属于治理类文件变更，需走 Plan Mode（见上方"强制流程"）。

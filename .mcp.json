@@ -1,8 +1,9 @@
 {
   "mcpServers": {
-    "ktx": {
+    "lucy": {
       "type": "http",
-      "url": "http://localhost:7878/mcp"
+      "url": "http://localhost:7879/mcp",
+      "headers": { "Authorization": "Bearer ${LUCY_LOCAL_TOKEN}" }
     }
   }
 }

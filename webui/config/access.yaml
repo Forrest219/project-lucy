@@ -34,6 +34,36 @@ roles:
         - sl_query
         - sl_read_source
         - entity_details
+  local_dev_full_access:
+    description: 本地开发全量只读访问（等价 ktx.yaml 直连范围）
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+            - superstore_returns
+            - superstore_people
+            - superstore_orders_huadong
+            - kx_dim_company
+            - kx_dim_financial_item
+            - kx_fact_financial_amount
+            - kx_vw_balance_sheet_detail
+            - kx_vw_cash_flow_statement_detail
+            - kx_vw_income_statement_detail
+      tools:
+        - kx_catalog
+        - sl_query
+        - sl_read_source
+        - sl_validate
+        - wiki_search
+        - wiki_read
+        - entity_details
+        - dictionary_search
+        - discover_data
+        - connection_list
 users:
   - id: zhangsan
     name: 张三
@@ -57,6 +87,15 @@ users:
         label: hermes-workhorse
         created: 2026-06-20
     role: kx_readonly
+  - id: forrest_local
+    name: Forrest（本地开发）
+    enabled: true
+    note: Local development user for the Lucy MCP proxy path (wo-proxy-instructions-injection Task B). Token provisioned via admin API; never store plaintext in committed files.
+    tokens:
+      - hash: sha256:4308081c826e6b6cc1d44ac3277078cb36007fd78723645f1eed61b0a75f951d
+        label: lucy-mcp-dev-v3
+        created: 2026-06-23
+    role: local_dev_full_access
   - id: lisi
     name: 李四
     enabled: false
