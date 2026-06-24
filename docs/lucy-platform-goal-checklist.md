@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy MCP Platform Goal Checklist |
 | 文档类型 | Goal / Acceptance Spec |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-21 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-21；v0.2 更新 2026-06-24（新增 MCP client compatibility / Skill management 能力行；修订 Non-goals 的 MCP client 范围表述；补充 Product Boundary 问答边界声明）；v0.3 更新 2026-06-24（Oracle 并入 StarRocks 数据库范围 Open Risk；Business eval 验收要求降级为"可配置+可手工/脚本触发+留痕"；新增系统可观测性/监控告警 Open Risk；Kubernetes/Helm 本期不支持决策收口并写入 Non-goals） |
 | 适用范围 | Lucy 从本地 POC / 内测工程形态走向可部署 MCP 服务管理平台的产品化验收 |
 
 ## 1. Goal
@@ -31,6 +31,7 @@ Lucy 的产品边界如下：
 - KTX 是 Lucy 的 bundled runtime dependency，负责底层 CLI、MCP server、semantic-layer runtime 等能力。
 - Lucy 负责配置管理、WebUI、权限、审计、MCP 管理、eval 验收、部署体验和产品化交付。
 - 客户不应被要求自行安装 KTX、Node、Python、pnpm 或 uv 才能完成标准部署。
+- Lucy 本身不直接回答业务问题；语义问答由接入的 Agent（如 Claude Code / Codex）通过 Lucy 提供的 MCP 能力完成。
 
 推荐表达：
 
@@ -49,6 +50,8 @@ Lucy Docker image = Lucy platform + pinned KTX runtime
 - 数据库接入。
 - semantic layer / wiki 管理。
 - MCP endpoint / token / agent 接入。
+- MCP client 兼容性矩阵。
+- Skill 管理（治理层面的内容/版本闭环，不含 Agent 分析推理本身）。
 - WebUI onboarding。
 - 权限、ACL 与 audit。
 - smoke / eval / release gate。
@@ -61,8 +64,10 @@ Lucy Docker image = Lucy platform + pinned KTX runtime
 - 在 Lucy repo 中复制、维护或长期 fork KTX 源码。
 - 重新实现 KTX semantic-layer engine、KTX CLI 或 KTX MCP server。
 - 让客户直接操作 KTX monorepo、pnpm workspace、uv runtime 或上游发布脚本。
-- 在首个 Docker 产品化闭环中同时覆盖所有数据库、所有 MCP client 和所有部署平台。
+- 在首个 Docker 产品化闭环中同时覆盖所有数据库和所有部署平台。
+- （已收窄）MCP client 覆盖范围不再是非目标：首版明确以 Claude Code / Codex / Openclaw / Hermes / Cursor 五个 client 为验收目标，详见 §5 `MCP client compatibility`；超出这五个 client 的覆盖仍属后续范围。
 - 用业务 eval 替代 runtime compatibility tests 或 platform smoke tests。
+- 在首个 Docker 产品化闭环中提供 Kubernetes/Helm 部署路径（2026-06-24 已决策本期不支持，详见 §9）。
 
 ## 5. Capability Checklist
 
@@ -77,10 +82,12 @@ Lucy Docker image = Lucy platform + pinned KTX runtime
 | Schema scan/read | verified | `semantic-layer/`, `examples/docker-demo/project-template/semantic-layer/`, `examples/postgres-demo/project-template/semantic-layer/`; `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` | Demo gate 经 Lucy MCP Proxy 调用 `sl_read_source` 读取语义/schema 内容；KTX 0.13.0 无顶层 `scan` 命令，P0 以 manifest/read/reindex 覆盖 |
 | Semantic layer management | partial | `semantic-layer/`, `webui/server/semantic-layer.ts`, `webui/src/pages/TableEditor.tsx` | 用户可编辑、保存、diff、validate、reindex semantic-layer overlay |
 | Wiki/context management | partial | `wiki/`, `webui/server/wiki.ts`, `webui/src/pages/WikiEditor.tsx` | 用户可维护 wiki/context，并让 KTX wiki 检索命中 |
+| Skill management | partial | `skills/warehouse/`, `skills/reviewer/`, `skills/domains/superstore/`, `skills/analysis/`；`CLAUDE.md` 运行时路由引用；目前无 WebUI Skill Editor 模块（参见 `docs/project-overview.md` §6 WebUI 7 模块列表，未含 Skill） | Skill 内容可被 KTX 运行时正确加载、路由并产生预期回答路径；WebUI 内可编辑/版本化/纳入 eval 回归覆盖后方可视为 verified |
 | MCP endpoint management | partial | `.mcp.json`, `webui/server/proxy/*`, `webui/src/pages/Onboarding.tsx`, `webui/docs/07-mcp-auth-proxy-spec.md` | 用户可获得 agents 平台可用的 MCP endpoint/token 配置 |
 | Auth / ACL / audit | verified | `webui/config/access.yaml`, `webui/server/proxy/*`, `webui/server/admin/*`, `docs/security-guide.md`, `scripts/security-baseline.mjs`; `npm run security:baseline` | token、role/ACL、audit log 可配置、可验证、可追溯 |
 | Agent onboarding | verified | `webui/src/pages/Onboarding.tsx`, `webui/src/__tests__/onboarding.test.tsx`, `docs/deployment-docker.md`; `npm run smoke:p0:demo`, `npm run smoke:p0:customer` | MCP 配置文档已有；demo gate 使用 bearer token 经 Lucy MCP Proxy 完成 `sl_read_source` 与 `sl_query`；WebUI 已提供上线检查和 MCP config 复制入口 |
-| Business eval | partial | `evals/`, `scripts/eval-runner.mjs`, `scripts/p0-business-eval-smoke.mjs`; `npm run smoke:p0:business-eval` | 核心 eval suite 可被 runner 读取；完整 LLM/agent eval 执行仍依赖外部 agent/model 环境 |
+| MCP client compatibility | verified | 人工验收测试：Claude Code、Codex、Openclaw、Hermes、Cursor 五个 MCP client（2026-06-24，Forrest 验证） | 五个 client 均可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用；新增 client 需补充至本表才视为已支持范围 |
+| Business eval | partial | `evals/`, `scripts/eval-runner.mjs`, `scripts/p0-business-eval-smoke.mjs`; `npm run smoke:p0:business-eval` | 本期验收要求已降级：eval case 可配置、可手工或脚本触发执行、执行结果留痕即满足要求；不要求自动 webhook 触发、阈值告警或每日 Cron 兜底（列为后续可选增强，非本期范围）。完整 LLM/agent eval 执行仍依赖外部 agent/model 环境，这是唯一剩余阻塞项 |
 | Runtime compatibility tests | verified | `scripts/p0-smoke.mjs`, `scripts/p0-demo-docker-smoke.mjs`, `scripts/p0-postgres-demo-smoke.mjs`, `scripts/p0-customer-path-smoke.mjs`; `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` | 内置 KTX 的 version、Python runtime、MCP tools/list、semantic-layer validate/query 基础能力已有 MySQL/PostgreSQL smoke gate |
 | Platform smoke tests | verified | `scripts/p0-smoke.mjs`, `scripts/p0-demo-docker-smoke.mjs`, `scripts/p0-postgres-demo-smoke.mjs`; `npm run smoke:p0`, `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` | WebUI build/test、API health、static SPA、Docker compose、MCP proxy auth/ACL 关键路径已覆盖 |
 | Release gates | verified | `.github/workflows/lucy-release.yml`; `docs/release-ci.md`; `npm run smoke:p0`, `npm run security:baseline`, `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer`, `npm run smoke:p0:business-eval`, `npm run audit:ktx-diff`, `npm run compat:ktx-upgrade`; `inbox/lucy-p0-security-baseline-2026-06-21.md` | P0 自动化 release baseline 已有可复验命令；P1 已补 KTX diff audit、WebUI onboarding、PostgreSQL gate、release artifacts 与 Docker secrets 示例；完整 LLM business eval 仍依赖外部 agent/model 环境 |
@@ -138,12 +145,13 @@ Lucy 的测试与 eval 分三层，不能互相替代：
 | Question | Current Position | Required Decision |
 |---|---|---|
 | Bundled KTX pinning source | 首版 Dockerfile 使用 npm release `@kaelio/ktx@0.13.0` | 正式 release policy 是否允许只 pin npm release，还是还要记录 git SHA / SBOM |
-| 首版部署形态 | 已按单机 Docker Compose 起步 | 后续是否增加 Kubernetes/Helm 路径 |
-| 首版数据库范围 | MVP 明确支持 MySQL + PostgreSQL；StarRocks 转 roadmap candidate | StarRocks 是否启动 DB-4 协议兼容 spike |
+| 首版部署形态 | 已按单机 Docker Compose 起步；Kubernetes/Helm 已决策本期不支持（2026-06-24，Forrest 决策，已写入 §4 Non-goals） | 后续阶段是否启动 Kubernetes/Helm 路径，本期不在范围内 |
+| 首版数据库范围 | MVP 明确支持 MySQL + PostgreSQL；StarRocks、Oracle 均转 roadmap candidate（2026-06-24 确认 Oracle 与 StarRocks 同等级别） | StarRocks、Oracle 是否启动协议兼容 spike，二者分别评估、分别决策 |
 | MCP endpoint 暴露方式 | 首版 Docker 采用 Lucy proxy 对外统一暴露；KTX upstream 只在容器内使用 | 是否需要支持高级用户直连 KTX upstream |
 | P0 smoke 数据源 | 已新增 demo MySQL compose；本机客户主链路也已用真实 MySQL 验证 | demo DB 作为可重复 CI gate，真实库作为人工验收补充 |
 | secrets 管理 | 首版支持 `/data/lucy/.ktx/secrets/*` 文件路径；已补 `docker-compose.secrets.yml` 作为 Docker secrets override 示例 | 是否继续补 env var / WebUI secret onboarding |
 | `sl_validate` MCP tool | KTX 0.13.0 MCP `tools/list` 不暴露 `sl_validate`；CLI `ktx sl validate` 可用 | docs / ACL / eval 假设是否要按当前 KTX tool surface 校准 |
+| 系统可观测性 / 监控告警 | 当前缺失：四份定位文档均无 metrics、告警、日志聚合机制，亦无 spec | 本期不交付，留作后续阶段；spec 范围（纯设计 vs 含现状盘点）待后续阶段确定 |
 
 ## 10. Update Rule
 

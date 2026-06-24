@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 产品介绍 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-18 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-24（澄清定位措辞；StarRocks/Oracle 数据源范围纠偏；审计留存表述纠偏；准确率指标加来源脚注；Eval 闭环自动化程度标注 Roadmap；列/行级权限措辞与 project-overview 对齐）；v1.2 更新 2026-06-24（权限管理卡片"表级 ACL"状态由 P1 改为已有，与 goal-checklist verified 对齐）；v1.3 更新 2026-06-24（Oracle 与 StarRocks 同列为 roadmap candidate；Eval 闭环表述改为"可手工/脚本触发即满足本期要求"，自动 Webhook/阈值告警维持 Roadmap） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | project-lucy docs / 产品设计 |
@@ -701,22 +701,22 @@
       <span class="gradient">交给 Agent 使用</span>
     </h1>
     <p class="hero-sub">
-      Lucy 是企业核心数据资产面向 AI Agent 的可信网关与治理海关。它在数据被 Agent 消费之前，统一校验口径、权限边界、查询路径与评测结果，让企业敢于开放数据，而不是被迫在效率和风险之间二选一。
+      Lucy 是企业核心数据资产面向 AI Agent 的可信网关与治理海关：它本身不直接回答业务问题，而是在数据被 Agent（如 Claude Code / Codex）消费之前，统一校验口径、权限边界、查询路径与评测结果，让企业敢于开放数据，而不是被迫在效率和风险之间二选一。
     </p>
     <div class="hero-stat-row">
       <div>
         <div class="hero-stat-num">21%</div>
-        <div class="hero-stat-label">无治理时的 Agent 准确率</div>
+        <div class="hero-stat-label">无治理时的 Agent 准确率*</div>
       </div>
       <div class="hero-stat-arrow">→</div>
       <div>
         <div class="hero-stat-num">95%+</div>
-        <div class="hero-stat-label">完整治理后的 Agent 准确率</div>
+        <div class="hero-stat-label">完整治理后的 Agent 准确率*</div>
       </div>
       <div class="hero-stat-divider"></div>
       <div>
-        <div class="hero-stat-num">180d</div>
-        <div class="hero-stat-label">访问日志持久化保留</div>
+        <div class="hero-stat-num">100%</div>
+        <div class="hero-stat-label">MCP 调用审计覆盖</div>
       </div>
       <div class="hero-stat-divider"></div>
       <div>
@@ -724,6 +724,7 @@
         <div class="hero-stat-label">细粒度 Agent 权限管控</div>
       </div>
     </div>
+    <p style="margin-top:18px;font-size:12px;color:var(--text3);text-align:center;">* 行业基准估算，非 Lucy 内部 Eval 实测结果；Lucy Business Eval 当前为 partial 状态，完整闭环尚未生效（详见 <code>docs/lucy-platform-goal-checklist.md</code> Capability Checklist）。</p>
   </div>
 </section>
 
@@ -764,8 +765,8 @@
       <div class="feature-card boundary-danger">
         <div class="feature-icon icon-blue">🗄️</div>
         <h3>多数据源接入</h3>
-        <p>统一 DataSourceAdapter SPI，支持 MySQL 和 StarRocks（MySQL Wire Protocol 只读账号）。跨源 Join 是治理红线，不进入 Agent 自动查询路径。</p>
-        <span class="feature-tag tag-p1">P1 · StarRocks</span>
+        <p>统一 DataSourceAdapter SPI，首版支持 MySQL + PostgreSQL（只读账号）。StarRocks、Oracle 均为 roadmap candidate，尚未启动协议兼容 spike。跨源 Join 是治理红线，不进入 Agent 自动查询路径。</p>
+        <span class="feature-tag tag-p1">Roadmap · StarRocks / Oracle 待立项</span>
       </div>
 
       <div class="feature-card">
@@ -785,15 +786,15 @@
       <div class="feature-card">
         <div class="feature-icon icon-yellow">🔐</div>
         <h3>权限管理</h3>
-        <p><strong>Secrets Cabinet：</strong>Lucy 不读取、不展示、不提交 <code>.ktx/secrets/</code> 中的密码与令牌。Eval Runner 通过 <code>safety_contract</code> 和 <code>forbidden_ast</code> 强阻断凭证路径、写操作和跨源 Join。</p>
-        <span class="feature-tag tag-p1">P1 · 表级 ACL</span>
+        <p><strong>表级 ACL：</strong>工具级、connection 级与表级权限已可配置、可验证、可追溯（见 <code>access.yaml</code>）。<strong>Secrets Cabinet：</strong>Lucy 不读取、不展示、不提交 <code>.ktx/secrets/</code> 中的密码与令牌；Eval Runner 通过 <code>safety_contract</code> 和 <code>forbidden_ast</code> 强阻断凭证路径、写操作和跨源 Join。</p>
+        <span class="feature-tag tag-existing">已有 · 表级 ACL</span>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon icon-green">📋</div>
         <h3>访问日志与审计</h3>
-        <p>每次 MCP 调用持久化记录 agent_id、SQL、返回行数、延迟和状态。SQLite 热查最近 180 天，历史数据归档对象存储永久保留。</p>
-        <span class="feature-tag tag-p1">P1 · 180 天+</span>
+        <p>每次 MCP 调用持久化记录 agent_id、SQL、返回行数、延迟和状态，写入 SQLite audit 日志，可配置、可验证、可追溯。</p>
+        <span class="feature-tag tag-existing">已有 · SQLite Audit</span>
       </div>
 
       <div class="feature-card">
@@ -868,7 +869,7 @@
             </div>
             <div class="sf-db">
               <div class="sf-box-title">数据源</div>
-              <div class="sf-db-list">MySQL / StarRocks<br>Oracle / PostgreSQL 等</div>
+              <div class="sf-db-list">MySQL / PostgreSQL<br><span style="opacity:.7;">StarRocks / Oracle（Roadmap）</span></div>
               <span class="sf-readonly">read-only</span>
             </div>
           </div>
@@ -888,11 +889,11 @@
             <div class="sf-section-label">数据源</div>
             <div class="sf-chips">
               <span class="sf-chip">MySQL</span>
-              <span class="sf-chip">StarRocks</span>
-              <span class="sf-chip">Oracle</span>
-              <span class="sf-chip">PostgreSQL 等</span>
+              <span class="sf-chip">PostgreSQL</span>
+              <span class="sf-chip">StarRocks（Roadmap）</span>
+              <span class="sf-chip">Oracle（Roadmap）</span>
             </div>
-            <div class="if-note">Schema / 字段 / 行数 / 查询历史</div>
+            <div class="if-note">首版支持 MySQL + PostgreSQL；StarRocks、Oracle 均为 roadmap candidate，尚未启动协议兼容 spike</div>
           </div>
 
           <div class="if-arrow">↓ Schema 扫描</div>
@@ -959,12 +960,12 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Eval 质量闭环
         </h3>
-        <p class="sub">配置侧每次变更自动触发，通过才允许进入服务侧。</p>
+        <p class="sub">配置侧变更经 Eval Runner 校验（可手工或脚本触发）并留痕才允许进入服务侧；自动 Webhook 触发与阈值告警为可选增强，非本期验收范围（见标注）。</p>
       </div>
       <div class="eval-steps-row">
         <div class="eval-step">
           <div class="eval-num">1</div>
-          <p><strong>变更触发</strong><br>语义层或 Skill 提交变更 → Webhook 触发相关 Eval Case</p>
+          <p><strong>变更触发</strong><br>语义层或 Skill 提交变更 → 手工或脚本触发相关 Eval Case 并留痕；自动 Webhook 触发 <span style="display:inline-block;margin-left:4px;padding:0 5px;border:1px solid var(--border);border-radius:4px;font-size:9px;color:var(--text3);">ROADMAP</span></p>
         </div>
         <div class="eval-step">
           <div class="eval-num">2</div>
@@ -972,7 +973,7 @@
         </div>
         <div class="eval-step">
           <div class="eval-num">3</div>
-          <p><strong>基线对比</strong><br>与历史 baseline 对比准确率，超过阈值变化时自动告警</p>
+          <p><strong>基线对比</strong><br>与历史 baseline 对比准确率，超过阈值变化时自动告警 <span style="display:inline-block;margin-left:4px;padding:0 5px;border:1px solid var(--border);border-radius:4px;font-size:9px;color:var(--text3);">ROADMAP</span></p>
         </div>
         <div class="eval-step">
           <div class="eval-num">4</div>
@@ -980,7 +981,7 @@
         </div>
         <div class="eval-step">
           <div class="eval-num">⟳</div>
-          <p><strong>定期调度兜底</strong><br>每日 Cron 全量跑，防止数据源漂移导致的隐性退化</p>
+          <p><strong>定期调度兜底</strong><br>每日 Cron 全量跑，防止数据源漂移导致的隐性退化 <span style="display:inline-block;margin-left:4px;padding:0 5px;border:1px solid var(--border);border-radius:4px;font-size:9px;color:var(--text3);">ROADMAP</span></p>
         </div>
       </div>
     </div>
@@ -1032,7 +1033,7 @@
           <tr>
             <td>审计能力</td>
             <td class="cross">用户操作日志（可选）</td>
-            <td class="check">✓ 每次 Agent MCP 调用完整记录，永久保留</td>
+            <td class="check">✓ 每次 Agent MCP 调用完整记录（SQLite Audit，可追溯）</td>
           </tr>
           <tr>
             <td>多数据源</td>
@@ -1055,7 +1056,7 @@
       <h3>超出边界，不实现</h3>
       <div class="scope-list">
         <div class="scope-item"><span class="x">✕</span> 跨数据源 Join（联邦查询）</div>
-        <div class="scope-item"><span class="x">✕</span> 列级 / 行级权限（数据脱敏/过滤）</div>
+        <div class="scope-item"><span class="x">✕</span> 列级 / 行级权限（数据脱敏/过滤，v1.0 不实现，列入长期 Roadmap，非永久排除）</div>
         <div class="scope-item"><span class="x">✕</span> SSO / LDAP / SAML 统一身份</div>
         <div class="scope-item"><span class="x">✕</span> SaaS 多租户部署</div>
         <div class="scope-item"><span class="x">✕</span> BI 可视化（图表 / Dashboard 给人看）</div>
