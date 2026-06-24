@@ -4,11 +4,11 @@
 |---|---|
 | 文档名称 | lucy-skills MCP Server Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-18 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-06-18；v1.1 修订 2026-06-24 |
 | 撰写人 | Claude |
 | 委托人 | zhangxingchen |
-| 基于材料 | `dev-inbox/20260617-2320-project-lucy-progress-and-plan.md` P1 决策；`docs/DEVELOPMENT.md` §Skills 当前状态；KTX MCP server 当前能力清单（4 tool + 1 prompt）；本会话 D-1 / E1 决策上下文 |
+| 基于材料 | `dev-inbox/20260617-2320-project-lucy-progress-and-plan.md` P1 决策；`docs/DEVELOPMENT.md` §Skills 当前状态；KTX MCP server 当前能力清单（4 tool，无 always-on prompt）；本会话 D-1 / E1 决策上下文 |
 | 适用范围 | lucy-skills MCP server MVP 实施门控；data agent 客户端集成参考 |
 | 输出位置 | /Users/zhangxingchen/Projects/project-lucy/lucy-skills/docs/01-spec.md |
 
@@ -18,7 +18,7 @@
 
 project-lucy 在 KTX 之上沉淀了一组 SKILL.md（`skills/warehouse`、`skills/reviewer`、可能未来扩展 `skills/domains/*`），但当前 data agent **无法以结构化方式按需触发**这些 skill：
 
-- KTX MCP server 仅暴露 4 个 tool（`sl_read` / `sl_query` / `wiki_search` / `sl_validate`）+ 1 个 always-on prompt（`warehouse-knowledge`）
+- KTX MCP server 仅暴露 4 个 tool（`sl_read` / `sl_query` / `wiki_search` / `sl_validate`），**不存在** always-on prompt（v1.1 更正：曾假设 KTX 会自动注入一个名为 `warehouse-knowledge` 的常驻 prompt，已直接核查 KTX 源码 `createDefaultKtxMcpServer`/`McpServer` 构造与全部 `loadPrompt(...)` 调用点证实不存在；仓库内原假设由此机制消费的 `.ktx/prompts/warehouse-knowledge.md` 是孤儿文件，已在 2026-06-23 的 CLAUDE.md 迁移中删除，见 `webui/docs/07-mcp-auth-proxy-spec.md` §10 Phase 4）
 - `SkillsRegistryService` 加载的 skill catalog 只在 KTX 进程内部使用（ingest / scan），不通过 MCP 透传
 - data agent 当前只能通过 LLM 主动 Read 工具去读 `skills/**/SKILL.md`，没有"目录可见 + 按需读"的标准通道
 
@@ -48,7 +48,7 @@ project-lucy 在 KTX 之上沉淀了一组 SKILL.md（`skills/warehouse`、`skil
 ### 1.5 Stack
 
 - **TypeScript + `@modelcontextprotocol/sdk`**（官方 SDK，文档/类型最全；与 KTX 选型一致，运维一套技能）
-- 运行形态：HTTP server（与 KTX 一致），默认端口 7879
+- 运行形态：HTTP server（与 KTX 一致），默认端口 7881（v1.1 更正：原定 7879 与 Lucy MCP Proxy 冲突——`webui/server/proxy/mcp-proxy.ts` 自 2026-06-23 起监听 `:7879`，见 `webui/docs/07-mcp-auth-proxy-spec.md`）
 - 子目录 `lucy-skills/` 自带 `package.json`，与 lucy 主仓库 git history 同仓但独立可发布
 
 ## §2 架构定位
@@ -60,7 +60,7 @@ data agent (Claude Code / 其他 MCP client)
     │                                     维护：KTX 上游
     │                                     角色：通用底座
     │
-    └── lucy-skills MCP (localhost:7879) ← skill 索引 + 内容
+    └── lucy-skills MCP (localhost:7881) ← skill 索引 + 内容
                                           维护：本仓库
                                           角色：lucy 增量补齐
 ```
@@ -157,7 +157,7 @@ URI scheme：`lucy-skill://<skill-name>`
 
 ```json
 {
-  "port": 7879,
+  "port": 7881,
   "host": "127.0.0.1",
   "scanRoot": "../skills",
   "include": ["**/SKILL.md"],
@@ -191,7 +191,7 @@ cd lucy-skills && npm start
     },
     "lucy-skills": {
       "type": "http",
-      "url": "http://localhost:7879/mcp"
+      "url": "http://localhost:7881/mcp"
     }
   }
 }
@@ -204,7 +204,7 @@ cd lucy-skills && npm start
 | # | 验证 | 方式 |
 |---|---|---|
 | V1 | `npm start` 能起服务并打印加载的 skill 数（当前期望 ≥ 2：warehouse-knowledge、analytics-reviewer） | 终端观察 |
-| V2 | 用 `mcp-inspector` 连 `http://localhost:7879/mcp`，调 `resources/list` 返回非空数组，每项含 uri/name/description/mimeType | inspector UI |
+| V2 | 用 `mcp-inspector` 连 `http://localhost:7881/mcp`，调 `resources/list` 返回非空数组，每项含 uri/name/description/mimeType | inspector UI |
 | V3 | inspector 调 `resources/read` 用 V2 拿到的 URI，返回 SKILL.md 全文（含 frontmatter） | inspector UI |
 | V4 | Claude Code 启动时能并列连上 KTX 和 lucy-skills，无连接错误 | Claude Code 启动日志 |
 | V5 | 在 Claude Code 一次会话中显式让 LLM 调 `resources/list` + `resources/read` 走完链路，输出 skill 内容 | 对话验证 |
