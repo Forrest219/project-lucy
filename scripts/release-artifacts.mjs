@@ -263,15 +263,19 @@ async function main() {
     auditWorkspace("root", "."),
     auditWorkspace("webui", "webui")
   ]);
-  const requiredGates = [
+  const repoQualityGates = [
     "npm run lint:spec",
+    "npm run smoke:p0",
     "npm run security:baseline",
     "npm audit --json (root, webui)",
+    "npm run audit:ktx-diff"
+  ];
+  const customerHeadlessGates = [
+    "npm run security:baseline",
     "npm run smoke:p0:docker",
     "npm run smoke:p0:demo",
     "npm run smoke:p0:postgres-demo",
-    "npm run smoke:p0:business-eval",
-    "npm run audit:ktx-diff"
+    "npm run smoke:p0:business-eval"
   ];
   const metadata = {
     generatedAt,
@@ -298,7 +302,8 @@ async function main() {
       verified: ["mysql:8.4-demo", "postgres:16-alpine-demo"]
     },
     gates: {
-      required: requiredGates,
+      customerHeadless: customerHeadlessGates,
+      repoQuality: repoQualityGates,
       audit,
       ktxUpgrade: ["npm run compat:ktx-upgrade -- --candidate <ktx-version>"]
     }
@@ -342,13 +347,18 @@ async function main() {
 - Docker image id: ${imageId}
 - Bundled KTX: @kaelio/ktx ${ktxVersion}
 - Verified databases: MySQL demo, PostgreSQL demo
-- Required gates: ${requiredGates.join("; ")}
+- Customer headless gates: ${customerHeadlessGates.join("; ")}
+- Repository quality gates: ${repoQualityGates.join("; ")}
 - npm audit summary: ${JSON.stringify(audit.totals)}
 
 ## Customer Deployment
 
-Use docs/customer-deployment-guide.md and docs/deployment-docker.md for Docker Compose deployment.
+Use docs/customer-deployment-guide.md and docs/deployment-docker.md for Docker Compose deployment. The customer standard entry is Lucy MCP Proxy plus an Agent MCP client config; WebUI checks, when present, are repository quality gates and not the customer operating path.
 Full P0/P1/P2 test case matrix: docs/lucy-test-cases.md (bundled as release/lucy-test-cases.md).
+
+## Non-Delivery Scope
+
+This release does not deliver a WebUI management console as the customer entry point, Skill Editor / Skill versioning UI, MCP endpoint lifecycle UI, Kubernetes/Helm, or system metrics/alerting/log aggregation.
 
 ## Artifacts
 

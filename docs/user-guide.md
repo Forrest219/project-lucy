@@ -18,6 +18,8 @@ Lucy lets your agent answer database questions through governed semantic definit
 - audit trail for data access.
 - repeatable eval checks for answer quality.
 
+Business users do not need a Lucy WebUI account for the first customer delivery. The standard path is to ask questions through the customer's approved Agent MCP client connected to Lucy MCP Proxy.
+
 ## 2. How To Ask
 
 Good questions include:

@@ -10,7 +10,7 @@
 
 ## 1. Endpoint
 
-Default Docker MCP endpoint:
+Default Docker customer MCP endpoint:
 
 ```text
 http://<host>:7879/mcp
@@ -52,7 +52,7 @@ Token rules:
 }
 ```
 
-The WebUI `/onboarding` page can copy this config with the detected host.
+For the headless customer delivery, generate or provision this config from deployment records and the agent platform secret store. WebUI onboarding is an optional repository UI surface, not the standard customer integration path.
 
 ## 4. Expected Tools
 

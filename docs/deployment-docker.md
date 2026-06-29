@@ -54,15 +54,14 @@ ktx admin runtime install --yes --feature core
 
 | Port | Purpose | Container Env |
 |---|---|---|
-| `5174` | Lucy WebUI + REST API | `LUCY_WEBUI_PORT` |
-| `7879` | Lucy MCP Proxy endpoint | `LUCY_PROXY_PORT` |
+| `5174` | Lucy health/API service; WebUI code is present but not the customer headless entry | `LUCY_WEBUI_PORT` |
+| `7879` | Lucy MCP Proxy customer endpoint | `LUCY_PROXY_PORT` |
 | `7878` | Internal KTX MCP upstream | not exposed by compose |
 
-默认外部入口：
+默认客户入口：
 
 ```text
-WebUI: http://localhost:5174
-MCP:   http://localhost:7879/mcp
+MCP: http://localhost:7879/mcp
 ```
 
 如宿主机端口冲突，可只改 compose 的宿主映射端口，容器内端口保持不变：
@@ -71,7 +70,7 @@ MCP:   http://localhost:7879/mcp
 LUCY_WEBUI_HOST_PORT=55175 LUCY_PROXY_HOST_PORT=57880 docker compose up --build
 ```
 
-KTX upstream 默认只绑定容器内 `127.0.0.1:7878`。外部 agents 应接入 Lucy MCP Proxy，不直接接入 KTX upstream。
+`http://localhost:5174/api/health` 是运维健康检查端点，不是客户业务入口。KTX upstream 默认只绑定容器内 `127.0.0.1:7878`。外部 agents 应接入 Lucy MCP Proxy，不直接接入 KTX upstream。
 
 ## 4. First Start
 
@@ -100,7 +99,7 @@ lucy-data:/data/lucy
 
 首版仍需要编辑 `/data/lucy/ktx.yaml` 和挂载密码文件。
 
-默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换连接信息和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 WebUI 启动。
+默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换连接信息和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 Lucy runtime 启动。
 
 推荐做法：
 
@@ -119,7 +118,7 @@ password: file:/data/lucy/.ktx/secrets/<password-file>
 docker compose restart lucy
 ```
 
-后续应将数据库接入向导产品化到 WebUI，本节是首版部署路径。
+后续可将数据库接入向导产品化到治理 UI；本节的配置文件路径是首版客户 headless 部署路径。
 
 ### Docker Secrets Override
 
@@ -173,7 +172,7 @@ Agent 平台应接入 Lucy MCP Proxy：
 }
 ```
 
-`<LUCY_AGENT_TOKEN>` 应由 Lucy WebUI 的 Agent/Token 管理功能生成。不要把内部 `KTX_INTERNAL_TOKEN` 配给外部 agent。
+`<LUCY_AGENT_TOKEN>` 来自持久化目录中的 `webui/config/access.yaml` agent/token 配置或一次性 token 创建流程。不要把内部 `KTX_INTERNAL_TOKEN` 配给外部 agent。
 
 ## 8. Runtime Environment
 
@@ -183,8 +182,8 @@ Agent 平台应接入 Lucy MCP Proxy：
 | `KTX_INTERNAL_TOKEN` | auto-generated on start | Lucy proxy 调用 KTX upstream 的内部 token |
 | `KTX_MCP_HOST` | `127.0.0.1` | KTX upstream bind host |
 | `KTX_MCP_PORT` | `7878` | KTX upstream port |
-| `LUCY_WEBUI_HOST` | `0.0.0.0` | WebUI/API bind host |
-| `LUCY_WEBUI_PORT` | `5174` | WebUI/API port |
+| `LUCY_WEBUI_HOST` | `0.0.0.0` | health/API service bind host |
+| `LUCY_WEBUI_PORT` | `5174` | health/API service port |
 | `LUCY_PROXY_HOST` | `0.0.0.0` | MCP Proxy bind host |
 | `LUCY_PROXY_PORT` | `7879` | MCP Proxy port |
 | `LUCY_PROXY_UPSTREAM_HOST` | `127.0.0.1` | KTX upstream host for proxy forwarding |
@@ -195,7 +194,7 @@ Compose 宿主端口映射变量：
 
 | Env | Default | Meaning |
 |---|---|---|
-| `LUCY_WEBUI_HOST_PORT` | `5174` | 宿主机映射到容器 `5174` 的 WebUI/API 端口 |
+| `LUCY_WEBUI_HOST_PORT` | `5174` | 宿主机映射到容器 `5174` 的 health/API 端口 |
 | `LUCY_PROXY_HOST_PORT` | `7879` | 宿主机映射到容器 `7879` 的 MCP Proxy 端口 |
 
 ## 9. Current Limitations
@@ -203,11 +202,12 @@ Compose 宿主端口映射变量：
 - 首版只定义单机 Docker Compose，不包含 Kubernetes/Helm。
 - 首次数据库配置仍需要编辑 `ktx.yaml` 或挂载配置文件。
 - 镜像内包含 `git`，因为 KTX 启动时需要初始化/访问项目 git repository。
-- WebUI production server 当前使用 `tsx` 运行 TypeScript server；后续可优化为编译后的 slim runtime image。
-- P0 smoke 已覆盖 image build、compose up、WebUI health、MCP proxy 响应、镜像内 KTX version、本机真实 MySQL 连接、semantic-layer validate、KTX CLI 查询、临时 MCP `tools/list` 与 `sl_query`。
+- WebUI production server 当前使用 `tsx` 运行 TypeScript server；这是仓库内部实现细节，不是客户标准入口，后续可优化为编译后的 slim runtime image。
+- P0 smoke 已覆盖 image build、compose up、health API、MCP proxy 响应、镜像内 KTX version、semantic-layer validate、KTX CLI 查询、临时 MCP `tools/list` 与 `sl_query`。
 - KTX 0.13.0 MCP `tools/list` 当前不暴露 `sl_validate`；validate gate 使用 CLI `ktx sl validate`。
 - Demo 数据库尚未内置；正式 CI/release 不应依赖生产或个人可访问数据库。
 - 业务 eval 仍依赖可访问的目标数据库和 agent CLI 环境。
+- Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、系统 metrics/告警/日志聚合、对象存储归档均不属于首版客户 headless 交付范围。
 
 ## 10. P0 Smoke
 
@@ -274,7 +274,7 @@ npm run smoke:p0:demo
 该自动化 gate 使用 `docker-compose.demo.yml` 启动 MySQL demo DB 与 Lucy，验证：
 
 - demo DB health。
-- Lucy WebUI `/api/health`。
+- Lucy health API `/api/health`。
 - `ktx connection test demo-mysql`。
 - `ktx admin reindex --force`。
 - `ktx sl validate`。
@@ -361,7 +361,7 @@ examples/postgres-demo/postgres/_baseline.json
 |---|---|---|
 | TC-BUILD-001 | `docker compose build --no-cache` | 退出码 0；镜像 `project-lucy:demo` 出现 |
 | TC-START-001 | demo stack 启动 | `lucy` 与 `demo-db` 均 `Up (healthy)` |
-| TC-NET-001 | WebUI `/api/health` | HTTP 200；`bundledKtxVersion` 与 `LUCY_EXPECTED_KTX_VERSION` 一致 |
+| TC-NET-001 | Lucy health API `/api/health` | HTTP 200；`bundledKtxVersion` 与 `LUCY_EXPECTED_KTX_VERSION` 一致 |
 | TC-NET-003 | 内置 docker-healthcheck | `docker inspect` 返回 `healthy` |
 | TC-DATA-001 | demo MySQL 直连 | 行数与 `_baseline.json#counts` 一致（1000/4/60） |
 | TC-DATA-002 | `ktx connection test demo-mysql` | 退出码 0 |

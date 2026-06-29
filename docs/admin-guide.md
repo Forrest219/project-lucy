@@ -19,6 +19,8 @@
 - 创建 Agent、role 和 token。
 - 查看 audit 与 release gate 结果。
 
+首版客户交付采用 headless 路径：Docker Compose、配置文件、Lucy MCP Proxy、Agent MCP client config、CLI/smoke/eval 证据。WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI 不属于本次客户交付承诺。
+
 ## 2. Deployment Path
 
 Start here:
@@ -39,21 +41,16 @@ Demo deploy:
 npm run smoke:p0:demo
 ```
 
-## 3. First Onboarding
+## 3. First Headless Onboarding
 
-Open WebUI:
+Follow this checklist:
 
-```text
-http://<host>:5174/onboarding
-```
-
-Follow the checklist:
-
-1. Database connection.
-2. Enabled table scope.
-3. Semantic layer.
-4. Validate/review changes.
-5. Agent MCP config.
+1. Start Docker Compose and confirm `curl http://<host>:5174/api/health`.
+2. Edit `/data/lucy/ktx.yaml` and secret files for the customer database.
+3. Maintain `semantic-layer/` and `wiki/` under `/data/lucy`.
+4. Run `ktx admin reindex --force`, `ktx sl validate`, and a read-only `ktx sl query --execute`.
+5. Provision `webui/config/access.yaml` agent/role/token config and distribute only the bearer token through the agent platform secret store.
+6. Configure the agent client to `http://<host>:7879/mcp` and run `tools/list`, `sl_read_source`, and `sl_query`.
 
 ## 4. Release And Upgrade
 
@@ -79,7 +76,7 @@ Use:
 
 - `docs/security-guide.md`
 - `webui/docs/07-mcp-auth-proxy-spec.md`
-- WebUI `/admin/agents`
-- WebUI `/admin/audit`
+- `webui/config/access.yaml`
+- `.ktx-ui/audit.sqlite`
 
 Do not give external agents `KTX_INTERNAL_TOKEN`. Use Agent token creation instead.
