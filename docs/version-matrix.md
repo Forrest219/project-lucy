@@ -62,7 +62,11 @@
 | Client | Status | Notes |
 |---|---|---|
 | Generic HTTP MCP client | verified by script | `scripts/p0-demo-docker-smoke.mjs` uses JSON-RPC over HTTP |
-| Codex / Claude Code | project-local usage exists | Full agent eval requires external CLI/auth |
+| Claude Code | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Codex | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Openclaw | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Hermes | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Cursor | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
 | Claude Desktop stdio | documented for local KTX in development docs | Not a Docker P0 customer path |
 | Cloud-hosted agent | not verified | Requires public URL, TLS, and access control |
 

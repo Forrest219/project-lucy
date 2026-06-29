@@ -83,7 +83,11 @@ GET    /api/admin/config-audit
 GET    /api/admin/config-audit/export.csv
 GET    /api/admin/audit
 GET    /api/admin/audit/sources
+GET    /api/admin/audit/:id/sources
 GET    /api/admin/audit/export
+GET    /api/admin/audit/turns
+GET    /api/admin/audit/turns/:turnId
+POST   /api/admin/audit/conversation-turns/purge
 GET    /api/admin/mcp-tools
 
 POST /mcp                                      # MCP proxy, port 7879
@@ -278,7 +282,11 @@ Audit：
 - `GET /api/admin/config-audit/export.csv`
 - `GET /api/admin/audit`
 - `GET /api/admin/audit/sources`
+- `GET /api/admin/audit/:id/sources`
 - `GET /api/admin/audit/export`
+- `GET /api/admin/audit/turns`
+- `GET /api/admin/audit/turns/:turnId`
+- `POST /api/admin/audit/conversation-turns/purge`
 - `GET /api/admin/mcp-tools`
 
 `GET /api/admin/config-audit` 查询 `config_change_log`，用于追踪 WebUI 对 `ktx.yaml`、`webui/config/access.yaml` 等治理配置的写入记录。
@@ -328,9 +336,64 @@ Query：
 }}
 ```
 
+`GET /api/admin/audit/:id/sources` 返回单条 access log 解析出的来源表明细。`:id` 为正整数 `access_log.id`；无来源记录时返回空数组，非法 id 返回 `400`。
+
+响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "accessLogId": 1,
+  "sources": [{
+    "id": 1,
+    "ts": "2026-06-29T10:00:00.000Z",
+    "userId": "workhorse",
+    "tool": "sl_read_source",
+    "connectionId": "mysql-aliyun",
+    "schemaName": "dataforai",
+    "sourceName": "superstore_orders",
+    "physicalTable": "dataforai.superstore_orders",
+    "extractionMethod": "semantic-layer",
+    "confidence": "high",
+    "createdAt": "2026-06-29T10:00:00.000Z"
+  }]
+}}
+```
+
 `GET /api/admin/audit` 查询 MCP access log；支持按 user、tool、outcome、时间范围、tableSearch、sessionId、turnId、platform 过滤。默认不包含协议类工具调用；传 `includeProtocol=true` 可包含 `tools/list`、`initialize`、`notifications/initialized`。
 
 `GET /api/admin/audit/export` 使用与 `/api/admin/audit` 相同过滤条件导出 CSV，并对 spreadsheet formula 前缀做转义。
+
+`GET /api/admin/audit/turns` 返回问答轮次视图，合并 inferred turns 与客户端显式上报的 conversation turns。支持 `user`、`since`、`until`、`source=inferred|reported|all`、`lookbackHours`、`limit`、`offset`；默认 `source=all`、`limit=50`，最大 `500`。
+
+响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "total": 1,
+  "entries": [{
+    "id": "inf_20260629_001",
+    "source": "inferred",
+    "userId": "workhorse",
+    "startedAt": "2026-06-29T10:00:00.000Z",
+    "endedAt": "2026-06-29T10:00:05.000Z",
+    "businessCallCount": 2,
+    "questionSummary": "查询销售额",
+    "confidence": "medium",
+    "tools": ["sl_read_source", "sl_query"],
+    "sources": [{ "physicalTable": "dataforai.superstore_orders" }]
+  }]
+}}
+```
+
+`GET /api/admin/audit/turns/:turnId` 返回单个轮次详情。`inf_` 前缀查询 inferred turn，否则查询 reported conversation turn；不存在时返回 `404`。响应包含关联 access logs、sources、question summary/preview，以及 inferred turn 的 evidence。
+
+`POST /api/admin/audit/conversation-turns/purge` 手动触发 conversation turn retention 清理。请求体支持 `retentionDays` 与 `dryRun`；返回删除计数与 cutoff 等清理结果。
+
+请求：
+
+```jsonc
+{ "retentionDays": 30, "dryRun": true }
+```
 
 `GET /api/admin/mcp-tools` 返回当前已知 MCP tool 列表，并标记全局 deny 状态。
 

@@ -14,6 +14,8 @@
 
 ---
 
+> **历史状态说明（2026-06-29）**：本文是 2026-06-19 的缺口分析快照，保留用于追溯当时 Admin、Eval、Audit 等模块的开发动机；它不再作为当前 WebUI 实现状态源。当前模块状态以 `docs/webui-impl-status.md` 和 `docs/project-overview.md` 为准，产品化验收以 `docs/lucy-platform-goal-checklist.md` 为准。
+
 ## 0. 阅读说明
 
 - 视角 = 用户视角，按 **数据工程师 / 管理员 / Agent 消费者（只读 ref）** 分组。WebUI 当前主要服务前两类。
@@ -21,7 +23,7 @@
   - 完全实现 = WebUI 已经能让用户在浏览器里完成全流程操作。
   - 部分实现 = 后端能力或文件落盘已存在，但 WebUI 入口缺失或只覆盖一部分能力。
   - 缺失 = 用户文档（user-guide）承诺过的能力，但代码层既无 UI 也无后端落地。
-- 数据来源：当前 WebUI 路由仅 `/`、`/sources/:conn/:schema/:table`、`/joins/:conn/:schema/:table`、`/wiki`、`/review`（见 `webui/src/app/App.tsx`）。MCP Proxy（端口 7879）由 spec 07 描述，目前是 server-side 守护，无 WebUI 管理界面。
+- 数据来源：本文保留当时快照；其中“当前 WebUI 路由仅...”等描述已过期。当前 WebUI 已包含 Onboarding、Connections、Eval、Admin/Audit 等模块，见 `docs/webui-impl-status.md`。
 - 推断：本文档中的「价值」一句话基于 `user-guide/product-intro.html` 和 `concepts.html` 的措辞总结；如与产品文案有偏差，以 user-guide 为准。
 
 ---

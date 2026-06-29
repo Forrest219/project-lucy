@@ -33,6 +33,10 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run audit:ktx-diff` | governance | regenerates KTX vs Lucy first/second-level directory and file diff audit |
 | `npm run compat:ktx-upgrade -- --candidate <version>` | runtime + platform upgrade | validates a candidate bundled KTX version through Docker/demo/business gates |
 
+### 2.1 Local Node / Native Addon Note
+
+CI runs fresh installs on Node 22 (`actions/setup-node@v4 node-version: 22`). Local checkouts may have `webui/node_modules` compiled under a different Node ABI, especially `better-sqlite3`; if `npm --prefix webui test` fails with a native module ABI mismatch, either rebuild/reinstall `webui` dependencies under the active Node version or run the verification with the Node version that built the current `node_modules`. Do not treat this local ABI mismatch as a release gate failure unless it reproduces after a fresh install.
+
 ## 3. Required P1 Release Baseline
 
 Required before a Docker release candidate:
