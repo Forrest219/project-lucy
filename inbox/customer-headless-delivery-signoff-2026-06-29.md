@@ -10,7 +10,7 @@
 
 本轮已完成客户 headless 交付口径收口、本地 gate、真实库 smoke、release artifact 生成和干净目录 dry-run。
 
-结论：本地客户 headless 交付证据 **PASS**。CI 触发信息待本轮分支 push / workflow_dispatch 后补充。
+结论：本地客户 headless 交付证据 **PASS**。CI 已触发，远端 `docker-smoke` 仍在运行中，未伪造为通过。
 
 ## 2. Customer Delivery Scope
 
@@ -59,16 +59,27 @@
 
 ## 5. CI
 
-待补充：
+已推送分支：
 
-- 分支/提交。
-- GitHub Actions run URL。
-- `lucy-release.yml` headless jobs 状态。
-- WebUI/spec jobs 状态：只作为仓库质量门禁，不作为客户使用路径。
+- Branch: `codex/customer-headless-delivery-2026-06-29`
+- Commit at trigger time: `c4826153439cc5e9754354f7f48ab1ccbc79d568`
+- GitHub Actions: https://github.com/Forrest219/project-lucy/actions/runs/28350554468
+
+截至 2026-06-29 05:56 UTC：
+
+| Job | Status | Customer gate interpretation |
+|---|---|---|
+| `spec-and-webui` | success | Repo quality gate; WebUI checks are not customer path |
+| `ktx-diff-audit` | success | Repo/runtime governance evidence |
+| `business-eval-catalog` | success | Headless business eval catalog gate |
+| `docker-smoke` | in_progress | Headless Docker gate still running in GitHub Actions |
+| `demo-e2e` | pending via dependency | Headless MySQL demo gate waits for `docker-smoke` |
+| `postgres-demo-e2e` | pending via dependency | Headless PostgreSQL demo gate waits for `docker-smoke` |
+
+本地同组 headless gate 已全部 PASS，见 `inbox/headless-delivery-gate-2026-06-29.md`。CI 最终状态仍需在 GitHub run 完成后复查。
 
 ## 6. Known Limitations And Follow-ups
 
 - Full LLM/agent business eval 仍依赖客户或 CI secret 环境中的 agent/model 凭据；本轮交付 catalog smoke 和运行方法。
 - P1 semantic-layer/wiki/headless client evidence 可继续拆成单独证据文件；本轮 gate/dry-run 已覆盖 demo semantic-layer 可见性、reindex、validate、query、MCP client JSON-RPC。
 - 真实客户生产环境仍需现场复验数据库网络、secret 挂载和客户实际 agent client。
-
