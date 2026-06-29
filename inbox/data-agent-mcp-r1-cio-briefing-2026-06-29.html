@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data Agent MCP R1 CIO Briefing</title>
+  <style>
+    :root {
+      --bg: #eef2f6;
+      --paper: #fbfcfe;
+      --ink: #17202a;
+      --muted: #617081;
+      --line: #dbe3ec;
+      --teal: #007c7a;
+      --teal-soft: #e4f4f2;
+      --navy: #233b5e;
+      --amber: #b7791f;
+      --amber-soft: #fff2d6;
+      --red: #a83b3b;
+      --red-soft: #fce8e8;
+      --green: #287a4f;
+      --green-soft: #e8f5ee;
+      --shadow: 0 24px 70px rgba(33, 45, 61, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top left, #f8fafc 0, var(--bg) 44%, #e6ebf1 100%);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .viewport {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .deck {
+      width: min(96vw, 1512px);
+      aspect-ratio: 16 / 10;
+      max-height: calc(100vh - 48px);
+      position: relative;
+      background: var(--paper);
+      border: 1px solid rgba(120, 135, 154, 0.28);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 58px 72px 52px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(18px);
+      transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 28px;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+    }
+
+    .kicker {
+      margin: 0 0 12px;
+      color: var(--teal);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      max-width: 980px;
+      font-size: clamp(44px, 5.2vw, 76px);
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      max-width: 980px;
+      font-size: clamp(34px, 3.6vw, 54px);
+      line-height: 1.08;
+      letter-spacing: -0.015em;
+    }
+
+    h3 {
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 900px;
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: clamp(20px, 2vw, 29px);
+      line-height: 1.45;
+    }
+
+    .body {
+      align-self: stretch;
+      min-height: 0;
+      display: grid;
+      gap: 24px;
+      align-content: center;
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #7c8795;
+      font-size: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+    }
+
+    .slide-number { font-variant-numeric: tabular-nums; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 30px;
+      padding: 0 11px;
+      border-radius: 5px;
+      background: var(--teal-soft);
+      color: #046966;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      background: #fff;
+    }
+
+    .panel.emphasis {
+      border-color: rgba(0, 124, 122, 0.24);
+      background: linear-gradient(180deg, #ffffff 0%, #f2fbfa 100%);
+    }
+
+    .panel.warning {
+      border-color: rgba(183, 121, 31, 0.28);
+      background: var(--amber-soft);
+    }
+
+    .panel.risk {
+      border-color: rgba(168, 59, 59, 0.28);
+      background: var(--red-soft);
+    }
+
+    .panel.good {
+      border-color: rgba(40, 122, 79, 0.26);
+      background: var(--green-soft);
+    }
+
+    .metric {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--navy);
+      font-size: 38px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .panel p,
+    li,
+    .small {
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    .panel strong { color: var(--ink); }
+
+    ul.clean {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 14px;
+    }
+
+    ul.clean li {
+      position: relative;
+      padding-left: 22px;
+    }
+
+    ul.clean li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.65em;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--teal);
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 0.95fr 1.35fr 0.95fr;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .node {
+      min-height: 158px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 24px;
+      display: grid;
+      align-content: center;
+      gap: 12px;
+    }
+
+    .node.primary {
+      min-height: 260px;
+      border-color: rgba(0, 124, 122, 0.3);
+      background: linear-gradient(180deg, #f6fffe 0%, #ffffff 100%);
+    }
+
+    .node-title {
+      font-size: 26px;
+      line-height: 1.18;
+      font-weight: 800;
+      color: var(--navy);
+    }
+
+    .node-sub {
+      font-size: 17px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--teal);
+      font-size: 34px;
+      font-weight: 800;
+    }
+
+    .capability {
+      min-height: 172px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 19px;
+      background: #fff;
+    }
+
+    .capability .index {
+      color: var(--teal);
+      font-weight: 800;
+      font-size: 15px;
+      margin-bottom: 18px;
+    }
+
+    .capability h3 {
+      margin-bottom: 10px;
+      color: var(--navy);
+      font-size: 20px;
+    }
+
+    .capability p { font-size: 16px; }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 22px 18px;
+      position: relative;
+      min-height: 200px;
+    }
+
+    .step::after {
+      content: "";
+      position: absolute;
+      top: 38px;
+      right: -14px;
+      width: 14px;
+      height: 2px;
+      background: var(--line);
+    }
+
+    .step:last-child::after { display: none; }
+
+    .step .num {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--teal);
+      color: #fff;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    .step h3 { font-size: 19px; margin-bottom: 9px; }
+    .step p { font-size: 16px; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .flow-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 22px;
+      min-height: 172px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .flow-card h3 {
+      color: var(--navy);
+      font-size: 20px;
+    }
+
+    .flow-card p { font-size: 16px; }
+
+    .decision-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .decision {
+      border-left: 5px solid var(--teal);
+      background: #fff;
+      border-top: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 20px 22px;
+    }
+
+    .decision h3 {
+      color: var(--navy);
+      margin-bottom: 8px;
+      font-size: 21px;
+    }
+
+    .decision p { font-size: 17px; }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .table th, .table td {
+      padding: 15px 18px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
+    .table th {
+      color: var(--navy);
+      background: #f3f6f9;
+      font-weight: 800;
+    }
+
+    .table tr:last-child td { border-bottom: 0; }
+    .table td { color: var(--muted); }
+    .table td strong { color: var(--ink); }
+
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 4px;
+      background: #d8e0e8;
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--teal);
+      transition: width 180ms ease;
+    }
+
+    .controls {
+      position: fixed;
+      right: 22px;
+      bottom: 18px;
+      display: flex;
+      gap: 8px;
+      z-index: 5;
+    }
+
+    button {
+      height: 36px;
+      min-width: 40px;
+      border: 1px solid rgba(97, 112, 129, 0.35);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.84);
+      color: var(--ink);
+      font-size: 18px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+
+    @media (max-width: 1100px) {
+      .slide { padding: 44px 48px 42px; }
+      .grid-5 { grid-template-columns: repeat(3, 1fr); }
+      .timeline { grid-template-columns: repeat(3, 1fr); }
+      .architecture { grid-template-columns: 1fr; }
+      .arrow { display: none; }
+    }
+
+    @media print {
+      body { background: #fff; overflow: visible; }
+      .viewport { display: block; padding: 0; }
+      .deck {
+        width: 100%;
+        max-height: none;
+        aspect-ratio: auto;
+        box-shadow: none;
+        border: 0;
+        overflow: visible;
+      }
+      .slide {
+        position: relative;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        page-break-after: always;
+        width: 100%;
+        height: 100vh;
+      }
+      .controls, .progress { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="viewport">
+    <section class="deck" aria-label="Data Agent MCP R1 CIO briefing slides">
+      <article class="slide active">
+        <header>
+          <p class="kicker">Data Agent MCP R1</p>
+          <h1>构建 AI 友好的受控数据服务层</h1>
+          <p class="lead">Data Agent MCP 已具备受控接入与业务验证能力，本次沟通聚焦三件事：架构边界、首批资产、上线前必须确认的风险。</p>
+        </header>
+        <div class="body"></div>
+        <footer class="footer"><span>R1 交付范围沟通</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">架构定位</p>
+          <h2>架构位置：Agent 与数据库之间的受控数据服务层。</h2>
+        </header>
+        <div class="body">
+          <div class="architecture">
+            <div class="node">
+              <div class="node-title">AI Agent</div>
+              <div class="node-sub">Claude Code / Codex / Cursor / Openclaw / Hermes</div>
+            </div>
+            <div class="node primary">
+              <div class="tag">Data Agent MCP</div>
+              <div class="node-title">权限 · 语义 · Wiki · 审计 · Eval</div>
+              <div class="node-sub">通过 MCP endpoint 提供受控查询能力；Agent 不直接接触数据库连接串。</div>
+            </div>
+            <div class="node">
+              <div class="node-title">客户数据资产</div>
+              <div class="node-sub">MySQL / PostgreSQL / 权威视图 / CEO 驾驶舱主题资产</div>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>架构与边界</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">价值主张</p>
+          <h2>“AI 友好”落在五个可验收维度上。</h2>
+        </header>
+        <div class="body">
+          <div class="grid-5">
+            <div class="capability">
+              <div class="index">01</div>
+              <h3>语义友好</h3>
+              <p>业务指标、维度、口径替代物理表和低语义字段。</p>
+            </div>
+            <div class="capability">
+              <div class="index">02</div>
+              <h3>权限友好</h3>
+              <p>Token、role、连接、表/视图、工具 ACL 硬约束。</p>
+            </div>
+            <div class="capability">
+              <div class="index">03</div>
+              <h3>上下文友好</h3>
+              <p>Wiki、Skills、报表口径以可检索方式组织，回答时可调用业务背景说明。</p>
+            </div>
+            <div class="capability">
+              <div class="index">04</div>
+              <h3>审计友好</h3>
+              <p>记录谁、何时、用什么工具、访问什么数据。</p>
+            </div>
+            <div class="capability">
+              <div class="index">05</div>
+              <h3>评测友好</h3>
+              <p>标杆测试用例持续验证回答质量。</p>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>价值主张对应交付能力</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">功能范围</p>
+          <h2>一期交付的是平台闭环，不是管理后台。</h2>
+        </header>
+        <div class="body">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>能力</th>
+                <th>R1 交付口径</th>
+                <th>客户价值</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>部署</strong></td>
+                <td>单机 Docker Compose，固定 KTX runtime。</td>
+                <td>降低环境依赖，便于试点上线。</td>
+              </tr>
+              <tr>
+                <td><strong>接入</strong></td>
+                <td>MySQL / PostgreSQL，只读账号与白名单。</td>
+                <td>从源头限制数据暴露面。</td>
+              </tr>
+              <tr>
+                <td><strong>治理</strong></td>
+                <td>Semantic layer、Wiki、Skills、ACL、Audit、Eval。</td>
+                <td>提升 Agent 回答准确性、访问可控性与结果可追溯性。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="footer"><span>功能范围</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">风险与安全</p>
+          <h2>关键风险与安全边界需在上线前确认。</h2>
+        </header>
+        <div class="body">
+          <div class="grid-2">
+            <div class="panel emphasis">
+              <h3>安全控制边界</h3>
+              <ul class="clean">
+                <li>Token、role、connection、table/view、tool 形成硬约束。</li>
+                <li>审计记录 MCP 调用、allow/deny、数据来源和时间戳。</li>
+                <li>配置文件约 30 秒生效；Kill Switch 需作为上线前专项补齐项。</li>
+              </ul>
+            </div>
+            <div class="panel warning">
+              <h3>FineReport 落地风险</h3>
+              <ul class="clean">
+                <li>单元格公式、模板 SQL、参数和权限规则需完整提供。</li>
+                <li>跨源拼接需先汇聚为单库单表/视图后接入 MCP。</li>
+                <li>标杆测试用例以 FineReport 前端最终渲染数值为准。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>上线前风险确认</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">落地模块</p>
+          <h2>CEO 管理驾驶舱是首个业务落地模块。</h2>
+        </header>
+        <div class="body">
+          <div class="flow">
+            <div class="flow-card">
+              <h3>输入材料</h3>
+              <p>18 个 CEO 页面、指标口径、数据溯源、验证结论。</p>
+            </div>
+            <div class="flow-card">
+              <h3>资产治理</h3>
+              <p>默认拒绝；只纳入 owner 确认后的表、视图、SQL 和口径。</p>
+            </div>
+            <div class="flow-card">
+              <h3>MCP 服务化</h3>
+              <p>语义层、Wiki、ACL、审计、评测组合交付。</p>
+            </div>
+            <div class="flow-card">
+              <h3>业务验收</h3>
+              <p>以客户确认的 FineReport 前端最终渲染数值做标杆测试用例。</p>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>从平台到业务样板</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">实施方案</p>
+          <h2>实施方案：GitOps + 白名单 + 标杆评测回归。</h2>
+        </header>
+        <div class="body">
+          <div class="timeline">
+            <div class="step">
+              <div class="num">1</div>
+              <h3>确认资产</h3>
+              <p>数据源 owner、只读账号、表/视图范围、敏感分级。</p>
+            </div>
+            <div class="step">
+              <div class="num">2</div>
+              <h3>规整口径</h3>
+              <p>FineReport SQL、公式、参数转为权威视图和语义层。</p>
+            </div>
+            <div class="step">
+              <div class="num">3</div>
+              <h3>配置 MCP</h3>
+              <p>Token、role、connection、tool、Wiki、Skills。</p>
+            </div>
+            <div class="step">
+              <div class="num">4</div>
+              <h3>运行校验</h3>
+              <p>semantic layer validate、reindex、sl_query smoke。</p>
+            </div>
+            <div class="step">
+              <div class="num">5</div>
+              <h3>验收回归</h3>
+              <p>标杆评测对齐驾驶舱快照，形成交付证据。</p>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>上线路径</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">边界与验收</p>
+          <h2>边界与验收合并管理，避免预期错位。</h2>
+        </header>
+        <div class="body">
+          <div class="grid-2">
+            <div class="panel good">
+              <h3>R1 包含</h3>
+              <ul class="clean">
+                <li>MCP endpoint 与基础客户端接入。</li>
+                <li>语义层、Wiki、权限、审计、脚本化 eval。</li>
+                <li>CEO 管理驾驶舱首批主题验证。</li>
+              </ul>
+            </div>
+            <div class="panel risk">
+              <h3>R1 不包含</h3>
+              <ul class="clean">
+                <li>WebUI 管理台、自助编辑器、审计看板。</li>
+                <li>Kubernetes、多机高可用、监控告警平台。</li>
+                <li>秒级 Kill Switch 不纳入当前 R1 交付范围。</li>
+              </ul>
+            </div>
+          </div>
+          <div class="grid-3">
+            <div class="panel">
+              <h3>平台链路</h3>
+              <p>Docker 启动、MCP initialize、tools/list、sl_read_source、sl_query。</p>
+            </div>
+            <div class="panel">
+              <h3>治理链路</h3>
+              <p>授权可访问，越权被拒绝；审计日志可查询或导出。</p>
+            </div>
+            <div class="panel">
+              <h3>业务链路</h3>
+              <p>CEO 驾驶舱标杆测试用例与 FineReport 快照在容差内一致。</p>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>边界与验收</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">确认事项</p>
+          <h2>需要 CIO 与数据平台负责人确认的事项。</h2>
+        </header>
+        <div class="body">
+          <div class="decision-grid">
+            <div class="decision">
+              <h3>数据访问路径</h3>
+              <p>是否可通过网络策略确保 Agent 不直连数据库，只通过 Data Agent MCP 访问数据。</p>
+            </div>
+            <div class="decision">
+              <h3>资产准入</h3>
+              <p>是否提供 owner、只读账号、白名单、敏感分级和脱敏要求。</p>
+            </div>
+            <div class="decision">
+              <h3>FineReport 材料</h3>
+              <p>是否提供 .cpt/.frm、内置 SQL、单元格公式、参数、权限规则。</p>
+            </div>
+            <div class="decision">
+              <h3>Agent 客户端范围</h3>
+              <p>已验收 Claude Code / Codex / Cursor / Openclaw / Hermes；确认最终做数据消费的客户端清单，未列入的客户端需补充验收。</p>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>会议收口</span><span class="slide-number"></span></footer>
+      </article>
+
+      <article class="slide">
+        <header>
+          <p class="kicker">结论</p>
+          <h2>建议结论：R1 可以作为受控范围试点，但必须先锁定资产与验收值。</h2>
+        </header>
+        <div class="body">
+          <div class="panel emphasis">
+            <h3>建议对外表述</h3>
+            <p style="font-size: 28px; line-height: 1.42; color: var(--ink);">
+              传统 BI 是给人看的，数据库是给程序查的；Data Agent MCP 是给 AI Agent 安全理解和可靠调用企业数据用的。
+            </p>
+          </div>
+          <div class="grid-3">
+            <div class="panel">
+              <h3>具备试点条件</h3>
+              <p>平台链路与业务样板边界清晰、可验证。</p>
+            </div>
+            <div class="panel warning">
+              <h3>需确认风险</h3>
+              <p>FineReport 逻辑、30 秒延迟、Kill Switch 是否作为上线前补齐项。</p>
+            </div>
+            <div class="panel good">
+              <h3>下一步</h3>
+              <p>形成资产清单、模板材料、标杆测试用例三项清单。</p>
+            </div>
+          </div>
+        </div>
+        <footer class="footer"><span>结论与下一步</span><span class="slide-number"></span></footer>
+      </article>
+
+      <div class="progress" aria-hidden="true"><span></span></div>
+    </section>
+  </main>
+  <div class="controls" aria-label="slide controls">
+    <button type="button" id="prev" aria-label="Previous slide">‹</button>
+    <button type="button" id="next" aria-label="Next slide">›</button>
+  </div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const progress = document.querySelector(".progress span");
+    const numbers = document.querySelectorAll(".slide-number");
+    let current = 0;
+
+    function show(index) {
+      current = Math.max(0, Math.min(index, slides.length - 1));
+      slides.forEach((slide, i) => slide.classList.toggle("active", i === current));
+      const label = `${String(current + 1).padStart(2, "0")} / ${String(slides.length).padStart(2, "0")}`;
+      numbers.forEach((node) => { node.textContent = label; });
+      progress.style.width = `${((current + 1) / slides.length) * 100}%`;
+      history.replaceState(null, "", `#${current + 1}`);
+    }
+
+    document.getElementById("prev").addEventListener("click", () => show(current - 1));
+    document.getElementById("next").addEventListener("click", () => show(current + 1));
+    window.addEventListener("keydown", (event) => {
+      if (["ArrowRight", "PageDown", " "].includes(event.key)) {
+        event.preventDefault();
+        show(current + 1);
+      }
+      if (["ArrowLeft", "PageUp"].includes(event.key)) {
+        event.preventDefault();
+        show(current - 1);
+      }
+      if (event.key === "Home") show(0);
+      if (event.key === "End") show(slides.length - 1);
+    });
+
+    const initial = Number(window.location.hash.replace("#", ""));
+    show(Number.isFinite(initial) && initial > 0 ? initial - 1 : 0);
+  </script>
+</body>
+</html>
