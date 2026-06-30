@@ -1,0 +1,110 @@
+{
+  "catalog": null,
+  "db": "data_agent_poc",
+  "name": "poc_ceo_metric_snapshot",
+  "kind": "table",
+  "comment": "陶峙桦场景：CEO 一眼报标杆快照表，用于 eval 数值一致性回归",
+  "estimatedRows": 0,
+  "columns": [
+    {
+      "name": "snapshot_dt",
+      "nativeType": "date",
+      "normalizedType": "date",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "标杆快照日期，通常对应 CEO 一眼报前端截图或导出日期"
+    },
+    {
+      "name": "metric_code",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "指标编码，关联 poc_metric_catalog.metric_code"
+    },
+    {
+      "name": "metric_name",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "指标中文名称，与快照中展示名称保持一致"
+    },
+    {
+      "name": "metric_value",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "标杆指标值；单位由 metric_code 对应指标口径决定"
+    },
+    {
+      "name": "dimension_desc",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "快照维度说明，例如 ALL、品牌、开屏、国内；无维度时填 ALL"
+    },
+    {
+      "name": "source_page",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "CEO 一眼报来源页面，例如营业收入-广告、DAU"
+    },
+    {
+      "name": "benchmark_type",
+      "nativeType": "enum",
+      "normalizedType": "enum",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "标杆类型：owner_screenshot=owner 截图，frontend_export=前端导出，mock_value=模拟值"
+    },
+    {
+      "name": "tolerance_rule",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "数值回归容差规则，例如整数完全一致、金额 ±1 元、比例 ±0.01pp"
+    },
+    {
+      "name": "note",
+      "nativeType": "text",
+      "normalizedType": "text",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "快照备注，例如截图文件名、导出口径、待确认事项"
+    },
+    {
+      "name": "created_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "记录创建时间"
+    },
+    {
+      "name": "updated_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "记录最近更新时间"
+    }
+  ],
+  "foreignKeys": []
+}

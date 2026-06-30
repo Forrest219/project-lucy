@@ -1,0 +1,146 @@
+{
+  "catalog": null,
+  "db": "data_agent_poc",
+  "name": "poc_ad_revenue_by_type_daily",
+  "kind": "table",
+  "comment": "陶峙桦场景：CEO 一眼报 IDM 治理层模拟日表，按收入品类、国家、平台记录广告收入、曝光、IDM 广告 DAU 和打开次数",
+  "estimatedRows": 251,
+  "columns": [
+    {
+      "name": "dt",
+      "nativeType": "date",
+      "normalizedType": "date",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "统计日期，日粒度，北京时间自然日"
+    },
+    {
+      "name": "revenue_type",
+      "nativeType": "enum",
+      "normalizedType": "enum",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "收入品类，取值：品牌、电商、效果、外包；来自 CEO 一眼报 docx §4.5 IDM 字段描述"
+    },
+    {
+      "name": "country",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "国家或区域，默认国内；与广告经营表口径对齐"
+    },
+    {
+      "name": "platform",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": true,
+      "comment": "平台维度，取值示例：Android、iPhone、ALL；来源 SQL 中 AndroidLite 合并到 Android，ALL 表示 POC 已聚合到全平台"
+    },
+    {
+      "name": "ad_revenue",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "分品类广告收入，单位：元；同一日期/国家/业务范围下，四品类合计应等于广告经营表总收入"
+    },
+    {
+      "name": "ad_impressions",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "分品类广告曝光量，单位：次；用于计算治理层 eCPM"
+    },
+    {
+      "name": "ad_dau_idm",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "IDM 层广告 DAU，单位：人；来源表 odm_umeng_all_threeends，来源字段 act_num，聚合口径为 sum(act_num) as dau"
+    },
+    {
+      "name": "total_opens",
+      "nativeType": "bigint",
+      "normalizedType": "bigint",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "总打开次数，单位：次；来源表 odm_umeng_all_threeends，来源字段 start_num，聚合口径为 sum(start_num) as start_num"
+    },
+    {
+      "name": "avg_opens_per_user_check",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "人均打开次数校验列，单位：次/人；仅供 eval 校验，正式 measure 使用 sum(total_opens)/sum(ad_dau_idm) 重算"
+    },
+    {
+      "name": "arpu_check",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "广告 ARPU 校验列，单位：元/人；对应 IDM 正式口径广告收入/DAU，正式 measure 使用 sum(ad_revenue)/sum(ad_dau_idm) 重算"
+    },
+    {
+      "name": "ecpm_idm_check",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "治理层 eCPM 校验列，单位：元/千次曝光；正式 measure 使用 sum(ad_revenue)/sum(ad_impressions)*1000 重算"
+    },
+    {
+      "name": "consistency_group",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "一致性校验分组，用于标识与 poc_ad_revenue_daily 汇总对账的范围，例如同日国内全平台广告收入"
+    },
+    {
+      "name": "seed_scenario",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "造数场景标记，例如效果收入占比最大、品类合计等于总收入"
+    },
+    {
+      "name": "created_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "记录创建时间"
+    },
+    {
+      "name": "updated_at",
+      "nativeType": "timestamp",
+      "normalizedType": "timestamp",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "记录最近更新时间"
+    }
+  ],
+  "foreignKeys": []
+}
