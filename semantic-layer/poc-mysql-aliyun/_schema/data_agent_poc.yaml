@@ -39,74 +39,91 @@ tables:
         nullable: false
         descriptions:
           db: 指标编码，POC 内唯一，例如 dau_noback、ad_revenue、ecpm
+          ai: POC 内唯一指标编码
       - name: metric_name
         type: string
         nullable: false
         descriptions:
           db: 指标中文名称，例如 DAU 不含刷新、广告收入、eCPM
+          ai: 指标中文业务名称
       - name: owner_name
         type: string
         nullable: false
         descriptions:
           db: 指标业务 owner 姓名，例如牛玉婷、何洲、陶峙桦
+          ai: 指标业务负责人姓名
       - name: source_asset
         type: string
         nullable: false
         descriptions:
           db: 来源资产名称，例如 FineBI 活跃分析、FineVis 营业收入-广告、CEO 一眼报溯源报告
+          ai: 来源资产如 BI 报表或文档
       - name: source_location
         type: string
         descriptions:
           db: 来源资产中的具体位置，例如 Sheet 编号、widget 名称、docx 章节或页面
+          ai: 来源资产中具体位置
       - name: source_table_hint
         type: string
         descriptions:
           db: 原始表或数据集线索，例如 rpt.rpt_app_basic_1d_d、report_r_ymsm、idm_ad_revenue_a_d
+          ai: 原始表或数据集线索
       - name: source_field_hint
         type: string
         descriptions:
           db: 原始字段或公式线索，例如 app_aty_user_cnt_1d_noback、广告收入/曝光*1000
+          ai: 原始字段或计算公式线索
       - name: formula
         type: string
         descriptions:
           db: 指标计算公式；原子指标可为空，比率指标需写清分子、分母和倍数
+          ai: 指标计算公式，原子指标可空
       - name: grain
         type: string
         descriptions:
           db: 指标统计粒度，例如日-包名、日-广告位-国家、日-收入品类-国家
+          ai: 指标统计粒度
       - name: dimensions
         type: string
         descriptions:
           db: 指标可分析维度列表，例如日期、包名、广告位、国家、收入品类
+          ai: 可分析维度列表
       - name: unit
         type: string
         descriptions:
           db: 指标单位，例如人、次、元、次曝光、元/人、元/千次曝光
+          ai: 指标计量单位
       - name: description
         type: string
         descriptions:
           db: 指标业务口径说明，包括适用范围、排除条件、含/不含后台刷新等
+          ai: 指标业务口径与适用范围说明
       - name: evidence_level
         type: string
         nullable: false
         descriptions:
           db: 来源证据等级：high=表/字段/公式明确，medium=部分线索明确，low=仅页面或业务名称
+          ai: 来源证据等级高低
       - name: pending_confirmation
         type: string
         descriptions:
           db: 待 owner 或数据平台确认的问题，例如字段名待解析、ARPU 双公式待确认
+          ai: 待确认问题或字段疑点
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 记录创建时间
+          ai: 记录创建时间戳
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 记录最近更新时间
+          ai: 记录最近更新时间戳
     descriptions:
       db: POC 指标字典表：承载指标中文口径、来源线索、公式、粒度、维度、证据等级
+      ai: POC 阶段指标目录，登记业务指标口径、来源与负责人，支撑溯源
   poc_ad_revenue_by_type_daily:
     table: data_agent_poc.poc_ad_revenue_by_type_daily
     columns:
@@ -198,59 +215,71 @@ tables:
         nullable: false
         descriptions:
           db: 统计日期，日粒度，北京时间自然日
+          ai: Statistics date at daily granularity, Beijing time natural day.
       - name: position_name
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 广告位名称，例如开屏、天气首页中部、信息流、详情页
+          ai: Ad slot name such as splash, weather home, or feed.
       - name: country
         type: string
         pk: true
         nullable: false
         descriptions:
           db: 国家或区域，默认国内；用于区分国内和国际广告业务
+          ai: Country or region distinguishing domestic versus international ad business.
       - name: ad_revenue
         type: number
         nullable: false
         descriptions:
           db: 广告收入，单位：元；何洲 FineVis 广告经营场景核心收入指标
+          ai: Ad revenue amount in yuan, core monetization KPI.
       - name: ad_impressions
         type: number
         nullable: false
         descriptions:
           db: 广告曝光量，单位：次；用于计算 eCPM
+          ai: Total ad impression count used for eCPM calculation.
       - name: ad_dau
         type: number
         nullable: false
         descriptions:
           db: 广告域 DAU/货币化 DAU，单位：人；不同于产品活跃 DAU，来源可能为友盟三端，待 owner 确认
+          ai: Monetized daily active users exposed to ads.
       - name: arpu_check
         type: number
         nullable: false
         descriptions:
           db: 广告 ARPU 校验列，单位：元/人；仅供 eval 校验，正式 measure 暂定 sum(ad_revenue)/sum(ad_dau)，ARPU 双公式待确认
+          ai: ARPU verification value in yuan per user for evaluation only.
       - name: ecpm_check
         type: number
         nullable: false
         descriptions:
           db: eCPM 校验列，单位：元/千次曝光；仅供 eval 校验，正式 measure 使用 sum(ad_revenue)/sum(ad_impressions)*1000 重算
+          ai: eCPM verification value in yuan per thousand impressions for evaluation.
       - name: seed_scenario
         type: string
         descriptions:
           db: 造数场景标记，例如开屏 eCPM 最高、信息流收入最高
+          ai: Synthetic data scenario tag marking special generation cases.
       - name: created_at
         type: time
         nullable: false
         descriptions:
           db: 记录创建时间
+          ai: Timestamp when the record was first created.
       - name: updated_at
         type: time
         nullable: false
         descriptions:
           db: 记录最近更新时间
+          ai: Timestamp of the most recent record modification.
     descriptions:
       db: 何洲场景：FineVis 营业收入-广告模拟日表，按日期、广告位、国家记录收入、曝光、广告域 DAU
+      ai: Daily ad revenue fact table by ad position and country for FineVis monetization scenarios.
   poc_app_active_daily:
     table: data_agent_poc.poc_app_active_daily
     columns:
