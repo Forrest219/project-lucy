@@ -1,4 +1,29 @@
 roles:
+  poc_readonly:
+    description: POC内测只读角色 — 可访问5张POC授权表，forbidden_finance由ACL层deny
+    allow:
+      connections:
+        - poc-mysql-aliyun
+      tableSelectors:
+        - connection: poc-mysql-aliyun
+          schema: data_agent_poc
+          names:
+            - poc_metric_catalog
+            - poc_app_active_daily
+            - poc_ad_revenue_daily
+            - poc_ad_revenue_by_type_daily
+            - poc_ceo_metric_snapshot
+            # forbidden_finance 故意不在此列表中：
+            #   - 表在 enabled_tables 中，scan 生成了 manifest（表"存在"）
+            #   - 但 tableSelector 不授权，lucy ACL 返回 deny 而非 "表不存在"
+            #   - deny 事件记录进 audit，演示 ACL 拦截能力
+      tools:
+        - sl_query
+        - sl_read_source
+        - wiki_search
+        - wiki_read
+        - entity_details
+        - connection_list
   kx_readonly:
     description: KX 财务数据只读问答
     allow:
@@ -65,6 +90,15 @@ roles:
         - discover_data
         - connection_list
 users:
+  - id: poc_demo
+    name: POC演示账号
+    enabled: true
+    note: 晨阳POC内测演示用户，仅可访问5张POC表，forbidden_finance由ACL deny
+    tokens:
+      - hash: sha256:81199e3ad07d78f11aace1e598ecea49739a5ca01f80ffdfe17cbae0e9faa5d7
+        label: poc-demo-token
+        created: 2026-06-29
+    role: poc_readonly
   - id: zhangsan
     name: 张三
     tokens:

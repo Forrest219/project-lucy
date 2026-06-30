@@ -1,0 +1,76 @@
+name: kx_dim_financial_item
+
+descriptions:
+  human: >-
+    KX 财报项目维度表。`preferred_view` 是语义层派生路由提示：确定属于报表展示口径的
+    合计/关键汇总项目优先走对应 `kx_vw_*_detail` 视图；其余明细项目保持 NULL，
+    默认回到 `kx_fact_financial_amount` 事实表。用户通常会说“营业收入”“营收”
+    “净利润”等科目或指标名称，而不是 item_id；如果问题要求底层金额明细，即使用
+    科目名称定位，也应走事实表并关联本维表。
+  ai: >-
+    Financial statement line item dimension. The computed `preferred_view`
+    column is a semantic routing hint, not a physical database column. Non-null
+    values indicate statement-layout total/key summary rows that should prefer
+    the corresponding `kx_vw_*_detail` view; null means use
+    `kx_fact_financial_amount` for subject-level analysis. Users usually ask by
+    subject names or aliases such as 营业收入/营收/净利润 rather than item_id. For
+    underlying amount detail questions, join this dimension to the fact table
+    even when `preferred_view` is non-null. `preferred_view` is a high-confidence
+    routing hint subset; detailed statement metrics are defined on the
+    corresponding `kx_vw_*_detail` view measures.
+
+columns:
+  - name: item_aliases
+    type: string
+    expr: >-
+      CASE
+        WHEN item_name = '一、营业收入' THEN '营业收入,营收,收入'
+        WHEN item_name = '减：营业成本' THEN '营业成本,成本'
+        WHEN item_name = '税金及附加' THEN '税金及附加,营业税金及附加'
+        WHEN item_name = '销售费用' THEN '销售费用,销售费'
+        WHEN item_name = '管理费用' THEN '管理费用,管理费'
+        WHEN item_name = '财务费用' THEN '财务费用,财务费'
+        WHEN item_name IN ('二、营业利润（亏损以-号填列）', '二、营业利润') THEN '营业利润,经营利润'
+        WHEN item_name IN ('三、利润总额（亏损以-号填列）', '三、利润总额') THEN '利润总额,总利润'
+        WHEN item_name IN ('四、净利润（亏损以-号填列）', '四、净利润') THEN '净利润,利润'
+        WHEN item_name = '流动资产合计' THEN '流动资产合计,流动资产'
+        WHEN item_name = '流动负债合计' THEN '流动负债合计,流动负债'
+        WHEN item_name = '资产合计' THEN '资产合计,总资产,资产总额'
+        WHEN item_name = '负债合计' THEN '负债合计,总负债,负债总额'
+        WHEN item_name = '所有者权益合计' THEN '所有者权益合计,净资产,权益合计'
+        WHEN item_name = '负债和所有者权益合计' THEN '负债和所有者权益合计,负债及所有者权益合计'
+        WHEN item_name = '经营活动产生的现金流量净额' THEN '经营活动现金流量净额,经营现金流净额,经营现金流'
+        WHEN item_name = '投资活动产生的现金流量净额' THEN '投资活动现金流量净额,投资现金流净额,投资现金流'
+        WHEN item_name = '筹资活动产生的现金流量净额' THEN '筹资活动现金流量净额,筹资现金流净额,筹资现金流'
+        WHEN item_name = '四、现金净增加额' THEN '现金净增加额,现金净增加'
+        WHEN item_name = '加：期初现金余额' THEN '期初现金余额,期初现金'
+        WHEN item_name = '五、期末现金余额' THEN '期末现金余额,现金余额'
+        ELSE NULL
+      END
+    descriptions:
+      db: 语义层派生字段；常见中文问法和科目别名，逗号分隔。
+      ai: >-
+        Common natural-language aliases for the canonical financial statement
+        item. Use this to map user terms such as 营收/收入/净利润/经营现金流 to
+        canonical item_name values that may include Chinese numbering prefixes.
+
+  - name: preferred_view
+    type: string
+    expr: >-
+      CASE
+        WHEN item_id IN (30, 47, 52, 53) THEN 'kx_vw_balance_sheet_detail'
+        WHEN item_id IN (83, 92, 94) THEN 'kx_vw_income_statement_detail'
+        WHEN item_id IN (102, 109, 116, 117, 119) THEN 'kx_vw_cash_flow_statement_detail'
+        ELSE NULL
+      END
+    descriptions:
+      db: 语义层派生字段；推荐查询视图，NULL 表示走事实表。
+      ai: >-
+        Preferred source view for statement-layout total or key summary rows.
+        Use `kx_vw_balance_sheet_detail` for balance sheet totals such as
+        assets/liabilities/equity totals, `kx_vw_income_statement_detail` for
+        profit summary rows known to exist in the view, and
+        `kx_vw_cash_flow_statement_detail` for operating/investing/financing
+        cash flow net amount, net cash increase, and ending cash balance. Null
+        means the line item should generally be queried from
+        `kx_fact_financial_amount`.

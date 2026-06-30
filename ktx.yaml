@@ -1,4 +1,20 @@
 connections:
+  poc-mysql-aliyun:
+    driver: mysql
+    host: rm-bp1t0ie3sj4g7561hpo.mysql.rds.aliyuncs.com
+    port: 3306
+    database: data_agent_poc
+    username: data_agent_poc_ro
+    password: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/poc-mysql-password
+    enabled_tables:
+      - data_agent_poc.poc_metric_catalog
+      - data_agent_poc.poc_app_active_daily
+      - data_agent_poc.poc_ad_revenue_daily
+      - data_agent_poc.poc_ad_revenue_by_type_daily
+      - data_agent_poc.poc_ceo_metric_snapshot
+      - data_agent_poc.forbidden_finance
+    schemas:
+      - data_agent_poc
   mysql-aliyun:
     driver: mysql
     enabled_tables:
@@ -79,4 +95,5 @@ scan:
     validationConcurrency: 4
 setup:
   database_connection_ids:
+    - poc-mysql-aliyun
     - mysql-aliyun

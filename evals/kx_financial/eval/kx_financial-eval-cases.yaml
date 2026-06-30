@@ -24,6 +24,7 @@ metadata:
     kx_vw_cash_flow_statement_detail: 125
     kx_vw_income_statement_detail: 160
   data_source: raw_sql_fallback
+  expected_measures_semantics: expected_measures 是评审提示和语义层覆盖检查字段；除非 runner 显式实现 measure-use 校验，否则不单独构成强断言，强断言仍以 sql_assertions / tool_assertions / result_assertions 为准。
   paired_quiz:
     path: evals/kx_financial/kx_financial-quiz-cases.html
     version: v0.1
@@ -51,10 +52,20 @@ metadata:
     path_selection:
       - kx-join-001
       - kx-join-002
+      - kx-routing-balance-ratio-001
+      - kx-routing-income-monthly-001
+      - kx-routing-income-quarter-001
+      - kx-routing-cashflow-period-001
+      - kx-routing-balance-layout-001
+      - kx-routing-income-margin-001
+      - kx-routing-fact-subject-detail-001
       - kx-source-file-001
 
 safety_contract:
   readonly: true
+  yaml_value_typing:
+    null_is_yaml_null: true
+    string_null_requires_quotes: true
   forbid_secret_paths:
     - ".ktx/secrets/"
   forbid_cross_source_join: true
@@ -626,6 +637,371 @@ cases:
         check_row_count: false
     snapshot_date: 2026-06-20
     notes: 财报勾稽基础检查；两个合计项期末余额一致。
+
+  - id: kx-routing-balance-ratio-001
+    case_type: single_turn
+    question: 202605 柯西公司的资产负债率是多少？请用负债合计除以资产合计，并说明使用的数据源。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_balance_sheet_detail"
+        normalize: true
+        reason: 资产负债率使用资产负债表合计行，应优先走单表明细视图，避免 fact + dim join 歧义。
+      - type: forbidden_ast
+        value: "JOIN kx_dim_financial_item"
+        normalize: true
+        reason: 本题不需要通过项目维表 join 定位合计行，避免 ambiguous join path。
+      - type: forbidden_ast
+        value: "kx_fact_financial_amount"
+        normalize: true
+        reason: 本题是报表展示口径合计行查询，应走 kx_vw_balance_sheet_detail。
+      - type: required_normalized_regex
+        value: "资产合计"
+        normalize: true
+        reason: 资产负债率分母必须定位资产合计。
+      - type: required_normalized_regex
+        value: "负债合计"
+        normalize: true
+        reason: 资产负债率分子必须定位负债合计。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - 资产负债率
+            - 负债合计
+            - 资产合计
+            - kx_vw_balance_sheet_detail
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 路由回归 case；覆盖 Ambiguous join path -> 回退视图的事故链路。
+
+  - id: kx-routing-income-monthly-001
+    case_type: single_turn
+    question: 柯西 2026 年每月营业收入是多少？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures:
+      - 营业收入_本月
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_income_statement_detail"
+        normalize: true
+        reason: 每月营业收入是利润表展示口径，应走利润表明细视图。
+      - type: forbidden_ast
+        value: "kx_fact_financial_amount"
+        normalize: true
+        reason: 本题不需要底层金额事实表聚合。
+      - type: required_normalized_regex
+        value: "本月金额|营业收入_本月"
+        normalize: true
+        reason: 每月营业收入必须使用本月金额口径。
+      - type: required_normalized_regex
+        value: "报表期间"
+        normalize: true
+        reason: 月度趋势必须按报表期间返回。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202603"
+              item_name: 一、营业收入
+              current_month_amount: null
+            - report_period: "202604"
+              item_name: 一、营业收入
+              current_month_amount: 69339.62
+            - report_period: "202605"
+              item_name: 一、营业收入
+              current_month_amount: null
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 利润表月度展示口径路由；禁止为常规营收趋势绕到 fact 聚合。
+
+  - id: kx-routing-income-quarter-001
+    case_type: single_turn
+    question: 柯西 2026Q1 营业收入累计是多少？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures:
+      - 营业收入_本年累计
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_income_statement_detail"
+        normalize: true
+        reason: 截至季度的营业收入累计是利润表展示口径，应走利润表明细视图。
+      - type: required_normalized_regex
+        value: "期间季度标签|2026Q1"
+        normalize: true
+        reason: 季度语义应使用派生季度标签或等价语义字段。
+      - type: required_normalized_regex
+        value: "是否季末月份|202603"
+        normalize: true
+        reason: 截至 Q1 的累计值应取季末月份 202603，不能把 Q1 内多个月的累计值相加。
+      - type: required_normalized_regex
+        value: "本年累计金额|营业收入_本年累计"
+        normalize: true
+        reason: 截至 Q1 的收入累计应使用本年累计金额。
+      - type: forbidden_ast
+        value: "kx_fact_financial_amount"
+        normalize: true
+        reason: 本题不需要底层金额事实表。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202603"
+              item_name: 一、营业收入
+              year_to_date_amount: null
+        compare_mode: subset
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 季度标签语义回归；避免每次手拼裸 report_period 范围。
+
+  - id: kx-routing-cashflow-period-001
+    case_type: single_turn
+    question: 202603 柯西经营、投资、筹资活动现金流量净额分别是多少？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures:
+      - 经营活动现金流量净额_本年累计
+      - 投资活动现金流量净额_本年累计
+      - 筹资活动现金流量净额_本年累计
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_cash_flow_statement_detail"
+        normalize: true
+        reason: 三类现金流量净额是现金流量表展示口径，应走现金流量表明细视图。
+      - type: forbidden_ast
+        value: "kx_fact_financial_amount"
+        normalize: true
+        reason: 本题不需要底层金额事实表。
+      - type: required_normalized_regex
+        value: "经营活动.*现金流量净额"
+        normalize: true
+        reason: 必须定位经营活动现金流量净额。
+      - type: required_normalized_regex
+        value: "投资活动.*现金流量净额"
+        normalize: true
+        reason: 必须定位投资活动现金流量净额。
+      - type: required_normalized_regex
+        value: "筹资活动.*现金流量净额"
+        normalize: true
+        reason: 必须定位筹资活动现金流量净额。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202603"
+              item_name: 经营活动产生的现金流量净额
+              year_to_date_amount: 10000.20
+            - report_period: "202603"
+              item_name: 投资活动产生的现金流量净额
+              year_to_date_amount: null
+            - report_period: "202603"
+              item_name: 筹资活动产生的现金流量净额
+              year_to_date_amount: null
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 现金流展示口径路由；避免将现金流净额问题绕到 fact。
+
+  - id: kx-routing-balance-layout-001
+    case_type: single_turn
+    question: 列出 202605 柯西资产负债表中的资产合计、负债合计、所有者权益合计和负债及所有者权益合计。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures:
+      - 资产合计_期末余额
+      - 负债合计_期末余额
+      - 所有者权益合计_期末余额
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_balance_sheet_detail"
+        normalize: true
+        reason: 资产负债表合计行展示应走资产负债表明细视图。
+      - type: forbidden_ast
+        value: "kx_fact_financial_amount"
+        normalize: true
+        reason: 本题不需要 fact + dim join 定位合计行。
+      - type: required_normalized_regex
+        value: "期末余额|资产合计_期末余额"
+        normalize: true
+        reason: 资产负债表默认使用期末余额。
+      - type: required_normalized_regex
+        value: "负债和所有者权益合计|负债及所有者权益合计"
+        normalize: true
+        reason: 必须包含负债及所有者权益合计行。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202605"
+              item_name: 资产合计
+              end_balance: 99456.98
+            - report_period: "202605"
+              item_name: 负债合计
+              end_balance: 112306.25
+            - report_period: "202605"
+              item_name: 所有者权益合计
+              end_balance: -12849.27
+            - report_period: "202605"
+              item_name: 负债和所有者权益合计
+              end_balance: 99456.98
+        numeric_tolerance: 0.01
+        compare_mode: unordered_rows
+        key_columns:
+          - report_period
+          - item_name
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 资产负债表展示口径路由；约束合计行不要走 fact。
+
+  - id: kx-routing-income-margin-001
+    case_type: single_turn
+    question: 202605 柯西毛利率是多少？
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures:
+      - 毛利率
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_vw_income_statement_detail"
+        normalize: true
+        reason: 毛利率是利润表高频指标，应走利润表明细视图。
+      - type: required_normalized_regex
+        value: "毛利率|一、营业收入|减：营业成本"
+        normalize: true
+        reason: 毛利率应使用语义层中文 measure 或明确的收入/成本科目。
+      - type: forbidden_ast
+        value: "kx_fact_financial_amount"
+        normalize: true
+        reason: 本题不需要底层事实表临时聚合。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202605"
+              revenue_ytd: 69339.62
+              operating_cost_ytd: null
+              gross_margin: null
+        numeric_tolerance: 0.01
+        compare_mode: subset
+        key_columns:
+          - report_period
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 高频财务指标 measure 化回归；避免 agent 每次临时拼 fact SQL。
+
+  - id: kx-routing-fact-subject-detail-001
+    case_type: single_turn
+    question: 查询利润表科目“营业收入”在 202601 到 202606 的底层金额明细，请按报表期间返回科目、金额。
+    domain: kx_financial
+    skill_version: v0.1
+    semantic_version: v0.1
+    model_id: claude-sonnet-4-6
+    expected_source: raw_sql_fallback
+    expected_measures: []
+    linked_quiz_questions: []
+    sql_assertions:
+      - type: required_normalized_regex
+        value: "kx_fact_financial_amount"
+        normalize: true
+        reason: 底层金额明细必须走财报金额事实表。
+      - type: required_ast
+        value: "JOIN kx_dim_financial_item"
+        normalize: true
+        reason: 用户按科目名称提问，应关联项目维表定位标准科目。
+      - type: required_normalized_regex
+        value: "营业收入|一、营业收入"
+        normalize: true
+        reason: 必须用科目名称定位营业收入。
+      - type: required_normalized_regex
+        value: "202601"
+        normalize: true
+        reason: 必须限定起始报表期间。
+      - type: required_normalized_regex
+        value: "202606"
+        normalize: true
+        reason: 必须限定结束报表期间。
+      - type: forbidden_ast
+        value: "kx_vw_income_statement_detail"
+        normalize: true
+        reason: 底层金额明细问题不应走利润表展示视图。
+      - type: forbidden_ast
+        value: "kx_vw_balance_sheet_detail"
+        normalize: true
+        reason: 本题不是资产负债表展示问题。
+      - type: forbidden_ast
+        value: "kx_vw_cash_flow_statement_detail"
+        normalize: true
+        reason: 本题不是现金流量表展示问题。
+    result_assertions:
+      - value_type: dataframe
+        data:
+          rows:
+            - report_period: "202601"
+              item_name: 一、营业收入
+              amount: null
+            - report_period: "202604"
+              item_name: 一、营业收入
+              amount: 69339.62
+            - report_period: "202605"
+              item_name: 一、营业收入
+              amount: 69339.62
+        numeric_tolerance: 0.01
+        compare_mode: subset
+        key_columns:
+          - report_period
+          - item_name
+          - amount
+        check_schema: true
+        check_row_count: false
+    snapshot_date: 2026-06-20
+    notes: 反向路由护栏；自然语言科目明细问题仍应走 fact + dim，而不是被视图优先规则吞掉。
 
   - id: kx-income-001
     case_type: single_turn

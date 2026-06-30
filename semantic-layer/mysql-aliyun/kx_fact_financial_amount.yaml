@@ -1,8 +1,28 @@
 name: kx_fact_financial_amount
 
 descriptions:
-  human: KX 财报金额事实表。用于分析柯西公司（深圳市柯西信息科技有限公司，company_id=1）在 2026 年的经营情况、利润表、资产负债表和现金流量表。
-  ai: Financial amount fact table for KX financial analysis; includes aliases Kexi company / 柯西公司 / 深圳市柯西信息科技有限公司 via company_id=1.
+  human: >-
+    KX 财报金额事实表。用于分析柯西公司（深圳市柯西信息科技有限公司，company_id=1）在
+    2026 年的经营情况、利润表、资产负债表和现金流量表。查询报表展示口径或合计行
+    （资产合计、负债合计、所有者权益合计、利润总额、净利润、现金流量净额等）时，
+    优先直接使用 `kx_vw_balance_sheet_detail`、`kx_vw_income_statement_detail`、
+    `kx_vw_cash_flow_statement_detail` 三个明细视图，避免不必要的 fact + dim join
+    路径歧义；事实表优先用于按科目名称查询底层金额明细、跨期间明细金额、单季度
+    发生额、来源追溯、自定义聚合，以及需要 amount_type / quarter_no 标准化过滤的分析。
+  ai: >-
+    Financial amount fact table for KX financial analysis; includes aliases
+    Kexi company / 柯西公司 / 深圳市柯西信息科技有限公司 via company_id=1.
+    For statement-layout questions or total/subtotal rows, prefer the three
+    single-table detail views (`kx_vw_balance_sheet_detail`,
+    `kx_vw_income_statement_detail`, `kx_vw_cash_flow_statement_detail`) to
+    avoid ambiguous fact-dimension join paths. Use this fact table when the
+    task needs underlying subject-level amount details, period-by-period detail
+    amounts, single-quarter amounts, lineage fields, custom aggregation, or
+    amount_type / quarter_no filters. Users usually ask by subject name, so join
+    `kx_dim_financial_item` to locate the canonical financial statement item.
+    Canonical item names may include Chinese numbering prefixes, for example
+    `一、营业收入`; use item aliases from `kx_dim_financial_item` when mapping
+    natural-language subjects.
 
 # 行粒度：每行是一家公司、一个报表期间、一个财报项目、一个金额类型的金额记录。
 grain:
@@ -15,11 +35,11 @@ measures:
 
   - name: non_null_amount_count
     expr: sum(case when amount is not null then 1 else 0 end)
-    description: amount 非空的记录数，用于检查报表项目覆盖与缺失情况。
+    description: amount 非空的记录数，用于检查报表项目覆盖与缺失情况，例如某科目在某月是否有填报数据。
 
   - name: null_amount_count
     expr: sum(case when amount is null then 1 else 0 end)
-    description: amount 为空的记录数。NULL 表示原始报表为空，不等同于 0。
+    description: amount 为空的记录数。NULL 表示原始报表为空，不等同于 0；用于检测某科目、某期间的数据缺口。
 
 segments:
   - name: kexi_company

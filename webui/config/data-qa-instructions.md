@@ -40,10 +40,15 @@ Step 3  以上均不能覆盖时，才允许 raw SQL
 
 ## 表路由（关键）
 
-本项目数据问答启用 `dataforai` 下的超市样例 domain 与 KX 财务报表 domain。
+本项目数据问答启用 `data_agent_poc` 下的 POC 内测 domain，以及 `dataforai` 下的超市样例 domain 与 KX 财务报表 domain。
 
 | 分析意图 | 路由 |
 |---|---|
+| POC 数据总纲、表路由、指标口径 | `poc-mysql-aliyun` / `data_agent_poc.poc_metric_catalog`，也可读 wiki `poc-data-agent-playbook.md` |
+| POC DAU、启动次数、人均启动、包名趋势、平台对比 | `poc-mysql-aliyun` / `data_agent_poc.poc_app_active_daily` |
+| POC 广告收入、曝光量、eCPM、ARPU、广告位排名、月度广告收入趋势 | `poc-mysql-aliyun` / `data_agent_poc.poc_ad_revenue_daily` |
+| POC 分品类广告收入（品牌 / 电商 / 效果 / 外包）、IDM治理层DAU、人均打开次数、治理层eCPM | `poc-mysql-aliyun` / `data_agent_poc.poc_ad_revenue_by_type_daily` |
+| POC CEO一眼报标杆快照、eval 回归值 | `poc-mysql-aliyun` / `data_agent_poc.poc_ceo_metric_snapshot` |
 | 超市零售明细（订单、折扣、利润、客户、产品、区域） | `dataforai.superstore_orders`（10194 行，4 年样本） |
 | 月度 / 季度 / 年度趋势 | `dataforai.superstore_orders` 按 `order_date` 聚合（如 `DATE_FORMAT(order_date,'%Y-%m')`），不要依赖外部汇总表 |
 | 退货关联 | `dataforai.superstore_returns` JOIN `superstore_orders` ON `order_id`（join 已在 sl yaml 中声明） |
@@ -57,6 +62,15 @@ Step 3  以上均不能覆盖时，才允许 raw SQL
 | KX 利润表明细视图 | `dataforai.kx_vw_income_statement_detail` |
 
 超市表查询默认加 `WHERE is_deleted = 0`；查 returns 时再加 `returned = '是'`。KX 财务表不含 `is_deleted`，不要套用超市软删除过滤。
+
+POC token 常见限制：`poc_readonly` 只授权 `poc-mysql-aliyun` 连接下的 5 张 POC 表。不要调用 `discover_data` / `dictionary_search` 做全局 metadata 发现；这些工具可能触达 KX 敏感 metadata 并被 ACL 拒绝。POC 查询必须显式传 `connectionId: "poc-mysql-aliyun"`，并用 source 前缀限定 measure / dimension，避免跨 source 重名。
+
+POC 广告收入常用 `sl_query` 参数：
+
+- 本年各月广告收入：`connectionId="poc-mysql-aliyun"`，`measures=["poc_ad_revenue_daily.ad_revenue"]`，按 `poc_ad_revenue_daily.dt` 做月粒度分组或日期过滤。
+- 本年各广告位广告收入：`connectionId="poc-mysql-aliyun"`，`measures=["poc_ad_revenue_daily.ad_revenue"]`，`dimensions=[{"field":"poc_ad_revenue_daily.ad_slot"}]`。
+- 本年各品类广告收入：`connectionId="poc-mysql-aliyun"`，`measures=["poc_ad_revenue_by_type_daily.ad_revenue"]`，`dimensions=[{"field":"poc_ad_revenue_by_type_daily.revenue_type"}]`。不要使用 `category`；品类字段名是 `revenue_type`。
+- 如需校验广告收入合计一致性，比较 `poc_ad_revenue_daily.ad_revenue` 与 `poc_ad_revenue_by_type_daily.ad_revenue` 在同一日期 / 国家粒度下的合计。
 
 当前 token 实际能看到哪些表/工具，以 `kx_catalog` 返回结果和 `tools/list` 的实际可见工具为准——本文件描述的是全量路由知识，不代表当前 token 一定有权限访问全部条目。
 
