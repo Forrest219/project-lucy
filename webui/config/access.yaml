@@ -92,9 +92,9 @@ users:
     enabled: true
     note: Local development user for the Lucy MCP proxy path (wo-proxy-instructions-injection Task B). Token provisioned via admin API; never store plaintext in committed files.
     tokens:
-      - hash: sha256:4308081c826e6b6cc1d44ac3277078cb36007fd78723645f1eed61b0a75f951d
-        label: lucy-mcp-dev-v3
-        created: 2026-06-23
+      - hash: sha256:790d0fda16da474703723041f0293f2086a92b62978f07ea89a00ca493f84a1b
+        label: lucy-mcp-dev-v4
+        created: 2026-06-30
     role: local_dev_full_access
   - id: lisi
     name: 李四
