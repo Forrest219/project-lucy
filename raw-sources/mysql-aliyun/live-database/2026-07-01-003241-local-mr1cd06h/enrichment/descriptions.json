@@ -1,0 +1,241 @@
+[
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "kx_dim_company"
+    },
+    "tableDescription": "Company dimension table storing master data and identifiers for business entities.",
+    "columnDescriptions": {
+      "company_id": "Unique numeric identifier for the company record.",
+      "company_name": "Registered business name of the company.",
+      "unified_social_credit_code": "Official Chinese unified social credit identifier.",
+      "created_at": "Timestamp when the record was first inserted.",
+      "updated_at": "Timestamp of the latest modification to the record."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "kx_dim_financial_item"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "item_id": null,
+      "statement_type": null,
+      "item_side": null,
+      "item_name": null,
+      "row_no": null,
+      "display_order": null,
+      "is_total": null,
+      "created_at": null,
+      "updated_at": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "kx_fact_financial_amount"
+    },
+    "tableDescription": "Stores financial statement amounts by company, reporting period, and statement type for analytical querying.",
+    "columnDescriptions": {
+      "amount_id": "Unique identifier for each financial amount record",
+      "company_id": "Foreign key referencing the reporting company",
+      "item_id": "Foreign key referencing the financial statement line item",
+      "report_period": "Reporting period in YYYYMM format, e.g., 202605",
+      "report_date": "Calendar date of the financial report, e.g., 2026-05-31",
+      "fiscal_year": "Fiscal year component of the reporting period",
+      "fiscal_month": "Fiscal month component of the reporting period",
+      "statement_type": "Type of financial statement: balance sheet, income, or cash flow",
+      "amount_type": "Nature of the figure: opening, closing, monthly, YTD, or quarterly",
+      "quarter_no": "Quarter number; zero indicates non-quarterly data",
+      "amount": "Monetary value in the reporting currency, NULL if absent",
+      "currency": "Currency code in which the amount is denominated",
+      "source_file_name": "Original Excel file name for data lineage tracing",
+      "source_sheet_name": "Original worksheet name for data lineage tracing",
+      "source_cell": "Original spreadsheet cell location for data lineage tracing",
+      "created_at": "Timestamp when the record was first inserted",
+      "updated_at": "Timestamp when the record was last modified"
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "kx_vw_cash_flow_statement_detail"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "公司名称": null,
+      "报表期间": null,
+      "报表日期": null,
+      "展示顺序": null,
+      "行次": null,
+      "项目名称": null,
+      "本年累计金额": null,
+      "本月金额": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "kx_vw_balance_sheet_detail"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "公司名称": null,
+      "报表期间": null,
+      "报表日期": null,
+      "项目归属": null,
+      "展示顺序": null,
+      "行次": null,
+      "项目名称": null,
+      "期末余额": null,
+      "年初余额": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "kx_vw_income_statement_detail"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "公司名称": null,
+      "报表期间": null,
+      "报表日期": null,
+      "展示顺序": null,
+      "行次": null,
+      "项目名称": null,
+      "本年累计金额": null,
+      "本月金额": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "superstore_orders"
+    },
+    "tableDescription": "Granular superstore order line-item records with customer, product, geography, financials, and ETL lineage metadata for China-based retail analytics.",
+    "columnDescriptions": {
+      "row_id": "Auto-incrementing surrogate primary key for each line item.",
+      "order_id": "Unique identifier grouping line items belonging to the same order.",
+      "order_date": "Calendar date when the customer placed the order.",
+      "ship_date": "Calendar date when the order was shipped to the customer.",
+      "ship_mode": "Shipping service level selected for order delivery.",
+      "customer_id": "Unique identifier assigned to the purchasing customer.",
+      "customer_name": "Full name of the customer who placed the order.",
+      "segment": "Market segment classification of the customer.",
+      "city": "City of the customer's shipping address.",
+      "province": "Province or autonomous region of the shipping address.",
+      "country_region": "Country of the customer's shipping address.",
+      "region": "Macroeconomic region grouping within China.",
+      "product_id": "Unique identifier for the sold product.",
+      "category": "Top-level product category classification.",
+      "sub_category": "Detailed product sub-category classification.",
+      "product_name": "Descriptive name of the sold product.",
+      "sales": "Total revenue generated by the line item.",
+      "quantity": "Number of units sold on the line item.",
+      "discount": "Fractional discount rate applied to the line item.",
+      "profit": "Net profit earned on the line item.",
+      "postal_code": "Postal code of the customer's shipping address.",
+      "source_system": "Originating system that supplied the record.",
+      "source_file": "Path of the source file from which the record was loaded.",
+      "source_sheet": "Worksheet name within the source workbook.",
+      "source_row_number": "Original row number in the source file.",
+      "batch_id": "Identifier of the ETL ingestion batch.",
+      "row_hash": "SHA-256 hash of business fields for change detection.",
+      "is_deleted": "Flag indicating soft-deletion status.",
+      "created_at": "Timestamp when the record was first loaded.",
+      "updated_at": "Timestamp when the record was last modified."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "superstore_orders_huadong"
+    },
+    "tableDescription": "Line-level superstore sales order fact data for China's East region, including products, customers, geography, and ETL lineage.",
+    "columnDescriptions": {
+      "row_id": "Surrogate primary key for each order line",
+      "order_id": "Business order identifier grouping line items",
+      "order_date": "Calendar date when customer placed the order",
+      "ship_date": "Calendar date when order was shipped",
+      "ship_mode": "Shipping service level or delivery class",
+      "customer_id": "Unique identifier assigned to each customer",
+      "customer_name": "Full name of the purchasing customer",
+      "segment": "Market segment classification such as consumer or business",
+      "city": "City where the customer is located",
+      "province": "Chinese province or autonomous region of customer",
+      "country_region": "Country name of the customer location",
+      "region": "Macro sales region within the country",
+      "product_id": "Unique identifier for the sold product",
+      "category": "Top-level product category classification",
+      "sub_category": "Detailed product sub-category classification",
+      "product_name": "Display name of the product purchased",
+      "sales": "Revenue amount for the line item",
+      "quantity": "Number of units sold in the line",
+      "discount": "Applied discount rate as a decimal fraction",
+      "profit": "Net profit earned on the line item",
+      "postal_code": "Customer postal or ZIP code",
+      "source_system": "Originating system that produced the record",
+      "source_file": "Path of the imported source file",
+      "source_sheet": "Worksheet name within the source file",
+      "source_row_number": "Original row index in the source file",
+      "batch_id": "Identifier of the ingestion batch run",
+      "row_hash": "SHA-256 hash of business fields for change detection",
+      "is_deleted": "Soft-delete flag indicating logical removal",
+      "created_at": "Timestamp when record was first loaded",
+      "updated_at": "Timestamp when record was last modified"
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "superstore_people"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "region": null,
+      "regional_manager": null,
+      "source_system": null,
+      "source_file": null,
+      "source_sheet": null,
+      "source_row_number": null,
+      "batch_id": null,
+      "row_hash": null,
+      "is_deleted": null,
+      "created_at": null,
+      "updated_at": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "dataforai",
+      "name": "superstore_returns"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "id": null,
+      "order_id": null,
+      "returned": null,
+      "source_system": null,
+      "source_file": null,
+      "source_sheet": null,
+      "source_row_number": null,
+      "batch_id": null,
+      "row_hash": null,
+      "is_deleted": null,
+      "created_at": null,
+      "updated_at": null
+    }
+  }
+]
