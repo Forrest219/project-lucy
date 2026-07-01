@@ -1,0 +1,92 @@
+{
+  "catalog": null,
+  "db": "dataforai",
+  "name": "kx_vw_balance_sheet_detail",
+  "kind": "view",
+  "comment": "VIEW",
+  "estimatedRows": null,
+  "columns": [
+    {
+      "name": "公司名称",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "公司名称"
+    },
+    {
+      "name": "报表期间",
+      "nativeType": "char",
+      "normalizedType": "char",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "报表期间，格式YYYYMM，例如202605"
+    },
+    {
+      "name": "报表日期",
+      "nativeType": "date",
+      "normalizedType": "date",
+      "dimensionType": "time",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "报表日期，例如2026-05-31"
+    },
+    {
+      "name": "项目归属",
+      "nativeType": "enum",
+      "normalizedType": "enum",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "项目归属：asset=资产，liability_equity=负债及所有者权益，income=利润表项目，cash_flow=现金流量项目"
+    },
+    {
+      "name": "展示顺序",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "展示顺序，按原始报表行顺序排序"
+    },
+    {
+      "name": "行次",
+      "nativeType": "int",
+      "normalizedType": "int",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": "原报表行次"
+    },
+    {
+      "name": "项目名称",
+      "nativeType": "varchar",
+      "normalizedType": "varchar",
+      "dimensionType": "string",
+      "nullable": false,
+      "primaryKey": false,
+      "comment": "财报项目名称"
+    },
+    {
+      "name": "期末余额",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    },
+    {
+      "name": "年初余额",
+      "nativeType": "decimal",
+      "normalizedType": "decimal",
+      "dimensionType": "number",
+      "nullable": true,
+      "primaryKey": false,
+      "comment": null
+    }
+  ],
+  "foreignKeys": []
+}
