@@ -1,0 +1,123 @@
+{
+  "connectionId": "mysql-aliyun",
+  "driver": "mysql",
+  "syncId": "2026-07-01-003241-local-mr1cd06h",
+  "runId": "local-mr1cjwqw",
+  "trigger": "cli",
+  "mode": "enriched",
+  "dryRun": false,
+  "artifactPaths": {
+    "rawSourcesDir": "raw-sources/mysql-aliyun/live-database/2026-07-01-003241-local-mr1cd06h",
+    "reportPath": "raw-sources/mysql-aliyun/live-database/2026-07-01-003241-local-mr1cd06h/scan-report.json",
+    "manifestShards": [
+      "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"
+    ],
+    "enrichmentArtifacts": [
+      "raw-sources/mysql-aliyun/live-database/2026-07-01-003241-local-mr1cd06h/enrichment/descriptions.json",
+      "raw-sources/mysql-aliyun/live-database/2026-07-01-003241-local-mr1cd06h/enrichment/embeddings.json",
+      "raw-sources/mysql-aliyun/live-database/2026-07-01-003241-local-mr1cd06h/enrichment/relationships.json",
+      "raw-sources/mysql-aliyun/live-database/2026-07-01-003241-local-mr1cd06h/enrichment/relationship-profile.json",
+      "raw-sources/mysql-aliyun/live-database/2026-07-01-003241-local-mr1cd06h/enrichment/relationship-diagnostics.json"
+    ]
+  },
+  "diffSummary": {
+    "tablesAdded": 0,
+    "tablesModified": 0,
+    "tablesDeleted": 0,
+    "tablesUnchanged": 10,
+    "columnsAdded": 0,
+    "columnsModified": 0,
+    "columnsDeleted": 0
+  },
+  "manifestShardsWritten": 1,
+  "structuralSyncStats": {
+    "tablesCreated": 0,
+    "tablesUpdated": 0,
+    "tablesDeleted": 0,
+    "columnsCreated": 0,
+    "columnsUpdated": 0,
+    "columnsDeleted": 0
+  },
+  "enrichment": {
+    "dataDictionary": "completed",
+    "tableDescriptions": "completed",
+    "columnDescriptions": "completed",
+    "embeddings": "completed",
+    "deterministicRelationships": "completed",
+    "llmRelationshipValidation": "completed",
+    "statisticalValidation": "completed"
+  },
+  "capabilityGaps": [],
+  "warnings": [
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table kx_dim_financial_item: No object generated: could not parse the response.",
+      "table": "kx_dim_financial_item",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    },
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table kx_vw_cash_flow_statement_detail: No object generated: could not parse the response.",
+      "table": "kx_vw_cash_flow_statement_detail",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    },
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table kx_vw_income_statement_detail: No object generated: could not parse the response.",
+      "table": "kx_vw_income_statement_detail",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    },
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table kx_vw_balance_sheet_detail: No object generated: could not parse the response.",
+      "table": "kx_vw_balance_sheet_detail",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    },
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table superstore_people: No object generated: could not parse the response.",
+      "table": "superstore_people",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    },
+    {
+      "code": "enrichment_failed",
+      "message": "Failed to generate batched description for table superstore_returns: No object generated: could not parse the response.",
+      "table": "superstore_returns",
+      "recoverable": true,
+      "metadata": {
+        "connectorId": "mysql:mysql-aliyun"
+      }
+    }
+  ],
+  "relationships": {
+    "accepted": 2,
+    "review": 8,
+    "rejected": 0,
+    "skipped": 0
+  },
+  "enrichmentState": {
+    "resumedStages": [],
+    "completedStages": [
+      "descriptions",
+      "embeddings",
+      "relationships"
+    ],
+    "failedStages": []
+  },
+  "createdAt": "2026-07-01T00:38:04.009Z"
+}
