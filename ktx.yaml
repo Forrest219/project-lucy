@@ -17,7 +17,7 @@ connections:
     port: 3306
     database: dataforai
     username: bi_zy
-    password: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
+    password: file:/Users/zhangxingchen/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
     # NOTE: `schemas` 控制 scan 范围；`enabled_tables`（上方）控制问答可见范围。
     schemas:
       - dataforai
@@ -30,7 +30,7 @@ llm:
   provider:
     backend: anthropic
     anthropic:
-      api_key: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/minimax-api-key
+      api_key: env:ANTHROPIC_AUTH_TOKEN
       base_url: https://api.minimaxi.com/anthropic/v1
   models:
     default: MiniMax-M3
