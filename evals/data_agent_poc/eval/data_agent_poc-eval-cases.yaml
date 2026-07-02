@@ -14,6 +14,9 @@ metadata:
   output_path: evals/data_agent_poc/eval/data_agent_poc-eval-cases.yaml
   snapshot_date: 2026-06-30
   data_source: semantic_layer
+  paired_quiz:
+    path: evals/data_agent_poc/data_agent_poc-quiz-cases.html
+    version: v0.1
 
 safety_contract:
   readonly: true
