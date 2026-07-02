@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { identifyRequest, setSessionClient, type Identity } from "./identity.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, check as aclCheck, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { resolveProjectRoot } from "../project.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
@@ -14,6 +15,9 @@ const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ??
 const SENSITIVE_ARG_KEY_RE = /(?:sql|query|password|passwd|pwd|token|secret|api[-_]?key|authorization|credential)/i;
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
 const QUERY_TABLE_RE = /\b(?:from|join|into|update|table)\s+[`"]?([a-zA-Z_][\w]*(?:\.[a-zA-Z_][\w]*){0,2})[`"]?/gi;
+const LUCY_QUERY_DEFAULT_LIMIT = Number(process.env.LUCY_QUERY_DEFAULT_LIMIT ?? 100);
+const LUCY_QUERY_MAX_LIMIT = Number(process.env.LUCY_QUERY_MAX_LIMIT ?? 1000);
+const LUCY_QUERY_MAX_INFLIGHT = Number(process.env.LUCY_QUERY_MAX_INFLIGHT ?? 4);
 
 function getInternalToken(): string {
   return process.env.KTX_INTERNAL_TOKEN ?? "";
@@ -22,6 +26,7 @@ function getInternalToken(): string {
 // ─── Phase 3: near-neighbor correlation for lucy_begin_question (spec §8.2) ──
 // In-memory only (not persisted) — mirrors identity.ts's sessionClients pattern.
 const reportedTurns = new Map<string, { turnId: string; createdAt: number }>();
+const lucyQueryInflight = new Map<string, number>();
 
 function reportedTurnKey(identity: Identity): string {
   return `${identity.userId}:${identity.tokenHashPrefix}`;
@@ -42,6 +47,47 @@ function recordReportedTurn(identity: Identity, turnId: string): void {
   const now = Date.now();
   purgeExpiredReportedTurns(now);
   reportedTurns.set(reportedTurnKey(identity), { turnId, createdAt: now });
+}
+
+function queryConcurrencyKey(identity: Identity): string {
+  return `${identity.userId}:${identity.tokenHashPrefix}`;
+}
+
+function queryConcurrencyLimit(): number {
+  if (!Number.isFinite(LUCY_QUERY_MAX_INFLIGHT)) return 4;
+  return Math.max(1, Math.floor(LUCY_QUERY_MAX_INFLIGHT));
+}
+
+function acquireLucyQuerySlot(identity: Identity): { allowed: true; release: () => void; active: number; max: number } | { allowed: false; active: number; max: number } {
+  const key = queryConcurrencyKey(identity);
+  const active = lucyQueryInflight.get(key) ?? 0;
+  const max = queryConcurrencyLimit();
+  if (active >= max) return { allowed: false, active, max };
+  lucyQueryInflight.set(key, active + 1);
+  let released = false;
+  return {
+    allowed: true,
+    active: active + 1,
+    max,
+    release: () => {
+      if (released) return;
+      released = true;
+      const current = lucyQueryInflight.get(key) ?? 0;
+      if (current <= 1) lucyQueryInflight.delete(key);
+      else lucyQueryInflight.set(key, current - 1);
+    }
+  };
+}
+
+function releaseOnResponseEnd(res: ServerResponse, release: () => void): void {
+  let released = false;
+  const once = () => {
+    if (released) return;
+    released = true;
+    release();
+  };
+  res.once("finish", once);
+  res.once("close", once);
 }
 
 function matchReportedTurn(identity: Identity): string | undefined {
@@ -327,10 +373,96 @@ function pipeResponse(upstream: IncomingMessage, res: ServerResponse): void {
 function kxCatalogTool() {
   return {
     name: "kx_catalog",
-    description: "List the KX financial sources available to this agent. Use this before KX/company operation questions. For workhorse, use connectionId=mysql-aliyun and kx_* sources only.",
+    description: "Compatibility catalog. Lists only the sources available to this agent. Prefer lucy_catalog for new clients.",
     inputSchema: {
       type: "object",
       properties: {},
+      additionalProperties: false
+    }
+  };
+}
+
+function lucyCatalogTool() {
+  return {
+    name: "lucy_catalog",
+    description: "List only the connections and semantic sources available to this agent, with safe query examples for the visible domain. Call this before choosing a database or source.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false
+    }
+  };
+}
+
+function lucyReadSourceTool() {
+  return {
+    name: "lucy_read_source",
+    description: "Read one authorized semantic source through Lucy. This is the stable Lucy wrapper for sl_read_source and is filtered by role/source policy.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        connectionId: { type: "string" },
+        sourceName: { type: "string" }
+      },
+      required: ["connectionId", "sourceName"],
+      additionalProperties: true
+    }
+  };
+}
+
+function lucyQueryTool() {
+  return {
+    name: "lucy_query",
+    description: "Run an authorized semantic query through Lucy guardrails. Use source-qualified measures, dimensions, filters, segments, and order fields.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        connectionId: { type: "string" },
+        measures: { type: "array" },
+        dimensions: { type: "array" },
+        filters: {},
+        segments: { type: "array" },
+        order_by: { type: "array" },
+        limit: { type: "number", minimum: 1, maximum: LUCY_QUERY_MAX_LIMIT }
+      },
+      required: ["connectionId"],
+      additionalProperties: true
+    }
+  };
+}
+
+function lucyExplainQueryTool() {
+  return {
+    name: "lucy_explain_query",
+    description: "Explain how Lucy would authorize and guardrail a semantic query without executing it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        connectionId: { type: "string" },
+        measures: { type: "array" },
+        dimensions: { type: "array" },
+        filters: {},
+        segments: { type: "array" },
+        order_by: { type: "array" },
+        limit: { type: "number", minimum: 1, maximum: LUCY_QUERY_MAX_LIMIT }
+      },
+      required: ["connectionId"],
+      additionalProperties: true
+    }
+  };
+}
+
+function lucyFreshnessTool() {
+  return {
+    name: "lucy_freshness",
+    description: "Return freshness metadata for one authorized source. R1 reports semantic-layer metadata freshness and leaves physical data freshness explicit when unavailable.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        connectionId: { type: "string" },
+        sourceName: { type: "string" }
+      },
+      required: ["connectionId", "sourceName"],
       additionalProperties: false
     }
   };
@@ -357,17 +489,243 @@ function lucyBeginQuestionTool() {
   };
 }
 
+function connectionListTool() {
+  return {
+    name: "connection_list",
+    description: "List only the database connections available to this agent. This proxy-local response is already filtered by effective permissions.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false
+    }
+  };
+}
+
+function wikiSearchTool() {
+  return {
+    name: "wiki_search",
+    description: "Search only wiki pages this agent is authorized to read. Returned keys are canonical and can be passed directly to wiki_read.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        q: { type: "string" },
+        limit: { type: "number", minimum: 1, maximum: 20 }
+      },
+      additionalProperties: true
+    }
+  };
+}
+
+function wikiReadTool() {
+  return {
+    name: "wiki_read",
+    description: "Read an authorized wiki page by canonical key. Unauthorized pages return a generic access denied response.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string" }
+      },
+      required: ["key"],
+      additionalProperties: true
+    }
+  };
+}
+
 // Local tools the proxy serves itself (never forwarded to KTX). Each is only injected
 // into tools/list when visibleTools allows it — same explicit allow-list gate as any
 // other tool (spec 08 §15 decision 2: no derived/bypass condition).
 function localToolBuilders(): Array<{ name: string; build: () => Record<string, unknown> }> {
   const builders: Array<{ name: string; build: () => Record<string, unknown> }> = [
-    { name: "kx_catalog", build: kxCatalogTool }
+    { name: "connection_list", build: connectionListTool },
+    { name: "lucy_catalog", build: lucyCatalogTool },
+    { name: "lucy_read_source", build: lucyReadSourceTool },
+    { name: "lucy_query", build: lucyQueryTool },
+    { name: "lucy_explain_query", build: lucyExplainQueryTool },
+    { name: "lucy_freshness", build: lucyFreshnessTool },
+    { name: "kx_catalog", build: kxCatalogTool },
+    { name: "wiki_search", build: wikiSearchTool },
+    { name: "wiki_read", build: wikiReadTool }
   ];
   if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
     builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
   }
   return builders;
+}
+
+function numericLimit(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return LUCY_QUERY_DEFAULT_LIMIT;
+  return Math.min(LUCY_QUERY_MAX_LIMIT, Math.max(1, Math.floor(value)));
+}
+
+function rewriteToolCall(parsed: Record<string, unknown>, upstreamTool: string, args: Record<string, unknown>): Buffer {
+  const params = parsed.params && typeof parsed.params === "object" && !Array.isArray(parsed.params)
+    ? { ...(parsed.params as Record<string, unknown>) }
+    : {};
+  return Buffer.from(JSON.stringify({
+    ...parsed,
+    params: {
+      ...params,
+      name: upstreamTool,
+      arguments: args
+    }
+  }));
+}
+
+function lucyReadSourceUpstreamArgs(args: unknown): Record<string, unknown> {
+  const record = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
+  return {
+    ...record,
+    connectionId: record.connectionId ?? record.connection_id ?? record.connection,
+    sourceName: record.sourceName ?? record.source_name ?? record.source ?? record.table
+  };
+}
+
+function lucyQueryUpstreamArgs(args: unknown): Record<string, unknown> {
+  const record = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
+  return {
+    ...record,
+    limit: numericLimit(record.limit)
+  };
+}
+
+function hasNonEmptyStringField(record: Record<string, unknown>, fields: string[]): boolean {
+  return fields.some((field) => typeof record[field] === "string" && String(record[field]).trim().length > 0);
+}
+
+function hasNonEmptyArrayField(record: Record<string, unknown>, fields: string[]): boolean {
+  return fields.some((field) => Array.isArray(record[field]) && (record[field] as unknown[]).length > 0);
+}
+
+function validateLucyToolArgs(toolName: string, args: unknown): string | undefined {
+  if (!toolName.startsWith("lucy_") || toolName === "lucy_catalog" || toolName === "lucy_begin_question") return undefined;
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return `invalid_arguments:${toolName}:arguments_object_required`;
+  }
+  const record = args as Record<string, unknown>;
+  if (!hasNonEmptyStringField(record, ["connectionId", "connection_id", "connection"])) {
+    return `invalid_arguments:${toolName}:connection_required`;
+  }
+
+  if (toolName === "lucy_read_source" || toolName === "lucy_freshness") {
+    if (!hasNonEmptyStringField(record, ["sourceName", "source_name", "source", "table"])) {
+      return `invalid_arguments:${toolName}:source_required`;
+    }
+  }
+
+  if (toolName === "lucy_query" || toolName === "lucy_explain_query") {
+    const hasQueryShape = hasNonEmptyArrayField(record, [
+      "measures",
+      "dimensions",
+      "filters",
+      "segments",
+      "order_by",
+      "orderBy"
+    ]) || hasNonEmptyStringField(record, [
+      "sourceName",
+      "source_name",
+      "source",
+      "table",
+      "query",
+      "sql"
+    ]);
+    if (!hasQueryShape) {
+      return `invalid_arguments:${toolName}:query_shape_required`;
+    }
+  }
+
+  return undefined;
+}
+
+async function lucyExplainQuery(identity: Identity, args: unknown): Promise<Record<string, unknown>> {
+  const sourceRefs = await extractSourceRefs("lucy_explain_query", args, { fresh: true });
+  const permissions = await effectivePermissions(identity);
+  const requestedLimit = args && typeof args === "object" && !Array.isArray(args)
+    ? (args as Record<string, unknown>).limit
+    : undefined;
+  return {
+    allowed: true,
+    upstreamTool: "sl_query",
+    requestedSources: sourceRefs,
+    guardrails: {
+      rawSqlAllowed: false,
+      writeOperationsAllowed: false,
+      defaultLimit: LUCY_QUERY_DEFAULT_LIMIT,
+      maxLimit: LUCY_QUERY_MAX_LIMIT,
+      maxConcurrentQueries: queryConcurrencyLimit(),
+      effectiveLimit: numericLimit(requestedLimit),
+      resultTruncation: "responses are audited with row/column counts and truncation flags when upstream exposes them"
+    },
+    policy: permissions.ok
+      ? {
+          roleIds: permissions.permissions.roleIds,
+          connections: permissions.permissions.connections,
+          sourceMapVersion: permissions.permissions.sourceMapVersion,
+          permissionSnapshotHash: permissions.permissions.snapshotHash
+        }
+      : { error: permissions.reason },
+    provenance: {
+      decision: "allowed",
+      explanation: "This explain response is generated by Lucy without executing the query. The same args must still pass Policy Runtime and Query Guardrail when executed through lucy_query."
+    }
+  };
+}
+
+async function lucyFreshness(identity: Identity, args: unknown): Promise<Record<string, unknown>> {
+  const record = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
+  const connectionId = String(record.connectionId ?? record.connection_id ?? record.connection ?? "").trim().toLowerCase();
+  const sourceName = String(record.sourceName ?? record.source_name ?? record.source ?? record.table ?? "").trim().toLowerCase();
+  const catalog = await lucyCatalog(identity);
+  const source = catalog.sources.find((item) => (
+    item.connectionId === connectionId && item.sourceName === sourceName
+  ));
+  if (!source) {
+    return {
+      sourceName,
+      connectionId,
+      status: "forbidden_or_unknown",
+      freshness: null
+    };
+  }
+
+  const projectRoot = await resolveProjectRoot();
+  const overlayPath = path.join(projectRoot, "semantic-layer", source.connectionId, `${source.sourceName}.yaml`);
+  const schemaPath = path.join(projectRoot, "semantic-layer", source.connectionId, "_schema", `${source.schema}.yaml`);
+  const mtimes: string[] = [];
+  for (const filePath of [overlayPath, schemaPath]) {
+    try {
+      mtimes.push((await stat(filePath)).mtime.toISOString());
+    } catch {
+      // Some sources are manifest-only or overlay-only; missing metadata files are not fatal.
+    }
+  }
+  const semanticLayerUpdatedAt = mtimes.sort().at(-1);
+  return {
+    connectionId: source.connectionId,
+    schema: source.schema,
+    sourceName: source.sourceName,
+    table: source.table,
+    freshness: {
+      mode: "metadata_only",
+      semanticLayerUpdatedAt: semanticLayerUpdatedAt ?? null,
+      physicalDataUpdatedAt: null,
+      note: "Physical data freshness is not available from the current source contract; Lucy reports this explicitly instead of inventing a timestamp."
+    }
+  };
+}
+
+async function connectionList(identity: Identity): Promise<{
+  connections: string[];
+  items: Array<{ id: string; connectionId: string }>;
+  filteredBy: "effective_permissions";
+}> {
+  const resolved = await effectivePermissions(identity);
+  const connections = resolved.ok ? resolved.permissions.connections : [];
+  return {
+    connections,
+    items: connections.map((connectionId) => ({ id: connectionId, connectionId })),
+    filteredBy: "effective_permissions"
+  };
 }
 
 // ─── InitializeResult.instructions injection (wo-proxy-instructions-injection Task A) ───
@@ -405,6 +763,49 @@ async function loadDataQaInstructions(): Promise<string | undefined> {
   return cachedDataQaInstructions;
 }
 
+async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
+  const fallback = await loadDataQaInstructions();
+  try {
+    const catalog = await lucyCatalog(identity);
+    if (catalog.connections.length === 0 && catalog.sources.length === 0) return fallback;
+    const visibleTools = new Set(await allowedToolNames(identity));
+    const catalogTool = visibleTools.has("lucy_catalog")
+      ? "`lucy_catalog`"
+      : visibleTools.has("kx_catalog")
+        ? "`kx_catalog`"
+        : "the visible catalog tool";
+    const sourceLines = catalog.sources.map((source) => (
+      `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`
+    ));
+    const exampleLines = catalog.examples.map((example) => `- ${example}`);
+    return [
+      "# Lucy Data QA Runtime Instructions",
+      "",
+      "- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.",
+      `- Call ${catalogTool} before choosing a connection or source unless the route is already explicit in the user request.`,
+      "- Only use connections and sources listed in this session's visible scope.",
+      "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
+      "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",
+      "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
+      "- Prefer semantic segments such as `poc_ad_revenue_daily.domestic` over hand-written string filters for common filters; this avoids quoting mistakes on non-ASCII values.",
+      "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.",
+      "",
+      "## Visible Scope",
+      "",
+      `Connections: ${catalog.connections.join(", ") || "(none)"}`,
+      "",
+      "Sources:",
+      ...(sourceLines.length > 0 ? sourceLines : ["- (none)"]),
+      "",
+      "## Query Examples",
+      "",
+      ...(exampleLines.length > 0 ? exampleLines : ["- Use the visible catalog and `lucy_read_source` to inspect the source before querying."])
+    ].join("\n");
+  } catch {
+    return fallback;
+  }
+}
+
 function instructionsInjectionEnabled(): boolean {
   return process.env.LUCY_ENABLE_INSTRUCTIONS_INJECTION !== "false";
 }
@@ -419,28 +820,383 @@ function decodeSseMessage(body: string): unknown | undefined {
   return JSON.parse(line.slice("data: ".length));
 }
 
-function filterAndAddAllowedTools(payload: unknown, visibleTools: Set<string>): unknown {
+function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
+  return JSON.stringify({
+    jsonrpc: "2.0",
+    id: requestId,
+    result: {
+      ...(options.isError ? { isError: true } : {}),
+      content: [{ type: "text", text }]
+    }
+  });
+}
+
+function firstStringValue(record: Record<string, unknown> | undefined, keys: string[]): string | undefined {
+  if (!record) return undefined;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function wikiKeyFromArgs(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+  return firstStringValue(args as Record<string, unknown>, ["key", "path", "page", "slug", "uri", "id"]);
+}
+
+function wikiQueryFromArgs(args: unknown): { query?: string; limit: number } {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return { limit: 10 };
+  const record = args as Record<string, unknown>;
+  const query = firstStringValue(record, ["query", "q", "text", "keyword"]);
+  const rawLimit = record.limit;
+  const limit = typeof rawLimit === "number" && Number.isFinite(rawLimit)
+    ? Math.min(20, Math.max(1, Math.floor(rawLimit)))
+    : 10;
+  return { query, limit };
+}
+
+function wikiKeyFromResult(item: Record<string, unknown>): string | undefined {
+  return firstStringValue(item, ["key", "path", "page", "slug", "uri", "id", "file", "filePath"]);
+}
+
+async function filterWikiResultArray(identity: Identity, items: unknown[]): Promise<{ items: unknown[]; filtered: number; sawWikiKeys: boolean }> {
+  const output: unknown[] = [];
+  let filtered = 0;
+  let sawWikiKeys = false;
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      output.push(item);
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const rawKey = wikiKeyFromResult(record);
+    if (!rawKey) {
+      output.push(item);
+      continue;
+    }
+    sawWikiKeys = true;
+    const { decision, page } = await canAccessWikiKey(identity, rawKey);
+    if (!decision.allowed || !page) {
+      filtered += 1;
+      continue;
+    }
+    output.push({ ...record, key: page.key, displayPath: page.key });
+  }
+  return { items: output, filtered, sawWikiKeys };
+}
+
+async function filterWikiSearchObject(identity: Identity, value: unknown): Promise<{ value: unknown; filtered: number; sawWikiKeys: boolean }> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { value, filtered: 0, sawWikiKeys: false };
+  const record = value as Record<string, unknown>;
+  const rewritten: Record<string, unknown> = { ...record };
+  let filtered = 0;
+  let sawWikiKeys = false;
+  for (const key of ["results", "items", "pages", "matches"]) {
+    const nested = record[key];
+    if (!Array.isArray(nested)) continue;
+    const result = await filterWikiResultArray(identity, nested);
+    rewritten[key] = result.items;
+    filtered += result.filtered;
+    sawWikiKeys = sawWikiKeys || result.sawWikiKeys;
+  }
+  return { value: rewritten, filtered, sawWikiKeys };
+}
+
+async function filterWikiSearchPayload(identity: Identity, payload: unknown): Promise<{ payload: unknown; filtered: number; failed?: string }> {
+  if (!payload || typeof payload !== "object") return { payload, filtered: 0, failed: "wiki_search_filter_failed:non_object_payload" };
+  const record = payload as Record<string, unknown>;
+  const result = record.result as Record<string, unknown> | undefined;
+  if (!result || typeof result !== "object") return { payload, filtered: 0, failed: "wiki_search_filter_failed:missing_result" };
+
+  const rewrittenResult: Record<string, unknown> = { ...result };
+  let filtered = 0;
+  let sawWikiKeys = false;
+
+  for (const key of ["results", "items", "pages", "matches"]) {
+    const nested = result[key];
+    if (!Array.isArray(nested)) continue;
+    const arrayResult = await filterWikiResultArray(identity, nested);
+    rewrittenResult[key] = arrayResult.items;
+    filtered += arrayResult.filtered;
+    sawWikiKeys = sawWikiKeys || arrayResult.sawWikiKeys;
+  }
+
+  if (Array.isArray(result.content)) {
+    const content: unknown[] = [];
+    for (const item of result.content) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        content.push(item);
+        continue;
+      }
+      const contentRecord = item as Record<string, unknown>;
+      if (typeof contentRecord.text !== "string" || !contentRecord.text.trim()) {
+        content.push(item);
+        continue;
+      }
+      try {
+        const parsedText = JSON.parse(contentRecord.text) as unknown;
+        const textResult = Array.isArray(parsedText)
+          ? await filterWikiResultArray(identity, parsedText).then((value) => ({ value: value.items, filtered: value.filtered, sawWikiKeys: value.sawWikiKeys }))
+          : await filterWikiSearchObject(identity, parsedText);
+        filtered += textResult.filtered;
+        sawWikiKeys = sawWikiKeys || textResult.sawWikiKeys;
+        content.push({ ...contentRecord, text: JSON.stringify(textResult.value, null, 2) });
+      } catch {
+        return { payload, filtered, failed: "wiki_search_filter_failed:unparseable_text" };
+      }
+    }
+    rewrittenResult.content = content;
+  }
+
+  if (!sawWikiKeys && filtered === 0) return { payload: { ...record, result: rewrittenResult }, filtered };
+  return { payload: { ...record, result: rewrittenResult }, filtered };
+}
+
+function rpcErrorResponse(requestId: string | number, message: string, reason: string): Record<string, unknown> {
+  return {
+    jsonrpc: "2.0",
+    id: requestId,
+    error: {
+      code: -32003,
+      message,
+      data: { reason }
+    }
+  };
+}
+
+function upstreamFailureReason(error: unknown): "source_timeout" | "upstream_unavailable" {
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout/i.test(message) ? "source_timeout" : "upstream_unavailable";
+}
+
+function ensureJsonRpcEnvelope(payload: unknown, requestId: string | number): unknown {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  const record = payload as Record<string, unknown>;
+  if (!("result" in record) && !("error" in record)) return payload;
+  return {
+    ...record,
+    jsonrpc: typeof record.jsonrpc === "string" ? record.jsonrpc : "2.0",
+    id: record.id ?? requestId
+  };
+}
+
+function firstStringField(record: Record<string, unknown>, fields: string[]): string | undefined {
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function firstFieldValue(record: Record<string, unknown>, fields: string[]): unknown {
+  for (const field of fields) {
+    if (record[field] !== undefined) return record[field];
+  }
+  return undefined;
+}
+
+function boundedProvenanceValue(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") return value.length > 500 ? `${value.slice(0, 500)}...` : value;
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (depth >= 4) return "[omitted]";
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => boundedProvenanceValue(item, depth + 1));
+  if (typeof value !== "object") return String(value);
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 30)) {
+    output[key] = boundedProvenanceValue(item, depth + 1);
+  }
+  return output;
+}
+
+function withLucyResultMeta(
+  payload: unknown,
+  requestId: string | number,
+  toolName: string,
+  args: unknown,
+  sourceRefs: SourceRef[]
+): unknown {
+  const enveloped = ensureJsonRpcEnvelope(payload, requestId);
+  if (!enveloped || typeof enveloped !== "object" || Array.isArray(enveloped)) return enveloped;
+  const record = enveloped as Record<string, unknown>;
+  const result = record.result;
+  if (!result || typeof result !== "object" || Array.isArray(result)) return enveloped;
+  const resultRecord = result as Record<string, unknown>;
+  const existingMeta = resultRecord._meta && typeof resultRecord._meta === "object" && !Array.isArray(resultRecord._meta)
+    ? resultRecord._meta as Record<string, unknown>
+    : {};
+  const argsRecord = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
+  const filters = firstFieldValue(argsRecord, ["filters", "filter", "where"]);
+  const segments = firstFieldValue(argsRecord, ["segments"]);
+  const orderBy = firstFieldValue(argsRecord, ["orderBy", "order_by"]);
+  const inspectedResult = inspectRowsAndColumns(resultRecord);
+  const responseTruncated = findBooleanFlag(resultRecord, "truncated");
+  return {
+    ...record,
+    result: {
+      ...resultRecord,
+      _meta: {
+        ...existingMeta,
+        lucy: {
+          contract: "lucy-r1-controlled-data-service",
+          tool: toolName,
+          upstreamTool: toolName === "lucy_query" ? "sl_query" : "sl_read_source",
+          sources: sourceRefs,
+          guardrails: {
+            rawSqlAllowed: false,
+            writeOperationsAllowed: false,
+            defaultLimit: LUCY_QUERY_DEFAULT_LIMIT,
+            maxLimit: LUCY_QUERY_MAX_LIMIT,
+            maxConcurrentQueries: queryConcurrencyLimit(),
+            effectiveLimit: toolName === "lucy_query" ? numericLimit(argsRecord.limit) : undefined
+          },
+          result: {
+            rowCount: inspectedResult.rows ?? null,
+            columnCount: inspectedResult.columns ?? null,
+            truncated: responseTruncated ?? null
+          },
+          provenance: {
+            connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
+            sourceName: firstStringField(argsRecord, ["sourceName", "source_name", "source", "table"]) ?? sourceRefs[0]?.sourceName ?? null,
+            measures: boundedProvenanceValue(firstFieldValue(argsRecord, ["measures"])) ?? null,
+            dimensions: boundedProvenanceValue(firstFieldValue(argsRecord, ["dimensions"])) ?? null,
+            filters: boundedProvenanceValue(filters) ?? null,
+            segments: boundedProvenanceValue(segments) ?? null,
+            orderBy: boundedProvenanceValue(orderBy) ?? null,
+            sourceResolution: sourceRefs.length > 0 ? "acl_source_map" : "none",
+            freshness: {
+              status: "not_checked",
+              tool: "lucy_freshness",
+              note: "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+            },
+            truncation: responseTruncated === undefined
+              ? "unknown; upstream did not expose a truncated flag"
+              : "reported from upstream response"
+          }
+        }
+      }
+    }
+  };
+}
+
+function filterAndAddAllowedTools(payload: unknown, visibleTools: Set<string>, requestId: string | number): unknown {
   if (!payload || typeof payload !== "object") return payload;
   const record = payload as Record<string, unknown>;
   const result = record.result as Record<string, unknown> | undefined;
   if (!result || !Array.isArray(result.tools)) return payload;
-  const filteredTools = result.tools.filter((tool) => {
-    if (!tool || typeof tool !== "object") return false;
+  const localTools = localToolBuilders()
+    .filter((local) => visibleTools.has(local.name))
+    .map((local) => ({ name: local.name, tool: local.build() }));
+  const localToolByName = new Map(localTools.map((entry) => [entry.name, entry.tool]));
+  const seenNames = new Set<string>();
+  const filteredTools = result.tools.flatMap((tool) => {
+    if (!tool || typeof tool !== "object") return [];
     const name = (tool as Record<string, unknown>).name;
-    return typeof name === "string" && visibleTools.has(name);
+    if (typeof name !== "string" || !visibleTools.has(name)) return [];
+    const localTool = localToolByName.get(name);
+    seenNames.add(name);
+    return [localTool ?? tool];
   });
-  const existingNames = new Set(filteredTools.map((tool) => (tool as Record<string, unknown>).name));
-  const injected = localToolBuilders()
-    .filter((local) => visibleTools.has(local.name) && !existingNames.has(local.name))
-    .map((local) => local.build());
+  const injected = localTools
+    .filter((entry) => !seenNames.has(entry.name))
+    .map((entry) => entry.tool);
   const tools = [...filteredTools, ...injected];
   return {
     ...record,
+    jsonrpc: typeof record.jsonrpc === "string" ? record.jsonrpc : "2.0",
+    id: record.id ?? requestId,
     result: {
       ...result,
       tools
     }
   };
+}
+
+async function writeLucySemanticResponse(
+  identity: Identity,
+  upstream: IncomingMessage,
+  res: ServerResponse,
+  requestId: string | number,
+  toolName: string,
+  toolArgs: unknown,
+  start: number,
+  requestMeta: Partial<Parameters<typeof writeLog>[0]>,
+  argsSummary: Record<string, unknown> | undefined,
+  queryMeta: Partial<Parameters<typeof writeLog>[0]>,
+  queryTables: string[]
+): Promise<void> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of upstream as AsyncIterable<Buffer>) {
+    chunks.push(chunk);
+  }
+
+  const originalBody = Buffer.concat(chunks).toString();
+  const contentType = String(upstream.headers["content-type"] ?? "");
+  const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
+  let body = originalBody;
+  let metaFailed: string | undefined;
+  let forceJson = false;
+
+  try {
+    if (contentType.includes("text/event-stream")) {
+      const payload = decodeSseMessage(originalBody);
+      if (!payload) throw new Error("missing SSE data frame");
+      body = encodeSseMessage(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
+    } else if (contentType.includes("application/json")) {
+      body = JSON.stringify(withLucyResultMeta(JSON.parse(originalBody), requestId, toolName, toolArgs, sourceRefs));
+      forceJson = true;
+    } else {
+      throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
+    }
+  } catch (err) {
+    metaFailed = `lucy_result_meta_failed:${err instanceof Error ? err.message : String(err)}`;
+    body = originalBody;
+  }
+
+  const headers: Record<string, string | string[] | number> = {};
+  for (const [k, v] of Object.entries(upstream.headers)) {
+    const lower = k.toLowerCase();
+    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
+  }
+  headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
+  const responseBytes = Buffer.byteLength(body);
+  headers["content-length"] = responseBytes;
+  res.writeHead(upstream.statusCode ?? 200, headers);
+  res.end(body);
+
+  let outcome: "ok" | "error" = "ok";
+  let errorDetail = metaFailed;
+  try {
+    const parsed = contentType.includes("application/json")
+      ? JSON.parse(body) as Record<string, unknown>
+      : decodeSseMessage(body) as Record<string, unknown> | undefined;
+    if (parsed?.error || (parsed?.result as Record<string, unknown> | undefined)?.isError) {
+      outcome = "error";
+      errorDetail = errorDetail ?? JSON.stringify(parsed.error ?? (parsed.result as Record<string, unknown>)?.content);
+    }
+  } catch {
+    // audit remains best-effort
+  }
+
+  const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
+  const tables = [...new Set([...structuredTables, ...queryTables])];
+  recordAudit({
+    ts: new Date().toISOString(),
+    userId: identity.userId,
+    client: identity.client,
+    tool: toolName,
+    tables: tables.length > 0 ? tables : undefined,
+    argsSummary,
+    ...queryMeta,
+    outcome,
+    errorDetail,
+    durationMs: Date.now() - start,
+    ...responseAuditMeta(Buffer.from(body), headers["content-type"]),
+    requestId,
+    ...requestMeta,
+    ...(await auditMeta(identity, outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error")),
+  }, outcome === "ok" ? sourceRefs : undefined);
 }
 
 function toolsListErrorResponse(requestId: string | number, detail: string): Record<string, unknown> {
@@ -452,6 +1208,36 @@ function toolsListErrorResponse(requestId: string | number, detail: string): Rec
       message: "tools/list filtering failed",
       data: { reason: detail }
     }
+  };
+}
+
+function localInitializePayload(requestId: string | number, instructions: string | undefined): Record<string, unknown> {
+  return {
+    jsonrpc: "2.0",
+    id: requestId,
+    result: {
+      protocolVersion: "2024-11-05",
+      capabilities: {
+        tools: { listChanged: false }
+      },
+      serverInfo: {
+        name: "lucy-mcp-proxy",
+        version: "local-fallback"
+      },
+      instructions: instructions ?? "Lucy MCP Proxy is available, but role-aware instructions could not be loaded."
+    }
+  };
+}
+
+async function localToolsListPayload(identity: Identity, requestId: string | number): Promise<Record<string, unknown>> {
+  const visibleTools = new Set(await allowedToolNames(identity));
+  const tools = localToolBuilders()
+    .filter((local) => visibleTools.has(local.name))
+    .map((local) => local.build());
+  return {
+    jsonrpc: "2.0",
+    id: requestId,
+    result: { tools }
   };
 }
 
@@ -477,9 +1263,9 @@ async function writeToolsListResponse(
     if (contentType.includes("text/event-stream")) {
       const payload = decodeSseMessage(originalBody);
       if (!payload) throw new Error("missing SSE data frame");
-      if (payload) body = encodeSseMessage(filterAndAddAllowedTools(payload, visibleTools));
+      if (payload) body = encodeSseMessage(filterAndAddAllowedTools(payload, visibleTools, requestId));
     } else if (contentType.includes("application/json")) {
-      body = JSON.stringify(filterAndAddAllowedTools(JSON.parse(originalBody), visibleTools));
+      body = JSON.stringify(filterAndAddAllowedTools(JSON.parse(originalBody), visibleTools, requestId));
     } else {
       throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
@@ -509,8 +1295,10 @@ async function writeToolsListResponse(
 // upstream body through unchanged. This is deliberately fail-open: a buggy
 // rewriter must not block MCP session establishment for every client.
 async function writeInitializeResponse(
+  identity: Identity,
   upstream: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
+  requestId: string | number
 ): Promise<{ injectionFailed: boolean; errorDetail?: string; responseBytes: number }> {
   const chunks: Buffer[] = [];
   for await (const chunk of upstream as AsyncIterable<Buffer>) {
@@ -519,7 +1307,7 @@ async function writeInitializeResponse(
 
   const originalBody = Buffer.concat(chunks).toString();
   const contentType = String(upstream.headers["content-type"] ?? "");
-  const instructions = await loadDataQaInstructions();
+  const instructions = await buildRoleAwareInstructions(identity);
   const isSse = contentType.includes("text/event-stream");
 
   let body = originalBody;
@@ -538,13 +1326,13 @@ async function writeInitializeResponse(
         const record = payload as Record<string, unknown>;
         const result = record.result as Record<string, unknown> | undefined;
         if (!result || typeof result !== "object") throw new Error("missing result object");
-        const rewritten = { ...record, result: { ...result, instructions } };
+        const rewritten = ensureJsonRpcEnvelope({ ...record, result: { ...result, instructions } }, requestId);
         body = encodeSseMessage(rewritten);
       } else if (contentType.includes("application/json")) {
         const parsed = JSON.parse(originalBody) as Record<string, unknown>;
         const result = parsed.result as Record<string, unknown> | undefined;
         if (!result || typeof result !== "object") throw new Error("missing result object");
-        const rewritten = { ...parsed, result: { ...result, instructions } };
+        const rewritten = ensureJsonRpcEnvelope({ ...parsed, result: { ...result, instructions } }, requestId);
         body = JSON.stringify(rewritten);
       } else {
         throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
@@ -589,9 +1377,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   let argsSummary: Record<string, unknown> | undefined;
   let queryMeta: Partial<Parameters<typeof writeLog>[0]> = {};
   let queryTables: string[] = [];
+  let parsedRpc: Record<string, unknown> | undefined;
 
   try {
     const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
+    parsedRpc = parsed;
     rpcMethod = parsed.method as string | undefined;
     requestId = (parsed.id as string | number | undefined) ?? "";
 
@@ -629,6 +1419,32 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (matched) requestMeta.lucyTurnId = matched;
   }
 
+  const invalidArgumentsReason = rpcMethod === "tools/call" && toolName
+    ? validateLucyToolArgs(toolName, toolArgs)
+    : undefined;
+  if (invalidArgumentsReason) {
+    const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${invalidArgumentsReason}`, { isError: true });
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: toolName ?? "tools/call",
+      tables: queryTables.length > 0 ? queryTables : undefined,
+      argsSummary,
+      ...queryMeta,
+      outcome: "error",
+      errorDetail: invalidArgumentsReason,
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, invalidArgumentsReason)),
+    });
+    return;
+  }
+
   // ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
     const decision = await aclCheck(identity, toolName, toolArgs);
@@ -663,8 +1479,12 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       });
       return;
     }
-    if (toolName === "kx_catalog") {
-      const data = await kxCatalog(identity);
+    if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
+      const data = toolName === "connection_list"
+        ? await connectionList(identity)
+        : toolName === "lucy_catalog"
+          ? await lucyCatalog(identity)
+          : await kxCatalog(identity);
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
@@ -687,6 +1507,62 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         ...(await auditMeta(identity, "allowed")),
+      });
+      return;
+    }
+    if (toolName === "lucy_explain_query" || toolName === "lucy_freshness") {
+      const data = toolName === "lucy_explain_query"
+        ? await lucyExplainQuery(identity, toolArgs)
+        : await lucyFreshness(identity, toolArgs);
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify(data, null, 2));
+      const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(responseBody);
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: sourceRefs.length > 0 ? sourceRefs.map((ref) => ref.physicalTable) : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "ok",
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        responseRowCount: 0,
+        responseColumnCount: 0,
+        responseTruncated: false,
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, "allowed")),
+      }, sourceRefs);
+      return;
+    }
+    if (toolName === "wiki_read") {
+      const rawKey = wikiKeyFromArgs(toolArgs);
+      const { page, decision } = rawKey
+        ? await canAccessWikiKey(identity, rawKey)
+        : { decision: { allowed: false, reason: "wiki_key_missing" } };
+      const allowed = Boolean(decision.allowed && page);
+      const responseBody = allowed && page
+        ? jsonRpcToolResult(requestId, JSON.stringify({ key: page.key, title: page.title, content: page.body }, null, 2))
+        : jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "wiki_forbidden"}`, { isError: true });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(responseBody);
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary: rawKey ? { key: canonicalWikiKey(rawKey) ?? "<invalid>" } : argsSummary,
+        ...queryMeta,
+        outcome: allowed ? "ok" : "denied",
+        errorDetail: allowed ? undefined : (decision.reason ?? "wiki_forbidden"),
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, allowed ? "allowed" : (decision.reason ?? "wiki_forbidden"))),
       });
       return;
     }
@@ -804,10 +1680,170 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     }
   }
 
-  const upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, body);
+  if (rpcMethod === "tools/call" && toolName === "lucy_query") {
+    const slot = acquireLucyQuerySlot(identity);
+    if (!slot.allowed) {
+      const reason = "query_concurrency_exceeded";
+      const responseBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          isError: true,
+          content: [{
+            type: "text",
+            text: `Access denied: ${reason}; active=${slot.active}; max=${slot.max}`
+          }]
+        }
+      });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      let sourceRefs: SourceRef[] = [];
+      try {
+        sourceRefs = await extractSourceRefs(toolName, toolArgs);
+      } catch {
+        // source attribution is best-effort for guardrail denials.
+      }
+      const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
+      const tables = [...new Set([...structuredTables, ...queryTables])];
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: tables.length > 0 ? tables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "denied",
+        errorDetail: `${reason}:active=${slot.active};max=${slot.max}`,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, reason)),
+      }, sourceRefs);
+      return;
+    }
+    releaseOnResponseEnd(res, slot.release);
+  }
+
+  let outboundBody = body;
+  if (rpcMethod === "tools/call" && parsedRpc && toolName === "lucy_read_source") {
+    outboundBody = rewriteToolCall(parsedRpc, "sl_read_source", lucyReadSourceUpstreamArgs(toolArgs));
+  }
+  if (rpcMethod === "tools/call" && parsedRpc && toolName === "lucy_query") {
+    outboundBody = rewriteToolCall(parsedRpc, "sl_query", lucyQueryUpstreamArgs(toolArgs));
+  }
+
+  let upstream: IncomingMessage;
+  try {
+    upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, outboundBody);
+  } catch (err) {
+    if (rpcMethod === "initialize") {
+      const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
+      const payload = localInitializePayload(requestId, instructions);
+      const responseBody = JSON.stringify(payload);
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "ok",
+        errorDetail: `upstream_unavailable:${err instanceof Error ? err.message : String(err)}`,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, "local_initialize_fallback")),
+      });
+      return;
+    }
+    if (rpcMethod === "tools/list") {
+      const payload = await localToolsListPayload(identity, requestId);
+      const responseBody = JSON.stringify(payload);
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "ok",
+        errorDetail: `upstream_unavailable:${err instanceof Error ? err.message : String(err)}`,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, "local_tools_list_fallback")),
+      });
+      return;
+    }
+    if (rpcMethod === "tools/call" && toolName === "wiki_search") {
+      const { query, limit } = wikiQueryFromArgs(toolArgs);
+      const results = query ? await searchAccessibleWikiPages(identity, query, limit) : [];
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+        query: query ?? "",
+        results,
+        filteredBy: "wiki_acl",
+        upstreamFallback: true
+      }, null, 2), { isError: !query });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary: query ? { query, limit } : argsSummary,
+        ...queryMeta,
+        outcome: query ? "ok" : "error",
+        errorDetail: query ? `upstream_unavailable:${err instanceof Error ? err.message : String(err)}` : "wiki_query_missing",
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, query ? "local_wiki_search_fallback" : "wiki_query_missing")),
+      });
+      return;
+    }
+    if (rpcMethod === "tools/call") {
+      const reason = upstreamFailureReason(err);
+      const responseBody = JSON.stringify(rpcErrorResponse(requestId, "KTX upstream unavailable", reason));
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+
+      let sourceRefs: SourceRef[] = [];
+      try {
+        sourceRefs = toolName ? await extractSourceRefs(toolName, toolArgs) : [];
+      } catch {
+        // Source attribution is best-effort on upstream failure.
+      }
+      const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
+      const tables = [...new Set([...structuredTables, ...queryTables])];
+      recordAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName ?? "tools/call",
+        tables: tables.length > 0 ? tables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "error",
+        errorDetail: `${reason}:${err instanceof Error ? err.message : String(err)}`,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, reason)),
+      }, sourceRefs);
+      return;
+    }
+    throw err;
+  }
 
   if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
-    const initResult = await writeInitializeResponse(upstream, res);
+    const initResult = await writeInitializeResponse(identity, upstream, res, requestId);
     recordAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -839,6 +1875,84 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       ...requestMeta,
       ...(await auditMeta(identity, toolsList.filterFailed ? "tools_list_filter_failed" : "allowed")),
     });
+    return;
+  }
+
+  if (rpcMethod === "tools/call" && toolName === "wiki_search") {
+    const chunks: Buffer[] = [];
+    for await (const chunk of upstream as AsyncIterable<Buffer>) {
+      chunks.push(chunk);
+    }
+    const originalBody = Buffer.concat(chunks).toString();
+    const contentType = String(upstream.headers["content-type"] ?? "");
+    let body = originalBody;
+    let filterFailed: string | undefined;
+    let filteredCount = 0;
+    let forceJson = false;
+
+    try {
+      if (contentType.includes("text/event-stream")) {
+        const payload = decodeSseMessage(originalBody);
+        if (!payload) throw new Error("missing SSE data frame");
+        const filtered = await filterWikiSearchPayload(identity, payload);
+        if (filtered.failed) {
+          filterFailed = filtered.failed;
+          body = encodeSseMessage(rpcErrorResponse(requestId, "wiki_search filtering failed", filtered.failed));
+        } else {
+          filteredCount = filtered.filtered;
+          body = encodeSseMessage(ensureJsonRpcEnvelope(filtered.payload, requestId));
+        }
+      } else if (contentType.includes("application/json")) {
+        const filtered = await filterWikiSearchPayload(identity, JSON.parse(originalBody));
+        if (filtered.failed) {
+          filterFailed = filtered.failed;
+          body = JSON.stringify(rpcErrorResponse(requestId, "wiki_search filtering failed", filtered.failed));
+          forceJson = true;
+        } else {
+          filteredCount = filtered.filtered;
+          body = JSON.stringify(ensureJsonRpcEnvelope(filtered.payload, requestId));
+        }
+      } else {
+        filterFailed = `wiki_search_filter_failed:unsupported_content_type:${contentType || "<missing>"}`;
+        body = JSON.stringify(rpcErrorResponse(requestId, "wiki_search filtering failed", filterFailed));
+        forceJson = true;
+      }
+    } catch (err) {
+      filterFailed = `wiki_search_filter_failed:${err instanceof Error ? err.message : String(err)}`;
+      body = JSON.stringify(rpcErrorResponse(requestId, "wiki_search filtering failed", filterFailed));
+      forceJson = true;
+    }
+
+    const headers: Record<string, string | string[] | number> = {};
+    for (const [k, v] of Object.entries(upstream.headers)) {
+      const lower = k.toLowerCase();
+      if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
+    }
+    headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
+    const responseBytes = Buffer.byteLength(body);
+    headers["content-length"] = responseBytes;
+    res.writeHead(upstream.statusCode ?? 200, headers);
+    res.end(body);
+    recordAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: toolName,
+      argsSummary,
+      ...queryMeta,
+      outcome: filterFailed ? "error" : "ok",
+      errorDetail: filterFailed,
+      durationMs: Date.now() - start,
+      responseBytes,
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, filterFailed ? "wiki_search_filter_failed" : filteredCount > 0 ? `wiki_filtered:${filteredCount}` : "allowed")),
+    });
+    return;
+  }
+
+  if (rpcMethod === "tools/call" && (toolName === "lucy_query" || toolName === "lucy_read_source")) {
+    await writeLucySemanticResponse(identity, upstream, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables);
     return;
   }
 

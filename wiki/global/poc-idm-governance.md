@@ -1,3 +1,11 @@
+---
+visibility: private
+sl_refs:
+  - poc-mysql-aliyun/data_agent_poc/poc_metric_catalog
+  - poc-mysql-aliyun/data_agent_poc/poc_ad_revenue_by_type_daily
+  - poc-mysql-aliyun/data_agent_poc/poc_ceo_metric_snapshot
+---
+
 # POC 场景三：IDM 层治理验证（陶峙桦 · CEO一眼报）
 
 > Owner：陶峙桦 | 原始资产：CEO一眼报溯源报告 V1.3 | POC 表：`poc_ad_revenue_by_type_daily`、`poc_ceo_metric_snapshot`
@@ -102,6 +110,17 @@ GROUP BY b.dt;
 | `ad_revenue_by_type` | 效果 | 效果品类当日收入基准 |
 
 当前 `benchmark_type = 'mock_value'`（模拟值）。陶峙桦提供真实截图后升级为 `owner_screenshot`。
+
+### 快照日期与 UTC 展示
+
+`snapshot_dt` 是北京时间自然日。MCP 返回 JSON 时可能显示成 UTC ISO，例如 `2026-05-30T16:00:00.000Z`；这对应北京时间 `2026-05-31 00:00:00`，不是 2026-05-30。
+
+对账前必须先把 UTC ISO 转成 `Asia/Shanghai` 日期。固定回归值：
+
+- 北京 2026-05-31：`poc_ceo_metric_snapshot.ad_revenue / ALL = 196,314.31`
+- 北京 2026-05-31：`poc_ad_revenue_daily` 国内总广告收入 = `196,314.31`
+- 北京 2026-05-31：`poc_ad_revenue_by_type_daily` 国内四品类合计 = `196,314.31`
+- 北京 2026-05-30：国内总广告收入 = `190,213.91`，不能用于 5 月 31 日快照校验
 
 ## 品类收入分布（内置场景）
 

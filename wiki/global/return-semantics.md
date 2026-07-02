@@ -1,3 +1,10 @@
+---
+visibility: private
+sl_refs:
+  - mysql-aliyun/dataforai/superstore_orders
+  - mysql-aliyun/dataforai/superstore_returns
+---
+
 # 退货语义（Return Semantics）
 
 > 适用：`dataforai.superstore_returns` 与 `dataforai.superstore_orders` 的关联。

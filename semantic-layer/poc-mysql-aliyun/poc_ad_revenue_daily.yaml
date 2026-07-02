@@ -3,6 +3,7 @@ name: poc_ad_revenue_daily
 # 行粒度：每行一条 (dt, position_name, country) 的广告收入与曝光日汇总
 # 来源场景：何洲 — FineVis 营业收入-广告
 # 对应上游：mojicom.ad_* 3表关联（原始字段名待何洲确认）
+# 日期口径：dt 是北京时间自然日；MCP/JSON 的 UTC ISO 展示值必须先转 Asia/Shanghai 再用于展示或对账。
 #
 # ⚠️ DAU 口径警告：ad_dau 在同一 (dt, country) 下的所有广告位行中重复存储
 #    （日级总广告DAU，4个广告位共享同一个值）。

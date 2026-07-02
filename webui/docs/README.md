@@ -13,6 +13,7 @@
 | [06-navigation-ia.md](06-navigation-ia.md) | 导航与信息架构优化，明确语义层/业务文档/审阅校验的用户口径 | 产品 / 前端 |
 | [07-mcp-auth-proxy-spec.md](07-mcp-auth-proxy-spec.md) | MCP Auth Proxy、访问日志、多用户权限与工具过滤 | 后端 / 安全 / 前端 |
 | [08-mcp-audit-question-tracing-spec.md](08-mcp-audit-question-tracing-spec.md) | MCP 审计增强：数据源正规化、问题簇推断、可选自然语言问题上报 | 后端 / 前端 / 审计 |
+| [09-lucy-r1-mcp-tool-contract.md](09-lucy-r1-mcp-tool-contract.md) | Lucy R1 `lucy_*` MCP 工具契约、错误 reason、返回 metadata 和 contract eval 要点 | 后端 / 安全 / Agent |
 
 ## 与原 README 的关键校正
 

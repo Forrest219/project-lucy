@@ -4,6 +4,7 @@ name: poc_ad_revenue_by_type_daily
 # 来源场景：陶峙桦 — CEO一眼报，IDM治理层（idm_ad_revenue_a_d）
 # 对应上游：idm_ad_revenue_a_d（字段名为描述推断，待数据平台核实）；
 #           DAU/打开次数来自 odm_umeng_all_threeends（act_num→dau，start_num→打开次数）
+# 日期口径：dt 是北京时间自然日；MCP/JSON 的 UTC ISO 展示值必须先转 Asia/Shanghai 再用于展示或对账。
 #
 # ⚠️ DAU/打开次数口径警告：
 #    ad_dau_idm、total_opens 在同一 (dt, country, platform) 下的各收入品类行中重复存储。

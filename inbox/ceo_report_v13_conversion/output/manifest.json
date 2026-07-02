@@ -1,0 +1,40 @@
+{
+  "source_file": "temp/CEO一眼报数据溯源及验证报告V1.3(2).docx",
+  "outputs": {
+    "markdown": "inbox/ceo_report_v13_conversion/output/ceo-report-v13.ai-readable.md",
+    "structured_json": "inbox/ceo_report_v13_conversion/output/ceo-report-v13.structured.json",
+    "structured_xlsx": "inbox/ceo_report_v13_conversion/output/ceo-report-v13.structured.xlsx",
+    "csv_files": [
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.ddl-fields.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.document-notes.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.freshness-notes.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.indicators.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.metric-rules.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.page-inheritance.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.risk-candidates.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.risk-notes.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.section-inventory.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.source-sql.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.table-catalog.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.validation-notes.csv",
+      "inbox/ceo_report_v13_conversion/output/ceo-report-v13.warehouse-tables.csv"
+    ]
+  },
+  "counts": {
+    "pages": 20,
+    "section_inventory_records": 95,
+    "page_inheritance_records": 2,
+    "tables": 93,
+    "indicator_records": 288,
+    "metric_rules": 132,
+    "source_sql_records": 77,
+    "warehouse_table_records": 413,
+    "table_catalog_records": 352,
+    "ddl_field_records": 70,
+    "validation_notes": 36,
+    "risk_notes": 3,
+    "risk_candidates": 9,
+    "freshness_notes": 40,
+    "document_notes": 5
+  }
+}

@@ -70,6 +70,8 @@ PUT    /api/eval/monitor/config
 GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
 
+GET    /api/r1/observability
+
 GET    /api/admin/agents
 POST   /api/admin/agents
 GET    /api/admin/agents/:userId
@@ -232,6 +234,87 @@ Monitor：
 - `GET/PUT /api/eval/monitor/threshold`
 
 常见错误码：`RUNNER_BUSY` `RUN_NOT_FOUND` `RUNNER_PRECHECK_FAILED` `NO_CASES_SELECTED` `UNSUPPORTED_SELECTION_MODE`。
+
+### R1 Observability
+
+`GET /api/r1/observability?hours=24&slowMs=30000` 返回 Lucy R1 受控数据服务层的最小排障信号。该端点只读，不创建新的状态；数据来自 audit sqlite、eval runs sqlite 和 `LUCY_R1_HERMES_ACCURACY_REPORT` 指向的外部 Hermes 准确率报告。
+
+响应摘要：
+
+```jsonc
+{ "ok": true, "data": {
+  "generatedAt": "2026-07-02T00:00:00.000Z",
+  "audit": {
+    "traffic": {
+      "businessCalls": 20,
+      "okCalls": 18,
+      "errorCalls": 1,
+      "deniedCalls": 1,
+      "successRate": 0.9,
+      "errorRate": 0.05,
+      "deniedRate": 0.05
+    },
+    "latency": { "p50Ms": 120, "p95Ms": 2000, "slowCalls": 1, "slowQueries": [] },
+    "denials": [
+      { "reason": "table_denied", "count": 1 },
+      { "reason": "query_concurrency_exceeded", "count": 1 }
+    ],
+    "sourceErrors": [{ "source": "doris-r1.mart.ceo_metric_snapshot", "outcome": "error", "count": 1 }],
+    "usage": { "tools": [], "roles": [], "tokens": [] }
+  },
+  "eval": {
+    "latestRun": { "domain": "r1_doris_smoke", "passRate": 0.95 },
+    "recent": { "runs": 3, "passRate": 0.96 }
+  },
+  "hermesQa": {
+    "status": "passed",
+    "agent": "hermes",
+    "target": "lucy-mcp-proxy",
+    "generatedBy": "scripts/lucy-r1-hermes-report.mjs",
+    "dataset": "r1_doris_benchmark",
+    "caseDataset": "r1_doris_benchmark",
+    "accuracy": 0.96,
+    "coreMetricAccuracy": 1,
+    "securityPassRate": 1,
+    "totalQuestions": 30,
+    "minQuestions": 30,
+    "tracedQuestions": 30,
+    "uniqueTraces": 30,
+    "lucyControlledQuestions": 30,
+    "lucyMetadataQuestions": 29,
+    "lucyRejectionQuestions": 1,
+    "agentIdentityGatePassed": true,
+    "targetIdentityGatePassed": true,
+    "datasetIdentityGatePassed": true,
+    "caseDatasetIdentityGatePassed": true,
+    "perCaseIdentityGatePassed": true,
+    "traceUniquenessGatePassed": true,
+    "lucyControlledEvidenceGatePassed": true,
+    "noDuplicateCasesGatePassed": true,
+    "generatedByGatePassed": true,
+    "threshold": 0.95
+  },
+  "releaseSignals": {
+    "trafficObservable": true,
+    "deniedReasonsObservable": true,
+    "sourceErrorsObservable": true,
+    "evalObservable": true,
+    "hermesQuestionCountGatePassed": true,
+    "hermesAccuracyGatePassed": true,
+    "hermesCoreMetricGatePassed": true,
+    "hermesSecurityGatePassed": true,
+    "hermesTraceCoverageGatePassed": true,
+    "hermesTraceUniquenessGatePassed": true,
+    "hermesNoDuplicateCasesGatePassed": true,
+    "hermesEvidenceCompletenessGatePassed": true,
+    "hermesLucyControlledEvidenceGatePassed": true,
+    "hermesPerCaseIdentityGatePassed": true,
+    "hermesReportGatePassed": true
+  }
+}}
+```
+
+用途：回答 R1 runbook 中的核心问题：业务请求量、成功/错误/拒绝率、p50/p95、慢查询、source 失败分布、token/role 使用、Eval pass rate、Hermes QA accuracy，以及 Hermes 逐题结果是否具备 Lucy `_meta.lucy` provenance 或 policy/guardrail 受控拒绝证据。`trafficObservable` 只代表 `businessCalls > 0`，不把 MCP 握手或 `tools/list` 单独算作业务流量；`evalObservable` 代表最新 `r1_*` eval 已成功且 `passRate >= 0.95`，不只是存在 eval run。
 
 ### Admin / 访问治理
 

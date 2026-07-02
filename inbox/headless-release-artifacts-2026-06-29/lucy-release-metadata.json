@@ -1,0 +1,129 @@
+{
+  "generatedAt": "2026-06-29T05:14:26.949Z",
+  "releaseTag": "headless-local-2026-06-29",
+  "lucy": {
+    "gitCommit": "31b61c3b41528e680447aaa084f8fde775cc7375",
+    "gitShort": "31b61c3",
+    "package": "project-lucy-eval",
+    "version": "0.1.0",
+    "webuiPackage": "webui",
+    "webuiVersion": "1.0.0"
+  },
+  "docker": {
+    "image": "project-lucy:headless-local-2026-06-29",
+    "imageId": "not-built-in-this-environment",
+    "baseImage": "node:22-bookworm-slim"
+  },
+  "ktx": {
+    "npmPackage": "@kaelio/ktx",
+    "npmVersion": "0.13.0",
+    "pythonRuntimeFeature": "core"
+  },
+  "databases": {
+    "verified": [
+      "mysql:8.4-demo",
+      "postgres:16-alpine-demo"
+    ]
+  },
+  "gates": {
+    "customerHeadless": [
+      "npm run security:baseline",
+      "npm run smoke:p0:docker",
+      "npm run smoke:p0:demo",
+      "npm run smoke:p0:postgres-demo",
+      "npm run smoke:p0:business-eval"
+    ],
+    "repoQuality": [
+      "npm run lint:spec",
+      "npm run smoke:p0",
+      "npm run security:baseline",
+      "npm audit --json (root, webui)",
+      "npm run audit:ktx-diff"
+    ],
+    "audit": {
+      "policy": {
+        "recordedInReleaseArtifacts": true,
+        "blocking": false,
+        "recommendedBlockingSeverities": [
+          "high",
+          "critical"
+        ]
+      },
+      "ok": false,
+      "hasHighOrCritical": true,
+      "totals": {
+        "info": 0,
+        "low": 0,
+        "moderate": 2,
+        "high": 1,
+        "critical": 0,
+        "total": 3
+      },
+      "workspaces": [
+        {
+          "workspace": "root",
+          "command": "npm audit --json",
+          "exitCode": 0,
+          "ok": true,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 0,
+            "critical": 0,
+            "total": 0
+          },
+          "vulnerabilities": []
+        },
+        {
+          "workspace": "webui",
+          "command": "npm audit --json",
+          "exitCode": 1,
+          "ok": false,
+          "counts": {
+            "info": 0,
+            "low": 0,
+            "moderate": 2,
+            "high": 1,
+            "critical": 0,
+            "total": 3
+          },
+          "vulnerabilities": [
+            {
+              "name": "gray-matter",
+              "severity": "moderate",
+              "isDirect": true,
+              "range": "<=1.2.6 || >=2.0.2",
+              "fixAvailable": {
+                "name": "gray-matter",
+                "version": "2.0.1",
+                "isSemVerMajor": true
+              }
+            },
+            {
+              "name": "js-yaml",
+              "severity": "moderate",
+              "isDirect": false,
+              "range": "<=4.1.1",
+              "fixAvailable": {
+                "name": "gray-matter",
+                "version": "2.0.1",
+                "isSemVerMajor": true
+              }
+            },
+            {
+              "name": "undici",
+              "severity": "high",
+              "isDirect": false,
+              "range": "7.0.0 - 7.27.2",
+              "fixAvailable": true
+            }
+          ]
+        }
+      ]
+    },
+    "ktxUpgrade": [
+      "npm run compat:ktx-upgrade -- --candidate <ktx-version>"
+    ]
+  }
+}

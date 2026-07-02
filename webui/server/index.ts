@@ -19,6 +19,7 @@ import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
+import { registerR1ObservabilityRoutes } from "./observability.js";
 import { safeWrite } from "./fs-safe.js";
 
 type ErrorEnvelope = {
@@ -424,6 +425,7 @@ export function buildServer() {
   registerCaseRoutes(app);
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
+  registerR1ObservabilityRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith("/api/")) {

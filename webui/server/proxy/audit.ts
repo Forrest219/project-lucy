@@ -351,6 +351,218 @@ export async function backfillAccessLogSourcesFromTables(
   return { scanned: rows.length, inserted };
 }
 
+export interface R1AuditObservability {
+  window: {
+    since: string;
+    hours: number;
+    slowMs: number;
+  };
+  traffic: {
+    totalRequests: number;
+    businessCalls: number;
+    okCalls: number;
+    errorCalls: number;
+    deniedCalls: number;
+    successRate: number;
+    errorRate: number;
+    deniedRate: number;
+  };
+  latency: {
+    p50Ms: number | null;
+    p95Ms: number | null;
+    slowCalls: number;
+    slowQueries: Array<{
+      ts: string;
+      userId: string;
+      tool: string;
+      durationMs: number;
+      queryOperation?: string;
+      queryPreview?: string;
+      decisionReason?: string;
+      requestId: string;
+    }>;
+  };
+  denials: Array<{ reason: string; count: number }>;
+  sourceErrors: Array<{
+    source: string;
+    connectionId?: string;
+    schemaName?: string;
+    sourceName?: string;
+    physicalTable: string;
+    outcome: "error" | "denied";
+    count: number;
+  }>;
+  usage: {
+    tools: Array<{ tool: string; calls: number; denied: number; errors: number }>;
+    roles: Array<{ roleId: string; calls: number; denied: number }>;
+    tokens: Array<{ tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>;
+  };
+}
+
+function rate(numerator: number, denominator: number): number {
+  return denominator > 0 ? numerator / denominator : 0;
+}
+
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
+  return sorted[index];
+}
+
+function parseRoleIds(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function readR1AuditObservability(options: { hours?: number; slowMs?: number } = {}): Promise<R1AuditObservability> {
+  const hours = Math.min(Math.max(Math.floor(options.hours ?? 24), 1), 24 * 90);
+  const slowMs = Math.max(Math.floor(options.slowMs ?? Number(process.env.LUCY_R1_SLOW_QUERY_MS ?? 30_000)), 1);
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const database = await getDb();
+
+  const rows = database.prepare(`
+    SELECT ts, user_id, token_label, token_hash_prefix, tool, outcome, duration_ms, request_id,
+           role_ids, decision_reason, query_operation, query_preview, tables
+    FROM access_log
+    WHERE ts >= ?
+    ORDER BY ts DESC, id DESC
+  `).all(since) as Array<{
+    ts: string;
+    user_id: string;
+    token_label: string | null;
+    token_hash_prefix: string | null;
+    tool: string;
+    outcome: "ok" | "error" | "denied";
+    duration_ms: number;
+    request_id: string;
+    role_ids: string | null;
+    decision_reason: string | null;
+    query_operation: string | null;
+    query_preview: string | null;
+    tables: string | null;
+  }>;
+
+  const protocolTools = new Set<string>(PROTOCOL_TOOLS);
+  const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
+  const okCalls = businessRows.filter((row) => row.outcome === "ok").length;
+  const errorCalls = businessRows.filter((row) => row.outcome === "error").length;
+  const deniedCalls = businessRows.filter((row) => row.outcome === "denied").length;
+  const durations = businessRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
+
+  const denials = new Map<string, number>();
+  const tools = new Map<string, { tool: string; calls: number; denied: number; errors: number }>();
+  const roles = new Map<string, { roleId: string; calls: number; denied: number }>();
+  const tokens = new Map<string, { tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>();
+
+  for (const row of businessRows) {
+    if (row.outcome === "denied") {
+      const reason = row.decision_reason ?? "unknown";
+      denials.set(reason, (denials.get(reason) ?? 0) + 1);
+    }
+
+    const tool = tools.get(row.tool) ?? { tool: row.tool, calls: 0, denied: 0, errors: 0 };
+    tool.calls += 1;
+    if (row.outcome === "denied") tool.denied += 1;
+    if (row.outcome === "error") tool.errors += 1;
+    tools.set(row.tool, tool);
+
+    for (const roleId of parseRoleIds(row.role_ids)) {
+      const role = roles.get(roleId) ?? { roleId, calls: 0, denied: 0 };
+      role.calls += 1;
+      if (row.outcome === "denied") role.denied += 1;
+      roles.set(roleId, role);
+    }
+
+    const tokenLabel = row.token_label ?? "unknown";
+    const tokenKey = `${tokenLabel}:${row.token_hash_prefix ?? ""}`;
+    const token = tokens.get(tokenKey) ?? { tokenLabel, tokenHashPrefix: row.token_hash_prefix ?? undefined, calls: 0, denied: 0 };
+    token.calls += 1;
+    if (row.outcome === "denied") token.denied += 1;
+    tokens.set(tokenKey, token);
+  }
+
+  const slowQueries = businessRows
+    .filter((row) => row.duration_ms >= slowMs)
+    .slice(0, 20)
+    .map((row) => ({
+      ts: row.ts,
+      userId: row.user_id,
+      tool: row.tool,
+      durationMs: row.duration_ms,
+      queryOperation: row.query_operation ?? undefined,
+      queryPreview: row.query_preview ?? undefined,
+      decisionReason: row.decision_reason ?? undefined,
+      requestId: row.request_id
+    }));
+
+  const sourceErrorRows = database.prepare(`
+    SELECT
+      COALESCE(als.connection_id, '') AS connection_id,
+      COALESCE(als.schema_name, '') AS schema_name,
+      COALESCE(als.source_name, '') AS source_name,
+      als.physical_table,
+      al.outcome,
+      COUNT(*) AS count
+    FROM access_log al
+    JOIN access_log_sources als ON als.access_log_id = al.id
+    WHERE al.ts >= ? AND al.outcome IN ('error', 'denied')
+    GROUP BY als.connection_id, als.schema_name, als.source_name, als.physical_table, al.outcome
+    ORDER BY count DESC
+    LIMIT 20
+  `).all(since) as Array<{
+    connection_id: string;
+    schema_name: string;
+    source_name: string;
+    physical_table: string;
+    outcome: "error" | "denied";
+    count: number;
+  }>;
+
+  return {
+    window: { since, hours, slowMs },
+    traffic: {
+      totalRequests: rows.length,
+      businessCalls: businessRows.length,
+      okCalls,
+      errorCalls,
+      deniedCalls,
+      successRate: rate(okCalls, businessRows.length),
+      errorRate: rate(errorCalls, businessRows.length),
+      deniedRate: rate(deniedCalls, businessRows.length)
+    },
+    latency: {
+      p50Ms: percentile(durations, 0.5),
+      p95Ms: percentile(durations, 0.95),
+      slowCalls: slowQueries.length,
+      slowQueries
+    },
+    denials: [...denials.entries()]
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20),
+    sourceErrors: sourceErrorRows.map((row) => ({
+      source: [row.connection_id, row.schema_name, row.source_name].filter(Boolean).join(".") || row.physical_table,
+      connectionId: row.connection_id || undefined,
+      schemaName: row.schema_name || undefined,
+      sourceName: row.source_name || undefined,
+      physicalTable: row.physical_table,
+      outcome: row.outcome,
+      count: row.count
+    })),
+    usage: {
+      tools: [...tools.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
+      roles: [...roles.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
+      tokens: [...tokens.values()].sort((a, b) => b.calls - a.calls).slice(0, 30)
+    }
+  };
+}
+
 // ─── Phase 3: conversation_turns (optional reported questions) ──────────────
 
 const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;

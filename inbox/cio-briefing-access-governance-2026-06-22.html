@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Lucy 权限治理优化汇报 · 业务 CIO 版</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --ink: #1a1d23;
+    --ink-2: #4a5160;
+    --ink-3: #828a99;
+    --line: #e6e8ec;
+    --bg: #ffffff;
+    --bg-soft: #f7f8fa;
+    --brand: #1f4ed8;
+    --ok: #1f7a4d;
+    --warn: #b45309;
+    --danger: #b91c1c;
+    --info: #1e40af;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #f3f4f6; color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; line-height: 1.6; }
+  .page { max-width: 1080px; margin: 24px auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  header.cover { padding: 40px 48px 32px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%); }
+  .eyebrow { font-size: 12px; color: var(--ink-3); letter-spacing: 0.12em; text-transform: uppercase; }
+  h1 { font-size: 28px; margin: 8px 0 6px; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 18px; margin: 32px 0 12px; font-weight: 700; border-left: 3px solid var(--brand); padding-left: 10px; }
+  h3 { font-size: 15px; margin: 20px 0 8px; font-weight: 600; color: var(--ink); }
+  p { margin: 8px 0; color: var(--ink-2); }
+  ul, ol { color: var(--ink-2); padding-left: 22px; }
+  li { margin: 4px 0; }
+  .meta-row { display: flex; gap: 28px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-3); }
+  .meta-row span strong { color: var(--ink-2); font-weight: 600; margin-right: 6px; }
+  main { padding: 8px 48px 48px; }
+  .lede { font-size: 16px; color: var(--ink); background: var(--bg-soft); border-left: 3px solid var(--brand); padding: 14px 18px; margin: 16px 0 28px; border-radius: 0 4px 4px 0; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: 16px; background: var(--bg); }
+  .card .label { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; }
+  .card .value { font-size: 24px; font-weight: 700; color: var(--ink); margin-top: 4px; }
+  .card .hint { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+  .card.ok .value { color: var(--ok); }
+  .card.warn .value { color: var(--warn); }
+  .card.danger .value { color: var(--danger); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--bg-soft); color: var(--ink); font-weight: 600; font-size: 13px; }
+  td { color: var(--ink-2); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+  .pill.ok { background: #e6f4ec; color: var(--ok); }
+  .pill.warn { background: #fdf3e3; color: var(--warn); }
+  .pill.danger { background: #fde8e8; color: var(--danger); }
+  .pill.info { background: #e6ecfa; color: var(--info); }
+  .timeline { position: relative; padding-left: 24px; margin: 12px 0; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+  .timeline-item { position: relative; margin-bottom: 18px; }
+  .timeline-item::before { content: ""; position: absolute; left: -20px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--brand); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--brand); }
+  .timeline-item .when { font-size: 12px; color: var(--brand); font-weight: 600; }
+  .timeline-item .what { font-weight: 600; color: var(--ink); margin-top: 2px; }
+  .timeline-item .desc { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+  .ask { background: #f0f4ff; border: 1px solid #d0ddf7; border-radius: 6px; padding: 14px 16px; margin: 16px 0; }
+  .ask .ask-label { font-size: 11px; color: var(--info); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  .ask p { color: var(--ink); margin: 4px 0 0; }
+  footer { border-top: 1px solid var(--line); padding: 16px 48px; font-size: 12px; color: var(--ink-3); background: var(--bg-soft); }
+  @media (max-width: 720px) {
+    .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    header.cover, main, footer { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="cover">
+    <div class="eyebrow">Lucy · 权限治理优化汇报</div>
+    <h1>把 Agent 接入数据的能力,做成可审计、可交付的产品</h1>
+    <p style="font-size: 15px; color: var(--ink-2); margin-top: 6px;">面向 CIO · 2026-06-22 · v1.0</p>
+    <div class="meta-row">
+      <span><strong>汇报人</strong> Lucy 产品 / 平台治理团队</span>
+      <span><strong>材料基础</strong> docs/lucy-platform-goal-checklist、docs/project-overview、inbox/access-governance-design</span>
+      <span><strong>汇报时长</strong> 约 5 分钟阅读</span>
+    </div>
+  </header>
+
+  <main>
+
+    <div class="lede">
+      本次优化把 Lucy 平台的"谁能用什么工具、看哪些数据"从手写配置,升级为<strong>预置角色 + 写入即审计</strong>的治理闭环。<br>
+      P0 安全写路径已落地;剩余 P1 工作可在两周内闭环,无新增技术债务,不影响现有客户交付节奏。
+    </div>
+
+    <h2>一、本次优化在做什么(一句话)</h2>
+    <p>把"为 AI Agent 配数据访问权限"这件事,从需要懂 YAML 的工程师才能做的隐式配置,变成<strong>选模板、点确认、留审计记录</strong>的标准化产品能力。</p>
+
+    <h2>二、为什么现在做(背景)</h2>
+    <ul>
+      <li><strong>2026-06-21 内部审计发现:</strong> admin 写入路径仍可创建"全部表全部工具"通配 Agent,与 v1.2 设计冲突,属于 P0 安全风险。</li>
+      <li><strong>2026-06-21 spec 评审 Opus 二次审阅:</strong> 把访问治理写入路径定性为可重新引入过度授权 Agent 的安全风险,优先级需高于纯文档同步。</li>
+      <li><strong>客户接入门槛:</strong> 当前只有 <code>kx_readonly</code> 一个角色,新客户接入时要手写 selector,容易出错。</li>
+    </ul>
+
+    <h2>三、范围(本次 + 后续)</h2>
+
+    <div class="grid-3">
+      <div class="card ok">
+        <div class="label">P0 安全写路径</div>
+        <div class="value">已落地</div>
+        <div class="hint">2026-06-21 闭环 · runtime / admin API / admin UI / 前端类型 / 测试均已对齐</div>
+      </div>
+      <div class="card warn">
+        <div class="label">P1 治理增强</div>
+        <div class="value">设计中</div>
+        <div class="hint">角色模板库 · 配置审计导出 · 主动 reload · 模板字段保护</div>
+      </div>
+      <div class="card">
+        <div class="label">P2 长期演进</div>
+        <div class="value">锚点保留</div>
+        <div class="hint">列级/行级权限 · 多管理员 RBAC · 待 goal 升级后再讨论</div>
+      </div>
+    </div>
+
+    <h2>四、用户价值(对内 + 对外)</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 18%">受益方</th>
+          <th style="width: 40%">变化前</th>
+          <th style="width: 42%">变化后</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>客户(管理员)</strong></td>
+          <td>新建 Agent 要手写 selector + connections + tools,容易出错,撤销延迟最长 30s</td>
+          <td>从下拉菜单选模板;改动必走 dryRun → 确认;审计日志自动留痕</td>
+        </tr>
+        <tr>
+          <td><strong>Agent 使用者</strong></td>
+          <td>需要懂"mysql-aliyun / dataforai.kx_*"等技术字段才能配通</td>
+          <td>只需配 URL + Bearer token,能力由模板自动限定</td>
+        </tr>
+        <tr>
+          <td><strong>合规 / 法务</strong></td>
+          <td>权限变更无统一审计通道,事后追溯靠人工查 yaml 差异</td>
+          <td>所有配置变更进 <code>config_change_log</code>,可按 user / 文件 / 时间查询与导出</td>
+        </tr>
+        <tr>
+          <td><strong>运维 / SRE</strong></td>
+          <td>升级时担心覆盖客户自定义的 role</td>
+          <td>模板与 role 实例分离,升级不会覆盖客户配置</td>
+        </tr>
+        <tr>
+          <td><strong>产品 / PM</strong></td>
+          <td>新增一类客户要重新设计 role,反复造轮子</td>
+          <td>复用 5 个预置模板覆盖 80% 场景;新增模板由产品维护,与 role 解耦</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>五、关键事实(给非技术读者)</h2>
+    <ul>
+      <li><strong>事实源仍然是 YAML:</strong> 没有引入新的配置系统,客户现有的 <code>access.yaml</code> 继续作为唯一权威源,git 可 diff。</li>
+      <li><strong>运行时裁决不会回退到旧配置:</strong> 角色解析失败一律拒绝,绝不回退到"全部允许",这是已落地的硬规则。</li>
+      <li><strong>明文密钥管理规则不变:</strong> 数据库密码仍然只在服务器本地 secrets 目录,管理员 UI 不可见。</li>
+      <li><strong>WebUI 仍仅本机访问:</strong> 没有引入新的登录系统,远程访问能力不在本阶段范围。</li>
+    </ul>
+
+    <h2>六、风险与缓解</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 24%">风险</th>
+          <th style="width: 12%">等级</th>
+          <th style="width: 36%">说明</th>
+          <th style="width: 28%">缓解措施</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>管理员误启用通配 legacy Agent</td>
+          <td><span class="pill ok">已闭环</span></td>
+          <td>P0 写入路径已强制 role-first,旧 allow 标记只读</td>
+          <td>API 强制拒绝 allow;UI 不再提供编辑入口</td>
+        </tr>
+        <tr>
+          <td>撤销 token 后 30s 内仍可用</td>
+          <td><span class="pill warn">产品待确认</span></td>
+          <td>配置读取 30s TTL,撤销后最坏 30s 内仍可能放行</td>
+          <td>UI 已明确告警;主动 reload 端点已列入 P1 实施清单</td>
+        </tr>
+        <tr>
+          <td>未来重构可能悄悄把"模板指针"字段写回 YAML</td>
+          <td><span class="pill warn">已设计</span></td>
+          <td>违反"模板展开即落盘"原则,会产生第二事实源</td>
+          <td>已纳入 lint:spec release gate 校验,第一天就是 fail</td>
+        </tr>
+        <tr>
+          <td>客户自定义 role 被产品升级覆盖</td>
+          <td><span class="pill ok">已规避</span></td>
+          <td>模板与 role 实例物理分离</td>
+          <td>模板源在 admin 端代码,upgrade 不写 yaml</td>
+        </tr>
+        <tr>
+          <td>列级权限需求未来浮现(PII 脱敏 / 租户隔离)</td>
+          <td><span class="pill danger">长期</span></td>
+          <td>当前 role selector 只能限定表,不能限定列</td>
+          <td>已在 §3.2 留 spec 锚点 + fail-closed 退化规则;非本阶段</td>
+        </tr>
+        <tr>
+          <td>spec / 实现 / 资产再次漂移</td>
+          <td><span class="pill ok">已缓解</span></td>
+          <td>2026-06-21 已接入 lint:spec 作为 release gate</td>
+          <td>5 类检查覆盖 routes / API / skill deps / eval schema / access 解析</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>七、资源投入(评估用)</h2>
+    <div class="grid-2">
+      <div class="card">
+        <div class="label">P0 安全写路径</div>
+        <div class="value">已投入</div>
+        <div class="hint">2026-06-21 闭环 · 未产生新增支出</div>
+      </div>
+      <div class="card warn">
+        <div class="label">P1 治理增强</div>
+        <div class="value">约 2 周</div>
+        <div class="hint">角色模板库 + 配置审计导出 + 主动 reload + 模板字段 lint</div>
+      </div>
+    </div>
+    <p style="font-size: 13px;">执行明细见 <code>inbox/access-governance-execution-plan-2026-06-22.md</code> 与 <code>inbox/access-governance-tasks-2026-06-22.md</code>。</p>
+
+    <h2>八、时间线</h2>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="when">2026-06-21</div>
+        <div class="what">P0 安全写路径闭环</div>
+        <div class="desc">role-first 模型在 runtime / admin API / admin UI / 前端类型 / 测试全部对齐;lint:spec 接入 release gate。</div>
+      </div>
+      <div class="timeline-item">
+        <div class="when">2026-06-22</div>
+        <div class="what">权限模型设计方案冻结</div>
+        <div class="desc">识别剩余三处增量:角色模板库、Policy 表达式锚点、lint 衔接;10 项 P0/P1 工作清单。</div>
+      </div>
+      <div class="timeline-item">
+        <div class="when">本周(W26)</div>
+        <div class="what">回归验证 + 角色模板库 v1</div>
+        <div class="desc">验证 v1.2 测试矩阵;交付 5 个预置模板 + UI 集成 + 模板字段 lint 规则。</div>
+      </div>
+      <div class="timeline-item">
+        <div class="when">下周(W27)</div>
+        <div class="what">配置审计导出 + 主动 reload</div>
+        <div class="desc">config_change_log 导出 CSV;<code>?reload=true</code> 端点;Onboarding 失败原因细分。</div>
+      </div>
+      <div class="timeline-item">
+        <div class="when">2026-07-06 前</div>
+        <div class="what">方案闭环 / 文档迁移</div>
+        <div class="desc">inbox 文档迁 docs/access-governance-design.md;更新 project-overview §10。</div>
+      </div>
+    </div>
+
+    <h2>九、给 CIO 的 3 个确认项</h2>
+
+    <div class="ask">
+      <div class="ask-label">决策 1 · 安全边界</div>
+      <p>是否同意"P0 写入路径已强制 role-first、撤销 30s TTL 内仍可能放行"作为可接受的产品安全等级?若需更严,请拍板是否进入主动 reload 优先路线(W27 之前可完成)。</p>
+    </div>
+
+    <div class="ask">
+      <div class="ask-label">决策 2 · 模板覆盖范围</div>
+      <p>本次 P1 拟交付 5 个预置模板(kx_readonly / superstore_readonly / wiki_only / guard_test / dev_superstore)。是否需要在 v1 额外覆盖某类客户场景(如财务扩展域、研发只读)以减少首次上线摩擦?</p>
+    </div>
+
+    <div class="ask">
+      <div class="ask-label">决策 3 · 长期演进节奏</div>
+      <p>列级 / 行级权限(增量 2)在 §3.2 留有 spec 锚点但不在 P1 范围。若业务侧出现 PII 脱敏或租户隔离需求,请提前 1 个季度预警,以便排期。</p>
+    </div>
+
+  </main>
+
+  <footer>
+    文档路径 inbox/cio-briefing-access-governance-2026-06-22.html · 基于 inbox/access-governance-design-2026-06-22.md · 若需技术细节请参阅方案文档
+  </footer>
+
+</div>
+</body>
+</html>

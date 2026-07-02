@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const testState = vi.hoisted(() => ({
   projectRoot: "",
   writeLogMock: vi.fn(() => Promise.resolve()),
+  writeAccessLogSourcesMock: vi.fn(() => Promise.resolve()),
   isTokenRevokedMock: vi.fn(() => false)
 }));
 
@@ -17,7 +18,8 @@ vi.mock("../project.js", () => ({
 
 vi.mock("../proxy/audit.js", () => ({
   isTokenRevoked: testState.isTokenRevokedMock,
-  writeLog: testState.writeLogMock
+  writeLog: testState.writeLogMock,
+  writeAccessLogSources: testState.writeAccessLogSourcesMock
 }));
 
 const TOKEN = "proxy-acl-token";
@@ -91,6 +93,7 @@ async function makeProject() {
 
 beforeEach(async () => {
   testState.writeLogMock.mockClear();
+  testState.writeAccessLogSourcesMock.mockClear();
   testState.isTokenRevokedMock.mockReset();
   testState.isTokenRevokedMock.mockReturnValue(false);
   projectRoot = await makeProject();
@@ -245,7 +248,7 @@ describe("MCP proxy ACL enforcement", () => {
     });
   });
 
-  it("does not expose raw upstream error details in 502 responses", async () => {
+  it("does not expose raw upstream error details in MCP upstream failure responses", async () => {
     const previousPort = process.env.LUCY_PROXY_UPSTREAM_PORT;
     process.env.LUCY_PROXY_UPSTREAM_PORT = "1";
     vi.resetModules();
@@ -253,10 +256,17 @@ describe("MCP proxy ACL enforcement", () => {
     try {
       await withProxy(async (port) => {
         const res = await callTool(port, TOKEN, "proxy-upstream-error", "sl_read_source", { sourceName: "superstore_orders" });
-        expect(res.status).toBe(502);
-        const body = await res.json() as { error: string; detail?: string };
-        expect(body).toEqual({ error: "Proxy error", detail: "Upstream unavailable" });
-        expect(JSON.stringify(body)).not.toMatch(/ECONNREFUSED|KTX upstream|127\.0\.0\.1:1/);
+        expect(res.status).toBe(200);
+        const body = await res.json() as { error?: { message?: string; data?: { reason?: string } } };
+        expect(body).toMatchObject({
+          jsonrpc: "2.0",
+          id: "proxy-upstream-error",
+          error: {
+            message: "KTX upstream unavailable",
+            data: { reason: "upstream_unavailable" }
+          }
+        });
+        expect(JSON.stringify(body)).not.toMatch(/ECONNREFUSED|127\.0\.0\.1:1/);
       });
     } finally {
       if (previousPort === undefined) delete process.env.LUCY_PROXY_UPSTREAM_PORT;

@@ -1,0 +1,81 @@
+connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      # dataforai 当前启用超市样例与 KX 财务报表 source。
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+      - dataforai.superstore_people
+      - dataforai.kx_dim_company
+      - dataforai.kx_dim_financial_item
+      - dataforai.kx_fact_financial_amount
+      - dataforai.kx_vw_balance_sheet_detail
+      - dataforai.kx_vw_cash_flow_statement_detail
+      - dataforai.kx_vw_income_statement_detail
+    host: rm-bp1t0ie3sj4g7561hpo.mysql.rds.aliyuncs.com
+    port: 3306
+    database: dataforai
+    username: bi_zy
+    password: file:/Users/forrest/Projects/project-lucy/.ktx/secrets/mysql-aliyun-password
+    # NOTE: `schemas` 控制 scan 范围；`enabled_tables`（上方）控制问答可见范围。
+    schemas:
+      - dataforai
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    author: ktx <ktx@example.com>
+llm:
+  provider:
+    backend: anthropic
+    anthropic:
+      api_key: env:MINIMAX_API_KEY
+      base_url: https://api.minimaxi.com/anthropic/v1
+  models:
+    default: MiniMax-M2.7-highspeed
+    triage: MiniMax-M2.7-highspeed
+    candidateExtraction: MiniMax-M2.7-highspeed
+    curator: MiniMax-M2.7-highspeed
+    reconcile: MiniMax-M2.7-highspeed
+    repair: MiniMax-M2.7-highspeed
+    # NOTE: 高风险审查（reviewer skill）跑在 Claude Code 主会话里，模型由用户 /model 选定，不在此处控制。
+  promptCaching:
+    enabled: false
+ingest:
+  embeddings:
+    backend: sentence-transformers
+    model: all-MiniLM-L6-v2
+    dimensions: 384
+  workUnits:
+    stepBudget: 40
+    maxConcurrency: 1
+    failureMode: continue
+agent:
+  run_research:
+    enabled: false
+    max_iterations: 20
+    default_toolset:
+      - sl_query
+      - wiki_search
+      - sl_read_source
+scan:
+  enrichment:
+    mode: llm
+    embeddings:
+      backend: sentence-transformers
+      model: all-MiniLM-L6-v2
+      dimensions: 384
+  relationships:
+    enabled: true
+    llmProposals: true
+    validationRequiredForManifest: true
+    acceptThreshold: 0.85
+    reviewThreshold: 0.55
+    maxLlmTablesPerBatch: 40
+    maxCandidatesPerColumn: 25
+    profileSampleRows: 10000
+    profileConcurrency: 4
+    validationConcurrency: 4
+setup:
+  database_connection_ids:
+    - mysql-aliyun

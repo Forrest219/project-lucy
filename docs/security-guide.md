@@ -98,6 +98,7 @@ Do not:
 Required before customer release:
 
 ```bash
+npm run r1:readiness:strict
 npm run lint:spec
 npm run security:baseline
 npm run smoke:p0:docker
@@ -111,6 +112,8 @@ For KTX upgrades:
 ```bash
 npm run compat:ktx-upgrade -- --candidate <version>
 ```
+
+R1 受控数据服务层发布还必须按 `docs/lucy-r1-release-runbook.md` 归档 Doris vertical slice evidence、Hermes QA Accuracy Report 和 `/api/r1/observability` 快照。
 
 ## 7. Residual Risks
 

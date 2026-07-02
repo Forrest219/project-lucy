@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lucy KX 数据问答 POC 审计简报 - 2026-06-21</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #5f6b76;
+      --line: #d8dee6;
+      --bg: #f7f9fb;
+      --panel: #ffffff;
+      --accent: #1267b1;
+      --accent-2: #1c7c54;
+      --warn: #b45309;
+      --danger: #b91c1c;
+      --soft-blue: #eaf3fb;
+      --soft-green: #eaf7f0;
+      --soft-red: #fff1f2;
+      --soft-amber: #fff7e6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 28px 56px;
+    }
+    header {
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 8px 0; }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 20px;
+    }
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      min-height: 100px;
+    }
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1.1;
+      margin: 2px 0 8px;
+    }
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      margin: 12px 0;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eef2f6;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: 0; }
+    code {
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: #eef2f6;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .ok { color: #14532d; background: var(--soft-green); }
+    .deny { color: #7f1d1d; background: var(--soft-red); }
+    .warn { color: #7c2d12; background: var(--soft-amber); }
+    .info { color: #0f3f70; background: var(--soft-blue); }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 58px 1fr 52px 52px;
+      align-items: center;
+      gap: 10px;
+      margin: 7px 0;
+      font-size: 13px;
+    }
+    .bar-track {
+      height: 15px;
+      background: #edf1f5;
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+    }
+    .bar-fill.business { background: var(--accent-2); }
+    .bar-fill.denied { background: var(--danger); }
+    .stack {
+      height: 16px;
+      display: flex;
+      overflow: hidden;
+      background: #edf1f5;
+      border-radius: 999px;
+    }
+    .stack span { display: block; height: 100%; }
+    .stack .protocol { background: #90a4b8; }
+    .stack .business { background: var(--accent-2); }
+    .stack .denied { background: var(--danger); }
+    .note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .executive {
+      border-left: 4px solid var(--accent);
+      background: #f3f8fc;
+    }
+    .risk {
+      border-left: 4px solid var(--warn);
+      background: #fffaf0;
+    }
+    .defense {
+      border-left: 4px solid var(--danger);
+      background: #fff7f7;
+    }
+    .question-list {
+      display: grid;
+      gap: 10px;
+    }
+    .question {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--panel);
+    }
+    .question .q {
+      font-weight: 650;
+      margin-bottom: 5px;
+    }
+    .question .a {
+      color: #2f3a45;
+    }
+    @media (max-width: 860px) {
+      main { padding: 22px 16px 42px; }
+      .summary, .grid-2 { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 54px 1fr 44px; }
+      .bar-row .denied-count { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Lucy KX 数据问答 POC 审计简报</h1>
+    <div class="meta">
+      <span>汇报对象：CIO / 数据治理负责人</span>
+      <span>日期口径：2026-06-21 00:00:00 - 12:39:56（Asia/Shanghai）</span>
+      <span>Agent：<code>workhorse</code></span>
+      <span>Token：<code>hermes-workhorse</code> / <code>sha256:f5d0c6...</code></span>
+    </div>
+  </header>
+
+  <section class="panel executive">
+    <h2>一页结论</h2>
+    <p>本次 POC 验证了 Lucy MCP Proxy 对 KX 财务域数据问答的三项核心能力：基于 token 的身份识别、工具与表级访问控制、可审计的访问留痕。今天 workhorse 共发生 350 条审计记录，其中 55 条为业务工具调用，15 条越权或错误路径被拒绝。</p>
+    <p>合法访问集中在 <code>mysql-aliyun</code> / <code>dataforai</code> 下 6 张显式授权的 KX 财务表/视图；尝试访问 <code>warehouse</code>、<code>information_schema.tables</code>、<code>dataforai.superstore_orders</code>、<code>orders</code> 均被拒绝，未发现非授权表数据被放出。</p>
+  </section>
+
+  <section class="summary" aria-label="核心指标">
+    <div class="metric">
+      <span>总审计记录</span>
+      <strong>350</strong>
+      <span>含协议握手、工具发现与业务调用</span>
+    </div>
+    <div class="metric">
+      <span>业务工具调用</span>
+      <strong>55</strong>
+      <span>非 <code>tools/list</code> / 初始化类调用</span>
+    </div>
+    <div class="metric">
+      <span>拦截记录</span>
+      <strong>15</strong>
+      <span>连接、工具、表级越权均被拒绝</span>
+    </div>
+    <div class="metric">
+      <span>授权数据范围</span>
+      <strong>6</strong>
+      <span>KX 财务表/视图，显式名单授权</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>访问时间分布</h2>
+    <div class="grid-2">
+      <div class="panel">
+        <h3>按小时访问量</h3>
+        <div class="bar-row"><strong>小时</strong><strong>总访问</strong><strong>业务</strong><strong class="denied-count">拒绝</strong></div>
+        <div class="bar-row"><span>00:00</span><div class="bar-track"><div class="bar-fill" style="width:85.4%"></div></div><span>6</span><span class="denied-count">4</span></div>
+        <div class="bar-row"><span>01:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>02:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>03:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>04:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>05:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>06:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>07:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>08:00</span><div class="bar-track"><div class="bar-fill" style="width:70.8%"></div></div><span>14</span><span class="denied-count">1</span></div>
+        <div class="bar-row"><span>09:00</span><div class="bar-track"><div class="bar-fill" style="width:89.6%"></div></div><span>23</span><span class="denied-count">3</span></div>
+        <div class="bar-row"><span>10:00</span><div class="bar-track"><div class="bar-fill" style="width:50.0%"></div></div><span>4</span><span class="denied-count">3</span></div>
+        <div class="bar-row"><span>11:00</span><div class="bar-track"><div class="bar-fill" style="width:41.7%"></div></div><span>0</span><span class="denied-count">0</span></div>
+        <div class="bar-row"><span>12:00</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>8</span><span class="denied-count">4</span></div>
+        <p class="note">蓝色条为该小时总审计记录相对峰值（12:00，48 次）。业务峰值出现在 09:00，主要对应柯西公司杜邦分析。</p>
+      </div>
+      <div class="panel">
+        <h3>访问类型拆分</h3>
+        <p>协议/工具发现类调用占比较高，反映 Hermes MCP client 会周期性拉取工具列表。</p>
+        <div class="stack" aria-label="访问类型堆叠">
+          <span class="protocol" style="width:84.3%" title="协议/发现 295"></span>
+          <span class="business" style="width:15.7%" title="业务 55"></span>
+        </div>
+        <p><span class="pill info">协议/发现 295</span> <span class="pill ok">业务调用 55</span></p>
+        <p>安全拦截占总审计记录 4.3%，占业务调用 27.3%。这说明 POC 中既有真实问答链路，也覆盖了越权路径验证。</p>
+        <div class="stack" aria-label="业务调用结果堆叠">
+          <span class="business" style="width:72.7%" title="业务允许 40"></span>
+          <span class="denied" style="width:27.3%" title="业务拒绝 15"></span>
+        </div>
+        <p><span class="pill ok">业务允许 40</span> <span class="pill deny">业务拒绝 15</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>数据源分布</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>数据域</th>
+          <th>访问情况</th>
+          <th>代表表/字段</th>
+          <th>治理结论</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>mysql-aliyun</code> / <code>dataforai</code></td>
+          <td><span class="pill ok">主要合法访问</span> 业务参数中出现约 38 次连接声明，表引用集中在 <code>dataforai</code>。</td>
+          <td><code>kx_fact_financial_amount</code>、<code>kx_dim_company</code>、三张 <code>kx_vw_*</code> detail view。</td>
+          <td>已按 <code>kx_readonly</code> role 显式授权，满足最小可用范围。</td>
+        </tr>
+        <tr>
+          <td><code>warehouse</code></td>
+          <td><span class="pill deny">拒绝</span> 多次尝试以 <code>warehouse</code> 查询 <code>orders</code> 或 KX 字段。</td>
+          <td><code>orders.revenue</code>、<code>kx_fact_financial_amount.amount</code></td>
+          <td>连接不在 token role 授权范围内，被拒绝。</td>
+        </tr>
+        <tr>
+          <td><code>information_schema</code></td>
+          <td><span class="pill deny">拒绝</span> 尝试查询真实数据库表清单。</td>
+          <td><code>information_schema.tables</code></td>
+          <td>元数据枚举被表级 ACL 拦截，避免越权探测全库结构。</td>
+        </tr>
+        <tr>
+          <td><code>superstore_*</code></td>
+          <td><span class="pill deny">拒绝</span> 多路径尝试访问 <code>superstore_orders</code>。</td>
+          <td><code>dataforai.superstore_orders</code></td>
+          <td>表存在迹象明确，但不在 KX role allowlist 内，未放行。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>工具使用分布</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>工具</th>
+          <th>成功</th>
+          <th>拒绝</th>
+          <th>用途说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>tools/list</code></td><td>262</td><td>0</td><td>客户端工具发现；当前 profile 移除本地 include 后，仍仅由 proxy 返回 4 个可见工具。</td></tr>
+        <tr><td><code>initialize</code></td><td>17</td><td>0</td><td>MCP session 初始化。</td></tr>
+        <tr><td><code>notifications/initialized</code></td><td>16</td><td>0</td><td>MCP 初始化完成通知。</td></tr>
+        <tr><td><code>sl_query</code></td><td>24</td><td>9</td><td>主要数据查询工具，用于收入分析、杜邦分析、数据覆盖度探查。</td></tr>
+        <tr><td><code>kx_catalog</code></td><td>8</td><td>1</td><td>列出 token 可见 KX 财务数据源；正常返回 6 张授权表/视图。</td></tr>
+        <tr><td><code>sl_read_source</code></td><td>6</td><td>2</td><td>读取语义层 source schema，用于确认字段和表结构。</td></tr>
+        <tr><td><code>entity_details</code></td><td>2</td><td>3</td><td>读取表/列元数据；部分中文列名和非授权表探查被拒。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>用户问题与业务回答摘要</h2>
+    <div class="question-list">
+      <div class="question">
+        <div class="q">00:00 - 使用 KTX 分析柯西公司 2026 年经营情况；随后澄清“指的是 kx 开头的表”。</div>
+        <div class="a">Workhorse 初始误走 <code>warehouse/orders</code>，出现超时和 <code>table_forbidden</code>；随后确认需要使用 KX 财务表。回答明确未编造经营数字，并要求先确认 KX 表结构。</div>
+      </div>
+      <div class="question">
+        <div class="q">08:13 - 使用 KTX 分析柯西公司 2026 年收入情况。</div>
+        <div class="a">查询 <code>kx_dim_company</code>、<code>kx_fact_financial_amount</code>、<code>kx_dim_financial_item</code>。早期回答给出 2026 年 1-5 月收入口径，提示收入数据稀疏、报表字段存在 NULL、YTD 口径需要谨慎解释。</div>
+      </div>
+      <div class="question">
+        <div class="q">08:51-09:46 - 对柯西公司做杜邦分析，并要求补全三张表数据。</div>
+        <div class="a">多次因 MCP 熔断和参数 schema 错误中断；重启 session 后成功查询资产负债表、利润表、现金流量表 detail view。最终输出一版截至 2026-05-31 的杜邦分析：营业收入 69,339.62 元，净利润 13,918.50 元，销售净利率约 20.07%，总资产周转率约 1.20，权益乘数约 -2.92，ROE 约 -70.20%，并强调负权益导致 ROE 经济意义失效。</div>
+      </div>
+      <div class="question">
+        <div class="q">09:53-10:08 - 调出 orders / superstore 数据，查看过去三年收入变化。</div>
+        <div class="a">KX catalog 仅暴露 6 张 KX 财务表；用户进一步说明要找 <code>superstore_*</code> 表。Workhorse 尝试 <code>entity_details</code>、<code>sl_query</code>、<code>sl_read_source</code> 访问 <code>dataforai.superstore_orders</code>，均被 ACL 拒绝。回答指出该表不在当前 token 授权范围，无法用 KX token 查询过去三年收入。</div>
+      </div>
+      <div class="question">
+        <div class="q">09:56-11:40 - 要求直接查数据库有多少张表，写 SQL，并选择绕过 KX 直连 MySQL。</div>
+        <div class="a">尝试 <code>information_schema.tables</code> 被拒。随后开始寻找 MySQL 凭据和 KTX 配置，确认 KTX 支持 <code>ktx.yaml</code> 中连接配置，但当时尚未找到实际配置文件。该链路没有绕过 Lucy 放出数据。</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>安全防御记录</h2>
+    <div class="panel defense">
+      <p>今天共有 15 条拒绝记录，覆盖连接越权、表越权、工具越权和显式表引用缺失。拒绝均发生在 proxy / ACL 层，响应不包含 token 明文。</p>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>工具</th>
+          <th>目标</th>
+          <th>拒绝原因</th>
+          <th>安全意义</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>00:02:03</td><td><code>sl_read_source</code></td><td><code>warehouse.orders</code></td><td><code>table_forbidden:orders</code></td><td>阻止非 KX 表读取。</td></tr>
+        <tr><td>00:32:27</td><td><code>sl_query</code></td><td><code>warehouse.orders.revenue</code></td><td><code>table_forbidden:orders</code></td><td>阻止通过 measure 绕行读取 orders。</td></tr>
+        <tr><td>00:32:27</td><td><code>kx_catalog</code></td><td>catalog</td><td><code>tool_forbidden</code></td><td>配置迁移前后工具可见性防御曾触发。</td></tr>
+        <tr><td>00:33:07</td><td><code>sl_query</code></td><td><code>warehouse</code></td><td><code>unknown_or_forbidden_connection:warehouse</code></td><td>阻止未授权连接。</td></tr>
+        <tr><td>08:13:23</td><td><code>entity_details</code></td><td><code>kx_dim_company.company_name</code></td><td><code>unknown_or_forbidden_connection:company_name</code></td><td>错误参数未被当作合法连接放行。</td></tr>
+        <tr><td>09:11:08</td><td><code>entity_details</code></td><td>中文列名元数据</td><td><code>unknown_or_forbidden_connection:项目名称</code></td><td>不规范元数据请求未越权穿透。</td></tr>
+        <tr><td>09:11:16</td><td><code>sl_query</code></td><td>未显式表前缀的中文字段</td><td><code>explicit_table_required:&lt;empty&gt;</code></td><td>要求显式表名，减少字段名歧义和绕权风险。</td></tr>
+        <tr><td>09:56:39</td><td><code>sl_query</code></td><td><code>information_schema.tables</code></td><td><code>table_forbidden:information_schema.tables</code></td><td>阻止枚举数据库全表结构。</td></tr>
+        <tr><td>10:08:22</td><td><code>entity_details</code></td><td><code>dataforai.superstore_orders</code></td><td><code>table_forbidden:dataforai.superstore_orders</code></td><td>阻止非 KX 域表元数据读取。</td></tr>
+        <tr><td>10:08:28</td><td><code>sl_query</code></td><td><code>dataforai.superstore_orders</code></td><td><code>table_forbidden:dataforai.superstore_orders</code></td><td>阻止订单事实数据查询。</td></tr>
+        <tr><td>10:08:34</td><td><code>sl_read_source</code></td><td><code>superstore_orders</code></td><td><code>table_forbidden:dataforai.superstore_orders</code></td><td>阻止通过 source schema 侧路获取表结构。</td></tr>
+        <tr><td>12:35-12:39</td><td><code>sl_query</code></td><td><code>warehouse</code> 连接重复探测</td><td><code>unknown_or_forbidden_connection:warehouse</code></td><td>重启和烟测期间持续验证连接级拒绝。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel risk">
+    <h2>POC 观察与建议</h2>
+    <p><strong>已验证价值：</strong>业务用户可以通过 Telegram / Workhorse 查询授权 KX 财务数据；CIO 侧能看到问题、工具、表、拒绝原因的审计链路，满足“可用且可控”的 POC 目标。</p>
+    <p><strong>安全结论：</strong><code>kx_readonly</code> role 对非 KX 表和非授权连接保持拒绝；<code>tools/list</code> 已由 proxy 侧过滤，Hermes profile 不再需要本地工具 include。</p>
+    <p><strong>改进建议：</strong>后续应在 audit 中增加 token hash 前缀或 token label 字段，便于同一 agent 多 token 场景下做精确追责；同时把“用户问题 ↔ MCP 请求 ↔ 回答”建立正式关联 ID，减少跨 Hermes state DB 与 Lucy audit DB 拼接成本。</p>
+  </section>
+
+  <footer class="note">
+    <p>数据来源：Lucy audit SQLite <code>.ktx-ui/audit.sqlite</code>、Hermes workhorse state DB <code>~/.hermes/profiles/workhorse/state.db</code>。报告生成时间：2026-06-21。</p>
+  </footer>
+</main>
+</body>
+</html>

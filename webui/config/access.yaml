@@ -1,4 +1,25 @@
 roles:
+  lucy_r1_exact_readonly:
+    description: Lucy R1 发布证据账号模板 — exact 6-tool controlled data service surface
+    allow:
+      connections:
+        - poc-mysql-aliyun
+      tableSelectors:
+        - connection: poc-mysql-aliyun
+          schema: data_agent_poc
+          names:
+            - poc_metric_catalog
+            - poc_app_active_daily
+            - poc_ad_revenue_daily
+            - poc_ad_revenue_by_type_daily
+            - poc_ceo_metric_snapshot
+      tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
   poc_readonly:
     description: POC内测只读角色 — 可访问5张POC授权表，forbidden_finance由ACL层deny
     allow:
@@ -18,8 +39,12 @@ roles:
             #   - 但 tableSelector 不授权，lucy ACL 返回 deny 而非 "表不存在"
             #   - deny 事件记录进 audit，演示 ACL 拦截能力
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_catalog
+        - lucy_begin_question
         - wiki_search
         - wiki_read
         - entity_details
@@ -40,9 +65,13 @@ roles:
             - kx_vw_cash_flow_statement_detail
             - kx_vw_income_statement_detail
       tools:
+        - lucy_catalog
         - kx_catalog
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
         - entity_details
   superstore_region_huadong:
     description: 华东区域经理 — 仅本区域订单（无 returns/people 关联）
@@ -55,9 +84,13 @@ roles:
           names:
             - superstore_orders_huadong
       tools:
+        - lucy_catalog
         - kx_catalog
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
         - entity_details
   local_dev_full_access:
     description: 本地开发全量只读访问（等价 ktx.yaml 直连范围）
@@ -79,7 +112,13 @@ roles:
             - kx_vw_cash_flow_statement_detail
             - kx_vw_income_statement_detail
       tools:
+        - lucy_catalog
         - kx_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
         - sl_query
         - sl_read_source
         - sl_validate
@@ -165,6 +204,12 @@ defaults:
     - dictionary_search
     - discover_data
     - connection_list
+    - lucy_catalog
+    - lucy_read_source
+    - lucy_query
+    - lucy_explain_query
+    - lucy_freshness
+    - lucy_begin_question
     - kx_catalog
     - sql_execution
     - memory_ingest
@@ -172,6 +217,10 @@ defaults:
   table_touching_tools:
     - sl_query
     - sl_read_source
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_freshness
     - sl_validate
     - entity_details
   sensitive_metadata_tools:

@@ -1,3 +1,13 @@
+---
+visibility: private
+sl_refs:
+  - poc-mysql-aliyun/data_agent_poc/poc_metric_catalog
+  - poc-mysql-aliyun/data_agent_poc/poc_app_active_daily
+  - poc-mysql-aliyun/data_agent_poc/poc_ad_revenue_daily
+  - poc-mysql-aliyun/data_agent_poc/poc_ad_revenue_by_type_daily
+  - poc-mysql-aliyun/data_agent_poc/poc_ceo_metric_snapshot
+---
+
 # Data Agent MCP POC — 数据路由总纲
 
 > 适用：`poc-mysql-aliyun` 连接，`data_agent_poc` 库，面向 lucy MCP 的 `wiki_search` / `wiki_read`。
@@ -42,6 +52,23 @@
 两者数值不同是正常的，不是数据错误。原因：统计口径和来源系统不同。
 
 **四品类收入一致性**：`poc_ad_revenue_by_type_daily` 四品类（按dt, country跨platform和revenue_type聚合后）等于 `poc_ad_revenue_daily` 同日同国总收入，内置可断言的一致性。
+
+## 反模式：UTC ISO 日期误读
+
+POC 表里的 `dt` / `snapshot_dt` 都表示 **北京时间自然日**。Lucy / KTX / MCP 在 JSON 里可能把 MySQL `DATE` / `DATETIME` 序列化成 UTC ISO 字符串，例如：
+
+| MCP 返回值 | 正确业务日期 | 错误读法 |
+|---|---|---|
+| `2026-05-30T16:00:00.000Z` | 北京时间 `2026-05-31` | 直接取 UTC 字符串日期当作 `2026-05-30` |
+
+禁止直接用 UTC ISO 字符串的 `YYYY-MM-DD` 部分做业务日期判断、过滤或对账。展示给用户、与快照表比较、或做同日事实表校验前，必须先转成 `Asia/Shanghai` 业务日期。
+
+CEO 快照回归的固定 sanity check：
+
+- `snapshot_dt = 2026-05-31` 对应北京自然日 5 月 31 日；
+- `poc_ad_revenue_daily` 当日国内广告收入合计 = `196,314.31`；
+- `poc_ad_revenue_by_type_daily` 当日国内四品类合计 = `196,314.31`；
+- `190,213.91` 是北京自然日 2026-05-30 的值，不能拿来和 2026-05-31 快照比较。
 
 ## ACL 演示说明
 

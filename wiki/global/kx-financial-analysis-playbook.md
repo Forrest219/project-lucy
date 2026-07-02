@@ -1,3 +1,16 @@
+---
+visibility: private
+allowed_roles:
+  - kx_readonly
+sl_refs:
+  - mysql-aliyun/dataforai/kx_dim_company
+  - mysql-aliyun/dataforai/kx_dim_financial_item
+  - mysql-aliyun/dataforai/kx_fact_financial_amount
+  - mysql-aliyun/dataforai/kx_vw_balance_sheet_detail
+  - mysql-aliyun/dataforai/kx_vw_cash_flow_statement_detail
+  - mysql-aliyun/dataforai/kx_vw_income_statement_detail
+---
+
 # KX 财务分析口径与公司别名
 
 > 适用：`dataforai` KX 财务报表域，面向 `wiki_search` / `wiki_read` 解决“柯西公司”“2026 年经营情况”等自然语言问题。

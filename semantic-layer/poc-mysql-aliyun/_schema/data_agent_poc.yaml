@@ -132,7 +132,8 @@ tables:
         pk: true
         nullable: false
         descriptions:
-          db: 统计日期，日粒度，北京时间自然日
+          db: 统计日期，日粒度，北京时间自然日；若 MCP/JSON 以 UTC ISO 展示，需转换为 Asia/Shanghai 业务日期后再解释
+          ai: Daily business date in Asia/Shanghai. Convert UTC ISO transport values to Beijing business dates before display or reconciliation.
       - name: revenue_type
         type: string
         pk: true
@@ -214,8 +215,8 @@ tables:
         pk: true
         nullable: false
         descriptions:
-          db: 统计日期，日粒度，北京时间自然日
-          ai: Statistics date at daily granularity, Beijing time natural day.
+          db: 统计日期，日粒度，北京时间自然日；若 MCP/JSON 以 UTC ISO 展示，需转换为 Asia/Shanghai 业务日期后再解释
+          ai: Statistics date at daily granularity, Beijing time natural day. Convert UTC ISO transport values to Asia/Shanghai before display or reconciliation.
       - name: position_name
         type: string
         pk: true
@@ -288,7 +289,8 @@ tables:
         pk: true
         nullable: false
         descriptions:
-          db: 统计日期，日粒度，北京时间自然日
+          db: 统计日期，日粒度，北京时间自然日；若 MCP/JSON 以 UTC ISO 展示，需转换为 Asia/Shanghai 业务日期后再解释
+          ai: Daily business date in Asia/Shanghai. Convert UTC ISO transport values to Beijing business dates before display or reconciliation.
       - name: pkg_name
         type: string
         pk: true
@@ -344,7 +346,8 @@ tables:
         pk: true
         nullable: false
         descriptions:
-          db: 标杆快照日期，通常对应 CEO 一眼报前端截图或导出日期
+          db: 标杆快照日期，北京时间自然日，通常对应 CEO 一眼报前端截图或导出日期；若 MCP/JSON 以 UTC ISO 展示，需转换为 Asia/Shanghai 业务日期后再对账
+          ai: Benchmark snapshot business date in Asia/Shanghai. Convert UTC ISO transport values to Beijing business dates before comparing with daily facts.
       - name: metric_code
         type: string
         pk: true

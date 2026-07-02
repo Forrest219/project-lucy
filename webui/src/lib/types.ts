@@ -68,6 +68,10 @@ export type SourceSummary = {
 export type ConnectionInfo = {
   id: string;
   driver?: string;
+  engine?: string;
+  wireProtocol?: "mysql" | "postgres" | "native" | "unknown";
+  r1Target?: boolean;
+  readOnlyExpected?: boolean;
   passwordSource?: "file" | "inline" | "env";
   schemas: string[];
   enabledTables: string[];

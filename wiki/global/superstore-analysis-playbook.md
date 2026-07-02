@@ -1,3 +1,11 @@
+---
+visibility: private
+sl_refs:
+  - mysql-aliyun/dataforai/superstore_orders
+  - mysql-aliyun/dataforai/superstore_returns
+  - mysql-aliyun/dataforai/superstore_people
+---
+
 # Superstore 数据分析路由与口径示例
 
 > 适用：`dataforai` 超市样例域，面向 KTX MCP 的 `wiki_search` / `wiki_read` 验证。

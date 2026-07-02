@@ -1,3 +1,9 @@
+---
+visibility: private
+sl_refs:
+  - poc-mysql-aliyun/data_agent_poc/poc_app_active_daily
+---
+
 # POC 场景一：用户活跃分析（牛玉婷 · FineBI）
 
 > Owner：牛玉婷 | 原始资产：FineBI 活跃分析 | POC 表：`poc_app_active_daily`

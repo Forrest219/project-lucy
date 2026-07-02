@@ -1,0 +1,289 @@
+﻿page_title,subsection_title,source_table_id,指标名称,统计维度,统计频率,数据来源方式,来源系统,系统表名
+1.首页,1.1指标清单,1,友盟单价,国内,日/月,系统取数,大数据中心,ods_channel_consumption_hand_copy_report_d
+1.首页,1.1指标清单,1,日均活跃渗透率,国内,月,手工上传,,sdm_penetration_rate_a_d
+1.首页,1.1指标清单,1,日均安装渗透率,国内,月,手工上传,,sdm_penetration_rate_a_d
+1.首页,1.1指标清单,1,FW国际综合排名,国际,月,手工上传,,sdm_penetration_rate_a_d
+1.首页,1.1指标清单,1,品牌声量占比,国内,日/月,系统取数,大数据中心,baidu_search_index
+1.首页,1.1指标清单,1,广告营收占比,国内,月,手工上传,,sdm_penetration_rate_a_d
+1.首页,1.1指标清单,1,新增用户占比,国内,周,手工上传,,sdm_user_share_a_d
+1.首页,1.1指标清单,1,现金结余,国内,日/月,系统取数,大数据中心,
+1.首页,1.1指标清单,1,同类赛道媒体机会,国内,月累/年累,手工上传,,odm_arket_overall_budget_a_d
+1.首页,1.1指标清单,1,同类赛道媒体目标市场,国内,月累/年累,手工上传,,odm_arket_overall_budget_a_d
+1.首页,1.1指标清单,1,同类赛道媒体目标客户,国内,月累/年累,手工上传,,odm_arket_overall_budget_a_d
+1.首页,1.1指标清单,1,客户关系建立,国内,月累/年累,系统取数,大数据中心,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,获取销售机会,国内,月累/年累,系统取数,大数据中心,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,提案反馈,国内,月累/年累,系统取数,大数据中心,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,排期沟通,国内,月累/年累,系统取数,大数据中心,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,需求确认,国内,月累/年累,系统取数,大数据中心,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,确认下单,国内,月累/年累,系统取数,结算中台,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,应收账款,国内,月累/年累,系统取数,结算中台,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,回款金额,国内,月累/年累,系统取数,结算中台,销售机会数据表 ad_xsy_crm.ad_xsy_crm_custom_entity3 ad_xsy_crm.ad_xsy_crm_entity_type ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_department ad_xsy_crm.ad_xsy_crm_opportunity ad_xsy_crm.ad_xsy_crm_field_enum ad_xsy_crm.ad_xsy_crm_user ad_xsy_crm.ad_xsy_crm_account ad_xsy_crm.ad_xsy_crm_custom_entity1 ad_xsy_crm.ad_xsy_crm_stage ad_xsy_crm.ad_xsy_crm_custom_entity4 ad_xsy_crm.ad_xsy_crm_contact 广告开票回款情况 hsar_cust_rec_headers moji_ads_monthly_record_initial moji_invoice_associated moji_invoice_req_headers moji_invoice_headers hsbm_receipt_lines hsbm_receipt_headers hsbm_payment_lines hsbm_payment_headers hspm_rule hspm_rule_data
+1.首页,1.1指标清单,1,市场需求,国内,年累,手工上传,,odm_tob_order_goal_a_d
+1.首页,1.1指标清单,1,客户关系建立,国内,年累,系统取数,CRM系统,api获取销售易表 机会表：opportunity 合同表：contract 签单表：tob_order_signing_sheet
+1.首页,1.1指标清单,1,客户需求确认,国内,年累,系统取数,CRM系统,api获取销售易表 机会表：opportunity 合同表：contract 签单表：tob_order_signing_sheet
+1.首页,1.1指标清单,1,方案反馈,国内,年累,系统取数,CRM系统,api获取销售易表 机会表：opportunity 合同表：contract 签单表：tob_order_signing_sheet
+1.首页,1.1指标清单,1,客户确认,国内,年累,系统取数,CRM系统,api获取销售易表 机会表：opportunity 合同表：contract 签单表：tob_order_signing_sheet
+1.首页,1.1指标清单,1,签单,国内,年累,系统取数,结算中台,api获取销售易表 机会表：opportunity 合同表：contract 签单表：tob_order_signing_sheet
+1.首页,1.1指标清单,1,已开票,国内,年累,系统取数,结算中台,api获取销售易表 机会表：opportunity 合同表：contract 签单表：tob_order_signing_sheet
+1.首页,1.1指标清单,1,已回款,国内,年累,系统取数,结算中台,api获取销售易表 机会表：opportunity 合同表：contract 签单表：tob_order_signing_sheet
+2.净现金流,2.1指标清单,7,净现金流,,日/月,系统取数,见知,现金流水详情表 （银行流水明细）
+2.净现金流,2.1指标清单,7,现金流入,收付款分类,日/月,系统取数,见知,现金流水详情表 （银行流水明细）
+2.净现金流,2.1指标清单,7,现金流出,收付款分类,日/月,系统取数,见知,现金流水详情表 （银行流水明细）
+2.净现金流,2.1指标清单,7,TOP10现金流入排行,,日/月,系统取数,见知,现金流水详情表 （银行流水明细）
+2.净现金流,2.1指标清单,7,TOP10现金流出排行,,日/月,系统取数,见知,现金流水详情表 （银行流水明细）
+2.净现金流,2.1指标清单,7,资产类现金合计,,日/月,系统取数,见知,
+2.净现金流,2.1指标清单,7,资产-应收汇票,,日/月,手工统计,见知,无
+2.净现金流,2.1指标清单,7,资产-可用资金,,日/月,系统取数,见知,银行账户余额表
+2.净现金流,2.1指标清单,7,资产-投资理财,,日/月,系统取数,见知,资金台账-投资理财
+2.净现金流,2.1指标清单,7,账户理财余额,,日/月,系统取数,见知,资金台账-投资理财
+2.净现金流,2.1指标清单,7,负债类现金合计,,日/月,系统取数,见知,资金台账-融资贷款
+2.净现金流,2.1指标清单,7,负债-融资贷款,金融机构,日/月,系统取数,见知,资金台账-融资贷款
+2.净现金流,2.1指标清单,7,账户活期存款余额,,日/月,系统取数,见知,银行账户余额表
+2.净现金流,2.1指标清单,7,账户到期理财,,日/月,系统取数,见知,资金台账-投资理财
+2.净现金流,2.1指标清单,7,账户到期借款,,日/月,系统取数,见知,资金台账-融资贷款
+3.营业收入,3.1指标清单,14,营业收入,,日,系统计算,,
+3.营业收入,3.1指标清单,14,广告收入,,日,系统计算,,
+3.营业收入,3.1指标清单,14,自营广告收入,,日,系统计算,,
+3.营业收入,3.1指标清单,14,自营品牌收入,,日,系统取数,数据中台,单用户roi品牌营收数据表 ad_single_user_roi_brand_income
+3.营业收入,3.1指标清单,14,自营电商收入,,日,系统取数,数据中台,单用户roi品牌营收数据表 ad_single_user_roi_brand_income
+3.营业收入,3.1指标清单,14,自营效果收入,,日,系统取数,广告后台,效果日报收入数据 ad_contract_daily_income
+3.营业收入,3.1指标清单,14,外包广告收入,,日,系统取数,,效果日报收入数据 ad_contract_daily_income
+3.营业收入,3.1指标清单,14,联盟收入,,日,系统取数,,效果日报收入数据 ad_contract_daily_income
+3.营业收入,3.1指标清单,14,DSP收入,,日,系统取数,,效果日报收入数据 ad_contract_daily_income
+3.营业收入,3.1指标清单,14,TOB收入,,日,手工填报,管驾数仓,净利润日报app_fin_pl_detail_i_d
+3.营业收入,3.1指标清单,14,会员收入,,日,系统取数,管驾数仓,净利润日报app_fin_pl_detail_i_d
+3.营业收入,3.1指标清单,14,国际化收入,,日,系统取数,管驾数仓,净利润日报-国际化idm_fin_inter_a_d
+3.营业收入,3.1指标清单,14,国际化广告收入,,日,系统取数,,净利润日报-国际化idm_fin_inter_a_d
+3.营业收入,3.1指标清单,14,国际化会员收入,,日,系统取数,,净利润日报-国际化idm_fin_inter_a_d
+3.营业收入,3.1指标清单,14,其他收入,,日,系统取数,,赋0值
+3.营业收入,3.1指标清单,14,营业收入,,月,系统计算,,
+3.营业收入,3.1指标清单,14,广告收入,,月,系统取数,财务tableua,损益明细凭证数据bidm.viz_dm_hs_pl_voucher_dtl
+3.营业收入,3.1指标清单,14,自营广告收入,,月,系统取数,结算中台,损益明细凭证数据
+3.营业收入,3.1指标清单,14,自营品牌收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,自营电商收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,自营效果收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,外包广告收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,联盟收入,,月,系统取数,,效果广告月数据汇总iscs_hsbm.hsar_settle_orders、iscs_hsbm.hsar_settle_order_lines、hscs_hspm.hspm_party_merchant
+3.营业收入,3.1指标清单,14,DSP收入,,月,系统取数,,效果广告月数据汇总iscs_hsbm.hsar_settle_orders、iscs_hsbm.hsar_settle_order_lines、hscs_hspm.hspm_party_merchant
+3.营业收入,3.1指标清单,14,小程序收入,,月,系统取数,,效果广告月数据汇总iscs_hsbm.hsar_settle_orders、iscs_hsbm.hsar_settle_order_lines、hscs_hspm.hspm_party_merchant
+3.营业收入,3.1指标清单,14,TOB收入,,月,系统取数,,损益明细凭证数据
+3.营业收入,3.1指标清单,14,SAAS收入,,月,系统取数,结算中台,TOB签单表idm_tob_order_signing_sheet
+3.营业收入,3.1指标清单,14,DAAS收入,,月,系统计算,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,会员收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,国际化收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,国际化广告收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,国际化会员收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,其他收入,,月,系统取数,财务tableua,损益明细凭证数据
+3.营业收入,3.1指标清单,14,外包广告收入目标值,,月,手工填报,,
+3.营业收入,3.1指标清单,14,自营品牌收入目标值,,月,手工填报,,
+3.营业收入,3.1指标清单,14,自营电商收入目标值,,月,手工填报,,
+3.营业收入,3.1指标清单,14,自营效果收入目标值,,月,手工填报,,
+4.营业收入-广告,4.1指标清单,22,广告收入,,日/月,系统取数,广告后台,
+4.营业收入-广告,4.1指标清单,22,广告DAU,,日/月,系统取数,,
+4.营业收入-广告,4.1指标清单,22,广告ARPU,,日/月,系统取数,广告后台,iscs_hsbm.hsar_settle_orders ad.ad_contract_daily_income
+4.营业收入-广告,4.1指标清单,22,广告总曝光量,,日/月,系统取数,广告后台,iscs_hsbm.hsar_settle_orders ad.ad_contract_daily_income
+4.营业收入-广告,4.1指标清单,22,总eCPM,,日/月,系统取数,广告后台,iscs_hsbm.hsar_settle_orders ad.ad_contract_daily_income
+4.营业收入-广告,4.1指标清单,22,人均打开次数,,日/月,系统取数,广告后台,iscs_hsbm.hsar_settle_orders ad.ad_contract_daily_income
+4.营业收入-广告,4.1指标清单,22,开屏位置_库存总数（总打开次数）,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,开屏位置_有效库存,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,开屏位置_填充率,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,开屏位置_曝光量,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,开屏位置_点击量,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,开屏位置_eCPM,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,其他位置_库存总数,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,其他位置_有效库存,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,其他位置_填充率,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,其他位置_曝光量,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,其他位置_点击量,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+4.营业收入-广告,4.1指标清单,22,其他位置eCPM,,日/月,系统取数,广告后台/ SelectedDB,hive.rpt.rpt_splash_stock_data ods.ods_ad_positions mojicom.ad_advertiser_req_fill_data
+5.营业收入-会员,5.1指标清单,27,会员流水,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,老会员流水,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,老会员流水_月卡,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,老会员流水_季卡,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,老会员流水_年卡,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,新会员流水,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,新会员流水_月卡,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,新会员流水_季卡,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,新会员流水_年卡,,日/月,系统取数,SelectDB,dw.dw_user_member_detail_a_d
+5.营业收入-会员,5.1指标清单,27,会员DAU,,日/月,系统取数,SelectDB,da_moji.nyt_vip_entrance_funnel_1d dm.dm_user_member_type_i_d da_moji.nyt_vip_entrance_funnel_1d dw.dw_flow_app_pkg_1d_d ods.ods_hd_member_delivery_channel
+5.营业收入-会员,5.1指标清单,27,渠道入口曝光人数,,日/月,系统取数,SelectDB,da_moji.nyt_vip_entrance_funnel_1d dm.dm_user_member_type_i_d da_moji.nyt_vip_entrance_funnel_1d dw.dw_flow_app_pkg_1d_d ods.ods_hd_member_delivery_channel
+5.营业收入-会员,5.1指标清单,27,渠道入口转化率,,日/月,系统取数,SelectDB,da_moji.nyt_vip_entrance_funnel_1d dm.dm_user_member_type_i_d da_moji.nyt_vip_entrance_funnel_1d dw.dw_flow_app_pkg_1d_d ods.ods_hd_member_delivery_channel
+5.营业收入-会员,5.1指标清单,27,购买页面曝光人数,,日/月,系统取数,SelectDB,da_moji.nyt_vip_entrance_funnel_1d dm.dm_user_member_type_i_d da_moji.nyt_vip_entrance_funnel_1d dw.dw_flow_app_pkg_1d_d ods.ods_hd_member_delivery_channel
+5.营业收入-会员,5.1指标清单,27,购买页面转化率,,日/月,系统取数,SelectDB,da_moji.nyt_vip_entrance_funnel_1d dm.dm_user_member_type_i_d da_moji.nyt_vip_entrance_funnel_1d dw.dw_flow_app_pkg_1d_d ods.ods_hd_member_delivery_channel
+5.营业收入-会员,5.1指标清单,27,订单数,,日/月,系统取数,SelectDB,da_moji.nyt_vip_entrance_funnel_1d dm.dm_user_member_type_i_d da_moji.nyt_vip_entrance_funnel_1d dw.dw_flow_app_pkg_1d_d ods.ods_hd_member_delivery_channel
+6.营业收入-国际化广告,6.1指标清单,33,点击_漏斗,国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+6.营业收入-国际化广告,6.1指标清单,33,库存总数,国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+6.营业收入-国际化广告,6.1指标清单,33,填充率,国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+6.营业收入-国际化广告,6.1指标清单,33,国际化总eCPM,国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+6.营业收入-国际化广告,6.1指标清单,33,国际化广告总曝光量,国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+6.营业收入-国际化广告,6.1指标清单,33,国际化广告ARPU,国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+6.营业收入-国际化广告,6.1指标清单,33,国际化广告DAU(剔除3天新用户),国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+6.营业收入-国际化广告,6.1指标清单,33,国际化广告收入美元,国际,日/月,系统取数,大数据中心,库存总数：sdm.sdm_ad_stock_1d_d 国际广告dau历史数据（2025-12-20之前）：sdm.sdm_ad_homepage_vst_i_d 国际广告dau数据（2025-12-20之后）：idm.idm_ad_homepage_vst_i_d idm.idm_user_register_a_d 国际化广告收入：odm.odm_ad_mediation_report_i_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化会员订单数,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化会员流水美元,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化老会员流水,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化老会员流水_月卡,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化老会员流水_年卡,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化老会员流水_其他卡(周卡),国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化新会员流水,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化新会员流水_月卡,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化新会员流水_年卡,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化新会员流水_其他卡(周卡),国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化会员DAU,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化短时降雨曝光UV,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化支付弹窗曝光UV,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化弹框按钮点击UV,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,国际化会员购买成功UV,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,开屏引导功能介绍页1曝光人数-均值,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,开屏引导功能介绍页2曝光人数-均值,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,开屏引导会员促销页曝光人数-均值,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+7.营业收入-国际化会员,7.1指标清单,38,开屏引导会员购买按钮点击人数-均值,国际,日/月,系统取数,大数据中心,国际化会员订单明细：member_order 卡种：member_price 是否新用户判断：idm_user_register_a_d 谷歌会员订单明细：stg_google_order_s_d 国家对照：dim_country_info 短时会员转化漏斗：odm_bury_i_min、dim_beta_uid_a 会员动态开屏转化：nyt_intapp_vip_funnel_onboarding_1d_d 国家简称对照：odm_inter_country_abbreviation 各国转化美元汇率：exchange_rates 国际dau分国家：sdm_app_act_1d_d
+8.净利润,8.1指标清单,44,净利润,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,营业收入,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,品牌收入,,日/月,系统取数,广告后台,日收入数据详情表/单用户roi品牌营收数据表
+8.净利润,8.1指标清单,44,效果收入,,日/月,系统取数,广告后台,日收入数据详情表
+8.净利润,8.1指标清单,44,效果极速版收入,,日/月,系统取数,广告后台,日收入数据详情表
+8.净利润,8.1指标清单,44,会员收入,,日/月,系统取数,数据中台,会员日分摊汇总报表/会员补录入账数据报表
+8.净利润,8.1指标清单,44,TOB收入,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,国际化收入,,日/月,系统取数+手工填报,,
+8.净利润,8.1指标清单,44,变动费用,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,推广费,,日/月,系统取数,数据中台,【日报】日汇总表
+8.净利润,8.1指标清单,44,推广费,,日/月,系统取数,数据中台hive,国际留存汇总
+8.净利润,8.1指标清单,44,差旅招待,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,运营费用,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,其他变动,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,固定费用,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,数据源,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,IT服务,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,工资薪酬福利,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,摊销类成本,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,营业外收支,,日/月,手工填报,,
+8.净利润,8.1指标清单,44,所得税,,日/月,手工填报,,
+9.M-ROE,9.1指标清单,52,M-ROE,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,管理会计净利润,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,管理会计总资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,【财务】净利润,,月,系统取数,数据中台,利润表
+9.M-ROE,9.1指标清单,52,【财务】净资产,,月,系统取数,数据中台,资产负债表
+9.M-ROE,9.1指标清单,52,净用户资产增值,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,净用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余用户资产增值,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余用户总资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,上一年期末残余用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余广告用户资产增值,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余会员用户资产增值,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余TOB客户资产增值,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余广告用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余会员用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,上一年期末残余广告用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,上一年期末残余会员用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,上一年期末残余TOB用户资产,,月,系统计算,,
+9.M-ROE,9.1指标清单,52,当年期末残余广告用户总资产,,月,手工填报,,
+9.M-ROE,9.1指标清单,52,当年期末残余会员用户总资产,,月,手工填报,,
+9.M-ROE,9.1指标清单,52,当年期末残余TOB用户资产,,月,手工填报,,
+10.负反馈率,10.1指标清单,56,市场负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+10.负反馈率,10.1指标清单,56,运营负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+10.负反馈率,10.1指标清单,56,研发负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+10.负反馈率,10.1指标清单,56,产品负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+10.负反馈率,10.1指标清单,56,会员负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+10.负反馈率,10.1指标清单,56,广告负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+10.负反馈率,10.1指标清单,56,气象负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+10.负反馈率,10.1指标清单,56,负反馈率,国内/国际,日/月,国内：系统取数 国际：手工上传,大数据中心,国内： 留存汇总数据：stg_appflyer_master_agg_retention 国际dau：stg_appflyer_master_agg_active 反馈数量表:nyt_feedback_data_monitor_final_1d 友盟日新增活跃：umeng_all 反馈词云图：zyx_feedback_tag_data_monitor 国际： BI获取国际化负反馈明细表，后续可统一切换为填报表 初始化表：odm_mk_inter_three_ends
+11.CLV,11.1指标清单,62,国际IOS厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际Android厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际手机厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,iPhone厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,荣耀厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,其他新媒体CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,网易新媒体CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,百青藤新媒体CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,百度SEM新媒体CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,新媒体CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,其他厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,OPPO厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,VIVO厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,华为厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,小米厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,手机厂商CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国内CLV,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际新增次日留存率,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际IOS厂商,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际Android厂商,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际手机厂商,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国际新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国内新增次日留存率,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,iPhone厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,小米厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,其他新媒体,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,网易新媒体,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,百青藤新媒体,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,百度SEM新媒体,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,新媒体,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,其他厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,OPPO厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,VIVO厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,华为厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,荣耀厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,手机厂商新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,国内新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+11.CLV,11.1指标清单,62,新增用户,,日/月,系统取数,selectedDB,国内clv： 渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d 国际clv： 国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+12.CLV-国内,12.1指标清单,68,新增7日留存率,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,新增3日留存率,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,新增次日留存率,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,单渠道CLV,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,广告ARPU,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,广告LT,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,消耗,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,CAC,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,LTV,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,新增用户,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+12.CLV-国内,12.1指标清单,68,总CLV,国内,日/月,系统取数,大数据中心,渠道id表： dim.dim_app_pid_info 单渠道新增留存： dm_user_register_traffic_scenario_retain_d 每日clv数据明细表： dm.dm_user_ltv_clv_i_d
+13.CLV-国际,13.1指标清单,73,国际总CLV,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增用户_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,LTV_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,CAC_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,消耗_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,会员LTV_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,会员LT_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,会员ARPU_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增用户会员流水_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增会员数_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,广告LTV_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,广告LT_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,广告ARPU_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增用户广告收入_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,DAU(剔除3天新用户)_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,会员ROI,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,广告ROI,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增次日留存率_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增7日留存率_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增14日留存率_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+13.CLV-国际,13.1指标清单,73,新增30日留存率_国际,国际,日/月,系统取数,大数据中心,国际化ROI-v1（天） 留存汇总数据： stg.stg_appflyer_master_agg_retention 国家维度表： dim.dim_country_info
+14.DAU,14.1指标清单,78,活跃次日留存率,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,人均打开次数,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,DAU,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,Android端DAU,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,IOS端DAU,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,HarmonyOS端DAU,国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,Android端TOP1,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,Android端TOP2,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,Android端TOP3,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,Android端其他,国际/国内,日/月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+14.DAU,14.1指标清单,78,MAU,国际/国内,月,系统取数,大数据中心,rpt.rpt_app_aty_basic_1d_d rpt.rpt_app_basic_1d_d sdm.sdm_app_act_1d_d dw.dw_flow_app_pkg_cm_m sdm.sdm_app_act_1m_m rpt.rpt_app_aty_retain_1d_d sdm.sdm_app_aty_retain_1d_d
+15.业务总览-国际化,15.1指标清单,83,国际化-会员流水,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,DAU趋势,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,新增构成,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,活跃留存-次日留存,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,活跃留存-7日留存,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,活跃留存-30日留存,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,总CAC_国际,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,国际化会员ROI,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,国际化广告ROI,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,国际化LTV,,日/月,系统取数,管驾数仓,
+15.业务总览-国际化,15.1指标清单,83,国际化-广告营收,,日/月,系统取数,管驾数仓,
+17.业务总览-TOB,17.1指标清单,87,客户年累计营收金额,,日/月,手工填报,,
+17.业务总览-TOB,17.1指标清单,87,市场需求_销售额(YTD),,日/月,手工填报,,
+17.业务总览-TOB,17.1指标清单,87,月度营收金额（服务类型）,,日/月,手工填报,,
+17.业务总览-TOB,17.1指标清单,87,月度目标金额,,日/月,手工填报,,
+17.业务总览-TOB,17.1指标清单,87,月度营收金额（行业分类）,,日/月,手工填报,,

@@ -1,3 +1,10 @@
+---
+visibility: private
+sl_refs:
+  - poc-mysql-aliyun/data_agent_poc/poc_ad_revenue_daily
+  - poc-mysql-aliyun/data_agent_poc/poc_ad_revenue_by_type_daily
+---
+
 # POC 场景二：广告经营分析（何洲 · FineVis）
 
 > Owner：何洲 | 原始资产：FineVis 营业收入-广告 | POC 表：`poc_ad_revenue_daily`
@@ -16,6 +23,10 @@
 `poc_ad_revenue_daily` 粒度：每行一条 **(日期 × 广告位 × 国家)** 记录。
 
 广告位枚举：`开屏`、`天气首页中部`、`信息流`、`详情页`
+
+### 日期字段说明
+
+`dt` 是北京时间自然日。MCP / JSON 返回时可能以 UTC ISO 展示，例如 `2026-05-30T16:00:00.000Z` 实际对应北京时间 `2026-05-31`。回答、过滤、同日对账或与 `poc_ceo_metric_snapshot.snapshot_dt` 比较前，必须先转成 `Asia/Shanghai` 日期；不要直接取 UTC 字符串的日期部分。
 
 ## 核心指标
 

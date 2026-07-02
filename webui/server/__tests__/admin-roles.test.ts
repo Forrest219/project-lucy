@@ -4,6 +4,7 @@ import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
+import { LUCY_R1_EXACT_TOOLS, ROLE_TEMPLATES } from "../admin/role-templates";
 
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
@@ -25,6 +26,13 @@ const ALL_TEMPLATE_SOURCES = [
   "superstore_orders",
   "superstore_people",
   "superstore_returns"
+];
+const POC_R1_TEMPLATE_SOURCES = [
+  "poc_metric_catalog",
+  "poc_app_active_daily",
+  "poc_ad_revenue_daily",
+  "poc_ad_revenue_by_type_daily",
+  "poc_ceo_metric_snapshot"
 ];
 
 const EMPTY_ACCESS_YAML = `roles: {}
@@ -60,6 +68,7 @@ async function makeProject(yamlContent = EMPTY_ACCESS_YAML) {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-admin-roles-"));
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
+  await mkdir(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
   await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
   await writeFile(path.join(root, "webui", "config", "access.yaml"), yamlContent, "utf8");
@@ -67,6 +76,13 @@ async function makeProject(yamlContent = EMPTY_ACCESS_YAML) {
     path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),
     `tables:
 ${ALL_TEMPLATE_SOURCES.map((source) => `  ${source}:\n    table: dataforai.${source}`).join("\n")}
+`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema", "data_agent_poc.yaml"),
+    `tables:
+${POC_R1_TEMPLATE_SOURCES.map((source) => `  ${source}:\n    table: data_agent_poc.${source}`).join("\n")}
 `,
     "utf8"
   );
@@ -86,19 +102,26 @@ afterEach(async () => {
 });
 
 describe("GET /api/admin/roles", () => {
-  it("returns the five role templates when yaml has no roles", async () => {
+  it("returns the six role templates when yaml has no roles", async () => {
     const app = buildServer();
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
 
-    expect(res.body.data.roles).toHaveLength(5);
+    expect(res.body.data.roles).toHaveLength(6);
     expect(res.body.data.roles.map((role: { id: string }) => role.id).sort()).toEqual([
       "dev_superstore",
       "guard_test",
       "kx_readonly",
+      "lucy_r1_exact_readonly",
       "superstore_readonly",
       "wiki_only"
     ]);
+    expect(res.body.data.roles.find((role: { id: string }) => role.id === "lucy_r1_exact_readonly")).toMatchObject({
+      source: "template",
+      invalid: false,
+      sourceCount: 5
+    });
+    expect(ROLE_TEMPLATES.lucy_r1_exact_readonly.allow.tools).toEqual(LUCY_R1_EXACT_TOOLS);
     expect(res.body.data.roles.every((role: { source: string; invalid: boolean }) => role.source === "template" && !role.invalid)).toBe(true);
     await app.close();
   });
@@ -112,12 +135,31 @@ describe("GET /api/admin/roles", () => {
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
 
-    expect(res.body.data.roles).toHaveLength(5);
+    expect(res.body.data.roles).toHaveLength(6);
     expect(res.body.data.roles.find((role: { id: string }) => role.id === "kx_readonly")).toMatchObject({
       source: "yaml",
       description: "Custom yaml KX role",
       sourceCount: 1
     });
+    await app.close();
+  });
+});
+
+describe("GET /api/admin/mcp-tools", () => {
+  it("includes the Lucy R1 controlled data service tools", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/mcp-tools").expect(200);
+    const toolNames = res.body.data.tools.map((tool: { name: string }) => tool.name);
+
+    expect(toolNames).toEqual(expect.arrayContaining([
+      "lucy_catalog",
+      "lucy_read_source",
+      "lucy_query",
+      "lucy_explain_query",
+      "lucy_freshness",
+      "lucy_begin_question"
+    ]));
     await app.close();
   });
 });

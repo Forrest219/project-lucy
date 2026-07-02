@@ -3,6 +3,7 @@ name: poc_ceo_metric_snapshot
 # 行粒度：每行一条 (snapshot_dt, metric_code, dimension_desc) 的标杆快照值
 # 用途：CEO一眼报标杆值，用于 eval 数值一致性回归；benchmark_type='mock_value' 表示模拟值。
 # 来源场景：陶峙桦 — CEO一眼报溯源报告（owner提供截图/导出值后升级benchmark_type）
+# 日期口径：snapshot_dt 是北京时间自然日；MCP/JSON 的 UTC ISO 展示值必须先转 Asia/Shanghai 再与日事实表对账。
 grain:
   - snapshot_dt
   - metric_code
