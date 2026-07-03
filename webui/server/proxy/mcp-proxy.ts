@@ -410,21 +410,70 @@ function lucyReadSourceTool() {
   };
 }
 
+function semanticQueryInputProperties() {
+  const semanticFieldRef = {
+    type: "object",
+    properties: {
+      field: { type: "string", minLength: 1 },
+      granularity: { type: "string" },
+      name: { type: "string" }
+    },
+    required: ["field"],
+    additionalProperties: true
+  };
+  const orderByRef = {
+    type: "object",
+    properties: {
+      field: { type: "string", minLength: 1 },
+      direction: { type: "string", enum: ["asc", "desc"] }
+    },
+    required: ["field"],
+    additionalProperties: true
+  };
+  const measureRef = {
+    anyOf: [
+      { type: "string", minLength: 1 },
+      {
+        type: "object",
+        properties: {
+          expr: { type: "string", minLength: 1 },
+          name: { type: "string", minLength: 1 }
+        },
+        required: ["expr"],
+        additionalProperties: true
+      }
+    ]
+  };
+  const filterRef = {
+    type: "object",
+    properties: {
+      field: { type: "string", minLength: 1 },
+      op: { type: "string" },
+      value: {},
+      values: { type: "array" }
+    },
+    additionalProperties: true
+  };
+
+  return {
+    connectionId: { type: "string" },
+    measures: { type: "array", items: measureRef },
+    dimensions: { type: "array", items: semanticFieldRef },
+    filters: { anyOf: [filterRef, { type: "array", items: filterRef }] },
+    segments: { type: "array", items: { type: "string", minLength: 1 } },
+    order_by: { type: "array", items: orderByRef },
+    orderBy: { type: "array", items: orderByRef },
+    limit: { type: "number", minimum: 1, maximum: LUCY_QUERY_MAX_LIMIT }
+  };
+}
+
 function lucyQueryTool() {
   return {
     name: "lucy_query",
-    description: "Run an authorized semantic query through Lucy guardrails. Use source-qualified measures, dimensions, filters, segments, and order fields.",
+    description: "Run an authorized semantic query through Lucy guardrails. Use source-qualified measures, dimensions, filters, segments, and order fields. dimensions/order_by must be arrays of objects, never strings.",
     inputSchema: {
       type: "object",
-      properties: {
-        connectionId: { type: "string" },
-        measures: { type: "array" },
-        dimensions: { type: "array" },
-        filters: {},
-        segments: { type: "array" },
-        order_by: { type: "array" },
-        limit: { type: "number", minimum: 1, maximum: LUCY_QUERY_MAX_LIMIT }
-      },
+      properties: semanticQueryInputProperties(),
       required: ["connectionId"],
       additionalProperties: true
     }
@@ -434,18 +483,10 @@ function lucyQueryTool() {
 function lucyExplainQueryTool() {
   return {
     name: "lucy_explain_query",
-    description: "Explain how Lucy would authorize and guardrail a semantic query without executing it.",
+    description: "Explain how Lucy would authorize and guardrail a semantic query without executing it. dimensions/order_by must be arrays of objects, never strings.",
     inputSchema: {
       type: "object",
-      properties: {
-        connectionId: { type: "string" },
-        measures: { type: "array" },
-        dimensions: { type: "array" },
-        filters: {},
-        segments: { type: "array" },
-        order_by: { type: "array" },
-        limit: { type: "number", minimum: 1, maximum: LUCY_QUERY_MAX_LIMIT }
-      },
+      properties: semanticQueryInputProperties(),
       required: ["connectionId"],
       additionalProperties: true
     }
@@ -597,6 +638,55 @@ function hasNonEmptyArrayField(record: Record<string, unknown>, fields: string[]
   return fields.some((field) => Array.isArray(record[field]) && (record[field] as unknown[]).length > 0);
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasNonEmptyStringValue(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function invalidObjectArrayFieldReason(toolName: string, record: Record<string, unknown>, field: string, reasonField = field): string | undefined {
+  const value = record[field];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return `invalid_arguments:${toolName}:${reasonField}_must_be_array`;
+  for (const item of value) {
+    if (!isPlainRecord(item)) return `invalid_arguments:${toolName}:${reasonField}_items_must_be_objects`;
+    if (!hasNonEmptyStringValue(item.field)) return `invalid_arguments:${toolName}:${reasonField}_field_required`;
+  }
+  return undefined;
+}
+
+function invalidStringArrayFieldReason(toolName: string, record: Record<string, unknown>, field: string): string | undefined {
+  const value = record[field];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return `invalid_arguments:${toolName}:${field}_must_be_array`;
+  if (value.some((item) => !hasNonEmptyStringValue(item))) {
+    return `invalid_arguments:${toolName}:${field}_items_must_be_non_empty_strings`;
+  }
+  return undefined;
+}
+
+function invalidMeasuresFieldReason(toolName: string, record: Record<string, unknown>): string | undefined {
+  const value = record.measures;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return `invalid_arguments:${toolName}:measures_must_be_array`;
+  for (const item of value) {
+    if (hasNonEmptyStringValue(item)) continue;
+    if (isPlainRecord(item) && hasNonEmptyStringValue(item.expr)) continue;
+    return `invalid_arguments:${toolName}:measures_items_must_be_strings_or_objects`;
+  }
+  return undefined;
+}
+
+function invalidLucyQueryShapeReason(toolName: string, record: Record<string, unknown>): string | undefined {
+  return invalidMeasuresFieldReason(toolName, record)
+    ?? invalidObjectArrayFieldReason(toolName, record, "dimensions")
+    ?? invalidStringArrayFieldReason(toolName, record, "segments")
+    ?? invalidObjectArrayFieldReason(toolName, record, "order_by")
+    ?? invalidObjectArrayFieldReason(toolName, record, "orderBy", "order_by");
+}
+
 function validateLucyToolArgs(toolName: string, args: unknown): string | undefined {
   if (!toolName.startsWith("lucy_") || toolName === "lucy_catalog" || toolName === "lucy_begin_question") return undefined;
   if (!args || typeof args !== "object" || Array.isArray(args)) {
@@ -632,6 +722,8 @@ function validateLucyToolArgs(toolName: string, args: unknown): string | undefin
     if (!hasQueryShape) {
       return `invalid_arguments:${toolName}:query_shape_required`;
     }
+    const invalidShape = invalidLucyQueryShapeReason(toolName, record);
+    if (invalidShape) return invalidShape;
   }
 
   return undefined;

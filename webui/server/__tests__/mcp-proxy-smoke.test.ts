@@ -384,7 +384,7 @@ describe("MCP proxy smoke", () => {
       const listText = await listRes.text();
       const listData = listText.split(/\r?\n/).find((line) => line.startsWith("data: "));
       expect(listData).toBeTruthy();
-      const listBody = JSON.parse(listData!.slice("data: ".length)) as { jsonrpc: string; id: string; result: { tools: Array<{ name: string }> } };
+      const listBody = JSON.parse(listData!.slice("data: ".length)) as { jsonrpc: string; id: string; result: { tools: Array<{ name: string; inputSchema?: Record<string, unknown> }> } };
       expect(listBody.jsonrpc).toBe("2.0");
       expect(listBody.id).toBe("tools-list");
       expect(listBody.result.tools.map((tool) => tool.name)).toContain("lucy_catalog");
@@ -403,6 +403,9 @@ describe("MCP proxy smoke", () => {
         "wiki_read",
         "lucy_begin_question"
       ]);
+      const lucyQuerySchema = listBody.result.tools.find((tool) => tool.name === "lucy_query")?.inputSchema as { properties?: Record<string, { items?: { type?: string } }> } | undefined;
+      expect(lucyQuerySchema?.properties?.dimensions?.items?.type).toBe("object");
+      expect(lucyQuerySchema?.properties?.order_by?.items?.type).toBe("object");
 
       const lucyCatalogRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -672,10 +675,46 @@ describe("MCP proxy smoke", () => {
           reason: "invalid_arguments:lucy_query:query_shape_required"
         },
         {
+          id: "lucy-query-invalid-dimensions-string",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], dimensions: [""], limit: 10 },
+          reason: "invalid_arguments:lucy_query:dimensions_items_must_be_objects"
+        },
+        {
+          id: "lucy-query-invalid-dimensions-field",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], dimensions: [{}], limit: 10 },
+          reason: "invalid_arguments:lucy_query:dimensions_field_required"
+        },
+        {
+          id: "lucy-query-invalid-order-by-string",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], order_by: [""], limit: 10 },
+          reason: "invalid_arguments:lucy_query:order_by_items_must_be_objects"
+        },
+        {
+          id: "lucy-query-invalid-orderBy-string",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], orderBy: [""], limit: 10 },
+          reason: "invalid_arguments:lucy_query:order_by_items_must_be_objects"
+        },
+        {
           id: "lucy-explain-invalid-args",
           tool: "lucy_explain_query",
           args: { connectionId: "mysql-aliyun", limit: 10 },
           reason: "invalid_arguments:lucy_explain_query:query_shape_required"
+        },
+        {
+          id: "lucy-explain-invalid-dimensions-string",
+          tool: "lucy_explain_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], dimensions: [""], limit: 10 },
+          reason: "invalid_arguments:lucy_explain_query:dimensions_items_must_be_objects"
+        },
+        {
+          id: "lucy-explain-invalid-order-by-string",
+          tool: "lucy_explain_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], order_by: [""], limit: 10 },
+          reason: "invalid_arguments:lucy_explain_query:order_by_items_must_be_objects"
         },
         {
           id: "lucy-read-source-invalid-args",
