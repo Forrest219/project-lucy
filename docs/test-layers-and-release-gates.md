@@ -33,18 +33,20 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run audit:ktx-diff` | governance | regenerates KTX vs Lucy first/second-level directory and file diff audit |
 | `npm run compat:ktx-upgrade -- --candidate <version>` | runtime + platform upgrade | validates a candidate bundled KTX version through Docker/demo/business gates |
 
+### 2.1 Local Node / Native Addon Baseline
+
+CI runs fresh installs on Node 22 (`actions/setup-node@v4 node-version: 22`), and local verification should use the same baseline. After switching Node versions or inheriting a stale `webui/node_modules`, run `npm --prefix webui ci` once to rebuild native addons such as `better-sqlite3`; then `npm --prefix webui test` should pass without a custom `PATH`. This was reverified on 2026-06-29 with local Node `v22.22.2`.
+
 ## 3. Required P1 Release Baseline
 
-Required before a Docker release candidate:
+Required before a customer headless Docker release candidate:
 
 ```bash
-npm run smoke:p0
 npm run security:baseline
 npm run smoke:p0:docker
 npm run smoke:p0:demo
 npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval
-npm run audit:ktx-diff
 ```
 
 Optional but recommended before customer-facing validation:
@@ -52,6 +54,15 @@ Optional but recommended before customer-facing validation:
 ```bash
 npm run smoke:p0:customer
 ```
+
+Repository quality gates that may still run in CI, but are not customer headless usage paths:
+
+```bash
+npm run smoke:p0
+npm run audit:ktx-diff
+```
+
+`npm run smoke:p0` includes WebUI build/test/static SPA checks. Those checks protect repository quality and future governance UI work; they do not mean WebUI is a customer standard entry point for this release.
 
 Required before changing bundled KTX version:
 
@@ -138,3 +149,5 @@ Recommended CI jobs:
 | customer-real-db | manual or protected secret environment: `npm run smoke:p0:customer` |
 
 GitHub Actions implementation: `.github/workflows/lucy-release.yml`.
+
+For customer signoff, treat `security-baseline`, `docker-smoke`, `demo-e2e`, `postgres-demo-e2e`, and `business-eval-catalog` as the headless gate set. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.

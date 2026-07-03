@@ -19,6 +19,12 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "dictionary_search", description: "搜索数据字典" },
   { name: "discover_data", description: "发现可用数据源" },
   { name: "connection_list", description: "列出可用数据库连接" },
+  { name: "lucy_catalog", description: "列出当前 agent 可访问的数据资产目录" },
+  { name: "lucy_read_source", description: "读取当前 agent 已授权 source 的语义定义" },
+  { name: "lucy_query", description: "通过 Lucy guardrail 执行受控语义查询" },
+  { name: "lucy_explain_query", description: "解释 Lucy 对查询的权限与 guardrail 判断" },
+  { name: "lucy_freshness", description: "查询当前 agent 已授权 source 的新鲜度元数据" },
+  { name: "lucy_begin_question", description: "记录一次业务问题，用于审计链路关联" },
   { name: "kx_catalog", description: "列出当前 agent 可访问的 KX 财务语义层 source" },
   { name: "sql_execution", description: "执行原始 SQL（受限）" },
   { name: "memory_ingest", description: "注入记忆" },
@@ -40,6 +46,11 @@ export function registerMcpToolsRoutes(app: FastifyInstance) {
       const userTools = new Set<string>();
       for (const user of config.users ?? []) {
         for (const t of user.allow?.tools ?? []) {
+          if (t !== "*") userTools.add(t);
+        }
+      }
+      for (const role of Object.values(config.roles ?? {})) {
+        for (const t of role.allow?.tools ?? []) {
           if (t !== "*") userTools.add(t);
         }
       }

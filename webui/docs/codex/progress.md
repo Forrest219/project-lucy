@@ -2,6 +2,8 @@
 
 更新时间：2026-06-16
 
+> **历史归档说明（2026-06-29）**：本文只记录 WebUI M0-M5 串行工单的执行历史，不覆盖后续已实现的 Onboarding、Connections、Eval、Admin/Audit 等模块。当前 WebUI 实现状态请看 `docs/webui-impl-status.md`；仓库级模块索引请看 `docs/project-overview.md`。
+
 ## 已完成
 
 | 工单 | 状态 | 说明 |

@@ -81,6 +81,12 @@ export function ConnectionOverview() {
                 <div>
                   <strong>{conn.id}</strong>
                   <span>{conn.driver ?? "未知 driver"}</span>
+                  <span>
+                    {conn.engine ?? "unknown engine"}
+                    {conn.wireProtocol ? ` / ${conn.wireProtocol} wire` : ""}
+                    {conn.r1Target ? " / R1 target" : ""}
+                    {conn.readOnlyExpected === false ? " / write-risk" : " / read-only expected"}
+                  </span>
                 </div>
                 <div>
                   <span>schemas</span>

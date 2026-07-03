@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ConnectionInfo } from "../lib/types";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 
 function renderOverview() {
@@ -52,7 +53,7 @@ function stubOverviewFetch({
   projectError = false,
   tables = [sourceSummary("superstore_orders"), sourceSummary("customers"), sourceSummary("orders", "crm")]
 }: {
-  connections?: Array<{ id: string; driver?: string; schemas: string[]; enabledTables: string[] }>;
+  connections?: ConnectionInfo[];
   ktxAvailable?: boolean;
   projectError?: boolean;
   tables?: ReturnType<typeof sourceSummary>[];
@@ -105,6 +106,52 @@ describe("ConnectionOverview", () => {
     expect(screen.getByRole("link", { name: "表白名单" })).toHaveAttribute("href", "/connections/whitelist");
     expect(screen.getByRole("link", { name: "连通测试" })).toHaveAttribute("href", "/connections/test");
     expect(screen.getByRole("link", { name: "打开表目录" })).toHaveAttribute("href", "/");
+  });
+
+  it("shows the Doris R1 target connection profile", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "doris-r1",
+          driver: "mysql",
+          engine: "doris",
+          wireProtocol: "mysql",
+          r1Target: true,
+          readOnlyExpected: true,
+          schemas: ["mart"],
+          enabledTables: ["mart.ceo_metric_snapshot"]
+        }
+      ],
+      tables: [sourceSummary("ceo_metric_snapshot", "mart")]
+    });
+
+    renderOverview();
+
+    expect(await screen.findByText("doris-r1")).toBeInTheDocument();
+    expect(screen.getByText("doris / mysql wire / R1 target / read-only expected")).toBeInTheDocument();
+  });
+
+  it("shows the StarRocks R1 target connection profile", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "starrocks-r1",
+          driver: "mysql",
+          engine: "starrocks",
+          wireProtocol: "mysql",
+          r1Target: true,
+          readOnlyExpected: true,
+          schemas: ["mart"],
+          enabledTables: ["mart.ceo_metric_snapshot"]
+        }
+      ],
+      tables: [sourceSummary("ceo_metric_snapshot", "mart")]
+    });
+
+    renderOverview();
+
+    expect(await screen.findByText("starrocks-r1")).toBeInTheDocument();
+    expect(screen.getByText("starrocks / mysql wire / R1 target / read-only expected")).toBeInTheDocument();
   });
 
   it("keeps the overview layout stable with no connections", async () => {

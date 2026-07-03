@@ -73,7 +73,7 @@
           <tr><td>MySQL</td><td>8.0+</td><td>mysql2</td><td>推荐，完整测试覆盖</td></tr>
           <tr><td>PostgreSQL</td><td>13+</td><td>pg</td><td>支持</td></tr>
           <tr><td>Oracle</td><td>19c+</td><td>oracledb</td><td>需额外安装 Oracle Instant Client</td></tr>
-          <tr><td>StarRocks</td><td>2.5+</td><td>mysql2</td><td>兼容 MySQL 协议</td></tr>
+          <tr><td>StarRocks</td><td>待 live certification</td><td>mysql2</td><td>R1 P1 gated support；兼容 MySQL 协议，未进入 release verified matrix</td></tr>
           <tr><td>更多</td><td>—</td><td>—</td><td>进行中，联系支持团队</td></tr>
         </tbody>
       </table>
@@ -105,7 +105,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
       <h2>连接字符串格式</h2>
       <p>在 KTX WebUI 的「数据源」页填写连接字符串时，请使用以下格式：</p>
 
-      <h3>MySQL / StarRocks</h3>
+      <h3>MySQL / StarRocks（P1 gated）</h3>
       <pre>mysql://lucy_readonly:&lt;password&gt;@&lt;host&gt;:3306/&lt;database&gt;</pre>
 
       <h3>PostgreSQL</h3>

@@ -9,7 +9,7 @@ import type { Identity } from "./identity.js";
 
 export interface AclDecision {
   allowed: boolean;
-  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'agent_disabled' | 'raw_query_forbidden' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>'
+  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'agent_disabled' | 'raw_query_forbidden' | 'query_concurrency_exceeded' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>'
 }
 
 const DEFAULT_DENY_TOOLS = ["sql_execution", "memory_ingest", "memory_ingest_status"] as const;
@@ -24,6 +24,11 @@ const DEFAULT_KNOWN_TOOLS = [
   "dictionary_search",
   "discover_data",
   "connection_list",
+  "lucy_catalog",
+  "lucy_read_source",
+  "lucy_query",
+  "lucy_explain_query",
+  "lucy_freshness",
   "kx_catalog",
   "lucy_begin_question",
   "sql_execution",
@@ -31,7 +36,7 @@ const DEFAULT_KNOWN_TOOLS = [
   "memory_ingest_status"
 ] as const;
 
-const DEFAULT_TABLE_TOUCHING_TOOLS = ["sl_query", "sl_read_source", "sl_validate", "entity_details"] as const;
+const DEFAULT_TABLE_TOUCHING_TOOLS = ["sl_query", "sl_read_source", "sl_validate", "entity_details", "lucy_read_source", "lucy_query", "lucy_explain_query", "lucy_freshness"] as const;
 const DEFAULT_SENSITIVE_METADATA_TOOLS = ["dictionary_search", "discover_data"] as const;
 const DEFAULT_SENSITIVE_TABLE_PREFIXES = ["dataforai.kx_"] as const;
 const BUILT_IN_TABLE_EXTRACTORS = new Set(["sl_query", "sl_read_source", "sl_validate", "entity_details"]);
@@ -258,6 +263,8 @@ function extractConnectionRefs(toolName: string, args: unknown): string[] {
   const connections = new Set<string>();
   switch (toolName) {
     case "sl_query":
+    case "lucy_query":
+    case "lucy_explain_query":
       for (const key of ["connectionId", "connection_id", "connection", "database"]) {
         addConnectionRef(a[key], connections);
       }
@@ -266,6 +273,8 @@ function extractConnectionRefs(toolName: string, args: unknown): string[] {
       }
       break;
     case "sl_read_source":
+    case "lucy_read_source":
+    case "lucy_freshness":
     case "sl_validate":
     case "entity_details":
       for (const key of ["connectionId", "connection_id", "connection", "database"]) {
@@ -319,9 +328,13 @@ function toSourceRef(
 function structuredExtractionMethod(toolName: string): string {
   switch (toolName) {
     case "sl_read_source":
+    case "lucy_read_source":
+    case "lucy_freshness":
     case "sl_validate":
       return "args_source_name";
     case "sl_query":
+    case "lucy_query":
+    case "lucy_explain_query":
     case "entity_details":
       return "field_ref";
     default:
@@ -629,7 +642,9 @@ export async function extractTables(toolName: string, args: unknown, options: { 
   const tables = new Set<string>();
 
   switch (toolName) {
-    case "sl_query": {
+    case "sl_query":
+    case "lucy_query":
+    case "lucy_explain_query": {
       // measures: ["superstore_orders.total_sales", "sum(superstore_orders.sales)"]
       // dimensions: [{field: "superstore_orders.region"}, ...]
       collectMetricRefs(a.measures, tables, map);
@@ -641,7 +656,9 @@ export async function extractTables(toolName: string, args: unknown, options: { 
       }
       break;
     }
-    case "sl_read_source": {
+    case "sl_read_source":
+    case "lucy_read_source":
+    case "lucy_freshness": {
       const sourceName = a.sourceName as string | undefined;
       if (sourceName) tables.add(sourceNameToTable(sourceName, map));
       break;
@@ -664,9 +681,9 @@ export async function extractTables(toolName: string, args: unknown, options: { 
   return [...tables].filter(Boolean);
 }
 
-export async function kxCatalog(identity: Identity): Promise<{
+export async function lucyCatalog(identity: Identity): Promise<{
   connections: string[];
-  sources: Array<{ sourceName: string; table: string }>;
+  sources: Array<{ connectionId: string; schema: string; sourceName: string; table: string }>;
   examples: string[];
 }> {
   const config = await getAccessConfig({ fresh: true });
@@ -677,13 +694,44 @@ export async function kxCatalog(identity: Identity): Promise<{
   }
   const connections = resolved.permissions.connections;
   const sources = resolved.permissions.sources
-    .map((source) => ({ sourceName: source.sourceName, table: source.table }))
+    .map((source) => ({
+      connectionId: source.connectionId,
+      schema: source.schema,
+      sourceName: source.sourceName,
+      table: source.table
+    }))
     .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+  const hasPocAdRevenue = sources.some((source) => source.connectionId === "poc-mysql-aliyun" && source.sourceName === "poc_ad_revenue_daily");
   const hasKxSources = sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
 
   return {
     connections,
     sources,
+    examples: hasPocAdRevenue
+      ? [
+          "For 本年各月广告收入, call sl_query with exactly this shape: {\"connectionId\":\"poc-mysql-aliyun\",\"measures\":[\"poc_ad_revenue_daily.ad_revenue\"],\"dimensions\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"granularity\":\"month\"}],\"segments\":[\"poc_ad_revenue_daily.domestic\"],\"order_by\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"direction\":\"asc\"}],\"limit\":20}.",
+          "Do not rewrite semantic keys to short names such as ad_revenue/dt/domestic; ACL requires explicit source-qualified keys. Do not wrap semantic measures as objects; object measures are only for ad hoc expr/name aggregates.",
+          "POC ad revenue data currently covers 2026-01-01 through 2026-05-31."
+        ]
+      : hasKxSources
+      ? [
+          "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
+          "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
+        ]
+      : []
+  };
+}
+
+export async function kxCatalog(identity: Identity): Promise<{
+  connections: string[];
+  sources: Array<{ connectionId?: string; schema?: string; sourceName: string; table: string }>;
+  examples: string[];
+}> {
+  const catalog = await lucyCatalog(identity);
+  const hasKxSources = catalog.sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
+  return {
+    connections: catalog.connections,
+    sources: catalog.sources,
     examples: hasKxSources
       ? [
           "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
@@ -691,6 +739,12 @@ export async function kxCatalog(identity: Identity): Promise<{
         ]
       : []
   };
+}
+
+export async function effectivePermissions(identity: Identity): Promise<RoleResolutionResult> {
+  const config = await getAccessConfig({ fresh: true });
+  const policy = aclPolicy(config);
+  return resolveEffectivePermissions(identity, config, policy);
 }
 
 export async function permissionSnapshot(identity: Identity): Promise<{
@@ -767,7 +821,7 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
 
   return uniqueSorted(tools.filter((tool) => {
     if (!policy.knownTools.has(tool) || policy.denyTools.has(tool)) return false;
-    if (tool === "kx_catalog" || tool === "lucy_begin_question") return resolved.permissions.sources.length > 0;
+    if (tool.startsWith("lucy_") || tool === "kx_catalog") return resolved.permissions.sources.length > 0;
     return true;
   }));
 }
@@ -818,7 +872,7 @@ export async function check(
   // 3. Table-level check (only for tools that touch tables)
   if (policy.tableTouchingTools.has(toolName)) {
     const argsRecord = args as Record<string, unknown> | undefined;
-    if (toolName === "sl_query" && argsRecord && hasRawQueryArg(argsRecord)) {
+    if ((toolName === "sl_query" || toolName === "lucy_query" || toolName === "lucy_explain_query") && argsRecord && hasRawQueryArg(argsRecord)) {
       return { allowed: false, reason: "raw_query_forbidden" };
     }
     if (connections.length > 0) {
@@ -833,7 +887,7 @@ export async function check(
       }
     }
     const requested = await extractTables(toolName, args, { fresh: true });
-    if (toolName === "sl_query" && requested.length === 0 && !allowedTables.includes("*")) {
+    if ((toolName === "sl_query" || toolName === "lucy_query" || toolName === "lucy_explain_query") && requested.length === 0 && !allowedTables.includes("*")) {
       return { allowed: false, reason: "explicit_table_required:<empty>" };
     }
     if (!BUILT_IN_TABLE_EXTRACTORS.has(toolName) && requested.length === 0) {

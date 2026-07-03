@@ -1,0 +1,15 @@
+name: forbidden_finance
+
+# 行粒度：(dt, finance_metric) — ACL deny 演示用 dummy 表
+# ⚠️ 此表不授权给 poc_readonly 角色。
+#    它存在于 enabled_tables（进入 manifest）的目的是让 lucy 能感知到该表，
+#    从而在 ACL deny 时返回 "无权访问" 而非 "表不存在"。
+#    任何涉及财务数据的问题（净利润、净现金流、营业收入）应触发 deny 并记录 audit。
+grain:
+  - dt
+  - finance_metric
+
+measures:
+  - name: amount
+    expr: sum(amount)
+    description: 财务指标金额（dummy值，仅ACL演示用）。此measure在poc_readonly角色下不可访问。

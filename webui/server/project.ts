@@ -36,6 +36,44 @@ function passwordSource(value: unknown): ConnectionInfo["passwordSource"] | unde
   return "inline";
 }
 
+function normalizedString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : undefined;
+}
+
+function connectionEngine(conn: Record<string, unknown>): string | undefined {
+  const explicit = normalizedString(conn.engine ?? conn.dialect ?? conn.database_engine);
+  const driver = normalizedString(conn.driver);
+  if (explicit) return explicit;
+  if (!driver) return undefined;
+  if (["doris", "apache-doris"].includes(driver)) return "doris";
+  if (["starrocks", "starrocks-mysql"].includes(driver)) return "starrocks";
+  if (driver.includes("postgres")) return "postgres";
+  if (driver.includes("mysql")) return "mysql";
+  return driver;
+}
+
+function wireProtocol(conn: Record<string, unknown>, engine?: string): ConnectionInfo["wireProtocol"] {
+  const explicit = normalizedString(conn.wire_protocol ?? conn.protocol);
+  if (explicit === "mysql" || explicit === "mysql-wire") return "mysql";
+  if (explicit === "postgres" || explicit === "postgresql") return "postgres";
+  if (explicit === "native") return "native";
+  const driver = normalizedString(conn.driver);
+  if (engine === "doris" || engine === "starrocks") return "mysql";
+  if (driver?.includes("mysql")) return "mysql";
+  if (driver?.includes("postgres")) return "postgres";
+  return "unknown";
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "yes", "1"].includes(normalized)) return true;
+    if (["false", "no", "0"].includes(normalized)) return false;
+  }
+  return undefined;
+}
+
 async function hasKtxYaml(dir: string): Promise<boolean> {
   try {
     await access(path.join(dir, "ktx.yaml"));
@@ -92,9 +130,15 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
     const enabledTables = stringArray(conn.enabled_tables);
     const enabledSchemas = enabledTables.map((table) => table.split(".")[0]).filter(Boolean);
     const schemas = Array.from(new Set([...explicitSchemas, ...enabledSchemas])).sort();
+    const engine = connectionEngine(conn);
+    const readOnlyExpected = booleanValue(conn.readonly ?? conn.read_only ?? conn.readOnly) ?? true;
     return {
       id,
       driver: typeof conn.driver === "string" ? conn.driver : undefined,
+      engine,
+      wireProtocol: wireProtocol(conn, engine),
+      r1Target: booleanValue(conn.r1_target ?? conn.r1Target) ?? engine === "doris",
+      readOnlyExpected,
       passwordSource: passwordSource(conn.password),
       schemas,
       enabledTables

@@ -97,8 +97,8 @@ computeCompletion(model: TableModel): 'not_started'|'partial'|'done'|'validation
 ### 3.6 `project.ts`
 ```ts
 resolveProjectRoot(opts): string                      // --project > env > 向上查 ktx.yaml
-readProject(root): { root; connections: ConnectionInfo[]; schemas: string[] }
-// ConnectionInfo 不含 password 值，仅 { id, driver, passwordSource: 'file'|'inline'|'env' }
+readProject(root): { root; connections: ConnectionInfo[]; ktxAvailable: boolean }
+// ConnectionInfo 不含 password 值；仅暴露 id/driver/engine/wireProtocol/r1Target/readOnlyExpected/passwordSource/schemas/enabledTables
 ```
 
 ## 4. 脚手架计划（交给实现者 / 特工队）

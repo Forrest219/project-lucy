@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 帮助文档中心 |
 | 文档类型 | Other |
-| 版本 | v2.0 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | v2.3 |
+| 撰写日期 | 2026-06-20；v2.1 更新 2026-06-24（澄清定位措辞、补充业务用户前提说明、修正 Eval 闭环自动化表述）；v2.2 更新 2026-06-24（权限与安全卡片补充边界排除项交叉引用）；v2.3 更新 2026-06-24（Eval 闭环表述改为"可手工/脚本触发即满足本期要求"） |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | project-lucy docs / 用户讨论 / Tableau & KTX 参考结构 |
@@ -60,7 +60,7 @@
     <header class="hero">
       <span class="eyebrow">Help Center</span>
       <h1>欢迎使用 Lucy 帮助文档中心</h1>
-      <p class="lead">Lucy 是企业 AI 数据问答的可信网关。无论你是业务使用者、BI 管理员，还是集成开发者，这里都有你需要的指引。</p>
+      <p class="lead">Lucy 是企业数据资产面向 AI Agent 的可信网关——它不直接回答问题，而是让你已经在用的 Agent（如 Claude Code / Codex）安全、准确地访问企业数据。无论你是业务使用者、BI 管理员，还是集成开发者，这里都有你需要的指引。</p>
     </header>
 
     <!-- 按角色选择路径 -->
@@ -71,6 +71,7 @@
           <div class="hub-card-icon">📊</div>
           <h3>业务用户</h3>
           <p>我要在会议里快速拿到可信、可追问的数据答案。</p>
+          <p style="font-size:13px;color:#6b7785;margin-top:-6px;">前提：你需要一个已配置 Lucy MCP token 的 Agent 客户端（如 Claude Code / Codex）——Lucy 本身不提供独立问答界面，问答由你的 Agent 完成。</p>
           <ul>
             <li><a href="getting-started.html">5 分钟理解 Lucy</a></li>
             <li><a href="workflows.html">常见任务流</a></li>
@@ -192,7 +193,7 @@
         </article>
         <article class="hub-card">
           <h3>权限与安全</h3>
-          <p>表级 ACL、用户角色、审计日志配置。</p>
+          <p>表级 ACL、用户角色、审计日志配置。列级/行级权限、SSO/LDAP/SAML、SaaS 多租户不在 v1.0 范围（见<a href="product-intro.html#scope">边界声明</a>）。</p>
           <ul>
             <li><a href="permissions.html">权限与 ACL 指南 <span class="wip-inline">WIP</span></a></li>
             <li><a href="trust.html">可信机制</a></li>
@@ -214,7 +215,7 @@
         </article>
         <article class="hub-card">
           <h3>Eval 质量闭环</h3>
-          <p>每次配置变更自动触发评测，通过才允许进入服务侧。</p>
+          <p>配置变更经 Eval Runner 校验（可手工或脚本触发）并留痕才允许进入服务侧；自动 Webhook 触发与阈值告警为可选增强，非本期范围。</p>
           <ul>
             <li><a href="eval-meta-governance-training.html">Eval 元治理培训</a></li>
             <li><a href="eval-meta-governance-training.html#safety">安全红线声明</a></li>

@@ -13,6 +13,14 @@ const KX_TABLES = [
   "dataforai.kx_vw_income_statement_detail"
 ];
 
+const POC_TABLES = [
+  "data_agent_poc.poc_metric_catalog",
+  "data_agent_poc.poc_app_active_daily",
+  "data_agent_poc.poc_ad_revenue_daily",
+  "data_agent_poc.poc_ad_revenue_by_type_daily",
+  "data_agent_poc.poc_ceo_metric_snapshot"
+];
+
 const ACCESS_YAML = `roles:
   kx_readonly:
     description: KX read only
@@ -29,6 +37,28 @@ ${KX_TABLES.map((table) => `            - ${table.replace("dataforai.", "")}`).j
         - lucy_begin_question
         - sl_query
         - sl_read_source
+        - entity_details
+  poc_readonly:
+    description: POC read only
+    allow:
+      connections:
+        - poc-mysql-aliyun
+      tableSelectors:
+        - connection: poc-mysql-aliyun
+          schema: data_agent_poc
+          names:
+            - poc_metric_catalog
+            - poc_app_active_daily
+            - poc_ad_revenue_daily
+            - poc_ad_revenue_by_type_daily
+            - poc_ceo_metric_snapshot
+      tools:
+        - lucy_catalog
+        - connection_list
+        - sl_query
+        - sl_read_source
+        - wiki_search
+        - wiki_read
         - entity_details
   invalid_kx_missing_connections:
     allow:
@@ -106,6 +136,11 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
     allow:
       tables: ["*"]
       tools: ["*"]
+  - id: poc_demo
+    name: POC Demo
+    enabled: true
+    role: poc_readonly
+    tokens: []
   - id: missing_role_agent
     name: Missing Role Agent
     enabled: true
@@ -189,6 +224,7 @@ defaults:
     - dictionary_search
     - discover_data
     - connection_list
+    - lucy_catalog
     - kx_catalog
     - sql_execution
     - memory_ingest
@@ -226,6 +262,21 @@ const SCHEMA_YAML = `tables:
     table: dataforai.superstore_people
 `;
 
+const POC_SCHEMA_YAML = `tables:
+  poc_metric_catalog:
+    table: data_agent_poc.poc_metric_catalog
+  poc_app_active_daily:
+    table: data_agent_poc.poc_app_active_daily
+  poc_ad_revenue_daily:
+    table: data_agent_poc.poc_ad_revenue_daily
+  poc_ad_revenue_by_type_daily:
+    table: data_agent_poc.poc_ad_revenue_by_type_daily
+  poc_ceo_metric_snapshot:
+    table: data_agent_poc.poc_ceo_metric_snapshot
+  forbidden_finance:
+    table: data_agent_poc.forbidden_finance
+`;
+
 let projectRoot: string;
 let previousRoot: string | undefined;
 
@@ -237,9 +288,11 @@ async function makeProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-kx-acl-"));
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
+  await mkdir(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema"), { recursive: true });
   await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
   await writeFile(path.join(root, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), SCHEMA_YAML, "utf8");
+  await writeFile(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema", "data_agent_poc.yaml"), POC_SCHEMA_YAML, "utf8");
   return root;
 }
 
@@ -542,6 +595,37 @@ describe("KX financial domain ACL guardrails", () => {
     ]);
   });
 
+  it("returns a role-aware Lucy catalog for poc_demo without production metadata", async () => {
+    const { allowedToolNames, check, lucyCatalog, permissionSnapshot } = await loadAcl();
+
+    await expect(check(identity("poc_demo"), "lucy_catalog", {})).resolves.toEqual({ allowed: true });
+    await expect(check(identity("poc_demo"), "connection_list", {})).resolves.toEqual({ allowed: true });
+    const visibleTools = await allowedToolNames(identity("poc_demo"));
+    expect(visibleTools).toContain("lucy_catalog");
+
+    const catalog = await lucyCatalog(identity("poc_demo"));
+    expect(catalog.connections).toEqual(["poc-mysql-aliyun"]);
+    expect(catalog.sources.map((source) => source.sourceName)).toEqual([
+      "poc_ad_revenue_by_type_daily",
+      "poc_ad_revenue_daily",
+      "poc_app_active_daily",
+      "poc_ceo_metric_snapshot",
+      "poc_metric_catalog"
+    ]);
+    expect(catalog.sources.map((source) => source.table).sort()).toEqual([...POC_TABLES].sort());
+    expect(catalog.sources.map((source) => source.table)).not.toContain("data_agent_poc.forbidden_finance");
+    expect(JSON.stringify(catalog)).not.toContain("dataforai");
+    expect(JSON.stringify(catalog)).not.toContain("kx_");
+    expect(JSON.stringify(catalog)).not.toContain("superstore");
+    const exampleText = catalog.examples.join("\n");
+    expect(exampleText).toContain("\"measures\":[\"poc_ad_revenue_daily.ad_revenue\"]");
+    expect(exampleText).toContain("\"segments\":[\"poc_ad_revenue_daily.domestic\"]");
+    expect(exampleText).toContain("Do not rewrite semantic keys to short names");
+
+    const snapshot = await permissionSnapshot(identity("poc_demo"));
+    expect(snapshot?.effectiveTablesCount).toBe(POC_TABLES.length);
+  });
+
   it("resolves role-based KX permissions and ignores deprecated allow when role is present", async () => {
     const { check, kxCatalog, permissionSnapshot } = await loadAcl();
 
@@ -781,8 +865,8 @@ describe("KX financial domain ACL guardrails", () => {
     const { check } = await loadAcl();
     const updatedAccess = ACCESS_YAML
       .replace(
-        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n",
-        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n    - future_table_export\n    - future_data_catalog\n"
+        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - lucy_catalog\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n",
+        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - lucy_catalog\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n    - future_table_export\n    - future_data_catalog\n"
       )
       .replace(
         "  table_touching_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - entity_details\n",

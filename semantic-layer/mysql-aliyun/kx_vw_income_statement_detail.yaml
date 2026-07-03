@@ -1,0 +1,113 @@
+name: kx_vw_income_statement_detail
+
+# Period derived columns are intentionally duplicated across the three KX
+# statement views. Keep the six `期间*` columns in sync when editing.
+descriptions:
+  human: >-
+    KX 利润表明细视图。用于回答营业收入/营收、营业成本、毛利率、营业利润、利润总额、
+    净利润、净利率、每月营业收入趋势和利润表摘要等报表展示口径问题。默认金额口径：
+    “2026 年 / 截至某月 / 截至 Q1”等累计问题使用 `本年累计金额`；“每月 / 月度”
+    问题使用 `本月金额`。如果用户要求底层金额明细、amount_type、quarter_no、
+    来源追溯或单季度发生额，应改走 `kx_fact_financial_amount`。
+  ai: >-
+    Income statement statement-layout view. Prefer this source for revenue,
+    operating cost, gross margin, operating profit, total profit, net profit,
+    net margin, monthly revenue trend, and income statement summary questions.
+    Use `本年累计金额` for year-to-date or quarter-to-date cumulative questions;
+    use `本月金额` for monthly questions. Use `kx_fact_financial_amount` instead
+    for underlying detail rows, amount_type, quarter_no, lineage fields, or
+    single-quarter amount questions.
+
+grain:
+  - 公司名称
+  - 报表期间
+  - 项目名称
+
+columns:
+  - name: 期间年份
+    type: number
+    expr: CASE WHEN `报表期间` IS NULL OR LENGTH(`报表期间`) != 6 THEN NULL ELSE (SUBSTRING(`报表期间`, 1, 4) + 0) END
+    descriptions:
+      db: 报表期间年份，从 YYYYMM 派生。
+      ai: Year derived from reporting period.
+
+  - name: 期间月份
+    type: number
+    expr: CASE WHEN `报表期间` IS NULL OR LENGTH(`报表期间`) != 6 THEN NULL ELSE (SUBSTRING(`报表期间`, 5, 2) + 0) END
+    descriptions:
+      db: 报表期间月份，从 YYYYMM 派生。
+      ai: Month derived from reporting period.
+
+  - name: 期间月份标签
+    type: string
+    expr: CASE WHEN `报表期间` IS NULL OR LENGTH(`报表期间`) != 6 THEN NULL ELSE CONCAT(SUBSTRING(`报表期间`, 1, 4), '-', SUBSTRING(`报表期间`, 5, 2)) END
+    descriptions:
+      db: 月份标签，例如 2026-05。
+      ai: Month label such as 2026-05.
+
+  - name: 期间季度
+    type: number
+    expr: CASE WHEN `报表期间` IS NULL OR LENGTH(`报表期间`) != 6 THEN NULL ELSE CEILING((SUBSTRING(`报表期间`, 5, 2) + 0) / 3) END
+    descriptions:
+      db: 报表期间所属季度，1-4。
+      ai: Quarter number derived from reporting period.
+
+  - name: 期间季度标签
+    type: string
+    expr: CASE WHEN `报表期间` IS NULL OR LENGTH(`报表期间`) != 6 THEN NULL ELSE CONCAT(SUBSTRING(`报表期间`, 1, 4), 'Q', CEILING((SUBSTRING(`报表期间`, 5, 2) + 0) / 3)) END
+    descriptions:
+      db: 季度标签，例如 2026Q1。
+      ai: Quarter label such as 2026Q1.
+
+  - name: 是否季末月份
+    type: number
+    expr: >-
+      CASE
+        WHEN `报表期间` IS NULL OR LENGTH(`报表期间`) != 6 THEN NULL
+        WHEN (SUBSTRING(`报表期间`, 5, 2) + 0) IN (3, 6, 9, 12) THEN 1
+        ELSE 0
+      END
+    descriptions:
+      db: 是否为季度末月份：1 = 是（3/6/9/12 月），0 = 否；报表期间为 NULL 或非 6 位时返回 NULL（不可判定）。
+      ai: Quarter-close month flag; 1 yes, 0 no, null when report_period is missing or malformed.
+
+measures:
+  - name: 营业收入_本年累计
+    expr: sum(case when `项目名称` = '一、营业收入' then `本年累计金额` else null end)
+    description: 营业收入本年累计金额；营收、收入默认映射到该科目。未找到对应报表行时返回 NULL；金额为 NULL 表示原始报表未填，不等于 0。
+
+  - name: 营业收入_本月
+    expr: sum(case when `项目名称` = '一、营业收入' then `本月金额` else null end)
+    description: 营业收入本月金额；每月/月度营业收入默认使用。未找到对应报表行时返回 NULL；金额为 NULL 表示原始报表未填，不等于 0。
+
+  - name: 营业成本_本年累计
+    expr: sum(case when `项目名称` = '减：营业成本' then `本年累计金额` else null end)
+    description: 营业成本本年累计金额。未找到对应报表行时返回 NULL；金额为 NULL 表示原始报表未填，不等于 0。
+
+  - name: 营业成本_本月
+    expr: sum(case when `项目名称` = '减：营业成本' then `本月金额` else null end)
+    description: 营业成本本月金额。未找到对应报表行时返回 NULL；金额为 NULL 表示原始报表未填，不等于 0。
+
+  - name: 毛利_本年累计
+    expr: sum(case when `项目名称` = '一、营业收入' then `本年累计金额` else null end) - sum(case when `项目名称` = '减：营业成本' then `本年累计金额` else null end)
+    description: 营业收入本年累计金额 - 营业成本本年累计金额。收入或成本缺失/NULL 时返回 NULL；NULL 表示不可计算，不代表 0。
+
+  - name: 毛利率
+    expr: (sum(case when `项目名称` = '一、营业收入' then `本年累计金额` else null end) - sum(case when `项目名称` = '减：营业成本' then `本年累计金额` else null end)) / nullif(sum(case when `项目名称` = '一、营业收入' then `本年累计金额` else null end), 0)
+    description: 毛利_本年累计 / 营业收入_本年累计。收入为 NULL 表示原始报表未填，不等于 0；收入缺失、成本缺失或收入为 0 时返回 NULL，表示不可计算。
+
+  - name: 营业利润_本年累计
+    expr: sum(case when `项目名称` in ('二、营业利润（亏损以-号填列）', '二、营业利润') then `本年累计金额` else null end)
+    description: 营业利润本年累计金额。未找到对应报表行时返回 NULL；金额为 NULL 表示原始报表未填，不等于 0。
+
+  - name: 利润总额_本年累计
+    expr: sum(case when `项目名称` in ('三、利润总额（亏损以-号填列）', '三、利润总额') then `本年累计金额` else null end)
+    description: 利润总额本年累计金额。未找到对应报表行时返回 NULL；金额为 NULL 表示原始报表未填，不等于 0。
+
+  - name: 净利润_本年累计
+    expr: sum(case when `项目名称` in ('四、净利润（亏损以-号填列）', '四、净利润') then `本年累计金额` else null end)
+    description: 净利润本年累计金额。未找到对应报表行时返回 NULL；金额为 NULL 表示原始报表未填，不等于 0。
+
+  - name: 净利率
+    expr: sum(case when `项目名称` in ('四、净利润（亏损以-号填列）', '四、净利润') then `本年累计金额` else null end) / nullif(sum(case when `项目名称` = '一、营业收入' then `本年累计金额` else null end), 0)
+    description: 净利润_本年累计 / 营业收入_本年累计。收入缺失、净利润缺失或收入为 0 时返回 NULL，表示不可计算，不代表 0。

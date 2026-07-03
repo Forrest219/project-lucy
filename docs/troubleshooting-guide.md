@@ -14,6 +14,7 @@
 docker compose ps
 docker compose logs lucy
 curl -fsS http://127.0.0.1:5174/api/health
+curl -fsS "http://127.0.0.1:5174/api/r1/observability?hours=24&slowMs=30000"
 npm run security:baseline
 ```
 
@@ -39,6 +40,7 @@ npm run security:baseline
 | Demo E2E | `npm run smoke:p0:demo` |
 | Business eval catalog | `npm run smoke:p0:business-eval` |
 | KTX candidate | `npm run compat:ktx-upgrade -- --candidate <version>` |
+| R1 readiness | `npm run r1:readiness:strict` |
 
 ## 4. Escalation Packet
 

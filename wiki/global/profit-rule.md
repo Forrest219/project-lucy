@@ -1,3 +1,9 @@
+---
+visibility: private
+sl_refs:
+  - mysql-aliyun/dataforai/superstore_orders
+---
+
 # 利润口径与负利润处理（Profit Rule）
 
 > 适用：`dataforai.superstore_orders` 等含行级 `profit` 字段的事实表。

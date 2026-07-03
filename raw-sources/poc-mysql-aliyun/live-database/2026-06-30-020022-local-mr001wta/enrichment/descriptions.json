@@ -1,0 +1,130 @@
+[
+  {
+    "table": {
+      "catalog": null,
+      "db": "data_agent_poc",
+      "name": "forbidden_finance"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "dt": null,
+      "finance_metric": null,
+      "amount": null,
+      "note": null,
+      "created_at": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "data_agent_poc",
+      "name": "poc_metric_catalog"
+    },
+    "tableDescription": "POC 阶段指标目录，登记业务指标口径、来源与负责人，支撑溯源",
+    "columnDescriptions": {
+      "metric_code": "POC 内唯一指标编码",
+      "metric_name": "指标中文业务名称",
+      "owner_name": "指标业务负责人姓名",
+      "source_asset": "来源资产如 BI 报表或文档",
+      "source_location": "来源资产中具体位置",
+      "source_table_hint": "原始表或数据集线索",
+      "source_field_hint": "原始字段或计算公式线索",
+      "formula": "指标计算公式，原子指标可空",
+      "grain": "指标统计粒度",
+      "dimensions": "可分析维度列表",
+      "unit": "指标计量单位",
+      "description": "指标业务口径与适用范围说明",
+      "evidence_level": "来源证据等级高低",
+      "pending_confirmation": "待确认问题或字段疑点",
+      "created_at": "记录创建时间戳",
+      "updated_at": "记录最近更新时间戳"
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "data_agent_poc",
+      "name": "poc_ad_revenue_by_type_daily"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "dt": null,
+      "revenue_type": null,
+      "country": null,
+      "platform": null,
+      "ad_revenue": null,
+      "ad_impressions": null,
+      "ad_dau_idm": null,
+      "total_opens": null,
+      "avg_opens_per_user_check": null,
+      "arpu_check": null,
+      "ecpm_idm_check": null,
+      "consistency_group": null,
+      "seed_scenario": null,
+      "created_at": null,
+      "updated_at": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "data_agent_poc",
+      "name": "poc_ad_revenue_daily"
+    },
+    "tableDescription": "Daily ad revenue fact table by ad position and country for FineVis monetization scenarios.",
+    "columnDescriptions": {
+      "dt": "Statistics date at daily granularity, Beijing time natural day.",
+      "position_name": "Ad slot name such as splash, weather home, or feed.",
+      "country": "Country or region distinguishing domestic versus international ad business.",
+      "ad_revenue": "Ad revenue amount in yuan, core monetization KPI.",
+      "ad_impressions": "Total ad impression count used for eCPM calculation.",
+      "ad_dau": "Monetized daily active users exposed to ads.",
+      "arpu_check": "ARPU verification value in yuan per user for evaluation only.",
+      "ecpm_check": "eCPM verification value in yuan per thousand impressions for evaluation.",
+      "seed_scenario": "Synthetic data scenario tag marking special generation cases.",
+      "created_at": "Timestamp when the record was first created.",
+      "updated_at": "Timestamp of the most recent record modification."
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "data_agent_poc",
+      "name": "poc_app_active_daily"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "dt": null,
+      "pkg_name": null,
+      "dau_noback": null,
+      "dau_with_back": null,
+      "start_cnt_noback": null,
+      "start_cnt_with_back": null,
+      "avg_start_cnt_check": null,
+      "seed_scenario": null,
+      "created_at": null,
+      "updated_at": null
+    }
+  },
+  {
+    "table": {
+      "catalog": null,
+      "db": "data_agent_poc",
+      "name": "poc_ceo_metric_snapshot"
+    },
+    "tableDescription": null,
+    "columnDescriptions": {
+      "snapshot_dt": null,
+      "metric_code": null,
+      "metric_name": null,
+      "metric_value": null,
+      "dimension_desc": null,
+      "source_page": null,
+      "benchmark_type": null,
+      "tolerance_rule": null,
+      "note": null,
+      "created_at": null,
+      "updated_at": null
+    }
+  }
+]

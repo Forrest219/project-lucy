@@ -45,6 +45,9 @@ const ACCESS_YAML = `users:
       tables:
         - dataforai.superstore_orders
       tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
         - kx_catalog
         - sl_read_source
 defaults:
@@ -190,9 +193,15 @@ describe("MCP proxy initialize instructions injection", () => {
       });
       expect(res.status).toBe(200);
       const body = await res.json() as { result: { instructions: string; serverInfo: { name: string } } };
-      expect(body.result.instructions).toBe(INSTRUCTIONS_FIXTURE.trim());
       expect(body.result.serverInfo.name).toBe("ktx");
-      expect(body.result.instructions).toContain("instructions_injection_marker_xyz");
+      expect(body.result.instructions).toContain("Lucy Data QA Runtime Instructions");
+      expect(body.result.instructions).toContain("lucy_catalog");
+      expect(body.result.instructions).toContain("lucy_query");
+      expect(body.result.instructions).toContain("lucy_read_source");
+      expect(body.result.instructions).not.toContain("call `sl_query` or `sl_read_source`");
+      expect(body.result.instructions).toContain("mysql-aliyun.dataforai.superstore_orders");
+      expect(body.result.instructions).toContain("source-qualified semantic keys");
+      expect(body.result.instructions).toContain("Use `{expr,name}` objects only for ad hoc aggregate expressions");
     } finally {
       await closeAll(upstream, server);
     }
@@ -221,7 +230,10 @@ describe("MCP proxy initialize instructions injection", () => {
       });
       expect(res.status).toBe(200);
       const body = await res.json() as { result: { instructions: string } };
-      expect(body.result.instructions).toBe(INSTRUCTIONS_FIXTURE.trim());
+      expect(body.result.instructions).toContain("Lucy Data QA Runtime Instructions");
+      expect(body.result.instructions).toContain("superstore_orders");
+      expect(body.result.instructions).toContain("lucy_query");
+      expect(body.result.instructions).not.toContain("For `sl_query`");
     } finally {
       await closeAll(upstream, server);
     }
@@ -254,12 +266,10 @@ describe("MCP proxy initialize instructions injection", () => {
     }
   });
 
-  it("rewrites SSE-wrapped initialize responses (text/event-stream content-type)", async () => {
+  it("rewrites SSE-wrapped initialize responses and restores JSON-RPC envelope", async () => {
     const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
       await readRequestBody(req);
       const payload = {
-        jsonrpc: "2.0",
-        id: "init-sse",
         result: {
           protocolVersion: "2024-11-05",
           serverInfo: { name: "ktx", version: "0.12.0" },
@@ -281,8 +291,11 @@ describe("MCP proxy initialize instructions injection", () => {
       expect(text.startsWith("event: message\ndata: ")).toBe(true);
       const dataLine = text.split(/\r?\n/).find((line) => line.startsWith("data: "));
       expect(dataLine).toBeTruthy();
-      const payload = JSON.parse(dataLine!.slice("data: ".length)) as { result: { instructions: string } };
-      expect(payload.result.instructions).toBe(INSTRUCTIONS_FIXTURE.trim());
+      const payload = JSON.parse(dataLine!.slice("data: ".length)) as { jsonrpc: string; id: string; result: { instructions: string } };
+      expect(payload.jsonrpc).toBe("2.0");
+      expect(payload.id).toBe("init-sse");
+      expect(payload.result.instructions).toContain("Lucy Data QA Runtime Instructions");
+      expect(payload.result.instructions).toContain("superstore_orders");
     } finally {
       await closeAll(upstream, server);
     }

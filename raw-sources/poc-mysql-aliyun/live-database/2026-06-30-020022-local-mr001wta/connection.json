@@ -1,0 +1,20 @@
+{
+  "connectionId": "poc-mysql-aliyun",
+  "driver": "mysql",
+  "extractedAt": "2026-06-30T02:00:22.656Z",
+  "scope": {
+    "schemas": [
+      "data_agent_poc"
+    ]
+  },
+  "metadata": {
+    "database": "data_agent_poc",
+    "schemas": [
+      "data_agent_poc"
+    ],
+    "host": "rm-bp1t0ie3sj4g7561hpo.mysql.rds.aliyuncs.com",
+    "table_count": 6,
+    "total_columns": 68
+  },
+  "tableCount": 6
+}

@@ -14,16 +14,18 @@
 
 - 客户通过 Docker Compose 部署 Lucy。
 - Lucy Docker image 内置 pinned KTX runtime。
-- 标准外部入口为 Lucy WebUI/API 与 Lucy MCP Proxy。
+- 客户标准外部入口为 Lucy MCP Proxy `/mcp`，由 Agent MCP client 通过 bearer token 访问。
+- `/api/health` 仅作为运维健康检查使用，不作为客户业务操作入口。
 - KTX MCP upstream 只在容器内使用，不直接暴露给外部 agent。
 - 项目配置、semantic-layer、wiki、audit/eval 状态持久化在 `/data/lucy`。
 
-默认入口：
+默认客户入口：
 
 ```text
-WebUI: http://<host>:5174
-MCP:   http://<host>:7879/mcp
+MCP: http://<host>:7879/mcp
 ```
+
+本次客户交付不承诺 WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、Kubernetes/Helm、系统 metrics/告警/日志聚合或对象存储归档。仓库内仍保留 WebUI/API 相关代码和测试作为内部质量门禁与后续产品化基础。
 
 ## 2. Prerequisites
 
@@ -103,7 +105,7 @@ docker run --rm \
 
 首版客户部署通过编辑 `/data/lucy/ktx.yaml` 接入数据库。
 
-默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换数据库 host、用户和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 WebUI 启动。
+默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换数据库 host、用户和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 Lucy runtime 启动。
 
 推荐流程：
 
@@ -151,6 +153,8 @@ docker compose exec lucy ktx --project-dir /data/lucy connection test <connectio
 
 ## 6. Semantic Layer Validation
 
+StarRocks R1 P1 gated support follows the same `driver: mysql` / `wire_protocol: mysql` shape as Doris, but remains pending live certification. Do not list StarRocks as release-verified for a customer deployment until `LUCY_R1_STARROCKS_EVIDENCE` has passed the explicit StarRocks target gate.
+
 配置或修改 semantic-layer 后运行：
 
 ```bash
@@ -190,6 +194,8 @@ Agent 应只接入 Lucy MCP Proxy：
 ```
 
 不要把 `KTX_INTERNAL_TOKEN` 分发给外部 agent。该 token 只用于 Lucy Proxy 到 KTX upstream 的内部调用。
+
+Agent、role 和 token 的事实源是持久化目录中的 `webui/config/access.yaml`。首版 headless 交付以配置文件、一次性 token 创建流程和 smoke/eval 证据为准；WebUI token 管理页面不作为客户标准入口。
 
 ## 8. Demo Deployment
 
@@ -250,7 +256,7 @@ npm run smoke:p0:demo
 该命令使用 `docker-compose.demo.yml` 启动 MySQL demo DB 与 Lucy，并验证：
 
 - DB health。
-- WebUI health。
+- Lucy health API。
 - KTX connection test。
 - reindex。
 - semantic-layer validate/query。
@@ -325,7 +331,7 @@ docker compose logs -f demo-db
 
 | Symptom | Check |
 |---|---|
-| WebUI 不可访问 | 宿主端口是否冲突；`LUCY_WEBUI_HOST_PORT` 映射是否正确 |
+| `/api/health` 不可访问 | 宿主端口是否冲突；`LUCY_WEBUI_HOST_PORT` 映射是否正确；该端口仅用于健康/API 运维检查 |
 | MCP agent 401/403 | Bearer token 是否来自 Lucy agent/token 管理；ACL 是否允许对应 tool/table |
 | `ktx sl query --execute` 失败 | 数据库连接、semantic-layer validate、KTX Python runtime 是否正常 |
 | 查询不到新语义层内容 | 是否运行 `ktx admin reindex --force` |

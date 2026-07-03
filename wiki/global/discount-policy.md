@@ -1,3 +1,9 @@
+---
+visibility: private
+sl_refs:
+  - mysql-aliyun/dataforai/superstore_orders
+---
+
 # 折扣率口径（Discount Rate Policy）
 
 > 适用：`dataforai.superstore_orders` 及任何含 `discount` × `sales` 字段对的零售明细表。

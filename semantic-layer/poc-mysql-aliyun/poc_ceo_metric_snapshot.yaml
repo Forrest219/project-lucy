@@ -1,0 +1,32 @@
+name: poc_ceo_metric_snapshot
+
+# 行粒度：每行一条 (snapshot_dt, metric_code, dimension_desc) 的标杆快照值
+# 用途：CEO一眼报标杆值，用于 eval 数值一致性回归；benchmark_type='mock_value' 表示模拟值。
+# 来源场景：陶峙桦 — CEO一眼报溯源报告（owner提供截图/导出值后升级benchmark_type）
+# 日期口径：snapshot_dt 是北京时间自然日；MCP/JSON 的 UTC ISO 展示值必须先转 Asia/Shanghai 再与日事实表对账。
+grain:
+  - snapshot_dt
+  - metric_code
+  - dimension_desc
+
+measures:
+  - name: metric_value
+    expr: max(metric_value)
+    description: 标杆指标值，单位由 metric_code 对应口径决定。聚合时用 max()（快照行唯一，max 等价取值）。
+
+  - name: snapshot_count
+    expr: count(*)
+    description: 快照记录数。
+
+segments:
+  - name: mock_values
+    expr: benchmark_type = 'mock_value'
+    description: 模拟值快照（POC阶段，非owner真实截图）。
+
+  - name: owner_screenshots
+    expr: benchmark_type = 'owner_screenshot'
+    description: owner提供的真实截图快照。eval回归的黄金标准。
+
+  - name: revenue_page
+    expr: source_page = '营业收入-广告'
+    description: 来自CEO一眼报"营业收入-广告"页面的快照。

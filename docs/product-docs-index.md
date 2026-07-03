@@ -10,6 +10,8 @@
 
 ## 1. Customer-Facing Guides
 
+The first customer delivery is headless. Customer-facing docs should start with Docker Compose, configuration files, Lucy MCP Proxy, Agent MCP client config, and smoke/eval evidence. WebUI docs below are repository/productization references, not the standard customer entry point.
+
 | Audience | Guide | Purpose |
 |---|---|---|
 | Admin | `docs/admin-guide.md` | Deploy, configure, operate, upgrade |
@@ -32,9 +34,9 @@
 
 | Guide | Purpose |
 |---|---|
-| `docs/webui-impl-status.md` | Current module implementation status |
-| `docs/webui-module-guide.md` | WebUI module usage |
-| `webui/docs/06-navigation-ia.md` | Navigation and information architecture |
+| `docs/webui-impl-status.md` | Repository quality/productization reference; not a customer headless entry |
+| `docs/webui-module-guide.md` | Optional WebUI module reference for later productization |
+| `webui/docs/06-navigation-ia.md` | Navigation and information architecture reference |
 | `webui/docs/07-mcp-auth-proxy-spec.md` | MCP auth proxy technical spec |
 
 ## 4. Existing HTML Help Center

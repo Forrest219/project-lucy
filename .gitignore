@@ -17,6 +17,7 @@ secrets/
 # temp scratch space
 temp/
 dev-inbox/
+inbox/
 release/
 
 # Build / dependency outputs (webui ships its own .gitignore, this is the root fallback)

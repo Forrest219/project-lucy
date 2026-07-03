@@ -70,6 +70,8 @@ PUT    /api/eval/monitor/config
 GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
 
+GET    /api/r1/observability
+
 GET    /api/admin/agents
 POST   /api/admin/agents
 GET    /api/admin/agents/:userId
@@ -83,7 +85,11 @@ GET    /api/admin/config-audit
 GET    /api/admin/config-audit/export.csv
 GET    /api/admin/audit
 GET    /api/admin/audit/sources
+GET    /api/admin/audit/:id/sources
 GET    /api/admin/audit/export
+GET    /api/admin/audit/turns
+GET    /api/admin/audit/turns/:turnId
+POST   /api/admin/audit/conversation-turns/purge
 GET    /api/admin/mcp-tools
 
 POST /mcp                                      # MCP proxy, port 7879
@@ -229,6 +235,87 @@ Monitor：
 
 常见错误码：`RUNNER_BUSY` `RUN_NOT_FOUND` `RUNNER_PRECHECK_FAILED` `NO_CASES_SELECTED` `UNSUPPORTED_SELECTION_MODE`。
 
+### R1 Observability
+
+`GET /api/r1/observability?hours=24&slowMs=30000` 返回 Lucy R1 受控数据服务层的最小排障信号。该端点只读，不创建新的状态；数据来自 audit sqlite、eval runs sqlite 和 `LUCY_R1_HERMES_ACCURACY_REPORT` 指向的外部 Hermes 准确率报告。
+
+响应摘要：
+
+```jsonc
+{ "ok": true, "data": {
+  "generatedAt": "2026-07-02T00:00:00.000Z",
+  "audit": {
+    "traffic": {
+      "businessCalls": 20,
+      "okCalls": 18,
+      "errorCalls": 1,
+      "deniedCalls": 1,
+      "successRate": 0.9,
+      "errorRate": 0.05,
+      "deniedRate": 0.05
+    },
+    "latency": { "p50Ms": 120, "p95Ms": 2000, "slowCalls": 1, "slowQueries": [] },
+    "denials": [
+      { "reason": "table_denied", "count": 1 },
+      { "reason": "query_concurrency_exceeded", "count": 1 }
+    ],
+    "sourceErrors": [{ "source": "doris-r1.mart.ceo_metric_snapshot", "outcome": "error", "count": 1 }],
+    "usage": { "tools": [], "roles": [], "tokens": [] }
+  },
+  "eval": {
+    "latestRun": { "domain": "r1_doris_smoke", "passRate": 0.95 },
+    "recent": { "runs": 3, "passRate": 0.96 }
+  },
+  "hermesQa": {
+    "status": "passed",
+    "agent": "hermes",
+    "target": "lucy-mcp-proxy",
+    "generatedBy": "scripts/lucy-r1-hermes-report.mjs",
+    "dataset": "r1_doris_benchmark",
+    "caseDataset": "r1_doris_benchmark",
+    "accuracy": 0.96,
+    "coreMetricAccuracy": 1,
+    "securityPassRate": 1,
+    "totalQuestions": 30,
+    "minQuestions": 30,
+    "tracedQuestions": 30,
+    "uniqueTraces": 30,
+    "lucyControlledQuestions": 30,
+    "lucyMetadataQuestions": 29,
+    "lucyRejectionQuestions": 1,
+    "agentIdentityGatePassed": true,
+    "targetIdentityGatePassed": true,
+    "datasetIdentityGatePassed": true,
+    "caseDatasetIdentityGatePassed": true,
+    "perCaseIdentityGatePassed": true,
+    "traceUniquenessGatePassed": true,
+    "lucyControlledEvidenceGatePassed": true,
+    "noDuplicateCasesGatePassed": true,
+    "generatedByGatePassed": true,
+    "threshold": 0.95
+  },
+  "releaseSignals": {
+    "trafficObservable": true,
+    "deniedReasonsObservable": true,
+    "sourceErrorsObservable": true,
+    "evalObservable": true,
+    "hermesQuestionCountGatePassed": true,
+    "hermesAccuracyGatePassed": true,
+    "hermesCoreMetricGatePassed": true,
+    "hermesSecurityGatePassed": true,
+    "hermesTraceCoverageGatePassed": true,
+    "hermesTraceUniquenessGatePassed": true,
+    "hermesNoDuplicateCasesGatePassed": true,
+    "hermesEvidenceCompletenessGatePassed": true,
+    "hermesLucyControlledEvidenceGatePassed": true,
+    "hermesPerCaseIdentityGatePassed": true,
+    "hermesReportGatePassed": true
+  }
+}}
+```
+
+用途：回答 R1 runbook 中的核心问题：业务请求量、成功/错误/拒绝率、p50/p95、慢查询、source 失败分布、token/role 使用、Eval pass rate、Hermes QA accuracy，以及 Hermes 逐题结果是否具备 Lucy `_meta.lucy` provenance 或 policy/guardrail 受控拒绝证据。`trafficObservable` 只代表 `businessCalls > 0`，不把 MCP 握手或 `tools/list` 单独算作业务流量；`evalObservable` 代表最新 `r1_*` eval 已成功且 `passRate >= 0.95`，不只是存在 eval run。
+
 ### Admin / 访问治理
 
 Agent 列表与详情：
@@ -278,7 +365,11 @@ Audit：
 - `GET /api/admin/config-audit/export.csv`
 - `GET /api/admin/audit`
 - `GET /api/admin/audit/sources`
+- `GET /api/admin/audit/:id/sources`
 - `GET /api/admin/audit/export`
+- `GET /api/admin/audit/turns`
+- `GET /api/admin/audit/turns/:turnId`
+- `POST /api/admin/audit/conversation-turns/purge`
 - `GET /api/admin/mcp-tools`
 
 `GET /api/admin/config-audit` 查询 `config_change_log`，用于追踪 WebUI 对 `ktx.yaml`、`webui/config/access.yaml` 等治理配置的写入记录。
@@ -328,9 +419,64 @@ Query：
 }}
 ```
 
+`GET /api/admin/audit/:id/sources` 返回单条 access log 解析出的来源表明细。`:id` 为正整数 `access_log.id`；无来源记录时返回空数组，非法 id 返回 `400`。
+
+响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "accessLogId": 1,
+  "sources": [{
+    "id": 1,
+    "ts": "2026-06-29T10:00:00.000Z",
+    "userId": "workhorse",
+    "tool": "sl_read_source",
+    "connectionId": "mysql-aliyun",
+    "schemaName": "dataforai",
+    "sourceName": "superstore_orders",
+    "physicalTable": "dataforai.superstore_orders",
+    "extractionMethod": "semantic-layer",
+    "confidence": "high",
+    "createdAt": "2026-06-29T10:00:00.000Z"
+  }]
+}}
+```
+
 `GET /api/admin/audit` 查询 MCP access log；支持按 user、tool、outcome、时间范围、tableSearch、sessionId、turnId、platform 过滤。默认不包含协议类工具调用；传 `includeProtocol=true` 可包含 `tools/list`、`initialize`、`notifications/initialized`。
 
 `GET /api/admin/audit/export` 使用与 `/api/admin/audit` 相同过滤条件导出 CSV，并对 spreadsheet formula 前缀做转义。
+
+`GET /api/admin/audit/turns` 返回问答轮次视图，合并 inferred turns 与客户端显式上报的 conversation turns。支持 `user`、`since`、`until`、`source=inferred|reported|all`、`lookbackHours`、`limit`、`offset`；默认 `source=all`、`limit=50`，最大 `500`。
+
+响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "total": 1,
+  "entries": [{
+    "id": "inf_20260629_001",
+    "source": "inferred",
+    "userId": "workhorse",
+    "startedAt": "2026-06-29T10:00:00.000Z",
+    "endedAt": "2026-06-29T10:00:05.000Z",
+    "businessCallCount": 2,
+    "questionSummary": "查询销售额",
+    "confidence": "medium",
+    "tools": ["sl_read_source", "sl_query"],
+    "sources": [{ "physicalTable": "dataforai.superstore_orders" }]
+  }]
+}}
+```
+
+`GET /api/admin/audit/turns/:turnId` 返回单个轮次详情。`inf_` 前缀查询 inferred turn，否则查询 reported conversation turn；不存在时返回 `404`。响应包含关联 access logs、sources、question summary/preview，以及 inferred turn 的 evidence。
+
+`POST /api/admin/audit/conversation-turns/purge` 手动触发 conversation turn retention 清理。请求体支持 `retentionDays` 与 `dryRun`；返回删除计数与 cutoff 等清理结果。
+
+请求：
+
+```jsonc
+{ "retentionDays": 30, "dryRun": true }
+```
 
 `GET /api/admin/mcp-tools` 返回当前已知 MCP tool 列表，并标记全局 deny 状态。
 
