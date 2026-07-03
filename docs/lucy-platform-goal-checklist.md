@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy MCP Platform Goal Checklist |
 | 文档类型 | Goal / Acceptance Spec |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-06-21；v0.2 更新 2026-06-24（新增 MCP client compatibility / Skill management 能力行；修订 Non-goals 的 MCP client 范围表述；补充 Product Boundary 问答边界声明）；v0.3 更新 2026-06-24（Oracle 并入 StarRocks 数据库范围 Open Risk；Business eval 验收要求降级为"可配置+可手工/脚本触发+留痕"；新增系统可观测性/监控告警 Open Risk；Kubernetes/Helm 本期不支持决策收口并写入 Non-goals） |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-06-21；v0.2 更新 2026-06-24（新增 MCP client compatibility / Skill management 能力行；修订 Non-goals 的 MCP client 范围表述；补充 Product Boundary 问答边界声明）；v0.3 更新 2026-06-24（Oracle 并入 StarRocks 数据库范围 Open Risk；Business eval 验收要求降级为"可配置+可手工/脚本触发+留痕"；新增系统可观测性/监控告警 Open Risk；Kubernetes/Helm 本期不支持决策收口并写入 Non-goals）；v0.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate） |
 | 适用范围 | Lucy 从本地 POC / 内测工程形态走向可部署 MCP 服务管理平台的产品化验收 |
 
 ## 1. Goal
@@ -146,7 +146,7 @@ Lucy 的测试与 eval 分三层，不能互相替代：
 |---|---|---|
 | Bundled KTX pinning source | 首版 Dockerfile 使用 npm release `@kaelio/ktx@0.13.0` | 正式 release policy 是否允许只 pin npm release，还是还要记录 git SHA / SBOM |
 | 首版部署形态 | 已按单机 Docker Compose 起步；Kubernetes/Helm 已决策本期不支持（2026-06-24，Forrest 决策，已写入 §4 Non-goals） | 后续阶段是否启动 Kubernetes/Helm 路径，本期不在范围内 |
-| 首版数据库范围 | MVP 明确支持 MySQL + PostgreSQL；StarRocks、Oracle 均转 roadmap candidate（2026-06-24 确认 Oracle 与 StarRocks 同等级别） | StarRocks、Oracle 是否启动协议兼容 spike，二者分别评估、分别决策 |
+| 首版数据库范围 | MVP 明确支持 MySQL + PostgreSQL；StarRocks 进入 R1 P1 gated support，pending live certification；Oracle 仍为 roadmap candidate | StarRocks live certification 通过前不进入 release verified matrix；Oracle 是否启动协议兼容 spike 另行决策 |
 | MCP endpoint 暴露方式 | 首版 Docker 采用 Lucy proxy 对外统一暴露；KTX upstream 只在容器内使用 | 是否需要支持高级用户直连 KTX upstream |
 | P0 smoke 数据源 | 已新增 demo MySQL compose；本机客户主链路也已用真实 MySQL 验证 | demo DB 作为可重复 CI gate，真实库作为人工验收补充 |
 | secrets 管理 | 首版支持 `/data/lucy/.ktx/secrets/*` 文件路径；已补 `docker-compose.secrets.yml` 作为 Docker secrets override 示例 | 是否继续补 env var / WebUI secret onboarding |

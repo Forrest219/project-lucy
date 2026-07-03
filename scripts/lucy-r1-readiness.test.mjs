@@ -23,8 +23,8 @@ async function withEvidenceFiles(files, fn) {
   }
 }
 
-function runReadiness(env) {
-  return spawnSync(process.execPath, [SCRIPT, "--strict"], {
+function runReadiness(env, args = ["--strict"]) {
+  return spawnSync(process.execPath, [SCRIPT, ...args], {
     cwd: ROOT,
     env: { ...process.env, ...env },
     encoding: "utf8"
@@ -98,6 +98,14 @@ const validDoris = {
   artifacts: {
     timeoutEvidence: "inbox/doris-timeout-evidence.json"
   }
+};
+
+const validStarRocks = {
+  ...validDoris,
+  connectionId: "starrocks-r1",
+  engine: "starrocks",
+  generatedBy: "scripts/lucy-r1-doris-smoke.mjs --engine starrocks",
+  artifacts: { timeoutEvidence: "inbox/starrocks-timeout-evidence.json" }
 };
 
 function makeHermesCases(total = 30) {
@@ -372,6 +380,26 @@ test("strict readiness accepts structurally valid MCP contract, Doris, and Herme
     assert.equal(output.results.find((item) => item.id === "external.mcp_contract")?.status, "pass");
     assert.equal(output.results.find((item) => item.id === "external.doris")?.status, "pass");
     assert.equal(output.results.find((item) => item.id === "external.hermes")?.status, "pass");
+  });
+});
+
+test("strict readiness accepts structurally valid StarRocks target evidence when selected explicitly", async () => {
+  await withEvidenceFiles({
+    "mcp.json": { ...validMcpContract, connectionId: "starrocks-r1" },
+    "starrocks.json": validStarRocks,
+    "hermes.json": validHermes
+  }, async (files) => {
+    const result = runReadiness({
+      LUCY_R1_MCP_CONTRACT_EVIDENCE: files["mcp.json"],
+      LUCY_R1_STARROCKS_EVIDENCE: files["starrocks.json"],
+      LUCY_R1_HERMES_ACCURACY_REPORT: files["hermes.json"]
+    }, ["--strict", "--target", "starrocks"]);
+    const output = parseOutput(result);
+    assert.equal(result.status, 0);
+    assert.equal(output.ok, true);
+    assert.equal(output.target, "starrocks");
+    assert.equal(output.results.find((item) => item.id === "external.starrocks")?.status, "pass");
+    assert.equal(output.results.find((item) => item.id === "external.doris"), undefined);
   });
 });
 

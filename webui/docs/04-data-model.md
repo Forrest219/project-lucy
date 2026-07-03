@@ -132,9 +132,9 @@ validation_failed  : 最近一次 ktx sl validate 失败（覆盖上述状态）
 type ConnectionInfo = {
   id: string;
   driver?: string;
-  engine?: string;                     // e.g. mysql, postgres, doris
+  engine?: string;                     // e.g. mysql, postgres, doris, starrocks
   wireProtocol?: "mysql" | "postgres" | "native" | "unknown";
-  r1Target?: boolean;                  // true for R1 target sources such as Doris
+  r1Target?: boolean;                  // true for explicit R1 target sources such as Doris / StarRocks
   readOnlyExpected?: boolean;          // defaults to true for governed Agent access
   passwordSource?: "file" | "inline" | "env";
   schemas: string[];
@@ -159,6 +159,14 @@ connections:
   doris-r1:
     driver: mysql
     engine: doris
+    wire_protocol: mysql
+    readonly: true
+    r1_target: true
+    enabled_tables:
+      - mart.ceo_metric_snapshot
+  starrocks-r1:
+    driver: mysql
+    engine: starrocks
     wire_protocol: mysql
     readonly: true
     r1_target: true

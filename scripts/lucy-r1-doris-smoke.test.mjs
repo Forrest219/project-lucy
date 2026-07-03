@@ -439,6 +439,46 @@ test("Doris smoke generator writes strict-readiness-compatible evidence when all
   });
 });
 
+test("OLAP smoke generator writes StarRocks evidence when all checks pass with stubbed runtime", async () => {
+  await withTempDir(async (dir) => {
+    const binDir = await writeFakeKtx(dir);
+    const proxy = await startProxyStub();
+    try {
+      const timeoutFile = path.join(dir, "timeout.json");
+      const outFile = path.join(dir, "starrocks.json");
+      await writeFile(timeoutFile, JSON.stringify({ status: "pass", classification: "source_timeout" }), "utf8");
+
+      const result = await runNodeAsync([
+        SCRIPT,
+        "--engine", "starrocks",
+        "--connection", "starrocks-r1",
+        "--source", "ceo_metric_snapshot",
+        "--measure", "ceo_metric_snapshot.revenue",
+        "--dimension", "ceo_metric_snapshot.biz_date",
+        "--proxy-url", proxy.url,
+        "--token", "test-token",
+        "--timeout-evidence", timeoutFile,
+        "--readonly-account-confirmed",
+        "--out", outFile
+      ], {
+        env: { PATH: `${binDir}:${process.env.PATH}` }
+      });
+      assert.equal(result.status, 0, result.stderr || result.stdout || result.signal);
+
+      const evidence = JSON.parse(await readFile(outFile, "utf8"));
+      assert.equal(evidence.connectionId, "starrocks-r1");
+      assert.equal(evidence.engine, "starrocks");
+      assert.equal(evidence.wireProtocol, "mysql");
+      assert.equal(evidence.generatedBy, "scripts/lucy-r1-doris-smoke.mjs --engine starrocks");
+      for (const [check, status] of Object.entries(evidence.checks)) {
+        assert.equal(status, "pass", `${check} should pass`);
+      }
+    } finally {
+      await proxy.close();
+    }
+  });
+});
+
 test("Doris smoke generator fails closed when proxy evidence is missing", async () => {
   await withTempDir(async (dir) => {
     const binDir = await writeFakeKtx(dir);

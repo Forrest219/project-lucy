@@ -10,6 +10,7 @@ const { values } = parseArgs({
   options: {
     json: { type: "boolean", default: false },
     "readiness-file": { type: "string" },
+    target: { type: "string", default: "doris" },
     help: { type: "boolean", short: "h", default: false }
   },
   allowPositionals: false
@@ -23,9 +24,43 @@ Summarizes Lucy R1 release readiness without weakening the strict gate. The
 status is diagnostic: it reports missing runtime evidence, current Doris target
 configuration, and the next commands to run.`;
 
+const TARGET = String(values.target ?? "doris").trim().toLowerCase();
+const TARGET_PROFILES = {
+  doris: {
+    id: "doris",
+    label: "Doris",
+    connectionId: "doris-r1",
+    engine: "doris",
+    evidenceId: "external.doris",
+    evidenceEnv: "LUCY_R1_DORIS_EVIDENCE",
+    evidenceLabel: "Doris vertical slice evidence",
+    dataset: "r1_doris_benchmark",
+    timeoutEvidence: "inbox/doris-timeout-evidence.json",
+    out: "inbox/doris-r1-evidence.json",
+    smokeCommand: "r1:doris-smoke"
+  },
+  starrocks: {
+    id: "starrocks",
+    label: "StarRocks",
+    connectionId: "starrocks-r1",
+    engine: "starrocks",
+    evidenceId: "external.starrocks",
+    evidenceEnv: "LUCY_R1_STARROCKS_EVIDENCE",
+    evidenceLabel: "StarRocks vertical slice evidence",
+    dataset: "r1_doris_benchmark",
+    timeoutEvidence: "inbox/starrocks-timeout-evidence.json",
+    out: "inbox/starrocks-r1-evidence.json",
+    smokeCommand: "r1:starrocks-smoke"
+  }
+};
+const TARGET_PROFILE = TARGET_PROFILES[TARGET];
+if (!TARGET_PROFILE) {
+  console.error(`--target must be doris or starrocks, got ${TARGET}`);
+  process.exit(1);
+}
 const REQUIRED_EXTERNAL = [
   ["external.mcp_contract", "LUCY_R1_MCP_CONTRACT_EVIDENCE", "MCP contract smoke evidence"],
-  ["external.doris", "LUCY_R1_DORIS_EVIDENCE", "Doris vertical slice evidence"],
+  [TARGET_PROFILE.evidenceId, TARGET_PROFILE.evidenceEnv, TARGET_PROFILE.evidenceLabel],
   ["external.hermes", "LUCY_R1_HERMES_ACCURACY_REPORT", "Hermes >=95% QA accuracy report"]
 ];
 const R1_TOOLS = [
@@ -98,18 +133,18 @@ function readYamlIfExists(file) {
   return parseYaml(readFileSync(file, "utf8"));
 }
 
-function dorisTargetStatus() {
+function targetStatus(profile) {
   const config = readYamlIfExists(absolute("ktx.yaml"));
-  const connection = config?.connections?.["doris-r1"];
+  const connection = config?.connections?.[profile.connectionId];
   if (!connection) {
     return {
       present: false,
       ready: false,
-      reason: "ktx.yaml does not define connections.doris-r1"
+      reason: `ktx.yaml does not define connections.${profile.connectionId}`
     };
   }
   const checks = {
-    engine: connection.engine === "doris",
+    engine: connection.engine === profile.engine,
     wireProtocol: connection.wire_protocol === "mysql" || connection.wireProtocol === "mysql",
     readonly: connection.readonly === true,
     r1Target: connection.r1_target === true || connection.r1Target === true,
@@ -122,7 +157,7 @@ function dorisTargetStatus() {
   };
 }
 
-function exactRoleStatus() {
+function exactRoleStatus(profile) {
   const config = readYamlIfExists(absolute("webui/config/access.yaml"));
   const role = config?.roles?.lucy_r1_exact_readonly;
   const connections = Array.isArray(role?.allow?.connections) ? role.allow.connections : [];
@@ -139,7 +174,9 @@ function exactRoleStatus() {
     exactToolCount: tools.length,
     exactTools,
     pointsToDoris: connections.includes("doris-r1"),
-    tableSelectorsPointToDoris: tableSelectorConnections.includes("doris-r1")
+    tableSelectorsPointToDoris: tableSelectorConnections.includes("doris-r1"),
+    pointsToTarget: connections.includes(profile.connectionId),
+    tableSelectorsPointToTarget: tableSelectorConnections.includes(profile.connectionId)
   };
 }
 
@@ -158,16 +195,17 @@ function buildSummary() {
     };
   });
   const missingExternal = externalEvidence.filter((item) => item.status !== "pass");
-  const dorisTarget = dorisTargetStatus();
-  const exactRole = exactRoleStatus();
-  const configReady = dorisTarget.ready === true
+  const selectedTarget = targetStatus(TARGET_PROFILE);
+  const exactRole = exactRoleStatus(TARGET_PROFILE);
+  const configReady = selectedTarget.ready === true
     && exactRole.present === true
     && exactRole.exactTools === true
-    && exactRole.pointsToDoris === true
-    && exactRole.tableSelectorsPointToDoris === true;
+    && exactRole.pointsToTarget === true
+    && exactRole.tableSelectorsPointToTarget === true;
   return {
     ok: readiness.ok === true,
     releaseReady: readiness.ok === true && missingExternal.length === 0 && configReady,
+    target: TARGET_PROFILE.id,
     configReady,
     readiness: {
       source: readinessRun.source,
@@ -179,13 +217,14 @@ function buildSummary() {
         .map((item) => ({ id: item.id, message: item.message }))
     },
     externalEvidence,
-    dorisTarget,
+    dorisTarget: TARGET_PROFILE.id === "doris" ? selectedTarget : targetStatus(TARGET_PROFILES.doris),
+    selectedTarget,
     exactRole,
     nextCommands: [
-      "npm run r1:mcp-contract -- --proxy-url http://127.0.0.1:7879/mcp --token \"$LUCY_AGENT_TOKEN\" --connection doris-r1 --source ceo_metric_snapshot --measure ceo_metric_snapshot.revenue --dimension ceo_metric_snapshot.biz_date --forbid-tool sl_query --forbid-source hidden_source --forbid-measure hidden_source.revenue --out inbox/lucy-r1-mcp-contract-evidence.json",
-      "npm run r1:doris-smoke -- --connection doris-r1 --source ceo_metric_snapshot --measure ceo_metric_snapshot.revenue --dimension ceo_metric_snapshot.biz_date --proxy-url http://127.0.0.1:7879/mcp --token \"$LUCY_AGENT_TOKEN\" --timeout-evidence inbox/doris-timeout-evidence.json --readonly-account-confirmed --out inbox/doris-r1-evidence.json",
-      "npm run r1:hermes-report -- --cases \"$LUCY_R1_BENCHMARK_CASES\" --results inbox/hermes-r1-results.json --dataset r1_doris_benchmark --out inbox/hermes-r1-accuracy.json",
-      "npm run r1:readiness:strict",
+      `npm run r1:mcp-contract -- --proxy-url http://127.0.0.1:7879/mcp --token "$LUCY_AGENT_TOKEN" --connection ${TARGET_PROFILE.connectionId} --source ceo_metric_snapshot --measure ceo_metric_snapshot.revenue --dimension ceo_metric_snapshot.biz_date --forbid-tool sl_query --forbid-source hidden_source --forbid-measure hidden_source.revenue --out inbox/lucy-r1-mcp-contract-evidence.json`,
+      `npm run ${TARGET_PROFILE.smokeCommand} -- --connection ${TARGET_PROFILE.connectionId} --source ceo_metric_snapshot --measure ceo_metric_snapshot.revenue --dimension ceo_metric_snapshot.biz_date --proxy-url http://127.0.0.1:7879/mcp --token "$LUCY_AGENT_TOKEN" --timeout-evidence ${TARGET_PROFILE.timeoutEvidence} --readonly-account-confirmed --out ${TARGET_PROFILE.out}`,
+      `npm run r1:hermes-report -- --cases "$LUCY_R1_BENCHMARK_CASES" --results inbox/hermes-r1-results.json --dataset ${TARGET_PROFILE.dataset} --out inbox/hermes-r1-accuracy.json`,
+      `npm run r1:readiness:strict -- --target ${TARGET_PROFILE.id}`,
       "npm run r1:release-bundle -- --observability-url \"http://127.0.0.1:5174/api/r1/observability?hours=24&slowMs=30000\" --eval-artifact inbox/hermes-r1-eval-artifacts --out inbox/lucy-r1-release-bundle"
     ]
   };
@@ -201,8 +240,8 @@ function printHuman(summary) {
     console.log(`- ${item.id}: ${item.status} — ${env}`);
   }
   console.log("");
-  console.log(`Doris target config: ${summary.dorisTarget.ready ? "ready" : "not ready"}${summary.dorisTarget.reason ? ` — ${summary.dorisTarget.reason}` : ""}`);
-  console.log(`Exact R1 role: ${summary.exactRole.present ? "present" : "missing"}; connections=${summary.exactRole.connections.join(",") || "<none>"}; tableSelectorConnections=${summary.exactRole.tableSelectorConnections.join(",") || "<none>"}; exactTools=${summary.exactRole.exactTools}; pointsToDoris=${summary.exactRole.pointsToDoris}; tableSelectorsPointToDoris=${summary.exactRole.tableSelectorsPointToDoris}`);
+  console.log(`${TARGET_PROFILE.label} target config: ${summary.selectedTarget.ready ? "ready" : "not ready"}${summary.selectedTarget.reason ? ` — ${summary.selectedTarget.reason}` : ""}`);
+  console.log(`Exact R1 role: ${summary.exactRole.present ? "present" : "missing"}; connections=${summary.exactRole.connections.join(",") || "<none>"}; tableSelectorConnections=${summary.exactRole.tableSelectorConnections.join(",") || "<none>"}; exactTools=${summary.exactRole.exactTools}; pointsToTarget=${summary.exactRole.pointsToTarget}; tableSelectorsPointToTarget=${summary.exactRole.tableSelectorsPointToTarget}`);
   console.log(`Config ready: ${summary.configReady}`);
   if (summary.readiness.failures.length > 0) {
     console.log("");

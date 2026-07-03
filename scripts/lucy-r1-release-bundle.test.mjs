@@ -183,6 +183,14 @@ const validDoris = {
   artifacts: { timeoutEvidence: "inbox/doris-timeout-evidence.json" }
 };
 
+const validStarRocks = {
+  ...validDoris,
+  connectionId: "starrocks-r1",
+  engine: "starrocks",
+  generatedBy: "scripts/lucy-r1-doris-smoke.mjs --engine starrocks",
+  artifacts: { timeoutEvidence: "inbox/starrocks-timeout-evidence.json" }
+};
+
 function makeHermesCases(total = 30) {
   const cases = [];
   for (let index = 1; index <= total; index += 1) {
@@ -334,6 +342,40 @@ roles:
         - doris-r1
       tableSelectors:
         - connection: doris-r1
+          schema: mart
+          names:
+            - ceo_metric_snapshot
+      tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+`, "utf8");
+}
+
+async function writeStarRocksReleaseConfig(dir) {
+  await mkdir(path.join(dir, "webui", "config"), { recursive: true });
+  await writeFile(path.join(dir, "ktx.yaml"), `
+connections:
+  starrocks-r1:
+    driver: mysql
+    engine: starrocks
+    wire_protocol: mysql
+    readonly: true
+    r1_target: true
+    enabled_tables:
+      - mart.ceo_metric_snapshot
+`, "utf8");
+  await writeFile(path.join(dir, "webui", "config", "access.yaml"), `
+roles:
+  lucy_r1_exact_readonly:
+    allow:
+      connections:
+        - starrocks-r1
+      tableSelectors:
+        - connection: starrocks-r1
           schema: mart
           names:
             - ceo_metric_snapshot
@@ -563,6 +605,72 @@ test("release bundle copies validated evidence and writes a manifest", async () 
     assert.equal(manifest.evalArtifacts[0].coverage.totalCaseIds, validHermesCases.length);
     assert.equal(manifest.evalArtifacts[0].coverage.totalTraceIds, validHermesCases.length);
     assert.equal(manifest.readiness.status, 0);
+  });
+});
+
+test("release bundle keeps StarRocks gated behind an explicit target and matching evidence", async () => {
+  await withTempDir(async (dir) => {
+    const mcp = path.join(dir, "mcp.json");
+    const starrocks = path.join(dir, "starrocks.json");
+    const hermes = path.join(dir, "hermes.json");
+    const observability = path.join(dir, "observability.json");
+    const evalDir = path.join(dir, "eval-artifact");
+    const outDefault = path.join(dir, "bundle-default");
+    const outStarRocks = path.join(dir, "bundle-starrocks");
+    const starrocksConfigRoot = path.join(dir, "starrocks-config");
+    await writeStarRocksReleaseConfig(starrocksConfigRoot);
+    await writeJson(mcp, {
+      ...validMcpContract,
+      connectionId: "starrocks-r1"
+    });
+    await writeJson(starrocks, validStarRocks);
+    await writeJson(hermes, validHermes);
+    await writeJson(observability, {
+      ...validObservability,
+      data: {
+        ...validObservability.data,
+        audit: {
+          ...validObservability.data.audit,
+          sourceErrors: [{ source: "starrocks-r1.mart.ceo_metric_snapshot", outcome: "error", count: 1 }]
+        }
+      }
+    });
+    await writeEvalArtifact(evalDir);
+
+    const defaultResult = runBundle([
+      "--observability-file", observability,
+      "--eval-artifact", evalDir,
+      "--out", outDefault
+    ], {
+      LUCY_R1_MCP_CONTRACT_EVIDENCE: mcp,
+      LUCY_R1_STARROCKS_EVIDENCE: starrocks,
+      LUCY_R1_HERMES_ACCURACY_REPORT: hermes,
+      LUCY_R1_RELEASE_CONFIG_ROOT: starrocksConfigRoot
+    });
+    assert.equal(defaultResult.status, 1);
+    const defaultManifest = JSON.parse(await readFile(path.join(outDefault, "release-manifest.json"), "utf8"));
+    assert.equal(defaultManifest.target, "doris");
+    assert.match(defaultManifest.reason, /LUCY_R1_DORIS_EVIDENCE is required/);
+
+    const starrocksResult = runBundle([
+      "--target", "starrocks",
+      "--observability-file", observability,
+      "--eval-artifact", evalDir,
+      "--out", outStarRocks
+    ], {
+      LUCY_R1_MCP_CONTRACT_EVIDENCE: mcp,
+      LUCY_R1_STARROCKS_EVIDENCE: starrocks,
+      LUCY_R1_HERMES_ACCURACY_REPORT: hermes,
+      LUCY_R1_RELEASE_CONFIG_ROOT: starrocksConfigRoot
+    });
+    assert.equal(starrocksResult.status, 0, starrocksResult.stderr || starrocksResult.stdout);
+    const manifest = JSON.parse(await readFile(path.join(outStarRocks, "release-manifest.json"), "utf8"));
+    assert.equal(manifest.ok, true);
+    assert.equal(manifest.target, "starrocks");
+    assert.equal(manifest.releaseDecision, "ready_for_human_approval");
+    assert.equal(manifest.evidence.starrocks.env, "LUCY_R1_STARROCKS_EVIDENCE");
+    assert.equal(manifest.localConfig.connectionId, "starrocks-r1");
+    assert.equal(manifest.consistency.target, "starrocks");
   });
 });
 

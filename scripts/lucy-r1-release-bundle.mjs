@@ -14,6 +14,7 @@ const { values } = parseArgs({
     "observability-url": { type: "string" },
     "observability-file": { type: "string" },
     "eval-artifact": { type: "string", multiple: true },
+    target: { type: "string", default: "doris" },
     "skip-observability": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false }
   },
@@ -41,9 +42,38 @@ if (values.help) {
   process.exit(0);
 }
 
+const TARGET = String(values.target ?? "doris").trim().toLowerCase();
+const TARGET_PROFILES = {
+  doris: {
+    id: "doris",
+    label: "Doris",
+    engine: "doris",
+    evidenceEnv: "LUCY_R1_DORIS_EVIDENCE",
+    dataset: "r1_doris_benchmark"
+  },
+  starrocks: {
+    id: "starrocks",
+    label: "StarRocks",
+    engine: "starrocks",
+    evidenceEnv: "LUCY_R1_STARROCKS_EVIDENCE",
+    dataset: "r1_doris_benchmark"
+  }
+};
+const TARGET_PROFILE = TARGET_PROFILES[TARGET];
+if (!TARGET_PROFILE) {
+  console.error(`[lucy-r1-release-bundle] FAIL: --target must be doris or starrocks, got ${TARGET}`);
+  process.exit(1);
+}
+
+// Static readiness anchors for the default Doris R1 path:
+// "release local config is not ready for Doris R1"
+// "Hermes cases must reference Doris evidence sourceName"
+// "observability sourceErrors must reference Doris evidence connectionId or sourceName"
+// "observability slowQueries must reference Doris source or source_timeout"
+
 const REQUIRED_EVIDENCE = [
   ["mcpContract", "LUCY_R1_MCP_CONTRACT_EVIDENCE"],
-  ["doris", "LUCY_R1_DORIS_EVIDENCE"],
+  [TARGET_PROFILE.id, TARGET_PROFILE.evidenceEnv],
   ["hermes", "LUCY_R1_HERMES_ACCURACY_REPORT"]
 ];
 const R1_EVAL_PASS_RATE_THRESHOLD = 0.95;
@@ -53,7 +83,7 @@ const RELEASE_MAX_EVIDENCE_WINDOW_HOURS = Math.max(
 );
 const RELEASE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const EVAL_ARTIFACT_IDENTITY_MARKERS = [
-  ["r1Dataset", "r1_doris_benchmark"],
+  ["r1Dataset", TARGET_PROFILE.dataset],
   ["hermesAgent", "hermes"],
   ["lucyMcpProxyTarget", "lucy-mcp-proxy"]
 ];
@@ -119,7 +149,7 @@ async function sha256Directory(dir) {
 }
 
 function runReadinessStrict(env) {
-  const result = spawnSync(process.execPath, ["scripts/lucy-r1-readiness.mjs", "--strict"], {
+  const result = spawnSync(process.execPath, ["scripts/lucy-r1-readiness.mjs", "--strict", "--target", TARGET_PROFILE.id], {
     cwd: process.cwd(),
     env: { ...process.env, ...env },
     encoding: "utf8"
@@ -397,9 +427,9 @@ function validateEqualNumber(left, right, label, errors) {
 async function validateLocalReleaseConfig(evidence) {
   const root = configRoot();
   const errors = [];
-  const doris = await readJsonFile(evidence.doris.file, "Doris evidence");
-  const expectedConnectionId = doris.connectionId;
-  const expectedSourceName = doris.sourceName;
+  const targetEvidence = await readJsonFile(evidence[TARGET_PROFILE.id].file, `${TARGET_PROFILE.label} evidence`);
+  const expectedConnectionId = targetEvidence.connectionId;
+  const expectedSourceName = targetEvidence.sourceName;
   const ktxPath = path.join(root, "ktx.yaml");
   const accessPath = path.join(root, "webui", "config", "access.yaml");
   if (!existsSync(ktxPath)) errors.push(`ktx.yaml is missing under release config root: ${root}`);
@@ -411,7 +441,7 @@ async function validateLocalReleaseConfig(evidence) {
   if (!connection) {
     errors.push(`ktx.yaml must define connections.${expectedConnectionId}`);
   } else {
-    if (connection.engine !== "doris") errors.push(`connections.${expectedConnectionId}.engine must be "doris"`);
+    if (connection.engine !== TARGET_PROFILE.engine) errors.push(`connections.${expectedConnectionId}.engine must be "${TARGET_PROFILE.engine}"`);
     const wireProtocol = connection.wire_protocol ?? connection.wireProtocol;
     if (wireProtocol !== "mysql") errors.push(`connections.${expectedConnectionId}.wire_protocol must be "mysql"`);
     if (connection.readonly !== true) errors.push(`connections.${expectedConnectionId}.readonly must be true`);
@@ -455,7 +485,7 @@ async function validateLocalReleaseConfig(evidence) {
     }
   }
 
-  if (errors.length > 0) throw new Error(`release local config is not ready for Doris R1: ${errors.join("; ")}`);
+  if (errors.length > 0) throw new Error(`release local config is not ready for ${TARGET_PROFILE.label} R1: ${errors.join("; ")}`);
   return {
     ok: true,
     root,
@@ -508,10 +538,10 @@ function timestampMs(value, label, errors) {
   return ms;
 }
 
-function validateEvidenceTiming(mcp, doris, hermes, snapshot, errors) {
+function validateEvidenceTiming(mcp, targetEvidence, hermes, snapshot, errors) {
   const timestamps = [
     ["MCP checkedAt", timestampMs(mcp.checkedAt, "MCP checkedAt", errors)],
-    ["Doris checkedAt", timestampMs(doris.checkedAt, "Doris checkedAt", errors)],
+    [`${TARGET_PROFILE.label} checkedAt`, timestampMs(targetEvidence.checkedAt, `${TARGET_PROFILE.label} checkedAt`, errors)],
     ["Hermes checkedAt", timestampMs(hermes.checkedAt, "Hermes checkedAt", errors)],
     ["observability generatedAt", timestampMs(snapshot?.data?.generatedAt, "observability generatedAt", errors)]
   ].filter(([, ms]) => typeof ms === "number");
@@ -541,20 +571,20 @@ function validateEvidenceTiming(mcp, doris, hermes, snapshot, errors) {
 async function validateEvidenceConsistency(evidence, observability) {
   const errors = [];
   const mcp = await readJsonFile(evidence.mcpContract.file, "MCP contract evidence");
-  const doris = await readJsonFile(evidence.doris.file, "Doris evidence");
+  const targetEvidence = await readJsonFile(evidence[TARGET_PROFILE.id].file, `${TARGET_PROFILE.label} evidence`);
   const hermes = await readJsonFile(evidence.hermes.file, "Hermes evidence");
   const snapshot = await readJsonFile(observability.file, "observability snapshot");
 
-  validateEqualString(mcp.connectionId, doris.connectionId, "MCP/Doris connectionId", errors);
-  validateEqualString(mcp.sourceName, doris.sourceName, "MCP/Doris sourceName", errors);
-  const dorisNeedles = [doris.connectionId, doris.sourceName];
+  validateEqualString(mcp.connectionId, targetEvidence.connectionId, `MCP/${TARGET_PROFILE.label} connectionId`, errors);
+  validateEqualString(mcp.sourceName, targetEvidence.sourceName, `MCP/${TARGET_PROFILE.label} sourceName`, errors);
+  const targetNeedles = [targetEvidence.connectionId, targetEvidence.sourceName];
   const sourceErrors = Array.isArray(snapshot?.data?.audit?.sourceErrors) ? snapshot.data.audit.sourceErrors : [];
-  if (!sourceErrors.some((item) => textContainsAny(item, dorisNeedles))) {
-    errors.push("observability sourceErrors must reference Doris evidence connectionId or sourceName");
+  if (!sourceErrors.some((item) => textContainsAny(item, targetNeedles))) {
+    errors.push(`observability sourceErrors must reference ${TARGET_PROFILE.label} evidence connectionId or sourceName`);
   }
   const slowQueries = Array.isArray(snapshot?.data?.audit?.latency?.slowQueries) ? snapshot.data.audit.latency.slowQueries : [];
-  if (!slowQueries.some((item) => textContainsAny(item, [...dorisNeedles, "source_timeout"]))) {
-    errors.push("observability slowQueries must reference Doris source or source_timeout");
+  if (!slowQueries.some((item) => textContainsAny(item, [...targetNeedles, "source_timeout"]))) {
+    errors.push(`observability slowQueries must reference ${TARGET_PROFILE.label} source or source_timeout`);
   }
   const usageTools = Array.isArray(snapshot?.data?.audit?.usage?.tools) ? snapshot.data.audit.usage.tools : [];
   if (!usageTools.some((item) => item?.tool === "lucy_query")) {
@@ -583,9 +613,9 @@ async function validateEvidenceConsistency(evidence, observability) {
     errors.push("observability usage.tools lucy_query denied count must be >= MCP concurrency denialCount");
   }
 
-  const hermesSourceCoverage = hermesCasesReferenceSource(hermes.cases, doris.sourceName);
+  const hermesSourceCoverage = hermesCasesReferenceSource(hermes.cases, targetEvidence.sourceName);
   if (!hermesSourceCoverage.ok) {
-    errors.push("Hermes cases must reference Doris evidence sourceName");
+    errors.push(`Hermes cases must reference ${TARGET_PROFILE.label} evidence sourceName`);
   }
 
   const hermesSummary = isObject(hermes.summary) ? hermes.summary : {};
@@ -624,11 +654,12 @@ async function validateEvidenceConsistency(evidence, observability) {
       errors
     );
   }
-  const timing = validateEvidenceTiming(mcp, doris, hermes, snapshot, errors);
+  const timing = validateEvidenceTiming(mcp, targetEvidence, hermes, snapshot, errors);
 
   if (errors.length > 0) throw new Error(`release evidence consistency failed: ${errors.join("; ")}`);
   return {
     ok: true,
+    target: TARGET_PROFILE.id,
     connectionId: mcp.connectionId,
     sourceName: mcp.sourceName,
     hermesTotalQuestions: hermesSummary.totalQuestions,
@@ -765,7 +796,7 @@ function validateEvalArtifacts(artifacts, hermesCases = []) {
     throw new Error("at least one --eval-artifact is required for an R1 release bundle");
   }
   if (!artifacts.some((artifact) => artifact?.identity?.passed === true)) {
-    throw new Error("at least one --eval-artifact must contain R1 Hermes/Lucy identity markers: r1_doris_benchmark, hermes, lucy-mcp-proxy");
+    throw new Error(`at least one --eval-artifact must contain R1 Hermes/Lucy identity markers: ${TARGET_PROFILE.dataset}, hermes, lucy-mcp-proxy`);
   }
   const requiredCaseIds = hermesCases
     .map((item) => item?.id)
@@ -798,6 +829,7 @@ async function main() {
     const manifest = {
       ok: false,
       generatedAt: new Date().toISOString(),
+      target: TARGET_PROFILE.id,
       reason: "strict_readiness_failed",
       readiness: {
         status: readiness.status,
@@ -816,6 +848,7 @@ async function main() {
       ok: false,
       generatedAt: new Date().toISOString(),
       generatedBy: "scripts/lucy-r1-release-bundle.mjs",
+      target: TARGET_PROFILE.id,
       reason: "observability_skipped",
       readiness: {
         status: readiness.status,
@@ -838,6 +871,7 @@ async function main() {
     ok: true,
     generatedAt: new Date().toISOString(),
     generatedBy: "scripts/lucy-r1-release-bundle.mjs",
+    target: TARGET_PROFILE.id,
     readiness: {
       status: readiness.status,
       file: readinessPath,
@@ -860,6 +894,7 @@ main().catch(async (error) => {
   const manifest = {
     ok: false,
     generatedAt: new Date().toISOString(),
+    target: TARGET_PROFILE.id,
     reason: error instanceof Error ? error.message : String(error)
   };
   await writeJson(path.join(outDir, "release-manifest.json"), manifest).catch(() => undefined);

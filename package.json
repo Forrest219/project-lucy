@@ -15,6 +15,7 @@
     "lint:spec": "node scripts/lint-spec.mjs",
     "r1:doris-smoke": "node scripts/lucy-r1-doris-smoke.mjs",
     "r1:doris-smoke:test": "node --test scripts/lucy-r1-doris-smoke.test.mjs",
+    "r1:starrocks-smoke": "node scripts/lucy-r1-doris-smoke.mjs --engine starrocks --out inbox/starrocks-r1-evidence.json",
     "r1:hermes-report": "node scripts/lucy-r1-hermes-report.mjs",
     "r1:hermes-report:test": "node --test scripts/lucy-r1-hermes-report.test.mjs",
     "r1:local-gates": "node scripts/lucy-r1-local-gates.mjs",

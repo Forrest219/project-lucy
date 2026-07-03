@@ -49,6 +49,24 @@ connections:
     password: file:<CHANGE-ME-ABS-PATH-TO-PROJECT>/.ktx/secrets/doris-r1-password
     schemas:
       - <CHANGE-ME-DORIS-SCHEMA>
+  # Lucy R1 P1 gated target source example: StarRocks speaks MySQL wire protocol.
+  # StarRocks is pending live certification; do not list it as release-verified
+  # until LUCY_R1_STARROCKS_EVIDENCE passes the strict target gate.
+  starrocks-r1:
+    driver: mysql
+    engine: starrocks
+    wire_protocol: mysql
+    readonly: true
+    r1_target: true
+    enabled_tables:
+      - <CHANGE-ME-STARROCKS-SCHEMA>.<CHANGE-ME-STARROCKS-TABLE>
+    host: <CHANGE-ME-STARROCKS-FE-HOST>
+    port: 9030
+    database: <CHANGE-ME-STARROCKS-DATABASE>
+    username: <CHANGE-ME-STARROCKS-READONLY-USERNAME>
+    password: file:<CHANGE-ME-ABS-PATH-TO-PROJECT>/.ktx/secrets/starrocks-r1-password
+    schemas:
+      - <CHANGE-ME-STARROCKS-SCHEMA>
 storage:
   state: sqlite
   search: sqlite-fts5

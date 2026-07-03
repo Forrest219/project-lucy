@@ -25,8 +25,9 @@ const { values } = parseArgs({
     measure: { type: "string", short: "m" },
     dimension: { type: "string", short: "d" },
     segment: { type: "string", multiple: true },
+    engine: { type: "string", default: "doris" },
     project: { type: "string", default: process.cwd() },
-    out: { type: "string", short: "o", default: "inbox/doris-r1-evidence.json" },
+    out: { type: "string", short: "o" },
     limit: { type: "string", default: "5" },
     "proxy-url": { type: "string" },
     token: { type: "string" },
@@ -68,15 +69,29 @@ function requiredString(name) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-const connectionId = requiredString("connection") ?? process.env.LUCY_R1_DORIS_CONNECTION;
-const sourceName = requiredString("source") ?? process.env.LUCY_R1_DORIS_SOURCE;
-const measure = requiredString("measure") ?? process.env.LUCY_R1_DORIS_MEASURE;
-const dimension = requiredString("dimension") ?? process.env.LUCY_R1_DORIS_DIMENSION;
+const engine = requiredString("engine") ?? process.env.LUCY_R1_TARGET_ENGINE ?? "doris";
+if (!["doris", "starrocks"].includes(engine)) {
+  console.error(`[lucy-r1-doris-smoke] FAIL: --engine must be doris or starrocks, got ${engine}`);
+  process.exit(1);
+}
+const engineEnvPrefix = engine === "starrocks" ? "STARROCKS" : "DORIS";
+const targetLabel = engine === "starrocks" ? "StarRocks" : "Doris";
+const defaultOut = engine === "starrocks" ? "inbox/starrocks-r1-evidence.json" : "inbox/doris-r1-evidence.json";
+const generatedBy = engine === "starrocks" ? "scripts/lucy-r1-doris-smoke.mjs --engine starrocks" : "scripts/lucy-r1-doris-smoke.mjs";
+
+function targetEnv(name) {
+  return process.env[`LUCY_R1_${engineEnvPrefix}_${name}`];
+}
+
+const connectionId = requiredString("connection") ?? targetEnv("CONNECTION");
+const sourceName = requiredString("source") ?? targetEnv("SOURCE");
+const measure = requiredString("measure") ?? targetEnv("MEASURE");
+const dimension = requiredString("dimension") ?? targetEnv("DIMENSION");
 const proxyUrl = requiredString("proxy-url") ?? process.env.LUCY_R1_PROXY_URL;
 const token = requiredString("token") ?? process.env.LUCY_R1_PROXY_TOKEN;
 const timeoutEvidence = requiredString("timeout-evidence") ?? process.env.LUCY_R1_TIMEOUT_EVIDENCE;
 const projectDir = path.resolve(String(values.project ?? process.cwd()));
-const outFile = path.resolve(String(values.out ?? "inbox/doris-r1-evidence.json"));
+const outFile = path.resolve(String(values.out ?? defaultOut));
 const limit = Number.parseInt(String(values.limit ?? "5"), 10);
 const segments = Array.isArray(values.segment) ? values.segment : [];
 
@@ -288,11 +303,11 @@ const evidence = {
   sourceName,
   measure,
   dimension,
-  engine: "doris",
+  engine,
   wireProtocol: "mysql",
   readonlyAccount: values["readonly-account-confirmed"] === true,
   checkedAt: nowIso(),
-  generatedBy: "scripts/lucy-r1-doris-smoke.mjs",
+  generatedBy,
   projectDir,
   checks: Object.fromEntries(requiredChecks.map((check) => [check, "fail"])),
   checkDetails: {},
@@ -317,7 +332,7 @@ function missingInput(check, message) {
 
 async function checkKtxConnection() {
   if (!connectionId) {
-    missingInput("connection", "--connection or LUCY_R1_DORIS_CONNECTION is required");
+    missingInput("connection", `--connection or LUCY_R1_${engineEnvPrefix}_CONNECTION is required`);
     return;
   }
   const args = ktxArgs(["connection", "test", connectionId]);
@@ -396,7 +411,7 @@ async function checkProxyPath() {
     const init = await rpc("", "initialize", {
       protocolVersion: "2025-03-26",
       capabilities: {},
-      clientInfo: { name: "lucy-r1-doris-smoke", version: "0.1.0" }
+      clientInfo: { name: `lucy-r1-${engine}-smoke`, version: "0.1.0" }
     });
     if (!init.ok || init.body?.error || !init.sessionId) {
       throw new Error(`initialize failed: HTTP ${init.status} ${JSON.stringify(init.body?.error ?? init.body)}`);
@@ -478,17 +493,17 @@ async function checkTimeoutEvidence() {
 }
 
 async function main() {
-  if (!connectionId) missingInput("connection", "--connection or LUCY_R1_DORIS_CONNECTION is required");
-  if (!sourceName) missingInput("typeMapping", "--source or LUCY_R1_DORIS_SOURCE is required");
+  if (!connectionId) missingInput("connection", `--connection or LUCY_R1_${engineEnvPrefix}_CONNECTION is required`);
+  if (!sourceName) missingInput("typeMapping", `--source or LUCY_R1_${engineEnvPrefix}_SOURCE is required`);
   if (!measure) {
-    missingInput("readonlySelect", "--measure or LUCY_R1_DORIS_MEASURE is required");
-    missingInput("limitPagination", "--measure or LUCY_R1_DORIS_MEASURE is required");
+    missingInput("readonlySelect", `--measure or LUCY_R1_${engineEnvPrefix}_MEASURE is required`);
+    missingInput("limitPagination", `--measure or LUCY_R1_${engineEnvPrefix}_MEASURE is required`);
   }
   if (!evidence.readonlyAccount) {
     evidence.checkDetails.readonlyAccount = {
       status: "fail",
       reason: "missing_operator_confirmation",
-      message: "--readonly-account-confirmed is required after the Doris credential has been verified as read-only"
+      message: `--readonly-account-confirmed is required after the ${targetLabel} credential has been verified as read-only`
     };
   }
 
@@ -518,6 +533,6 @@ main().catch(async (error) => {
   evidence.fatalError = error instanceof Error ? error.message : String(error);
   await mkdir(path.dirname(outFile), { recursive: true }).catch(() => undefined);
   await writeFile(outFile, `${JSON.stringify(evidence, null, 2)}\n`, "utf8").catch(() => undefined);
-  console.error(`[lucy-r1-doris-smoke] FAIL: ${evidence.fatalError}`);
+  console.error(`[lucy-r1-${engine}-smoke] FAIL: ${evidence.fatalError}`);
   process.exit(1);
 });

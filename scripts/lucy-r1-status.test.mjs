@@ -143,3 +143,69 @@ roles:
     }
   });
 });
+
+test("R1 status can evaluate an explicit StarRocks target without changing the default Doris profile", async () => {
+  await withFixtureReadiness({
+    ok: true,
+    strict: true,
+    target: "starrocks",
+    counts: { pass: 338 },
+    results: [
+      { status: "pass", id: "external.mcp_contract", message: "MCP evidence valid" },
+      { status: "pass", id: "external.starrocks", message: "StarRocks evidence valid" },
+      { status: "pass", id: "external.hermes", message: "Hermes evidence valid" }
+    ]
+  }, async (file) => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lucy-r1-ready-starrocks-config-"));
+    try {
+      await mkdir(path.join(dir, "webui", "config"), { recursive: true });
+      await writeFile(path.join(dir, "ktx.yaml"), `
+connections:
+  starrocks-r1:
+    driver: mysql
+    engine: starrocks
+    wire_protocol: mysql
+    readonly: true
+    r1_target: true
+    enabled_tables:
+      - mart.ceo_metric_snapshot
+`, "utf8");
+      await writeFile(path.join(dir, "webui", "config", "access.yaml"), `
+roles:
+  lucy_r1_exact_readonly:
+    allow:
+      connections:
+        - starrocks-r1
+      tableSelectors:
+        - connection: starrocks-r1
+          schema: mart
+          names:
+            - ceo_metric_snapshot
+      tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+`, "utf8");
+      const result = spawnSync(process.execPath, [SCRIPT, "--readiness-file", file, "--target", "starrocks", "--json"], {
+        cwd: dir,
+        encoding: "utf8"
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      const summary = JSON.parse(result.stdout);
+      assert.equal(summary.target, "starrocks");
+      assert.equal(summary.configReady, true);
+      assert.equal(summary.releaseReady, true);
+      assert.equal(summary.selectedTarget.ready, true);
+      assert.equal(summary.selectedTarget.checks.engine, true);
+      assert.equal(summary.exactRole.pointsToTarget, true);
+      assert.equal(summary.exactRole.tableSelectorsPointToTarget, true);
+      assert.equal(summary.externalEvidence[1].id, "external.starrocks");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

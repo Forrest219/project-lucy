@@ -80,6 +80,11 @@ The artifact contains:
 - `lucy-sbom.json`: local CycloneDX-lite runtime dependency inventory for the Lucy root package, WebUI package, base image, and bundled KTX runtime. Development-only dependencies marked `dev: true` in package-lock files are omitted; remaining npm components are labeled as `production`, `peer`, `optional`, or `bundled` from package-lock metadata.
 - `lucy-customer-deployment-guide.md`, `lucy-deployment-docker.md`, `lucy-test-cases.md`: customer-facing deployment and test documentation copied from `docs/`.
 
+StarRocks R1 P1 note:
+
+- StarRocks is not added to the default verified database matrix until live certification evidence exists.
+- StarRocks evidence uses `LUCY_R1_STARROCKS_EVIDENCE` and an explicit StarRocks target gate; missing StarRocks evidence must not fail the default Doris R1 release path.
+
 ## 5. Registry Publishing
 
 Current CI builds and tags the image inside the workflow runner. Registry push is intentionally not enabled until the target registry, image namespace, and credentials policy are decided.

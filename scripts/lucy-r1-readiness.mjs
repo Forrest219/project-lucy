@@ -6,6 +6,43 @@ import { parse } from "yaml";
 
 const ROOT = process.cwd();
 const STRICT = process.argv.includes("--strict");
+function optionValue(name, fallback) {
+  const eq = process.argv.find((arg) => arg.startsWith(`--${name}=`));
+  if (eq) return eq.slice(name.length + 3);
+  const index = process.argv.indexOf(`--${name}`);
+  if (index >= 0) return process.argv[index + 1] ?? fallback;
+  return fallback;
+}
+const TARGET = optionValue("target", "doris");
+if (!["doris", "starrocks"].includes(TARGET)) {
+  console.error(JSON.stringify({
+    ok: false,
+    strict: STRICT,
+    target: TARGET,
+    counts: { fail: 1 },
+    results: [{ status: "fail", id: "target.invalid", message: "--target must be doris or starrocks" }]
+  }, null, 2));
+  process.exit(1);
+}
+const TARGET_PROFILES = {
+  doris: {
+    id: "doris",
+    label: "Doris",
+    externalId: "external.doris",
+    env: "LUCY_R1_DORIS_EVIDENCE",
+    engine: "doris",
+    generatedBy: "scripts/lucy-r1-doris-smoke.mjs"
+  },
+  starrocks: {
+    id: "starrocks",
+    label: "StarRocks",
+    externalId: "external.starrocks",
+    env: "LUCY_R1_STARROCKS_EVIDENCE",
+    engine: "starrocks",
+    generatedBy: "scripts/lucy-r1-doris-smoke.mjs --engine starrocks"
+  }
+};
+const TARGET_PROFILE = TARGET_PROFILES[TARGET];
 
 const R1_TOOLS = [
   "lucy_catalog",
@@ -655,7 +692,7 @@ function requireIsoTimestamp(value, pathExpression, errors) {
   return actual;
 }
 
-function validateDorisEvidence(filePath) {
+function validateOlapEvidence(filePath, profile = TARGET_PROFILES.doris) {
   const parsed = parseJsonEvidence(filePath);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
   const value = parsed.value;
@@ -667,10 +704,10 @@ function validateDorisEvidence(filePath) {
   if (typeof value.sourceName !== "string" || !value.sourceName.trim()) errors.push("sourceName is required");
   if (typeof value.measure !== "string" || !value.measure.trim()) errors.push("measure is required");
   requireIsoTimestamp(value, "checkedAt", errors);
-  if (value.engine !== "doris") errors.push('engine must be "doris"');
+  if (value.engine !== profile.engine) errors.push(`engine must be "${profile.engine}"`);
   if (value.wireProtocol !== "mysql") errors.push('wireProtocol must be "mysql"');
   if (value.readonlyAccount !== true) errors.push("readonlyAccount must be true");
-  if (value.generatedBy !== "scripts/lucy-r1-doris-smoke.mjs") errors.push('generatedBy must be "scripts/lucy-r1-doris-smoke.mjs"');
+  if (value.generatedBy !== profile.generatedBy) errors.push(`generatedBy must be "${profile.generatedBy}"`);
   for (const check of [
     "checks.connection",
     "checks.readonlySelect",
@@ -712,7 +749,7 @@ function validateDorisEvidence(filePath) {
     ?? valueAt(value, ["checkDetails", "timeoutClassification", "reason"])
     ?? valueAt(value, ["checkDetails", "timeoutClassification", "evidence", "reason"]);
   if (timeoutClassification !== "source_timeout") {
-    errors.push('checkDetails.timeoutClassification must classify Doris timeouts as "source_timeout"');
+    errors.push(`checkDetails.timeoutClassification must classify ${profile.label} timeouts as "source_timeout"`);
   }
   if (valueAt(value, ["checkDetails", "lucyMetadata", "hasLucyMeta"]) !== true) {
     errors.push("checkDetails.lucyMetadata.hasLucyMeta must be true");
@@ -761,6 +798,14 @@ function validateDorisEvidence(filePath) {
       p95Ms: p95
     }
   };
+}
+
+function validateDorisEvidence(filePath) {
+  return validateOlapEvidence(filePath, TARGET_PROFILES.doris);
+}
+
+function validateStarRocksEvidence(filePath) {
+  return validateOlapEvidence(filePath, TARGET_PROFILES.starrocks);
 }
 
 function validateHermesEvidence(filePath) {
@@ -1171,18 +1216,18 @@ function checkExternalEvidence() {
     });
   }
 
-  const dorisEvidence = evidenceFileFromEnv("LUCY_R1_DORIS_EVIDENCE");
-  if (dorisEvidence && existsSync(dorisEvidence)) {
-    const validation = validateDorisEvidence(dorisEvidence);
-    add(validation.ok ? "pass" : "fail", "external.doris", "Doris vertical slice evidence is structurally valid", {
-      file: dorisEvidence,
-      mtime: statSync(dorisEvidence).mtime.toISOString(),
+  const targetEvidence = evidenceFileFromEnv(TARGET_PROFILE.env);
+  if (targetEvidence && existsSync(targetEvidence)) {
+    const validation = TARGET === "starrocks" ? validateStarRocksEvidence(targetEvidence) : validateDorisEvidence(targetEvidence);
+    add(validation.ok ? "pass" : "fail", TARGET_PROFILE.externalId, `${TARGET_PROFILE.label} vertical slice evidence is structurally valid`, {
+      file: targetEvidence,
+      mtime: statSync(targetEvidence).mtime.toISOString(),
       ...validation
     });
   } else {
-    add(STRICT ? "fail" : "manual", "external.doris", "Doris vertical slice requires external evidence", {
-      env: "LUCY_R1_DORIS_EVIDENCE",
-      expected: "Path to Doris vertical slice evidence JSON"
+    add(STRICT ? "fail" : "manual", TARGET_PROFILE.externalId, `${TARGET_PROFILE.label} vertical slice requires external evidence`, {
+      env: TARGET_PROFILE.env,
+      expected: `Path to ${TARGET_PROFILE.label} vertical slice evidence JSON`
     });
   }
 
@@ -1220,6 +1265,7 @@ const counts = results.reduce((acc, item) => {
 console.log(JSON.stringify({
   ok: !results.some((item) => item.status === "fail"),
   strict: STRICT,
+  target: TARGET,
   counts,
   results
 }, null, 2));

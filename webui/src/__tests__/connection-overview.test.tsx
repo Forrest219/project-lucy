@@ -131,6 +131,29 @@ describe("ConnectionOverview", () => {
     expect(screen.getByText("doris / mysql wire / R1 target / read-only expected")).toBeInTheDocument();
   });
 
+  it("shows the StarRocks R1 target connection profile", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "starrocks-r1",
+          driver: "mysql",
+          engine: "starrocks",
+          wireProtocol: "mysql",
+          r1Target: true,
+          readOnlyExpected: true,
+          schemas: ["mart"],
+          enabledTables: ["mart.ceo_metric_snapshot"]
+        }
+      ],
+      tables: [sourceSummary("ceo_metric_snapshot", "mart")]
+    });
+
+    renderOverview();
+
+    expect(await screen.findByText("starrocks-r1")).toBeInTheDocument();
+    expect(screen.getByText("starrocks / mysql wire / R1 target / read-only expected")).toBeInTheDocument();
+  });
+
   it("keeps the overview layout stable with no connections", async () => {
     stubOverviewFetch({ connections: [], tables: [] });
     renderOverview();

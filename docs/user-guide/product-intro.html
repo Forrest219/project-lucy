@@ -5,7 +5,7 @@
 | 文档名称 | Lucy 产品介绍 |
 | 文档类型 | Other |
 | 版本 | v1.3 |
-| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-24（澄清定位措辞；StarRocks/Oracle 数据源范围纠偏；审计留存表述纠偏；准确率指标加来源脚注；Eval 闭环自动化程度标注 Roadmap；列/行级权限措辞与 project-overview 对齐）；v1.2 更新 2026-06-24（权限管理卡片"表级 ACL"状态由 P1 改为已有，与 goal-checklist verified 对齐）；v1.3 更新 2026-06-24（Oracle 与 StarRocks 同列为 roadmap candidate；Eval 闭环表述改为"可手工/脚本触发即满足本期要求"，自动 Webhook/阈值告警维持 Roadmap） |
+| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-24（澄清定位措辞；StarRocks/Oracle 数据源范围纠偏；审计留存表述纠偏；准确率指标加来源脚注；Eval 闭环自动化程度标注 Roadmap；列/行级权限措辞与 project-overview 对齐）；v1.2 更新 2026-06-24（权限管理卡片"表级 ACL"状态由 P1 改为已有，与 goal-checklist verified 对齐）；v1.3 更新 2026-06-24（数据源范围收口；Eval 闭环表述改为"可手工/脚本触发即满足本期要求"，自动 Webhook/阈值告警维持 Roadmap）；v1.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | project-lucy docs / 产品设计 |
@@ -765,8 +765,8 @@
       <div class="feature-card boundary-danger">
         <div class="feature-icon icon-blue">🗄️</div>
         <h3>多数据源接入</h3>
-        <p>统一 DataSourceAdapter SPI，首版支持 MySQL + PostgreSQL（只读账号）。StarRocks、Oracle 均为 roadmap candidate，尚未启动协议兼容 spike。跨源 Join 是治理红线，不进入 Agent 自动查询路径。</p>
-        <span class="feature-tag tag-p1">Roadmap · StarRocks / Oracle 待立项</span>
+        <p>统一 DataSourceAdapter SPI，首版支持 MySQL + PostgreSQL（只读账号）。StarRocks 进入 R1 P1 gated support：先支持 MySQL wire 只读目标源配置与证据路径，live certification 通过前不标记 release verified；Oracle 仍为 roadmap candidate。跨源 Join 是治理红线，不进入 Agent 自动查询路径。</p>
+        <span class="feature-tag tag-p1">P1 · StarRocks gated support</span>
       </div>
 
       <div class="feature-card">
@@ -869,7 +869,7 @@
             </div>
             <div class="sf-db">
               <div class="sf-box-title">数据源</div>
-              <div class="sf-db-list">MySQL / PostgreSQL<br><span style="opacity:.7;">StarRocks / Oracle（Roadmap）</span></div>
+              <div class="sf-db-list">MySQL / PostgreSQL<br><span style="opacity:.7;">StarRocks（P1 gated）/ Oracle（Roadmap）</span></div>
               <span class="sf-readonly">read-only</span>
             </div>
           </div>
@@ -890,10 +890,10 @@
             <div class="sf-chips">
               <span class="sf-chip">MySQL</span>
               <span class="sf-chip">PostgreSQL</span>
-              <span class="sf-chip">StarRocks（Roadmap）</span>
+              <span class="sf-chip">StarRocks（P1 gated）</span>
               <span class="sf-chip">Oracle（Roadmap）</span>
             </div>
-            <div class="if-note">首版支持 MySQL + PostgreSQL；StarRocks、Oracle 均为 roadmap candidate，尚未启动协议兼容 spike</div>
+            <div class="if-note">首版支持 MySQL + PostgreSQL；StarRocks 为 R1 P1 gated target，live certification 前不进入 verified matrix；Oracle 仍为 roadmap candidate</div>
           </div>
 
           <div class="if-arrow">↓ Schema 扫描</div>

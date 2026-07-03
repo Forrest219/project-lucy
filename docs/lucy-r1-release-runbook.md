@@ -6,7 +6,7 @@
 | 文档类型 | Release / Operations Runbook |
 | 版本 | v0.1 |
 | 撰写日期 | 2026-07-02 |
-| 适用范围 | Lucy R1 受控数据服务层发布、回滚、Doris/Hermes 验收证据归档 |
+| 适用范围 | Lucy R1 受控数据服务层发布、回滚、Doris/Hermes 验收证据归档；StarRocks R1 P1 gated target 证据路径 |
 
 ## 1. 发布定位
 
@@ -27,6 +27,13 @@ R1 发布不证明资产梳理、权限审批、业务口径仲裁、行列权�
 - `lucy_query` 和 `lucy_read_source` 走 Lucy result metadata。
 - `lucy_begin_question` 能形成 question-level trace。
 - `/api/r1/observability` 能返回 audit、eval、Hermes QA 和 releaseSignals。
+
+StarRocks P1 gated target：
+
+- StarRocks 使用 `starrocks-r1` 作为示例 connection id，要求 `engine: starrocks`、`wire_protocol: mysql`、`readonly: true`、`r1_target: true`。
+- StarRocks evidence 使用 `LUCY_R1_STARROCKS_EVIDENCE` / `inbox/starrocks-r1-evidence.json`，与 Doris 分文件保存并共享 OLAP smoke check 名称。
+- 默认 `r1:status`、`r1:readiness:strict`、`r1:release-bundle` 仍以 Doris 为 target；只有显式 `--target starrocks` 才检查 StarRocks evidence。
+- live certification 通过前，release metadata 不得把 StarRocks 列为 verified database。
 
 ## 3. 发布检查清单
 

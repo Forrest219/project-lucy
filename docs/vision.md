@@ -24,7 +24,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 
 | 模块名 | 说明 | 优先级 |
 |---|---|---|
-| 多数据源接入 | MVP 支持 MySQL 与 PostgreSQL；StarRocks 退出首版 MVP，转 roadmap candidate，待协议兼容 spike 后重新评估 | P0 |
+| 多数据源接入 | MVP 支持 MySQL 与 PostgreSQL；StarRocks 进入 R1 P1 gated support，先完成 MySQL wire 只读目标源配置、证据路径和 stub 测试，live certification 通过前不进入 release verified matrix | P0 |
 | 语义与知识治理 | 维护语义层（字段别名、业务定义）、Wiki 文档、Knowledge Base；解决概念-实体歧义 | P0 |
 | Skill 管理 | 将结构化程序性知识（查询模板、计算逻辑）封装为可版本化的 Skill，供 KTX MCP Server 分发 | P0 |
 | 权限管理 | 表级 ACL；Service Account + Token 手动分配；不支持列/行级权限，不支持 SSO | P0 |
@@ -90,7 +90,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 - **Lucy Core Services**：系统核心，维护语义/知识库、Skill 仓库和权限 & Token 管理三个子服务。
 - **KTX MCP Server**：将语义事实和 Skill 封装为 MCP 工具集，是 Agent 获取上下文的唯一入口。
 - **Governance Gateway**：拦截所有 Agent 请求，完成 Token 鉴权、审计日志写入和限流，实现零信任访问控制。
-- **数据源层**：MVP 支持 MySQL 和 PostgreSQL；StarRocks 退出首版 MVP，需完成协议兼容 spike 后再评估是否进入正式支持范围。Gateway 代理查询，Agent 不直连数据库。
+- **数据源层**：MVP 支持 MySQL 和 PostgreSQL；StarRocks 进入 R1 P1 gated support，作为 MySQL wire 只读 OLAP target source 推进配置、证据路径和 stub 测试。live certification 通过前不作为 release verified 数据源。Gateway 代理查询，Agent 不直连数据库。
 - **审计存储层**：SQLite 保留近期热数据用于快速查询；历史数据归档至对象存储，保留 180 天以上。
 - **Eval 闭环**：语义层或 Skill 发生变更时自动触发 Eval Runner，结果写入 Ops Dashboard，形成准确率质量门禁。
 
@@ -102,7 +102,7 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 |---|---|---|
 | Token 手动分配 | Service Account Token 由管理员在 WebUI 中手动创建和分配，不提供自助申请或自动颁发 | 初期用户规模小，手动管理成本可接受；避免过度设计 |
 | Audit 持久化策略 | 审计日志写入 SQLite 作为热存储供即时查询；定期批量归档至对象存储（S3 兼容），保留 180 天+ | 兼顾查询性能与存储成本，SQLite 免运维 |
-| StarRocks MVP 范围 | StarRocks 退出首版 MVP；不再把 MySQL Wire Protocol 兼容性假设直接写成支持承诺 | KTX upstream 当前无现成 StarRocks connector；协议兼容、SQL 生成、join/measure/派生列行为均需独立 spike 验证 |
+| StarRocks R1 P1 范围 | StarRocks 作为 gated read-only OLAP target 推进；不把 MySQL Wire Protocol 兼容性直接写成 release verified 支持承诺 | 本期先做配置/模型识别、证据路径和 stub 测试；SQL 生成、join/measure/派生列行为仍需 live certification 验证 |
 | 不做列/行级权限 | 权限粒度止步于表级 ACL，不实现列级掩码或行级过滤 | 需求复杂度远超收益；语义层本身可通过 Skill 封装规避敏感字段 |
 | Agent 不直连数据库 | 所有数据查询必须经过 Governance Gateway，Agent 无法绕过鉴权和审计 | 保证审计完整性，防止未授权的直接查询 |
 | Eval 触发机制 | 语义层或 Skill 变更时自动触发 Eval，同时保留定期调度（如每日）兜底 | 变更触发保证即时质量反馈，定期调度防止数据源漂移导致的隐性退化 |
@@ -125,6 +125,6 @@ Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企�
 ## 6. 未决问题
 
 - 是否追加真实外部 PostgreSQL 客户环境验收；当前 demo PostgreSQL smoke gate 已作为 CI verified 路径。
-- StarRocks 协议兼容 spike 何时启动；spike 通过前不进入 MVP 支持范围。
+- StarRocks live certification 何时启动；通过前不进入 release verified matrix。
 - Kubernetes / Helm 部署路径进入哪个 roadmap 阶段。
 - Release metadata 是否在首版强制包含 SBOM。

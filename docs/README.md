@@ -19,6 +19,7 @@
 |---|---|
 | `lucy-r1-controlled-data-service-plan.md` | Lucy R1 受控数据服务层底座方案与实施计划 |
 | `lucy-r1-release-runbook.md` | Lucy R1 发布检查、Doris/Hermes 证据、排障和回滚手册 |
+| `starrocks-r1-support-plan.md` | StarRocks R1 P1 gated support 边界、证据路径与发布限制 |
 | `design-agent-permissions.md` | Module 1 Agent 权限管控详细设计 |
 | `design-db-connection.md` | 数据库接入模块技术设计 |
 | `design-eval-monitoring.md` | Module 2 Eval 配置与监控详细设计 |

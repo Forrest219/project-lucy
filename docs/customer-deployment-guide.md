@@ -153,6 +153,8 @@ docker compose exec lucy ktx --project-dir /data/lucy connection test <connectio
 
 ## 6. Semantic Layer Validation
 
+StarRocks R1 P1 gated support follows the same `driver: mysql` / `wire_protocol: mysql` shape as Doris, but remains pending live certification. Do not list StarRocks as release-verified for a customer deployment until `LUCY_R1_STARROCKS_EVIDENCE` has passed the explicit StarRocks target gate.
+
 配置或修改 semantic-layer 后运行：
 
 ```bash

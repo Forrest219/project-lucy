@@ -71,4 +71,46 @@ connections:
       schemas: ["ads"]
     });
   });
+
+  it("recognizes explicit StarRocks R1 target profiles without auto-promoting all StarRocks connections", async () => {
+    const root = await writeProject(`
+connections:
+  starrocks-r1:
+    driver: mysql
+    engine: starrocks
+    wire_protocol: mysql
+    readonly: true
+    r1_target: true
+    password: file:/tmp/starrocks-password
+    enabled_tables:
+      - mart.ceo_metric_snapshot
+  analytics-starrocks:
+    driver: starrocks
+    enabled_tables:
+      - ads.sales_daily
+`);
+
+    const project = await readProject(root);
+
+    expect(project.connections[0]).toMatchObject({
+      id: "starrocks-r1",
+      driver: "mysql",
+      engine: "starrocks",
+      wireProtocol: "mysql",
+      r1Target: true,
+      readOnlyExpected: true,
+      passwordSource: "file",
+      schemas: ["mart"],
+      enabledTables: ["mart.ceo_metric_snapshot"]
+    });
+    expect(project.connections[1]).toMatchObject({
+      id: "analytics-starrocks",
+      driver: "starrocks",
+      engine: "starrocks",
+      wireProtocol: "mysql",
+      r1Target: false,
+      readOnlyExpected: true,
+      schemas: ["ads"]
+    });
+  });
 });

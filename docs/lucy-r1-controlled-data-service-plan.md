@@ -30,7 +30,7 @@ Agent
 
 一句话目标：
 
-> 先把 Doris 打穿，再把它包进稳定 MCP 契约，随后加 Policy、Guardrail、Role-aware runtime、审计、Eval 和可观测性，形成生产级受控数据服务底座。
+> 先把 Doris 打穿，再把它包进稳定 MCP 契约，随后加 Policy、Guardrail、Role-aware runtime、审计、Eval 和可观测性，形成生产级受控数据服务底座。StarRocks 作为 R1 P1 gated target 同步推进配置、证据路径和 stub 测试，live certification 通过前不进入默认发布硬门禁。
 
 ## 2. R1 非目标
 
@@ -56,6 +56,7 @@ R1 只做 tool / connection / source / table / view 级授权，加 Query Guardr
 | 模块 | R1 要做什么 | 验收标准 |
 |---|---|---|
 | Doris / 目标源适配 | 打穿目标数据源连接、只读查询、SQL 方言、类型映射、分页、超时、错误归因 | Agent 可通过 Lucy 查询 Doris 权威视图；禁止写操作；慢查询和失败可归因 |
+| StarRocks P1 gated target | 以 MySQL wire protocol 表达 StarRocks 只读 OLAP target，补配置、模型、可选 evidence 和 stub 测试 | 默认 Doris R1 gate 不受影响；显式 StarRocks target 有独立 evidence，live certification 通过前不标记 verified |
 | MCP 工具契约 | 定义少而硬的工具面，不暴露混乱能力 | 工具列表稳定，文档清晰，Agent 不需要知道底层数据库连接 |
 | Policy Runtime | 执行 token / role / tool / connection / source / table / view 授权 | 未授权工具、source、表、视图访问必须 fail-closed，并写 denied audit |
 | Query Guardrail | 对合法工具调用继续做运行时保护 | 禁止 DML/DDL；限制 raw SQL；限制行数、超时、并发、敏感 source；所有拒绝有 reason |
@@ -162,6 +163,7 @@ Lucy 的 Eval 不只测问答准确率，也要测服务底座的安全行为。
 | Security regression eval | 越权拒绝、不可见 source 不泄露、raw SQL 拦截、敏感字段不返回、disabled token 失效 |
 | MCP contract eval | 工具 schema、返回结构、错误码、可见工具列表稳定 |
 | Doris smoke regression | 连接、只读、limit、timeout、类型映射、错误归因 |
+| StarRocks smoke fixture | 与 Doris 共享 OLAP smoke check 名称，使用独立 StarRocks evidence 文件；本期只要求 stub/fixture 通过 |
 
 触发规则：
 
