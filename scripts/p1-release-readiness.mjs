@@ -25,7 +25,7 @@ const P1_GATES = [
   ["skills", ["run", "smoke:p1:skills"]],
   ["endpoint", ["run", "smoke:p1:endpoint"]],
   ["observability", ["run", "smoke:p1:observability"]],
-  ["agent-e2e", ["run", "smoke:p1:agent-e2e"]],
+  ["agent-e2e", ["run", "e2e:agent"], { kind: "e2e", runtime: "configured real agent commands" }],
   ["business-eval-full", ["run", "smoke:p1:business-eval-full"]],
   ["starrocks-certification", ["run", "smoke:p1:starrocks-certification"]]
 ];
@@ -38,6 +38,8 @@ const USAGE = `Usage:
   npm run smoke:p1:release-readiness -- --list
 
 Aggregates P1上线达标 gates and writes evidence JSON.
+The agent-e2e gate is intentionally wired to npm run e2e:agent. Smoke/unit tests are not
+accepted as a substitute for real agent runtime validation.
 Exit behavior:
   - failed gates always fail the run.
   - blocked gates fail unless --allow-blocked is supplied.
@@ -62,12 +64,12 @@ function classifyOutput(code, stdout, stderr) {
   return "failed";
 }
 
-function runGate(id, npmArgs) {
+function runGate(id, npmArgs, metadata = {}) {
   return new Promise((resolve) => {
     const label = `npm ${npmArgs.join(" ")}`;
     console.log(`\n[p1-release-readiness] ${id}: ${label}`);
     if (dryRun) {
-      resolve({ id, command: label, status: "dry-run", exitCode: 0, stdout: "", stderr: "" });
+      resolve({ id, command: label, ...metadata, status: "dry-run", exitCode: 0, stdout: "", stderr: "" });
       return;
     }
     const child = spawn("npm", npmArgs, {
@@ -89,13 +91,14 @@ function runGate(id, npmArgs) {
     });
     child.on("error", (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      resolve({ id, command: label, status: "failed", exitCode: -1, stdout: "", stderr: message });
+      resolve({ id, command: label, ...metadata, status: "failed", exitCode: -1, stdout: "", stderr: message });
     });
     child.on("close", (code) => {
       const exitCode = code ?? -1;
       resolve({
         id,
         command: label,
+        ...metadata,
         status: classifyOutput(exitCode, stdout, stderr),
         exitCode,
         stdout: redact(stdout).slice(-4000),
@@ -124,15 +127,15 @@ if (listOnly) {
     includeP0,
     allowBlocked,
     count: gates.length,
-    gates: gates.map(([id, npmArgs]) => ({ id, command: `npm ${npmArgs.join(" ")}` }))
+    gates: gates.map(([id, npmArgs, metadata = {}]) => ({ id, command: `npm ${npmArgs.join(" ")}`, ...metadata }))
   }, null, 2));
   process.exit(0);
 }
 
 const startedAt = new Date().toISOString();
 const results = [];
-for (const [id, npmArgs] of gates) {
-  results.push(await runGate(id, npmArgs));
+for (const [id, npmArgs, metadata = {}] of gates) {
+  results.push(await runGate(id, npmArgs, metadata));
 }
 
 const summary = {

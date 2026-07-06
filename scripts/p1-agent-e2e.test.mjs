@@ -228,7 +228,7 @@ test("HTML report renders human-readable redacted evidence", () => {
     generatedBy: "test",
     status: "pass",
     summary: { profiles: 1, pass: 2, fail: 0, blocked: 0, skip: 0, dryRun: 0 },
-    config: { proxyUrl: "http://127.0.0.1:7879/mcp" },
+    config: { proxyUrl: "http://127.0.0.1:7879/mcp", agentRuntime: "hermes-local-real", stub: false },
     profiles: [{
       id: "main",
       label: "main process",
@@ -244,6 +244,8 @@ test("HTML report renders human-readable redacted evidence", () => {
   assert(html.includes("预检"));
   assert(html.includes("直接 MCP 控制检查"));
   assert(html.includes("Agent 端到端检查"));
+  assert(html.includes("hermes-local-real"));
+  assert(html.includes("Stub 模式"));
   assert(html.includes("agent:kx-income-001"));
   assert.equal(html.includes("main-token"), false);
 });

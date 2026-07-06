@@ -183,9 +183,16 @@ const DEFAULT_AGENT_COMMANDS = {
 };
 
 const USAGE = `Usage:
+  npm run e2e:agent
+  npm run e2e:agent -- --dry-run
+  npm run e2e:agent -- --profile main --profile hermes
   npm run smoke:p1:agent-e2e
   npm run smoke:p1:agent-e2e -- --dry-run
   npm run smoke:p1:agent-e2e -- --profile main --profile hermes
+
+Note:
+  The e2e:* commands are the canonical database-to-agent E2E gates. The smoke:* names are
+  compatibility aliases and must not be used to downgrade real-agent validation into stub-only tests.
 
 Options:
   --profile <id>            Profile to run: main, hermes, moz. Repeatable. Defaults to all three.
@@ -1002,7 +1009,9 @@ function renderHtmlReport(evidence) {
     ["失败", summary.fail ?? 0],
     ["阻塞", summary.blocked ?? 0],
     ["跳过", summary.skip ?? 0],
-    ["演练", summary.dryRun ?? 0]
+    ["演练", summary.dryRun ?? 0],
+    ["Agent 运行时", safe.config?.agentRuntime || "未声明"],
+    ["Stub 模式", safe.config?.stub === true ? "是" : safe.config?.stub === false ? "否" : "未声明"]
   ].map(([label, value]) => `<div class="card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
 
   const profileSections = profiles.map((profile) => `
@@ -1114,7 +1123,10 @@ async function runAgentE2E({ args, env = process.env } = {}) {
       artifacts: args.artifacts,
       htmlReport: args.htmlReport,
       timeoutMs: args.timeoutMs,
-      agentTimeoutMs: args.agentTimeoutMs
+      agentTimeoutMs: args.agentTimeoutMs,
+      gateKind: "e2e",
+      agentRuntime: env.LUCY_E2E_AGENT_RUNTIME || "configured-agent-command",
+      stub: env.LUCY_E2E_STUB === "true" ? true : env.LUCY_E2E_STUB === "false" ? false : null
     },
     profiles: [],
     summary: {}

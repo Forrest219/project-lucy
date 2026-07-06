@@ -30,6 +30,7 @@ const EXIT_CODES = {
 };
 
 const USAGE = `Usage:
+  npm run e2e:agent:local-hermes
   npm run smoke:p1:agent-e2e:local-hermes
   node scripts/p1-agent-e2e-local-hermes.mjs --replace-existing
 
@@ -48,7 +49,8 @@ Options:
   --help                     Show this help.
 
 This harness generates one-run tokens in memory, writes only their hashes to an ignored access config,
-starts KTX MCP and Lucy WebUI/proxy with LUCY_ACCESS_CONFIG_PATH, then runs Hermes workhorse and moz E2E.`;
+starts KTX MCP and Lucy WebUI/proxy with LUCY_ACCESS_CONFIG_PATH, then runs real Hermes workhorse
+and moz E2E. The smoke:* command name is a compatibility alias; this harness is a real-agent E2E gate.`;
 
 function parseArgs(argv = process.argv) {
   const args = {
@@ -471,6 +473,13 @@ async function runLocalHermesE2E({ args, env = process.env } = {}) {
       webuiLog: resolve(REPO_ROOT, args.webuiLog),
       proxyUrl: DEFAULT_PROXY_URL,
       profiles: ["hermes", "moz"],
+      gateKind: "e2e",
+      agentRuntime: "hermes",
+      runtimeProfiles: [
+        { id: "hermes", hermesHome: HERMES_WORKHORSE_HOME },
+        { id: "moz", hermesHome: HERMES_MOZ_HOME }
+      ],
+      stub: false,
       replaceExisting: args.replaceExisting,
       keepServices: args.keepServices,
       dryRun: args.dryRun
@@ -521,6 +530,8 @@ async function runLocalHermesE2E({ args, env = process.env } = {}) {
       LUCY_E2E_HERMES_TOKEN: tokens.hermesToken,
       LUCY_E2E_MOZ_TOKEN: tokens.mozToken,
       LUCY_E2E_MOZ_EXPECTED_ROLE: "kx_readonly",
+      LUCY_E2E_AGENT_RUNTIME: "hermes-local-real",
+      LUCY_E2E_STUB: "false",
       LUCY_E2E_AGENT_COMMANDS: JSON.stringify(localAgentCommands())
     };
     const result = await runCapture(process.execPath, [
@@ -537,7 +548,7 @@ async function runLocalHermesE2E({ args, env = process.env } = {}) {
       timeoutMs: args.agentTimeoutMs * 2
     });
     wrapper.runner = {
-      command: "node scripts/p1-agent-e2e.mjs --profile hermes --profile moz",
+      command: "npm run e2e:agent -- --profile hermes --profile moz",
       exitCode: result.code,
       signal: result.signal,
       stdoutTail: tail(result.stdout),

@@ -19,6 +19,9 @@ describe("p1 release readiness aggregate", () => {
       "business-eval-full",
       "starrocks-certification"
     ]);
+    const agentGate = parsed.gates.find((gate) => gate.id === "agent-e2e");
+    assert.equal(agentGate.command, "npm run e2e:agent");
+    assert.equal(agentGate.kind, "e2e");
   });
 
   it("dry-runs all P1 gates and writes aggregate evidence", () => {
