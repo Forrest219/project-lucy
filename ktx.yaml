@@ -37,6 +37,29 @@ connections:
     # NOTE: `schemas` 控制 scan 范围；`enabled_tables`（上方）控制问答可见范围。
     schemas:
       - dataforai
+  starrocks-r1:
+    driver: mysql
+    engine: starrocks
+    wire_protocol: mysql
+    readonly: true
+    r1_target: true
+    enabled_tables:
+      - demo_finance.ads_finance_revenue_day
+      - meta.field_abbr_dict
+      - meta.dict_enum
+      - meta.source_system_registry
+      - meta.mv_registry
+      - meta.data_semantic_dict
+    host: 10.69.65.62
+    port: 8090
+    database: demo_finance
+    username: admin
+    password: file:/Users/zhangxingchen/Projects/project-lucy/.ktx/secrets/starrocks-r1-password
+    schemas:
+      - ai
+      - sandbox
+      - meta
+      - demo_finance
 storage:
   state: sqlite
   search: sqlite-fts5
@@ -97,3 +120,4 @@ setup:
   database_connection_ids:
     - poc-mysql-aliyun
     - mysql-aliyun
+    - starrocks-r1
