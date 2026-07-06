@@ -162,6 +162,22 @@ Runner 只能输出上表中的状态和退出码；同一次运行出现多类�
 | `range_bucket` | 新值落出原选项区间或正确 bucket 变化 | 标记 `stale`，阻断流水线 |
 | `conceptual` | 数据漂移不影响概念题正确性 | 不阻断，仅记录 drift 影响评估 |
 
+### 6.4 P1 完整业务 eval 证据链
+
+`scripts/p1-business-eval-full.mjs` 是 P1 完整业务 LLM / agent eval 的编排入口，覆盖 `superstore`、`kx_financial`、`data_agent_poc` 三套 eval YAML。它不替代 `scripts/eval-runner.mjs` 的 case 执行逻辑，只负责前置可用性检查、逐套调用 runner、汇总证据。
+
+运行前必须先做 precheck：agent CLI 可执行、模型密钥或 CLI 登录可用、MCP endpoint 可达、token 在 endpoint 需要鉴权时可用。precheck 不通过时仍必须写出 `inbox/p1-business-eval-full-evidence.json`，状态为 `blocked`，并不得进入 LLM case 执行。
+
+P1 full eval 退出码：
+
+| 状态 | Exit code | 说明 |
+|---|---:|---|
+| `pass` | `0` | 三套 runner summary 均为 0 fail |
+| `fail` | `1` | precheck 通过，但任一 suite 的 runner 失败或 summary 含失败 case |
+| `blocked` | `2` | agent CLI / model secret / MCP endpoint / MCP token 等执行前置条件缺失 |
+
+默认汇总证据落盘到 `inbox/p1-business-eval-full-evidence.json`；每套 runner JSON 和 stderr 摘要落在 `inbox/p1-business-eval-full-{suite}.json` 与 `.stderr.log`，用于保留从 precheck 到 case summary 的完整证据链。
+
 ---
 
 ## 7. 元数据要求

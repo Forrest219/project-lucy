@@ -170,5 +170,6 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 2. ✅ `access.yaml` 等治理配置写入已补 dryRun、diff、输入校验与审计；`config_change_log` 支持 CSV 导出。真实 `ktx.yaml` 已改为本机 ignored 配置，仓库只提交 `ktx.yaml.example`。
 3. ✅ 建立 spec 防漂移检查：route/status、API/spec、skill dependencies、eval schema、access role selector，并新增模板指针字段 fail 规则。
 4. 补全当前 API / Model 索引，避免 `webui/docs/03-04` 与实现漂移。
-5. 补齐 semantic-layer reindex、wiki_search、完整 business eval 的 release evidence。
-6. 明确 v1 后续范围：Skill Editor / endpoint lifecycle / observability 是否进入产品承诺，并为进入项补 spec、UAT 和 release gate。
+5. ✅ P1 headless gates 已新增：`smoke:p1:context`、`smoke:p1:skills`、`smoke:p1:endpoint`、`smoke:p1:observability`、`smoke:p1:business-eval-full`、`smoke:p1:starrocks-certification`、`smoke:p1:release-readiness`。
+6. 真实上线前仍需在具备 runtime/secret 的环境补齐 evidence：KTX/proxy runtime context、endpoint live token、observability live URL、完整 agent eval、StarRocks live certification。
+7. 明确 v1 后续范围：Skill Editor、复杂告警系统、Kubernetes/Helm 不在本轮 headless 达标范围；若进入产品承诺需另补 spec、UAT 和 release gate。

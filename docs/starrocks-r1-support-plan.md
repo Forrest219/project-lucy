@@ -60,6 +60,7 @@ StarRocks 使用独立 evidence 文件，不复用 Doris evidence 文件：
 
 - 环境变量：`LUCY_R1_STARROCKS_EVIDENCE`
 - 默认输出：`inbox/starrocks-r1-evidence.json`
+- certification summary：`inbox/starrocks-r1-certification-summary.json`
 - engine：`starrocks`
 - wireProtocol：`mysql`
 
@@ -78,6 +79,21 @@ Doris evidence 继续使用：
 - `timeoutClassification`
 - `errorTaxonomy`
 - `lucyMetadata`
+
+StarRocks live certification 的聚合入口是：
+
+```bash
+node scripts/p1-starrocks-certification.mjs
+```
+
+该脚本只封装判定流程，不把 StarRocks 提升为 verified；主控 npm script `npm run smoke:p1:starrocks-certification` 仅作为统一 gate 入口。流程顺序为：
+
+1. precheck：确认 `ktx.yaml` 内显式 StarRocks R1 target、Lucy MCP Proxy URL/token、StarRocks live evidence 输入、只读账号人工确认、MCP negative samples 与 Hermes report 均存在。
+2. 执行 `npm run r1:starrocks-smoke -- ...` 生成 StarRocks vertical slice evidence。
+3. 执行 `npm run r1:mcp-contract -- ...` 生成匹配 StarRocks target 的 MCP contract evidence。
+4. 执行 `npm run r1:readiness:strict -- --target starrocks` 做最终结构化判定。
+
+缺少真实环境或 evidence 输入时，脚本必须写出 `status: "blocked"` 到 `inbox/starrocks-r1-certification-summary.json`，并跳过 live 命令执行；这类 blocked evidence 只说明不可判定，不得被解释为 StarRocks 已通过认证。
 
 ## 5. 发布限制
 

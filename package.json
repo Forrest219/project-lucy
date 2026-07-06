@@ -36,7 +36,15 @@
     "smoke:p0:customer": "node scripts/p0-customer-path-smoke.mjs",
     "smoke:p0:demo": "node scripts/p0-demo-docker-smoke.mjs",
     "smoke:p0:postgres-demo": "node scripts/p0-postgres-demo-smoke.mjs",
-    "smoke:p0:business-eval": "node scripts/p0-business-eval-smoke.mjs"
+    "smoke:p0:business-eval": "node scripts/p0-business-eval-smoke.mjs",
+    "smoke:p1:context": "node scripts/p1-context-smoke.mjs",
+    "smoke:p1:skills": "node scripts/p1-skills-smoke.mjs",
+    "smoke:p1:endpoint": "node scripts/p1-endpoint-smoke.mjs",
+    "smoke:p1:observability": "node scripts/p1-observability-smoke.mjs",
+    "smoke:p1:business-eval-full": "node scripts/p1-business-eval-full.mjs --require-mcp-token",
+    "smoke:p1:starrocks-certification": "node scripts/p1-starrocks-certification.mjs",
+    "smoke:p1:release-readiness": "node scripts/p1-release-readiness.mjs",
+    "smoke:p1:release-readiness:test": "node --test scripts/p1-release-readiness.test.mjs"
   },
   "dependencies": {
     "yaml": "^2.6.0"

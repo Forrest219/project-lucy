@@ -30,6 +30,13 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:business-eval` | business eval catalog | verifies core eval suites can be read by runner |
 | `npm run smoke:p0:customer` | customer/manual | verifies configured real DB path on this machine |
+| `npm run smoke:p1:context` | context governance | semantic-layer inventory/readability and key wiki playbook evidence; optional KTX/proxy runtime checks |
+| `npm run smoke:p1:skills` | skill governance | `SKILL.md` frontmatter, dependency references, runtime boundary, and eval `skill_version` coverage |
+| `npm run smoke:p1:endpoint` | MCP lifecycle | authenticated proxy precheck, `initialize`, `tools/list`, and `lucy_read_source` forwarding metadata |
+| `npm run smoke:p1:observability` | observability | generic `/api/observability` evidence; reports blocked if WebUI service is not reachable |
+| `npm run smoke:p1:business-eval-full` | business eval full run | full Superstore, KX Financial, and Data Agent POC agent eval; requires agent/model/MCP environment |
+| `npm run smoke:p1:starrocks-certification` | R1 StarRocks gated support | fail-closed certification wrapper; missing live StarRocks config writes blocked evidence |
+| `npm run smoke:p1:release-readiness` | aggregate | runs P1 gates and writes aggregate evidence; use `--allow-blocked` only for pre-release evidence collection |
 | `npm run audit:ktx-diff` | governance | regenerates KTX vs Lucy first/second-level directory and file diff audit |
 | `npm run compat:ktx-upgrade -- --candidate <version>` | runtime + platform upgrade | validates a candidate bundled KTX version through Docker/demo/business gates |
 
@@ -48,6 +55,19 @@ npm run smoke:p0:demo
 npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval
 ```
+
+Required before promoting P1 governance capabilities to verified:
+
+```bash
+npm run smoke:p1:context -- --with-ktx --proxy-url <lucy-mcp-url> --token <token>
+npm run smoke:p1:skills
+npm run smoke:p1:endpoint -- --proxy-url <lucy-mcp-url> --token <token> --connection <id> --source <source>
+npm run smoke:p1:observability -- --url <webui-url>/api/observability
+npm run smoke:p1:business-eval-full -- --require-mcp-token
+npm run smoke:p1:release-readiness
+```
+
+If the machine lacks agent/model secrets, a running WebUI service, Lucy proxy token, or StarRocks live config, the relevant P1 gate must write `blocked` evidence rather than returning a fake pass. `npm run smoke:p1:release-readiness -- --allow-blocked` is only for collecting a pre-release evidence bundle while known external dependencies are still unavailable.
 
 Optional but recommended before customer-facing validation:
 
@@ -112,6 +132,7 @@ Full business eval, requiring agent/model credentials:
 ```bash
 npm run eval -- --cases evals/superstore/eval/superstore-eval-cases.yaml --format md
 npm run eval -- --cases evals/kx_financial/eval/kx_financial-eval-cases.yaml --format md
+npm run eval -- --cases evals/data_agent_poc/eval/data_agent_poc-eval-cases.yaml --format md
 ```
 
 Full eval should run in an environment with:
@@ -144,6 +165,12 @@ Recommended CI jobs:
 | demo-e2e | `npm run smoke:p0:demo` |
 | postgres-demo-e2e | `npm run smoke:p0:postgres-demo` |
 | business-eval-catalog | `npm run smoke:p0:business-eval` |
+| p1-context | `npm run smoke:p1:context -- --strict-runtime` in a prepared KTX/proxy environment |
+| p1-skills | `npm run smoke:p1:skills` |
+| p1-endpoint | protected secret environment: `npm run smoke:p1:endpoint -- --proxy-url <url> --token <token>` |
+| p1-observability | service environment: `npm run smoke:p1:observability -- --url <url>/api/observability` |
+| p1-business-eval-full | protected model/MCP secret environment: `npm run smoke:p1:business-eval-full -- --require-mcp-token` |
+| p1-release-readiness | `npm run smoke:p1:release-readiness` |
 | ktx-diff-audit | `npm run audit:ktx-diff -- --out inbox/ktx-lucy-diff-$(date +%F).md` |
 | ktx-upgrade-compat | `npm run compat:ktx-upgrade -- --candidate <version>` |
 | customer-real-db | manual or protected secret environment: `npm run smoke:p0:customer` |

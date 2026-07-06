@@ -81,17 +81,18 @@ Lucy Docker image = Lucy platform + pinned KTX runtime
 | 数据库连接 | 已验证 | 本机 ignored `ktx.yaml`, `ktx.yaml.example`, `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml`, `examples/docker-demo/`, `examples/postgres-demo/`; `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` | Demo Docker MySQL、Demo Docker PostgreSQL 与本机真实 MySQL 连接均有验证路径；真实连接配置按机器本地维护，仓库只提交模板和示例；WebUI 配置向导属于后续体验增强 |
 | 本机运行配置隔离 | 已实现 | `.gitignore`, `ktx.yaml.example`, `webui/config/access.yaml`; PR `codex/isolate-local-runtime-state` | 真实 `ktx.yaml` 不再作为共享主干配置提交；本机 secret path 与 token 明文只存在本机；`forrest_local` 过渡期同时接受 v3/v4 token hash |
 | Schema 扫描 / 读取 | 已验证 | `semantic-layer/`, `examples/docker-demo/project-template/semantic-layer/`, `examples/postgres-demo/project-template/semantic-layer/`; `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` | Demo gate 经 Lucy MCP Proxy 调用 `sl_read_source` 读取语义/schema 内容；KTX 0.13.0 无顶层 `scan` 命令，P0 以 manifest/read/reindex 覆盖 |
-| Semantic layer 管理 | 部分完成 | `semantic-layer/`, `webui/server/semantic-layer.ts`, `webui/src/pages/TableEditor.tsx` | 用户可编辑、保存、diff、validate、reindex semantic-layer overlay |
-| Wiki / context 管理 | 部分完成 | `wiki/`, `webui/server/wiki.ts`, `webui/src/pages/WikiEditor.tsx` | 用户可维护 wiki/context，并让 KTX wiki 检索命中 |
-| Skill 管理 | 部分完成 | `skills/warehouse/`, `skills/reviewer/`, `skills/domains/superstore/`, `skills/analysis/`；运行时 instructions 来源 `webui/config/data-qa-instructions.md`；目前无 WebUI Skill Editor 模块（参见 `docs/project-overview.md` §6 WebUI 7 模块列表，未含 Skill） | Skill 内容可被数据问答运行时按需引用并产生预期回答路径；WebUI 内可编辑/版本化/纳入 eval 回归覆盖后方可视为 verified |
-| MCP endpoint 管理 | 部分完成 | `.mcp.json`, `webui/server/proxy/*`, `webui/src/pages/Onboarding.tsx`, `webui/docs/07-mcp-auth-proxy-spec.md` | 用户可获得 agents 平台可用的 MCP endpoint/token 配置 |
+| Semantic layer 管理 | 已实现 | `semantic-layer/`, `webui/server/semantic-layer.ts`, `webui/src/pages/TableEditor.tsx`, `scripts/p1-context-smoke.mjs`; `npm run smoke:p1:context` | 静态 inventory/readability gate 已落地；达到“已验证”需在发布环境追加 `--with-ktx` 和 proxy runtime evidence |
+| Wiki / context 管理 | 已实现 | `wiki/`, `webui/server/wiki.ts`, `webui/src/pages/WikiEditor.tsx`, `scripts/p1-context-smoke.mjs`; `inbox/p1-context-evidence.json` | 关键 playbook 存在性 gate 已落地；达到“已验证”需证明 `wiki_search` 在 KTX/Lucy proxy 中命中 |
+| Skill 管理 | 已实现 | `skills/`, `skills/README.md`, `scripts/p1-skills-smoke.mjs`, `webui/config/data-qa-instructions.md`; `npm run smoke:p1:skills` | 本期不交付 Skill Editor；文件治理、依赖、版本、runtime 边界与 eval `skill_version` 已可 headless 验证 |
+| MCP endpoint 管理 | 已实现 | `.mcp.json`, `webui/server/proxy/*`, `scripts/p1-endpoint-smoke.mjs`, `webui/docs/07-mcp-auth-proxy-spec.md` | endpoint 生命周期 smoke 已覆盖 URL/token precheck、authenticated initialize、tools/list 和关键 forwarding；达到“已验证”需在发布环境提供真实 proxy/token evidence |
 | 鉴权 / ACL / 审计 | 已验证 | `webui/config/access.yaml`, `webui/server/proxy/*`, `webui/server/admin/*`, `docs/security-guide.md`, `scripts/security-baseline.mjs`; `npm run security:baseline` | token、role/ACL、audit log 可配置、可验证、可追溯 |
 | Agent 接入向导 | 已验证 | `webui/src/pages/Onboarding.tsx`, `webui/src/__tests__/onboarding.test.tsx`, `docs/deployment-docker.md`; `npm run smoke:p0:demo`, `npm run smoke:p0:customer` | MCP 配置文档已有；demo gate 使用 bearer token 经 Lucy MCP Proxy 完成 `sl_read_source` 与 `sl_query`；WebUI 已提供上线检查和 MCP config 复制入口 |
 | MCP client 兼容性 | 已验证 | 人工验收测试：Claude Code、Codex、Openclaw、Hermes、Cursor 五个 MCP client（2026-06-24，Forrest 验证） | 五个 client 均可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用；新增 client 需补充至本表才视为已支持范围 |
-| 业务 eval | 部分完成 | `evals/`, `scripts/eval-runner.mjs`, `scripts/p0-business-eval-smoke.mjs`; `npm run smoke:p0:business-eval` | 本期验收要求已降级：eval case 可配置、可手工或脚本触发执行、执行结果留痕即满足要求；不要求自动 webhook 触发、阈值告警或每日 Cron 兜底（列为后续可选增强，非本期范围）。完整 LLM/agent eval 执行仍依赖外部 agent/model 环境，这是唯一剩余阻塞项 |
+| 业务 eval | 已实现 | `evals/`, `scripts/eval-runner.mjs`, `scripts/p0-business-eval-smoke.mjs`, `scripts/p1-business-eval-full.mjs`; `npm run smoke:p0:business-eval` | Superstore、KX Financial、Data Agent POC 的 full-run 入口和 blocked precheck 已落地；达到“已验证”需在具备 agent/model/MCP secret 的环境跑完并归档 artifact |
 | Runtime 兼容性测试 | 已验证 | `scripts/p0-smoke.mjs`, `scripts/p0-demo-docker-smoke.mjs`, `scripts/p0-postgres-demo-smoke.mjs`, `scripts/p0-customer-path-smoke.mjs`; `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` | 内置 KTX 的 version、Python runtime、MCP tools/list、semantic-layer validate/query 基础能力已有 MySQL/PostgreSQL smoke gate |
 | 平台 smoke 测试 | 已验证 | `scripts/p0-smoke.mjs`, `scripts/p0-demo-docker-smoke.mjs`, `scripts/p0-postgres-demo-smoke.mjs`; `npm run smoke:p0`, `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` | WebUI build/test、API health、static SPA、Docker compose、MCP proxy auth/ACL 关键路径已覆盖 |
 | 发布门禁 | 已验证 | `.github/workflows/lucy-release.yml`; `docs/release-ci.md`; `npm run smoke:p0`, `npm run security:baseline`, `npm run smoke:p0:docker`, `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer`, `npm run smoke:p0:business-eval`, `npm run audit:ktx-diff`, `npm run compat:ktx-upgrade`; `inbox/lucy-p0-security-baseline-2026-06-21.md` | P0 自动化 release baseline 已有可复验命令；P1 已补 KTX diff audit、WebUI onboarding、PostgreSQL gate、release artifacts 与 Docker secrets 示例；完整 LLM business eval 仍依赖外部 agent/model 环境 |
+| P1 发布达标准备度 | 已实现 | `scripts/p1-release-readiness.mjs`; `npm run smoke:p1:release-readiness -- --dry-run`; `docs/test-layers-and-release-gates.md` | P1 聚合 gate 已串起 context、skills、endpoint、observability、business eval full、StarRocks certification；真实发布环境不得用 `--allow-blocked` 代替通过 |
 | 版本矩阵 | 已实现 | `docs/version-matrix.md` | Lucy version、bundled KTX version、Node/Python/runtime、数据库、MCP client 兼容性可追踪 |
 | 升级兼容性 | 已实现 | `scripts/ktx-upgrade-compat.mjs`, `docs/release-ci.md`, `.github/workflows/lucy-release.yml` | KTX 升级前后自动验证 CLI/MCP/semantic-layer/config 兼容性 |
 
@@ -107,13 +108,12 @@ Lucy Docker image = Lucy platform + pinned KTX runtime
 | 模块 / 能力 | 当前状态 | 交付影响 | 下一步 |
 |---|---|---|---|
 | WebUI 管理台 | 内部治理 UI 已实现并有测试，但首版客户交付采用 headless 路径 | 未达到“客户标准入口”交付预期；当前只作为内部质量门禁和后续产品化基础 | 若要承诺给客户使用，需补稳定性验收、用户文档、部署入口和 UAT 证据 |
-| Skill 管理 / Skill Editor | 文件资产存在，WebUI 编辑、版本化、运行时自动加载闭环未开发 | 不能宣称 Skill 管理平台能力；只能按文件治理和人工 review 使用 | 定义 Skill Editor / 版本化 / eval 回归方案，或明确维持 v1 后续范围 |
-| MCP endpoint 生命周期管理 | 已有 proxy、token 和 config 复制；endpoint 启停、健康、轮换、状态控制 UI 未开发 | 未达到“管理 MCP endpoint 生命周期”的产品化预期 | 将当前能力表述为“接入配置与代理”；生命周期管理另立 P1/P2 设计与 gate |
-| 完整业务 eval 执行 | Eval YAML、runner、WebUI run/monitor 已实现；完整 LLM/agent eval 依赖外部 agent/model secret | 当前只满足 catalog/smoke 和可手工触发要求，未达到自动质量门禁预期 | 在具备 agent/model secret 的环境跑完整 Superstore/KX eval 并归档报告 |
-| Semantic layer reindex 证据 | CLI/demo gate 可验证；WebUI 用户路径和留痕证据仍不完整 | WebUI 语义层维护从“可编辑”到“可交付治理闭环”还差验收证据 | 补 WebUI reindex 用户路径说明或 CLI handoff，并在 release evidence 归档 |
-| Wiki search 命中证据 | Wiki 编辑已实现；KTX `wiki_search` 命中证据未形成 release gate | 业务上下文管理能力未达到“已验证” | 增加 wiki_search smoke/eval 证据，覆盖关键 playbook |
-| 系统可观测性 / 告警 | `/api/r1/observability` 覆盖 R1 最小排障；通用 metrics、告警、日志聚合、容量统计未开发 | 不满足平台运营监控交付预期；当前客户文档已声明不在首版范围 | 后续阶段定义 metrics/alert/log retention spec |
-| StarRocks live certification | 配置形态和 R1 P1 gated 证据路径已存在；真实集群认证仍 pending | 不能列为 release verified database | 仅在 `LUCY_R1_STARROCKS_EVIDENCE` 和关联 gates 通过后提升状态 |
+| Skill Editor | 本期明确不开发；Skill 文件治理 gate 已落地 | 不能宣称 WebUI Skill 编辑器能力 | 维持后续范围，若进入产品承诺再补 UI/spec/UAT |
+| 完整业务 eval 执行 | full-run 脚本已实现；真实执行依赖 agent/model/MCP secret | 缺 secret 时只能 blocked，不能作为已验证质量门禁 | 在受控 secret 环境跑 `npm run smoke:p1:business-eval-full -- --require-mcp-token` 并归档报告 |
+| Semantic layer / wiki runtime 证据 | 静态 gate 已通过；KTX/proxy runtime 部分默认 skipped | 未接入 runtime evidence 前不能升为已验证 | 发布环境跑 `npm run smoke:p1:context -- --with-ktx --proxy-url <url> --token <token>` |
+| MCP endpoint live 证据 | endpoint smoke 已实现；真实 proxy/token 未在本地 gate 中运行 | 本地无服务时输出 blocked，不能作为已验证 | 发布环境跑 `npm run smoke:p1:endpoint -- --proxy-url <url> --token <token>` |
+| StarRocks live certification | certification wrapper 已实现；无真实 StarRocks 配置时 blocked | 不得写入 verified database matrix | 提供真实 StarRocks config/evidence 后跑 `npm run smoke:p1:starrocks-certification` |
+| 复杂告警系统 | 通用 `/api/observability` 已落地；复杂告警、日志聚合、容量规划未开发 | 满足最小 headless observability，不满足完整运维平台 | 作为后续阶段定义 metrics/alert/log retention spec |
 | Kubernetes / Helm | 明确 non-goal，未开发 | 不影响当前 Docker Compose headless 交付；不满足云原生部署预期 | 后续另启部署形态设计 |
 
 ## 6. Release Gates

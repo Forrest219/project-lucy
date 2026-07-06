@@ -71,9 +71,33 @@ type EvalObservability = {
 };
 
 const R1_EVAL_PASS_RATE_THRESHOLD = 0.95;
+const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
+const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
 
 function rate(numerator: number, denominator: number): number {
   return denominator > 0 ? numerator / denominator : 0;
+}
+
+function redactText(value: string): string {
+  return value.replace(SENSITIVE_PAIR_RE, "[REDACTED]");
+}
+
+function redactSensitive(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSensitive);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => !SENSITIVE_KEY_RE.test(key))
+        .map(([key, nested]) => [key, redactSensitive(nested)])
+    );
+  }
+  if (typeof value === "string") return redactText(value);
+  return value;
+}
+
+function signalStatus(count: number, bad = false): "ok" | "warn" | "no_data" {
+  if (count <= 0) return "no_data";
+  return bad ? "warn" : "ok";
 }
 
 function r1EvalGatePassed(evalStatus: EvalObservability): boolean {
@@ -341,7 +365,129 @@ async function readEvalObservability(hours: number): Promise<EvalObservability> 
   };
 }
 
+async function readGenericObservability(hours: number, slowMs: number) {
+  const storage = {
+    status: "ok" as "ok" | "degraded",
+    audit: "ok" as "ok" | "error",
+    eval: "ok" as "ok" | "error"
+  };
+  let audit: Awaited<ReturnType<typeof readR1AuditObservability>> | undefined;
+  let evalStatus: EvalObservability | undefined;
+  const errors: Array<{ component: "audit" | "eval"; message: string }> = [];
+
+  try {
+    audit = await readR1AuditObservability({ hours, slowMs });
+  } catch (error) {
+    storage.status = "degraded";
+    storage.audit = "error";
+    errors.push({ component: "audit", message: error instanceof Error ? error.message : String(error) });
+  }
+
+  try {
+    evalStatus = await readEvalObservability(hours);
+  } catch (error) {
+    storage.status = "degraded";
+    storage.eval = "error";
+    errors.push({ component: "eval", message: error instanceof Error ? error.message : String(error) });
+  }
+
+  const emptyAudit = {
+    window: { since: new Date(Date.now() - hours * 60 * 60 * 1000).toISOString(), hours, slowMs },
+    traffic: {
+      totalRequests: 0,
+      businessCalls: 0,
+      okCalls: 0,
+      errorCalls: 0,
+      deniedCalls: 0,
+      successRate: 0,
+      errorRate: 0,
+      deniedRate: 0
+    },
+    latency: { p50Ms: null, p95Ms: null, slowCalls: 0, slowQueries: [] },
+    denials: [],
+    sourceErrors: [],
+    usage: { tools: [], roles: [], tokens: [] }
+  };
+  const snapshot = audit ?? emptyAudit;
+  const evalSnapshot = evalStatus ?? {
+    latestRun: undefined,
+    recent: { runs: 0, totalCases: 0, passCount: 0, failCount: 0, passRate: 0 }
+  };
+
+  return redactSensitive({
+    generatedAt: new Date().toISOString(),
+    window: snapshot.window,
+    traffic: {
+      status: signalStatus(snapshot.traffic.businessCalls),
+      totalRequests: snapshot.traffic.totalRequests,
+      businessCalls: snapshot.traffic.businessCalls,
+      okCalls: snapshot.traffic.okCalls,
+      successRate: snapshot.traffic.successRate
+    },
+    error: {
+      status: signalStatus(snapshot.traffic.errorCalls, snapshot.traffic.errorCalls > 0),
+      errorCalls: snapshot.traffic.errorCalls,
+      errorRate: snapshot.traffic.errorRate
+    },
+    denied: {
+      status: signalStatus(snapshot.traffic.deniedCalls, snapshot.traffic.deniedCalls > 0),
+      deniedCalls: snapshot.traffic.deniedCalls,
+      deniedRate: snapshot.traffic.deniedRate,
+      reasons: snapshot.denials
+    },
+    latency: {
+      status: signalStatus(snapshot.traffic.businessCalls, snapshot.latency.slowCalls > 0),
+      slowMs,
+      p50Ms: snapshot.latency.p50Ms,
+      p95Ms: snapshot.latency.p95Ms,
+      slowCalls: snapshot.latency.slowCalls,
+      slowQueries: snapshot.latency.slowQueries.map((row) => ({
+        ts: row.ts,
+        userId: row.userId,
+        tool: row.tool,
+        durationMs: row.durationMs,
+        queryOperation: row.queryOperation,
+        queryPreview: row.queryPreview,
+        decisionReason: row.decisionReason,
+        requestId: row.requestId
+      }))
+    },
+    eval: {
+      status: evalSnapshot.latestRun ? "ok" : "no_data",
+      latest: evalSnapshot.latestRun ?? null,
+      recent: evalSnapshot.recent
+    },
+    latest: {
+      evalRun: evalSnapshot.latestRun ?? null
+    },
+    storage,
+    audit: {
+      status: storage.audit === "ok"
+        ? signalStatus(snapshot.traffic.totalRequests)
+        : "degraded",
+      sourceErrors: snapshot.sourceErrors,
+      usage: {
+        tools: snapshot.usage.tools,
+        roles: snapshot.usage.roles
+      },
+      errors
+    }
+  });
+}
+
 export function registerR1ObservabilityRoutes(app: FastifyInstance) {
+  app.get<{
+    Querystring: { hours?: string; slowMs?: string };
+  }>("/api/observability", async (request) => {
+    const hours = Math.min(Math.max(parseInt(request.query.hours ?? "24", 10) || 24, 1), 24 * 90);
+    const slowMs = Math.max(parseInt(request.query.slowMs ?? String(process.env.LUCY_OBSERVABILITY_SLOW_MS ?? 30_000), 10) || 30_000, 1);
+
+    return {
+      ok: true,
+      data: await readGenericObservability(hours, slowMs)
+    };
+  });
+
   app.get<{
     Querystring: { hours?: string; slowMs?: string };
   }>("/api/r1/observability", async (request) => {
