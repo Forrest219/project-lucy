@@ -679,6 +679,24 @@ function invalidMeasuresFieldReason(toolName: string, record: Record<string, unk
   return undefined;
 }
 
+function normalizeMeasureItem(item: unknown): unknown {
+  if (hasNonEmptyStringValue(item)) return item;
+  if (!isPlainRecord(item)) return item;
+  if (hasNonEmptyStringValue(item.expr)) return item;
+  if (hasNonEmptyStringValue(item.$text)) return String(item.$text).trim();
+  if (hasNonEmptyStringValue(item.name)) return String(item.name).trim();
+  return item;
+}
+
+function normalizeLucyQueryArgs(args: unknown): unknown {
+  if (!isPlainRecord(args)) return args;
+  const out: Record<string, unknown> = { ...args };
+  if (Array.isArray(out.measures)) {
+    out.measures = out.measures.map(normalizeMeasureItem);
+  }
+  return out;
+}
+
 function invalidLucyQueryShapeReason(toolName: string, record: Record<string, unknown>): string | undefined {
   return invalidMeasuresFieldReason(toolName, record)
     ?? invalidObjectArrayFieldReason(toolName, record, "dimensions")
@@ -949,7 +967,7 @@ function wikiQueryFromArgs(args: unknown): { query?: string; limit: number } {
 }
 
 function wikiKeyFromResult(item: Record<string, unknown>): string | undefined {
-  return firstStringValue(item, ["key", "path", "page", "slug", "uri", "id", "file", "filePath"]);
+  return firstStringValue(item, ["path", "filePath", "file", "uri", "key", "page", "slug", "id"]);
 }
 
 async function filterWikiResultArray(identity: Identity, items: unknown[]): Promise<{ items: unknown[]; filtered: number; sawWikiKeys: boolean }> {
@@ -984,7 +1002,7 @@ async function filterWikiSearchObject(identity: Identity, value: unknown): Promi
   const rewritten: Record<string, unknown> = { ...record };
   let filtered = 0;
   let sawWikiKeys = false;
-  for (const key of ["results", "items", "pages", "matches"]) {
+  for (const key of ["results", "items", "pages", "matches", "hits"]) {
     const nested = record[key];
     if (!Array.isArray(nested)) continue;
     const result = await filterWikiResultArray(identity, nested);
@@ -1005,7 +1023,7 @@ async function filterWikiSearchPayload(identity: Identity, payload: unknown): Pr
   let filtered = 0;
   let sawWikiKeys = false;
 
-  for (const key of ["results", "items", "pages", "matches"]) {
+  for (const key of ["results", "items", "pages", "matches", "hits"]) {
     const nested = result[key];
     if (!Array.isArray(nested)) continue;
     const arrayResult = await filterWikiResultArray(identity, nested);
@@ -1039,6 +1057,13 @@ async function filterWikiSearchPayload(identity: Identity, payload: unknown): Pr
       }
     }
     rewrittenResult.content = content;
+  }
+
+  if (result.structuredContent && typeof result.structuredContent === "object" && !Array.isArray(result.structuredContent)) {
+    const structured = await filterWikiSearchObject(identity, result.structuredContent);
+    rewrittenResult.structuredContent = structured.value;
+    filtered += structured.filtered;
+    sawWikiKeys = sawWikiKeys || structured.sawWikiKeys;
   }
 
   if (!sawWikiKeys && filtered === 0) return { payload: { ...record, result: rewrittenResult }, filtered };
@@ -1487,7 +1512,12 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (rpcMethod === "tools/call") {
       const params = parsed.params as Record<string, unknown> | undefined;
       toolName = params?.name as string | undefined;
-      toolArgs = params?.arguments;
+      toolArgs = (toolName === "lucy_query" || toolName === "lucy_explain_query")
+        ? normalizeLucyQueryArgs(params?.arguments)
+        : params?.arguments;
+      if (toolArgs !== params?.arguments && params) {
+        params.arguments = toolArgs;
+      }
       const args = params?.arguments as Record<string, unknown> | undefined;
       if (args) {
         // Keep only a safe subset of args for logging

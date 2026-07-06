@@ -224,7 +224,7 @@ function localAgentCommands() {
       "lucy-e2e-workhorse",
       "--accept-hooks",
       "--max-turns",
-      "30"
+      "45"
     ],
     moz: [
       "env",
@@ -238,7 +238,7 @@ function localAgentCommands() {
       "lucy-e2e-moz",
       "--accept-hooks",
       "--max-turns",
-      "30"
+      "45"
     ]
   };
 }

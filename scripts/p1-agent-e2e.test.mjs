@@ -30,7 +30,7 @@ function startLucyStub({ token = "main-token" } = {}) {
     { connectionId: "poc-mysql-aliyun", sourceName: "poc_ceo_metric_snapshot" },
     { connectionId: "poc-mysql-aliyun", sourceName: "poc_ad_revenue_daily" }
   ];
-  const tools = ["lucy_catalog", "lucy_read_source", "lucy_query", "wiki_search"].map((name) => ({
+  const tools = ["lucy_catalog", "lucy_read_source", "lucy_query", "wiki_search", "wiki_read"].map((name) => ({
     name,
     inputSchema: { type: "object", properties: {} }
   }));
@@ -73,10 +73,24 @@ function startLucyStub({ token = "main-token" } = {}) {
         return;
       }
       if (name === "wiki_search") {
+        const query = String(args.query || "").toLowerCase();
+        const key = query.includes("kx")
+          ? "global/kx-financial-analysis-playbook.md"
+          : query.includes("superstore")
+            ? "global/superstore-analysis-playbook.md"
+            : "global/poc-data-agent-playbook.md";
         res.end(JSON.stringify({
           jsonrpc: "2.0",
           id: body.id,
-          result: { content: [{ type: "text", text: JSON.stringify({ hits: [{ title: "POC data agent playbook" }] }) }] }
+          result: { content: [{ type: "text", text: JSON.stringify({ results: [{ key, title: key }] }) }] }
+        }));
+        return;
+      }
+      if (name === "wiki_read") {
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { content: [{ type: "text", text: JSON.stringify({ key: args.key, content: "authorized wiki content" }) }] }
         }));
         return;
       }

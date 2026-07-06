@@ -94,16 +94,33 @@ const DIRECT_CASES = {
 const ROLE_CASES = {
   local_dev_full_access: {
     visible: ["superstore_orders", "kx_vw_income_statement_detail", "poc_ceo_metric_snapshot"],
-    tools: ["lucy_catalog", "lucy_read_source", "lucy_query", "wiki_search"],
+    tools: ["lucy_catalog", "lucy_read_source", "lucy_query", "wiki_search", "wiki_read"],
     direct: ["superstore", "kx", "poc"],
     agent: ["superstore-ordercount-002", "kx-income-001", "data_agent_poc-timezone-utc-display-001"],
+    wiki: {
+      required: [
+        { query: "KX 财务", contains: ["kx-financial-analysis-playbook"] },
+        { query: "superstore", contains: ["superstore-analysis-playbook"] },
+        { query: "data_agent_poc", contains: ["poc-data-agent-playbook"] }
+      ],
+      deny: []
+    },
     deny: []
   },
   kx_readonly: {
     visible: ["kx_vw_income_statement_detail"],
-    tools: ["lucy_catalog", "lucy_read_source", "lucy_query"],
+    tools: ["lucy_catalog", "lucy_read_source", "lucy_query", "wiki_search", "wiki_read"],
     direct: ["kx"],
     agent: ["kx-income-001"],
+    wiki: {
+      required: [
+        { query: "KX 财务", contains: ["kx-financial-analysis-playbook"] }
+      ],
+      deny: [
+        { query: "superstore", forbids: ["superstore-analysis-playbook"], readKey: "global/superstore-analysis-playbook.md" },
+        { query: "data_agent_poc", forbids: ["poc-data-agent-playbook"], readKey: "global/poc-data-agent-playbook.md" }
+      ]
+    },
     deny: [
       { connectionId: "mysql-aliyun", sourceName: "superstore_orders" },
       { connectionId: "poc-mysql-aliyun", sourceName: "poc_ceo_metric_snapshot" }
@@ -114,6 +131,13 @@ const ROLE_CASES = {
     tools: ["lucy_catalog", "lucy_read_source", "lucy_query"],
     direct: ["huadong"],
     agent: ["superstore-ordercount-002"],
+    wiki: {
+      required: [],
+      deny: [
+        { query: "KX 财务", forbids: ["kx-financial-analysis-playbook"], readKey: "global/kx-financial-analysis-playbook.md" },
+        { query: "data_agent_poc", forbids: ["poc-data-agent-playbook"], readKey: "global/poc-data-agent-playbook.md" }
+      ]
+    },
     deny: [
       { connectionId: "mysql-aliyun", sourceName: "superstore_orders" },
       { connectionId: "poc-mysql-aliyun", sourceName: "poc_ceo_metric_snapshot" }
@@ -487,6 +511,11 @@ function responseContains(body, phrases = []) {
   return phrases.every((phrase) => stringIncludesLoose(text, phrase));
 }
 
+function responseForbids(body, phrases = []) {
+  const text = textOf(parseJsonStrings(body));
+  return phrases.every((phrase) => !stringIncludesLoose(text, phrase));
+}
+
 async function runDirectMcpProfile(profile, rolePlan, args) {
   const checks = [];
   const client = { proxyUrl: args.proxyUrl, token: profile.token, timeoutMs: args.timeoutMs };
@@ -542,25 +571,66 @@ async function runDirectMcpProfile(profile, rolePlan, args) {
   });
   if (checks.at(-1).status !== "pass") return { status: "fail", checks };
 
-  if (tools.includes("wiki_search")) {
-    const wiki = await rpc({ ...client, sessionId }, "tools/call", {
-      name: "wiki_search",
-      arguments: { query: profile.expectedRole === "kx_readonly" ? "KX 财务" : "playbook semantic layer", limit: 5 }
-    });
+  const wikiPlan = rolePlan.wiki || {
+    required: [{ query: profile.expectedRole === "kx_readonly" ? "KX 财务" : "playbook semantic layer", contains: [] }],
+    deny: []
+  };
+  if (!tools.includes("wiki_search") && (wikiPlan.required.length > 0 || wikiPlan.deny.length > 0)) {
     checks.push({
-      name: "wiki_search",
-      status: wiki.ok && !isErrorResult(wiki.body) ? "pass" : "fail",
-      httpStatus: wiki.status,
-      response: wiki.ok ? tail(wiki.body, 800) : tail(wiki.body)
-    });
-    if (checks.at(-1).status !== "pass") return { status: "fail", checks };
-  } else {
-    checks.push({
-      name: "wiki_search",
-      status: "skip",
-      reason: "tool_not_visible_for_role",
+      name: "wiki_search:tool_visible",
+      status: "fail",
+      reason: "required_context_tool_not_visible",
       role: profile.expectedRole
     });
+    return { status: "fail", checks };
+  }
+
+  for (const wikiCase of wikiPlan.required) {
+    const wiki = await rpc({ ...client, sessionId }, "tools/call", {
+      name: "wiki_search",
+      arguments: { query: wikiCase.query, limit: 5 }
+    });
+    const passed = wiki.ok && !isErrorResult(wiki.body) && responseContains(wiki.body, wikiCase.contains || []);
+    checks.push({
+      name: `wiki_search:allow:${wikiCase.query}`,
+      status: passed ? "pass" : "fail",
+      httpStatus: wiki.status,
+      requiredPhrases: wikiCase.contains || [],
+      response: tail(wiki.body, 1200)
+    });
+    if (!passed) return { status: "fail", checks };
+  }
+
+  for (const wikiCase of wikiPlan.deny) {
+    if (tools.includes("wiki_search")) {
+      const wiki = await rpc({ ...client, sessionId }, "tools/call", {
+        name: "wiki_search",
+        arguments: { query: wikiCase.query, limit: 5 }
+      });
+      const passed = wiki.ok && !isErrorResult(wiki.body) && responseForbids(wiki.body, wikiCase.forbids || []);
+      checks.push({
+        name: `wiki_search:deny:${wikiCase.query}`,
+        status: passed ? "pass" : "fail",
+        httpStatus: wiki.status,
+        forbiddenPhrases: wikiCase.forbids || [],
+        response: tail(wiki.body, 1200)
+      });
+      if (!passed) return { status: "fail", checks };
+    }
+    if (tools.includes("wiki_read") && wikiCase.readKey) {
+      const read = await rpc({ ...client, sessionId }, "tools/call", {
+        name: "wiki_read",
+        arguments: { key: wikiCase.readKey }
+      });
+      checks.push({
+        name: `wiki_read:deny:${wikiCase.readKey}`,
+        status: read.ok && isErrorResult(read.body) && responseForbids(read.body, wikiCase.forbids || []) ? "pass" : "fail",
+        httpStatus: read.status,
+        forbiddenPhrases: wikiCase.forbids || [],
+        response: tail(read.body, 1200)
+      });
+      if (checks.at(-1).status !== "pass") return { status: "fail", checks };
+    }
   }
 
   for (const directId of rolePlan.direct) {
@@ -638,9 +708,10 @@ function renderPrompt(profile, testCase) {
         "",
         "KX 财务 case 的可复现工具路径：",
         "1. 调用 lucy_read_source，参数为 {\"connectionId\":\"mysql-aliyun\",\"sourceName\":\"kx_vw_income_statement_detail\"}。",
-        "2. 调用 lucy_query，参数必须使用 source-qualified 字段：",
-        "{\"connectionId\":\"mysql-aliyun\",\"sourceName\":\"kx_vw_income_statement_detail\",\"measures\":[{\"expr\":\"sum(case when kx_vw_income_statement_detail.`项目名称` = '一、营业收入' then kx_vw_income_statement_detail.`本年累计金额` else null end)\",\"name\":\"营业收入_本年累计\"}],\"dimensions\":[{\"field\":\"kx_vw_income_statement_detail.报表期间\"}],\"limit\":20}",
-        "3. 在返回行中定位 report_period / 报表期间 = 202605，并回答一、营业收入的本年累计金额。"
+        "2. 调用 lucy_query，参数必须使用已发布的 source-qualified semantic measure 字符串，避免临时 {expr,name} 对象在 agent transport 中被丢弃：",
+        "{\"connectionId\":\"mysql-aliyun\",\"sourceName\":\"kx_vw_income_statement_detail\",\"measures\":[\"kx_vw_income_statement_detail.营业收入_本年累计\"],\"dimensions\":[{\"field\":\"kx_vw_income_statement_detail.报表期间\"}],\"limit\":20}",
+        "3. 只要 lucy_query 返回 rows，就立刻在返回行中定位 report_period / 报表期间 = 202605，并回答一、营业收入的本年累计金额。",
+        "4. 禁止在成功返回 rows 后继续改用 {expr,name}、{name}、{$text} 或其它 measure 形态重试；这些重试会污染 E2E 结果。"
       ]
     : [];
   return [

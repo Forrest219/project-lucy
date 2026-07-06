@@ -8,6 +8,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const TOKEN = "proxy-smoke-token";
+const KX_TOKEN = "proxy-smoke-kx-token";
+const POC_TOKEN = "proxy-smoke-poc-token";
 const RESTRICTED_TOKEN = "proxy-smoke-restricted-token";
 const EXACT_TOKEN = "proxy-smoke-exact-r1-token";
 const INTERNAL_TOKEN = "internal-smoke-token";
@@ -66,6 +68,42 @@ const ACCESS_YAML = `users:
         - dataforai.superstore_orders
       tools:
         - sl_read_source
+  - id: kx_agent
+    name: KX Agent
+    enabled: true
+    tokens:
+      - hash: "${tokenHash(KX_TOKEN)}"
+        label: kx-token
+        created: 2026-07-06
+    allow:
+      connections:
+        - mysql-aliyun
+      tables:
+        - dataforai.kx_fact_financial_amount
+      tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
+        - wiki_search
+        - wiki_read
+  - id: poc_agent
+    name: POC Agent
+    enabled: true
+    tokens:
+      - hash: "${tokenHash(POC_TOKEN)}"
+        label: poc-token
+        created: 2026-07-06
+    allow:
+      connections:
+        - poc-mysql-aliyun
+      tables:
+        - data_agent_poc.poc_ceo_metric_snapshot
+      tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
+        - wiki_search
+        - wiki_read
   - id: exact_r1_agent
     name: Exact R1 Agent
     enabled: true
@@ -96,6 +134,11 @@ const SCHEMA_YAML = `tables:
     table: dataforai.superstore_orders
 `;
 
+const POC_SCHEMA_YAML = `tables:
+  poc_ceo_metric_snapshot:
+    table: data_agent_poc.poc_ceo_metric_snapshot
+`;
+
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
@@ -110,10 +153,12 @@ async function makeProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-mcp-proxy-smoke-"));
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
+  await mkdir(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, "wiki", "global"), { recursive: true });
   await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
   await writeFile(path.join(root, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), SCHEMA_YAML, "utf8");
+  await writeFile(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema", "data_agent_poc.yaml"), POC_SCHEMA_YAML, "utf8");
   await writeFile(path.join(root, "wiki", "global", "superstore.md"), [
     "---",
     "visibility: private",
@@ -133,6 +178,16 @@ async function makeProject() {
     "# KX Secret Wiki",
     "",
     "Unauthorized KX context."
+  ].join("\n"), "utf8");
+  await writeFile(path.join(root, "wiki", "global", "poc.md"), [
+    "---",
+    "visibility: private",
+    "sl_refs:",
+    "  - poc-mysql-aliyun/data_agent_poc/poc_ceo_metric_snapshot",
+    "---",
+    "# POC Wiki",
+    "",
+    "Authorized POC context."
   ].join("\n"), "utf8");
   return root;
 }
@@ -648,6 +703,84 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("normalizes agent transport measure wrappers before validating and forwarding Lucy queries", async () => {
+    const upstreamSeen: Array<Record<string, unknown>> = [];
+    const upstream = createServer(async (req, res) => {
+      const body = await readRequestBody(req);
+      upstreamSeen.push(JSON.parse(body) as Record<string, unknown>);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: "normalized-query",
+        result: {
+          content: [{ type: "text", text: JSON.stringify({ rows: [{ sales: 100 }] }) }]
+        }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const calls = [
+        {
+          id: "lucy-query-text-measure",
+          tool: "lucy_query",
+          measures: [{ $text: "superstore_orders.sales" }]
+        },
+        {
+          id: "lucy-query-name-measure",
+          tool: "lucy_query",
+          measures: [{ name: "superstore_orders.sales" }]
+        }
+      ];
+
+      for (const call of calls) {
+        const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${TOKEN}`
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: call.id,
+            method: "tools/call",
+            params: {
+              name: call.tool,
+              arguments: {
+                connectionId: "mysql-aliyun",
+                measures: call.measures,
+                dimensions: [{ field: "superstore_orders.region" }],
+                limit: 10
+              }
+            }
+          })
+        });
+        expect(res.status).toBe(200);
+        const body = await res.json() as { result?: unknown; error?: unknown };
+        expect(body.error).toBeUndefined();
+      }
+
+      expect(upstreamSeen).toHaveLength(2);
+      for (const seen of upstreamSeen) {
+        const params = seen.params as Record<string, unknown>;
+        const args = params.arguments as Record<string, unknown>;
+        expect(args.measures).toEqual(["superstore_orders.sales"]);
+      }
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("fails closed on malformed Lucy R1 tool arguments before forwarding or local execution", async () => {
     const upstreamSeen: string[] = [];
     const upstream = createServer(async (req, res) => {
@@ -1147,11 +1280,21 @@ describe("MCP proxy smoke", () => {
         result: {
           content: [{
             type: "text",
-            text: JSON.stringify([
-              { key: "global/superstore", title: "Superstore Wiki", snippet: "Authorized superstore context" },
-              { key: "global/kx-secret", title: "KX Secret Wiki", snippet: "Unauthorized KX context" }
-            ])
-          }]
+            text: JSON.stringify({
+              hits: [
+                { key: "superstore", path: "wiki/global/superstore.md", title: "Superstore Wiki", snippet: "Authorized superstore context" },
+                { key: "kx-secret", path: "wiki/global/kx-secret.md", title: "KX Secret Wiki", snippet: "Unauthorized KX context" },
+                { key: "poc", path: "wiki/global/poc.md", title: "POC Wiki", snippet: "Unauthorized POC context" }
+              ]
+            })
+          }],
+          structuredContent: {
+            hits: [
+              { key: "superstore", path: "wiki/global/superstore.md", title: "Superstore Wiki", snippet: "Authorized superstore context" },
+              { key: "kx-secret", path: "wiki/global/kx-secret.md", title: "KX Secret Wiki", snippet: "Unauthorized KX context" },
+              { key: "poc", path: "wiki/global/poc.md", title: "POC Wiki", snippet: "Unauthorized POC context" }
+            ]
+          }
         }
       }));
     });
@@ -1213,11 +1356,96 @@ describe("MCP proxy smoke", () => {
       expect(searchText).toContain("global/superstore.md");
       expect(searchText).not.toContain("KX Secret Wiki");
       expect(searchText).not.toContain("Unauthorized KX context");
+      expect(searchText).not.toContain("POC Wiki");
 
-      expect(upstreamSeen).toHaveLength(1);
+      const kxSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${KX_TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "wiki-search-kx-filtered",
+          method: "tools/call",
+          params: { name: "wiki_search", arguments: { query: "context" } }
+        })
+      });
+      expect(kxSearch.status).toBe(200);
+      const kxSearchBody = await kxSearch.json() as { result: { content: Array<{ text: string }> } };
+      const kxSearchText = kxSearchBody.result.content[0]?.text ?? "";
+      expect(kxSearchText).toContain("KX Secret Wiki");
+      expect(kxSearchText).not.toContain("Superstore Wiki");
+      expect(kxSearchText).not.toContain("POC Wiki");
+
+      const kxReadAllowed = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${KX_TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "wiki-read-kx-allowed",
+          method: "tools/call",
+          params: { name: "wiki_read", arguments: { key: "global/kx-secret" } }
+        })
+      });
+      expect(kxReadAllowed.status).toBe(200);
+      const kxReadAllowedBody = await kxReadAllowed.json() as { result: { content: Array<{ text: string }> } };
+      expect(kxReadAllowedBody.result.content[0]?.text ?? "").toContain("Unauthorized KX context");
+
+      const kxReadDenied = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${KX_TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "wiki-read-kx-deny-poc",
+          method: "tools/call",
+          params: { name: "wiki_read", arguments: { key: "global/poc" } }
+        })
+      });
+      expect(kxReadDenied.status).toBe(200);
+      const kxReadDeniedBody = await kxReadDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
+      expect(kxReadDeniedBody.result.isError).toBe(true);
+      expect(kxReadDeniedBody.result.content[0]?.text ?? "").not.toContain("POC Wiki");
+
+      const pocSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${POC_TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "wiki-search-poc-filtered",
+          method: "tools/call",
+          params: { name: "wiki_search", arguments: { query: "context" } }
+        })
+      });
+      expect(pocSearch.status).toBe(200);
+      const pocSearchBody = await pocSearch.json() as { result: { content: Array<{ text: string }> } };
+      const pocSearchText = pocSearchBody.result.content[0]?.text ?? "";
+      expect(pocSearchText).toContain("POC Wiki");
+      expect(pocSearchText).not.toContain("KX Secret Wiki");
+      expect(pocSearchText).not.toContain("Superstore Wiki");
+
+      const pocReadDenied = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${POC_TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "wiki-read-poc-deny-kx",
+          method: "tools/call",
+          params: { name: "wiki_read", arguments: { key: "global/kx-secret" } }
+        })
+      });
+      expect(pocReadDenied.status).toBe(200);
+      const pocReadDeniedBody = await pocReadDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
+      expect(pocReadDeniedBody.result.isError).toBe(true);
+      expect(pocReadDeniedBody.result.content[0]?.text ?? "").not.toContain("KX Secret Wiki");
+
+      expect(upstreamSeen).toHaveLength(3);
       const deniedAudit = await waitForAuditRow("wiki-read-denied");
       expect(deniedAudit.outcome).toBe("denied");
       expect(deniedAudit.decision_reason).toBe("wiki_forbidden");
+      const kxDeniedAudit = await waitForAuditRow("wiki-read-kx-deny-poc");
+      expect(kxDeniedAudit.outcome).toBe("denied");
+      expect(kxDeniedAudit.decision_reason).toBe("wiki_forbidden");
+      const pocDeniedAudit = await waitForAuditRow("wiki-read-poc-deny-kx");
+      expect(pocDeniedAudit.outcome).toBe("denied");
+      expect(pocDeniedAudit.decision_reason).toBe("wiki_forbidden");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));

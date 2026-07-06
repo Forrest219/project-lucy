@@ -38,6 +38,8 @@ ${KX_TABLES.map((table) => `            - ${table.replace("dataforai.", "")}`).j
         - sl_query
         - sl_read_source
         - entity_details
+        - wiki_search
+        - wiki_read
   poc_readonly:
     description: POC read only
     allow:

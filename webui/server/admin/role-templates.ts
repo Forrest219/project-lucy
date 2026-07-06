@@ -12,6 +12,8 @@ const READONLY_TOOLS = [
   "lucy_freshness",
   "lucy_begin_question",
   "kx_catalog",
+  "wiki_search",
+  "wiki_read",
   "entity_details"
 ];
 export const LUCY_R1_EXACT_TOOLS = [
@@ -112,7 +114,7 @@ export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
           names: SUPERSTORE_NAMES
         }
       ],
-      tools: [...READONLY_TOOLS, "wiki_search", "wiki_read", "discover_data", "dictionary_search"]
+      tools: [...READONLY_TOOLS, "discover_data", "dictionary_search"]
     }
   }
 };
