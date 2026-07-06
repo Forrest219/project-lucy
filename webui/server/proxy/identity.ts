@@ -66,17 +66,27 @@ export interface Identity {
 }
 
 let configCache: AccessConfig | null = null;
+let configCachePath = "";
 let configLoadedAt = 0;
 const CACHE_TTL = 30_000;
 const SESSION_CLIENT_TTL = 24 * 60 * 60 * 1000;
 
+export async function resolveAccessConfigPath(): Promise<string> {
+  const override = process.env.LUCY_ACCESS_CONFIG_PATH?.trim();
+  if (override) return path.resolve(override);
+  const projectRoot = await resolveProjectRoot();
+  return path.join(projectRoot, "webui", "config", "access.yaml");
+}
+
 async function loadConfig(options: { fresh?: boolean } = {}): Promise<AccessConfig> {
   const now = Date.now();
-  if (!options.fresh && configCache && now - configLoadedAt < CACHE_TTL) return configCache;
-  const projectRoot = await resolveProjectRoot();
-  const configPath = path.join(projectRoot, "webui", "config", "access.yaml");
+  const configPath = await resolveAccessConfigPath();
+  if (!options.fresh && configCache && configCachePath === configPath && now - configLoadedAt < CACHE_TTL) {
+    return configCache;
+  }
   const content = await readFile(configPath, "utf-8");
   configCache = parse(content) as AccessConfig;
+  configCachePath = configPath;
   configLoadedAt = now;
   return configCache;
 }

@@ -34,6 +34,8 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p1:skills` | skill governance | `SKILL.md` frontmatter, dependency references, runtime boundary, and eval `skill_version` coverage |
 | `npm run smoke:p1:endpoint` | MCP lifecycle | authenticated proxy precheck, `initialize`, `tools/list`, and `lucy_read_source` forwarding metadata |
 | `npm run smoke:p1:observability` | observability | generic `/api/observability` evidence; reports blocked if WebUI service is not reachable |
+| `npm run smoke:p1:agent-e2e` | agent database E2E | database-backed Lucy MCP control path plus main/Hermes/moz agent final-answer assertions; missing local tokens or agent adapters returns blocked evidence |
+| `npm run smoke:p1:agent-e2e:local-hermes` | local agent database E2E | repeatable local harness for Hermes workhorse + moz: generates runtime-only token hashes, starts KTX/WebUI/proxy, runs agent assertions, then cleans up |
 | `npm run smoke:p1:business-eval-full` | business eval full run | full Superstore, KX Financial, and Data Agent POC agent eval; requires agent/model/MCP environment |
 | `npm run smoke:p1:starrocks-certification` | R1 StarRocks gated support | fail-closed certification wrapper; missing live StarRocks config writes blocked evidence |
 | `npm run smoke:p1:release-readiness` | aggregate | runs P1 gates and writes aggregate evidence; use `--allow-blocked` only for pre-release evidence collection |
@@ -63,11 +65,22 @@ npm run smoke:p1:context -- --with-ktx --proxy-url <lucy-mcp-url> --token <token
 npm run smoke:p1:skills
 npm run smoke:p1:endpoint -- --proxy-url <lucy-mcp-url> --token <token> --connection <id> --source <source>
 npm run smoke:p1:observability -- --url <webui-url>/api/observability
+npm run smoke:p1:agent-e2e
 npm run smoke:p1:business-eval-full -- --require-mcp-token
 npm run smoke:p1:release-readiness
 ```
 
-If the machine lacks agent/model secrets, a running WebUI service, Lucy proxy token, or StarRocks live config, the relevant P1 gate must write `blocked` evidence rather than returning a fake pass. `npm run smoke:p1:release-readiness -- --allow-blocked` is only for collecting a pre-release evidence bundle while known external dependencies are still unavailable.
+`smoke:p1:agent-e2e` expects `LUCY_E2E_MAIN_TOKEN`, `LUCY_E2E_HERMES_TOKEN`, `LUCY_E2E_MOZ_TOKEN`, `LUCY_E2E_MOZ_EXPECTED_ROLE`, and `LUCY_E2E_AGENT_COMMANDS` on machines that validate all three local agent paths. It writes canonical machine evidence to `inbox/p1-agent-e2e-evidence.json`, a human-readable report to `inbox/p1-agent-e2e-report.html`, and redacted agent/MCP artifacts to `inbox/p1-agent-e2e-artifacts/`.
+
+On Forrest's local machine, the repeatable Hermes/moz path is:
+
+```bash
+npm run smoke:p1:agent-e2e:local-hermes
+```
+
+That wrapper generates one-run tokens in memory, writes only their hashes to ignored `inbox/p1-agent-e2e-local-access.yaml`, starts KTX MCP and Lucy WebUI/proxy with `LUCY_ACCESS_CONFIG_PATH`, runs `smoke:p1:agent-e2e -- --profile hermes --profile moz`, writes canonical evidence to `inbox/p1-agent-e2e-hermes-moz-evidence.json`, writes the human report to `inbox/p1-agent-e2e-hermes-moz-report.html`, writes wrapper evidence to `inbox/p1-agent-e2e-local-hermes-run.json`, and stops services it started. Hermes profile configs must reference `LUCY_E2E_HERMES_TOKEN` and `LUCY_E2E_MOZ_TOKEN`; the wrapper does not read or print `.ktx/secrets/` contents.
+
+If the machine lacks agent/model secrets, a running WebUI service, Lucy proxy token, local agent adapters, or StarRocks live config, the relevant P1 gate must write `blocked` evidence rather than returning a fake pass. `npm run smoke:p1:release-readiness -- --allow-blocked` is only for collecting a pre-release evidence bundle while known external dependencies are still unavailable.
 
 Optional but recommended before customer-facing validation:
 
@@ -169,6 +182,8 @@ Recommended CI jobs:
 | p1-skills | `npm run smoke:p1:skills` |
 | p1-endpoint | protected secret environment: `npm run smoke:p1:endpoint -- --proxy-url <url> --token <token>` |
 | p1-observability | service environment: `npm run smoke:p1:observability -- --url <url>/api/observability` |
+| p1-agent-e2e | protected local agent environment: `npm run smoke:p1:agent-e2e` |
+| p1-agent-e2e-local-hermes | Forrest local protected agent environment: `npm run smoke:p1:agent-e2e:local-hermes` |
 | p1-business-eval-full | protected model/MCP secret environment: `npm run smoke:p1:business-eval-full -- --require-mcp-token` |
 | p1-release-readiness | `npm run smoke:p1:release-readiness` |
 | ktx-diff-audit | `npm run audit:ktx-diff -- --out inbox/ktx-lucy-diff-$(date +%F).md` |

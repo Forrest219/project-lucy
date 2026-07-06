@@ -15,6 +15,7 @@ describe("p1 release readiness aggregate", () => {
       "skills",
       "endpoint",
       "observability",
+      "agent-e2e",
       "business-eval-full",
       "starrocks-certification"
     ]);

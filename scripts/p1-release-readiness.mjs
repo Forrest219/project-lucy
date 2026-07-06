@@ -25,6 +25,7 @@ const P1_GATES = [
   ["skills", ["run", "smoke:p1:skills"]],
   ["endpoint", ["run", "smoke:p1:endpoint"]],
   ["observability", ["run", "smoke:p1:observability"]],
+  ["agent-e2e", ["run", "smoke:p1:agent-e2e"]],
   ["business-eval-full", ["run", "smoke:p1:business-eval-full"]],
   ["starrocks-certification", ["run", "smoke:p1:starrocks-certification"]]
 ];
