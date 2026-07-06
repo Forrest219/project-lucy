@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.5 |
-| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞） |
+| 版本 | v1.6 |
+| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理） |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
 project-lucy 是一个本地自服务数据治理与 Agent 数据访问栈，底座为 KTX 语义层、wiki、eval cases、skills 和 Lucy WebUI 治理工作台。Lucy 自身不直接生成分析结论或回答问题；目标是在受控数据访问前提下，让 Claude Code / Codex 等 Agent 优先使用语义层和业务口径回答数据问题，并通过 eval/quiz 形成回归门禁。
@@ -16,11 +16,12 @@ project-lucy 是一个本地自服务数据治理与 Agent 数据访问栈，底
 
 | 文件 | 语境 | 说明 |
 |---|---|---|
-| `CLAUDE.md` | 运行时 | KTX 数据问答运行时 prompt，只放数据问答规则 |
+| Lucy MCP Proxy `initialize` instructions（来源 `webui/config/data-qa-instructions.md`） | 运行时 | 数据问答规则由 proxy 注入给 MCP client |
+| `CLAUDE.md` | 开发/运行入口指引 | 只做入口引用，不承载数据问答规则正文 |
 | `AGENTS.md` → `docs/DEVELOPMENT.md` | 开发态 | 代码、配置、spec 修改治理规则 |
 | `inbox/` | 临时产物 | 一次性审计、过程报告、临时计划，可在进程结束后删除 |
 
-开发规则不得写入 `CLAUDE.md`；数据问答规则不得写入开发治理文档。
+开发规则不得写入 `CLAUDE.md` 或 `webui/config/data-qa-instructions.md`；数据问答规则只维护在 `webui/config/data-qa-instructions.md`，不复制到开发治理文档。
 
 ## 2. 当前数据域
 
@@ -28,15 +29,17 @@ project-lucy 是一个本地自服务数据治理与 Agent 数据访问栈，底
 |---|---|---|
 | Superstore | 零售订单、折扣、利润、退货、区域经理分析 | `semantic-layer/mysql-aliyun/superstore_orders.yaml` · `skills/domains/superstore/*` · `wiki/global/superstore-analysis-playbook.md` · `evals/superstore/*` |
 | KX Financial | 柯西公司财报金额、利润表、资产负债表、现金流分析 | `semantic-layer/mysql-aliyun/kx_fact_financial_amount.yaml` · `wiki/global/kx-financial-analysis-playbook.md` · `evals/kx_financial/*` |
+| Data Agent POC | 广告收入、活跃、CEO 指标快照和受限财务表验证 | `semantic-layer/poc-mysql-aliyun/*` · `wiki/global/poc-*.md` · `evals/data_agent_poc/*` |
 
-底层数据库为 Aliyun RDS MySQL 8.0.34，当前连接 ID 为 `mysql-aliyun`，schema 为 `dataforai`。
+底层数据库以 Aliyun RDS MySQL 8.0.34 为主，当前正式连接 ID 为 `mysql-aliyun`，POC 连接 ID 为 `poc-mysql-aliyun`。
 
 ## 3. 核心目录
 
 ```text
 project-lucy/
-├── CLAUDE.md                         # KTX 数据问答运行时上下文
+├── CLAUDE.md                         # 开发/运行入口指引，不承载数据问答规则正文
 ├── AGENTS.md                         # Agent 开发入口
+├── ktx.yaml.example                  # 共享 KTX 配置模板；真实 ktx.yaml 为本机 ignored 文件
 ├── docs/                             # 仓库级治理、设计、review、UAT、用户文档
 ├── inbox/                            # 临时审计/计划/过程产物
 ├── semantic-layer/mysql-aliyun/       # KTX manifest + overlay
@@ -58,7 +61,7 @@ project-lucy/
 
 ## 4. 运行时回答链
 
-数据问答运行时遵循 `CLAUDE.md`：
+数据问答运行时遵循 Lucy MCP Proxy `initialize` 注入的 instructions，正文来源为 `webui/config/data-qa-instructions.md`：
 
 1. 先查 KTX semantic layer：`sl_read` / `sl_query`。
 2. 再查 KTX wiki / reference docs：`wiki_search`。
@@ -95,6 +98,19 @@ WebUI 是本地治理工作台，当前导航有 7 个一级模块：
 | 访问治理 | `/admin/agents`、`/admin/audit` | 已实现；role-first admin UI/API 已闭环，Role 模板库 P1 已落地 | Agent、Token、ACL、访问日志、配置审计 |
 
 详细状态表见 `docs/webui-impl-status.md`。`webui/docs/codex/*` 是 M0-M5 执行历史归档，不代表当前全部模块范围。
+
+### 6.1 交付状态快照（2026-07-06）
+
+| 模块 / 能力 | 当前判断 | 交付含义 |
+|---|---|---|
+| Docker headless customer path | 达到当前交付预期 | 标准入口是 Docker Compose、配置文件、Lucy MCP Proxy、Agent MCP config、smoke/eval 证据 |
+| WebUI 管理台 | 已实现内部治理能力，但非当前客户标准入口 | 代码和测试作为内部质量门禁；客户承诺需另补 UAT、用户文档和稳定性证据 |
+| 数据库接入 | MySQL/PostgreSQL verified；StarRocks P1 gated；Oracle roadmap | StarRocks live certification 前不能写入 verified matrix |
+| Semantic layer / Wiki 管理 | 编辑能力已实现，reindex 与 wiki_search 交付证据仍不足 | 不能把 WebUI 维护链路整体标记为 verified 治理闭环 |
+| Skill management | 文件资产存在，Skill Editor / 版本化 / 自动加载闭环未开发 | 当前只能作为代码库治理资产，不是产品化 Skill 管理模块 |
+| MCP endpoint lifecycle | Proxy、token、config 复制已实现；启停、状态、健康、轮换 UI 未开发 | 当前交付为“接入配置”，不是完整 endpoint 生命周期管理 |
+| Business eval | Catalog/smoke/WebUI run 基础已实现；完整 LLM/agent eval 未形成稳定证据 | 未达到自动质量门禁预期，需具备 agent/model secret 后补跑并归档 |
+| Observability / alerting | R1 最小排障端点存在；通用 metrics、告警、日志聚合未开发 | 不属于当前 headless 交付承诺，后续需独立 spec |
 
 ## 7. Eval / Quiz 现状
 
@@ -151,7 +167,8 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 ## 10. 当前整改优先级
 
 1. ✅ 2026-06-22 P0-1 Admin Role-First 已闭环；剩余长期 Policy 表达式锚点见 `docs/access-governance-design.md`。
-2. ✅ `ktx.yaml` / `access.yaml` 等配置写入已补 dryRun、diff、输入校验与审计；`config_change_log` 支持 CSV 导出。
+2. ✅ `access.yaml` 等治理配置写入已补 dryRun、diff、输入校验与审计；`config_change_log` 支持 CSV 导出。真实 `ktx.yaml` 已改为本机 ignored 配置，仓库只提交 `ktx.yaml.example`。
 3. ✅ 建立 spec 防漂移检查：route/status、API/spec、skill dependencies、eval schema、access role selector，并新增模板指针字段 fail 规则。
 4. 补全当前 API / Model 索引，避免 `webui/docs/03-04` 与实现漂移。
-5. 在事实源稳定后补 semantic-layer、wiki、skills、domain index 的长期治理规范。
+5. 补齐 semantic-layer reindex、wiki_search、完整 business eval 的 release evidence。
+6. 明确 v1 后续范围：Skill Editor / endpoint lifecycle / observability 是否进入产品承诺，并为进入项补 spec、UAT 和 release gate。
