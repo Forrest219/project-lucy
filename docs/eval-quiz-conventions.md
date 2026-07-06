@@ -174,7 +174,8 @@ P1 full eval 退出码：
 |---|---:|---|
 | `pass` | `0` | 三套 runner summary 均为 0 fail |
 | `fail` | `1` | precheck 通过，但任一 suite 的 runner 失败或 summary 含失败 case |
-| `blocked` | `2` | agent CLI / model secret / MCP endpoint / MCP token 等执行前置条件缺失 |
+| `usage` | `2` | 参数错误或脚本级异常 |
+| `blocked` | `42` | agent CLI / model secret / MCP endpoint / MCP token 等执行前置条件缺失 |
 
 默认汇总证据落盘到 `inbox/p1-business-eval-full-evidence.json`；每套 runner JSON 和 stderr 摘要落在 `inbox/p1-business-eval-full-{suite}.json` 与 `.stderr.log`，用于保留从 precheck 到 case summary 的完整证据链。
 
