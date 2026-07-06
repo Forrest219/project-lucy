@@ -163,6 +163,7 @@ function assert(name, cond, detail) {
   assert('parseClaudeOutput extracts sql_execution input SQL', parsed.sql.includes('kx_fact_financial_amount'), parsed.sql);
   assert('parseClaudeOutput parses sql_execution rows', parsed.result.row_count === 2330, JSON.stringify(parsed.result));
   assert('parseClaudeOutput records KTX tool candidates', parsed.toolCandidates.length === 1, JSON.stringify(parsed.toolCandidates));
+  assert('parseClaudeOutput records semantic query evidence', parsed.semanticQueries.length === 1, JSON.stringify(parsed.semanticQueries));
 }
 {
   const stdout = JSON.stringify({
@@ -197,6 +198,40 @@ function assert(name, cond, detail) {
     parsed.toolCandidates.length === 1 && parsed.toolCandidates[0].sql === null,
     JSON.stringify(parsed.toolCandidates)
   );
+  assert('parseClaudeOutput records wiki context evidence', parsed.wikiContextEvidence[0]?.key === 'kx-playbook', JSON.stringify(parsed.wikiContextEvidence));
+}
+
+{
+  const stdout = JSON.stringify({
+    type: 'assistant',
+    message: {
+      content: [
+        {
+          type: 'tool_use',
+          id: 'call_lucy',
+          name: 'mcp__ktx__sl_query',
+          input: { connectionId: 'mysql-aliyun', measures: ['m.revenue'] },
+        },
+      ],
+    },
+  }) + '\n' + JSON.stringify({
+    type: 'user',
+    message: {
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: 'call_lucy',
+          content: [{ type: 'text', text: JSON.stringify({
+            headers: ['revenue'],
+            rows: [[100]],
+            _meta: { lucy: { traceId: 'trace-001', tool: 'lucy_query' } },
+          }) }],
+        },
+      ],
+    },
+  });
+  const parsed = parseClaudeOutput(stdout);
+  assert('parseClaudeOutput records Lucy metadata', parsed.lucyMeta[0]?.traceId === 'trace-001', JSON.stringify(parsed.lucyMeta));
 }
 
 {
@@ -214,6 +249,22 @@ function assert(name, cond, detail) {
     summary.inputValueCounts['mcp__ktx__sl_read_source:sourceName'].kx_fact_financial_amount === 2,
     JSON.stringify(summary)
   );
+}
+
+{
+  const actual = { rows: [{ region: 'East', share: 0.61 }, { region: 'West', share: 0.39 }] };
+  const ranking = checkResultAssertions(actual, '', [{
+    value_type: 'ranking_set',
+    data: { label_column: 'region', order: ['East', 'West'] },
+  }]);
+  assert('checkResultAssertions supports ranking_set order', ranking.ok, JSON.stringify(ranking));
+  const distribution = checkResultAssertions(actual, '', [{
+    value_type: 'distribution',
+    key_columns: ['region'],
+    numeric_tolerance: 0.01,
+    data: { rows: [{ region: 'East', share: 0.60 }] },
+  }]);
+  assert('checkResultAssertions supports distribution tolerance', distribution.ok, JSON.stringify(distribution));
 }
 {
   const toolCalls = [

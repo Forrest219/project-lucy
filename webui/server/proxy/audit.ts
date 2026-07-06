@@ -420,6 +420,16 @@ function parseRoleIds(value: string | null): string[] {
   }
 }
 
+function parseJsonArray(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function readR1AuditObservability(options: { hours?: number; slowMs?: number } = {}): Promise<R1AuditObservability> {
   const hours = Math.min(Math.max(Math.floor(options.hours ?? 24), 1), 24 * 90);
   const slowMs = Math.max(Math.floor(options.slowMs ?? Number(process.env.LUCY_R1_SLOW_QUERY_MS ?? 30_000)), 1);
@@ -561,6 +571,101 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
       tokens: [...tokens.values()].sort((a, b) => b.calls - a.calls).slice(0, 30)
     }
   };
+}
+
+export async function searchAccessLogs(options: {
+  hours?: number;
+  trace?: string;
+  source?: string;
+  role?: string;
+  outcome?: string;
+  limit?: number;
+} = {}): Promise<Array<{
+  ts: string;
+  userId: string;
+  tool: string;
+  outcome: string;
+  durationMs: number;
+  requestId: string;
+  lucyTurnId?: string;
+  lucySessionId?: string;
+  roleIds?: string[];
+  tables?: string[];
+  queryOperation?: string;
+  queryPreview?: string;
+  decisionReason?: string;
+}>> {
+  const hours = Math.min(Math.max(Math.floor(options.hours ?? 24), 1), 24 * 90);
+  const limit = Math.min(Math.max(Math.floor(options.limit ?? 50), 1), 200);
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const database = await getDb();
+  const clauses = ["al.ts >= ?"];
+  const params: unknown[] = [since];
+
+  if (options.trace) {
+    clauses.push("(al.lucy_turn_id = ? OR al.request_id = ? OR al.lucy_session_id = ?)");
+    params.push(options.trace, options.trace, options.trace);
+  }
+  if (options.outcome) {
+    clauses.push("al.outcome = ?");
+    params.push(options.outcome);
+  }
+  if (options.role) {
+    clauses.push("al.role_ids LIKE ?");
+    params.push(`%${options.role}%`);
+  }
+  if (options.source) {
+    clauses.push(`(
+      al.tables LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM access_log_sources als
+        WHERE als.access_log_id = al.id
+          AND (als.source_name LIKE ? OR als.physical_table LIKE ?)
+      )
+    )`);
+    params.push(`%${options.source}%`, `%${options.source}%`, `%${options.source}%`);
+  }
+  params.push(limit);
+
+  const rows = database.prepare(`
+    SELECT al.ts, al.user_id, al.tool, al.outcome, al.duration_ms, al.request_id,
+           al.lucy_turn_id, al.lucy_session_id, al.role_ids, al.tables,
+           al.query_operation, al.query_preview, al.decision_reason
+    FROM access_log al
+    WHERE ${clauses.join(" AND ")}
+    ORDER BY al.ts DESC, al.id DESC
+    LIMIT ?
+  `).all(...params) as Array<{
+    ts: string;
+    user_id: string;
+    tool: string;
+    outcome: string;
+    duration_ms: number;
+    request_id: string;
+    lucy_turn_id: string | null;
+    lucy_session_id: string | null;
+    role_ids: string | null;
+    tables: string | null;
+    query_operation: string | null;
+    query_preview: string | null;
+    decision_reason: string | null;
+  }>;
+
+  return rows.map((row) => ({
+    ts: row.ts,
+    userId: row.user_id,
+    tool: row.tool,
+    outcome: row.outcome,
+    durationMs: row.duration_ms,
+    requestId: row.request_id,
+    lucyTurnId: row.lucy_turn_id ?? undefined,
+    lucySessionId: row.lucy_session_id ?? undefined,
+    roleIds: parseRoleIds(row.role_ids),
+    tables: parseJsonArray(row.tables),
+    queryOperation: row.query_operation ?? undefined,
+    queryPreview: row.query_preview ?? undefined,
+    decisionReason: row.decision_reason ?? undefined
+  }));
 }
 
 // ─── Phase 3: conversation_turns (optional reported questions) ──────────────

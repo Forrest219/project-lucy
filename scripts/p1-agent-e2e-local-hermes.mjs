@@ -475,6 +475,7 @@ async function runLocalHermesE2E({ args, env = process.env } = {}) {
       profiles: ["hermes", "moz"],
       gateKind: "e2e",
       agentRuntime: "hermes",
+      traceBaseUrl: env.LUCY_E2E_TRACE_BASE_URL || "",
       runtimeProfiles: [
         { id: "hermes", hermesHome: HERMES_WORKHORSE_HOME },
         { id: "moz", hermesHome: HERMES_MOZ_HOME }
@@ -532,6 +533,7 @@ async function runLocalHermesE2E({ args, env = process.env } = {}) {
       LUCY_E2E_MOZ_EXPECTED_ROLE: "kx_readonly",
       LUCY_E2E_AGENT_RUNTIME: "hermes-local-real",
       LUCY_E2E_STUB: "false",
+      LUCY_E2E_TRACE_BASE_URL: env.LUCY_E2E_TRACE_BASE_URL || "",
       LUCY_E2E_AGENT_COMMANDS: JSON.stringify(localAgentCommands())
     };
     const result = await runCapture(process.execPath, [

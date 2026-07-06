@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { accessSync, chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { dirname, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
@@ -196,6 +196,7 @@ Note:
 
 Options:
   --profile <id>            Profile to run: main, hermes, moz. Repeatable. Defaults to all three.
+  --suite <id>              Restrict agent/direct cases to suite: superstore, kx_financial, data_agent_poc. Repeatable.
   --proxy-url <url>         Lucy MCP Proxy URL. Defaults to LUCY_E2E_PROXY_URL or ${DEFAULT_PROXY_URL}.
   --out <path>              Evidence JSON path. Defaults to ${DEFAULT_OUT}.
   --artifacts <dir>         Redacted artifact dir. Defaults to ${DEFAULT_ARTIFACTS}.
@@ -215,6 +216,7 @@ Exit codes: 0 pass, 1 fail, 2 usage/config parse error, 42 blocked.`;
 function parseArgs(argv = process.argv) {
   const args = {
     profiles: [],
+    suites: [],
     proxyUrl: DEFAULT_PROXY_URL,
     out: DEFAULT_OUT,
     artifacts: DEFAULT_ARTIFACTS,
@@ -234,6 +236,9 @@ function parseArgs(argv = process.argv) {
         break;
       case "--profile":
         args.profiles.push(requiredValue(argv, ++i, "--profile"));
+        break;
+      case "--suite":
+        args.suites.push(requiredValue(argv, ++i, "--suite"));
         break;
       case "--proxy-url":
         args.proxyUrl = requiredValue(argv, ++i, "--proxy-url");
@@ -264,6 +269,9 @@ function parseArgs(argv = process.argv) {
   if (args.profiles.length === 0) args.profiles = ["main", "hermes", "moz"];
   for (const profile of args.profiles) {
     if (!PROFILE_DEFAULTS[profile]) throw new Error(`unknown profile: ${profile}`);
+  }
+  for (const suite of args.suites) {
+    if (!["superstore", "kx_financial", "data_agent_poc"].includes(suite)) throw new Error(`unknown suite: ${suite}`);
   }
   new URL(args.proxyUrl);
   return args;
@@ -345,6 +353,38 @@ function checkProfilePlan(profile) {
     };
   }
   return { status: "ok", rolePlan };
+}
+
+function directCaseSuite(id) {
+  if (id === "kx") return "kx_financial";
+  if (id === "poc") return "data_agent_poc";
+  return "superstore";
+}
+
+function filterRolePlanBySuites(rolePlan, suites = []) {
+  if (!Array.isArray(suites) || suites.length === 0) return rolePlan;
+  const selected = new Set(suites);
+  return {
+    ...rolePlan,
+    direct: (rolePlan.direct || []).filter((id) => selected.has(directCaseSuite(id))),
+    agent: (rolePlan.agent || []).filter((caseId) => selected.has(CASE_SPECS[caseId]?.suite)),
+    visible: (rolePlan.visible || []).filter((sourceName) => {
+      if (selected.has("data_agent_poc") && sourceName.startsWith("poc_")) return true;
+      if (selected.has("kx_financial") && sourceName.startsWith("kx_")) return true;
+      if (selected.has("superstore") && sourceName.startsWith("superstore_")) return true;
+      return false;
+    }),
+    wiki: {
+      required: (rolePlan.wiki?.required || []).filter((item) => {
+        const q = String(item.query || "").toLowerCase();
+        if (selected.has("data_agent_poc") && q.includes("data_agent_poc")) return true;
+        if (selected.has("kx_financial") && q.includes("kx")) return true;
+        if (selected.has("superstore") && q.includes("superstore")) return true;
+        return false;
+      }),
+      deny: rolePlan.wiki?.deny || []
+    }
+  };
 }
 
 function textOf(value) {
@@ -795,6 +835,149 @@ function parseAgentFinalText(stdout, stderr = "") {
   return `${stdout}\n${stderr}`.trim();
 }
 
+function generatedTraceId(profileId, caseId) {
+  return `agent-${String(profileId).replace(/[^a-zA-Z0-9_-]/g, "-")}-${String(caseId).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function parseMaybeJson(value) {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function textFromToolResult(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((block) => typeof block === "string" ? block : block?.text || "").filter(Boolean).join("\n");
+  }
+  if (content && typeof content === "object") {
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function extractLucyMeta(value, toolName) {
+  const out = [];
+  const seen = new Set();
+  function visit(item) {
+    if (!item || typeof item !== "object" || seen.has(item)) return;
+    seen.add(item);
+    const meta = item._meta?.lucy || item.meta?.lucy || item.lucy;
+    if (meta && typeof meta === "object") out.push({ toolName, ...meta });
+    for (const nested of Object.values(item)) visit(nested);
+  }
+  visit(value);
+  return out;
+}
+
+function evidenceFromAgentStreams(stdout = "", stderr = "") {
+  const lines = `${stdout}\n${stderr}`.split("\n").filter((line) => line.trim().length > 0);
+  const toolUseById = new Map();
+  const toolCalls = [];
+  const wikiContextEvidence = [];
+  const semanticQueries = [];
+  const lucyMeta = [];
+
+  for (const line of lines) {
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const blocks = Array.isArray(event?.message?.content) ? event.message.content : [];
+    for (const block of blocks) {
+      if (block?.type === "tool_use") {
+        const call = { id: block.id || block.tool_use_id || "", name: block.name || "", input: block.input || {} };
+        toolCalls.push(call);
+        if (call.id) toolUseById.set(call.id, call);
+      }
+      if (block?.type === "tool_result") {
+        const call = toolUseById.get(block.tool_use_id || block.id || "") || {};
+        const text = textFromToolResult(block.content);
+        const parsed = parseMaybeJson(text);
+        lucyMeta.push(...extractLucyMeta(parsed, call.name));
+        if (/wiki_(search|read)|context_(search|read)/.test(String(call.name || ""))) {
+          const records = Array.isArray(parsed?.results) ? parsed.results : Array.isArray(parsed) ? parsed : [parsed];
+          for (const item of records) {
+            if (item && typeof item === "object") {
+              wikiContextEvidence.push({
+                toolName: call.name,
+                query: call.input?.query,
+                key: item.key || item.path,
+                title: item.title,
+                snippet: item.snippet || (typeof item.content === "string" ? item.content.slice(0, 240) : undefined)
+              });
+            }
+          }
+        }
+        if (/(lucy_query|sl_query|sql_execution)$/.test(String(call.name || ""))) {
+          semanticQueries.push({
+            toolName: call.name,
+            args: call.input || {},
+            sql: typeof parsed?.sql === "string" ? parsed.sql : undefined,
+            rowCount: Array.isArray(parsed?.rows) ? parsed.rows.length : undefined
+          });
+        }
+      }
+    }
+  }
+
+  return { toolCalls, wikiContextEvidence, semanticQueries, lucyMeta };
+}
+
+function traceIdFromEvidence(evidence, profileId, caseId) {
+  for (const meta of evidence.lucyMeta || []) {
+    for (const key of ["traceId", "trace_id", "turnId", "turn_id", "requestId", "request_id"]) {
+      if (typeof meta?.[key] === "string" && meta[key]) return { traceId: meta[key], generated: false, source: "lucy_meta" };
+    }
+  }
+  return { traceId: generatedTraceId(profileId, caseId), generated: true, source: "runner_generated" };
+}
+
+function agentContextRequirement(testCase = {}) {
+  const req = testCase.context_required;
+  if (!req) return { required: false, keys: [], titles: [], queries: [] };
+  if (req === true) return { required: true, keys: [], titles: [], queries: [] };
+  if (typeof req === "object") {
+    return {
+      required: true,
+      keys: Array.isArray(req.keys) ? req.keys.map(String) : [],
+      titles: Array.isArray(req.titles) ? req.titles.map(String) : [],
+      queries: Array.isArray(req.queries) ? req.queries.map(String) : []
+    };
+  }
+  return { required: Boolean(req), keys: [], titles: [], queries: [] };
+}
+
+function checkAgentContextEvidence(requirement, evidence = []) {
+  const failures = [];
+  if (!requirement.required) return failures;
+  if (!Array.isArray(evidence) || evidence.length === 0) {
+    failures.push("context evidence: context_required case has no wiki/context tool evidence");
+    return failures;
+  }
+  for (const key of requirement.keys) {
+    if (!evidence.some((item) => String(item.key || "").includes(key))) {
+      failures.push(`context evidence: required key missing: ${key}`);
+    }
+  }
+  for (const title of requirement.titles) {
+    const needle = String(title).toLowerCase();
+    if (!evidence.some((item) => String(item.title || item.snippet || "").toLowerCase().includes(needle))) {
+      failures.push(`context evidence: required title missing: ${title}`);
+    }
+  }
+  return failures;
+}
+
 async function runAgentProfile(profile, rolePlan, args, agentCommands, artifactsDir) {
   const commandTemplate = agentCommands[profile.id];
   if (!commandTemplate) {
@@ -827,31 +1010,68 @@ async function runAgentProfile(profile, rolePlan, args, agentCommands, artifacts
       const startedAt = new Date().toISOString();
       const result = await runCommand(command, commandArgs, { timeoutMs: args.agentTimeoutMs });
       const finishedAt = new Date().toISOString();
+      const durationMs = durationMsBetween(startedAt, finishedAt);
       const finalText = parseAgentFinalText(result.stdout, result.stderr);
+      const extractedEvidence = evidenceFromAgentStreams(result.stdout, result.stderr);
+      const trace = traceIdFromEvidence(extractedEvidence, profile.id, caseId);
+      const contextRequirement = agentContextRequirement(testCase);
+      const contextFailures = checkAgentContextEvidence(contextRequirement, extractedEvidence.wikiContextEvidence);
       const assertions = assertionsFromCase(testCase);
       const assertionResult = checkTextAssertions(finalText, assertions);
+      const score = {
+        status: result.code === 0 && assertionResult.ok && contextFailures.length === 0 ? "pass" : "fail",
+        failures: [
+          ...(result.code === 0 ? [] : [`agent exited code=${result.code}`]),
+          ...assertionResult.missing.map((item) => `missing: ${item}`),
+          ...assertionResult.forbiddenHits.map((item) => `forbidden: ${item}`),
+          ...contextFailures
+        ],
+        classification: result.code === 0 && assertionResult.ok && contextFailures.length === 0 ? "pass" : contextFailures.length > 0 ? "schema_drift" : "logic_regression"
+      };
       const artifactPath = resolve(artifactsDir, `${profile.id}-${caseId}.json`);
       writeFileSync(artifactPath, `${JSON.stringify(redactValue({
         profile: profile.id,
         caseId,
+        traceId: trace.traceId,
+        trace,
+        contextRequired: contextRequirement.required,
+        turns: [],
+        toolCalls: extractedEvidence.toolCalls,
+        semanticQueries: extractedEvidence.semanticQueries,
+        wikiContextEvidence: extractedEvidence.wikiContextEvidence,
+        lucyMeta: extractedEvidence.lucyMeta,
         startedAt,
         finishedAt,
+        durationMs,
         command: [basename(command), ...commandArgs.map((arg) => arg === prompt ? "{prompt}" : arg === mcpConfig ? "{mcpConfig}" : arg)],
         exitCode: result.code,
         signal: result.signal,
         timedOut: Boolean(result.timedOut),
         stdout: result.stdout,
         stderr: result.stderr,
+        finalAnswer: finalText,
         finalText,
-        assertions: assertionResult
+        assertions: assertionResult,
+        score,
+        failureClassification: score.classification
       }, profile.token), null, 2)}\n`, "utf8");
       checks.push({
         name: `agent:${caseId}`,
-        status: result.code === 0 && assertionResult.ok ? "pass" : "fail",
+        status: score.status,
+        traceId: trace.traceId,
+        traceGenerated: trace.generated,
+        contextRequired: contextRequirement.required,
+        scoreStatus: score.status,
+        failureClassification: score.classification,
+        durationMs,
         exitCode: result.code,
         signal: result.signal,
         timedOut: Boolean(result.timedOut),
         artifactPath,
+        score,
+        failureClassification: score.classification,
+        wikiContextEvidenceCount: extractedEvidence.wikiContextEvidence.length,
+        semanticQueryCount: extractedEvidence.semanticQueries.length,
         requiredPhrases: assertions.required,
         forbiddenPhrases: assertions.forbidden,
         missing: assertionResult.missing,
@@ -898,19 +1118,125 @@ function deriveStatus(profileResults) {
   return "pass";
 }
 
+function ratio(numerator, denominator) {
+  return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
+}
+
+function durationMsBetween(startedAt, finishedAt) {
+  const start = Date.parse(startedAt || "");
+  const finish = Date.parse(finishedAt || "");
+  if (!Number.isFinite(start) || !Number.isFinite(finish) || finish < start) return null;
+  return finish - start;
+}
+
+function percentile(values, p) {
+  const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  if (sorted.length === 0) return null;
+  const index = Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1);
+  return sorted[index];
+}
+
+function directCheckKind(check = {}) {
+  const name = String(check.name || "");
+  if (name.startsWith("wiki_")) return "wiki_rag";
+  if (name === "lucy_catalog" || name === "tools_list" || name === "initialize") return "data_catalog";
+  if (name.startsWith("deny:") || name.includes(":deny:")) return "access_control";
+  if (name.includes(":read:") || name.includes(":query")) return "direct_query";
+  return "other";
+}
+
+function isAllowControlCheck(check = {}) {
+  const name = String(check.name || "");
+  return name.includes(":allow:")
+    || name === "lucy_catalog"
+    || name.includes(":read:")
+    || name.includes(":query");
+}
+
+function isDenyControlCheck(check = {}) {
+  const name = String(check.name || "");
+  return name.startsWith("deny:") || name.includes(":deny:");
+}
+
 function summarize(profileResults) {
   const allChecks = profileResults.flatMap((profile) => [
     ...(profile.precheck ?? []),
     ...(profile.direct?.checks ?? []),
     ...(profile.agent?.checks ?? [])
   ]);
+  const directChecks = profileResults.flatMap((profile) => profile.direct?.checks ?? []);
+  const agentChecks = profileResults
+    .flatMap((profile) => profile.agent?.checks ?? [])
+    .filter((check) => String(check.name || "").startsWith("agent:"));
+  const traceIds = agentChecks.map((check) => check.traceId).filter(Boolean);
+  const uniqueTraceIds = new Set(traceIds);
+  const contextRequiredChecks = agentChecks.filter((check) => check.contextRequired === true);
+  const contextEvidenceChecks = contextRequiredChecks.filter((check) => Number(check.wikiContextEvidenceCount || 0) > 0);
+  const scoredAgentChecks = agentChecks.filter((check) => check.scoreStatus || check.status);
+  const pass = allChecks.filter((check) => check.status === "pass").length;
+  const fail = allChecks.filter((check) => check.status === "fail").length;
+  const blocked = allChecks.filter((check) => check.status === "blocked").length;
+  const decisive = pass + fail + blocked;
+  const scorePassCases = scoredAgentChecks.filter((check) => check.status === "pass").length;
+  const scoreTotalCases = scoredAgentChecks.length;
+  const allowChecks = directChecks.filter(isAllowControlCheck);
+  const denyChecks = directChecks.filter(isDenyControlCheck);
+  const allowPass = allowChecks.filter((check) => check.status === "pass").length;
+  const denyPass = denyChecks.filter((check) => check.status === "pass").length;
+  const durations = agentChecks.map((check) => check.durationMs).filter((value) => Number.isFinite(value));
+  const artifactChecks = agentChecks.filter((check) => check.artifactPath);
+  const directGroups = {};
+  for (const check of directChecks) {
+    const group = directCheckKind(check);
+    directGroups[group] = directGroups[group] || { total: 0, pass: 0, fail: 0, blocked: 0 };
+    directGroups[group].total += 1;
+    if (check.status === "pass") directGroups[group].pass += 1;
+    if (check.status === "fail") directGroups[group].fail += 1;
+    if (check.status === "blocked") directGroups[group].blocked += 1;
+  }
   return {
     profiles: profileResults.length,
-    pass: allChecks.filter((check) => check.status === "pass").length,
-    fail: allChecks.filter((check) => check.status === "fail").length,
-    blocked: allChecks.filter((check) => check.status === "blocked").length,
+    pass,
+    fail,
+    blocked,
     skip: allChecks.filter((check) => check.status === "skip").length,
-    dryRun: allChecks.filter((check) => check.status === "dry-run").length
+    dryRun: allChecks.filter((check) => check.status === "dry-run").length,
+    passedChecks: pass,
+    totalChecks: decisive,
+    passRate: ratio(pass, decisive),
+    scorePassCases,
+    scoreTotalCases,
+    scorePassRate: ratio(scorePassCases, scoreTotalCases),
+    agentCaseCount: agentChecks.length,
+    tracedCases: traceIds.length,
+    uniqueTraces: uniqueTraceIds.size,
+    traceCoverage: agentChecks.length === 0 || traceIds.length === agentChecks.length,
+    traceCoverageRate: ratio(traceIds.length, agentChecks.length),
+    traceUniqueness: traceIds.length === uniqueTraceIds.size,
+    traceUniquenessRate: ratio(uniqueTraceIds.size, agentChecks.length),
+    contextRequiredCases: contextRequiredChecks.length,
+    contextEvidencedCases: contextEvidenceChecks.length,
+    contextEvidenceCoverage: contextRequiredChecks.length === 0 || contextEvidenceChecks.length === contextRequiredChecks.length,
+    contextEvidenceCoverageRate: ratio(contextEvidenceChecks.length, contextRequiredChecks.length),
+    artifactCompleteCases: artifactChecks.length,
+    artifactTotalCases: agentChecks.length,
+    artifactCompleteness: ratio(artifactChecks.length, agentChecks.length),
+    accessControl: {
+      allowTotal: allowChecks.length,
+      allowPass,
+      allowPassRate: ratio(allowPass, allowChecks.length),
+      denyTotal: denyChecks.length,
+      denyPass,
+      denyPassRate: ratio(denyPass, denyChecks.length)
+    },
+    directGroups,
+    latency: {
+      agentCaseCount: durations.length,
+      minMs: durations.length ? Math.min(...durations) : null,
+      avgMs: durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : null,
+      p95Ms: percentile(durations, 95),
+      maxMs: durations.length ? Math.max(...durations) : null
+    }
   };
 }
 
@@ -954,6 +1280,47 @@ function conciseValue(value) {
   return JSON.stringify(value);
 }
 
+function formatPercent(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "N/A";
+  return `${Math.round(Number(value) * 100)}%`;
+}
+
+function formatRate(value, numerator, denominator, label = "") {
+  const base = formatPercent(value);
+  if (numerator == null || denominator == null || !Number.isFinite(Number(numerator)) || !Number.isFinite(Number(denominator))) return base;
+  return `${base} (${numerator}/${denominator}${label ? ` ${label}` : ""})`;
+}
+
+function formatDuration(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "N/A";
+  if (value < 1000) return `${Math.round(value)} ms`;
+  return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)} s`;
+}
+
+function readJsonIfExists(filePath) {
+  if (!filePath) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function truncateText(value, max = 900) {
+  const text = String(value ?? "");
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
+function traceHref(traceId, config = {}) {
+  if (!traceId) return "";
+  const base = config.traceBaseUrl || "";
+  if (!base) return "";
+  const encoded = encodeURIComponent(traceId);
+  if (String(base).includes("{traceId}")) return String(base).replaceAll("{traceId}", encoded);
+  if (String(base).includes("?")) return `${base}${String(base).endsWith("?") || String(base).endsWith("&") ? "" : "&"}traceId=${encoded}`;
+  return `${String(base).replace(/\/$/, "")}/${encoded}`;
+}
+
 function checkDetails(check) {
   const details = [];
   const labels = {
@@ -965,7 +1332,13 @@ function checkDetails(check) {
     role: "角色",
     exitCode: "退出码",
     signal: "信号",
-    artifactPath: "产物路径"
+    artifactPath: "产物路径",
+    traceId: "Trace ID",
+    scoreStatus: "评分状态",
+    failureClassification: "失败分类",
+    durationMs: "耗时(ms)",
+    wikiContextEvidenceCount: "上下文证据数",
+    semanticQueryCount: "语义查询数"
   };
   for (const [key, label] of Object.entries(labels)) {
     if (check[key] != null && check[key] !== "") details.push(`${label}: ${conciseValue(check[key])}`);
@@ -978,7 +1351,36 @@ function checkDetails(check) {
   return details.join("\n");
 }
 
-function renderChecksTable(title, checks = []) {
+function artifactSummaryHtml(check = {}, config = {}) {
+  const artifact = readJsonIfExists(check.artifactPath);
+  if (!artifact) return "";
+  const semanticQueries = Array.isArray(artifact.semanticQueries) ? artifact.semanticQueries : [];
+  const wikiEvidence = Array.isArray(artifact.wikiContextEvidence) ? artifact.wikiContextEvidence : [];
+  const traceId = artifact.traceId || check.traceId;
+  const href = traceHref(traceId, config);
+  const trace = href
+    ? `<a href="${escapeHtml(href)}">${escapeHtml(traceId)}</a>`
+    : escapeHtml(traceId || "未记录");
+  const semanticRows = semanticQueries.length
+    ? semanticQueries.map((item) => `- ${escapeHtml(item.toolName || "semantic_query")} rows=${escapeHtml(item.rowCount ?? "N/A")} ${escapeHtml(item.sql || JSON.stringify(item.args || {}))}`).join("<br>")
+    : "该 case 未捕获 semantic query 事件";
+  const wikiRows = wikiEvidence.length
+    ? wikiEvidence.map((item) => `- ${escapeHtml(item.title || item.key || item.toolName || "context")}：${escapeHtml(truncateText(item.snippet || item.content || "", 220))}`).join("<br>")
+    : "该 case 未产生 wiki/context evidence；只有 context_required case 才强制非空";
+  return `
+        <details class="artifact">
+          <summary>查看 artifact 摘要</summary>
+          <dl>
+            <dt>Trace</dt><dd>${trace}</dd>
+            <dt>Score</dt><dd>${escapeHtml(artifact.score?.status || "未记录")} / ${escapeHtml(artifact.failureClassification || artifact.score?.classification || "未分类")}</dd>
+            <dt>Semantic Queries</dt><dd>${semanticRows}</dd>
+            <dt>Wiki / Context Evidence</dt><dd>${wikiRows}</dd>
+            <dt>Final Answer</dt><dd><pre>${escapeHtml(truncateText(artifact.finalAnswer || artifact.finalText || "", 1600))}</pre></dd>
+          </dl>
+        </details>`;
+}
+
+function renderChecksTable(title, checks = [], options = {}) {
   if (!checks.length) {
     return `<section class="panel"><h3>${escapeHtml(title)}</h3><p class="muted">没有记录检查项。</p></section>`;
   }
@@ -986,7 +1388,7 @@ function renderChecksTable(title, checks = []) {
       <tr>
         <td><span class="badge ${cssStatus(check.status)}">${escapeHtml(statusLabel(check.status))}</span></td>
         <td>${escapeHtml(check.name || check.caseId || "检查项")}</td>
-        <td><pre>${escapeHtml(checkDetails(check) || "正常")}</pre></td>
+        <td><pre>${escapeHtml(checkDetails(check) || "正常")}</pre>${artifactSummaryHtml(check, options.config)}</td>
       </tr>`).join("");
   return `
     <section class="panel">
@@ -998,6 +1400,65 @@ function renderChecksTable(title, checks = []) {
     </section>`;
 }
 
+function groupDirectChecks(checks = []) {
+  const labels = {
+    access_control: "权限管控",
+    wiki_rag: "Wiki RAG",
+    direct_query: "Direct Query",
+    data_catalog: "Data Catalog",
+    other: "其他"
+  };
+  const groups = new Map();
+  for (const check of checks) {
+    const kind = directCheckKind(check);
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push(check);
+  }
+  return ["access_control", "wiki_rag", "direct_query", "data_catalog", "other"]
+    .filter((kind) => groups.has(kind))
+    .map((kind) => renderChecksTable(labels[kind], groups.get(kind)));
+}
+
+function execVersion(command, args = []) {
+  try {
+    const result = spawnSync(command, args, { cwd: REPO_ROOT, encoding: "utf8", timeout: 5000 });
+    const text = `${result.stdout || ""}${result.stderr || ""}`.trim();
+    return result.status === 0 && text ? text.split("\n")[0] : "not_available";
+  } catch {
+    return "not_available";
+  }
+}
+
+function execOutput(command, args = []) {
+  try {
+    const result = spawnSync(command, args, { cwd: REPO_ROOT, encoding: "utf8", timeout: 5000 });
+    return result.status === 0 ? String(result.stdout || "").trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function buildEnvironmentSnapshot(env = process.env) {
+  let rootPackage = {};
+  try {
+    rootPackage = JSON.parse(readFileSync(resolve(REPO_ROOT, "package.json"), "utf8"));
+  } catch {
+    rootPackage = {};
+  }
+  const commit = execVersion("git", ["rev-parse", "--short", "HEAD"]);
+  const dirty = execOutput("git", ["status", "--short"]);
+  return {
+    node: process.version,
+    packageName: rootPackage.name || "project-lucy",
+    packageVersion: rootPackage.version || "not_declared",
+    gitCommit: commit,
+    gitDirty: dirty ? dirty.split("\n").length : 0,
+    ktxVersion: execVersion("ktx", ["--version"]),
+    hermesVersion: execVersion("/Users/forrest/.local/bin/hermes", ["--version"]),
+    agentModelTag: env.LUCY_E2E_AGENT_MODEL_TAG || env.HERMES_MODEL_TAG || "not_declared"
+  };
+}
+
 function renderHtmlReport(evidence) {
   const safe = redactValue(evidence);
   const summary = safe.summary || {};
@@ -1005,11 +1466,18 @@ function renderHtmlReport(evidence) {
   const profiles = Array.isArray(safe.profiles) ? safe.profiles : [];
   const cards = [
     ["Profile 数量", summary.profiles ?? profiles.length],
+    ["通过率", formatRate(summary.passRate, summary.passedChecks ?? summary.pass, summary.totalChecks ?? ((summary.pass ?? 0) + (summary.fail ?? 0) + (summary.blocked ?? 0)), "checks")],
+    ["评分通过率", formatRate(summary.scorePassRate, summary.scorePassCases, summary.scoreTotalCases, "cases")],
+    ["Trace 覆盖", formatRate(summary.traceCoverageRate ?? (summary.traceCoverage === true ? 1 : 0), summary.tracedCases, summary.agentCaseCount, "cases")],
+    ["Trace 唯一", formatRate(summary.traceUniquenessRate ?? (summary.traceUniqueness === true ? 1 : 0), summary.uniqueTraces, summary.agentCaseCount, "cases")],
+    ["Deny 拦截率", formatRate(summary.accessControl?.denyPassRate, summary.accessControl?.denyPass, summary.accessControl?.denyTotal, "hits")],
+    ["Allow 放行率", formatRate(summary.accessControl?.allowPassRate, summary.accessControl?.allowPass, summary.accessControl?.allowTotal, "hits")],
+    ["P95 耗时", formatDuration(summary.latency?.p95Ms)],
+    ["平均耗时", formatDuration(summary.latency?.avgMs)],
+    ["Artifact 完整度", formatRate(summary.artifactCompleteness, summary.artifactCompleteCases, summary.artifactTotalCases, "cases")],
     ["通过", summary.pass ?? 0],
     ["失败", summary.fail ?? 0],
     ["阻塞", summary.blocked ?? 0],
-    ["跳过", summary.skip ?? 0],
-    ["演练", summary.dryRun ?? 0],
     ["Agent 运行时", safe.config?.agentRuntime || "未声明"],
     ["Stub 模式", safe.config?.stub === true ? "是" : safe.config?.stub === false ? "否" : "未声明"]
   ].map(([label, value]) => `<div class="card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
@@ -1024,8 +1492,8 @@ function renderHtmlReport(evidence) {
         <span class="badge ${cssStatus(profile.status)}">${escapeHtml(statusLabel(profile.status))}</span>
       </div>
       ${renderChecksTable("预检", profile.precheck)}
-      ${renderChecksTable("直接 MCP 控制检查", profile.direct?.checks)}
-      ${renderChecksTable("Agent 端到端检查", profile.agent?.checks)}
+      ${groupDirectChecks(profile.direct?.checks || []).join("")}
+      ${renderChecksTable("Agent 端到端检查", profile.agent?.checks, { config: safe.config })}
     </section>`).join("");
 
   return `<!doctype html>
@@ -1053,7 +1521,7 @@ function renderHtmlReport(evidence) {
     .badge.skip { background: var(--skip); }
     .badge.dry-run { background: var(--dry); }
     .badge.unknown { background: #687083; }
-    .summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin: 18px 0 22px; }
+    .summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 18px 0 22px; }
     .card, .profile, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
     .card { padding: 14px; }
     .card span { display: block; color: var(--muted); font-size: 12px; }
@@ -1068,6 +1536,12 @@ function renderHtmlReport(evidence) {
     th:first-child, td:first-child { width: 96px; }
     th:nth-child(2), td:nth-child(2) { width: 280px; }
     pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #243043; }
+    details.artifact { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+    details.artifact summary { cursor: pointer; color: #315a9c; font-weight: 700; }
+    dl { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 8px 12px; margin: 10px 0 0; }
+    dt { color: var(--muted); font-weight: 700; }
+    dd { margin: 0; min-width: 0; word-break: break-word; }
+    a { color: #315a9c; }
     @media (max-width: 760px) {
       main { padding: 20px 12px 40px; }
       header { display: block; }
@@ -1090,6 +1564,10 @@ function renderHtmlReport(evidence) {
     <section class="panel">
       <h3>运行上下文</h3>
       <pre>${escapeHtml(JSON.stringify(safe.config || {}, null, 2))}</pre>
+    </section>
+    <section class="panel">
+      <h3>环境 / 版本快照</h3>
+      <pre>${escapeHtml(JSON.stringify(safe.environment || {}, null, 2))}</pre>
     </section>
     ${profileSections || '<section class="panel"><h3>Profiles</h3><p class="muted">没有记录 profile。</p></section>'}
   </main>
@@ -1119,6 +1597,7 @@ async function runAgentE2E({ args, env = process.env } = {}) {
     config: {
       proxyUrl: args.proxyUrl,
       profiles: args.profiles,
+      suites: args.suites,
       out: args.out,
       artifacts: args.artifacts,
       htmlReport: args.htmlReport,
@@ -1126,8 +1605,10 @@ async function runAgentE2E({ args, env = process.env } = {}) {
       agentTimeoutMs: args.agentTimeoutMs,
       gateKind: "e2e",
       agentRuntime: env.LUCY_E2E_AGENT_RUNTIME || "configured-agent-command",
-      stub: env.LUCY_E2E_STUB === "true" ? true : env.LUCY_E2E_STUB === "false" ? false : null
+      stub: env.LUCY_E2E_STUB === "true" ? true : env.LUCY_E2E_STUB === "false" ? false : null,
+      traceBaseUrl: env.LUCY_E2E_TRACE_BASE_URL || ""
     },
+    environment: buildEnvironmentSnapshot(env),
     profiles: [],
     summary: {}
   };
@@ -1147,8 +1628,20 @@ async function runAgentE2E({ args, env = process.env } = {}) {
       evidence.profiles.push(profileResult);
       continue;
     }
+    const rolePlan = filterRolePlanBySuites(plan.rolePlan, args.suites);
+    if ((rolePlan.direct || []).length === 0 && (rolePlan.agent || []).length === 0) {
+      profileResult.status = "blocked";
+      profileResult.precheck.push({
+        name: "suite_selection",
+        status: "blocked",
+        reason: "no_cases_for_selected_suite",
+        suites: args.suites
+      });
+      evidence.profiles.push(profileResult);
+      continue;
+    }
 
-    const caseIds = [...plan.rolePlan.agent];
+    const caseIds = [...rolePlan.agent];
     const caseChecks = [];
     for (const caseId of caseIds) {
       try {
@@ -1190,9 +1683,9 @@ async function runAgentE2E({ args, env = process.env } = {}) {
       continue;
     }
 
-    profileResult.direct = await runDirectMcpProfile(profile, plan.rolePlan, args);
+    profileResult.direct = await runDirectMcpProfile(profile, rolePlan, args);
     if (profileResult.direct.status === "pass") {
-      profileResult.agent = await runAgentProfile(profile, plan.rolePlan, args, agentCommands, artifactsDir);
+      profileResult.agent = await runAgentProfile(profile, rolePlan, args, agentCommands, artifactsDir);
     } else {
       profileResult.agent = { status: "blocked", checks: [{ name: "agent_after_direct_mcp", status: "blocked", reason: "direct_mcp_not_passed" }] };
     }
@@ -1202,6 +1695,8 @@ async function runAgentE2E({ args, env = process.env } = {}) {
 
   evidence.status = deriveStatus(evidence.profiles);
   evidence.summary = summarize(evidence.profiles);
+  if (evidence.status === "pass" && evidence.summary.traceUniqueness === false) evidence.status = "fail";
+  if (evidence.status === "pass" && evidence.summary.traceCoverage === false) evidence.status = "fail";
   evidence.exitCode = evidence.status === "pass"
     ? EXIT_CODES.pass
     : evidence.status === "blocked"

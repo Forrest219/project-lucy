@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
-import { readR1AuditObservability } from "./proxy/audit.js";
+import { readR1AuditObservability, searchAccessLogs } from "./proxy/audit.js";
 import { getEvalDb } from "./eval/db.js";
 
 type HermesAccuracy = {
@@ -67,6 +67,17 @@ type EvalObservability = {
     passCount: number;
     failCount: number;
     passRate: number;
+  };
+  trust: {
+    traceRequiredCases: number;
+    tracedCases: number;
+    uniqueTraces: number;
+    traceCoverage: boolean;
+    traceUniqueness: boolean;
+    contextRequiredCases: number;
+    contextEvidencedCases: number;
+    contextEvidenceCoverage: boolean;
+    latestFailureClassifications: Record<string, number>;
   };
 };
 
@@ -343,6 +354,32 @@ async function readEvalObservability(hours: number): Promise<EvalObservability> 
     FROM eval_run
     WHERE started_at >= ? AND status = 'succeeded'
   `).get(since) as { runs: number; total_cases: number; pass_count: number; fail_count: number };
+  const latestCaseRows = latest ? db.prepare(`
+    SELECT trace_id, wiki_context_raw, failure_classification, score_raw
+    FROM eval_run_case
+    WHERE run_id = ?
+  `).all(latest.id) as Array<{
+    trace_id: string | null;
+    wiki_context_raw: string | null;
+    failure_classification: string | null;
+    score_raw: string | null;
+  }> : [];
+  const traceIds = latestCaseRows.map((row) => row.trace_id).filter((value): value is string => Boolean(value));
+  const uniqueTraceIds = new Set(traceIds);
+  const contextEvidenced = latestCaseRows.filter((row) => {
+    if (!row.wiki_context_raw) return false;
+    try {
+      const parsed = JSON.parse(row.wiki_context_raw) as unknown;
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch {
+      return false;
+    }
+  });
+  const latestFailureClassifications: Record<string, number> = {};
+  for (const row of latestCaseRows) {
+    const classification = row.failure_classification ?? "unknown";
+    latestFailureClassifications[classification] = (latestFailureClassifications[classification] ?? 0) + 1;
+  }
   return {
     latestRun: latest ? {
       id: latest.id,
@@ -361,6 +398,17 @@ async function readEvalObservability(hours: number): Promise<EvalObservability> 
       passCount: recent.pass_count,
       failCount: recent.fail_count,
       passRate: rate(recent.pass_count, recent.total_cases)
+    },
+    trust: {
+      traceRequiredCases: latestCaseRows.length,
+      tracedCases: traceIds.length,
+      uniqueTraces: uniqueTraceIds.size,
+      traceCoverage: latestCaseRows.length === 0 || traceIds.length === latestCaseRows.length,
+      traceUniqueness: traceIds.length === uniqueTraceIds.size,
+      contextRequiredCases: latestCaseRows.length,
+      contextEvidencedCases: contextEvidenced.length,
+      contextEvidenceCoverage: latestCaseRows.length === 0 || contextEvidenced.length === latestCaseRows.length,
+      latestFailureClassifications
     }
   };
 }
@@ -411,8 +459,37 @@ async function readGenericObservability(hours: number, slowMs: number) {
   const snapshot = audit ?? emptyAudit;
   const evalSnapshot = evalStatus ?? {
     latestRun: undefined,
-    recent: { runs: 0, totalCases: 0, passCount: 0, failCount: 0, passRate: 0 }
+    recent: { runs: 0, totalCases: 0, passCount: 0, failCount: 0, passRate: 0 },
+    trust: {
+      traceRequiredCases: 0,
+      tracedCases: 0,
+      uniqueTraces: 0,
+      traceCoverage: true,
+      traceUniqueness: true,
+      contextRequiredCases: 0,
+      contextEvidencedCases: 0,
+      contextEvidenceCoverage: true,
+      latestFailureClassifications: {}
+    }
   };
+  const slo = {
+    thresholds: {
+      p95LatencyMs: slowMs,
+      maxErrorRate: Number(process.env.LUCY_OBSERVABILITY_MAX_ERROR_RATE ?? 0.02),
+      maxDeniedRate: Number(process.env.LUCY_OBSERVABILITY_MAX_DENIED_RATE ?? 0.1),
+      minEvalPassRate: Number(process.env.LUCY_OBSERVABILITY_MIN_EVAL_PASS_RATE ?? 0.95)
+    },
+    status: "ok" as "ok" | "warn" | "no_data",
+    violations: [] as string[]
+  };
+  if (snapshot.traffic.businessCalls <= 0) slo.status = "no_data";
+  if ((snapshot.latency.p95Ms ?? 0) > slo.thresholds.p95LatencyMs) slo.violations.push("latency_p95");
+  if (snapshot.traffic.errorRate > slo.thresholds.maxErrorRate) slo.violations.push("error_rate");
+  if (snapshot.traffic.deniedRate > slo.thresholds.maxDeniedRate) slo.violations.push("denied_rate");
+  if (evalSnapshot.latestRun && evalSnapshot.latestRun.passRate < slo.thresholds.minEvalPassRate) slo.violations.push("eval_pass_rate");
+  if (!evalSnapshot.trust.traceCoverage) slo.violations.push("eval_trace_coverage");
+  if (!evalSnapshot.trust.traceUniqueness) slo.violations.push("eval_trace_uniqueness");
+  if (slo.violations.length > 0) slo.status = "warn";
 
   return redactSensitive({
     generatedAt: new Date().toISOString(),
@@ -455,8 +532,10 @@ async function readGenericObservability(hours: number, slowMs: number) {
     eval: {
       status: evalSnapshot.latestRun ? "ok" : "no_data",
       latest: evalSnapshot.latestRun ?? null,
-      recent: evalSnapshot.recent
+      recent: evalSnapshot.recent,
+      trust: evalSnapshot.trust
     },
+    slo,
     latest: {
       evalRun: evalSnapshot.latestRun ?? null
     },
@@ -485,6 +564,35 @@ export function registerR1ObservabilityRoutes(app: FastifyInstance) {
     return {
       ok: true,
       data: await readGenericObservability(hours, slowMs)
+    };
+  });
+
+  app.get<{
+    Querystring: { hours?: string; trace?: string; source?: string; role?: string; outcome?: string; limit?: string };
+  }>("/api/observability/logs", async (request) => {
+    const hours = Math.min(Math.max(parseInt(request.query.hours ?? "24", 10) || 24, 1), 24 * 90);
+    const limit = Math.min(Math.max(parseInt(request.query.limit ?? "50", 10) || 50, 1), 200);
+    const rows = await searchAccessLogs({
+      hours,
+      limit,
+      trace: request.query.trace,
+      source: request.query.source,
+      role: request.query.role,
+      outcome: request.query.outcome
+    });
+    return {
+      ok: true,
+      data: redactSensitive({
+        filters: {
+          hours,
+          trace: request.query.trace,
+          source: request.query.source,
+          role: request.query.role,
+          outcome: request.query.outcome,
+          limit
+        },
+        rows
+      })
     };
   });
 

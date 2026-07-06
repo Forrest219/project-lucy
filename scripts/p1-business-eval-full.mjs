@@ -317,6 +317,14 @@ function evidenceBase({ status, exitCode, args, suites, precheck }) {
       totalCases: 0,
       pass: 0,
       fail: 0,
+      traceRequiredCases: 0,
+      tracedCases: 0,
+      uniqueTraces: 0,
+      contextRequiredCases: 0,
+      contextEvidencedCases: 0,
+      traceCoverage: true,
+      traceUniqueness: true,
+      contextEvidenceCoverage: true,
     },
   };
 }
@@ -390,6 +398,9 @@ async function runSuite(suite, { args, env = process.env, run = runCommand } = {
     totalCases: summary?.total ?? 0,
     pass: summary?.pass ?? 0,
     fail: summary?.fail ?? (summary ? 0 : 1),
+    gates: summary?.gates ?? null,
+    trace: summary?.trace ?? null,
+    context: summary?.context ?? null,
     failedCaseIds: Array.isArray(summary?.cases) ? summary.cases.filter((entry) => !entry.pass).map((entry) => entry.id) : [],
   };
 }
@@ -418,9 +429,22 @@ async function runFullEval({ args, env = process.env, fetchImpl = globalThis.fet
     evidence.summary.totalCases += suiteEvidence.totalCases;
     evidence.summary.pass += suiteEvidence.pass;
     evidence.summary.fail += suiteEvidence.fail;
+    evidence.summary.traceRequiredCases += suiteEvidence.trace?.requiredCases ?? 0;
+    evidence.summary.tracedCases += suiteEvidence.trace?.tracedCases ?? 0;
+    evidence.summary.uniqueTraces += suiteEvidence.trace?.uniqueTraces ?? 0;
+    evidence.summary.contextRequiredCases += suiteEvidence.context?.requiredCases ?? 0;
+    evidence.summary.contextEvidencedCases += suiteEvidence.context?.evidencedCases ?? 0;
+    evidence.summary.traceCoverage = evidence.summary.traceCoverage && (suiteEvidence.gates?.traceCoverage ?? true);
+    evidence.summary.traceUniqueness = evidence.summary.traceUniqueness && (suiteEvidence.gates?.traceUniqueness ?? true);
+    evidence.summary.contextEvidenceCoverage = evidence.summary.contextEvidenceCoverage && (suiteEvidence.gates?.contextEvidenceCoverage ?? true);
   }
 
-  evidence.status = evidence.suites.every((suite) => suite.status === 'pass') ? 'pass' : 'fail';
+  evidence.status = evidence.suites.every((suite) => suite.status === 'pass')
+    && evidence.summary.traceCoverage
+    && evidence.summary.traceUniqueness
+    && evidence.summary.contextEvidenceCoverage
+    ? 'pass'
+    : 'fail';
   evidence.exitCode = evidence.status === 'pass' ? EXIT_CODES.pass : EXIT_CODES.evalFail;
   return { evidence, exitCode: evidence.exitCode };
 }

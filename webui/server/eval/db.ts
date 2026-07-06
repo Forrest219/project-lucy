@@ -42,6 +42,14 @@ const SCHEMA = `
     tool_calls_raw    TEXT,
     tool_summary_raw  TEXT,
     budget_failures   TEXT,
+    trace_id          TEXT,
+    artifact_path     TEXT,
+    wiki_context_raw  TEXT,
+    semantic_queries_raw TEXT,
+    lucy_meta_raw     TEXT,
+    score_raw         TEXT,
+    failure_classification TEXT,
+    turn_artifacts_raw TEXT,
     PRIMARY KEY (run_id, case_id)
   );
 
@@ -55,7 +63,15 @@ function ensureEvalRunCaseColumns(instance: Database.Database): void {
   const additions: Array<[string, string]> = [
     ["tool_calls_raw", "TEXT"],
     ["tool_summary_raw", "TEXT"],
-    ["budget_failures", "TEXT"]
+    ["budget_failures", "TEXT"],
+    ["trace_id", "TEXT"],
+    ["artifact_path", "TEXT"],
+    ["wiki_context_raw", "TEXT"],
+    ["semantic_queries_raw", "TEXT"],
+    ["lucy_meta_raw", "TEXT"],
+    ["score_raw", "TEXT"],
+    ["failure_classification", "TEXT"],
+    ["turn_artifacts_raw", "TEXT"]
   ];
   for (const [name, type] of additions) {
     if (!columns.has(name)) {
@@ -121,4 +137,12 @@ export interface EvalRunCaseRow {
   tool_calls_raw: string | null;
   tool_summary_raw: string | null;
   budget_failures: string | null;
+  trace_id: string | null;
+  artifact_path: string | null;
+  wiki_context_raw: string | null;
+  semantic_queries_raw: string | null;
+  lucy_meta_raw: string | null;
+  score_raw: string | null;
+  failure_classification: string | null;
+  turn_artifacts_raw: string | null;
 }

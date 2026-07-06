@@ -35,7 +35,9 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p1:endpoint` | MCP lifecycle | authenticated proxy precheck, `initialize`, `tools/list`, and `lucy_read_source` forwarding metadata |
 | `npm run smoke:p1:observability` | observability | generic `/api/observability` evidence; reports blocked if WebUI service is not reachable |
 | `npm run e2e:agent` | agent database E2E | database-backed Lucy MCP control path plus main/Hermes/moz agent final-answer assertions; missing local tokens or agent adapters returns blocked evidence |
+| `npm run e2e:agent:ceo-one-report` |主题级 agent E2E | CEO 一眼报类 SOW 可信 Eval/UAT gate 占位；当前跑 `data_agent_poc` suite，输出 trace/context/score artifact |
 | `npm run e2e:agent:local-hermes` | real local Hermes E2E | repeatable local harness for Hermes workhorse + moz: generates runtime-only token hashes, starts KTX/WebUI/proxy, calls real Hermes, runs agent assertions, then cleans up |
+| `npm run e2e:sow-trust-standard` | SOW trust E2E standard | runs real local Hermes E2E with default local trace links, then packages strict READY evidence for external SOW review |
 | `npm run smoke:p1:agent-e2e` | compatibility alias | legacy command name for `e2e:agent`; do not treat stub/unit coverage as E2E acceptance |
 | `npm run smoke:p1:agent-e2e:local-hermes` | compatibility alias | legacy command name for `e2e:agent:local-hermes` |
 | `npm run smoke:p1:business-eval-full` | business eval full run | full Superstore, KX Financial, and Data Agent POC agent eval; requires agent/model/MCP environment |
@@ -68,6 +70,7 @@ npm run smoke:p1:skills
 npm run smoke:p1:endpoint -- --proxy-url <lucy-mcp-url> --token <token> --connection <id> --source <source>
 npm run smoke:p1:observability -- --url <webui-url>/api/observability
 npm run e2e:agent
+npm run e2e:agent:ceo-one-report
 npm run smoke:p1:business-eval-full -- --require-mcp-token
 npm run smoke:p1:release-readiness
 ```
@@ -78,9 +81,40 @@ On Forrest's local machine, the repeatable Hermes/moz path is:
 
 ```bash
 npm run e2e:agent:local-hermes
+npm run package:sow-trust-evidence -- --strict
 ```
 
 That wrapper generates one-run tokens in memory, writes only their hashes to ignored `inbox/p1-agent-e2e-local-access.yaml`, starts KTX MCP and Lucy WebUI/proxy with `LUCY_ACCESS_CONFIG_PATH`, runs `e2e:agent -- --profile hermes --profile moz`, writes canonical evidence to `inbox/p1-agent-e2e-hermes-moz-evidence.json`, writes the human report to `inbox/p1-agent-e2e-hermes-moz-report.html`, writes wrapper evidence to `inbox/p1-agent-e2e-local-hermes-run.json`, and stops services it started. Hermes profile configs must reference `LUCY_E2E_HERMES_TOKEN` and `LUCY_E2E_MOZ_TOKEN`; the wrapper does not read or print `.ktx/secrets/` contents. Its evidence declares `gateKind: e2e`, `agentRuntime: hermes`, `stub: false`, and runtime profiles for workhorse/moz.
+
+### 3.1 SOW Trust E2E Standard
+
+CEO 一眼报 / SOW 可信 Eval/UAT 对外展示必须使用以下可复跑标准：
+
+```bash
+npm run e2e:sow-trust-standard
+```
+
+展开后等价于：设置默认 `LUCY_E2E_TRACE_BASE_URL=http://127.0.0.1:5174/api/observability/logs?traceId={traceId}`，执行 `npm run e2e:agent:local-hermes`，再执行 `npm run package:sow-trust-evidence -- --strict`。需要接入其他 trace UI 时，可显式覆盖 `LUCY_E2E_TRACE_BASE_URL`。
+
+标准输出物：
+
+| Artifact | Path | Standard |
+|---|---|---|
+| Machine evidence | `inbox/ceo-one-report-sow-trust-evidence-package/real-hermes-moz-evidence.json` | `status=pass`, `stub=false`, `agentRuntime=hermes-local-real` |
+| Human report | `inbox/ceo-one-report-sow-trust-evidence-package/real-hermes-moz-report.html` | Summary 以 `100% (x/y)` 展示 rate 与样本量 |
+| Manifest | `inbox/ceo-one-report-sow-trust-evidence-package/manifest.json` | `status=READY` |
+| Per-case artifacts | `inbox/ceo-one-report-sow-trust-evidence-package/real-hermes-moz-artifacts/*.json` | 含 `traceId`, `score`, `failureClassification`, `semanticQueries`, `wikiContextEvidence`, `lucyMeta`, `finalAnswer` |
+
+机器验收条件：
+
+- `package:sow-trust-evidence -- --strict` 返回 0，且 manifest `status` 为 `READY`。
+- Run summary 必须包含 rate 的分子、分母和值：`passedChecks/totalChecks/passRate`、`scorePassCases/scoreTotalCases/scorePassRate`、`tracedCases/agentCaseCount/traceCoverageRate`、`uniqueTraces/agentCaseCount/traceUniquenessRate`、`artifactCompleteCases/artifactTotalCases/artifactCompleteness`。
+- Access control 必须包含 `allowPass/allowTotal/allowPassRate` 与 `denyPass/denyTotal/denyPassRate`。
+- HTML Summary 必须展示 `通过率 100% (34/34 checks)`、`评分通过率 100% (2/2 cases)`、`Trace 覆盖 100% (2/2 cases)`、`Deny 拦截率 100% (12/12 hits)`、`Allow 放行率 100% (8/8 hits)` 这一类带基数形态；具体数字随 case 数变化，但格式不能退化为裸百分比。
+- 若设置 `LUCY_E2E_TRACE_BASE_URL`，artifact 摘要里的 traceId 必须渲染为可点击链接；未设置时仅展示 traceId。
+- `context_required` case 必须有 `wikiContextEvidence`；当前 local Hermes KX gate 没有 context-required case 时，summary 应显示 `contextRequiredCases=0` 且 `contextEvidenceCoverage=true`，不得伪造非空 context evidence。
+
+该标准是对外 SOW 证据标准；`npm run e2e:agent:test`、stub proxy 单测、dry-run 和 smoke test 只能证明 harness，不可替代真实 Agent + Lucy/KTX MCP E2E。
 
 Agent E2E acceptance requires real agent runtime execution. Unit tests such as `npm run e2e:agent:test` and proxy smoke tests can protect the harness and ACL logic, but they do not satisfy the database-to-agent E2E standard.
 
@@ -188,6 +222,7 @@ Recommended CI jobs:
 | p1-observability | service environment: `npm run smoke:p1:observability -- --url <url>/api/observability` |
 | p1-agent-e2e | protected local agent environment: `npm run e2e:agent` |
 | p1-agent-e2e-local-hermes | Forrest local protected agent environment: `npm run e2e:agent:local-hermes` |
+| sow-trust-e2e-standard | Forrest local protected agent environment: `npm run e2e:sow-trust-standard` |
 | p1-business-eval-full | protected model/MCP secret environment: `npm run smoke:p1:business-eval-full -- --require-mcp-token` |
 | p1-release-readiness | `npm run smoke:p1:release-readiness` |
 | ktx-diff-audit | `npm run audit:ktx-diff -- --out inbox/ktx-lucy-diff-$(date +%F).md` |

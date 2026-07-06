@@ -23,7 +23,14 @@ describe("eval runner summary mapping", () => {
         result: { weighted_discount: 0.14 },
         finalText: "weighted_discount is 0.14",
         toolSummary: { total: 2, ktxByShortName: { sql_execution: 1, sl_read_source: 1 } },
-        budgetFailures: []
+        budgetFailures: [],
+        traceId: "trace-superstore-discount-001",
+        wikiContextEvidence: [{ toolName: "mcp__ktx__wiki_search", key: "global/superstore.md" }],
+        semanticQueries: [{ toolName: "mcp__ktx__sl_query", rowCount: 1 }],
+        lucyMeta: [{ toolName: "mcp__ktx__sl_query", traceId: "trace-superstore-discount-001" }],
+        score: { status: "fail", classification: "data_drift", failures: ["result mismatch"] },
+        failureClassification: "data_drift",
+        turns: []
       },
       evalCase
     );
@@ -35,7 +42,9 @@ describe("eval runner summary mapping", () => {
       drift: "data_drift",
       sql: "SELECT SUM(discount * sales) / SUM(sales) FROM superstore_orders",
       error_message: "result mismatch: weighted_discount expected 0.1398 got 0.14",
-      final_text: "weighted_discount is 0.14"
+      final_text: "weighted_discount is 0.14",
+      trace_id: "trace-superstore-discount-001",
+      failure_classification: "data_drift"
     });
     expect(JSON.parse(row.expected_raw ?? "null")).toEqual(evalCase.result_assertions);
     expect(JSON.parse(row.actual_raw ?? "null")).toEqual({ weighted_discount: 0.14 });
@@ -48,6 +57,21 @@ describe("eval runner summary mapping", () => {
       ktxByShortName: { sql_execution: 1, sl_read_source: 1 }
     });
     expect(JSON.parse(row.budget_failures ?? "null")).toEqual([]);
+    expect(JSON.parse(row.wiki_context_raw ?? "null")).toEqual([
+      { toolName: "mcp__ktx__wiki_search", key: "global/superstore.md" }
+    ]);
+    expect(JSON.parse(row.semantic_queries_raw ?? "null")).toEqual([
+      { toolName: "mcp__ktx__sl_query", rowCount: 1 }
+    ]);
+    expect(JSON.parse(row.lucy_meta_raw ?? "null")).toEqual([
+      { toolName: "mcp__ktx__sl_query", traceId: "trace-superstore-discount-001" }
+    ]);
+    expect(JSON.parse(row.score_raw ?? "null")).toEqual({
+      status: "fail",
+      classification: "data_drift",
+      failures: ["result mismatch"]
+    });
+    expect(JSON.parse(row.turn_artifacts_raw ?? "null")).toEqual([]);
   });
 
   it("classifies SQL failures as logic regressions", () => {

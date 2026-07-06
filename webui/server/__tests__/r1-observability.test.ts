@@ -124,6 +124,7 @@ describe("GET /api/r1/observability", () => {
       responseRowCount: 2,
       responseColumnCount: 3,
       requestId: "query-ok",
+      lucyTurnId: "trace-ceo-001",
       roleIds: ["ceo_readonly"],
       decisionReason: "allowed"
     });
@@ -168,10 +169,20 @@ describe("GET /api/r1/observability", () => {
     }]);
 
     const db = await getEvalDb();
-    db.prepare(`
+    const runResult = db.prepare(`
       INSERT INTO eval_run (domain, started_at, finished_at, status, triggered_by, trigger, ktx_mcp_url, case_selection, total_cases, pass_count, fail_count)
       VALUES ('r1_doris_smoke', ?, ?, 'succeeded', 'test', 'manual', 'http://localhost:7879/mcp', '{}', 20, 19, 1)
     `).run(new Date().toISOString(), new Date().toISOString());
+    db.prepare(`
+      INSERT INTO eval_run_case (
+        run_id, case_id, status, drift, trace_id, wiki_context_raw, score_raw, failure_classification
+      )
+      VALUES (?, 'ceo-case-001', 'PASS', 'pass', 'trace-ceo-001', ?, ?, 'pass')
+    `).run(
+      runResult.lastInsertRowid,
+      JSON.stringify([{ toolName: "mcp__ktx__wiki_search", key: "global/ceo.md" }]),
+      JSON.stringify({ status: "pass", classification: "pass", failures: [] })
+    );
 
     const { buildServer } = await import("../index");
     const app = buildServer();
@@ -204,6 +215,16 @@ describe("GET /api/r1/observability", () => {
         passCount: 19,
         failCount: 1,
         passRate: 0.95
+      });
+      expect(res.body.data.eval.trust).toMatchObject({
+        traceRequiredCases: 1,
+        tracedCases: 1,
+        uniqueTraces: 1,
+        traceCoverage: true,
+        traceUniqueness: true,
+        contextRequiredCases: 1,
+        contextEvidencedCases: 1,
+        contextEvidenceCoverage: true
       });
       expect(res.body.data.hermesQa).toMatchObject({
         status: "passed",
@@ -245,6 +266,22 @@ describe("GET /api/r1/observability", () => {
         hermesLucyControlledEvidenceGatePassed: true,
         hermesPerCaseIdentityGatePassed: true,
         hermesReportGatePassed: true
+      });
+
+      const generic = await request(app.server)
+        .get("/api/observability?hours=24&slowMs=30000")
+        .expect(200);
+      expect(generic.body.data.slo.status).toBe("warn");
+      expect(generic.body.data.slo.violations).toContain("denied_rate");
+      expect(generic.body.data.eval.trust.traceCoverage).toBe(true);
+
+      const logs = await request(app.server)
+        .get("/api/observability/logs?trace=trace-ceo-001&source=ceo_metric_snapshot&role=ceo_readonly&outcome=ok")
+        .expect(200);
+      expect(logs.body.data.rows[0]).toMatchObject({
+        requestId: "query-ok",
+        lucyTurnId: "trace-ceo-001",
+        outcome: "ok"
       });
     } finally {
       await app.close();

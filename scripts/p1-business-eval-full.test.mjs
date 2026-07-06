@@ -163,6 +163,20 @@ test('runFullEval aggregates eval-runner JSON artifacts for selected suites', as
         total: 2,
         pass: 1,
         fail: 1,
+        gates: {
+          traceCoverage: true,
+          traceUniqueness: true,
+          contextEvidenceCoverage: true,
+        },
+        trace: {
+          requiredCases: 2,
+          tracedCases: 2,
+          uniqueTraces: 2,
+        },
+        context: {
+          requiredCases: 1,
+          evidencedCases: 1,
+        },
         cases: [
           { id: 'case-pass', pass: true },
           { id: 'case-fail', pass: false },
@@ -176,6 +190,11 @@ test('runFullEval aggregates eval-runner JSON artifacts for selected suites', as
   assert.equal(evidence.summary.totalCases, 2);
   assert.equal(evidence.summary.pass, 1);
   assert.equal(evidence.summary.fail, 1);
+  assert.equal(evidence.summary.traceCoverage, true);
+  assert.equal(evidence.summary.traceUniqueness, true);
+  assert.equal(evidence.summary.contextEvidenceCoverage, true);
+  assert.equal(evidence.summary.tracedCases, 2);
+  assert.equal(evidence.summary.contextEvidencedCases, 1);
   assert.deepEqual(evidence.suites[0].failedCaseIds, ['case-fail']);
 
   rmSync('inbox/p1-business-eval-full-superstore.json', { force: true });

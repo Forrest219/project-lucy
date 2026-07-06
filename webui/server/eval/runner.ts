@@ -84,6 +84,15 @@ type EvalSummaryCase = {
   toolCalls?: unknown;
   toolSummary?: unknown;
   budgetFailures?: unknown;
+  traceId?: unknown;
+  trace?: unknown;
+  turns?: unknown;
+  semanticQueries?: unknown;
+  wikiContextEvidence?: unknown;
+  lucyMeta?: unknown;
+  score?: unknown;
+  failureClassification?: unknown;
+  artifactPath?: unknown;
   exitCode?: unknown;
   durationMs?: unknown;
 };
@@ -142,6 +151,10 @@ function formatSummaryMarkdown(summary: EvalSummary, sourceRelPath: string): str
     const failures = Array.isArray(c.failures) ? c.failures.map(String) : [];
     lines.push(`## ${String(c.id ?? "")}`);
     lines.push(`- pass: ${c.pass ? "PASS" : "FAIL"}`);
+    if (c.traceId) lines.push(`- traceId: ${String(c.traceId)}`);
+    if (c.failureClassification) lines.push(`- failureClassification: ${String(c.failureClassification)}`);
+    if (c.score) lines.push(`- score: ${JSON.stringify(c.score)}`);
+    if (Array.isArray(c.wikiContextEvidence)) lines.push(`- wikiContextEvidence: ${c.wikiContextEvidence.length}`);
     if (c.sql) {
       lines.push("- sql:");
       lines.push("```sql");
@@ -216,7 +229,15 @@ export function mapSummaryCaseToRunCase(
     final_text: typeof summaryCase.finalText === "string" ? summaryCase.finalText : null,
     tool_calls_raw: toJsonText(summaryCase.toolCalls),
     tool_summary_raw: toJsonText(summaryCase.toolSummary),
-    budget_failures: toJsonText(summaryCase.budgetFailures)
+    budget_failures: toJsonText(summaryCase.budgetFailures),
+    trace_id: typeof summaryCase.traceId === "string" ? summaryCase.traceId : null,
+    artifact_path: typeof summaryCase.artifactPath === "string" ? summaryCase.artifactPath : null,
+    wiki_context_raw: toJsonText(summaryCase.wikiContextEvidence),
+    semantic_queries_raw: toJsonText(summaryCase.semanticQueries),
+    lucy_meta_raw: toJsonText(summaryCase.lucyMeta),
+    score_raw: toJsonText(summaryCase.score),
+    failure_classification: typeof summaryCase.failureClassification === "string" ? summaryCase.failureClassification : null,
+    turn_artifacts_raw: toJsonText(summaryCase.turns)
   };
 }
 
@@ -381,9 +402,11 @@ export async function spawnEvalRun(
       const insertCase = db2.prepare(`
         INSERT OR REPLACE INTO eval_run_case (
           run_id, case_id, status, drift, exit_code, duration_ms, sql, result_raw, expected_raw, actual_raw,
-          failed_assertions, error_message, final_text, tool_calls_raw, tool_summary_raw, budget_failures
+          failed_assertions, error_message, final_text, tool_calls_raw, tool_summary_raw, budget_failures,
+          trace_id, artifact_path, wiki_context_raw, semantic_queries_raw, lucy_meta_raw, score_raw,
+          failure_classification, turn_artifacts_raw
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const insertMany = db2.transaction((cases: EvalSummaryCase[]) => {
@@ -405,7 +428,15 @@ export async function spawnEvalRun(
             mapped.final_text,
             mapped.tool_calls_raw,
             mapped.tool_summary_raw,
-            mapped.budget_failures
+            mapped.budget_failures,
+            mapped.trace_id,
+            mapped.artifact_path,
+            mapped.wiki_context_raw,
+            mapped.semantic_queries_raw,
+            mapped.lucy_meta_raw,
+            mapped.score_raw,
+            mapped.failure_classification,
+            mapped.turn_artifacts_raw
           );
         }
       });
@@ -485,6 +516,8 @@ export function registerRunnerRoutes(app: FastifyInstance) {
       sql: string | null; result_raw: string | null; expected_raw: string | null; actual_raw: string | null;
       failed_assertions: string | null; error_message: string | null; final_text: string | null;
       tool_calls_raw: string | null; tool_summary_raw: string | null; budget_failures: string | null;
+      trace_id: string | null; artifact_path: string | null; wiki_context_raw: string | null; semantic_queries_raw: string | null;
+      lucy_meta_raw: string | null; score_raw: string | null; failure_classification: string | null; turn_artifacts_raw: string | null;
     }>;
 
     const results = caseRows.map((c) => ({
@@ -502,7 +535,15 @@ export function registerRunnerRoutes(app: FastifyInstance) {
       finalText: c.final_text ?? undefined,
       toolCalls: parseJsonText(c.tool_calls_raw),
       toolSummary: parseJsonText(c.tool_summary_raw),
-      budgetFailures: parseJsonText(c.budget_failures)
+      budgetFailures: parseJsonText(c.budget_failures),
+      traceId: c.trace_id ?? undefined,
+      artifactPath: c.artifact_path ?? undefined,
+      wikiContextEvidence: parseJsonText(c.wiki_context_raw),
+      semanticQueries: parseJsonText(c.semantic_queries_raw),
+      lucyMeta: parseJsonText(c.lucy_meta_raw),
+      score: parseJsonText(c.score_raw),
+      failureClassification: c.failure_classification ?? undefined,
+      turns: parseJsonText(c.turn_artifacts_raw)
     }));
 
     return { ok: true, data: { ...rowToRun(row), results } };
@@ -518,11 +559,15 @@ export function registerRunnerRoutes(app: FastifyInstance) {
     const caseRows = db.prepare("SELECT * FROM eval_run_case WHERE run_id = ?").all(runId) as Array<{
       case_id: string; status: string; sql: string | null; failed_assertions: string | null;
       error_message: string | null; final_text: string | null; duration_ms: number | null;
+      trace_id: string | null; failure_classification: string | null; score_raw: string | null;
     }>;
 
     const cases = caseRows.map((c) => ({
       id: c.case_id,
       passed: c.status === "PASS",
+      traceId: c.trace_id ?? undefined,
+      failureClassification: c.failure_classification ?? undefined,
+      score: parseJsonText(c.score_raw),
       failedAssertions: c.failed_assertions ? JSON.parse(c.failed_assertions) as string[] : undefined,
       errorMessage: c.error_message ?? undefined,
       durationMs: c.duration_ms ?? undefined

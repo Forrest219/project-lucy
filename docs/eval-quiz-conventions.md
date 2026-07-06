@@ -251,6 +251,19 @@ safety_contract:
 | result_assertions | 本轮结果断言 |
 | context_assertions | 本轮必须继承或保持的上下文断言 |
 
+### 7.2 SOW 可信 Eval/UAT 增量字段
+
+SOW 主题级 gate 可在 case 上追加以下字段，旧 case 不强制迁移：
+
+| 字段 | 说明 |
+|---|---|
+| `trace_required` | `true` 时 runner 必须输出唯一 `traceId`，并纳入 trace coverage / uniqueness gate |
+| `context_required` | `true` 或 `{ keys, titles, queries }`；要求 case artifact 包含 wiki/context evidence |
+| `risk_tags` | 风险标签，例如 `sow_p0`, `trace`, `context`, `multiturn`, `reviewer_gate` |
+| `scoring` | 评分扩展，例如 `require_refusal_reason`, `require_lucy_meta`, `reviewer_gate`, `allowed_failure_classifications` |
+
+Runner 输出的 per-case artifact 见 `docs/ceo-one-report-sow-eval-uat-contract.md`。
+
 `result_assertions` 是结果校验策略列表，不直接等同于结果值；每个 assertion item 使用以下结构：
 
 | 字段 | 说明 |
@@ -299,7 +312,7 @@ Runner 应优先使用 SQL parser / AST matcher；只有 parser 不支持当前 
 
 `raw_sql_fallback` 或 `sl_query` 等会产生 SQL 的 case 仍应使用 `sql_assertions` 校验 SQL 结构；`tool_assertions` 只补充工具路径，不替代结果断言。
 
-### 7.2 quiz HTML
+### 7.3 quiz HTML
 
 HTML 顶部 metadata 注释必含（per AGENTS.md §文档输出元数据要求）：
 
@@ -323,7 +336,7 @@ HTML 顶部 metadata 注释必含（per AGENTS.md §文档输出元数据要求�
 | answer_binding | `exact_value` / `ranking` / `boolean` / `range_bucket` / `conceptual` |
 | stale_status | `fresh` / `stale`；由 drift 级联判定维护 |
 
-### 7.3 最小检查流程
+### 7.4 最小检查流程
 
 新增或刷新 eval / quiz 后，至少执行以下检查：
 

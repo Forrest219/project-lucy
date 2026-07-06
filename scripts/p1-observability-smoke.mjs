@@ -62,7 +62,7 @@ If the WebUI service is not running, the evidence status is "blocked".`);
 
   const source = readFileSync(path.join(root, "webui/server/observability.ts"), "utf8");
   const index = readFileSync(path.join(root, "webui/server/index.ts"), "utf8");
-  for (const phrase of ["/api/observability", "traffic", "error", "denied", "latency", "latest", "storage", "audit", "redactSensitive"]) {
+  for (const phrase of ["/api/observability", "/api/observability/logs", "traffic", "error", "denied", "latency", "latest", "storage", "audit", "slo", "traceCoverage", "contextEvidenceCoverage", "redactSensitive"]) {
     add(source.includes(phrase) ? "pass" : "fail", `observability.source.${phrase}`, `observability source includes ${phrase}`);
   }
   add(index.includes("registerR1ObservabilityRoutes(app)") ? "pass" : "fail", "observability.route.registered", "observability routes are registered by buildServer()");
@@ -73,7 +73,7 @@ If the WebUI service is not running, the evidence status is "blocked".`);
     const { response, body } = await fetchObservability(url, timeoutMs);
     httpStatus = response.status;
     observability = body?.data ?? null;
-    const requiredSections = ["traffic", "error", "denied", "latency", "eval", "latest", "storage", "audit"];
+    const requiredSections = ["traffic", "error", "denied", "latency", "eval", "slo", "latest", "storage", "audit"];
     const missingSections = requiredSections.filter((key) => body?.data?.[key] === undefined);
     const sensitiveLeak = hasSensitiveLeak(body);
     add(response.ok ? "pass" : "fail", "observability.http.ok", "GET /api/observability returns HTTP success", { status: response.status });
