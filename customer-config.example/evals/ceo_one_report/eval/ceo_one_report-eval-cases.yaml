@@ -1,0 +1,40 @@
+metadata:
+  document_name: CEO One Report Customer Eval Cases
+  document_type: Eval
+  version: v0.1
+  runner_schema_version: v1.4
+  written_date: 2026-07-06
+  author: Lucy delivery
+  scope: Customer-owned SOW/UAT acceptance cases for the CEO one-report domain.
+
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - ".ktx/secrets/"
+  forbid_cross_source_join: true
+
+cases:
+  - id: ceo_one_report-context-required-001
+    case_type: single_turn
+    question: "请根据 CEO 一眼报口径说明，回答最近一个快照日的核心指标。"
+    domain: ceo_one_report
+    trace_required: true
+    context_required:
+      keys:
+        - global/ceo-one-report.md
+      queries:
+        - ceo one report metric definition
+    risk_tags:
+      - sow_p0
+      - trace
+      - context
+    expected_source: semantic_layer
+    expected_measures:
+      - ceo_metric_snapshot.metric_value_sum
+    result_assertions:
+      - value_type: text
+        compare_mode: contains_any
+        data:
+          required_phrases:
+            - "CEO"
+            - "口径"

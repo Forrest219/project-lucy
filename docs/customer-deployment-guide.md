@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Customer Deployment Guide |
 | 文档类型 | Customer Deployment / Operations Guide |
-| 版本 | v0.2（2026-06-23 增补：扩展 demo 数据集到 1000 行 + 全链路测试用例矩阵） |
+| 版本 | v0.3（2026-07-06 增补：headless customer config package 推荐交付模式） |
 | 撰写日期 | 2026-06-21（v0.1）；2026-06-23（v0.2 增补） |
 | 适用范围 | 单机 Docker Compose 形态的 Lucy 客户部署、升级、回滚和排障 |
 
@@ -101,9 +101,72 @@ docker run --rm \
   tar czf /backup/lucy-data-$(date +%Y%m%d-%H%M%S).tgz -C /data/lucy .
 ```
 
-## 5. Database Configuration
+## 5. Headless Configuration Package
 
-首版客户部署通过编辑 `/data/lucy/ktx.yaml` 接入数据库。
+推荐客户形态是 **标准 Lucy image + 客户配置包目录 + bind mount 到 `/data/lucy`**。Lucy image 只作为运行时；客户数据库连接、semantic-layer、wiki、eval、权限和 secrets 由客户维护的 `customer-config/` 承载。
+
+推荐目录：
+
+```text
+customer-config/
+  ktx.yaml
+  semantic-layer/
+  wiki/
+  evals/
+  skills/
+  webui/config/access.yaml
+  .ktx/secrets/
+  .ktx-ui/
+```
+
+推荐 compose override：
+
+```yaml
+services:
+  lucy:
+    volumes:
+      - ./customer-config:/data/lucy
+```
+
+仓库提供 `docker-compose.customer-config.yml` 作为该模式的最小 override。客户现场启动：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml up -d --build
+```
+
+配置包版本化建议：
+
+| 路径 | 是否建议进客户 Git | 说明 |
+|---|---:|---|
+| `ktx.yaml` | 是 | 只允许 `password: file:/...`，不得写入明文密码 |
+| `semantic-layer/` | 是 | 客户业务表、指标、维度、segment、join 的事实源 |
+| `wiki/` | 是 | 业务口径、指标解释、SOW/UAT context evidence 的事实源 |
+| `evals/` | 是 | 客户主题级 SOW/UAT case |
+| `skills/` | 是 | 可选，客户自定义 skill 资产 |
+| `webui/config/access.yaml` | 是 | 只提交 token hash、role、ACL，不提交明文 token |
+| `.ktx/secrets/` | 否 | 密码文件；用客户 secret store、Docker secrets 或受控目录注入 |
+| `.ktx-ui/` | 否 | 运行时状态、audit/eval 状态；按备份策略处理 |
+
+不推荐客户长期通过 `docker cp` 手工维护配置；该方式仅用于 POC、现场救急或迁移。自定义 image template 适合多环境批量交付，不作为 200 人公司 / 50-200 张表 / 3 人运维团队的默认模式。
+
+配置包静态检查：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+```
+
+该检查至少确认：
+
+- `ktx.yaml` 不含 `CHANGE-ME`，连接密码使用 `file:` secret 引用。
+- `semantic-layer/` 同时包含 `_schema` manifest 与 overlay YAML。
+- `wiki/` 存在 Markdown context 文档。
+- `evals/` 存在可解析的 `*-eval-cases.yaml`。
+- `webui/config/access.yaml` 只包含 token hash，不包含明文 token。
+- `docker-compose.customer-config.yml` 将 `./customer-config` 挂载到 `/data/lucy`。
+
+## 6. Database Configuration
+
+首版客户部署通过编辑 `/data/lucy/ktx.yaml` 接入数据库。若使用 §5 推荐的 bind mount 模式，实际编辑宿主机 `customer-config/ktx.yaml`；容器内路径仍是 `/data/lucy/ktx.yaml`。
 
 默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换数据库 host、用户和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 Lucy runtime 启动。
 
@@ -151,7 +214,7 @@ docker compose restart lucy
 docker compose exec lucy ktx --project-dir /data/lucy connection test <connection-id>
 ```
 
-## 6. Semantic Layer Validation
+## 7. Semantic Layer Validation
 
 StarRocks R1 P1 gated support follows the same `driver: mysql` / `wire_protocol: mysql` shape as Doris, but remains pending live certification. Do not list StarRocks as release-verified for a customer deployment until `LUCY_R1_STARROCKS_EVIDENCE` has passed the explicit StarRocks target gate.
 
@@ -175,7 +238,7 @@ docker compose exec lucy ktx --project-dir /data/lucy \
   --max-rows 5
 ```
 
-## 7. Agent MCP Configuration
+## 8. Agent MCP Configuration
 
 Agent 应只接入 Lucy MCP Proxy：
 
@@ -197,7 +260,7 @@ Agent 应只接入 Lucy MCP Proxy：
 
 Agent、role 和 token 的事实源是持久化目录中的 `webui/config/access.yaml`。首版 headless 交付以配置文件、一次性 token 创建流程和 smoke/eval 证据为准；WebUI token 管理页面不作为客户标准入口。
 
-## 8. Demo Deployment
+## 9. Demo Deployment
 
 无需客户数据库即可跑 demo。客户工程师只用 Docker Compose 即可完成最小验收：
 
@@ -263,7 +326,7 @@ npm run smoke:p0:demo
 - Lucy MCP Proxy bearer token。
 - `sl_read_source` 与 `sl_query`。
 
-## 9. Upgrade
+## 10. Upgrade
 
 升级前：
 
@@ -278,7 +341,7 @@ docker compose pull
 docker compose up -d --build
 ```
 
-升级后，客户 Docker-only demo 验收按 §8 执行；仓库开发 / CI 环境可额外运行：
+升级后，客户 Docker-only demo 验收按 §9 执行；仓库开发 / CI 环境可额外运行：
 
 ```bash
 npm run smoke:p0:docker
@@ -291,7 +354,7 @@ npm run smoke:p0:demo
 npm run smoke:p0:customer
 ```
 
-## 10. Rollback
+## 11. Rollback
 
 回滚原则：
 
@@ -317,7 +380,7 @@ docker run --rm \
   sh -c 'rm -rf /data/lucy/* && tar xzf /backup/<backup-file>.tgz -C /data/lucy'
 ```
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 查看服务状态：
 
@@ -337,11 +400,11 @@ docker compose logs -f demo-db
 | 查询不到新语义层内容 | 是否运行 `ktx admin reindex --force` |
 | 容器启动后 seed 不生效 | volume 中已有 `/data/lucy/ktx.yaml` 时不会覆盖已有项目 |
 
-## 12. v0.2 增补：扩展 demo 数据集
+## 13. v0.2 增补：扩展 demo 数据集
 
 > 本节于 2026-06-23 加入。背景：v0.1 描述的 demo 数据集仅 5 行 / 1 单退货，样本量不足以验证聚合查询、年度趋势、区域分布等业务口径。
 
-### 12.1 数据规模
+### 13.1 数据规模
 
 `docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 现在各承载 **1000 行订单 + 60 单退货 + 4 个区域经理 + ~294 个客户**，跨 4 年（2024-2027）。
 
@@ -363,7 +426,7 @@ node examples/docker-demo/scripts/gen-demo-data.mjs \
   --out-dir=examples/postgres-demo/postgres
 ```
 
-### 12.2 seed=42 快照（当前基线）
+### 13.2 seed=42 快照（当前基线）
 
 | 字段 | 值 | 来源 |
 |---|---|---|
@@ -381,7 +444,7 @@ node examples/docker-demo/scripts/gen-demo-data.mjs \
 | `sales_by_region.Southwest` | 242646.2038 | |
 | `sales_by_year` | 2024/2025/2026/2027 各 ~36 万 | 4 年近似均匀 |
 
-### 12.3 业务验证期望值
+### 13.3 业务验证期望值
 
 测试断言应直接读 `_baseline.json`，不要在脚本里硬编码数字。常见业务查询示例：
 
@@ -395,10 +458,10 @@ node examples/docker-demo/scripts/gen-demo-data.mjs \
 | 高折扣行数 | `counts.high_discount_rows` |
 | 亏损行数 | `counts.loss_rows` |
 
-完整 P0/P1/P2 测试用例矩阵见 `docs/lucy-test-cases.md`，并在 `docs/deployment-docker.md` §12 给出 P0/P1/P2 速查表。
+完整 P0/P1/P2 测试用例矩阵见 `docs/lucy-test-cases.md`，并在 `docs/deployment-docker.md` §13 给出 P0/P1/P2 速查表。
 
-### 12.4 客户部署时的兼容性注意
+### 13.4 客户部署时的兼容性注意
 
 - 数据规模扩大后，MySQL 8.4 初始化时间从 < 1s 增至 ~3-5s（容器健康检查间隔 5s，足够；如有 CI 严格 timeout，需要相应放宽）。
 - Postgres demo 同步扩容；`01-init.sql` 现在 ~1100 行。
-- 业务 eval case（`evals/superstore/eval/superstore-eval-cases.yaml`）原本基于 10194 行生产数据；接入 demo 链路时若数值类断言期望硬编码，会与新基线冲突。建议 eval case 改为读 `_baseline.json`（详见 `docs/deployment-docker.md` §12.4 测试用例矩阵与 `docs/lucy-test-cases.md`）。
+- 业务 eval case（`evals/superstore/eval/superstore-eval-cases.yaml`）原本基于 10194 行生产数据；接入 demo 链路时若数值类断言期望硬编码，会与新基线冲突。建议 eval case 改为读 `_baseline.json`（详见 `docs/deployment-docker.md` §13.4 测试用例矩阵与 `docs/lucy-test-cases.md`）。

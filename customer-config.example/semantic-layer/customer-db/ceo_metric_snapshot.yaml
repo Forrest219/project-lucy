@@ -1,0 +1,16 @@
+name: ceo_metric_snapshot
+
+grain:
+  - snapshot_date
+  - metric_name
+  - business_unit
+
+measures:
+  - name: metric_value_sum
+    expr: sum(metric_value)
+    description: CEO 指标值汇总。只有可加指标才允许汇总；比例类指标必须在 wiki 中声明口径。
+
+segments:
+  - name: active_rows
+    expr: metric_name is not null
+    description: 基础有效记录过滤条件。

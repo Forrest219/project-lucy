@@ -1,0 +1,4 @@
+services:
+  lucy:
+    volumes:
+      - ./customer-config:/data/lucy

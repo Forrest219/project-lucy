@@ -26,6 +26,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run security:baseline` | security + platform | token hash, wildcard ACL, deny tools, audit hooks, secrets exclusion baseline |
 | `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke |
 | `npm run smoke:p0:docker` | runtime + platform | Docker image build, compose up, `/api/health`, MCP proxy port, bundled KTX version |
+| `npm run smoke:p0:headless-config` | customer config | verifies the recommended `/data/lucy` config package shape, secret references, semantic-layer/wiki/eval/access parseability, and compose override |
 | `npm run smoke:p0:demo` | runtime + platform + customer path | demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:business-eval` | business eval catalog | verifies core eval suites can be read by runner |
@@ -57,6 +58,7 @@ Required before a customer headless Docker release candidate:
 ```bash
 npm run security:baseline
 npm run smoke:p0:docker
+npm run smoke:p0:headless-config
 npm run smoke:p0:demo
 npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval
@@ -115,6 +117,33 @@ npm run e2e:sow-trust-standard
 - `context_required` case 必须有 `wikiContextEvidence`；当前 local Hermes KX gate 没有 context-required case 时，summary 应显示 `contextRequiredCases=0` 且 `contextEvidenceCoverage=true`，不得伪造非空 context evidence。
 
 该标准是对外 SOW 证据标准；`npm run e2e:agent:test`、stub proxy 单测、dry-run 和 smoke test 只能证明 harness，不可替代真实 Agent + Lucy/KTX MCP E2E。
+
+### 3.2 Headless Customer Config Package Standard
+
+客户 Docker headless 交付默认采用 **标准 Lucy image + `customer-config/` bind mount 到 `/data/lucy`**。部署 readiness 必须能说明同一份 `/data/lucy` 配置事实源覆盖数据库连接、semantic-layer、wiki、eval、skills、agent access 和 runtime state。
+
+静态 gate：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config.example
+```
+
+客户真实配置包 gate：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+```
+
+机器验收条件：
+
+- `docker-compose.customer-config.yml` 将 `./customer-config` bind mount 到 `/data/lucy`。
+- `ktx.yaml` 不含 `CHANGE-ME`，连接密码只使用 `file:` secret 引用；真实客户包加 `--require-secret-files` 时 secret 文件必须存在。
+- `semantic-layer/` 至少包含一个 `_schema` manifest 与一个 overlay YAML。
+- `wiki/` 至少包含一个 Markdown context 文档。
+- `evals/` 至少包含一个可解析且非空的 `*-eval-cases.yaml`。
+- `webui/config/access.yaml` 至少包含一个 role 和一个 user，token 只允许 `sha256:` hash，不允许明文 token 字段。
+
+该 gate 只证明客户配置包可交付；它不能替代数据库 `connection test`、`admin reindex`、`sl validate`、ACL smoke 或 SOW trust E2E。
 
 Agent E2E acceptance requires real agent runtime execution. Unit tests such as `npm run e2e:agent:test` and proxy smoke tests can protect the harness and ACL logic, but they do not satisfy the database-to-agent E2E standard.
 
@@ -213,6 +242,7 @@ Recommended CI jobs:
 | spec-and-unit | `npm run lint:spec`; `cd webui && npm test` |
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker` |
+| headless-config | `npm run smoke:p0:headless-config` |
 | demo-e2e | `npm run smoke:p0:demo` |
 | postgres-demo-e2e | `npm run smoke:p0:postgres-demo` |
 | business-eval-catalog | `npm run smoke:p0:business-eval` |
@@ -231,4 +261,4 @@ Recommended CI jobs:
 
 GitHub Actions implementation: `.github/workflows/lucy-release.yml`.
 
-For customer signoff, treat `security-baseline`, `docker-smoke`, `demo-e2e`, `postgres-demo-e2e`, and `business-eval-catalog` as the headless gate set. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.
+For customer signoff, treat `security-baseline`, `docker-smoke`, `headless-config`, `demo-e2e`, `postgres-demo-e2e`, and `business-eval-catalog` as the headless gate set. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.

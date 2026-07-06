@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Admin Guide |
 | 文档类型 | Product / Admin Guide |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-22 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-06-22；2026-07-06 |
 | 适用范围 | 管理员部署、配置、升级、日常运维 |
 
 ## 1. Admin Responsibilities
@@ -13,9 +13,9 @@
 管理员负责：
 
 - 部署 Lucy Docker image。
-- 挂载 KTX project data。
+- 维护客户 `customer-config/` 配置包并挂载到 `/data/lucy`。
 - 配置数据库连接与 secret 文件。
-- 维护 semantic-layer 与 wiki。
+- 持续维护 semantic-layer、wiki、eval 和 agent access 配置。
 - 创建 Agent、role 和 token。
 - 查看 audit 与 release gate 结果。
 
@@ -32,7 +32,7 @@ Start here:
 Minimal deploy:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml up -d --build
 ```
 
 Demo deploy:
@@ -45,14 +45,55 @@ npm run smoke:p0:demo
 
 Follow this checklist:
 
-1. Start Docker Compose and confirm `curl http://<host>:5174/api/health`.
-2. Edit `/data/lucy/ktx.yaml` and secret files for the customer database.
-3. Maintain `semantic-layer/` and `wiki/` under `/data/lucy`.
-4. Run `ktx admin reindex --force`, `ktx sl validate`, and a read-only `ktx sl query --execute`.
-5. Provision `webui/config/access.yaml` agent/role/token config and distribute only the bearer token through the agent platform secret store.
-6. Configure the agent client to `http://<host>:7879/mcp` and run `tools/list`, `sl_read_source`, and `sl_query`.
+1. Create a customer-owned `customer-config/` directory from `customer-config.example/`.
+2. Edit `customer-config/ktx.yaml` and set every database password as `file:/data/lucy/.ktx/secrets/<name>`.
+3. Maintain `customer-config/semantic-layer/`:
+   - `_schema/*.yaml` is the physical table manifest from scan/import.
+   - `<source>.yaml` is the hand-maintained overlay for grain, measures, dimensions, segments, and joins.
+4. Maintain `customer-config/wiki/` with Markdown context documents. Every wiki file must have YAML frontmatter with `title` and `summary` so KTX reindex can ingest it.
+5. Maintain `customer-config/evals/` for SOW/UAT cases and `customer-config/webui/config/access.yaml` for role, token hash, tool, connection, and table ACL.
+6. Start Docker Compose and confirm `curl http://<host>:5174/api/health`.
+7. Run `npm run smoke:p0:headless-config -- --root customer-config --require-secret-files`.
+8. Run `ktx admin reindex --force`, `ktx sl validate`, and a read-only `ktx sl query --execute` inside the container.
+9. Configure the agent client to `http://<host>:7879/mcp` and run `tools/list`, `wiki_search`, `sl_read_source`, and `sl_query`.
 
-## 4. Release And Upgrade
+## 4. Continuous Configuration Workflow
+
+For every semantic/table/wiki change:
+
+1. Edit the customer config package in Git or the customer-controlled config directory.
+2. Run the static config package gate:
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+```
+
+3. Reindex runtime metadata:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml exec lucy \
+  ktx --project-dir /data/lucy admin reindex --force --output json
+```
+
+4. Validate the changed semantic source and run one read-only query:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml exec lucy \
+  ktx --project-dir /data/lucy sl validate <source-name> --connection-id <connection-id>
+
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml exec lucy \
+  ktx --project-dir /data/lucy sl --connection-id <connection-id> query \
+  --measure <source.measure> \
+  --dimension <source.dimension> \
+  --segment <source.segment> \
+  --limit 5 \
+  --execute \
+  --max-rows 5
+```
+
+5. For user-facing or SOW changes, run the relevant eval/evidence gate before exposing the updated agent config.
+
+## 5. Release And Upgrade
 
 Before release:
 
@@ -60,6 +101,7 @@ Before release:
 npm run lint:spec
 npm run security:baseline
 npm run smoke:p0:docker
+npm run smoke:p0:headless-config
 npm run smoke:p0:demo
 npm run smoke:p0:business-eval
 ```
@@ -70,7 +112,7 @@ Before changing bundled KTX:
 npm run compat:ktx-upgrade -- --candidate <version>
 ```
 
-## 5. Security Operations
+## 6. Security Operations
 
 Use:
 

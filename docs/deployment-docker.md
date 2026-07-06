@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Docker Deployment |
 | 文档类型 | Deployment Guide |
-| 版本 | v0.2（2026-06-23 增补：全链路测试用例矩阵、大陆网络环境、demo evals 挂载） |
+| 版本 | v0.3（2026-07-06 增补：headless customer config package 推荐模式） |
 | 撰写日期 | 2026-06-21（v0.1）；2026-06-23（v0.2 增补） |
 | 适用范围 | Lucy 首版单机 Docker Compose 部署 |
 
@@ -95,9 +95,56 @@ docker compose up --build
 lucy-data:/data/lucy
 ```
 
-## 5. Configure Database
+## 5. Recommended Customer Config Mount
 
-首版仍需要编辑 `/data/lucy/ktx.yaml` 和挂载密码文件。
+客户 headless 部署推荐把业务配置维护为 `customer-config/`，并 bind mount 到 `/data/lucy`：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml up -d --build
+```
+
+`docker-compose.customer-config.yml` 内容：
+
+```yaml
+services:
+  lucy:
+    volumes:
+      - ./customer-config:/data/lucy
+```
+
+推荐配置包结构：
+
+```text
+customer-config/
+  ktx.yaml
+  semantic-layer/
+  wiki/
+  evals/
+  skills/
+  webui/config/access.yaml
+  .ktx/secrets/
+  .ktx-ui/
+```
+
+此模式下，Lucy image 与客户配置解耦：升级镜像不会覆盖业务口径、权限、wiki、eval 或 secret。`docker cp` 手工拷贝只作为 POC / 救急路径；自定义 `LUCY_TEMPLATE_ROOT` 适合多环境企业模板，不作为默认客户部署方式。
+
+仓库提供可提交的 `customer-config.example/`，用于说明目录形态和字段边界；其中不包含真实 secret。
+
+静态检查：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config.example
+```
+
+客户真实配置包建议额外校验 secret 文件存在：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+```
+
+## 6. Configure Database
+
+首版仍需要编辑 `/data/lucy/ktx.yaml` 和挂载密码文件。若使用 §5 推荐的 bind mount 模式，实际编辑宿主机 `customer-config/ktx.yaml`；容器内路径仍是 `/data/lucy/ktx.yaml`。
 
 默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换连接信息和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 Lucy runtime 启动。
 
@@ -139,7 +186,7 @@ password: file:/run/secrets/mysql_password
 
 未使用的 secret 可以保留占位文件，或按客户实际数据库类型裁剪 override。
 
-## 6. Healthcheck
+## 7. Healthcheck
 
 容器 healthcheck 执行：
 
@@ -154,7 +201,7 @@ curl http://localhost:5174/api/health
 docker compose exec lucy ktx --version
 ```
 
-## 7. MCP Agent Config
+## 8. MCP Agent Config
 
 Agent 平台应接入 Lucy MCP Proxy：
 
@@ -174,7 +221,7 @@ Agent 平台应接入 Lucy MCP Proxy：
 
 `<LUCY_AGENT_TOKEN>` 来自持久化目录中的 `webui/config/access.yaml` agent/token 配置或一次性 token 创建流程。不要把内部 `KTX_INTERNAL_TOKEN` 配给外部 agent。
 
-## 8. Runtime Environment
+## 9. Runtime Environment
 
 | Env | Default | Meaning |
 |---|---|---|
@@ -197,10 +244,10 @@ Compose 宿主端口映射变量：
 | `LUCY_WEBUI_HOST_PORT` | `5174` | 宿主机映射到容器 `5174` 的 health/API 端口 |
 | `LUCY_PROXY_HOST_PORT` | `7879` | 宿主机映射到容器 `7879` 的 MCP Proxy 端口 |
 
-## 9. Current Limitations
+## 10. Current Limitations
 
 - 首版只定义单机 Docker Compose，不包含 Kubernetes/Helm。
-- 首次数据库配置仍需要编辑 `ktx.yaml` 或挂载配置文件。
+- 首次数据库配置仍需要编辑 `customer-config/ktx.yaml` 或挂载等价配置文件。
 - 镜像内包含 `git`，因为 KTX 启动时需要初始化/访问项目 git repository。
 - WebUI production server 当前使用 `tsx` 运行 TypeScript server；这是仓库内部实现细节，不是客户标准入口，后续可优化为编译后的 slim runtime image。
 - P0 smoke 已覆盖 image build、compose up、health API、MCP proxy 响应、镜像内 KTX version、semantic-layer validate、KTX CLI 查询、临时 MCP `tools/list` 与 `sl_query`。
@@ -209,7 +256,7 @@ Compose 宿主端口映射变量：
 - 业务 eval 仍依赖可访问的目标数据库和 agent CLI 环境。
 - Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、系统 metrics/告警/日志聚合、对象存储归档均不属于首版客户 headless 交付范围。
 
-## 10. P0 Smoke
+## 11. P0 Smoke
 
 默认本地 gate：
 
@@ -307,7 +354,15 @@ LUCY_P0_SEGMENT=<source.segment> \
 npm run smoke:p0:customer
 ```
 
-## 11. Troubleshooting
+Headless 配置包 gate（不依赖真实数据库连接）：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+```
+
+该 gate 验证 `/data/lucy` 配置包形态、secret 引用、semantic-layer/wiki/eval/access 解析与 compose override，不能替代 `connection test`、`reindex`、`sl validate` 和 SOW trust E2E。
+
+## 12. Troubleshooting
 
 查看日志：
 
@@ -334,17 +389,19 @@ docker compose exec lucy ktx --version
 docker compose exec lucy ktx status --project-dir /data/lucy
 ```
 
-## 12. v0.2 增补：全链路测试用例矩阵
+如果 bind mount 后配置看不到，先确认是否使用了 `docker-compose.customer-config.yml`，以及 `./customer-config` 是否相对当前 compose 执行目录存在。
+
+## 13. v0.2 增补：全链路测试用例矩阵
 
 > 本节于 2026-06-23 加入。覆盖镜像构建 → 启动 → 健康检查 → 数据接入 → 语义层 → Proxy 鉴权 → 业务查询 → 失败/边界 → 自动化门禁，~35 条 TC。
 
-### 12.1 用例组织
+### 13.1 用例组织
 
 - ID：`TC-<域>-<编号>`（如 `TC-DEMO-001`）
 - 优先级：P0 = 部署门禁；P1 = 业务验证；P2 = 边界 / 故障恢复
 - 执行方式：M = 手工；S = 脚本；A = 自动化（`smoke:p0:*`）
 
-### 12.2 数据基线单一事实源
+### 13.2 数据基线单一事实源
 
 所有业务断言期望值必须来自 `_baseline.json`，不要在测试脚本里硬编码：
 
@@ -355,7 +412,7 @@ examples/postgres-demo/postgres/_baseline.json
 
 修改 seed 或 rows 后重跑生成器即可刷新基线。
 
-### 12.3 P0 用例速查（部署门禁）
+### 13.3 P0 用例速查（部署门禁）
 
 | 用例 | 校验点 | Pass 条件 |
 |---|---|---|
@@ -375,8 +432,9 @@ examples/postgres-demo/postgres/_baseline.json
 | TC-BIZ-003 | 利润率 | `measures.profit_margin` |
 | TC-BIZ-004 | East region 销售 | `sales_by_region.East` |
 | TC-AUTO-001 | `npm run smoke:p0:demo` | 末尾输出 `PASS` |
+| TC-CONFIG-001 | `npm run smoke:p0:headless-config -- --root customer-config --require-secret-files` | 配置包结构、secret 引用、wiki/eval/access 均通过 |
 
-### 12.4 P1 业务查询
+### 13.4 P1 业务查询
 
 | 用例 | 工具 | 期望 |
 |---|---|---|
@@ -389,7 +447,7 @@ examples/postgres-demo/postgres/_baseline.json
 | TC-AUTO-002 | `npm run smoke:p0:postgres-demo` | PASS |
 | TC-AUTO-003 | `npm run security:baseline` | 无 critical |
 
-### 12.5 P2 失败 / 边界
+### 13.5 P2 失败 / 边界
 
 | 用例 | 场景 | 处置 |
 |---|---|---|
@@ -398,7 +456,7 @@ examples/postgres-demo/postgres/_baseline.json
 | TC-FAIL-005 | DROP 表后 sl_query | 响应 error 含表名 |
 | TC-FAIL-007 | demo 卷残留导致旧状态 | `down -v` 后 `up` 解决 |
 
-### 12.6 完整用例文档
+### 13.6 完整用例文档
 
 完整 ~35 条 TC 含命令、参数、错误对照见 `docs/lucy-test-cases.md`，随发布产物输出到 `release/lucy-test-cases.md`。
 
@@ -410,7 +468,7 @@ node scripts/release-artifacts.mjs --out release/
 
 发布产物中的 `lucy-docker-source-bundle.tar.gz` 是客户可安装包；metadata、SBOM 和单独的 Markdown 文档只用于发布说明。
 
-## 13. v0.2 增补：Demo Evals 挂载
+## 14. v0.2 增补：Demo Evals 挂载
 
 `docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 已挂载 `./evals:/data/lucy/evals:ro`，使 demo 容器内 KTX MCP 的 wiki_search / eval 工具能访问到仓库的 eval suites。
 
@@ -420,7 +478,7 @@ node scripts/release-artifacts.mjs --out release/
 - 不挂 evals 时，KTX MCP 在 demo 容器内找不到 superstore eval
 - 调整后无需重启 demo-db；只 `docker compose up -d lucy` 即可
 
-## 14. v0.2 增补：大陆网络环境
+## 15. v0.2 增补：大陆网络环境
 
 针对中国大陆用户访问 Docker Hub / npmjs 受限的场景：
 

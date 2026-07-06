@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Security Guide |
 | 文档类型 | Security / Operations Guide |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-22 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-06-22；2026-07-06 |
 | 适用范围 | Docker 部署、MCP Proxy、Agent token、ACL、audit、secrets |
 
 ## 1. Security Model
@@ -18,7 +18,7 @@ Lucy sits between agents and databases:
 - Lucy forwards allowed calls to bundled KTX.
 - Lucy records audit logs.
 
-Lucy does not make the source database public. Database credentials stay in the mounted KTX project data directory.
+Lucy does not make the source database public. Database credentials stay in the mounted customer config package under `/data/lucy`.
 
 ## 2. Token Lifecycle
 
@@ -81,17 +81,18 @@ Sensitive payload handling:
 
 Do:
 
-- Mount customer KTX project data at `/data/lucy`.
+- Mount the customer-owned `customer-config/` directory at `/data/lucy`.
 - Store DB passwords under `/data/lucy/.ktx/secrets/`.
 - For Docker Compose environments that standardize on Docker secrets, mount `docker-compose.secrets.yml` and reference `/run/secrets/<name>` from `ktx.yaml`.
 - Use read-only database users where possible.
 - Rotate tokens through WebUI/Admin API when an agent is retired.
+- Keep `semantic-layer/`, `wiki/`, `evals/`, and `webui/config/access.yaml` versioned in the customer config repository or controlled change process.
 
 Do not:
 
 - Bake customer credentials into the image.
 - Use `KTX_INTERNAL_TOKEN` as an external agent token.
-- Commit `.ktx/secrets/`, `.ktx-ui/*.sqlite*`, or generated DB files.
+- Commit `.ktx/secrets/`, `.ktx-ui/*.sqlite*`, generated DB files, token plaintext, or inline database passwords in `ktx.yaml`.
 
 ## 6. Release Gate
 
@@ -102,6 +103,7 @@ npm run r1:readiness:strict
 npm run lint:spec
 npm run security:baseline
 npm run smoke:p0:docker
+npm run smoke:p0:headless-config
 npm run smoke:p0:demo
 npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval

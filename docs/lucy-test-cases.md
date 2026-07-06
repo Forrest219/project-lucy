@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | project-lucy Docker 全链路 + 业务测试用例 |
 | 文档类型 | Test Plan / QA |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-23 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-06-23；2026-07-06 |
 | 撰写人 | Hermes（生成器 + 测试矩阵） |
-| 适用范围 | 配套 `docs/customer-deployment-guide.md` v0.2 + `docs/deployment-docker.md` v0.2；覆盖 demo 链路、postgres-demo 链路、smoke、proxy 鉴权、业务 evals、失败/边界 |
-| 基于材料 | `scripts/p0-demo-docker-smoke.mjs`、`scripts/p0-postgres-demo-smoke.mjs`、`evals/superstore/eval/superstore-eval-cases.yaml`、`examples/docker-demo/mysql/_baseline.json`、`examples/docker-demo/scripts/gen-demo-data.mjs`、`examples/docker-demo/project-template/semantic-layer/demo-mysql/superstore_orders.yaml` |
-| 关联文档 | `docs/customer-deployment-guide.md` §12、`docs/deployment-docker.md` §12 |
+| 适用范围 | 配套 `docs/customer-deployment-guide.md` v0.3 + `docs/deployment-docker.md` v0.3；覆盖 headless 配置包、demo 链路、postgres-demo 链路、smoke、proxy 鉴权、业务 evals、失败/边界 |
+| 基于材料 | `scripts/headless-config-smoke.mjs`、`scripts/p0-demo-docker-smoke.mjs`、`scripts/p0-postgres-demo-smoke.mjs`、`evals/superstore/eval/superstore-eval-cases.yaml`、`examples/docker-demo/mysql/_baseline.json`、`examples/docker-demo/scripts/gen-demo-data.mjs`、`examples/docker-demo/project-template/semantic-layer/demo-mysql/superstore_orders.yaml` |
+| 关联文档 | `docs/customer-deployment-guide.md` §5/§13、`docs/deployment-docker.md` §5/§13 |
 
 ---
 
@@ -77,6 +77,43 @@ docker compose -f docker-compose.demo.yml down -v
 ```
 
 仓库开发 / CI 可运行 `npm run smoke:p0:demo` 自动覆盖上述主链路；客户安装验收不依赖 npm。
+
+### 0.3 客户配置包最小验收路径
+
+真实客户环境采用 `customer-config/` bind mount 到 `/data/lucy`。配置包至少包含：
+
+```text
+customer-config/
+  ktx.yaml
+  semantic-layer/
+  wiki/
+  evals/
+  skills/
+  webui/config/access.yaml
+  .ktx/secrets/
+  .ktx-ui/
+```
+
+仓库开发 / CI 的静态 gate：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config.example
+```
+
+客户真实配置包建议加 secret 文件存在性检查：
+
+```bash
+npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+```
+
+最小 Pass 条件：
+
+- `ktx.yaml` 不含 `CHANGE-ME`，数据库密码只用 `file:` secret 引用。
+- `semantic-layer/` 至少包含一个 `_schema` manifest 和一个 overlay YAML。
+- `wiki/` 至少包含一个 Markdown，且 frontmatter 有 `title` 与 `summary`。
+- `evals/` 至少包含一个可解析且非空的 `*-eval-cases.yaml`。
+- `webui/config/access.yaml` 只包含 `sha256:` token hash，不包含明文 token。
+- `docker-compose.customer-config.yml` 将 `./customer-config` 挂载到 `/data/lucy`。
 
 ---
 

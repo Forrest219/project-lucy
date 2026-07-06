@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Release CI |
 | 文档类型 | Release / CI Spec |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-22 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-06-22；2026-07-06 |
 | 适用范围 | GitHub Actions release gates、Docker image build、KTX upgrade compatibility |
 
 ## 1. CI Workflow
@@ -36,6 +36,7 @@ Manual inputs:
 | `business-eval-catalog` | `npm run smoke:p0:business-eval` |
 | `ktx-diff-audit` | clones upstream KTX and runs `npm run audit:ktx-diff` |
 | `docker-smoke` | `npm run smoke:p0:docker` |
+| `headless-config` | `npm run smoke:p0:headless-config` |
 | `demo-e2e` | `npm run smoke:p0:demo` |
 | `postgres-demo-e2e` | `npm run smoke:p0:postgres-demo` |
 | `ktx-upgrade-compat` | manual candidate version only; runs `npm run compat:ktx-upgrade` |
@@ -78,7 +79,7 @@ The artifact contains:
 - `lucy-release-metadata.json`: Git commit, Docker image id, bundled KTX version, verified database matrix, required gates, and root/WebUI `npm audit --json` summaries with exit codes.
 - `lucy-release-notes.md`: concise customer-facing release summary.
 - `lucy-sbom.json`: local CycloneDX-lite runtime dependency inventory for the Lucy root package, WebUI package, base image, and bundled KTX runtime. Development-only dependencies marked `dev: true` in package-lock files are omitted; remaining npm components are labeled as `production`, `peer`, `optional`, or `bundled` from package-lock metadata.
-- `lucy-customer-deployment-guide.md`, `lucy-deployment-docker.md`, `lucy-test-cases.md`: customer-facing deployment and test documentation copied from `docs/`.
+- `lucy-customer-deployment-guide.md`, `lucy-deployment-docker.md`, `lucy-admin-guide.md`, `lucy-agent-integration-guide.md`, `lucy-security-guide.md`, `lucy-troubleshooting-guide.md`, `lucy-product-docs-index.md`, `lucy-version-matrix.md`, `lucy-test-layers-and-release-gates.md`, `lucy-test-cases.md`: customer-facing deployment, continuous configuration, security, integration, troubleshooting, compatibility, release gate, and test documentation copied from `docs/`.
 
 StarRocks R1 P1 note:
 

@@ -7,6 +7,7 @@ Thumbs.db
 
 # KTX runtime state (daemon pid, ports, logs, transient config)
 ktx.yaml
+!customer-config.example/ktx.yaml
 .ktx/logs/
 .ktx/runtime/
 .ktx/mcp.json
@@ -14,6 +15,10 @@ ktx.yaml
 # Secrets — never commit; ktx.yaml references via file: URI
 .ktx/secrets/
 secrets/
+customer-config/
+!customer-config.example/.ktx/
+!customer-config.example/.ktx/secrets/
+!customer-config.example/.ktx/secrets/.gitignore
 
 # temp scratch space
 temp/
@@ -32,3 +37,5 @@ __pycache__/
 .venv/
 venv/
 .ktx-ui/
+!customer-config.example/.ktx-ui/
+!customer-config.example/.ktx-ui/.gitkeep

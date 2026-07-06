@@ -60,7 +60,7 @@
     <header class="hero">
       <span class="eyebrow">Admin Guide</span>
       <h1>连接你的数据源</h1>
-      <p class="lead">Lucy 支持主流企业数据库。连接建立后，KTX 会扫描 Schema 并生成语义层草稿，BI 管理员再补充业务口径即可。</p>
+      <p class="lead">Lucy 支持主流企业数据库。客户 headless 部署中，数据库连接、表清单、语义层、Wiki 和 Eval 都由 <code>customer-config/</code> 配置包持续维护。</p>
     </header>
 
     <section>
@@ -102,20 +102,49 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
     </section>
 
     <section>
-      <h2>连接字符串格式</h2>
-      <p>在 KTX WebUI 的「数据源」页填写连接字符串时，请使用以下格式：</p>
+      <h2>ktx.yaml 配置格式</h2>
+      <p>在 <code>customer-config/ktx.yaml</code> 中配置连接。密码不要写入 YAML 明文，统一使用 <code>file:</code> 引用容器内 secret 文件。</p>
 
       <h3>MySQL / StarRocks（P1 gated）</h3>
-      <pre>mysql://lucy_readonly:&lt;password&gt;@&lt;host&gt;:3306/&lt;database&gt;</pre>
+      <pre>connections:
+  customer-db:
+    driver: mysql
+    readonly: true
+    enabled_tables:
+      - analytics.ceo_metric_snapshot
+    host: db.example.internal
+    port: 3306
+    database: analytics
+    username: lucy_readonly
+    password: file:/data/lucy/.ktx/secrets/customer-db-password
+    schemas:
+      - analytics</pre>
 
       <h3>PostgreSQL</h3>
-      <pre>postgresql://lucy_readonly:&lt;password&gt;@&lt;host&gt;:5432/&lt;database&gt;</pre>
+      <pre>connections:
+  customer-postgres:
+    driver: postgres
+    readonly: true
+    enabled_tables:
+      - public.orders
+    host: postgres.example.internal
+    port: 5432
+    database: analytics
+    username: lucy_readonly
+    password: file:/data/lucy/.ktx/secrets/postgres-password
+    schemas:
+      - public</pre>
     </section>
 
     <section>
-      <h2>Schema 扫描</h2>
-      <p>连接测试通过后，KTX 会对目标数据库执行 Schema 扫描，读取所有表和字段并生成 YAML 草稿。扫描过程全程只读（运行 <code>SHOW TABLES</code> / <code>information_schema</code> 查询），不会修改数据库内容。</p>
-      <p>扫描完成后，前往 KTX WebUI 为关键字段补充中文描述，并定义 Measure（指标公式），这些内容将成为 Agent 理解业务数据的标准口径。</p>
+      <h2>表与语义层持续配置</h2>
+      <p><code>customer-config/semantic-layer/&lt;connection&gt;/_schema/</code> 保存物理表 manifest，描述表名、字段、类型和基础描述；<code>customer-config/semantic-layer/&lt;connection&gt;/&lt;source&gt;.yaml</code> 保存人工 overlay，维护 grain、measures、segments、joins 和业务解释。</p>
+      <p>每次新增表、指标、Join 或 Wiki 口径后，运行配置包检查、reindex 和 validate，确保 Agent 能检索到最新语义：</p>
+      <pre>npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml exec lucy \
+  ktx --project-dir /data/lucy admin reindex --force --output json
+docker compose -f docker-compose.yml -f docker-compose.customer-config.yml exec lucy \
+  ktx --project-dir /data/lucy sl validate &lt;source-name&gt; --connection-id &lt;connection-id&gt;</pre>
     </section>
 
     <section>
@@ -128,7 +157,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
 
       <div class="callout">
         <strong>能同时连多个数据库吗？</strong>
-        <p>可以。每个数据库作为独立 Domain 配置，语义层文件按 domain 目录隔离。</p>
+        <p>可以。每个数据库作为独立 connection 配置，语义层文件按 <code>semantic-layer/&lt;connection&gt;/</code> 目录隔离。</p>
       </div>
     </section>
 

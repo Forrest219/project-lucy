@@ -1,0 +1,27 @@
+tables:
+  ceo_metric_snapshot:
+    table: analytics.ceo_metric_snapshot
+    columns:
+      - name: snapshot_date
+        type: time
+        nullable: false
+        descriptions:
+          db: 快照日期
+          ai: Business date of the CEO metric snapshot.
+      - name: metric_name
+        type: string
+        nullable: false
+        descriptions:
+          db: 指标名称
+          ai: Canonical metric identifier shown in CEO reporting.
+      - name: metric_value
+        type: number
+        nullable: false
+        descriptions:
+          db: 指标值
+          ai: Numeric value of the metric for the snapshot date.
+      - name: business_unit
+        type: string
+        descriptions:
+          db: 业务单元
+          ai: Business unit owning the metric.

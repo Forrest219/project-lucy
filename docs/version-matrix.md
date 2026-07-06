@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-21 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-06-21；2026-07-06 |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
@@ -19,6 +19,7 @@
 | KTX Python runtime | `0.13.0`, feature `core` | `Dockerfile` runs `ktx admin runtime install --yes --feature core` |
 | Node runtime | `node:22-bookworm-slim` | `Dockerfile` |
 | Docker deployment | Single-node Docker Compose | `docker-compose.yml`, `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml` |
+| Headless customer config | `customer-config/` bind mount to `/data/lucy` | `docker-compose.customer-config.yml`, `customer-config.example/`, `npm run smoke:p0:headless-config` |
 | Demo DB | `mysql:8.4`, `postgres:16-alpine` | `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml` |
 | Customer DB path | MySQL validated locally | `npm run smoke:p0:customer` |
 | MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/deployment-docker.md`, `npm run smoke:p0:demo` |
@@ -41,9 +42,10 @@
 | Deployment | Status | Notes |
 |---|---|---|
 | Docker Compose single node | supported baseline | P0 release baseline |
+| Docker Compose customer config package | supported baseline | maintain `customer-config/`, bind mount to `/data/lucy`, run `smoke:p0:headless-config` |
 | Docker Compose demo DB | supported smoke/demo path | MySQL demo DB + Lucy |
-| Docker Compose external MySQL | supported with manual config | edit `/data/lucy/ktx.yaml` and secret file |
-| Docker Compose external PostgreSQL | supported with manual config | edit `/data/lucy/ktx.yaml` and secret file |
+| Docker Compose external MySQL | supported with customer config package | edit `customer-config/ktx.yaml`, use `file:/data/lucy/.ktx/secrets/<name>` |
+| Docker Compose external PostgreSQL | supported with customer config package | edit `customer-config/ktx.yaml`, use `file:/data/lucy/.ktx/secrets/<name>` |
 | Kubernetes / Helm | not supported | future P2/P3 |
 | Hosted SaaS / multi-tenant | not supported | future product line |
 

@@ -1,0 +1,54 @@
+roles:
+  customer_readonly:
+    description: Customer headless readonly agent role
+    allow:
+      connections:
+        - customer-db
+      tableSelectors:
+        - connection: customer-db
+          schema: analytics
+          names:
+            - ceo_metric_snapshot
+      tools:
+        - sl_query
+        - sl_read_source
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+users:
+  - id: customer_agent
+    name: Customer Agent
+    enabled: true
+    note: Example hash only. Generate a real one-time token during deployment.
+    tokens:
+      - hash: sha256:8ccee2d00afbe164425d51333fe42a3e5a7381955e555a69c185edb8783018f7
+        label: example-token-hash
+        created: 2026-07-06
+    role: customer_readonly
+
+defaults:
+  deny_tools:
+    - sql_execution
+    - memory_ingest
+    - memory_ingest_status
+  known_tools:
+    - sl_query
+    - sl_read_source
+    - wiki_search
+    - wiki_read
+    - entity_details
+    - dictionary_search
+    - discover_data
+    - connection_list
+    - sql_execution
+    - memory_ingest
+    - memory_ingest_status
+  table_touching_tools:
+    - sl_query
+    - sl_read_source
+    - entity_details
+  sensitive_metadata_tools:
+    - dictionary_search
+    - discover_data
+  sensitive_table_prefixes: []

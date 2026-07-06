@@ -49,8 +49,15 @@ for (let i = 0; i < args.length; i++) {
 // Each entry has explicit src -> dest mapping; no mechanical prefixing.
 // Missing source files fail fast (see main loop).
 const REQUIRED_DOCS = [
+  { src: "docs/product-docs-index.md", dest: "lucy-product-docs-index.md" },
+  { src: "docs/admin-guide.md", dest: "lucy-admin-guide.md" },
+  { src: "docs/agent-integration-guide.md", dest: "lucy-agent-integration-guide.md" },
+  { src: "docs/security-guide.md", dest: "lucy-security-guide.md" },
+  { src: "docs/troubleshooting-guide.md", dest: "lucy-troubleshooting-guide.md" },
   { src: "docs/customer-deployment-guide.md", dest: "lucy-customer-deployment-guide.md" },
   { src: "docs/deployment-docker.md",          dest: "lucy-deployment-docker.md" },
+  { src: "docs/version-matrix.md",             dest: "lucy-version-matrix.md" },
+  { src: "docs/test-layers-and-release-gates.md", dest: "lucy-test-layers-and-release-gates.md" },
   { src: "docs/lucy-test-cases.md",            dest: "lucy-test-cases.md" }
 ];
 const SOURCE_BUNDLE_NAME = "lucy-docker-source-bundle.tar.gz";
@@ -61,14 +68,17 @@ const SOURCE_BUNDLE_ENTRIES = [
   ".dockerignore",
   "Dockerfile",
   "docker-compose.yml",
+  "docker-compose.customer-config.yml",
   "docker-compose.demo.yml",
   "docker-compose.postgres-demo.yml",
   "docker-compose.secrets.yml",
+  "customer-config.example",
   "package.json",
   "package-lock.json",
   "ktx.yaml.example",
   "examples",
   "evals/superstore",
+  "scripts/headless-config-smoke.mjs",
   "scripts/docker-entrypoint.sh",
   "scripts/docker-healthcheck.sh",
   "webui/package.json",
@@ -273,6 +283,7 @@ async function main() {
   const customerHeadlessGates = [
     "npm run security:baseline",
     "npm run smoke:p0:docker",
+    "npm run smoke:p0:headless-config",
     "npm run smoke:p0:demo",
     "npm run smoke:p0:postgres-demo",
     "npm run smoke:p0:business-eval"
@@ -353,7 +364,7 @@ async function main() {
 
 ## Customer Deployment
 
-Use docs/customer-deployment-guide.md and docs/deployment-docker.md for Docker Compose deployment. The customer standard entry is Lucy MCP Proxy plus an Agent MCP client config; WebUI checks, when present, are repository quality gates and not the customer operating path.
+Use docs/customer-deployment-guide.md, docs/deployment-docker.md, and docs/admin-guide.md for Docker Compose deployment and continuous configuration. The customer standard entry is Lucy MCP Proxy plus an Agent MCP client config; WebUI checks, when present, are repository quality gates and not the customer operating path.
 Full P0/P1/P2 test case matrix: docs/lucy-test-cases.md (bundled as release/lucy-test-cases.md).
 
 ## Non-Delivery Scope
@@ -366,8 +377,15 @@ This release does not deliver a WebUI management console as the customer entry p
 - lucy-release-notes.md
 - lucy-sbom.json (production/runtime dependencies; dev dependencies omitted)
 - lucy-docker-source-bundle.tar.gz (installable Docker Compose source bundle)
+- lucy-product-docs-index.md (customer-facing docs map)
+- lucy-admin-guide.md (deployment and continuous configuration)
+- lucy-agent-integration-guide.md (MCP client setup)
+- lucy-security-guide.md (token, ACL, audit, and secrets)
+- lucy-troubleshooting-guide.md (operations triage)
 - lucy-customer-deployment-guide.md (copy of docs/customer-deployment-guide.md)
 - lucy-deployment-docker.md (copy of docs/deployment-docker.md)
+- lucy-version-matrix.md (copy of docs/version-matrix.md)
+- lucy-test-layers-and-release-gates.md (copy of docs/test-layers-and-release-gates.md)
 - lucy-test-cases.md (copy of docs/lucy-test-cases.md)
 `;
 

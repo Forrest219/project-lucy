@@ -59,8 +59,8 @@
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Admin Guide</span>
-      <h1>五步完成 Lucy 部署</h1>
-      <p class="lead">从零到可用。完成以下五步后，你的团队就可以通过 Agent 发起数据问答请求了。</p>
+      <h1>五步完成 Lucy Headless 部署</h1>
+      <p class="lead">首版客户交付采用 Docker Compose + customer-config 配置包。完成以下五步后，你的团队就可以通过 Agent 发起受治理的数据问答请求了。</p>
     </header>
 
     <section>
@@ -71,8 +71,9 @@
           <tr><th>条件</th><th>说明</th></tr>
         </thead>
         <tbody>
-          <tr><td>KTX 实例</td><td>ktx CLI 已安装 (>=v0.4)，运行 <code>ktx version</code> 验证</td></tr>
+          <tr><td>Docker 环境</td><td>Docker Engine / Docker Desktop 与 Docker Compose v2 可用</td></tr>
           <tr><td>数据库账号</td><td>目标数据库的只读账号（SELECT 权限，无写权限）</td></tr>
+          <tr><td>配置包目录</td><td>基于 <code>customer-config.example/</code> 创建客户 <code>customer-config/</code></td></tr>
           <tr><td>Agent 接入</td><td>Claude Code / Codex / Cursor 其中之一已配置好</td></tr>
           <tr><td>Git 仓库</td><td>用于存储语义层 YAML 与 Wiki 配置文件</td></tr>
         </tbody>
@@ -87,7 +88,7 @@
           <div class="step-num">1</div>
           <div class="step-body">
             <h3>连接数据源</h3>
-            <p>在 KTX WebUI 的「数据源」页填写连接字符串，点击「测试连接」验证。当前 release-verified 路径以 MySQL 与 PostgreSQL 为主；StarRocks 属于 R1 P1 gated support，live certification 通过前不作为已验证数据源。建议用只读账号。详见<a href="data-sources.html">「数据源接入」</a>文档。</p>
+            <p>在 <code>customer-config/ktx.yaml</code> 中配置只读数据库连接，密码使用 <code>file:/data/lucy/.ktx/secrets/&lt;name&gt;</code> 引用。当前 release-verified 路径以 MySQL 与 PostgreSQL 为主；StarRocks 属于 R1 P1 gated support，live certification 通过前不作为已验证数据源。详见<a href="data-sources.html">「数据源接入」</a>文档。</p>
           </div>
         </div>
 
@@ -95,7 +96,7 @@
           <div class="step-num">2</div>
           <div class="step-body">
             <h3>Schema 扫描</h3>
-            <p>连接成功后点击「扫描 Schema」，KTX 会自动读取所有表和字段，生成语义层 YAML 草稿。</p>
+            <p>将物理表 manifest 放在 <code>customer-config/semantic-layer/&lt;connection&gt;/_schema/</code>。它描述表、字段、类型和描述，是后续 overlay 的基础。</p>
           </div>
         </div>
 
@@ -103,7 +104,7 @@
           <div class="step-num">3</div>
           <div class="step-body">
             <h3>完善语义层</h3>
-            <p>在 KTX WebUI「语义层」页为关键字段补充中文描述、定义官方 Measures（指标公式）、配置 Joins。参见<a href="webui-guide.html">「KTX WebUI 使用说明」</a>。</p>
+            <p>在 <code>customer-config/semantic-layer/&lt;connection&gt;/&lt;source&gt;.yaml</code> 中维护 grain、measures、segments、joins 和业务描述；在 <code>customer-config/wiki/</code> 中维护口径文档。每个 Wiki 文件必须有 <code>title</code> 与 <code>summary</code> frontmatter。</p>
           </div>
         </div>
 
@@ -111,7 +112,7 @@
           <div class="step-num">4</div>
           <div class="step-body">
             <h3>运行 Eval</h3>
-            <p>配置完成后在「Eval」页点击「运行」。评测通过后，配置进入服务侧，Agent 可以开始查询。</p>
+            <p>配置完成后运行 <code>npm run smoke:p0:headless-config -- --root customer-config --require-secret-files</code>，再在容器内执行 <code>ktx admin reindex --force</code>、<code>ktx sl validate</code> 和一条只读查询。SOW/UAT 场景还应运行对应 eval/evidence gate。</p>
           </div>
         </div>
 
@@ -119,14 +120,14 @@
           <div class="step-num">5</div>
           <div class="step-body">
             <h3>接入 Agent</h3>
-            <p>将 KTX MCP Server 地址添加到 Agent 配置（Claude Code 的 <code>.claude/settings.json</code>，或 Cursor 的 MCP 配置）。</p>
+            <p>将 Lucy MCP Proxy 地址 <code>http://&lt;host&gt;:7879/mcp</code> 添加到 Agent 配置，并使用 <code>webui/config/access.yaml</code> 中 token hash 对应的一次性明文 token。不要把 <code>KTX_INTERNAL_TOKEN</code> 发给外部 Agent。</p>
           </div>
         </div>
 
       </div>
 
       <div class="callout warning">
-        ⚠️ 配置上线前必须通过 Eval。Eval 失败时，原有配置仍在服务侧，新配置不会上线。
+        ⚠️ 配置上线前必须通过 headless config、reindex、semantic validate 和相关 Eval gate。修改语义层或 Wiki 后必须重新 reindex。
       </div>
     </section>
 

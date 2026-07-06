@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Product Docs Index |
 | 文档类型 | Product Docs Index |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-22 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-06-22；2026-07-06 |
 | 适用范围 | 客户交付文档、管理员文档、用户文档、Agent 接入文档 |
 
 ## 1. Customer-Facing Guides
@@ -14,7 +14,7 @@ The first customer delivery is headless. Customer-facing docs should start with 
 
 | Audience | Guide | Purpose |
 |---|---|---|
-| Admin | `docs/admin-guide.md` | Deploy, configure, operate, upgrade |
+| Admin | `docs/admin-guide.md` | Deploy, continuously configure semantic-layer/wiki/evals/access, operate, upgrade |
 | User | `docs/user-guide.md` | How business users ask governed data questions |
 | Agent integrator | `docs/agent-integration-guide.md` | MCP endpoint, bearer token, client config |
 | Operator | `docs/troubleshooting-guide.md` | Common failures and escalation packet |
@@ -24,8 +24,8 @@ The first customer delivery is headless. Customer-facing docs should start with 
 
 | Guide | Purpose |
 |---|---|
-| `docs/customer-deployment-guide.md` | End-to-end customer deployment and operations |
-| `docs/deployment-docker.md` | Docker Compose details |
+| `docs/customer-deployment-guide.md` | End-to-end customer deployment, headless config package, operations |
+| `docs/deployment-docker.md` | Docker Compose details and `customer-config/` bind mount |
 | `docs/release-ci.md` | Release CI and KTX upgrade gates |
 | `docs/version-matrix.md` | Supported runtime and compatibility matrix |
 | `docs/test-layers-and-release-gates.md` | Runtime/platform/business eval gate split |

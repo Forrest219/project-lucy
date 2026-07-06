@@ -90,6 +90,18 @@ jobs:
         working-directory: webui
       - run: npm run smoke:p0:docker
 
+  headless-config:
+    runs-on: ubuntu-latest
+    needs: spec-and-webui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:p0:headless-config
+
   demo-e2e:
     runs-on: ubuntu-latest
     needs: docker-smoke
@@ -118,6 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - docker-smoke
+      - headless-config
       - demo-e2e
       - postgres-demo-e2e
       - business-eval-catalog
@@ -135,6 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - docker-smoke
+      - headless-config
       - demo-e2e
       - postgres-demo-e2e
       - business-eval-catalog
