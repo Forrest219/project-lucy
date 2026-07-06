@@ -6,6 +6,7 @@ Thumbs.db
 .vscode/
 
 # KTX runtime state (daemon pid, ports, logs, transient config)
+ktx.yaml
 .ktx/logs/
 .ktx/runtime/
 .ktx/mcp.json
