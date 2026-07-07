@@ -4,15 +4,17 @@
 |---|---|
 | 文档名称 | Lucy R1 受控数据服务层底座方案与实施计划 |
 | 文档类型 | Design / Plan |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-07-02 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-07-02；v0.2 更新 2026-07-06（同步 governed MCP runtime 与 context compiler 边界） |
 | 适用范围 | Lucy R1 平台能力规划、实施排期、验收口径 |
 
 ## 1. 定位
 
-Lucy R1 的核心角色是面向 AI Agent 的受控数据服务层底座。
+Lucy R1 的核心角色是面向 AI Agent 的 **governed MCP runtime**。它是 Lucy “data agent context compiler + governed MCP runtime” 产品定位中的运行时底座：把已确认的数据资产、语义、权限策略和测试集通过少而硬的 MCP 工具安全交付给 Agent。
 
 Lucy 不负责 BI 资产梳理、业务 owner 协调、权限审批流程或指标口径仲裁。这些工作由外部 workflow 完成。Lucy 负责承接外部 workflow 已确认的数据资产、语义、权限策略和测试集，并把它们稳定地转化为 Agent 可调用、权限可控、查询可守护、行为可审计、质量可回归、运行可观测的数据服务。
+
+Context compiler 能力（如 trusted query ingestion、企业知识连接器、纠错 memory、自动 pipeline/code enrichment）是 R1 后续增强方向；R1 不承诺复制 OpenAI 完整 data platform，也不把 BI/文档/owner 协调流程内建为首版范围。
 
 R1 主线：
 
@@ -30,7 +32,7 @@ Agent
 
 一句话目标：
 
-> 先把 Doris 打穿，再把它包进稳定 MCP 契约，随后加 Policy、Guardrail、Role-aware runtime、审计、Eval 和可观测性，形成生产级受控数据服务底座。StarRocks 作为 R1 P1 gated target 同步推进配置、证据路径和 stub 测试，live certification 通过前不进入默认发布硬门禁。
+> 先把 Doris 打穿，再把它包进稳定 MCP 契约，随后加 Policy、Guardrail、Role-aware runtime、审计、Eval 和可观测性，形成生产级 governed MCP runtime。StarRocks 作为 R1 P1 gated target 同步推进配置、证据路径和 stub 测试，live certification 通过前不进入默认发布硬门禁。
 
 ## 2. R1 非目标
 

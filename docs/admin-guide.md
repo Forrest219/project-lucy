@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Admin Guide |
 | 文档类型 | Product / Admin Guide |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-06-22；2026-07-06 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-22；2026-07-06；v0.3 更新 2026-07-06（同步 context compiler 定位） |
 | 适用范围 | 管理员部署、配置、升级、日常运维 |
 
 ## 1. Admin Responsibilities
@@ -13,13 +13,13 @@
 管理员负责：
 
 - 部署 Lucy Docker image。
-- 维护客户 `customer-config/` 配置包并挂载到 `/data/lucy`。
+- 维护客户 `customer-config/` context package 并挂载到 `/data/lucy`。
 - 配置数据库连接与 secret 文件。
-- 持续维护 semantic-layer、wiki、eval 和 agent access 配置。
+- 持续维护 Semantic Pack（semantic-layer）、Knowledge Pack（wiki / skills）、Query / Quality Pack（trusted query / eval / audit evidence）和 agent access 配置。
 - 创建 Agent、role 和 token。
 - 查看 audit 与 release gate 结果。
 
-首版客户交付采用 headless 路径：Docker Compose、配置文件、Lucy MCP Proxy、Agent MCP client config、CLI/smoke/eval 证据。WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI 不属于本次客户交付承诺。
+首版客户交付采用 headless 路径：Docker Compose、配置文件、Lucy MCP Proxy、Agent MCP client config、CLI/smoke/eval 证据。Lucy 在该路径中是 data agent context compiler + governed MCP runtime；WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI 不属于本次客户交付承诺。
 
 ## 2. Deployment Path
 
@@ -45,7 +45,7 @@ npm run smoke:p0:demo
 
 Follow this checklist:
 
-1. Create a customer-owned `customer-config/` directory from `customer-config.example/`.
+1. Create a customer-owned `customer-config/` context package from `customer-config.example/`.
 2. Edit `customer-config/ktx.yaml` and set every database password as `file:/data/lucy/.ktx/secrets/<name>`.
 3. Maintain `customer-config/semantic-layer/`:
    - `_schema/*.yaml` is the physical table manifest from scan/import.

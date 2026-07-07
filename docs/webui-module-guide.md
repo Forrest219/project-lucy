@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | KTX WebUI 功能模块清单与使用说明 |
 | 文档类型 | Design |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-06-20；v1.2 更新 2026-07-06（同步 context package 治理定位） |
 | 撰写人 | Claude Architect |
 | 委托人 | zhangxingchen |
 | 基于材料 | project-lucy/webui/src/app/App.tsx、docs/webui-feature-map.md、docs/vision.md、docs/project-overview.md、ktx/packages/cli/src/setup-databases.ts、webui/server/project.ts |
@@ -16,9 +16,9 @@
 
 ## 产品简介
 
-**KTX WebUI** 是 Lucy 系统的治理控制台，面向数据工程师和团队管理员。它让你在浏览器里完成数据库接入管理、语义层维护、业务知识沉淀、评测管理和访问管控，而不必打开终端或手写 YAML。
+**KTX WebUI** 是 Lucy context package 的治理控制台，面向数据工程师和团队管理员。它让你在浏览器里完成数据库接入管理、语义层维护、业务知识沉淀、评测管理和访问管控，把数据库、文档、人工口径整理成 Agent 可安全使用的上下文资产，而不必打开终端或手写 YAML。
 
-KTX WebUI 解决的核心问题：**AI Agent 回答数据问题的准确率**。通过维护语义层（"利润率怎么算"）、业务 Wiki（"这张表的口径注意事项"）和评测用例（"改完之后准确率还在吗"），把 Agent 的问答准确率从不足 21% 提升到 95% 以上。
+KTX WebUI 解决的核心问题：**AI Agent 回答数据问题的准确率与可治理性**。通过维护 Semantic Pack（"利润率怎么算"）、Knowledge Pack（"这张表的口径注意事项"）和 Quality Pack（"改完之后准确率还在吗"），让 Lucy 的 governed MCP runtime 有可靠上下文可交付给 Agent。
 
 ---
 

@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 产品愿景 |
 | 文档类型 | Design |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-22 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-22；v1.2 更新 2026-07-06（统一 Lucy 产品定位为 data agent context compiler + governed MCP runtime） |
 | 撰写人 | Claude |
 | 委托人 | zhangxingchen |
 | 基于材料 | 用户产品愿景输入、Anthropic 自助数据分析架构参考、project-lucy 现状 |
@@ -16,7 +16,21 @@
 
 ## 1. 产品定位
 
-Lucy 是面向 AI Agent 的数据消费治理控制面，核心使命是把企业多数据源通过统一语义层安全、准确地暴露给 AI Agent。它解决 Anthropic 自助数据分析报告中总结的三类失败模式：概念-实体歧义、数据陈旧和检索失败，将 Agent 数据回答准确率从基线 21% 提升至 95%。Lucy 不是 BI 工具，不面向人类分析师；它是 AI Agent 的"数据网关 + 知识基座 + 访问管控"三合一后台。长期目标是成为 Agent 时代企业数据基础设施的标准组件。
+Lucy 是面向中小企业的 **data agent context compiler + governed MCP runtime**：
+把数据库、BI、文档、人工口径编译成 Agent 可安全使用、可审计、可回归的数据服务。
+
+中文产品口径：Lucy 是面向中小企业的 **data agent 上下文编译器与受治理 MCP 运行时**。它不试图复制 OpenAI 内部完整数据平台，而是把中小企业已有的数据库、语义定义、业务知识、可信查询与质量用例整理成可交付给 Claude Code、Codex、Hermes、Cursor 等 Agent 的受控 MCP 能力。
+
+Lucy 解决的核心问题不是“再做一个 BI”，而是让 Agent 在回答数据问题前先拿到正确上下文，并在查询时受到权限、guardrail、审计和 eval 约束。长期目标是成为中小企业采用 data agent 时的标准上下文编译层和安全运行时。
+
+Lucy 的 context compiler 最小交付单元由四类 context pack 组成：
+
+| Context Pack | 内容 | 目的 |
+|---|---|---|
+| Semantic Pack | schema、grain、measures、dimensions、segments、joins、freshness | 让 Agent 理解“有什么数据、怎么算、怎么连” |
+| Knowledge Pack | wiki、业务口径、owner/caveat、使用禁区 | 让 Agent 理解“为什么这样用、哪里容易错” |
+| Query Pack | 可信 SQL、BI/dashboard 查询范式、常见问题样例 | 让 Agent 学习可复用的查询路径，而不是模仿一次性探索 SQL |
+| Quality Pack | eval cases、安全回归、audit trace、纠错记录 | 让回答质量、安全边界和修正经验可回归 |
 
 ---
 

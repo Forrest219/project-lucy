@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy README |
 | 文档类型 | Other |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-18 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-06-18；v1.2 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位与 Proxy instructions 运行时入口） |
 | 撰写人 | Claude |
 | 委托人 | 待确认 |
 | 基于材料 | AGENTS.md、docs/DEVELOPMENT.md、docs/project-overview.md、ktx.yaml、.mcp.json、lucy-skills/docs/01-spec.md、skills/、evals/ |
@@ -18,16 +18,16 @@
 
 | 语境 | 入口文件 | 读者 | 注入方式 |
 |------|---------|------|---------|
-| **运行时**：KTX 数据问答 | [`CLAUDE.md`](CLAUDE.md) | KTX 内置 LLM agent | `ktx.yaml → llm.provider.backend: claude-code` 自动注入 |
+| **运行时**：Lucy 数据问答 | Lucy MCP Proxy `initialize` instructions（来源 [`webui/config/data-qa-instructions.md`](webui/config/data-qa-instructions.md)） | 任何走 `:7879` 的 MCP client | MCP `initialize` 响应注入，见 [`webui/docs/07-mcp-auth-proxy-spec.md`](webui/docs/07-mcp-auth-proxy-spec.md) §4.4 |
 | **开发态**：改代码 / 改配置 | [`AGENTS.md`](AGENTS.md) → [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Claude Code、Codex 等 coding agent | agent 启动时读取 AGENTS.md |
 
-> `CLAUDE.md` 由 ktx.yaml 自动注入给数据问答 LLM，**不是给 coding agent 读的**。coding agent 的入口是 `AGENTS.md`。
+> `CLAUDE.md` 现在只做入口指引，不承载数据问答规则正文。coding agent 的入口是 `AGENTS.md`；数据问答运行时指导由 Lucy MCP Proxy 注入。
 
 ---
 
-`project-lucy` 是一个基于 KTX MCP Server 的语义、Skill 与 Wiki 管理平台，旨在为 Claude Code、Codex 等 data agent 提供可维护的上下文、业务知识和数据问答能力。
+`project-lucy` 是面向中小企业的 **data agent context compiler + governed MCP runtime**，旨在把数据库、BI、文档、人工口径编译成 Claude Code、Codex、Hermes、Cursor 等 data agent 可安全使用、可审计、可回归的数据服务。
 
-本仓库关注的不是单一数据源，而是一套可迁移的 agent context 工程：用 `ktx.yaml` 管理 KTX MCP Server 运行配置，用 `semantic-layer/` 管理数据语义，用 `skills/` 承载可复用能力，用 `wiki/` 沉淀业务知识，用 `evals/` 做质量门禁。
+本仓库关注的不是单一数据源，而是一套可迁移的 agent context 工程：用 `semantic-layer/` 管理 Semantic Pack，用 `wiki/` 和 `skills/` 承载 Knowledge Pack，用 `evals/`、审计和后续 trusted query 资产形成 Query / Quality Pack，并通过 Lucy MCP Proxy 暴露受治理 MCP runtime。
 
 ## 核心目录
 
@@ -44,7 +44,7 @@
 | `raw-sources/` | 数据源扫描与抽取产生的原始材料，作为语义层建设和回溯的输入。 |
 | `docs/` | 开发治理与项目概览。`docs/DEVELOPMENT.md` 是开发规则权威源；`docs/project-overview.md` 是全组件索引。 |
 | `AGENTS.md` | AI coding agent 的开发入口，指向本仓库治理规则。 |
-| `CLAUDE.md` | KTX 数据问答运行时上下文，由 `ktx.yaml` 自动注入，不是开发说明。 |
+| `CLAUDE.md` | 开发/运行入口指引，不承载数据问答规则正文。 |
 | `AGENT_PIPELINE.md` | 可选的完整交付流水线（pm / architect / coder / tester / reviewer 5 角色）；仅在需要正式审计、不可逆操作或团队交接时启用。 |
 
 ## KTX MCP 相关目录
@@ -91,7 +91,7 @@
 
 ## 本地运行
 
-本项目依赖 KTX CLI，并通过 KTX MCP Server 向 Claude Code、Codex 等客户端提供语义层、Wiki 和 Skill 能力。首次运行前，请确保本机已经安装 KTX，并准备好当前环境需要的数据源连接、模型后端和本地密钥文件。
+本项目依赖 KTX CLI，并通过 Lucy MCP Proxy 向 Claude Code、Codex 等客户端提供受治理的语义层、Wiki、Skill 和查询能力。首次运行前，请确保本机已经安装 KTX，并准备好当前环境需要的数据源连接、模型后端和本地密钥文件。
 
 **客户部署 / 运维**：见 [`docs/customer-deployment-guide.md`](docs/customer-deployment-guide.md)、[`docs/deployment-docker.md`](docs/deployment-docker.md) 与 [`docs/admin-guide.md`](docs/admin-guide.md)。首版客户标准路径是标准 Lucy image + `customer-config/` 配置包 bind mount 到 `/data/lucy`；持续维护表语义、wiki、eval 和权限时先改 `customer-config/`，再运行 reindex/validate/eval gate。
 **全链路测试用例**：见 [`docs/lucy-test-cases.md`](docs/lucy-test-cases.md)。
@@ -108,14 +108,14 @@ mkdir -p .ktx/secrets && echo '<your-mysql-password>' > .ktx/secrets/mysql-aliyu
 # 3. 安装 KTX CLI（或使用本机 dev 版本）
 npm install -g @kaelio/ktx@latest
 
-# 4. 启动 KTX MCP daemon（HTTP 端点 http://localhost:7879/mcp）
+# 4. 启动 KTX MCP daemon；外部客户端应通过 Lucy MCP Proxy :7879 接入
 ktx mcp start --project-dir /Users/zhangxingchen/Projects/project-lucy
 
 # 5. 验证连接
 ktx status
 ```
 
-仓库已附带 `.mcp.json`，Claude Code 启动时会自动连接 KTX MCP daemon；daemon 不运行则连接失败。
+仓库已附带 `.mcp.json` 示例；客户端应配置到 Lucy MCP Proxy，而不是直接暴露 KTX upstream。daemon / proxy 未运行则连接失败。
 
 **治理工作台（WebUI）**：
 
@@ -148,7 +148,7 @@ ktx sl list
 
 重要边界：
 
-- `CLAUDE.md` 是 KTX 产品运行时上下文，不是 agent 开发说明。
+- `CLAUDE.md` 是入口指引，不是数据问答运行时上下文或 agent 开发说明。
 - `.ktx/secrets/` 下的密钥文件不得输出、提交或写入文档。
 - 数据库连接不是仓库身份的一部分，可以按使用者环境自定义；`ktx.yaml` 中的连接信息改动前必须先确认。
 - 涉及新功能、跨文件改动、语义层、KTX 运行时行为或治理类文件（`CLAUDE.md`、`AGENTS.md`、`ktx.yaml`、`skills/`）的变更，需要先进入 Plan Mode 给出计划并获得人工确认。
@@ -156,7 +156,8 @@ ktx sl list
 
 ## 设计原则
 
+- 上下文编译优先：先把数据库、BI、文档、人工口径编译成可维护 context pack，再交给 agent 使用。
 - 语义层优先：让 agent 先理解数据含义，再生成查询或分析。
-- 上下文可维护：把业务知识沉淀到 Wiki、Prompt 和 Skill，而不是散落在临时对话里。
+- 上下文可维护：把业务知识沉淀到 Wiki、Skill、eval 和审计证据，而不是散落在临时对话里。
 - 配置可迁移：数据源、模型和运行环境应通过配置替换，不绑定单一开发实例。
 - 运行时与开发态隔离：产品问答上下文和开发治理规则分别维护，避免 prompt 污染。

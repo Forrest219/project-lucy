@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 产品介绍 |
 | 文档类型 | Other |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-24（澄清定位措辞；StarRocks/Oracle 数据源范围纠偏；审计留存表述纠偏；准确率指标加来源脚注；Eval 闭环自动化程度标注 Roadmap；列/行级权限措辞与 project-overview 对齐）；v1.2 更新 2026-06-24（权限管理卡片"表级 ACL"状态由 P1 改为已有，与 goal-checklist verified 对齐）；v1.3 更新 2026-06-24（数据源范围收口；Eval 闭环表述改为"可手工/脚本触发即满足本期要求"，自动 Webhook/阈值告警维持 Roadmap）；v1.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate） |
+| 版本 | v1.5 |
+| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-24（澄清定位措辞；StarRocks/Oracle 数据源范围纠偏；审计留存表述纠偏；准确率指标加来源脚注；Eval 闭环自动化程度标注 Roadmap；列/行级权限措辞与 project-overview 对齐）；v1.2 更新 2026-06-24（权限管理卡片"表级 ACL"状态由 P1 改为已有，与 goal-checklist verified 对齐）；v1.3 更新 2026-06-24（数据源范围收口；Eval 闭环表述改为"可手工/脚本触发即满足本期要求"，自动 Webhook/阈值告警维持 Roadmap）；v1.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate）；v1.5 更新 2026-07-06（统一定位为 context compiler + governed MCP runtime） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | project-lucy docs / 产品设计 |
@@ -694,14 +694,14 @@
   <div class="container">
     <div class="hero-badge">
       <span class="dot"></span>
-      AI 数据资产可信网关
+      Data Agent 上下文编译器
     </div>
     <h1 class="hero-title">
-      企业数据可以安全地<br>
-      <span class="gradient">交给 Agent 使用</span>
+      企业上下文可以安全地<br>
+      <span class="gradient">编译给 Agent 使用</span>
     </h1>
     <p class="hero-sub">
-      Lucy 是企业核心数据资产面向 AI Agent 的可信网关与治理海关：它本身不直接回答业务问题，而是在数据被 Agent（如 Claude Code / Codex）消费之前，统一校验口径、权限边界、查询路径与评测结果，让企业敢于开放数据，而不是被迫在效率和风险之间二选一。
+      Lucy 是面向中小企业的 data agent context compiler + governed MCP runtime：它本身不直接回答业务问题，而是在数据被 Agent（如 Claude Code / Codex / Hermes / Cursor）消费之前，把数据库、BI、文档、人工口径编译成可授权、可审计、可回归的 MCP 数据服务。
     </p>
     <div class="hero-stat-row">
       <div>
@@ -733,7 +733,7 @@
   <div class="container">
     <div class="section-label">为什么需要 Lucy</div>
     <h2 class="section-title">企业不敢开放数据给 Agent 的三类根因</h2>
-    <p class="section-sub">没有可信网关，AI 直连数据会把口径幻觉、越权风险和静默漂移一起带进业务决策链。</p>
+    <p class="section-sub">没有上下文编译层和受治理运行时，AI 直连数据会把口径幻觉、越权风险和静默漂移一起带进业务决策链。</p>
     <div class="problem-grid">
       <div class="problem-card">
         <div class="problem-icon">🎯</div>
@@ -758,8 +758,8 @@
 <section id="features">
   <div class="container">
     <div class="section-label">功能模块</div>
-    <h2 class="section-title">全链路 AI 数据资产治理</h2>
-    <p class="section-sub">Lucy 不是单点工具，而是把数据资产安全暴露给 Agent 的治理链路：定义口径、固化知识、控制访问、记录审计、主动评测。</p>
+    <h2 class="section-title">从企业上下文到受控 MCP 服务</h2>
+    <p class="section-sub">Lucy 不是单点工具，而是把数据资产、业务知识、可信查询和质量用例编译成 Agent 可安全消费的治理链路：定义口径、固化知识、控制访问、记录审计、主动评测。</p>
     <div class="features-grid">
 
       <div class="feature-card boundary-danger">
@@ -772,7 +772,7 @@
       <div class="feature-card">
         <div class="feature-icon icon-cyan">📐</div>
         <h3>语义与知识治理</h3>
-        <p>在 WebUI 中维护字段别名、业务定义、Wiki 文档和 Knowledge Base。所有变更落 KTX git 文件，以 KTX MCP Server 为唯一语义事实源。</p>
+        <p>在 WebUI 中维护字段别名、业务定义、Wiki 文档和 Knowledge Base，形成 Semantic Pack 与 Knowledge Pack。所有变更落 KTX git 文件，以语义层和业务文档作为可审阅事实源。</p>
         <span class="feature-tag tag-existing">已有 · M0–M5</span>
       </div>
 
@@ -800,7 +800,7 @@
       <div class="feature-card">
         <div class="feature-icon icon-red">📊</div>
         <h3>Eval 质量监控</h3>
-        <p>Eval Runner 是 AI 数据中台的免疫系统：先编译安全红线，再校验语义、SQL 结构和结果断言，把异常分诊为数据漂移、schema 漂移、逻辑回归或工具错误。</p>
+        <p>Eval Runner 是 Quality Pack 的核心：先编译安全红线，再校验语义、SQL 结构和结果断言，把异常分诊为数据漂移、schema 漂移、逻辑回归或工具错误。</p>
         <span class="feature-tag tag-p1">P1 · 自动化门禁</span>
       </div>
 

@@ -4,13 +4,22 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.6 |
-| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理） |
+| 版本 | v1.7 |
+| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位） |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
-project-lucy 是一个本地自服务数据治理与 Agent 数据访问栈，底座为 KTX 语义层、wiki、eval cases、skills 和 Lucy WebUI 治理工作台。Lucy 自身不直接生成分析结论或回答问题；目标是在受控数据访问前提下，让 Claude Code / Codex 等 Agent 优先使用语义层和业务口径回答数据问题，并通过 eval/quiz 形成回归门禁。
+project-lucy 是面向中小企业的 **data agent context compiler + governed MCP runtime**。它把数据库、BI、文档、人工口径编译成 Agent 可安全使用、可审计、可回归的数据服务；底座为 KTX 语义层、wiki、eval cases、skills、Lucy MCP Proxy 和 Lucy WebUI 治理工作台。
 
-面向产品化交付，Lucy 的目标形态是位于数据库和 agents 之间的 MCP 服务管理平台：用户通过 Docker 部署 Lucy，接入数据库，配置语义层，并在 agents 平台配置 MCP endpoint/token 接入数据能力。该目标的验收合同见 `docs/lucy-platform-goal-checklist.md`。
+Lucy 自身不直接生成分析结论或回答问题；语义问答由 Claude Code / Codex / Hermes / Cursor 等 Agent 通过 Lucy 提供的受治理 MCP 能力完成。面向产品化交付，用户通过 Docker 部署 Lucy，接入数据库，维护客户 context package，并在 agents 平台配置 MCP endpoint/token 接入数据能力。该目标的验收合同见 `docs/lucy-platform-goal-checklist.md`。
+
+Lucy 当前 context compiler 的四类资产：
+
+| Context Pack | 当前承载 | 说明 |
+|---|---|---|
+| Semantic Pack | `semantic-layer/` | schema、grain、measures、segments、joins、source metadata |
+| Knowledge Pack | `wiki/`、`skills/` | 业务口径、分析路径、领域坑点、reviewer checklist |
+| Query Pack | `evals/`、审计 trace、后续 trusted query 资产 | 当前以 eval 和 trace 为基础；BI/dashboard trusted query ingestion 属后续增强 |
+| Quality Pack | `evals/`、`.ktx-ui/audit.sqlite`、release gates | business eval、安全回归、MCP contract、审计和发布门禁 |
 
 ## 1. 双轨语境
 
@@ -138,7 +147,8 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 
 | 主题 | 文档 |
 |---|---|
-| Lucy MCP 平台产品化目标 | `docs/lucy-platform-goal-checklist.md` |
+| Lucy 产品定位与愿景 | `docs/vision.md` |
+| Lucy context compiler / MCP runtime 产品化目标 | `docs/lucy-platform-goal-checklist.md` |
 | Docker 部署 | `docs/deployment-docker.md` |
 | 客户部署 / 运维手册 | `docs/customer-deployment-guide.md` |
 | 版本矩阵 | `docs/version-matrix.md` |

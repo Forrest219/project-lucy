@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 核心概念 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-19 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-06-19；v1.1 更新 2026-07-06（新增 context pack 与 governed MCP runtime 概念） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | docs/eval-quiz-conventions.md |
@@ -60,7 +60,7 @@
     <header class="hero">
       <span class="eyebrow">Concepts</span>
       <h1>先理解概念，再相信答案。</h1>
-      <p class="lead">Lucy 的回答质量来自一组约束：标准指标、数据路径、评测用例、人类测验和漂移治理。</p>
+      <p class="lead">Lucy 的回答质量来自两件事：先把企业上下文编译成可维护资产，再通过受治理 MCP runtime 让 Agent 安全使用。</p>
     </header>
 
     <section>
@@ -68,10 +68,16 @@
       <table>
         <thead><tr><th>概念</th><th>含义</th><th>用户应该关心什么</th></tr></thead>
         <tbody>
-          <tr><td>Semantic Layer</td><td>指标、维度、过滤条件和 join 路径的标准定义。</td><td>优先要求 Lucy 使用标准口径。</td></tr>
+          <tr><td>Context Compiler</td><td>把数据库、BI、文档、人工口径整理成 Agent 可用上下文资产的过程。</td><td>不要让 Agent 直接猜裸库；先维护上下文。</td></tr>
+          <tr><td>Governed MCP Runtime</td><td>通过 MCP 暴露受权限、guardrail、审计和 eval 约束的数据工具。</td><td>Agent 只能使用当前 token/role 可见的工具和数据。</td></tr>
+          <tr><td>Semantic Pack</td><td>schema、指标、维度、过滤条件、grain 和 join 路径的标准定义。</td><td>优先要求 Lucy 使用标准口径。</td></tr>
+          <tr><td>Knowledge Pack</td><td>Wiki、Skill、业务解释、owner/caveat 和使用禁区。</td><td>用它解释“为什么这样算”和“哪里容易错”。</td></tr>
+          <tr><td>Query Pack</td><td>可信查询范式、常见问题和后续 BI/dashboard query examples。</td><td>优先复用可信查询路径，不模仿一次性探索 SQL。</td></tr>
+          <tr><td>Quality Pack</td><td>Eval、安全回归、audit trace 和纠错记录。</td><td>验证模型会不会按正确方式做，并把错误沉淀为回归资产。</td></tr>
+          <tr><td>Semantic Layer</td><td>Semantic Pack 的结构化实现，定义指标、维度、过滤条件和 join 路径。</td><td>优先要求 Lucy 使用标准口径。</td></tr>
           <tr><td>Measure</td><td>可计算指标，例如 <code>order_count</code>、<code>profit_margin</code>。</td><td>同名业务指标必须口径一致。</td></tr>
           <tr><td>Fallback</td><td>语义层暂时表达不了的问题，使用受控 raw SQL 补充。</td><td>必须说明原因、假设和可追溯来源。</td></tr>
-          <tr><td>Eval</td><td>给 Agent 跑的机器评测题。</td><td>验证模型会不会按正确方式做。</td></tr>
+          <tr><td>Eval</td><td>给 Agent 跑的机器评测题，是 Quality Pack 的一部分。</td><td>验证模型会不会按正确方式做。</td></tr>
           <tr><td>Quiz</td><td>给人做的训练题。</td><td>验证团队是否理解正确业务口径。</td></tr>
           <tr><td>Data Drift</td><td>底层数据变化导致结果值变化。</td><td>不要把正常数据漂移误判为模型错误。</td></tr>
         </tbody>

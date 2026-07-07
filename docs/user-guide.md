@@ -4,17 +4,18 @@
 |---|---|
 | 文档名称 | Lucy User Guide |
 | 文档类型 | Product / User Guide |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-22 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-06-22；v0.2 更新 2026-07-06（同步 context compiler 定位） |
 | 适用范围 | 使用 agent 通过 Lucy 访问数据的业务用户 |
 
 ## 1. What Lucy Gives You
 
-Lucy lets your agent answer database questions through governed semantic definitions:
+Lucy lets your agent answer data questions through governed context, not through direct raw database access. It acts as a data agent context compiler + governed MCP runtime:
 
-- approved tables only.
-- business metric definitions.
-- wiki/context retrieval.
+- approved tables and sources only.
+- business metric definitions and semantic-layer measures.
+- wiki/context retrieval for business meaning and caveats.
+- safe MCP tools instead of unrestricted database credentials.
 - audit trail for data access.
 - repeatable eval checks for answer quality.
 
@@ -43,6 +44,7 @@ The agent should:
 - use semantic-layer measures when available.
 - avoid raw SQL unless explicitly approved by policy.
 - cite source tables or semantic objects.
+- explain the relevant context pack when it affects the answer, such as metric definitions, wiki caveats, or eval-backed assumptions.
 - say when a requested table or tool is not allowed.
 
 ## 4. When Something Looks Wrong

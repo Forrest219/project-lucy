@@ -4,13 +4,21 @@
 |---|---|
 | 文档名称 | Lucy Product Docs Index |
 | 文档类型 | Product Docs Index |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-06-22；2026-07-06 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-22；2026-07-06；v0.3 更新 2026-07-06（补充产品定位事实源） |
 | 适用范围 | 客户交付文档、管理员文档、用户文档、Agent 接入文档 |
 
 ## 1. Customer-Facing Guides
 
 The first customer delivery is headless. Customer-facing docs should start with Docker Compose, configuration files, Lucy MCP Proxy, Agent MCP client config, and smoke/eval evidence. WebUI docs below are repository/productization references, not the standard customer entry point.
+
+Lucy 的正式产品定位是 **data agent context compiler + governed MCP runtime**。定位与目标事实源如下：
+
+| Source | Purpose |
+|---|---|
+| `docs/vision.md` | 产品愿景与长期定位 |
+| `docs/project-overview.md` | 当前能力边界、目录索引和交付状态 |
+| `docs/lucy-platform-goal-checklist.md` | 产品化验收目标和边界 |
 
 | Audience | Guide | Purpose |
 |---|---|---|

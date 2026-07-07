@@ -4,11 +4,13 @@
 |---|---|
 | 文档名称 | Lucy Agent Integration Guide |
 | 文档类型 | Product / Integration Guide |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-06-22 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-06-22；v0.2 更新 2026-07-06（推荐 R1 lucy_* 工具面） |
 | 适用范围 | Codex、Claude Code、Claude Desktop 或通用 HTTP MCP client 接入 Lucy |
 
 ## 1. Endpoint
+
+Agents consume Lucy as a governed MCP runtime. Lucy compiles customer data context into semantic, knowledge, query, quality, and access assets, then exposes only the tools allowed for the agent's token/role.
 
 Default Docker customer MCP endpoint:
 
@@ -56,13 +58,16 @@ For the headless customer delivery, generate or provision this config from deplo
 
 ## 4. Expected Tools
 
-Typical allowed tools:
+R1 tokens should prefer the stable Lucy tool surface:
 
-- `kx_catalog`
-- `sl_query`
-- `sl_read_source`
-- `wiki_search`
-- `entity_details`
+- `lucy_catalog`
+- `lucy_read_source`
+- `lucy_query`
+- `lucy_explain_query`
+- `lucy_freshness`
+- `lucy_begin_question`
+
+Some legacy or compatibility tokens may still expose older upstream-oriented tools such as `kx_catalog`, `sl_query`, `sl_read_source`, `wiki_search`, or `entity_details`. New integrations should treat those as compatibility surface, not the preferred product contract.
 
 Globally denied tools:
 
@@ -79,3 +84,5 @@ npm run smoke:p0:demo
 ```
 
 It initializes an MCP session, lists tools, calls `sl_read_source`, and runs `sl_query` through Lucy MCP Proxy.
+
+For R1 contract validation, use the relevant `lucy_*` endpoint smoke or contract smoke so the evidence proves the governed MCP runtime surface, not only legacy tool forwarding.

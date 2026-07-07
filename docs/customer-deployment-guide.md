@@ -13,6 +13,7 @@
 首版客户交付形态：
 
 - 客户通过 Docker Compose 部署 Lucy。
+- 客户部署的是 **data agent context compiler + governed MCP runtime**：Lucy 负责把数据库、semantic-layer、wiki、eval、skills 和 access policy 组成的客户 context package 安全交付给 Agent。
 - Lucy Docker image 内置 pinned KTX runtime。
 - 客户标准外部入口为 Lucy MCP Proxy `/mcp`，由 Agent MCP client 通过 bearer token 访问。
 - `/api/health` 仅作为运维健康检查使用，不作为客户业务操作入口。
@@ -25,7 +26,7 @@
 MCP: http://<host>:7879/mcp
 ```
 
-本次客户交付不承诺 WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、Kubernetes/Helm、系统 metrics/告警/日志聚合或对象存储归档。仓库内仍保留 WebUI/API 相关代码和测试作为内部质量门禁与后续产品化基础。
+本次客户交付不是 BI 可视化工具，也不是完整企业数据平台替代品；它提供受治理的数据上下文编译与 MCP 访问运行时。本次客户交付不承诺 WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、Kubernetes/Helm、系统 metrics/告警/日志聚合或对象存储归档。仓库内仍保留 WebUI/API 相关代码和测试作为内部质量门禁与后续产品化基础。
 
 ## 2. Prerequisites
 
@@ -103,7 +104,7 @@ docker run --rm \
 
 ## 5. Headless Configuration Package
 
-推荐客户形态是 **标准 Lucy image + 客户配置包目录 + bind mount 到 `/data/lucy`**。Lucy image 只作为运行时；客户数据库连接、semantic-layer、wiki、eval、权限和 secrets 由客户维护的 `customer-config/` 承载。
+推荐客户形态是 **标准 Lucy image + 客户配置包目录 + bind mount 到 `/data/lucy`**。Lucy image 只作为受治理 MCP runtime；客户数据库连接、semantic-layer、wiki、eval、skills、权限和 secrets 由客户维护的 `customer-config/` 承载，形成可版本化的 customer context package。
 
 推荐目录：
 

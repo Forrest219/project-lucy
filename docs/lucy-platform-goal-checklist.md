@@ -4,32 +4,34 @@
 |---|---|
 | 文档名称 | Lucy MCP Platform Goal Checklist |
 | 文档类型 | Goal / Acceptance Spec |
-| 版本 | v0.5 |
-| 撰写日期 | 2026-06-21；v0.2 更新 2026-06-24（新增 MCP client compatibility / Skill management 能力行；修订 Non-goals 的 MCP client 范围表述；补充 Product Boundary 问答边界声明）；v0.3 更新 2026-06-24（Oracle 并入 StarRocks 数据库范围 Open Risk；Business eval 验收要求降级为"可配置+可手工/脚本触发+留痕"；新增系统可观测性/监控告警 Open Risk；Kubernetes/Helm 本期不支持决策收口并写入 Non-goals）；v0.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate）；v0.5 更新 2026-07-06（补交付缺口快照；同步 `ktx.yaml` 本机化治理状态） |
-| 适用范围 | Lucy 从本地 POC / 内测工程形态走向可部署 MCP 服务管理平台的产品化验收 |
+| 版本 | v0.6 |
+| 撰写日期 | 2026-06-21；v0.2 更新 2026-06-24（新增 MCP client compatibility / Skill management 能力行；修订 Non-goals 的 MCP client 范围表述；补充 Product Boundary 问答边界声明）；v0.3 更新 2026-06-24（Oracle 并入 StarRocks 数据库范围 Open Risk；Business eval 验收要求降级为"可配置+可手工/脚本触发+留痕"；新增系统可观测性/监控告警 Open Risk；Kubernetes/Helm 本期不支持决策收口并写入 Non-goals）；v0.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate）；v0.5 更新 2026-07-06（补交付缺口快照；同步 `ktx.yaml` 本机化治理状态）；v0.6 更新 2026-07-06（统一 Lucy 为 data agent context compiler + governed MCP runtime） |
+| 适用范围 | Lucy 从本地 POC / 内测工程形态走向可部署 data agent 上下文编译器与受治理 MCP 运行时的产品化验收 |
 
 ## 1. Goal
 
-Lucy 的目标是成为位于数据库和 agents 之间的 MCP 服务管理平台。
+Lucy 的目标是成为面向中小企业的 **data agent context compiler + governed MCP runtime**。
+
+Lucy 位于数据库、BI、文档、人工口径与 agents 之间：把企业数据上下文编译成 semantic layer、wiki、trusted query/eval、access policy 等可维护资产，再通过受治理的 MCP runtime 安全交付给 Agent 使用。Lucy 不直接回答业务问题，也不取代完整数据平台；它让 Claude Code、Codex、Hermes、Cursor 等 Agent 能在权限、guardrail、审计和 eval 约束下访问可信数据能力。
 
 最终用户应能够：
 
 1. 通过 Docker 部署 Lucy。
-2. 在 Lucy 中接入数据库。
-3. 扫描或读取数据库 schema。
-4. 配置、校验并重建 semantic layer / wiki / related context。
-5. 启动或管理 MCP endpoint。
+2. 在 Lucy 中接入数据库，并读取或导入 schema。
+3. 编译并维护客户 context package：semantic layer、wiki、trusted query/eval、access policy。
+4. 校验并重建 semantic layer / wiki / related context。
+5. 启动或管理受治理 MCP endpoint。
 6. 在 agents 平台配置 MCP endpoint/token。
-7. 让 agent 通过 Lucy 安全访问数据能力。
+7. 让 agent 通过 Lucy 安全访问数据能力，并留下可审计、可回归证据。
 
 ## 2. Product Boundary
 
 Lucy 的产品边界如下：
 
-- Lucy repo 是 MCP 服务管理平台仓库，不 fork / vendor KTX 源码。
+- Lucy repo 是 data agent context compiler + governed MCP runtime 的平台仓库，不 fork / vendor KTX 源码。
 - Lucy Docker image 是客户交付物，必须内置固定版本 KTX runtime。
 - KTX 是 Lucy 的 bundled runtime dependency，负责底层 CLI、MCP server、semantic-layer runtime 等能力。
-- Lucy 负责配置管理、WebUI、权限、审计、MCP 管理、eval 验收、部署体验和产品化交付。
+- Lucy 负责 context package 管理、WebUI、权限、审计、MCP 管理、eval 验收、部署体验和产品化交付。
 - 客户不应被要求自行安装 KTX、Node、Python、pnpm 或 uv 才能完成标准部署。
 - Lucy 本身不直接回答业务问题；语义问答由接入的 Agent（如 Claude Code / Codex）通过 Lucy 提供的 MCP 能力完成。
 
@@ -38,7 +40,7 @@ Lucy 的产品边界如下：
 ```text
 Lucy repo = Lucy platform source
 KTX = bundled runtime dependency
-Lucy Docker image = Lucy platform + pinned KTX runtime
+Lucy Docker image = Lucy context compiler + governed MCP runtime + pinned KTX runtime
 ```
 
 ## 3. Scope
@@ -49,6 +51,7 @@ Lucy Docker image = Lucy platform + pinned KTX runtime
 - KTX runtime 集成。
 - 数据库接入。
 - semantic layer / wiki 管理。
+- trusted query / eval context 管理。
 - MCP endpoint / token / agent 接入。
 - MCP client 兼容性矩阵。
 - Skill 管理（治理层面的内容/版本闭环，不含 Agent 分析推理本身）。
