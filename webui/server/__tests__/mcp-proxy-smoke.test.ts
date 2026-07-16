@@ -658,7 +658,10 @@ describe("MCP proxy smoke", () => {
               connectionId: "mysql-aliyun",
               measures: ["superstore_orders.sales"],
               dimensions: [{ field: "superstore_orders.region" }],
-              filters: [{ field: "superstore_orders.sales", op: ">", value: 100 }],
+              filters: [
+                { field: "superstore_orders.sales", op: "gt", value: 100 },
+                { field: "superstore_orders.region", op: "matches", value: "East" }
+              ],
               segments: ["superstore_orders.active_rows"],
               orderBy: [{ field: "superstore_orders.sales", direction: "desc" }],
               limit: 5000
@@ -678,7 +681,10 @@ describe("MCP proxy smoke", () => {
       expect(queryBody.result._meta?.lucy?.provenance).toMatchObject({
         connectionId: "mysql-aliyun",
         sourceName: "superstore_orders",
-        filters: [{ field: "superstore_orders.sales", op: ">", value: 100 }],
+        filters: [
+          { field: "superstore_orders.sales", op: "gt", value: 100 },
+          { field: "superstore_orders.region", op: "matches", value: "East" }
+        ],
         segments: ["superstore_orders.active_rows"],
         orderBy: [{ field: "superstore_orders.sales", direction: "desc" }],
         freshness: { status: "not_checked", tool: "lucy_freshness" }
@@ -690,6 +696,10 @@ describe("MCP proxy smoke", () => {
       ]);
       const forwardedQueryArgs = (upstreamSeen[1]?.body.params as Record<string, unknown>).arguments as Record<string, unknown>;
       expect(forwardedQueryArgs.limit).toBe(1000);
+      expect(forwardedQueryArgs.filters).toEqual([
+        "superstore_orders.sales > 100",
+        "superstore_orders.region LIKE '%East%'"
+      ]);
 
       const readAudit = await waitForAuditRow("lucy-read-source");
       expect(readAudit.tool).toBe("lucy_read_source");
@@ -830,6 +840,24 @@ describe("MCP proxy smoke", () => {
           tool: "lucy_query",
           args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], orderBy: [""], limit: 10 },
           reason: "invalid_arguments:lucy_query:order_by_items_must_be_objects"
+        },
+        {
+          id: "lucy-query-invalid-filter-op",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], filters: [{ field: "superstore_orders.region", op: "similar_to", value: "East" }], limit: 10 },
+          reason: "invalid_arguments:lucy_query:filters_op_unsupported"
+        },
+        {
+          id: "lucy-query-invalid-filter-field",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], filters: [{ field: "superstore_orders.region;DROP", op: "=", value: "East" }], limit: 10 },
+          reason: "invalid_arguments:lucy_query:filters_field_unsafe"
+        },
+        {
+          id: "lucy-query-invalid-filter-empty-in",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], filters: [{ field: "superstore_orders.region", op: "in", values: [] }], limit: 10 },
+          reason: "invalid_arguments:lucy_query:filters_values_required"
         },
         {
           id: "lucy-explain-invalid-args",

@@ -77,6 +77,7 @@ async function localSmoke() {
   await run("npm", ["run", "build"], { cwd: "webui" });
   await run("npm", ["test"], { cwd: "webui" });
   await run("bash", ["-n", "scripts/docker-entrypoint.sh", "scripts/docker-healthcheck.sh"]);
+  await run("npm", ["run", "smoke:p0:docker-entrypoint:test"]);
   await run("docker", ["compose", "config"], { capture: true });
 
   const env = {
@@ -112,7 +113,8 @@ async function dockerSmoke() {
   const dockerProxyPort = process.env.LUCY_DOCKER_SMOKE_PROXY_PORT ?? "57880";
   const composeEnv = {
     LUCY_WEBUI_HOST_PORT: dockerWebPort,
-    LUCY_PROXY_HOST_PORT: dockerProxyPort
+    LUCY_PROXY_HOST_PORT: dockerProxyPort,
+    LUCY_ALLOW_PLACEHOLDER_KTX: "1"
   };
   let buildEnv = {};
   if (!defaultDockerConfig) {

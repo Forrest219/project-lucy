@@ -576,6 +576,12 @@ describe("KX financial domain ACL guardrails", () => {
 
     await expect(check(identity("workhorse"), "sl_query", {
       connectionId: "mysql-aliyun",
+      sourceName: "kx_vw_income_statement_detail",
+      measures: [{ expr: "count(1)", name: "cnt" }]
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("workhorse"), "sl_query", {
+      connectionId: "mysql-aliyun",
       measures: [{ expr: "count(1)", name: "cnt" }]
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:<empty>" });
   });

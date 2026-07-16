@@ -173,11 +173,14 @@ Policy / Guardrail 拒绝以 MCP tool result 的 `isError: true` 返回，并写
 ```jsonc
 {
   "connectionId": "doris-r1",
+  "sourceName": "ceo_metric_snapshot",
   "measures": ["ceo_metric_snapshot.revenue"],
-  "dimensions": ["ceo_metric_snapshot.biz_date"],
-  "filters": [],
+  "dimensions": [{ "field": "ceo_metric_snapshot.biz_date" }],
+  "filters": [
+    { "field": "ceo_metric_snapshot.region", "op": "contains", "value": "华南" }
+  ],
   "segments": [],
-  "order_by": [],
+  "order_by": [{ "field": "ceo_metric_snapshot.biz_date", "direction": "asc" }],
   "limit": 100
 }
 ```
@@ -186,6 +189,9 @@ Guardrail：
 
 - Proxy 先校验参数结构；缺少 `connectionId`、查询 shape 为空或类型错误时返回 `invalid_arguments:*`，不得转发到 Doris/目标源。
 - `query` / `sql` raw string 一律拒绝。
+- `filters` 对外支持 string filter 和 `{field, op, value/values}` 结构化 filter；Proxy 转发上游 `sl_query` 前会规范化为 KTX 接受的 string filters。
+  - `op` 使用白名单归一化：`eq`/`equals`/`is` → `=`，`neq`/`not_equals`/`is_not` → `!=`，`gt`/`gte`/`lt`/`lte` → `>`/`>=`/`<`/`<=`，`include`/`includes`/`match`/`matches` → `contains`，`startswith`/`prefix` → `starts_with`，`endswith`/`suffix` → `ends_with`。
+  - 未知或模糊 `op` 继续 fail closed，返回 `invalid_arguments:*:filters_op_unsupported`。
 - `limit` 默认 `LUCY_QUERY_DEFAULT_LIMIT`，上限 `LUCY_QUERY_MAX_LIMIT`。
 - 并发默认每 token 最多 `LUCY_QUERY_MAX_INFLIGHT=4` 个 in-flight `lucy_query`，超限返回 `query_concurrency_exceeded` 并写 denied audit。
 - DDL/DML 不得通过 Lucy 暴露。

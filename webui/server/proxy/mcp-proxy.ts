@@ -445,14 +445,20 @@ function semanticQueryInputProperties() {
     ]
   };
   const filterRef = {
-    type: "object",
-    properties: {
-      field: { type: "string", minLength: 1 },
-      op: { type: "string" },
-      value: {},
-      values: { type: "array" }
-    },
-    additionalProperties: true
+    anyOf: [
+      { type: "string", minLength: 1 },
+      {
+        type: "object",
+        properties: {
+          field: { type: "string", minLength: 1 },
+          op: { type: "string" },
+          value: {},
+          values: { type: "array" }
+        },
+        required: ["field"],
+        additionalProperties: true
+      }
+    ]
   };
 
   return {
@@ -470,7 +476,7 @@ function semanticQueryInputProperties() {
 function lucyQueryTool() {
   return {
     name: "lucy_query",
-    description: "Run an authorized semantic query through Lucy guardrails. Use source-qualified measures, dimensions, filters, segments, and order fields. dimensions/order_by must be arrays of objects, never strings.",
+    description: "Run an authorized semantic query through Lucy guardrails. This is the primary tool for factual data retrieval. Use source-qualified measures, dimensions, filters, segments, and order fields. dimensions/order_by must be arrays of objects, never strings.",
     inputSchema: {
       type: "object",
       properties: semanticQueryInputProperties(),
@@ -483,7 +489,7 @@ function lucyQueryTool() {
 function lucyExplainQueryTool() {
   return {
     name: "lucy_explain_query",
-    description: "Explain how Lucy would authorize and guardrail a semantic query without executing it. dimensions/order_by must be arrays of objects, never strings.",
+    description: "Diagnostic tool: explain how Lucy would authorize and guardrail a semantic query without executing it. Use after a query is denied or when debugging permissions/guardrails; do not use as a routine dry-run before simple factual queries. dimensions/order_by must be arrays of objects, never strings.",
     inputSchema: {
       type: "object",
       properties: semanticQueryInputProperties(),
@@ -622,10 +628,113 @@ function lucyReadSourceUpstreamArgs(args: unknown): Record<string, unknown> {
   };
 }
 
+function isSafeSemanticFieldRef(value: unknown): value is string {
+  if (!hasNonEmptyStringValue(value)) return false;
+  return !/[^\p{L}\p{N}_.$]/u.test(String(value).trim());
+}
+
+function sqlLiteral(value: unknown): string {
+  if (value === null) return "NULL";
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+type LucyFilterOp = "=" | "!=" | ">" | ">=" | "<" | "<=" | "in" | "contains" | "like" | "starts_with" | "ends_with";
+
+function normalizeLucyFilterOp(op: unknown): LucyFilterOp | undefined {
+  const raw = op === undefined ? "=" : String(op).trim().toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  switch (raw) {
+    case "=":
+    case "==":
+    case "eq":
+    case "equals":
+    case "equal":
+    case "is":
+      return "=";
+    case "!=":
+    case "<>":
+    case "ne":
+    case "neq":
+    case "not_equal":
+    case "not_equals":
+    case "is_not":
+      return "!=";
+    case ">":
+    case "gt":
+      return ">";
+    case ">=":
+    case "gte":
+    case "ge":
+      return ">=";
+    case "<":
+    case "lt":
+      return "<";
+    case "<=":
+    case "lte":
+    case "le":
+      return "<=";
+    case "in":
+      return "in";
+    case "contains":
+    case "include":
+    case "includes":
+    case "match":
+    case "matches":
+      return "contains";
+    case "like":
+      return "like";
+    case "starts_with":
+    case "startswith":
+    case "prefix":
+      return "starts_with";
+    case "ends_with":
+    case "endswith":
+    case "suffix":
+      return "ends_with";
+    default:
+      return undefined;
+  }
+}
+
+function sqlLikeLiteral(value: unknown, mode: "contains" | "like" | "starts_with" | "ends_with"): string {
+  const text = String(value).replaceAll("'", "''");
+  if (mode === "contains") return `'%${text}%'`;
+  if (mode === "starts_with") return `'${text}%'`;
+  if (mode === "ends_with") return `'%${text}'`;
+  return `'${text}'`;
+}
+
+function normalizeLucyFilterForUpstream(item: unknown): unknown {
+  if (hasNonEmptyStringValue(item)) return item;
+  if (!isPlainRecord(item) || !isSafeSemanticFieldRef(item.field)) return item;
+
+  const field = String(item.field).trim();
+  const op = normalizeLucyFilterOp(item.op);
+  if (!op) return item;
+  if (op === "in") {
+    const rawValues = Array.isArray(item.values) ? item.values : Array.isArray(item.value) ? item.value : [];
+    return `${field} IN (${rawValues.map(sqlLiteral).join(", ")})`;
+  }
+  if (op === "contains" || op === "like" || op === "starts_with" || op === "ends_with") {
+    const value = Object.prototype.hasOwnProperty.call(item, "value") ? item.value : Array.isArray(item.values) ? item.values[0] : "";
+    return `${field} LIKE ${sqlLikeLiteral(value, op)}`;
+  }
+  const value = Object.prototype.hasOwnProperty.call(item, "value") ? item.value : Array.isArray(item.values) ? item.values[0] : "";
+  return `${field} ${op} ${sqlLiteral(value)}`;
+}
+
+function normalizeLucyFiltersForUpstream(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  const items = Array.isArray(value) ? value : [value];
+  return items.map(normalizeLucyFilterForUpstream);
+}
+
 function lucyQueryUpstreamArgs(args: unknown): Record<string, unknown> {
   const record = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
   return {
     ...record,
+    filters: normalizeLucyFiltersForUpstream(record.filters),
     limit: numericLimit(record.limit)
   };
 }
@@ -667,6 +776,33 @@ function invalidStringArrayFieldReason(toolName: string, record: Record<string, 
   return undefined;
 }
 
+function invalidFilterFieldReason(toolName: string, record: Record<string, unknown>): string | undefined {
+  const value = record.filters;
+  if (value === undefined) return undefined;
+  const items = Array.isArray(value) ? value : [value];
+  for (const item of items) {
+    if (hasNonEmptyStringValue(item)) continue;
+    if (isPlainRecord(item)) {
+      if (!hasNonEmptyStringValue(item.field)) return `invalid_arguments:${toolName}:filters_field_required`;
+      if (!isSafeSemanticFieldRef(item.field)) return `invalid_arguments:${toolName}:filters_field_unsafe`;
+      const op = normalizeLucyFilterOp(item.op);
+      if (!op) {
+        return `invalid_arguments:${toolName}:filters_op_unsupported`;
+      }
+      if (op === "in") {
+        const inValues = Array.isArray(item.values) ? item.values : Array.isArray(item.value) ? item.value : [];
+        if (inValues.length === 0) return `invalid_arguments:${toolName}:filters_values_required`;
+      }
+      if (op !== "in" && !Object.prototype.hasOwnProperty.call(item, "value") && !Object.prototype.hasOwnProperty.call(item, "values")) {
+        return `invalid_arguments:${toolName}:filters_value_required`;
+      }
+      continue;
+    }
+    return `invalid_arguments:${toolName}:filters_items_must_be_strings_or_objects`;
+  }
+  return undefined;
+}
+
 function invalidMeasuresFieldReason(toolName: string, record: Record<string, unknown>): string | undefined {
   const value = record.measures;
   if (value === undefined) return undefined;
@@ -700,6 +836,7 @@ function normalizeLucyQueryArgs(args: unknown): unknown {
 function invalidLucyQueryShapeReason(toolName: string, record: Record<string, unknown>): string | undefined {
   return invalidMeasuresFieldReason(toolName, record)
     ?? invalidObjectArrayFieldReason(toolName, record, "dimensions")
+    ?? invalidFilterFieldReason(toolName, record)
     ?? invalidStringArrayFieldReason(toolName, record, "segments")
     ?? invalidObjectArrayFieldReason(toolName, record, "order_by")
     ?? invalidObjectArrayFieldReason(toolName, record, "orderBy", "order_by");
@@ -895,9 +1032,15 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       `- Call ${catalogTool} before choosing a connection or source unless the route is already explicit in the user request.`,
       "- Only use connections and sources listed in this session's visible scope.",
       "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
+      "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
+      "- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.",
+      "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
+      "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",
+      "- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.",
       "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",
       "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
-      "- Prefer semantic segments such as `poc_ad_revenue_daily.domestic` over hand-written string filters for common filters; this avoids quoting mistakes on non-ASCII values.",
+      "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
+      "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
       "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.",
       "",
       "## Visible Scope",

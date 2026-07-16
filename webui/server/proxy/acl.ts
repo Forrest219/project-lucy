@@ -647,6 +647,8 @@ export async function extractTables(toolName: string, args: unknown, options: { 
     case "lucy_explain_query": {
       // measures: ["superstore_orders.total_sales", "sum(superstore_orders.sales)"]
       // dimensions: [{field: "superstore_orders.region"}, ...]
+      const sourceName = (a.sourceName ?? a.source_name ?? a.source ?? a.table) as string | undefined;
+      if (sourceName) tables.add(sourceNameToTable(sourceName, map));
       collectMetricRefs(a.measures, tables, map);
       for (const d of (a.dimensions as Array<{ field?: string }> | undefined) ?? []) {
         if (d?.field) addTableRefsFromText(d.field, tables, map);

@@ -464,12 +464,12 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 - 期望：lucy 容器 `healthcheck` 失败退出；日志提示 `EADDRINUSE`
 - 处置：换端口 `LUCY_DEMO_WEBUI_HOST_PORT=6174`
 
-### TC-FAIL-004 缺 `<CHANGE-ME>` 占位符的 ktx.yaml
+### TC-FAIL-004 含 `<CHANGE-ME>` 占位符的 ktx.yaml
 
 - 优先级：P2
 - 操作：在 `/data/lucy/ktx.yaml` 留 `<CHANGE-ME>` 占位符重启
-- 期望：entrypoint 打印 `[lucy] warning: ... still contains CHANGE-ME placeholders` 但不中断
-- Pass 条件：lucy 仍启动，警告出现
+- 期望：entrypoint 打印 `[lucy] fatal: ... contains CHANGE-ME placeholders` 并拒绝启动；仅模板演示可显式设置 `LUCY_ALLOW_PLACEHOLDER_KTX=1` 降级为 warning
+- Pass 条件：lucy 拒绝启动，fatal 日志出现；设置 `LUCY_ALLOW_PLACEHOLDER_KTX=1` 时降级为 warning 并允许模板演示启动
 
 ### TC-FAIL-005 数据不一致（手动 DROP 表后 sl_query）
 

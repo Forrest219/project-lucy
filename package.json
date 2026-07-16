@@ -32,6 +32,7 @@
     "release:artifacts": "node scripts/release-artifacts.mjs",
     "security:baseline": "node scripts/security-baseline.mjs",
     "smoke:p0": "node scripts/p0-smoke.mjs",
+    "smoke:p0:docker-entrypoint:test": "node --test scripts/docker-entrypoint.test.mjs",
     "smoke:p0:docker": "node scripts/p0-smoke.mjs --docker",
     "smoke:p0:headless-config": "node scripts/headless-config-smoke.mjs",
     "smoke:p0:customer": "node scripts/p0-customer-path-smoke.mjs",
