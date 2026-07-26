@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiGet } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { ProjectInfo, SourcesResponse } from "../../lib/types";
+import type { ConnectionInfo, ProjectInfo, SourcesResponse } from "../../lib/types";
+import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
 
 function KpiTile({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return (
@@ -32,6 +34,7 @@ export function ConnectionOverview() {
   const schemaCount = connections.reduce((sum, conn) => sum + conn.schemas.length, 0);
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
+  const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
 
   if (loading) {
     return <p className="pl-notice">正在加载连接状态...</p>;
@@ -96,6 +99,16 @@ export function ConnectionOverview() {
                   <span>enabled</span>
                   <strong>{conn.enabledTables.length} 张表</strong>
                 </div>
+                <div>
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--secondary"
+                    onClick={() => setAddTarget(conn)}
+                    data-testid={`add-schema-${conn.id}`}
+                  >
+                    + 添加 schema
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -123,6 +136,14 @@ export function ConnectionOverview() {
           </div>
         </aside>
       </div>
+
+      {addTarget && (
+        <AddSchemaDrawer
+          connection={addTarget}
+          open={Boolean(addTarget)}
+          onClose={() => setAddTarget(null)}
+        />
+      )}
     </div>
   );
 }

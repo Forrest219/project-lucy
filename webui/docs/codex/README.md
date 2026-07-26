@@ -62,7 +62,7 @@ git -C /Users/forrest/Projects/project-lucy status --short   # 记录开工前�
 
 ## 4. 串行交付节奏
 
-M0 → M1 → M2 → M3 →（M4、M5 可并行）。**每个里程碑结束后停下来交回**给用户/协调者确认，再领下一张工单。不要一口气从 M0 冲到 M5。
+M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完成的 fs-safe `ALLOW_FILES` 通道与 ktx CLI 封装。**每个里程碑结束后停下来交回**给用户/协调者确认，再领下一张工单。不要一口气从 M0 冲到 M6。
 
 ## 5. 工单清单
 
@@ -74,6 +74,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）。**每个里程碑结束后�
 | [wo-M3-save-validate.md](wo-M3-save-validate.md) | M3 | 落盘写回 + ktx validate + Review 页 |
 | [wo-M4-measures-segments-joins.md](wo-M4-measures-segments-joins.md) | M4 | measures/segments/joins + sidecar |
 | [wo-M5-wiki.md](wo-M5-wiki.md) | M5 | Wiki 编辑器 |
+| [wo-M6-schema-onboarding.md](wo-M6-schema-onboarding.md) | M6 | Schema Onboarding（给已有连接加 schema） |
 
 ## 6. 如何把工单喂给 codex
 

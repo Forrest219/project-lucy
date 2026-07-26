@@ -48,15 +48,27 @@
 - [ ] T5.4 从 Table Editor 一键创建关联 wiki
 - **验收**：能创建/编辑 wiki、frontmatter 正确、仅写 `wiki/`
 
+## M6 · Schema Onboarding
+> 前置：M3 完成（fs-safe `ALLOW_FILES` 通道 + ktx CLI 封装 util）。详见 [`docs/design-schema-onboarding.md`](../../docs/design-schema-onboarding.md)。
+- [ ] T6.1 `server/project.ts writeKtxYaml(root, mutator)` util + YAML round-trip 单测（不破坏 `llm / scan / ingest / agent / storage / setup` 任何段）
+- [ ] T6.2 `addSchema()` + `POST /api/connections/:connId/schemas`（dryRun + 写后审计 + 内部预检 `ktx connection test`）
+- [ ] T6.3 前端「连接概览」+ 三步抽屉/对话框（input → diff → confirm → ingest 引导）
+- [ ] T6.4 审计：`config_change_log` 写 `schema_add` 记录（`target_id = "<connId>:<schema>"`）
+- [ ] T6.5 文档：`docs/webui-module-guide.md` v1.3 / `docs/webui-feature-map.md` §4 / `docs/webui-impl-status.md` 同步
+- [ ] T6.6 安全回归：写 `ktx.yaml` 经 `ALLOW_FILES` 通道放行；写 `.ktx/secrets/` / `raw-sources/` / `.git/` 仍 403
+- **验收**：连接概览 → + 添加 schema → 输入名 → test → diff → 确认 → `ktx.yaml` 仅 + 1 行 → ingest → 表目录筛出新 schema → 审计有记录
+
 ## 总验收（对齐原 README §验收标准）
 1. 读取真实 semantic sources ✔  2. 承载 ~300 表目录 ✔  3. 搜索/筛选/打开单表 ✔
 4. 编辑描述/grain/measures/segments/joins ✔；字段 `role/visibility` 暂只读或草稿，不落盘  5. 保存回 YAML ✔
 6. 保存前显示 diff ✔  7. 保存后 `ktx sl validate` ✔  8. 创建/编辑 `wiki/global/*.md` ✔
 9. 不读/不展示 `.ktx/secrets` ✔  10. 不写 `raw-sources` ✔  11. git diff 可见改动 ✔
+12. 给已有连接添加 schema(database)并触发 ingest 同步表（ADR-11）✔
 
 ## 建议执行方式
-走 `/mulan-task-force`，按 M0→M5 串行交付，每个里程碑产出可验收增量。
+走 `/mulan-task-force`，按 M0→M1→M2→M3→（M4、M5 可并行）→M6 串行交付，每个里程碑产出可验收增量。
 M4/M5 启动前先做 Document API spike；ADR-10 的 ktx schema 探测已完成。
+M6 依赖 M3 的 fs-safe `ALLOW_FILES` 通道与 ktx CLI 封装，详见 `docs/design-schema-onboarding.md`。
 
 ---
 _架构设计 by Claude (architect) · 2026-06-15_

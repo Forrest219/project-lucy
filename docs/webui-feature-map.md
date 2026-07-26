@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy WebUI 功能地图 |
 | 文档类型 | Design / Current Capability Map |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-19；v1.1 更新 2026-06-29 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-06-19；v1.1 更新 2026-06-29；v1.2 更新 2026-07-24（新增 M6 「添加 schema」行） |
 | 撰写人 | Claude Thinker / Codex |
 | 适用范围 | WebUI 当前能力索引、交付前 reviewer 核对 |
 | 当前状态源 | `docs/webui-impl-status.md`, `docs/project-overview.md`, `docs/lucy-platform-goal-checklist.md` |
@@ -75,6 +75,7 @@ Eval 管理已经从 CLI-only 发展为 WebUI 模块，但完整 LLM/agent eval 
 | 部署向导与上线检查 | 已实现 | 帮客户完成 Docker / MCP / Agent 配置主链路 | `/onboarding`, `src/pages/Onboarding.tsx` |
 | MCP config 复制入口 | 已实现 | 降低 Agent 接入配置错误 | `/onboarding` |
 | 连接概览 | 已实现 | 查看当前项目连接和安全剥离后的配置 | `/connections`, `GET /api/connections` |
+| 给已有连接添加 schema | ✅ M6 已实现 | 在 webui 内给连接加 schema(database)，不接管新建连接 | `POST /api/connections/:connId/schemas`，详见 [`docs/design-schema-onboarding.md`](design-schema-onboarding.md) |
 | 表白名单配置 | 已实现 | 控制连接启用表范围 | `PUT /api/connections/:connId/enabled-tables` |
 | 连接测试与 ingest | 已实现 | 验证 DB 可用并触发 schema 扫描 | `POST /api/connections/:connId/test`, `POST /api/connections/:connId/ingest` |
 | Lucy MCP Proxy | 已实现 | Bearer token、ACL、audit、tool forwarding | `POST /mcp` on 7879 |

@@ -37,6 +37,8 @@ export type ConnectionTestResult = {
   latencyMs?: number;
   detail?: string;
   reason?: string;
+  stdout?: string;
+  stderr?: string;
 };
 
 export type IngestResult = {
@@ -61,14 +63,20 @@ export async function testConnection(
         const out = stdout.toString();
         const err = stderr.toString();
         if (!error) {
-          resolve({ status: "ok", latencyMs, detail: out.trim() || undefined });
+          resolve({ status: "ok", latencyMs, detail: out.trim() || undefined, stdout: out, stderr: err });
           return;
         }
         if (error.code === "ENOENT") {
           reject(new KtxCliError("ktx CLI was not found in PATH"));
           return;
         }
-        resolve({ status: "error", latencyMs, reason: (err || out).trim() || "Connection failed" });
+        resolve({
+          status: "error",
+          latencyMs,
+          reason: (err || out).trim() || "Connection failed",
+          stdout: out,
+          stderr: err
+        });
       }
     );
   });

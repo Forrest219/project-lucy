@@ -4,11 +4,11 @@
 |---|---|
 | 文档名称 | KTX WebUI 功能模块清单与使用说明 |
 | 文档类型 | Design |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-06-20；v1.2 更新 2026-07-06（同步 context package 治理定位） |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-06-20；v1.2 更新 2026-07-06（同步 context package 治理定位）；v1.3 更新 2026-07-24（新增 M6 「添加 schema」） |
 | 撰写人 | Claude Architect |
 | 委托人 | zhangxingchen |
-| 基于材料 | project-lucy/webui/src/app/App.tsx、docs/webui-feature-map.md、docs/vision.md、docs/project-overview.md、ktx/packages/cli/src/setup-databases.ts、webui/server/project.ts |
+| 基于材料 | project-lucy/webui/src/app/App.tsx、docs/webui-feature-map.md、docs/vision.md、docs/project-overview.md、ktx/packages/cli/src/setup-databases.ts、webui/server/project.ts、`docs/design-schema-onboarding.md` |
 | 适用范围 | 产品功能规划、用户文档编写、前端开发对齐 |
 | 输出位置 | /Users/zhangxingchen/Projects/project-lucy/docs/webui-module-guide.md |
 
@@ -29,6 +29,7 @@ KTX WebUI 解决的核心问题：**AI Agent 回答数据问题的准确率与�
 | 一级模块 | 二级入口 | 一句话说明 |
 |---|---|---|
 | **数据库接入** | 连接概览 | 查看已接入的数据库连接及状态 |
+| | 添加 schema | 在 webui 内给已有连接追加 schema(database)，无需编辑 ktx.yaml |
 | | 表白名单 | 管理哪些表对 Agent 可见，改完后触发扫描同步 |
 | | 连通测试 | 验证数据库连接是否正常，排查中断 |
 | **语义层维护** | 表目录 | 浏览所有数据表，查看完成度和评测覆盖情况 |
@@ -75,6 +76,22 @@ KTX WebUI 解决的核心问题：**AI Agent 回答数据问题的准确率与�
 5. 扫描完成后，新表出现在语义层维护的表目录中，可以开始补充描述
 
 > **提示**：移除白名单只影响后续扫描，不会删除已有的语义层定义文件，如需清理需手动操作。
+
+---
+
+#### 添加 schema
+
+**什么时候用**：需要给一个已有的数据库连接追加一个 schema（或 database，例如新建了一张业务库 `finance_mart`），而又不想打开 `ktx.yaml` 编辑。
+
+**怎么用**：
+1. 点击侧边栏「连接概览」，找到目标连接卡片
+2. 点击「+ 添加 schema」按钮，弹出三步抽屉
+3. **输入**：填写 schema 名。对 MySQL / Doris / StarRocks 提示为「Schema 或 database」，对 PostgreSQL 提示为「Schema」。规则：字母或下划线开头，字母/数字/下划线，最多 63 字符。前端 zod 与后端正则双重校验
+4. **预览**：点击「下一步」后系统先跑 `ktx connection test <connId>` 预检，再生成 unified diff 预览 ktx.yaml 变更（只追加一行 `- <新 schema>`，其它字段如 `host / password / llm / scan / ingest` 保持不变）
+5. **确认**：点击「确认写入」，系统调用 `POST /api/connections/:connId/schemas?dryRun=false`，写入审计写入 `config_change_log`，新增一条 `change_type=schema_add` 记录
+6. 抽屉提示「现在 ingest」按钮，点击后即触发 `ktx ingest <connId>` 把新 schema 的表扫到语义层
+
+> **安全边界**：新建连接、删除 schema、修改凭据仍必须回终端执行 `ktx setup`；WebUI 内的「添加 schema」只追加 `connections.<connId>.schemas` 一行 YAML，不触碰任何其它字段，且写入必须显式 `dryRun=false`。
 
 ---
 

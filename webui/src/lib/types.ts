@@ -91,6 +91,26 @@ export type ConnectionTablesResponse = {
   tables: string[];
 };
 
+export type IngestResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+export type AddSchemaPreview = {
+  diff: string;
+  proposedYaml: string;
+  oldSchemas: string[];
+  newSchemas: string[];
+};
+
+export type AddSchemaResult = {
+  written: true;
+  auditId?: number;
+  oldSchemas: string[];
+  newSchemas: string[];
+};
+
 export type SourcesResponse = {
   tables: SourceSummary[];
 };

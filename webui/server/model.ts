@@ -96,3 +96,24 @@ export type TablePatch = {
     description?: string;
   }>;
 };
+
+export type AddSchemaPreview = {
+  diff: string;
+  proposedYaml: string;
+  oldSchemas: string[];
+  newSchemas: string[];
+};
+
+export type AddSchemaResult = {
+  written: true;
+  auditId?: number;
+  oldSchemas: string[];
+  newSchemas: string[];
+};
+
+export type ConnectionTestDetail = {
+  status: "ok" | "error";
+  latencyMs?: number;
+  detail?: string;
+  reason?: string;
+};

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -64,6 +64,54 @@ describe("fs-safe writable paths", () => {
     await symlink(path.join(projectRoot, ".ktx", "secrets"), path.join(projectRoot, "semantic-layer", "secret-link"));
 
     await expectForbidden(() => resolveWritable(projectRoot, "semantic-layer/secret-link/p"));
+  });
+
+  it("allows ktx.yaml through the ALLOW_FILES channel for the M6 add-schema flow", async () => {
+    await safeWrite(projectRoot, "ktx.yaml", "connections: {}\n");
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe("connections: {}\n");
+  });
+
+  it("rejects writes to other root-level files (e.g. README.md, package.json, .env)", async () => {
+    await expectForbidden(() => safeWrite(projectRoot, "README.md", "# nope"));
+    await expectForbidden(() => safeWrite(projectRoot, "package.json", "{}"));
+    await expectForbidden(() => safeWrite(projectRoot, ".env", "SECRET=x"));
+  });
+
+  it("rejects writing into a path that symlinks into .ktx/secrets even when ALLOW_FILES matches", async () => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-outside-"));
+    try {
+      const outsideFile = path.join(outside, "stolen.yaml");
+      await writeFile(outsideFile, "original\n", "utf8");
+      await symlink(outsideFile, path.join(projectRoot, "ktx.yaml"));
+
+      await expectForbidden(() => safeWrite(projectRoot, "ktx.yaml", "overwritten\n"));
+      await expect(readFile(outsideFile, "utf8")).resolves.toBe("original\n");
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects ktx.yaml when it is a symlink to an external directory", async () => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-outside-dir-"));
+    try {
+      await symlink(outside, path.join(projectRoot, "ktx.yaml"));
+      await expectForbidden(() => safeWrite(projectRoot, "ktx.yaml", "connections: {}\n"));
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a dangling ktx.yaml symlink before it can create an external file", async () => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-dangling-"));
+    try {
+      const outsideFile = path.join(outside, "not-created.yaml");
+      await symlink(outsideFile, path.join(projectRoot, "ktx.yaml"));
+
+      await expectForbidden(() => safeWrite(projectRoot, "ktx.yaml", "connections: {}\n"));
+      await expect(readFile(outsideFile, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 });
 

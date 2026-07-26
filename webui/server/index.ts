@@ -8,7 +8,7 @@ import { buildProxy } from "./proxy/mcp-proxy.js";
 import { changedFiles, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { validateSource, testConnection, runIngest, type ValidationResult } from "./ktx";
-import { readProject, readConnections, resolveProjectRoot } from "./project";
+import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
 import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
@@ -30,6 +30,38 @@ type ErrorEnvelope = {
     detail?: unknown;
   };
 };
+
+type SupportedError = FastifyError & {
+  code?: string;
+  statusCode?: number;
+  detail?: unknown;
+};
+
+function supportedErrorDetail(error: SupportedError): unknown {
+  if (error.code === "SCHEMA_NAME_INVALID") {
+    const detail = error.detail;
+    if (
+      detail &&
+      typeof detail === "object" &&
+      "pattern" in detail &&
+      typeof (detail as { pattern?: unknown }).pattern === "string"
+    ) {
+      return { pattern: (detail as { pattern: string }).pattern };
+    }
+  }
+  if (error.code === "CONNECTION_TEST_FAILED") {
+    const detail = error.detail;
+    if (detail && typeof detail === "object") {
+      const source = detail as Record<string, unknown>;
+      return Object.fromEntries(
+        ["stdout", "stderr", "reason"]
+          .filter((key) => typeof source[key] === "string")
+          .map((key) => [key, source[key]])
+      );
+    }
+  }
+  return undefined;
+}
 
 const DEFAULT_WEBUI_PORT = 5174;
 const STATIC_MIME_TYPES: Record<string, string> = {
@@ -153,7 +185,7 @@ export function buildServer() {
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
 
-  app.setErrorHandler((error: FastifyError & { code?: string; statusCode?: number }, _request, reply) => {
+  app.setErrorHandler((error: SupportedError, _request, reply) => {
     const statusCode = error.statusCode ?? 500;
     const code = error.code ?? (statusCode === 500 ? "INTERNAL" : "BAD_REQUEST");
     const payload: ErrorEnvelope = {
@@ -163,6 +195,10 @@ export function buildServer() {
         message: error.message || "Internal server error"
       }
     };
+    const detail = supportedErrorDetail(error);
+    if (detail !== undefined) {
+      payload.error.detail = detail;
+    }
 
     reply.status(statusCode).send(payload);
   });
@@ -406,6 +442,26 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
     const result = await testConnection(projectRoot, connId);
+    return { ok: true, data: result };
+  });
+
+  app.post<{
+    Params: { connId: string };
+    Body: { schema?: string; dryRun?: boolean };
+  }>("/api/connections/:connId/schemas", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const body = request.body ?? {};
+    const dryRun = body.dryRun !== false;
+    if (typeof body.schema !== "string") {
+      throw enabledTableError("BAD_REQUEST", "schema is required");
+    }
+    const result = await addSchema(projectRoot, connId, body.schema, dryRun, {
+      recordConfigChange
+    });
+    if (!dryRun) {
+      writtenFiles.push({ filePath: "ktx.yaml" });
+    }
     return { ok: true, data: result };
   });
 
