@@ -1,40 +1,106 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { ConnectionsResponse } from "../../lib/types";
+import type {
+  ConnectionInfo,
+  ConnectionTestResult,
+  ConnectionsResponse
+} from "../../lib/types";
 
-type TestResult = {
-  status: "ok" | "error";
-  latencyMs?: number;
-  detail?: string;
-  reason?: string;
-};
+type LatencyTone = "muted" | "success" | "warning" | "danger";
+
+function latencyTone(latencyMs: number | undefined): {
+  label: string;
+  tone: LatencyTone;
+} {
+  if (latencyMs === undefined) return { label: "未返回", tone: "muted" };
+  if (latencyMs < 200) return { label: "正常", tone: "success" };
+  if (latencyMs <= 1000) return { label: "偏慢", tone: "warning" };
+  return { label: "需关注", tone: "danger" };
+}
+
+function protocolLabel(protocol: ConnectionInfo["wireProtocol"]): string {
+  if (protocol === "mysql") return "MySQL Wire";
+  if (protocol === "postgres") return "Postgres Wire";
+  if (protocol === "native") return "Native";
+  return "Unknown";
+}
+
+function engineDisplay(engine: string | undefined, driver: string | undefined): string {
+  const normalized = (engine ?? driver ?? "").toLowerCase();
+  if (normalized === "mysql") return "MySQL";
+  if (normalized === "postgres" || normalized === "postgresql") return "Postgres";
+  if (normalized === "doris") return "Doris";
+  if (normalized === "starrocks") return "StarRocks";
+  return "DB";
+}
+
+function accessModeLabel(readOnlyExpected: boolean | undefined): string {
+  return readOnlyExpected ? "Read-Only (受控访问)" : "未声明";
+}
 
 export function ConnectionTest() {
   const [selectedConnId, setSelectedConnId] = useState<string>("");
-  const [result, setResult] = useState<TestResult | null>(null);
+  const [result, setResult] = useState<ConnectionTestResult | null>(null);
+  const [logsExpanded, setLogsExpanded] = useState(false);
 
-  const { data: connData, isLoading: connLoading } = useQuery({
+  const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
     queryFn: () => apiGet<ConnectionsResponse>("/api/connections")
   });
 
-  const connections = connData?.connections ?? [];
+  const connections = connectionsQuery.data?.connections ?? [];
   const activeConnId = selectedConnId || connections[0]?.id || "";
+  const activeConn = connections.find((c) => c.id === activeConnId);
 
   const testMutation = useMutation({
-    mutationFn: () => apiPost<TestResult>(`/api/connections/${encodeURIComponent(activeConnId)}/test`, {}),
-    onSuccess: (data) => {
-      setResult(data);
+    mutationFn: (connId: string) =>
+      apiPost<ConnectionTestResult>(
+        `/api/connections/${encodeURIComponent(connId)}/test`,
+        {}
+      ),
+    onMutate: () => {
+      setResult(null);
+      setLogsExpanded(false);
     },
-    onError: (err) => {
-      setResult({ status: "error", reason: err instanceof Error ? err.message : "未知错误" });
+    onSuccess: (data, connId) => {
+      if (connId === activeConnId) {
+        setResult(data);
+      }
+    },
+    onError: (err, connId) => {
+      if (connId === activeConnId) {
+        setResult({
+          status: "error",
+          reason: err instanceof Error ? err.message : "未知错误"
+        });
+      }
     }
   });
 
-  if (connLoading) {
+  if (connectionsQuery.isLoading) {
     return <p className="pl-notice">正在加载连接列表...</p>;
+  }
+
+  const isPending = testMutation.isPending;
+  const latency = latencyTone(result?.latencyMs);
+
+  let bannerText: string;
+  let bannerClass: string;
+  if (isPending) {
+    bannerText = "正在测试连接...";
+    bannerClass = "pl-diagnostic-banner pl-diagnostic-banner--muted";
+  } else if (result === null) {
+    bannerText = "尚未测试";
+    bannerClass = "pl-diagnostic-banner pl-diagnostic-banner--muted";
+  } else if (result.status === "ok") {
+    bannerText = "连接成功 (Connection Passed)";
+    bannerClass = "pl-diagnostic-banner pl-diagnostic-banner--success";
+  } else {
+    bannerText = "连接失败 (Connection Failed)";
+    bannerClass = "pl-diagnostic-banner pl-diagnostic-banner--danger";
   }
 
   return (
@@ -45,10 +111,18 @@ export function ConnectionTest() {
           <h1 className="text-xl font-semibold">连通测试</h1>
         </div>
       </div>
-      <p className="pl-page-intro">测试数据库连通性，验证凭证与网络配置是否正确。</p>
+      <p className="pl-page-intro">
+        测试数据库连通性，验证凭据、网络与驱动配置是否正确。
+      </p>
 
-      <div className="flex items-end gap-3 mt-4">
-        {connections.length > 0 ? (
+      {connections.length === 0 && (
+        <div className="pl-empty-state mt-4">
+          暂无连接配置。请先在 <Link to="/connections">连接概览</Link> 添加连接。
+        </div>
+      )}
+
+      {connections.length > 0 && (
+        <div className="pl-toolbar mt-4">
           <label className="grid gap-1.5 text-sm">
             <span>选择连接</span>
             <select
@@ -57,49 +131,98 @@ export function ConnectionTest() {
               onChange={(e) => {
                 setSelectedConnId(e.target.value);
                 setResult(null);
+                setLogsExpanded(false);
               }}
               aria-label="选择连接"
             >
               {connections.map((c) => (
-                <option key={c.id} value={c.id}>{c.id}</option>
+                <option key={c.id} value={c.id}>
+                  {c.id}
+                </option>
               ))}
             </select>
           </label>
-        ) : (
-          <p className="text-sm text-fg-muted">暂无连接配置。</p>
-        )}
-
-        {connections.length > 0 && (
           <button
-            className="pl-btn"
+            className="pl-btn pl-btn--primary"
             onClick={() => {
-              setResult(null);
-              testMutation.mutate();
+              if (activeConnId) testMutation.mutate(activeConnId);
             }}
-            disabled={testMutation.isPending || !activeConnId}
+            disabled={isPending || !activeConnId}
+            data-testid="rerun-connection-test"
           >
-            {testMutation.isPending ? "测试中..." : "测试连接"}
+            {isPending ? "测试中..." : "重新测试连接"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {result && (
-        <div className={`mt-6 p-4 rounded border ${result.status === "ok" ? "border-green-500 bg-green-50" : "border-red-400 bg-red-50"}`}>
-          {result.status === "ok" ? (
-            <div>
-              <p className="font-semibold text-green-700">连接成功</p>
-              {result.latencyMs !== undefined && (
-                <p className="text-sm text-green-600 mt-1">延迟：{result.latencyMs} ms</p>
-              )}
-              {result.detail && (
-                <pre className="text-xs mt-2 whitespace-pre-wrap text-green-700">{result.detail}</pre>
-              )}
+      {activeConn && (
+        <div className="pl-diagnostic-panel" data-testid="connection-test-panel">
+          <div
+            className={bannerClass}
+            role="status"
+            aria-live="polite"
+            data-testid="connection-test-banner"
+          >
+            <strong>{bannerText}</strong>
+            {result && result.latencyMs !== undefined && (
+              <span data-testid="connection-test-latency">
+                响应延时: {result.latencyMs} ms
+              </span>
+            )}
+            {result && (
+              <span className={`pl-latency-badge pl-latency-badge--${latency.tone}`}>
+                {latency.label}
+              </span>
+            )}
+          </div>
+
+          {result && (
+            <div className="pl-diagnostic-grid" data-testid="connection-test-metadata">
+              <div>
+                <span>数据库驱动</span>
+                <strong>{engineDisplay(activeConn.engine, activeConn.driver)}</strong>
+              </div>
+              <div>
+                <span>传输协议</span>
+                <strong>{protocolLabel(activeConn.wireProtocol)}</strong>
+              </div>
+              <div>
+                <span>访问模式</span>
+                <strong>{accessModeLabel(activeConn.readOnlyExpected)}</strong>
+              </div>
             </div>
-          ) : (
-            <div>
-              <p className="font-semibold text-red-700">连接失败</p>
-              {result.reason && (
-                <pre className="text-xs mt-2 whitespace-pre-wrap text-red-600">{result.reason}</pre>
+          )}
+
+          {result && (
+            <div
+              className="pl-collapsible-log"
+              role="region"
+              aria-label="原始诊断日志 (ktx connection test stdout/stderr)"
+              data-testid="connection-test-log"
+            >
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost text-sm"
+                aria-expanded={logsExpanded}
+                onClick={() => setLogsExpanded((v) => !v)}
+              >
+                原始诊断日志 (ktx connection test stdout/stderr)
+              </button>
+              {logsExpanded && (
+                <div className="grid gap-2">
+                  {result.stdout !== undefined && result.stdout !== "" && (
+                    <pre data-testid="connection-test-stdout">{result.stdout}</pre>
+                  )}
+                  {result.stderr !== undefined && result.stderr !== "" && (
+                    <pre data-testid="connection-test-stderr">{result.stderr}</pre>
+                  )}
+                  {result.detail !== undefined && result.detail !== "" && (
+                    <pre data-testid="connection-test-detail">{result.detail}</pre>
+                  )}
+                  {result.reason !== undefined && result.reason !== "" && (
+                    <pre data-testid="connection-test-reason">{result.reason}</pre>
+                  )}
+                </div>
               )}
             </div>
           )}

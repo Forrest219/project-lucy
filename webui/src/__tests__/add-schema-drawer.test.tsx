@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddSchemaDrawer } from "../components/AddSchemaDrawer";
 import type { ConnectionInfo } from "../lib/types";
@@ -62,6 +62,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -194,6 +195,71 @@ describe("AddSchemaDrawer", () => {
       expect(screen.getByText(/CONNECTION_TEST_FAILED/)).toBeInTheDocument();
     });
     expect(screen.queryByText(/已添加 schema/)).not.toBeInTheDocument();
+  });
+
+  it("collapses CONNECTION_TEST_FAILED ktx output behind a toggle button", async () => {
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas": (body) => {
+        if ((body as { dryRun?: boolean }).dryRun === false) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: {
+                code: "CONNECTION_TEST_FAILED",
+                message: "ktx connection test failed",
+                detail: { stdout: "", stderr: "auth failed", reason: "auth failed" }
+              }
+            }),
+            { status: 400 }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              diff: "@@ -1 +1 @@\n-    - dataforai\n+    - finance_mart\n",
+              proposedYaml: "schemas:\n  - dataforai\n  - finance_mart\n",
+              oldSchemas: ["dataforai"],
+              newSchemas: ["dataforai", "finance_mart"]
+            }
+          })
+        );
+      }
+    });
+
+    renderDrawer(makeConn());
+
+    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "finance_mart" } });
+    fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
+    await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
+    fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
+
+    const toggle = await screen.findByRole("button", { name: /Show ktx output|查看 ktx 输出/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("ktx-output-detail")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(await screen.findByTestId("ktx-output-detail")).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("renders as a right-side slide-over drawer instead of a centered modal", () => {
+    renderDrawer(makeConn());
+
+    const drawer = screen.getByTestId("add-schema-drawer");
+    expect(drawer).toHaveClass("pl-drawer-panel");
+    expect(drawer).not.toHaveClass("pl-modal-panel");
+    const backdrop = screen.getByTestId("add-schema-drawer-backdrop");
+    expect(backdrop).toHaveClass("pl-drawer-backdrop");
+    expect(backdrop).not.toHaveClass("pl-modal-backdrop");
+  });
+
+  it("labels the three steps with side-effect names", () => {
+    renderDrawer(makeConn());
+
+    expect(screen.getByText("1. 输入 Schema")).toBeInTheDocument();
+    expect(screen.getByText("2. 测试并预览")).toBeInTheDocument();
+    expect(screen.getByText("3. 确认并 ingest")).toBeInTheDocument();
   });
 
   it("uses the postgres-aware field label", () => {

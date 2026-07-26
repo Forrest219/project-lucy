@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Monitor } from "../pages/eval/Monitor";
 
@@ -85,6 +85,7 @@ function stubMonitorFetch({ empty = false }: { empty?: boolean } = {}) {
 }
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
