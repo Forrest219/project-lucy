@@ -14,6 +14,8 @@
 | [07-mcp-auth-proxy-spec.md](07-mcp-auth-proxy-spec.md) | MCP Auth Proxy、访问日志、多用户权限与工具过滤 | 后端 / 安全 / 前端 |
 | [08-mcp-audit-question-tracing-spec.md](08-mcp-audit-question-tracing-spec.md) | MCP 审计增强：数据源正规化、问题簇推断、可选自然语言问题上报 | 后端 / 前端 / 审计 |
 | [09-lucy-r1-mcp-tool-contract.md](09-lucy-r1-mcp-tool-contract.md) | Lucy R1 `lucy_*` MCP 工具契约、错误 reason、返回 metadata 和 contract eval 要点 | 后端 / 安全 / Agent |
+| [10-deployment-connection-ux-refresh.md](10-deployment-connection-ux-refresh.md) | 部署向导与连接概览体验升级：交付闭环、Metric Tooltip、连接卡片、Add Schema 抽屉 | 产品 / 前端 |
+| [14-agent-admin-enterprise-delivery-spec.md](14-agent-admin-enterprise-delivery-spec.md) | 访问治理 Agent Admin 企业级交付体验：列表配置复制、新建权限透明度、Token 首秀、详情页保存与权限树 | 产品 / 前端 / 安全 |
 
 ## 与原 README 的关键校正
 

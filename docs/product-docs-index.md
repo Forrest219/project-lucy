@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Product Docs Index |
 | 文档类型 | Product Docs Index |
-| 版本 | v0.4 |
-| 撰写日期 | 2026-06-22；2026-07-06 v0.3；2026-07-24 v0.4（新增 WebUI 模块设计规范索引） |
+| 版本 | v0.5 |
+| 撰写日期 | 2026-06-22；2026-07-06 v0.3；2026-07-24 v0.4（新增 WebUI 模块设计规范索引）；2026-07-26 v0.5（新增 WebUI 部署/连接体验升级 spec） |
 | 适用范围 | 客户交付文档、管理员文档、用户文档、Agent 接入文档 |
 
 ## 1. Customer-Facing Guides
@@ -58,6 +58,7 @@ Builder-facing technical designs that gate codex M-tickets. Spec is the source o
 |---|---|
 | `docs/design-db-connection.md` | WebUI 连接管理模块（连接概览 / 表白名单 / 连通测试） |
 | `docs/design-schema-onboarding.md` | WebUI schema onboarding 模块（M6：给已有连接追加 schema，ADR-11） |
+| `webui/docs/10-deployment-connection-ux-refresh.md` | WebUI 部署向导与数据库连接概览体验升级（交付闭环、指标语义、连接卡片、Add Schema 抽屉） |
 
 ## 5. Existing HTML Help Center
 

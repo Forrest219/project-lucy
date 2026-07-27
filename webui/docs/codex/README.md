@@ -75,6 +75,8 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M4-measures-segments-joins.md](wo-M4-measures-segments-joins.md) | M4 | measures/segments/joins + sidecar |
 | [wo-M5-wiki.md](wo-M5-wiki.md) | M5 | Wiki 编辑器 |
 | [wo-M6-schema-onboarding.md](wo-M6-schema-onboarding.md) | M6 | Schema Onboarding（给已有连接加 schema） |
+| [wo-M7-deployment-connection-ux-refresh.md](wo-M7-deployment-connection-ux-refresh.md) | M7 | 部署向导与连接概览体验升级 |
+| [wo-M11-agent-admin-enterprise-delivery.md](wo-M11-agent-admin-enterprise-delivery.md) | M11 | Agent Admin 企业级交付体验升级 |
 
 ## 6. 如何把工单喂给 codex
 

@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.7 |
-| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位） |
+| 版本 | v1.8 |
+| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位）；v1.8 更新 2026-07-27（新增 Agent Admin 企业级交付 spec 索引） |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
 project-lucy 是面向中小企业的 **data agent context compiler + governed MCP runtime**。它把数据库、BI、文档、人工口径编译成 Agent 可安全使用、可审计、可回归的数据服务；底座为 KTX 语义层、wiki、eval cases、skills、Lucy MCP Proxy 和 Lucy WebUI 治理工作台。
@@ -168,6 +168,7 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | Agent 权限设计 | `docs/design-agent-permissions.md` |
 | 访问治理闭环设计 | `docs/access-governance-design.md` |
+| Agent Admin 企业级交付 spec | `webui/docs/14-agent-admin-enterprise-delivery-spec.md` |
 | Eval 设计 | `docs/design-eval-monitoring.md` |
 | Eval Tool-Budget 设计 | `docs/design-eval-tool-budget.md` |
 | Eval / Quiz 约定 | `docs/eval-quiz-conventions.md` |
@@ -183,3 +184,4 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 5. ✅ P1 headless gates 已新增：`smoke:p1:context`、`smoke:p1:skills`、`smoke:p1:endpoint`、`smoke:p1:observability`、`e2e:agent`、`e2e:agent:local-hermes`、`smoke:p1:business-eval-full`、`smoke:p1:starrocks-certification`、`smoke:p1:release-readiness`。旧 `smoke:p1:agent-e2e*` 只保留为兼容入口。
 6. 真实上线前仍需在具备 runtime/secret 的环境补齐 evidence：KTX/proxy runtime context、endpoint live token、observability live URL、完整 all-profile agent E2E、完整 agent eval、StarRocks live certification。本机 Hermes workhorse/moz 数据库到 agent E2E 已通过 `npm run e2e:agent:local-hermes`，机器证据落在 `inbox/p1-agent-e2e-hermes-moz-evidence.json`，人类报告落在 `inbox/p1-agent-e2e-hermes-moz-report.html`；token 每次运行临时生成且仅 hash 写入 ignored access config。
 7. 明确 v1 后续范围：Skill Editor、复杂告警系统、Kubernetes/Helm 不在本轮 headless 达标范围；若进入产品承诺需另补 spec、UAT 和 release gate。
+8. 访问治理 UI 的企业级交付优化已落 spec：列表页 MCP 配置交付、新建 Agent 权限透明度、Token 一次性首秀、详情页 sticky 保存和 Effective Permissions tree，见 `webui/docs/14-agent-admin-enterprise-delivery-spec.md`；执行工单见 `webui/docs/codex/wo-M11-agent-admin-enterprise-delivery.md`。
