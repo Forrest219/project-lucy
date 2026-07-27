@@ -29,6 +29,11 @@ function displayDescription(table: SourceSummary) {
   return parts.join(" / ");
 }
 
+function slRefWikiHref(table: SourceSummary): string {
+  const slRef = `${table.conn}/${table.schema}/${table.table}`;
+  return `/wiki?sl_ref=${encodeURIComponent(slRef)}`;
+}
+
 export function Catalog() {
   const [schema, setSchema] = useState("all");
   const [status, setStatus] = useState<CompletionStatus | "all">("all");
@@ -107,21 +112,40 @@ export function Catalog() {
       </div>
 
       <div className="pl-table-list">
-        {filtered.map((table) => (
-          <Link
-            className="pl-table-row"
-            key={`${table.conn}/${table.schema}/${table.table}`}
-            to={`/sources/${encodeURIComponent(table.conn)}/${encodeURIComponent(table.schema)}/${encodeURIComponent(table.table)}`}
-          >
-            <div>
-              <strong>{table.table}</strong>
-              <span>{table.schema}</span>
+        {filtered.map((table) => {
+          const editorHref = `/sources/${encodeURIComponent(table.conn)}/${encodeURIComponent(table.schema)}/${encodeURIComponent(table.table)}`;
+          const wikiHref = slRefWikiHref(table);
+          return (
+            <div
+              className="pl-table-row"
+              key={`${table.conn}/${table.schema}/${table.table}`}
+              role="group"
+            >
+              <div className="pl-table-row-meta">
+                <strong>{table.table}</strong>
+                <span>{table.schema}</span>
+              </div>
+              <span className="pl-table-row-stats">{displayDescription(table)}</span>
+              <StatusBadge status={table.completion} />
+              <div className="pl-table-row-actions">
+                <Link
+                  aria-label={`打开 ${table.schema}.${table.table} 的业务 Wiki`}
+                  className="pl-btn pl-btn--ghost"
+                  to={wikiHref}
+                >
+                  业务 Wiki
+                </Link>
+                <Link
+                  aria-label={`维护表语义：${table.schema}.${table.table}`}
+                  className="pl-btn pl-btn--secondary"
+                  to={editorHref}
+                >
+                  维护语义
+                </Link>
+              </div>
             </div>
-            <span>{displayDescription(table)}</span>
-            <StatusBadge status={table.completion} />
-            <span className="text-sm text-primary font-medium">维护语义</span>
-          </Link>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
