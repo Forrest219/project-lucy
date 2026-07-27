@@ -301,36 +301,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     return { ok: true, data: { agents, version } };
   });
 
-  // GET /api/admin/roles
-  app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => {
-    const projectRoot = await resolveProjectRoot();
-    const { config } = await readAccessYaml(projectRoot);
-    const includeTemplates = request.query.includeTemplates !== "false";
-    const entries = [
-      ...Object.entries(config.roles ?? {}).map(([id, role]) => ({ id, role, source: "yaml" as const })),
-      ...(includeTemplates
-        ? Object.entries(ROLE_TEMPLATES)
-            .filter(([id]) => !config.roles?.[id])
-            .map(([id, template]) => ({ id, role: expandTemplate(id) ?? template, source: "template" as const }))
-        : [])
-    ];
-    const roles = await Promise.all(
-      entries.map(async ({ id, role, source }) => {
-        const resolved = await previewRolePermissionsForAdmin(id, source === "template" ? { role } : undefined);
-        return {
-          id,
-          description: role.description,
-          tools: role.allow?.tools ?? [],
-          connections: role.allow?.connections ?? [],
-          sourceCount: resolved.ok ? resolved.permissions.sources.length : 0,
-          source,
-          invalid: !resolved.ok,
-          warnings: resolved.ok ? [] : [resolved.reason]
-        };
-      })
-    );
-    return { ok: true, data: { roles } };
-  });
+  // GET /api/admin/roles — moved to ./roles.ts (M12)
 
   // POST /api/admin/agents
   app.post<{

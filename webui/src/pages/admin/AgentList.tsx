@@ -286,14 +286,28 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
               <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
             <label className="grid gap-1">
-              <span className="text-sm font-medium">角色 <span className="text-danger">*</span></span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">角色 <span className="text-danger">*</span></span>
+                <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                  管理角色 →
+                </Link>
+              </div>
               <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
+                {roles.length === 0 && <option value="" disabled>暂无可用角色</option>}
                 {roles.map((item) => (
                   <option key={item.id} value={item.id} disabled={item.invalid}>
                     {item.id}{item.source === "template" ? " (template)" : ""}{item.invalid ? " (invalid)" : ""}
                   </option>
                 ))}
               </select>
+              {roles.length === 0 && (
+                <span className="text-xs text-warning-strong">
+                  还没有可用角色。请先创建角色。
+                  <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
+                    创建角色
+                  </Link>
+                </span>
+              )}
             </label>
             <RoleSummaryCard role={selectedRole} />
             <div className="flex justify-end gap-2 pt-2">

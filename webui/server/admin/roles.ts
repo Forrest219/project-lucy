@@ -1,0 +1,586 @@
+import type { FastifyInstance } from "fastify";
+import { resolveProjectRoot } from "../project.js";
+import { recordConfigChange } from "./audit.js";
+import { previewRolePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
+import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
+import {
+  ACCESS_YAML_REL,
+  ROLE_ID_RE,
+  makeDiff,
+  readAccessYaml,
+  readAccessYamlVersion,
+  writeAccessYaml,
+  type YamlAccessConfig,
+  type YamlRole
+} from "./access-config.js";
+
+type RoleSource = "yaml" | "template";
+
+type ResolvedRole = {
+  id: string;
+  role: YamlRole;
+  source: RoleSource;
+};
+
+function bodyHasOwn(value: unknown, key: string): boolean {
+  return Boolean(value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function findRole(config: YamlAccessConfig, roleId: string): ResolvedRole | undefined {
+  const yamlRole = config.roles?.[roleId];
+  if (yamlRole?.allow) {
+    return { id: roleId, role: yamlRole, source: "yaml" };
+  }
+  if (ROLE_TEMPLATES[roleId]) {
+    const expanded = expandTemplate(roleId);
+    if (expanded) return { id: roleId, role: expanded, source: "template" };
+  }
+  return undefined;
+}
+
+function usersReferencingRole(config: YamlAccessConfig, roleId: string) {
+  return config.users.filter((user) => user.role === roleId);
+}
+
+function effectivePermissionsToPreview(permissions: EffectivePermissions) {
+  return {
+    roleIds: permissions.roleIds,
+    snapshotHash: permissions.snapshotHash,
+    sourceMapVersion: permissions.sourceMapVersion,
+    tools: permissions.tools,
+    connections: permissions.connections,
+    sources: permissions.sources,
+    legacyAllow: permissions.legacyAllow
+  };
+}
+
+function buildRoleSummary(config: YamlAccessConfig, resolved: ResolvedRole) {
+  const users = usersReferencingRole(config, resolved.id);
+  return {
+    id: resolved.id,
+    description: resolved.role.description,
+    source: resolved.source,
+    tools: resolved.role.allow?.tools ?? [],
+    connections: resolved.role.allow?.connections ?? [],
+    usageCount: users.length,
+    users: users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      enabled: user.enabled !== false,
+      tokenCount: user.tokens?.length ?? 0
+    }))
+  };
+}
+
+function isTableTouchingTool(tool: string): boolean {
+  return [
+    "sl_query",
+    "sl_read_source",
+    "sl_validate",
+    "entity_details",
+    "lucy_read_source",
+    "lucy_query",
+    "lucy_explain_query",
+    "lucy_freshness"
+  ].includes(tool);
+}
+
+function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
+  if (!role || typeof role !== "object" || Array.isArray(role)) {
+    return { ok: false, reason: "role must be an object" };
+  }
+  const obj = role as Record<string, unknown>;
+  if (obj.description !== undefined && typeof obj.description !== "string") {
+    return { ok: false, reason: "role.description must be a string" };
+  }
+  if (obj.allow === undefined) {
+    return { ok: true, value: { description: obj.description as string | undefined } };
+  }
+  if (!obj.allow || typeof obj.allow !== "object" || Array.isArray(obj.allow)) {
+    return { ok: false, reason: "role.allow must be an object" };
+  }
+  const allow = obj.allow as Record<string, unknown>;
+  let connections: string[] | undefined;
+  if (allow.connections !== undefined) {
+    if (!Array.isArray(allow.connections) || allow.connections.some((item) => typeof item !== "string")) {
+      return { ok: false, reason: "allow.connections must be a string array" };
+    }
+    connections = (allow.connections as string[]).map((item) => item.trim()).filter(Boolean);
+  }
+  let tableSelectors: YamlRole["allow"] extends infer A
+    ? A extends { tableSelectors?: infer S }
+      ? S
+      : never
+    : never;
+  if (allow.tableSelectors !== undefined) {
+    if (!Array.isArray(allow.tableSelectors)) {
+      return { ok: false, reason: "allow.tableSelectors must be an array" };
+    }
+    const built: NonNullable<YamlRole["allow"]>["tableSelectors"] = [];
+    for (const raw of allow.tableSelectors as Array<Record<string, unknown>>) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        return { ok: false, reason: "table selector must be an object" };
+      }
+      if (raw.connection !== undefined && typeof raw.connection !== "string") {
+        return { ok: false, reason: "table selector connection must be a string" };
+      }
+      if (typeof raw.schema !== "string" || !raw.schema.trim()) {
+        return { ok: false, reason: "table selector schema is required" };
+      }
+      const hasNames = raw.names !== undefined;
+      const hasPrefix = raw.prefix !== undefined;
+      if (hasNames === hasPrefix) {
+        return { ok: false, reason: "table selector must set exactly one of names or prefix" };
+      }
+      if (hasNames) {
+        if (!Array.isArray(raw.names) || raw.names.length === 0) {
+          return { ok: false, reason: "table selector names must be a non-empty array" };
+        }
+        if (raw.names.some((item) => typeof item !== "string" || !item.trim())) {
+          return { ok: false, reason: "table selector names must be a non-empty array of strings" };
+        }
+        built.push({
+          connection: raw.connection as string | undefined,
+          schema: raw.schema,
+          names: (raw.names as string[]).map((item) => item.trim()).filter(Boolean)
+        });
+      } else {
+        if (typeof raw.prefix !== "string" || !raw.prefix.trim()) {
+          return { ok: false, reason: "table selector prefix must be a non-empty string" };
+        }
+        built.push({
+          connection: raw.connection as string | undefined,
+          schema: raw.schema,
+          prefix: (raw.prefix as string).trim()
+        });
+      }
+    }
+    tableSelectors = built;
+  }
+  let tools: string[] | undefined;
+  if (allow.tools !== undefined) {
+    if (!Array.isArray(allow.tools) || allow.tools.length === 0) {
+      return { ok: false, reason: "allow.tools must be a non-empty array" };
+    }
+    if (allow.tools.some((item) => typeof item !== "string")) {
+      return { ok: false, reason: "allow.tools must be a string array" };
+    }
+    if (allow.tools.includes("*")) {
+      return { ok: false, reason: "wildcard tools ('*') are not allowed" };
+    }
+    tools = (allow.tools as string[]).map((item) => item.trim()).filter(Boolean);
+  }
+
+  const hasTableTouchingTool = (tools ?? []).some(isTableTouchingTool);
+  if ((tableSelectors && tableSelectors.length > 0 || hasTableTouchingTool) && (!connections || connections.length === 0)) {
+    return { ok: false, reason: "connections must be set when role uses table selectors or table-touching tools" };
+  }
+
+  return {
+    ok: true,
+    value: {
+      description: obj.description as string | undefined,
+      allow: {
+        connections,
+        tableSelectors,
+        tools
+      }
+    }
+  };
+}
+
+async function resolveRoleForWrite(
+  roleId: string,
+  role: YamlRole
+): Promise<{ ok: true } | { ok: false; code: string; message: string; status: number }> {
+  if (!ROLE_ID_RE.test(roleId)) {
+    return {
+      ok: false,
+      code: "INVALID_ROLE_ID",
+      message: "roleId must match ^[A-Za-z0-9_-]{1,64}$",
+      status: 400
+    };
+  }
+  const shape = validateRoleShape(role);
+  if (!shape.ok) {
+    return { ok: false, code: "INVALID_ROLE", message: shape.reason, status: 400 };
+  }
+  if (ROLE_TEMPLATES[roleId]) {
+    return { ok: false, code: "ROLE_ID_TAKEN", message: `role id '${roleId}' conflicts with built-in template`, status: 409 };
+  }
+  const resolved = await previewRolePermissionsForAdmin(roleId, { role: shape.value });
+  if (!resolved.ok) {
+    return { ok: false, code: "INVALID_ROLE", message: resolved.reason, status: 400 };
+  }
+  if (resolved.permissions.sources.length === 0 && (shape.value.allow?.tableSelectors?.length ?? 0) > 0) {
+    return { ok: false, code: "INVALID_ROLE", message: "role resolves to 0 source", status: 400 };
+  }
+  return { ok: true };
+}
+
+export function registerRoleRoutes(app: FastifyInstance) {
+  // GET /api/admin/roles — list with usageCount and users
+  app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { config } = await readAccessYaml(projectRoot);
+    const includeTemplates = request.query.includeTemplates !== "false";
+
+    const entries: ResolvedRole[] = [
+      ...Object.entries(config.roles ?? {})
+        .filter(([, role]) => role.allow !== undefined)
+        .map(([id, role]) => ({ id, role, source: "yaml" as const })),
+      ...(includeTemplates
+        ? Object.keys(ROLE_TEMPLATES)
+            .filter((id) => !config.roles?.[id] || !config.roles?.[id]?.allow)
+            .map((id) => {
+              const expanded = expandTemplate(id);
+              if (!expanded) return null;
+              return { id, role: expanded, source: "template" as const };
+            })
+            .filter((entry): entry is ResolvedRole => entry !== null)
+        : [])
+    ];
+
+    const roles = await Promise.all(
+      entries.map(async (entry) => {
+        const resolved = await previewRolePermissionsForAdmin(
+          entry.id,
+          entry.source === "template" ? { role: entry.role } : undefined
+        );
+        const summary = buildRoleSummary(config, entry);
+        return {
+          ...summary,
+          sourceCount: resolved.ok ? resolved.permissions.sources.length : 0,
+          invalid: !resolved.ok,
+          warnings: resolved.ok ? [] : [resolved.reason]
+        };
+      })
+    );
+
+    return { ok: true, data: { roles } };
+  });
+
+  // GET /api/admin/roles/:roleId — single role detail
+  app.get<{ Params: { roleId: string } }>("/api/admin/roles/:roleId", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const { config } = await readAccessYaml(projectRoot);
+    const resolved = findRole(config, request.params.roleId);
+    if (!resolved) {
+      return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `Role '${request.params.roleId}' not found` } });
+    }
+    const summary = buildRoleSummary(config, resolved);
+    const preview = await previewRolePermissionsForAdmin(
+      resolved.id,
+      resolved.source === "template" ? { role: resolved.role } : undefined
+    );
+    return {
+      ok: true,
+      data: {
+        ...summary,
+        sourceCount: preview.ok ? preview.permissions.sources.length : 0,
+        invalid: !preview.ok,
+        warnings: preview.ok ? [] : [preview.reason],
+        role: {
+          description: resolved.role.description,
+          allow: resolved.role.allow ?? {}
+        },
+        effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined
+      }
+    };
+  });
+
+  // POST /api/admin/roles/_preview — preview without writing
+  app.post<{ Body: { roleId?: string; role?: unknown } }>("/api/admin/roles/_preview", async (request, reply) => {
+    const { roleId, role } = request.body ?? {};
+    if (typeof roleId !== "string" || !roleId.trim()) {
+      return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "roleId is required" } });
+    }
+    if (!ROLE_ID_RE.test(roleId)) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE_ID", message: "roleId must match ^[A-Za-z0-9_-]{1,64}$" } });
+    }
+    const shape = validateRoleShape(role);
+    if (!shape.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: shape.reason } });
+    }
+    const resolved = await previewRolePermissionsForAdmin(roleId, { role: shape.value });
+    if (!resolved.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: resolved.reason } });
+    }
+    return {
+      ok: true,
+      data: {
+        effectivePermissions: effectivePermissionsToPreview(resolved.permissions),
+        warnings: []
+      }
+    };
+  });
+
+  // POST /api/admin/roles — create role (dryRun-first)
+  app.post<{
+    Body: { dryRun?: boolean; roleId?: string; role?: unknown };
+  }>("/api/admin/roles", async (request, reply) => {
+    const dryRun = request.body?.dryRun !== false;
+    const { roleId, role } = request.body ?? {};
+    if (typeof roleId !== "string" || !roleId.trim()) {
+      return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "roleId is required" } });
+    }
+    const validated = await resolveRoleForWrite(roleId, role as YamlRole);
+    if (!validated.ok) {
+      return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
+    }
+    const projectRoot = await resolveProjectRoot();
+    const { config, raw } = await readAccessYaml(projectRoot);
+    if (config.roles?.[roleId]) {
+      return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
+    }
+    const shape = validateRoleShape(role);
+    if (!shape.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: shape.reason } });
+    }
+    const newConfig: YamlAccessConfig = {
+      ...config,
+      roles: {
+        ...(config.roles ?? {}),
+        [roleId]: shape.value
+      }
+    };
+    // re-stringify via the same stringify used by write
+    const proposedYaml = await import("yaml").then(({ stringify }) => stringify(newConfig, { lineWidth: 0 }));
+    const diff = makeDiff(raw, proposedYaml);
+    if (dryRun) {
+      return { ok: true, data: { diff, proposedYaml } };
+    }
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "role_create",
+      targetId: roleId,
+      oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
+      newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: shape.value.description },
+      diff
+    });
+    await writeAccessYaml(projectRoot, newConfig);
+    const detail = await readAccessYaml(projectRoot);
+    const finalResolved = findRole(detail.config, roleId);
+    if (!finalResolved) {
+      return reply.status(500).send({ ok: false, error: { code: "INTERNAL", message: "role was not persisted" } });
+    }
+    const summary = buildRoleSummary(detail.config, finalResolved);
+    const preview = await previewRolePermissionsForAdmin(roleId, { role: finalResolved.role });
+    return {
+      ok: true,
+      data: {
+        written: true,
+        version: detail.version,
+        role: {
+          ...summary,
+          sourceCount: preview.ok ? preview.permissions.sources.length : 0,
+          invalid: !preview.ok,
+          warnings: preview.ok ? [] : [preview.reason],
+          role: {
+            description: finalResolved.role.description,
+            allow: finalResolved.role.allow ?? {}
+          },
+          effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined
+        }
+      }
+    };
+  });
+
+  // PATCH /api/admin/roles/:roleId — edit yaml role
+  app.patch<{
+    Params: { roleId: string };
+    Body: { dryRun?: boolean; version?: string; patch?: { description?: unknown; allow?: unknown } };
+  }>("/api/admin/roles/:roleId", async (request, reply) => {
+    const dryRun = request.body?.dryRun !== false;
+    const projectRoot = await resolveProjectRoot();
+    const { raw, version: currentVersion } = await readAccessYamlVersion(projectRoot);
+    if (request.body?.version && request.body.version !== currentVersion) {
+      return reply.status(409).send({ ok: false, error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" } });
+    }
+    const config = (await import("yaml")).parse(raw) as YamlAccessConfig;
+    if (!config.users) config.users = [];
+    const existing = config.roles?.[request.params.roleId];
+    if (!existing || !existing.allow) {
+      // template role is read-only
+      if (ROLE_TEMPLATES[request.params.roleId]) {
+        return reply.status(400).send({ ok: false, error: { code: "TEMPLATE_ROLE_READONLY", message: "template roles are read-only" } });
+      }
+      return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
+    }
+    const patch = request.body?.patch ?? {};
+    if (bodyHasOwn(patch, "id") || bodyHasOwn(patch, "roleId")) {
+      return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "role id cannot be changed" } });
+    }
+    for (const key of Object.keys(patch)) {
+      if (key !== "description" && key !== "allow") {
+        return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: `patch.${key} is not editable` } });
+      }
+    }
+    const next: YamlRole = {
+      ...existing,
+      description: patch.description !== undefined
+        ? (typeof patch.description === "string" ? patch.description : existing.description)
+        : existing.description,
+      allow: patch.allow !== undefined
+        ? (patch.allow as YamlRole["allow"])
+        : existing.allow
+    };
+    const validated = await resolveRoleForWrite(request.params.roleId, next);
+    if (!validated.ok) {
+      return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
+    }
+    const shape = validateRoleShape(next);
+    if (!shape.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: shape.reason } });
+    }
+    const newConfig: YamlAccessConfig = {
+      ...config,
+      roles: { ...(config.roles ?? {}), [request.params.roleId]: shape.value }
+    };
+    const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
+    const diff = makeDiff(raw, proposedYaml);
+    if (dryRun) {
+      return { ok: true, data: { diff, proposedYaml, version: currentVersion } };
+    }
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "role_patch",
+      targetId: request.params.roleId,
+      oldSummary: { description: existing.description, allow: existing.allow },
+      newSummary: { description: shape.value.description, allow: shape.value.allow },
+      diff
+    });
+    await writeAccessYaml(projectRoot, newConfig);
+    const detail = await readAccessYaml(projectRoot);
+    return { ok: true, data: { written: true, version: detail.version } };
+  });
+
+  // DELETE /api/admin/roles/:roleId — delete yaml role, blocked if in use
+  app.delete<{ Params: { roleId: string }; Body?: { dryRun?: boolean; version?: string } }>(
+    "/api/admin/roles/:roleId",
+    async (request, reply) => {
+      const dryRun = request.body?.dryRun !== false;
+      const projectRoot = await resolveProjectRoot();
+      const { config, raw, version } = await readAccessYaml(projectRoot);
+      if (request.body?.version && request.body.version !== version) {
+        return reply.status(409).send({ ok: false, error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" } });
+      }
+      if (!config.roles?.[request.params.roleId] || !config.roles[request.params.roleId].allow) {
+        if (ROLE_TEMPLATES[request.params.roleId]) {
+          return reply.status(400).send({ ok: false, error: { code: "TEMPLATE_ROLE_READONLY", message: "template roles are read-only" } });
+        }
+        return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
+      }
+      const users = usersReferencingRole(config, request.params.roleId);
+      if (users.length > 0) {
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "ROLE_IN_USE",
+            message: `role '${request.params.roleId}' is used by ${users.length} agent(s)`,
+            detail: {
+              users: users.map((user) => ({ id: user.id, name: user.name, enabled: user.enabled !== false }))
+            }
+          }
+        });
+      }
+      const newConfig: YamlAccessConfig = {
+        ...config,
+        roles: Object.fromEntries(
+          Object.entries(config.roles ?? {}).filter(([id]) => id !== request.params.roleId)
+        )
+      };
+      const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
+      const diff = makeDiff(raw, proposedYaml);
+      if (dryRun) {
+        return { ok: true, data: { diff, proposedYaml, version } };
+      }
+      await recordConfigChange({
+        filePath: ACCESS_YAML_REL,
+        changeType: "role_delete",
+        targetId: request.params.roleId,
+        oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
+        newSummary: { roleIds: Object.keys(newConfig.roles ?? {}) },
+        diff
+      });
+      await writeAccessYaml(projectRoot, newConfig);
+      return { ok: true, data: { written: true, version: (await readAccessYaml(projectRoot)).version } };
+    }
+  );
+
+  // POST /api/admin/roles/:roleId/copy — copy yaml or template role into a new yaml role
+  app.post<{
+    Params: { roleId: string };
+    Body: { dryRun?: boolean; newRoleId?: string; description?: string };
+  }>("/api/admin/roles/:roleId/copy", async (request, reply) => {
+    const dryRun = request.body?.dryRun !== false;
+    const { newRoleId, description } = request.body ?? {};
+    if (typeof newRoleId !== "string" || !newRoleId.trim()) {
+      return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "newRoleId is required" } });
+    }
+    const projectRoot = await resolveProjectRoot();
+    const { config, raw } = await readAccessYaml(projectRoot);
+    const source = findRole(config, request.params.roleId);
+    if (!source) {
+      return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
+    }
+    const clonedRole: YamlRole = {
+      description: description ?? source.role.description,
+      allow: source.role.allow
+    };
+    const validated = await resolveRoleForWrite(newRoleId, clonedRole);
+    if (!validated.ok) {
+      return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
+    }
+    if (config.roles?.[newRoleId]) {
+      return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${newRoleId}' already exists` } });
+    }
+    const shape = validateRoleShape(clonedRole);
+    if (!shape.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: shape.reason } });
+    }
+    const newConfig: YamlAccessConfig = {
+      ...config,
+      roles: { ...(config.roles ?? {}), [newRoleId]: shape.value }
+    };
+    const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
+    const diff = makeDiff(raw, proposedYaml);
+    if (dryRun) {
+      return { ok: true, data: { diff, proposedYaml } };
+    }
+    await recordConfigChange({
+      filePath: ACCESS_YAML_REL,
+      changeType: "role_create",
+      targetId: newRoleId,
+      oldSummary: { roleIds: Object.keys(config.roles ?? {}), sourceRoleId: request.params.roleId },
+      newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), sourceRoleId: request.params.roleId },
+      diff
+    });
+    await writeAccessYaml(projectRoot, newConfig);
+    const detail = await readAccessYaml(projectRoot);
+    const finalResolved = findRole(detail.config, newRoleId);
+    if (!finalResolved) {
+      return reply.status(500).send({ ok: false, error: { code: "INTERNAL", message: "role was not persisted" } });
+    }
+    const summary = buildRoleSummary(detail.config, finalResolved);
+    const preview = await previewRolePermissionsForAdmin(newRoleId, { role: finalResolved.role });
+    return {
+      ok: true,
+      data: {
+        written: true,
+        version: detail.version,
+        role: {
+          ...summary,
+          sourceCount: preview.ok ? preview.permissions.sources.length : 0,
+          invalid: !preview.ok,
+          warnings: preview.ok ? [] : [preview.reason],
+          role: {
+            description: finalResolved.role.description,
+            allow: finalResolved.role.allow ?? {}
+          },
+          effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined
+        }
+      }
+    };
+  });
+}

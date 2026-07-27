@@ -18,6 +18,7 @@ function renderAgentDetail(initialPath = "/admin/agents/zhangsan") {
         <Routes>
           <Route path="/admin/agents/:userId" element={<AgentDetail />} />
           <Route path="/admin/agents/:userId/tokens/new" element={<div data-testid="new-token">new token</div>} />
+          <Route path="/admin/roles" element={<div data-testid="roles-page">roles</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -342,6 +343,14 @@ describe("AgentDetail", () => {
     fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
 
     expect(await screen.findByText(/legacy wildcard 仍在使用/)).toBeInTheDocument();
+  });
+
+  it("Agent detail role field shows 管理角色 link", async () => {
+    stubAgentEndpoints();
+    renderAgentDetail();
+    expect(await screen.findByText("张三")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /管理角色/ });
+    expect(link.getAttribute("href")).toBe("/admin/roles");
   });
 });
 

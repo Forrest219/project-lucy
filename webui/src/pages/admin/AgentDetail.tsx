@@ -299,7 +299,12 @@ export function AgentDetail() {
               </label>
             </div>
             <label className="grid gap-1">
-              <span className="text-sm font-medium">角色</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">角色</span>
+                <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                  管理角色 →
+                </Link>
+              </div>
               <select
                 className="pl-input"
                 value={currentRole ?? ""}

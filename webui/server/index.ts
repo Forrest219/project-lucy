@@ -13,6 +13,7 @@ import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
 import { registerAgentRoutes } from "./admin/agents.js";
+import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
@@ -475,6 +476,7 @@ export function buildServer() {
   });
 
   registerAgentRoutes(app);
+  registerRoleRoutes(app);
   registerTokenRoutes(app);
   registerAuditRoutes(app);
   registerMcpToolsRoutes(app);

@@ -254,6 +254,35 @@ export type Role = {
   sourceCount: number;
   invalid: boolean;
   warnings: string[];
+  usageCount?: number;
+  users?: Array<{ id: string; name: string; enabled: boolean; tokenCount: number }>;
+};
+
+export type RoleUserReference = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  tokenCount: number;
+};
+
+export type RoleSelector =
+  | { connection?: string; schema: string; names: string[] }
+  | { connection?: string; schema: string; prefix: string };
+
+export type RoleAllowConfig = {
+  connections?: string[];
+  tableSelectors?: RoleSelector[];
+  tools?: string[];
+};
+
+export type RoleDetail = Role & {
+  usageCount: number;
+  users: RoleUserReference[];
+  role: {
+    description?: string;
+    allow: RoleAllowConfig;
+  };
+  effectivePermissions?: EffectivePermissionsPreview;
 };
 
 export type EffectivePermissionsPreview = {

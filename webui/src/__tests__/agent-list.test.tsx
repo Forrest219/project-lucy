@@ -20,6 +20,7 @@ function renderAgentList() {
           <Route path="/admin/agents" element={<AgentList />} />
           <Route path="/admin/agents/:userId" element={<AgentDetailProbe />} />
           <Route path="/admin/audit" element={<div data-testid="audit-page">audit</div>} />
+          <Route path="/admin/roles" element={<div data-testid="roles-page">roles</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -234,5 +235,26 @@ describe("AgentList", () => {
       expect(screen.getByTestId("agent-detail")).toBeInTheDocument();
     });
     expect(screen.getByTestId("agent-detail")).toHaveAttribute("data-search", "?tab=tokens");
+  });
+
+  it("new agent modal role field shows 管理角色 link and empty-state when no roles", async () => {
+    stubAgentsEndpoints([], []);
+    renderAgentList();
+    await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+
+    expect(await screen.findByText(/还没有可用角色/)).toBeInTheDocument();
+    const createLink = screen.getByRole("link", { name: /创建角色/ });
+    expect(createLink.getAttribute("href")).toBe("/admin/roles/new");
+  });
+
+  it("new agent modal role field shows 管理角色 link to role admin", async () => {
+    stubAgentsEndpoints([], [analystRole]);
+    renderAgentList();
+    await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+
+    const link = await screen.findByRole("link", { name: /管理角色/ });
+    expect(link.getAttribute("href")).toBe("/admin/roles");
   });
 });

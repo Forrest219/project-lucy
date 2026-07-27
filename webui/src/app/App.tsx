@@ -13,6 +13,8 @@ import { NewToken } from "../pages/admin/NewToken";
 import { Audit } from "../pages/admin/Audit";
 import { ConfigAudit } from "../pages/admin/ConfigAudit";
 import { AuditSources } from "../pages/admin/AuditSources";
+import { RoleList } from "../pages/admin/RoleList";
+import { RoleDetail } from "../pages/admin/RoleDetail";
 import { CaseList } from "../pages/eval/CaseList";
 import { CaseEditor } from "../pages/eval/CaseEditor";
 import { RunList } from "../pages/eval/RunList";
@@ -87,6 +89,15 @@ export function breadcrumbItems(pathname: string): string[] {
     if (parts[1] === "agents") {
       return ["访问治理", "Agent 实例"];
     }
+    if (parts[1] === "roles" && parts[2] === "new") {
+      return ["访问治理", "角色配置", "新建 Role"];
+    }
+    if (parts[1] === "roles" && parts[2]) {
+      return ["访问治理", "角色配置", parts[2]];
+    }
+    if (parts[1] === "roles") {
+      return ["访问治理", "角色配置"];
+    }
     if (parts[1] === "audit") {
       return ["访问治理", "访问日志"];
     }
@@ -146,6 +157,7 @@ const navGroups: Array<{ title: string; items: NavItem[] }> = [
     title: "访问治理",
     items: [
       { label: "Agent 实例", to: "/admin/agents", active: (path) => path.startsWith("/admin/agents") },
+      { label: "角色配置", to: "/admin/roles", active: (path) => path.startsWith("/admin/roles") },
       { label: "访问日志", to: "/admin/audit", active: (path) => path === "/admin/audit" },
       { label: "数据源热力", to: "/admin/audit-sources", active: (path) => path === "/admin/audit-sources" },
       { label: "配置变更", to: "/admin/config-audit", active: (path) => path === "/admin/config-audit" }
@@ -271,6 +283,9 @@ export function AppFrame() {
             <Route path="/admin/agents" element={<AgentList />} />
             <Route path="/admin/agents/:userId" element={<AgentDetail />} />
             <Route path="/admin/agents/:userId/tokens/new" element={<NewToken />} />
+            <Route path="/admin/roles" element={<RoleList />} />
+            <Route path="/admin/roles/new" element={<RoleDetail mode="create" />} />
+            <Route path="/admin/roles/:roleId" element={<RoleDetail />} />
             <Route path="/admin/audit" element={<Audit />} />
             <Route path="/admin/audit-sources" element={<AuditSources />} />
             <Route path="/admin/config-audit" element={<ConfigAudit />} />

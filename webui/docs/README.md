@@ -16,6 +16,7 @@
 | [09-lucy-r1-mcp-tool-contract.md](09-lucy-r1-mcp-tool-contract.md) | Lucy R1 `lucy_*` MCP 工具契约、错误 reason、返回 metadata 和 contract eval 要点 | 后端 / 安全 / Agent |
 | [10-deployment-connection-ux-refresh.md](10-deployment-connection-ux-refresh.md) | 部署向导与连接概览体验升级：交付闭环、Metric Tooltip、连接卡片、Add Schema 抽屉 | 产品 / 前端 |
 | [14-agent-admin-enterprise-delivery-spec.md](14-agent-admin-enterprise-delivery-spec.md) | 访问治理 Agent Admin 企业级交付体验：列表配置复制、新建权限透明度、Token 首秀、详情页保存与权限树 | 产品 / 前端 / 安全 |
+| [15-role-admin-spec.md](15-role-admin-spec.md) | 访问治理 Role Admin：角色列表、新建/编辑/删除、template 复制、dryRun diff 与 Agent 入口联动 | 产品 / 前端 / 后端 / 安全 |
 
 ## 与原 README 的关键校正
 

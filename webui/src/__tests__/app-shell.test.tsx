@@ -20,6 +20,8 @@ vi.mock("../pages/admin/AgentList", () => ({ AgentList: () => <StubPage name="Ag
 vi.mock("../pages/admin/AgentDetail", () => ({ AgentDetail: () => <StubPage name="AgentDetail" /> }));
 vi.mock("../pages/admin/NewToken", () => ({ NewToken: () => <StubPage name="NewToken" /> }));
 vi.mock("../pages/admin/Audit", () => ({ Audit: () => <StubPage name="Audit" /> }));
+vi.mock("../pages/admin/RoleList", () => ({ RoleList: () => <StubPage name="RoleList" /> }));
+vi.mock("../pages/admin/RoleDetail", () => ({ RoleDetail: () => <StubPage name="RoleDetail" /> }));
 vi.mock("../pages/eval/CaseList", () => ({ CaseList: () => <StubPage name="CaseList" /> }));
 vi.mock("../pages/eval/CaseEditor", () => ({ CaseEditor: () => <StubPage name="CaseEditor" /> }));
 vi.mock("../pages/eval/RunList", () => ({ RunList: () => <StubPage name="RunList" /> }));
@@ -102,7 +104,8 @@ describe("AppFrame shell", () => {
     ["/eval/runs", "RunList", "运行历史"],
     ["/eval/monitor", "Monitor", "趋势监控"],
     ["/admin/agents", "AgentList", "Agent 实例"],
-    ["/admin/audit", "Audit", "访问日志"]
+    ["/admin/audit", "Audit", "访问日志"],
+    ["/admin/roles", "RoleList", "角色配置"]
   ])("renders route %s and marks active navigation", (path, pageName, activeLink) => {
     renderAt(path);
     expect(screen.getByTestId("route-page")).toHaveTextContent(pageName);
