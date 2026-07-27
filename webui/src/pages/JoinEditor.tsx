@@ -5,37 +5,7 @@ import { apiGet, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
 import type { Join, JoinCandidate, JoinCandidatesResponse, SourceDetail } from "../lib/types";
-
-const RELATIONSHIP_LABELS: Record<Join["relationship"], string> = {
-  many_to_one: "多对一",
-  one_to_many: "一对多",
-  one_to_one: "一对一"
-};
-
-function suggestedJoins(source?: SourceDetail): JoinCandidate[] {
-  if (!source) {
-    return [];
-  }
-  return source.model.columns
-    .filter((column) => column.name.endsWith("_id"))
-    .map((column) => {
-      const stem = column.name.replace(/_id$/, "");
-      const to = stem.endsWith("s") ? stem : `${stem}s`;
-      return {
-        conn: source.model.conn,
-        schema: source.model.schema,
-        fromTable: source.model.table,
-        join: {
-          to,
-          on: `${source.model.table}.${column.name} = ${to}.${column.name}`,
-          relationship: "many_to_one",
-          source: "candidate"
-        },
-        confidence: "candidate",
-        note: "根据 *_id 字段名推断"
-      };
-    });
-}
+import { RELATIONSHIP_LABELS, suggestedJoins } from "./semantic/join-utils";
 
 export function JoinEditor() {
   const params = useParams();
