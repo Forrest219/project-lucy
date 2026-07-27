@@ -17,7 +17,7 @@ const TEST_CONN: ConnectionInfo = {
   enabledTables: ["dataforai.superstore_orders"]
 };
 
-type Handler = (body: unknown, init?: RequestInit) => Response;
+type Handler = (body: unknown, init?: RequestInit) => Response | Promise<Response>;
 type HandlerMap = Record<string, Handler>;
 
 function stubConnTestFetch(handlers: HandlerMap = {}) {

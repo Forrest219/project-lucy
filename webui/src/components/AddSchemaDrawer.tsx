@@ -15,6 +15,8 @@ export type AddSchemaDrawerProps = {
   onClose: () => void;
 };
 
+const STEP_LABELS = ["输入 Schema", "测试并预览", "确认并 ingest"];
+
 export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerProps) {
   const queryClient = useQueryClient();
   const fieldLabel = schemaFieldLabel(connection.engine);
@@ -105,9 +107,18 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
   if (!open) return null;
 
   return (
-    <div className="pl-modal-backdrop" role="dialog" aria-modal="true" aria-label="添加 schema">
-      <div className="pl-modal-panel" data-testid="add-schema-drawer">
-        <header className="pl-section-heading">
+    <div
+      className="pl-drawer-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="添加 schema"
+      data-testid="add-schema-drawer-backdrop"
+    >
+      <div
+        className="pl-drawer-panel"
+        data-testid="add-schema-drawer"
+      >
+        <header className="pl-drawer-header">
           <div>
             <p className="pl-eyebrow">数据库接入</p>
             <h2 className="pl-panel-title">添加 schema 到 {connection.id}</h2>
@@ -121,7 +132,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         </header>
 
         <ol className="flex items-center gap-2 text-xs text-fg-muted" aria-label="步骤">
-          {["输入", "预览", "确认"].map((label, idx) => {
+          {STEP_LABELS.map((label, idx) => {
             const active =
               (idx === 0 && step === "input") ||
               (idx === 1 && (step === "preview" || step === "submitting")) ||
@@ -139,7 +150,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         </ol>
 
         {step === "input" && (
-          <section className="grid gap-3 mt-4" aria-label="输入 schema 名">
+          <section className="pl-drawer-body" aria-label="输入 schema 名">
             <label className="grid gap-1.5 text-sm">
               <span>{fieldLabel} 名</span>
               <input
@@ -162,7 +173,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
             <p className="text-xs text-fg-muted">
               添加前会自动调用 <code>ktx connection test {connection.id}</code>。
             </p>
-            <div className="flex justify-end gap-2">
+            <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
                 取消
               </button>
@@ -182,14 +193,14 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         )}
 
         {step === "preview" && preview && (
-          <section className="grid gap-3 mt-4" aria-label="预览变更">
+          <section className="pl-drawer-body" aria-label="预览变更">
             <p className="text-sm">ktx.yaml 计划变更（unified diff）：</p>
             <DiffViewer diff={preview.diff} />
             <p className="text-xs text-fg-muted">
               旧 schemas：<code>{preview.oldSchemas.join(", ") || "（空）"}</code> → 新：{" "}
               <code>{preview.newSchemas.join(", ")}</code>
             </p>
-            <div className="flex justify-end gap-2">
+            <div className="pl-drawer-footer">
               <button
                 className="pl-btn pl-btn--ghost"
                 onClick={() => setStep("input")}
@@ -214,10 +225,10 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         )}
 
         {step === "submitting" && (
-          <section className="grid gap-3 mt-4" aria-label="写入中">
+          <section className="pl-drawer-body" aria-label="写入中">
             <p className="text-sm">正在写入 ktx.yaml...</p>
             {writeMutation.error && <ErrorPanel error={writeMutation.error} />}
-            <div className="flex justify-end gap-2">
+            <div className="pl-drawer-footer">
               <button
                 className="pl-btn pl-btn--ghost"
                 onClick={() => setStep("preview")}
@@ -230,14 +241,14 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         )}
 
         {step === "success" && (
-          <section className="grid gap-3 mt-4" aria-label="完成">
+          <section className="pl-drawer-body" aria-label="完成">
             <p className="text-sm font-semibold text-green-700">
               ✓ 已添加 schema：{trimmed}
             </p>
             <p className="text-xs text-fg-muted">
               接下来执行 <code>ktx ingest {connection.id}</code> 把新 schema 的表同步到语义层。
             </p>
-            <div className="flex justify-end gap-2">
+            <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
                 稍后
               </button>
@@ -254,11 +265,11 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         )}
 
         {step === "fatal" && (
-          <section className="grid gap-3 mt-4" aria-label="致命错误">
+          <section className="pl-drawer-body" aria-label="致命错误">
             <p className="text-sm font-semibold text-danger-strong">
               {submitError ?? "ktx.yaml 无法解析，请在终端检查。"}
             </p>
-            <div className="flex justify-end gap-2">
+            <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
                 关闭
               </button>
@@ -292,19 +303,12 @@ function ErrorPanel({ error }: { error: unknown }) {
 
   if (code === "CONNECTION_TEST_FAILED") {
     return (
-      <div className="text-xs text-danger" role="alert">
-        <p className="font-semibold">连接测试失败（CONNECTION_TEST_FAILED）</p>
-        {detail !== undefined && detail !== null && (
-          <pre className="whitespace-pre-wrap text-danger mt-1">
-            {JSON.stringify(detail, null, 2) ?? String(detail)}
-          </pre>
-        )}
-      </div>
+      <ConnectionTestFailedPanel code={code} message={message} detail={detail} />
     );
   }
   if (code === "KTX_YAML_PARSE_ERROR") {
     return (
-      <div className="text-xs text-danger" role="alert">
+      <div className="pl-drawer-error" role="alert" data-testid="add-schema-fatal-error">
         <p className="font-semibold">ktx.yaml 解析失败</p>
         <p>请在终端检查 ktx.yaml，修正后再回来重试。</p>
         <p className="text-fg-muted">{message}</p>
@@ -312,9 +316,44 @@ function ErrorPanel({ error }: { error: unknown }) {
     );
   }
   return (
-    <div className="text-xs text-danger" role="alert">
+    <div className="pl-drawer-error" role="alert">
       <p className="font-semibold">{code}</p>
       <p>{message}</p>
+    </div>
+  );
+}
+
+function ConnectionTestFailedPanel({
+  code,
+  message,
+  detail
+}: {
+  code: string;
+  message: string;
+  detail: unknown;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const detailText =
+    detail === undefined || detail === null ? null : JSON.stringify(detail, null, 2) ?? String(detail);
+
+  return (
+    <div className="pl-drawer-error" role="alert" data-testid="add-schema-connection-test-failed">
+      <p className="font-semibold">连接测试失败（{code}）</p>
+      <p>{message}</p>
+      {detailText !== null ? (
+        <div>
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            data-testid="toggle-ktx-output"
+          >
+            {expanded ? "Hide ktx output" : "Show ktx output"}
+          </button>
+          {expanded ? <pre data-testid="ktx-output-detail">{detailText}</pre> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

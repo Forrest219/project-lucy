@@ -87,6 +87,22 @@ function defaultMcpEndpoint() {
   return `${protocol}//${host}:7879/mcp`;
 }
 
+function percent(done: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.round((done / total) * 100);
+}
+
+type ChecklistStep = {
+  title: string;
+  ready: boolean;
+  to: string;
+  reason?: string;
+};
+
+function firstBlockingStep(steps: ChecklistStep[]) {
+  return steps.find((step) => !step.ready);
+}
+
 export function Onboarding() {
   const [copied, setCopied] = useState(false);
   const projectQuery = useQuery({
@@ -125,7 +141,17 @@ export function Onboarding() {
   const semanticReady = sources.length > 0 && doneSources > 0;
   const validationReady = changedFiles.length === 0;
   const mcpReady = !mcpNotReadyReason;
-  const readyCount = [connectionReady, tableScopeReady, semanticReady, validationReady, mcpReady].filter(Boolean).length;
+
+  const checklistSteps: ChecklistStep[] = [
+    { title: "接入数据库", ready: connectionReady, to: "/connections" },
+    { title: "限定表范围", ready: tableScopeReady, to: "/connections/whitelist" },
+    { title: "配置语义层", ready: semanticReady, to: "/" },
+    { title: "校验并审阅变更", ready: validationReady, to: "/review" },
+    { title: "配置 Agent MCP", ready: mcpReady, reason: mcpNotReadyReason, to: "/admin/agents" }
+  ];
+  const readyCount = checklistSteps.filter((step) => step.ready).length;
+  const blocker = firstBlockingStep(checklistSteps);
+  const semanticPercent = percent(doneSources, sources.length);
 
   async function copyConfig() {
     try {
@@ -149,7 +175,6 @@ export function Onboarding() {
     <div className="pl-page-stack">
       <div className="pl-section-heading">
         <div>
-          <p className="pl-eyebrow">部署向导</p>
           <h1 className="text-xl font-semibold">上线检查</h1>
           <p className="pl-page-intro">按客户部署主链路检查 Lucy 是否已经可以作为 MCP 服务管理平台交付给 agent 使用。</p>
         </div>
@@ -159,26 +184,72 @@ export function Onboarding() {
         </div>
       </div>
 
+      <section
+        className={
+          readyCount === 5
+            ? "pl-delivery-banner pl-delivery-banner--ready"
+            : "pl-delivery-banner"
+        }
+        data-testid="onboarding-delivery-banner"
+      >
+        {readyCount === 5 ? (
+          <>
+            <div>
+              <strong>Lucy MCP is ready for Agent delivery</strong>
+              <span>Agent can connect through {endpoint}.</span>
+            </div>
+            <button type="button" className="pl-btn pl-btn--primary" onClick={copyConfig}>
+              {copied ? "已复制 .mcp.json" : "复制 .mcp.json 配置"}
+            </button>
+          </>
+        ) : (
+          <>
+            <div>
+              <strong>还差 {5 - readyCount} 项即可交付</strong>
+              <span>下一项：{blocker?.reason ?? blocker?.title ?? "继续检查配置"}</span>
+            </div>
+            {blocker ? (
+              <Link className="pl-btn pl-btn--secondary" to={blocker.to}>
+                打开阻塞项
+              </Link>
+            ) : null}
+          </>
+        )}
+      </section>
+
       <div className="pl-metric-grid">
         <div className="pl-metric-card">
-          <span>Checklist</span>
+          <span>Deployment readiness</span>
           <strong>{readyCount}/5</strong>
-          <small>上线主链路完成度</small>
+          <small>{readyCount === 5 ? "Ready" : `${5 - readyCount} items remaining`}</small>
+          <div className="pl-progress">
+            <i style={{ width: `${(readyCount / 5) * 100}%` }} />
+          </div>
         </div>
-        <div className={projectQuery.data?.ktxAvailable ? "pl-metric-card pl-metric-card--success" : "pl-metric-card pl-metric-card--danger"}>
+        <div
+          className={
+            projectQuery.data?.ktxAvailable
+              ? "pl-metric-card pl-metric-card--success"
+              : "pl-metric-card pl-metric-card--danger"
+          }
+        >
           <span>KTX Runtime</span>
-          <strong>{projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</strong>
+          <strong>{projectQuery.data?.ktxAvailable ? "Available" : "Unavailable"}</strong>
           <small>{projectQuery.data?.root ?? "项目根未知"}</small>
         </div>
         <div className="pl-metric-card">
-          <span>Semantic Tables</span>
-          <strong>{doneSources}/{sources.length}</strong>
-          <small>已完成 / 已扫描</small>
+          <span>Semantic coverage</span>
+          <strong>
+            {doneSources}/{sources.length}
+          </strong>
+          <small>{semanticPercent}% maintained</small>
         </div>
         <div className="pl-metric-card">
-          <span>MCP Access</span>
-          <strong>{agents.length}</strong>
-          <small>{tokenCount} 个可用 token</small>
+          <span>MCP access</span>
+          <strong>{enabledTokenCount}</strong>
+          <small>
+            {agents.length} agents · {tokenCount} tokens
+          </small>
         </div>
       </div>
 
@@ -214,7 +285,7 @@ export function Onboarding() {
         <OnboardingStep
           index={3}
           title="配置语义层"
-          description="补齐表描述、字段说明、指标、分段和关联关系，让 agent 使用稳定业务口径。"
+          description="补齐至少一张核心表的业务语义；其余扫描表可作为后续维护队列继续完善。"
           ready={semanticReady}
           action={{ label: "维护语义", to: "/" }}
         >

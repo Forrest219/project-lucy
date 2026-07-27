@@ -97,6 +97,15 @@ export type IngestResult = {
   stderr: string;
 };
 
+export type ConnectionTestResult = {
+  status: "ok" | "error";
+  latencyMs?: number;
+  detail?: string;
+  reason?: string;
+  stdout?: string;
+  stderr?: string;
+};
+
 export type AddSchemaPreview = {
   diff: string;
   proposedYaml: string;

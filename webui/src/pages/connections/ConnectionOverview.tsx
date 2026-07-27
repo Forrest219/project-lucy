@@ -1,19 +1,31 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { apiGet } from "../../lib/apiClient";
+import { toast } from "sonner";
+import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { ConnectionInfo, ProjectInfo, SourcesResponse } from "../../lib/types";
+import type { ConnectionInfo, ConnectionTestResult, ProjectInfo, SourcesResponse } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
+import { MetricCard } from "./MetricCard";
 
-function KpiTile({ label, value, hint }: { label: string; value: string | number; hint: string }) {
-  return (
-    <div className="pl-metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{hint}</small>
-    </div>
-  );
+type TestUiStatus = "unknown" | "testing" | "connected" | "disconnected";
+
+const MCP_ENDPOINT = "http://127.0.0.1:7879/mcp";
+
+function engineLabel(engine?: string) {
+  const normalized = engine?.toLowerCase();
+  if (normalized === "mysql") return "MySQL";
+  if (normalized === "postgres" || normalized === "postgresql") return "Postgres";
+  if (normalized === "doris") return "Doris";
+  if (normalized === "starrocks") return "StarRocks";
+  return "DB";
+}
+
+function statusLabel(state: TestUiStatus) {
+  if (state === "unknown") return "Not tested";
+  if (state === "testing") return "Testing";
+  if (state === "connected") return "Connected";
+  return "Disconnected";
 }
 
 export function ConnectionOverview() {
@@ -35,6 +47,33 @@ export function ConnectionOverview() {
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
+  const [testStates, setTestStates] = useState<Record<string, TestUiStatus>>({});
+
+  const testMutation = useMutation({
+    mutationFn: (connId: string) =>
+      apiPost<ConnectionTestResult>(`/api/connections/${encodeURIComponent(connId)}/test`, {}),
+    onMutate: (connId) => {
+      setTestStates((prev) => ({ ...prev, [connId]: "testing" }));
+    },
+    onSuccess: (data, connId) => {
+      setTestStates((prev) => ({
+        ...prev,
+        [connId]: data.status === "ok" ? "connected" : "disconnected"
+      }));
+    },
+    onError: (_error, connId) => {
+      setTestStates((prev) => ({ ...prev, [connId]: "disconnected" }));
+    }
+  });
+
+  async function copyEndpoint() {
+    try {
+      await navigator.clipboard.writeText(MCP_ENDPOINT);
+      toast.success("MCP endpoint 已复制");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "复制失败");
+    }
+  }
 
   if (loading) {
     return <p className="pl-notice">正在加载连接状态...</p>;
@@ -60,11 +99,31 @@ export function ConnectionOverview() {
       </div>
 
       <div className="pl-metric-grid">
-        <KpiTile label="连接数" value={connections.length} hint={schemaCount > 0 ? `${schemaCount} 个 schema` : "未配置 schema"} />
-        <KpiTile label="Enabled tables" value={enabledTableCount} hint="来自 ktx.yaml enabled_tables" />
-        <KpiTile label="Semantic tables" value={semanticTableCount} hint="已进入 semantic-layer 的表" />
-        <KpiTile label="Semantic sources" value={semanticSourceCount} hint="按 connection/schema 聚合" />
-        <KpiTile label="KTX CLI" value={projectQuery.data?.ktxAvailable ? "可用" : "不可用"} hint={projectQuery.data?.root ?? "项目根目录未知"} />
+        <MetricCard
+          type="connections"
+          value={connections.length}
+          subValue={schemaCount > 0 ? `${schemaCount} 个 schema` : "未配置 schema"}
+        />
+        <MetricCard
+          type="enabledTables"
+          value={enabledTableCount}
+          subValue="来自 ktx.yaml enabled_tables"
+        />
+        <MetricCard
+          type="semanticTables"
+          value={semanticTableCount}
+          subValue="已进入 semantic-layer 的表"
+        />
+        <MetricCard
+          type="semanticSources"
+          value={semanticSourceCount}
+          subValue="按 connection/schema 聚合"
+        />
+        <MetricCard
+          type="ktxRuntime"
+          value={projectQuery.data?.ktxAvailable ? "可用" : "不可用"}
+          subValue={projectQuery.data?.root ?? "项目根目录未知"}
+        />
       </div>
 
       <div className="pl-overview-grid">
@@ -79,38 +138,61 @@ export function ConnectionOverview() {
             {connections.length === 0 && (
               <p className="text-sm text-fg-muted py-4">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
             )}
-            {connections.map((conn) => (
-              <div className="pl-connection-row" key={conn.id}>
-                <div>
-                  <strong>{conn.id}</strong>
-                  <span>{conn.driver ?? "未知 driver"}</span>
-                  <span>
-                    {conn.engine ?? "unknown engine"}
-                    {conn.wireProtocol ? ` / ${conn.wireProtocol} wire` : ""}
-                    {conn.r1Target ? " / R1 target" : ""}
-                    {conn.readOnlyExpected === false ? " / write-risk" : " / read-only expected"}
-                  </span>
+            {connections.map((conn) => {
+              const state: TestUiStatus = testStates[conn.id] ?? "unknown";
+              return (
+                <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="pl-engine-badge" data-testid={`engine-badge-${conn.id}`}>
+                        {engineLabel(conn.engine ?? conn.driver)}
+                      </span>
+                      <strong>{conn.id}</strong>
+                      <span
+                        className={`pl-connection-status pl-connection-status--${state}`}
+                        data-testid={`connection-status-${conn.id}`}
+                      >
+                        {statusLabel(state)}
+                      </span>
+                    </div>
+                    <span>
+                      {conn.engine ?? "unknown engine"}
+                      {conn.wireProtocol ? ` / ${conn.wireProtocol} wire` : ""}
+                      {conn.r1Target ? " / R1 target" : ""}
+                      {conn.readOnlyExpected === false ? " / write-risk" : " / read-only expected"}
+                    </span>
+                    <span>{conn.driver ?? "未知 driver"}</span>
+                  </div>
+                  <div>
+                    <span>schemas</span>
+                    <strong>{conn.schemas.length > 0 ? conn.schemas.join(", ") : "-"}</strong>
+                  </div>
+                  <div>
+                    <span>enabled</span>
+                    <strong>{conn.enabledTables.length} 张表</strong>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--secondary"
+                      onClick={() => setAddTarget(conn)}
+                      data-testid={`add-schema-${conn.id}`}
+                    >
+                      + 添加 schema
+                    </button>
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--ghost"
+                      onClick={() => testMutation.mutate(conn.id)}
+                      disabled={testMutation.isPending && testMutation.variables === conn.id}
+                      data-testid={`test-connection-${conn.id}`}
+                    >
+                      {state === "testing" ? "Testing..." : "测试连接"}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <span>schemas</span>
-                  <strong>{conn.schemas.length > 0 ? conn.schemas.join(", ") : "-"}</strong>
-                </div>
-                <div>
-                  <span>enabled</span>
-                  <strong>{conn.enabledTables.length} 张表</strong>
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    className="pl-btn pl-btn--secondary"
-                    onClick={() => setAddTarget(conn)}
-                    data-testid={`add-schema-${conn.id}`}
-                  >
-                    + 添加 schema
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -131,8 +213,19 @@ export function ConnectionOverview() {
             </Link>
           </div>
           <div className="pl-code-snippet">
-            <span>MCP endpoint</span>
-            <code>http://127.0.0.1:7879/mcp</code>
+            <div className="pl-copy-line">
+              <span>MCP endpoint</span>
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost"
+                aria-label="复制 MCP endpoint"
+                onClick={copyEndpoint}
+                data-testid="copy-mcp-endpoint"
+              >
+                复制
+              </button>
+            </div>
+            <code>{MCP_ENDPOINT}</code>
           </div>
         </aside>
       </div>

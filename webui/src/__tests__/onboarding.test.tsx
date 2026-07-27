@@ -101,13 +101,31 @@ describe("Onboarding", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "上线检查" })).toBeInTheDocument();
+    expect(screen.getByText("Deployment readiness")).toBeInTheDocument();
+    expect(screen.getByText("Semantic coverage")).toBeInTheDocument();
     expect(screen.getByText("5/5")).toBeInTheDocument();
     expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
     expect(screen.getByText("mysql-demo")).toBeInTheDocument();
     expect(screen.getByText("http://localhost:7879/mcp")).toBeInTheDocument();
+    expect(screen.getByText("Lucy MCP is ready for Agent delivery")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /复制 .*mcp\.json 配置/i })
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Semantic Tables")).not.toBeInTheDocument();
+    expect(screen.queryByText("Checklist")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "复制 MCP 配置" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Bearer <LUCY_AGENT_TOKEN>"));
+  });
+
+  it("shows a not-ready blocker banner with the first failure reason", async () => {
+    renderPage({ agents: [] });
+
+    expect(await screen.findByText(/还差/)).toBeInTheDocument();
+    expect(screen.getByText("尚未创建 Agent")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "打开阻塞项" })
+    ).toHaveAttribute("href", "/admin/agents");
   });
 
   it.each([
