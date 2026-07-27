@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
@@ -33,6 +34,11 @@ type EnabledTablesPreview = {
   newEnabledTables: string[];
 };
 
+type EnabledTablesPreviewByConnection = {
+  connId: string;
+  preview: EnabledTablesPreview;
+};
+
 type EnabledTablesWrite = {
   written: true;
   auditId?: number;
@@ -41,6 +47,21 @@ type EnabledTablesWrite = {
 };
 
 type IngestResult = { exitCode: number; stdout: string; stderr: string };
+
+type ScanLogEntry = {
+  connectionId: string;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+type SaveProgressPhase = "queued" | "saving" | "scanning" | "done" | "scan_failed" | "save_failed";
+
+type SaveProgressItem = {
+  connId: string;
+  phase: SaveProgressPhase;
+  detail?: string;
+};
 
 const STATUS_LABELS: Record<WhitelistStatus, string> = {
   included: "已纳入",
@@ -54,6 +75,15 @@ const STATUS_CLASS: Record<WhitelistStatus, string> = {
   pending: "pl-status-badge pl-status-badge--pending",
   semantic_pending: "pl-status-badge pl-status-badge--semantic-pending",
   disabled: "pl-status-badge pl-status-badge--disabled"
+};
+
+const SAVE_PROGRESS_LABELS: Record<SaveProgressPhase, string> = {
+  queued: "等待保存",
+  saving: "写入白名单",
+  scanning: "触发扫描",
+  done: "扫描完成",
+  scan_failed: "扫描失败",
+  save_failed: "保存失败"
 };
 
 function parseQualifiedName(name: string): { schema: string; table: string } {
@@ -89,8 +119,9 @@ export function TableWhitelist() {
   const [search, setSearch] = useState("");
   const [schemaFilter, setSchemaFilter] = useState("all");
   const [draftByConnection, setDraftByConnection] = useState<Record<string, string[]>>({});
-  const [previewConnId, setPreviewConnId] = useState<string | null>(null);
-  const [scanLog, setScanLog] = useState<{ connectionId: string; exitCode: number; stdout: string; stderr: string } | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [scanLogs, setScanLogs] = useState<ScanLogEntry[]>([]);
+  const [saveProgress, setSaveProgress] = useState<SaveProgressItem[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "danger" | null>(null);
 
@@ -123,8 +154,8 @@ export function TableWhitelist() {
     return map;
   }, [sourcesQuery.data]);
 
-  // Build all grouped rows (before filters)
-  const groups = useMemo(() => {
+  // Build all connection rows (before filters)
+  const connectionRows = useMemo(() => {
     return connections.map((conn, idx) => {
       const tablesData = tablesQueries[idx]?.data;
       const tables = tablesData?.tables ?? [];
@@ -152,30 +183,35 @@ export function TableWhitelist() {
     });
   }, [connections, tablesQueries, sourceByKey, draftByConnection]);
 
-  // Unique schemas (for the filter)
   const allSchemas = useMemo(() => {
     const set = new Set<string>();
-    for (const { rows } of groups) for (const r of rows) if (r.schema) set.add(r.schema);
+    for (const { rows } of connectionRows) for (const r of rows) if (r.schema) set.add(r.schema);
     return Array.from(set).sort();
-  }, [groups]);
+  }, [connectionRows]);
 
   // Apply search + schema filter for visible groups
   const visibleGroups = useMemo(() => {
     const lowerSearch = search.trim().toLowerCase();
-    return groups
-      .map(({ conn, rows }) => {
-        const filteredRows = rows.filter((row) => {
-          if (schemaFilter !== "all" && row.schema !== schemaFilter) return false;
-          if (!lowerSearch) return true;
-          return (
+    return connectionRows.flatMap(({ conn, rows }) => {
+      const rowsBySchema = new Map<string, WhitelistTableRow[]>();
+      for (const row of rows) {
+        if (schemaFilter !== "all" && row.schema !== schemaFilter) continue;
+        if (lowerSearch) {
+          const matched =
             row.table.toLowerCase().includes(lowerSearch) ||
-            row.qualifiedName.toLowerCase().includes(lowerSearch)
-          );
-        });
-        return { conn, schema: rows[0]?.schema ?? "", rows: filteredRows };
-      })
-      .filter((g) => g.rows.length > 0);
-  }, [groups, search, schemaFilter]);
+            row.qualifiedName.toLowerCase().includes(lowerSearch);
+          if (!matched) continue;
+        }
+        const schemaKey = row.schema || "default";
+        const existing = rowsBySchema.get(schemaKey) ?? [];
+        existing.push(row);
+        rowsBySchema.set(schemaKey, existing);
+      }
+      return Array.from(rowsBySchema.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([schema, groupedRows]) => ({ conn, schema, rows: groupedRows }));
+    });
+  }, [connectionRows, search, schemaFilter]);
 
   const visibleTotal = visibleGroups.reduce((sum, g) => sum + g.rows.length, 0);
   const visibleChecked = visibleGroups.reduce(
@@ -187,21 +223,21 @@ export function TableWhitelist() {
   const diffStats = useMemo(() => {
     let added = 0;
     let removed = 0;
-    for (const { conn } of groups) {
+    for (const { conn } of connectionRows) {
       const draft = new Set(draftByConnection[conn.id] ?? conn.enabledTables);
       const persisted = new Set(conn.enabledTables);
       added += setDifference(draft, persisted).length;
       removed += setDifference(persisted, draft).length;
     }
     return { added, removed, isDirty: added + removed > 0 };
-  }, [groups, draftByConnection]);
+  }, [connectionRows, draftByConnection]);
 
   const changedConnections = useMemo(() => {
-    return groups.filter(({ conn }) => {
+    return connectionRows.filter(({ conn }) => {
       const draft = draftByConnection[conn.id] ?? conn.enabledTables;
       return !isEqualSet(draft, conn.enabledTables);
     });
-  }, [groups, draftByConnection]);
+  }, [connectionRows, draftByConnection]);
 
   function setDraftForConnection(connId: string, newDraft: string[]) {
     setDraftByConnection((prev) => ({ ...prev, [connId]: newDraft }));
@@ -214,9 +250,11 @@ export function TableWhitelist() {
     if (current.has(row.qualifiedName)) current.delete(row.qualifiedName);
     else current.add(row.qualifiedName);
     setDraftForConnection(conn.id, Array.from(current));
+    setPreviewOpen(false);
   }
 
   function selectAllVisible() {
+    setPreviewOpen(false);
     setDraftByConnection((prev) => {
       const next = { ...prev };
       for (const { conn, rows } of visibleGroups) {
@@ -229,6 +267,7 @@ export function TableWhitelist() {
   }
 
   function invertVisible() {
+    setPreviewOpen(false);
     setDraftByConnection((prev) => {
       const next = { ...prev };
       for (const { conn, rows } of visibleGroups) {
@@ -245,23 +284,33 @@ export function TableWhitelist() {
 
   function resetDraft() {
     setDraftByConnection({});
-    setPreviewConnId(null);
-    setScanLog(null);
+    setPreviewOpen(false);
+    setScanLogs([]);
+    setSaveProgress([]);
     setStatusMessage(null);
     setStatusTone(null);
   }
 
+  function updateSaveProgress(connId: string, phase: SaveProgressPhase, detail?: string) {
+    setSaveProgress((prev) =>
+      prev.map((item) => (item.connId === connId ? { ...item, phase, detail } : item))
+    );
+  }
+
   const previewMutation = useMutation({
-    mutationFn: async (connId: string) => {
-      const conn = connections.find((c) => c.id === connId);
-      if (!conn) throw new Error("连接不存在");
-      const draft = draftByConnection[conn.id] ?? conn.enabledTables;
-      return apiPut<EnabledTablesPreview>(
-        `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
-        { dryRun: true, enabledTables: draft }
-      );
+    mutationFn: async () => {
+      const results: EnabledTablesPreviewByConnection[] = [];
+      for (const { conn } of changedConnections) {
+        const draft = draftByConnection[conn.id] ?? conn.enabledTables;
+        const preview = await apiPut<EnabledTablesPreview>(
+          `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
+          { dryRun: true, enabledTables: draft }
+        );
+        results.push({ connId: conn.id, preview });
+      }
+      return results;
     },
-    onSuccess: (_data, connId) => setPreviewConnId(connId),
+    onSuccess: () => setPreviewOpen(true),
     onError: (err) =>
       toast.error(`预览失败：${err instanceof Error ? err.message : "未知错误"}`)
   });
@@ -274,21 +323,43 @@ export function TableWhitelist() {
         ingest: IngestResult | null;
         ingestError?: string;
       }> = [];
+      setScanLogs([]);
+      setSaveProgress(
+        changedConnections.map(({ conn }) => ({
+          connId: conn.id,
+          phase: "queued" as const
+        }))
+      );
       for (const { conn } of changedConnections) {
         const draft = draftByConnection[conn.id] ?? conn.enabledTables;
-        const write = await apiPut<EnabledTablesWrite>(
-          `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
-          { dryRun: false, enabledTables: draft }
-        );
+        let write: EnabledTablesWrite;
+        updateSaveProgress(conn.id, "saving");
+        try {
+          write = await apiPut<EnabledTablesWrite>(
+            `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
+            { dryRun: false, enabledTables: draft }
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "未知错误";
+          updateSaveProgress(conn.id, "save_failed", message);
+          throw err;
+        }
         let ingest: IngestResult | null = null;
         let ingestError: string | undefined;
+        updateSaveProgress(conn.id, "scanning");
         try {
           ingest = await apiPost<IngestResult>(
             `/api/connections/${encodeURIComponent(conn.id)}/ingest`,
             {}
           );
+          if (ingest.exitCode === 0) {
+            updateSaveProgress(conn.id, "done");
+          } else {
+            updateSaveProgress(conn.id, "scan_failed", `退出码 ${ingest.exitCode}`);
+          }
         } catch (err) {
           ingestError = err instanceof Error ? err.message : "未知错误";
+          updateSaveProgress(conn.id, "scan_failed", ingestError);
         }
         results.push({ connId: conn.id, write, ingest, ingestError });
       }
@@ -317,42 +388,26 @@ export function TableWhitelist() {
         for (const r of results) delete next[r.connId];
         return next;
       });
-      setPreviewConnId(null);
+      setPreviewOpen(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       for (const r of results) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(r.connId) });
       }
-      // Keep the last scan log for inspection
-      const last = results[results.length - 1];
-      if (last?.ingest) {
-        setScanLog({ connectionId: last.connId, ...last.ingest });
-      } else if (last?.ingestError) {
-        setScanLog({
-          connectionId: last.connId,
-          exitCode: -1,
-          stdout: "",
-          stderr: last.ingestError
-        });
-      }
+      setScanLogs(
+        results.flatMap((r) => {
+          if (r.ingest) return [{ connectionId: r.connId, ...r.ingest }];
+          if (r.ingestError) {
+            return [{ connectionId: r.connId, exitCode: -1, stdout: "", stderr: r.ingestError }];
+          }
+          return [];
+        })
+      );
     },
     onError: (err) => {
       toast.error(`保存失败：${err instanceof Error ? err.message : "未知错误"}`);
     }
   });
-
-  const previewConn = previewConnId ? connections.find((c) => c.id === previewConnId) : null;
-  const previewDraft = previewConn
-    ? draftByConnection[previewConn.id] ?? previewConn.enabledTables
-    : null;
-  const previewEnabledTablesPreview =
-    previewMutation.data && previewConn
-      ? {
-          diff: previewMutation.data.diff,
-          oldEnabledTables: previewMutation.data.oldEnabledTables,
-          newEnabledTables: previewMutation.data.newEnabledTables
-        }
-      : null;
 
   if (connectionsQuery.isLoading) {
     return <p className="pl-notice">正在加载连接列表...</p>;
@@ -446,7 +501,7 @@ export function TableWhitelist() {
                 const status = whitelistStatus(row);
                 return (
                   <tr
-                    key={row.qualifiedName}
+                    key={`${row.connectionId}-${row.qualifiedName}`}
                     data-testid={`whitelist-row-${row.qualifiedName}`}
                   >
                     <td>
@@ -467,15 +522,13 @@ export function TableWhitelist() {
                       <span className={STATUS_CLASS[status]}>{STATUS_LABELS[status]}</span>
                     </td>
                     <td>
-                      {status === "included" ? (
-                        <button
-                          type="button"
+                      {status === "included" || status === "semantic_pending" ? (
+                        <Link
                           className="pl-btn pl-btn--ghost text-xs"
-                          disabled
-                          title="暂未提供语义详情入口"
+                          to={`/sources/${encodeURIComponent(row.connectionId)}/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`}
                         >
                           查看语义
-                        </button>
+                        </Link>
                       ) : status === "disabled" ? (
                         <button
                           type="button"
@@ -486,9 +539,7 @@ export function TableWhitelist() {
                         </button>
                       ) : status === "pending" ? (
                         <span className="text-xs text-fg-muted">待保存</span>
-                      ) : (
-                        <span className="text-xs text-fg-muted">已启用</span>
-                      )}
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -522,6 +573,12 @@ export function TableWhitelist() {
         >
           <div className="pl-floating-action-bar-text">
             变更未保存（新增 {diffStats.added} 张表 / 移除 {diffStats.removed} 张表）
+            {saveMutation.isPending && saveProgress.length > 0 && (
+              <span className="block text-xs font-normal text-fg-muted">
+                正在处理 {saveProgress.filter((item) => item.phase === "done" || item.phase === "scan_failed").length} /{" "}
+                {saveProgress.length} 个连接
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="pl-btn pl-btn--ghost" onClick={resetDraft}>
@@ -530,10 +587,7 @@ export function TableWhitelist() {
             <button
               type="button"
               className="pl-btn pl-btn--secondary"
-              onClick={() => {
-                const first = changedConnections[0];
-                if (first) previewMutation.mutate(first.conn.id);
-              }}
+              onClick={() => previewMutation.mutate()}
               disabled={previewMutation.isPending || changedConnections.length === 0}
             >
               {previewMutation.isPending ? "生成中..." : "预览 YAML"}
@@ -550,7 +604,24 @@ export function TableWhitelist() {
         </div>
       )}
 
-      {previewConn && previewEnabledTablesPreview && previewDraft && (
+      {saveProgress.length > 0 && (
+        <div className="mt-4 grid gap-2" role="status" aria-live="polite" data-testid="whitelist-save-progress">
+          <p className="text-sm font-medium">保存与扫描进度</p>
+          <div className="grid gap-2">
+            {saveProgress.map((item) => (
+              <div key={item.connId} className="pl-save-progress-row">
+                <span className="font-medium">{item.connId}</span>
+                <span className={`pl-status-badge pl-save-progress-row--${item.phase}`}>
+                  {SAVE_PROGRESS_LABELS[item.phase]}
+                </span>
+                {item.detail && <span className="text-xs text-fg-muted">{item.detail}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {previewOpen && previewMutation.data && previewMutation.data.length > 0 && (
         <div
           className="pl-drawer-backdrop"
           role="dialog"
@@ -561,59 +632,71 @@ export function TableWhitelist() {
           <div className="pl-drawer-panel">
             <header className="pl-drawer-header">
               <div>
-                <h2 className="pl-panel-title">YAML 预览 ({previewConn.id})</h2>
-                <p className="pl-notice">写入 ktx.yaml 前的最终检查。</p>
+                <h2 className="pl-panel-title">YAML 预览</h2>
+                <p className="pl-notice">
+                  写入 ktx.yaml 前的最终检查，共 {previewMutation.data.length} 个连接。
+                </p>
               </div>
               <button
                 type="button"
                 className="pl-btn pl-btn--ghost"
-                onClick={() => setPreviewConnId(null)}
+                onClick={() => setPreviewOpen(false)}
                 aria-label="关闭 YAML 预览"
               >
                 关闭
               </button>
             </header>
             <div className="pl-drawer-body">
-              <p className="text-sm">
-                enabled_tables: {previewEnabledTablesPreview.oldEnabledTables.length} -&gt;{" "}
-                {previewEnabledTablesPreview.newEnabledTables.length}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {setDifference(
-                  previewEnabledTablesPreview.newEnabledTables,
-                  previewEnabledTablesPreview.oldEnabledTables
-                ).map((t) => (
-                  <span
-                    key={`add-${t}`}
-                    className="pl-status-badge pl-status-badge--included"
-                  >
-                    新增：{t}
-                  </span>
-                ))}
-                {setDifference(
-                  previewEnabledTablesPreview.oldEnabledTables,
-                  previewEnabledTablesPreview.newEnabledTables
-                ).map((t) => (
-                  <span
-                    key={`del-${t}`}
-                    className="pl-status-badge pl-status-badge--disabled"
-                  >
-                    移除：{t}
-                  </span>
-                ))}
-              </div>
-              <DiffViewer diff={previewEnabledTablesPreview.diff} />
+              {previewMutation.data.map(({ connId, preview }) => (
+                <section className="pl-preview-section" key={connId}>
+                  <h3 className="text-sm font-semibold">Connection: {connId}</h3>
+                  <p className="text-sm">
+                    enabled_tables: {preview.oldEnabledTables.length} -&gt;{" "}
+                    {preview.newEnabledTables.length}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {setDifference(
+                      preview.newEnabledTables,
+                      preview.oldEnabledTables
+                    ).map((t) => (
+                      <span
+                        key={`${connId}-add-${t}`}
+                        className="pl-status-badge pl-status-badge--included"
+                      >
+                        新增：{t}
+                      </span>
+                    ))}
+                    {setDifference(
+                      preview.oldEnabledTables,
+                      preview.newEnabledTables
+                    ).map((t) => (
+                      <span
+                        key={`${connId}-del-${t}`}
+                        className="pl-status-badge pl-status-badge--disabled"
+                      >
+                        移除：{t}
+                      </span>
+                    ))}
+                  </div>
+                  <DiffViewer diff={preview.diff} />
+                </section>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {scanLog && (
-        <div className="mt-6">
-          <p className="text-sm font-medium mb-2">扫描日志 ({scanLog.connectionId})</p>
-          <pre className="text-xs bg-surface-muted p-3 rounded overflow-auto max-h-64 whitespace-pre-wrap">
-            {[scanLog.stdout, scanLog.stderr].filter(Boolean).join("\n").trim() || `退出码 ${scanLog.exitCode}`}
-          </pre>
+      {scanLogs.length > 0 && (
+        <div className="mt-6 grid gap-3">
+          <p className="text-sm font-medium">扫描日志</p>
+          {scanLogs.map((log) => (
+            <details className="pl-collapsible-log" key={log.connectionId}>
+              <summary>Connection: {log.connectionId} · 退出码 {log.exitCode}</summary>
+              <pre>
+                {[log.stdout, log.stderr].filter(Boolean).join("\n").trim() || `退出码 ${log.exitCode}`}
+              </pre>
+            </details>
+          ))}
         </div>
       )}
     </section>
