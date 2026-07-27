@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentList } from "../pages/admin/AgentList";
 import type { Agent, Role } from "../lib/types";
@@ -18,12 +18,17 @@ function renderAgentList() {
       <MemoryRouter initialEntries={["/admin/agents"]}>
         <Routes>
           <Route path="/admin/agents" element={<AgentList />} />
-          <Route path="/admin/agents/:userId" element={<div data-testid="agent-detail">detail</div>} />
+          <Route path="/admin/agents/:userId" element={<AgentDetailProbe />} />
           <Route path="/admin/audit" element={<div data-testid="audit-page">audit</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
+}
+
+function AgentDetailProbe() {
+  const location = useLocation();
+  return <div data-testid="agent-detail" data-search={location.search}>detail token handoff</div>;
 }
 
 function makeAgent(overrides: Partial<Agent> = {}): Agent {
@@ -55,13 +60,28 @@ afterEach(() => {
 });
 
 function stubAgentsEndpoints(agents: Agent[], roles: Role[] = [analystRole]) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url === "/api/admin/agents") {
+    if (url === "/api/admin/agents" && !init) {
       return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1" } }));
     }
     if (url === "/api/admin/roles") {
       return new Response(JSON.stringify({ ok: true, data: { roles } }));
+    }
+    if (url === "/api/admin/agents" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      if (body.dryRun) {
+        return new Response(JSON.stringify({ ok: true, data: { diff: "+ id: newagent1", proposedYaml: "yaml" } }));
+      }
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            written: true,
+            agent: makeAgent({ id: body.agent.id, name: body.agent.name, role: body.agent.role })
+          }
+        })
+      );
     }
     return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
   });
@@ -195,5 +215,24 @@ describe("AgentList", () => {
       });
       expect(dryRunCall).toBeTruthy();
     });
+  });
+
+  it("new agent create confirmation navigates to the token handoff tab", async () => {
+    stubAgentsEndpoints([]);
+
+    renderAgentList();
+    await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+    fireEvent.change(await screen.findByLabelText(/用户 ID/), { target: { value: "newagent1" } });
+    fireEvent.change(screen.getByLabelText(/显示名/), { target: { value: "新人" } });
+    fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
+    expect(await screen.findByText(/\+ id: newagent1/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "确认创建" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-detail")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("agent-detail")).toHaveAttribute("data-search", "?tab=tokens");
   });
 });

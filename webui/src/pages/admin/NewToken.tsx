@@ -58,9 +58,8 @@ export function buildClientSnippets(token: string): Record<ClientId, string> {
       "# In ~/.codex/config.toml",
       "[mcp_servers.lucy]",
       `url = "${MCP_URL}"`,
-      "",
-      "# Codex uses HTTP Authorization header via env var:",
-      "env = { LUCY_AGENT_TOKEN = \"<generated-token>\" }"
+      "type = \"http\"",
+      `headers = { Authorization = "Bearer ${token}" }`
     ].join("\n"),
     generic: JSON.stringify(
       {

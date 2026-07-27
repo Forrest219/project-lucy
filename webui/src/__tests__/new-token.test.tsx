@@ -205,4 +205,43 @@ describe("NewToken", () => {
     expect(snippet.textContent).toContain("mcpServers");
     expect(snippet.textContent).toContain("Bearer lucy_oneshot_token");
   });
+
+  it("switching to Codex copies a config that includes bearer with plaintext token", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/admin/agents/zhangsan/tokens" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                token: "lucy_oneshot_token",
+                hash: "sha256:hash",
+                label: "codex-laptop",
+                created: "2026-06-20T00:00:00.000Z",
+                expires_at: null
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    renderNewToken();
+    fireEvent.change(screen.getByLabelText(/Token 标签/), { target: { value: "codex-laptop" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
+    expect(await screen.findByText("lucy_oneshot_token")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Codex" }));
+    expect(screen.getByTestId("snippet-active")).toHaveTextContent("Bearer lucy_oneshot_token");
+    fireEvent.click(screen.getByRole("button", { name: /复制当前/ }));
+
+    await vi.waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Bearer lucy_oneshot_token"));
+    });
+  });
 });

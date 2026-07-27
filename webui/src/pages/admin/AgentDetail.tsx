@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { DiffViewer } from "../../components/DiffViewer";
@@ -8,10 +8,16 @@ import type { Agent, AgentPatch, EffectivePermissionsPreview, Role } from "../..
 
 type AgentDetailResponse = { agent: Agent; version: string };
 type PatchDryRunResponse = { diff: string; proposedYaml: string };
+type DiffPreview = PatchDryRunResponse & { patch: AgentPatch };
 type PatchSaveResponse = { written: boolean; agent: Agent };
 type RolesResponse = { roles: Role[] };
 
 type Tab = "info" | "tokens" | "permissions" | "diff";
+
+function tabFromSearch(search: string): Tab {
+  const tab = new URLSearchParams(search).get("tab");
+  return tab === "tokens" || tab === "permissions" || tab === "diff" || tab === "info" ? tab : "info";
+}
 
 /**
  * Group effective-permission sources by connection and schema so the UI
@@ -56,9 +62,10 @@ export function groupSourcesByConnectionAndSchema(
 
 export function AgentDetail() {
   const { userId } = useParams<{ userId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<Tab>("info");
+  const [activeTab, setActiveTab] = useState<Tab>(() => tabFromSearch(location.search));
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "agent", userId],
@@ -74,7 +81,7 @@ export function AgentDetail() {
   const [editNote, setEditNote] = useState<string | null>(null);
   const [editEnabled, setEditEnabled] = useState<boolean | null>(null);
   const [editRole, setEditRole] = useState<string | null>(null);
-  const [diffPreview, setDiffPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
+  const [diffPreview, setDiffPreview] = useState<DiffPreview | null>(null);
 
   const agent = data?.agent;
   const version = data?.version;
@@ -88,9 +95,35 @@ export function AgentDetail() {
     return patch;
   }
 
+  function clearStaleDiffPreview() {
+    if (diffPreview) setDiffPreview(null);
+  }
+
+  function updateEditName(value: string) {
+    clearStaleDiffPreview();
+    setEditName(value);
+  }
+
+  function updateEditNote(value: string) {
+    clearStaleDiffPreview();
+    setEditNote(value);
+  }
+
+  function updateEditEnabled(value: boolean) {
+    clearStaleDiffPreview();
+    setEditEnabled(value);
+  }
+
+  function updateEditRole(value: string) {
+    clearStaleDiffPreview();
+    setEditRole(value);
+  }
+
   const previewMutation = useMutation({
-    mutationFn: (patch: AgentPatch) =>
-      apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch }),
+    mutationFn: async (patch: AgentPatch) => {
+      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
+      return { ...data, patch };
+    },
     onSuccess: (data) => {
       setDiffPreview(data);
       setActiveTab("diff");
@@ -149,7 +182,12 @@ export function AgentDetail() {
     setEditNote(null);
     setEditEnabled(null);
     setEditRole(null);
+    setDiffPreview(null);
   }
+
+  useEffect(() => {
+    setActiveTab(tabFromSearch(location.search));
+  }, [location.search]);
 
   // Cmd+S / Ctrl+S keyboard shortcut to trigger dry-run preview from the
   // basic info tab. We never bypass dryRun; this only opens the Diff tab.
@@ -237,7 +275,7 @@ export function AgentDetail() {
               <input
                 className="pl-input"
                 value={editName !== null ? editName : agent.name}
-                onChange={(e) => setEditName(e.target.value)}
+                onChange={(e) => updateEditName(e.target.value)}
               />
             </label>
             <label className="grid gap-1">
@@ -246,7 +284,7 @@ export function AgentDetail() {
                 className="pl-input"
                 rows={3}
                 value={editNote !== null ? editNote : (agent.note ?? "")}
-                onChange={(e) => setEditNote(e.target.value)}
+                onChange={(e) => updateEditNote(e.target.value)}
               />
             </label>
             <div className="grid gap-1">
@@ -255,7 +293,7 @@ export function AgentDetail() {
                 <input
                   type="checkbox"
                   checked={editEnabled !== null ? editEnabled : agent.enabled}
-                  onChange={(e) => setEditEnabled(e.target.checked)}
+                  onChange={(e) => updateEditEnabled(e.target.checked)}
                 />
                 启用
               </label>
@@ -265,7 +303,7 @@ export function AgentDetail() {
               <select
                 className="pl-input"
                 value={currentRole ?? ""}
-                onChange={(e) => setEditRole(e.target.value)}
+                onChange={(e) => updateEditRole(e.target.value)}
               >
                 <option value="" disabled>选择角色</option>
                 {roles.map((role) => (
@@ -454,7 +492,7 @@ export function AgentDetail() {
                   <button
                     type="button"
                     className="pl-btn pl-btn--primary"
-                    onClick={() => saveMutation.mutate(buildPatch())}
+                    onClick={() => diffPreview && saveMutation.mutate(diffPreview.patch)}
                     disabled={saveMutation.isPending}
                   >
                     {saveMutation.isPending ? "保存中…" : "保存"}

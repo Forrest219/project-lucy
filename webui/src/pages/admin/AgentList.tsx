@@ -418,7 +418,7 @@ export function AgentList() {
           onCreated={(id) => {
             setShowNew(false);
             void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
-            navigate(`/admin/agents/${id}`);
+            navigate(`/admin/agents/${id}?tab=tokens`);
           }}
         />
       )}

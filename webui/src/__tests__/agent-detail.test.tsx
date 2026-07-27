@@ -162,6 +162,38 @@ describe("AgentDetail", () => {
     });
   });
 
+  it("saves the exact patch that produced the displayed diff", async () => {
+    const fetchMock = stubAgentEndpoints();
+    renderAgentDetail();
+    fireEvent.change(await screen.findByDisplayValue("张三"), { target: { value: "预览名" } });
+    fireEvent.click(screen.getByRole("button", { name: "预览并保存" }));
+    expect(await screen.findByText(/\+ name: 张三编辑/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
+    fireEvent.change(screen.getByDisplayValue("预览名"), { target: { value: "预览后又改名" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "变更预览" }));
+    expect(screen.queryByText(/\+ name: 张三编辑/)).not.toBeInTheDocument();
+    expect(screen.getByText(/点「预览并保存」生成 diff/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览并保存" }));
+    expect(await screen.findByText(/\+ name: 张三编辑/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find((call) => {
+        const init = call[1] as RequestInit | undefined;
+        if (init?.method !== "PATCH") return false;
+        const body = JSON.parse(String(init.body));
+        return body.dryRun === false;
+      });
+      expect(saveCall).toBeTruthy();
+      const body = JSON.parse(String(saveCall?.[1]?.body));
+      expect(body.patch.name).toBe("预览后又改名");
+    });
+  });
+
   it("does not show sticky save bar before any edits", async () => {
     stubAgentEndpoints();
     renderAgentDetail();
@@ -264,6 +296,14 @@ describe("AgentDetail", () => {
     await waitFor(() => {
       expect(screen.getByTestId("new-token")).toBeInTheDocument();
     });
+  });
+
+  it("opens Token tab from the tab query parameter", async () => {
+    stubAgentEndpoints();
+    renderAgentDetail("/admin/agents/zhangsan?tab=tokens");
+
+    expect(await screen.findByText(/当前活跃 token/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Token" })).toHaveClass("pl-admin-tab--active");
   });
 
   it("Effective Permissions tree groups sources by connection then schema and shows tools", async () => {
