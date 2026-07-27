@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { DiffViewer } from "../../components/DiffViewer";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
-import type { Agent, AgentPatch, Role } from "../../lib/types";
+import type { Agent, AgentPatch, EffectivePermissionsPreview, Role } from "../../lib/types";
 
 type AgentDetailResponse = { agent: Agent; version: string };
 type PatchDryRunResponse = { diff: string; proposedYaml: string };
@@ -12,6 +12,47 @@ type PatchSaveResponse = { written: boolean; agent: Agent };
 type RolesResponse = { roles: Role[] };
 
 type Tab = "info" | "tokens" | "permissions" | "diff";
+
+/**
+ * Group effective-permission sources by connection and schema so the UI
+ * can render a Connection → Schema → Source/Table tree.
+ */
+export function groupSourcesByConnectionAndSchema(
+  sources: EffectivePermissionsPreview["sources"] = []
+): Array<{
+  connectionId: string;
+  schemas: Array<{ schema: string; sources: Array<{ sourceName: string; tables: string[] }> }>;
+}> {
+  const byConn = new Map<string, Map<string, Map<string, Set<string>>>>();
+  for (const src of sources) {
+    let schemaMap = byConn.get(src.connectionId);
+    if (!schemaMap) {
+      schemaMap = new Map();
+      byConn.set(src.connectionId, schemaMap);
+    }
+    let sourceMap = schemaMap.get(src.schema);
+    if (!sourceMap) {
+      sourceMap = new Map();
+      schemaMap.set(src.schema, sourceMap);
+    }
+    let tables = sourceMap.get(src.sourceName);
+    if (!tables) {
+      tables = new Set();
+      sourceMap.set(src.sourceName, tables);
+    }
+    tables.add(src.table);
+  }
+  return Array.from(byConn.entries()).map(([connectionId, schemaMap]) => ({
+    connectionId,
+    schemas: Array.from(schemaMap.entries()).map(([schema, sourceMap]) => ({
+      schema,
+      sources: Array.from(sourceMap.entries()).map(([sourceName, tableSet]) => ({
+        sourceName,
+        tables: Array.from(tableSet).sort()
+      }))
+    }))
+  }));
+}
 
 export function AgentDetail() {
   const { userId } = useParams<{ userId: string }>();
@@ -103,6 +144,29 @@ export function AgentDetail() {
     revokeTokenMutation.mutate(label);
   }
 
+  function handleDiscardEdits() {
+    setEditName(null);
+    setEditNote(null);
+    setEditEnabled(null);
+    setEditRole(null);
+  }
+
+  // Cmd+S / Ctrl+S keyboard shortcut to trigger dry-run preview from the
+  // basic info tab. We never bypass dryRun; this only opens the Diff tab.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key.toLowerCase() !== "s") return;
+      if (!agent) return;
+      if (editName === null && editNote === null && editEnabled === null && editRole === null) return;
+      e.preventDefault();
+      previewMutation.mutate(buildPatch());
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent, editName, editNote, editEnabled, editRole, version]);
+
   if (isLoading) return <div className="pl-notice">加载中…</div>;
   if (error || !agent) return <div className="pl-notice">加载失败：{error ? (error as Error).message : "Agent 不存在"}</div>;
 
@@ -110,6 +174,8 @@ export function AgentDetail() {
   const currentRole = editRole !== null ? editRole : agent.role;
   const effective = agent.effectivePermissions;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
+  const hasEdits = editName !== null || editNote !== null || editEnabled !== null || editRole !== null;
+  const groupedSources = effective ? groupSourcesByConnectionAndSchema(effective.sources) : [];
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "info", label: "基本信息" },
@@ -118,15 +184,13 @@ export function AgentDetail() {
     { key: "diff", label: "变更预览" }
   ];
 
-  const hasEdits = editName !== null || editNote !== null || editEnabled !== null || editRole !== null;
-
   return (
     <div className="pl-page-stack">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link to="/admin/agents" className="text-sm text-fg-muted hover:text-fg">‹ 返回列表</Link>
           <h1 className="text-xl font-semibold mt-1">{agent.name} <span className="text-fg-muted font-normal text-base">({agent.id})</span></h1>
-          <p className="pl-page-intro">编辑前先生成变更预览，确认后写入访问配置。</p>
+          <p className="pl-page-intro">编辑前先生成变更预览，确认后写入访问配置。Cmd+S / Ctrl+S 触发预览。</p>
         </div>
         <div className="flex gap-2">
           <Link to={`/admin/config-audit?targetId=${encodeURIComponent(agent.id)}`} className="pl-btn pl-btn--secondary text-sm">
@@ -134,16 +198,10 @@ export function AgentDetail() {
           </Link>
           <button
             type="button"
-            className="pl-btn pl-btn--ghost text-sm"
-            onClick={() => {
-              const newEnabled = !(editEnabled !== null ? editEnabled : agent.enabled);
-              setEditEnabled(newEnabled);
-              previewMutation.mutate({ enabled: newEnabled });
-            }}
+            className="pl-btn pl-btn--danger text-sm"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
           >
-            {(editEnabled !== null ? editEnabled : agent.enabled) ? "禁用" : "启用"}
-          </button>
-          <button type="button" className="pl-btn pl-btn--danger text-sm" onClick={handleDelete} disabled={deleteMutation.isPending}>
             删除
           </button>
         </div>
@@ -158,13 +216,18 @@ export function AgentDetail() {
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
+            {tab.key === "diff" && diffPreview && (
+              <span className="ml-2 inline-flex items-center rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-semibold text-warning-strong">
+                待保存
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      <div>
+      <div className="pl-admin-tab-panel">
         {activeTab === "info" && (
-          <div className="grid gap-4 max-w-md">
+          <div className="grid gap-4 max-w-md pb-32">
             <div className="grid gap-1">
               <span className="text-sm text-fg-muted">用户 ID（不可改）</span>
               <span className="font-mono text-sm">{agent.id}</span>
@@ -221,101 +284,173 @@ export function AgentDetail() {
         )}
 
         {activeTab === "tokens" && (
-          <div className="grid gap-4">
+          <div className="grid gap-4 max-w-3xl">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-fg-muted">
+                当前活跃 token：{agent.tokens.length} 个。已撤销的 token 在此版本不展示历史，可在变更历史中查询。
+              </p>
+              <Link
+                to={`/admin/agents/${userId}/tokens/new`}
+                className="pl-btn pl-btn--primary text-sm"
+                aria-label="生成新 Token"
+              >
+                + 生成新 Token
+              </Link>
+            </div>
             {agent.tokens.length === 0 ? (
-              <p className="text-sm text-fg-muted">暂无 token，点下方按钮创建。</p>
+              <p className="text-sm text-fg-muted">暂无 token，点「生成新 Token」创建。</p>
             ) : (
-              agent.tokens.map((token) => (
-                <div key={token.hash} className="pl-card flex items-start justify-between gap-4">
-                  <div>
-                    <div className="font-medium text-sm">{token.label}</div>
-                    <div className="text-xs text-fg-muted mt-0.5">
-                      创建 {token.created} · <span className="font-mono">{token.hash.slice(0, 20)}…</span>
+              <div className="grid gap-2">
+                {agent.tokens.map((token) => (
+                  <div key={token.hash} className="pl-card flex items-start justify-between gap-4">
+                    <div className="grid gap-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{token.label}</span>
+                        <span className="pl-status-badge pl-status-done">活跃</span>
+                      </div>
+                      <div className="text-xs text-fg-muted">
+                        <span>创建 {token.created}</span>
+                        {token.expires_at && <span> · 过期 {token.expires_at}</span>}
+                      </div>
+                      <div className="text-xs text-fg-muted">
+                        最近使用：
+                        {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "—"}
+                        {token.last_tool ? ` · ${token.last_tool}` : ""}
+                        {token.last_outcome ? ` · ${token.last_outcome}` : ""}
+                      </div>
+                      <div className="text-xs text-fg-muted font-mono">
+                        hash: {token.hash.slice(0, 24)}…
+                      </div>
                     </div>
-                    {token.expires_at && <div className="text-xs text-fg-muted">过期：{token.expires_at}</div>}
-                    <div className="text-xs text-fg-muted">
-                      最近使用：{token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "—"}
-                      {token.last_tool ? ` · ${token.last_tool}` : ""}
-                      {token.last_outcome ? ` · ${token.last_outcome}` : ""}
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--ghost text-xs"
+                        onClick={() => void navigator.clipboard.writeText(token.hash).then(() => toast.success("Hash 已复制"))}
+                        aria-label={`复制 ${token.label} 的 hash`}
+                      >
+                        复制 hash
+                      </button>
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--danger text-xs"
+                        onClick={() => handleRevokeToken(token.label)}
+                        aria-label={`撤销 ${token.label}`}
+                      >
+                        撤销 Token
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                  <button
-                      type="button"
-                      className="pl-btn pl-btn--ghost text-xs"
-                      onClick={() => void navigator.clipboard.writeText(token.hash).then(() => toast.success("Hash 已复制"))}
-                    >
-                      复制 hash
-                    </button>
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--danger text-xs"
-                      onClick={() => handleRevokeToken(token.label)}
-                    >
-                      撤销
-                    </button>
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
-            <Link to={`/admin/agents/${userId}/tokens/new`} className="pl-btn pl-btn--ghost text-sm inline-block">
-              + 新建 Token
-            </Link>
           </div>
         )}
 
         {activeTab === "permissions" && (
-          <div className="grid gap-4 max-w-3xl">
+          <div className="grid gap-4 max-w-3xl pb-32">
             <div className="pl-card">
               <div className="text-sm font-medium">当前角色</div>
               <div className="text-sm text-fg-muted mt-1">
                 {agent.role ?? "旧 ACL"}{legacyWildcard ? " · legacy wildcard" : ""}
               </div>
               {agent.permissionWarnings && agent.permissionWarnings.length > 0 && (
-                <div className="text-sm text-danger mt-2">{agent.permissionWarnings.join(", ")}</div>
+                <ul className="text-sm text-danger mt-2 list-disc pl-5">
+                  {agent.permissionWarnings.map((w, idx) => (
+                    <li key={idx}>{w}</li>
+                  ))}
+                </ul>
               )}
             </div>
             {effective ? (
-              <>
+              <div data-testid="permissions-tree" className="grid gap-4">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="pl-metric-card"><span>工具</span><strong>{effective.tools.length}</strong><small>{effective.roleIds.join(", ") || "legacy"}</small></div>
                   <div className="pl-metric-card"><span>连接</span><strong>{effective.connections.length}</strong><small>{effective.connections.join(", ") || "—"}</small></div>
                   <div className="pl-metric-card"><span>Source</span><strong>{effective.sources.length}</strong><small>{effective.snapshotHash.slice(0, 12)}</small></div>
                 </div>
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium">工具</div>
-                  <div className="flex flex-wrap gap-2">
-                    {effective.tools.map((tool) => <span key={tool} className="pl-status-badge">{tool}</span>)}
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <div className="text-sm font-medium">授权 Source</div>
-                  {effective.sources.length === 0 ? (
+                  <div className="text-sm font-medium">连接 / Schema / Source / Table</div>
+                  {groupedSources.length === 0 ? (
                     <p className="text-sm text-fg-muted">无可展开 source。</p>
                   ) : (
-                    <div className="grid gap-1">
-                      {effective.sources.map((source) => (
-                        <div key={`${source.connectionId}:${source.sourceName}`} className="text-sm font-mono text-fg-muted">
-                          {source.connectionId} / {source.sourceName} · {source.table}
-                        </div>
+                    <ul className="grid gap-3 pl-2">
+                      {groupedSources.map((connGroup) => (
+                        <li key={connGroup.connectionId} className="grid gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="pl-status-badge pl-status-included">{connGroup.connectionId}</span>
+                            <span className="text-xs text-fg-muted">连接</span>
+                          </div>
+                          <ul className="grid gap-2 pl-4">
+                            {connGroup.schemas.map((schemaGroup) => (
+                              <li key={`${connGroup.connectionId}:${schemaGroup.schema}`} className="grid gap-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm">{schemaGroup.schema}</span>
+                                  <span className="text-xs text-fg-muted">schema</span>
+                                </div>
+                                <ul className="grid gap-1 pl-4">
+                                  {schemaGroup.sources.map((sourceGroup) => (
+                                    <li
+                                      key={`${connGroup.connectionId}:${schemaGroup.schema}:${sourceGroup.sourceName}`}
+                                      className="font-mono text-xs text-fg-muted"
+                                    >
+                                      {sourceGroup.sourceName}
+                                      {sourceGroup.tables.length > 0 && (
+                                        <ul className="pl-4">
+                                          {sourceGroup.tables.map((tbl) => (
+                                            <li key={tbl}>
+                                              <span>{tbl}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
                 </div>
-              </>
+                <div className="grid gap-2">
+                  <div className="text-sm font-medium">允许的 MCP 工具</div>
+                  <div className="flex flex-wrap gap-2">
+                    {effective.tools.length === 0 ? (
+                      <span className="text-sm text-fg-muted">—</span>
+                    ) : (
+                      effective.tools.map((tool) => <span key={tool} className="pl-status-badge pl-status-included">{tool}</span>)
+                    )}
+                  </div>
+                </div>
+              </div>
             ) : (
-              <p className="text-sm text-fg-muted">当前权限无法解析。请先迁移到有效角色。</p>
+              <div className="pl-card">
+                <p className="text-sm text-fg-muted">当前权限无法解析。请先迁移到有效角色。</p>
+              </div>
             )}
           </div>
         )}
 
         {activeTab === "diff" && (
-          <div className="grid gap-4">
+          <div className="grid gap-4 pb-32">
             {diffPreview ? (
               <>
+                <p className="text-sm text-fg-muted">以下改动将写入 access.yaml，确认后才会落盘。</p>
                 <DiffViewer diff={diffPreview.diff} />
                 <div className="flex justify-end gap-2">
-                  <button type="button" className="pl-btn pl-btn--ghost" onClick={() => { setDiffPreview(null); setActiveTab("info"); }}>取消</button>
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost"
+                    onClick={() => {
+                      setDiffPreview(null);
+                      setActiveTab("info");
+                    }}
+                  >
+                    取消
+                  </button>
                   <button
                     type="button"
                     className="pl-btn pl-btn--primary"
@@ -327,28 +462,39 @@ export function AgentDetail() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-fg-muted">在其他标签页编辑后，点「预览变更」生成 diff。</p>
+              <p className="text-sm text-fg-muted">在其他标签页编辑后，点「预览并保存」生成 diff。</p>
             )}
           </div>
         )}
       </div>
 
       {hasEdits && activeTab !== "diff" && (
-        <div className="flex justify-end gap-2 pt-4 border-t border-border-default">
-          <button type="button" className="pl-btn pl-btn--ghost" onClick={() => {
-            setEditName(null); setEditNote(null); setEditEnabled(null);
-            setEditRole(null);
-          }}>
-            取消
-          </button>
-          <button
-            type="button"
-            className="pl-btn pl-btn--primary"
-            onClick={() => previewMutation.mutate(buildPatch())}
-            disabled={previewMutation.isPending}
-          >
-            {previewMutation.isPending ? "生成中…" : "预览变更"}
-          </button>
+        <div
+          data-testid="sticky-save-bar"
+          className="pl-floating-action-bar"
+          role="region"
+          aria-label="未保存修改"
+        >
+          <span className="pl-floating-action-bar-text">您有未保存的修改</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost"
+              onClick={handleDiscardEdits}
+              aria-label="放弃修改"
+            >
+              放弃修改
+            </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary"
+              onClick={() => previewMutation.mutate(buildPatch())}
+              disabled={previewMutation.isPending}
+              aria-label="预览并保存"
+            >
+              {previewMutation.isPending ? "生成中…" : "预览并保存"}
+            </button>
+          </div>
         </div>
       )}
     </div>

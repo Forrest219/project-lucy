@@ -185,6 +185,13 @@
 
   .pl-floating-action-bar { @apply sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-default bg-bg-elevated p-3 shadow-md; }
   .pl-floating-action-bar-text { @apply text-sm font-medium; }
+  .pl-save-progress-row { @apply flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-bg-base px-3 py-2 text-sm; }
+  .pl-save-progress-row--queued { @apply bg-bg-muted text-fg-muted; }
+  .pl-save-progress-row--saving,
+  .pl-save-progress-row--scanning { @apply bg-warning-soft text-warning-strong; }
+  .pl-save-progress-row--done { @apply bg-success-soft text-success-strong; }
+  .pl-save-progress-row--scan_failed,
+  .pl-save-progress-row--save_failed { @apply bg-danger-soft text-danger-strong; }
 
   /* 连通测试诊断面板 (M8) */
   .pl-diagnostic-panel { @apply mt-6 grid gap-4; }
@@ -214,6 +221,62 @@
 
   /* 字段描述列表 */
   .pl-field-editor-list { @apply grid gap-3; }
+
+  /* Field card (M9) — human/AI separate buckets, metadata badges. */
+  .pl-field-card {
+    @apply grid min-w-0 gap-3 rounded-md border border-border-default bg-bg-base p-4;
+  }
+  .pl-field-card-header {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+  .pl-field-card-name strong { @apply font-mono text-base text-fg-default; }
+  .pl-field-badges { @apply flex flex-wrap items-center gap-1.5; }
+  .pl-meta-badge {
+    @apply inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium;
+  }
+  .pl-meta-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+  .pl-meta-badge--pk { @apply border-accent/40 bg-accent/10 text-accent; }
+  .pl-meta-badge--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-meta-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+
+  .pl-description-buckets { @apply grid gap-3; }
+  .pl-description-bucket { @apply grid gap-1.5; }
+  .pl-description-bucket-header {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+  .pl-description-label {
+    @apply text-xs font-semibold tracking-wider text-fg-muted uppercase;
+  }
+  .pl-description-muted { @apply text-xs text-fg-muted italic; }
+  .pl-description-text {
+    @apply rounded-md border border-border-default bg-bg-surface p-2 text-sm text-fg-default;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+
+  /* Candidate joins banner (M9) — embedded in the table editor. */
+  .pl-candidate-joins-banner {
+    @apply grid gap-3 rounded-md border border-accent/30 bg-accent/5 p-4;
+  }
+  .pl-candidate-joins-banner-header { @apply grid gap-1; }
+  .pl-candidate-joins-banner-header strong { @apply text-sm font-semibold text-accent; }
+  .pl-candidate-joins-list { @apply grid gap-2; }
+  .pl-candidate-join-row {
+    @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-3 md:grid-cols-[minmax(0,1fr)_auto];
+  }
+  .pl-candidate-join-body { @apply grid min-w-0 gap-1; }
+  .pl-candidate-join-line {
+    @apply flex flex-wrap items-center gap-2 text-sm;
+  }
+  .pl-candidate-join-rel { @apply text-xs text-fg-muted; }
+  .pl-candidate-join-on {
+    @apply min-w-0 truncate rounded bg-bg-base px-2 py-1 font-mono text-xs;
+  }
+  .pl-candidate-join-note { @apply text-xs text-fg-muted; }
+  .pl-candidate-join-actions { @apply flex flex-wrap items-center gap-2 md:justify-end; }
   .pl-inline-grid { @apply grid gap-2; }
   .pl-measure-grid { @apply grid gap-3 md:grid-cols-4; }
   .pl-segment-grid { @apply grid gap-3 md:grid-cols-3; }
@@ -240,6 +303,12 @@
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
   .pl-segmented-control-item { @apply rounded-sm px-2 py-1.5 text-sm text-fg-muted; }
   .pl-segmented-control-item--active { @apply bg-bg-surface text-fg-default shadow-sm; }
+  .pl-inspector-header { @apply grid gap-2; }
+  .pl-inspector-badges { @apply flex flex-wrap items-center gap-2; }
+  .pl-inspector-badge { @apply inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-medium; }
+  .pl-inspector-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+  .pl-inspector-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-inspector-badge--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-validation-summary { @apply grid gap-2; }
   .pl-validation-summary > div { @apply flex items-center justify-between gap-3 rounded-md border border-border-default bg-bg-base px-3 py-2; }
   .pl-validation-summary span { @apply text-sm text-fg-muted; }
@@ -258,6 +327,35 @@
   .pl-metadata-grid > div { @apply grid gap-0.5; }
   .pl-metadata-grid span { @apply text-xs text-fg-muted; }
   .pl-metadata-grid strong { @apply text-sm; }
+
+  /* Semantic-layer source metadata (M9) — fixed tracks, no value overflow. */
+  .pl-source-metadata-grid {
+    @apply mb-4 grid gap-3;
+    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(96px, 1fr));
+  }
+  .pl-source-metadata-cell {
+    @apply grid min-w-0 gap-1 rounded-md border border-border-default bg-bg-base p-3;
+  }
+  .pl-source-metadata-cell--wide { @apply col-span-1; }
+  .pl-source-metadata-label {
+    @apply flex flex-wrap items-center gap-2 text-xs font-semibold tracking-wider text-fg-muted uppercase;
+  }
+  .pl-copy-line {
+    @apply flex min-w-0 items-center justify-between gap-2;
+  }
+  .pl-copy-line strong {
+    @apply min-w-0 flex-1 truncate font-mono text-sm;
+  }
+
+  /* Overlay write-hint badge (M9) — used for grain/measures/segments. */
+  .pl-overlay-badge {
+    @apply inline-flex items-center gap-1 rounded-sm border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-accent uppercase;
+    cursor: help;
+  }
+
+  .pl-field-label-with-overlay {
+    @apply flex items-center gap-2;
+  }
 
   /* Diff / YAML preview */
   .pl-diff-viewer { @apply rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed overflow-auto; }
@@ -298,6 +396,7 @@
   .pl-admin-tabbar { @apply flex flex-wrap gap-1 border-b border-border-default; }
   .pl-admin-tab { @apply -mb-px border-b-2 border-transparent px-4 py-2 text-sm text-fg-muted; }
   .pl-admin-tab--active { @apply border-accent text-fg-default font-medium; }
+  .pl-admin-tab-panel { @apply min-h-[400px]; }
   /* Slide-over Drawer (right-anchored, replaces centered modal for Add Schema) */
   .pl-drawer-backdrop { @apply fixed inset-0 z-50 flex justify-end bg-fg-default/40; }
   .pl-drawer-panel { @apply flex h-full w-full max-w-xl flex-col gap-4 overflow-auto bg-bg-surface p-6 shadow-lg; }
@@ -306,6 +405,7 @@
   .pl-drawer-footer { @apply flex flex-wrap items-center justify-end gap-2 pt-2; }
   .pl-drawer-error { @apply rounded-md border border-danger-strong bg-danger-soft p-3 text-xs text-danger-strong; }
   .pl-drawer-error pre { @apply mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-bg-surface p-2 text-fg-default; }
+  .pl-preview-section { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
 
   /* Metric card with help (Connection Overview 5-card grid) */
   .pl-metric-card--with-help { @apply gap-2; }
@@ -369,6 +469,129 @@
   .pl-select-item[data-highlighted] { @apply bg-bg-muted text-fg-default; }
   .pl-select-item[data-state="checked"] { @apply font-medium; }
   .pl-select-trigger[data-placeholder] { @apply text-fg-muted; }
+
+  /* M10 — Business Wiki UX refactor */
+
+  /* Catalog row: a non-anchor container with two action links to
+     avoid nested anchors. Stats, status and action group each get
+     their own column so the layout stays stable. */
+  .pl-table-row-meta { @apply grid gap-0.5; }
+  .pl-table-row-meta strong { @apply text-sm font-medium; }
+  .pl-table-row-meta span { @apply text-xs text-fg-muted; }
+  .pl-table-row-stats { @apply text-xs text-fg-muted; }
+  .pl-table-row-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+
+  /* Compact 2-col frontmatter grid (M10). Keeps the body markdown
+     editor visible in the first desktop viewport. */
+  .pl-frontmatter { @apply grid gap-3 p-4; }
+  .pl-frontmatter-header { @apply grid gap-1; }
+  .pl-frontmatter-header .pl-panel-title { @apply mb-0; }
+  .pl-frontmatter-grid {
+    @apply grid gap-3;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .pl-frontmatter-cell { @apply mb-0; }
+  .pl-frontmatter-cell--wide { @apply col-span-1 sm:col-span-2; }
+  .pl-frontmatter-advanced { @apply grid gap-2; }
+  .pl-frontmatter-advanced-toggle { @apply w-fit; }
+  .pl-frontmatter-advanced-body { @apply grid gap-3; }
+
+  /* sl_ref chips: known vs unknown visual states. Known chips carry
+     a 🔗 link back to the table editor. */
+  .pl-slref-picker { @apply relative grid gap-2; }
+  .pl-slref-chips {
+    @apply flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-border-default bg-bg-surface px-2 py-1.5;
+  }
+  .pl-slref-input,
+  .pl-tag-input-field {
+    @apply min-w-32 flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-fg-default focus:outline-none focus:ring-0;
+  }
+  .pl-slref-dropdown {
+    @apply absolute top-full left-0 right-0 z-30 mt-1 grid max-h-64 gap-0.5 overflow-auto rounded-md border border-border-default bg-bg-elevated p-1 shadow-lg;
+  }
+  .pl-slref-option-button {
+    @apply grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-fg-default;
+  }
+  .pl-slref-option-button:hover { @apply bg-bg-muted; }
+  .pl-slref-option--active .pl-slref-option-button { @apply bg-bg-muted; }
+  .pl-slref-option-button strong { @apply font-medium; }
+  .pl-slref-option-button span { @apply text-xs text-fg-muted; }
+  .pl-slref-option-button code { @apply truncate font-mono text-xs text-fg-muted; }
+  .pl-slref-empty { @apply mt-2; }
+  .pl-slref-empty code { @apply rounded bg-bg-muted px-1 font-mono; }
+
+  .pl-tag-input {
+    @apply flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-border-default bg-bg-surface px-2 py-1.5;
+  }
+
+  /* Generic chip primitive. State variants carry color and the
+     warning state. */
+  .pl-chip {
+    @apply inline-flex max-w-full items-center gap-1 rounded-pill border px-2 py-0.5 text-xs;
+  }
+  .pl-chip-label { @apply min-w-0 truncate font-medium; }
+  .pl-chip-remove {
+    @apply inline-flex size-4 items-center justify-center rounded-pill text-base leading-none text-fg-muted hover:bg-bg-muted;
+  }
+  .pl-chip-link {
+    @apply inline-flex items-center rounded-pill px-1 text-primary no-underline hover:bg-bg-muted;
+  }
+  .pl-chip--known { @apply border-accent/30 bg-accent/10 text-accent; }
+  .pl-chip--unknown { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-chip--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+
+  /* Wiki sidebar: compact, with explicit new-document CTA. */
+  .pl-wiki-sidebar { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto; }
+  .pl-wiki-sidebar-header { @apply flex items-center justify-between gap-2; }
+  .pl-wiki-sidebar-title { @apply text-base font-semibold; }
+  .pl-wiki-new-button { @apply px-2 py-1 text-xs; }
+  .pl-wiki-filter { @apply text-xs; }
+  .pl-wiki-context-hint { @apply rounded-md border border-border-default bg-bg-base p-2 text-xs; }
+  .pl-wiki-context-hint code { @apply break-all font-mono; }
+  .pl-wiki-body {
+    @apply grid gap-4;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .pl-wiki-left { @apply min-w-0; }
+  .pl-wiki-editor-panel { @apply grid gap-3 p-4; }
+  .pl-wiki-editor-header { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-wiki-shortcut-hint { @apply text-xs text-fg-muted; }
+  .pl-wiki-markdown-input { @apply min-h-[420px]; }
+
+  /* Wiki inspector (right column): tabbed preview / diff / raw. */
+  .pl-wiki-inspector {
+    @apply sticky top-[88px] grid h-fit min-h-[420px] gap-3 rounded-md border border-border-default bg-bg-surface p-3;
+  }
+  .pl-wiki-inspector-tabs { @apply flex flex-wrap gap-1; }
+  .pl-wiki-inspector-tab {
+    @apply rounded-sm px-2.5 py-1 text-sm text-fg-muted;
+  }
+  .pl-wiki-inspector-tab:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-wiki-inspector-tab--active { @apply bg-bg-muted font-medium text-fg-default; }
+  .pl-wiki-inspector-section { @apply min-h-[300px] grid gap-2; }
+
+  /* Markdown preview typography. Small enough to keep a workbench
+     feel, large enough to remain readable. */
+  .pl-markdown-preview { @apply grid gap-2 text-sm leading-relaxed text-fg-default; }
+  .pl-markdown-preview h1 { @apply text-xl font-semibold; }
+  .pl-markdown-preview h2 { @apply text-base font-semibold; }
+  .pl-markdown-preview h3 { @apply text-sm font-semibold; }
+  .pl-markdown-preview p { @apply text-sm; }
+  .pl-markdown-preview ul { @apply list-disc space-y-1 pl-5 text-sm; }
+  .pl-markdown-preview ol { @apply list-decimal space-y-1 pl-5 text-sm; }
+  .pl-markdown-preview li { @apply text-sm; }
+  .pl-markdown-preview code {
+    @apply rounded bg-bg-muted px-1 py-0.5 font-mono text-xs;
+  }
+  .pl-markdown-preview pre {
+    @apply overflow-auto rounded-md border border-border-default bg-bg-base p-3;
+  }
+  .pl-markdown-preview pre code { @apply bg-transparent p-0 text-xs; }
+  .pl-markdown-preview blockquote {
+    @apply border-l-2 border-border-strong pl-3 text-fg-muted italic;
+  }
+  .pl-markdown-preview a { @apply text-accent underline; }
+  .pl-markdown-preview hr { @apply border-border-default; }
 }
 
 @media (max-width: 1280px) {
@@ -380,5 +603,34 @@
     position: static;
     grid-column: 1 / -1;
     height: auto;
+  }
+
+  .pl-source-metadata-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .pl-source-metadata-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pl-wiki-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pl-wiki-sidebar,
+  .pl-wiki-inspector {
+    position: static;
+    height: auto;
+  }
+
+  .pl-frontmatter-grid,
+  .pl-wiki-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pl-frontmatter-cell--wide {
+    grid-column: 1;
   }
 }
