@@ -294,7 +294,23 @@ describe("AddSchemaDrawer", () => {
       "POST /api/connections/mysql-aliyun/ingest": () =>
         new Response(JSON.stringify({
           ok: true,
-          data: { exitCode: 0, stdout: "ok", stderr: "" }
+          data: {
+            id: "ing_mysql-aliyun",
+            connectionId: "mysql-aliyun",
+            requestedScope: "connection",
+            executedScope: "connection",
+            schemaScopedSupported: false,
+            status: "success",
+            startedAt: "2026-07-28T10:30:00.000Z",
+            finishedAt: "2026-07-28T10:30:01.245Z",
+            durationMs: 1245,
+            exitCode: 0,
+            stdout: "ok",
+            stderr: "",
+            command: ["ktx", "ingest", "mysql-aliyun"],
+            scannedTableCount: 4,
+            scannedSchemas: ["dataforai", "finance_mart"]
+          }
         }))
     });
 
@@ -316,6 +332,71 @@ describe("AddSchemaDrawer", () => {
         queryKey: ["connections", "mysql-aliyun", "tables"]
       });
     });
+  });
+
+  it("shows a collapsible stdout/stderr panel when ingest returns a non-zero exit code", async () => {
+    stubFetch({
+      "POST /api/connections/demo-mysql/schemas": (body) => {
+        if ((body as { dryRun?: boolean }).dryRun === false) {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              written: true,
+              auditId: 7,
+              oldSchemas: ["dataforai"],
+              newSchemas: ["dataforai", "openclaw_db"]
+            }
+          }));
+        }
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            diff: "+      - openclaw_db\n",
+            proposedYaml: "schemas:\n  - dataforai\n  - openclaw_db\n",
+            oldSchemas: ["dataforai"],
+            newSchemas: ["dataforai", "openclaw_db"]
+          }
+        }));
+      },
+      "POST /api/connections/demo-mysql/ingest": () =>
+        new Response(JSON.stringify({
+          ok: true,
+          data: {
+            id: "ing_demo-mysql-openclaw_db",
+            connectionId: "demo-mysql",
+            schema: "openclaw_db",
+            requestedScope: "schema",
+            executedScope: "connection",
+            schemaScopedSupported: false,
+            status: "failed",
+            startedAt: "2026-07-28T10:30:00.000Z",
+            finishedAt: "2026-07-28T10:30:01.245Z",
+            durationMs: 1245,
+            exitCode: 1,
+            stdout: "",
+            stderr: "Project: /Users/zhangxingchen/Projects/project-lucy\nConnection \"demo-mysql\" is not configured in ktx.yaml\n",
+            command: ["ktx", "ingest", "demo-mysql"],
+            hint: "当前项目的 ktx.yaml 中没有配置连接 demo-mysql，请确认 WebUI 指向的项目根和连接 ID 是否一致。"
+          }
+        }))
+    });
+
+    renderDrawer(makeConn({ id: "demo-mysql" }));
+    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "openclaw_db" } });
+    fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
+    await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
+    fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
+    await waitFor(() => screen.getByText("现在 ingest"));
+    fireEvent.click(screen.getByText("现在 ingest"));
+
+    expect(await screen.findByTestId("add-schema-ingest-failed")).toHaveTextContent("ingest demo-mysql 失败（退出码 1）");
+    expect(screen.getByText(/ktx.yaml 中没有配置连接 demo-mysql/)).toBeInTheDocument();
+    const toggle = screen.getByTestId("add-schema-ingest-toggle");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("add-schema-ingest-detail")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(await screen.findByTestId("add-schema-ingest-detail")).toHaveTextContent("Connection \"demo-mysql\" is not configured in ktx.yaml");
   });
 
   it("uses the MySQL/Doris/StarRocks-aware field label", () => {

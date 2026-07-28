@@ -117,6 +117,7 @@
   .pl-btn--secondary { @apply border border-border-default bg-bg-surface hover:bg-bg-muted text-fg-default; }
   .pl-btn--ghost { @apply text-fg-default hover:bg-bg-muted; }
   .pl-btn--danger { @apply border border-danger-strong bg-danger-soft text-danger-strong hover:bg-danger-soft; }
+  .pl-btn--sm { @apply px-2 py-0.5 text-xs; }
   .pl-btn:disabled { @apply opacity-50 cursor-not-allowed; }
 
   /* 表单 */
@@ -144,6 +145,37 @@
   .pl-connection-row > div { @apply grid gap-1; }
   .pl-connection-row strong { @apply text-sm font-medium; }
   .pl-connection-row span { @apply text-xs text-fg-muted; }
+
+  /* M13: connection-card schema chips and per-schema ingest rows. */
+  .pl-schema-cell { @apply grid gap-1; }
+  .pl-schema-list { @apply grid gap-1 list-none p-0 m-0; }
+  .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-default bg-bg-surface px-2 py-1; }
+  .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
+
+  /* M13: per-card "last ingest" badge + connection-level trigger button. */
+  .pl-ingest-last-run { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-ingest-last-run--success { @apply border-success bg-success-soft text-success-strong; }
+  .pl-ingest-last-run--failed { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-ingest-last-run--running { @apply border-warning bg-warning-soft text-warning-strong; }
+  .pl-ingest-last-run--never { @apply border-border-default bg-bg-muted text-fg-muted; }
+
+  /* M13: when a schema request still executes connection-scoped ingest. */
+  .pl-ingest-unsupported-hint { @apply text-xs text-fg-muted; }
+  .pl-ingest-unsupported-hint code { @apply mx-0.5 font-mono; }
+
+  /* M13: full diagnostics drawer layout. */
+  .pl-ingest-diagnostics { @apply grid gap-3; }
+  .pl-ingest-diagnostics-conn { @apply text-sm font-normal text-fg-muted; }
+  .pl-ingest-diagnostics-grid { @apply grid gap-3 sm:grid-cols-3; }
+  .pl-ingest-diagnostics-grid > div { @apply grid gap-0.5; }
+  .pl-ingest-diagnostics-grid span { @apply text-xs text-fg-muted; }
+  .pl-ingest-diagnostics-grid strong { @apply text-sm font-medium text-fg-default; }
+  .pl-ingest-diagnostics-hint { @apply rounded-md border border-warning bg-warning-soft px-3 py-2 text-sm text-warning-strong; }
+  .pl-log-section { @apply grid gap-2; }
+  .pl-log-section-title { @apply text-xs font-medium text-fg-muted; }
+  .pl-log-section pre { @apply max-h-64 overflow-auto rounded-md bg-bg-base p-2 font-mono text-xs text-fg-default whitespace-pre-wrap; }
+  .pl-ingest-diagnostics [aria-pressed="true"] { @apply bg-primary text-primary-fg; }
+
   .pl-action-list { @apply grid gap-2; }
   .pl-action-list a { @apply grid gap-0.5 rounded-md border border-border-default bg-bg-base p-3 text-fg-default no-underline; }
   .pl-action-list a:hover { @apply border-border-strong bg-bg-muted; }

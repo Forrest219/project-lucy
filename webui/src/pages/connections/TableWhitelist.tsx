@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
+import { apiGet, apiPut } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   CompletionStatus,
@@ -12,6 +12,7 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
+import { IngestActionButton } from "../../components/ingest";
 
 type WhitelistTableRow = {
   connectionId: string;
@@ -46,23 +47,6 @@ type EnabledTablesWrite = {
   newEnabledTables: string[];
 };
 
-type IngestResult = { exitCode: number; stdout: string; stderr: string };
-
-type ScanLogEntry = {
-  connectionId: string;
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-};
-
-type SaveProgressPhase = "queued" | "saving" | "scanning" | "done" | "scan_failed" | "save_failed";
-
-type SaveProgressItem = {
-  connId: string;
-  phase: SaveProgressPhase;
-  detail?: string;
-};
-
 const STATUS_LABELS: Record<WhitelistStatus, string> = {
   included: "已纳入",
   pending: "待同步",
@@ -75,15 +59,6 @@ const STATUS_CLASS: Record<WhitelistStatus, string> = {
   pending: "pl-status-badge pl-status-badge--pending",
   semantic_pending: "pl-status-badge pl-status-badge--semantic-pending",
   disabled: "pl-status-badge pl-status-badge--disabled"
-};
-
-const SAVE_PROGRESS_LABELS: Record<SaveProgressPhase, string> = {
-  queued: "等待保存",
-  saving: "写入白名单",
-  scanning: "触发扫描",
-  done: "扫描完成",
-  scan_failed: "扫描失败",
-  save_failed: "保存失败"
 };
 
 function parseQualifiedName(name: string): { schema: string; table: string } {
@@ -120,8 +95,6 @@ export function TableWhitelist() {
   const [schemaFilter, setSchemaFilter] = useState("all");
   const [draftByConnection, setDraftByConnection] = useState<Record<string, string[]>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [scanLogs, setScanLogs] = useState<ScanLogEntry[]>([]);
-  const [saveProgress, setSaveProgress] = useState<SaveProgressItem[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "danger" | null>(null);
 
@@ -185,7 +158,10 @@ export function TableWhitelist() {
 
   const allSchemas = useMemo(() => {
     const set = new Set<string>();
-    for (const { rows } of connectionRows) for (const r of rows) if (r.schema) set.add(r.schema);
+    for (const { conn, rows } of connectionRows) {
+      for (const schema of conn.schemas) if (schema) set.add(schema);
+      for (const r of rows) if (r.schema) set.add(r.schema);
+    }
     return Array.from(set).sort();
   }, [connectionRows]);
 
@@ -210,6 +186,17 @@ export function TableWhitelist() {
       return Array.from(rowsBySchema.entries())
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([schema, groupedRows]) => ({ conn, schema, rows: groupedRows }));
+    });
+  }, [connectionRows, search, schemaFilter]);
+
+  const configuredSchemasWithoutTables = useMemo(() => {
+    if (search.trim()) return [];
+    return connectionRows.flatMap(({ conn, rows }) => {
+      const scannedSchemas = new Set(rows.map((row) => row.schema).filter(Boolean));
+      return conn.schemas
+        .filter((schema) => schema && (schemaFilter === "all" || schemaFilter === schema))
+        .filter((schema) => !scannedSchemas.has(schema))
+        .map((schema) => ({ conn, schema }));
     });
   }, [connectionRows, search, schemaFilter]);
 
@@ -285,16 +272,15 @@ export function TableWhitelist() {
   function resetDraft() {
     setDraftByConnection({});
     setPreviewOpen(false);
-    setScanLogs([]);
-    setSaveProgress([]);
     setStatusMessage(null);
     setStatusTone(null);
   }
 
-  function updateSaveProgress(connId: string, phase: SaveProgressPhase, detail?: string) {
-    setSaveProgress((prev) =>
-      prev.map((item) => (item.connId === connId ? { ...item, phase, detail } : item))
-    );
+  function updateSaveProgress(_connId: string, _phase: never, _detail?: string) {
+    // Removed in M13. The save flow no longer cascades into a per-connection
+    // ingest; the new toolbar IngestActionButton owns that capability.
+    void _connId;
+    void _phase;
   }
 
   const previewMutation = useMutation({
@@ -317,69 +303,26 @@ export function TableWhitelist() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const results: Array<{
-        connId: string;
-        write: EnabledTablesWrite;
-        ingest: IngestResult | null;
-        ingestError?: string;
-      }> = [];
-      setScanLogs([]);
-      setSaveProgress(
-        changedConnections.map(({ conn }) => ({
-          connId: conn.id,
-          phase: "queued" as const
-        }))
-      );
+      const results: Array<{ connId: string; write: EnabledTablesWrite }> = [];
       for (const { conn } of changedConnections) {
         const draft = draftByConnection[conn.id] ?? conn.enabledTables;
-        let write: EnabledTablesWrite;
-        updateSaveProgress(conn.id, "saving");
-        try {
-          write = await apiPut<EnabledTablesWrite>(
-            `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
-            { dryRun: false, enabledTables: draft }
-          );
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "未知错误";
-          updateSaveProgress(conn.id, "save_failed", message);
-          throw err;
-        }
-        let ingest: IngestResult | null = null;
-        let ingestError: string | undefined;
-        updateSaveProgress(conn.id, "scanning");
-        try {
-          ingest = await apiPost<IngestResult>(
-            `/api/connections/${encodeURIComponent(conn.id)}/ingest`,
-            {}
-          );
-          if (ingest.exitCode === 0) {
-            updateSaveProgress(conn.id, "done");
-          } else {
-            updateSaveProgress(conn.id, "scan_failed", `退出码 ${ingest.exitCode}`);
-          }
-        } catch (err) {
-          ingestError = err instanceof Error ? err.message : "未知错误";
-          updateSaveProgress(conn.id, "scan_failed", ingestError);
-        }
-        results.push({ connId: conn.id, write, ingest, ingestError });
+        const write = await apiPut<EnabledTablesWrite>(
+          `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
+          { dryRun: false, enabledTables: draft }
+        );
+        results.push({ connId: conn.id, write });
       }
       return results;
     },
     onSuccess: (results) => {
       const allWritten = results.every((r) => r.write.written);
-      const allScanned = results.every((r) => r.ingest?.exitCode === 0 && !r.ingestError);
       if (allWritten) {
         toast.success("表白名单已保存");
-        setStatusMessage("表白名单已保存");
+        setStatusMessage("表白名单已保存。需要刷新物理表元数据时，可点击右上角“触发 Schema 扫描”。");
         setStatusTone("success");
-      }
-      if (allScanned) {
-        toast.success("扫描完成");
-        setStatusMessage("扫描完成");
-        setStatusTone("success");
-      } else if (allWritten) {
-        toast.error("白名单已保存，扫描失败");
-        setStatusMessage("白名单已保存，扫描失败");
+      } else {
+        toast.error("表白名单保存未完成，请重试。");
+        setStatusMessage("表白名单保存未完成");
         setStatusTone("danger");
       }
       // Sync drafts to the just-persisted state for the changed connections
@@ -394,20 +337,19 @@ export function TableWhitelist() {
       for (const r of results) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(r.connId) });
       }
-      setScanLogs(
-        results.flatMap((r) => {
-          if (r.ingest) return [{ connectionId: r.connId, ...r.ingest }];
-          if (r.ingestError) {
-            return [{ connectionId: r.connId, exitCode: -1, stdout: "", stderr: r.ingestError }];
-          }
-          return [];
-        })
-      );
     },
     onError: (err) => {
       toast.error(`保存失败：${err instanceof Error ? err.message : "未知错误"}`);
     }
   });
+
+  // M13: pick a default ingest target for the toolbar scan button.
+  // - single connection + specific schema → ingest with that schema
+  // - single connection + "all"           → ingest without schema (connection scope)
+  // - multiple connections                → button is disabled with a chooser hint
+  const toolbarScanConnId = connections.length === 1 ? connections[0]?.id : undefined;
+  const toolbarScanSchema =
+    connections.length === 1 && schemaFilter !== "all" ? schemaFilter : undefined;
 
   if (connectionsQuery.isLoading) {
     return <p className="pl-notice">正在加载连接列表...</p>;
@@ -477,6 +419,25 @@ export function TableWhitelist() {
             >
               反选当前结果
             </button>
+            {toolbarScanConnId ? (
+              <IngestActionButton
+                connectionId={toolbarScanConnId}
+                schema={toolbarScanSchema}
+                label="触发 Schema 扫描"
+                variant="secondary"
+                testId="whitelist-trigger-scan"
+              />
+            ) : (
+              <button
+                type="button"
+                className="pl-btn pl-btn--secondary"
+                disabled
+                title="请先在连接概览中为单个连接触发 ingest"
+                data-testid="whitelist-trigger-scan"
+              >
+                触发 Schema 扫描
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -549,6 +510,48 @@ export function TableWhitelist() {
         </section>
       ))}
 
+      {configuredSchemasWithoutTables.map(({ conn, schema }) => (
+        <section
+          key={`${conn.id}-${schema}-configured-empty`}
+          className="pl-table-group mt-4"
+          data-testid={`configured-schema-empty-${conn.id}-${schema}`}
+        >
+          <div className="pl-table-group-heading">
+            Connection: {conn.id} · Schema: {schema}
+          </div>
+          <div className="pl-empty-state">
+            <strong>{schema} 已在连接配置中启用，但尚未扫描到可加入白名单的表。</strong>
+            <p className="mt-1">
+              白名单只展示 <code>semantic-layer/{conn.id}/_schema</code> 中的扫描结果。
+              触发 Schema 扫描后，KTX 会把当前 schema 的表清单同步到 semantic-layer，再回到这里加入白名单。
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <IngestActionButton
+                connectionId={conn.id}
+                schema={schema}
+                label="触发 Schema 扫描"
+                variant="primary"
+                size="sm"
+                testId={`whitelist-empty-trigger-scan-${conn.id}-${schema}`}
+              />
+              <Link
+                to="/connections"
+                className="pl-btn pl-btn--ghost"
+                data-testid={`whitelist-empty-back-to-overview-${conn.id}-${schema}`}
+              >
+                打开连接概览
+              </Link>
+            </div>
+          </div>
+        </section>
+      ))}
+
+      {connections.length > 0 && visibleGroups.length === 0 && configuredSchemasWithoutTables.length === 0 && (
+        <div className="pl-empty-state mt-4">
+          当前筛选条件下没有可加入白名单的表。
+        </div>
+      )}
+
       {statusMessage && (
         <div
           className={`pl-validation-banner ${
@@ -573,10 +576,9 @@ export function TableWhitelist() {
         >
           <div className="pl-floating-action-bar-text">
             变更未保存（新增 {diffStats.added} 张表 / 移除 {diffStats.removed} 张表）
-            {saveMutation.isPending && saveProgress.length > 0 && (
+            {saveMutation.isPending && (
               <span className="block text-xs font-normal text-fg-muted">
-                正在处理 {saveProgress.filter((item) => item.phase === "done" || item.phase === "scan_failed").length} /{" "}
-                {saveProgress.length} 个连接
+                正在写入 ktx.yaml（共 {changedConnections.length} 个连接）
               </span>
             )}
           </div>
@@ -597,26 +599,10 @@ export function TableWhitelist() {
               className="pl-btn pl-btn--primary"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
+              data-testid="whitelist-save-changes"
             >
-              {saveMutation.isPending ? "保存中..." : "保存并触发扫描"}
+              {saveMutation.isPending ? "保存中..." : "保存变更"}
             </button>
-          </div>
-        </div>
-      )}
-
-      {saveProgress.length > 0 && (
-        <div className="mt-4 grid gap-2" role="status" aria-live="polite" data-testid="whitelist-save-progress">
-          <p className="text-sm font-medium">保存与扫描进度</p>
-          <div className="grid gap-2">
-            {saveProgress.map((item) => (
-              <div key={item.connId} className="pl-save-progress-row">
-                <span className="font-medium">{item.connId}</span>
-                <span className={`pl-status-badge pl-save-progress-row--${item.phase}`}>
-                  {SAVE_PROGRESS_LABELS[item.phase]}
-                </span>
-                {item.detail && <span className="text-xs text-fg-muted">{item.detail}</span>}
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -686,19 +672,7 @@ export function TableWhitelist() {
         </div>
       )}
 
-      {scanLogs.length > 0 && (
-        <div className="mt-6 grid gap-3">
-          <p className="text-sm font-medium">扫描日志</p>
-          {scanLogs.map((log) => (
-            <details className="pl-collapsible-log" key={log.connectionId}>
-              <summary>Connection: {log.connectionId} · 退出码 {log.exitCode}</summary>
-              <pre>
-                {[log.stdout, log.stderr].filter(Boolean).join("\n").trim() || `退出码 ${log.exitCode}`}
-              </pre>
-            </details>
-          ))}
-        </div>
-      )}
+      {false && null /* M13: scan logs are now handled by the shared IngestDiagnosticsDrawer (toolbar / per-schema buttons). */}
     </section>
   );
 }

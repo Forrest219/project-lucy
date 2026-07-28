@@ -3,9 +3,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
+import { useIngestRun } from "../lib/ingest";
 import { DiffViewer } from "./DiffViewer";
+import { IngestResultPanel } from "./ingest";
 import { schemaFieldLabel, validateSchemaName } from "../lib/schemas";
-import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo, IngestResult } from "../lib/types";
+import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo } from "../lib/types";
 
 type Step = "input" | "preview" | "submitting" | "success" | "fatal";
 
@@ -24,6 +26,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
   const [step, setStep] = useState<Step>("input");
   const [preview, setPreview] = useState<AddSchemaPreview | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const ingest = useIngestRun({ connectionId: connection.id });
 
   const trimmed = schema.trim();
   const issue = useMemo(() => validateSchemaName(trimmed), [trimmed]);
@@ -58,6 +61,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connection.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ingestRuns });
       toast.success(`已添加 schema: ${trimmed}`);
     },
     onError: (err) => {
@@ -65,38 +69,29 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
     }
   });
 
-  const ingestMutation = useMutation({
-    mutationFn: () =>
-      apiPost<IngestResult>(
-        `/api/connections/${encodeURIComponent(connection.id)}/ingest`,
-        {}
-      ),
-    onSuccess: (data) => {
-      if (data.exitCode === 0) {
-        void Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.project }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.connections }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.sources }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connection.id) })
-        ]);
-        toast.success(`ingest ${connection.id} 完成`);
+  async function runIngestNow() {
+    ingest.clearLastRun();
+    try {
+      const result = await ingest.run();
+      if (!result) return;
+      if (result.status === "success") {
+        toast.success(`ingest ${connection.id} 完成（${result.scannedTableCount ?? 0} 张表）`);
       } else {
-        toast.warning(`ingest ${connection.id} 退出码 ${data.exitCode}`);
+        toast.warning(`ingest ${connection.id} 退出码 ${result.exitCode}`);
       }
-    },
-    onError: (err) => {
+    } catch (err) {
       toast.error(`ingest 启动失败：${err instanceof Error ? err.message : "未知错误"}`);
     }
-  });
+  }
 
   function reset() {
     setSchema("");
     setStep("input");
     setPreview(null);
     setSubmitError(null);
+    ingest.clearLastRun();
     previewMutation.reset();
     writeMutation.reset();
-    ingestMutation.reset();
   }
 
   function close() {
@@ -254,13 +249,19 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               </button>
               <button
                 className="pl-btn pl-btn--primary"
-                onClick={() => ingestMutation.mutate()}
-                disabled={ingestMutation.isPending}
+                onClick={runIngestNow}
+                disabled={ingest.isPending}
+                data-testid="add-schema-ingest-now"
               >
-                {ingestMutation.isPending ? "ingest 中..." : "现在 ingest"}
+                {ingest.isPending ? "ingest 中..." : "现在 ingest"}
               </button>
             </div>
-            {ingestMutation.error && <ErrorPanel error={ingestMutation.error} />}
+            {ingest.lastRun && ingest.lastRun.status === "failed" && (
+              <IngestResultPanel run={ingest.lastRun} testIdPrefix="add-schema-ingest" />
+            )}
+            {ingest.lastRun && ingest.lastRun.status === "success" && (
+              <IngestResultPanel run={ingest.lastRun} testIdPrefix="add-schema-ingest" />
+            )}
           </section>
         )}
 

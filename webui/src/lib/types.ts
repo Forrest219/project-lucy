@@ -276,6 +276,7 @@ export type RoleAllowConfig = {
 };
 
 export type RoleDetail = Role & {
+  version?: string;
   usageCount: number;
   users: RoleUserReference[];
   role: {
@@ -581,4 +582,35 @@ export type MonitorConfig = {
     passRateRed: number;
     consecutiveFailThreshold: number;
   }>;
+};
+
+// ─── Ingest runs (M13) ────────────────────────────────────────────────────────
+
+export type IngestScope = "connection" | "schema";
+
+export type IngestRunStatus = "running" | "success" | "failed";
+
+export type IngestRun = {
+  id: string;
+  connectionId: string;
+  schema?: string;
+  requestedScope: IngestScope;
+  executedScope: IngestScope;
+  schemaScopedSupported: boolean;
+  status: IngestRunStatus;
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  command: string[];
+  scannedTableCount?: number;
+  scannedSchemas?: string[];
+  hint?: string;
+};
+
+export type IngestRunsResponse = {
+  runs: IngestRun[];
+  lastByConnection: Record<string, IngestRun>;
 };

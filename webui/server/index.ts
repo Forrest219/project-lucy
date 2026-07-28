@@ -9,6 +9,13 @@ import { changedFiles, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { validateSource, testConnection, runIngest, type ValidationResult } from "./ktx";
 import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
+import {
+  appendIngestRun,
+  ingestFailureHint,
+  readIngestRuns,
+  type IngestRun,
+  type IngestRunsResponse
+} from "./ingest-runs";
 import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
@@ -123,6 +130,14 @@ function makeDiff(oldText: string, newText: string): string {
     }
   }
   return lines.join("\n");
+}
+
+function formatIngestTimestamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
+    `_${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}`
+  );
 }
 
 function enabledTableError(code: string, message: string) {
@@ -468,11 +483,62 @@ export function buildServer() {
 
   app.post<{
     Params: { connId: string };
+    Body: { schema?: string };
   }>("/api/connections/:connId/ingest", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
+    const body = request.body ?? {};
+    const schema = typeof body.schema === "string" && body.schema.trim().length > 0
+      ? body.schema.trim()
+      : undefined;
+    const requestedScope: "connection" | "schema" = schema ? "schema" : "connection";
+    // M13 only supports connection-scoped KTX ingest. If the user requested
+    // schema scope, we still execute `ktx ingest <conn>` and surface the
+    // gap honestly via schemaScopedSupported=false + executedScope=connection.
+    const command: string[] = ["ktx", "ingest", connId];
+    const startedAt = new Date();
     const result = await runIngest(projectRoot, connId);
-    return { ok: true, data: result };
+    const finishedAt = new Date();
+    const status: IngestRun["status"] = result.exitCode === 0 ? "success" : "failed";
+    const scanned = await scannedPhysicalTables(projectRoot, connId);
+    const run: IngestRun = {
+      id: `ing_${formatIngestTimestamp(startedAt)}_${connId}`,
+      connectionId: connId,
+      schema,
+      requestedScope,
+      executedScope: "connection",
+      schemaScopedSupported: false,
+      status,
+      startedAt: startedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      durationMs: finishedAt.getTime() - startedAt.getTime(),
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      command,
+      scannedTableCount: scanned.size,
+      scannedSchemas: Array.from(
+        new Set(Array.from(scanned).map((entry) => entry.split(".")[0]).filter(Boolean))
+      ).sort()
+    };
+    if (status === "failed") {
+      run.hint = ingestFailureHint(connId, schema, result.stderr || result.stdout);
+    }
+    const response = await appendIngestRun(projectRoot, run);
+    return { ok: true, data: response.runs[0] ?? run };
+  });
+
+  app.get<{
+    Params: { connId?: string };
+  }>("/api/connections/ingest-runs", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const data: IngestRunsResponse = await readIngestRuns(projectRoot);
+    if (request.params.connId && data.lastByConnection[request.params.connId] === undefined) {
+      // No history for that connection: still return an empty record so the
+      // frontend can render "未运行" without falling back to the global view.
+      return { ok: true, data: { runs: [], lastByConnection: {} } };
+    }
+    return { ok: true, data };
   });
 
   registerAgentRoutes(app);

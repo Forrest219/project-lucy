@@ -239,8 +239,11 @@ describe("TableWhitelist", () => {
     );
     renderWhitelist();
 
-    expect(await screen.findByText("Connection: mysql-aliyun · Schema: analytics")).toBeInTheDocument();
-    expect(screen.getByText("Connection: mysql-aliyun · Schema: dataforai")).toBeInTheDocument();
+    await screen.findByRole("combobox", { name: "Schema 筛选" });
+    await waitFor(() => {
+      expect(screen.getByText("Connection: mysql-aliyun · Schema: analytics")).toBeInTheDocument();
+      expect(screen.getByText("Connection: mysql-aliyun · Schema: dataforai")).toBeInTheDocument();
+    });
 
     fireEvent.change(screen.getByRole("combobox", { name: "Schema 筛选" }), {
       target: { value: "analytics" }
@@ -251,6 +254,35 @@ describe("TableWhitelist", () => {
     });
     expect(screen.queryByText("Connection: mysql-aliyun · Schema: dataforai")).not.toBeInTheDocument();
     expect(screen.getByText("revenue_daily")).toBeInTheDocument();
+    expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
+  });
+
+  it("keeps configured schemas in the filter even when ingest has not produced table inventory yet", async () => {
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+    );
+    renderWhitelist();
+
+    const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
+    expect(within(schemaSelect).getByRole("option", { name: "openclaw_db" })).toBeInTheDocument();
+    expect(screen.getByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")).toHaveTextContent(
+      "openclaw_db 已在连接配置中启用，但尚未扫描到可加入白名单的表。"
+    );
+
+    fireEvent.change(schemaSelect, { target: { value: "openclaw_db" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("已勾选 0 / 0 张表")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Connection: mysql-aliyun · Schema: openclaw_db")).toBeInTheDocument();
+    expect(screen.queryByText("Connection: mysql-aliyun · Schema: dataforai")).not.toBeInTheDocument();
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
   });
 
@@ -374,7 +406,7 @@ describe("TableWhitelist", () => {
     expect(within(drawer).getAllByText(/analytics\.revenue_monthly/).length).toBeGreaterThan(0);
   });
 
-  it("persists enabled tables and triggers ingest on save-and-scan", async () => {
+  it("persists enabled tables but does not auto-trigger ingest on save", async () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
@@ -385,7 +417,9 @@ describe("TableWhitelist", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
-    fireEvent.click(screen.getByRole("button", { name: "保存并触发扫描" }));
+    // M13: button text changed from "保存并触发扫描" to "保存变更", and saving
+    // the whitelist must NOT call /ingest automatically.
+    fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -393,15 +427,94 @@ describe("TableWhitelist", () => {
         expect.objectContaining({ method: "PUT" })
       );
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/connections/mysql-aliyun/ingest"),
-      expect.objectContaining({ method: "POST" })
-    );
-    expect(await screen.findAllByText(/扫描完成|白名单已保存/)).not.toHaveLength(0);
+    const ingestCalls = fetchMock.mock.calls.filter((call) => {
+      const url = String(call[0]);
+      return url.includes("/api/connections/mysql-aliyun/ingest");
+    });
+    expect(ingestCalls).toHaveLength(0);
+    expect(await screen.findByText(/表白名单已保存/)).toBeInTheDocument();
   });
 
-  it("shows per-connection save progress and keeps every scan log for multi-connection saves", async () => {
-    const { fetchMock, handlers } = stubWhitelistFetch(
+  it("surfaces a 触发 Schema 扫描 action in the toolbar even without any draft changes", async () => {
+    const { fetchMock } = stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const scanButton = await screen.findByTestId("whitelist-trigger-scan");
+    expect(scanButton).toHaveTextContent("触发 Schema 扫描");
+    expect(scanButton).not.toBeDisabled();
+
+    fireEvent.click(scanButton);
+    await waitFor(() => {
+      const ingestCalls = fetchMock.mock.calls.filter((call) => {
+        const url = String(call[0]);
+        return url.includes("/api/connections/mysql-aliyun/ingest");
+      });
+      expect(ingestCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("forwards the current schema filter to the ingest request when the toolbar scan is clicked", async () => {
+    const { fetchMock } = stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+    );
+    renderWhitelist();
+
+    const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
+    fireEvent.change(schemaSelect, { target: { value: "openclaw_db" } });
+
+    fireEvent.click(await screen.findByTestId("whitelist-trigger-scan"));
+
+    await waitFor(() => {
+      const ingestCall = fetchMock.mock.calls.find((call) =>
+        String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+      );
+      expect(ingestCall).toBeDefined();
+    });
+    const ingestCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+    );
+    expect(ingestCall?.[1]?.body).toBe(JSON.stringify({ schema: "openclaw_db" }));
+  });
+
+  it("exposes a 触发 Schema 扫描 action inside the configured empty schema state", async () => {
+    const { fetchMock } = stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+    );
+    renderWhitelist();
+
+    const empty = await screen.findByTestId("configured-schema-empty-mysql-aliyun-openclaw_db");
+    const button = within(empty).getByTestId("whitelist-empty-trigger-scan-mysql-aliyun-openclaw_db");
+    expect(button).toHaveTextContent("触发 Schema 扫描");
+
+    fireEvent.click(button);
+    await waitFor(() => {
+      const ingestCall = fetchMock.mock.calls.find((call) =>
+        String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+      );
+      expect(ingestCall).toBeDefined();
+    });
+    const ingestCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+    );
+    expect(ingestCall?.[1]?.body).toBe(JSON.stringify({ schema: "openclaw_db" }));
+  });
+
+  it("saves multi-connection whitelist changes without auto-triggering ingest", async () => {
+    const { fetchMock } = stubWhitelistFetch(
       defaultHandlers({
         connections: [TEST_CONN, TEST_CONN_REPLICA],
         tablesByConnection: {
@@ -425,14 +538,6 @@ describe("TableWhitelist", () => {
         ]
       })
     );
-    handlers["POST /api/connections/mysql-aliyun/ingest"] = () =>
-      new Response(
-        JSON.stringify({ ok: true, data: { exitCode: 0, stdout: "mysql scan ok", stderr: "" } })
-      );
-    handlers["POST /api/connections/analytics-pg/ingest"] = () =>
-      new Response(
-        JSON.stringify({ ok: true, data: { exitCode: 0, stdout: "pg scan ok", stderr: "" } })
-      );
     renderWhitelist();
 
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
@@ -444,26 +549,21 @@ describe("TableWhitelist", () => {
     await waitFor(() => expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "保存并触发扫描" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
-    const progress = await screen.findByTestId("whitelist-save-progress");
     await waitFor(() => {
-      expect(within(progress).getByText("mysql-aliyun")).toBeInTheDocument();
-      expect(within(progress).getByText("analytics-pg")).toBeInTheDocument();
-      expect(within(progress).getAllByText("扫描完成")).toHaveLength(2);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/connections/mysql-aliyun/enabled-tables"),
+        expect.objectContaining({ method: "PUT" })
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/connections/analytics-pg/enabled-tables"),
+        expect.objectContaining({ method: "PUT" })
+      );
     });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/connections/mysql-aliyun/enabled-tables"),
-      expect.objectContaining({ method: "PUT" })
+    const ingestCalls = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).includes("/ingest")
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/api/connections/analytics-pg/enabled-tables"),
-      expect.objectContaining({ method: "PUT" })
-    );
-    expect(await screen.findByText("Connection: mysql-aliyun · 退出码 0")).toBeInTheDocument();
-    expect(screen.getByText("Connection: analytics-pg · 退出码 0")).toBeInTheDocument();
-    expect(screen.getByText("mysql scan ok")).toBeInTheDocument();
-    expect(screen.getByText("pg scan ok")).toBeInTheDocument();
+    expect(ingestCalls).toHaveLength(0);
   });
 });

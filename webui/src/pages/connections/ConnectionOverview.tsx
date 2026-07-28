@@ -4,8 +4,9 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { ConnectionInfo, ConnectionTestResult, ProjectInfo, SourcesResponse } from "../../lib/types";
+import type { ConnectionInfo, ConnectionTestResult, IngestRunsResponse, ProjectInfo, SourcesResponse } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
+import { IngestActionButton, IngestLastRunBadge } from "../../components/ingest";
 import { MetricCard } from "./MetricCard";
 
 type TestUiStatus = "unknown" | "testing" | "connected" | "disconnected";
@@ -36,6 +37,10 @@ export function ConnectionOverview() {
   const sourcesQuery = useQuery({
     queryKey: queryKeys.sources,
     queryFn: () => apiGet<SourcesResponse>("/api/sources")
+  });
+  const ingestRunsQuery = useQuery({
+    queryKey: queryKeys.ingestRuns,
+    queryFn: () => apiGet<IngestRunsResponse>("/api/connections/ingest-runs")
   });
 
   const connections = projectQuery.data?.connections ?? [];
@@ -140,6 +145,7 @@ export function ConnectionOverview() {
             )}
             {connections.map((conn) => {
               const state: TestUiStatus = testStates[conn.id] ?? "unknown";
+              const lastRun = ingestRunsQuery.data?.lastByConnection[conn.id];
               return (
                 <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
                   <div>
@@ -154,6 +160,7 @@ export function ConnectionOverview() {
                       >
                         {statusLabel(state)}
                       </span>
+                      <IngestLastRunBadge run={lastRun ?? null} />
                     </div>
                     <span>
                       {conn.engine ?? "unknown engine"}
@@ -163,15 +170,37 @@ export function ConnectionOverview() {
                     </span>
                     <span>{conn.driver ?? "未知 driver"}</span>
                   </div>
-                  <div>
+                  <div className="pl-schema-cell">
                     <span>schemas</span>
-                    <strong>{conn.schemas.length > 0 ? conn.schemas.join(", ") : "-"}</strong>
+                    {conn.schemas.length === 0 ? (
+                      <strong>-</strong>
+                    ) : (
+                      <ul className="pl-schema-list">
+                        {conn.schemas.map((schema) => (
+                          <li className="pl-schema-row" key={schema} data-testid={`schema-row-${conn.id}-${schema}`}>
+                            <code>{schema}</code>
+                            <IngestActionButton
+                              connectionId={conn.id}
+                              schema={schema}
+                              label="重新扫描"
+                              variant="ghost"
+                              size="sm"
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   <div>
                     <span>enabled</span>
                     <strong>{conn.enabledTables.length} 张表</strong>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <IngestActionButton
+                      connectionId={conn.id}
+                      label="触发 Ingest"
+                      variant="primary"
+                    />
                     <button
                       type="button"
                       className="pl-btn pl-btn--secondary"
