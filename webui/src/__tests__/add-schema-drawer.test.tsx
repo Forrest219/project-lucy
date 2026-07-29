@@ -254,12 +254,13 @@ describe("AddSchemaDrawer", () => {
     expect(backdrop).not.toHaveClass("pl-modal-backdrop");
   });
 
-  it("labels the three steps with side-effect names", () => {
+  it("labels the three steps with M14 names (no ingest wording)", () => {
     renderDrawer(makeConn());
 
     expect(screen.getByText("1. 输入 Schema")).toBeInTheDocument();
     expect(screen.getByText("2. 测试并预览")).toBeInTheDocument();
-    expect(screen.getByText("3. 确认并 ingest")).toBeInTheDocument();
+    expect(screen.getByText("3. 确认并完成")).toBeInTheDocument();
+    expect(screen.queryByText(/3. 确认并 ingest/)).not.toBeInTheDocument();
   });
 
   it("uses the postgres-aware field label", () => {
@@ -267,7 +268,8 @@ describe("AddSchemaDrawer", () => {
     expect(screen.getByText(/^Schema 名$/)).toBeInTheDocument();
   });
 
-  it("invalidates catalog caches after a successful ingest", async () => {
+  it("after a successful add, surfaces the static loading hint and the reload-catalog button, no ingest CTA", async () => {
+    const fetchMock = vi.fn();
     stubFetch({
       "POST /api/connections/mysql-aliyun/schemas": (body) => {
         if ((body as { dryRun?: boolean }).dryRun === false) {
@@ -291,28 +293,91 @@ describe("AddSchemaDrawer", () => {
           }
         }));
       },
-      "POST /api/connections/mysql-aliyun/ingest": () =>
-        new Response(JSON.stringify({
+      "POST /api/catalog/reload": () => {
+        fetchMock("/api/catalog/reload");
+        return new Response(JSON.stringify({
           ok: true,
           data: {
-            id: "ing_mysql-aliyun",
-            connectionId: "mysql-aliyun",
-            requestedScope: "connection",
-            executedScope: "connection",
-            schemaScopedSupported: false,
+            id: "rel_20260729_103000_001",
             status: "success",
-            startedAt: "2026-07-28T10:30:00.000Z",
-            finishedAt: "2026-07-28T10:30:01.245Z",
-            durationMs: 1245,
-            exitCode: 0,
-            stdout: "ok",
-            stderr: "",
-            command: ["ktx", "ingest", "mysql-aliyun"],
-            scannedTableCount: 4,
-            scannedSchemas: ["dataforai", "finance_mart"]
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "mysql-aliyun",
+            requestedSchema: "finance_mart",
+            connectionIds: ["mysql-aliyun"],
+            connections: 1,
+            configuredSchemas: 2,
+            manifestSchemas: 1,
+            tables: 4,
+            enabledTables: 4,
+            warnings: [],
+            source: "static-yaml"
           }
-        }))
+        }));
+      }
     });
+    // Re-stub with the spy after stubFetch so we also count calls.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        let body: unknown = undefined;
+        if (typeof init?.body === "string") {
+          try {
+            body = JSON.parse(init.body);
+          } catch {
+            body = init.body;
+          }
+        }
+        const key = `${method} ${url}`;
+        const handler =
+          {
+            "POST /api/connections/mysql-aliyun/schemas": () => {
+              if ((body as { dryRun?: boolean }).dryRun === false) {
+                return new Response(JSON.stringify({
+                  ok: true,
+                  data: { written: true, auditId: 7, oldSchemas: ["dataforai"], newSchemas: ["dataforai", "finance_mart"] }
+                }));
+              }
+              return new Response(JSON.stringify({
+                ok: true,
+                data: {
+                  diff: "+      - finance_mart\n",
+                  proposedYaml: "schemas:\n  - dataforai\n  - finance_mart\n",
+                  oldSchemas: ["dataforai"],
+                  newSchemas: ["dataforai", "finance_mart"]
+                }
+              }));
+            },
+            "POST /api/catalog/reload": () => {
+              fetchMock(url, init);
+              return new Response(JSON.stringify({
+                ok: true,
+                data: {
+                  id: "rel_20260729_103000_001",
+                  status: "success",
+                  startedAt: "2026-07-29T02:30:00.000Z",
+                  finishedAt: "2026-07-29T02:30:00.045Z",
+                  durationMs: 45,
+                  requestedConnectionId: "mysql-aliyun",
+                  requestedSchema: "finance_mart",
+                  connectionIds: ["mysql-aliyun"],
+                  connections: 1,
+                  configuredSchemas: 2,
+                  manifestSchemas: 1,
+                  tables: 4,
+                  enabledTables: 4,
+                  warnings: [],
+                  source: "static-yaml"
+                }
+              }));
+            }
+          }[key] ?? (() => new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: key } }), { status: 404 }));
+        return handler();
+      })
+    );
 
     const { client } = renderDrawer(makeConn());
     const invalidate = vi.spyOn(client, "invalidateQueries");
@@ -320,11 +385,32 @@ describe("AddSchemaDrawer", () => {
     fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
     await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
     fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
-    await waitFor(() => screen.getByText("现在 ingest"));
-    invalidate.mockClear();
-    fireEvent.click(screen.getByText("现在 ingest"));
 
+    // Static loading hint and reload button appear; no ingest wording.
+    await waitFor(() => screen.getByTestId("add-schema-reload-catalog"));
+    expect(screen.getByTestId("add-schema-static-loading-hint")).toHaveTextContent(/semantic-layer/);
+    expect(screen.queryByText(/现在 ingest/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ingest 中/)).not.toBeInTheDocument();
+
+    // No request to /ingest at any point.
+    const ingestCalls = (await vi.mocked(global.fetch).mock.calls).filter((call) =>
+      String(call[0]).includes("/ingest")
+    );
+    expect(ingestCalls).toHaveLength(0);
+
+    // Click reload and verify it posts to /api/catalog/reload with the
+    // connectionId + schema.
+    fireEvent.click(screen.getByTestId("add-schema-reload-catalog"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const reloadCall = fetchMock.mock.calls[0];
+    expect(String(reloadCall?.[0])).toBe("/api/catalog/reload");
+    expect(reloadCall?.[1]?.body).toBe(
+      JSON.stringify({ connectionId: "mysql-aliyun", schema: "finance_mart" })
+    );
+
+    // Catalog cache keys invalidated.
     await waitFor(() => {
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ["catalog", "reloads"] });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["project"] });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["connections"] });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["sources"] });
@@ -332,71 +418,6 @@ describe("AddSchemaDrawer", () => {
         queryKey: ["connections", "mysql-aliyun", "tables"]
       });
     });
-  });
-
-  it("shows a collapsible stdout/stderr panel when ingest returns a non-zero exit code", async () => {
-    stubFetch({
-      "POST /api/connections/demo-mysql/schemas": (body) => {
-        if ((body as { dryRun?: boolean }).dryRun === false) {
-          return new Response(JSON.stringify({
-            ok: true,
-            data: {
-              written: true,
-              auditId: 7,
-              oldSchemas: ["dataforai"],
-              newSchemas: ["dataforai", "openclaw_db"]
-            }
-          }));
-        }
-        return new Response(JSON.stringify({
-          ok: true,
-          data: {
-            diff: "+      - openclaw_db\n",
-            proposedYaml: "schemas:\n  - dataforai\n  - openclaw_db\n",
-            oldSchemas: ["dataforai"],
-            newSchemas: ["dataforai", "openclaw_db"]
-          }
-        }));
-      },
-      "POST /api/connections/demo-mysql/ingest": () =>
-        new Response(JSON.stringify({
-          ok: true,
-          data: {
-            id: "ing_demo-mysql-openclaw_db",
-            connectionId: "demo-mysql",
-            schema: "openclaw_db",
-            requestedScope: "schema",
-            executedScope: "connection",
-            schemaScopedSupported: false,
-            status: "failed",
-            startedAt: "2026-07-28T10:30:00.000Z",
-            finishedAt: "2026-07-28T10:30:01.245Z",
-            durationMs: 1245,
-            exitCode: 1,
-            stdout: "",
-            stderr: "Project: /Users/zhangxingchen/Projects/project-lucy\nConnection \"demo-mysql\" is not configured in ktx.yaml\n",
-            command: ["ktx", "ingest", "demo-mysql"],
-            hint: "当前项目的 ktx.yaml 中没有配置连接 demo-mysql，请确认 WebUI 指向的项目根和连接 ID 是否一致。"
-          }
-        }))
-    });
-
-    renderDrawer(makeConn({ id: "demo-mysql" }));
-    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "openclaw_db" } });
-    fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
-    await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
-    fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
-    await waitFor(() => screen.getByText("现在 ingest"));
-    fireEvent.click(screen.getByText("现在 ingest"));
-
-    expect(await screen.findByTestId("add-schema-ingest-failed")).toHaveTextContent("ingest demo-mysql 失败（退出码 1）");
-    expect(screen.getByText(/ktx.yaml 中没有配置连接 demo-mysql/)).toBeInTheDocument();
-    const toggle = screen.getByTestId("add-schema-ingest-toggle");
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByTestId("add-schema-ingest-detail")).not.toBeInTheDocument();
-
-    fireEvent.click(toggle);
-    expect(await screen.findByTestId("add-schema-ingest-detail")).toHaveTextContent("Connection \"demo-mysql\" is not configured in ktx.yaml");
   });
 
   it("uses the MySQL/Doris/StarRocks-aware field label", () => {

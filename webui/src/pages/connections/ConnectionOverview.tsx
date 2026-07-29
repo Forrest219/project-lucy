@@ -4,9 +4,16 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { ConnectionInfo, ConnectionTestResult, IngestRunsResponse, ProjectInfo, SourcesResponse } from "../../lib/types";
+import type {
+  CatalogReloadsResponse,
+  ConnectionInfo,
+  ConnectionTestResult,
+  ProjectInfo,
+  SourcesResponse
+} from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
-import { IngestActionButton, IngestLastRunBadge } from "../../components/ingest";
+import { CatalogReloadButton, CatalogReloadLastRunBadge } from "../../components/catalog";
+import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
 
 type TestUiStatus = "unknown" | "testing" | "connected" | "disconnected";
@@ -38,9 +45,9 @@ export function ConnectionOverview() {
     queryKey: queryKeys.sources,
     queryFn: () => apiGet<SourcesResponse>("/api/sources")
   });
-  const ingestRunsQuery = useQuery({
-    queryKey: queryKeys.ingestRuns,
-    queryFn: () => apiGet<IngestRunsResponse>("/api/connections/ingest-runs")
+  const catalogReloadsQuery = useQuery({
+    queryKey: queryKeys.catalogReloads,
+    queryFn: () => apiGet<CatalogReloadsResponse>("/api/catalog/reloads")
   });
 
   const connections = projectQuery.data?.connections ?? [];
@@ -90,18 +97,27 @@ export function ConnectionOverview() {
 
   return (
     <div className="pl-page-stack">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">数据库接入</p>
-          <h1 className="text-xl font-semibold">连接概览</h1>
-          <p className="pl-page-intro">查看当前 KTX 项目的数据库连接、启用表范围和语义层覆盖情况。</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link className="pl-btn pl-btn--secondary" to="/connections/whitelist">表白名单</Link>
-          <Link className="pl-btn pl-btn--secondary" to="/connections/test">连通测试</Link>
-          <Link className="pl-btn pl-btn--primary" to="/">打开表目录</Link>
-        </div>
-      </div>
+      <PageHeader
+        title="连接概览"
+        breadcrumbs={["数据库接入", "连接概览"]}
+        description="查看当前 KTX 项目的数据库连接、启用表范围和语义层覆盖情况。"
+        badges={
+          projectQuery.data ? (
+            <>
+              <span data-testid="page-header-badge-root">{projectQuery.data.root}</span>
+              <span>{connections.length} 个连接</span>
+              <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
+            </>
+          ) : null
+        }
+        actions={
+          <>
+            <Link className="pl-btn pl-btn--secondary" to="/connections/whitelist">表白名单</Link>
+            <Link className="pl-btn pl-btn--secondary" to="/connections/test">连通测试</Link>
+            <Link className="pl-btn pl-btn--primary" to="/">打开表目录</Link>
+          </>
+        }
+      />
 
       <div className="pl-metric-grid">
         <MetricCard
@@ -133,19 +149,14 @@ export function ConnectionOverview() {
 
       <div className="pl-overview-grid">
         <section className="pl-panel">
-          <div className="pl-section-heading">
-            <div>
-              <h2 className="pl-panel-title">Connection Details</h2>
-              <p className="pl-notice">连接配置来自当前项目，不在 WebUI 中直接编辑凭据。</p>
-            </div>
-          </div>
+          <p className="pl-notice mb-3">连接配置来自当前项目，不在 WebUI 中直接编辑凭据。</p>
           <div className="pl-table-list">
             {connections.length === 0 && (
               <p className="text-sm text-fg-muted py-4">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
             )}
             {connections.map((conn) => {
               const state: TestUiStatus = testStates[conn.id] ?? "unknown";
-              const lastRun = ingestRunsQuery.data?.lastByConnection[conn.id];
+              const lastRun = catalogReloadsQuery.data?.lastByConnection[conn.id];
               return (
                 <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
                   <div>
@@ -160,7 +171,7 @@ export function ConnectionOverview() {
                       >
                         {statusLabel(state)}
                       </span>
-                      <IngestLastRunBadge run={lastRun ?? null} />
+                      <CatalogReloadLastRunBadge run={lastRun ?? null} />
                     </div>
                     <span>
                       {conn.engine ?? "unknown engine"}
@@ -179,13 +190,7 @@ export function ConnectionOverview() {
                         {conn.schemas.map((schema) => (
                           <li className="pl-schema-row" key={schema} data-testid={`schema-row-${conn.id}-${schema}`}>
                             <code>{schema}</code>
-                            <IngestActionButton
-                              connectionId={conn.id}
-                              schema={schema}
-                              label="重新扫描"
-                              variant="ghost"
-                              size="sm"
-                            />
+                            <span className="text-xs text-fg-muted">本地 YAML 资产</span>
                           </li>
                         ))}
                       </ul>
@@ -196,10 +201,11 @@ export function ConnectionOverview() {
                     <strong>{conn.enabledTables.length} 张表</strong>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <IngestActionButton
+                    <CatalogReloadButton
                       connectionId={conn.id}
-                      label="触发 Ingest"
+                      label="重新加载本地资产"
                       variant="primary"
+                      testId={`catalog-reload-${conn.id}`}
                     />
                     <button
                       type="button"
@@ -226,7 +232,6 @@ export function ConnectionOverview() {
         </section>
 
         <aside className="pl-panel">
-          <h2 className="pl-panel-title">Quick Start</h2>
           <div className="pl-action-list">
             <Link to="/connections/whitelist">
               <strong>维护表白名单</strong>

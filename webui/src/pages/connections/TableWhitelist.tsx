@@ -12,7 +12,8 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
-import { IngestActionButton } from "../../components/ingest";
+import { CatalogReloadButton } from "../../components/catalog";
+import { PageHeader } from "../../components/PageHeader";
 
 type WhitelistTableRow = {
   connectionId: string;
@@ -318,7 +319,7 @@ export function TableWhitelist() {
       const allWritten = results.every((r) => r.write.written);
       if (allWritten) {
         toast.success("表白名单已保存");
-        setStatusMessage("表白名单已保存。需要刷新物理表元数据时，可点击右上角“触发 Schema 扫描”。");
+        setStatusMessage("表白名单已保存。需要刷新本地表清单时，可点击右上角“刷新本地表目录”。");
         setStatusTone("success");
       } else {
         toast.error("表白名单保存未完成，请重试。");
@@ -343,12 +344,12 @@ export function TableWhitelist() {
     }
   });
 
-  // M13: pick a default ingest target for the toolbar scan button.
-  // - single connection + specific schema → ingest with that schema
-  // - single connection + "all"           → ingest without schema (connection scope)
+  // M14: pick a default catalog reload target for the toolbar button.
+  // - single connection + specific schema → reload with that schema filter
+  // - single connection + "all"           → reload without schema (connection scope)
   // - multiple connections                → button is disabled with a chooser hint
-  const toolbarScanConnId = connections.length === 1 ? connections[0]?.id : undefined;
-  const toolbarScanSchema =
+  const toolbarReloadConnId = connections.length === 1 ? connections[0]?.id : undefined;
+  const toolbarReloadSchema =
     connections.length === 1 && schemaFilter !== "all" ? schemaFilter : undefined;
 
   if (connectionsQuery.isLoading) {
@@ -356,23 +357,32 @@ export function TableWhitelist() {
   }
 
   return (
-    <section className="pl-panel">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">数据库接入</p>
-          <h1 className="text-xl font-semibold">表白名单</h1>
-        </div>
-      </div>
-      <p className="pl-page-intro">
-        维护进入语义层的表范围，保存后写入 <code>ktx.yaml</code> 的 <code>enabled_tables</code> 字段。
-      </p>
+    <div className="pl-page-stack">
+      <PageHeader
+        title="表白名单"
+        breadcrumbs={["数据库接入", "表白名单"]}
+        description={
+          <>
+            维护进入语义层的表范围，保存后写入 <code>ktx.yaml</code> 的 <code>enabled_tables</code> 字段。
+          </>
+        }
+        badges={
+          connections.length > 0 ? (
+            <>
+              <span>{connections.length} 个连接</span>
+              <span>已勾选 {visibleChecked} / {visibleTotal} 张表</span>
+            </>
+          ) : null
+        }
+      />
 
-      {connections.length === 0 && (
-        <p className="text-sm text-fg-muted">暂无连接配置。</p>
-      )}
+      <section className="pl-panel">
+        {connections.length === 0 && (
+          <p className="text-sm text-fg-muted">暂无连接配置。</p>
+        )}
 
-      {connections.length > 0 && (
-        <div className="pl-whitelist-toolbar mt-4" role="toolbar" aria-label="表白名单工具栏">
+        {connections.length > 0 && (
+          <div className="pl-whitelist-toolbar" role="toolbar" aria-label="表白名单工具栏">
           <label className="grid gap-1.5 text-sm">
             <span>搜索</span>
             <input
@@ -419,23 +429,23 @@ export function TableWhitelist() {
             >
               反选当前结果
             </button>
-            {toolbarScanConnId ? (
-              <IngestActionButton
-                connectionId={toolbarScanConnId}
-                schema={toolbarScanSchema}
-                label="触发 Schema 扫描"
+            {toolbarReloadConnId ? (
+              <CatalogReloadButton
+                connectionId={toolbarReloadConnId}
+                schema={toolbarReloadSchema}
+                label="刷新本地表目录"
                 variant="secondary"
-                testId="whitelist-trigger-scan"
+                testId="whitelist-reload-catalog"
               />
             ) : (
               <button
                 type="button"
                 className="pl-btn pl-btn--secondary"
                 disabled
-                title="请先在连接概览中为单个连接触发 ingest"
-                data-testid="whitelist-trigger-scan"
+                title="请先在连接概览中为单个连接刷新本地资产"
+                data-testid="whitelist-reload-catalog"
               >
-                触发 Schema 扫描
+                刷新本地表目录
               </button>
             )}
           </div>
@@ -520,19 +530,20 @@ export function TableWhitelist() {
             Connection: {conn.id} · Schema: {schema}
           </div>
           <div className="pl-empty-state">
-            <strong>{schema} 已在连接配置中启用，但尚未扫描到可加入白名单的表。</strong>
+            <strong>{schema} 已在连接配置中启用，但本地 semantic-layer 尚未提供表清单。</strong>
             <p className="mt-1">
-              白名单只展示 <code>semantic-layer/{conn.id}/_schema</code> 中的扫描结果。
-              触发 Schema 扫描后，KTX 会把当前 schema 的表清单同步到 semantic-layer，再回到这里加入白名单。
+              请将 manifest 文件放入 <code>semantic-layer/{conn.id}/_schema/{schema}.yaml</code>，
+              或在具备 KTX/数据库权限的离线环境中生成后提交。
+              白名单只读取本地 YAML 资产，不会访问物理数据库。
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <IngestActionButton
+              <CatalogReloadButton
                 connectionId={conn.id}
                 schema={schema}
-                label="触发 Schema 扫描"
+                label="刷新本地表目录"
                 variant="primary"
                 size="sm"
-                testId={`whitelist-empty-trigger-scan-${conn.id}-${schema}`}
+                testId={`whitelist-empty-reload-catalog-${conn.id}-${schema}`}
               />
               <Link
                 to="/connections"
@@ -551,6 +562,7 @@ export function TableWhitelist() {
           当前筛选条件下没有可加入白名单的表。
         </div>
       )}
+      </section>
 
       {statusMessage && (
         <div
@@ -673,6 +685,6 @@ export function TableWhitelist() {
       )}
 
       {false && null /* M13: scan logs are now handled by the shared IngestDiagnosticsDrawer (toolbar / per-schema buttons). */}
-    </section>
+    </div>
   );
 }

@@ -1,27 +1,22 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the ktx CLI wrapper so the test does not shell out.
+// M14: the WebUI route must NEVER shell out to ktx. The mocks throw if any
+// WebUI code accidentally calls into ktx, so the test fails loudly instead of
+// silently passing.
 vi.mock("../ktx", async () => {
   const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+  const failIfCalled = () => {
+    throw new Error("M14: WebUI must not call runIngest from /api/connections/:connId/ingest");
+  };
   return {
     ...actual,
-    testConnection: vi.fn(async () => ({
-      status: "ok" as const,
-      latencyMs: 5,
-      detail: "ok"
-    })),
-    runIngest: vi.fn(async () => ({ exitCode: 0, stdout: "scanned 3 tables", stderr: "" })),
-    validateSource: vi.fn(async () => ({
-      ok: true,
-      exitCode: 0,
-      stdout: "valid",
-      stderr: "",
-      issues: []
-    }))
+    testConnection: vi.fn(failIfCalled),
+    runIngest: vi.fn(failIfCalled),
+    validateSource: vi.fn(failIfCalled)
   };
 });
 
@@ -30,23 +25,14 @@ let auditDbPath: string;
 let previousRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
-async function makeProject(yaml: string, schemaFiles: Record<string, string> = {}) {
-  projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-api-ingest-"));
+async function makeProject(yaml: string) {
+  projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-api-ingest-alias-"));
   await writeFile(path.join(projectRoot, "ktx.yaml"), yaml, "utf8");
   auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
   await mkdir(path.dirname(auditDbPath), { recursive: true });
-  const connId = "demo-mysql";
-  for (const [schemaName, content] of Object.entries(schemaFiles)) {
-    const dir = path.join(projectRoot, "semantic-layer", connId, "_schema");
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, `${schemaName}.yaml`), content, "utf8");
-  }
 }
 
 beforeEach(async () => {
-  // The server caches module-scope state (project root resolution, sidecar IO).
-  // Resetting modules between tests forces a fresh import so each test gets its
-  // own KTX_PROJECT_ROOT and isolated .ktx-ui sidecar directory.
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
@@ -74,22 +60,10 @@ async function buildFreshServer() {
   return buildServer();
 }
 
-const SCHEMA_FILES = {
-  dataforai: `tables:
-  superstore_orders:
-    table: dataforai.superstore_orders
-  superstore_people:
-    table: dataforai.superstore_people
-  superstore_returns:
-    table: dataforai.superstore_returns
-`
-};
-
-describe("POST /api/connections/:connId/ingest", () => {
-  it("records a successful connection-scoped run and appends to sidecar", async () => {
+describe("POST /api/connections/:connId/ingest (M14 deprecated alias)", () => {
+  it("returns deprecated: true + replacement and never shells out", async () => {
     await makeProject(
-      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`,
-      SCHEMA_FILES
+      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_AUDIT_DB = auditDbPath;
@@ -102,151 +76,68 @@ describe("POST /api/connections/:connId/ingest", () => {
       .expect(200);
 
     expect(res.body.ok).toBe(true);
-    const run = res.body.data;
-    expect(run.connectionId).toBe("demo-mysql");
-    expect(run.requestedScope).toBe("connection");
-    expect(run.executedScope).toBe("connection");
-    expect(run.schemaScopedSupported).toBe(false);
-    expect(run.status).toBe("success");
-    expect(run.exitCode).toBe(0);
-    expect(run.command).toEqual(["ktx", "ingest", "demo-mysql"]);
-    expect(run.scannedTableCount).toBe(3);
-    expect(run.scannedSchemas).toEqual(["dataforai"]);
-    expect(run.finishedAt).toBeDefined();
-    expect(run.durationMs).toBeGreaterThanOrEqual(0);
-
-    // Sidecar file should now exist.
-    const sidecarText = await readFile(
-      path.join(projectRoot, ".ktx-ui", "ingest-runs.json"),
-      "utf8"
-    );
-    const sidecar = JSON.parse(sidecarText) as { runs: Array<{ id: string }> };
-    expect(sidecar.runs).toHaveLength(1);
-    expect(sidecar.runs[0]?.id).toBe(run.id);
-
-    await app.close();
-  });
-
-  it("preserves requestedScope=schema but executes connection scope when KTX does not support schema", async () => {
-    await makeProject(
-      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`,
-      SCHEMA_FILES
-    );
-    process.env.KTX_PROJECT_ROOT = projectRoot;
-    process.env.LUCY_AUDIT_DB = auditDbPath;
-
-    const app = await buildFreshServer();
-    await app.ready();
-    const res = await request(app.server)
-      .post("/api/connections/demo-mysql/ingest")
-      .send({ schema: "openclaw_db" })
-      .expect(200);
-
-    expect(res.body.ok).toBe(true);
-    const run = res.body.data;
-    expect(run.schema).toBe("openclaw_db");
-    expect(run.requestedScope).toBe("schema");
-    expect(run.executedScope).toBe("connection");
-    expect(run.schemaScopedSupported).toBe(false);
-
-    // The CLI command must not include a fake --schema flag.
-    expect(run.command).toEqual(["ktx", "ingest", "demo-mysql"]);
-
-    await app.close();
-  });
-
-  it("returns structured failure data (still ok:true) with exitCode, stderr, stdout, hint", async () => {
-    await makeProject(
-      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`,
-      SCHEMA_FILES
-    );
-    process.env.KTX_PROJECT_ROOT = projectRoot;
-    process.env.LUCY_AUDIT_DB = auditDbPath;
+    const data = res.body.data;
+    expect(data.deprecated).toBe(true);
+    expect(data.replacement).toBe("/api/catalog/reload");
+    expect(data.message).toMatch(/no longer executes ktx ingest/i);
+    expect(data.reload).toBeDefined();
+    expect(data.reload.source).toBe("static-yaml");
+    expect(data.reload.deprecatedIngestAlias).toBe(true);
+    expect(data.reload.requestedConnectionId).toBe("demo-mysql");
+    // CLI-shaped fields must NOT appear in the response.
+    expect(data.command).toBeUndefined();
+    expect(data.exitCode).toBeUndefined();
+    expect(data.stdout).toBeUndefined();
+    expect(data.stderr).toBeUndefined();
+    expect(data.scannedTableCount).toBeUndefined();
 
     const ktx = await import("../ktx");
-    vi.mocked(ktx.runIngest).mockResolvedValueOnce({
-      exitCode: 1,
-      stdout: "",
-      stderr: "Unknown database 'openclaw_db'"
-    });
-
-    const app = await buildFreshServer();
-    await app.ready();
-    const res = await request(app.server)
-      .post("/api/connections/demo-mysql/ingest")
-      .send({ schema: "openclaw_db" })
-      .expect(200);
-
-    expect(res.body.ok).toBe(true);
-    const run = res.body.data;
-    expect(run.status).toBe("failed");
-    expect(run.exitCode).toBe(1);
-    expect(run.stderr).toContain("Unknown database");
-    expect(run.stdout).toBe("");
-    expect(run.hint).toMatch(/物理库|schema/);
-    expect(run.requestedScope).toBe("schema");
+    expect(vi.mocked(ktx.runIngest)).not.toHaveBeenCalled();
 
     await app.close();
   });
 
-  it("redacts and bounds the persisted logs so secrets never leak and the file stays small", async () => {
+  it("forwards the optional schema filter into the static reload run", async () => {
     await makeProject(
-      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`,
-      SCHEMA_FILES
+      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_AUDIT_DB = auditDbPath;
-
-    const huge = "x".repeat(40_000);
-    const ktx = await import("../ktx");
-    vi.mocked(ktx.runIngest).mockResolvedValueOnce({
-      exitCode: 0,
-      stdout: `loaded password=secret123 ${huge}`,
-      stderr: ""
-    });
 
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
       .post("/api/connections/demo-mysql/ingest")
-      .send({})
+      .send({ schema: "dataforai" })
       .expect(200);
 
     expect(res.body.ok).toBe(true);
-    const run = res.body.data;
-    expect(run.stdout).not.toContain("secret123");
-    expect(run.stdout).toContain("password=[REDACTED]");
-    expect(run.stdout?.length).toBe(16 * 1024);
+    const data = res.body.data;
+    expect(data.deprecated).toBe(true);
+    expect(data.reload.requestedConnectionId).toBe("demo-mysql");
+    expect(data.reload.requestedSchema).toBe("dataforai");
 
     await app.close();
   });
 });
 
-describe("GET /api/connections/ingest-runs", () => {
-  it("returns the recorded run history and per-connection last run", async () => {
+describe("GET /api/connections/ingest-runs (legacy)", () => {
+  it("still serves the legacy sidecar for backward compatibility", async () => {
     await makeProject(
-      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`,
-      SCHEMA_FILES
+      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
     await app.ready();
-    await request(app.server)
-      .post("/api/connections/demo-mysql/ingest")
-      .send({})
-      .expect(200);
-    await request(app.server)
-      .post("/api/connections/demo-mysql/ingest")
-      .send({ schema: "dataforai" })
-      .expect(200);
-
     const res = await request(app.server).get("/api/connections/ingest-runs").expect(200);
+
     expect(res.body.ok).toBe(true);
-    expect(res.body.data.runs).toHaveLength(2);
-    expect(res.body.data.lastByConnection["demo-mysql"]).toBeDefined();
-    expect(res.body.data.lastByConnection["demo-mysql"].connectionId).toBe("demo-mysql");
+    // M14 stopped writing the ingest sidecar. Legacy runs may exist from M13
+    // history, but new reloads do not append to it.
+    expect(Array.isArray(res.body.data.runs)).toBe(true);
+    expect(res.body.data.lastByConnection).toBeDefined();
 
     await app.close();
   });

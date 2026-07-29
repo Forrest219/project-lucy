@@ -120,8 +120,32 @@ function defaultHandlers(opts: {
         })
       );
     };
-    handlers[`POST /api/connections/${conn.id}/ingest`] = () =>
-      new Response(JSON.stringify({ ok: true, data: { exitCode: 0, stdout: "ok", stderr: "" } }));
+    // M14: catalog reload endpoint replaces the deprecated ingest endpoint.
+    handlers[`POST /api/catalog/reload`] = (body) => {
+      const b = body as { connectionId?: string; schema?: string };
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            id: "rel_20260729_103000_001",
+            status: "success",
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: b.connectionId,
+            requestedSchema: b.schema,
+            connectionIds: b.connectionId ? [b.connectionId] : [conn.id],
+            connections: 1,
+            configuredSchemas: 1,
+            manifestSchemas: 1,
+            tables: 3,
+            enabledTables: 3,
+            warnings: [],
+            source: "static-yaml"
+          }
+        })
+      );
+    };
   }
 
   return handlers;
@@ -186,7 +210,7 @@ describe("TableWhitelist", () => {
     expect(await screen.findByRole("heading", { name: "表白名单" })).toBeInTheDocument();
     expect(screen.getByPlaceholderText("搜索表名/描述...")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Schema 筛选" })).toBeInTheDocument();
-    expect(screen.getByText("已勾选 2 / 3 张表")).toBeInTheDocument();
+    expect(screen.getAllByText("已勾选 2 / 3 张表")[0]).toBeInTheDocument();
     expect(screen.getByText("Connection: mysql-aliyun · Schema: dataforai")).toBeInTheDocument();
     expect(screen.getByText("superstore_orders")).toBeInTheDocument();
     expect(screen.getByText("8 个")).toBeInTheDocument();
@@ -257,7 +281,7 @@ describe("TableWhitelist", () => {
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
   });
 
-  it("keeps configured schemas in the filter even when ingest has not produced table inventory yet", async () => {
+  it("keeps configured schemas in the filter even when the local manifest is missing", async () => {
     stubWhitelistFetch(
       defaultHandlers({
         connection: {
@@ -273,13 +297,13 @@ describe("TableWhitelist", () => {
     const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
     expect(within(schemaSelect).getByRole("option", { name: "openclaw_db" })).toBeInTheDocument();
     expect(screen.getByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")).toHaveTextContent(
-      "openclaw_db 已在连接配置中启用，但尚未扫描到可加入白名单的表。"
+      "openclaw_db 已在连接配置中启用，但本地 semantic-layer 尚未提供表清单。"
     );
 
     fireEvent.change(schemaSelect, { target: { value: "openclaw_db" } });
 
     await waitFor(() => {
-      expect(screen.getByText("已勾选 0 / 0 张表")).toBeInTheDocument();
+      expect(screen.getAllByText("已勾选 0 / 0 张表")[0]).toBeInTheDocument();
     });
     expect(screen.getByText("Connection: mysql-aliyun · Schema: openclaw_db")).toBeInTheDocument();
     expect(screen.queryByText("Connection: mysql-aliyun · Schema: dataforai")).not.toBeInTheDocument();
@@ -294,7 +318,7 @@ describe("TableWhitelist", () => {
     fireEvent.change(search, { target: { value: "returns" } });
 
     await waitFor(() => {
-      expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument();
+      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
     });
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
     expect(screen.queryByText("superstore_people")).not.toBeInTheDocument();
@@ -309,19 +333,19 @@ describe("TableWhitelist", () => {
     fireEvent.change(search, { target: { value: "returns" } });
 
     await waitFor(() => {
-      expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument();
+      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
 
-    expect(await screen.findByText("已勾选 1 / 1 张表")).toBeInTheDocument();
+    expect(await screen.findAllByText("已勾选 1 / 1 张表")).toHaveLength(2);
     expect(screen.getByText(/变更未保存/)).toBeInTheDocument();
     expect(screen.getByText(/新增 1 张表/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "反选当前结果" }));
 
     await waitFor(() => {
-      expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument();
+      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
     });
     expect(screen.queryByText(/变更未保存/)).not.toBeInTheDocument();
   });
@@ -333,7 +357,7 @@ describe("TableWhitelist", () => {
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
     await waitFor(() => {
-      expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument();
+      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
@@ -389,11 +413,11 @@ describe("TableWhitelist", () => {
 
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
-    await waitFor(() => expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
 
     fireEvent.change(search, { target: { value: "monthly" } });
-    await waitFor(() => expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
 
     fireEvent.click(screen.getByRole("button", { name: "预览 YAML" }));
@@ -406,19 +430,19 @@ describe("TableWhitelist", () => {
     expect(within(drawer).getAllByText(/analytics\.revenue_monthly/).length).toBeGreaterThan(0);
   });
 
-  it("persists enabled tables but does not auto-trigger ingest on save", async () => {
+  it("persists enabled tables but does not auto-trigger ingest or catalog reload on save", async () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
     await waitFor(() => {
-      expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument();
+      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
     // M13: button text changed from "保存并触发扫描" to "保存变更", and saving
-    // the whitelist must NOT call /ingest automatically.
+    // the whitelist must NOT call /ingest or /api/catalog/reload automatically.
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
     await waitFor(() => {
@@ -432,28 +456,38 @@ describe("TableWhitelist", () => {
       return url.includes("/api/connections/mysql-aliyun/ingest");
     });
     expect(ingestCalls).toHaveLength(0);
+    const reloadCalls = fetchMock.mock.calls.filter((call) => {
+      const url = String(call[0]);
+      return url.includes("/api/catalog/reload");
+    });
+    expect(reloadCalls).toHaveLength(0);
     expect(await screen.findByText(/表白名单已保存/)).toBeInTheDocument();
   });
 
-  it("surfaces a 触发 Schema 扫描 action in the toolbar even without any draft changes", async () => {
+  it("surfaces a 刷新本地表目录 action in the toolbar even without any draft changes", async () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
-    const scanButton = await screen.findByTestId("whitelist-trigger-scan");
-    expect(scanButton).toHaveTextContent("触发 Schema 扫描");
-    expect(scanButton).not.toBeDisabled();
+    const reloadButton = await screen.findByTestId("whitelist-reload-catalog");
+    expect(reloadButton).toHaveTextContent("刷新本地表目录");
+    expect(reloadButton).not.toBeDisabled();
 
-    fireEvent.click(scanButton);
+    fireEvent.click(reloadButton);
     await waitFor(() => {
-      const ingestCalls = fetchMock.mock.calls.filter((call) => {
+      const reloadCalls = fetchMock.mock.calls.filter((call) => {
         const url = String(call[0]);
-        return url.includes("/api/connections/mysql-aliyun/ingest");
+        return url.includes("/api/catalog/reload");
       });
-      expect(ingestCalls.length).toBeGreaterThan(0);
+      expect(reloadCalls.length).toBeGreaterThan(0);
     });
+    // The deprecated ingest endpoint must never be called from the whitelist.
+    const ingestCalls = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).includes("/ingest")
+    );
+    expect(ingestCalls).toHaveLength(0);
   });
 
-  it("forwards the current schema filter to the ingest request when the toolbar scan is clicked", async () => {
+  it("forwards the current schema filter to the reload request when the toolbar button is clicked", async () => {
     const { fetchMock } = stubWhitelistFetch(
       defaultHandlers({
         connection: {
@@ -469,21 +503,23 @@ describe("TableWhitelist", () => {
     const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
     fireEvent.change(schemaSelect, { target: { value: "openclaw_db" } });
 
-    fireEvent.click(await screen.findByTestId("whitelist-trigger-scan"));
+    fireEvent.click(await screen.findByTestId("whitelist-reload-catalog"));
 
     await waitFor(() => {
-      const ingestCall = fetchMock.mock.calls.find((call) =>
-        String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+      const reloadCall = fetchMock.mock.calls.find((call) =>
+        String(call[0]).includes("/api/catalog/reload")
       );
-      expect(ingestCall).toBeDefined();
+      expect(reloadCall).toBeDefined();
     });
-    const ingestCall = fetchMock.mock.calls.find((call) =>
-      String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+    const reloadCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/api/catalog/reload")
     );
-    expect(ingestCall?.[1]?.body).toBe(JSON.stringify({ schema: "openclaw_db" }));
+    expect(reloadCall?.[1]?.body).toBe(
+      JSON.stringify({ connectionId: "mysql-aliyun", schema: "openclaw_db" })
+    );
   });
 
-  it("exposes a 触发 Schema 扫描 action inside the configured empty schema state", async () => {
+  it("exposes a 刷新本地表目录 action inside the configured empty schema state", async () => {
     const { fetchMock } = stubWhitelistFetch(
       defaultHandlers({
         connection: {
@@ -497,20 +533,24 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const empty = await screen.findByTestId("configured-schema-empty-mysql-aliyun-openclaw_db");
-    const button = within(empty).getByTestId("whitelist-empty-trigger-scan-mysql-aliyun-openclaw_db");
-    expect(button).toHaveTextContent("触发 Schema 扫描");
+    const button = within(empty).getByTestId(
+      "whitelist-empty-reload-catalog-mysql-aliyun-openclaw_db"
+    );
+    expect(button).toHaveTextContent("刷新本地表目录");
 
     fireEvent.click(button);
     await waitFor(() => {
-      const ingestCall = fetchMock.mock.calls.find((call) =>
-        String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+      const reloadCall = fetchMock.mock.calls.find((call) =>
+        String(call[0]).includes("/api/catalog/reload")
       );
-      expect(ingestCall).toBeDefined();
+      expect(reloadCall).toBeDefined();
     });
-    const ingestCall = fetchMock.mock.calls.find((call) =>
-      String(call[0]).includes("/api/connections/mysql-aliyun/ingest")
+    const reloadCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/api/catalog/reload")
     );
-    expect(ingestCall?.[1]?.body).toBe(JSON.stringify({ schema: "openclaw_db" }));
+    expect(reloadCall?.[1]?.body).toBe(
+      JSON.stringify({ connectionId: "mysql-aliyun", schema: "openclaw_db" })
+    );
   });
 
   it("saves multi-connection whitelist changes without auto-triggering ingest", async () => {
@@ -542,11 +582,11 @@ describe("TableWhitelist", () => {
 
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
-    await waitFor(() => expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
 
     fireEvent.change(search, { target: { value: "monthly" } });
-    await waitFor(() => expect(screen.getByText("已勾选 0 / 1 张表")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
 
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));

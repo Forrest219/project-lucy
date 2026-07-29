@@ -7,15 +7,19 @@ import { parse, stringify } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
 import { changedFiles, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
-import { validateSource, testConnection, runIngest, type ValidationResult } from "./ktx";
+import { validateSource, testConnection, type ValidationResult } from "./ktx";
 import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
 import {
-  appendIngestRun,
-  ingestFailureHint,
-  readIngestRuns,
-  type IngestRun,
+  // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
+  // `/api/connections/:connId/ingest` alias compatibility route.
+  readIngestRuns as readLegacyIngestRuns,
   type IngestRunsResponse
 } from "./ingest-runs";
+import {
+  reloadCatalog,
+  readCatalogReloads,
+  type CatalogReloadsResponse
+} from "./catalog-reload";
 import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
@@ -130,14 +134,6 @@ function makeDiff(oldText: string, newText: string): string {
     }
   }
   return lines.join("\n");
-}
-
-function formatIngestTimestamp(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
-    `_${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}`
-  );
 }
 
 function enabledTableError(code: string, message: string) {
@@ -481,6 +477,12 @@ export function buildServer() {
     return { ok: true, data: result };
   });
 
+  // M14: deprecated alias for `/api/connections/:connId/ingest`. The M13
+  // route used to shell out to `ktx ingest <conn>`, which transitively
+  // required LLM/embedding/enrichment configuration. We now satisfy the
+  // request by reloading the static local catalog and return a `deprecated:
+  // true` envelope so legacy clients get a structured 200 response instead
+  // of a 404 or an enrichment-misconfiguration crash.
   app.post<{
     Params: { connId: string };
     Body: { schema?: string };
@@ -491,53 +493,61 @@ export function buildServer() {
     const schema = typeof body.schema === "string" && body.schema.trim().length > 0
       ? body.schema.trim()
       : undefined;
-    const requestedScope: "connection" | "schema" = schema ? "schema" : "connection";
-    // M13 only supports connection-scoped KTX ingest. If the user requested
-    // schema scope, we still execute `ktx ingest <conn>` and surface the
-    // gap honestly via schemaScopedSupported=false + executedScope=connection.
-    const command: string[] = ["ktx", "ingest", connId];
-    const startedAt = new Date();
-    const result = await runIngest(projectRoot, connId);
-    const finishedAt = new Date();
-    const status: IngestRun["status"] = result.exitCode === 0 ? "success" : "failed";
-    const scanned = await scannedPhysicalTables(projectRoot, connId);
-    const run: IngestRun = {
-      id: `ing_${formatIngestTimestamp(startedAt)}_${connId}`,
+    const reload = await reloadCatalog(projectRoot, {
       connectionId: connId,
-      schema,
-      requestedScope,
-      executedScope: "connection",
-      schemaScopedSupported: false,
-      status,
-      startedAt: startedAt.toISOString(),
-      finishedAt: finishedAt.toISOString(),
-      durationMs: finishedAt.getTime() - startedAt.getTime(),
-      exitCode: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      command,
-      scannedTableCount: scanned.size,
-      scannedSchemas: Array.from(
-        new Set(Array.from(scanned).map((entry) => entry.split(".")[0]).filter(Boolean))
-      ).sort()
+      ...(schema ? { schema } : {}),
+      deprecatedIngestAlias: true
+    });
+    return {
+      ok: true,
+      data: {
+        deprecated: true,
+        replacement: "/api/catalog/reload",
+        message: "WebUI no longer executes ktx ingest. Static catalog reload completed.",
+        reload
+      }
     };
-    if (status === "failed") {
-      run.hint = ingestFailureHint(connId, schema, result.stderr || result.stdout);
-    }
-    const response = await appendIngestRun(projectRoot, run);
-    return { ok: true, data: response.runs[0] ?? run };
   });
 
   app.get<{
     Params: { connId?: string };
   }>("/api/connections/ingest-runs", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const data: IngestRunsResponse = await readIngestRuns(projectRoot);
+    const data: IngestRunsResponse = await readLegacyIngestRuns(projectRoot);
     if (request.params.connId && data.lastByConnection[request.params.connId] === undefined) {
       // No history for that connection: still return an empty record so the
       // frontend can render "未运行" without falling back to the global view.
       return { ok: true, data: { runs: [], lastByConnection: {} } };
     }
+    return { ok: true, data };
+  });
+
+  // M14: the new core catalog refresh endpoints. They read only the local
+  // filesystem and never shell out to the ktx CLI. They are the replacement
+  // for the M13 ingest route (which is preserved as a deprecated alias above).
+  app.post<{
+    Body: { connectionId?: string; schema?: string };
+  }>("/api/catalog/reload", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const connectionId =
+      typeof body.connectionId === "string" && body.connectionId.trim().length > 0
+        ? body.connectionId.trim()
+        : undefined;
+    const schema =
+      typeof body.schema === "string" && body.schema.trim().length > 0
+        ? body.schema.trim()
+        : undefined;
+    const run = await reloadCatalog(projectRoot, {
+      ...(connectionId ? { connectionId } : {}),
+      ...(schema ? { schema } : {})
+    });
+    return { ok: true, data: run };
+  });
+
+  app.get("/api/catalog/reloads", async () => {
+    const projectRoot = await resolveProjectRoot();
+    const data: CatalogReloadsResponse = await readCatalogReloads(projectRoot);
     return { ok: true, data };
   });
 

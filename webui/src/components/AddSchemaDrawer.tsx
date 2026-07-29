@@ -3,9 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
-import { useIngestRun } from "../lib/ingest";
 import { DiffViewer } from "./DiffViewer";
-import { IngestResultPanel } from "./ingest";
+import { CatalogReloadButton } from "./catalog";
 import { schemaFieldLabel, validateSchemaName } from "../lib/schemas";
 import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo } from "../lib/types";
 
@@ -17,7 +16,7 @@ export type AddSchemaDrawerProps = {
   onClose: () => void;
 };
 
-const STEP_LABELS = ["输入 Schema", "测试并预览", "确认并 ingest"];
+const STEP_LABELS = ["输入 Schema", "测试并预览", "确认并完成"];
 
 export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerProps) {
   const queryClient = useQueryClient();
@@ -26,7 +25,6 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
   const [step, setStep] = useState<Step>("input");
   const [preview, setPreview] = useState<AddSchemaPreview | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const ingest = useIngestRun({ connectionId: connection.id });
 
   const trimmed = schema.trim();
   const issue = useMemo(() => validateSchemaName(trimmed), [trimmed]);
@@ -61,7 +59,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connection.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.ingestRuns });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
       toast.success(`已添加 schema: ${trimmed}`);
     },
     onError: (err) => {
@@ -69,27 +67,11 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
     }
   });
 
-  async function runIngestNow() {
-    ingest.clearLastRun();
-    try {
-      const result = await ingest.run();
-      if (!result) return;
-      if (result.status === "success") {
-        toast.success(`ingest ${connection.id} 完成（${result.scannedTableCount ?? 0} 张表）`);
-      } else {
-        toast.warning(`ingest ${connection.id} 退出码 ${result.exitCode}`);
-      }
-    } catch (err) {
-      toast.error(`ingest 启动失败：${err instanceof Error ? err.message : "未知错误"}`);
-    }
-  }
-
   function reset() {
     setSchema("");
     setStep("input");
     setPreview(null);
     setSubmitError(null);
-    ingest.clearLastRun();
     previewMutation.reset();
     writeMutation.reset();
   }
@@ -118,7 +100,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
             <p className="pl-eyebrow">数据库接入</p>
             <h2 className="pl-panel-title">添加 schema 到 {connection.id}</h2>
             <p className="pl-notice">
-              全程在本地完成：测连通 → 写 ktx.yaml → 触发 ingest。不会触碰凭据。
+              全程在本地完成：测连通 → 写 ktx.yaml → 重新加载本地资产。不会触碰凭据。
             </p>
           </div>
           <button className="pl-btn pl-btn--ghost" onClick={close}>
@@ -240,28 +222,22 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
             <p className="text-sm font-semibold text-green-700">
               ✓ 已添加 schema：{trimmed}
             </p>
-            <p className="text-xs text-fg-muted">
-              接下来执行 <code>ktx ingest {connection.id}</code> 把新 schema 的表同步到语义层。
+            <p className="text-xs text-fg-muted" data-testid="add-schema-static-loading-hint">
+              WebUI 将从本地 <code>semantic-layer</code> YAML 读取表清单。
+              若该 schema 的 manifest 尚未存在，可稍后添加文件并点击“刷新本地表目录”。
             </p>
             <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
-                稍后
+                完成
               </button>
-              <button
-                className="pl-btn pl-btn--primary"
-                onClick={runIngestNow}
-                disabled={ingest.isPending}
-                data-testid="add-schema-ingest-now"
-              >
-                {ingest.isPending ? "ingest 中..." : "现在 ingest"}
-              </button>
+              <CatalogReloadButton
+                connectionId={connection.id}
+                schema={trimmed}
+                label="刷新本地表目录"
+                variant="secondary"
+                testId="add-schema-reload-catalog"
+              />
             </div>
-            {ingest.lastRun && ingest.lastRun.status === "failed" && (
-              <IngestResultPanel run={ingest.lastRun} testIdPrefix="add-schema-ingest" />
-            )}
-            {ingest.lastRun && ingest.lastRun.status === "success" && (
-              <IngestResultPanel run={ingest.lastRun} testIdPrefix="add-schema-ingest" />
-            )}
           </section>
         )}
 

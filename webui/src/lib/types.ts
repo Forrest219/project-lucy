@@ -584,33 +584,50 @@ export type MonitorConfig = {
   }>;
 };
 
-// ─── Ingest runs (M13) ────────────────────────────────────────────────────────
+// ─── Catalog Reload (M14) ──────────────────────────────────────────────────────
+// Static YAML-only catalog reload. No CLI subprocesses; no LLM dependency.
+// The deprecated `/api/connections/:connId/ingest` alias route still
+// returns an M13-shape IngestRun (server-side only). UI pages must not import
+// or render it.
+// M13 `IngestRun` types above are kept for the deprecated
+// `/api/connections/:connId/ingest` alias route so legacy bundles don't 404.
 
-export type IngestScope = "connection" | "schema";
+export type CatalogReloadStatus = "success" | "failed";
 
-export type IngestRunStatus = "running" | "success" | "failed";
-
-export type IngestRun = {
-  id: string;
+export type CatalogReloadWarning = {
+  code:
+    | "SCHEMA_MANIFEST_MISSING"
+    | "SCHEMA_MANIFEST_EMPTY"
+    | "ENABLED_TABLE_NOT_SCANNED"
+    | "MANIFEST_PARSE_FAILED";
   connectionId: string;
   schema?: string;
-  requestedScope: IngestScope;
-  executedScope: IngestScope;
-  schemaScopedSupported: boolean;
-  status: IngestRunStatus;
-  startedAt: string;
-  finishedAt?: string;
-  durationMs?: number;
-  exitCode?: number;
-  stdout?: string;
-  stderr?: string;
-  command: string[];
-  scannedTableCount?: number;
-  scannedSchemas?: string[];
-  hint?: string;
+  table?: string;
+  filePath?: string;
+  message: string;
 };
 
-export type IngestRunsResponse = {
-  runs: IngestRun[];
-  lastByConnection: Record<string, IngestRun>;
+export type CatalogReloadRun = {
+  id: string;
+  status: CatalogReloadStatus;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  requestedConnectionId?: string;
+  requestedSchema?: string;
+  connections: number;
+  connectionIds: string[];
+  configuredSchemas: number;
+  manifestSchemas: number;
+  tables: number;
+  enabledTables: number;
+  warnings: CatalogReloadWarning[];
+  source: "static-yaml";
+  deprecatedIngestAlias?: boolean;
+};
+
+export type CatalogReloadsResponse = {
+  runs: CatalogReloadRun[];
+  last: CatalogReloadRun | null;
+  lastByConnection: Record<string, CatalogReloadRun>;
 };

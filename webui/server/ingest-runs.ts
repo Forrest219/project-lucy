@@ -72,19 +72,22 @@ const REDACTED = "[REDACTED]";
 // Single-token value: `--key=value`, `key=value`, `key: value`.
 // Multi-word keys (e.g. "dsn password") are matched by allowing `\s+` between
 // the optional "dsn" prefix and the canonical key name.
-const SENSITIVE_KEY =
-  "(?:--\\s*)?(?:dsn\\s+)?(?:passw(?:or)?d|passwd|pwd|secret|token|api[-_]?key|authorization|credential)";
-const SINGLE_TOKEN_VALUE = /((?:--\s*)?\b(?:dsn\s+)?(?:passw(?:or)?d|passwd|pwd|secret|token|api[-_]?key|credential)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const SINGLE_TOKEN_VALUE = /((?:--\s*)?\b(?:dsn\s+)?(?:passw(?:or)?d|passwd|pwd|secret|token|api[-_]?key|authorization|credential)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi;
 // Authorization header: redact the entire value (scheme + token) so the
 // log doesn't reveal "Authorization: <scheme> was used". For schemes we
 // don't recognize, fall through (the SINGLE_TOKEN_VALUE pass catches generic
 // "authorization: <token>" form if the key matches).
 const AUTH_HEADER = /(\bauthorization\s*[:=]\s*)((?:Bearer|Basic|Token|ApiKey)\s+[^\s,;]+)/gi;
+const URL_CREDENTIALS = /\b([A-Za-z][A-Za-z0-9+.-]*:\/\/)([^:\s/@]+):([^@\s/?#]+)@/g;
 
 export function redactIngestLog(text: string): string {
   if (!text) return text;
   let result = text.replace(AUTH_HEADER, (_match, prefix: string) => `${prefix}${REDACTED}`);
   result = result.replace(SINGLE_TOKEN_VALUE, (_match, prefix: string) => `${prefix}${REDACTED}`);
+  result = result.replace(
+    URL_CREDENTIALS,
+    (_match, scheme: string, user: string) => `${scheme}${user}:${REDACTED}@`
+  );
   return result;
 }
 

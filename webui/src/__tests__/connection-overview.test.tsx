@@ -46,7 +46,7 @@ type TestHandler = (body: unknown, init?: RequestInit) => Response;
 function makeHandlerMap(
   projectHandler: TestHandler,
   testHandler?: TestHandler,
-  ingestRunsHandler?: TestHandler
+  catalogReloadsHandler?: TestHandler
 ): Record<string, TestHandler> {
   return {
     "GET /api/project": projectHandler,
@@ -58,7 +58,7 @@ function makeHandlerMap(
         })
       ),
     ...(testHandler ? { "POST /api/connections/mysql-aliyun/test": testHandler } : {}),
-    "GET /api/connections/ingest-runs": ingestRunsHandler ?? (() => new Response(JSON.stringify({ ok: true, data: { runs: [], lastByConnection: {} } })))
+    "GET /api/catalog/reloads": catalogReloadsHandler ?? (() => new Response(JSON.stringify({ ok: true, data: { runs: [], last: null, lastByConnection: {} } })))
   };
 }
 
@@ -75,14 +75,14 @@ function stubOverviewFetch({
   projectError = false,
   tables = [sourceSummary("superstore_orders"), sourceSummary("customers"), sourceSummary("orders", "crm")],
   testHandler,
-  ingestRunsResponse
+  catalogReloadsResponse
 }: {
   connections?: ConnectionInfo[];
   ktxAvailable?: boolean;
   projectError?: boolean;
   tables?: ReturnType<typeof sourceSummary>[];
   testHandler?: TestHandler;
-  ingestRunsResponse?: { runs: unknown[]; lastByConnection: Record<string, unknown> };
+  catalogReloadsResponse?: { runs: unknown[]; last: unknown | null; lastByConnection: Record<string, unknown> };
 } = {}) {
   const handlers = makeHandlerMap(
     (() => {
@@ -106,8 +106,8 @@ function stubOverviewFetch({
         );
     })(),
     testHandler,
-    ingestRunsResponse
-      ? () => new Response(JSON.stringify({ ok: true, data: ingestRunsResponse }))
+    catalogReloadsResponse
+      ? () => new Response(JSON.stringify({ ok: true, data: catalogReloadsResponse }))
       : undefined
   );
   // tables override
@@ -152,7 +152,7 @@ describe("ConnectionOverview", () => {
 
     renderOverview();
 
-    expect(await screen.findByText("连接概览")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "连接概览" })).toBeInTheDocument();
     expect(screen.getAllByTestId("connection-metric")).toHaveLength(5);
     expect(screen.getByText("数据连接")).toBeInTheDocument();
     expect(screen.getByText("启用的表")).toBeInTheDocument();
@@ -327,7 +327,7 @@ describe("ConnectionOverview", () => {
     expect(await screen.findByText("不可用")).toBeInTheDocument();
   });
 
-  it("renders the connection-level 触发 Ingest action and a per-schema 重新扫描 row", async () => {
+  it("renders the connection-level 重新加载本地资产 action and no CLI ingest wording", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -338,16 +338,18 @@ describe("ConnectionOverview", () => {
         }
       ],
       tables: [sourceSummary("superstore_orders")],
-      ingestRunsResponse: { runs: [], lastByConnection: {} }
+      catalogReloadsResponse: { runs: [], last: null, lastByConnection: {} }
     });
     renderOverview();
 
-    expect(await screen.findByTestId("ingest-action-mysql-aliyun")).toHaveTextContent(/触发 Ingest/);
-    expect(screen.getByTestId("ingest-action-mysql-aliyun-openclaw_db")).toHaveTextContent("重新扫描");
-    expect(screen.getByTestId("ingest-action-mysql-aliyun-dataforai")).toHaveTextContent("重新扫描");
+    expect(
+      await screen.findByTestId("catalog-reload-mysql-aliyun")
+    ).toHaveTextContent("重新加载本地资产");
+    expect(screen.queryByText(/触发 Ingest/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/重新扫描/)).not.toBeInTheDocument();
   });
 
-  it("renders the last run badge from the ingest-runs sidecar", async () => {
+  it("renders the last reload badge from the catalog-reloads sidecar", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -358,55 +360,69 @@ describe("ConnectionOverview", () => {
         }
       ],
       tables: [sourceSummary("superstore_orders")],
-      ingestRunsResponse: {
+      catalogReloadsResponse: {
         runs: [
           {
-            id: "ing_20260728_183000_demo_mysql",
-            connectionId: "mysql-aliyun",
-            requestedScope: "connection",
-            executedScope: "connection",
-            schemaScopedSupported: false,
+            id: "rel_20260729_103000_001",
             status: "success",
-            startedAt: "2026-07-28T10:30:00.000Z",
-            finishedAt: "2026-07-28T10:30:01.245Z",
-            durationMs: 1245,
-            exitCode: 0,
-            stdout: "ok",
-            stderr: "",
-            command: ["ktx", "ingest", "mysql-aliyun"],
-            scannedTableCount: 4,
-            scannedSchemas: ["dataforai"]
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "mysql-aliyun",
+            connectionIds: ["mysql-aliyun"],
+            connections: 1,
+            configuredSchemas: 1,
+            manifestSchemas: 1,
+            tables: 4,
+            enabledTables: 4,
+            warnings: [],
+            source: "static-yaml"
           }
         ],
+        last: {
+          id: "rel_20260729_103000_001",
+          status: "success",
+          startedAt: "2026-07-29T02:30:00.000Z",
+          finishedAt: "2026-07-29T02:30:00.045Z",
+          durationMs: 45,
+          requestedConnectionId: "mysql-aliyun",
+          connectionIds: ["mysql-aliyun"],
+          connections: 1,
+          configuredSchemas: 1,
+          manifestSchemas: 1,
+          tables: 4,
+          enabledTables: 4,
+          warnings: [],
+          source: "static-yaml"
+        },
         lastByConnection: {
           "mysql-aliyun": {
-            id: "ing_20260728_183000_demo_mysql",
-            connectionId: "mysql-aliyun",
-            requestedScope: "connection",
-            executedScope: "connection",
-            schemaScopedSupported: false,
+            id: "rel_20260729_103000_001",
             status: "success",
-            startedAt: "2026-07-28T10:30:00.000Z",
-            finishedAt: "2026-07-28T10:30:01.245Z",
-            durationMs: 1245,
-            exitCode: 0,
-            stdout: "ok",
-            stderr: "",
-            command: ["ktx", "ingest", "mysql-aliyun"],
-            scannedTableCount: 4,
-            scannedSchemas: ["dataforai"]
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "mysql-aliyun",
+            connectionIds: ["mysql-aliyun"],
+            connections: 1,
+            configuredSchemas: 1,
+            manifestSchemas: 1,
+            tables: 4,
+            enabledTables: 4,
+            warnings: [],
+            source: "static-yaml"
           }
         }
       }
     });
     renderOverview();
 
-    const badge = await screen.findByTestId("ingest-last-run");
+    const badge = await screen.findByTestId("catalog-last-run");
     expect(badge).toHaveTextContent("成功");
     expect(badge).toHaveTextContent("4 张表");
   });
 
-  it("renders the never-run badge when the sidecar has no entry for the connection", async () => {
+  it("renders the never-run reload badge when the sidecar has no entry for the connection", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -417,11 +433,11 @@ describe("ConnectionOverview", () => {
         }
       ],
       tables: [sourceSummary("superstore_orders")],
-      ingestRunsResponse: { runs: [], lastByConnection: {} }
+      catalogReloadsResponse: { runs: [], last: null, lastByConnection: {} }
     });
     renderOverview();
 
-    const badge = await screen.findByTestId("ingest-last-run");
+    const badge = await screen.findByTestId("catalog-last-run");
     expect(badge).toHaveTextContent("未运行");
   });
 });

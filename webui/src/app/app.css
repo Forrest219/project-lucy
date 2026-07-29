@@ -92,6 +92,73 @@
   .pl-workspace-body { @apply p-6; }
   .pl-page-stack { @apply grid gap-5; }
 
+  /* 统一 PageHeader (M15)：4 象限布局，消除全站 H1/分类名重复 */
+  .pl-page-header {
+    @apply mb-5 rounded-md border border-border-default bg-bg-surface p-5;
+  }
+  .pl-page-header-grid {
+    @apply grid gap-3;
+    grid-template-areas:
+      "crumbs badges"
+      "title actions";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .pl-page-header-cell {
+    @apply min-w-0;
+  }
+  .pl-page-header-cell--empty {
+    @apply hidden;
+  }
+  .pl-page-header-cell--breadcrumbs { grid-area: crumbs; }
+  .pl-page-header-cell--badges { grid-area: badges; }
+  .pl-page-header-cell--title { grid-area: title; }
+  .pl-page-header-cell--actions { grid-area: actions; }
+
+  .pl-page-header-breadcrumbs {
+    @apply flex flex-wrap items-center gap-1.5 text-xs text-fg-muted list-none p-0 m-0;
+  }
+  .pl-page-header-breadcrumb-item {
+    @apply inline-flex items-center gap-1.5;
+  }
+  .pl-page-header-breadcrumb-sep {
+    @apply text-fg-muted/60;
+  }
+
+  .pl-page-header-badges {
+    @apply flex flex-wrap items-center justify-end gap-2;
+  }
+  .pl-page-header-badges > * {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted;
+  }
+  .pl-page-header-badges > *:empty {
+    @apply hidden;
+  }
+
+  .pl-page-header-title {
+    @apply text-xl font-semibold leading-tight text-fg-default;
+  }
+  .pl-page-header-description {
+    @apply mt-1 text-sm text-fg-muted;
+  }
+
+  .pl-page-header-actions {
+    @apply flex flex-wrap items-center justify-end gap-2;
+  }
+  @media (max-width: 640px) {
+    .pl-page-header-grid {
+      grid-template-areas:
+        "crumbs"
+        "badges"
+        "title"
+        "actions";
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pl-page-header-cell--badges { @apply justify-start; }
+    .pl-page-header-cell--actions { @apply justify-start; }
+    .pl-page-header-badges { @apply justify-start; }
+    .pl-page-header-actions { @apply justify-start; }
+  }
+
   /* 面板/卡片 */
   .pl-panel { @apply mb-4 rounded-md border border-border-default bg-bg-surface p-6; }
   .pl-panel-title { @apply mb-3 text-base font-semibold; }
@@ -175,6 +242,21 @@
   .pl-log-section-title { @apply text-xs font-medium text-fg-muted; }
   .pl-log-section pre { @apply max-h-64 overflow-auto rounded-md bg-bg-base p-2 font-mono text-xs text-fg-default whitespace-pre-wrap; }
   .pl-ingest-diagnostics [aria-pressed="true"] { @apply bg-primary text-primary-fg; }
+
+  /* M14: per-card "last catalog reload" badge. */
+  .pl-catalog-last-run { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-catalog-last-run--success { @apply border-success bg-success-soft text-success-strong; }
+  .pl-catalog-last-run--warnings { @apply border-warning bg-warning-soft text-warning-strong; }
+  .pl-catalog-last-run--failed { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-catalog-last-run--never { @apply border-border-default bg-bg-muted text-fg-muted; }
+
+  /* M14: static catalog reload result panel (inline next to the button). */
+  .pl-catalog-reload-inline { @apply mt-2; }
+  .pl-catalog-reload-result { @apply grid gap-1 rounded-md border border-border-default bg-bg-base p-3 text-sm text-fg-default; }
+  .pl-catalog-reload-result[data-state="warnings"] { @apply border-warning; }
+  .pl-catalog-reload-result[data-state="clean"] { @apply border-border-default; }
+  .pl-catalog-reload-warnings { @apply mt-1 grid gap-1 list-none p-0 text-xs text-warning-strong; }
+  .pl-catalog-reload-warnings li { @apply rounded-md border border-warning bg-warning-soft px-2 py-1; }
 
   .pl-action-list { @apply grid gap-2; }
   .pl-action-list a { @apply grid gap-0.5 rounded-md border border-border-default bg-bg-base p-3 text-fg-default no-underline; }
