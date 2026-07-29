@@ -90,6 +90,11 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     return { ok: false, reason: "role must be an object" };
   }
   const obj = role as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (key !== "description" && key !== "allow") {
+      return { ok: false, reason: `role.${key} is not allowed` };
+    }
+  }
   if (obj.description !== undefined && typeof obj.description !== "string") {
     return { ok: false, reason: "role.description must be a string" };
   }
@@ -100,6 +105,11 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     return { ok: false, reason: "role.allow must be an object" };
   }
   const allow = obj.allow as Record<string, unknown>;
+  for (const key of Object.keys(allow)) {
+    if (key !== "connections" && key !== "tableSelectors" && key !== "tools") {
+      return { ok: false, reason: `allow.${key} is not allowed` };
+    }
+  }
   let connections: string[] | undefined;
   if (allow.connections !== undefined) {
     if (!Array.isArray(allow.connections) || allow.connections.some((item) => typeof item !== "string")) {
@@ -107,11 +117,7 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     }
     connections = (allow.connections as string[]).map((item) => item.trim()).filter(Boolean);
   }
-  let tableSelectors: YamlRole["allow"] extends infer A
-    ? A extends { tableSelectors?: infer S }
-      ? S
-      : never
-    : never;
+  let tableSelectors: NonNullable<YamlRole["allow"]>["tableSelectors"] | undefined;
   if (allow.tableSelectors !== undefined) {
     if (!Array.isArray(allow.tableSelectors)) {
       return { ok: false, reason: "allow.tableSelectors must be an array" };
@@ -120,6 +126,11 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     for (const raw of allow.tableSelectors as Array<Record<string, unknown>>) {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
         return { ok: false, reason: "table selector must be an object" };
+      }
+      for (const key of Object.keys(raw)) {
+        if (key !== "connection" && key !== "schema" && key !== "names" && key !== "prefix") {
+          return { ok: false, reason: `table selector ${key} is not allowed` };
+        }
       }
       if (raw.connection !== undefined && typeof raw.connection !== "string") {
         return { ok: false, reason: "table selector connection must be a string" };
@@ -140,8 +151,8 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
           return { ok: false, reason: "table selector names must be a non-empty array of strings" };
         }
         built.push({
-          connection: raw.connection as string | undefined,
-          schema: raw.schema,
+          connection: typeof raw.connection === "string" ? raw.connection.trim() || undefined : undefined,
+          schema: raw.schema.trim(),
           names: (raw.names as string[]).map((item) => item.trim()).filter(Boolean)
         });
       } else {
@@ -149,8 +160,8 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
           return { ok: false, reason: "table selector prefix must be a non-empty string" };
         }
         built.push({
-          connection: raw.connection as string | undefined,
-          schema: raw.schema,
+          connection: typeof raw.connection === "string" ? raw.connection.trim() || undefined : undefined,
+          schema: raw.schema.trim(),
           prefix: (raw.prefix as string).trim()
         });
       }
@@ -165,10 +176,10 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     if (allow.tools.some((item) => typeof item !== "string")) {
       return { ok: false, reason: "allow.tools must be a string array" };
     }
-    if (allow.tools.includes("*")) {
+    tools = (allow.tools as string[]).map((item) => item.trim()).filter(Boolean);
+    if (tools.includes("*")) {
       return { ok: false, reason: "wildcard tools ('*') are not allowed" };
     }
-    tools = (allow.tools as string[]).map((item) => item.trim()).filter(Boolean);
   }
 
   const hasTableTouchingTool = (tools ?? []).some(isTableTouchingTool);
@@ -191,7 +202,8 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
 
 async function resolveRoleForWrite(
   roleId: string,
-  role: YamlRole
+  role: YamlRole,
+  options: { allowTemplateId?: boolean } = {}
 ): Promise<{ ok: true } | { ok: false; code: string; message: string; status: number }> {
   if (!ROLE_ID_RE.test(roleId)) {
     return {
@@ -205,7 +217,7 @@ async function resolveRoleForWrite(
   if (!shape.ok) {
     return { ok: false, code: "INVALID_ROLE", message: shape.reason, status: 400 };
   }
-  if (ROLE_TEMPLATES[roleId]) {
+  if (!options.allowTemplateId && ROLE_TEMPLATES[roleId]) {
     return { ok: false, code: "ROLE_ID_TAKEN", message: `role id '${roleId}' conflicts with built-in template`, status: 409 };
   }
   const resolved = await previewRolePermissionsForAdmin(roleId, { role: shape.value });
@@ -225,21 +237,17 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const { config } = await readAccessYaml(projectRoot);
     const includeTemplates = request.query.includeTemplates !== "false";
 
-    const entries: ResolvedRole[] = [
-      ...Object.entries(config.roles ?? {})
+    const yamlEntries: ResolvedRole[] = Object.entries(config.roles ?? {})
         .filter(([, role]) => role.allow !== undefined)
-        .map(([id, role]) => ({ id, role, source: "yaml" as const })),
-      ...(includeTemplates
-        ? Object.keys(ROLE_TEMPLATES)
-            .filter((id) => !config.roles?.[id] || !config.roles?.[id]?.allow)
-            .map((id) => {
-              const expanded = expandTemplate(id);
-              if (!expanded) return null;
-              return { id, role: expanded, source: "template" as const };
-            })
-            .filter((entry): entry is ResolvedRole => entry !== null)
-        : [])
-    ];
+        .map(([id, role]) => ({ id, role, source: "yaml" }));
+    const templateEntries: ResolvedRole[] = includeTemplates
+      ? Object.keys(ROLE_TEMPLATES).flatMap((id) => {
+          if (config.roles?.[id]?.allow) return [];
+          const expanded = expandTemplate(id);
+          return expanded ? [{ id, role: expanded, source: "template" as const }] : [];
+        })
+      : [];
+    const entries: ResolvedRole[] = [...yamlEntries, ...templateEntries];
 
     const roles = await Promise.all(
       entries.map(async (entry) => {
@@ -263,7 +271,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
   // GET /api/admin/roles/:roleId — single role detail
   app.get<{ Params: { roleId: string } }>("/api/admin/roles/:roleId", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
-    const { config } = await readAccessYaml(projectRoot);
+    const { config, version } = await readAccessYaml(projectRoot);
     const resolved = findRole(config, request.params.roleId);
     if (!resolved) {
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `Role '${request.params.roleId}' not found` } });
@@ -277,6 +285,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       ok: true,
       data: {
         ...summary,
+        version,
         sourceCount: preview.ok ? preview.permissions.sources.length : 0,
         invalid: !preview.ok,
         warnings: preview.ok ? [] : [preview.reason],
@@ -425,7 +434,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ? (patch.allow as YamlRole["allow"])
         : existing.allow
     };
-    const validated = await resolveRoleForWrite(request.params.roleId, next);
+    const validated = await resolveRoleForWrite(request.params.roleId, next, { allowTemplateId: true });
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
     }
@@ -511,10 +520,10 @@ export function registerRoleRoutes(app: FastifyInstance) {
   // POST /api/admin/roles/:roleId/copy — copy yaml or template role into a new yaml role
   app.post<{
     Params: { roleId: string };
-    Body: { dryRun?: boolean; newRoleId?: string; description?: string };
+    Body: { dryRun?: boolean; newRoleId?: string; description?: string; role?: unknown };
   }>("/api/admin/roles/:roleId/copy", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
-    const { newRoleId, description } = request.body ?? {};
+    const { newRoleId, description, role } = request.body ?? {};
     if (typeof newRoleId !== "string" || !newRoleId.trim()) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "newRoleId is required" } });
     }
@@ -524,10 +533,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (!source) {
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
     }
-    const clonedRole: YamlRole = {
-      description: description ?? source.role.description,
-      allow: source.role.allow
-    };
+    const clonedRole: YamlRole = role === undefined
+      ? {
+          description: description ?? source.role.description,
+          allow: source.role.allow
+        }
+      : (role as YamlRole);
     const validated = await resolveRoleForWrite(newRoleId, clonedRole);
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });

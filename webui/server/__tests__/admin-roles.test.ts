@@ -175,7 +175,7 @@ describe("GET /api/admin/roles", () => {
       invalid: false,
       sourceCount: 5
     });
-    expect(ROLE_TEMPLATES.lucy_r1_exact_readonly.allow.tools).toEqual(LUCY_R1_EXACT_TOOLS);
+    expect(ROLE_TEMPLATES.lucy_r1_exact_readonly.allow?.tools).toEqual(LUCY_R1_EXACT_TOOLS);
     expect(res.body.data.roles.every((role: { source: string; invalid: boolean }) => role.source === "template" && !role.invalid)).toBe(true);
     await app.close();
   });
@@ -627,6 +627,40 @@ describe("PATCH /api/admin/roles/:roleId", () => {
       .send({ dryRun: false, version: "0000000000000-stale", patch: { description: "x" } })
       .expect(409);
     expect(res.body.error.code).toBe("VERSION_CONFLICT");
+    await app.close();
+  });
+
+  it("allows editing a yaml role that shadows a built-in template id", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(CUSTOM_KX_ACCESS_YAML);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const detail = await request(app.server).get("/api/admin/roles/kx_readonly").expect(200);
+    expect(detail.body.data.source).toBe("yaml");
+
+    const res = await request(app.server)
+      .patch("/api/admin/roles/kx_readonly")
+      .send({
+        dryRun: false,
+        version: detail.body.data.version,
+        patch: {
+          description: "Patched yaml override",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_returns"] }
+            ],
+            tools: ["sl_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("Patched yaml override");
+    expect(yaml).toContain("superstore_returns");
     await app.close();
   });
 });

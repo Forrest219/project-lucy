@@ -88,9 +88,17 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return envelope.data;
 }
 
-export async function apiDelete<T>(path: string): Promise<T> {
+export async function apiDelete<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
-    method: "DELETE"
+    method: "DELETE",
+    ...(body === undefined
+      ? {}
+      : {
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(body)
+        })
   });
   const envelope = (await response.json()) as ApiEnvelope<T>;
 

@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../../lib/apiClient";
-import { PageHeader } from "../../components/PageHeader";
 import type { RoleAllowConfig, RoleDetail as RoleDetailType, RoleSelector } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type Tab = "config" | "permissions" | "usage" | "diff";
 
@@ -20,6 +20,40 @@ type RoleFormState = {
     namesText: string;
     prefix: string;
   }>;
+};
+
+type RoleWritePayload = {
+  description?: string;
+  allow: RoleAllowConfig;
+};
+
+type CreatePreview = {
+  diff: string;
+  proposedYaml: string;
+  payload: {
+    roleId: string;
+    role: RoleWritePayload;
+  };
+};
+
+type PatchPreview = {
+  diff: string;
+  proposedYaml: string;
+  version?: string;
+  patch: RoleWritePayload;
+};
+
+type CopyPreview = {
+  diff: string;
+  proposedYaml: string;
+  newRoleId: string;
+  role: RoleWritePayload;
+};
+
+type DeletePreview = {
+  diff: string;
+  proposedYaml: string;
+  version?: string;
 };
 
 const EMPTY_FORM: RoleFormState = {
@@ -89,10 +123,6 @@ function formToAllow(state: RoleFormState): RoleAllowConfig {
   };
 }
 
-function emptyRoleAllow(): RoleAllowConfig {
-  return {};
-}
-
 function initFormFromDetail(detail: RoleDetailType): RoleFormState {
   return {
     roleId: detail.id,
@@ -145,20 +175,34 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const [form, setForm] = useState<RoleFormState>(EMPTY_FORM);
   const [activeTab, setActiveTab] = useState<Tab>("config");
-  const [diffPreview, setDiffPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
-  const [createPreview, setCreatePreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
-  const [deletePreview, setDeletePreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
+  const [diffPreview, setDiffPreview] = useState<PatchPreview | null>(null);
+  const [createPreview, setCreatePreview] = useState<CreatePreview | CopyPreview | null>(null);
+  const [deletePreview, setDeletePreview] = useState<DeletePreview | null>(null);
+
+  function clearPreviews() {
+    setCreatePreview(null);
+    setDeletePreview(null);
+    setDiffPreview(null);
+  }
+
+  function updateForm(next: RoleFormState) {
+    setForm(next);
+    clearPreviews();
+  }
 
   useEffect(() => {
     if (mode === "edit" && detail) {
       setForm(initFormFromDetail(detail));
+      clearPreviews();
     } else if (mode === "copy" && detail) {
       setForm({
         ...initFormFromDetail(detail),
         roleId: ""
       });
+      clearPreviews();
     } else if (mode === "create") {
       setForm(EMPTY_FORM);
+      clearPreviews();
     }
   }, [mode, detail]);
 
@@ -171,15 +215,15 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   const dirty = isRoleDirty(form, detail, mode);
 
   const createMutation = useMutation({
-    mutationFn: (body: { dryRun: boolean; payload: { roleId: string; role: RoleAllowConfig & { description?: string } } }) =>
+    mutationFn: (body: { dryRun: boolean; payload: { roleId: string; role: RoleWritePayload } }) =>
       apiPost<{ diff: string; proposedYaml: string } | { written: boolean; role: RoleDetailType }>(
         "/api/admin/roles",
-        { dryRun: body.dryRun, roleId: body.payload.roleId, role: { description: body.payload.role.description, allow: body.payload.role } }
+        { dryRun: body.dryRun, roleId: body.payload.roleId, role: body.payload.role }
       ),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const result = data as { diff: string; proposedYaml: string };
-        setCreatePreview(result);
+        setCreatePreview({ ...result, payload: vars.payload });
         setDiffPreview(null);
         setDeletePreview(null);
         setActiveTab("diff");
@@ -187,22 +231,22 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         toast.success("Role 已创建");
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
-        navigate(`/admin/roles/${encodeURIComponent(form.roleId)}`);
+        navigate(`/admin/roles/${encodeURIComponent(vars.payload.roleId)}`);
       }
     },
     onError: (err: Error) => toast.error(err.message)
   });
 
   const patchMutation = useMutation({
-    mutationFn: (body: { dryRun: boolean; version: string | undefined; patch: { description?: string; allow?: RoleAllowConfig } }) =>
-      apiPatch<{ diff: string; proposedYaml: string } | { written: boolean; version: string }>(
+    mutationFn: (body: { dryRun: boolean; version: string | undefined; patch: RoleWritePayload }) =>
+      apiPatch<{ diff: string; proposedYaml: string; version?: string } | { written: boolean; version: string }>(
         `/api/admin/roles/${roleId}`,
         { dryRun: body.dryRun, version: body.version, patch: body.patch }
       ),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
-        const result = data as { diff: string; proposedYaml: string };
-        setDiffPreview(result);
+        const result = data as { diff: string; proposedYaml: string; version?: string };
+        setDiffPreview({ ...result, version: result.version ?? vars.version, patch: vars.patch });
         setCreatePreview(null);
         setDeletePreview(null);
         setActiveTab("diff");
@@ -218,15 +262,15 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   });
 
   const copyMutation = useMutation({
-    mutationFn: (body: { dryRun: boolean; newRoleId: string }) =>
+    mutationFn: (body: { dryRun: boolean; newRoleId: string; role: RoleWritePayload }) =>
       apiPost<{ diff: string; proposedYaml: string } | { written: boolean; role: RoleDetailType }>(
         `/api/admin/roles/${roleId}/copy`,
-        { dryRun: body.dryRun, newRoleId: body.newRoleId }
+        { dryRun: body.dryRun, newRoleId: body.newRoleId, role: body.role }
       ),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const result = data as { diff: string; proposedYaml: string };
-        setCreatePreview(result);
+        setCreatePreview({ ...result, newRoleId: vars.newRoleId, role: vars.role });
         setDiffPreview(null);
         setDeletePreview(null);
         setActiveTab("diff");
@@ -241,14 +285,14 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const deleteMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; version: string | undefined }) =>
-      apiDelete<{ diff: string; proposedYaml: string } | { written: boolean }>(
+      apiDelete<{ diff: string; proposedYaml: string; version?: string } | { written: boolean }>(
         `/api/admin/roles/${roleId}`,
         { dryRun: body.dryRun, version: body.version }
       ),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
-        const result = data as { diff: string; proposedYaml: string };
-        setDeletePreview(result);
+        const result = data as { diff: string; proposedYaml: string; version?: string };
+        setDeletePreview({ ...result, version: result.version ?? vars.version });
         setCreatePreview(null);
         setDiffPreview(null);
         setActiveTab("diff");
@@ -262,7 +306,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     onError: (err: Error) => toast.error(err.message)
   });
 
-  function buildRolePayload() {
+  function buildRolePayload(): RoleWritePayload {
     const allowConfig = formToAllow(form);
     return {
       description: form.description.trim() || undefined,
@@ -279,22 +323,21 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       toast.error("至少需要一个 MCP 工具");
       return;
     }
+    const payload = {
+      roleId: form.roleId,
+      role: buildRolePayload()
+    };
     createMutation.mutate({
       dryRun: true,
-      payload: {
-        roleId: form.roleId,
-        role: buildRolePayload()
-      }
+      payload
     });
   }
 
   function handleCreateSave() {
+    if (!createPreview || !("payload" in createPreview)) return;
     createMutation.mutate({
       dryRun: false,
-      payload: {
-        roleId: form.roleId,
-        role: buildRolePayload()
-      }
+      payload: createPreview.payload
     });
   }
 
@@ -302,16 +345,17 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     if (!detail) return;
     patchMutation.mutate({
       dryRun: true,
-      version: detail ? undefined : undefined,
+      version: detail.version,
       patch: buildRolePayload()
     });
   }
 
   function handlePatchSave() {
+    if (!diffPreview) return;
     patchMutation.mutate({
       dryRun: false,
-      version: undefined,
-      patch: buildRolePayload()
+      version: diffPreview.version,
+      patch: diffPreview.patch
     });
   }
 
@@ -320,26 +364,27 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       toast.error("新 Role id 必须匹配 ^[A-Za-z0-9_-]{1,64}$");
       return;
     }
-    copyMutation.mutate({ dryRun: true, newRoleId: form.roleId });
+    copyMutation.mutate({ dryRun: true, newRoleId: form.roleId, role: buildRolePayload() });
   }
 
   function handleCopySave() {
-    copyMutation.mutate({ dryRun: false, newRoleId: form.roleId });
+    if (!createPreview || !("newRoleId" in createPreview)) return;
+    copyMutation.mutate({ dryRun: false, newRoleId: createPreview.newRoleId, role: createPreview.role });
   }
 
   function handleDeletePreview() {
-    deleteMutation.mutate({ dryRun: true, version: undefined });
+    deleteMutation.mutate({ dryRun: true, version: detail?.version });
   }
 
   function handleDeleteSave() {
-    deleteMutation.mutate({ dryRun: false, version: undefined });
+    if (!deletePreview) return;
+    deleteMutation.mutate({ dryRun: false, version: deletePreview.version });
   }
 
   function resetToForm() {
     if (detail) setForm(initFormFromDetail(detail));
-    setCreatePreview(null);
-    setDeletePreview(null);
-    setDiffPreview(null);
+    else setForm(EMPTY_FORM);
+    clearPreviews();
   }
 
   if (mode === "edit" || mode === "copy" || mode === "delete") {
@@ -448,9 +493,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 value={form.roleId}
                 disabled={mode === "edit" && detail?.source !== "template"}
                 placeholder="例：poc_data_engineer"
-                onChange={(e) => setForm({ ...form, roleId: e.target.value })}
+                onChange={(e) => updateForm({ ...form, roleId: e.target.value })}
               />
-              <span className="text-xs text-fg-muted">规则：^[A-Za-z0-9_-]{1,64}$</span>
+              <span className="text-xs text-fg-muted">规则：{"^[A-Za-z0-9_-]{1,64}$"}</span>
             </label>
             <label className="grid gap-1" htmlFor="role-description-input">
               <span className="text-sm font-medium">描述</span>
@@ -459,7 +504,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 className="pl-input"
                 value={form.description}
                 placeholder="可选"
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onChange={(e) => updateForm({ ...form, description: e.target.value })}
                 disabled={isReadOnlyTemplate}
               />
             </label>
@@ -471,7 +516,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 rows={2}
                 placeholder="一行或逗号分隔，例如：mysql-aliyun"
                 value={form.connectionsText}
-                onChange={(e) => setForm({ ...form, connectionsText: e.target.value })}
+                onChange={(e) => updateForm({ ...form, connectionsText: e.target.value })}
                 disabled={isReadOnlyTemplate}
               />
             </label>
@@ -483,7 +528,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 rows={3}
                 placeholder="lucy_query&#10;lucy_read_source"
                 value={form.toolsText}
-                onChange={(e) => setForm({ ...form, toolsText: e.target.value })}
+                onChange={(e) => updateForm({ ...form, toolsText: e.target.value })}
                 disabled={isReadOnlyTemplate}
               />
               <span className="text-xs text-fg-muted">
@@ -497,7 +542,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                   type="button"
                   className="pl-btn pl-btn--ghost text-xs"
                   onClick={() =>
-                    setForm({
+                    updateForm({
                       ...form,
                       selectors: [...form.selectors, { connection: "", schema: "", kind: "names", namesText: "", prefix: "" }]
                     })
@@ -521,7 +566,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                           onChange={(e) => {
                             const next = [...form.selectors];
                             next[idx] = { ...row, connection: e.target.value };
-                            setForm({ ...form, selectors: next });
+                            updateForm({ ...form, selectors: next });
                           }}
                           disabled={isReadOnlyTemplate}
                           aria-label={`selector ${idx + 1} connection`}
@@ -533,7 +578,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                           onChange={(e) => {
                             const next = [...form.selectors];
                             next[idx] = { ...row, schema: e.target.value };
-                            setForm({ ...form, selectors: next });
+                            updateForm({ ...form, selectors: next });
                           }}
                           disabled={isReadOnlyTemplate}
                           aria-label={`selector ${idx + 1} schema`}
@@ -547,7 +592,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                             onChange={() => {
                               const next = [...form.selectors];
                               next[idx] = { ...row, kind: "names" };
-                              setForm({ ...form, selectors: next });
+                              updateForm({ ...form, selectors: next });
                             }}
                             disabled={isReadOnlyTemplate}
                           />
@@ -560,7 +605,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                             onChange={() => {
                               const next = [...form.selectors];
                               next[idx] = { ...row, kind: "prefix" };
-                              setForm({ ...form, selectors: next });
+                              updateForm({ ...form, selectors: next });
                             }}
                             disabled={isReadOnlyTemplate}
                           />
@@ -571,7 +616,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                           className="pl-btn pl-btn--ghost text-xs ml-auto"
                           onClick={() => {
                             const next = form.selectors.filter((_, i) => i !== idx);
-                            setForm({ ...form, selectors: next });
+                            updateForm({ ...form, selectors: next });
                           }}
                           disabled={isReadOnlyTemplate}
                         >
@@ -587,7 +632,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                           onChange={(e) => {
                             const next = [...form.selectors];
                             next[idx] = { ...row, namesText: e.target.value };
-                            setForm({ ...form, selectors: next });
+                            updateForm({ ...form, selectors: next });
                           }}
                           disabled={isReadOnlyTemplate}
                           aria-label={`selector ${idx + 1} names`}
@@ -600,7 +645,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                           onChange={(e) => {
                             const next = [...form.selectors];
                             next[idx] = { ...row, prefix: e.target.value };
-                            setForm({ ...form, selectors: next });
+                            updateForm({ ...form, selectors: next });
                           }}
                           disabled={isReadOnlyTemplate}
                           aria-label={`selector ${idx + 1} prefix`}
@@ -813,6 +858,3 @@ function DiffTabContent({
     </>
   );
 }
-
-// Reference emptyRoleAllow so the helper is included even if unused at top level
-void emptyRoleAllow;

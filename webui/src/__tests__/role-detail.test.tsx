@@ -25,6 +25,7 @@ function renderAt(path: string) {
 function makeYamlRole(overrides: Partial<RoleDetailType> = {}): RoleDetailType {
   return {
     id: "analyst",
+    version: "v-detail",
     description: "Analyst role",
     source: "yaml",
     tools: ["lucy_query"],
@@ -228,6 +229,7 @@ describe("RoleDetail", () => {
     renderAt("/admin/roles/wiki_only?mode=copy");
     const idInput = (await screen.findByLabelText(/^Role ID/)) as HTMLInputElement;
     fireEvent.change(idInput, { target: { value: "wiki_clone" } });
+    fireEvent.change(screen.getByLabelText(/^描述/), { target: { value: "Copied and edited" } });
     fireEvent.click(screen.getByRole("button", { name: /预览复制/ }));
 
     await waitFor(() => {
@@ -235,6 +237,7 @@ describe("RoleDetail", () => {
         (item) => String(item[0]) === "/api/admin/roles/wiki_only/copy" && JSON.parse(String((item[1] as RequestInit).body)).dryRun === true
       );
       expect(call).toBeTruthy();
+      expect(JSON.parse(String((call![1] as RequestInit).body)).role.description).toBe("Copied and edited");
     });
 
     fireEvent.click(await screen.findByRole("button", { name: /确认创建/ }));
@@ -244,6 +247,7 @@ describe("RoleDetail", () => {
         (item) => String(item[0]) === "/api/admin/roles/wiki_only/copy" && JSON.parse(String((item[1] as RequestInit).body)).dryRun === false
       );
       expect(call).toBeTruthy();
+      expect(JSON.parse(String((call![1] as RequestInit).body)).role.description).toBe("Copied and edited");
     });
   });
 
@@ -282,18 +286,22 @@ describe("RoleDetail", () => {
     expect(card?.getAttribute("href")).toBe("/admin/agents/zhangsan");
   });
 
-  it("editing after preview clears stale diff", async () => {
+  it("editing after preview clears stale diff and save uses the preview version", async () => {
     stubSingleRole(makeYamlRole());
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/admin/roles/analyst" && !init) {
         return new Response(JSON.stringify({ ok: true, data: makeYamlRole() }));
       }
-      if (url === "/api/admin/roles/analyst" && init?.method === "PATCH" && JSON.parse(String(init.body)).dryRun) {
+      if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        if (!body.dryRun) {
+          return new Response(JSON.stringify({ ok: true, data: { written: true, version: "v-after" } }));
+        }
         return new Response(
           JSON.stringify({
             ok: true,
-            data: { diff: "+ description: Stale", proposedYaml: "yaml" }
+            data: { diff: "+ description: Stale", proposedYaml: "yaml", version: "v-preview" }
           })
         );
       }
@@ -306,18 +314,66 @@ describe("RoleDetail", () => {
     fireEvent.change(desc, { target: { value: "v1" } });
     fireEvent.click(screen.getByRole("button", { name: /预览并保存/ }));
     expect(await screen.findByTestId("role-diff")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
+      );
+      expect(saveCall).toBeTruthy();
+      const saveBody = JSON.parse(String((saveCall![1] as RequestInit).body));
+      expect(saveBody.version).toBe("v-preview");
+      expect(saveBody.patch.description).toBe("v1");
+    });
 
-    // Go back to config, edit again
+    // Go back to config, edit again; the old diff is invalidated immediately.
     fireEvent.click(screen.getByRole("button", { name: "基本配置" }));
     const desc2 = screen.getByDisplayValue("v1") as HTMLInputElement;
     fireEvent.change(desc2, { target: { value: "v2" } });
-    // Stale diff should be replaced when we re-preview
+    fireEvent.click(screen.getByRole("button", { name: "变更预览" }));
+    expect(screen.queryByTestId("role-diff")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "基本配置" }));
     fireEvent.click(screen.getByRole("button", { name: /预览并保存/ }));
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
         (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === true
       );
       expect(calls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it("delete flow sends dryRun false in the DELETE body on confirm", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/admin/roles/analyst" && !init) {
+        return new Response(JSON.stringify({ ok: true, data: makeYamlRole() }));
+      }
+      if (url === "/api/admin/roles/analyst" && init?.method === "DELETE") {
+        const body = JSON.parse(String(init.body));
+        if (body.dryRun) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: { diff: "- analyst", proposedYaml: "roles: {}\n", version: "v-delete-preview" }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, data: { written: true } }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt("/admin/roles/analyst?mode=delete");
+    fireEvent.click(await screen.findByRole("button", { name: /预览删除/ }));
+    expect(await screen.findByTestId("role-diff")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "DELETE" && JSON.parse(String(call[1].body)).dryRun === false
+      );
+      expect(saveCall).toBeTruthy();
+      expect(JSON.parse(String((saveCall![1] as RequestInit).body)).version).toBe("v-delete-preview");
     });
   });
 
