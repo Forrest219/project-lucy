@@ -155,7 +155,7 @@ describe("NewToken", () => {
         return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
       })
     );
-    const writeText = vi.fn(async () => undefined);
+    const writeText = vi.fn<(value: string) => Promise<void>>(async () => undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
     renderNewToken();
@@ -168,7 +168,7 @@ describe("NewToken", () => {
     await vi.waitFor(() => {
       expect(writeText).toHaveBeenCalled();
     });
-    const payload = writeText.mock.calls.at(-1)?.[0] as string;
+    const payload = String((writeText.mock.calls as Array<[string]>).at(-1)?.[0] ?? "");
     expect(payload).toContain("Bearer lucy_oneshot_token");
   });
 
@@ -228,7 +228,7 @@ describe("NewToken", () => {
         return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
       })
     );
-    const writeText = vi.fn(async () => undefined);
+    const writeText = vi.fn<(value: string) => Promise<void>>(async () => undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
     renderNewToken();

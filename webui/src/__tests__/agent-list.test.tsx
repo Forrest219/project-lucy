@@ -134,7 +134,7 @@ describe("AgentList", () => {
 
   it("copy MCP config writes a safe template with placeholder token and no plaintext", async () => {
     stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })]);
-    const writeText = vi.fn(async () => undefined);
+    const writeText = vi.fn<(value: string) => Promise<void>>(async () => undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText }
@@ -147,7 +147,7 @@ describe("AgentList", () => {
     await waitFor(() => {
       expect(writeText).toHaveBeenCalled();
     });
-    const payload = writeText.mock.calls[0]?.[0] as string;
+    const payload = String((writeText.mock.calls as Array<[string]>)[0]?.[0] ?? "");
     const parsed = JSON.parse(payload);
     expect(parsed.mcpServers.lucy.headers.Authorization).toBe("Bearer ${LUCY_AGENT_TOKEN}");
     expect(payload).not.toMatch(/sha256:[0-9a-f]{16,}/i);
