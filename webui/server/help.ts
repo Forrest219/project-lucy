@@ -1,9 +1,11 @@
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { assertReadable } from "./fs-safe.js";
 
 const HANDBOOK_REL_PATH = "docs/SYSTEM_HANDBOOK.md";
+const DEFAULT_APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HEADING_RE = /^(#{1,3})\s+(.+?)\s*#*\s*$/;
 const FENCE_RE = /^```/;
 
@@ -63,6 +65,10 @@ export class HelpDocNotFoundError extends Error {
   }
 }
 
+export function resolveHelpAppRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return path.resolve(env.LUCY_APP_ROOT ?? DEFAULT_APP_ROOT);
+}
+
 function stableSlug(title: string): string {
   const ascii = title
     .toLowerCase()
@@ -108,10 +114,10 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
   return items;
 }
 
-export async function readHelpHandbook(projectRoot: string): Promise<HelpHandbook> {
+export async function readHelpHandbook(appRoot = resolveHelpAppRoot()): Promise<HelpHandbook> {
   let target: string;
   try {
-    target = await assertReadable(projectRoot, HANDBOOK_REL_PATH);
+    target = await assertReadable(appRoot, HANDBOOK_REL_PATH);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new HelpDocNotFoundError();

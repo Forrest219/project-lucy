@@ -21,7 +21,7 @@
 
 1. WebUI 任意页面都能通过 `?` 帮助按钮进入对应操作说明。
 2. 用户可以在系统内阅读完整系统手册、搜索问题、复制命令片段。
-3. 帮助内容仍以 `docs/SYSTEM_HANDBOOK.md` 为单一事实源，避免 UI 文案与文档漂移。
+3. 帮助内容仍以仓库内 `docs/SYSTEM_HANDBOOK.md` 为单一事实源，并在运行时作为应用内置只读资产提供，避免 UI 文案与文档漂移。
 4. Help API 只读、固定白名单，不开放任意文件读取，不接触 `.ktx/secrets/**`。
 5. 首期不引入 AI 问答；保持 Zero AI Dependency 和本地文件 SSOT。
 
@@ -144,7 +144,7 @@ flowchart LR
   F --> S["GET /api/help/search?q=..."]
   A --> R["help.ts 固定白名单读取"]
   S --> R
-  R --> D["docs/SYSTEM_HANDBOOK.md"]
+  R --> D["应用根 / docs/SYSTEM_HANDBOOK.md"]
 ```
 
 ### 5.2 后端模块
@@ -153,7 +153,7 @@ flowchart LR
 
 职责：
 
-1. 固定读取 `docs/SYSTEM_HANDBOOK.md`。
+1. 固定读取应用根下的 `docs/SYSTEM_HANDBOOK.md`，例如 Docker 镜像内 `/app/docs/SYSTEM_HANDBOOK.md`；不得依赖客户项目根 `/data/lucy/docs`。
 2. 解析标题生成 TOC。
 3. 基于手写 alias map 生成稳定 section id。
 4. 返回 Markdown 原文、更新时间、hash/etag。
@@ -216,9 +216,9 @@ flowchart LR
 
 | code | 场景 |
 |---|---|
-| `HELP_DOC_NOT_FOUND` | `docs/SYSTEM_HANDBOOK.md` 不存在 |
-| `HELP_DOC_READ_FAILED` | 文件读取失败 |
-| `HELP_QUERY_TOO_LONG` | 搜索词超过限制，例如 80 字符 |
+| `ERR_HELP_DOC_NOT_FOUND` | 应用根下 `docs/SYSTEM_HANDBOOK.md` 不存在 |
+| `ERR_HELP_DOC_READ_FAILED` | 文件读取失败 |
+| `ERR_HELP_QUERY_TOO_LONG` | 搜索词超过限制，例如 80 字符 |
 
 ### 5.4 前端模块
 
@@ -249,7 +249,7 @@ P0 可暂时复用 `MarkdownPreview`，但它当前不支持 Markdown table，�
 
 | 边界 | 设计 |
 |---|---|
-| 读取范围 | 只读 `docs/SYSTEM_HANDBOOK.md`，不接受任意 path |
+| 读取范围 | 只读应用根下的 `docs/SYSTEM_HANDBOOK.md`，不接受任意 path |
 | 写入 | Help API 不提供写接口 |
 | secrets | 不读取 `.ktx/secrets/**`；手册内只允许占位符 |
 | HTML | Markdown raw HTML 默认转义或丢弃 |
@@ -263,15 +263,15 @@ P0 可暂时复用 `MarkdownPreview`，但它当前不支持 Markdown table，�
 
 | 项 | 内容 |
 |---|---|
-| 目标 | 新增只读 Help API，读取 `docs/SYSTEM_HANDBOOK.md` |
+| 目标 | 新增只读 Help API，读取应用内置的 `docs/SYSTEM_HANDBOOK.md` |
 | 文件 | `webui/server/help.ts`、`webui/server/index.ts`、`webui/server/__tests__/help.test.ts` |
 | 范围 | `GET /api/help/handbook`；标题 TOC；固定白名单；错误 envelope |
-| 验收 | 正常返回 markdown/toc/sourcePath/updatedAt；缺文件返回 `HELP_DOC_NOT_FOUND`；不能读取任意 path |
+| 验收 | 正常返回 markdown/toc/sourcePath/updatedAt；缺文件返回 `ERR_HELP_DOC_NOT_FOUND`；不能读取任意 path；Docker demo 中即使 `/data/lucy/docs` 不存在也能加载 |
 
 实现要点：
 
 1. `HELP_DOCS = { handbook: "docs/SYSTEM_HANDBOOK.md" }` 固定常量。
-2. 使用 `assertReadable(projectRoot, relPath)` 但不暴露 `relPath` 参数给客户端。
+2. 使用应用根读取内置手册，应用根优先来自 `LUCY_APP_ROOT`，否则由 server 源码位置推导；不暴露 `relPath` 参数给客户端。
 3. 用正则解析 `^#{1,3} ` 标题，生成 TOC。
 4. 对已知章节标题映射稳定 ID；未知标题使用安全 slug 作为 fallback。
 

@@ -5,20 +5,28 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handbookPathForTests, parseHelpToc, readHelpHandbook } from "../help";
 
-let projectRoot: string;
+let projectRoot: string | undefined;
+let appRoot: string | undefined;
 let previousRoot: string | undefined;
+let previousAppRoot: string | undefined;
 
-async function makeProject(markdown?: string) {
-  projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-help-"));
-  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+async function makeRoot(prefix: string, markdown?: string) {
+  const root = await mkdtemp(path.join(os.tmpdir(), prefix));
   if (markdown !== undefined) {
-    await mkdir(path.join(projectRoot, "docs"), { recursive: true });
-    await writeFile(handbookPathForTests(projectRoot), markdown, "utf8");
+    await mkdir(path.join(root, "docs"), { recursive: true });
+    await writeFile(handbookPathForTests(root), markdown, "utf8");
   }
+  return root;
+}
+
+async function makeProject() {
+  projectRoot = await makeRoot("lucy-help-project-");
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
 }
 
 beforeEach(() => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousAppRoot = process.env.LUCY_APP_ROOT;
   vi.resetModules();
 });
 
@@ -28,8 +36,18 @@ afterEach(async () => {
   } else {
     process.env.KTX_PROJECT_ROOT = previousRoot;
   }
+  if (previousAppRoot === undefined) {
+    delete process.env.LUCY_APP_ROOT;
+  } else {
+    process.env.LUCY_APP_ROOT = previousAppRoot;
+  }
   if (projectRoot) {
     await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = undefined;
+  }
+  if (appRoot) {
+    await rm(appRoot, { recursive: true, force: true });
+    appRoot = undefined;
   }
 });
 
@@ -61,8 +79,9 @@ describe("Help handbook", () => {
     ]);
   });
 
-  it("reads only docs/SYSTEM_HANDBOOK.md and returns the API envelope", async () => {
-    await makeProject([
+  it("reads only the bundled docs/SYSTEM_HANDBOOK.md and returns the API envelope", async () => {
+    await makeProject();
+    appRoot = await makeRoot("lucy-help-app-", [
       "# Project Lucy 系统使用与运维手册",
       "",
       "## 1. 系统概述与架构拓扑",
@@ -72,6 +91,7 @@ describe("Help handbook", () => {
       "### 1.1 Lucy 是什么"
     ].join("\n"));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_APP_ROOT = appRoot;
 
     const app = await buildFreshServer();
     await app.ready();
@@ -102,9 +122,11 @@ describe("Help handbook", () => {
 
   it("throws ERR_HELP_DOC_NOT_FOUND when the fixed handbook is missing", async () => {
     await makeProject();
+    appRoot = await makeRoot("lucy-help-app-");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_APP_ROOT = appRoot;
 
-    await expect(readHelpHandbook(projectRoot)).rejects.toMatchObject({
+    await expect(readHelpHandbook(appRoot)).rejects.toMatchObject({
       code: "ERR_HELP_DOC_NOT_FOUND",
       statusCode: 404
     });

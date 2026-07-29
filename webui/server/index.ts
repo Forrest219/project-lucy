@@ -358,10 +358,9 @@ export function buildServer() {
   });
 
   app.get("/api/help/handbook", async () => {
-    const projectRoot = await resolveProjectRoot();
     return {
       ok: true,
-      data: await readHelpHandbook(projectRoot)
+      data: await readHelpHandbook()
     };
   });
 
