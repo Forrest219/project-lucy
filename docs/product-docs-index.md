@@ -58,6 +58,7 @@ Builder-facing technical designs that gate codex M-tickets. Spec is the source o
 |---|---|
 | `docs/design-db-connection.md` | WebUI 连接管理模块（连接概览 / 表白名单 / 连通测试） |
 | `docs/design-schema-onboarding.md` | WebUI schema onboarding 模块（M6：给已有连接追加 schema，ADR-11） |
+| `docs/design-system-handbook-help.md` | WebUI 内置系统手册与 Help Center（M15：全局 `?`、`/help`、上下文帮助抽屉） |
 | `webui/docs/10-deployment-connection-ux-refresh.md` | WebUI 部署向导与数据库连接概览体验升级（交付闭环、指标语义、连接卡片、Add Schema 抽屉） |
 
 ## 5. Existing HTML Help Center

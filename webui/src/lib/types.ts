@@ -218,6 +218,22 @@ export type WikiPreview = {
   proposedMarkdown: string;
 };
 
+export type HelpTocItem = {
+  id: string;
+  level: 2 | 3;
+  title: string;
+};
+
+export type HelpHandbook = {
+  id: "system-handbook";
+  title: string;
+  sourcePath: string;
+  updatedAt: string;
+  etag: string;
+  toc: HelpTocItem[];
+  markdown: string;
+};
+
 export type JoinCandidate = {
   conn: string;
   schema: string;

@@ -30,6 +30,7 @@ vi.mock("../pages/eval/Monitor", () => ({ Monitor: () => <StubPage name="Monitor
 vi.mock("../pages/connections/ConnectionOverview", () => ({ ConnectionOverview: () => <StubPage name="ConnectionOverview" /> }));
 vi.mock("../pages/connections/TableWhitelist", () => ({ TableWhitelist: () => <StubPage name="TableWhitelist" /> }));
 vi.mock("../pages/connections/ConnectionTest", () => ({ ConnectionTest: () => <StubPage name="ConnectionTest" /> }));
+vi.mock("../pages/HelpCenter", () => ({ HelpCenter: () => <StubPage name="HelpCenter" /> }));
 
 function renderAt(path: string) {
   const client = new QueryClient({
@@ -118,6 +119,16 @@ describe("AppFrame shell", () => {
     expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "主导航" })).toHaveClass("pl-nav");
     expect(screen.getByRole("link", { name: "连接概览" })).toHaveClass("pl-nav-link", "pl-nav-link--active");
+  });
+
+  it("renders a global help button", () => {
+    renderAt("/");
+    expect(screen.getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
+  });
+
+  it("renders the help route", () => {
+    renderAt("/help");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("HelpCenter");
   });
 
   it("marks source and join pages as table catalog navigation", () => {

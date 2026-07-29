@@ -23,6 +23,7 @@ import {
 import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
+import { readHelpHandbook } from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
@@ -353,6 +354,14 @@ export function buildServer() {
     return {
       ok: true,
       data: preview
+    };
+  });
+
+  app.get("/api/help/handbook", async () => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await readHelpHandbook(projectRoot)
     };
   });
 

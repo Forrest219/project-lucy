@@ -165,6 +165,7 @@ Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
 | WebUI 当前状态 | `docs/webui-impl-status.md` |
 | WebUI 模块使用 | `docs/webui-module-guide.md` |
 | WebUI 基础架构 | `webui/docs/01-architecture.md`、`webui/docs/02-arch-spec.md`、`webui/docs/03-api-spec.md`、`webui/docs/04-data-model.md` |
+| WebUI 内置系统手册 / Help Center | `docs/design-system-handbook-help.md`、`docs/SYSTEM_HANDBOOK.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | Agent 权限设计 | `docs/design-agent-permissions.md` |
 | 访问治理闭环设计 | `docs/access-governance-design.md` |

@@ -1,0 +1,151 @@
+import { readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import path from "node:path";
+import { assertReadable } from "./fs-safe.js";
+
+const HANDBOOK_REL_PATH = "docs/SYSTEM_HANDBOOK.md";
+const HEADING_RE = /^(#{1,3})\s+(.+?)\s*#*\s*$/;
+const FENCE_RE = /^```/;
+
+const SECTION_ALIASES: Array<[RegExp, string]> = [
+  [/系统概述与架构拓扑/, "system-overview"],
+  [/快速上手/, "quick-start"],
+  [/部署向导与上线检查/, "deployment-checklist"],
+  [/数据库接入/, "database-connections"],
+  [/表白名单/, "table-whitelist"],
+  [/静态 Catalog reload|Reload Catalog/i, "catalog-reload"],
+  [/语义层维护/, "semantic-layer"],
+  [/表目录/, "semantic-catalog"],
+  [/表语义编辑|Human vs AI/, "semantic-table-editor"],
+  [/关联关系|Joins/i, "semantic-joins"],
+  [/业务文档 Wiki|业务 Wiki/, "business-wiki"],
+  [/访问治理 Admin/, "admin-governance"],
+  [/Agent 实例/, "admin-agents"],
+  [/Role 权限模板|角色配置/, "admin-roles"],
+  [/Bearer Token|Token 发行/, "admin-tokens"],
+  [/MCP 访问日志|问题簇|审计/, "admin-audit"],
+  [/质量评测 Eval/, "eval"],
+  [/Eval Case|Case 维护/, "eval-cases"],
+  [/Run 试跑|运行历史/, "eval-runs"],
+  [/趋势监控/, "eval-monitor"],
+  [/Agent \/ 客户端接入指南|MCP Integration Guide/, "mcp-integration"],
+  [/配置与环境变量速查/, "configuration-reference"],
+  [/FAQ 与排障指南/, "troubleshooting"],
+  [/MCP 返回 401/, "mcp-401"],
+  [/KTX upstream 不可用/, "ktx-upstream-unavailable"],
+  [/安全边界速查/, "security-boundaries"],
+  [/审阅|校验/, "review-validate"]
+];
+
+export type HelpTocItem = {
+  id: string;
+  level: 2 | 3;
+  title: string;
+};
+
+export type HelpHandbook = {
+  id: "system-handbook";
+  title: string;
+  sourcePath: typeof HANDBOOK_REL_PATH;
+  updatedAt: string;
+  etag: string;
+  toc: HelpTocItem[];
+  markdown: string;
+};
+
+export class HelpDocNotFoundError extends Error {
+  code = "ERR_HELP_DOC_NOT_FOUND";
+  statusCode = 404;
+
+  constructor() {
+    super(`${HANDBOOK_REL_PATH} was not found`);
+    this.name = "HelpDocNotFoundError";
+  }
+}
+
+function stableSlug(title: string): string {
+  const ascii = title
+    .toLowerCase()
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (ascii) return ascii;
+  return createHash("sha1").update(title).digest("hex").slice(0, 10);
+}
+
+function sectionIdFor(title: string): string {
+  const cleanTitle = title.replace(/^\d+(?:\.\d+)*\s*/, "").trim();
+  const alias = SECTION_ALIASES.find(([pattern]) => pattern.test(cleanTitle));
+  return alias?.[1] ?? stableSlug(cleanTitle);
+}
+
+function dedupeId(base: string, used: Map<string, number>): string {
+  const count = used.get(base) ?? 0;
+  used.set(base, count + 1);
+  return count === 0 ? base : `${base}-${count + 1}`;
+}
+
+export function parseHelpToc(markdown: string): HelpTocItem[] {
+  const used = new Map<string, number>();
+  const items: HelpTocItem[] = [];
+  let inFence = false;
+  for (const line of markdown.split(/\r?\n/)) {
+    if (FENCE_RE.test(line.trim())) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = line.match(HEADING_RE);
+    if (!match || (match[1]?.length ?? 1) < 2) continue;
+    const level = (match[1]?.length ?? 2) as 2 | 3;
+    const title = (match[2] ?? "").trim();
+    items.push({
+      id: dedupeId(sectionIdFor(title), used),
+      level,
+      title
+    });
+  }
+  return items;
+}
+
+export async function readHelpHandbook(projectRoot: string): Promise<HelpHandbook> {
+  let target: string;
+  try {
+    target = await assertReadable(projectRoot, HANDBOOK_REL_PATH);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new HelpDocNotFoundError();
+    }
+    throw error;
+  }
+
+  let markdown: string;
+  let info: Awaited<ReturnType<typeof stat>>;
+  try {
+    [markdown, info] = await Promise.all([
+      readFile(target, "utf8"),
+      stat(target)
+    ]);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new HelpDocNotFoundError();
+    }
+    throw error;
+  }
+
+  const title = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? "Project Lucy 系统使用与运维手册";
+  const hash = createHash("sha256").update(markdown).digest("hex");
+  return {
+    id: "system-handbook",
+    title,
+    sourcePath: HANDBOOK_REL_PATH,
+    updatedAt: info.mtime.toISOString(),
+    etag: `sha256:${hash}`,
+    toc: parseHelpToc(markdown),
+    markdown
+  };
+}
+
+export function handbookPathForTests(projectRoot: string): string {
+  return path.join(projectRoot, HANDBOOK_REL_PATH);
+}

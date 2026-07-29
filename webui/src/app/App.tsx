@@ -23,6 +23,8 @@ import { Monitor } from "../pages/eval/Monitor";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { TableWhitelist } from "../pages/connections/TableWhitelist";
 import { ConnectionTest } from "../pages/connections/ConnectionTest";
+import { HelpCenter } from "../pages/HelpCenter";
+import { HelpButton } from "../components/HelpButton";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import type { ProjectInfo, SourceDetail } from "../lib/types";
@@ -48,6 +50,9 @@ export function breadcrumbItems(pathname: string): string[] {
   }
   if (parts[0] === "review") {
     return ["审阅与校验", "变更审阅"];
+  }
+  if (parts[0] === "help") {
+    return ["系统帮助", "系统手册"];
   }
   if (parts[0] === "eval") {
     if (parts[1] === "cases" && parts[2] && parts[3]) {
@@ -246,6 +251,9 @@ export function AppFrame() {
             </section>
           ))}
         </nav>
+        <div className="pl-sidebar-tools">
+          <HelpButton />
+        </div>
       </aside>
 
       <main className="pl-workspace">
@@ -296,6 +304,7 @@ export function AppFrame() {
             <Route path="/eval/runs" element={<RunList />} />
             <Route path="/eval/runs/:runId" element={<RunDetail />} />
             <Route path="/eval/monitor" element={<Monitor />} />
+            <Route path="/help" element={<HelpCenter />} />
           </Routes>
         </div>
       </main>

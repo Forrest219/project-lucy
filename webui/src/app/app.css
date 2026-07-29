@@ -109,6 +109,15 @@
   .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
   .pl-brand-block span { @apply text-xs text-fg-muted; }
+  .pl-sidebar-tools { @apply mt-6 border-t border-border-default px-2 pt-4; }
+  .pl-help-button {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline transition-colors;
+  }
+  .pl-help-button:hover { @apply bg-bg-muted; }
+  .pl-tooltip-content {
+    @apply z-50 rounded-md border border-border-default bg-bg-elevated px-2 py-1 text-xs text-fg-default;
+  }
+  .pl-tooltip-arrow { fill: var(--token-color-bg-elevated); }
   .pl-workspace { @apply min-w-0 bg-bg-base; }
   .pl-topbar { @apply sticky top-0 z-10 border-b border-border-default bg-bg-surface px-6 py-4; }
   .pl-topbar-title { @apply mt-1 text-base font-semibold leading-6 text-fg-default; }
