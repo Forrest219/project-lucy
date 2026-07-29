@@ -109,13 +109,13 @@
   .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
   .pl-brand-block span { @apply text-xs text-fg-muted; }
-  .pl-sidebar-tools { @apply mt-6 border-t border-border-default px-2 pt-4; }
+  .pl-sidebar-tools { @apply mt-6 border-t border-border-default px-4 pt-4; }
   .pl-help-button {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-md border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline transition-colors;
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
   }
   .pl-help-button:hover { @apply bg-bg-muted; }
   .pl-tooltip-content {
-    @apply z-50 rounded-md border border-border-default bg-bg-elevated px-2 py-1 text-xs text-fg-default;
+    @apply z-50 rounded-sm border border-border-default bg-bg-elevated px-2 py-1 text-xs text-fg-default shadow-card;
   }
   .pl-tooltip-arrow { fill: var(--token-color-bg-elevated); }
   .pl-workspace { @apply min-w-0 bg-bg-base; }
@@ -125,6 +125,39 @@
   .pl-topbar-facts span { @apply rounded-pill border border-border-default bg-bg-muted px-2 py-0.5; }
   .pl-workspace-body { @apply p-8; }
   .pl-page-stack { @apply grid gap-4; }
+
+  .pl-help-page { @apply grid gap-4; }
+  .pl-help-layout {
+    @apply grid items-start gap-4;
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+  .pl-help-toc {
+    @apply sticky top-6 max-h-[calc(100vh-48px)] overflow-auto rounded-lg border border-border-default bg-bg-surface p-3 shadow-card;
+  }
+  .pl-help-toc-title { @apply mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-fg-muted; }
+  .pl-help-toc-link {
+    @apply block rounded-sm px-2 py-1.5 text-xs text-fg-body no-underline hover:bg-bg-muted;
+  }
+  .pl-help-toc-link[aria-current="location"] { @apply bg-bg-selected font-medium text-fg-default; }
+  .pl-help-toc-link--level-3 { @apply pl-5 text-fg-muted; }
+  .pl-help-content {
+    @apply min-w-0 rounded-lg border border-border-default bg-bg-surface p-5 shadow-card;
+  }
+  .pl-help-section {
+    @apply scroll-mt-8 border-b border-border-muted py-4 first:pt-0 last:border-b-0 last:pb-0;
+  }
+  .pl-help-section .pl-markdown-preview { @apply gap-3; }
+  .pl-help-section .pl-markdown-preview h1 { @apply text-lg; }
+  .pl-help-section .pl-markdown-preview h2 { @apply text-base; }
+  .pl-help-section .pl-markdown-preview pre { @apply max-w-full overflow-auto; }
+  @media (max-width: 900px) {
+    .pl-help-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pl-help-toc {
+      @apply static max-h-none;
+    }
+  }
 
   /* 统一 PageHeader (M15)：4 象限布局，消除全站 H1/分类名重复 */
   .pl-page-header {
