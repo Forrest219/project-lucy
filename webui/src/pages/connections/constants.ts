@@ -6,7 +6,7 @@ export interface MetricMeta {
 }
 
 /**
- * Page-level UX copy for the five connection-overview metric cards.
+ * Page-level UX copy for the four connection-overview metric cards.
  * Keep this in the page folder — it's not part of the API data model.
  */
 export const METRIC_METADATA = {
@@ -28,17 +28,11 @@ export const METRIC_METADATA = {
     question: "授权的表里，真正被 AI 看懂、查准的数据有多少？",
     healthyRule: "转化率 (Semantic / Enabled) ≥ 80%"
   },
-  semanticSources: {
-    title: "语义源",
-    description: "按 connection/schema 聚合的主题域概览。",
-    question: "资产是否形成了高内聚的主题域（如财务域、销售域）？",
-    healthyRule: "资产清晰归域名，避免散兵游勇式摆放"
-  },
-  ktxRuntime: {
-    title: "KTX Runtime",
-    description: "底层语义编译与计算引擎的运行状态。",
-    question: "语义编译与查询底座是否健康可用？",
-    healthyRule: "状态保持可用，服务未挂载时及时预警"
+  catalogStatus: {
+    title: "Catalog 状态",
+    description: "最近一次本地 YAML Catalog Reload 的透明状态。",
+    question: "WebUI 当前看到的表目录是否已经从本地资产重新加载？",
+    healthyRule: "最近一次 reload 成功，且 warning 数量可解释"
   }
 } satisfies Record<string, MetricMeta>;
 

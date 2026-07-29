@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPut } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
@@ -13,7 +13,7 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
-import { CatalogReloadButton } from "../../components/catalog";
+import { CatalogAssetUploadButton, CatalogReloadButton } from "../../components/catalog";
 import { PageHeader } from "../../components/PageHeader";
 
 type WhitelistTableRow = {
@@ -93,8 +93,13 @@ function isEqualSet<T>(a: Iterable<T>, b: Iterable<T>): boolean {
 
 export function TableWhitelist() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const initialSchemaParam = searchParams.get("schema") ?? null;
+  const [schemaFilter, setSchemaFilter] = useState<string>(
+    initialSchemaParam && initialSchemaParam.length > 0 ? initialSchemaParam : "all"
+  );
+  const [userOverrodeSchema, setUserOverrodeSchema] = useState<boolean>(false);
   const [search, setSearch] = useState("");
-  const [schemaFilter, setSchemaFilter] = useState("all");
   const [draftByConnection, setDraftByConnection] = useState<Record<string, string[]>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -171,6 +176,19 @@ export function TableWhitelist() {
     return Array.from(set).sort();
   }, [connectionRows]);
 
+  // M17: re-honor the ?schema= query param when the user lands on the page.
+  // Do not override a later manual selection. Falls back to "all" if the
+  // schema is unknown.
+  useEffect(() => {
+    if (userOverrodeSchema) return;
+    if (!initialSchemaParam) return;
+    if (allSchemas.includes(initialSchemaParam)) {
+      setSchemaFilter(initialSchemaParam);
+    } else {
+      setSchemaFilter("all");
+    }
+  }, [allSchemas, initialSchemaParam, userOverrodeSchema]);
+
   // Apply search + schema filter for visible groups
   const visibleGroups = useMemo(() => {
     const lowerSearch = search.trim().toLowerCase();
@@ -224,6 +242,7 @@ export function TableWhitelist() {
     }
     return { added, removed, isDirty: added + removed > 0 };
   }, [connectionRows, draftByConnection]);
+  const changedTableCount = diffStats.added + diffStats.removed;
 
   const changedConnections = useMemo(() => {
     return connectionRows.filter(({ conn }) => {
@@ -324,7 +343,7 @@ export function TableWhitelist() {
       const allWritten = results.every((r) => r.write.written);
       if (allWritten) {
         toast.success("表白名单已保存");
-        setStatusMessage("表白名单已保存。需要刷新本地表清单时，可点击右上角“刷新本地表目录”。");
+        setStatusMessage("已保存白名单变更。若你同时更新了 YAML 文件，请刷新本地目录。");
         setStatusTone("success");
       } else {
         toast.error("表白名单保存未完成，请重试。");
@@ -371,16 +390,7 @@ export function TableWhitelist() {
           </>
         }
         badges={
-          projectQuery.data || connections.length > 0 ? (
-            <>
-              {projectQuery.data ? <span>{projectQuery.data.root}</span> : null}
-              <span>{connections.length} 个连接</span>
-              {projectQuery.data ? (
-                <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
-              ) : null}
-              <span>已勾选 {visibleChecked} / {visibleTotal} 张表</span>
-            </>
-          ) : null
+          projectQuery.data ? <span>{projectQuery.data.root}</span> : null
         }
       />
 
@@ -405,7 +415,10 @@ export function TableWhitelist() {
             <select
               className="pl-input"
               value={schemaFilter}
-              onChange={(e) => setSchemaFilter(e.target.value)}
+              onChange={(e) => {
+                setUserOverrodeSchema(true);
+                setSchemaFilter(e.target.value);
+              }}
               aria-label="Schema 筛选"
             >
               <option value="all">全部 Schema</option>
@@ -440,7 +453,7 @@ export function TableWhitelist() {
             <CatalogReloadButton
               connectionId={toolbarReloadConnId}
               schema={toolbarReloadSchema}
-              label="刷新本地表目录"
+              label="刷新本地目录"
               variant="secondary"
               testId="whitelist-reload-catalog"
             />
@@ -528,18 +541,21 @@ export function TableWhitelist() {
           <div className="pl-empty-state">
             <strong>{schema} 已在连接配置中启用，但本地 semantic-layer 尚未提供表清单。</strong>
             <p className="mt-1">
-              请将 manifest 文件放入 <code>semantic-layer/{conn.id}/_schema/{schema}.yaml</code>，
-              或在具备 KTX/数据库权限的离线环境中生成后提交。
+              请将 manifest 文件放入下方 YAML 路径，或在具备 KTX/数据库权限的离线环境中生成后提交。
               白名单只读取本地 YAML 资产，不会访问物理数据库。
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <CatalogReloadButton
+              <details className="pl-yaml-path-details">
+                <summary>查看 YAML 路径说明</summary>
+                <code>semantic-layer/{conn.id}/_schema/{schema}.yaml</code>
+              </details>
+              <CatalogAssetUploadButton
                 connectionId={conn.id}
                 schema={schema}
-                label="刷新本地表目录"
-                variant="primary"
+                label="上传该 Schema 的 YAML"
+                variant="secondary"
                 size="sm"
-                testId={`whitelist-empty-reload-catalog-${conn.id}-${schema}`}
+                testId={`whitelist-empty-upload-yaml-${conn.id}-${schema}`}
               />
               <Link
                 to="/connections"
@@ -583,7 +599,10 @@ export function TableWhitelist() {
           data-testid="whitelist-floating-bar"
         >
           <div className="pl-floating-action-bar-text">
-            变更未保存（新增 {diffStats.added} 张表 / 移除 {diffStats.removed} 张表）
+            已修改 {changedTableCount} 张表，尚未写入 ktx.yaml
+            <span className="block text-xs font-normal text-fg-muted">
+              新增 {diffStats.added} 张表 / 移除 {diffStats.removed} 张表，保存不会自动重载 Catalog。
+            </span>
             {saveMutation.isPending && (
               <span className="block text-xs font-normal text-fg-muted">
                 正在写入 ktx.yaml（共 {changedConnections.length} 个连接）
@@ -592,7 +611,7 @@ export function TableWhitelist() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="pl-btn pl-btn--ghost" onClick={resetDraft}>
-              重置
+              放弃
             </button>
             <button
               type="button"

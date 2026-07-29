@@ -13,5 +13,7 @@ export const queryKeys = {
   // `/api/connections/:connId/ingest` alias. New UI surfaces should not use it.
   ingestRuns: ["connections", "ingest-runs"] as const,
   // M14 static catalog reload sidecar (`.ktx-ui/catalog-reloads.json`).
-  catalogReloads: ["catalog", "reloads"] as const
+  catalogReloads: ["catalog", "reloads"] as const,
+  // M17 controlled YAML asset upload history (`.ktx-ui/catalog-asset-uploads.json`).
+  catalogAssetUploads: ["catalog", "asset-uploads"] as const
 };

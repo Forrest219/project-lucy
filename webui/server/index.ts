@@ -20,6 +20,15 @@ import {
   readCatalogReloads,
   type CatalogReloadsResponse
 } from "./catalog-reload";
+import {
+  CatalogAssetOverwriteRequiredError,
+  CatalogAssetValidationError,
+  readCatalogAssetUploads,
+  uploadCatalogAsset,
+  validateCatalogAsset,
+  type CatalogAssetUploadRequest,
+  type CatalogAssetValidateRequest
+} from "./catalog-assets";
 import type { TablePatch } from "./model";
 import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
@@ -557,6 +566,70 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     const data: CatalogReloadsResponse = await readCatalogReloads(projectRoot);
     return { ok: true, data };
+  });
+
+  // ─── M17: Controlled YAML catalog asset upload ───────────────────────────
+  // WebUI uses these endpoints to let analysts commit a schema manifest
+  // without going through ops. The target path is server-computed, never
+  // client-supplied. Symlink chains and arbitrary writes are rejected.
+
+  app.post<{
+    Body: Partial<CatalogAssetValidateRequest>;
+  }>("/api/catalog/assets/validate", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const rawAssetType = (body as { assetType?: unknown }).assetType;
+    const validation = await validateCatalogAsset(projectRoot, {
+      connectionId: typeof body.connectionId === "string" ? body.connectionId : "",
+      schema: typeof body.schema === "string" ? body.schema : "",
+      assetType: rawAssetType as CatalogAssetValidateRequest["assetType"],
+      filename: typeof body.filename === "string" ? body.filename : "",
+      content: typeof body.content === "string" ? body.content : ""
+    });
+    return reply.send({ ok: true, data: validation });
+  });
+
+  app.post<{
+    Body: Partial<CatalogAssetUploadRequest>;
+  }>("/api/catalog/assets/upload", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const rawAssetType = (body as { assetType?: unknown }).assetType;
+    const upload: CatalogAssetUploadRequest = {
+      connectionId: typeof body.connectionId === "string" ? body.connectionId : "",
+      schema: typeof body.schema === "string" ? body.schema : "",
+      assetType: rawAssetType as CatalogAssetUploadRequest["assetType"],
+      filename: typeof body.filename === "string" ? body.filename : "",
+      content: typeof body.content === "string" ? body.content : "",
+      confirmOverwrite: body.confirmOverwrite === true
+    };
+    try {
+      const result = await uploadCatalogAsset(projectRoot, upload);
+      return reply.send({ ok: true, data: result });
+    } catch (error) {
+      if (error instanceof CatalogAssetValidationError) {
+        reply.status(error.statusCode);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: { validation: error.validation }
+        });
+      }
+      if (error instanceof CatalogAssetOverwriteRequiredError) {
+        reply.status(409);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: { validation: error.validation }
+        });
+      }
+      throw error;
+    }
+  });
+
+  app.get("/api/catalog/assets/uploads", async () => {
+    const projectRoot = await resolveProjectRoot();
+    return { ok: true, data: await readCatalogAssetUploads(projectRoot) };
   });
 
   registerAgentRoutes(app);

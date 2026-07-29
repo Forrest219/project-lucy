@@ -153,27 +153,94 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     expect(await screen.findByRole("heading", { name: "连接概览" })).toBeInTheDocument();
-    expect(screen.getAllByTestId("connection-metric")).toHaveLength(5);
+    expect(screen.getAllByTestId("connection-metric")).toHaveLength(4);
     expect(screen.getByText("数据连接")).toBeInTheDocument();
     expect(screen.getByText("启用的表")).toBeInTheDocument();
     expect(screen.getByText("语义层对象")).toBeInTheDocument();
-    expect(screen.getByText("语义源")).toBeInTheDocument();
-    expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
+    expect(screen.getByText("Catalog 状态")).toBeInTheDocument();
+    expect(screen.queryByText("语义源")).not.toBeInTheDocument();
+    expect(screen.queryByText("KTX Runtime")).not.toBeInTheDocument();
     expect(screen.getByText("mysql-aliyun")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "表白名单" })).toHaveAttribute("href", "/connections/whitelist");
-    expect(screen.getByRole("link", { name: "连通测试" })).toHaveAttribute("href", "/connections/test");
-    expect(screen.getByRole("link", { name: "打开表目录" })).toHaveAttribute("href", "/");
+    // M17: cross-page navigation must NOT live in the page header anymore.
+    expect(screen.queryByRole("link", { name: "表白名单" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "连通测试" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "打开表目录" })).not.toBeInTheDocument();
+    // The per-connection card still surfaces the upload + reload actions.
+    expect(screen.getAllByRole("button", { name: "上传 YAML" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "刷新本地目录" }).length).toBeGreaterThan(0);
+    expect(screen.queryByText("维护表白名单")).not.toBeInTheDocument();
+    expect(screen.queryByText("运行连通测试")).not.toBeInTheDocument();
   });
 
   it("renders an accessible ⓘ help trigger for every metric", async () => {
     stubOverviewFetch();
     renderOverview();
 
-    for (const label of ["数据连接", "启用的表", "语义层对象", "语义源", "KTX Runtime"]) {
+    for (const label of ["数据连接", "启用的表", "语义层对象", "Catalog 状态"]) {
       expect(
         await screen.findByRole("button", { name: `${label} 管理含义` })
       ).toBeInTheDocument();
     }
+  });
+
+  it("shows per-schema manifest status and the correct next action", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders", "dataforai")],
+      catalogReloadsResponse: {
+        runs: [],
+        last: null,
+        lastByConnection: {
+          "mysql-aliyun": {
+            id: "rel_20260729_103000_001",
+            status: "success",
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "mysql-aliyun",
+            connectionIds: ["mysql-aliyun"],
+            connections: 1,
+            configuredSchemas: 2,
+            manifestSchemas: 1,
+            tables: 1,
+            enabledTables: 1,
+            warnings: [
+              {
+                code: "SCHEMA_MANIFEST_MISSING",
+                connectionId: "mysql-aliyun",
+                schema: "openclaw_db",
+                filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+                message: "openclaw_db manifest missing"
+              }
+            ],
+            source: "static-yaml"
+          }
+        }
+      }
+    });
+    renderOverview();
+
+    expect(
+      await screen.findByTestId("schema-asset-status-mysql-aliyun-dataforai")
+    ).toHaveTextContent("已存在");
+    expect(screen.getByTestId("schema-row-mysql-aliyun-dataforai")).toHaveTextContent("1 张表");
+    expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).toHaveAttribute(
+      "href",
+      "/connections/whitelist?schema=dataforai"
+    );
+
+    expect(screen.getByTestId("schema-asset-status-mysql-aliyun-openclaw_db")).toHaveTextContent(
+      "缺失 manifest"
+    );
+    expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).toHaveTextContent("0 张表");
+    expect(screen.getByTestId("upload-yaml-mysql-aliyun-openclaw_db")).toBeInTheDocument();
   });
 
   it("shows management-meaning Tooltip content on the 数据连接 help trigger", async () => {
@@ -276,8 +343,9 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     expect(await screen.findByText("doris-r1")).toBeInTheDocument();
-    expect(screen.getByText("doris / mysql wire / R1 target / read-only expected")).toBeInTheDocument();
     expect(screen.getByTestId("engine-badge-doris-r1")).toHaveTextContent("Doris");
+    expect(screen.getByTestId("connection-status-doris-r1")).toHaveTextContent("Not tested");
+    expect(screen.getByTestId("connection-card-doris-r1")).toHaveTextContent("Read-only expected");
   });
 
   it("shows the StarRocks R1 target connection profile", async () => {
@@ -300,8 +368,8 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     expect(await screen.findByText("starrocks-r1")).toBeInTheDocument();
-    expect(screen.getByText("starrocks / mysql wire / R1 target / read-only expected")).toBeInTheDocument();
     expect(screen.getByTestId("engine-badge-starrocks-r1")).toHaveTextContent("StarRocks");
+    expect(screen.getByTestId("connection-card-starrocks-r1")).toHaveTextContent("Read-only expected");
   });
 
   it("keeps the overview layout stable with no connections", async () => {
@@ -320,14 +388,33 @@ describe("ConnectionOverview", () => {
     expect(await screen.findByText("连接状态加载失败：project unavailable")).toBeInTheDocument();
   });
 
-  it("surfaces unavailable KTX Runtime status", async () => {
+  it("surfaces project root as the only environment badge in the header", async () => {
     stubOverviewFetch({ ktxAvailable: false });
     renderOverview();
 
-    expect(await screen.findByText("不可用")).toBeInTheDocument();
+    expect(await screen.findByTestId("page-header-badge-root")).toHaveTextContent("/tmp/project-lucy");
+    expect(screen.queryByText("KTX 不可用")).not.toBeInTheDocument();
   });
 
-  it("renders the connection-level 重新加载本地资产 action and no CLI ingest wording", async () => {
+  it("M17: keeps the header compact (no connection count, no KTX badge, no big description card)", async () => {
+    stubOverviewFetch();
+    renderOverview();
+
+    expect(await screen.findByRole("heading", { name: "连接概览" })).toBeInTheDocument();
+    expect(screen.queryByText("1 个连接")).not.toBeInTheDocument();
+    expect(screen.queryByText("KTX 可用")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("连接配置来自当前项目，不在 WebUI 中直接编辑凭据。")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重新加载资产" })).not.toBeInTheDocument();
+  });
+
+  it("renders the connection-level 刷新本地目录 action and no CLI ingest wording", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -344,7 +431,7 @@ describe("ConnectionOverview", () => {
 
     expect(
       await screen.findByTestId("catalog-reload-mysql-aliyun")
-    ).toHaveTextContent("重新加载本地资产");
+    ).toHaveTextContent("刷新本地目录");
     expect(screen.queryByText(/触发 Ingest/)).not.toBeInTheDocument();
     expect(screen.queryByText(/重新扫描/)).not.toBeInTheDocument();
   });

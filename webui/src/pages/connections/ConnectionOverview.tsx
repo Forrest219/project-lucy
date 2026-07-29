@@ -6,13 +6,19 @@ import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   CatalogReloadsResponse,
+  CatalogReloadWarning,
   ConnectionInfo,
   ConnectionTestResult,
   ProjectInfo,
+  SourceSummary,
   SourcesResponse
 } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
-import { CatalogReloadButton, CatalogReloadLastRunBadge } from "../../components/catalog";
+import {
+  CatalogAssetUploadButton,
+  CatalogReloadButton,
+  CatalogReloadLastRunBadge
+} from "../../components/catalog";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
 
@@ -36,6 +42,69 @@ function statusLabel(state: TestUiStatus) {
   return "Disconnected";
 }
 
+function catalogStatusLabel(run: CatalogReloadsResponse["last"]): string {
+  if (!run) return "未运行";
+  if (run.status === "failed") return "失败";
+  if (run.warnings.length > 0) return "有提示";
+  return "成功";
+}
+
+function catalogStatusDetail(run: CatalogReloadsResponse["last"]): string {
+  if (!run) return "尚未运行过本地目录刷新";
+  const warningText = run.warnings.length > 0 ? ` · ${run.warnings.length} 个提示` : "";
+  return `${run.tables} 张表 · ${run.connectionIds.length} 个连接${warningText}`;
+}
+
+function formatLocalTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
+type SchemaAssetState = {
+  label: string;
+  tableCount: number;
+  tone: "success" | "warning" | "danger" | "muted";
+};
+
+function matchingSchemaWarnings(
+  warnings: CatalogReloadWarning[],
+  connectionId: string,
+  schema: string
+): CatalogReloadWarning[] {
+  return warnings.filter((warning) => {
+    if (warning.connectionId !== connectionId) return false;
+    if (warning.schema === schema) return true;
+    return Boolean(warning.table?.startsWith(`${schema}.`));
+  });
+}
+
+function schemaAssetState(
+  connectionId: string,
+  schema: string,
+  tables: SourceSummary[],
+  run: CatalogReloadsResponse["lastByConnection"][string] | undefined
+): SchemaAssetState {
+  const tableCount = tables.filter((table) => table.conn === connectionId && table.schema === schema).length;
+  const warnings = matchingSchemaWarnings(run?.warnings ?? [], connectionId, schema);
+  if (warnings.some((warning) => warning.code === "MANIFEST_PARSE_FAILED")) {
+    return { label: "解析失败", tableCount, tone: "danger" };
+  }
+  if (warnings.some((warning) => warning.code === "SCHEMA_MANIFEST_MISSING")) {
+    return { label: "缺失 manifest", tableCount, tone: "warning" };
+  }
+  if (warnings.some((warning) => warning.code === "SCHEMA_MANIFEST_EMPTY")) {
+    return { label: "空 manifest", tableCount, tone: "warning" };
+  }
+  if (tableCount > 0) {
+    return { label: "已存在", tableCount, tone: "success" };
+  }
+  return { label: "未发现本地 manifest", tableCount, tone: "muted" };
+}
+
 export function ConnectionOverview() {
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
@@ -54,8 +123,8 @@ export function ConnectionOverview() {
   const enabledTableCount = connections.reduce((sum, conn) => sum + conn.enabledTables.length, 0);
   const semanticTables = sourcesQuery.data?.tables ?? [];
   const semanticTableCount = semanticTables.length;
-  const semanticSourceCount = new Set(semanticTables.map((table) => `${table.conn}.${table.schema}`)).size;
   const schemaCount = connections.reduce((sum, conn) => sum + conn.schemas.length, 0);
+  const lastCatalogRun = catalogReloadsQuery.data?.last ?? null;
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
@@ -100,22 +169,11 @@ export function ConnectionOverview() {
       <PageHeader
         title="连接概览"
         breadcrumbs={["数据库接入", "连接概览"]}
-        description="查看当前 KTX 项目的数据库连接、启用表范围和语义层覆盖情况。"
+        description="维护每个连接的 schema、YAML 资产与本地目录刷新状态。"
         badges={
           projectQuery.data ? (
-            <>
-              <span data-testid="page-header-badge-root">{projectQuery.data.root}</span>
-              <span>{connections.length} 个连接</span>
-              <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
-            </>
+            <span data-testid="page-header-badge-root">{projectQuery.data.root}</span>
           ) : null
-        }
-        actions={
-          <>
-            <Link className="pl-btn pl-btn--secondary" to="/connections/whitelist">表白名单</Link>
-            <Link className="pl-btn pl-btn--secondary" to="/connections/test">连通测试</Link>
-            <Link className="pl-btn pl-btn--primary" to="/">打开表目录</Link>
-          </>
         }
       />
 
@@ -136,117 +194,136 @@ export function ConnectionOverview() {
           subValue="已进入 semantic-layer 的表"
         />
         <MetricCard
-          type="semanticSources"
-          value={semanticSourceCount}
-          subValue="按 connection/schema 聚合"
-        />
-        <MetricCard
-          type="ktxRuntime"
-          value={projectQuery.data?.ktxAvailable ? "可用" : "不可用"}
-          subValue={projectQuery.data?.root ?? "项目根目录未知"}
+          type="catalogStatus"
+          value={catalogStatusLabel(lastCatalogRun)}
+          subValue={catalogStatusDetail(lastCatalogRun)}
         />
       </div>
 
       <div className="pl-overview-grid">
         <section className="pl-panel">
-          <p className="pl-notice mb-3">连接配置来自当前项目，不在 WebUI 中直接编辑凭据。</p>
-          <div className="pl-table-list">
-            {connections.length === 0 && (
-              <p className="text-sm text-fg-muted py-4">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
-            )}
-            {connections.map((conn) => {
-              const state: TestUiStatus = testStates[conn.id] ?? "unknown";
-              const lastRun = catalogReloadsQuery.data?.lastByConnection[conn.id];
-              return (
-                <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="pl-engine-badge" data-testid={`engine-badge-${conn.id}`}>
-                        {engineLabel(conn.engine ?? conn.driver)}
-                      </span>
-                      <strong>{conn.id}</strong>
-                      <span
-                        className={`pl-connection-status pl-connection-status--${state}`}
-                        data-testid={`connection-status-${conn.id}`}
-                      >
-                        {statusLabel(state)}
-                      </span>
-                      <CatalogReloadLastRunBadge run={lastRun ?? null} />
-                    </div>
-                    <span>
-                      {conn.engine ?? "unknown engine"}
-                      {conn.wireProtocol ? ` / ${conn.wireProtocol} wire` : ""}
-                      {conn.r1Target ? " / R1 target" : ""}
-                      {conn.readOnlyExpected === false ? " / write-risk" : " / read-only expected"}
-                    </span>
-                    <span>{conn.driver ?? "未知 driver"}</span>
-                  </div>
-                  <div className="pl-schema-cell">
-                    <span>schemas</span>
-                    {conn.schemas.length === 0 ? (
-                      <strong>-</strong>
-                    ) : (
-                      <ul className="pl-schema-list">
-                        {conn.schemas.map((schema) => (
-                          <li className="pl-schema-row" key={schema} data-testid={`schema-row-${conn.id}-${schema}`}>
-                            <code>{schema}</code>
-                            <span className="text-xs text-fg-muted">本地 YAML 资产</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div>
-                    <span>enabled</span>
-                    <strong>{conn.enabledTables.length} 张表</strong>
-                  </div>
+          {connections.length === 0 && (
+            <p className="text-sm text-fg-muted py-4">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
+          )}
+          {connections.map((conn) => {
+            const state: TestUiStatus = testStates[conn.id] ?? "unknown";
+            const lastRun = catalogReloadsQuery.data?.lastByConnection[conn.id];
+            const lastRunAt = lastRun ? formatLocalTime(lastRun.startedAt) : "尚未运行";
+            return (
+              <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
+                <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <CatalogReloadButton
-                      connectionId={conn.id}
-                      label="重新加载本地资产"
-                      variant="primary"
-                      testId={`catalog-reload-${conn.id}`}
-                    />
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary"
-                      onClick={() => setAddTarget(conn)}
-                      data-testid={`add-schema-${conn.id}`}
+                    <span className="pl-engine-badge" data-testid={`engine-badge-${conn.id}`}>
+                      {engineLabel(conn.engine ?? conn.driver)}
+                    </span>
+                    <strong>{conn.id}</strong>
+                    <span
+                      className={`pl-connection-status pl-connection-status--${state}`}
+                      data-testid={`connection-status-${conn.id}`}
                     >
-                      + 添加 schema
-                    </button>
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--ghost"
-                      onClick={() => testMutation.mutate(conn.id)}
-                      disabled={testMutation.isPending && testMutation.variables === conn.id}
-                      data-testid={`test-connection-${conn.id}`}
-                    >
-                      {state === "testing" ? "Testing..." : "测试连接"}
-                    </button>
+                      {statusLabel(state)}
+                    </span>
+                    <span className="text-xs text-fg-muted">
+                      {conn.readOnlyExpected === false ? "Write-risk" : "Read-only expected"}
+                    </span>
                   </div>
+                  <p className="text-xs text-fg-muted">
+                    配置来源：ktx.yaml。凭据不在 WebUI 中编辑。
+                  </p>
+                  <p className="text-xs text-fg-muted">
+                    上次刷新：{lastRunAt}
+                    {lastRun ? ` · ${catalogStatusLabel(lastRun)}` : ""}
+                  </p>
+                  <CatalogReloadLastRunBadge run={lastRun ?? null} />
                 </div>
-              );
-            })}
-          </div>
+                <div className="pl-schema-cell">
+                  <span className="text-xs text-fg-muted">schemas</span>
+                  {conn.schemas.length === 0 ? (
+                    <strong>-</strong>
+                  ) : (
+                    <ul className="pl-schema-list" data-testid={`schema-list-${conn.id}`}>
+                      {conn.schemas.map((schema) => {
+                        const assetState = schemaAssetState(conn.id, schema, semanticTables, lastRun);
+                        const hasManifest = assetState.tone === "success";
+                        return (
+                          <li
+                            className="pl-schema-row"
+                            key={schema}
+                            data-testid={`schema-row-${conn.id}-${schema}`}
+                          >
+                            <code>{schema}</code>
+                            <span
+                              className={`pl-schema-asset-status pl-schema-asset-status--${assetState.tone}`}
+                              data-testid={`schema-asset-status-${conn.id}-${schema}`}
+                            >
+                              {assetState.label}
+                            </span>
+                            <span className="text-xs text-fg-muted">
+                              {assetState.tableCount} 张表
+                            </span>
+                            {hasManifest ? (
+                              <Link
+                                className="pl-btn pl-btn--ghost pl-btn--sm"
+                                to={`/connections/whitelist?schema=${encodeURIComponent(schema)}`}
+                                data-testid={`schema-whitelist-${conn.id}-${schema}`}
+                              >
+                                维护白名单
+                              </Link>
+                            ) : (
+                              <CatalogAssetUploadButton
+                                connectionId={conn.id}
+                                schema={schema}
+                                label="上传该 Schema 的 YAML"
+                                variant="ghost"
+                                size="sm"
+                                testId={`upload-yaml-${conn.id}-${schema}`}
+                              />
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--secondary"
+                    onClick={() => setAddTarget(conn)}
+                    data-testid={`add-schema-${conn.id}`}
+                  >
+                    + 添加 Schema
+                  </button>
+                  <CatalogAssetUploadButton
+                    connectionId={conn.id}
+                    schemaOptions={conn.schemas}
+                    label="上传 YAML"
+                    variant="primary"
+                    testId={`upload-yaml-${conn.id}`}
+                  />
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost"
+                    onClick={() => testMutation.mutate(conn.id)}
+                    disabled={testMutation.isPending && testMutation.variables === conn.id}
+                    data-testid={`test-connection-${conn.id}`}
+                  >
+                    {state === "testing" ? "Testing..." : "测试连接"}
+                  </button>
+                  <CatalogReloadButton
+                    connectionId={conn.id}
+                    label="刷新本地目录"
+                    variant="secondary"
+                    testId={`catalog-reload-${conn.id}`}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </section>
 
         <aside className="pl-panel">
-          <div className="pl-action-list">
-            <Link to="/connections/whitelist">
-              <strong>维护表白名单</strong>
-              <span>选择需要进入语义层的物理表。</span>
-            </Link>
-            <Link to="/connections/test">
-              <strong>运行连通测试</strong>
-              <span>验证当前连接的访问状态。</span>
-            </Link>
-            <Link to="/">
-              <strong>打开表目录</strong>
-              <span>查看已入库的语义对象与完成度。</span>
-            </Link>
-          </div>
-          <div className="pl-code-snippet">
+          <div className="pl-code-snippet mt-0">
             <div className="pl-copy-line">
               <span>MCP endpoint</span>
               <button

@@ -71,11 +71,18 @@ function defaultHandlers(opts: {
   const connections = opts.connections ?? [opts.connection ?? TEST_CONN];
   const sources = opts.sources ?? TEST_SOURCES;
   const persistedByConnection = new Map(connections.map((conn) => [conn.id, [...conn.enabledTables]]));
-  const handlers: HandlerMap = {
-    "GET /api/connections": () =>
-      new Response(JSON.stringify({ ok: true, data: { connections } })),
-    "GET /api/sources": () =>
-      new Response(JSON.stringify({ ok: true, data: { tables: sources } }))
+    const handlers: HandlerMap = {
+      "GET /api/connections": () =>
+        new Response(JSON.stringify({ ok: true, data: { connections } })),
+      "GET /api/project": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { root: "/tmp/project-lucy", ktxAvailable: true, connections }
+          })
+        ),
+      "GET /api/sources": () =>
+        new Response(JSON.stringify({ ok: true, data: { tables: sources } }))
   };
 
   for (const conn of connections) {
@@ -177,13 +184,13 @@ function stubWhitelistFetch(handlers: HandlerMap = {}) {
   return { fetchMock, handlers };
 }
 
-function renderWhitelist() {
+function renderWhitelist(initialEntries: string[] = ["/"]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <TableWhitelist />
       </MemoryRouter>
     </QueryClientProvider>
@@ -338,8 +345,8 @@ describe("TableWhitelist", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
 
-    expect(await screen.findAllByText("已勾选 1 / 1 张表")).toHaveLength(2);
-    expect(screen.getByText(/变更未保存/)).toBeInTheDocument();
+    expect(await screen.findAllByText("已勾选 1 / 1 张表")).toHaveLength(1);
+    expect(screen.getByText(/已修改 1 张表/)).toBeInTheDocument();
     expect(screen.getByText(/新增 1 张表/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "反选当前结果" }));
@@ -461,15 +468,15 @@ describe("TableWhitelist", () => {
       return url.includes("/api/catalog/reload");
     });
     expect(reloadCalls).toHaveLength(0);
-    expect(await screen.findByText(/表白名单已保存/)).toBeInTheDocument();
+    expect(await screen.findByText(/已保存白名单变更/)).toBeInTheDocument();
   });
 
-  it("surfaces a 刷新本地表目录 action in the toolbar even without any draft changes", async () => {
+  it("surfaces a 刷新本地目录 action in the toolbar even without any draft changes", async () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
     const reloadButton = await screen.findByTestId("whitelist-reload-catalog");
-    expect(reloadButton).toHaveTextContent("刷新本地表目录");
+    expect(reloadButton).toHaveTextContent("刷新本地目录");
     expect(reloadButton).not.toBeDisabled();
 
     fireEvent.click(reloadButton);
@@ -541,7 +548,7 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const reloadButton = await screen.findByTestId("whitelist-reload-catalog");
-    expect(reloadButton).toHaveTextContent("刷新本地表目录");
+    expect(reloadButton).toHaveTextContent("刷新本地目录");
     expect(reloadButton).not.toBeDisabled();
 
     fireEvent.click(reloadButton);
@@ -558,7 +565,7 @@ describe("TableWhitelist", () => {
     expect(reloadCall?.[1]?.body).toBe(JSON.stringify({}));
   });
 
-  it("exposes a 刷新本地表目录 action inside the configured empty schema state", async () => {
+  it("shows YAML path guidance inside the configured empty schema state without a duplicate reload action", async () => {
     const { fetchMock } = stubWhitelistFetch(
       defaultHandlers({
         connection: {
@@ -572,24 +579,95 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const empty = await screen.findByTestId("configured-schema-empty-mysql-aliyun-openclaw_db");
-    const button = within(empty).getByTestId(
-      "whitelist-empty-reload-catalog-mysql-aliyun-openclaw_db"
-    );
-    expect(button).toHaveTextContent("刷新本地表目录");
+    expect(within(empty).getByText("查看 YAML 路径说明")).toBeInTheDocument();
+    expect(within(empty).getByText("semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml")).toBeInTheDocument();
+    expect(
+      within(empty).queryByTestId("whitelist-empty-reload-catalog-mysql-aliyun-openclaw_db")
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(button);
-    await waitFor(() => {
-      const reloadCall = fetchMock.mock.calls.find((call) =>
-        String(call[0]).includes("/api/catalog/reload")
-      );
-      expect(reloadCall).toBeDefined();
-    });
-    const reloadCall = fetchMock.mock.calls.find((call) =>
+    const reloadCalls = fetchMock.mock.calls.filter((call) =>
       String(call[0]).includes("/api/catalog/reload")
     );
-    expect(reloadCall?.[1]?.body).toBe(
-      JSON.stringify({ connectionId: "mysql-aliyun", schema: "openclaw_db" })
+    expect(reloadCalls).toHaveLength(0);
+  });
+
+  it("preselects the Schema filter from the ?schema= query param without overwriting a later manual change", async () => {
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
     );
+    renderWhitelist(["/connections/whitelist?schema=openclaw_db"]);
+
+    const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
+    expect(schemaSelect).toHaveValue("openclaw_db");
+    expect(
+      screen.getByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")
+    ).toBeInTheDocument();
+
+    // User manually picks another option — the new value should stick.
+    fireEvent.change(schemaSelect, { target: { value: "dataforai" } });
+    expect(schemaSelect).toHaveValue("dataforai");
+  });
+
+  it("falls back to 'all' when the ?schema= query param is unknown", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist(["/connections/whitelist?schema=ghost"]);
+    const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
+    expect(schemaSelect).toHaveValue("all");
+  });
+
+  it("renders the empty-schema upload CTA in the configured empty state", async () => {
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+    );
+    renderWhitelist(["/connections/whitelist?schema=openclaw_db"]);
+
+    const empty = await screen.findByTestId(
+      "configured-schema-empty-mysql-aliyun-openclaw_db"
+    );
+    const uploadBtn = within(empty).getByRole("button", {
+      name: "上传该 Schema 的 YAML"
+    });
+    expect(uploadBtn).toBeInTheDocument();
+    // The action should not be a duplicate global reload — the toolbar covers
+    // that. Only the contextual upload CTA is rendered here.
+    expect(
+      within(empty).queryByTestId("whitelist-reload-catalog")
+    ).not.toBeInTheDocument();
+  });
+
+  it("surfaces the new save success copy when the whitelist is saved", async () => {
+    const { fetchMock } = stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const search = await screen.findByPlaceholderText("搜索表名/描述...");
+    fireEvent.change(search, { target: { value: "returns" } });
+    await waitFor(() => {
+      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
+
+    expect(
+      await screen.findByText(/已保存白名单变更/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/若你同时更新了 YAML 文件，请刷新本地目录/)
+    ).toBeInTheDocument();
+    void fetchMock;
   });
 
   it("saves multi-connection whitelist changes without auto-triggering ingest", async () => {

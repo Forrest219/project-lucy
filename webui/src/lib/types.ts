@@ -645,3 +645,95 @@ export type CatalogReloadsResponse = {
   last: CatalogReloadRun | null;
   lastByConnection: Record<string, CatalogReloadRun>;
 };
+
+// ─── M17 Catalog Asset Upload (controlled YAML manifest) ───────────────────
+// Self-service schema manifest upload that the analyst can run from the WebUI
+// instead of handing the file to ops. The backend pins the target path to
+// `semantic-layer/<connection>/_schema/<schema>.yaml`; the client never picks
+// the file location. Records are stored in a bounded sidecar; YAML content
+// itself is never written into the sidecar.
+
+export type CatalogAssetType = "schemaManifest";
+
+export type CatalogAssetWarningCode =
+  | "EMPTY_MANIFEST"
+  | "TARGET_EXISTS"
+  | "TABLE_SCHEMA_MISMATCH"
+  | "UNKNOWN_MANIFEST_SHAPE";
+
+export type CatalogAssetWarning = {
+  code: CatalogAssetWarningCode;
+  message: string;
+  table?: string;
+};
+
+export type CatalogAssetErrorCode =
+  | "UNKNOWN_CONNECTION"
+  | "SCHEMA_NOT_CONFIGURED"
+  | "INVALID_ASSET_TYPE"
+  | "INVALID_FILENAME"
+  | "FILE_TOO_LARGE"
+  | "YAML_PARSE_FAILED"
+  | "INVALID_MANIFEST"
+  | "PATH_NOT_ALLOWED";
+
+export type CatalogAssetError = {
+  code: CatalogAssetErrorCode;
+  message: string;
+};
+
+export type CatalogAssetValidateRequest = {
+  connectionId: string;
+  schema: string;
+  assetType: CatalogAssetType;
+  filename: string;
+  content: string;
+};
+
+export type CatalogAssetValidateResponse = {
+  valid: boolean;
+  connectionId: string;
+  schema: string;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  exists: boolean;
+  originalFilename: string;
+  sizeBytes: number;
+  sha256: string;
+  tables: number;
+  tableNames: string[];
+  warnings: CatalogAssetWarning[];
+  errors: CatalogAssetError[];
+};
+
+export type CatalogAssetUploadRequest = CatalogAssetValidateRequest & {
+  confirmOverwrite?: boolean;
+};
+
+export type CatalogAssetUploadRecord = {
+  id: string;
+  createdAt: string;
+  connectionId: string;
+  schema: string;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  originalFilename: string;
+  sizeBytes: number;
+  sha256: string;
+  tables: number;
+  overwritten: boolean;
+  warnings: CatalogAssetWarning[];
+  reloadRunId?: string;
+};
+
+export type CatalogAssetUploadResponse = {
+  uploaded: true;
+  record: CatalogAssetUploadRecord;
+  validation: CatalogAssetValidateResponse;
+  reload: CatalogReloadRun;
+};
+
+export type CatalogAssetUploadsResponse = {
+  records: CatalogAssetUploadRecord[];
+  lastBySchema: Record<string, CatalogAssetUploadRecord>;
+};

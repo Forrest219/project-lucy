@@ -64,6 +64,13 @@ function defaultHandlers(opts: {
   return {
     "GET /api/connections": () =>
       new Response(JSON.stringify({ ok: true, data: { connections: [conn] } })),
+    "GET /api/project": () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: { root: "/tmp/project-lucy", ktxAvailable: true, connections: [conn] }
+        })
+      ),
     [`POST /api/connections/${conn.id}/test`]: async () => {
       if (delay > 0) {
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -114,7 +121,7 @@ describe("ConnectionTest", () => {
     expect(screen.queryByText("连接成功 (Connection Passed)")).not.toBeInTheDocument();
   });
 
-  it("shows success state with structured latency, metadata, and collapsed logs", async () => {
+  it("shows success state with structured latency, metadata, and visible logs", async () => {
     stubConnTestFetch(
       defaultHandlers({
         testResult: {
@@ -141,12 +148,13 @@ describe("ConnectionTest", () => {
     expect(screen.getByText("访问模式")).toBeInTheDocument();
     expect(screen.getByText("Read-Only (受控访问)")).toBeInTheDocument();
 
-    // Raw logs are collapsed by default
     const toggle = screen.getByRole("button", { name: /原始诊断日志/ });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("connection-test-raw-log-frame")).toBeInTheDocument();
+    expect(screen.getByTestId("connection-test-stdout")).toHaveTextContent("Status: ok");
   });
 
-  it("expands the raw log block and shows the stdout text", async () => {
+  it("can collapse and re-expand the raw log block", async () => {
     stubConnTestFetch(
       defaultHandlers({
         testResult: {
@@ -167,14 +175,18 @@ describe("ConnectionTest", () => {
     fireEvent.click(toggle);
 
     await waitFor(() =>
-      expect(toggle).toHaveAttribute("aria-expanded", "true")
+      expect(toggle).toHaveAttribute("aria-expanded", "false")
     );
+    expect(screen.queryByTestId("connection-test-raw-log-frame")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-expanded", "true"));
     expect(
       await screen.findByTestId("connection-test-stdout")
     ).toHaveTextContent("Status: ok");
   });
 
-  it("shows failure state with the access-denied reason in the expanded log", async () => {
+  it("shows failure state with the access-denied reason in the visible log", async () => {
     stubConnTestFetch(
       defaultHandlers({
         testResult: {
@@ -194,20 +206,38 @@ describe("ConnectionTest", () => {
     expect(await screen.findByText("连接失败 (Connection Failed)")).toBeInTheDocument();
     expect(screen.getByText("需关注")).toBeInTheDocument();
 
-    const toggle = screen.getByRole("button", { name: /原始诊断日志/ });
-    fireEvent.click(toggle);
-    await waitFor(() =>
-      expect(toggle).toHaveAttribute("aria-expanded", "true")
-    );
+    expect(screen.getByRole("button", { name: /原始诊断日志/ })).toHaveAttribute("aria-expanded", "true");
     expect(
-      await screen.findByTestId("connection-test-reason")
+      await screen.findByTestId("connection-test-stderr")
     ).toHaveTextContent("Access denied");
+  });
+
+  it("shows a placeholder when the connection test returns no raw log text", async () => {
+    stubConnTestFetch(
+      defaultHandlers({
+        testResult: {
+          status: "ok",
+          latencyMs: 88,
+          stdout: "",
+          stderr: ""
+        }
+      })
+    );
+    renderConnectionTest();
+
+    const button = await screen.findByRole("button", { name: "重新测试连接" });
+    fireEvent.click(button);
+
+    expect(await screen.findByText("连接成功 (Connection Passed)")).toBeInTheDocument();
+    expect(screen.getByTestId("connection-test-log-empty")).toHaveTextContent("暂无原始日志输出");
   });
 
   it("renders an empty state link when no connection is configured", async () => {
     stubConnTestFetch({
       "GET /api/connections": () =>
-        new Response(JSON.stringify({ ok: true, data: { connections: [] } }))
+        new Response(JSON.stringify({ ok: true, data: { connections: [] } })),
+      "GET /api/project": () =>
+        new Response(JSON.stringify({ ok: true, data: { root: "/tmp/project-lucy", ktxAvailable: true, connections: [] } }))
     });
     renderConnectionTest();
     expect(await screen.findByText(/暂无连接配置/)).toBeInTheDocument();

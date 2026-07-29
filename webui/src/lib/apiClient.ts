@@ -10,6 +10,7 @@ type ApiFailure = {
     message: string;
     detail?: unknown;
   };
+  data?: unknown;
 };
 
 type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;
@@ -17,12 +18,14 @@ type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;
 export class ApiError extends Error {
   code: string;
   detail?: unknown;
+  data?: unknown;
 
-  constructor(error: ApiFailure["error"]) {
+  constructor(error: ApiFailure["error"], data?: unknown) {
     super(error.message);
     this.name = "ApiError";
     this.code = error.code;
     this.detail = error.detail;
+    this.data = data;
   }
 }
 
@@ -31,7 +34,7 @@ export async function apiGet<T>(path: string): Promise<T> {
   const envelope = (await response.json()) as ApiEnvelope<T>;
 
   if (envelope.ok === false) {
-    throw new ApiError(envelope.error);
+    throw new ApiError(envelope.error, envelope.data);
   }
 
   return envelope.data;
@@ -48,7 +51,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const envelope = (await response.json()) as ApiEnvelope<T>;
 
   if (envelope.ok === false) {
-    throw new ApiError(envelope.error);
+    throw new ApiError(envelope.error, envelope.data);
   }
 
   return envelope.data;
@@ -65,7 +68,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const envelope = (await response.json()) as ApiEnvelope<T>;
 
   if (envelope.ok === false) {
-    throw new ApiError(envelope.error);
+    throw new ApiError(envelope.error, envelope.data);
   }
 
   return envelope.data;
@@ -82,7 +85,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const envelope = (await response.json()) as ApiEnvelope<T>;
 
   if (envelope.ok === false) {
-    throw new ApiError(envelope.error);
+    throw new ApiError(envelope.error, envelope.data);
   }
 
   return envelope.data;
@@ -103,7 +106,7 @@ export async function apiDelete<T>(path: string, body?: unknown): Promise<T> {
   const envelope = (await response.json()) as ApiEnvelope<T>;
 
   if (envelope.ok === false) {
-    throw new ApiError(envelope.error);
+    throw new ApiError(envelope.error, envelope.data);
   }
 
   return envelope.data;

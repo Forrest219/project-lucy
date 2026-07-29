@@ -326,6 +326,11 @@
   .pl-schema-list { @apply grid gap-1 list-none p-0 m-0; }
   .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border-0 bg-bg-subtle px-2 py-1; }
   .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
+  .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
+  .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
 
   /* M13: per-card "last ingest" badge + connection-level trigger button. */
   .pl-ingest-last-run { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
@@ -366,6 +371,38 @@
   .pl-catalog-reload-warnings { @apply mt-1 grid gap-1 list-none p-0 text-xs text-warning-strong; }
   .pl-catalog-reload-warnings li { @apply rounded-md border border-warning bg-warning-soft px-2 py-1; }
   .pl-catalog-reload-error { @apply mt-2 rounded-md border border-danger-strong bg-danger-soft p-3 text-sm text-danger-strong; }
+
+  /* M17: controlled YAML asset upload UX. */
+  .pl-upload-dropzone {
+    @apply grid gap-2 rounded-md border border-dashed border-border-default bg-bg-subtle p-4 text-sm text-fg-muted;
+  }
+  .pl-upload-file-summary {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-upload-source-textarea {
+    @apply min-h-48 font-mono text-xs leading-relaxed;
+  }
+  .pl-upload-validation {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3 text-sm;
+  }
+  .pl-upload-validation--success {
+    @apply border-success-strong bg-success-soft text-success-strong;
+  }
+  .pl-upload-validation--warning {
+    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  }
+  .pl-upload-validation--danger {
+    @apply border-danger-strong bg-danger-soft text-danger-strong;
+  }
+  .pl-upload-validation-list {
+    @apply grid gap-1 list-none p-0 text-xs;
+  }
+  .pl-upload-target-path {
+    @apply flex flex-col gap-1 rounded-md border border-border-default bg-bg-subtle p-2 text-xs;
+  }
+  .pl-upload-target-path code {
+    @apply break-all font-mono text-fg-default;
+  }
 
   .pl-action-list { @apply grid gap-2; }
   .pl-action-list a { @apply grid gap-0.5 rounded-md border border-border-default bg-bg-base p-3 text-fg-default no-underline; }

@@ -254,13 +254,23 @@ describe("AddSchemaDrawer", () => {
     expect(backdrop).not.toHaveClass("pl-modal-backdrop");
   });
 
-  it("labels the three steps with M14 names (no ingest wording)", () => {
+  it("M17: rewrites the intro copy to distinguish connection-test vs add-schema vs upload", () => {
     renderDrawer(makeConn());
 
-    expect(screen.getByText("1. 输入 Schema")).toBeInTheDocument();
-    expect(screen.getByText("2. 测试并预览")).toBeInTheDocument();
-    expect(screen.getByText("3. 确认并完成")).toBeInTheDocument();
-    expect(screen.queryByText(/3. 确认并 ingest/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) =>
+        Boolean(
+          element &&
+            element.classList?.contains("pl-notice") &&
+            element.textContent?.includes("添加 schema 会写入") &&
+            element.textContent?.includes("不会扫描物理数据库")
+        )
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/连接测试会使用当前项目已有凭据验证访问权限/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/不会触碰凭据/)).not.toBeInTheDocument();
   });
 
   it("uses the postgres-aware field label", () => {
@@ -391,6 +401,14 @@ describe("AddSchemaDrawer", () => {
     expect(screen.getByTestId("add-schema-static-loading-hint")).toHaveTextContent(/semantic-layer/);
     expect(screen.queryByText(/现在 ingest/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ingest 中/)).not.toBeInTheDocument();
+    // M17: success step surfaces the upload-YAML next step + the "added"
+    // copy in the prescribed format.
+    expect(
+      screen.getByText(/已添加 schema：finance_mart/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ingest/i })).not.toBeInTheDocument();
 
     // No request to /ingest at any point.
     const ingestCalls = (await vi.mocked(global.fetch).mock.calls).filter((call) =>

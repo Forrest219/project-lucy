@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { DiffViewer } from "./DiffViewer";
-import { CatalogReloadButton } from "./catalog";
+import { CatalogAssetUploadButton, CatalogReloadButton } from "./catalog";
 import { schemaFieldLabel, validateSchemaName } from "../lib/schemas";
 import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo } from "../lib/types";
 
@@ -16,7 +16,7 @@ export type AddSchemaDrawerProps = {
   onClose: () => void;
 };
 
-const STEP_LABELS = ["输入 Schema", "测试并预览", "确认并完成"];
+const STEP_LABELS = ["输入 Schema", "测试连接", "确认并完成"];
 
 export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerProps) {
   const queryClient = useQueryClient();
@@ -100,7 +100,8 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
             <p className="pl-eyebrow">数据库接入</p>
             <h2 className="pl-panel-title">添加 schema 到 {connection.id}</h2>
             <p className="pl-notice">
-              全程在本地完成：测连通 → 写 ktx.yaml → 重新加载本地资产。不会触碰凭据。
+              添加 schema 会写入 <code>ktx.yaml</code>，不会扫描物理数据库。
+              连接测试会使用当前项目已有凭据验证访问权限。
             </p>
           </div>
           <button className="pl-btn pl-btn--ghost" onClick={close}>
@@ -148,7 +149,8 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               </span>
             </label>
             <p className="text-xs text-fg-muted">
-              添加前会自动调用 <code>ktx connection test {connection.id}</code>。
+              添加前会自动调用 <code>ktx connection test {connection.id}</code>，
+              使用项目已配置的凭据验证连通性，不会扫描物理数据库。
             </p>
             <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
@@ -219,12 +221,15 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
 
         {step === "success" && (
           <section className="pl-drawer-body" aria-label="完成">
-            <p className="text-sm font-semibold text-green-700">
+            <p className="text-sm font-semibold text-green-700" data-testid="add-schema-success-message">
               ✓ 已添加 schema：{trimmed}
             </p>
+            <p className="text-sm">
+              <code>{trimmed}</code> 已添加到 <code>{connection.id}</code>。
+            </p>
             <p className="text-xs text-fg-muted" data-testid="add-schema-static-loading-hint">
-              WebUI 将从本地 <code>semantic-layer</code> YAML 读取表清单。
-              若该 schema 的 manifest 尚未存在，可稍后添加文件并点击“刷新本地表目录”。
+              WebUI 不会自动扫描物理数据库。若你已有该 schema 的 <code>semantic-layer</code>{" "}
+              manifest YAML，可以现在上传；否则稍后由离线流程生成后上传，或在清单页直接编辑白名单。
             </p>
             <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
@@ -233,9 +238,16 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               <CatalogReloadButton
                 connectionId={connection.id}
                 schema={trimmed}
-                label="刷新本地表目录"
+                label="刷新本地目录"
                 variant="secondary"
                 testId="add-schema-reload-catalog"
+              />
+              <CatalogAssetUploadButton
+                connectionId={connection.id}
+                schema={trimmed}
+                label="上传 YAML"
+                variant="primary"
+                testId="add-schema-upload-yaml"
               />
             </div>
           </section>

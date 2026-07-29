@@ -43,6 +43,18 @@ function accessModeLabel(readOnlyExpected: boolean | undefined): string {
   return readOnlyExpected ? "Read-Only (受控访问)" : "未声明";
 }
 
+function rawLogSections(result: ConnectionTestResult): Array<{ label: string; value: string }> {
+  const primary = [
+    { label: "stdout", value: result.stdout ?? "" },
+    { label: "stderr", value: result.stderr ?? "" }
+  ].filter((section) => section.value.trim().length > 0);
+  if (primary.length > 0) return primary;
+  return [
+    { label: "detail", value: result.detail ?? "" },
+    { label: "reason", value: result.reason ?? "" }
+  ].filter((section) => section.value.trim().length > 0);
+}
+
 export function ConnectionTest() {
   const [selectedConnId, setSelectedConnId] = useState<string>("");
   const [result, setResult] = useState<ConnectionTestResult | null>(null);
@@ -74,6 +86,7 @@ export function ConnectionTest() {
     onSuccess: (data, connId) => {
       if (connId === activeConnId) {
         setResult(data);
+        setLogsExpanded(true);
       }
     },
     onError: (err, connId) => {
@@ -82,6 +95,7 @@ export function ConnectionTest() {
           status: "error",
           reason: err instanceof Error ? err.message : "未知错误"
         });
+        setLogsExpanded(true);
       }
     }
   });
@@ -92,6 +106,7 @@ export function ConnectionTest() {
 
   const isPending = testMutation.isPending;
   const latency = latencyTone(result?.latencyMs);
+  const logSections = result ? rawLogSections(result) : [];
 
   let bannerText: string;
   let bannerClass: string;
@@ -116,13 +131,7 @@ export function ConnectionTest() {
         breadcrumbs={["数据库接入", "连通测试"]}
         description="测试数据库连通性，验证凭据、网络与驱动配置是否正确。"
         badges={
-          projectQuery.data ? (
-            <>
-              <span>{projectQuery.data.root}</span>
-              <span>{connections.length} 个连接</span>
-              <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
-            </>
-          ) : null
+          projectQuery.data ? <span>{projectQuery.data.root}</span> : null
         }
       />
 
@@ -221,18 +230,21 @@ export function ConnectionTest() {
                 原始诊断日志 (ktx connection test stdout/stderr)
               </button>
               {logsExpanded && (
-                <div className="grid gap-2">
-                  {result.stdout !== undefined && result.stdout !== "" && (
-                    <pre data-testid="connection-test-stdout">{result.stdout}</pre>
-                  )}
-                  {result.stderr !== undefined && result.stderr !== "" && (
-                    <pre data-testid="connection-test-stderr">{result.stderr}</pre>
-                  )}
-                  {result.detail !== undefined && result.detail !== "" && (
-                    <pre data-testid="connection-test-detail">{result.detail}</pre>
-                  )}
-                  {result.reason !== undefined && result.reason !== "" && (
-                    <pre data-testid="connection-test-reason">{result.reason}</pre>
+                <div className="pl-raw-log-frame" data-testid="connection-test-raw-log-frame">
+                  {logSections.length > 0 ? (
+                    logSections.map((section) => (
+                      <pre
+                        key={section.label}
+                        data-testid={`connection-test-${section.label}`}
+                      >
+                        <span>{section.label}</span>
+                        {section.value}
+                      </pre>
+                    ))
+                  ) : (
+                    <p className="pl-raw-log-placeholder" data-testid="connection-test-log-empty">
+                      暂无原始日志输出
+                    </p>
                   )}
                 </div>
               )}
