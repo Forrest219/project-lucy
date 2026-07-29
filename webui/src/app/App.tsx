@@ -224,7 +224,7 @@ export function AppFrame() {
           <span>语义维护工作台</span>
         </div>
 
-        <nav className="grid gap-4" aria-label="主导航">
+        <nav className="pl-nav" aria-label="主导航">
           {navGroups.map((group) => (
             <section className="pl-nav-section" key={group.title}>
               <h2 className="pl-nav-section-title">{group.title}</h2>

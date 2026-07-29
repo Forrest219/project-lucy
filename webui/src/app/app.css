@@ -2,30 +2,44 @@
 
 /* 原值层：私有，主题切换或租户覆盖时改这一层 */
 :root {
-  --token-color-bg-base: #f6f7f8;
+  --token-color-bg-base: #ffffff;
   --token-color-bg-surface: #ffffff;
   --token-color-bg-elevated: #ffffff;
-  --token-color-bg-muted: #eef2f0;
-  --token-color-fg-default: #17201c;
-  --token-color-fg-muted: #66736d;
+  --token-color-bg-muted: #f3f4f6;
+  --token-color-bg-subtle: rgba(243, 244, 246, 0.4);
+  --token-color-bg-selected: #f2f3f5;
+  --token-color-fg-default: #030711;
+  --token-color-fg-body: #18181b;
+  --token-color-fg-strong: #181e25;
+  --token-color-fg-muted: #6b7280;
+  --token-color-fg-subtle: #86909c;
   --token-color-fg-inverse: #ffffff;
-  --token-color-border-default: #dde3df;
-  --token-color-border-strong: #b9c5be;
-  --token-color-primary: #10b981;
-  --token-color-primary-hover: #059669;
+  --token-color-border-default: #e5e7eb;
+  --token-color-border-muted: rgba(229, 231, 235, 0.6);
+  --token-color-border-strong: #cfd5dd;
+  --token-color-primary: #181e25;
+  --token-color-primary-hover: #030711;
   --token-color-primary-fg: #ffffff;
-  --token-color-accent: #2563eb;
-  --token-color-danger: #dc2626;
-  --token-color-warning: #d97706;
-  --token-color-warning-soft: #fef3c7;
+  --token-color-accent: #3c83f6;
+  --token-color-brand: #ff5a3d;
+  --token-color-danger: #ef4444;
+  --token-color-warning: #ff8f1f;
+  --token-color-warning-soft: #fff7ed;
   --token-color-warning-strong: #92400e;
-  --token-color-success: #15803d;
+  --token-color-success: #16a34a;
   --token-color-success-soft: #dcfce7;
   --token-color-success-strong: #166534;
   --token-color-danger-soft: #fee2e2;
   --token-color-danger-strong: #b42318;
   --token-color-diff-added-bg: #dcfce7;
   --token-color-diff-removed-bg: #fee2e2;
+  --token-radius-xs: 2px;
+  --token-radius-sm: 5px;
+  --token-radius-md: 8px;
+  --token-radius-lg: 10px;
+  --token-radius-xl: 12px;
+  --token-radius-pill: 9999px;
+  --token-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 /* @theme 层：暴露给 Tailwind utility 和 BEM 命名 */
@@ -34,15 +48,22 @@
   --color-bg-surface: var(--token-color-bg-surface);
   --color-bg-elevated: var(--token-color-bg-elevated);
   --color-bg-muted: var(--token-color-bg-muted);
+  --color-bg-subtle: var(--token-color-bg-subtle);
+  --color-bg-selected: var(--token-color-bg-selected);
   --color-fg-default: var(--token-color-fg-default);
+  --color-fg-body: var(--token-color-fg-body);
+  --color-fg-strong: var(--token-color-fg-strong);
   --color-fg-muted: var(--token-color-fg-muted);
+  --color-fg-subtle: var(--token-color-fg-subtle);
   --color-fg-inverse: var(--token-color-fg-inverse);
   --color-border-default: var(--token-color-border-default);
+  --color-border-muted: var(--token-color-border-muted);
   --color-border-strong: var(--token-color-border-strong);
   --color-primary: var(--token-color-primary);
   --color-primary-hover: var(--token-color-primary-hover);
   --color-primary-fg: var(--token-color-primary-fg);
   --color-accent: var(--token-color-accent);
+  --color-brand: var(--token-color-brand);
   --color-danger: var(--token-color-danger);
   --color-warning: var(--token-color-warning);
   --color-success: var(--token-color-success);
@@ -53,10 +74,13 @@
   --color-danger-soft: var(--token-color-danger-soft);
   --color-danger-strong: var(--token-color-danger-strong);
 
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-pill: 9999px;
+  --radius-xs: var(--token-radius-xs);
+  --radius-sm: var(--token-radius-sm);
+  --radius-md: var(--token-radius-md);
+  --radius-lg: var(--token-radius-lg);
+  --radius-xl: var(--token-radius-xl);
+  --radius-pill: var(--token-radius-pill);
+  --shadow-card: var(--token-shadow-card);
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "PingFang SC",
     "Microsoft YaHei", sans-serif;
@@ -67,34 +91,35 @@
 @layer base {
   body {
     background: var(--color-bg-base);
-    color: var(--color-fg-default);
+    color: var(--color-fg-body);
     font-family: var(--font-sans);
   }
 }
 
 @layer components {
   /* shell + 主布局 */
-  .pl-app-shell { @apply grid min-h-screen grid-cols-[264px_minmax(0,1fr)] bg-bg-base text-fg-default; }
-  .pl-sidebar { @apply sticky top-0 h-screen overflow-auto border-r border-border-default bg-bg-surface px-4 py-5; }
-  .pl-nav-section { @apply mb-6; }
-  .pl-nav-section-title { @apply mb-2 px-2 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-nav-link { @apply flex min-h-9 items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-fg-default no-underline; }
+  .pl-app-shell { @apply grid min-h-screen grid-cols-[216px_minmax(0,1fr)] bg-bg-base text-fg-body; }
+  .pl-sidebar { @apply sticky top-0 h-screen overflow-auto border-r border-border-default bg-bg-surface px-3 py-4; }
+  .pl-nav { @apply grid gap-3; }
+  .pl-nav-section { @apply mb-3; }
+  .pl-nav-section-title { @apply mb-1 px-4 py-[7px] text-sm font-semibold text-fg-strong; }
+  .pl-nav-link { @apply flex min-h-10 items-center gap-2 rounded-xl px-3 py-0 pl-7 text-sm font-normal text-fg-body no-underline transition-colors; }
   .pl-nav-link:hover { @apply bg-bg-muted text-fg-default; }
-  .pl-nav-link--active { @apply bg-bg-muted text-primary font-semibold; }
-  .pl-brand-block { @apply mb-7 grid gap-0.5 px-2; }
+  .pl-nav-link--active { @apply bg-bg-selected text-fg-body font-medium; }
+  .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
   .pl-brand-block span { @apply text-xs text-fg-muted; }
   .pl-workspace { @apply min-w-0 bg-bg-base; }
   .pl-topbar { @apply sticky top-0 z-10 border-b border-border-default bg-bg-surface px-6 py-4; }
-  .pl-topbar-title { @apply mt-1 text-xl font-semibold leading-tight text-fg-default; }
+  .pl-topbar-title { @apply mt-1 text-base font-semibold leading-6 text-fg-default; }
   .pl-topbar-facts { @apply mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
   .pl-topbar-facts span { @apply rounded-pill border border-border-default bg-bg-muted px-2 py-0.5; }
-  .pl-workspace-body { @apply p-6; }
-  .pl-page-stack { @apply grid gap-5; }
+  .pl-workspace-body { @apply p-8; }
+  .pl-page-stack { @apply grid gap-4; }
 
   /* 统一 PageHeader (M15)：4 象限布局，消除全站 H1/分类名重复 */
   .pl-page-header {
-    @apply mb-5 rounded-md border border-border-default bg-bg-surface p-5;
+    @apply mb-4 rounded-lg border border-border-default bg-bg-surface p-4 shadow-card;
   }
   .pl-page-header-grid {
     @apply grid gap-3;
@@ -135,7 +160,7 @@
   }
 
   .pl-page-header-title {
-    @apply text-xl font-semibold leading-tight text-fg-default;
+    @apply text-base font-semibold leading-6 text-fg-default;
   }
   .pl-page-header-description {
     @apply mt-1 text-sm text-fg-muted;
@@ -160,15 +185,15 @@
   }
 
   /* 面板/卡片 */
-  .pl-panel { @apply mb-4 rounded-md border border-border-default bg-bg-surface p-6; }
+  .pl-panel { @apply mb-4 rounded-lg border border-border-default bg-bg-surface p-4 shadow-card; }
   .pl-panel-title { @apply mb-3 text-base font-semibold; }
   .pl-section-heading { @apply mb-4 flex items-start justify-between gap-4; }
   .pl-page-intro { @apply mb-4 text-sm text-fg-muted; }
   .pl-eyebrow { @apply mb-1 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-metric-grid { @apply grid gap-3 md:grid-cols-2 xl:grid-cols-4; }
-  .pl-metric-card { @apply grid gap-1 rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-metric-card { @apply grid gap-1 rounded-lg border-0 bg-bg-subtle p-3; }
   .pl-metric-card span { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-metric-card strong { @apply text-2xl font-semibold text-fg-default; }
+  .pl-metric-card strong { @apply text-xl font-semibold text-fg-default; }
   .pl-metric-card small { @apply text-xs text-fg-muted; }
   .pl-metric-card--success { @apply border-success-strong bg-success-soft; }
   .pl-metric-card--success strong { @apply text-success-strong; }
@@ -176,10 +201,51 @@
   .pl-metric-card--warning strong { @apply text-warning-strong; }
   .pl-metric-card--danger { @apply border-danger-strong bg-danger-soft; }
   .pl-metric-card--danger strong { @apply text-danger-strong; }
-  .pl-empty-state { @apply rounded-md border border-border-default bg-bg-base p-4 text-sm text-fg-muted; }
+  .pl-empty-state { @apply rounded-lg bg-bg-subtle p-4 text-sm text-fg-muted; }
+
+  .pl-panel :where(
+    .pl-empty-state,
+    .pl-metric-card,
+    .pl-connection-row,
+    .pl-schema-row,
+    .pl-catalog-reload-result,
+    .pl-action-list a,
+    .pl-code-snippet,
+    .pl-save-progress-row,
+    .pl-field-card,
+    .pl-description-text,
+    .pl-candidate-join-row,
+    .pl-source-metadata-cell,
+    .pl-preview-section,
+    .pl-relation-row,
+    .pl-wiki-context-hint
+  ),
+  .pl-card :where(
+    .pl-empty-state,
+    .pl-metric-card,
+    .pl-catalog-reload-result,
+    .pl-action-list a,
+    .pl-code-snippet,
+    .pl-preview-section
+  ),
+  .pl-review-main :where(
+    .pl-validation-summary > div,
+    .pl-preview-section,
+    .pl-code-snippet
+  ) {
+    border-width: 0;
+    background: var(--token-color-bg-subtle);
+    box-shadow: none;
+  }
+
+  .pl-panel .pl-diagnostic-grid > div,
+  .pl-card .pl-diagnostic-grid > div {
+    border-width: 0;
+    background: var(--token-color-bg-subtle);
+  }
 
   /* 按钮 */
-  .pl-btn { @apply inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium; }
+  .pl-btn { @apply inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium; }
   .pl-btn--primary { @apply bg-primary text-primary-fg hover:bg-primary-hover border border-transparent; }
   .pl-btn--secondary { @apply border border-border-default bg-bg-surface hover:bg-bg-muted text-fg-default; }
   .pl-btn--ghost { @apply text-fg-default hover:bg-bg-muted; }
@@ -208,7 +274,7 @@
   .pl-table-row strong { @apply font-medium; }
   .pl-table-row span { @apply text-sm text-fg-muted; }
   .pl-overview-grid { @apply grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]; }
-  .pl-connection-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-4 md:grid-cols-[1.2fr_1fr_auto]; }
+  .pl-connection-row { @apply grid gap-3 rounded-lg border-0 bg-bg-subtle p-3 md:grid-cols-[1.2fr_1fr_auto]; }
   .pl-connection-row > div { @apply grid gap-1; }
   .pl-connection-row strong { @apply text-sm font-medium; }
   .pl-connection-row span { @apply text-xs text-fg-muted; }
@@ -216,7 +282,7 @@
   /* M13: connection-card schema chips and per-schema ingest rows. */
   .pl-schema-cell { @apply grid gap-1; }
   .pl-schema-list { @apply grid gap-1 list-none p-0 m-0; }
-  .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-default bg-bg-surface px-2 py-1; }
+  .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border-0 bg-bg-subtle px-2 py-1; }
   .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
 
   /* M13: per-card "last ingest" badge + connection-level trigger button. */

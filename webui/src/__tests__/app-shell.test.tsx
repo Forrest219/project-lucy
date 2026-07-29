@@ -112,6 +112,14 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
   });
 
+  it("exposes density shell classes and active nav styling hook", () => {
+    renderAt("/connections");
+    expect(document.querySelector(".pl-app-shell")).toBeInTheDocument();
+    expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "主导航" })).toHaveClass("pl-nav");
+    expect(screen.getByRole("link", { name: "连接概览" })).toHaveClass("pl-nav-link", "pl-nav-link--active");
+  });
+
   it("marks source and join pages as table catalog navigation", () => {
     renderAt("/sources/mysql-aliyun/dataforai/superstore_orders");
     expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
