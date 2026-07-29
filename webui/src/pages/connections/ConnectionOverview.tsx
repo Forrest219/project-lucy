@@ -9,6 +9,7 @@ import type {
   CatalogReloadWarning,
   ConnectionInfo,
   ConnectionTestResult,
+  McpEndpointInfo,
   ProjectInfo,
   SourceSummary,
   SourcesResponse
@@ -23,8 +24,6 @@ import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
 
 type TestUiStatus = "unknown" | "testing" | "connected" | "disconnected";
-
-const MCP_ENDPOINT = "http://127.0.0.1:7879/mcp";
 
 function engineLabel(engine?: string) {
   const normalized = engine?.toLowerCase();
@@ -125,6 +124,9 @@ export function ConnectionOverview() {
   const semanticTableCount = semanticTables.length;
   const schemaCount = connections.reduce((sum, conn) => sum + conn.schemas.length, 0);
   const lastCatalogRun = catalogReloadsQuery.data?.last ?? null;
+  const mcpEndpointInfo: McpEndpointInfo | undefined = projectQuery.data?.mcpEndpoint;
+  const mcpEndpoint = mcpEndpointInfo?.url ?? null;
+  const canCopyMcpEndpoint = mcpEndpoint !== null;
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
@@ -148,11 +150,15 @@ export function ConnectionOverview() {
   });
 
   async function copyEndpoint() {
+    if (!mcpEndpoint) {
+      toast.error("Lucy MCP endpoint 不可用，无法复制");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(MCP_ENDPOINT);
+      await navigator.clipboard.writeText(mcpEndpoint);
       toast.success("MCP endpoint 已复制");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "复制失败");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "复制失败");
     }
   }
 
@@ -326,17 +332,27 @@ export function ConnectionOverview() {
           <div className="pl-code-snippet mt-0">
             <div className="pl-copy-line">
               <span>MCP endpoint</span>
-              <button
-                type="button"
-                className="pl-btn pl-btn--ghost"
-                aria-label="复制 MCP endpoint"
-                onClick={copyEndpoint}
-                data-testid="copy-mcp-endpoint"
-              >
-                复制
-              </button>
+              {canCopyMcpEndpoint ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost"
+                  aria-label="复制 MCP endpoint"
+                  onClick={copyEndpoint}
+                  data-testid="copy-mcp-endpoint"
+                >
+                  复制
+                </button>
+              ) : null}
             </div>
-            <code>{MCP_ENDPOINT}</code>
+            {mcpEndpoint ? (
+              <code data-testid="mcp-endpoint-value">{mcpEndpoint}</code>
+            ) : (
+              <div className="pl-error" data-testid="mcp-endpoint-diagnostic">
+                {mcpEndpointInfo?.diagnostics.map((d, i) => (
+                  <div key={`${d.code}-${i}`}>{d.message}</div>
+                ))}
+              </div>
+            )}
           </div>
         </aside>
       </div>

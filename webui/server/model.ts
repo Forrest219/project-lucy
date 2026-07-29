@@ -79,10 +79,41 @@ export type ConnectionInfo = {
   enabledTables: string[];
 };
 
+// ─── MCP Public Endpoint Runtime (M18) ────────────────────────────────────────
+//
+// `McpEndpointInfo` is the single fact-source that the WebUI uses to render
+// and copy MCP config fragments. The backend reads `LUCY_PUBLIC_MCP_URL` from
+// the runtime environment; when the variable is missing it returns a local
+// development fallback, and when the value is malformed it returns a null URL
+// with a diagnostic. Frontend pages must never infer the endpoint from
+// `window.location`, `Host`, or other browser-derived signals.
+
+export type McpEndpointStatus = "configured" | "fallback" | "invalid";
+
+export type McpEndpointDiagnosticCode =
+  | "MISSING_PUBLIC_MCP_URL"
+  | "INVALID_PUBLIC_MCP_URL"
+  | "UNSUPPORTED_PUBLIC_MCP_PROTOCOL"
+  | "MCP_PATH_RECOMMENDED";
+
+export type McpEndpointDiagnostic = {
+  code: McpEndpointDiagnosticCode;
+  message: string;
+};
+
+export type McpEndpointInfo = {
+  url: string | null;
+  status: McpEndpointStatus;
+  source: "env" | "fallback";
+  configured: boolean;
+  diagnostics: McpEndpointDiagnostic[];
+};
+
 export type ProjectInfo = {
   root: string;
   connections: ConnectionInfo[];
   ktxAvailable: boolean;
+  mcpEndpoint: McpEndpointInfo;
 };
 
 export type TablePatch = {

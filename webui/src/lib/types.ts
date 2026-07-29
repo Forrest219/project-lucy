@@ -77,10 +77,40 @@ export type ConnectionInfo = {
   enabledTables: string[];
 };
 
+// ─── MCP Public Endpoint Runtime (M18) ────────────────────────────────────────
+//
+// Mirrors the backend `McpEndpointInfo`. Frontend pages must read the
+// endpoint from the `mcpEndpoint` field returned by `GET /api/project` and
+// must not infer the endpoint from `window.location`, `Host`, or other
+// browser-derived signals. The runtime state is set by the backend from
+// `LUCY_PUBLIC_MCP_URL` (or the local development fallback).
+
+export type McpEndpointStatus = "configured" | "fallback" | "invalid";
+
+export type McpEndpointDiagnosticCode =
+  | "MISSING_PUBLIC_MCP_URL"
+  | "INVALID_PUBLIC_MCP_URL"
+  | "UNSUPPORTED_PUBLIC_MCP_PROTOCOL"
+  | "MCP_PATH_RECOMMENDED";
+
+export type McpEndpointDiagnostic = {
+  code: McpEndpointDiagnosticCode;
+  message: string;
+};
+
+export type McpEndpointInfo = {
+  url: string | null;
+  status: McpEndpointStatus;
+  source: "env" | "fallback";
+  configured: boolean;
+  diagnostics: McpEndpointDiagnostic[];
+};
+
 export type ProjectInfo = {
   root: string;
   connections: ConnectionInfo[];
   ktxAvailable: boolean;
+  mcpEndpoint: McpEndpointInfo;
 };
 
 export type ConnectionsResponse = {

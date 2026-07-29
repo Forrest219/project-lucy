@@ -3,17 +3,20 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, CreateAgentBody, Role } from "../../lib/types";
+import { queryKeys } from "../../lib/queryKeys";
+import type { Agent, CreateAgentBody, ProjectInfo, Role } from "../../lib/types";
+import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
 
 type AgentsResponse = { agents: Agent[]; version: string };
 type RolesResponse = { roles: Role[] };
 
 /**
- * Default MCP endpoint advertised in the safe .mcp.json template.
- * The template never embeds a real token; users must set LUCY_AGENT_TOKEN.
+ * Placeholder token marker used in the safe .mcp.json template.
+ * Replaced by the user with their real LUCY_AGENT_TOKEN; we never embed
+ * a real token or hash in the safe template.
  */
-export const SAFE_MCP_URL = "http://localhost:7879/mcp";
+export const SAFE_MCP_TOKEN_PLACEHOLDER = "${LUCY_AGENT_TOKEN}";
 
 /**
  * Format a lastSeen timestamp as a relative label (e.g. "10 分钟前").
@@ -52,30 +55,20 @@ export function formatLastSeen(lastSeen?: string | null): { label: string; title
 }
 
 /**
- * Build a safe .mcp.json snippet for a given agent.
+ * Build a safe .mcp.json snippet for a given endpoint.
  * The snippet uses ${LUCY_AGENT_TOKEN} as a placeholder and never
  * embeds a real token or hash, so it can be safely shared.
  */
-export function buildSafeMcpConfig(_agentId: string): string {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        lucy: {
-          type: "http",
-          url: SAFE_MCP_URL,
-          headers: {
-            Authorization: "Bearer ${LUCY_AGENT_TOKEN}"
-          }
-        }
-      }
-    },
-    null,
-    2
-  );
+export function buildSafeMcpConfig(endpoint: string): string {
+  return buildMcpConfig(endpoint, SAFE_MCP_TOKEN_PLACEHOLDER);
 }
 
-async function copyAgentMcpConfig(agent: Agent): Promise<void> {
-  const snippet = buildSafeMcpConfig(agent.id);
+async function copyAgentMcpConfig(endpoint: string | null): Promise<void> {
+  if (!endpoint) {
+    toast.error("Lucy MCP endpoint 不可用，无法复制 MCP 配置");
+    return;
+  }
+  const snippet = buildSafeMcpConfig(endpoint);
   await navigator.clipboard.writeText(snippet);
   toast.success("MCP 配置已复制");
 }
@@ -102,11 +95,12 @@ function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
   );
 }
 
-function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void }) {
+function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: string | null; onViewLogs: () => void }) {
   const sourceCount = agent.effectivePermissions?.sources.length ?? agent.allow?.tables?.length ?? 0;
   const toolCount = agent.effectivePermissions?.tools.length ?? agent.allow?.tools?.length ?? 0;
   const tokenCount = agent.tokens.length;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
+  const canCopyMcp = endpoint !== null;
 
   return (
     <div className="pl-card">
@@ -135,9 +129,11 @@ function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void
               type="button"
               className="pl-btn pl-btn--ghost text-sm"
               onClick={() => {
-                void copyAgentMcpConfig(agent);
+                void copyAgentMcpConfig(endpoint);
               }}
               aria-label={`复制 ${agent.name} 的 MCP 配置`}
+              disabled={!canCopyMcp}
+              title={canCopyMcp ? undefined : "Lucy MCP endpoint 不可用"}
             >
               📋 复制 MCP 配置
             </button>
@@ -352,6 +348,12 @@ export function AgentList() {
     queryKey: ["admin", "roles"],
     queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
   });
+  const { data: projectData } = useQuery({
+    queryKey: queryKeys.project,
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
+  });
+  const mcpEndpointInfo = projectData?.mcpEndpoint;
+  const mcpEndpoint = mcpEndpointInfo?.url ?? null;
 
   const agents = data?.agents ?? [];
   const enabledCount = agents.filter((agent) => agent.enabled).length;
@@ -394,6 +396,14 @@ export function AgentList() {
         <MetricCard label="7d denied" value={deniedLast7d} hint="来自 Agent stats 汇总" />
       </div>
 
+      {mcpEndpointInfo?.status === "invalid" || projectData === undefined ? (
+        <div className={mcpEndpointInfo?.status === "invalid" ? "pl-error" : "pl-notice"} data-testid="mcp-endpoint-diagnostic">
+          {mcpEndpointInfo?.diagnostics.length
+            ? mcpEndpointInfo.diagnostics.map((d, i) => <div key={`${d.code}-${i}`}>{d.message}</div>)
+            : "Lucy MCP endpoint 正在加载；加载完成前无法复制 MCP 配置。"}
+        </div>
+      ) : null}
+
       <div className="pl-admin-filterbar">
         <input
           className="pl-input flex-1"
@@ -427,6 +437,7 @@ export function AgentList() {
             <AgentCard
               key={agent.id}
               agent={agent}
+              endpoint={mcpEndpoint}
               onViewLogs={() => navigate(`/admin/audit?user=${agent.id}`)}
             />
           ))}

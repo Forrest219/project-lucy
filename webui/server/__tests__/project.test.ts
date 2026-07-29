@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readProject } from "../project";
 
 let tempRoot: string | undefined;
@@ -17,6 +17,7 @@ afterEach(async () => {
     await rm(tempRoot, { recursive: true, force: true });
     tempRoot = undefined;
   }
+  vi.unstubAllEnvs();
 });
 
 describe("readProject", () => {
@@ -112,5 +113,47 @@ connections:
       readOnlyExpected: true,
       schemas: ["ads"]
     });
+  });
+
+  it("exposes the local development fallback when LUCY_PUBLIC_MCP_URL is unset", async () => {
+    vi.stubEnv("LUCY_PUBLIC_MCP_URL", "");
+    const root = await writeProject(`
+connections:
+  doris-r1:
+    driver: doris
+    enabled_tables:
+      - mart.ceo_metric_snapshot
+`);
+
+    const project = await readProject(root);
+
+    expect(project.mcpEndpoint).toMatchObject({
+      url: "http://127.0.0.1:7879/mcp",
+      status: "fallback",
+      source: "fallback",
+      configured: false
+    });
+    expect(project.mcpEndpoint.diagnostics.map((d) => d.code)).toContain("MISSING_PUBLIC_MCP_URL");
+  });
+
+  it("exposes the configured public endpoint when LUCY_PUBLIC_MCP_URL is set", async () => {
+    vi.stubEnv("LUCY_PUBLIC_MCP_URL", "https://lucy.example.com/mcp");
+    const root = await writeProject(`
+connections:
+  doris-r1:
+    driver: doris
+    enabled_tables:
+      - mart.ceo_metric_snapshot
+`);
+
+    const project = await readProject(root);
+
+    expect(project.mcpEndpoint).toMatchObject({
+      url: "https://lucy.example.com/mcp",
+      status: "configured",
+      source: "env",
+      configured: true
+    });
+    expect(project.mcpEndpoint.diagnostics).toEqual([]);
   });
 });

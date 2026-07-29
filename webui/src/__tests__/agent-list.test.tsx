@@ -60,9 +60,32 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubAgentsEndpoints(agents: Agent[], roles: Role[] = [analystRole]) {
+function stubAgentsEndpoints(
+  agents: Agent[],
+  roles: Role[] = [analystRole],
+  mcpEndpoint = {
+    url: "https://lucy.example.com/mcp",
+    status: "configured" as const,
+    source: "env" as const,
+    configured: true,
+    diagnostics: []
+  }
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url === "/api/project") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            root: "/tmp/project-lucy",
+            ktxAvailable: true,
+            connections: [],
+            mcpEndpoint
+          }
+        })
+      );
+    }
     if (url === "/api/admin/agents" && !init) {
       return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1" } }));
     }
@@ -150,8 +173,32 @@ describe("AgentList", () => {
     const payload = String((writeText.mock.calls as Array<[string]>)[0]?.[0] ?? "");
     const parsed = JSON.parse(payload);
     expect(parsed.mcpServers.lucy.headers.Authorization).toBe("Bearer ${LUCY_AGENT_TOKEN}");
+    expect(parsed.mcpServers.lucy.url).toBe("https://lucy.example.com/mcp");
     expect(payload).not.toMatch(/sha256:[0-9a-f]{16,}/i);
     expect(payload).not.toMatch(/[0-9a-f]{32,}/);
+    expect(payload).not.toContain("http://localhost:7879/mcp");
+    expect(payload).not.toContain("http://127.0.0.1:7879/mcp");
+  });
+
+  it("surfaces runtime diagnostics when MCP config copy is unavailable", async () => {
+    stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })], [analystRole], {
+      url: null,
+      status: "invalid",
+      source: "env",
+      configured: false,
+      diagnostics: [
+        {
+          code: "INVALID_PUBLIC_MCP_URL",
+          message: "LUCY_PUBLIC_MCP_URL must be a valid absolute URL."
+        }
+      ]
+    });
+
+    renderAgentList();
+
+    expect(await screen.findByText("张三")).toBeInTheDocument();
+    expect(screen.getByText("LUCY_PUBLIC_MCP_URL must be a valid absolute URL.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /MCP 配置/ })).toBeDisabled();
   });
 
   it("view logs navigates to /admin/audit?user=<agentId>", async () => {

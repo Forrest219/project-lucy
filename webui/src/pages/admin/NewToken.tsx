@@ -1,16 +1,12 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiPost } from "../../lib/apiClient";
-import type { CreateTokenResponse } from "../../lib/types";
+import { apiGet, apiPost } from "../../lib/apiClient";
+import { queryKeys } from "../../lib/queryKeys";
+import type { CreateTokenResponse, McpEndpointInfo, ProjectInfo } from "../../lib/types";
+import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
-
-/**
- * Default MCP endpoint advertised in client snippets. The plaintext token
- * is only embedded in the snippet at generation time and never persisted.
- */
-const MCP_URL = "http://localhost:7879/mcp";
 
 type ClientId = "hermes" | "claude-code" | "codex" | "generic";
 
@@ -24,57 +20,17 @@ type ClientSnippet = {
 
 /**
  * Build the four canonical client snippets for a freshly generated token.
- * This helper is pure: callers can pass any plaintext token to render the
- * corresponding ready-to-paste configuration fragment.
+ * This helper is pure: callers pass the resolved MCP endpoint and the
+ * plaintext token to render the corresponding ready-to-paste configuration
+ * fragment. The endpoint is required; the caller is responsible for
+ * checking that the runtime configuration supplied a usable URL.
  */
-export function buildClientSnippets(token: string): Record<ClientId, string> {
+export function buildClientSnippets(token: string, endpoint: string): Record<ClientId, string> {
   return {
-    hermes: JSON.stringify(
-      {
-        mcpServers: {
-          lucy: {
-            type: "http",
-            url: MCP_URL,
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        }
-      },
-      null,
-      2
-    ),
-    "claude-code": JSON.stringify(
-      {
-        mcpServers: {
-          lucy: {
-            type: "http",
-            url: MCP_URL,
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        }
-      },
-      null,
-      2
-    ),
-    codex: [
-      "# In ~/.codex/config.toml",
-      "[mcp_servers.lucy]",
-      `url = "${MCP_URL}"`,
-      "type = \"http\"",
-      `headers = { Authorization = "Bearer ${token}" }`
-    ].join("\n"),
-    generic: JSON.stringify(
-      {
-        mcpServers: {
-          lucy: {
-            type: "http",
-            url: MCP_URL,
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        }
-      },
-      null,
-      2
-    )
+    hermes: buildMcpConfig(endpoint, token),
+    "claude-code": buildMcpConfig(endpoint, token),
+    codex: buildCodexMcpToml(endpoint, token),
+    generic: buildMcpConfig(endpoint, token)
   };
 }
 
@@ -84,6 +40,15 @@ const CLIENT_TABS: Array<{ id: ClientId; label: string; description: string }> =
   { id: "codex", label: "Codex", description: "config.toml 片段，配合环境变量使用" },
   { id: "generic", label: "Generic MCP", description: "通用 MCP over HTTP 客户端" }
 ];
+
+function EndpointFallbackNotice({ endpointInfo }: { endpointInfo?: McpEndpointInfo }) {
+  if (endpointInfo?.status !== "fallback") return null;
+  return (
+    <div className="pl-notice" data-testid="mcp-fallback-notice">
+      当前使用本地默认 MCP endpoint。客户部署请配置 LUCY_PUBLIC_MCP_URL，避免 Agent 复制到只能在本机访问的地址。
+    </div>
+  );
+}
 
 export function NewToken() {
   const { userId } = useParams<{ userId: string }>();
@@ -97,6 +62,13 @@ export function NewToken() {
   const [copied, setCopied] = useState(false);
   const [activeSnippet, setActiveSnippet] = useState<ClientId>("hermes");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project,
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
+  });
+  const endpointInfo: McpEndpointInfo | undefined = projectQuery.data?.mcpEndpoint;
+  const endpoint = endpointInfo?.url ?? null;
 
   const mutation = useMutation({
     mutationFn: (body: { label: string; expires_at?: string | null }) =>
@@ -133,7 +105,7 @@ export function NewToken() {
     navigate(`/admin/agents/${userId}`);
   }
 
-  const snippets = generatedToken ? buildClientSnippets(generatedToken.token) : null;
+  const snippets = generatedToken && endpoint ? buildClientSnippets(generatedToken.token, endpoint) : null;
   const activeSnippetContent = snippets ? snippets[activeSnippet] : "";
 
   function handleCopySnippet() {
@@ -191,6 +163,7 @@ export function NewToken() {
               {copiedSnippet ? "已复制" : "复制当前配置"}
             </button>
           </div>
+          <EndpointFallbackNotice endpointInfo={endpointInfo} />
           <div
             role="tablist"
             aria-label="客户端接入配置"
@@ -224,6 +197,47 @@ export function NewToken() {
           </pre>
         </div>
 
+        <div className="flex justify-end">
+          <button type="button" className="pl-btn pl-btn--primary" onClick={handleClose}>
+            我已保存，关闭
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (generatedToken && !snippets) {
+    const endpointDiagnostic =
+      endpointInfo?.diagnostics.length
+        ? endpointInfo.diagnostics
+        : [
+            {
+              code: "MCP_ENDPOINT_UNAVAILABLE",
+              message: projectQuery.error instanceof Error
+                ? `无法加载 Lucy MCP endpoint：${projectQuery.error.message}`
+                : "无法加载 Lucy MCP endpoint，请刷新后重试。"
+            }
+          ];
+    return (
+      <div className="grid gap-6 max-w-2xl">
+        <PageHeader
+          title="Token 已生成"
+          breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
+          description="⚠ Token 已生成，但 Lucy MCP endpoint 当前不可用，无法生成可复制的客户端配置片段。"
+        />
+        <div className="pl-card grid gap-3">
+          <code
+            className="font-mono text-sm bg-bg-muted rounded px-3 py-2 break-all select-all"
+            data-testid="plaintext-token"
+          >
+            {generatedToken.token}
+          </code>
+          <div className="pl-error" data-testid="mcp-endpoint-diagnostic">
+            {endpointDiagnostic.map((d, i) => (
+              <div key={`${d.code}-${i}`}>{d.message}</div>
+            ))}
+          </div>
+        </div>
         <div className="flex justify-end">
           <button type="button" className="pl-btn pl-btn--primary" onClick={handleClose}>
             我已保存，关闭

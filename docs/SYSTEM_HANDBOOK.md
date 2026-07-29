@@ -47,7 +47,7 @@ Fastify WebUI API :5174
 
 Agent 客户端
   │
-  │ POST http://127.0.0.1:7879/mcp
+  │ POST <LUCY_PUBLIC_MCP_URL>
   │ Authorization: Bearer <agent-token>
   ▼
 Lucy MCP Auth Proxy :7879
@@ -70,7 +70,7 @@ KTX CLI / MCP daemon
 | Vite dev UI | `5173` | `webui/vite.config.ts`；开发访问页面用它 |
 | Fastify API / 静态 WebUI | `5174` | `LUCY_WEBUI_PORT` 可覆盖 |
 | KTX MCP upstream | `7878` | 仅作为 Lucy Proxy 上游，不建议外部 Agent 直连 |
-| Lucy MCP Proxy | `7879` | Agent 正式接入地址 |
+| Lucy MCP Proxy | `7879` | 内部监听端口；Agent 正式接入地址以 `LUCY_PUBLIC_MCP_URL` / WebUI 展示值为准 |
 | Docker/demo 宿主端口 | 可能是 `5174`、`55176`、`55177` 等 | 以 compose 环境变量和启动日志为准 |
 
 ### 1.3 核心原则
@@ -131,7 +131,7 @@ npm run dev
 | --- | --- |
 | `http://127.0.0.1:5173/onboarding` | 开发态 WebUI 上线检查 |
 | `http://127.0.0.1:5174/api/health` | Fastify 健康检查 |
-| `http://127.0.0.1:7879/mcp` | Agent MCP 接入地址 |
+| `http://127.0.0.1:7879/mcp` | 本地开发 MCP fallback；客户部署以 `LUCY_PUBLIC_MCP_URL` / WebUI 展示值为准 |
 
 如果当前 KTX CLI 已支持 `ktx ui`，可用它作为封装入口；仍以启动日志中的 WebUI/API/Proxy 地址为准。
 
@@ -560,8 +560,11 @@ POST /api/eval/runs
 
 ### 4.1 接入地址
 
+接入地址以 WebUI 展示的 Public MCP endpoint 为准。部署方通过
+`LUCY_PUBLIC_MCP_URL` 配置该值；未配置时 WebUI 只会显示本地开发 fallback。
+
 ```text
-http://127.0.0.1:7879/mcp
+<LUCY_PUBLIC_MCP_URL>
 ```
 
 请求必须携带：
@@ -581,7 +584,7 @@ Authorization: Bearer ${LUCY_AGENT_TOKEN}
   "mcpServers": {
     "lucy": {
       "type": "http",
-      "url": "http://127.0.0.1:7879/mcp",
+      "url": "<LUCY_PUBLIC_MCP_URL>",
       "headers": {
         "Authorization": "Bearer ${LUCY_AGENT_TOKEN}"
       }
@@ -602,7 +605,7 @@ export LUCY_AGENT_TOKEN="$(cat /Users/zhangxingchen/Projects/project-lucy/.ktx/s
 {
   "mcpServers": {
     "lucy": {
-      "url": "http://127.0.0.1:7879/mcp",
+      "url": "<LUCY_PUBLIC_MCP_URL>",
       "headers": {
         "Authorization": "Bearer ${LUCY_AGENT_TOKEN}"
       }

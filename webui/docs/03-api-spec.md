@@ -98,14 +98,38 @@ POST /mcp                                      # MCP proxy, port 7879
 ## 3. 端点细节
 
 ### `GET /api/project`
-返回项目根、连接列表（**剥离 password 值**）、schema 列表。
+返回项目根、连接列表（**剥离 password 值**）、schema 列表，以及 public MCP endpoint runtime 配置。
 ```jsonc
 { "ok": true, "data": {
   "root": "/Users/forrest/Projects/project-lucy",
   "connections": [{ "id": "mysql-aliyun", "driver": "mysql", "passwordSource": "file", "schemas": ["dataforai"] }],
-  "ktxAvailable": true
+  "ktxAvailable": true,
+  "mcpEndpoint": {
+    "url": "https://lucy.example.com/mcp",
+    "status": "configured",
+    "source": "env",
+    "configured": true,
+    "diagnostics": []
+  }
 }}
 ```
+
+`mcpEndpoint` 字段是 M18 起所有 WebUI 页面渲染和复制 MCP 配置片段的唯一事实源。前端禁止从 `window.location`、`Host` header 或其他浏览器信号推断 endpoint。
+
+| `status` | 含义 | `url` | UI 表现 |
+|---|---|---|---|
+| `configured` | `LUCY_PUBLIC_MCP_URL` 存在且合法（http/https，可解析） | 配置值 | 正常展示，允许复制 endpoint 与 MCP config；可选带 `MCP_PATH_RECOMMENDED` diagnostic（pathname 不以 `/mcp` 结尾） |
+| `fallback` | 未设置 `LUCY_PUBLIC_MCP_URL` | `http://127.0.0.1:7879/mcp`（本地开发默认） | 展示本地默认，附带 `MISSING_PUBLIC_MCP_URL` diagnostic；onboarding 与 token 页面提示客户部署需要配置 `LUCY_PUBLIC_MCP_URL` |
+| `invalid` | `LUCY_PUBLIC_MCP_URL` 存在但非法（非绝对 URL / 非 http/https） | `null` | 不生成可复制 MCP config；展示 diagnostic 提示修复 runtime 配置 |
+
+`diagnostics` 是诊断数组，元素结构为 `{ code, message }`。常见 code：
+
+- `MISSING_PUBLIC_MCP_URL`
+- `INVALID_PUBLIC_MCP_URL`
+- `UNSUPPORTED_PUBLIC_MCP_PROTOCOL`
+- `MCP_PATH_RECOMMENDED`（仅 informational，status 仍为 `configured`）
+
+后端不会从 `Host` / `X-Forwarded-*` 推断 endpoint；只读取环境变量 `LUCY_PUBLIC_MCP_URL`，未设置时使用 `http://127.0.0.1:7879/mcp` 作为本地开发 fallback。`LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 控制的是 MCP proxy 的内部监听地址，与 `LUCY_PUBLIC_MCP_URL` 是不同的两个变量。
 
 ### `GET /api/sources`
 扫描全部 `_schema/*.yaml`，返回逐表目录摘要（供 Catalog）。

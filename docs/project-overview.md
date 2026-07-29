@@ -117,7 +117,7 @@ WebUI 是本地治理工作台，当前导航有 7 个一级模块：
 | 数据库接入 | MySQL/PostgreSQL verified；StarRocks P1 gated；Oracle roadmap | StarRocks live certification 前不能写入 verified matrix |
 | Semantic layer / Wiki 管理 | 编辑能力已实现，reindex 与 wiki_search 交付证据仍不足 | 不能把 WebUI 维护链路整体标记为 verified 治理闭环 |
 | Skill management | 文件资产存在，Skill Editor / 版本化 / 自动加载闭环未开发 | 当前只能作为代码库治理资产，不是产品化 Skill 管理模块 |
-| MCP endpoint lifecycle | Proxy、token、config 复制已实现；启停、状态、健康、轮换 UI 未开发 | 当前交付为“接入配置”，不是完整 endpoint 生命周期管理 |
+| MCP endpoint lifecycle | Proxy、token、config 复制已实现；M18 起 endpoint 由 `LUCY_PUBLIC_MCP_URL` runtime 配置，WebUI 统一从 `GET /api/project.mcpEndpoint` 读取并展示；启停、状态、健康、轮换 UI 未开发 | 当前交付为“runtime-configured 接入配置”，不是完整 endpoint 生命周期管理 |
 | Business eval | Catalog/smoke/WebUI run 基础已实现；完整 LLM/agent eval 未形成稳定证据 | 未达到自动质量门禁预期，需具备 agent/model secret 后补跑并归档 |
 | Observability / alerting | R1 最小排障端点存在；通用 metrics、告警、日志聚合未开发 | 不属于当前 headless 交付承诺，后续需独立 spec |
 
@@ -132,7 +132,7 @@ WebUI 是本地治理工作台，当前导航有 7 个一级模块：
 
 ## 8. 访问治理现状
 
-Lucy MCP Proxy 运行在 `http://127.0.0.1:7879/mcp`，用于：
+Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0.0:7879`），实际对外可访问的 endpoint 是部署方通过 `LUCY_PUBLIC_MCP_URL` 注入的 URL（详见 `docs/deployment-docker.md` §9 与 `docs/customer-deployment-guide.md` §1）。WebUI `/onboarding`、`/connections`、`/admin/agents` 与 Token 首秀页面统一从 `GET /api/project.mcpEndpoint` 读取该值用于展示与复制；前端不再根据浏览器 host、容器端口或 `localhost` 推断 endpoint。MCP proxy 用于：
 
 - Bearer token → userId 映射。
 - `tools/list` 过滤与 `kx_catalog` 注入。

@@ -75,7 +75,8 @@ function stubOverviewFetch({
   projectError = false,
   tables = [sourceSummary("superstore_orders"), sourceSummary("customers"), sourceSummary("orders", "crm")],
   testHandler,
-  catalogReloadsResponse
+  catalogReloadsResponse,
+  mcpEndpoint
 }: {
   connections?: ConnectionInfo[];
   ktxAvailable?: boolean;
@@ -83,7 +84,21 @@ function stubOverviewFetch({
   tables?: ReturnType<typeof sourceSummary>[];
   testHandler?: TestHandler;
   catalogReloadsResponse?: { runs: unknown[]; last: unknown | null; lastByConnection: Record<string, unknown> };
+  mcpEndpoint?: {
+    url: string | null;
+    status: "configured" | "fallback" | "invalid";
+    source: "env" | "fallback";
+    configured: boolean;
+    diagnostics: Array<{ code: string; message: string }>;
+  };
 } = {}) {
+  const resolvedMcpEndpoint = mcpEndpoint ?? {
+    url: "https://lucy.example.com/mcp",
+    status: "configured" as const,
+    source: "env" as const,
+    configured: true,
+    diagnostics: []
+  };
   const handlers = makeHandlerMap(
     (() => {
       if (projectError) {
@@ -100,7 +115,8 @@ function stubOverviewFetch({
             data: {
               root: "/tmp/project-lucy",
               ktxAvailable,
-              connections
+              connections,
+              mcpEndpoint: resolvedMcpEndpoint
             }
           })
         );
@@ -320,7 +336,52 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     fireEvent.click(await screen.findByTestId("copy-mcp-endpoint"));
-    expect(writeText).toHaveBeenCalledWith("http://127.0.0.1:7879/mcp");
+    expect(writeText).toHaveBeenCalledWith("https://lucy.example.com/mcp");
+  });
+
+  it("shows the local fallback endpoint when the runtime config is unset", async () => {
+    stubOverviewFetch({
+      mcpEndpoint: {
+        url: "http://127.0.0.1:7879/mcp",
+        status: "fallback",
+        source: "fallback",
+        configured: false,
+        diagnostics: [
+          {
+            code: "MISSING_PUBLIC_MCP_URL",
+            message: "LUCY_PUBLIC_MCP_URL is not configured; using local development MCP endpoint."
+          }
+        ]
+      }
+    });
+
+    renderOverview();
+
+    expect(await screen.findByText("http://127.0.0.1:7879/mcp")).toBeInTheDocument();
+  });
+
+  it("surfaces the runtime diagnostic and disables copy when the configured endpoint is invalid", async () => {
+    stubOverviewFetch({
+      mcpEndpoint: {
+        url: null,
+        status: "invalid",
+        source: "env",
+        configured: false,
+        diagnostics: [
+          {
+            code: "INVALID_PUBLIC_MCP_URL",
+            message: "LUCY_PUBLIC_MCP_URL must be a valid absolute URL."
+          }
+        ]
+      }
+    });
+
+    renderOverview();
+
+    expect(
+      await screen.findByText("LUCY_PUBLIC_MCP_URL must be a valid absolute URL.")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("copy-mcp-endpoint")).not.toBeInTheDocument();
   });
 
   it("shows the Doris R1 target connection profile", async () => {

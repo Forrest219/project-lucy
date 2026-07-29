@@ -4,6 +4,7 @@ import { isMap, isScalar, isSeq, parse, parseDocument, type Document, type Node,
 import { execFile } from "node:child_process";
 import { testConnection } from "./ktx";
 import { safeWrite } from "./fs-safe";
+import { resolveMcpEndpoint } from "./runtime-config";
 import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo, ProjectInfo } from "./model";
 import { previewDiff } from "./diff";
 
@@ -206,7 +207,8 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
   return {
     root: projectRoot,
     connections,
-    ktxAvailable: true
+    ktxAvailable: true,
+    mcpEndpoint: resolveMcpEndpoint()
   };
 }
 

@@ -23,8 +23,16 @@
 默认客户入口：
 
 ```text
-MCP: http://<host>:7879/mcp
+MCP: <LUCY_PUBLIC_MCP_URL>
 ```
+
+> 🔑 **客户部署必须显式设置 `LUCY_PUBLIC_MCP_URL`**（例如 `https://lucy.example.com/mcp`）。`LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 只控制 Lucy 容器内 MCP Proxy 的监听地址，**不是**给 Agent 复制的 URL；WebUI 与生成的 `.mcp.json` / Codex TOML 始终读取 `LUCY_PUBLIC_MCP_URL` 字段。
+> - Docker Compose：`services.lucy.environment` 增加 `LUCY_PUBLIC_MCP_URL: "https://lucy.example.com/mcp"`。
+> - Kubernetes / Helm：`env:` 或 `values.yaml` 注入同名变量。
+> - 裸机 systemd / 裸进程：服务启动前 `export LUCY_PUBLIC_MCP_URL=...`。
+> - 本地开发 / 验收：可不设，WebUI 走 fallback `http://127.0.0.1:7879/mcp` 并在 `/onboarding` / token 页面提示。
+>
+> 部署方式只决定怎么注入这个值，Lucy 内部只关心最终的 public MCP URL。
 
 本次客户交付不是 BI 可视化工具，也不是完整企业数据平台替代品；它提供受治理的数据上下文编译与 MCP 访问运行时。本次客户交付不承诺 WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、Kubernetes/Helm、系统 metrics/告警/日志聚合或对象存储归档。仓库内仍保留 WebUI/API 相关代码和测试作为内部质量门禁与后续产品化基础。
 
@@ -241,14 +249,14 @@ docker compose exec lucy ktx --project-dir /data/lucy \
 
 ## 8. Agent MCP Configuration
 
-Agent 应只接入 Lucy MCP Proxy：
+Agent 应只接入 Lucy MCP Proxy，URL 必须用 `LUCY_PUBLIC_MCP_URL`（参见 §1）：
 
 ```json
 {
   "mcpServers": {
     "lucy": {
       "type": "http",
-      "url": "http://<host>:7879/mcp",
+      "url": "<LUCY_PUBLIC_MCP_URL>",
       "headers": {
         "Authorization": "Bearer <LUCY_AGENT_TOKEN>"
       }
@@ -256,6 +264,8 @@ Agent 应只接入 Lucy MCP Proxy：
   }
 }
 ```
+
+`<LUCY_PUBLIC_MCP_URL>` 替换为部署方在 `LUCY_PUBLIC_MCP_URL` 中设置并由 WebUI 展示的值。**不要**把 `http://<host>:7879/mcp` 或 `http://127.0.0.1:7879/mcp` 直接复制给外部 Agent —— 这两个地址分别是容器内/本机 listen 地址，未必能跨网络被 Agent 平台访问。
 
 不要把 `KTX_INTERNAL_TOKEN` 分发给外部 agent。该 token 只用于 Lucy Proxy 到 KTX upstream 的内部调用。
 
