@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
 import type { AuditResponse, AuditLogEntry } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
@@ -207,14 +208,17 @@ export function Audit() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">访问日志</h1>
-          <p className="pl-page-intro">查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。</p>
-        </div>
-        <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a>
-      </div>
+      <PageHeader
+        title="访问日志"
+        breadcrumbs={["访问治理", "访问日志"]}
+        description="查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。"
+        badges={
+          <span>{total} 条记录</span>
+        }
+        actions={
+          <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a>
+        }
+      />
 
       <div className="pl-admin-filterbar">
         <input

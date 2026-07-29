@@ -6,8 +6,10 @@ import { queryKeys } from "../../lib/queryKeys";
 import type {
   ConnectionInfo,
   ConnectionTestResult,
-  ConnectionsResponse
+  ConnectionsResponse,
+  ProjectInfo
 } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type LatencyTone = "muted" | "success" | "warning" | "danger";
 
@@ -49,6 +51,10 @@ export function ConnectionTest() {
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
     queryFn: () => apiGet<ConnectionsResponse>("/api/connections")
+  });
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project,
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
   });
 
   const connections = connectionsQuery.data?.connections ?? [];
@@ -104,25 +110,31 @@ export function ConnectionTest() {
   }
 
   return (
-    <section className="pl-panel">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">数据库接入</p>
-          <h1 className="text-xl font-semibold">连通测试</h1>
-        </div>
-      </div>
-      <p className="pl-page-intro">
-        测试数据库连通性，验证凭据、网络与驱动配置是否正确。
-      </p>
+    <div className="pl-page-stack">
+      <PageHeader
+        title="连通测试"
+        breadcrumbs={["数据库接入", "连通测试"]}
+        description="测试数据库连通性，验证凭据、网络与驱动配置是否正确。"
+        badges={
+          projectQuery.data ? (
+            <>
+              <span>{projectQuery.data.root}</span>
+              <span>{connections.length} 个连接</span>
+              <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
+            </>
+          ) : null
+        }
+      />
 
-      {connections.length === 0 && (
-        <div className="pl-empty-state mt-4">
-          暂无连接配置。请先在 <Link to="/connections">连接概览</Link> 添加连接。
-        </div>
-      )}
+      <section className="pl-panel">
+        {connections.length === 0 && (
+          <div className="pl-empty-state">
+            暂无连接配置。请先在 <Link to="/connections">连接概览</Link> 添加连接。
+          </div>
+        )}
 
-      {connections.length > 0 && (
-        <div className="pl-toolbar mt-4">
+        {connections.length > 0 && (
+          <div className="pl-toolbar">
           <label className="grid gap-1.5 text-sm">
             <span>选择连接</span>
             <select
@@ -228,6 +240,7 @@ export function ConnectionTest() {
           )}
         </div>
       )}
-    </section>
+      </section>
+    </div>
   );
 }

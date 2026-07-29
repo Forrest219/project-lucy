@@ -5,6 +5,7 @@ import { apiGet, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
 import type { Join, JoinCandidate, JoinCandidatesResponse, SourceDetail } from "../lib/types";
+import { PageHeader } from "../components/PageHeader";
 import { RELATIONSHIP_LABELS, suggestedJoins } from "./semantic/join-utils";
 
 export function JoinEditor() {
@@ -69,21 +70,27 @@ export function JoinEditor() {
   }
 
   return (
-    <section className="pl-panel">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">语义层维护 / 关联关系</p>
-          <h1 className="text-xl font-semibold">维护关联关系：{table}</h1>
-        </div>
-        <Link className="pl-btn pl-btn--ghost" to={`/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`}>
-          返回表编辑
-        </Link>
-      </div>
-      <p className="pl-page-intro">候选关系先保存在 .ktx-ui sidecar，只有确认后的正式关系才写入 semantic-layer。</p>
+    <div className="pl-page-stack">
+      <PageHeader
+        title={`维护关联关系：${table}`}
+        breadcrumbs={["语义层维护", "关联关系", table]}
+        description="候选关系先保存在 .ktx-ui sidecar，只有确认后的正式关系才写入 semantic-layer。"
+        badges={
+          <>
+            <span>{conn}</span>
+            <span>{schema}</span>
+          </>
+        }
+        actions={
+          <Link className="pl-btn pl-btn--ghost" to={`/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`}>
+            返回表编辑
+          </Link>
+        }
+      />
 
       <div className="grid gap-4">
         <section className="pl-panel">
-          <h2 className="pl-panel-title">已确认关系</h2>
+          <p className="pl-panel-title">已确认关系</p>
           <div className="grid gap-2">
             {(sourceQuery.data?.model.joins ?? []).map((join) => (
               <div className="pl-join-row" key={`${join.to}-${join.on}`}>
@@ -97,7 +104,7 @@ export function JoinEditor() {
         </section>
 
         <section className="pl-panel">
-          <h2 className="pl-panel-title">候选关系</h2>
+          <p className="pl-panel-title">候选关系</p>
           <div className="grid gap-2">
             {[...tableCandidates, ...suggestions].map((candidate) => (
               <div className="pl-join-row" key={`${candidate.join.to}-${candidate.join.on}-${candidate.note}`}>
@@ -120,6 +127,6 @@ export function JoinEditor() {
           </div>
         </section>
       </div>
-    </section>
+    </div>
   );
 }

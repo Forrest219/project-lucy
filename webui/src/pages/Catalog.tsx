@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { SelectField } from "../components/SelectField";
 import { StatusBadge } from "../components/StatusBadge";
+import { PageHeader } from "../components/PageHeader";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import type { CompletionStatus, SourcesResponse, SourceSummary } from "../lib/types";
@@ -82,20 +83,25 @@ export function Catalog() {
   }
 
   return (
-    <section className="pl-panel">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">语义层维护</p>
-          <h1 className="text-xl font-semibold">语义维护工作台</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link className="pl-btn pl-btn--ghost" to="/wiki">业务 Wiki</Link>
-          <Link className="pl-btn pl-btn--ghost" to="/review">审阅</Link>
-          <p className="text-sm text-fg-muted">{filtered.length} / {tables.length} 张表</p>
-        </div>
-      </div>
-      <p className="pl-page-intro">浏览当前 KTX 项目的语义层数据表，按 schema、状态和关键词定位需要维护的对象。</p>
+    <div className="pl-page-stack">
+      <PageHeader
+        title="语义维护工作台"
+        breadcrumbs={["语义层维护", "表目录"]}
+        description="浏览当前 KTX 项目的语义层数据表，按 schema、状态和关键词定位需要维护的对象。"
+        badges={
+          <span data-testid="catalog-count">
+            {filtered.length} / {tables.length} 张表
+          </span>
+        }
+        actions={
+          <>
+            <Link className="pl-btn pl-btn--ghost" to="/wiki">业务 Wiki</Link>
+            <Link className="pl-btn pl-btn--ghost" to="/review">审阅</Link>
+          </>
+        }
+      />
 
+      <section className="pl-panel">
       <div className="pl-toolbar">
         <label className="grid gap-1.5 text-sm">
           <span>Schema</span>
@@ -147,6 +153,7 @@ export function Catalog() {
           );
         })}
       </div>
-    </section>
+      </section>
+    </div>
   );
 }

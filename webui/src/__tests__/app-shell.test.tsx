@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
+import { PageHeader } from "../components/PageHeader";
 
 function StubPage({ name }: { name: string }) {
   return <div data-testid="route-page">{name}</div>;
@@ -113,14 +114,6 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
   });
 
-  it("exposes density shell classes and active nav styling hook", () => {
-    renderAt("/connections");
-    expect(document.querySelector(".pl-app-shell")).toBeInTheDocument();
-    expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "主导航" })).toHaveClass("pl-nav");
-    expect(screen.getByRole("link", { name: "连接概览" })).toHaveClass("pl-nav-link", "pl-nav-link--active");
-  });
-
   it("renders a global help button", () => {
     renderAt("/");
     expect(screen.getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
@@ -137,19 +130,18 @@ describe("AppFrame shell", () => {
     expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
   });
 
-  it("shows source context in the topbar", async () => {
-    renderAt("/sources/mysql-aliyun/dataforai/superstore_orders");
-    expect(await screen.findByText("mysql-aliyun")).toBeInTheDocument();
-    expect(screen.getAllByText("dataforai").length).toBeGreaterThan(0);
-    expect(await screen.findByText("完成度 done")).toBeInTheDocument();
+  it("exposes density shell classes and active nav styling hook", () => {
+    renderAt("/connections");
+    expect(document.querySelector(".pl-app-shell")).toBeInTheDocument();
+    expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "主导航" })).toHaveClass("pl-nav");
+    expect(screen.getByRole("link", { name: "连接概览" })).toHaveClass("pl-nav-link", "pl-nav-link--active");
   });
 
-  it("derives connection topbar facts from project data only", async () => {
-    const { fetchMock } = renderAt("/connections");
-    expect(await screen.findByText("/tmp/project-lucy")).toBeInTheDocument();
-    expect(screen.getByText("1 个连接")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith("/api/project");
-    expect(fetchMock).not.toHaveBeenCalledWith("/api/connections");
+  it("renders PageHeader with the global H1 styling hook", () => {
+    render(<PageHeader title="连接概览" breadcrumbs={["数据库接入"]} />);
+    expect(screen.getByRole("heading", { level: 1, name: "连接概览" })).toHaveClass("pl-page-header-title");
+    expect(screen.getByTestId("page-header")).toHaveClass("pl-page-header");
   });
 
   it("marks admin agent context pages as agent navigation", () => {

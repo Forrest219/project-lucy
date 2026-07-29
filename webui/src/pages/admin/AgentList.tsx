@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import type { Agent, CreateAgentBody, Role } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type AgentsResponse = { agents: Agent[]; version: string };
 type RolesResponse = { roles: Role[] };
@@ -370,14 +371,21 @@ export function AgentList() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">Agent 实例</h1>
-          <p className="pl-page-intro">配置每个 Agent 实例能用哪些 MCP 工具和访问哪些表。</p>
-        </div>
-        <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
-      </div>
+      <PageHeader
+        title="Agent 实例"
+        breadcrumbs={["访问治理", "Agent 实例"]}
+        description="配置每个 Agent 实例能用哪些 MCP 工具和访问哪些表。"
+        badges={
+          <>
+            <span>{agents.length} 个 Agent</span>
+            <span>{enabledCount} 已启用</span>
+            <span>{tokenCount} token</span>
+          </>
+        }
+        actions={
+          <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
+        }
+      />
 
       <div className="pl-metric-grid">
         <MetricCard label="Agent 数" value={agents.length} hint="access.yaml 中的实例" />

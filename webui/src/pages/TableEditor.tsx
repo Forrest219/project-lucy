@@ -8,6 +8,7 @@ import { MeasureForm } from "../components/MeasureForm";
 import { SegmentForm } from "../components/SegmentForm";
 import { StatusBadge } from "../components/StatusBadge";
 import { YamlPreview } from "../components/YamlPreview";
+import { PageHeader } from "../components/PageHeader";
 import { apiGet, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
@@ -449,19 +450,19 @@ function Inspector({
 
       {activeTab === "diff" ? (
         <section className="pl-inspector-section">
-          <h2 className="pl-panel-title">变更预览</h2>
+          <p className="pl-panel-title">变更预览</p>
           <DiffViewer diff={preview?.diff ?? ""} />
         </section>
       ) : null}
       {activeTab === "yaml" ? (
         <section className="pl-inspector-section">
-          <h2 className="pl-panel-title">拟写入 YAML</h2>
+          <p className="pl-panel-title">拟写入 YAML</p>
           <YamlPreview yaml={preview?.proposedYaml ?? source.rawYaml} />
         </section>
       ) : null}
       {activeTab === "validate" ? (
         <section className="pl-inspector-section">
-          <h2 className="pl-panel-title">保存与校验</h2>
+          <p className="pl-panel-title">保存与校验</p>
           <p className="pl-notice">
             保存会调用现有语义层写入接口（dryRun:false）；成功后进入审阅页查看 changed files 与 validate 结果。
             Cmd+S / Ctrl+S 不会落盘，只会刷新 DryRun 预览并切到 Diff 面板。
@@ -802,53 +803,71 @@ export function TableEditor() {
   const grainLabel = source?.model.grain?.join(", ") || "无";
 
   return (
-    <section
-      className="pl-table-workbench"
-      onKeyDown={source ? handleSaveShortcut : undefined}
-    >
-      <SourceObjectTree
-        activeSection={activeSection}
-        currentTable={table}
-        onSectionChange={setActiveSection}
-        schema={schema}
-        siblingTables={siblingTables}
-        source={source}
+    <div className="pl-page-stack">
+      <PageHeader
+        title={source ? `维护表语义：${source.model.table}` : "维护表语义"}
+        breadcrumbs={[
+          "语义层维护",
+          source?.model.conn ?? conn,
+          source?.model.schema ?? schema,
+          source?.model.table ?? table
+        ]}
+        description="维护 semantic-layer 的结构化语义，包括表描述、行粒度、字段描述、指标和分群。"
+        badges={
+          source ? (
+            <>
+              <span data-testid="table-editor-conn">{source.model.conn}</span>
+              <span>{source.model.schema}</span>
+              <span>完成度 {source.completion}</span>
+            </>
+          ) : null
+        }
+        actions={
+          source ? (
+            <>
+              <Link
+                aria-label={`打开或创建 ${source.model.table} 的业务 Wiki`}
+                className="pl-btn pl-btn--ghost"
+                title={`打开或创建 ${source.model.conn}/${source.model.schema}/${source.model.table} 的业务 Wiki`}
+                to={`/wiki?sl_ref=${encodeURIComponent(`${source.model.conn}/${source.model.schema}/${source.model.table}`)}`}
+              >
+                业务 Wiki
+              </Link>
+              <Link
+                className="pl-btn pl-btn--ghost"
+                to={`/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`}
+              >
+                关联关系
+              </Link>
+              <Link className="pl-btn pl-btn--ghost" to="/review">审阅</Link>
+              <button className="pl-btn pl-btn--primary" disabled={saveMutation.isPending} form="table-editor-form" type="submit">
+                {saveMutation.isPending ? "保存中..." : "保存"}
+              </button>
+            </>
+          ) : null
+        }
       />
 
-      <div className="pl-table-editor-main">
-        {sourceQuery.isLoading ? <p className="pl-notice">正在加载表信息...</p> : null}
-        {sourceQuery.error ? (
-          <p className="pl-error">表信息加载失败：{sourceQuery.error instanceof Error ? sourceQuery.error.message : "未知错误"}</p>
-        ) : null}
-        {source ? (
-          <>
-            <div className="pl-table-editor-header">
-              <div>
-                <p className="pl-eyebrow">语义层维护 / {source.model.conn} / {source.model.schema}</p>
-                <h1 className="text-xl font-semibold">维护表语义：{source.model.table}</h1>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  aria-label={`打开或创建 ${source.model.table} 的业务 Wiki`}
-                  className="pl-btn pl-btn--ghost"
-                  title={`打开或创建 ${source.model.conn}/${source.model.schema}/${source.model.table} 的业务 Wiki`}
-                  to={`/wiki?sl_ref=${encodeURIComponent(`${source.model.conn}/${source.model.schema}/${source.model.table}`)}`}
-                >
-                  业务 Wiki
-                </Link>
-                <Link
-                  className="pl-btn pl-btn--ghost"
-                  to={`/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`}
-                >
-                  关联关系
-                </Link>
-                <Link className="pl-btn pl-btn--ghost" to="/review">审阅</Link>
-                <StatusBadge status={source.completion} />
-                <button className="pl-btn pl-btn--primary" disabled={saveMutation.isPending} form="table-editor-form" type="submit">
-                  {saveMutation.isPending ? "保存中..." : "保存"}
-                </button>
-              </div>
-            </div>
+      <section
+        className="pl-table-workbench"
+        onKeyDown={source ? handleSaveShortcut : undefined}
+      >
+        <SourceObjectTree
+          activeSection={activeSection}
+          currentTable={table}
+          onSectionChange={setActiveSection}
+          schema={schema}
+          siblingTables={siblingTables}
+          source={source}
+        />
+
+        <div className="pl-table-editor-main">
+          {sourceQuery.isLoading ? <p className="pl-notice">正在加载表信息...</p> : null}
+          {sourceQuery.error ? (
+            <p className="pl-error">表信息加载失败：{sourceQuery.error instanceof Error ? sourceQuery.error.message : "未知错误"}</p>
+          ) : null}
+          {source ? (
+            <>
 
             <form
               className="pl-table-editor-form"
@@ -867,8 +886,6 @@ export function TableEditor() {
 
               {activeSection === "overview" ? (
                 <section className="pl-panel">
-                  <h2 className="pl-panel-title">基础语义</h2>
-                  <p className="pl-page-intro">维护会写入 semantic-layer 的结构化语义，包括表描述、行粒度、字段描述、指标和分群。</p>
                   <div className="pl-source-metadata-grid">
                     <div className="pl-source-metadata-cell pl-source-metadata-cell--wide">
                       <span className="pl-source-metadata-label">完整表名</span>
@@ -916,15 +933,11 @@ export function TableEditor() {
 
               {activeSection === "measures" ? (
                 <section className="pl-panel">
-                  <div className="pl-section-heading">
-                    <div>
-                      <h2 className="pl-panel-title">
-                        Measures
-                        <OverlayBadge source={source} />
-                      </h2>
-                      <p className="pl-notice">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
-                    </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="pl-panel-title mb-0">Measures</p>
+                    <OverlayBadge source={source} />
                   </div>
+                  <p className="pl-notice mb-3">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
                   <MeasureForm
                     measures={form.measures}
                     onChange={(measures) => setForm({ ...form, measures })}
@@ -934,15 +947,11 @@ export function TableEditor() {
 
               {activeSection === "segments" ? (
                 <section className="pl-panel">
-                  <div className="pl-section-heading">
-                    <div>
-                      <h2 className="pl-panel-title">
-                        Segments
-                        <OverlayBadge source={source} />
-                      </h2>
-                      <p className="pl-notice">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
-                    </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="pl-panel-title mb-0">Segments</p>
+                    <OverlayBadge source={source} />
                   </div>
+                  <p className="pl-notice mb-3">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
                   <SegmentForm
                     segments={form.segments}
                     onChange={(segments) => setForm({ ...form, segments })}
@@ -952,14 +961,11 @@ export function TableEditor() {
 
               {activeSection === "columns" ? (
                 <section className="pl-panel">
-                  <div className="pl-section-heading">
-                    <div>
-                      <h2 className="pl-panel-title">字段语义</h2>
-                      <p className="pl-notice">每张卡片展示 PK/类型/可空性与 AI 建议。Human 文本框初始仅载入 descriptions.human，点击「采纳 AI 描述」才会把 AI 文本写进 Human。</p>
-                    </div>
-                    <label className="pl-field-search">
-                      <span>搜索字段</span>
-                      <input className="pl-input" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="字段名/类型/AI/Human" />
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="pl-notice mb-0">每张卡片展示 PK/类型/可空性与 AI 建议。Human 文本框初始仅载入 descriptions.human，点击「采纳 AI 描述」才会把 AI 文本写进 Human。</p>
+                    <label className="pl-field-search shrink-0">
+                      <span className="sr-only">搜索字段</span>
+                      <input className="pl-input" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="搜索字段" />
                     </label>
                   </div>
                   <div className="pl-field-editor-list">
@@ -985,13 +991,10 @@ export function TableEditor() {
 
               {activeSection === "joins" ? (
                 <section className="pl-panel">
-                  <div className="pl-section-heading">
-                    <div>
-                      <h2 className="pl-panel-title">Joins</h2>
-                      <p className="pl-notice">正式关联关系仍在关联关系页面维护，这里只展示当前表上下文。</p>
-                    </div>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="pl-notice mb-0">正式关联关系仍在关联关系页面维护，这里只展示当前表上下文。</p>
                     <Link
-                      className="pl-btn pl-btn--secondary"
+                      className="pl-btn pl-btn--secondary shrink-0"
                       to={`/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`}
                     >
                       打开关联关系
@@ -1024,7 +1027,8 @@ export function TableEditor() {
           source={source}
         />
       ) : null}
-    </section>
+      </section>
+    </div>
   );
 }
 

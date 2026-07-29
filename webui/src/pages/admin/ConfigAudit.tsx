@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
+import { PageHeader } from "../../components/PageHeader";
 import { apiGet } from "../../lib/apiClient";
 import type { ConfigAuditEntry, ConfigAuditResponse } from "../../lib/types";
 
@@ -78,17 +79,20 @@ export function ConfigAudit() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">配置变更日志</h1>
-          <p className="pl-page-intro">查看访问配置写入历史，当前 actor 为单管理员本机语义。</p>
-        </div>
-        <div className="flex gap-2">
-          <a href={exportUrl} className="pl-btn pl-btn--ghost text-sm">导出 CSV</a>
-          <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
-        </div>
-      </div>
+      <PageHeader
+        title="配置变更日志"
+        breadcrumbs={["访问治理", "配置变更日志"]}
+        description="查看访问配置写入历史，当前 actor 为单管理员本机语义。"
+        badges={
+          <span>{total} 条记录</span>
+        }
+        actions={
+          <>
+            <a href={exportUrl} className="pl-btn pl-btn--ghost text-sm">导出 CSV</a>
+            <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
+          </>
+        }
+      />
 
       {data?.actorNotice ? <div className="pl-notice">{data.actorNotice}</div> : null}
 

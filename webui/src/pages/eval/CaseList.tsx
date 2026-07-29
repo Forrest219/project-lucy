@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiDelete } from "../../lib/apiClient";
 import type { EvalDomainInfo, EvalCase, EvalRun, EvalRunWithResults } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type CasesResponse = { cases: EvalCase[] };
@@ -65,7 +66,11 @@ export function CaseList() {
   if (domains.length === 0) {
     return (
       <div className="grid gap-6">
-        <h1 className="text-xl font-semibold">Case 管理</h1>
+        <PageHeader
+          title="Case 管理"
+          breadcrumbs={["质量评测", "Case 管理"]}
+          description="管理各 domain 的 eval case 定义（YAML 源文件）。"
+        />
         <div className="pl-notice">未找到 eval domain，请确认 evals/ 目录下有对应的 cases yaml 文件。</div>
       </div>
     );
@@ -73,20 +78,24 @@ export function CaseList() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">Case 管理</h1>
-          <p className="text-sm text-fg-muted mt-1">管理各 domain 的 eval case 定义（YAML 源文件）。</p>
-        </div>
-        <button
-          type="button"
-          className="pl-btn pl-btn--primary text-sm"
-          onClick={() => navigate(`/eval/cases/${activeDomain}/new`)}
-          disabled={!activeDomain}
-        >
-          新建 Case
-        </button>
-      </div>
+      <PageHeader
+        title="Case 管理"
+        breadcrumbs={["质量评测", "Case 管理"]}
+        description="管理各 domain 的 eval case 定义（YAML 源文件）。"
+        badges={
+          <span>{cases.length} 个 case</span>
+        }
+        actions={
+          <button
+            type="button"
+            className="pl-btn pl-btn--primary text-sm"
+            onClick={() => navigate(`/eval/cases/${activeDomain}/new`)}
+            disabled={!activeDomain}
+          >
+            新建 Case
+          </button>
+        }
+      />
 
       {/* Domain tabs */}
       <div className="flex gap-2 flex-wrap">

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
 import type { AuditSourcesResponse } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 function HeatRow({ label, calls, denied, max }: { label: string; calls: number; denied?: number; max: number }) {
   const width = max > 0 ? Math.max(4, Math.round((calls / max) * 100)) : 0;
@@ -26,14 +27,14 @@ export function AuditSources() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">数据源热力视图</h1>
-          <p className="pl-page-intro">从访问审计派生表级访问和拒绝分布，不读取业务数据内容。</p>
-        </div>
-        <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
-      </div>
+      <PageHeader
+        title="数据源热力视图"
+        breadcrumbs={["访问治理", "数据源热力视图"]}
+        description="从访问审计派生表级访问和拒绝分布，不读取业务数据内容。"
+        actions={
+          <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
+        }
+      />
 
       {isLoading ? (
         <div className="pl-notice">加载中…</div>
@@ -50,7 +51,7 @@ export function AuditSources() {
 
           <section className="pl-card grid gap-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Top Tables</h2>
+              <p className="text-base font-semibold mb-0">Top Tables</p>
               <span className="text-xs text-fg-muted">calls / denied</span>
             </div>
             {(data?.topTables ?? []).length === 0 ? (
@@ -63,7 +64,7 @@ export function AuditSources() {
           </section>
 
           <section className="pl-card grid gap-3">
-            <h2 className="text-base font-semibold">Denied Tables</h2>
+            <p className="text-base font-semibold mb-0">Denied Tables</p>
             {(data?.deniedTables ?? []).length === 0 ? (
               <p className="text-sm text-fg-muted">暂无表级拒绝记录。</p>
             ) : (

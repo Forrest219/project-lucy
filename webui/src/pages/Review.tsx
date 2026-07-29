@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DiffViewer } from "../components/DiffViewer";
+import { PageHeader } from "../components/PageHeader";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
@@ -43,23 +44,31 @@ export function Review() {
 
   return (
     <div className="pl-page-stack">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">审阅与校验</p>
-          <h1 className="text-xl font-semibold">变更审阅与校验</h1>
-          <p className="pl-page-intro">集中查看可编辑目录中的文件变更，并对本次保存过的语义对象运行校验。WebUI 不执行 git commit。</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="pl-btn pl-btn--primary" onClick={() => validateMutation.mutate()} disabled={validateMutation.isPending}>
-            {validateMutation.isPending ? "校验中..." : "Validate changed"}
-          </button>
-          <Link className="pl-btn pl-btn--secondary" to="/">表目录</Link>
-        </div>
-      </div>
+      <PageHeader
+        title="变更审阅与校验"
+        breadcrumbs={["审阅与校验", "变更审阅"]}
+        description="集中查看可编辑目录中的文件变更，并对本次保存过的语义对象运行校验。WebUI 不执行 git commit。"
+        badges={
+          <>
+            <span>{files.length} 个待审阅文件</span>
+            {validateMutation.data ? (
+              <span>{failedCount > 0 ? `校验失败 ${failedCount} 张` : `校验通过 ${validateMutation.data.results.length} 张`}</span>
+            ) : null}
+          </>
+        }
+        actions={
+          <>
+            <button type="button" className="pl-btn pl-btn--primary" onClick={() => validateMutation.mutate()} disabled={validateMutation.isPending}>
+              {validateMutation.isPending ? "校验中..." : "Validate changed"}
+            </button>
+            <Link className="pl-btn pl-btn--secondary" to="/">表目录</Link>
+          </>
+        }
+      />
 
       <div className="pl-review-layout">
         <aside className="pl-review-sidebar">
-          <h2 className="pl-panel-title">文件</h2>
+          <p className="pl-panel-title mb-2">文件</p>
           {diffQuery.isLoading ? <p className="pl-notice">正在加载变更...</p> : null}
           {diffQuery.error ? <p className="pl-error">变更加载失败：{diffQuery.error instanceof Error ? diffQuery.error.message : "未知错误"}</p> : null}
           {files.length === 0 && !diffQuery.isLoading ? <p className="pl-notice">可编辑目录中暂无变更文件。</p> : null}
@@ -83,17 +92,15 @@ export function Review() {
 
         <section className="pl-review-main">
           <div className="pl-review-main-header">
-            <div>
-              <h2 className="pl-panel-title">{active?.filePath ?? "变更详情"}</h2>
-              <p className="pl-notice">{active ? `状态：${active.status}` : "请选择左侧文件查看 diff。"}</p>
-            </div>
+            <p className="pl-panel-title mb-1">{active?.filePath ?? "变更详情"}</p>
+            <p className="pl-notice">{active ? `状态：${active.status}` : "请选择左侧文件查看 diff。"}</p>
           </div>
           <DiffViewer diff={active?.diff || "该文件暂无可展示的补丁内容。"} />
         </section>
 
         <aside className="pl-review-sidebar">
           <section className="grid gap-3">
-            <h2 className="pl-panel-title">Validate changed</h2>
+            <p className="pl-panel-title">Validate changed</p>
             {validateMutation.data ? (
               <div className="grid gap-2">
                 <div className={failedCount > 0 ? "pl-validation-banner pl-validation-banner--danger" : "pl-validation-banner pl-validation-banner--success"}>
@@ -115,7 +122,7 @@ export function Review() {
           </section>
 
           <section className="grid gap-3">
-            <h2 className="pl-panel-title">建议命令</h2>
+            <p className="pl-panel-title">建议命令</p>
             <pre className="pl-yaml-preview">git diff{"\n"}git status --short</pre>
           </section>
         </aside>

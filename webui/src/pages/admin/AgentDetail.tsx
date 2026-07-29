@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { DiffViewer } from "../../components/DiffViewer";
+import { PageHeader } from "../../components/PageHeader";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
 import type { Agent, AgentPatch, EffectivePermissionsPreview, Role } from "../../lib/types";
 
@@ -224,26 +225,38 @@ export function AgentDetail() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link to="/admin/agents" className="text-sm text-fg-muted hover:text-fg">‹ 返回列表</Link>
-          <h1 className="text-xl font-semibold mt-1">{agent.name} <span className="text-fg-muted font-normal text-base">({agent.id})</span></h1>
-          <p className="pl-page-intro">编辑前先生成变更预览，确认后写入访问配置。Cmd+S / Ctrl+S 触发预览。</p>
-        </div>
-        <div className="flex gap-2">
-          <Link to={`/admin/config-audit?targetId=${encodeURIComponent(agent.id)}`} className="pl-btn pl-btn--secondary text-sm">
-            变更历史
-          </Link>
-          <button
-            type="button"
-            className="pl-btn pl-btn--danger text-sm"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-          >
-            删除
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title={
+          <>
+            {agent.name} <span className="text-fg-muted font-normal text-base">({agent.id})</span>
+          </>
+        }
+        breadcrumbs={["访问治理", "Agent 实例", agent.id]}
+        description="编辑前先生成变更预览，确认后写入访问配置。Cmd+S / Ctrl+S 触发预览。"
+        badges={
+          <>
+            <span>{agent.enabled ? "已启用" : "已禁用"}</span>
+            {agent.role ? <span>role: {agent.role}</span> : <span>legacy allow</span>}
+            <span>{agent.tokens.filter((t) => !t.revoked).length} 有效 token</span>
+          </>
+        }
+        actions={
+          <>
+            <Link to="/admin/agents" className="pl-btn pl-btn--ghost text-sm">‹ 返回列表</Link>
+            <Link to={`/admin/config-audit?targetId=${encodeURIComponent(agent.id)}`} className="pl-btn pl-btn--secondary text-sm">
+              变更历史
+            </Link>
+            <button
+              type="button"
+              className="pl-btn pl-btn--danger text-sm"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+            >
+              删除
+            </button>
+          </>
+        }
+      />
 
       <div className="pl-admin-tabbar">
         {tabs.map((tab) => (

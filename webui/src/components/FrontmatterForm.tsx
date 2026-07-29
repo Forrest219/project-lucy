@@ -21,7 +21,7 @@ export function FrontmatterForm({ value, onChange }: Props) {
   return (
     <section className="pl-panel pl-frontmatter">
       <header className="pl-frontmatter-header">
-        <h2 className="pl-panel-title">页面元信息</h2>
+        <p className="pl-panel-title">页面元信息</p>
         <p className="pl-notice">
           关联语义对象与标签会驱动 Wiki ↔ 表编辑器的双向跳转。摘要会出现在文档列表与目录。
         </p>

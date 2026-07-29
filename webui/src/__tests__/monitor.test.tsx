@@ -95,7 +95,7 @@ describe("Monitor", () => {
     stubMonitorFetch();
     renderMonitor();
 
-    expect(await screen.findByText("趋势监控")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "趋势监控" })).toBeInTheDocument();
     expect(screen.getByText("最新通过率")).toBeInTheDocument();
     expect(await screen.findByText("75%")).toBeInTheDocument();
     expect(screen.getByText("红线状态")).toBeInTheDocument();
@@ -116,7 +116,7 @@ describe("Monitor", () => {
     const fetchMock = stubMonitorFetch();
     renderMonitor();
 
-    expect(await screen.findByText("趋势监控")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "趋势监控" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "90d" }));
 
     await waitFor(() => {
@@ -128,7 +128,7 @@ describe("Monitor", () => {
     const fetchMock = stubMonitorFetch();
     renderMonitor();
 
-    expect(await screen.findByText("趋势监控")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "趋势监控" })).toBeInTheDocument();
     fireEvent.change(await screen.findByDisplayValue("90"), { target: { value: "85" } });
     fireEvent.change(await screen.findByDisplayValue("3"), { target: { value: "999" } });
     fireEvent.click(screen.getByRole("button", { name: "保存阈值" }));

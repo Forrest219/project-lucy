@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
 import { Catalog } from "../pages/Catalog";
@@ -25,97 +25,8 @@ import { TableWhitelist } from "../pages/connections/TableWhitelist";
 import { ConnectionTest } from "../pages/connections/ConnectionTest";
 import { HelpCenter } from "../pages/HelpCenter";
 import { HelpButton } from "../components/HelpButton";
-import { apiGet } from "../lib/apiClient";
-import { queryKeys } from "../lib/queryKeys";
-import type { ProjectInfo, SourceDetail } from "../lib/types";
 
 const queryClient = new QueryClient();
-
-export function breadcrumbItems(pathname: string): string[] {
-  const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  if (parts.length === 0) {
-    return ["语义层维护", "表目录"];
-  }
-  if (parts[0] === "onboarding") {
-    return ["部署向导", "上线检查"];
-  }
-  if (parts[0] === "sources") {
-    return ["语义层维护", parts[2] ?? "表语义", parts[3] ?? "表语义"];
-  }
-  if (parts[0] === "joins") {
-    return ["语义层维护", "关联关系", parts[3] ?? "当前表"];
-  }
-  if (parts[0] === "wiki") {
-    return ["业务文档", "Wiki 文档"];
-  }
-  if (parts[0] === "review") {
-    return ["审阅与校验", "变更审阅"];
-  }
-  if (parts[0] === "help") {
-    return ["系统帮助", "系统手册"];
-  }
-  if (parts[0] === "eval") {
-    if (parts[1] === "cases" && parts[2] && parts[3]) {
-      return ["质量评测", "Case 管理", parts[2], parts[3]];
-    }
-    if (parts[1] === "cases" && parts[2]) {
-      return ["质量评测", "Case 管理", parts[2]];
-    }
-    if (parts[1] === "cases") {
-      return ["质量评测", "Case 管理"];
-    }
-    if (parts[1] === "runs" && parts[2]) {
-      return ["质量评测", "运行历史", `Run #${parts[2]}`];
-    }
-    if (parts[1] === "runs") {
-      return ["质量评测", "运行历史"];
-    }
-    if (parts[1] === "monitor") {
-      return ["质量评测", "趋势监控"];
-    }
-    return ["质量评测"];
-  }
-  if (parts[0] === "connections") {
-    if (parts[1] === "whitelist") {
-      return ["数据库接入", "表白名单"];
-    }
-    if (parts[1] === "test") {
-      return ["数据库接入", "连通测试"];
-    }
-    return ["数据库接入", "连接概览"];
-  }
-  if (parts[0] === "admin") {
-    if (parts[1] === "agents" && parts[2] && parts[3] === "tokens") {
-      return ["访问治理", "Agent 实例", parts[2], "新建 Token"];
-    }
-    if (parts[1] === "agents" && parts[2]) {
-      return ["访问治理", "Agent 实例", parts[2]];
-    }
-    if (parts[1] === "agents") {
-      return ["访问治理", "Agent 实例"];
-    }
-    if (parts[1] === "roles" && parts[2] === "new") {
-      return ["访问治理", "角色配置", "新建 Role"];
-    }
-    if (parts[1] === "roles" && parts[2]) {
-      return ["访问治理", "角色配置", parts[2]];
-    }
-    if (parts[1] === "roles") {
-      return ["访问治理", "角色配置"];
-    }
-    if (parts[1] === "audit") {
-      return ["访问治理", "访问日志"];
-    }
-    if (parts[1] === "config-audit") {
-      return ["访问治理", "配置变更日志"];
-    }
-    if (parts[1] === "audit-sources") {
-      return ["访问治理", "数据源热力视图"];
-    }
-    return ["访问治理"];
-  }
-  return ["KTX WebUI"];
-}
 
 type NavItem = { label: string; to: string; active: (pathname: string) => boolean };
 
@@ -174,52 +85,8 @@ function navLinkClass(isActive: boolean) {
   return `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`;
 }
 
-function routeSource(pathname: string): { conn: string; schema: string; table: string } | null {
-  const match = pathname.match(/^\/sources\/([^/]+)\/([^/]+)\/([^/]+)/);
-  if (!match) {
-    return null;
-  }
-  return {
-    conn: decodeURIComponent(match[1]),
-    schema: decodeURIComponent(match[2]),
-    table: decodeURIComponent(match[3])
-  };
-}
-
 export function AppFrame() {
   const location = useLocation();
-  const breadcrumbs = breadcrumbItems(location.pathname);
-  const pageTitle = breadcrumbs[breadcrumbs.length - 1] ?? "KTX WebUI";
-  const isConnectionRoute = location.pathname.startsWith("/connections");
-  const currentSource = routeSource(location.pathname);
-  const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project"),
-    enabled: isConnectionRoute
-  });
-  const topbarSourceQuery = useQuery({
-    queryKey: currentSource ? queryKeys.source(currentSource.conn, currentSource.schema, currentSource.table) : ["sources", "inactive"],
-    queryFn: () =>
-      apiGet<SourceDetail>(
-        `/api/sources/${encodeURIComponent(currentSource?.conn ?? "")}/${encodeURIComponent(currentSource?.schema ?? "")}/${encodeURIComponent(currentSource?.table ?? "")}`
-    ),
-    enabled: Boolean(currentSource)
-  });
-  const topbarSourceData =
-    currentSource &&
-    topbarSourceQuery.data?.model.conn === currentSource.conn &&
-    topbarSourceQuery.data.model.schema === currentSource.schema &&
-    topbarSourceQuery.data.model.table === currentSource.table
-      ? topbarSourceQuery.data
-      : null;
-  const topbarFacts = [
-    isConnectionRoute && projectQuery.data?.root ? projectQuery.data.root : null,
-    isConnectionRoute && projectQuery.data ? `${projectQuery.data.connections.length} 个连接` : null,
-    isConnectionRoute && projectQuery.data ? `KTX ${projectQuery.data.ktxAvailable ? "可用" : "不可用"}` : null,
-    currentSource ? currentSource.conn : null,
-    currentSource ? currentSource.schema : null,
-    topbarSourceData ? `完成度 ${topbarSourceData.completion}` : null
-  ].filter(Boolean);
 
   return (
     <div className="pl-app-shell">
@@ -257,26 +124,6 @@ export function AppFrame() {
       </aside>
 
       <main className="pl-workspace">
-        <header className="pl-topbar">
-          <div>
-            <nav className="flex items-center gap-2 text-sm text-fg-muted" aria-label="当前位置">
-              {breadcrumbs.map((item, index) => (
-                <span key={`${index}-${item}`} className="flex items-center gap-2">
-                  {index > 0 ? <span>/</span> : null}
-                  <span>{item}</span>
-                </span>
-              ))}
-            </nav>
-            <div className="pl-topbar-title">{pageTitle}</div>
-            {topbarFacts.length > 0 ? (
-              <div className="pl-topbar-facts" aria-label="页面上下文">
-                {topbarFacts.map((fact) => (
-                  <span key={fact}>{fact}</span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </header>
         <div className="pl-workspace-body">
           <Routes>
             <Route path="/onboarding" element={<Onboarding />} />

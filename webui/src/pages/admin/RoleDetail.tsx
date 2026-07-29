@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../../lib/apiClient";
+import { PageHeader } from "../../components/PageHeader";
 import type { RoleAllowConfig, RoleDetail as RoleDetailType, RoleSelector } from "../../lib/types";
 
 type Tab = "config" | "permissions" | "usage" | "diff";
@@ -369,34 +370,54 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link to="/admin/roles" className="text-sm text-fg-muted hover:text-fg">‹ 返回列表</Link>
-          <h1 className="text-xl font-semibold mt-1">
-            {mode === "create" ? "新建 Role" : mode === "copy" ? `复制 Role · ${roleId}` : mode === "delete" ? `删除 Role · ${roleId}` : `${detail?.id ?? roleId}`}
-            {detail?.source === "template" && <span className="ml-2 pl-status-badge pl-status-partial">template</span>}
-          </h1>
-          <p className="pl-page-intro">
+      <PageHeader
+        title={
+          mode === "create"
+            ? "新建 Role"
+            : mode === "copy"
+              ? `复制 Role · ${roleId}`
+              : mode === "delete"
+                ? `删除 Role · ${roleId}`
+                : `${detail?.id ?? roleId}`
+        }
+        breadcrumbs={
+          mode === "create"
+            ? ["访问治理", "角色配置", "新建 Role"]
+            : ["访问治理", "角色配置", roleId]
+        }
+        description={
+          <>
             {mode === "create" && "新建 YAML role，所有写入必须经过 dryRun diff 确认。"}
             {mode === "edit" && detail?.source === "template" && "这是内置模板，UI 上只读。请使用「复制为 YAML Role」展开为普通 YAML role。"}
             {mode === "edit" && detail?.source !== "template" && "编辑 YAML role，所有写入必须经过 dryRun diff 确认。"}
             {mode === "copy" && "从已有 role 复制出新的 YAML role。需输入新 id。"}
             {mode === "delete" && "删除前必须 dryRun diff。被 Agent 引用的 role 不可删除。"}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {mode === "delete" && (
-            <button
-              type="button"
-              className="pl-btn pl-btn--danger text-sm"
-              onClick={handleDeletePreview}
-              disabled={(detail?.usageCount ?? 0) > 0 || deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? "生成 diff 中…" : "预览删除"}
-            </button>
-          )}
-        </div>
-      </div>
+          </>
+        }
+        badges={
+          detail ? (
+            <>
+              <span>{detail.source === "template" ? "template" : "YAML role"}</span>
+              <span>{detail.usageCount} 个 Agent 引用</span>
+            </>
+          ) : null
+        }
+        actions={
+          <>
+            <Link to="/admin/roles" className="pl-btn pl-btn--ghost text-sm">‹ 返回列表</Link>
+            {mode === "delete" && (
+              <button
+                type="button"
+                className="pl-btn pl-btn--danger text-sm"
+                onClick={handleDeletePreview}
+                disabled={(detail?.usageCount ?? 0) > 0 || deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? "生成 diff 中…" : "预览删除"}
+              </button>
+            )}
+          </>
+        }
+      />
 
       <div className="pl-admin-tabbar">
         {tabs.map((tab) => (

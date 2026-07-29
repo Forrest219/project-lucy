@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPut } from "../../lib/apiClient";
 import type { EvalDomainInfo, EvalDriftDistribution, EvalTrendPoint, MonitorConfig } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type TrendResponse = { points: EvalTrendPoint[]; thresholds: { yellow: number; red: number } };
@@ -217,42 +218,49 @@ export function Monitor() {
 
   return (
     <div className="pl-page-stack">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">质量评测</p>
-          <h1 className="text-xl font-semibold">趋势监控</h1>
-          <p className="pl-page-intro">查看 eval 质量趋势、失败集中度与 drift 分布。</p>
-        </div>
-        <div className="pl-monitor-controls">
-          <label>
-            <span>Domain</span>
-            <select className="pl-input" value={activeDomain} onChange={(e) => setDomain(e.target.value)}>
-              {domains.map((d) => <option key={d.domain} value={d.domain}>{d.domain}</option>)}
-            </select>
-          </label>
-          <div className="pl-segmented-control" role="tablist" aria-label="时间窗口">
-            {[7, 30, 90].map((value) => (
-              <button
-                aria-selected={days === value}
-                className={days === value ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
-                key={value}
-                onClick={() => setDays(value)}
-                role="tab"
-                type="button"
-              >
-                {value}d
-              </button>
-            ))}
-          </div>
-          <button
-            className="pl-btn pl-btn--secondary"
-            onClick={() => void qc.invalidateQueries({ queryKey: ["eval", "monitor"] })}
-            type="button"
-          >
-            刷新
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="趋势监控"
+        breadcrumbs={["质量评测", "趋势监控"]}
+        description="查看 eval 质量趋势、失败集中度与 drift 分布。"
+        badges={
+          <>
+            <span>{activeDomain}</span>
+            <span>近 {days} 天</span>
+            {lastPoint ? <span>最新 {pct(lastPoint.passRate)}</span> : null}
+          </>
+        }
+        actions={
+          <>
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-fg-muted">Domain</span>
+              <select className="pl-input" value={activeDomain} onChange={(e) => setDomain(e.target.value)}>
+                {domains.map((d) => <option key={d.domain} value={d.domain}>{d.domain}</option>)}
+              </select>
+            </label>
+            <div className="pl-segmented-control" role="tablist" aria-label="时间窗口">
+              {[7, 30, 90].map((value) => (
+                <button
+                  aria-selected={days === value}
+                  className={days === value ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                  key={value}
+                  onClick={() => setDays(value)}
+                  role="tab"
+                  type="button"
+                >
+                  {value}d
+                </button>
+              ))}
+            </div>
+            <button
+              className="pl-btn pl-btn--secondary"
+              onClick={() => void qc.invalidateQueries({ queryKey: ["eval", "monitor"] })}
+              type="button"
+            >
+              刷新
+            </button>
+          </>
+        }
+      />
 
       <div className="pl-metric-grid">
         <MetricCard label="最新通过率" value={pct(lastPoint?.passRate)} hint={lastPoint?.date ?? "暂无趋势数据"} tone={statusTone} />
@@ -263,12 +271,12 @@ export function Monitor() {
 
       <div className="pl-monitor-grid">
         <section className="pl-panel pl-monitor-trend">
-          <h2 className="pl-panel-title">通过率趋势（近 {days} 天）</h2>
+          <p className="pl-panel-title">通过率趋势（近 {days} 天）</p>
           {loadingTrend ? <div className="pl-notice">加载中...</div> : <TrendChart points={points} thresholds={thresholds} />}
         </section>
 
         <section className="pl-panel">
-          <h2 className="pl-panel-title">Drift 分布</h2>
+          <p className="pl-panel-title">Drift 分布</p>
           {driftItems.length === 0 ? (
             <div className="pl-empty-state">暂无 drift 数据</div>
           ) : (
@@ -288,7 +296,7 @@ export function Monitor() {
         </section>
 
         <section className="pl-panel">
-          <h2 className="pl-panel-title">失败 Top-{topFails.length}</h2>
+          <p className="pl-panel-title">失败 Top-{topFails.length}</p>
           {topFails.length === 0 ? (
             <div className="pl-empty-state">暂无失败 case</div>
           ) : (
@@ -317,7 +325,7 @@ export function Monitor() {
       </div>
 
       <section className="pl-panel">
-        <h2 className="pl-panel-title">告警阈值配置</h2>
+        <p className="pl-panel-title">告警阈值配置</p>
         {domains.length === 0 ? (
           <div className="pl-empty-state">无 domain</div>
         ) : (

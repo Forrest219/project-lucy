@@ -8,6 +8,7 @@ import type {
   CompletionStatus,
   ConnectionInfo,
   ConnectionTablesResponse,
+  ProjectInfo,
   SourceSummary,
   SourcesResponse
 } from "../../lib/types";
@@ -102,6 +103,10 @@ export function TableWhitelist() {
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
     queryFn: () => apiGet<{ connections: ConnectionInfo[] }>("/api/connections")
+  });
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project,
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
   });
   const connections = connectionsQuery.data?.connections ?? [];
 
@@ -366,9 +371,13 @@ export function TableWhitelist() {
           </>
         }
         badges={
-          connections.length > 0 ? (
+          projectQuery.data || connections.length > 0 ? (
             <>
+              {projectQuery.data ? <span>{projectQuery.data.root}</span> : null}
               <span>{connections.length} 个连接</span>
+              {projectQuery.data ? (
+                <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
+              ) : null}
               <span>已勾选 {visibleChecked} / {visibleTotal} 张表</span>
             </>
           ) : null

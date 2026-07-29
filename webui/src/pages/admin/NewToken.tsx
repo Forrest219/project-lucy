@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiPost } from "../../lib/apiClient";
 import type { CreateTokenResponse } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 /**
  * Default MCP endpoint advertised in client snippets. The plaintext token
@@ -147,10 +148,11 @@ export function NewToken() {
   if (generatedToken && snippets) {
     return (
       <div className="grid gap-6 max-w-2xl">
-        <div>
-          <h1 className="text-xl font-semibold">Token 已生成</h1>
-          <p className="text-sm text-warning-strong mt-1">⚠ 关闭后无法再次查看 token 明文。请立即复制保存，或将下方配置交给 Agent 使用者。</p>
-        </div>
+        <PageHeader
+          title="Token 已生成"
+          breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
+          description="⚠ 关闭后无法再次查看 token 明文。请立即复制保存，或将下方配置交给 Agent 使用者。"
+        />
 
         <div className="pl-card grid gap-3">
           <div className="flex items-center gap-2">
@@ -233,10 +235,11 @@ export function NewToken() {
 
   return (
     <div className="grid gap-6 max-w-xl">
-      <div>
-        <h1 className="text-xl font-semibold">为 {userId} 创建新 Token</h1>
-        <p className="text-sm text-fg-muted mt-1">一旦关闭生成页面，将无法再看到 token 明文。请立即复制保存。</p>
-      </div>
+      <PageHeader
+        title={`为 ${userId} 创建新 Token`}
+        breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
+        description="一旦关闭生成页面，将无法再看到 token 明文。请立即复制保存。"
+      />
 
       <div className="pl-card grid gap-4">
         <label className="grid gap-1">

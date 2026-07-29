@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FrontmatterForm } from "../components/FrontmatterForm";
+import { PageHeader } from "../components/PageHeader";
 import {
   WikiInspector,
   type WikiInspectorTab
@@ -307,10 +308,35 @@ export function WikiEditor() {
   }, [pages, searchFilter]);
 
   return (
-    <section
-      className="pl-editor-layout pl-wiki-layout"
-    >
-      <aside className="grid content-start gap-3 pl-wiki-sidebar">
+    <div className="pl-page-stack">
+      <PageHeader
+        title={`业务文档：${key}`}
+        breadcrumbs={["业务文档", "Wiki 文档", key]}
+        description={
+          <>
+            Wiki 用于维护人可阅读的业务口径、使用场景和注意事项，不替代表字段描述。
+            {mode === "draft" ? " 当前为未保存草稿，点保存才会落盘。" : ""}
+          </>
+        }
+        badges={
+          mode === "draft" ? <span>未保存草稿</span> : null
+        }
+        actions={
+          <button
+            className="pl-btn pl-btn--primary"
+            disabled={saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+            type="button"
+          >
+            {saveMutation.isPending ? "保存中..." : "保存"}
+          </button>
+        }
+      />
+
+      <section
+        className="pl-editor-layout pl-wiki-layout"
+      >
+        <aside className="grid content-start gap-3 pl-wiki-sidebar">
         <Link className="pl-btn pl-btn--ghost justify-start" to="/">
           表目录
         </Link>
@@ -372,34 +398,15 @@ export function WikiEditor() {
             <p className="pl-notice">没有匹配的 Wiki 页面。</p>
           ) : null}
         </nav>
-      </aside>
+        </aside>
 
-      <div className="grid gap-4 pl-wiki-main">
-        <div className="pl-section-heading">
-          <div>
-            <p className="pl-eyebrow">业务文档</p>
-            <h1 className="text-xl font-semibold">业务文档：{key}</h1>
-          </div>
-          <button
-            className="pl-btn pl-btn--primary"
-            disabled={saveMutation.isPending}
-            onClick={() => saveMutation.mutate()}
-            type="button"
-          >
-            {saveMutation.isPending ? "保存中..." : "保存"}
-          </button>
-        </div>
-        <p className="pl-page-intro">
-          Wiki 用于维护人可阅读的业务口径、使用场景和注意事项，不替代表字段描述。
-          {mode === "draft" ? " 当前为未保存草稿，点保存才会落盘。" : ""}
-        </p>
-
-        <div className="pl-wiki-body">
+        <div className="grid gap-4 pl-wiki-main">
+          <div className="pl-wiki-body">
           <div className="grid gap-4 pl-wiki-left">
             <FrontmatterForm onChange={updateFrontmatter} value={frontmatter} />
             <section className="pl-panel pl-wiki-editor-panel">
               <header className="pl-wiki-editor-header">
-                <h2 className="pl-panel-title">正文 Markdown</h2>
+                <p className="pl-panel-title mb-0">正文 Markdown</p>
                 <span aria-hidden className="pl-wiki-shortcut-hint">
                   ⌘/Ctrl + S 刷新 Dry-run
                 </span>
@@ -419,8 +426,9 @@ export function WikiEditor() {
             preview={preview}
             previewError={previewError}
           />
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

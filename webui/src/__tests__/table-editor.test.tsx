@@ -247,7 +247,7 @@ describe("TableEditor", () => {
     // Wait for the columns section to actually render before asserting on
     // its cards (the grain field on the overview tab also contains the
     // column name "order_key" so we cannot use it as a readiness signal).
-    await screen.findByText("字段语义");
+    await screen.findByText(/每张卡片展示 PK/);
 
     expect(screen.getByText("order_key")).toBeInTheDocument();
     // Metadata badges
@@ -270,7 +270,7 @@ describe("TableEditor", () => {
     renderEditor();
 
     fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
-    await screen.findByText("字段语义");
+    await screen.findByText(/每张卡片展示 PK/);
 
     // The first Adopt button belongs to order_key (the first card with AI
     // and an empty human description).
@@ -530,7 +530,7 @@ describe("TableEditor", () => {
 
     // Switch to columns section first so the form has something to dry-run
     fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
-    await screen.findByText("字段语义");
+    await screen.findByText(/每张卡片展示 PK/);
     expect(screen.getByText("order_key")).toBeInTheDocument();
 
     // Find the form root to focus inside

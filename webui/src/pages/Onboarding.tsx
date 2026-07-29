@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import type { Agent, ChangedFilesResponse, ProjectInfo, SourcesResponse } from "../lib/types";
+import { PageHeader } from "../components/PageHeader";
 
 type AgentsResponse = { agents: Agent[] };
 
@@ -173,16 +174,25 @@ export function Onboarding() {
 
   return (
     <div className="pl-page-stack">
-      <div className="pl-section-heading">
-        <div>
-          <h1 className="text-xl font-semibold">上线检查</h1>
-          <p className="pl-page-intro">按客户部署主链路检查 Lucy 是否已经可以作为 MCP 服务管理平台交付给 agent 使用。</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link className="pl-btn pl-btn--secondary" to="/connections">数据库接入</Link>
-          <Link className="pl-btn pl-btn--primary" to="/admin/agents">配置 Agent</Link>
-        </div>
-      </div>
+      <PageHeader
+        title="上线检查"
+        breadcrumbs={["部署向导", "上线检查"]}
+        description="按客户部署主链路检查 Lucy 是否已经可以作为 MCP 服务管理平台交付给 agent 使用。"
+        badges={
+          projectQuery.data ? (
+            <>
+              <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
+              <span>{doneSources}/{sources.length} 语义完成</span>
+            </>
+          ) : null
+        }
+        actions={
+          <>
+            <Link className="pl-btn pl-btn--secondary" to="/connections">数据库接入</Link>
+            <Link className="pl-btn pl-btn--primary" to="/admin/agents">配置 Agent</Link>
+          </>
+        }
+      />
 
       <section
         className={

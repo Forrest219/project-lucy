@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
 import type { Role } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type RolesResponse = { roles: Role[] };
 
@@ -163,23 +164,28 @@ export function RoleList() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">角色配置</h1>
-          <p className="pl-page-intro">
-            管理 access.yaml 中的 role 模板：新建、编辑、删除、复制。每个 role 决定 Agent 可访问的数据源和 MCP 工具。
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link to="/admin/roles?mode=copy-template" className="pl-btn pl-btn--secondary text-sm">
-            从模板复制
-          </Link>
-          <Link to="/admin/roles/new" className="pl-btn pl-btn--primary text-sm">
-            新建 Role
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="角色配置"
+        breadcrumbs={["访问治理", "角色配置"]}
+        description="管理 access.yaml 中的 role 模板：新建、编辑、删除、复制。每个 role 决定 Agent 可访问的数据源和 MCP 工具。"
+        badges={
+          <>
+            <span>{yamlCount} YAML role</span>
+            <span>{templateCount} template</span>
+            {invalidCount > 0 ? <span>{invalidCount} invalid</span> : null}
+          </>
+        }
+        actions={
+          <>
+            <Link to="/admin/roles?mode=copy-template" className="pl-btn pl-btn--secondary text-sm">
+              从模板复制
+            </Link>
+            <Link to="/admin/roles/new" className="pl-btn pl-btn--primary text-sm">
+              新建 Role
+            </Link>
+          </>
+        }
+      />
 
       <div className="pl-metric-grid">
         <MetricCard label="YAML role" value={yamlCount} hint="来自 access.yaml" />

@@ -104,7 +104,7 @@ function stubSingleRole(detail: RoleDetailType) {
 describe("RoleDetail", () => {
   it("/admin/roles/new renders the create form and shows role id input", async () => {
     renderAt("/admin/roles/new");
-    expect(await screen.findByText("新建 Role")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "新建 Role" })).toBeInTheDocument();
     expect(document.getElementById("role-id-input")).toBeInTheDocument();
     expect(document.getElementById("role-tools-input")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /预览保存/ })).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe("RoleDetail", () => {
   it("renders edit form for yaml role and dirty state triggers sticky save bar", async () => {
     stubSingleRole(makeYamlRole());
     renderAt("/admin/roles/analyst");
-    expect(await screen.findByText("analyst")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "analyst" })).toBeInTheDocument();
     expect(screen.queryByTestId("role-dirty-bar")).not.toBeInTheDocument();
 
     const descInput = screen.getByDisplayValue("Analyst role") as HTMLInputElement;

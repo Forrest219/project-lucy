@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import type { EvalCase, EvalRun, EvalDomainInfo } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type RunsResponse = { total: number; runs: EvalRun[] };
@@ -94,22 +95,26 @@ export function RunList() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">运行历史</h1>
-          <p className="text-sm text-fg-muted mt-1">查看 eval run 历史，触发新 run，查看结果详情。</p>
-        </div>
-        <button
-          type="button"
-          className="pl-btn pl-btn--primary text-sm"
-          onClick={() => {
-            setTriggerForm((p) => ({ ...p, domain: domains[0]?.domain ?? "", selectedCaseId: "" }));
-            setShowTrigger(true);
-          }}
-        >
-          触发新 Run
-        </button>
-      </div>
+      <PageHeader
+        title="运行历史"
+        breadcrumbs={["质量评测", "运行历史"]}
+        description="查看 eval run 历史，触发新 run，查看结果详情。"
+        badges={
+          <span>{runs.length} / {data?.total ?? 0} 条</span>
+        }
+        actions={
+          <button
+            type="button"
+            className="pl-btn pl-btn--primary text-sm"
+            onClick={() => {
+              setTriggerForm((p) => ({ ...p, domain: domains[0]?.domain ?? "", selectedCaseId: "" }));
+              setShowTrigger(true);
+            }}
+          >
+            触发新 Run
+          </button>
+        }
+      />
 
       {/* Trigger dialog */}
       {showTrigger && (
