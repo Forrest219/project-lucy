@@ -194,6 +194,24 @@ describe("redactIngestLog", () => {
     expect(output).not.toContain("abc123");
   });
 
+  it("redacts bare Authorization values without a known auth scheme", () => {
+    const input = "Authorization: abc123 authorization=xyz456";
+    const output = redactIngestLog(input);
+    expect(output).toContain("Authorization: [REDACTED]");
+    expect(output).toContain("authorization=[REDACTED]");
+    expect(output).not.toContain("abc123");
+    expect(output).not.toContain("xyz456");
+  });
+
+  it("redacts URL credentials in DSN-like connection strings", () => {
+    const input = "mysql://lucy:secret@127.0.0.1:3306/db jdbc:postgresql://app:pgpass@db.local/sales";
+    const output = redactIngestLog(input);
+    expect(output).toContain("mysql://lucy:[REDACTED]@127.0.0.1:3306/db");
+    expect(output).toContain("postgresql://app:[REDACTED]@db.local/sales");
+    expect(output).not.toContain("secret");
+    expect(output).not.toContain("pgpass");
+  });
+
   it("redacts DSN-style multi-word keys like 'dsn password'", () => {
     const input = "DSN password=hunter2 sent";
     const output = redactIngestLog(input);
