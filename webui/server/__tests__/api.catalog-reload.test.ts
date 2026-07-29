@@ -223,6 +223,74 @@ describe("POST /api/catalog/reload", () => {
 
     await app.close();
   });
+
+  it("returns 404 when the requested connection is not configured", async () => {
+    await makeProject(
+      `connections:
+  demo-mysql:
+    schemas:
+      - dataforai
+    enabled_tables: []
+`,
+      { dataforai: DATA_FORAI_MANIFEST }
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/reload")
+      .send({ connectionId: "missing-conn" })
+      .expect(404);
+
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error.code).toBe("CONNECTION_NOT_FOUND");
+
+    await app.close();
+  });
+
+  it("scopes counts and warnings to the requested schema", async () => {
+    await makeProject(
+      `connections:
+  demo-mysql:
+    schemas:
+      - dataforai
+      - openclaw_db
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_people
+      - openclaw_db.orders
+`,
+      {
+        dataforai: DATA_FORAI_MANIFEST,
+        openclaw_db: `tables:
+  orders:
+    table: openclaw_db.orders
+`
+      }
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/reload")
+      .send({ connectionId: "demo-mysql", schema: "openclaw_db" })
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+    const run = res.body.data;
+    expect(run.requestedSchema).toBe("openclaw_db");
+    expect(run.configuredSchemas).toBe(1);
+    expect(run.manifestSchemas).toBe(1);
+    expect(run.tables).toBe(1);
+    expect(run.enabledTables).toBe(1);
+    expect(run.warnings).toEqual([]);
+
+    await app.close();
+  });
 });
 
 describe("GET /api/catalog/reloads", () => {

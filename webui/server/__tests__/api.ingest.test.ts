@@ -119,6 +119,28 @@ describe("POST /api/connections/:connId/ingest (M14 deprecated alias)", () => {
 
     await app.close();
   });
+
+  it("returns 404 for an unknown connection without falling back to ktx ingest", async () => {
+    await makeProject(
+      `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: []\n`
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/connections/missing-conn/ingest")
+      .send({})
+      .expect(404);
+
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error.code).toBe("CONNECTION_NOT_FOUND");
+    const ktx = await import("../ktx");
+    expect(vi.mocked(ktx.runIngest)).not.toHaveBeenCalled();
+
+    await app.close();
+  });
 });
 
 describe("GET /api/connections/ingest-runs (legacy)", () => {

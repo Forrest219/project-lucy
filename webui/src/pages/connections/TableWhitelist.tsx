@@ -278,8 +278,8 @@ export function TableWhitelist() {
   }
 
   function updateSaveProgress(_connId: string, _phase: never, _detail?: string) {
-    // Removed in M13. The save flow no longer cascades into a per-connection
-    // ingest; the new toolbar IngestActionButton owns that capability.
+    // Removed in M14. Saving the whitelist only writes enabled_tables; catalog
+    // reload is an explicit toolbar action.
     void _connId;
     void _phase;
   }
@@ -344,13 +344,12 @@ export function TableWhitelist() {
     }
   });
 
-  // M14: pick a default catalog reload target for the toolbar button.
-  // - single connection + specific schema → reload with that schema filter
-  // - single connection + "all"           → reload without schema (connection scope)
-  // - multiple connections                → button is disabled with a chooser hint
+  // M14: pick a catalog reload target for the toolbar button.
+  // - single connection + specific schema → connection/schema scope
+  // - single connection + "all"           → connection scope
+  // - multiple connections                → global scope, with optional schema filter
   const toolbarReloadConnId = connections.length === 1 ? connections[0]?.id : undefined;
-  const toolbarReloadSchema =
-    connections.length === 1 && schemaFilter !== "all" ? schemaFilter : undefined;
+  const toolbarReloadSchema = schemaFilter !== "all" ? schemaFilter : undefined;
 
   if (connectionsQuery.isLoading) {
     return <p className="pl-notice">正在加载连接列表...</p>;
@@ -429,25 +428,13 @@ export function TableWhitelist() {
             >
               反选当前结果
             </button>
-            {toolbarReloadConnId ? (
-              <CatalogReloadButton
-                connectionId={toolbarReloadConnId}
-                schema={toolbarReloadSchema}
-                label="刷新本地表目录"
-                variant="secondary"
-                testId="whitelist-reload-catalog"
-              />
-            ) : (
-              <button
-                type="button"
-                className="pl-btn pl-btn--secondary"
-                disabled
-                title="请先在连接概览中为单个连接刷新本地资产"
-                data-testid="whitelist-reload-catalog"
-              >
-                刷新本地表目录
-              </button>
-            )}
+            <CatalogReloadButton
+              connectionId={toolbarReloadConnId}
+              schema={toolbarReloadSchema}
+              label="刷新本地表目录"
+              variant="secondary"
+              testId="whitelist-reload-catalog"
+            />
           </div>
         </div>
       )}
@@ -684,7 +671,6 @@ export function TableWhitelist() {
         </div>
       )}
 
-      {false && null /* M13: scan logs are now handled by the shared IngestDiagnosticsDrawer (toolbar / per-schema buttons). */}
     </div>
   );
 }

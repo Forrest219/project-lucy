@@ -47,7 +47,6 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
     ...(connectionId ? { connectionId } : {}),
     ...(schema ? { schema } : {})
   });
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
 
   const baseLabel = label ?? defaultLabel();
@@ -96,10 +95,14 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
           <CatalogReloadResultPanel run={reload.lastRun} />
         </div>
       )}
-      {drawerOpen && reload.lastRun && (
-        // Reserved for future modal layout; current surfaces use the inline
-        // panel above, but we keep the wiring consistent.
-        <div hidden data-testid="catalog-reload-drawer-placeholder" />
+      {showPanel && reload.error && (
+        <div
+          className="pl-catalog-reload-error"
+          role="alert"
+          data-testid="catalog-reload-error"
+        >
+          本地 Catalog 重新加载失败：{reload.error.message}
+        </div>
       )}
     </>
   );

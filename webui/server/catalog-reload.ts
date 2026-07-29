@@ -54,6 +54,16 @@ export type ReloadCatalogInput = {
   deprecatedIngestAlias?: boolean;
 };
 
+export class CatalogReloadConnectionNotFoundError extends Error {
+  code = "CONNECTION_NOT_FOUND";
+  statusCode = 404;
+
+  constructor(connectionId: string) {
+    super(`Connection '${connectionId}' not found in ktx.yaml`);
+    this.name = "CatalogReloadConnectionNotFoundError";
+  }
+}
+
 const REL_PATH = ".ktx-ui/catalog-reloads.json";
 const MAX_RUNS = 20;
 
@@ -231,21 +241,24 @@ export async function reloadCatalog(
 
   const config = await readProjectConfig(projectRoot);
   const configConnIds = Object.keys(config.connections);
-  const targetConnIds = input.connectionId
-    ? configConnIds.filter((id) => id === input.connectionId)
-    : configConnIds;
+  if (input.connectionId && !config.connections[input.connectionId]) {
+    throw new CatalogReloadConnectionNotFoundError(input.connectionId);
+  }
+  const targetConnIds = input.connectionId ? [input.connectionId] : configConnIds;
+  const scopeSchemas = input.schema ? new Set([input.schema]) : null;
 
   // Per-connection stats: manifest entries and physical table set.
-  const manifestByConn: Record<string, ManifestEntry[]> = {};
   const tableSetByConn: Record<string, Set<string>> = {};
   const manifestSchemaSetByConn: Record<string, Set<string>> = {};
 
   for (const connId of targetConnIds) {
     const manifests = await listManifests(projectRoot, connId);
-    manifestByConn[connId] = manifests;
+    const scopedManifests = scopeSchemas
+      ? manifests.filter((manifest) => scopeSchemas.has(manifest.schema))
+      : manifests;
     const set = new Set<string>();
     const schemaSet = new Set<string>();
-    for (const m of manifests) {
+    for (const m of scopedManifests) {
       schemaSet.add(m.schema);
       for (const table of m.tables) set.add(table);
       if (m.parseFailed) {
@@ -290,17 +303,24 @@ export async function reloadCatalog(
     const combined = derivedFromEnabled
       ? new Set<string>([...explicitSchemas, ...derivedFromEnabled])
       : explicitSchemas;
-    configuredSchemas += combined.size;
+    const scopedConfiguredSchemas = scopeSchemas
+      ? new Set([...combined].filter((schema) => scopeSchemas.has(schema)))
+      : combined;
+    const scopedEnabledTables = scopeSchemas
+      ? [...enabledSet].filter((table) => {
+          const [schema] = table.split(".");
+          return Boolean(schema && scopeSchemas.has(schema));
+        })
+      : [...enabledSet];
+    configuredSchemas += scopedConfiguredSchemas.size;
     manifestSchemas += manifestSchemaSetByConn[connId]?.size ?? 0;
     tables += tableSetByConn[connId]?.size ?? 0;
-    enabledTables += enabledSet.size;
+    enabledTables += scopedEnabledTables.length;
 
     const tableSet = tableSetByConn[connId] ?? new Set<string>();
-    const scopeSchemas = input.schema ? new Set([input.schema]) : null;
 
     // SCHEMA_MANIFEST_MISSING: configured schema has no local manifest file.
-    for (const schema of combined) {
-      if (scopeSchemas && !scopeSchemas.has(schema)) continue;
+    for (const schema of scopedConfiguredSchemas) {
       const hasManifest = (manifestSchemaSetByConn[connId] ?? new Set()).has(schema);
       if (!hasManifest) {
         warnings.push({
@@ -315,11 +335,7 @@ export async function reloadCatalog(
 
     // ENABLED_TABLE_NOT_SCANNED: enabled_tables points to tables not in any
     // local manifest.
-    for (const table of enabledSet) {
-      if (scopeSchemas) {
-        const [schema] = table.split(".");
-        if (schema && !scopeSchemas.has(schema)) continue;
-      }
+    for (const table of scopedEnabledTables) {
       if (!tableSet.has(table)) {
         warnings.push({
           code: "ENABLED_TABLE_NOT_SCANNED",

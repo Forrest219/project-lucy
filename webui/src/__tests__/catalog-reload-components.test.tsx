@@ -160,6 +160,30 @@ describe("CatalogReloadButton", () => {
     expect(screen.getByText(/1 个提示/)).toBeInTheDocument();
   });
 
+  it("renders an inline error when the reload request fails", async () => {
+    stubFetch({
+      "POST /api/catalog/reload": () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: {
+              code: "CONNECTION_NOT_FOUND",
+              message: "Connection 'missing-conn' not found in ktx.yaml"
+            }
+          }),
+          { status: 404 }
+        )
+    });
+    renderWithClient(<CatalogReloadButton connectionId="missing-conn" />);
+
+    fireEvent.click(screen.getByTestId("catalog-reload"));
+
+    expect(await screen.findByTestId("catalog-reload-error")).toHaveTextContent(
+      "Connection 'missing-conn' not found in ktx.yaml"
+    );
+    expect(screen.queryByTestId("catalog-reload-inline")).not.toBeInTheDocument();
+  });
+
   it("uses a custom label and testId when provided", async () => {
     stubFetch({
       "POST /api/catalog/reload": () =>

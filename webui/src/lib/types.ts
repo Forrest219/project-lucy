@@ -587,10 +587,8 @@ export type MonitorConfig = {
 // ─── Catalog Reload (M14) ──────────────────────────────────────────────────────
 // Static YAML-only catalog reload. No CLI subprocesses; no LLM dependency.
 // The deprecated `/api/connections/:connId/ingest` alias route still
-// returns an M13-shape IngestRun (server-side only). UI pages must not import
-// or render it.
-// M13 `IngestRun` types above are kept for the deprecated
-// `/api/connections/:connId/ingest` alias route so legacy bundles don't 404.
+// exists for compatibility, but UI pages must use CatalogReloadRun instead of
+// the M13 IngestRun shape.
 
 export type CatalogReloadStatus = "success" | "failed";
 

@@ -384,7 +384,7 @@ describe("TableWhitelist", () => {
     expect(within(drawer).getByText("移除：dataforai.superstore_people")).toBeInTheDocument();
   });
 
-  it("previews every changed connection before save-and-scan can write them", async () => {
+  it("previews every changed connection before saving writes them", async () => {
     stubWhitelistFetch(
       defaultHandlers({
         connections: [TEST_CONN, TEST_CONN_REPLICA],
@@ -441,8 +441,8 @@ describe("TableWhitelist", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
-    // M13: button text changed from "保存并触发扫描" to "保存变更", and saving
-    // the whitelist must NOT call /ingest or /api/catalog/reload automatically.
+    // M14: saving the whitelist must only write enabled_tables; catalog reload
+    // remains an explicit toolbar action.
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
     await waitFor(() => {
@@ -517,6 +517,45 @@ describe("TableWhitelist", () => {
     expect(reloadCall?.[1]?.body).toBe(
       JSON.stringify({ connectionId: "mysql-aliyun", schema: "openclaw_db" })
     );
+  });
+
+  it("keeps the toolbar reload action enabled as a global reload in multi-connection projects", async () => {
+    const { fetchMock } = stubWhitelistFetch(
+      defaultHandlers({
+        connections: [TEST_CONN, TEST_CONN_REPLICA],
+        tablesByConnection: {
+          "mysql-aliyun": TEST_TABLES,
+          "analytics-pg": ["analytics.revenue_daily", "analytics.revenue_monthly"]
+        },
+        sources: [
+          ...TEST_SOURCES,
+          makeSource("revenue_daily", {
+            conn: "analytics-pg",
+            schema: "analytics",
+            columnCount: 4,
+            completion: "done"
+          })
+        ]
+      })
+    );
+    renderWhitelist();
+
+    const reloadButton = await screen.findByTestId("whitelist-reload-catalog");
+    expect(reloadButton).toHaveTextContent("刷新本地表目录");
+    expect(reloadButton).not.toBeDisabled();
+
+    fireEvent.click(reloadButton);
+
+    await waitFor(() => {
+      const reloadCall = fetchMock.mock.calls.find((call) =>
+        String(call[0]).includes("/api/catalog/reload")
+      );
+      expect(reloadCall).toBeDefined();
+    });
+    const reloadCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/api/catalog/reload")
+    );
+    expect(reloadCall?.[1]?.body).toBe(JSON.stringify({}));
   });
 
   it("exposes a 刷新本地表目录 action inside the configured empty schema state", async () => {

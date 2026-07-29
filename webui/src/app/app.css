@@ -257,6 +257,7 @@
   .pl-catalog-reload-result[data-state="clean"] { @apply border-border-default; }
   .pl-catalog-reload-warnings { @apply mt-1 grid gap-1 list-none p-0 text-xs text-warning-strong; }
   .pl-catalog-reload-warnings li { @apply rounded-md border border-warning bg-warning-soft px-2 py-1; }
+  .pl-catalog-reload-error { @apply mt-2 rounded-md border border-danger-strong bg-danger-soft p-3 text-sm text-danger-strong; }
 
   .pl-action-list { @apply grid gap-2; }
   .pl-action-list a { @apply grid gap-0.5 rounded-md border border-border-default bg-bg-base p-3 text-fg-default no-underline; }
