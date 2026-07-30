@@ -220,7 +220,7 @@ async function validateSchemaAgainstConfig(
  * directory, not a symlink. Validation never creates directories; upload may
  * create the missing tail and then re-run this check.
  */
-async function assertSafeTarget(
+export async function assertSafeTarget(
   projectRoot: string,
   targetRel: string,
   errors: CatalogAssetError[],

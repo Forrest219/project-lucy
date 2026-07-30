@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
@@ -43,6 +43,16 @@ import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
 import { registerR1ObservabilityRoutes } from "./observability.js";
 import { safeWrite } from "./fs-safe.js";
+import {
+  publishSemanticAssets,
+  readSemanticAssetRelease,
+  readSemanticAssetReleases,
+  SemanticAssetValidationError,
+  validateSemanticAssets,
+  type SemanticAssetPublishRequest,
+  type SemanticAssetValidateRequest
+} from "./semantic-assets.js";
+import { exportSemanticAssetPackage } from "./semantic-asset-export.js";
 
 type ErrorEnvelope = {
   ok: false;
@@ -630,6 +640,172 @@ export function buildServer() {
   app.get("/api/catalog/assets/uploads", async () => {
     const projectRoot = await resolveProjectRoot();
     return { ok: true, data: await readCatalogAssetUploads(projectRoot) };
+  });
+
+  // ─── M19: Semantic Asset Self-Service Publish And Export ────────────────
+
+  app.post<{
+    Body: Partial<SemanticAssetValidateRequest>;
+  }>("/api/semantic-assets/validate", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const files = Array.isArray(body.files)
+      ? body.files
+          .filter(
+            (item): item is { filename: string; content: string } =>
+              !!item &&
+              typeof (item as { filename?: unknown }).filename === "string" &&
+              typeof (item as { content?: unknown }).content === "string"
+          )
+          .map((item) => ({
+            filename: item.filename,
+            content: item.content
+          }))
+      : [];
+    const packages = Array.isArray(body.packages)
+      ? body.packages
+          .filter(
+            (item): item is { filename: string; contentBase64: string } =>
+              !!item &&
+              typeof (item as { filename?: unknown }).filename === "string" &&
+              typeof (item as { contentBase64?: unknown }).contentBase64 === "string"
+          )
+          .map((item) => ({
+            filename: item.filename,
+            contentBase64: item.contentBase64
+          }))
+      : [];
+    const result = await validateSemanticAssets(projectRoot, {
+      files,
+      packages,
+      defaultConnectionId:
+        typeof body.defaultConnectionId === "string" ? body.defaultConnectionId : undefined,
+      defaultSchema: typeof body.defaultSchema === "string" ? body.defaultSchema : undefined
+    });
+    return reply.send({ ok: true, data: result });
+  });
+
+  app.post<{
+    Body: Partial<SemanticAssetPublishRequest>;
+  }>("/api/semantic-assets/publish", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const validationId =
+      typeof body.validationId === "string" ? body.validationId : "";
+    try {
+      const result = await publishSemanticAssets(projectRoot, {
+        validationId,
+        confirmOverwrite: body.confirmOverwrite === true
+      });
+      return reply.send({ ok: true, data: result });
+    } catch (error) {
+      if (error instanceof SemanticAssetValidationError) {
+        reply.status(error.statusCode);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: {
+            errors: error.errors,
+            ...(error.release ? { release: error.release } : {})
+          }
+        });
+      }
+      throw error;
+    }
+  });
+
+  app.get("/api/semantic-assets/releases", async () => {
+    const projectRoot = await resolveProjectRoot();
+    return { ok: true, data: await readSemanticAssetReleases(projectRoot) };
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/api/semantic-assets/releases/:id/status", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const record = await readSemanticAssetRelease(projectRoot, request.params.id);
+    if (!record) {
+      reply.status(404);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "RELEASE_NOT_FOUND",
+          message: `Release ${request.params.id} was not found`
+        }
+      });
+    }
+    return { ok: true, data: { release: record } };
+  });
+
+  app.post<{
+    Body: {
+      scope?: { connectionId?: string; schema?: string };
+      includeWiki?: boolean;
+      includeEvals?: boolean;
+      includeSkills?: boolean;
+      includeSanitizedKtxYaml?: boolean;
+    };
+  }>("/api/semantic-assets/export", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const scope =
+      body.scope && typeof body.scope === "object" && !Array.isArray(body.scope)
+        ? {
+            connectionId:
+              typeof body.scope.connectionId === "string" ? body.scope.connectionId : undefined,
+            schema: typeof body.scope.schema === "string" ? body.scope.schema : undefined
+          }
+        : undefined;
+    const result = await exportSemanticAssetPackage(projectRoot, {
+      ...(scope ? { scope } : {}),
+      includeWiki: body.includeWiki === true,
+      includeEvals: body.includeEvals === true,
+      includeSkills: body.includeSkills === true,
+      includeSanitizedKtxYaml: body.includeSanitizedKtxYaml !== false
+    });
+    return { ok: true, data: result };
+  });
+
+  app.get<{
+    Params: { exportId: string };
+  }>("/api/semantic-assets/exports/:exportId/download", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const exportId = request.params.exportId;
+    if (!/^exp_\d{8}_\d{6}_\d{3}_[0-9a-f]{8}$/.test(exportId)) {
+      reply.status(404);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "EXPORT_NOT_FOUND",
+          message: `Export ${exportId} 不存在或已过期`
+        }
+      });
+    }
+    const exportsDir = path.resolve(projectRoot, ".ktx-ui", "exports");
+    const zipPath = path.join(exportsDir, `${exportId}.zip`);
+    let exists = false;
+    try {
+      const info = await lstat(zipPath);
+      exists = info.isFile() && !info.isSymbolicLink();
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+    if (!exists) {
+      reply.status(404);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "EXPORT_NOT_FOUND",
+          message: `Export ${exportId} 不存在或已过期`
+        }
+      });
+    }
+    reply.type("application/zip");
+    reply.header(
+      "Content-Disposition",
+      `attachment; filename="lucy-semantic-asset-${exportId}.zip"`
+    );
+    return reply.send(createReadStream(zipPath));
   });
 
   registerAgentRoutes(app);

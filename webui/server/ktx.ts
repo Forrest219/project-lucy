@@ -143,3 +143,35 @@ export async function validateSource(
     );
   });
 }
+
+// M19: reindexProject shells out to `ktx admin reindex` for the M19 async
+// post-publish step. WebUI must NEVER call this without first promoting
+// validated YAML to the formal PVC. The MVP uses incremental reindex; pass
+// `force: true` only when the API explicitly demands a full rebuild.
+export async function reindexProject(
+  projectRoot: string,
+  options: { force?: boolean; execFileImpl?: ExecFileImpl } = {}
+): Promise<IngestResult> {
+  const execFileImpl = options.execFileImpl ?? execFile;
+  const args = ["admin", "reindex"];
+  if (options.force) {
+    args.push("--force");
+  }
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      "ktx",
+      args,
+      { cwd: projectRoot, timeout: 180_000, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
+      (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
+        const out = stdout.toString();
+        const err = stderr.toString();
+        if (error?.code === "ENOENT") {
+          reject(new KtxCliError("ktx CLI was not found in PATH"));
+          return;
+        }
+        const exitCode = !error ? 0 : (typeof error.code === "number" ? error.code : 1);
+        resolve({ exitCode, stdout: out, stderr: err });
+      }
+    );
+  });
+}
