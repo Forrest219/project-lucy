@@ -6,7 +6,7 @@
   --token-color-bg-surface: #ffffff;
   --token-color-bg-elevated: #ffffff;
   --token-color-bg-muted: #f3f4f6;
-  --token-color-bg-subtle: rgba(243, 244, 246, 0.4);
+  --token-color-bg-subtle: #f9fafb;
   --token-color-bg-selected: #f2f3f5;
   --token-color-fg-default: #030711;
   --token-color-fg-body: #18181b;
@@ -99,8 +99,8 @@
 @layer components {
   /* shell + 主布局 */
   .pl-app-shell { @apply grid min-h-screen grid-cols-[216px_minmax(0,1fr)] bg-bg-base text-fg-body; }
-  .pl-sidebar { @apply sticky top-0 h-screen overflow-auto border-r border-border-default bg-bg-surface px-3 py-4; }
-  .pl-nav { @apply grid gap-3; }
+  .pl-sidebar { @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r border-border-default bg-bg-surface px-3 py-4; }
+  .pl-nav { @apply grid min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pb-3; }
   .pl-nav-section { @apply mb-3; }
   .pl-nav-section-title { @apply mb-1 px-4 py-[7px] text-sm font-semibold text-fg-strong; }
   .pl-nav-link { @apply flex min-h-10 items-center gap-2 rounded-xl px-3 py-0 pl-7 text-sm font-normal text-fg-body no-underline transition-colors; }
@@ -109,7 +109,13 @@
   .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
   .pl-brand-block span { @apply text-xs text-fg-muted; }
-  .pl-sidebar-tools { @apply mt-6 border-t border-border-default px-4 pt-4; }
+  .pl-sidebar-footer { @apply relative z-10 mt-4 grid shrink-0 gap-2 border-t border-border-default bg-bg-surface px-4 pt-4; }
+  .pl-sidebar-utility { @apply grid gap-1; }
+  .pl-sidebar-help-link {
+    @apply flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium text-fg-body no-underline transition-colors;
+  }
+  .pl-sidebar-help-link:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-sidebar-version { @apply px-3 text-xs text-fg-muted; }
   .pl-help-button {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
   }
@@ -118,11 +124,7 @@
     @apply z-50 rounded-sm border border-border-default bg-bg-elevated px-2 py-1 text-xs text-fg-default shadow-card;
   }
   .pl-tooltip-arrow { fill: var(--token-color-bg-elevated); }
-  .pl-workspace { @apply min-w-0 bg-bg-base; }
-  .pl-topbar { @apply sticky top-0 z-10 border-b border-border-default bg-bg-surface px-6 py-4; }
-  .pl-topbar-title { @apply mt-1 text-base font-semibold leading-6 text-fg-default; }
-  .pl-topbar-facts { @apply mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
-  .pl-topbar-facts span { @apply rounded-pill border border-border-default bg-bg-muted px-2 py-0.5; }
+  .pl-workspace { @apply flex min-h-screen min-w-0 flex-col bg-bg-base; }
   .pl-workspace-body { @apply p-8; }
   .pl-page-stack { @apply grid gap-4; }
 
@@ -236,10 +238,14 @@
   .pl-page-intro { @apply mb-4 text-sm text-fg-muted; }
   .pl-eyebrow { @apply mb-1 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-metric-grid { @apply grid gap-3 md:grid-cols-2 xl:grid-cols-4; }
-  .pl-metric-card { @apply grid gap-1 rounded-lg border-0 bg-bg-subtle p-3; }
+  .pl-metric-grid--three { @apply md:grid-cols-3 xl:grid-cols-3; }
+  .pl-metric-card { @apply grid gap-1 rounded-lg border border-border-default bg-bg-subtle p-3 shadow-card; }
+  .pl-muted-block { @apply rounded-lg border border-border-default bg-bg-subtle shadow-card; }
   .pl-metric-card span { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-metric-card strong { @apply text-xl font-semibold text-fg-default; }
   .pl-metric-card small { @apply text-xs text-fg-muted; }
+  .pl-metric-value--success { color: var(--token-color-success-strong); }
+  .pl-metric-value--danger { color: var(--token-color-danger-strong); }
   .pl-metric-card--success { @apply border-success-strong bg-success-soft; }
   .pl-metric-card--success strong { @apply text-success-strong; }
   .pl-metric-card--warning { @apply border-warning-strong bg-warning-soft; }
@@ -250,7 +256,6 @@
 
   .pl-panel :where(
     .pl-empty-state,
-    .pl-metric-card,
     .pl-connection-row,
     .pl-schema-row,
     .pl-catalog-reload-result,
@@ -267,7 +272,6 @@
   ),
   .pl-card :where(
     .pl-empty-state,
-    .pl-metric-card,
     .pl-catalog-reload-result,
     .pl-action-list a,
     .pl-code-snippet,
@@ -437,10 +441,18 @@
 
   /* Onboarding */
   .pl-onboarding-list { @apply grid gap-3; }
-  .pl-onboarding-step { @apply grid gap-4 rounded-md border border-border-default bg-bg-surface p-5 lg:grid-cols-[40px_minmax(0,1fr)_auto]; }
+  .pl-onboarding-step { @apply grid items-start gap-4 rounded-md border border-border-default bg-bg-surface p-5 lg:grid-cols-[40px_minmax(0,1fr)_auto]; }
   .pl-onboarding-step-index { @apply flex size-10 items-center justify-center rounded-md bg-bg-muted text-sm font-semibold text-fg-muted; }
+  .pl-onboarding-step-action { @apply flex justify-end self-start; }
   .pl-onboarding-facts { @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
   .pl-onboarding-facts span { @apply rounded-pill border border-border-default bg-bg-muted px-2 py-0.5; }
+  .pl-health-list { @apply grid gap-3; }
+  .pl-health-item { @apply grid grid-cols-[10px_minmax(0,1fr)] items-start gap-4 rounded-md border border-border-default bg-bg-surface p-5; }
+  .pl-health-item-status { @apply mt-1 size-2.5 rounded-pill bg-fg-muted; }
+  .pl-health-item[data-tone="ready"] .pl-health-item-status { @apply bg-success; }
+  .pl-health-item[data-tone="warning"] .pl-health-item-status { @apply bg-warning; }
+  .pl-health-item[data-tone="danger"] .pl-health-item-status { @apply bg-danger; }
+  .pl-health-item[data-tone="info"] .pl-health-item-status { @apply bg-accent; }
 
   /* 状态徽章 */
   .pl-status-badge { @apply inline-flex items-center rounded-pill px-2 py-0.5 text-xs font-medium; }
@@ -465,8 +477,11 @@
   .pl-data-table tbody td { @apply border-b border-border-default px-3 py-2 align-middle; }
   .pl-data-table tbody tr:hover { @apply bg-bg-muted; }
 
-  .pl-floating-action-bar { @apply sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-default bg-bg-elevated p-3 shadow-md; }
+  .pl-floating-action-bar { @apply sticky bottom-6 z-30 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-strong bg-bg-elevated p-4 shadow-md; }
   .pl-floating-action-bar-text { @apply text-sm font-medium; }
+  .pl-yaml-path-details { @apply grid gap-1 text-xs text-fg-muted; }
+  .pl-yaml-path-details summary { @apply cursor-pointer font-medium text-fg-default; }
+  .pl-yaml-path-details code { @apply block rounded-md border border-border-default bg-bg-base px-2 py-1 font-mono; }
   .pl-save-progress-row { @apply flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-bg-base px-3 py-2 text-sm; }
   .pl-save-progress-row--queued { @apply bg-bg-muted text-fg-muted; }
   .pl-save-progress-row--saving,
@@ -496,6 +511,11 @@
   .pl-collapsible-log { @apply grid gap-2; }
   .pl-collapsible-log summary { @apply cursor-pointer text-sm font-medium text-fg-default; }
   .pl-collapsible-log pre { @apply max-h-64 overflow-auto rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs whitespace-pre-wrap; }
+  .pl-raw-log-frame { @apply h-64 overflow-auto rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs text-fg-default; }
+  .pl-raw-log-frame pre { @apply mb-3 border-0 bg-transparent p-0 whitespace-pre-wrap; }
+  .pl-raw-log-frame pre:last-child { @apply mb-0; }
+  .pl-raw-log-frame pre span { @apply mb-1 block font-sans text-[11px] font-semibold uppercase tracking-wider text-fg-muted; }
+  .pl-raw-log-placeholder { @apply text-fg-muted; }
 
   /* 通知 */
   .pl-notice { @apply text-sm text-fg-muted; }
@@ -602,7 +622,10 @@
   .pl-monitor-trend { @apply xl:row-span-2; }
   .pl-distribution-row { @apply grid grid-cols-[120px_minmax(0,1fr)_48px] items-center gap-3 text-sm; }
   .pl-distribution-row span { @apply truncate font-mono text-xs; }
-  .pl-distribution-row div { @apply h-2 overflow-hidden rounded-pill bg-bg-muted; }
+  .pl-distribution-row div {
+    @apply h-2 overflow-hidden rounded-pill border border-border-strong bg-border-default;
+    box-sizing: border-box;
+  }
   .pl-distribution-row i { @apply block h-full rounded-pill bg-accent; }
   .pl-distribution-row strong { @apply text-right text-xs text-fg-muted; }
   .pl-metadata-grid { @apply grid grid-cols-2 gap-3 mb-4 md:grid-cols-4; }
@@ -720,8 +743,13 @@
   .pl-delivery-banner span { @apply text-sm text-fg-muted; }
   .pl-delivery-banner--ready { @apply border-success-strong bg-success-soft; }
   .pl-delivery-banner--ready > div span { @apply text-success-strong; }
-  .pl-progress { @apply mt-2 h-1.5 overflow-hidden rounded-pill bg-bg-muted; }
-  .pl-progress i { @apply block h-full rounded-pill bg-primary; }
+  .pl-progress {
+    @apply mt-2 h-2 overflow-hidden rounded-pill border border-border-strong bg-border-default;
+    box-sizing: border-box;
+  }
+  .pl-progress i,
+  .pl-progress-bar { @apply block h-full rounded-pill bg-primary; }
+  .pl-progress-bar--success { background-color: var(--token-color-success); }
 
   /* Legacy centered modal (kept for other admin dialogs) */
   .pl-modal-backdrop { @apply fixed inset-0 z-50 flex items-center justify-center bg-fg-default/40 p-4; }

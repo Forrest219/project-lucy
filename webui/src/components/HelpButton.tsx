@@ -1,7 +1,14 @@
+import type { ReactNode } from "react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { Link, useLocation } from "react-router-dom";
 
-export function HelpButton() {
+export function HelpButton({
+  children = "?",
+  className = "pl-help-button"
+}: {
+  children?: ReactNode;
+  className?: string;
+}) {
   const location = useLocation();
   const active = location.pathname === "/help";
 
@@ -12,11 +19,11 @@ export function HelpButton() {
           <Link
             aria-current={active ? "page" : undefined}
             aria-label="打开系统手册"
-            className="pl-help-button"
+            className={className}
             title="系统手册"
             to="/help"
           >
-            ?
+            {children}
           </Link>
         </Tooltip.Trigger>
         <Tooltip.Portal>

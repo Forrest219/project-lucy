@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
@@ -95,7 +95,7 @@ afterEach(() => {
 
 describe("AppFrame shell", () => {
   it.each([
-    ["/onboarding", "Onboarding", "上线检查"],
+    ["/onboarding", "Onboarding", "系统概览"],
     ["/connections", "ConnectionOverview", "连接概览"],
     ["/connections/whitelist", "TableWhitelist", "表白名单"],
     ["/connections/test", "ConnectionTest", "连通测试"],
@@ -114,9 +114,29 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
   });
 
+  it("labels onboarding as the runtime system overview area", () => {
+    renderAt("/onboarding");
+    expect(screen.getByText("Lucy WebUI")).toBeInTheDocument();
+    expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
+    expect(screen.getByText("运行状态")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "系统概览" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByText("部署向导")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "上线检查" })).not.toBeInTheDocument();
+  });
+
   it("renders a global help button", () => {
     renderAt("/");
-    expect(screen.getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
+    expect(document.querySelector(".pl-topbar")).not.toBeInTheDocument();
+
+    const sidebarFooter = screen.getByTestId("sidebar-footer");
+    const sidebarHelp = within(sidebarFooter).getByRole("link", { name: "打开系统手册" });
+    expect(sidebarHelp).toHaveAttribute("href", "/help");
+    expect(sidebarHelp).toHaveTextContent("系统手册");
+    expect(sidebarFooter).toHaveTextContent("Lucy v1.8 · © 2026");
+    expect(within(sidebarFooter).getAllByRole("link")).toHaveLength(1);
+    expect(within(sidebarFooter).queryByRole("link", { name: "配置变更" })).not.toBeInTheDocument();
+    expect(within(sidebarFooter).queryByRole("navigation")).not.toBeInTheDocument();
+    expect(sidebarFooter.querySelector(".pl-nav-section")).not.toBeInTheDocument();
   });
 
   it("renders the help route", () => {
@@ -139,9 +159,14 @@ describe("AppFrame shell", () => {
   });
 
   it("renders PageHeader with the global H1 styling hook", () => {
-    render(<PageHeader title="连接概览" breadcrumbs={["数据库接入"]} />);
+    render(
+      <MemoryRouter>
+        <PageHeader title="连接概览" breadcrumbs={["数据库接入"]} />
+      </MemoryRouter>
+    );
     expect(screen.getByRole("heading", { level: 1, name: "连接概览" })).toHaveClass("pl-page-header-title");
     expect(screen.getByTestId("page-header")).toHaveClass("pl-page-header");
+    expect(screen.queryByRole("link", { name: "打开系统手册" })).not.toBeInTheDocument();
   });
 
   it("marks admin agent context pages as agent navigation", () => {

@@ -32,8 +32,8 @@ type NavItem = { label: string; to: string; active: (pathname: string) => boolea
 
 const navGroups: Array<{ title: string; items: NavItem[] }> = [
   {
-    title: "部署向导",
-    items: [{ label: "上线检查", to: "/onboarding", active: (path) => path === "/onboarding" }]
+    title: "运行状态",
+    items: [{ label: "系统概览", to: "/onboarding", active: (path) => path === "/onboarding" }]
   },
   {
     title: "数据库接入",
@@ -92,7 +92,7 @@ export function AppFrame() {
     <div className="pl-app-shell">
       <aside className="pl-sidebar">
         <div className="pl-brand-block">
-          <strong>KTX WebUI</strong>
+          <strong>Lucy WebUI</strong>
           <span>语义维护工作台</span>
         </div>
 
@@ -118,8 +118,14 @@ export function AppFrame() {
             </section>
           ))}
         </nav>
-        <div className="pl-sidebar-tools">
-          <HelpButton />
+        <div className="pl-sidebar-footer" data-testid="sidebar-footer">
+          <div className="pl-sidebar-utility" data-testid="sidebar-utility">
+            <HelpButton className="pl-sidebar-help-link">
+              <span aria-hidden="true">?</span>
+              <span>系统手册</span>
+            </HelpButton>
+          </div>
+          <div className="pl-sidebar-version">Lucy v1.8 · © 2026</div>
         </div>
       </aside>
 
