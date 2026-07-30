@@ -149,6 +149,9 @@
   .pl-help-section .pl-markdown-preview { @apply gap-3; }
   .pl-help-section .pl-markdown-preview h1 { @apply text-lg; }
   .pl-help-section .pl-markdown-preview h2 { @apply text-base; }
+  .pl-help-section .pl-markdown-preview h4,
+  .pl-help-section .pl-markdown-preview h5,
+  .pl-help-section .pl-markdown-preview h6 { @apply text-sm font-semibold; }
   .pl-help-section .pl-markdown-preview pre { @apply max-w-full overflow-auto; }
   @media (max-width: 900px) {
     .pl-help-layout {
@@ -855,6 +858,9 @@
   .pl-markdown-preview h1 { @apply text-xl font-semibold; }
   .pl-markdown-preview h2 { @apply text-base font-semibold; }
   .pl-markdown-preview h3 { @apply text-sm font-semibold; }
+  .pl-markdown-preview h4 { @apply text-sm font-semibold; }
+  .pl-markdown-preview h5,
+  .pl-markdown-preview h6 { @apply text-xs font-semibold uppercase tracking-wide text-fg-muted; }
   .pl-markdown-preview p { @apply text-sm; }
   .pl-markdown-preview ul { @apply list-disc space-y-1 pl-5 text-sm; }
   .pl-markdown-preview ol { @apply list-decimal space-y-1 pl-5 text-sm; }

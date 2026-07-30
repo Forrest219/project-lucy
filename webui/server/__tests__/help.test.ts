@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handbookPathForTests, parseHelpToc, readHelpHandbook } from "../help";
@@ -79,6 +80,33 @@ describe("Help handbook", () => {
     ]);
   });
 
+  it("exposes stable aliases for the YAML delivery runbook section tree", () => {
+    const toc = parseHelpToc([
+      "### 3.7 YAML 文件规范与交付验收",
+      "#### 3.7.1 YAML 类型总览",
+      "#### 3.7.2 Schema manifest 规范",
+      "#### 3.7.3 Manifest augmentation overlay 规范",
+      "#### 3.7.4 New semantic source 规范",
+      "#### 3.7.5 描述字段规范",
+      "#### 3.7.6 GO / NO-GO 交付 checklist",
+      "##### 3.7.6.1 静态文件检查",
+      "#### 3.7.7 常见错误与诊断 Runbook",
+      "#### 3.7.8 Agent 自检协议"
+    ].join("\n"));
+
+    expect(toc).toEqual([
+      { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 文件规范与交付验收" },
+      { id: "yaml-type-overview", level: 3, title: "3.7.1 YAML 类型总览" },
+      { id: "yaml-schema-manifest", level: 3, title: "3.7.2 Schema manifest 规范" },
+      { id: "yaml-augmentation-overlay", level: 3, title: "3.7.3 Manifest augmentation overlay 规范" },
+      { id: "yaml-new-semantic-source", level: 3, title: "3.7.4 New semantic source 规范" },
+      { id: "yaml-description-fields", level: 3, title: "3.7.5 描述字段规范" },
+      { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
+      { id: "yaml-common-errors", level: 3, title: "3.7.7 常见错误与诊断 Runbook" },
+      { id: "yaml-agent-self-check", level: 3, title: "3.7.8 Agent 自检协议" }
+    ]);
+  });
+
   it("reads only the bundled docs/SYSTEM_HANDBOOK.md and returns the API envelope", async () => {
     await makeProject();
     appRoot = await makeRoot("lucy-help-app-", [
@@ -144,5 +172,91 @@ describe("Help handbook", () => {
     });
 
     await app.close();
+  });
+
+  it("exposes the YAML delivery runbook anchors and content markers via the API", async () => {
+    const fixture = [
+      "# Project Lucy 系统使用与运维手册",
+      "",
+      "## 1. 系统概述与架构拓扑",
+      "",
+      "Lucy 本地语义补充工作台。",
+      "",
+      "## 3.7 YAML 文件规范与交付验收",
+      "",
+      "事故教训：reindex 成功不等于交付成功。",
+      "",
+      "### 3.7.1 YAML 类型总览",
+      "",
+      "7 类 YAML 文件。",
+      "",
+      "### 3.7.2 Schema manifest 规范",
+      "",
+      "manifest 顶层 `tables:`，物理列用 `descriptions:`。",
+      "",
+      "### 3.7.3 Manifest augmentation overlay 规范",
+      "",
+      "overlay 文件名 = manifest source name，默认无 `table:`。",
+      "",
+      "### 3.7.4 New semantic source 规范",
+      "",
+      "new source 是高级操作，必须同步 ACL。",
+      "",
+      "### 3.7.5 描述字段规范",
+      "",
+      "物理列用 `descriptions:`，measure 用 `description:`。",
+      "",
+      "### 3.7.6 GO / NO-GO 交付 checklist",
+      "",
+      "静态、KTX、真实 query、MCP smoke 四道关。",
+      "",
+      "### 3.7.7 常见错误与诊断 Runbook",
+      "",
+      "`Unrecognized key: \"description\"` 等症状速查。",
+      "",
+      "### 3.7.8 Agent 自检协议",
+      "",
+      "Agent 必须按 GO / NO-GO 输出模板给结论。"
+    ].join("\n");
+
+    appRoot = await makeRoot("lucy-help-yaml-fixture-", fixture);
+    process.env.LUCY_APP_ROOT = appRoot;
+
+    const handbook = await readHelpHandbook(appRoot);
+
+    expect(handbook.markdown).toContain("reindex 成功");
+    expect(handbook.markdown).toContain("GO / NO-GO");
+    expect(handbook.markdown).toContain("Manifest augmentation overlay");
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        { id: "yaml-delivery-runbook", level: 2, title: "3.7 YAML 文件规范与交付验收" },
+        { id: "yaml-augmentation-overlay", level: 3, title: "3.7.3 Manifest augmentation overlay 规范" },
+        { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
+        { id: "yaml-agent-self-check", level: 3, title: "3.7.8 Agent 自检协议" }
+      ])
+    );
+  });
+
+  it("the bundled handbook declares reindex success is not delivery success", async () => {
+    // Resolved from the test file location, this is the real on-disk handbook shipped with the app.
+    // Test file lives at <root>/webui/server/__tests__/help.test.ts → walk up to <root>/.
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toMatch(/reindex.*?不(等于|代表)/u);
+    expect(handbook.markdown).toContain("GO / NO-GO");
+    expect(handbook.markdown).toContain("Manifest augmentation overlay");
+    expect(handbook.markdown).toContain("Agent 自检协议");
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 文件规范与交付验收" },
+        { id: "yaml-augmentation-overlay", level: 3, title: "3.7.3 Manifest augmentation overlay 规范" },
+        { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
+        { id: "yaml-agent-self-check", level: 3, title: "3.7.8 Agent 自检协议" }
+      ])
+    );
   });
 });

@@ -26,6 +26,8 @@ function renderHelp(path = "/help") {
             etag: "sha256:abc",
             toc: [
               { id: "system-overview", level: 2, title: "1. 系统概述与架构拓扑" },
+              { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 文件规范与交付验收" },
+              { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
               { id: "mcp-integration", level: 2, title: "4. Agent / 客户端接入指南" },
               { id: "configuration-reference", level: 2, title: "5. 配置与环境变量速查" }
             ],
@@ -35,6 +37,18 @@ function renderHelp(path = "/help") {
               "## 1. 系统概述与架构拓扑",
               "",
               "Lucy 是本地语义补充工作台。",
+              "",
+              "### 3.7 YAML 文件规范与交付验收",
+              "",
+              "FAQ 可跳到 [KTX 合并与索引检查](#3762-ktx-合并与索引检查)。",
+              "",
+              "#### 3.7.6 GO / NO-GO 交付 checklist",
+              "",
+              "只有全部检查通过才允许 GO。",
+              "",
+              "##### 3.7.6.2 KTX 合并与索引检查",
+              "",
+              "必须执行 `sl read`。",
               "",
               "## 4. Agent / 客户端接入指南",
               "",
@@ -74,8 +88,13 @@ describe("HelpCenter", () => {
 
     expect(await screen.findByRole("heading", { name: "系统手册" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "系统概述与架构拓扑" })).toHaveAttribute("href", "/help?section=system-overview");
+    expect(screen.getByRole("link", { name: "YAML 文件规范与交付验收" })).toHaveAttribute("href", "/help?section=yaml-delivery-runbook");
+    expect(screen.getByRole("link", { name: "GO / NO-GO 交付 checklist" })).toHaveAttribute("href", "/help?section=yaml-delivery-checklist");
     expect(screen.getByRole("link", { name: "Agent / 客户端接入指南" })).toHaveAttribute("href", "/help?section=mcp-integration");
     expect(screen.getByText(/Lucy 是本地语义补充工作台/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "KTX 合并与索引检查" })).toHaveAttribute("href", "#3762-ktx-合并与索引检查");
+    expect(screen.getByRole("link", { name: "KTX 合并与索引检查" })).not.toHaveAttribute("target");
+    expect(screen.getByRole("heading", { name: "3.7.6.2 KTX 合并与索引检查" })).toHaveAttribute("id", "3762-ktx-合并与索引检查");
     expect(screen.getByText("docs/SYSTEM_HANDBOOK.md")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/help/handbook");
   });
@@ -85,6 +104,17 @@ describe("HelpCenter", () => {
     Element.prototype.scrollIntoView = scrollIntoView;
 
     renderHelp("/help?section=mcp-integration");
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  it("scrolls to the YAML delivery checklist section from a stable section id", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    renderHelp("/help?section=yaml-delivery-checklist");
 
     await waitFor(() => {
       expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });

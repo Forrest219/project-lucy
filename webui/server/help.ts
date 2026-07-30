@@ -6,7 +6,7 @@ import { assertReadable } from "./fs-safe.js";
 
 const HANDBOOK_REL_PATH = "docs/SYSTEM_HANDBOOK.md";
 const DEFAULT_APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const HEADING_RE = /^(#{1,3})\s+(.+?)\s*#*\s*$/;
+const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const FENCE_RE = /^```/;
 
 const SECTION_ALIASES: Array<[RegExp, string]> = [
@@ -30,6 +30,15 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/Eval Case|Case 维护/, "eval-cases"],
   [/Run 试跑|运行历史/, "eval-runs"],
   [/趋势监控/, "eval-monitor"],
+  [/YAML 文件规范与交付验收|YAML Delivery/i, "yaml-delivery-runbook"],
+  [/YAML 类型总览/, "yaml-type-overview"],
+  [/Schema manifest 规范|Schema Manifest/i, "yaml-schema-manifest"],
+  [/Manifest augmentation overlay|Augmentation Overlay|Overlay 规范/i, "yaml-augmentation-overlay"],
+  [/New semantic source 规范|New Semantic Source/i, "yaml-new-semantic-source"],
+  [/描述字段规范/, "yaml-description-fields"],
+  [/GO \/ NO-GO|交付 checklist|交付验收/i, "yaml-delivery-checklist"],
+  [/常见错误与修复|常见错误与诊断|诊断 Runbook/i, "yaml-common-errors"],
+  [/Agent 自检协议/, "yaml-agent-self-check"],
   [/Agent \/ 客户端接入指南|MCP Integration Guide/, "mcp-integration"],
   [/配置与环境变量速查/, "configuration-reference"],
   [/FAQ 与排障指南/, "troubleshooting"],
@@ -102,9 +111,11 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
     }
     if (inFence) continue;
     const match = line.match(HEADING_RE);
-    if (!match || (match[1]?.length ?? 1) < 2) continue;
-    const level = (match[1]?.length ?? 2) as 2 | 3;
-    const title = (match[2] ?? "").trim();
+    const rawLevel = match?.[1]?.length ?? 1;
+    const title = (match?.[2] ?? "").trim();
+    const yamlRunbookSubheading = rawLevel === 4 && /^3\.7\.\d+/.test(title);
+    if (!match || rawLevel < 2 || (rawLevel > 3 && !yamlRunbookSubheading)) continue;
+    const level = Math.min(rawLevel, 3) as 2 | 3;
     items.push({
       id: dedupeId(sectionIdFor(title), used),
       level,

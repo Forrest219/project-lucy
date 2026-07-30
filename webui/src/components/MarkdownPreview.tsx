@@ -2,7 +2,7 @@
  * Tiny, dependency-free Markdown renderer for the Wiki preview tab.
  *
  * Scope is intentionally small (matches the design doc §7.2):
- *   - H1 / H2 / H3 headings
+ *   - H1-H6 headings
  *   - paragraphs
  *   - unordered and ordered lists
  *   - bold, italic, inline code
@@ -10,14 +10,13 @@
  *   - blockquotes
  *   - links
  *
- * The renderer escapes raw HTML and runs no `dangerouslySetInnerHTML`
- * path. Source markdown is split into lines first; each block
- * (paragraph / list / code / quote) is then re-joined to text with a
- * small set of safe inline transforms.
+ * Source markdown is split into lines first; each block (paragraph /
+ * list / code / quote) is then re-joined to escaped HTML with a small
+ * tag whitelist.
  */
 
 type Block =
-  | { kind: "heading"; level: 1 | 2 | 3; text: string }
+  | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; text: string }
   | { kind: "paragraph"; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
   | { kind: "code"; language: string | null; text: string }
@@ -39,6 +38,16 @@ function escapeHtml(input: string): string {
     .replaceAll("'", "&#39;");
 }
 
+function markdownAnchorId(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim()
+    .replace(/\s/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function renderInline(text: string): string {
   let safe = escapeHtml(text);
   // Inline code first (before bold/italic) so we don't break backticks.
@@ -53,7 +62,11 @@ function renderInline(text: string): string {
   safe = safe.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, url: string) => {
     const cleaned = url.trim();
     if (/^(https?:|\/|#|\?)/i.test(cleaned) || /^[a-zA-Z0-9_./-]+$/.test(cleaned)) {
-      return `<a href="${escapeHtml(cleaned)}" rel="noopener noreferrer" target="_blank">${label}</a>`;
+      const href = escapeHtml(cleaned);
+      if (/^(#|\?)/.test(cleaned)) {
+        return `<a href="${href}">${label}</a>`;
+      }
+      return `<a href="${href}" rel="noopener noreferrer" target="_blank">${label}</a>`;
     }
     return label;
   });
@@ -138,7 +151,7 @@ function parseBlocks(markdown: string): Block[] {
       flushQuote();
       const hashes = heading[1] ?? "";
       const text = heading[2] ?? "";
-      const level = (hashes.length <= 3 ? hashes.length : 3) as 1 | 2 | 3;
+      const level = Math.min(hashes.length, 6) as 1 | 2 | 3 | 4 | 5 | 6;
       blocks.push({ kind: "heading", level, text });
       i += 1;
       continue;
@@ -196,7 +209,9 @@ function renderBlocks(blocks: Block[]): string {
   for (const block of blocks) {
     switch (block.kind) {
       case "heading": {
-        out.push(`<h${block.level}>${renderInline(block.text)}</h${block.level}>`);
+        const id = markdownAnchorId(block.text);
+        const idAttr = id ? ` id="${escapeHtml(id)}"` : "";
+        out.push(`<h${block.level}${idAttr}>${renderInline(block.text)}</h${block.level}>`);
         break;
       }
       case "paragraph": {
@@ -232,10 +247,8 @@ type Props = {
 };
 
 /**
- * Render Markdown to safe HTML and inject it via dangerouslySetInnerHTML.
- * The source is fully escaped and only a small tag whitelist is emitted,
- * so this is not an XSS vector for the supported syntax. Scripts / iframes
- * / style tags are never produced.
+ * Render Markdown to a small escaped HTML whitelist, then inject the
+ * generated string. Scripts / iframes / style tags are never produced.
  */
 export function MarkdownPreview({ markdown }: Props) {
   const html = renderBlocks(parseBlocks(markdown));

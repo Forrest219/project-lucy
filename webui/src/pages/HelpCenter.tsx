@@ -14,11 +14,13 @@ type HelpSection = {
 
 type HeadingMatch = {
   index: number;
+  level: 2 | 3 | 4;
   title: string;
 };
 
-function headingMatchesOutsideFences(markdown: string): HeadingMatch[] {
+function headingMatchesOutsideFences(markdown: string, toc: HelpTocItem[]): HeadingMatch[] {
   const matches: HeadingMatch[] = [];
+  const tocTitles = new Set(toc.map((item) => item.title));
   let offset = 0;
   let inFence = false;
   for (const line of markdown.split(/(\r?\n)/)) {
@@ -30,11 +32,18 @@ function headingMatchesOutsideFences(markdown: string): HeadingMatch[] {
     if (/^```/.test(trimmed)) {
       inFence = !inFence;
     } else if (!inFence) {
-      const heading = line.match(/^(#{2,3})\s+(.+?)\s*#*\s*$/);
+      const heading = line.match(/^(#{2,4})\s+(.+?)\s*#*\s*$/);
       if (heading) {
+        const level = (heading[1]?.length ?? 2) as 2 | 3 | 4;
+        const title = (heading[2] ?? "").trim();
+        if (level > 3 && !tocTitles.has(title)) {
+          offset += line.length;
+          continue;
+        }
         matches.push({
           index: offset,
-          title: (heading[2] ?? "").trim()
+          level,
+          title
         });
       }
     }
@@ -49,7 +58,7 @@ function splitIntoSections(markdown: string, toc: HelpTocItem[]): HelpSection[] 
   }
 
   const headingToItem = new Map(toc.map((item) => [item.title, item]));
-  const matches = headingMatchesOutsideFences(markdown);
+  const matches = headingMatchesOutsideFences(markdown, toc);
   const sections: HelpSection[] = [];
 
   const firstHeading = matches[0];
