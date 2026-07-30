@@ -15,5 +15,9 @@ export const queryKeys = {
   // M14 static catalog reload sidecar (`.ktx-ui/catalog-reloads.json`).
   catalogReloads: ["catalog", "reloads"] as const,
   // M17 controlled YAML asset upload history (`.ktx-ui/catalog-asset-uploads.json`).
-  catalogAssetUploads: ["catalog", "asset-uploads"] as const
+  catalogAssetUploads: ["catalog", "asset-uploads"] as const,
+  // M19 self-service publish and sanitized export.
+  semanticAssetReleases: ["semantic-assets", "releases"] as const,
+  semanticAssetRelease: (releaseId: string) =>
+    ["semantic-assets", "releases", releaseId] as const
 };

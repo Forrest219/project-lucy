@@ -767,3 +767,174 @@ export type CatalogAssetUploadsResponse = {
   records: CatalogAssetUploadRecord[];
   lastBySchema: Record<string, CatalogAssetUploadRecord>;
 };
+
+// ─── M19 Semantic Asset Self-Service Publish And Export ────────────────────
+// Analyst-driven upload of multi-file semantic asset packages: schema
+// manifests (`semantic-layer/<conn>/_schema/<schema>.yaml`) and semantic
+// source overlays (`semantic-layer/<conn>/<source>.yaml`). The backend
+// computes every target path, refuses paths from the client, and the
+// publish pipeline never shells out before a staging-validate gate passes.
+
+export type SemanticAssetKind = "schemaManifest" | "semanticSource" | "wiki" | "eval";
+
+export type SemanticAssetWarningCode =
+  | "TARGET_EXISTS"
+  | "EMPTY_MANIFEST"
+  | "TABLE_SCHEMA_MISMATCH"
+  | "UNKNOWN_MANIFEST_SHAPE"
+  | "PUBLISH_LOCKED";
+
+export type SemanticAssetErrorCode =
+  | "UNKNOWN_CONNECTION"
+  | "SCHEMA_NOT_CONFIGURED"
+  | "DUPLICATE_FILENAME"
+  | "INVALID_FILENAME"
+  | "FILE_TOO_LARGE"
+  | "PACKAGE_PARSE_FAILED"
+  | "YAML_PARSE_FAILED"
+  | "INVALID_MANIFEST"
+  | "UNSAFE_SOURCE_NAME"
+  | "OVERLAY_MISSING_TABLE"
+  | "UNKNOWN_SHAPE"
+  | "PATH_NOT_ALLOWED"
+  | "VALIDATION_SNAPSHOT_NOT_FOUND"
+  | "VALIDATION_GATE_FAILED"
+  | "PUBLISH_IN_PROGRESS";
+
+export type SemanticAssetWarning = {
+  code: SemanticAssetWarningCode;
+  message: string;
+  filePath?: string;
+};
+
+export type SemanticAssetError = {
+  code: SemanticAssetErrorCode;
+  message: string;
+  filePath?: string;
+  line?: number;
+  column?: number;
+};
+
+export type SemanticAssetFilePreview = {
+  originalFilename: string;
+  kind: SemanticAssetKind;
+  targetPath: string;
+  exists: boolean;
+  sizeBytes: number;
+  sha256: string;
+  connectionId?: string;
+  schema?: string;
+  sourceName?: string;
+  physicalTable?: string;
+  warnings: SemanticAssetWarning[];
+};
+
+export type SemanticAssetChangedSource = {
+  connectionId: string;
+  sourceName: string;
+};
+
+export type SemanticAssetValidateRequest = {
+  files: Array<{ filename: string; content: string }>;
+  packages?: Array<{ filename: string; contentBase64: string }>;
+  defaultConnectionId?: string;
+  defaultSchema?: string;
+};
+
+export type SemanticAssetValidateResponse = {
+  valid: boolean;
+  validationId: string;
+  files: SemanticAssetFilePreview[];
+  changedSources: SemanticAssetChangedSource[];
+  diff: string;
+  warnings: SemanticAssetWarning[];
+  errors: SemanticAssetError[];
+};
+
+export type SemanticAssetReleaseStatus =
+  | "blocked"
+  | "promote_failed"
+  | "reindexing"
+  | "published"
+  | "reindex_failed";
+
+export type SemanticAssetReleaseFile = {
+  targetPath: string;
+  kind: SemanticAssetKind;
+  sha256: string;
+  overwritten: boolean;
+};
+
+export type SemanticAssetValidationRow = {
+  connectionId: string;
+  sourceName: string;
+  ok: boolean;
+  exitCode: number;
+  stdout?: string;
+  stderr?: string;
+  issues: Array<{ message: string; filePath?: string; line?: number; column?: number }>;
+};
+
+export type SemanticAssetReindexRecord = {
+  ok: boolean;
+  exitCode: number;
+  stdout?: string;
+  stderr?: string;
+};
+
+export type SemanticAssetReleaseRecord = {
+  id: string;
+  createdAt: string;
+  actor: string;
+  status: SemanticAssetReleaseStatus;
+  connectionIds: string[];
+  files: SemanticAssetReleaseFile[];
+  changedSources: SemanticAssetChangedSource[];
+  diff?: string;
+  validation: {
+    ok: boolean;
+    results: SemanticAssetValidationRow[];
+  };
+  reindex?: SemanticAssetReindexRecord;
+};
+
+export type SemanticAssetReleasesResponse = {
+  records: SemanticAssetReleaseRecord[];
+};
+
+export type SemanticAssetReleaseStatusResponse = {
+  release: SemanticAssetReleaseRecord;
+};
+
+export type SemanticAssetPublishRequest = {
+  validationId: string;
+  confirmOverwrite?: boolean;
+};
+
+export type SemanticAssetPublishResponse = {
+  accepted: boolean;
+  release: SemanticAssetReleaseRecord;
+};
+
+export type SemanticAssetExportRequest = {
+  scope?: { connectionId?: string; schema?: string };
+  includeWiki?: boolean;
+  includeEvals?: boolean;
+  includeSkills?: boolean;
+  includeSanitizedKtxYaml?: boolean;
+};
+
+export type SemanticAssetExcludedFile = {
+  path: string;
+  reason: string;
+};
+
+export type SemanticAssetExportResponse = {
+  exportId: string;
+  filename: string;
+  sizeBytes: number;
+  sha256: string;
+  downloadUrl: string;
+  includedFiles: string[];
+  excludedFiles: SemanticAssetExcludedFile[];
+};

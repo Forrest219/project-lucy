@@ -8,6 +8,7 @@ import { apiGet, apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
 import type { ChangedFilesResponse, ValidateChangedResponse } from "../lib/types";
+import { SemanticAssetExportButton, SemanticAssetPublishDrawer } from "../components/semantic-assets";
 
 function tableNameFromPath(filePath: string) {
   return filePath.split("/").pop()?.replace(/\.ya?ml$/, "") ?? filePath;
@@ -15,6 +16,7 @@ function tableNameFromPath(filePath: string) {
 
 export function Review() {
   const [selected, setSelected] = useState<string | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
   const diffQuery = useQuery({
     queryKey: queryKeys.diff,
     queryFn: () => apiGet<ChangedFilesResponse>("/api/diff")
@@ -35,6 +37,7 @@ export function Review() {
   });
 
   const files = diffQuery.data?.files ?? [];
+  const semanticLayerChanges = files.filter((f) => f.filePath.startsWith("semantic-layer/"));
   const active = files.find((file) => file.filePath === (selected ?? files[0]?.filePath));
   const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
   function validationForFile(filePath: string) {
@@ -61,6 +64,16 @@ export function Review() {
             <button type="button" className="pl-btn pl-btn--primary" onClick={() => validateMutation.mutate()} disabled={validateMutation.isPending}>
               {validateMutation.isPending ? "校验中..." : "Validate changed"}
             </button>
+            {semanticLayerChanges.length > 0 ? (
+              <button
+                type="button"
+                className="pl-btn pl-btn--primary"
+                onClick={() => setPublishOpen(true)}
+                data-testid="review-publish-and-reindex"
+              >
+                发布并 reindex
+              </button>
+            ) : null}
             <Link className="pl-btn pl-btn--secondary" to="/">表目录</Link>
           </>
         }
