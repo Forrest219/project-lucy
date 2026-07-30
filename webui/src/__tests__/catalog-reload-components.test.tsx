@@ -200,10 +200,10 @@ describe("CatalogReloadButton", () => {
     expect(screen.getByTestId("whitelist-reload-catalog")).toHaveTextContent("刷新本地表目录");
   });
 
-  it("defaults the label to 重新加载本地资产 when no label is provided", () => {
+  it("defaults the label to 刷新本地目录 when no label is provided", () => {
     stubFetch({});
     renderWithClient(<CatalogReloadButton />);
-    expect(screen.getByTestId("catalog-reload")).toHaveTextContent("重新加载本地资产");
+    expect(screen.getByTestId("catalog-reload")).toHaveTextContent("刷新本地目录");
   });
 });
 
