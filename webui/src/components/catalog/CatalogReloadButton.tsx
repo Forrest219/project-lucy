@@ -14,7 +14,7 @@ export type CatalogReloadButtonProps = {
 };
 
 function defaultLabel(): string {
-  return "重新加载本地资产";
+  return "刷新本地目录";
 }
 
 function buttonClass(
@@ -51,7 +51,7 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
 
   const baseLabel = label ?? defaultLabel();
   const buttonText = reload.isPending
-    ? "重新加载中..."
+    ? "刷新本地目录中..."
     : reload.lastRun
       ? `完成 ✓ · ${reload.lastRun.tables} 张表`
       : baseLabel;
@@ -76,11 +76,7 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
         onClick={handleClick}
         disabled={reload.isPending}
         data-testid={testId ?? "catalog-reload"}
-        aria-label={
-          connectionId
-            ? `重新加载 ${connectionId} 的本地资产`
-            : "重新加载本地资产"
-        }
+        title="重新读取 ktx.yaml 与 semantic-layer YAML 文件，不会连接数据库，也不会执行 ingest。"
         data-connection={connectionId ?? undefined}
         data-schema={schema ?? undefined}
       >

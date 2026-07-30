@@ -184,8 +184,8 @@ describe("ConnectionOverview", () => {
     // The per-connection card still surfaces the upload + reload actions.
     expect(screen.getAllByRole("button", { name: "上传 YAML" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "刷新本地目录" }).length).toBeGreaterThan(0);
-    expect(screen.queryByText("维护表白名单")).not.toBeInTheDocument();
     expect(screen.queryByText("运行连通测试")).not.toBeInTheDocument();
+    expect(screen.queryByText("MCP endpoint")).not.toBeInTheDocument();
   });
 
   it("renders an accessible ⓘ help trigger for every metric", async () => {
@@ -243,6 +243,11 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
+    expect(await screen.findByText("关联 Schema 资产列表")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Schema" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "本地表数" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "上下文动作" })).toBeInTheDocument();
     expect(
       await screen.findByTestId("schema-asset-status-mysql-aliyun-dataforai")
     ).toHaveTextContent("已存在");
@@ -254,6 +259,10 @@ describe("ConnectionOverview", () => {
 
     expect(screen.getByTestId("schema-asset-status-mysql-aliyun-openclaw_db")).toHaveTextContent(
       "缺失 manifest"
+    );
+    expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).toHaveAttribute(
+      "data-tone",
+      "warning"
     );
     expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).toHaveTextContent("0 张表");
     expect(screen.getByTestId("upload-yaml-mysql-aliyun-openclaw_db")).toBeInTheDocument();
@@ -325,21 +334,7 @@ describe("ConnectionOverview", () => {
     });
   });
 
-  it("copies the MCP endpoint string with one click", async () => {
-    const writeText = vi.fn(async () => undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText }
-    });
-
-    stubOverviewFetch();
-    renderOverview();
-
-    fireEvent.click(await screen.findByTestId("copy-mcp-endpoint"));
-    expect(writeText).toHaveBeenCalledWith("https://lucy.example.com/mcp");
-  });
-
-  it("shows the local fallback endpoint when the runtime config is unset", async () => {
+  it("does not render MCP endpoint runtime config inside the connection overview", async () => {
     stubOverviewFetch({
       mcpEndpoint: {
         url: "http://127.0.0.1:7879/mcp",
@@ -357,30 +352,9 @@ describe("ConnectionOverview", () => {
 
     renderOverview();
 
-    expect(await screen.findByText("http://127.0.0.1:7879/mcp")).toBeInTheDocument();
-  });
-
-  it("surfaces the runtime diagnostic and disables copy when the configured endpoint is invalid", async () => {
-    stubOverviewFetch({
-      mcpEndpoint: {
-        url: null,
-        status: "invalid",
-        source: "env",
-        configured: false,
-        diagnostics: [
-          {
-            code: "INVALID_PUBLIC_MCP_URL",
-            message: "LUCY_PUBLIC_MCP_URL must be a valid absolute URL."
-          }
-        ]
-      }
-    });
-
-    renderOverview();
-
-    expect(
-      await screen.findByText("LUCY_PUBLIC_MCP_URL must be a valid absolute URL.")
-    ).toBeInTheDocument();
+    expect(await screen.findByText("mysql-aliyun")).toBeInTheDocument();
+    expect(screen.queryByText("MCP endpoint")).not.toBeInTheDocument();
+    expect(screen.queryByText("http://127.0.0.1:7879/mcp")).not.toBeInTheDocument();
     expect(screen.queryByTestId("copy-mcp-endpoint")).not.toBeInTheDocument();
   });
 
@@ -493,11 +467,15 @@ describe("ConnectionOverview", () => {
     expect(
       await screen.findByTestId("catalog-reload-mysql-aliyun")
     ).toHaveTextContent("刷新本地目录");
+    expect(screen.getByTestId("catalog-reload-mysql-aliyun")).toHaveAttribute(
+      "title",
+      "重新读取 ktx.yaml 与 semantic-layer YAML 文件，不会连接数据库，也不会执行 ingest。"
+    );
     expect(screen.queryByText(/触发 Ingest/)).not.toBeInTheDocument();
     expect(screen.queryByText(/重新扫描/)).not.toBeInTheDocument();
   });
 
-  it("renders the last reload badge from the catalog-reloads sidecar", async () => {
+  it("renders one compact catalog status line from the catalog-reloads sidecar", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -565,12 +543,14 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    const badge = await screen.findByTestId("catalog-last-run");
-    expect(badge).toHaveTextContent("成功");
-    expect(badge).toHaveTextContent("4 张表");
+    const status = await screen.findByTestId("catalog-status-mysql-aliyun");
+    expect(status).toHaveTextContent("Catalog 已同步");
+    expect(status).toHaveTextContent("2026-07-29 10:30");
+    expect(screen.queryByTestId("catalog-last-run")).not.toBeInTheDocument();
+    expect(screen.queryByText("上次刷新")).not.toBeInTheDocument();
   });
 
-  it("renders the never-run reload badge when the sidecar has no entry for the connection", async () => {
+  it("renders the never-run catalog status when the sidecar has no entry for the connection", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -585,7 +565,8 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    const badge = await screen.findByTestId("catalog-last-run");
-    expect(badge).toHaveTextContent("未运行");
+    const status = await screen.findByTestId("catalog-status-mysql-aliyun");
+    expect(status).toHaveTextContent("Catalog 未刷新");
+    expect(status).toHaveTextContent("尚未读取本地 YAML");
   });
 });

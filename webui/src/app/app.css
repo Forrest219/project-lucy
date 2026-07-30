@@ -315,22 +315,41 @@
   .pl-table-row:hover { @apply border-border-strong; }
   .pl-table-row strong { @apply font-medium; }
   .pl-table-row span { @apply text-sm text-fg-muted; }
-  .pl-overview-grid { @apply grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]; }
-  .pl-connection-row { @apply grid gap-3 rounded-lg border-0 bg-bg-subtle p-3 md:grid-cols-[1.2fr_1fr_auto]; }
-  .pl-connection-row > div { @apply grid gap-1; }
-  .pl-connection-row strong { @apply text-sm font-medium; }
-  .pl-connection-row span { @apply text-xs text-fg-muted; }
+  .pl-overview-grid { @apply grid gap-4; }
+  .pl-connection-row { @apply overflow-hidden rounded-lg border border-border-default bg-bg-surface; }
+  .pl-connection-card-header { @apply grid gap-2 border-b border-border-default bg-bg-subtle px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto]; }
+  .pl-connection-card-title { @apply flex flex-wrap items-center gap-2; }
+  .pl-connection-card-title strong { @apply text-base font-semibold text-fg-default; }
+  .pl-connection-card-badges { @apply flex flex-wrap items-center gap-2 md:justify-end; }
+  .pl-connection-card-meta { @apply text-xs text-fg-muted md:col-span-2; }
+  .pl-connection-card-body { @apply grid gap-3 px-4 py-4; }
+  .pl-connection-card-footer { @apply flex flex-wrap items-center justify-between gap-3 border-t border-border-default bg-bg-subtle px-4 py-3; }
+  .pl-connection-card-actions { @apply flex flex-wrap items-center justify-end gap-2; }
 
   /* M13: connection-card schema chips and per-schema ingest rows. */
   .pl-schema-cell { @apply grid gap-1; }
   .pl-schema-list { @apply grid gap-1 list-none p-0 m-0; }
   .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border-0 bg-bg-subtle px-2 py-1; }
   .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
+  .pl-schema-asset-heading { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  .pl-schema-asset-table { @apply w-full border-collapse text-sm; }
+  .pl-schema-asset-table th { @apply border-b border-border-default px-3 py-2 text-left text-xs font-semibold text-fg-muted; }
+  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-body; }
+  .pl-schema-asset-table tbody tr:last-child td { @apply border-b-0; }
+  .pl-schema-asset-table tbody tr[data-tone="warning"] { background-color: #fefce8; }
+  .pl-schema-asset-table code { @apply font-mono text-sm text-fg-default; }
   .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
   .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
+  .pl-catalog-status-line { @apply flex flex-wrap items-center gap-2 text-sm; }
+  .pl-catalog-status-line strong { @apply font-semibold; }
+  .pl-catalog-status-line span { @apply text-xs text-fg-muted; }
+  .pl-catalog-status-line--success strong { color: var(--token-color-success-strong); }
+  .pl-catalog-status-line--warning strong { color: var(--token-color-warning-strong); }
+  .pl-catalog-status-line--danger strong { color: var(--token-color-danger-strong); }
+  .pl-catalog-status-line--muted strong { color: var(--token-color-fg-muted); }
 
   /* M13: per-card "last ingest" badge + connection-level trigger button. */
   .pl-ingest-last-run { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
