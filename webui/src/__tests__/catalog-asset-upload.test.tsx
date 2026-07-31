@@ -59,6 +59,7 @@ function makeValidateResponse(overrides: Partial<CatalogAssetValidateResponse> =
     valid: true,
     connectionId: "demo-mysql",
     schema: "openclaw_db",
+    assetKind: "schema_manifest",
     assetType: "schemaManifest",
     targetPath: "semantic-layer/demo-mysql/_schema/openclaw_db.yaml",
     exists: false,
@@ -83,6 +84,7 @@ function makeUploadResponse(
       createdAt: "2026-07-29T02:30:00.000Z",
       connectionId: "demo-mysql",
       schema: "openclaw_db",
+      assetKind: "schema_manifest",
       assetType: "schemaManifest",
       targetPath: "semantic-layer/demo-mysql/_schema/openclaw_db.yaml",
       originalFilename: "openclaw_db.yaml",
@@ -135,7 +137,7 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
       </Wrapper>
     );
 
-    const trigger = screen.getByRole("button", { name: "上传 YAML" });
+    const trigger = screen.getByRole("button", { name: "上传 Schema Manifest" });
     fireEvent.click(trigger);
     expect(await screen.findByTestId("catalog-asset-upload-drawer")).toBeInTheDocument();
   });
@@ -151,6 +153,37 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
     expect(
       screen.getByRole("button", { name: "上传该 Schema 的 YAML" })
     ).toBeInTheDocument();
+  });
+
+  it("locks the Schema selector and title for schema-scoped uploads", async () => {
+    stubFetch({});
+    const { Wrapper } = makeWrapper();
+    render(
+      <Wrapper>
+        <CatalogAssetUploadDrawer
+          open
+          onClose={vi.fn()}
+          connectionId="demo-mysql"
+          schema="openclaw_db"
+          schemaOptions={["dataforai", "openclaw_db"]}
+        />
+      </Wrapper>
+    );
+
+    expect(screen.getByRole("dialog", { name: "上传 Schema Manifest" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /上传 openclaw_db 的 Schema Manifest/ })
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("catalog-asset-upload-drawer")).toHaveTextContent(
+      "不会编辑指标、Join 或业务语义"
+    );
+    expect(screen.getByTestId("catalog-asset-upload-target-schema")).toHaveTextContent(
+      "openclaw_db"
+    );
+    expect(screen.queryByTestId("catalog-asset-upload-schema")).not.toBeInTheDocument();
+    expect(screen.getByTestId("catalog-asset-upload-filename")).toHaveValue(
+      "openclaw_db.yaml"
+    );
   });
 
   it("triggers validate on textarea paste without selecting a file", async () => {
@@ -177,6 +210,28 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
       );
     });
     expect(screen.getByTestId("catalog-asset-validation-panel")).toHaveTextContent("1");
+  });
+
+  it("keeps the YAML editor monospace and inserts two spaces on Tab", async () => {
+    stubFetch({});
+    const { Wrapper } = makeWrapper();
+    render(
+      <Wrapper>
+        <CatalogAssetUploadDrawer
+          open
+          onClose={vi.fn()}
+          connectionId="demo-mysql"
+          schema="openclaw_db"
+        />
+      </Wrapper>
+    );
+
+    const textarea = await screen.findByTestId("catalog-asset-upload-textarea") as HTMLTextAreaElement;
+    expect(textarea).toHaveClass("pl-upload-source-textarea");
+    fireEvent.change(textarea, { target: { value: "tables:\n" } });
+    textarea.setSelectionRange(8, 8);
+    fireEvent.keyDown(textarea, { key: "Tab" });
+    expect(textarea).toHaveValue("tables:\n  ");
   });
 
   it("shows the overwrite checkbox and disables the upload action when the target exists", async () => {

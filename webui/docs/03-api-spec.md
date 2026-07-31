@@ -44,8 +44,16 @@ PUT  /api/joins/candidates
 GET  /api/connections
 GET  /api/connections/:connId/tables
 PUT  /api/connections/:connId/enabled-tables     # default dryRun
+POST /api/connections/:connId/schemas            # add schema metadata to existing connection
 POST /api/connections/:connId/test
 POST /api/connections/:connId/ingest
+GET  /api/connections/ingest-runs
+
+POST /api/catalog/reload
+GET  /api/catalog/reloads
+POST /api/catalog/assets/validate
+POST /api/catalog/assets/upload
+GET  /api/catalog/assets/uploads
 
 GET    /api/eval/domains
 GET    /api/eval/domains/:domain
@@ -71,6 +79,14 @@ GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
 
 GET    /api/r1/observability
+GET    /api/help/handbook
+
+POST   /api/semantic-assets/validate
+POST   /api/semantic-assets/publish
+GET    /api/semantic-assets/releases
+GET    /api/semantic-assets/releases/:id/status
+POST   /api/semantic-assets/export
+GET    /api/semantic-assets/exports/:exportId/download
 
 GET    /api/admin/agents
 POST   /api/admin/agents
@@ -81,6 +97,9 @@ GET    /api/admin/agents/:userId/effective-permissions
 POST   /api/admin/agents/:userId/tokens
 DELETE /api/admin/agents/:userId/tokens/:label
 GET    /api/admin/roles
+GET    /api/admin/roles/:roleId
+POST   /api/admin/roles/_preview
+POST   /api/admin/roles/:roleId/copy
 GET    /api/admin/config-audit
 GET    /api/admin/config-audit/export.csv
 GET    /api/admin/audit
@@ -227,6 +246,28 @@ dryRun 响应：
 
 `POST /api/connections/:connId/test` 调用连接测试；`POST /api/connections/:connId/ingest` 触发 schema 扫描。两者返回 `{ exitCode, stdout, stderr }` 风格结果。
 
+`POST /api/connections/:connId/schemas` 只在已有 connection 下登记 schema 元数据，默认 `dryRun:true`，写入目标是 `ktx.yaml`，不创建物理数据库连接、不触发扫描、不写语义层 overlay。
+
+`GET /api/connections/ingest-runs` 返回历史 ingest / catalog reload 记录 sidecar，用于兼容旧入口与运维状态面板。
+
+### Catalog Reload 与 Manifest 上传
+
+`POST /api/catalog/reload` 触发静态目录重载，生成 catalog reload 运行记录；`GET /api/catalog/reloads` 返回最近重载历史。
+
+`POST /api/catalog/assets/validate` 校验待上传 Schema Manifest。请求使用规范字段 `assetKind: "schema_manifest"`；兼容旧客户端 `assetType: "schemaManifest"`。其他 asset kind 必须走对应语义资产入口，不能混用。
+
+`POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。
+
+`GET /api/catalog/assets/uploads` 返回 Schema Manifest 上传审计记录。
+
+### 语义资产发布与导出
+
+`POST /api/semantic-assets/validate` 校验语义资产包或 semantic overlay，执行 secret hard block、结构校验和发布前 gate。
+
+`POST /api/semantic-assets/publish` 发布通过校验的语义资产，写入 release 记录；`GET /api/semantic-assets/releases` 查询 release 列表；`GET /api/semantic-assets/releases/:id/status` 查询单个 release 状态。
+
+`POST /api/semantic-assets/export` 生成语义资产导出任务；`GET /api/semantic-assets/exports/:exportId/download` 下载指定导出产物。
+
 ### Eval / 质量评测
 
 `GET /api/eval/domains` 返回 domain 列表与最近运行摘要；`GET /api/eval/domains/:domain` 返回单个 domain。
@@ -340,6 +381,10 @@ Monitor：
 
 用途：回答 R1 runbook 中的核心问题：业务请求量、成功/错误/拒绝率、p50/p95、慢查询、source 失败分布、token/role 使用、Eval pass rate、Hermes QA accuracy，以及 Hermes 逐题结果是否具备 Lucy `_meta.lucy` provenance 或 policy/guardrail 受控拒绝证据。`trafficObservable` 只代表 `businessCalls > 0`，不把 MCP 握手或 `tools/list` 单独算作业务流量；`evalObservable` 代表最新 `r1_*` eval 已成功且 `passRate >= 0.95`，不只是存在 eval run。
 
+### Help
+
+`GET /api/help/handbook` 返回系统手册内容和元数据，供 WebUI 帮助入口展示。该端点只读，不暴露 secret 文件。
+
 ### Admin / 访问治理
 
 Agent 列表与详情：
@@ -381,6 +426,9 @@ Token：
 Roles：
 
 - `GET /api/admin/roles?includeTemplates=true` 返回 yaml role 与内置模板合并后的列表、工具、连接、展开 source 数与 warnings；返回项含 `source: "yaml" | "template"`，id 冲突时 yaml role 优先。`includeTemplates=false` 时只返回 yaml role。
+- `GET /api/admin/roles/:roleId` 返回单个 role 详情。
+- `POST /api/admin/roles/_preview` dryRun 预览 role 写入结果和权限展开。
+- `POST /api/admin/roles/:roleId/copy` 基于已有 role 复制新 role，默认 dryRun。
 - `GET /api/admin/agents/:userId/effective-permissions` 返回 role 展开后的 `tools`、`connections`、`sources`、`snapshotHash`、`sourceMapVersion`。
 
 Audit：

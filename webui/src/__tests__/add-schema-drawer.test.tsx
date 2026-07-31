@@ -401,12 +401,12 @@ describe("AddSchemaDrawer", () => {
     expect(screen.getByTestId("add-schema-static-loading-hint")).toHaveTextContent(/semantic-layer/);
     expect(screen.queryByText(/现在 ingest/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ingest 中/)).not.toBeInTheDocument();
-    // M17: success step surfaces the upload-YAML next step + the "added"
+    // M25: success step surfaces the Schema Manifest upload next step + the "added"
     // copy in the prescribed format.
     expect(
       screen.getByText(/已添加 Schema：finance_mart/)
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /ingest/i })).not.toBeInTheDocument();
 

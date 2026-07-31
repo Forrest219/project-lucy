@@ -85,6 +85,31 @@ function baseYaml(): string {
 const SAMPLE_MANIFEST = "tables:\n  customers:\n    table: openclaw_db.customers\n";
 
 describe("POST /api/catalog/assets/validate", () => {
+  it("accepts canonical assetKind schema_manifest", async () => {
+    projectRoot = await makeProject(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/assets/validate")
+      .send({
+        connectionId: "demo-mysql",
+        schema: "openclaw_db",
+        assetKind: "schema_manifest",
+        filename: "openclaw_db.yaml",
+        content: SAMPLE_MANIFEST
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(true);
+    expect(res.body.data.assetKind).toBe("schema_manifest");
+    expect(res.body.data.assetType).toBe("schemaManifest");
+    await app.close();
+  });
+
   it("returns valid payload without writing the file", async () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
@@ -98,7 +123,7 @@ describe("POST /api/catalog/assets/validate", () => {
       .send({
         connectionId: "demo-mysql",
         schema: "openclaw_db",
-        assetType: "schemaManifest",
+        assetKind: "schema_manifest",
         filename: "openclaw_db.yaml",
         content: SAMPLE_MANIFEST
       })
@@ -107,6 +132,8 @@ describe("POST /api/catalog/assets/validate", () => {
     expect(res.body.ok).toBe(true);
     const data = res.body.data;
     expect(data.valid).toBe(true);
+    expect(data.assetKind).toBe("schema_manifest");
+    expect(data.assetType).toBe("schemaManifest");
     expect(data.targetPath).toBe("semantic-layer/demo-mysql/_schema/openclaw_db.yaml");
     expect(data.tables).toBe(1);
     expect(data.tableNames).toEqual(["customers"]);
@@ -204,7 +231,7 @@ describe("POST /api/catalog/assets/validate", () => {
     await app.close();
   });
 
-  it("reports INVALID_ASSET_TYPE instead of coercing unknown asset types", async () => {
+  it("reports ASSET_KIND_UNSUPPORTED instead of coercing unknown asset types", async () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
@@ -225,7 +252,56 @@ describe("POST /api/catalog/assets/validate", () => {
 
     expect(res.body.data.valid).toBe(false);
     const codes = (res.body.data.errors as Array<{ code: string }>).map((e) => e.code);
-    expect(codes).toContain("INVALID_ASSET_TYPE");
+    expect(codes).toContain("ASSET_KIND_UNSUPPORTED");
+    await app.close();
+  });
+
+  it("reports ASSET_KIND_ROUTE_MISMATCH for semantic overlay on the catalog upload route", async () => {
+    projectRoot = await makeProject(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/assets/validate")
+      .send({
+        connectionId: "demo-mysql",
+        schema: "openclaw_db",
+        assetKind: "semantic_overlay",
+        filename: "openclaw_db.yaml",
+        content: SAMPLE_MANIFEST
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(false);
+    const codes = (res.body.data.errors as Array<{ code: string }>).map((e) => e.code);
+    expect(codes).toContain("ASSET_KIND_ROUTE_MISMATCH");
+    await app.close();
+  });
+
+  it("reports ASSET_KIND_REQUIRED when no asset kind or legacy asset type is provided", async () => {
+    projectRoot = await makeProject(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/assets/validate")
+      .send({
+        connectionId: "demo-mysql",
+        schema: "openclaw_db",
+        filename: "openclaw_db.yaml",
+        content: SAMPLE_MANIFEST
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(false);
+    const codes = (res.body.data.errors as Array<{ code: string }>).map((e) => e.code);
+    expect(codes).toContain("ASSET_KIND_REQUIRED");
     await app.close();
   });
 
@@ -277,6 +353,67 @@ describe("POST /api/catalog/assets/validate", () => {
     expect(res.body.data.valid).toBe(false);
     const codes = (res.body.data.errors as Array<{ code: string }>).map((e) => e.code);
     expect(codes).toContain("YAML_PARSE_FAILED");
+    await app.close();
+  });
+
+  it("rejects semantic overlay YAML in the Schema Manifest upload route", async () => {
+    projectRoot = await makeProject(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const overlayYaml = [
+      "name: superstore_orders",
+      "grain:",
+      "  - order_id",
+      "measures:",
+      "  - name: total_sales",
+      "    expr: sum(sales)",
+      ""
+    ].join("\n");
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/assets/validate")
+      .send({
+        connectionId: "demo-mysql",
+        schema: "openclaw_db",
+        assetKind: "schema_manifest",
+        filename: "superstore_orders.yaml",
+        content: overlayYaml
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(false);
+    const errors = res.body.data.errors as Array<{ code: string; message: string }>;
+    expect(errors.map((e) => e.code)).toContain("OVERLAY_FIELD_IN_MANIFEST");
+    expect(errors.map((e) => e.message).join("\n")).toContain("semantic overlay");
+    await app.close();
+  });
+
+  it("rejects YAML without tables as not a Schema Manifest", async () => {
+    projectRoot = await makeProject(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/assets/validate")
+      .send({
+        connectionId: "demo-mysql",
+        schema: "openclaw_db",
+        assetKind: "schema_manifest",
+        filename: "openclaw_db.yaml",
+        content: "name: openclaw_db\n"
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(false);
+    const codes = (res.body.data.errors as Array<{ code: string }>).map((e) => e.code);
+    expect(codes).toContain("SCHEMA_MANIFEST_EXPECTED");
     await app.close();
   });
 
@@ -429,6 +566,8 @@ describe("POST /api/catalog/assets/upload", () => {
     const record = res.body.data.record;
     expect(record.connectionId).toBe("demo-mysql");
     expect(record.schema).toBe("openclaw_db");
+    expect(record.assetKind).toBe("schema_manifest");
+    expect(record.assetType).toBe("schemaManifest");
     expect(record.tables).toBe(1);
     expect(record.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(record.overwritten).toBe(false);
@@ -451,6 +590,7 @@ describe("POST /api/catalog/assets/upload", () => {
 
     // Reload is the new static catalog run.
     const reload = res.body.data.reload;
+    expect(res.body.data.validation.assetKind).toBe("schema_manifest");
     expect(reload.source).toBe("static-yaml");
     expect(reload.requestedConnectionId).toBe("demo-mysql");
     expect(reload.requestedSchema).toBe("openclaw_db");

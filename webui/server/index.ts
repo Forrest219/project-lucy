@@ -588,10 +588,12 @@ export function buildServer() {
   }>("/api/catalog/assets/validate", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const body = request.body ?? {};
+    const rawAssetKind = (body as { assetKind?: unknown }).assetKind;
     const rawAssetType = (body as { assetType?: unknown }).assetType;
     const validation = await validateCatalogAsset(projectRoot, {
       connectionId: typeof body.connectionId === "string" ? body.connectionId : "",
       schema: typeof body.schema === "string" ? body.schema : "",
+      assetKind: rawAssetKind as CatalogAssetValidateRequest["assetKind"],
       assetType: rawAssetType as CatalogAssetValidateRequest["assetType"],
       filename: typeof body.filename === "string" ? body.filename : "",
       content: typeof body.content === "string" ? body.content : ""
@@ -604,10 +606,12 @@ export function buildServer() {
   }>("/api/catalog/assets/upload", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const body = request.body ?? {};
+    const rawAssetKind = (body as { assetKind?: unknown }).assetKind;
     const rawAssetType = (body as { assetType?: unknown }).assetType;
     const upload: CatalogAssetUploadRequest = {
       connectionId: typeof body.connectionId === "string" ? body.connectionId : "",
       schema: typeof body.schema === "string" ? body.schema : "",
+      assetKind: rawAssetKind as CatalogAssetUploadRequest["assetKind"],
       assetType: rawAssetType as CatalogAssetUploadRequest["assetType"],
       filename: typeof body.filename === "string" ? body.filename : "",
       content: typeof body.content === "string" ? body.content : "",

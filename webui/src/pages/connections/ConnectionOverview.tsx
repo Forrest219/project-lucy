@@ -365,7 +365,7 @@ export function ConnectionOverview() {
                     <CatalogAssetUploadButton
                       connectionId={conn.id}
                       schemaOptions={conn.schemas}
-                      label="上传 YAML"
+                      label="上传 Schema Manifest"
                       variant={hasManifestGap ? "primary" : "secondary"}
                       testId={`upload-yaml-${conn.id}`}
                     />

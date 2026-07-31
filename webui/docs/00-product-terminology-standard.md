@@ -53,7 +53,7 @@ Lucy 是面向数据与语义层运维的 SaaS 产品。术语必须稳定、专
 
 - `测试连接`
 - `刷新本地目录`
-- `上传 YAML`
+- `上传 Schema Manifest`
 - `保存变更`
 
 状态文案应该回答“当前处于什么状态”：
@@ -137,6 +137,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Catalog Reload | 刷新本地目录 | 重新读取本地 Catalog | 重新加载资产、触发 ingest | 只读取 `ktx.yaml` 与 `semantic-layer` YAML，不连接数据库 |
 | YAML Asset | YAML 资产 | 语义层 YAML | YAML 报价 | 语义层资产文件 |
 | Asset Package | 资产包 | 语义资产包 | 报价包 | zip / bundle 形式的资产交付物 |
+| Asset Kind | asset kind / 资产类型 | 上传资产类型 | 上传类别泛化 | 上传 API 与 Validate Gate 中区分 Schema Manifest、semantic overlay、资产包 |
+| Schema Manifest Upload | 上传 Schema Manifest | 上传 Manifest、上传该 Schema 的 YAML | 裸用“上传 YAML” | 数据库接入中的受控 manifest 上传动作 |
+| Semantic Overlay Upload | 上传 semantic overlay | 上传 overlay YAML | 裸用“上传 YAML” | 语义层维护中的 overlay 上传动作 |
 | Whitelist | 表白名单 | 白名单 | 表白、白表 | 控制进入语义层的表范围 |
 | Semantic Layer | 语义层 | semantic-layer | 语义图层 | 表、指标、维度、业务语义定义层 |
 | Metric | 指标 | Metric | 度量混用 | 可聚合的业务数值定义 |
@@ -188,6 +191,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Manifest Status | Manifest 状态 | 清单状态、舱单状态 | Schema manifest 是否存在 |
 | Missing Manifest | 缺失 Manifest | 财政部舱单、缺失清单 | 本地 manifest 文件不存在 |
 | Upload Schema YAML | 上传该 Schema 的 YAML | 上传该架构的 YAML | 上传特定 Schema 的 YAML 资产 |
+| Upload Schema Manifest | 上传 Schema Manifest | 上传 Manifest | 裸用“上传 YAML” | 写入 `semantic-layer/<connection>/_schema/<schema>.yaml` |
 | Refresh Local Catalog | 刷新本地目录 | 重新加载资产 | 重新读取本地 YAML 资产 |
 
 ### 4.2 语义层维护
@@ -198,6 +202,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Business Annotation | 业务注释 | 查看注释可接受 | 面向业务的表 / 字段解释 |
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |
+| Upload Semantic Overlay | 上传 semantic overlay | 上传 overlay YAML | 裸用“上传 YAML” | 写入 `semantic-layer/<connection>/<table>.yaml` |
 
 语义层对象展示必须遵守自顶向下的层级顺序：
 
@@ -215,6 +220,33 @@ Connection (连接)
 
 - 业务页面：`新增指标`、`指标定义`、`指标口径`
 - 模型内部：`Measure 表达式`、`Measure SQL`
+
+### 4.2.1 数据库接入 / 语义层维护 / 语义资产交付边界
+
+数据库接入负责让 Connection、Schema、表白名单和 Schema Manifest 进入 Lucy，并保持本地 Catalog 可读。
+语义层维护负责维护已进入 Lucy 的表的业务语义，包括字段说明、grain、指标、分群和 Join。
+语义资产交付负责资产包级导入、导出、Validate Gate 与发布。
+
+| 能力 | 数据库接入 | 语义层维护 | 语义资产交付 |
+|---|---|---|---|
+| 查看 Connection | Owner | Consumer | Consumer |
+| 添加 Schema 到 `ktx.yaml` | Owner | 不负责 | 不负责 |
+| 连通测试 | Owner | 不负责 | 不负责 |
+| 表白名单 / `enabled_tables` | Owner | Consumer | Consumer |
+| Manifest 状态 | Owner | Consumer | Consumer |
+| 上传 Schema Manifest | Owner | 不作为主入口 | 可包含在资产包中 |
+| 刷新本地目录 | Owner | 可提示 | 可触发发布后刷新 |
+| 表目录浏览 | Consumer | Owner | Consumer |
+| 字段描述 | 不负责编辑 | Owner | 可发布 |
+| grain | 不负责编辑 | Owner | 可发布 |
+| Metric / Measure | 不负责编辑 | Owner | 可发布 |
+| Segment | 不负责编辑 | Owner | 可发布 |
+| Join | 不负责编辑 | Owner | 可发布 |
+| semantic overlay YAML | 不作为主入口 | Owner | 可包含在资产包中 |
+| 资产包导入 / 导出 | Consumer | Consumer | Owner |
+| validate / reindex | 基础刷新后可触发 | 语义变更后必须触发 | 发布 gate 必须触发 |
+
+按钮、Drawer 标题、Toast 主动作不得裸用 `上传 YAML`。必须写明 `上传 Schema Manifest`、`上传 semantic overlay` 或 `上传资产包`；说明文中使用 `YAML 资产` 总称时，必须在同一段落中说明具体类型。
 
 ### 4.3 审阅与审核
 

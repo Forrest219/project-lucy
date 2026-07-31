@@ -29,16 +29,25 @@ const SIDECAR_REL = ".ktx-ui/catalog-asset-uploads.json";
 // Server-side definition of the public shape. Frontend type definitions
 // must stay in lock-step. Only export names that route handlers re-use.
 
-export type CatalogAssetType = "schemaManifest";
+export type CatalogAssetKind = "schema_manifest";
+export type LegacyCatalogAssetType = "schemaManifest";
+export type CatalogAssetType = LegacyCatalogAssetType;
 
 export type CatalogAssetErrorCode =
   | "UNKNOWN_CONNECTION"
   | "SCHEMA_NOT_CONFIGURED"
+  | "ASSET_KIND_REQUIRED"
+  | "ASSET_KIND_UNSUPPORTED"
+  | "ASSET_KIND_ROUTE_MISMATCH"
   | "INVALID_ASSET_TYPE"
   | "INVALID_FILENAME"
   | "FILE_TOO_LARGE"
   | "YAML_PARSE_FAILED"
   | "INVALID_MANIFEST"
+  | "SCHEMA_MANIFEST_EXPECTED"
+  | "SEMANTIC_OVERLAY_EXPECTED"
+  | "OVERLAY_FIELD_IN_MANIFEST"
+  | "MANIFEST_SHAPE_IN_OVERLAY"
   | "PATH_NOT_ALLOWED";
 
 export type CatalogAssetError = {
@@ -61,7 +70,8 @@ export type CatalogAssetWarning = {
 export type CatalogAssetValidateRequest = {
   connectionId: string;
   schema: string;
-  assetType: CatalogAssetType;
+  assetKind?: CatalogAssetKind | "semantic_overlay" | "asset_package";
+  assetType?: LegacyCatalogAssetType;
   filename: string;
   content: string;
 };
@@ -70,6 +80,7 @@ export type CatalogAssetValidateResponse = {
   valid: boolean;
   connectionId: string;
   schema: string;
+  assetKind: CatalogAssetKind;
   assetType: CatalogAssetType;
   targetPath: string;
   exists: boolean;
@@ -91,6 +102,7 @@ export type CatalogAssetUploadRecord = {
   createdAt: string;
   connectionId: string;
   schema: string;
+  assetKind: CatalogAssetKind;
   assetType: CatalogAssetType;
   targetPath: string;
   originalFilename: string;
@@ -151,6 +163,50 @@ function isSafePathSegment(segment: string): boolean {
 
 function sha256(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+type AssetKindNormalization =
+  | { ok: true; assetKind: CatalogAssetKind }
+  | { ok: false; code: CatalogAssetErrorCode; message: string };
+
+function normalizeCatalogAssetKind(request: {
+  assetKind?: unknown;
+  assetType?: unknown;
+}): AssetKindNormalization {
+  if (request.assetKind !== undefined) {
+    if (request.assetKind === "schema_manifest") {
+      return { ok: true, assetKind: "schema_manifest" };
+    }
+    if (request.assetKind === "semantic_overlay" || request.assetKind === "asset_package") {
+      return {
+        ok: false,
+        code: "ASSET_KIND_ROUTE_MISMATCH",
+        message: "此入口只接受 Schema Manifest，请切换到对应模块。"
+      };
+    }
+    return {
+      ok: false,
+      code: "ASSET_KIND_UNSUPPORTED",
+      message: `不支持的 assetKind: ${String(request.assetKind)}`
+    };
+  }
+
+  if (request.assetType !== undefined) {
+    if (request.assetType === "schemaManifest") {
+      return { ok: true, assetKind: "schema_manifest" };
+    }
+    return {
+      ok: false,
+      code: "ASSET_KIND_UNSUPPORTED",
+      message: `不支持的 assetType: ${String(request.assetType)}`
+    };
+  }
+
+  return {
+    ok: false,
+    code: "ASSET_KIND_REQUIRED",
+    message: "请选择要上传的资产类型。"
+  };
 }
 
 function pad2(value: number): string {
@@ -386,12 +442,21 @@ function parseManifest(
     };
   }
   const root = doc as Record<string, unknown>;
+  const overlayOnlyKeys = ["grain", "measures", "segments"];
+  const foundOverlayOnlyKey = overlayOnlyKeys.find((key) => Object.prototype.hasOwnProperty.call(root, key));
+  if (foundOverlayOnlyKey) {
+    return {
+      ok: false,
+      code: "OVERLAY_FIELD_IN_MANIFEST",
+      message: `业务语义字段 ${foundOverlayOnlyKey} 应写入 semantic overlay，不应写入 Schema Manifest。`
+    };
+  }
   const tablesNode = root.tables;
   if (tablesNode === undefined) {
     return {
       ok: false,
-      code: "INVALID_MANIFEST",
-      message: "manifest 缺少 `tables` 字段"
+      code: "SCHEMA_MANIFEST_EXPECTED",
+      message: "这是 semantic overlay 或普通 YAML，不是 Schema Manifest：顶层缺少 `tables` 字段。"
     };
   }
   if (tablesNode === null || typeof tablesNode !== "object" || Array.isArray(tablesNode)) {
@@ -421,6 +486,7 @@ function parseManifest(
 
 function buildBaseValidation(
   request: CatalogAssetValidateRequest,
+  assetKind: CatalogAssetKind,
   projectRoot: string,
   errors: CatalogAssetError[],
   warnings: CatalogAssetWarning[],
@@ -430,6 +496,7 @@ function buildBaseValidation(
   | "valid"
   | "connectionId"
   | "schema"
+  | "assetKind"
   | "assetType"
   | "targetPath"
   | "originalFilename"
@@ -460,7 +527,8 @@ function buildBaseValidation(
     valid: errors.length === 0,
     connectionId: request.connectionId,
     schema: request.schema,
-    assetType: request.assetType,
+    assetKind,
+    assetType: "schemaManifest",
     targetPath: targetRel,
     originalFilename: sanitized,
     sizeBytes,
@@ -478,6 +546,14 @@ export async function validateCatalogAsset(
 ): Promise<CatalogAssetValidateResponse> {
   const errors: CatalogAssetError[] = [];
   const warnings: CatalogAssetWarning[] = [];
+  const normalizedKind = normalizeCatalogAssetKind(request);
+  const assetKind: CatalogAssetKind = normalizedKind.ok ? normalizedKind.assetKind : "schema_manifest";
+  if (!normalizedKind.ok) {
+    errors.push({
+      code: normalizedKind.code,
+      message: normalizedKind.message
+    });
+  }
 
   const safeSegments =
     isSafePathSegment(request.connectionId) && isSafePathSegment(request.schema);
@@ -488,17 +564,10 @@ export async function validateCatalogAsset(
     });
   }
 
-  if (request.assetType !== "schemaManifest") {
-    errors.push({
-      code: "INVALID_ASSET_TYPE",
-      message: `不支持的 assetType: ${String(request.assetType)}`
-    });
-  }
-
   const targetRel = safeSegments
     ? buildTargetRel(request.connectionId, request.schema)
     : "semantic-layer/_invalid/_schema/_invalid.yaml";
-  const base = buildBaseValidation(request, projectRoot, errors, warnings, targetRel);
+  const base = buildBaseValidation(request, assetKind, projectRoot, errors, warnings, targetRel);
 
   // Configuration checks (connection + schema in ktx.yaml).
   if (errors.length === 0) {
@@ -715,6 +784,7 @@ export async function uploadCatalogAsset(
     createdAt: createdAt.toISOString(),
     connectionId: validation.connectionId,
     schema: validation.schema,
+    assetKind: validation.assetKind,
     assetType: validation.assetType,
     targetPath: targetRel,
     originalFilename: validation.originalFilename,

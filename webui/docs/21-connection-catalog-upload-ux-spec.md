@@ -374,7 +374,7 @@ openclaw_db 已添加到 demo-mysql。
 动作：
 
 ```text
-[上传 YAML] [刷新本地目录] [完成]
+[上传 Schema Manifest] [刷新本地目录] [完成]
 ```
 
 其中 `刷新本地目录` 只有在已有本地 manifest 文件时才有意义；如果刚添加 schema 但没有 YAML，优先引导上传。

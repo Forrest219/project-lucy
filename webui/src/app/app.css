@@ -419,7 +419,7 @@
     @apply flex flex-wrap items-center gap-2;
   }
   .pl-upload-source-textarea {
-    @apply min-h-48 font-mono text-xs leading-relaxed;
+    @apply min-h-72 resize-y font-mono text-xs leading-relaxed;
   }
   .pl-upload-validation {
     @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3 text-sm;
@@ -707,6 +707,8 @@
   .pl-validation-banner { @apply rounded-md border px-3 py-2 text-sm font-medium; }
   .pl-validation-banner--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-validation-banner--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-boundary-checklist { @apply grid gap-2 text-xs text-fg-muted; }
+  .pl-boundary-checklist li { @apply rounded-md border border-border-default bg-bg-base px-3 py-2; }
 
   /* Admin */
   .pl-card { @apply rounded-md border border-border-default bg-bg-surface p-4; }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -44,7 +44,7 @@ function buildRequest(
   return {
     connectionId,
     schema,
-    assetType: "schemaManifest",
+    assetKind: "schema_manifest",
     filename: filename || FILENAME_HINT,
     content
   };
@@ -83,6 +83,9 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
   const [validatedSignature, setValidatedSignature] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastRequestedRef = useRef<string>("");
+  const title = schemaLocked
+    ? `上传 ${schema} 的 Schema Manifest`
+    : `上传 ${connectionId} 的 Schema Manifest`;
 
   useEffect(() => {
     if (!open) return;
@@ -190,6 +193,20 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
     uploadMutation.mutate();
   }
 
+  function handleTextareaKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Tab" || event.shiftKey) return;
+    event.preventDefault();
+    const target = event.currentTarget;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    const next = `${content.slice(0, start)}  ${content.slice(end)}`;
+    setContent(next);
+    window.requestAnimationFrame(() => {
+      target.selectionStart = start + 2;
+      target.selectionEnd = start + 2;
+    });
+  }
+
   const canUpload = useMemo(() => {
     if (!validation) return false;
     if (!validation.valid) return false;
@@ -203,10 +220,11 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
 
   return (
     <div
-      className="pl-drawer-backdrop"
+      className="pl-drawer-backdrop notranslate"
       role="dialog"
       aria-modal="true"
-      aria-label="上传 YAML 资产"
+      aria-label="上传 Schema Manifest"
+      translate="no"
       data-testid="catalog-asset-upload-drawer"
     >
       <div className="pl-drawer-panel" data-testid="catalog-asset-upload-panel">
@@ -214,11 +232,15 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
           <div>
             <p className="pl-eyebrow">数据库接入</p>
             <h2 className="pl-panel-title notranslate" translate="no">
-              上传 {connectionId} 的 Schema Manifest
+              {title}
             </h2>
             <p className="pl-notice">
               目标路径由系统计算；会校验连接、<code className="notranslate" translate="no">Schema</code>、<code className="notranslate" translate="no">YAML</code> 结构、文件大小与目标路径。
-              写入成功后会自动刷新本地目录。
+              提交前会自动校验，写入成功后会自动刷新本地目录。
+            </p>
+            <p className="pl-notice">
+              此操作只写入 <code className="notranslate" translate="no">semantic-layer/&lt;connection&gt;/_schema/&lt;schema&gt;.yaml</code>，
+              不会编辑指标、<code className="notranslate" translate="no">Join</code> 或业务语义。
             </p>
           </div>
           <button
@@ -327,6 +349,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                   rows={10}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
+                  onKeyDown={handleTextareaKeyDown}
                   placeholder={YAML_PLACEHOLDER}
                   data-testid="catalog-asset-upload-textarea"
                 />
@@ -371,8 +394,8 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
             aria-label="上传成功"
             data-testid="catalog-asset-upload-success"
           >
-            <p className="text-sm font-semibold text-success-strong">
-              ✓ 已上传 {uploadMutation.data.record.originalFilename}
+            <p className="text-sm font-semibold text-success-strong notranslate" translate="no">
+              ✓ 已上传 Schema Manifest：{uploadMutation.data.record.originalFilename}
             </p>
             <p className="text-sm">
               解析到 <strong>{uploadMutation.data.record.tables}</strong> 张表，

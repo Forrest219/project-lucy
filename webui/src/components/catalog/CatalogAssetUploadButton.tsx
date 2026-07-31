@@ -13,7 +13,7 @@ export type CatalogAssetUploadButtonProps = {
 
 function defaultLabel(schema?: string): string {
   if (schema) return "上传该 Schema 的 YAML";
-  return "上传 YAML";
+  return "上传 Schema Manifest";
 }
 
 function buttonClass(

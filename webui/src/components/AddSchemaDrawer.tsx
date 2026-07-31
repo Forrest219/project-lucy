@@ -246,7 +246,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               <CatalogAssetUploadButton
                 connectionId={connection.id}
                 schema={trimmed}
-                label="上传 YAML"
+                label="上传 Schema Manifest"
                 variant="primary"
                 testId="add-schema-upload-yaml"
               />

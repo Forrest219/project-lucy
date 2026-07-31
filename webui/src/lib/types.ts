@@ -686,7 +686,9 @@ export type CatalogReloadsResponse = {
 // the file location. Records are stored in a bounded sidecar; YAML content
 // itself is never written into the sidecar.
 
-export type CatalogAssetType = "schemaManifest";
+export type CatalogAssetKind = "schema_manifest";
+export type LegacyCatalogAssetType = "schemaManifest";
+export type CatalogAssetType = LegacyCatalogAssetType;
 
 export type CatalogAssetWarningCode =
   | "EMPTY_MANIFEST"
@@ -703,11 +705,18 @@ export type CatalogAssetWarning = {
 export type CatalogAssetErrorCode =
   | "UNKNOWN_CONNECTION"
   | "SCHEMA_NOT_CONFIGURED"
+  | "ASSET_KIND_REQUIRED"
+  | "ASSET_KIND_UNSUPPORTED"
+  | "ASSET_KIND_ROUTE_MISMATCH"
   | "INVALID_ASSET_TYPE"
   | "INVALID_FILENAME"
   | "FILE_TOO_LARGE"
   | "YAML_PARSE_FAILED"
   | "INVALID_MANIFEST"
+  | "SCHEMA_MANIFEST_EXPECTED"
+  | "SEMANTIC_OVERLAY_EXPECTED"
+  | "OVERLAY_FIELD_IN_MANIFEST"
+  | "MANIFEST_SHAPE_IN_OVERLAY"
   | "PATH_NOT_ALLOWED";
 
 export type CatalogAssetError = {
@@ -718,7 +727,8 @@ export type CatalogAssetError = {
 export type CatalogAssetValidateRequest = {
   connectionId: string;
   schema: string;
-  assetType: CatalogAssetType;
+  assetKind?: CatalogAssetKind;
+  assetType?: LegacyCatalogAssetType;
   filename: string;
   content: string;
 };
@@ -727,6 +737,7 @@ export type CatalogAssetValidateResponse = {
   valid: boolean;
   connectionId: string;
   schema: string;
+  assetKind: CatalogAssetKind;
   assetType: CatalogAssetType;
   targetPath: string;
   exists: boolean;
@@ -748,6 +759,7 @@ export type CatalogAssetUploadRecord = {
   createdAt: string;
   connectionId: string;
   schema: string;
+  assetKind: CatalogAssetKind;
   assetType: CatalogAssetType;
   targetPath: string;
   originalFilename: string;

@@ -183,7 +183,8 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByRole("link", { name: "连通测试" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "打开表目录" })).not.toBeInTheDocument();
     // The per-connection card still surfaces the upload + reload actions.
-    expect(screen.getAllByRole("button", { name: "上传 YAML" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "上传 Schema Manifest" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "刷新本地目录" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     expect(screen.queryByText("运行连通测试")).not.toBeInTheDocument();
@@ -406,7 +407,8 @@ describe("ConnectionOverview", () => {
     expect(
       screen.getByText("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。")
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "重新加载资产" })).not.toBeInTheDocument();
@@ -617,7 +619,8 @@ describe("ConnectionOverview", () => {
 
     const footerActions = within(card).getByTestId("connection-card-schema-actions-mysql-aliyun");
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toBeInTheDocument();
-    expect(within(footerActions).getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
+    expect(within(footerActions).getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
+    expect(within(footerActions).queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "刷新本地目录" })).not.toBeInTheDocument();
     expect(within(card).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
@@ -690,6 +693,11 @@ describe("ConnectionOverview", () => {
     ).toHaveTextContent("缺失 Manifest");
     const uploadBtn = await screen.findByTestId("upload-yaml-demo-mysql-openclaw_db");
     expect(uploadBtn).toHaveTextContent("上传 Manifest");
+    fireEvent.click(uploadBtn);
+    expect(
+      await screen.findByRole("heading", { name: /上传 openclaw_db 的 Schema Manifest/ })
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-asset-upload-schema")).not.toBeInTheDocument();
   });
 
   it("M21: uses 缺失 Manifest (capital M) for missing manifest rows and exposes no machine-translation artifacts", async () => {

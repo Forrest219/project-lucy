@@ -84,6 +84,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M20-yaml-delivery-runbook.md](wo-M20-yaml-delivery-runbook.md) | M20 | YAML 交付规范进入 Help Center：用途、规则、常见错误、交付 checklist 与 Agent 自检协议 |
 | [wo-M21-connection-module-terminology-ia-refresh.md](wo-M21-connection-module-terminology-ia-refresh.md) | M21 | 数据库接入模块术语与 IA 刷新：Connection 中心化、Schema / Manifest / Catalog 术语治理 |
 | [wo-M22-database-connection-operations-runbook.md](wo-M22-database-connection-operations-runbook.md) | M22 | 数据库连接运维 Runbook：通用新增连接边界、配置、ACL 与验收 |
+| [wo-M25-connection-semantic-boundary-automation.md](wo-M25-connection-semantic-boundary-automation.md) | M25 | 数据库接入与语义层维护边界自动化：asset kind、上传校验、IA lint 与 Review checklist |
 | [wo-M26-help-markdown-rendering.md](wo-M26-help-markdown-rendering.md) | M26 | Help Center Markdown 渲染修复：系统手册表格、安全渲染、深链与回归测试 |
 
 ## 6. 如何把工单喂给 codex

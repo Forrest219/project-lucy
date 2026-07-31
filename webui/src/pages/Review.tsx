@@ -14,6 +14,45 @@ function tableNameFromPath(filePath: string) {
   return filePath.split("/").pop()?.replace(/\.ya?ml$/, "") ?? filePath;
 }
 
+const boundaryChecklistRules: Array<{ pattern: RegExp; prompt: string }> = [
+  {
+    pattern: /^webui\/src\/pages\/connections\//,
+    prompt: "检查数据库接入是否只处理 Connection / Schema / Manifest / Catalog / 白名单 / 连通测试。"
+  },
+  {
+    pattern: /^webui\/src\/components\/catalog\//,
+    prompt: "检查上传文案是否明确 Schema Manifest，且目标路径由系统计算。"
+  },
+  {
+    pattern: /^webui\/src\/pages\/TableEditor\.tsx$/,
+    prompt: "检查语义层维护是否只处理业务语义和 overlay。"
+  },
+  {
+    pattern: /^webui\/server\/catalog-assets\.ts$/,
+    prompt: "检查 asset kind、路径约束、结构校验和 sidecar raw content 禁止。"
+  },
+  {
+    pattern: /^webui\/server\/semantic-assets\.ts$/,
+    prompt: "检查资产包分类、secret hard block 和 Validate Gate。"
+  },
+  {
+    pattern: /^webui\/src\/components\/semantic-assets\//,
+    prompt: "检查资产包分类、secret hard block 和 Validate Gate。"
+  }
+];
+
+export function boundaryChecklistForChangedFiles(files: string[]): string[] {
+  const prompts = new Set<string>();
+  for (const file of files) {
+    for (const rule of boundaryChecklistRules) {
+      if (rule.pattern.test(file)) {
+        prompts.add(rule.prompt);
+      }
+    }
+  }
+  return [...prompts];
+}
+
 export function Review() {
   const [selected, setSelected] = useState<string | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -37,6 +76,7 @@ export function Review() {
   });
 
   const files = diffQuery.data?.files ?? [];
+  const boundaryChecklist = boundaryChecklistForChangedFiles(files.map((file) => file.filePath));
   const semanticLayerChanges = files.filter((f) => f.filePath.startsWith("semantic-layer/"));
   const active = files.find((file) => file.filePath === (selected ?? files[0]?.filePath));
   const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
@@ -113,6 +153,21 @@ export function Review() {
         </section>
 
         <aside className="pl-review-sidebar">
+          {boundaryChecklist.length > 0 ? (
+            <section
+              className="grid gap-3 notranslate"
+              translate="no"
+              data-testid="review-boundary-checklist"
+            >
+              <p className="pl-panel-title">边界检查</p>
+              <ul className="pl-boundary-checklist">
+                {boundaryChecklist.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <section className="grid gap-3">
             <p className="pl-panel-title">Validate changed</p>
             {validateMutation.data ? (
