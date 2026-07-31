@@ -2,22 +2,23 @@ import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FrontmatterForm } from "../components/FrontmatterForm";
+import { toast } from "sonner";
 import { PageHeader } from "../components/PageHeader";
-import {
-  WikiInspector,
-  type WikiInspectorTab
-} from "../components/WikiInspector";
+import { WikiReadView } from "../components/WikiReadView";
+import { WikiEditView } from "../components/WikiEditView";
+import { WikiSavePreflight } from "../components/WikiSavePreflight";
+import { WikiTree } from "../components/WikiTree";
 import { apiGet, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import {
   draftKeyForSlRef,
   findWikiBySlRef,
-  nextNewNoteKey,
-  normalizeSlRef
+  nextNewNoteKey
 } from "../lib/slRef";
-import { toast } from "sonner";
+import { buildSavePreflightState, wikiDraftVersion } from "../lib/wiki";
 import type {
+  SourcesResponse,
+  SourceSummary,
   WikiFrontmatter,
   WikiListResponse,
   WikiPage,
@@ -26,6 +27,7 @@ import type {
 } from "../lib/types";
 
 type PageMode = "loaded" | "draft";
+type WikiUiMode = "read" | "edit";
 
 /**
  * Compute the effective key + mode for the editor. The URL is the
@@ -58,14 +60,29 @@ function resolveKey(
 export function WikiEditor() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const slRef = normalizeSlRef(searchParams.get("sl_ref"));
-  const keyParam = searchParams.get("key") ?? "";
+  const slRefRaw = searchParams.get("sl_ref");
+  const slRef = slRefRaw ? decodeURIComponent(slRefRaw) : null;
+  const keyParamRaw = searchParams.get("key") ?? "";
+  const keyParam = keyParamRaw ? decodeURIComponent(keyParamRaw) : "";
   const listQuery = useQuery({
     queryKey: queryKeys.wiki,
     queryFn: () => apiGet<WikiListResponse>("/api/wiki")
   });
+  const sourcesQuery = useQuery({
+    queryKey: queryKeys.sources,
+    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+  });
 
   const pages = listQuery.data?.pages ?? [];
+  const tables = sourcesQuery.data?.tables ?? [];
+
+  const knownSlRefs = useMemo(() => {
+    const set = new Set<string>();
+    for (const table of tables) {
+      set.add(`${table.conn}/${table.schema}/${table.table}`);
+    }
+    return set;
+  }, [tables]);
 
   // The effective key is derived from URL + page list on every render.
   // No useState for this — the URL is the single source of truth.
@@ -83,15 +100,41 @@ export function WikiEditor() {
   const [content, setContent] = useState("");
   const [preview, setPreview] = useState<WikiPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<WikiInspectorTab>("preview");
-  const [searchFilter, setSearchFilter] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState<string | null>(null);
+  const [uiMode, setUiMode] = useState<WikiUiMode>("read");
+  const [preflightOpen, setPreflightOpen] = useState(false);
   const [pathDraft, setPathDraft] = useState("");
   const dirtyRef = useRef(false);
   const sourceRef = useRef<string>(`${key}::${mode}::init`);
   const preserveBufferForKeyRef = useRef<string | null>(null);
+  const lastResolvedKeyRef = useRef<string>(key);
+  // Live draft version. Updated every time the editor buffer changes.
+  // Stored in a ref so the async runDryRun closure can compare it
+  // against the version it started with without going stale.
+  const currentDraftVersionRef = useRef<string>(wikiDraftVersion({}, ""));
+  const currentDraftVersion = useMemo(
+    () => wikiDraftVersion(frontmatter, content),
+    [content, frontmatter]
+  );
+  useEffect(() => {
+    currentDraftVersionRef.current = currentDraftVersion;
+  }, [currentDraftVersion]);
 
   useEffect(() => {
     setPathDraft(key);
+  }, [key]);
+
+  // When the resolved key changes, default back to Read Mode so the
+  // user always lands on a clean document surface unless they were
+  // actively editing the same key.
+  useEffect(() => {
+    if (lastResolvedKeyRef.current === key) {
+      return;
+    }
+    lastResolvedKeyRef.current = key;
+    setUiMode("read");
+    setPreflightOpen(false);
   }, [key]);
 
   // When an object handoff comes in as only `?sl_ref=...`, resolve it
@@ -176,6 +219,8 @@ export function WikiEditor() {
       dirtyRef.current = false;
       sourceRef.current = `${key}::${mode}::saved`;
       toast.success("Wiki 已保存");
+      setPreflightOpen(false);
+      setUiMode("read");
     },
     onError: (error) => {
       toast.error(`保存失败：${error instanceof Error ? error.message : "未知错误"}`);
@@ -193,31 +238,43 @@ export function WikiEditor() {
       return;
     }
     const timeout = window.setTimeout(() => {
-      apiPut<WikiPreview>(`/api/wiki/${encodeURIComponent(key)}`, previewBody)
-        .then((data) => {
-          setPreview(data);
-          setPreviewError(null);
-        })
-        .catch((caught: unknown) => {
-          setPreview(null);
-          setPreviewError(caught instanceof Error ? caught.message : "预览失败");
-        });
+      runDryRun();
     }, 350);
     return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, previewBody]);
 
-  const runPreviewNow = useCallback(() => {
+  const runDryRun = useCallback(() => {
     if (!key.endsWith(".md")) {
       return;
     }
+    const startedVersion = wikiDraftVersion(previewBody.frontmatter, previewBody.content);
+    setPreviewLoading(true);
     apiPut<WikiPreview>(`/api/wiki/${encodeURIComponent(key)}`, previewBody)
       .then((data) => {
+        // Drop the response if the user kept editing while the
+        // request was in flight. A later runDryRun will pick up the
+        // current draft and the Save Preflight must never show a diff
+        // that does not match the editor buffer.
+        if (currentDraftVersionRef.current !== startedVersion) {
+          return;
+        }
         setPreview(data);
+        setPreviewVersion(startedVersion);
         setPreviewError(null);
       })
       .catch((caught: unknown) => {
+        if (currentDraftVersionRef.current !== startedVersion) {
+          return;
+        }
         setPreview(null);
+        setPreviewVersion(null);
         setPreviewError(caught instanceof Error ? caught.message : "预览失败");
+      })
+      .finally(() => {
+        if (currentDraftVersionRef.current === startedVersion) {
+          setPreviewLoading(false);
+        }
       });
   }, [key, previewBody]);
 
@@ -229,6 +286,12 @@ export function WikiEditor() {
   function updateContent(next: string) {
     dirtyRef.current = true;
     setContent(next);
+  }
+
+  function applyTemplate(templateContent: string) {
+    dirtyRef.current = true;
+    setContent(templateContent);
+    setUiMode("edit");
   }
 
   function navigateTo(nextKey: string) {
@@ -270,10 +333,44 @@ export function WikiEditor() {
     sourceRef.current = `${draftKey}::navigated`;
   }
 
-  // Cmd/Ctrl+S: refresh the dry-run preview and switch the inspector
-  // to the Diff tab. This is explicitly a no-write shortcut. We
-  // listen on `window` so the shortcut works regardless of where
-  // focus currently lives inside the editor.
+  function openSavePreflight() {
+    if (!key.endsWith(".md")) {
+      toast.error("路径必须以 .md 结尾才能保存。");
+      return;
+    }
+    // Always force a fresh dry-run when the modal opens. If the
+    // current draft is still covered by a recent preview we still
+    // re-issue the request so Diff / Raw can never lag behind the
+    // editor buffer.
+    setPreview(null);
+    setPreviewVersion(null);
+    setPreviewError(null);
+    runDryRun();
+    setPreflightOpen(true);
+  }
+
+  function switchToEdit() {
+    if (uiMode === "edit") {
+      return;
+    }
+    setUiMode("edit");
+  }
+
+  function requestBackToRead() {
+    if (uiMode === "edit" && dirtyRef.current) {
+      const confirmed = window.confirm(
+        "当前编辑未保存。返回阅读态后，未保存的草稿仍会保留在 Markdown 编辑器中。"
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    setUiMode("read");
+  }
+
+  // Cmd/Ctrl+S opens the Save Preflight. This is the single source of
+  // truth for the shortcut and is wired on `window` so it works no
+  // matter where focus currently lives.
   useEffect(() => {
     function handle(event: KeyboardEvent) {
       if (!(event.metaKey || event.ctrlKey)) {
@@ -282,153 +379,208 @@ export function WikiEditor() {
       if (event.key.toLowerCase() !== "s") {
         return;
       }
-      // Don't hijack the browser's save-page shortcut when the user
-      // is editing inside a regular text input other than our own
-      // (e.g. the page path field). The wiki editor owns the shortcut
-      // and we always want a dry-run refresh.
       event.preventDefault();
-      runPreviewNow();
-      setActiveTab("diff");
-      toast.success("已更新 Dry-run 预览");
+      if (uiMode !== "edit") {
+        setUiMode("edit");
+      }
+      openSavePreflight();
     }
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [runPreviewNow]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiMode, key, frontmatter, content]);
 
-  const filteredPages = useMemo(() => {
-    const needle = searchFilter.trim().toLowerCase();
-    if (!needle) {
-      return pages;
-    }
-    return pages.filter((page) =>
-      `${page.key} ${page.summary ?? ""} ${page.tags.join(" ")} ${page.slRefs.join(" ")}`
-        .toLowerCase()
-        .includes(needle)
-    );
-  }, [pages, searchFilter]);
+  const preflightState = useMemo(
+    () =>
+      buildSavePreflightState({
+        key,
+        preview,
+        previewError,
+        frontmatter,
+        content,
+        knownSlRefs,
+        previewLoading,
+        currentDraftVersion,
+        previewVersion
+      }),
+    [content, currentDraftVersion, frontmatter, key, knownSlRefs, preview, previewError, previewLoading, previewVersion]
+  );
+
+  const tabs = useMemo(
+    () => [
+      { key: "read", label: "阅读态", active: uiMode === "read" },
+      { key: "edit", label: "编辑态", active: uiMode === "edit" }
+    ],
+    [uiMode]
+  );
 
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title={`业务文档：${key}`}
+        title={uiMode === "read" ? "业务 Wiki 工作台" : `业务 Wiki 工作台 · ${key}`}
         breadcrumbs={["业务文档", "Wiki 文档", key]}
         description={
-          <>
-            Wiki 用于维护人可阅读的业务口径、使用场景和注意事项，不替代表字段描述。
-            {mode === "draft" ? " 当前为未保存草稿，点保存才会落盘。" : ""}
-          </>
+          uiMode === "read"
+            ? "阅读态：先看清业务文档，再决定是否进入编辑态。"
+            : "编辑态：直接撰写 Markdown，Diff 与原始 Markdown 通过保存预检查看。"
         }
         badges={
-          mode === "draft" ? <span>未保存草稿</span> : null
+          <>
+            <span data-testid="wiki-mode-badge" data-mode={uiMode}>
+              {uiMode === "read" ? "阅读态" : "编辑态"}
+            </span>
+            <span data-testid="wiki-status-badge" data-status={mode}>
+              {mode === "draft" ? "未保存草稿" : "已保存"}
+            </span>
+          </>
         }
         actions={
-          <button
-            className="pl-btn pl-btn--primary"
-            disabled={saveMutation.isPending}
-            onClick={() => saveMutation.mutate()}
-            type="button"
-          >
-            {saveMutation.isPending ? "保存中..." : "保存"}
-          </button>
+          <div className="pl-wiki-header-actions" data-testid="wiki-header-actions">
+            <div className="pl-wiki-header-modes" data-testid="wiki-header-modes" role="tablist">
+              {tabs.map((tab) => (
+                <button
+                  aria-selected={tab.active}
+                  className={clsx(
+                    "pl-btn",
+                    "pl-btn--ghost",
+                    tab.active && "pl-wiki-header-mode--active"
+                  )}
+                  data-mode={tab.key}
+                  data-testid={`wiki-mode-${tab.key}`}
+                  key={tab.key}
+                  onClick={() => {
+                    if (tab.key === "read") {
+                      requestBackToRead();
+                    } else {
+                      switchToEdit();
+                    }
+                  }}
+                  role="tab"
+                  type="button"
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <button
+              className="pl-btn pl-btn--ghost"
+              data-testid="wiki-new-button"
+              onClick={startNewWiki}
+              type="button"
+            >
+              + 新建 Wiki
+            </button>
+            {uiMode === "read" ? (
+              <button
+                className="pl-btn pl-btn--primary"
+                data-testid="wiki-edit-button"
+                onClick={switchToEdit}
+                type="button"
+              >
+                编辑
+              </button>
+            ) : (
+              <>
+                <button
+                  className="pl-btn pl-btn--ghost"
+                  data-testid="wiki-back-to-read"
+                  onClick={requestBackToRead}
+                  type="button"
+                >
+                  返回阅读
+                </button>
+                <button
+                  className="pl-btn pl-btn--primary"
+                  data-testid="wiki-save-preflight-button"
+                  disabled={saveMutation.isPending}
+                  onClick={openSavePreflight}
+                  type="button"
+                >
+                  保存预检
+                </button>
+              </>
+            )}
+          </div>
         }
       />
 
       <section
-        className="pl-editor-layout pl-wiki-layout"
+        aria-label="业务 Wiki 工作区"
+        className={clsx("pl-editor-layout", "pl-wiki-layout", `pl-wiki-layout--${uiMode}`)}
+        data-testid="wiki-layout"
       >
-        <aside className="grid content-start gap-3 pl-wiki-sidebar">
-        <Link className="pl-btn pl-btn--ghost justify-start" to="/">
-          表目录
-        </Link>
-        <div className="pl-wiki-sidebar-header">
-          <h2 className="pl-wiki-sidebar-title">业务 Wiki</h2>
-          <button
-            className="pl-btn pl-btn--primary pl-wiki-new-button"
-            onClick={startNewWiki}
-            type="button"
-          >
-            + 新建 Wiki
-          </button>
-        </div>
-        <label className="pl-field-label">
-          <span>页面路径</span>
-          <input
-            className="pl-input"
-            onBlur={commitPathDraft}
-            onChange={(event) => setPathDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commitPathDraft();
-              }
-            }}
-            value={pathDraft}
-          />
-        </label>
-        <input
-          aria-label="按路径或标签筛选 Wiki"
-          className="pl-input pl-wiki-filter"
-          onChange={(event) => setSearchFilter(event.target.value)}
-          placeholder="筛选路径 / 标签 / sl_ref…"
-          value={searchFilter}
-        />
-        {slRef ? (
-          <p className="pl-notice pl-wiki-context-hint" title={slRef}>
-            当前上下文：<code>{slRef}</code>
-            {mode === "loaded" ? "（已匹配）" : "（新草稿）"}
-          </p>
-        ) : null}
-        <nav aria-label="Wiki 页面列表" className="grid gap-1">
-          {filteredPages.map((page: WikiSummary) => {
-            const active = page.key === key && mode === "loaded";
-            return (
-              <button
-                aria-current={active ? "page" : undefined}
-                className={clsx("pl-file-button", active && "pl-file-button--active")}
-                key={page.key}
-                onClick={() => navigateTo(page.key)}
-                type="button"
-              >
-                <span>md</span>
-                <span className="truncate">{page.key}</span>
-              </button>
-            );
-          })}
-          {filteredPages.length === 0 ? (
-            <p className="pl-notice">没有匹配的 Wiki 页面。</p>
+        <aside
+          aria-label="业务 Wiki 目录"
+          className="grid content-start gap-3 pl-wiki-sidebar"
+          data-testid="wiki-sidebar"
+        >
+          <Link className="pl-btn pl-btn--ghost justify-start" to="/">
+            表目录
+          </Link>
+          <div className="pl-wiki-sidebar-header">
+            <h2 className="pl-wiki-sidebar-title">业务 Wiki</h2>
+          </div>
+          <label className="pl-field-label">
+            <span>页面路径</span>
+            <input
+              className="pl-input notranslate"
+              data-testid="wiki-path-input"
+              onBlur={commitPathDraft}
+              onChange={(event) => setPathDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitPathDraft();
+                }
+              }}
+              translate="no"
+              value={pathDraft}
+            />
+          </label>
+          {slRef ? (
+            <p
+              className="pl-notice pl-wiki-context-hint"
+              data-testid="wiki-context-hint"
+              title={slRef}
+            >
+              当前上下文：<code className="notranslate" translate="no">{slRef}</code>
+              {mode === "loaded" ? "（已匹配）" : "（新草稿）"}
+            </p>
           ) : null}
-        </nav>
+          <WikiTree activeKey={key} onSelect={navigateTo} pages={pages} />
         </aside>
 
         <div className="grid gap-4 pl-wiki-main">
-          <div className="pl-wiki-body">
-          <div className="grid gap-4 pl-wiki-left">
-            <FrontmatterForm onChange={updateFrontmatter} value={frontmatter} />
-            <section className="pl-panel pl-wiki-editor-panel">
-              <header className="pl-wiki-editor-header">
-                <p className="pl-panel-title mb-0">正文 Markdown</p>
-                <span aria-hidden className="pl-wiki-shortcut-hint">
-                  ⌘/Ctrl + S 刷新 Dry-run
-                </span>
-              </header>
-              <textarea
-                className="pl-textarea pl-wiki-markdown-input"
-                onChange={(event) => updateContent(event.target.value)}
-                rows={18}
-                value={content}
+          <div className="pl-wiki-body" data-testid="wiki-body">
+            {uiMode === "read" ? (
+              <WikiReadView
+                content={content}
+                frontmatter={frontmatter}
+                keyName={key}
+                knownSources={knownSlRefs}
+                knownTables={tables}
+                onApplyTemplate={applyTemplate}
+                onSwitchToEdit={switchToEdit}
               />
-            </section>
-          </div>
-          <WikiInspector
-            activeTab={activeTab}
-            content={content}
-            onTabChange={setActiveTab}
-            preview={preview}
-            previewError={previewError}
-          />
+            ) : (
+              <WikiEditView
+                content={content}
+                frontmatter={frontmatter}
+                onContentChange={updateContent}
+                onFrontmatterChange={updateFrontmatter}
+              />
+            )}
           </div>
         </div>
       </section>
+
+      <WikiSavePreflight
+        isSaving={saveMutation.isPending}
+        onCancel={() => setPreflightOpen(false)}
+        onConfirmSave={() => saveMutation.mutate()}
+        open={preflightOpen}
+        state={preflightState}
+      />
     </div>
   );
 }

@@ -955,17 +955,35 @@
   .pl-wiki-filter { @apply text-xs; }
   .pl-wiki-context-hint { @apply rounded-md border border-border-default bg-bg-base p-2 text-xs; }
   .pl-wiki-context-hint code { @apply break-all font-mono; }
-  .pl-wiki-body {
-    @apply grid gap-4;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* M33 Wiki workbench: read-mode-first layout. Desktop keeps the
+     sidebar + main two-column grid (inheriting `.pl-editor-layout`)
+     so the article stays in the first viewport on 1280x720. The
+     single-column stack is reserved for the mobile media query
+     further down. The persistent Diff / Raw inspector was removed
+     from the daily surface and lives inside the Save Preflight
+     modal instead. */
+  .pl-wiki-layout--read,
+  .pl-wiki-layout--edit {
+    /* Inherit the editor-layout 240px sidebar grid. Re-declared here
+       so the workbench layout never accidentally flips to single
+       column at desktop widths. */
+    grid-template-columns: 240px minmax(0, 1fr);
   }
+  .pl-wiki-body { @apply grid gap-4; }
   .pl-wiki-left { @apply min-w-0; }
   .pl-wiki-editor-panel { @apply grid gap-3 p-4; }
   .pl-wiki-editor-header { @apply flex flex-wrap items-center justify-between gap-2; }
   .pl-wiki-shortcut-hint { @apply text-xs text-fg-muted; }
   .pl-wiki-markdown-input { @apply min-h-[420px]; }
 
-  /* Wiki inspector (right column): tabbed preview / diff / raw. */
+  /* Header actions: keep the mode toggle + new / save CTAs inline. */
+  .pl-wiki-header-actions { @apply flex flex-wrap items-center gap-2; }
+  .pl-wiki-header-modes { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-surface p-0.5; }
+  .pl-wiki-header-mode--active { @apply bg-bg-muted text-fg-default font-semibold; }
+
+  /* Wiki inspector (right column): legacy tabs. Still rendered when
+     other code paths (e.g. tests, future drawer) opt in. The default
+     workbench surface no longer uses it. */
   .pl-wiki-inspector {
     @apply sticky top-[88px] grid h-fit min-h-[420px] gap-3 rounded-md border border-border-default bg-bg-surface p-3;
   }
@@ -976,6 +994,147 @@
   .pl-wiki-inspector-tab:hover { @apply bg-bg-muted text-fg-default; }
   .pl-wiki-inspector-tab--active { @apply bg-bg-muted font-medium text-fg-default; }
   .pl-wiki-inspector-section { @apply min-h-[300px] grid gap-2; }
+
+  /* Read Mode: clean business document surface. */
+  .pl-wiki-read-view { @apply grid gap-5 rounded-lg border border-border-default bg-bg-surface p-6 shadow-card; }
+  .pl-wiki-read-header { @apply grid gap-3; }
+  .pl-wiki-read-title { @apply text-2xl font-semibold leading-tight text-fg-default; }
+  .pl-wiki-read-key { @apply font-mono text-xs text-fg-muted; }
+  .pl-wiki-read-summary { @apply text-sm text-fg-body; }
+  .pl-wiki-read-meta { @apply flex flex-wrap items-center gap-3; }
+  .pl-wiki-read-tags { @apply flex flex-wrap items-center gap-1 list-none p-0 m-0; }
+  .pl-wiki-read-tag { @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-wiki-read-refs { @apply flex flex-wrap items-center gap-1 list-none p-0 m-0; }
+  .pl-wiki-read-ref { @apply inline-flex; }
+  .pl-wiki-read-ref-link,
+  .pl-wiki-read-ref-text { @apply inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-xs; }
+  .pl-wiki-read-ref-label { @apply font-medium; }
+  .pl-wiki-read-ref-warning { @apply text-[10px] uppercase tracking-wide; }
+  .pl-wiki-read-ref--known .pl-wiki-read-ref-link { @apply border-accent/30 bg-accent/10 text-accent no-underline; }
+  .pl-wiki-read-ref--unknown .pl-wiki-read-ref-text { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+
+  .pl-wiki-read-layout {
+    @apply grid gap-6;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  }
+  .pl-wiki-read-layout--no-toc { grid-template-columns: minmax(0, 1fr); }
+  .pl-wiki-read-body { @apply min-w-0; }
+  .pl-wiki-read-toc {
+    @apply sticky top-[96px] grid h-fit gap-2 rounded-md border border-border-default bg-bg-subtle p-3 text-sm;
+  }
+  .pl-wiki-read-toc-title { @apply text-xs font-semibold uppercase tracking-wide text-fg-muted; }
+  .pl-wiki-read-toc-list { @apply list-none p-0 m-0 grid gap-1; }
+  .pl-wiki-read-toc-item--level-3 .pl-wiki-read-toc-link { @apply pl-3 text-fg-muted; }
+  .pl-wiki-read-toc-link { @apply block rounded-sm px-2 py-1 text-sm text-fg-body no-underline hover:bg-bg-muted; }
+
+  .pl-wiki-read-empty { @apply grid gap-3 rounded-md border border-border-default bg-bg-subtle p-4; }
+  .pl-wiki-read-empty-hint { @apply text-sm text-fg-body; }
+  .pl-wiki-read-empty-subhint { @apply text-sm text-fg-muted; }
+  .pl-wiki-read-empty-templates { @apply list-none p-0 m-0 grid gap-2 sm:grid-cols-2; }
+  .pl-wiki-read-template { @apply grid; }
+  .pl-wiki-read-template-button {
+    @apply grid gap-1 rounded-md border border-border-default bg-bg-surface p-3 text-left text-sm transition-colors;
+  }
+  .pl-wiki-read-template-button:hover { @apply border-border-strong bg-bg-muted; }
+  .pl-wiki-read-template-button strong { @apply text-sm font-semibold; }
+  .pl-wiki-read-template-button span { @apply text-xs text-fg-muted; }
+
+  /* Edit Mode: compact Meta Header + dual-pane editor + preview. */
+  .pl-wiki-edit-view { @apply grid gap-4; }
+  .pl-wiki-edit-meta {
+    @apply grid gap-2 rounded-lg border border-border-default bg-bg-surface p-3 shadow-card;
+  }
+  .pl-wiki-edit-meta[open] { @apply pb-3; }
+  .pl-wiki-edit-meta-summary {
+    @apply flex cursor-pointer flex-wrap items-baseline gap-2 text-sm font-semibold;
+    list-style: none;
+  }
+  .pl-wiki-edit-meta-summary::-webkit-details-marker { display: none; }
+  .pl-wiki-edit-meta-summary::before {
+    content: "▶";
+    @apply mr-1 text-xs text-fg-muted transition-transform;
+  }
+  .pl-wiki-edit-meta[open] > summary::before { transform: rotate(90deg); }
+  .pl-wiki-edit-meta-hint { @apply text-xs font-normal text-fg-muted; }
+  .pl-wiki-edit-meta-body { @apply pt-2; }
+  .pl-wiki-edit-grid {
+    @apply grid gap-4 rounded-lg border border-border-default bg-bg-surface p-4 shadow-card;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 60vh;
+  }
+  .pl-wiki-edit-source,
+  .pl-wiki-edit-preview { @apply grid gap-2 min-w-0; }
+  .pl-wiki-edit-source-header,
+  .pl-wiki-edit-preview-header { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-wiki-edit-source-title,
+  .pl-wiki-edit-preview-title { @apply text-sm font-semibold; }
+  .pl-wiki-edit-source-hint,
+  .pl-wiki-edit-preview-hint { @apply text-xs text-fg-muted; }
+  .pl-wiki-edit-source-input { @apply min-h-[60vh] font-mono text-sm; }
+  .pl-wiki-edit-preview { @apply rounded-md border border-border-default bg-bg-subtle p-3; }
+  .pl-wiki-edit-preview .pl-markdown-preview { @apply gap-2; }
+
+  /* Save Preflight modal: target, validation, diff, raw, actions. */
+  .pl-wiki-preflight-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    z-index: 50;
+  }
+  .pl-wiki-preflight-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 51;
+    width: min(960px, 92vw);
+    max-height: 90vh;
+    overflow: auto;
+    @apply grid gap-4 rounded-lg border border-border-default bg-bg-surface p-6 shadow-card;
+  }
+  .pl-wiki-preflight-title { @apply text-lg font-semibold; }
+  .pl-wiki-preflight-description { @apply text-sm text-fg-muted; }
+  .pl-wiki-preflight-section { @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3; }
+  .pl-wiki-preflight-section-title { @apply text-sm font-semibold; }
+  .pl-wiki-preflight-target { @apply break-all rounded bg-bg-muted px-2 py-1 font-mono text-sm; }
+  .pl-wiki-preflight-findings { @apply list-none p-0 m-0 grid gap-2; }
+  .pl-wiki-preflight-finding {
+    @apply grid grid-cols-[auto_1fr] items-baseline gap-2 rounded-md border bg-bg-surface px-3 py-2 text-sm;
+  }
+  .pl-wiki-preflight-finding--error { @apply border-danger-strong text-danger-strong; }
+  .pl-wiki-preflight-finding--warning { @apply border-warning-strong text-warning-strong; }
+  .pl-wiki-preflight-finding--info { @apply border-border-default text-fg-body; }
+  .pl-wiki-preflight-finding-level { @apply text-xs font-semibold; }
+  .pl-wiki-preflight-raw-toggle { @apply w-fit text-sm font-medium text-fg-default; }
+  .pl-wiki-preflight-raw {
+    @apply mt-2 max-h-[280px] overflow-auto rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs;
+  }
+  .pl-wiki-preflight-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+
+  /* Wiki tree (sidebar): search + directory groups + title-first rows. */
+  .pl-wiki-tree { @apply grid gap-2; }
+  .pl-wiki-tree-search { @apply text-sm; }
+  .pl-wiki-tree-list { @apply list-none p-0 m-0 grid gap-2; }
+  .pl-wiki-tree-group { @apply grid gap-1; }
+  .pl-wiki-tree-group-toggle {
+    @apply flex items-center gap-1 rounded-sm px-1 py-1 text-xs font-semibold text-fg-muted;
+  }
+  .pl-wiki-tree-group-toggle:hover { @apply text-fg-default; }
+  .pl-wiki-tree-group-caret { @apply text-[10px] text-fg-muted; }
+  .pl-wiki-tree-group-count {
+    @apply ml-auto inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-fg-muted;
+  }
+  .pl-wiki-tree-pages { @apply list-none p-0 m-0 grid gap-0.5 pl-3; }
+  .pl-wiki-tree-page { @apply grid; }
+  .pl-wiki-tree-page-button {
+    @apply grid gap-0.5 rounded-sm px-2 py-1.5 text-left text-sm text-fg-body;
+  }
+  .pl-wiki-tree-page-button:hover { @apply bg-bg-muted; }
+  .pl-wiki-tree-page--active .pl-wiki-tree-page-button {
+    @apply bg-bg-selected text-fg-default font-semibold;
+  }
+  .pl-wiki-tree-page-title { @apply truncate; }
+  .pl-wiki-tree-page-path { @apply truncate font-mono text-[10px] text-fg-muted; }
 
   /* Markdown preview typography. Small enough to keep a workbench
      feel, large enough to remain readable. */
@@ -1002,6 +1161,12 @@
   }
   .pl-markdown-preview a { @apply text-accent underline; }
   .pl-markdown-preview hr { @apply border-border-default; }
+  .pl-markdown-table-wrap { @apply my-3 w-full overflow-x-auto; }
+  .pl-markdown-table { @apply w-full border-collapse text-sm; }
+  .pl-markdown-table th,
+  .pl-markdown-table td { @apply border border-border-default px-3 py-2 align-top; }
+  .pl-markdown-table th { @apply bg-bg-muted font-semibold text-fg-default; }
+  .pl-markdown-table tbody tr:nth-child(even) { @apply bg-bg-subtle; }
 }
 
 @media (max-width: 1280px) {
@@ -1025,7 +1190,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .pl-wiki-layout {
+  .pl-wiki-layout--read,
+  .pl-wiki-layout--edit {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1036,9 +1202,12 @@
   }
 
   .pl-frontmatter-grid,
-  .pl-wiki-body {
+  .pl-wiki-read-layout,
+  .pl-wiki-edit-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .pl-wiki-read-toc { position: static; }
 
   .pl-frontmatter-cell--wide {
     grid-column: 1;

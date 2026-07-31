@@ -9,18 +9,23 @@
  *   - fenced code blocks
  *   - blockquotes
  *   - links
+ *   - GFM pipe tables
  *
  * Source markdown is split into lines first; each block (paragraph /
  * list / code / quote) is then re-joined to escaped HTML with a small
  * tag whitelist.
  */
+import { ensureUniqueHeadingId, slugifyHeading } from "../lib/wiki";
+
+type TableAlignment = "left" | "center" | "right";
 
 type Block =
   | { kind: "heading"; level: 1 | 2 | 3 | 4 | 5 | 6; text: string }
   | { kind: "paragraph"; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
   | { kind: "code"; language: string | null; text: string }
-  | { kind: "quote"; text: string };
+  | { kind: "quote"; text: string }
+  | { kind: "table"; headers: string[]; alignments: TableAlignment[]; rows: string[][] };
 
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const FENCE_RE = /^```(\S+)?\s*$/;
@@ -39,19 +44,21 @@ function escapeHtml(input: string): string {
 }
 
 function markdownAnchorId(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .trim()
-    .replace(/\s/g, "-")
-    .replace(/^-+|-+$/g, "");
+  // Source of truth lives in `lib/wiki.ts` so this renderer and the
+  // Wiki TOC extract the same slug.
+  return slugifyHeading(text);
 }
 
 function renderInline(text: string): string {
   let safe = escapeHtml(text);
-  // Inline code first (before bold/italic) so we don't break backticks.
-  safe = safe.replace(/`([^`]+)`/g, (_match, code: string) => `<code>${code}</code>`);
+  const codePlaceholders: string[] = [];
+  // Inline code first (before bold/italic) so underscores inside config keys
+  // such as LUCY_AGENT_TOKEN stay literal.
+  safe = safe.replace(/`([^`]+)`/g, (_match, code: string) => {
+    const token = `\u0000CODE${codePlaceholders.length}\u0000`;
+    codePlaceholders.push(`<code class="notranslate" translate="no">${code}</code>`);
+    return token;
+  });
   // Bold: **text** or __text__
   safe = safe.replace(/\*\*([^*]+)\*\*/g, (_match, body: string) => `<strong>${body}</strong>`);
   safe = safe.replace(/__([^_]+)__/g, (_match, body: string) => `<strong>${body}</strong>`);
@@ -70,7 +77,80 @@ function renderInline(text: string): string {
     }
     return label;
   });
-  return safe;
+  return safe.replace(/\u0000CODE(\d+)\u0000/g, (_match, index: string) => codePlaceholders[Number(index)] ?? "");
+}
+
+function isTableRow(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.includes("|") && trimmed.length > 0;
+}
+
+function splitTableRow(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith("|")) {
+    trimmed = trimmed.slice(1);
+  }
+  if (trimmed.endsWith("|")) {
+    trimmed = trimmed.slice(0, -1);
+  }
+  return trimmed.split("|").map((cell) => cell.trim());
+}
+
+function isTableSeparator(cells: string[]): boolean {
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()));
+}
+
+function parseTableAlignment(cell: string): TableAlignment {
+  const trimmed = cell.trim();
+  if (trimmed.startsWith(":") && trimmed.endsWith(":")) return "center";
+  if (trimmed.endsWith(":")) return "right";
+  return "left";
+}
+
+function normalizeTableRow(cells: string[], width: number): string[] {
+  if (cells.length === width) return cells;
+  if (cells.length > width) return cells.slice(0, width);
+  return [...cells, ...Array.from({ length: width - cells.length }, () => "")];
+}
+
+function tryParseTable(lines: string[], startIndex: number): { block: Block; nextIndex: number } | null {
+  const headerLine = lines[startIndex] ?? "";
+  const separatorLine = lines[startIndex + 1] ?? "";
+  if (!isTableRow(headerLine) || !isTableRow(separatorLine)) {
+    return null;
+  }
+  const headers = splitTableRow(headerLine);
+  const separators = splitTableRow(separatorLine);
+  if (headers.length === 0 || !isTableSeparator(separators)) {
+    return null;
+  }
+
+  const width = headers.length;
+  const alignments = normalizeTableRow(separators, width).map(parseTableAlignment);
+  const rows: string[][] = [];
+  let i = startIndex + 2;
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    if (line.trim() === "" || !isTableRow(line)) {
+      break;
+    }
+    rows.push(normalizeTableRow(splitTableRow(line), width));
+    i += 1;
+  }
+
+  return {
+    block: {
+      kind: "table",
+      headers,
+      alignments,
+      rows
+    },
+    nextIndex: i
+  };
+}
+
+function alignStyle(align: TableAlignment): string {
+  return align === "left" ? "" : ` style="text-align: ${align}"`;
 }
 
 function parseBlocks(markdown: string): Block[] {
@@ -156,6 +236,15 @@ function parseBlocks(markdown: string): Block[] {
       i += 1;
       continue;
     }
+    const table = tryParseTable(lines, i);
+    if (table) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      blocks.push(table.block);
+      i = table.nextIndex;
+      continue;
+    }
     const ul = line.match(UL_ITEM_RE);
     const ol = line.match(OL_ITEM_RE);
     if (ul || ol) {
@@ -206,10 +295,16 @@ function parseBlocks(markdown: string): Block[] {
 
 function renderBlocks(blocks: Block[]): string {
   const out: string[] = [];
+  // Track used anchor ids so duplicate headings get a deterministic
+  // suffix (`-2`, `-3`, …) that matches the suffix emitted by
+  // `extractWikiToc`. Without this, two `## Notes` headings would
+  // render the same DOM id and the TOC link would scroll to the
+  // wrong section.
+  const usedIds = new Set<string>();
   for (const block of blocks) {
     switch (block.kind) {
       case "heading": {
-        const id = markdownAnchorId(block.text);
+        const id = ensureUniqueHeadingId(markdownAnchorId(block.text), usedIds);
         const idAttr = id ? ` id="${escapeHtml(id)}"` : "";
         out.push(`<h${block.level}${idAttr}>${renderInline(block.text)}</h${block.level}>`);
         break;
@@ -230,11 +325,28 @@ function renderBlocks(blocks: Block[]): string {
       }
       case "code": {
         const lang = block.language ? ` data-lang="${escapeHtml(block.language)}"` : "";
-        out.push(`<pre${lang}><code>${escapeHtml(block.text)}</code></pre>`);
+        out.push(`<pre${lang} class="notranslate" translate="no"><code class="notranslate" translate="no">${escapeHtml(block.text)}</code></pre>`);
         break;
       }
       case "quote": {
         out.push(`<blockquote><p>${renderInline(block.text)}</p></blockquote>`);
+        break;
+      }
+      case "table": {
+        const headers = block.headers
+          .map((header, index) => `<th scope="col"${alignStyle(block.alignments[index] ?? "left")}>${renderInline(header)}</th>`)
+          .join("");
+        const rows = block.rows
+          .map((row) => {
+            const cells = row
+              .map((cell, index) => `<td${alignStyle(block.alignments[index] ?? "left")}>${renderInline(cell)}</td>`)
+              .join("");
+            return `<tr>${cells}</tr>`;
+          })
+          .join("");
+        out.push(
+          `<div class="pl-markdown-table-wrap"><table class="pl-markdown-table notranslate" translate="no"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`
+        );
         break;
       }
     }
