@@ -897,11 +897,14 @@ export type SemanticAssetReindexRecord = {
   stderr?: string;
 };
 
+export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex";
+
 export type SemanticAssetReleaseRecord = {
   id: string;
   createdAt: string;
   actor: string;
   status: SemanticAssetReleaseStatus;
+  trigger?: SemanticAssetReleaseTrigger;
   connectionIds: string[];
   files: SemanticAssetReleaseFile[];
   changedSources: SemanticAssetChangedSource[];
@@ -929,6 +932,14 @@ export type SemanticAssetPublishRequest = {
 export type SemanticAssetPublishResponse = {
   accepted: boolean;
   release: SemanticAssetReleaseRecord;
+};
+
+export type SemanticAssetManualReindexResponse = {
+  id?: string;
+  force: boolean;
+  startedAt: string;
+  finishedAt: string;
+  reindex: SemanticAssetReindexRecord;
 };
 
 export type SemanticAssetExportRequest = {

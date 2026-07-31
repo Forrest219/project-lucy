@@ -70,7 +70,8 @@ export type SemanticAssetErrorCode =
   | "PATH_NOT_ALLOWED"
   | "VALIDATION_SNAPSHOT_NOT_FOUND"
   | "VALIDATION_GATE_FAILED"
-  | "PUBLISH_IN_PROGRESS";
+  | "PUBLISH_IN_PROGRESS"
+  | "REINDEX_IN_PROGRESS";
 
 export type SemanticAssetWarning = {
   code: SemanticAssetWarningCode;
@@ -153,11 +154,14 @@ export type SemanticAssetReindexRecord = {
   stderr?: string;
 };
 
+export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex";
+
 export type SemanticAssetReleaseRecord = {
   id: string;
   createdAt: string;
   actor: string;
   status: SemanticAssetReleaseStatus;
+  trigger?: SemanticAssetReleaseTrigger;
   connectionIds: string[];
   files: SemanticAssetReleaseFile[];
   changedSources: SemanticAssetChangedSource[];
@@ -255,6 +259,10 @@ function newValidationId(): string {
 
 function newReleaseId(): string {
   return `rel_${formatTimestamp(new Date())}_${randomUUID().slice(0, 8)}`;
+}
+
+function newManualReindexId(): string {
+  return `idx_${formatTimestamp(new Date())}_${randomUUID().slice(0, 8)}`;
 }
 
 function sanitizeFilename(raw: string): string {
@@ -869,7 +877,15 @@ function normalizeSidecar(raw: unknown): SidecarFile {
   const records: SemanticAssetReleaseRecord[] = [];
   for (const item of obj.records) {
     if (item && typeof item === "object") {
-      records.push(item as SemanticAssetReleaseRecord);
+      // Backfill the `trigger` field for pre-M32 records so the publish
+      // history page can render the trigger column consistently. Missing
+      // trigger implies the record came from a publish action; explicit
+      // `webui_manual_reindex` is left untouched.
+      const obj = item as SemanticAssetReleaseRecord;
+      if (obj.trigger === undefined) {
+        obj.trigger = "webui_publish";
+      }
+      records.push(obj);
     }
   }
   return { version: 1, records };
@@ -924,7 +940,28 @@ export async function readSemanticAssetReleases(
   projectRoot: string
 ): Promise<SemanticAssetReleasesResponse> {
   const sidecar = await readSidecar(projectRoot);
-  return { records: sidecar.records.slice(-MAX_RELEASE_RECORDS) };
+  const records = sidecar.records.slice(-MAX_RELEASE_RECORDS);
+  records.sort(sortRecordsByCreatedAtDesc);
+  return { records };
+}
+
+/**
+ * Sort comparator for release history: newest `createdAt` first, falling back
+ * to lexicographic `id` ordering when timestamps tie. The id tiebreaker
+ * keeps the order deterministic so the audit page never re-shuffles rows
+ * for releases written in the same millisecond (e.g. by parallel test
+ * workers). The order is part of the public contract — the spec example
+ * in §7.2 shows the latest record at the top of the table.
+ */
+export function sortRecordsByCreatedAtDesc(
+  a: SemanticAssetReleaseRecord,
+  b: SemanticAssetReleaseRecord
+): number {
+  if (a.createdAt < b.createdAt) return 1;
+  if (a.createdAt > b.createdAt) return -1;
+  if (a.id < b.id) return 1;
+  if (a.id > b.id) return -1;
+  return 0;
 }
 
 export async function readSemanticAssetRelease(
@@ -933,6 +970,44 @@ export async function readSemanticAssetRelease(
 ): Promise<SemanticAssetReleaseRecord | null> {
   const sidecar = await readSidecar(projectRoot);
   return sidecar.records.find((r) => r.id === releaseId) ?? null;
+}
+
+export type ManualReindexInput = {
+  actor?: string;
+  force: boolean;
+  reindex: SemanticAssetReindexRecord;
+  startedAt?: string;
+};
+
+export async function recordManualReindex(
+  projectRoot: string,
+  input: ManualReindexInput
+): Promise<SemanticAssetReleaseRecord> {
+  const createdAt = input.startedAt ?? new Date().toISOString();
+  const ok = input.reindex.ok;
+  const record: SemanticAssetReleaseRecord = {
+    id: newManualReindexId(),
+    createdAt,
+    actor: input.actor ?? "local-admin",
+    status: ok ? "published" : "reindex_failed",
+    trigger: "webui_manual_reindex",
+    connectionIds: [],
+    files: [],
+    changedSources: [],
+    validation: { ok: true, results: [] },
+    reindex: {
+      ok: input.reindex.ok,
+      exitCode: input.reindex.exitCode,
+      stdout: redactText(input.reindex.stdout),
+      stderr: redactText(input.reindex.stderr)
+    }
+  };
+  // Reuse the same sidecar that backs the publish history so the
+  // `发布记录` page renders manual reindex entries alongside publish batches
+  // without introducing a second sidecar.
+  await appendReleaseRecord(projectRoot, record);
+  void input.force; // `force` is preserved in stdout/exit code, not as a sidecar field.
+  return record;
 }
 
 // ─── Publish lock (single-process MVP) ────────────────────────────────────
@@ -1565,6 +1640,7 @@ export async function publishSemanticAssets(
       createdAt,
       actor,
       status: "blocked",
+      trigger: "webui_publish",
       connectionIds: Array.from(new Set(snapshot.files.map((f) => f.connectionId))),
       files: snapshot.files.map((f) => ({
         targetPath: f.targetPath,
@@ -1602,6 +1678,7 @@ export async function publishSemanticAssets(
       createdAt,
       actor,
       status: "blocked",
+      trigger: "webui_publish",
       connectionIds: Array.from(new Set(snapshot.files.map((f) => f.connectionId))),
       files: snapshot.files.map((f) => ({
         targetPath: f.targetPath,
@@ -1652,6 +1729,7 @@ export async function publishSemanticAssets(
         createdAt,
         actor,
         status: "promote_failed",
+        trigger: "webui_publish",
         connectionIds: Array.from(new Set(snapshot.files.map((f) => f.connectionId))),
         files: releaseFiles,
         changedSources: snapshot.changedSources,
@@ -1672,6 +1750,7 @@ export async function publishSemanticAssets(
     createdAt,
     actor,
     status: "reindexing",
+    trigger: "webui_publish",
     connectionIds: Array.from(new Set(snapshot.files.map((f) => f.connectionId))),
     files: releaseFiles,
     changedSources: snapshot.changedSources,
@@ -1760,6 +1839,7 @@ export const __test = {
   appendReleaseRecord,
   updateReleaseRecord,
   readPublishLock,
+  recordManualReindex,
   cleanupExpiredSemanticPublishStaging,
   cleanupSemanticPublishStaging,
   stagingDir,

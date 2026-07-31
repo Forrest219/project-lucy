@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import { BrowserRouter, Link, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Catalog } from "../pages/Catalog";
 import { JoinEditor } from "../pages/JoinEditor";
 import { Onboarding } from "../pages/Onboarding";
-import { Review } from "../pages/Review";
+import { PublishWorkbench } from "../pages/publish/PublishWorkbench";
+import { PublishHistory } from "../pages/publish/PublishHistory";
 import { TableEditor } from "../pages/TableEditor";
 import { WikiEditor } from "../pages/WikiEditor";
 import { AgentList } from "../pages/admin/AgentList";
@@ -58,8 +59,11 @@ const navGroups: Array<{ title: string; items: NavItem[] }> = [
     items: [{ label: "Wiki 文档", to: "/wiki", active: (path) => path === "/wiki" }]
   },
   {
-    title: "审阅与校验",
-    items: [{ label: "变更审阅", to: "/review", active: (path) => path === "/review" }]
+    title: "语义发布",
+    items: [
+      { label: "发布工作台", to: "/publish/workbench", active: (path) => path.startsWith("/publish/workbench") },
+      { label: "发布记录", to: "/publish/history", active: (path) => path.startsWith("/publish/history") }
+    ]
   },
   {
     title: "质量评测",
@@ -139,7 +143,9 @@ export function AppFrame() {
             <Route path="/" element={<Catalog />} />
             <Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
             <Route path="/joins/:conn/:schema/:table" element={<JoinEditor />} />
-            <Route path="/review" element={<Review />} />
+            <Route path="/publish/workbench" element={<PublishWorkbench />} />
+            <Route path="/publish/history" element={<PublishHistory />} />
+            <Route path="/review" element={<Navigate to="/publish/workbench" replace />} />
             <Route path="/wiki" element={<WikiEditor />} />
             <Route path="/admin/agents" element={<AgentList />} />
             <Route path="/admin/agents/:userId" element={<AgentDetail />} />

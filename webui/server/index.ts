@@ -7,7 +7,7 @@ import { parse, stringify } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
 import { changedFiles, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
-import { validateSource, testConnection, type ValidationResult } from "./ktx";
+import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
 import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
@@ -47,6 +47,7 @@ import {
   publishSemanticAssets,
   readSemanticAssetRelease,
   readSemanticAssetReleases,
+  recordManualReindex,
   SemanticAssetValidationError,
   validateSemanticAssets,
   type SemanticAssetPublishRequest,
@@ -739,6 +740,55 @@ export function buildServer() {
       });
     }
     return { ok: true, data: { release: record } };
+  });
+
+  app.post<{
+    Body: { force?: boolean };
+  }>("/api/semantic-assets/reindex", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const force = request.body?.force === true;
+    const lockPath = path.resolve(projectRoot, ".ktx-ui", "semantic-publish.lock");
+    try {
+      const lockStat = await lstat(lockPath);
+      if (lockStat.isFile()) {
+        reply.status(409);
+        return reply.send({
+          ok: false,
+          error: {
+            code: "REINDEX_IN_PROGRESS",
+            message: "已有发布批次正在重建索引，请等待当前批次完成后再试"
+          }
+        });
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+    const startedAt = new Date().toISOString();
+    const reindex = await reindexProject(projectRoot, { force });
+    const finishedAt = new Date().toISOString();
+    const reindexRecord = {
+      ok: reindex.exitCode === 0,
+      exitCode: reindex.exitCode,
+      stdout: reindex.stdout,
+      stderr: reindex.stderr
+    };
+    // M32: write a lightweight history record so /publish/history can show
+    // the reindex result alongside normal publish batches.
+    const historyRecord = await recordManualReindex(projectRoot, {
+      force,
+      startedAt,
+      reindex: reindexRecord
+    });
+    return {
+      ok: true,
+      data: {
+        id: historyRecord.id,
+        force,
+        startedAt,
+        finishedAt,
+        reindex: reindexRecord
+      }
+    };
   });
 
   app.post<{

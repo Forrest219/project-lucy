@@ -15,7 +15,8 @@ function StubPage({ name }: { name: string }) {
 vi.mock("../pages/Catalog", () => ({ Catalog: () => <StubPage name="Catalog" /> }));
 vi.mock("../pages/JoinEditor", () => ({ JoinEditor: () => <StubPage name="JoinEditor" /> }));
 vi.mock("../pages/Onboarding", () => ({ Onboarding: () => <StubPage name="Onboarding" /> }));
-vi.mock("../pages/Review", () => ({ Review: () => <StubPage name="Review" /> }));
+vi.mock("../pages/publish/PublishWorkbench", () => ({ PublishWorkbench: () => <StubPage name="PublishWorkbench" /> }));
+vi.mock("../pages/publish/PublishHistory", () => ({ PublishHistory: () => <StubPage name="PublishHistory" /> }));
 vi.mock("../pages/TableEditor", () => ({ TableEditor: () => <StubPage name="TableEditor" /> }));
 vi.mock("../pages/WikiEditor", () => ({ WikiEditor: () => <StubPage name="WikiEditor" /> }));
 vi.mock("../pages/admin/AgentList", () => ({ AgentList: () => <StubPage name="AgentList" /> }));
@@ -102,7 +103,8 @@ describe("AppFrame shell", () => {
     ["/connections/test", "ConnectionTest", "连通测试"],
     ["/", "Catalog", "表目录"],
     ["/wiki", "WikiEditor", "Wiki 文档"],
-    ["/review", "Review", "变更审阅"],
+    ["/publish/workbench", "PublishWorkbench", "发布工作台"],
+    ["/publish/history", "PublishHistory", "发布记录"],
     ["/eval/cases", "CaseList", "Case 管理"],
     ["/eval/runs", "RunList", "运行历史"],
     ["/eval/monitor", "Monitor", "趋势监控"],
@@ -123,6 +125,25 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: "系统概览" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByText("部署向导")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "上线检查" })).not.toBeInTheDocument();
+  });
+
+  it("exposes the semantic-publish module with only workbench + history in the sidebar", () => {
+    renderAt("/publish/workbench");
+    expect(screen.getByText("语义发布")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "发布工作台" })).toHaveAttribute("href", "/publish/workbench");
+    expect(screen.getByRole("link", { name: "发布记录" })).toHaveAttribute("href", "/publish/history");
+    expect(screen.queryByText("审阅与校验")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "变更审阅" })).not.toBeInTheDocument();
+    // No second-level item such as `待发布变更`, `索引生效`, or `资产包` is allowed.
+    expect(screen.queryByRole("link", { name: "待发布变更" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "索引生效" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "资产包" })).not.toBeInTheDocument();
+  });
+
+  it("redirects the legacy /review route to the publish workbench", () => {
+    renderAt("/review");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("PublishWorkbench");
+    expect(screen.getByRole("link", { name: "发布工作台" })).toHaveAttribute("aria-current", "page");
   });
 
   it("renders a global help button", () => {

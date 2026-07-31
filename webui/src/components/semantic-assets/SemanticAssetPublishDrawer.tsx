@@ -352,10 +352,9 @@ export function SemanticAssetPublishDrawer(props: SemanticAssetPublishDrawerProp
         <header className="pl-drawer-header">
           <div>
             <p className="pl-eyebrow">语义资产</p>
-            <h2 className="pl-panel-title notranslate" translate="no">发布 Schema Manifest + Semantic Overlay</h2>
+            <h2 className="pl-panel-title notranslate" translate="no">发布语义资产</h2>
             <p className="pl-notice notranslate" translate="no">
-              走 staging 验证门禁：通过 <code className="notranslate" translate="no">ktx sl validate</code> 后才原子落盘正式 PVC；只有
-              落盘成功才会触发 <code className="notranslate" translate="no">ktx admin reindex</code>。正式文件不会被覆盖除非你勾选确认。
+              走 staging 验证门禁；发布成功后将自动重建 <code className="notranslate" translate="no">KTX</code> 索引，让 Agent / MCP 读取最新语义资产。
             </p>
           </div>
           <button
@@ -511,7 +510,7 @@ export function SemanticAssetPublishDrawer(props: SemanticAssetPublishDrawerProp
                 onClick={handleSubmit}
                 data-testid="semantic-asset-publish-submit"
               >
-                {publishMutation.isPending ? "发布中…" : "发布语义层"}
+                {publishMutation.isPending ? "发布中…" : "发布并重建索引"}
               </button>
             </div>
           </section>

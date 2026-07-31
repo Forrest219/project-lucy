@@ -128,6 +128,26 @@ afterEach(() => {
 });
 
 describe("SemanticAssetPublishButton + SemanticAssetPublishDrawer", () => {
+  it("uses 发布并重建索引 as the submit CTA and 发布语义资产 as the drawer heading", async () => {
+    stubFetch({});
+    const { Wrapper } = makeWrapper();
+    render(
+      <Wrapper>
+        <SemanticAssetPublishDrawer open onClose={() => undefined} />
+      </Wrapper>
+    );
+    expect(
+      screen.getByRole("heading", { name: "发布语义资产" })
+    ).toBeInTheDocument();
+    // The KTX index mention is wrapped in <code> so the visible text is
+    // split across nodes; a regex match against the container handles the
+    // element boundary without flagging the KTX term as a forbidden pattern.
+    const drawer = screen.getByTestId("semantic-asset-publish-panel");
+    expect(drawer.textContent ?? "").toMatch(/发布成功后.*自动重建.*KTX.*索引/);
+    const submit = screen.getByTestId("semantic-asset-publish-submit");
+    expect(submit).toHaveTextContent("发布并重建索引");
+  });
+
   it("opens the drawer when the button is clicked", async () => {
     stubFetch({});
     const { Wrapper } = makeWrapper();
