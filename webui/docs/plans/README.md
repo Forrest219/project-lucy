@@ -87,6 +87,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M24-catalog-reload-result-ops-ux.md](wo-M24-catalog-reload-result-ops-ux.md) | M24 | 本地目录刷新结果运维体验：卡片内状态栏、Schema 资产列表优先、inline 缺失 Manifest 诊断 |
 | [wo-M25-connection-semantic-boundary-automation.md](wo-M25-connection-semantic-boundary-automation.md) | M25 | 数据库接入与语义层维护边界自动化：asset kind、上传校验、IA lint 与 Review checklist |
 | [wo-M26-help-markdown-rendering.md](wo-M26-help-markdown-rendering.md) | M26 | Help Center Markdown 渲染修复：系统手册表格、安全渲染、深链与回归测试 |
+| [wo-M31-table-whitelist-catalog-reload-layout-stability.md](wo-M31-table-whitelist-catalog-reload-layout-stability.md) | M31 | 表白名单刷新反馈与布局稳定性：Toast 成功反馈、Schema 内缺失 Manifest 诊断、工具栏和行内操作降噪 |
 
 ## 6. 如何把工单喂给 codex
 

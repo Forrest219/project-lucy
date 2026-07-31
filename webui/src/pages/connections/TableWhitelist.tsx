@@ -13,7 +13,7 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
-import { CatalogAssetUploadButton, CatalogReloadButton } from "../../components/catalog";
+import { CatalogReloadButton } from "../../components/catalog";
 import { PageHeader } from "../../components/PageHeader";
 
 type WhitelistTableRow = {
@@ -91,6 +91,16 @@ function isEqualSet<T>(a: Iterable<T>, b: Iterable<T>): boolean {
   return true;
 }
 
+function catalogReloadToastSummary(run: { tables: number; enabledTables: number; warnings: unknown[] }): string {
+  const warningPart = run.warnings.length > 0 ? ` · ${run.warnings.length} 个提示` : "";
+  return `本地目录已刷新 · 发现 ${run.tables} 张表 · 表白名单 ${run.enabledTables} 张${warningPart}`;
+}
+
+function catalogReloadBannerSummary(run: { tables: number; enabledTables: number; warnings: unknown[] }): string {
+  const warningPart = run.warnings.length > 0 ? `，${run.warnings.length} 个提示` : "";
+  return `本地目录已刷新。发现 ${run.tables} 张表，当前表白名单 ${run.enabledTables} 张${warningPart}。`;
+}
+
 export function TableWhitelist() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -103,7 +113,8 @@ export function TableWhitelist() {
   const [draftByConnection, setDraftByConnection] = useState<Record<string, string[]>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [statusTone, setStatusTone] = useState<"success" | "danger" | null>(null);
+  const [statusTone, setStatusTone] = useState<"success" | "warning" | "danger" | null>(null);
+  const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
 
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
@@ -301,6 +312,23 @@ export function TableWhitelist() {
     setStatusTone(null);
   }
 
+  function toggleDetails(key: string) {
+    setOpenDetails((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  async function copyManifestPath(schemaManifestPath: string) {
+    try {
+      if (!navigator?.clipboard?.writeText) {
+        throw new Error("clipboard unavailable");
+      }
+      await navigator.clipboard.writeText(schemaManifestPath);
+      toast.success("已复制 Manifest 路径");
+    } catch (err) {
+      void err;
+      toast.error("复制路径失败");
+    }
+  }
+
   function updateSaveProgress(_connId: string, _phase: never, _detail?: string) {
     // Removed in M14. Saving the whitelist only writes enabled_tables; catalog
     // reload is an explicit toolbar action.
@@ -343,7 +371,7 @@ export function TableWhitelist() {
       const allWritten = results.every((r) => r.write.written);
       if (allWritten) {
         toast.success("表白名单已保存");
-        setStatusMessage("已保存白名单变更。若你同时更新了 YAML 文件，请刷新本地目录。");
+        setStatusMessage("表白名单已保存。保存不会自动刷新本地目录。");
         setStatusTone("success");
       } else {
         toast.error("表白名单保存未完成，请重试。");
@@ -401,66 +429,79 @@ export function TableWhitelist() {
 
         {connections.length > 0 && (
           <div className="pl-whitelist-toolbar" role="toolbar" aria-label="表白名单工具栏">
-          <label className="grid gap-1.5 text-sm">
-            <span>搜索</span>
-            <input
-              className="pl-input"
-              placeholder="搜索表名/描述..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            <span className="notranslate" translate="no">Schema 筛选</span>
-            <select
-              className="pl-input notranslate"
-              value={schemaFilter}
-              onChange={(e) => {
-                setUserOverrodeSchema(true);
-                setSchemaFilter(e.target.value);
-              }}
-              aria-label="Schema 筛选"
-              translate="no"
-            >
-              <option className="notranslate" value="all" translate="no">全部 Schema</option>
-              {allSchemas.map((s) => (
-                <option className="notranslate" key={s} value={s} translate="no">
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-fg-muted">已勾选</span>
-            <strong>已勾选 {visibleChecked} / {visibleTotal} 张表</strong>
+            <div className="pl-whitelist-filter-area" data-testid="pl-whitelist-filter-area">
+              <label className="grid gap-1.5 text-sm">
+                <span>搜索</span>
+                <input
+                  className="pl-input"
+                  placeholder="搜索表名/描述..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="notranslate" translate="no">Schema 筛选</span>
+                <select
+                  className="pl-input notranslate"
+                  value={schemaFilter}
+                  onChange={(e) => {
+                    setUserOverrodeSchema(true);
+                    setSchemaFilter(e.target.value);
+                  }}
+                  aria-label="Schema 筛选"
+                  translate="no"
+                >
+                  <option className="notranslate" value="all" translate="no">全部 Schema</option>
+                  {allSchemas.map((s) => (
+                    <option className="notranslate" key={s} value={s} translate="no">
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="pl-whitelist-ops-area" data-testid="pl-whitelist-ops-area">
+              <span className="pl-whitelist-selection-summary" aria-live="polite">
+                已选 {visibleChecked}/{visibleTotal} 张表
+              </span>
+              <button
+                type="button"
+                className="pl-inline-link pl-inline-link--quiet"
+                onClick={selectAllVisible}
+                disabled={visibleTotal === 0}
+              >
+                全选
+              </button>
+              <button
+                type="button"
+                className="pl-inline-link pl-inline-link--quiet"
+                onClick={invertVisible}
+                disabled={visibleTotal === 0}
+              >
+                反选
+              </button>
+              <CatalogReloadButton
+                connectionId={toolbarReloadConnId}
+                schema={toolbarReloadSchema}
+                label="刷新本地目录"
+                variant="secondary"
+                testId="whitelist-reload-catalog"
+                showCompletionLabel={false}
+                showInlineResult={false}
+                onReloadComplete={(run) => {
+                  toast.success(catalogReloadToastSummary(run));
+                  setStatusMessage(catalogReloadBannerSummary(run));
+                  setStatusTone(run.warnings.length > 0 ? "warning" : "success");
+                }}
+                onReloadError={(error) => {
+                  toast.error(`本地目录刷新失败：${error.message}`);
+                  setStatusMessage(`本地目录刷新失败：${error.message}`);
+                  setStatusTone("danger");
+                }}
+              />
+            </div>
           </div>
-          <div className="flex flex-wrap items-end gap-2 ml-auto">
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost"
-              onClick={selectAllVisible}
-              disabled={visibleTotal === 0}
-            >
-              全选当前结果
-            </button>
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost"
-              onClick={invertVisible}
-              disabled={visibleTotal === 0}
-            >
-              反选当前结果
-            </button>
-            <CatalogReloadButton
-              connectionId={toolbarReloadConnId}
-              schema={toolbarReloadSchema}
-              label="刷新本地目录"
-              variant="secondary"
-              testId="whitelist-reload-catalog"
-            />
-          </div>
-        </div>
-      )}
+        )}
 
       {visibleGroups.map(({ conn, schema, rows }) => (
         <section key={`${conn.id}-${schema}`} className="pl-table-group mt-4">
@@ -471,7 +512,7 @@ export function TableWhitelist() {
             <thead>
               <tr>
                 <th>选择</th>
-                <th>表名 (Table)</th>
+                <th className="notranslate" translate="no">表名 (Table)</th>
                 <th>字段数</th>
                 <th>状态</th>
                 <th>动作</th>
@@ -494,7 +535,7 @@ export function TableWhitelist() {
                       />
                     </td>
                     <td>
-                      <span className="font-medium">{row.table}</span>
+                      <span className="font-medium notranslate" translate="no">{row.table}</span>
                     </td>
                     <td>
                       {row.columnCount !== undefined ? `${row.columnCount} 个` : "-"}
@@ -505,7 +546,7 @@ export function TableWhitelist() {
                     <td>
                       {status === "included" || status === "semantic_pending" ? (
                         <Link
-                          className="pl-btn pl-btn--ghost text-xs"
+                          className="pl-inline-link text-xs"
                           to={`/sources/${encodeURIComponent(row.connectionId)}/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`}
                         >
                           查看语义
@@ -513,7 +554,7 @@ export function TableWhitelist() {
                       ) : status === "disabled" ? (
                         <button
                           type="button"
-                          className="pl-btn pl-btn--ghost text-xs"
+                          className="pl-btn pl-btn--ghost pl-btn--sm"
                           onClick={() => toggleRow(row)}
                         >
                           加入白名单
@@ -530,45 +571,87 @@ export function TableWhitelist() {
         </section>
       ))}
 
-      {configuredSchemasWithoutTables.map(({ conn, schema }) => (
-        <section
-          key={`${conn.id}-${schema}-configured-empty`}
-          className="pl-table-group mt-4"
-          data-testid={`configured-schema-empty-${conn.id}-${schema}`}
-        >
-          <div className="pl-table-group-heading notranslate" translate="no">
-            连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
-          </div>
-          <div className="pl-empty-state">
-            <strong className="notranslate" translate="no">{schema} 已在连接配置中启用，但本地语义层尚未提供 Manifest。</strong>
-            <p className="mt-1">
-              请将 <code className="notranslate" translate="no">Manifest</code> 文件放入下方 <code className="notranslate" translate="no">YAML</code> 路径，或在具备 <code className="notranslate" translate="no">KTX</code>/数据库权限的离线环境中生成后提交。
-              白名单只读取本地 <code className="notranslate" translate="no">YAML</code> 资产，不会访问物理数据库。
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <details className="pl-yaml-path-details">
-                <summary>查看 YAML 路径说明</summary>
-                <code className="notranslate" translate="no" dir="ltr">semantic-layer/{conn.id}/_schema/{schema}.yaml</code>
-              </details>
-              <CatalogAssetUploadButton
-                connectionId={conn.id}
-                schema={schema}
-                label="上传该 Schema 的 YAML"
-                variant="secondary"
-                size="sm"
-                testId={`whitelist-empty-upload-yaml-${conn.id}-${schema}`}
-              />
-              <Link
-                to="/connections"
-                className="pl-btn pl-btn--ghost"
-                data-testid={`whitelist-empty-back-to-overview-${conn.id}-${schema}`}
-              >
-                打开连接概览
-              </Link>
+      {configuredSchemasWithoutTables.map(({ conn, schema }) => {
+        const schemaManifestPath = `semantic-layer/${conn.id}/_schema/${schema}.yaml`;
+        const detailsKey = `${conn.id}-${schema}`;
+        const detailsId = `whitelist-missing-manifest-details-${conn.id}-${schema}`;
+        const isDetailsOpen = openDetails[detailsKey] === true;
+        return (
+          <section
+            key={`${conn.id}-${schema}-configured-empty`}
+            className="pl-table-group mt-4"
+            data-testid={`configured-schema-empty-${conn.id}-${schema}`}
+          >
+            <div className="pl-table-group-heading notranslate" translate="no">
+              连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
             </div>
-          </div>
-        </section>
-      ))}
+            <div
+              className="pl-missing-manifest-diagnostic notranslate"
+              translate="no"
+            >
+              <p
+                className="pl-missing-manifest-title notranslate"
+                translate="no"
+                data-testid={`whitelist-missing-manifest-title-${conn.id}-${schema}`}
+              >
+                {`缺少 Manifest：${schema}`}
+              </p>
+              <p className="pl-missing-manifest-description notranslate" translate="no">
+                {`${schema} 已在连接配置中启用，但本地 schema 文件不存在。`}
+              </p>
+              <p className="pl-missing-manifest-path-row">
+                <span>路径：</span>
+                <code
+                  className="notranslate"
+                  translate="no"
+                  dir="ltr"
+                  data-testid={`whitelist-missing-manifest-path-${conn.id}-${schema}`}
+                >
+                  {schemaManifestPath}
+                </code>
+              </p>
+              {isDetailsOpen ? (
+                <p
+                  id={detailsId}
+                  className="pl-missing-manifest-details-content notranslate"
+                  translate="no"
+                  data-testid={`whitelist-missing-manifest-details-${conn.id}-${schema}`}
+                >
+                  白名单只读取本地 <code className="notranslate" translate="no">YAML</code> 资产。刷新本地目录不会连接数据库，也不会生成新的 Manifest。
+                </p>
+              ) : null}
+              <div className="pl-missing-manifest-actions">
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost pl-btn--sm"
+                  aria-expanded={isDetailsOpen}
+                  aria-controls={detailsId}
+                  onClick={() => toggleDetails(detailsKey)}
+                  data-testid={`whitelist-missing-manifest-toggle-${conn.id}-${schema}`}
+                >
+                  {isDetailsOpen ? "收起详情" : "展开详情"}
+                </button>
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost pl-btn--sm"
+                  onClick={() => void copyManifestPath(schemaManifestPath)}
+                  data-testid={`whitelist-missing-manifest-copy-${conn.id}-${schema}`}
+                >
+                  复制路径
+                </button>
+                <Link
+                  to="/connections"
+                  className="pl-btn pl-btn--ghost pl-btn--sm notranslate"
+                  translate="no"
+                  data-testid={`whitelist-missing-manifest-overview-${conn.id}-${schema}`}
+                >
+                  去连接概览上传 Manifest
+                </Link>
+              </div>
+            </div>
+          </section>
+        );
+      })}
 
       {connections.length > 0 && visibleGroups.length === 0 && configuredSchemasWithoutTables.length === 0 && (
         <div className="pl-empty-state mt-4">
@@ -582,6 +665,8 @@ export function TableWhitelist() {
           className={`pl-validation-banner ${
             statusTone === "danger"
               ? "pl-validation-banner--danger"
+              : statusTone === "warning"
+                ? "pl-validation-banner--warning"
               : "pl-validation-banner--success"
           }`}
           role="status"

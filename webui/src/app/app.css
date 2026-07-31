@@ -302,6 +302,25 @@
   .pl-btn--danger { @apply border border-danger-strong bg-danger-soft text-danger-strong hover:bg-danger-soft; }
   .pl-btn--sm { @apply px-2 py-0.5 text-xs; }
   .pl-btn:disabled { @apply opacity-50 cursor-not-allowed; }
+  /* M31: lightweight inline link used for row actions (查看语义) and toolbar
+     batch selectors (全选 / 反选). Renders as a link, not a button. */
+  .pl-inline-link {
+    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm text-sm font-normal text-primary underline-offset-4 no-underline;
+  }
+  .pl-inline-link:hover,
+  .pl-inline-link:focus-visible {
+    @apply underline;
+    outline: none;
+  }
+  .pl-inline-link:focus-visible {
+    @apply ring-2 ring-primary;
+  }
+  .pl-inline-link:disabled {
+    @apply cursor-not-allowed text-fg-muted no-underline opacity-60;
+  }
+  .pl-inline-link--quiet {
+    @apply text-sm font-normal;
+  }
 
   /* 表单 */
   .pl-field-label { @apply grid gap-1.5 mb-3 text-sm; }
@@ -503,8 +522,44 @@
   .pl-status-badge--disabled { @apply bg-bg-muted text-fg-muted; }
 
   /* 表白名单 (M8) */
-  .pl-whitelist-toolbar { @apply flex flex-wrap items-end gap-4 rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-whitelist-toolbar { @apply flex flex-wrap items-end justify-between gap-x-4 gap-y-3 rounded-md border border-border-default bg-bg-surface p-3; }
   .pl-whitelist-toolbar label { @apply grid gap-1.5 text-sm; }
+  /* M31: stable two-zone toolbar — filters on the left, batch / ops on the
+     right. Each zone wraps internally so the toolbar keeps a predictable
+     height when controls overflow. */
+  .pl-whitelist-filter-area {
+    @apply flex flex-wrap items-end gap-3;
+  }
+  .pl-whitelist-ops-area {
+    @apply ml-auto flex flex-wrap items-center gap-3;
+  }
+  .pl-whitelist-selection-summary {
+    @apply whitespace-nowrap text-sm text-fg-muted;
+  }
+  .pl-missing-manifest-diagnostic {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3 text-sm text-fg-body;
+  }
+  .pl-missing-manifest-title {
+    @apply text-sm font-semibold text-fg-default;
+  }
+  .pl-missing-manifest-description {
+    @apply text-sm text-fg-body;
+  }
+  .pl-missing-manifest-path-row {
+    @apply flex flex-wrap items-baseline gap-1 text-sm text-fg-muted;
+  }
+  .pl-missing-manifest-path-row code {
+    @apply break-all rounded-sm border border-border-default bg-bg-base px-1.5 py-0.5 font-mono text-xs text-fg-default;
+  }
+  .pl-missing-manifest-details-content {
+    @apply rounded-sm border border-border-muted bg-bg-base px-3 py-2 text-xs text-fg-body;
+  }
+  .pl-missing-manifest-details-content code {
+    @apply font-mono;
+  }
+  .pl-missing-manifest-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
   .pl-table-group { @apply grid gap-2; }
   .pl-table-group-heading { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-data-table { @apply w-full border-collapse text-sm; }
@@ -728,6 +783,7 @@
   .pl-validation-row--failed > span { @apply text-danger-strong; }
   .pl-validation-banner { @apply rounded-md border px-3 py-2 text-sm font-medium; }
   .pl-validation-banner--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-validation-banner--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-validation-banner--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-boundary-checklist { @apply grid gap-2 text-xs text-fg-muted; }
   .pl-boundary-checklist li { @apply rounded-md border border-border-default bg-bg-base px-3 py-2; }

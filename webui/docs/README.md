@@ -31,6 +31,7 @@
 | [28-catalog-reload-result-ops-ux-spec.md](28-catalog-reload-result-ops-ux-spec.md) | 本地目录刷新结果运维体验：卡片内状态栏、Schema 资产列表优先、inline 缺失 Manifest 诊断与修复闭环 | 产品 / 前端 / 运维 |
 | [29-connection-semantic-boundary-automation-spec.md](29-connection-semantic-boundary-automation-spec.md) | 数据库接入与语义层维护边界自动化：职责矩阵、asset kind、上传结构校验、IA boundary lint 与 Review checklist | 产品 / 前端 / 后端 / 运维 |
 | [30-help-markdown-rendering-spec.md](30-help-markdown-rendering-spec.md) | Help Center Markdown 渲染修复：系统手册表格、深链、安全渲染与翻译防御 | 产品 / 前端 / 文档 / 安全 |
+| [34-table-whitelist-catalog-reload-layout-stability-spec.md](34-table-whitelist-catalog-reload-layout-stability-spec.md) | 表白名单刷新反馈与布局稳定性：Toast 成功反馈、Schema 内缺失 Manifest 诊断、工具栏和行内操作降噪 | 产品 / 前端 |
 
 ## 与原 README 的关键校正
 

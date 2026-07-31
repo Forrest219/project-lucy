@@ -5,8 +5,20 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TableWhitelist } from "../pages/connections/TableWhitelist";
-import type { ConnectionInfo, SourceSummary } from "../lib/types";
+import type { CatalogReloadRun, ConnectionInfo, SourceSummary } from "../lib/types";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
+
+const toastMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn()
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: toastMocks.success,
+    error: toastMocks.error
+  }
+}));
 
 const TEST_CONN: ConnectionInfo = {
   id: "mysql-aliyun",
@@ -68,6 +80,7 @@ function defaultHandlers(opts: {
   tables?: string[];
   tablesByConnection?: Record<string, string[]>;
   sources?: SourceSummary[];
+  catalogReload?: Partial<CatalogReloadRun>;
 } = {}): HandlerMap {
   const connections = opts.connections ?? [opts.connection ?? TEST_CONN];
   const sources = opts.sources ?? TEST_SOURCES;
@@ -146,9 +159,9 @@ function defaultHandlers(opts: {
             connections: 1,
             configuredSchemas: 1,
             manifestSchemas: 1,
-            tables: 3,
-            enabledTables: 3,
-            warnings: [],
+            tables: opts.catalogReload?.tables ?? 3,
+            enabledTables: opts.catalogReload?.enabledTables ?? 3,
+            warnings: opts.catalogReload?.warnings ?? [],
             source: "static-yaml"
           }
         })
@@ -201,6 +214,8 @@ function renderWhitelist(initialEntries: string[] = ["/"]) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  toastMocks.success.mockReset();
+  toastMocks.error.mockReset();
 });
 
 afterEach(() => {
@@ -218,7 +233,7 @@ describe("TableWhitelist", () => {
     expect(await screen.findByRole("heading", { name: "表白名单" })).toBeInTheDocument();
     expect(screen.getByPlaceholderText("搜索表名/描述...")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Schema 筛选" })).toBeInTheDocument();
-    expect(screen.getAllByText("已勾选 2 / 3 张表")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("已选 2/3 张表")[0]).toBeInTheDocument();
     expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
     expect(screen.getByText("superstore_orders")).toBeInTheDocument();
     expect(screen.getByText("8 个")).toBeInTheDocument();
@@ -305,13 +320,13 @@ describe("TableWhitelist", () => {
     const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
     expect(within(schemaSelect).getByRole("option", { name: "openclaw_db" })).toBeInTheDocument();
     expect(screen.getByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")).toHaveTextContent(
-      "openclaw_db 已在连接配置中启用，但本地语义层尚未提供 Manifest。"
+      "openclaw_db 已在连接配置中启用，但本地 schema 文件不存在。"
     );
 
     fireEvent.change(schemaSelect, { target: { value: "openclaw_db" } });
 
     await waitFor(() => {
-      expect(screen.getAllByText("已勾选 0 / 0 张表")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/0 张表")[0]).toBeInTheDocument();
     });
     expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：OPENCLAW_DB")).toBeInTheDocument();
     expect(screen.queryByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).not.toBeInTheDocument();
@@ -326,7 +341,7 @@ describe("TableWhitelist", () => {
     fireEvent.change(search, { target: { value: "returns" } });
 
     await waitFor(() => {
-      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
     expect(screen.queryByText("superstore_people")).not.toBeInTheDocument();
@@ -341,19 +356,19 @@ describe("TableWhitelist", () => {
     fireEvent.change(search, { target: { value: "returns" } });
 
     await waitFor(() => {
-      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
 
-    expect(await screen.findAllByText("已勾选 1 / 1 张表")).toHaveLength(1);
+    expect(await screen.findAllByText("已选 1/1 张表")).toHaveLength(1);
     expect(screen.getByText(/已修改 1 张表/)).toBeInTheDocument();
     expect(screen.getByText(/新增 1 张表/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "反选当前结果" }));
+    fireEvent.click(screen.getByRole("button", { name: "反选" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
     expect(screen.queryByText(/变更未保存/)).not.toBeInTheDocument();
   });
@@ -365,10 +380,10 @@ describe("TableWhitelist", () => {
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
     await waitFor(() => {
-      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
     fireEvent.click(screen.getByRole("button", { name: "预览 YAML" }));
 
     const drawer = await screen.findByRole("dialog", { name: "YAML 预览" });
@@ -421,12 +436,12 @@ describe("TableWhitelist", () => {
 
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
-    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
 
     fireEvent.change(search, { target: { value: "monthly" } });
-    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
 
     fireEvent.click(screen.getByRole("button", { name: "预览 YAML" }));
 
@@ -445,10 +460,10 @@ describe("TableWhitelist", () => {
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
     await waitFor(() => {
-      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
     // M14: saving the whitelist must only write enabled_tables; catalog reload
     // remains an explicit toolbar action.
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
@@ -469,7 +484,8 @@ describe("TableWhitelist", () => {
       return url.includes("/api/catalog/reload");
     });
     expect(reloadCalls).toHaveLength(0);
-    expect(await screen.findByText(/已保存白名单变更/)).toBeInTheDocument();
+    expect(await screen.findByText(/表白名单已保存/)).toBeInTheDocument();
+    expect(screen.queryByText(/请刷新本地目录/)).not.toBeInTheDocument();
   });
 
   it("surfaces a 刷新本地目录 action in the toolbar even without any draft changes", async () => {
@@ -566,7 +582,7 @@ describe("TableWhitelist", () => {
     expect(reloadCall?.[1]?.body).toBe(JSON.stringify({}));
   });
 
-  it("shows YAML path guidance inside the configured empty schema state without a duplicate reload action", async () => {
+  it("shows compact missing Manifest diagnostic inside the configured empty schema state without a duplicate reload action", async () => {
     const { fetchMock } = stubWhitelistFetch(
       defaultHandlers({
         connection: {
@@ -580,8 +596,15 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const empty = await screen.findByTestId("configured-schema-empty-mysql-aliyun-openclaw_db");
-    expect(within(empty).getByText("查看 YAML 路径说明")).toBeInTheDocument();
+    expect(within(empty).getByText(/缺少 Manifest：openclaw_db/)).toBeInTheDocument();
+    expect(within(empty).getByText("openclaw_db 已在连接配置中启用，但本地 schema 文件不存在。")).toBeInTheDocument();
     expect(within(empty).getByText("semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml")).toBeInTheDocument();
+    expect(within(empty).getByRole("button", { name: "展开详情" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(empty).getByRole("button", { name: "复制路径" })).toBeInTheDocument();
+    expect(within(empty).queryByRole("button", { name: "上传 Manifest" })).not.toBeInTheDocument();
+    expect(within(empty).getByRole("link", { name: "去连接概览上传 Manifest" })).toHaveAttribute("href", "/connections");
+    expect(within(empty).queryByText("上传该 Schema 的 YAML")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-asset-upload-drawer")).not.toBeInTheDocument();
     expect(
       within(empty).queryByTestId("whitelist-empty-reload-catalog-mysql-aliyun-openclaw_db")
     ).not.toBeInTheDocument();
@@ -623,7 +646,7 @@ describe("TableWhitelist", () => {
     expect(schemaSelect).toHaveValue("all");
   });
 
-  it("renders the empty-schema upload CTA in the configured empty state", async () => {
+  it("routes missing Manifest repair from the configured empty state to the connection overview", async () => {
     stubWhitelistFetch(
       defaultHandlers({
         connection: {
@@ -639,36 +662,84 @@ describe("TableWhitelist", () => {
     const empty = await screen.findByTestId(
       "configured-schema-empty-mysql-aliyun-openclaw_db"
     );
-    const uploadBtn = within(empty).getByRole("button", {
-      name: "上传该 Schema 的 YAML"
+    const repairLink = within(empty).getByRole("link", {
+      name: "去连接概览上传 Manifest"
     });
-    expect(uploadBtn).toBeInTheDocument();
+    expect(repairLink).toHaveAttribute("href", "/connections");
+    expect(within(empty).queryByRole("button", { name: "上传 Manifest" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-asset-upload-drawer")).not.toBeInTheDocument();
     // The action should not be a duplicate global reload — the toolbar covers
-    // that. Only the contextual upload CTA is rendered here.
+    // that. Only the contextual repair link is rendered here.
     expect(
       within(empty).queryByTestId("whitelist-reload-catalog")
     ).not.toBeInTheDocument();
   });
 
-  it("surfaces the new save success copy when the whitelist is saved", async () => {
+  it("surfaces the save success copy without stale reload guidance when the whitelist is saved", async () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
     await waitFor(() => {
-      expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
     expect(
-      await screen.findByText(/已保存白名单变更/)
+      await screen.findByText(/表白名单已保存/)
     ).toBeInTheDocument();
+    expect(screen.getByText(/保存不会自动刷新本地目录/)).toBeInTheDocument();
     expect(
-      screen.getByText(/若你同时更新了 YAML 文件，请刷新本地目录/)
-    ).toBeInTheDocument();
+      screen.queryByText(/若你同时更新了 YAML 文件，请刷新本地目录/)
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/请刷新本地目录/)).not.toBeInTheDocument();
     void fetchMock;
+  });
+
+  it("replaces the save banner with a reload summary that separates discovered and whitelisted table counts", async () => {
+    stubWhitelistFetch(
+      defaultHandlers({
+        catalogReload: {
+          tables: 3,
+          enabledTables: 2,
+          warnings: [
+            {
+              code: "SCHEMA_MANIFEST_MISSING",
+              connectionId: "mysql-aliyun",
+              schema: "openclaw_db",
+              filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+              message: "openclaw_db 已在连接配置中启用，但本地 schema 文件不存在。"
+            }
+          ]
+        }
+      })
+    );
+    renderWhitelist();
+
+    const row = await screen.findByTestId("whitelist-row-dataforai.superstore_people");
+    fireEvent.click(within(row).getByRole("checkbox", { name: "选择 superstore_people" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
+
+    expect(await screen.findByText(/表白名单已保存/)).toBeInTheDocument();
+    expect(screen.getByText(/保存不会自动刷新本地目录/)).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId("whitelist-reload-catalog"));
+
+    await waitFor(() => {
+      expect(
+        toastMocks.success.mock.calls.some(([message]) =>
+          String(message).includes("本地目录已刷新 · 发现 3 张表 · 表白名单 2 张 · 1 个提示")
+        )
+      ).toBe(true);
+    });
+
+    expect(
+      await screen.findByText("本地目录已刷新。发现 3 张表，当前表白名单 2 张，1 个提示。")
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/保存不会自动刷新本地目录/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/请刷新本地目录/)).not.toBeInTheDocument();
   });
 
   it("saves multi-connection whitelist changes without auto-triggering ingest", async () => {
@@ -700,12 +771,12 @@ describe("TableWhitelist", () => {
 
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
-    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
 
     fireEvent.change(search, { target: { value: "monthly" } });
-    await waitFor(() => expect(screen.getAllByText("已勾选 0 / 1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选当前结果" }));
+    await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
 
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
@@ -749,13 +820,136 @@ describe("TableWhitelist", () => {
       expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
     });
 
-    // Empty-schema copy uses Manifest terminology, not 表清单.
+    // Empty-schema copy uses Manifest terminology and the new compact diagnostic.
     const empty = await screen.findByTestId(
       "configured-schema-empty-mysql-aliyun-openclaw_db"
     );
-    expect(within(empty).getByText(/本地语义层尚未提供 Manifest/)).toBeInTheDocument();
+    expect(within(empty).getByText(/缺少 Manifest：openclaw_db/)).toBeInTheDocument();
+    expect(within(empty).getByText("openclaw_db 已在连接配置中启用，但本地 schema 文件不存在。")).toBeInTheDocument();
     expect(within(empty).queryByText("表清单")).not.toBeInTheDocument();
+    expect(within(empty).queryByText("上传该 Schema 的 YAML")).not.toBeInTheDocument();
 
     assertNoForbiddenTerms(document.body);
+  });
+
+  it("M31: toolbar splits filters and operations, and the reload button returns to 刷新本地目录 after success", async () => {
+    const { fetchMock } = stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const toolbar = await screen.findByRole("toolbar", { name: "表白名单工具栏" });
+    expect(within(toolbar).getByTestId("pl-whitelist-filter-area")).toBeInTheDocument();
+    expect(within(toolbar).getByTestId("pl-whitelist-ops-area")).toBeInTheDocument();
+
+    const reloadButton = await screen.findByTestId("whitelist-reload-catalog");
+    expect(reloadButton).toHaveTextContent("刷新本地目录");
+
+    fireEvent.click(reloadButton);
+
+    await waitFor(() => {
+      expect(reloadButton).toHaveTextContent("刷新本地目录中...");
+    });
+
+    await waitFor(() => {
+      expect(reloadButton).toHaveTextContent("刷新本地目录");
+    });
+
+    expect(screen.queryByText(/完成 ✓/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-reload-inline")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-reload-error")).not.toBeInTheDocument();
+
+    const reloadCalls = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).includes("/api/catalog/reload")
+    );
+    expect(reloadCalls.length).toBeGreaterThan(0);
+
+    await waitFor(() => {
+      expect(
+        toastMocks.success.mock.calls.some(([message]) =>
+          String(message).includes("本地目录已刷新 · 发现 3 张表 · 表白名单 3 张")
+        )
+      ).toBe(true);
+      void fetchMock;
+    });
+  });
+
+  it("M31: toolbar surfaces a copy-path error Toast when the Clipboard API is unavailable", async () => {
+    // The jsdom environment does not implement navigator.clipboard by default,
+    // so the copy action should fall back to a graceful error Toast.
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard unavailable"));
+    Object.defineProperty(global.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+    );
+    renderWhitelist();
+
+    const empty = await screen.findByTestId(
+      "configured-schema-empty-mysql-aliyun-openclaw_db"
+    );
+    fireEvent.click(within(empty).getByRole("button", { name: "复制路径" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml"
+      );
+      expect(
+        toastMocks.error.mock.calls.some(([message]) =>
+          String(message).includes("复制路径失败")
+        )
+      ).toBe(true);
+    });
+  });
+
+  it("M31: 查看语义 uses lightweight link affordance and field count has no arrow glyph", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const row = await screen.findByTestId("whitelist-row-dataforai.superstore_orders");
+    const link = within(row).getByRole("link", { name: "查看语义" });
+
+    expect(link).toHaveAttribute(
+      "href",
+      "/sources/mysql-aliyun/dataforai/superstore_orders"
+    );
+    expect(link.className).toContain("pl-inline-link");
+    expect(link.className).not.toContain("pl-btn--ghost");
+    expect(link.className).not.toContain("pl-btn--primary");
+    expect(link.className).not.toContain("pl-btn--secondary");
+    expect(link.className).not.toContain("pl-btn");
+
+    expect(within(row).getByText("8 个")).toBeInTheDocument();
+    expect(within(row).queryByText(/↑/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/↓/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/→/)).not.toBeInTheDocument();
+  });
+
+  it("M31: 表头 (Table) and row table names carry browser translation defense per M31 spec", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const table = await screen.findByRole("table");
+    const tableHead = within(table).getByRole("row", { name: /表名/ });
+    const headerCell = within(tableHead).getByText("表名 (Table)");
+
+    expect(headerCell.tagName).toBe("TH");
+    expect(headerCell).toHaveAttribute("translate", "no");
+    expect(headerCell.className).toContain("notranslate");
+
+    const row = await screen.findByTestId("whitelist-row-dataforai.superstore_orders");
+    const nameCell = within(row).getByText("superstore_orders");
+
+    expect(nameCell.tagName).toBe("SPAN");
+    expect(nameCell).toHaveAttribute("translate", "no");
+    expect(nameCell.className).toContain("notranslate");
   });
 });
