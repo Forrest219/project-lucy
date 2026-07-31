@@ -274,13 +274,14 @@ describe("ConnectionTest", () => {
     assertNoForbiddenTerms(document.body);
   });
 
-  it("M21: also surfaces a hint that 测试连接 can be triggered from a connection card on the overview", async () => {
+  it("keeps connection testing centralized on the 连通测试 page", async () => {
     stubConnTestFetch(defaultHandlers());
     renderConnectionTest();
 
     expect(await screen.findByRole("heading", { name: "连通测试" })).toBeInTheDocument();
     const hint = screen.getByTestId("connection-test-overview-hint");
-    expect(hint).toHaveTextContent(/对单个连接执行测试/);
+    expect(hint).toHaveTextContent(/数据库连通性统一在本页测试/);
+    expect(hint).not.toHaveTextContent(/连接卡片会直接打开连通测试 Drawer/);
     expect(within(hint).getByRole("link", { name: "连接概览" })).toHaveAttribute(
       "href",
       "/connections"

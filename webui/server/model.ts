@@ -75,6 +75,9 @@ export type ConnectionInfo = {
   r1Target?: boolean;
   readOnlyExpected?: boolean;
   passwordSource?: "file" | "inline" | "env";
+  host?: string;
+  port?: string;
+  database?: string;
   schemas: string[];
   enabledTables: string[];
 };

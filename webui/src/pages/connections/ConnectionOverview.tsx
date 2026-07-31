@@ -1,13 +1,13 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { apiGet, apiPost } from "../../lib/apiClient";
+import { apiGet } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   CatalogReloadsResponse,
   CatalogReloadWarning,
   ConnectionInfo,
-  ConnectionTestResult,
   ProjectInfo,
   SourceSummary,
   SourcesResponse
@@ -17,11 +17,8 @@ import {
   CatalogAssetUploadButton,
   CatalogReloadButton
 } from "../../components/catalog";
-import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
-
-type TestUiStatus = "unknown" | "testing" | "connected" | "disconnected";
 
 function engineLabel(engine?: string) {
   const normalized = engine?.toLowerCase();
@@ -32,24 +29,41 @@ function engineLabel(engine?: string) {
   return "DB";
 }
 
-function statusLabel(state: TestUiStatus) {
-  if (state === "unknown") return "Not tested";
-  if (state === "testing") return "Testing";
-  if (state === "connected") return "Connected";
-  return "Disconnected";
-}
-
 function catalogStatusLabel(run: CatalogReloadsResponse["last"]): string {
   if (!run) return "未运行";
   if (run.status === "failed") return "失败";
-  if (run.warnings.length > 0) return "有提示";
+  if (run.warnings.length > 0) return `${run.warnings.length} 个待处理`;
   return "成功";
+}
+
+function warningIssueLabel(warning: CatalogReloadWarning): string {
+  if (warning.code === "MANIFEST_PARSE_FAILED") return "Manifest 解析失败";
+  if (warning.code === "SCHEMA_MANIFEST_MISSING") return "缺失 Manifest";
+  if (warning.code === "SCHEMA_MANIFEST_EMPTY") return "空 Manifest";
+  if (warning.code === "ENABLED_TABLE_NOT_SCANNED") return "enabled_tables 未扫描";
+  return warning.message;
+}
+
+function warningSubject(warning: CatalogReloadWarning): string {
+  return warning.schema ?? warning.table ?? warning.connectionId;
+}
+
+function warningSummary(warnings: CatalogReloadWarning[]): string {
+  if (warnings.length === 0) return "";
+  const first = warnings[0];
+  const summary = `${warningSubject(first)} ${warningIssueLabel(first)}`;
+  if (warnings.length === 1) return summary;
+  return `${summary} 等 ${warnings.length} 个待处理`;
 }
 
 function catalogStatusDetail(run: CatalogReloadsResponse["last"]): string {
   if (!run) return "尚未运行过本地目录刷新";
-  const warningText = run.warnings.length > 0 ? ` · ${run.warnings.length} 个提示` : "";
+  const warningText = run.warnings.length > 0 ? ` · ${warningSummary(run.warnings)}` : "";
   return `${run.tables} 张表 · ${run.connectionIds.length} 个连接${warningText}`;
+}
+
+function catalogStatusSubValue(run: CatalogReloadsResponse["last"]): ReactNode {
+  return <span className="notranslate" translate="no">{catalogStatusDetail(run)}</span>;
 }
 
 function formatLocalTime(iso: string): string {
@@ -118,7 +132,7 @@ function catalogRunState(
       tone: "muted"
     };
   }
-  const warningText = run.warnings.length > 0 ? ` · ${run.warnings.length} 个提示` : "";
+  const warningText = run.warnings.length > 0 ? ` · ${warningSummary(run.warnings)}` : "";
   if (run.status === "failed") {
     return {
       label: "Catalog 刷新失败",
@@ -131,6 +145,17 @@ function catalogRunState(
     detail: `${formatLocalTime(run.startedAt)}${warningText}`,
     tone: run.warnings.length > 0 ? "warning" : "success"
   };
+}
+
+function connectionIdentity(conn: ConnectionInfo): ReactNode {
+  const host = conn.host ? `${conn.host}${conn.port ? `:${conn.port}` : ""}` : "未声明 Host";
+  const database = conn.database ?? "未声明 Database";
+  return (
+    <span className="pl-connection-card-identity notranslate" translate="no">
+      <span>Host <code>{host}</code></span>
+      <span>Database <code>{database}</code></span>
+    </span>
+  );
 }
 
 export function ConnectionOverview() {
@@ -156,51 +181,6 @@ export function ConnectionOverview() {
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
-  const [testDrawerTarget, setTestDrawerTarget] = useState<ConnectionInfo | null>(null);
-  // M21: ConnectionOverview is the single source of truth for connection-test
-  // results. We cache the latest `ConnectionTestResult` per connection, the
-  // current drawer target, and the drawer's collapsible log state. The
-  // `ConnectionTestDrawer` is fully controlled — it never owns its own
-  // mutation or result state, so the card status, drawer banner, and
-  // compatibility page stay in lockstep.
-  const [testResults, setTestResults] = useState<Record<string, ConnectionTestResult | null>>({});
-  const [drawerLogsExpanded, setDrawerLogsExpanded] = useState(false);
-
-  const testMutation = useMutation({
-    mutationFn: (connId: string) =>
-      apiPost<ConnectionTestResult>(`/api/connections/${encodeURIComponent(connId)}/test`, {}),
-    onSuccess: (data, connId) => {
-      setTestResults((prev) => ({ ...prev, [connId]: data }));
-    },
-    onError: (err, connId) => {
-      setTestResults((prev) => ({
-        ...prev,
-        [connId]: {
-          status: "error",
-          reason: err instanceof Error ? err.message : "未知错误"
-        }
-      }));
-    }
-  });
-
-  const testStates = useMemo(() => {
-    const out: Record<string, TestUiStatus> = {};
-    for (const conn of connections) {
-      const isPending =
-        testMutation.isPending && testMutation.variables === conn.id;
-      const result = testResults[conn.id];
-      if (isPending) {
-        out[conn.id] = "testing";
-      } else if (result === undefined) {
-        out[conn.id] = "unknown";
-      } else if (result.status === "ok") {
-        out[conn.id] = "connected";
-      } else {
-        out[conn.id] = "disconnected";
-      }
-    }
-    return out;
-  }, [connections, testMutation.isPending, testMutation.variables, testResults]);
 
   if (loading) {
     return <p className="pl-notice">正在加载连接状态...</p>;
@@ -242,7 +222,7 @@ export function ConnectionOverview() {
         <MetricCard
           type="catalogStatus"
           value={catalogStatusLabel(lastCatalogRun)}
-          subValue={catalogStatusDetail(lastCatalogRun)}
+          subValue={catalogStatusSubValue(lastCatalogRun)}
         />
       </div>
 
@@ -252,7 +232,6 @@ export function ConnectionOverview() {
             <p className="text-sm text-fg-muted py-4 notranslate" translate="no">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
           )}
           {connections.map((conn) => {
-            const state: TestUiStatus = testStates[conn.id] ?? "unknown";
             const lastRun = catalogReloadsQuery.data?.lastByConnection[conn.id];
             const catalogState = catalogRunState(lastRun);
             const schemaRows = conn.schemas.map((schema) => ({
@@ -275,13 +254,6 @@ export function ConnectionOverview() {
                   </div>
                   <div className="pl-connection-card-badges">
                     <span
-                      className={`pl-connection-status pl-connection-status--${state}`}
-                      data-testid={`connection-status-${conn.id}`}
-                      translate="no"
-                    >
-                      {statusLabel(state)}
-                    </span>
-                    <span
                       className="text-xs text-fg-muted notranslate"
                       translate="no"
                       data-testid={`connection-readonly-${conn.id}`}
@@ -292,6 +264,18 @@ export function ConnectionOverview() {
                   <p className="pl-connection-card-meta notranslate" translate="no">
                     配置来源：ktx.yaml。凭据不在 WebUI 中编辑。
                   </p>
+                  {connectionIdentity(conn)}
+                  <div
+                    className="pl-connection-card-header-actions"
+                    data-testid={`connection-card-header-actions-${conn.id}`}
+                  >
+                    <CatalogReloadButton
+                      connectionId={conn.id}
+                      label="刷新本地目录"
+                      variant="secondary"
+                      testId={`catalog-reload-${conn.id}`}
+                    />
+                  </div>
                 </div>
                 <div className="pl-connection-card-body">
                   <div className="pl-schema-asset-heading">
@@ -306,7 +290,7 @@ export function ConnectionOverview() {
                           <th className="notranslate" translate="no">Schema</th>
                           <th className="notranslate" translate="no">Manifest 状态</th>
                           <th>本地表数</th>
-                          <th>上下文动作</th>
+                          <th>操作</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -358,13 +342,17 @@ export function ConnectionOverview() {
                 </div>
                 <div className="pl-connection-card-footer">
                   <div
-                    className={`pl-catalog-status-line pl-catalog-status-line--${catalogState.tone}`}
+                    className={`pl-catalog-status-line pl-catalog-status-line--${catalogState.tone} notranslate`}
                     data-testid={`catalog-status-${conn.id}`}
+                    translate="no"
                   >
                     <strong>{catalogState.label}</strong>
                     <span>{catalogState.detail}</span>
                   </div>
-                  <div className="pl-connection-card-actions">
+                  <div
+                    className="pl-connection-card-schema-actions"
+                    data-testid={`connection-card-schema-actions-${conn.id}`}
+                  >
                     <button
                       type="button"
                       className={`pl-btn notranslate ${hasManifestGap ? "pl-btn--secondary" : "pl-btn--primary"}`}
@@ -381,30 +369,6 @@ export function ConnectionOverview() {
                       variant={hasManifestGap ? "primary" : "secondary"}
                       testId={`upload-yaml-${conn.id}`}
                     />
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary"
-                      onClick={() => {
-                        setDrawerLogsExpanded(false);
-                        setTestDrawerTarget(conn);
-                        // Auto-run on first open so the card status flips
-                        // and the drawer banner reflects the latest result
-                        // without an extra click.
-                        if (testResults[conn.id] === undefined) {
-                          testMutation.mutate(conn.id);
-                        }
-                      }}
-                      disabled={testMutation.isPending && testMutation.variables === conn.id}
-                      data-testid={`test-connection-${conn.id}`}
-                    >
-                      {state === "testing" ? "Testing..." : "测试连接"}
-                    </button>
-                    <CatalogReloadButton
-                      connectionId={conn.id}
-                      label="刷新本地目录"
-                      variant="secondary"
-                      testId={`catalog-reload-${conn.id}`}
-                    />
                   </div>
                 </div>
               </div>
@@ -418,21 +382,6 @@ export function ConnectionOverview() {
           connection={addTarget}
           open={Boolean(addTarget)}
           onClose={() => setAddTarget(null)}
-        />
-      )}
-
-      {testDrawerTarget && (
-        <ConnectionTestDrawer
-          connection={testDrawerTarget}
-          open={Boolean(testDrawerTarget)}
-          result={testResults[testDrawerTarget.id] ?? null}
-          isPending={
-            testMutation.isPending && testMutation.variables === testDrawerTarget.id
-          }
-          logsExpanded={drawerLogsExpanded}
-          onClose={() => setTestDrawerTarget(null)}
-          onRunTest={() => testMutation.mutate(testDrawerTarget.id)}
-          onToggleLogs={() => setDrawerLogsExpanded((v) => !v)}
         />
       )}
 

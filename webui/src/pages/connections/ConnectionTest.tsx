@@ -75,13 +75,17 @@ export function ConnectionTest() {
         }
       />
 
-      <p className="pl-notice" data-testid="connection-test-overview-hint">
-        也可以在{" "}
+      <p
+        className="pl-notice notranslate"
+        data-testid="connection-test-overview-hint"
+        translate="no"
+      >
+        连接概览用于维护 Schema、YAML 资产与本地 Catalog；数据库连通性统一在本页测试。
+        如需核对连接配置，请回到{" "}
         <Link to="/connections" className="pl-link" data-testid="connection-test-overview-link">
           连接概览
-        </Link>{" "}
-        中对单个连接执行测试，连接卡片会直接打开连通测试 Drawer。
-        本页面保留为兼容入口，与 Drawer 共用同一套诊断面板。
+        </Link>
+        。
       </p>
 
       <section className="pl-panel">

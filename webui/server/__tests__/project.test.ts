@@ -31,6 +31,9 @@ connections:
     readonly: true
     r1_target: true
     password: file:/tmp/doris-password
+    host: 10.0.0.8
+    port: 9030
+    database: mart
     enabled_tables:
       - mart.ceo_metric_snapshot
 `);
@@ -46,6 +49,9 @@ connections:
       r1Target: true,
       readOnlyExpected: true,
       passwordSource: "file",
+      host: "10.0.0.8",
+      port: "9030",
+      database: "mart",
       schemas: ["mart"],
       enabledTables: ["mart.ceo_metric_snapshot"]
     });

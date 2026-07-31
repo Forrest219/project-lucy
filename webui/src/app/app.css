@@ -330,9 +330,13 @@
   .pl-connection-card-title strong { @apply text-base font-semibold text-fg-default; }
   .pl-connection-card-badges { @apply flex flex-wrap items-center gap-2 md:justify-end; }
   .pl-connection-card-meta { @apply text-xs text-fg-muted md:col-span-2; }
+  .pl-connection-card-identity { @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted md:col-span-2; }
+  .pl-connection-card-identity code { @apply rounded bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-default; }
+  .pl-connection-card-header-actions { @apply flex flex-wrap items-center gap-2 md:col-span-2 md:justify-end; }
   .pl-connection-card-body { @apply grid gap-3 px-4 py-4; }
   .pl-connection-card-footer { @apply flex flex-wrap items-center justify-between gap-3 border-t border-border-default bg-bg-subtle px-4 py-3; }
   .pl-connection-card-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+  .pl-connection-card-schema-actions { @apply flex flex-wrap items-center justify-end gap-2; }
 
   /* M13: connection-card schema chips and per-schema ingest rows. */
   .pl-schema-cell { @apply grid gap-1; }

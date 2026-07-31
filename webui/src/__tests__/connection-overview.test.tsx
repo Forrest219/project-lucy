@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionInfo } from "../lib/types";
@@ -46,7 +46,6 @@ type TestHandler = (body: unknown, init?: RequestInit) => Response;
 
 function makeHandlerMap(
   projectHandler: TestHandler,
-  testHandler?: TestHandler,
   catalogReloadsHandler?: TestHandler
 ): Record<string, TestHandler> {
   return {
@@ -58,7 +57,6 @@ function makeHandlerMap(
           data: { tables: [sourceSummary("superstore_orders"), sourceSummary("customers"), sourceSummary("orders", "crm")] }
         })
       ),
-    ...(testHandler ? { "POST /api/connections/mysql-aliyun/test": testHandler } : {}),
     "GET /api/catalog/reloads": catalogReloadsHandler ?? (() => new Response(JSON.stringify({ ok: true, data: { runs: [], last: null, lastByConnection: {} } })))
   };
 }
@@ -68,6 +66,9 @@ function stubOverviewFetch({
     {
       id: "mysql-aliyun",
       driver: "mysql",
+      host: "127.0.0.1",
+      port: "3306",
+      database: "dataforai",
       schemas: ["dataforai"],
       enabledTables: ["dataforai.superstore_orders", "dataforai.customers"]
     }
@@ -75,7 +76,6 @@ function stubOverviewFetch({
   ktxAvailable = true,
   projectError = false,
   tables = [sourceSummary("superstore_orders"), sourceSummary("customers"), sourceSummary("orders", "crm")],
-  testHandler,
   catalogReloadsResponse,
   mcpEndpoint
 }: {
@@ -83,7 +83,6 @@ function stubOverviewFetch({
   ktxAvailable?: boolean;
   projectError?: boolean;
   tables?: ReturnType<typeof sourceSummary>[];
-  testHandler?: TestHandler;
   catalogReloadsResponse?: { runs: unknown[]; last: unknown | null; lastByConnection: Record<string, unknown> };
   mcpEndpoint?: {
     url: string | null;
@@ -122,7 +121,6 @@ function stubOverviewFetch({
           })
         );
     })(),
-    testHandler,
     catalogReloadsResponse
       ? () => new Response(JSON.stringify({ ok: true, data: catalogReloadsResponse }))
       : undefined
@@ -178,6 +176,8 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByText("语义源")).not.toBeInTheDocument();
     expect(screen.queryByText("KTX Runtime")).not.toBeInTheDocument();
     expect(screen.getByText("mysql-aliyun")).toBeInTheDocument();
+    expect(screen.getByText("127.0.0.1:3306")).toBeInTheDocument();
+    expect(screen.getAllByText("dataforai").length).toBeGreaterThan(0);
     // M17: cross-page navigation must NOT live in the page header anymore.
     expect(screen.queryByRole("link", { name: "表白名单" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "连通测试" })).not.toBeInTheDocument();
@@ -185,6 +185,7 @@ describe("ConnectionOverview", () => {
     // The per-connection card still surfaces the upload + reload actions.
     expect(screen.getAllByRole("button", { name: "上传 YAML" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "刷新本地目录" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     expect(screen.queryByText("运行连通测试")).not.toBeInTheDocument();
     expect(screen.queryByText("MCP endpoint")).not.toBeInTheDocument();
   });
@@ -248,7 +249,7 @@ describe("ConnectionOverview", () => {
     expect(screen.getByRole("columnheader", { name: "Schema" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "本地表数" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "上下文动作" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       await screen.findByTestId("schema-asset-status-mysql-aliyun-dataforai")
     ).toHaveTextContent("已存在");
@@ -288,53 +289,6 @@ describe("ConnectionOverview", () => {
     expect(screen.getAllByText("至少包含 1 个生产/测试数据库").length).toBeGreaterThan(0);
   });
 
-  it("starts every connection as Not tested", async () => {
-    stubOverviewFetch();
-    renderOverview();
-
-    expect(await screen.findByText("Not tested")).toBeInTheDocument();
-    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
-    expect(screen.queryByText("Disconnected")).not.toBeInTheDocument();
-  });
-
-  it("transitions a connection card to Connected when the test returns status ok", async () => {
-    stubOverviewFetch({
-      testHandler: () =>
-        new Response(
-          JSON.stringify({ ok: true, data: { status: "ok", latencyMs: 5, detail: "ok", stdout: "ok", stderr: "" } })
-        )
-    });
-    renderOverview();
-
-    const testButton = await screen.findByTestId("test-connection-mysql-aliyun");
-    fireEvent.click(testButton);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent(
-        "Connected"
-      );
-    });
-  });
-
-  it("transitions a connection card to Disconnected when the test returns status error", async () => {
-    stubOverviewFetch({
-      testHandler: () =>
-        new Response(
-          JSON.stringify({ ok: true, data: { status: "error", reason: "denied", stdout: "", stderr: "denied" } })
-        )
-    });
-    renderOverview();
-
-    const testButton = await screen.findByTestId("test-connection-mysql-aliyun");
-    fireEvent.click(testButton);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent(
-        "Disconnected"
-      );
-    });
-  });
-
   it("does not render MCP endpoint runtime config inside the connection overview", async () => {
     stubOverviewFetch({
       mcpEndpoint: {
@@ -369,6 +323,9 @@ describe("ConnectionOverview", () => {
           wireProtocol: "mysql",
           r1Target: true,
           readOnlyExpected: true,
+          host: "10.0.0.8",
+          port: "9030",
+          database: "mart",
           schemas: ["mart"],
           enabledTables: ["mart.ceo_metric_snapshot"]
         }
@@ -380,7 +337,7 @@ describe("ConnectionOverview", () => {
 
     expect(await screen.findByText("doris-r1")).toBeInTheDocument();
     expect(screen.getByTestId("engine-badge-doris-r1")).toHaveTextContent("Doris");
-    expect(screen.getByTestId("connection-status-doris-r1")).toHaveTextContent("Not tested");
+    expect(screen.getByText("10.0.0.8:9030")).toBeInTheDocument();
     expect(screen.getByTestId("connection-card-doris-r1")).toHaveTextContent("Read-only expected");
   });
 
@@ -394,6 +351,9 @@ describe("ConnectionOverview", () => {
           wireProtocol: "mysql",
           r1Target: true,
           readOnlyExpected: true,
+          host: "10.0.0.9",
+          port: "9030",
+          database: "mart",
           schemas: ["mart"],
           enabledTables: ["mart.ceo_metric_snapshot"]
         }
@@ -405,6 +365,7 @@ describe("ConnectionOverview", () => {
 
     expect(await screen.findByText("starrocks-r1")).toBeInTheDocument();
     expect(screen.getByTestId("engine-badge-starrocks-r1")).toHaveTextContent("StarRocks");
+    expect(screen.getByText("10.0.0.9:9030")).toBeInTheDocument();
     expect(screen.getByTestId("connection-card-starrocks-r1")).toHaveTextContent("Read-only expected");
   });
 
@@ -447,6 +408,7 @@ describe("ConnectionOverview", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "重新加载资产" })).not.toBeInTheDocument();
   });
 
@@ -551,6 +513,79 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByText("上次刷新")).not.toBeInTheDocument();
   });
 
+  it("renders concrete catalog warning summaries instead of abstract tips", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")],
+      catalogReloadsResponse: {
+        runs: [],
+        last: {
+          id: "rel_20260729_103000_001",
+          status: "success",
+          startedAt: "2026-07-29T02:30:00.000Z",
+          finishedAt: "2026-07-29T02:30:00.045Z",
+          durationMs: 45,
+          requestedConnectionId: "mysql-aliyun",
+          connectionIds: ["mysql-aliyun"],
+          connections: 1,
+          configuredSchemas: 2,
+          manifestSchemas: 1,
+          tables: 1,
+          enabledTables: 1,
+          warnings: [
+            {
+              code: "SCHEMA_MANIFEST_MISSING",
+              connectionId: "mysql-aliyun",
+              schema: "openclaw_db",
+              filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+              message: "openclaw_db manifest missing"
+            }
+          ],
+          source: "static-yaml"
+        },
+        lastByConnection: {
+          "mysql-aliyun": {
+            id: "rel_20260729_103000_001",
+            status: "success",
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "mysql-aliyun",
+            connectionIds: ["mysql-aliyun"],
+            connections: 1,
+            configuredSchemas: 2,
+            manifestSchemas: 1,
+            tables: 1,
+            enabledTables: 1,
+            warnings: [
+              {
+                code: "SCHEMA_MANIFEST_MISSING",
+                connectionId: "mysql-aliyun",
+                schema: "openclaw_db",
+                filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+                message: "openclaw_db manifest missing"
+              }
+            ],
+            source: "static-yaml"
+          }
+        }
+      }
+    });
+    renderOverview();
+
+    expect(await screen.findByText("1 个待处理")).toBeInTheDocument();
+    expect(screen.getAllByText(/openclaw_db 缺失 Manifest/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("有提示")).not.toBeInTheDocument();
+    expect(screen.queryByText(/1 个提示/)).not.toBeInTheDocument();
+  });
+
   it("renders the never-run catalog status when the sidecar has no entry for the connection", async () => {
     stubOverviewFetch({
       connections: [
@@ -571,23 +606,21 @@ describe("ConnectionOverview", () => {
     expect(status).toHaveTextContent("尚未读取本地 YAML");
   });
 
-  it("M21: keeps the connection card focused on Connection-level actions and removes the system-level asset export card", async () => {
+  it("M23: separates Connection-level header actions from Schema-level footer actions", async () => {
     stubOverviewFetch();
     renderOverview();
 
-    // The card footer must only carry Connection-level actions.
-    expect(
-      await screen.findByRole("button", { name: /\+ 添加 Schema/ })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "上传 YAML" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "测试连接" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "刷新本地目录" })
-    ).toBeInTheDocument();
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    const headerActions = within(card).getByTestId("connection-card-header-actions-mysql-aliyun");
+    expect(within(headerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
+    expect(within(headerActions).getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+
+    const footerActions = within(card).getByTestId("connection-card-schema-actions-mysql-aliyun");
+    expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toBeInTheDocument();
+    expect(within(footerActions).getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
+    expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
+    expect(within(footerActions).queryByRole("button", { name: "刷新本地目录" })).not.toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "上传语义包" })
     ).not.toBeInTheDocument();
@@ -606,108 +639,6 @@ describe("ConnectionOverview", () => {
     expect(
       screen.queryByText("下载当前全量资产包")
     ).not.toBeInTheDocument();
-  });
-
-  it("M21: clicking 测试连接 on a connection card opens the ConnectionTestDrawer dialog with the 连通测试 title", async () => {
-    stubOverviewFetch({
-      testHandler: () =>
-        new Response(
-          JSON.stringify({
-            ok: true,
-            data: {
-              status: "ok",
-              latencyMs: 5,
-              detail: "ok",
-              stdout: "ok",
-              stderr: ""
-            }
-          })
-        )
-    });
-    renderOverview();
-
-    const testButton = await screen.findByTestId("test-connection-mysql-aliyun");
-    fireEvent.click(testButton);
-
-    expect(
-      await screen.findByRole("dialog", { name: /连通测试/ })
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "替代测试" })
-    ).not.toBeInTheDocument();
-  });
-
-  it("M21: connection card and ConnectionTestDrawer share one source of truth (no desync)", async () => {
-    stubOverviewFetch({
-      testHandler: () =>
-        new Response(
-          JSON.stringify({
-            ok: true,
-            data: {
-              status: "ok",
-              latencyMs: 12,
-              detail: "ok",
-              stdout: "ok",
-              stderr: ""
-            }
-          })
-        )
-    });
-    renderOverview();
-
-    const testButton = await screen.findByTestId("test-connection-mysql-aliyun");
-    fireEvent.click(testButton);
-
-    // The drawer must surface the success result on first open, not a stale
-    // "尚未测试" — that's the dual-state regression we are guarding.
-    expect(
-      await screen.findByText("连接成功 (Connection Passed)")
-    ).toBeInTheDocument();
-    // The card status also flips to Connected once the same mutation lands.
-    await waitFor(() => {
-      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent("Connected");
-    });
-    // Latency value is rendered both in the card pipeline and inside the
-    // drawer banner; guard it lands in the drawer too.
-    expect(screen.getByTestId("connection-test-latency")).toHaveTextContent("12 ms");
-  });
-
-  it("M21: drawer 重新测试连接 also updates the connection card status", async () => {
-    let callCount = 0;
-    stubOverviewFetch({
-      testHandler: () => {
-        callCount += 1;
-        const status = callCount === 1 ? "ok" : "error";
-        const body: Record<string, unknown> = {
-          ok: true,
-          data: {
-            status,
-            latencyMs: 30,
-            detail: status,
-            stdout: status,
-            stderr: ""
-          }
-        };
-        return new Response(JSON.stringify(body));
-      }
-    });
-    renderOverview();
-
-    // First click on the card auto-runs the test, card flips to Connected.
-    fireEvent.click(await screen.findByTestId("test-connection-mysql-aliyun"));
-    await waitFor(() => {
-      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent("Connected");
-    });
-
-    // Re-run from the drawer, expect the card to flip to Disconnected.
-    fireEvent.click(await screen.findByTestId("connection-test-drawer-run"));
-    await waitFor(() => {
-      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent("Disconnected");
-    });
-    // The drawer banner tracks the same result.
-    expect(
-      await screen.findByText("连接失败 (Connection Failed)")
-    ).toBeInTheDocument();
   });
 
   it("M21: missing-manifest row says 缺失 Manifest and shows the 上传 Manifest row action", async () => {

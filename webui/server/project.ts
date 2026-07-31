@@ -99,6 +99,17 @@ function normalizedString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim().toLowerCase() : undefined;
 }
 
+function displayString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
 function connectionEngine(conn: Record<string, unknown>): string | undefined {
   const explicit = normalizedString(conn.engine ?? conn.dialect ?? conn.database_engine);
   const driver = normalizedString(conn.driver);
@@ -199,6 +210,9 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
       r1Target: booleanValue(conn.r1_target ?? conn.r1Target) ?? engine === "doris",
       readOnlyExpected,
       passwordSource: passwordSource(conn.password),
+      host: displayString(conn.host),
+      port: displayString(conn.port),
+      database: displayString(conn.database ?? conn.db ?? conn.dbname),
       schemas,
       enabledTables
     };
