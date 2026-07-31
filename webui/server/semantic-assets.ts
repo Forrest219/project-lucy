@@ -39,7 +39,8 @@ import path from "node:path";
 import { parseDocument } from "yaml";
 import { createTwoFilesPatch } from "diff";
 import { readProject } from "./project";
-import { assertSafeTarget, ForbiddenPathError } from "./catalog-assets";
+import { assertSafeTarget } from "./catalog-assets";
+import { ForbiddenPathError } from "./fs-safe";
 import { reindexProject, validateSource, type Issue, type ValidationResult } from "./ktx";
 import { reloadCatalog } from "./catalog-reload";
 

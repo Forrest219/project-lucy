@@ -8,7 +8,9 @@
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
     "build": "vite build",
     "start": "tsx server/index.ts",
+    "pretest": "npm run lint:terminology",
     "test": "vitest run --maxWorkers=1",
+    "lint:terminology": "node scripts/lint-terminology.mjs",
     "acceptance:api": "tsx scripts/api-acceptance.ts",
     "backfill:access-log-sources": "tsx scripts/backfill-access-log-sources.ts"
   },

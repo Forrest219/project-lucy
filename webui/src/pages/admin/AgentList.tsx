@@ -316,7 +316,7 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
           </div>
         ) : (
           <div className="grid gap-4">
-            <p className="text-sm text-fg-muted">以下改动将写入 access.yaml：</p>
+            <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
             <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
               {preview?.diff}
             </pre>

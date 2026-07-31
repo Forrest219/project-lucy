@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionInfo } from "../lib/types";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
+import { assertNoForbiddenTerms } from "./forbidden-terms";
 
 function renderOverview() {
   const client = new QueryClient({
@@ -258,7 +259,7 @@ describe("ConnectionOverview", () => {
     );
 
     expect(screen.getByTestId("schema-asset-status-mysql-aliyun-openclaw_db")).toHaveTextContent(
-      "缺失 manifest"
+      "缺失 Manifest"
     );
     expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).toHaveAttribute(
       "data-tone",
@@ -568,5 +569,247 @@ describe("ConnectionOverview", () => {
     const status = await screen.findByTestId("catalog-status-mysql-aliyun");
     expect(status).toHaveTextContent("Catalog 未刷新");
     expect(status).toHaveTextContent("尚未读取本地 YAML");
+  });
+
+  it("M21: keeps the connection card focused on Connection-level actions and removes the system-level asset export card", async () => {
+    stubOverviewFetch();
+    renderOverview();
+
+    // The card footer must only carry Connection-level actions.
+    expect(
+      await screen.findByRole("button", { name: /\+ 添加 Schema/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "上传 YAML" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "测试连接" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "刷新本地目录" })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "上传语义包" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "上传资产包" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "下载当前全量资产包" })
+    ).not.toBeInTheDocument();
+
+    // The full-width system-level export card must not live below the
+    // connection list anymore.
+    expect(
+      screen.queryByTestId("semantic-asset-export-panel")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("下载当前全量资产包")
+    ).not.toBeInTheDocument();
+  });
+
+  it("M21: clicking 测试连接 on a connection card opens the ConnectionTestDrawer dialog with the 连通测试 title", async () => {
+    stubOverviewFetch({
+      testHandler: () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              status: "ok",
+              latencyMs: 5,
+              detail: "ok",
+              stdout: "ok",
+              stderr: ""
+            }
+          })
+        )
+    });
+    renderOverview();
+
+    const testButton = await screen.findByTestId("test-connection-mysql-aliyun");
+    fireEvent.click(testButton);
+
+    expect(
+      await screen.findByRole("dialog", { name: /连通测试/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "替代测试" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("M21: connection card and ConnectionTestDrawer share one source of truth (no desync)", async () => {
+    stubOverviewFetch({
+      testHandler: () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              status: "ok",
+              latencyMs: 12,
+              detail: "ok",
+              stdout: "ok",
+              stderr: ""
+            }
+          })
+        )
+    });
+    renderOverview();
+
+    const testButton = await screen.findByTestId("test-connection-mysql-aliyun");
+    fireEvent.click(testButton);
+
+    // The drawer must surface the success result on first open, not a stale
+    // "尚未测试" — that's the dual-state regression we are guarding.
+    expect(
+      await screen.findByText("连接成功 (Connection Passed)")
+    ).toBeInTheDocument();
+    // The card status also flips to Connected once the same mutation lands.
+    await waitFor(() => {
+      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent("Connected");
+    });
+    // Latency value is rendered both in the card pipeline and inside the
+    // drawer banner; guard it lands in the drawer too.
+    expect(screen.getByTestId("connection-test-latency")).toHaveTextContent("12 ms");
+  });
+
+  it("M21: drawer 重新测试连接 also updates the connection card status", async () => {
+    let callCount = 0;
+    stubOverviewFetch({
+      testHandler: () => {
+        callCount += 1;
+        const status = callCount === 1 ? "ok" : "error";
+        const body: Record<string, unknown> = {
+          ok: true,
+          data: {
+            status,
+            latencyMs: 30,
+            detail: status,
+            stdout: status,
+            stderr: ""
+          }
+        };
+        return new Response(JSON.stringify(body));
+      }
+    });
+    renderOverview();
+
+    // First click on the card auto-runs the test, card flips to Connected.
+    fireEvent.click(await screen.findByTestId("test-connection-mysql-aliyun"));
+    await waitFor(() => {
+      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent("Connected");
+    });
+
+    // Re-run from the drawer, expect the card to flip to Disconnected.
+    fireEvent.click(await screen.findByTestId("connection-test-drawer-run"));
+    await waitFor(() => {
+      expect(screen.getByTestId("connection-status-mysql-aliyun")).toHaveTextContent("Disconnected");
+    });
+    // The drawer banner tracks the same result.
+    expect(
+      await screen.findByText("连接失败 (Connection Failed)")
+    ).toBeInTheDocument();
+  });
+
+  it("M21: missing-manifest row says 缺失 Manifest and shows the 上传 Manifest row action", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "demo-mysql",
+          driver: "mysql",
+          schemas: ["openclaw_db"],
+          enabledTables: []
+        }
+      ],
+      tables: [],
+      catalogReloadsResponse: {
+        runs: [],
+        last: null,
+        lastByConnection: {
+          "demo-mysql": {
+            id: "rel_20260729_103000_001",
+            status: "success",
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "demo-mysql",
+            connectionIds: ["demo-mysql"],
+            connections: 1,
+            configuredSchemas: 1,
+            manifestSchemas: 0,
+            tables: 0,
+            enabledTables: 0,
+            warnings: [
+              {
+                code: "SCHEMA_MANIFEST_MISSING",
+                connectionId: "demo-mysql",
+                schema: "openclaw_db",
+                filePath: "semantic-layer/demo-mysql/_schema/openclaw_db.yaml",
+                message: "openclaw_db manifest missing"
+              }
+            ],
+            source: "static-yaml"
+          }
+        }
+      }
+    });
+    renderOverview();
+
+    expect(
+      await screen.findByTestId("schema-asset-status-demo-mysql-openclaw_db")
+    ).toHaveTextContent("缺失 Manifest");
+    const uploadBtn = await screen.findByTestId("upload-yaml-demo-mysql-openclaw_db");
+    expect(uploadBtn).toHaveTextContent("上传 Manifest");
+  });
+
+  it("M21: uses 缺失 Manifest (capital M) for missing manifest rows and exposes no machine-translation artifacts", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders", "dataforai")],
+      catalogReloadsResponse: {
+        runs: [],
+        last: null,
+        lastByConnection: {
+          "mysql-aliyun": {
+            id: "rel_20260729_103000_001",
+            status: "success",
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "mysql-aliyun",
+            connectionIds: ["mysql-aliyun"],
+            connections: 1,
+            configuredSchemas: 2,
+            manifestSchemas: 1,
+            tables: 1,
+            enabledTables: 1,
+            warnings: [
+              {
+                code: "SCHEMA_MANIFEST_MISSING",
+                connectionId: "mysql-aliyun",
+                schema: "openclaw_db",
+                filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+                message: "openclaw_db manifest missing"
+              }
+            ],
+            source: "static-yaml"
+          }
+        }
+      }
+    });
+    renderOverview();
+
+    const status = await screen.findByTestId("schema-asset-status-mysql-aliyun-openclaw_db");
+    expect(status).toHaveTextContent("缺失 Manifest");
+    expect(status).not.toHaveTextContent("缺失 manifest");
+    expect(screen.queryByText("财政部舱单")).not.toBeInTheDocument();
+    expect(screen.queryByText("模式清单")).not.toBeInTheDocument();
+    assertNoForbiddenTerms(document.body);
   });
 });

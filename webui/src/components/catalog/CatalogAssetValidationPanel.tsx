@@ -61,7 +61,7 @@ export function CatalogAssetValidationPanel({
         aria-live="polite"
       >
         <p className="text-xs text-fg-muted">
-          请选择 <code>.yaml</code> 文件或直接在下方粘贴 YAML 源码。提交前会自动校验。
+          请选择 <code className="notranslate" translate="no">.yaml</code> 文件或直接在下方粘贴 <code className="notranslate" translate="no">YAML</code> 源码。提交前会自动校验。
         </p>
       </div>
     );

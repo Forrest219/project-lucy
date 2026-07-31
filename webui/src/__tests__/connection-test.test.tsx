@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionTest } from "../pages/connections/ConnectionTest";
 import type { ConnectionInfo } from "../lib/types";
+import { assertNoForbiddenTerms } from "./forbidden-terms";
 
 const TEST_CONN: ConnectionInfo = {
   id: "mysql-aliyun",
@@ -241,7 +242,10 @@ describe("ConnectionTest", () => {
     });
     renderConnectionTest();
     expect(await screen.findByText(/暂无连接配置/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "连接概览" })).toHaveAttribute(
+    // Multiple 连接概览 links are now expected (sidebar nav + empty-state CTA);
+    // assert the one inside the empty state.
+    const empty = screen.getByText(/暂无连接配置/).parentElement;
+    expect(within(empty as HTMLElement).getByRole("link", { name: "连接概览" })).toHaveAttribute(
       "href",
       "/connections"
     );
@@ -255,5 +259,31 @@ describe("ConnectionTest", () => {
     const button = await screen.findByRole("button", { name: "重新测试连接" });
     fireEvent.click(button);
     await waitFor(() => expect(button).toBeDisabled());
+  });
+
+  it("M21: page heading and nav use 连通测试 and there are no machine-translation artifacts", async () => {
+    stubConnTestFetch(defaultHandlers());
+    renderConnectionTest();
+
+    expect(await screen.findByRole("heading", { name: "连通测试" })).toBeInTheDocument();
+    expect(screen.queryByText("替代测试")).not.toBeInTheDocument();
+    expect(screen.queryByText("财政部舱单")).not.toBeInTheDocument();
+    expect(screen.queryByText("上传报价包")).not.toBeInTheDocument();
+    expect(screen.queryByText("添加架构")).not.toBeInTheDocument();
+    expect(screen.queryByText("目标架构")).not.toBeInTheDocument();
+    assertNoForbiddenTerms(document.body);
+  });
+
+  it("M21: also surfaces a hint that 测试连接 can be triggered from a connection card on the overview", async () => {
+    stubConnTestFetch(defaultHandlers());
+    renderConnectionTest();
+
+    expect(await screen.findByRole("heading", { name: "连通测试" })).toBeInTheDocument();
+    const hint = screen.getByTestId("connection-test-overview-hint");
+    expect(hint).toHaveTextContent(/对单个连接执行测试/);
+    expect(within(hint).getByRole("link", { name: "连接概览" })).toHaveAttribute(
+      "href",
+      "/connections"
+    );
   });
 });

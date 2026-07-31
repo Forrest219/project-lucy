@@ -107,6 +107,40 @@ describe("Help handbook", () => {
     ]);
   });
 
+  it("exposes stable level-4 aliases for the database connection operations runbook", () => {
+    const toc = parseHelpToc([
+      "### 3.2 数据库接入",
+      "#### WebUI 与 ktx.yaml 的职责边界",
+      "#### 连接形态与配置字段",
+      "#### 新增数据库连接（运维 Runbook）",
+      "#### Agent 可见性与 ACL 同步"
+    ].join("\n"));
+
+    expect(toc).toEqual([
+      { id: "database-connections", level: 3, title: "3.2 数据库接入" },
+      { id: "database-connection-boundary", level: 4, title: "WebUI 与 ktx.yaml 的职责边界" },
+      { id: "database-connection-shapes", level: 4, title: "连接形态与配置字段" },
+      {
+        id: "database-connection-operations-runbook",
+        level: 4,
+        title: "新增数据库连接（运维 Runbook）"
+      },
+      { id: "database-connection-acl-sync", level: 4, title: "Agent 可见性与 ACL 同步" }
+    ]);
+  });
+
+  it("ignores level-4 headings that are not part of the database ops section", () => {
+    const toc = parseHelpToc([
+      "### 3.2 数据库接入",
+      "#### 一些未知子节",
+      "#### another unknown sub heading"
+    ].join("\n"));
+
+    expect(toc).toEqual([
+      { id: "database-connections", level: 3, title: "3.2 数据库接入" }
+    ]);
+  });
+
   it("reads only the bundled docs/SYSTEM_HANDBOOK.md and returns the API envelope", async () => {
     await makeProject();
     appRoot = await makeRoot("lucy-help-app-", [
@@ -256,6 +290,56 @@ describe("Help handbook", () => {
         { id: "yaml-augmentation-overlay", level: 3, title: "3.7.3 Manifest augmentation overlay 规范" },
         { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
         { id: "yaml-agent-self-check", level: 3, title: "3.7.8 Agent 自检协议" }
+      ])
+    );
+  });
+
+  it("the bundled handbook documents the database connection operations runbook", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    // Content markers — operations runbook must be self-contained and explicit.
+    expect(handbook.markdown).toContain("WebUI 不负责新建物理数据库连接");
+    expect(handbook.markdown).toContain("新增数据库连接（运维 Runbook）");
+    expect(handbook.markdown).toContain("Agent 可见性与 ACL 同步");
+    expect(handbook.markdown).toContain("连接形态与配置字段");
+    expect(handbook.markdown).toContain("WebUI 与 ktx.yaml 的职责边界");
+    expect(handbook.markdown).toContain("刷新本地目录");
+    expect(handbook.markdown).toContain("当前 `scan.enrichment`、LLM 和 embedding 配置涉及的外部数据流已获得客户 / 数据 Owner 授权");
+    expect(handbook.markdown).toContain("docker compose exec lucy ktx --project-dir /data/lucy ingest <connection-id>");
+    // Catalog Reload must not be conflated with physical scanning / ingest.
+    expect(handbook.markdown).toContain("不会连接物理数据库扫描新表");
+    expect(handbook.markdown).toContain("不会替代 `ktx ingest`");
+    // Credential safety: every `password:` line in the bundled doc must use a
+    // safe reference (file:, env:, or placeholder), never an inline secret.
+    const passwordLines = handbook.markdown.match(/password:\s+[^\n]+/g) ?? [];
+    expect(passwordLines.length).toBeGreaterThan(0);
+    for (const line of passwordLines) {
+      expect(line).toMatch(/^password:\s+(file:|env:|<)/);
+    }
+    // Spot-check the documented placeholders are present so the safety rule
+    // has something concrete to assert against.
+    expect(handbook.markdown).toContain("file:<PROJECT_ROOT>/.ktx/secrets/<connection-id>-password");
+    expect(handbook.markdown).toContain("file:/data/lucy/.ktx/secrets/<connection-id>-password");
+    // Stable anchors for the new section tree.
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        { id: "database-connections", level: 3, title: "3.2 数据库接入" },
+        {
+          id: "database-connection-boundary",
+          level: 4,
+          title: "WebUI 与 ktx.yaml 的职责边界"
+        },
+        { id: "database-connection-shapes", level: 4, title: "连接形态与配置字段" },
+        {
+          id: "database-connection-operations-runbook",
+          level: 4,
+          title: "新增数据库连接（运维 Runbook）"
+        },
+        { id: "database-connection-acl-sync", level: 4, title: "Agent 可见性与 ACL 同步" }
       ])
     );
   });

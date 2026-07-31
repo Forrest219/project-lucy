@@ -26,6 +26,27 @@ function renderHelp(path = "/help") {
             etag: "sha256:abc",
             toc: [
               { id: "system-overview", level: 2, title: "1. 系统概述与架构拓扑" },
+              { id: "database-connections", level: 3, title: "3.2 数据库接入" },
+              {
+                id: "database-connection-boundary",
+                level: 4,
+                title: "WebUI 与 ktx.yaml 的职责边界"
+              },
+              {
+                id: "database-connection-shapes",
+                level: 4,
+                title: "连接形态与配置字段"
+              },
+              {
+                id: "database-connection-operations-runbook",
+                level: 4,
+                title: "新增数据库连接（运维 Runbook）"
+              },
+              {
+                id: "database-connection-acl-sync",
+                level: 4,
+                title: "Agent 可见性与 ACL 同步"
+              },
               { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 文件规范与交付验收" },
               { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
               { id: "mcp-integration", level: 2, title: "4. Agent / 客户端接入指南" },
@@ -37,6 +58,26 @@ function renderHelp(path = "/help") {
               "## 1. 系统概述与架构拓扑",
               "",
               "Lucy 是本地语义补充工作台。",
+              "",
+              "### 3.2 数据库接入",
+              "",
+              "WebUI 不负责新建物理数据库连接。新增连接的 host、port、database、username、password、driver 等字段由运维在 `ktx.yaml` 和 secret 文件中配置。",
+              "",
+              "#### WebUI 与 ktx.yaml 的职责边界",
+              "",
+              "WebUI 是已声明连接的管理界面，不承担物理数据库连接的创建与凭据管理。",
+              "",
+              "#### 连接形态与配置字段",
+              "",
+              "通用模板见 `ktx.yaml`。",
+              "",
+              "#### 新增数据库连接（运维 Runbook）",
+              "",
+              "按 10 步顺序操作。",
+              "",
+              "#### Agent 可见性与 ACL 同步",
+              "",
+              "新增连接后必须同步 `webui/config/access.yaml` 的 role。",
               "",
               "### 3.7 YAML 文件规范与交付验收",
               "",
@@ -115,6 +156,50 @@ describe("HelpCenter", () => {
     Element.prototype.scrollIntoView = scrollIntoView;
 
     renderHelp("/help?section=yaml-delivery-checklist");
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  it("renders the database connection operations runbook section tree and content", async () => {
+    const { fetchMock } = renderHelp();
+
+    // Boundary statement + capability table must be present in the markdown.
+    expect(
+      await screen.findByText(/WebUI 不负责新建物理数据库连接/)
+    ).toBeInTheDocument();
+    // All four level-4 anchors must surface as toc links with stable hrefs.
+    expect(
+      screen.getByRole("link", { name: "WebUI 与 ktx.yaml 的职责边界" })
+    ).toHaveAttribute("href", "/help?section=database-connection-boundary");
+    expect(
+      screen.getByRole("link", { name: "连接形态与配置字段" })
+    ).toHaveAttribute("href", "/help?section=database-connection-shapes");
+    expect(
+      screen.getByRole("link", { name: "新增数据库连接（运维 Runbook）" })
+    ).toHaveAttribute(
+      "href",
+      "/help?section=database-connection-operations-runbook"
+    );
+    expect(
+      screen.getByRole("link", { name: "Agent 可见性与 ACL 同步" })
+    ).toHaveAttribute("href", "/help?section=database-connection-acl-sync");
+    // Sections are rendered as anchors with the stable id.
+    expect(
+      document.getElementById("database-connection-operations-runbook")
+    ).toBeInTheDocument();
+    expect(
+      document.getElementById("database-connection-acl-sync")
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/help/handbook");
+  });
+
+  it("scrolls to the database connection operations runbook section from a stable section id", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    renderHelp("/help?section=database-connection-operations-runbook");
 
     await waitFor(() => {
       expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });

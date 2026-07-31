@@ -74,6 +74,7 @@ export function Review() {
                 发布并 reindex
               </button>
             ) : null}
+            <SemanticAssetExportButton variant="secondary" testId="review-export-asset-package" />
             <Link className="pl-btn pl-btn--secondary" to="/">表目录</Link>
           </>
         }

@@ -26,6 +26,8 @@
 | [22-public-mcp-endpoint-runtime-config-spec.md](22-public-mcp-endpoint-runtime-config-spec.md) | Public MCP Endpoint runtime 配置：统一 WebUI 与 Agent config 中展示和复制的 MCP endpoint | 产品 / Runtime / 前端 / 后端 |
 | [23-semantic-asset-publish-export-spec.md](23-semantic-asset-publish-export-spec.md) | 语义资产自助发布与安全导出：staging validate gate、PVC 写入、KTX reindex、secrets hard block | 产品 / 前端 / 后端 / 安全 |
 | [24-yaml-delivery-runbook-spec.md](24-yaml-delivery-runbook-spec.md) | YAML 交付规范与自助运维手册：manifest/overlay/new source 分型、GO/NO-GO checklist、Agent 自检协议 | 产品 / 文档 / 运维 / Agent |
+| [25-connection-module-terminology-ia-refresh-spec.md](25-connection-module-terminology-ia-refresh-spec.md) | 数据库接入模块术语与 IA 刷新：Connection 中心化、Schema / Manifest / Catalog 术语治理、连接卡片动作收敛 | 产品 / 前端 / 运维 |
+| [26-database-connection-operations-runbook-spec.md](26-database-connection-operations-runbook-spec.md) | 数据库连接运维 Runbook：明确 WebUI 不新建物理连接，给出通用 `ktx.yaml` / secret / ACL / 验收路径 | 产品 / 文档 / 运维 / 安全 |
 
 ## 与原 README 的关键校正
 

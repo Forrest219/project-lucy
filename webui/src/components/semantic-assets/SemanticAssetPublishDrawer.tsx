@@ -352,10 +352,10 @@ export function SemanticAssetPublishDrawer(props: SemanticAssetPublishDrawerProp
         <header className="pl-drawer-header">
           <div>
             <p className="pl-eyebrow">语义资产</p>
-            <h2 className="pl-panel-title">发布 schema manifest + semantic overlay</h2>
-            <p className="pl-notice">
-              走 staging 验证门禁：通过 <code>ktx sl validate</code> 后才原子落盘正式 PVC；只有
-              落盘成功才会触发 <code>ktx admin reindex</code>。正式文件不会被覆盖除非你勾选确认。
+            <h2 className="pl-panel-title notranslate" translate="no">发布 Schema Manifest + Semantic Overlay</h2>
+            <p className="pl-notice notranslate" translate="no">
+              走 staging 验证门禁：通过 <code className="notranslate" translate="no">ktx sl validate</code> 后才原子落盘正式 PVC；只有
+              落盘成功才会触发 <code className="notranslate" translate="no">ktx admin reindex</code>。正式文件不会被覆盖除非你勾选确认。
             </p>
           </div>
           <button
@@ -390,7 +390,7 @@ export function SemanticAssetPublishDrawer(props: SemanticAssetPublishDrawerProp
                 data-testid="semantic-asset-publish-file"
               />
               <p className="text-sm">
-                选择 <code>.yaml</code> / <code>.zip</code> / <code>.tar.gz</code> 文件或拖入此处。
+                选择 <code className="notranslate" translate="no">.yaml</code> / <code className="notranslate" translate="no">.zip</code> / <code className="notranslate" translate="no">.tar.gz</code> 文件或拖入此处。
               </p>
               <div className="pl-upload-file-summary">
                 <button

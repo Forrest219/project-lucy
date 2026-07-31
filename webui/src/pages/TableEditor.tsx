@@ -357,8 +357,8 @@ function SourceObjectTree({
     <aside className="pl-object-tree">
       <Link className="pl-btn pl-btn--ghost justify-start" to="/">表目录</Link>
       <div className="pl-object-tree-group">
-        <h2 className="pl-object-tree-title">{schema || "schema"}</h2>
-        <nav className="grid gap-1" aria-label="同 schema 表">
+        <h2 className="pl-object-tree-title notranslate" translate="no">{schema || "Schema"}</h2>
+        <nav className="grid gap-1 notranslate" aria-label="同 Schema 表" translate="no">
           {siblingTables.map((item) => (
             <Link
               aria-current={item.table === currentTable ? "page" : undefined}
@@ -812,7 +812,7 @@ export function TableEditor() {
           source?.model.schema ?? schema,
           source?.model.table ?? table
         ]}
-        description="维护 semantic-layer 的结构化语义，包括表描述、行粒度、字段描述、指标和分群。"
+        description={<span className="notranslate" translate="no">维护 semantic-layer 的结构化语义，包括表描述、行粒度、字段描述、指标和分群。</span>}
         badges={
           source ? (
             <>
@@ -937,7 +937,7 @@ export function TableEditor() {
                     <p className="pl-panel-title mb-0">Measures</p>
                     <OverlayBadge source={source} />
                   </div>
-                  <p className="pl-notice mb-3">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
+                  <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
                   <MeasureForm
                     measures={form.measures}
                     onChange={(measures) => setForm({ ...form, measures })}
@@ -951,7 +951,7 @@ export function TableEditor() {
                     <p className="pl-panel-title mb-0">Segments</p>
                     <OverlayBadge source={source} />
                   </div>
-                  <p className="pl-notice mb-3">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
+                  <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
                   <SegmentForm
                     segments={form.segments}
                     onChange={(segments) => setForm({ ...form, segments })}

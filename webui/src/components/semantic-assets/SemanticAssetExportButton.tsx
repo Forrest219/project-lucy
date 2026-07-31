@@ -99,7 +99,7 @@ export function SemanticAssetExportButton(props: SemanticAssetExportButtonProps)
           <p className="text-fg-muted">
             包含 {includedCount} 个文件，排除 {excludedCount} 个。{" "}
             <strong className="text-success-strong">Secrets 已强制排除</strong>，
-            <code>ktx.yaml</code> 已脱敏为 <code>&lt;REDACTED&gt;</code>。
+            <code className="notranslate" translate="no">ktx.yaml</code> 已脱敏为 <code className="notranslate" translate="no">&lt;REDACTED&gt;</code>。
           </p>
           {Object.keys(excludedByCategory).length > 0 ? (
             <ul

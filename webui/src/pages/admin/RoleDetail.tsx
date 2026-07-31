@@ -572,8 +572,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                           aria-label={`selector ${idx + 1} connection`}
                         />
                         <input
-                          className="pl-input"
-                          placeholder="schema (必填)"
+                          className="pl-input notranslate"
+                          placeholder="Schema (必填)"
                           value={row.schema}
                           onChange={(e) => {
                             const next = [...form.selectors];
@@ -581,7 +581,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                             updateForm({ ...form, selectors: next });
                           }}
                           disabled={isReadOnlyTemplate}
-                          aria-label={`selector ${idx + 1} schema`}
+                          aria-label={`selector ${idx + 1} Schema`}
+                          translate="no"
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -834,7 +835,7 @@ function DiffTabContent({
 }) {
   return (
     <>
-      <p className="text-sm text-fg-muted">以下改动将写入 access.yaml：</p>
+      <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
       <pre className="pl-diff-viewer text-xs max-h-96 overflow-auto" data-testid="role-diff">
         {diff}
       </pre>

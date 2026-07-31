@@ -14,6 +14,10 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/快速上手/, "quick-start"],
   [/部署向导与上线检查/, "deployment-checklist"],
   [/数据库接入/, "database-connections"],
+  [/WebUI 与 ktx\.yaml 的职责边界|职责边界|WebUI Boundary/i, "database-connection-boundary"],
+  [/连接形态与配置字段|Connection Shape/i, "database-connection-shapes"],
+  [/新增数据库连接（运维 Runbook）|Database Connection Operations/i, "database-connection-operations-runbook"],
+  [/Agent 可见性与 ACL 同步|ACL 同步/i, "database-connection-acl-sync"],
   [/表白名单/, "table-whitelist"],
   [/静态 Catalog reload|Reload Catalog/i, "catalog-reload"],
   [/语义层维护/, "semantic-layer"],
@@ -48,9 +52,16 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/审阅|校验/, "review-validate"]
 ];
 
+const DATABASE_OPS_HEADING_TITLES = new Set([
+  "WebUI 与 ktx.yaml 的职责边界",
+  "连接形态与配置字段",
+  "新增数据库连接（运维 Runbook）",
+  "Agent 可见性与 ACL 同步"
+]);
+
 export type HelpTocItem = {
   id: string;
-  level: 2 | 3;
+  level: 2 | 3 | 4;
   title: string;
 };
 
@@ -114,8 +125,13 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
     const rawLevel = match?.[1]?.length ?? 1;
     const title = (match?.[2] ?? "").trim();
     const yamlRunbookSubheading = rawLevel === 4 && /^3\.7\.\d+/.test(title);
-    if (!match || rawLevel < 2 || (rawLevel > 3 && !yamlRunbookSubheading)) continue;
-    const level = Math.min(rawLevel, 3) as 2 | 3;
+    const cleanTitle = title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
+    const databaseOpsSubheading = rawLevel === 4 && DATABASE_OPS_HEADING_TITLES.has(cleanTitle);
+    if (!match || rawLevel < 2 || (rawLevel > 3 && !yamlRunbookSubheading && !databaseOpsSubheading)) continue;
+    // 3.7.x 子标题为兼容性保留 level 3；3.2.x 运维 Runbook 子标题按真实 level 4 输出。
+    const level: 2 | 3 | 4 = yamlRunbookSubheading
+      ? (Math.min(rawLevel, 3) as 2 | 3)
+      : (rawLevel as 2 | 3 | 4);
     items.push({
       id: dedupeId(sectionIdFor(title), used),
       level,

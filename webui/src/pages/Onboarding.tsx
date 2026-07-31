@@ -294,7 +294,7 @@ export function Onboarding() {
             <div className="pl-onboarding-facts">
               <span>{connections.length} 个连接</span>
               {connections[0] ? <span>{connections.map((conn) => conn.id).join(", ")}</span> : null}
-              <span>{connections.reduce((sum, conn) => sum + conn.schemas.length, 0)} 个 schema</span>
+              <span className="notranslate" translate="no">{connections.reduce((sum, conn) => sum + conn.schemas.length, 0)} 个 Schema</span>
               <span>KTX {projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</span>
             </div>
           </HealthDiagnosticItem>

@@ -72,11 +72,12 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
     <>
       <button
         type="button"
-        className={buttonClass(variant, size)}
+        className={`${buttonClass(variant, size)} notranslate`}
         onClick={handleClick}
         disabled={reload.isPending}
         data-testid={testId ?? "catalog-reload"}
         title="重新读取 ktx.yaml 与 semantic-layer YAML 文件，不会连接数据库，也不会执行 ingest。"
+        translate="no"
         data-connection={connectionId ?? undefined}
         data-schema={schema ?? undefined}
       >
@@ -93,9 +94,10 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
       )}
       {showPanel && reload.error && (
         <div
-          className="pl-catalog-reload-error"
+          className="pl-catalog-reload-error notranslate"
           role="alert"
           data-testid="catalog-reload-error"
+          translate="no"
         >
           本地 Catalog 重新加载失败：{reload.error.message}
         </div>

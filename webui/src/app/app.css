@@ -142,6 +142,7 @@
   }
   .pl-help-toc-link[aria-current="location"] { @apply bg-bg-selected font-medium text-fg-default; }
   .pl-help-toc-link--level-3 { @apply pl-5 text-fg-muted; }
+  .pl-help-toc-link--level-4 { @apply pl-8 text-fg-muted; }
   .pl-help-content {
     @apply min-w-0 rounded-lg border border-border-default bg-bg-surface p-5 shadow-card;
   }
@@ -391,11 +392,19 @@
 
   /* M14: static catalog reload result panel (inline next to the button). */
   .pl-catalog-reload-inline { @apply mt-2; }
-  .pl-catalog-reload-result { @apply grid gap-1 rounded-md border border-border-default bg-bg-base p-3 text-sm text-fg-default; }
-  .pl-catalog-reload-result[data-state="warnings"] { @apply border-warning; }
+  /* M21: keep the outer container a neutral / subtle warning border; the
+     warning item itself is rendered without a heavy warning border to avoid
+     the previous orange-on-orange double-nested look. */
+  .pl-catalog-reload-result { @apply grid gap-2 rounded-md border border-border-default bg-bg-base p-3 text-sm text-fg-default; }
+  .pl-catalog-reload-result[data-state="warnings"] { @apply border-warning-soft; }
   .pl-catalog-reload-result[data-state="clean"] { @apply border-border-default; }
-  .pl-catalog-reload-warnings { @apply mt-1 grid gap-1 list-none p-0 text-xs text-warning-strong; }
-  .pl-catalog-reload-warnings li { @apply rounded-md border border-warning bg-warning-soft px-2 py-1; }
+  .pl-catalog-reload-result[data-state="empty"] { @apply border-border-default bg-bg-subtle text-fg-muted; }
+  .pl-catalog-reload-warnings { @apply grid gap-1 list-none p-0 text-xs text-warning-strong; }
+  .pl-catalog-reload-warnings li { @apply rounded-sm bg-warning-soft px-2 py-1; }
+  .pl-catalog-reload-details { @apply flex flex-col gap-2; }
+  .pl-catalog-reload-details-list { @apply grid gap-1 list-none p-0 text-xs text-fg-muted; }
+  .pl-catalog-reload-details-list li { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-catalog-reload-details-list li strong { @apply text-sm text-fg-default; }
   .pl-catalog-reload-error { @apply mt-2 rounded-md border border-danger-strong bg-danger-soft p-3 text-sm text-danger-strong; }
 
   /* M17: controlled YAML asset upload UX. */
@@ -708,6 +717,10 @@
   .pl-drawer-header { @apply flex items-start justify-between gap-3; }
   .pl-drawer-body { @apply grid gap-3; }
   .pl-drawer-footer { @apply flex flex-wrap items-center justify-end gap-2 pt-2; }
+  /* M21: stable 32x32 close button. `whitespace-nowrap` keeps the two glyphs of
+     "关闭" on one line so it never stacks vertically. */
+  .pl-drawer-close { @apply inline-flex h-8 w-8 shrink-0 items-center justify-center whitespace-nowrap rounded-sm; }
+  .pl-drawer-footer-border-t { @apply border-t border-border-default pt-4 mt-2; }
   .pl-drawer-error { @apply rounded-md border border-danger-strong bg-danger-soft p-3 text-xs text-danger-strong; }
   .pl-drawer-error pre { @apply mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-bg-surface p-2 text-fg-default; }
   .pl-preview-section { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }

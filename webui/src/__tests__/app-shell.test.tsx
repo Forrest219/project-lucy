@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
 import { PageHeader } from "../components/PageHeader";
+import { assertNoForbiddenTerms } from "./forbidden-terms";
 
 function StubPage({ name }: { name: string }) {
   return <div data-testid="route-page">{name}</div>;
@@ -173,5 +174,14 @@ describe("AppFrame shell", () => {
     renderAt("/admin/agents/zhangsan/tokens/new");
     expect(screen.getByRole("link", { name: "Agent 实例" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("route-page")).toHaveTextContent("NewToken");
+  });
+
+  it("uses 连通测试 for the connection-test sidebar entry and renders no machine-translation artifacts", () => {
+    renderAt("/connections");
+    expect(screen.getByRole("link", { name: "连通测试" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "替代测试" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "添加架构" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "上传报价包" })).not.toBeInTheDocument();
+    assertNoForbiddenTerms(document.body);
   });
 });

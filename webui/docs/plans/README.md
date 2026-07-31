@@ -82,6 +82,8 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M16-system-overview-runtime-monitoring.md](wo-M16-system-overview-runtime-monitoring.md) | M16 | 系统概览运行状态监控：`/onboarding` 去向导化 |
 | [wo-M19-semantic-asset-publish-export.md](wo-M19-semantic-asset-publish-export.md) | M19 | 语义资产自助发布与安全导出：上传 manifest/overlay、Validate Gate、reindex、secrets hard block |
 | [wo-M20-yaml-delivery-runbook.md](wo-M20-yaml-delivery-runbook.md) | M20 | YAML 交付规范进入 Help Center：用途、规则、常见错误、交付 checklist 与 Agent 自检协议 |
+| [wo-M21-connection-module-terminology-ia-refresh.md](wo-M21-connection-module-terminology-ia-refresh.md) | M21 | 数据库接入模块术语与 IA 刷新：Connection 中心化、Schema / Manifest / Catalog 术语治理 |
+| [wo-M22-database-connection-operations-runbook.md](wo-M22-database-connection-operations-runbook.md) | M22 | 数据库连接运维 Runbook：通用新增连接边界、配置、ACL 与验收 |
 
 ## 6. 如何把工单喂给 codex
 

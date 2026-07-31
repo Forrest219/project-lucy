@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TableWhitelist } from "../pages/connections/TableWhitelist";
 import type { ConnectionInfo, SourceSummary } from "../lib/types";
+import { assertNoForbiddenTerms } from "./forbidden-terms";
 
 const TEST_CONN: ConnectionInfo = {
   id: "mysql-aliyun",
@@ -218,7 +219,7 @@ describe("TableWhitelist", () => {
     expect(screen.getByPlaceholderText("搜索表名/描述...")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Schema 筛选" })).toBeInTheDocument();
     expect(screen.getAllByText("已勾选 2 / 3 张表")[0]).toBeInTheDocument();
-    expect(screen.getByText("Connection: mysql-aliyun · Schema: dataforai")).toBeInTheDocument();
+    expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
     expect(screen.getByText("superstore_orders")).toBeInTheDocument();
     expect(screen.getByText("8 个")).toBeInTheDocument();
     expect(screen.getByText("已纳入")).toBeInTheDocument();
@@ -272,8 +273,8 @@ describe("TableWhitelist", () => {
 
     await screen.findByRole("combobox", { name: "Schema 筛选" });
     await waitFor(() => {
-      expect(screen.getByText("Connection: mysql-aliyun · Schema: analytics")).toBeInTheDocument();
-      expect(screen.getByText("Connection: mysql-aliyun · Schema: dataforai")).toBeInTheDocument();
+      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：ANALYTICS")).toBeInTheDocument();
+      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByRole("combobox", { name: "Schema 筛选" }), {
@@ -281,9 +282,9 @@ describe("TableWhitelist", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Connection: mysql-aliyun · Schema: analytics")).toBeInTheDocument();
+      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：ANALYTICS")).toBeInTheDocument();
     });
-    expect(screen.queryByText("Connection: mysql-aliyun · Schema: dataforai")).not.toBeInTheDocument();
+    expect(screen.queryByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).not.toBeInTheDocument();
     expect(screen.getByText("revenue_daily")).toBeInTheDocument();
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
   });
@@ -304,7 +305,7 @@ describe("TableWhitelist", () => {
     const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
     expect(within(schemaSelect).getByRole("option", { name: "openclaw_db" })).toBeInTheDocument();
     expect(screen.getByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")).toHaveTextContent(
-      "openclaw_db 已在连接配置中启用，但本地 semantic-layer 尚未提供表清单。"
+      "openclaw_db 已在连接配置中启用，但本地语义层尚未提供 Manifest。"
     );
 
     fireEvent.change(schemaSelect, { target: { value: "openclaw_db" } });
@@ -312,8 +313,8 @@ describe("TableWhitelist", () => {
     await waitFor(() => {
       expect(screen.getAllByText("已勾选 0 / 0 张表")[0]).toBeInTheDocument();
     });
-    expect(screen.getByText("Connection: mysql-aliyun · Schema: openclaw_db")).toBeInTheDocument();
-    expect(screen.queryByText("Connection: mysql-aliyun · Schema: dataforai")).not.toBeInTheDocument();
+    expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：OPENCLAW_DB")).toBeInTheDocument();
+    expect(screen.queryByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).not.toBeInTheDocument();
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
   });
 
@@ -722,5 +723,39 @@ describe("TableWhitelist", () => {
       String(call[0]).includes("/ingest")
     );
     expect(ingestCalls).toHaveLength(0);
+  });
+
+  it("M21: uses Schema 筛选 / 全部 Schema / 连接+Schema Chinese heading and Manifest terminology", async () => {
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+    );
+    renderWhitelist();
+
+    // Schema 筛选 control stays stable, with 全部 Schema as the placeholder.
+    const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
+    expect(within(schemaSelect).getByRole("option", { name: "全部 Schema" })).toBeInTheDocument();
+    expect(screen.queryByText("全部架构")).not.toBeInTheDocument();
+    expect(screen.queryByText("模式筛选")).not.toBeInTheDocument();
+
+    // Group heading follows the canonical Chinese format with colon-typed dots.
+    await waitFor(() => {
+      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
+    });
+
+    // Empty-schema copy uses Manifest terminology, not 表清单.
+    const empty = await screen.findByTestId(
+      "configured-schema-empty-mysql-aliyun-openclaw_db"
+    );
+    expect(within(empty).getByText(/本地语义层尚未提供 Manifest/)).toBeInTheDocument();
+    expect(within(empty).queryByText("表清单")).not.toBeInTheDocument();
+
+    assertNoForbiddenTerms(document.body);
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../../lib/apiClient";
@@ -17,10 +17,7 @@ import {
   CatalogAssetUploadButton,
   CatalogReloadButton
 } from "../../components/catalog";
-import {
-  SemanticAssetExportButton,
-  SemanticAssetPublishButton
-} from "../../components/semantic-assets";
+import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
 
@@ -97,18 +94,18 @@ function schemaAssetState(
   const tableCount = tables.filter((table) => table.conn === connectionId && table.schema === schema).length;
   const warnings = matchingSchemaWarnings(run?.warnings ?? [], connectionId, schema);
   if (warnings.some((warning) => warning.code === "MANIFEST_PARSE_FAILED")) {
-    return { label: "解析失败", tableCount, tone: "danger" };
+    return { label: "Manifest 解析失败", tableCount, tone: "danger" };
   }
   if (warnings.some((warning) => warning.code === "SCHEMA_MANIFEST_MISSING")) {
-    return { label: "缺失 manifest", tableCount, tone: "warning" };
+    return { label: "缺失 Manifest", tableCount, tone: "warning" };
   }
   if (warnings.some((warning) => warning.code === "SCHEMA_MANIFEST_EMPTY")) {
-    return { label: "空 manifest", tableCount, tone: "warning" };
+    return { label: "空 Manifest", tableCount, tone: "warning" };
   }
   if (tableCount > 0) {
     return { label: "已存在", tableCount, tone: "success" };
   }
-  return { label: "未发现本地 manifest", tableCount, tone: "muted" };
+  return { label: "未发现本地 Manifest", tableCount, tone: "muted" };
 }
 
 function catalogRunState(
@@ -159,24 +156,51 @@ export function ConnectionOverview() {
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
-  const [testStates, setTestStates] = useState<Record<string, TestUiStatus>>({});
+  const [testDrawerTarget, setTestDrawerTarget] = useState<ConnectionInfo | null>(null);
+  // M21: ConnectionOverview is the single source of truth for connection-test
+  // results. We cache the latest `ConnectionTestResult` per connection, the
+  // current drawer target, and the drawer's collapsible log state. The
+  // `ConnectionTestDrawer` is fully controlled — it never owns its own
+  // mutation or result state, so the card status, drawer banner, and
+  // compatibility page stay in lockstep.
+  const [testResults, setTestResults] = useState<Record<string, ConnectionTestResult | null>>({});
+  const [drawerLogsExpanded, setDrawerLogsExpanded] = useState(false);
 
   const testMutation = useMutation({
     mutationFn: (connId: string) =>
       apiPost<ConnectionTestResult>(`/api/connections/${encodeURIComponent(connId)}/test`, {}),
-    onMutate: (connId) => {
-      setTestStates((prev) => ({ ...prev, [connId]: "testing" }));
-    },
     onSuccess: (data, connId) => {
-      setTestStates((prev) => ({
-        ...prev,
-        [connId]: data.status === "ok" ? "connected" : "disconnected"
-      }));
+      setTestResults((prev) => ({ ...prev, [connId]: data }));
     },
-    onError: (_error, connId) => {
-      setTestStates((prev) => ({ ...prev, [connId]: "disconnected" }));
+    onError: (err, connId) => {
+      setTestResults((prev) => ({
+        ...prev,
+        [connId]: {
+          status: "error",
+          reason: err instanceof Error ? err.message : "未知错误"
+        }
+      }));
     }
   });
+
+  const testStates = useMemo(() => {
+    const out: Record<string, TestUiStatus> = {};
+    for (const conn of connections) {
+      const isPending =
+        testMutation.isPending && testMutation.variables === conn.id;
+      const result = testResults[conn.id];
+      if (isPending) {
+        out[conn.id] = "testing";
+      } else if (result === undefined) {
+        out[conn.id] = "unknown";
+      } else if (result.status === "ok") {
+        out[conn.id] = "connected";
+      } else {
+        out[conn.id] = "disconnected";
+      }
+    }
+    return out;
+  }, [connections, testMutation.isPending, testMutation.variables, testResults]);
 
   if (loading) {
     return <p className="pl-notice">正在加载连接状态...</p>;
@@ -191,7 +215,7 @@ export function ConnectionOverview() {
       <PageHeader
         title="连接概览"
         breadcrumbs={["数据库接入", "连接概览"]}
-        description="维护每个连接的 schema、YAML 资产与本地目录刷新状态。"
+        description={<span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与本地目录刷新状态。</span>}
         badges={
           projectQuery.data ? (
             <span data-testid="page-header-badge-root">{projectQuery.data.root}</span>
@@ -203,7 +227,7 @@ export function ConnectionOverview() {
         <MetricCard
           type="connections"
           value={connections.length}
-          subValue={schemaCount > 0 ? `${schemaCount} 个 schema` : "未配置 schema"}
+          subValue={schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
         />
         <MetricCard
           type="enabledTables"
@@ -225,7 +249,7 @@ export function ConnectionOverview() {
       <div className="pl-overview-grid">
         <section className="pl-panel">
           {connections.length === 0 && (
-            <p className="text-sm text-fg-muted py-4">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
+            <p className="text-sm text-fg-muted py-4 notranslate" translate="no">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
           )}
           {connections.map((conn) => {
             const state: TestUiStatus = testStates[conn.id] ?? "unknown";
@@ -240,38 +264,47 @@ export function ConnectionOverview() {
               <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
                 <div className="pl-connection-card-header">
                   <div className="pl-connection-card-title">
-                    <span className="pl-engine-badge" data-testid={`engine-badge-${conn.id}`}>
+                    <span
+                      className="pl-engine-badge notranslate"
+                      data-testid={`engine-badge-${conn.id}`}
+                      translate="no"
+                    >
                       {engineLabel(conn.engine ?? conn.driver)}
                     </span>
-                    <strong>{conn.id}</strong>
+                    <strong className="notranslate" translate="no">{conn.id}</strong>
                   </div>
                   <div className="pl-connection-card-badges">
                     <span
                       className={`pl-connection-status pl-connection-status--${state}`}
                       data-testid={`connection-status-${conn.id}`}
+                      translate="no"
                     >
                       {statusLabel(state)}
                     </span>
-                    <span className="text-xs text-fg-muted">
+                    <span
+                      className="text-xs text-fg-muted notranslate"
+                      translate="no"
+                      data-testid={`connection-readonly-${conn.id}`}
+                    >
                       {conn.readOnlyExpected === false ? "Write-risk" : "Read-only expected"}
                     </span>
                   </div>
-                  <p className="pl-connection-card-meta">
+                  <p className="pl-connection-card-meta notranslate" translate="no">
                     配置来源：ktx.yaml。凭据不在 WebUI 中编辑。
                   </p>
                 </div>
                 <div className="pl-connection-card-body">
                   <div className="pl-schema-asset-heading">
-                    <span>关联 Schema 资产列表</span>
+                    <span className="notranslate" translate="no">关联 Schema 资产列表</span>
                   </div>
                   {conn.schemas.length === 0 ? (
-                    <p className="text-sm text-fg-muted py-3">尚未配置 schema。请先添加 Schema。</p>
+                    <p className="text-sm text-fg-muted py-3 notranslate" translate="no">尚未配置 Schema。请先添加 Schema。</p>
                   ) : (
                     <table className="pl-schema-asset-table" data-testid={`schema-list-${conn.id}`}>
                       <thead>
                         <tr>
-                          <th>Schema</th>
-                          <th>Manifest 状态</th>
+                          <th className="notranslate" translate="no">Schema</th>
+                          <th className="notranslate" translate="no">Manifest 状态</th>
                           <th>本地表数</th>
                           <th>上下文动作</th>
                         </tr>
@@ -285,11 +318,12 @@ export function ConnectionOverview() {
                               data-tone={assetState.tone}
                               data-testid={`schema-row-${conn.id}-${schema}`}
                             >
-                              <td><code>{schema}</code></td>
+                              <td><code className="notranslate" translate="no">{schema}</code></td>
                               <td>
                                 <span
                                   className={`pl-schema-asset-status pl-schema-asset-status--${assetState.tone}`}
                                   data-testid={`schema-asset-status-${conn.id}-${schema}`}
+                                  translate="no"
                                 >
                                   {assetState.label}
                                 </span>
@@ -308,7 +342,7 @@ export function ConnectionOverview() {
                                   <CatalogAssetUploadButton
                                     connectionId={conn.id}
                                     schema={schema}
-                                    label="上传该 Schema 的 YAML"
+                                    label="上传 Manifest"
                                     variant="ghost"
                                     size="sm"
                                     testId={`upload-yaml-${conn.id}-${schema}`}
@@ -333,9 +367,10 @@ export function ConnectionOverview() {
                   <div className="pl-connection-card-actions">
                     <button
                       type="button"
-                      className={`pl-btn ${hasManifestGap ? "pl-btn--secondary" : "pl-btn--primary"}`}
+                      className={`pl-btn notranslate ${hasManifestGap ? "pl-btn--secondary" : "pl-btn--primary"}`}
                       onClick={() => setAddTarget(conn)}
                       data-testid={`add-schema-${conn.id}`}
+                      translate="no"
                     >
                       + 添加 Schema
                     </button>
@@ -346,17 +381,19 @@ export function ConnectionOverview() {
                       variant={hasManifestGap ? "primary" : "secondary"}
                       testId={`upload-yaml-${conn.id}`}
                     />
-                    <SemanticAssetPublishButton
-                      connectionId={conn.id}
-                      schemaOptions={conn.schemas}
-                      label="上传语义包"
-                      variant="secondary"
-                      testId={`semantic-publish-${conn.id}`}
-                    />
                     <button
                       type="button"
                       className="pl-btn pl-btn--secondary"
-                      onClick={() => testMutation.mutate(conn.id)}
+                      onClick={() => {
+                        setDrawerLogsExpanded(false);
+                        setTestDrawerTarget(conn);
+                        // Auto-run on first open so the card status flips
+                        // and the drawer banner reflects the latest result
+                        // without an extra click.
+                        if (testResults[conn.id] === undefined) {
+                          testMutation.mutate(conn.id);
+                        }
+                      }}
                       disabled={testMutation.isPending && testMutation.variables === conn.id}
                       data-testid={`test-connection-${conn.id}`}
                     >
@@ -384,14 +421,28 @@ export function ConnectionOverview() {
         />
       )}
 
-      <section className="pl-panel" data-testid="semantic-asset-export-panel">
-        <p className="pl-panel-title">下载当前全量资产包</p>
-        <p className="pl-notice">
-          走白名单脱敏导出：<code>ktx.yaml</code> 的 host/port/username/password 强制替换为
-          <code>&lt;REDACTED&gt;</code>，secrets、.env、私钥、audit sqlite 一律不进 zip。
-        </p>
-        <SemanticAssetExportButton />
-      </section>
+      {testDrawerTarget && (
+        <ConnectionTestDrawer
+          connection={testDrawerTarget}
+          open={Boolean(testDrawerTarget)}
+          result={testResults[testDrawerTarget.id] ?? null}
+          isPending={
+            testMutation.isPending && testMutation.variables === testDrawerTarget.id
+          }
+          logsExpanded={drawerLogsExpanded}
+          onClose={() => setTestDrawerTarget(null)}
+          onRunTest={() => testMutation.mutate(testDrawerTarget.id)}
+          onToggleLogs={() => setDrawerLogsExpanded((v) => !v)}
+        />
+      )}
+
+      <p className="pl-notice" data-testid="connections-export-hint">
+        系统级资产包导出已迁移到{" "}
+        <Link to="/review" className="pl-link" data-testid="connections-export-link">
+          变更审阅
+        </Link>
+        页面，仅在发布语义资产或交付运维包时使用，与 Connection 无关。
+      </p>
     </div>
   );
 }

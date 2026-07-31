@@ -426,7 +426,7 @@ export function AgentDetail() {
                   <div className="pl-metric-card"><span>Source</span><strong>{effective.sources.length}</strong><small>{effective.snapshotHash.slice(0, 12)}</small></div>
                 </div>
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium">连接 / Schema / Source / Table</div>
+                  <div className="text-sm font-medium notranslate" translate="no">连接 / Schema / Source / Table</div>
                   {groupedSources.length === 0 ? (
                     <p className="text-sm text-fg-muted">无可展开 source。</p>
                   ) : (
@@ -442,7 +442,7 @@ export function AgentDetail() {
                               <li key={`${connGroup.connectionId}:${schemaGroup.schema}`} className="grid gap-1">
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono text-sm">{schemaGroup.schema}</span>
-                                  <span className="text-xs text-fg-muted">schema</span>
+                                  <span className="text-xs text-fg-muted notranslate" translate="no">Schema</span>
                                 </div>
                                 <ul className="grid gap-1 pl-4">
                                   {schemaGroup.sources.map((sourceGroup) => (
@@ -494,7 +494,7 @@ export function AgentDetail() {
           <div className="grid gap-4 pb-32">
             {diffPreview ? (
               <>
-                <p className="text-sm text-fg-muted">以下改动将写入 access.yaml，确认后才会落盘。</p>
+                <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml，确认后才会落盘。</p>
                 <DiffViewer diff={diffPreview.diff} />
                 <div className="flex justify-end gap-2">
                   <button

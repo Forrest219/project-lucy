@@ -250,7 +250,7 @@ export type WikiPreview = {
 
 export type HelpTocItem = {
   id: string;
-  level: 2 | 3;
+  level: 2 | 3 | 4;
   title: string;
 };
 

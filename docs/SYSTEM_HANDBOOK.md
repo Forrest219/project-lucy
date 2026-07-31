@@ -222,6 +222,25 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | 表白名单 | `/connections/whitelist` | 维护 `ktx.yaml` 的 `enabled_tables` |
 | 连通测试 | `/connections/test` | 调用 `ktx connection test <connId>` |
 
+> WebUI 不负责新建物理数据库连接。新增连接的 host、port、database、username、password、driver 等字段由运维在 `ktx.yaml` 和 secret 文件中配置。
+> WebUI 管理的是已声明连接：查看连接状态、测试连接、添加 Schema、维护表白名单、上传 YAML 资产、刷新本地目录。
+
+| 问题 | 手册应回答 |
+| --- | --- |
+| 我在哪里新建连接？ | 编辑 `ktx.yaml`，不是 WebUI |
+| 密码放哪里？ | `file:` / `env:` / Docker secrets，不写 inline 明文 |
+| WebUI 能做什么？ | 管理已声明连接 |
+| 新连接什么时候对 Agent 可见？ | `ktx.yaml`、manifest / overlay、`enabled_tables`、`access.yaml` 均就绪后 |
+
+| 工作 | 操作入口 |
+| --- | --- |
+| 新增物理数据库连接 | `ktx.yaml` + secret 文件 |
+| 修改连接 host / port / username / password | `ktx.yaml` + secret 文件 |
+| 给已有连接添加 Schema | WebUI `/connections` 或受控 API |
+| 测试连接 | WebUI 或 `ktx connection test` |
+| 维护表白名单 | WebUI `/connections/whitelist` |
+| 让 Agent 可见 | `webui/config/access.yaml` role / ACL |
+
 连接信息来自 `ktx.yaml`。WebUI 只暴露 `passwordSource`，不会读取或返回 `password: file:` 指向的密钥内容。
 
 白名单保存流程：
@@ -265,6 +284,249 @@ PUT /api/connections/:connId/enabled-tables
 | `SCHEMA_MANIFEST_EMPTY` | manifest 存在但没有表 |
 | `ENABLED_TABLE_NOT_SCANNED` | `enabled_tables` 中的表未出现在本地 manifest |
 | `MANIFEST_PARSE_FAILED` | manifest YAML 解析失败 |
+
+#### WebUI 与 ktx.yaml 的职责边界
+
+> WebUI 是已声明连接的管理界面，不承担物理数据库连接的创建与凭据管理。物理连接的事实源是 `ktx.yaml`，凭据的事实源是 `.ktx/secrets/`、环境变量或 Docker secrets。
+
+| 角色 | 负责的事 | 不负责的事 |
+| --- | --- | --- |
+| WebUI | 查看 connection、连通测试、添加 Schema、维护 `enabled_tables`、上传 YAML 资产、刷新本地目录、显示 secret 路径来源 | 写入 host / port / user / password；读取 `password: file:` 指向的密钥内容；直接连接物理数据库做扫描 |
+| `ktx.yaml` + secret | 声明物理连接的 driver、host、port、username、password、schemas、`enabled_tables` | Agent 鉴权；role / ACL 治理 |
+| `webui/config/access.yaml` | 定义 role、Agent、token hash、ACL（连接、表白名单、工具） | 物理连接配置；MCP upstream 行为 |
+
+常见误判：
+
+| 误判 | 正确做法 |
+| --- | --- |
+| WebUI 上没有"新建连接"按钮是 bug | 这是安全边界；新增连接必须改 `ktx.yaml` + secret |
+| 在 `access.yaml` 改 password 即可改连接凭据 | `access.yaml` 不存凭据；改密码必须改 secret 文件并 reload |
+| `ktx.yaml` 配了连接，Agent 立即可见 | 还需 manifest、`enabled_tables`、`access.yaml` 三件套就绪 |
+| 物理表加好就等于 Agent 能查 | 还要在 `access.yaml` 把表加进 role 的 `tableSelectors` |
+
+#### 连接形态与配置字段
+
+新增连接前先确定目标形态。`ktx.yaml` 里的 connection 字段是通用的，按 driver 决定默认值；Doris / StarRocks 等 MySQL wire protocol OLAP 源需显式声明 `engine` 和 `wire_protocol`。
+
+通用字段：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `driver` | 是 | KTX driver，例如 `mysql`、`postgres` |
+| `engine` | 视情况 | 数据库引擎标识，例如 `doris`、`starrocks`；原生 MySQL 可省略 |
+| `wire_protocol` | 视情况 | Doris / StarRocks 等使用 MySQL wire protocol 的 OLAP 源应显式写出 |
+| `readonly` | 建议 | 运维意图标记；真实只读必须由数据库账号权限保证 |
+| `r1_target` | 视情况 | 仅 R1 受控目标源需要显式设置 |
+| `enabled_tables` | 是 | 允许进入语义层 / Agent 暴露基础范围的表 |
+| `host` | 是 | 数据库 host，不在公开文档泄露真实值 |
+| `port` | 是 | 数据库端口 |
+| `database` | 是 | 默认 database / catalog，具体语义以 driver 为准 |
+| `username` | 是 | 只读账号 |
+| `password` | 是 | 使用 `file:` 或 `env:`，禁止明文 |
+| `schemas` | 是 | 已纳入治理的 Schema 列表 |
+
+连接形态矩阵：
+
+| 连接形态 | 推荐配置形态 | 说明 |
+| --- | --- | --- |
+| MySQL | `driver: mysql`，默认端口 `3306` | 原生 MySQL；`engine` 通常可省略 |
+| PostgreSQL | `driver: postgres`，默认端口 `5432` | Schema 语义按 PostgreSQL 处理 |
+| Doris | `driver: mysql`、`engine: doris`、`wire_protocol: mysql` | MySQL wire protocol OLAP 源；R1 目标源需 `readonly: true`、`r1_target: true` |
+| StarRocks | `driver: mysql`、`engine: starrocks`、`wire_protocol: mysql` | MySQL wire protocol OLAP 源；当前仍是 gated support，需证据后才能写 release-verified |
+
+通用模板（本地开发路径）：
+
+```yaml
+connections:
+  <connection-id>:
+    driver: <mysql|postgres>
+    engine: <optional-engine>
+    wire_protocol: <optional-wire-protocol>
+    readonly: true
+    enabled_tables:
+      - <schema>.<table_or_view>
+    host: <DB_HOST>
+    port: <DB_PORT>
+    database: <DATABASE>
+    username: <READONLY_USERNAME>
+    password: file:<PROJECT_ROOT>/.ktx/secrets/<connection-id>-password
+    schemas:
+      - <schema>
+
+setup:
+  database_connection_ids:
+    - <connection-id>
+```
+
+通用模板（Docker / customer-config 路径，容器内路径）：
+
+```yaml
+password: file:/data/lucy/.ktx/secrets/<connection-id>-password
+```
+
+凭据保护要求：
+
+| 路径形态 | 示例 | 适用场景 |
+| --- | --- | --- |
+| `file:<absolute-path>` | `file:<PROJECT_ROOT>/.ktx/secrets/<connection-id>-password` | 本地开发、CI 沙盒 |
+| `file:/data/lucy/...` | `file:/data/lucy/.ktx/secrets/<connection-id>-password` | Docker 容器内 |
+| `env:<NAME>` | `env:LUCY_DB_PASSWORD_<CONNECTION_ID>` | 12-factor / Kubernetes secret |
+| inline 明文 | 禁止 | 任何环境都不允许 |
+
+#### 新增数据库连接（运维 Runbook）
+
+按以下顺序操作，前后步骤不可调换。流程目标是：先把"事实源 + 凭据 + 索引 + ACL"全部就绪，再让 Agent 接入。
+
+1. 收集连接信息：确认目标数据库类型、host、port、database / catalog、schemas、目标表清单。
+2. 创建只读账号：生产库必须使用真只读账号；`SELECT` 权限只授予目标 schema / 表。
+3. 创建 secret 文件或环境变量：见下方"本地开发路径"或"Docker / customer-config 路径"。
+4. 编辑 `ktx.yaml`：使用通用模板填入 connection 块（见 3.2.2）。
+5. 测试连接：`ktx connection test <connection-id>`。
+6. 生成或导入 manifest：运行 `ktx ingest <connection-id>` 前，必须确认当前 `scan.enrichment`、LLM 和 embedding 配置涉及的外部数据流已获得客户 / 数据 Owner 授权；未授权时改用受控 Manifest 上传，或在获批的无 enrichment 扫描路径下生成 manifest。产物落在 `semantic-layer/<conn>/_schema/<schema>.yaml`。
+7. 维护 `enabled_tables`：把允许的物理表写入 `ktx.yaml`，确保已在 manifest 中。
+8. 重建索引：`ktx admin reindex --force`，让 KTX MCP 检索读到新连接与新表。
+9. 同步 `webui/config/access.yaml`：在对应 role 的 `allow.connections` / `tableSelectors` / `tools` 中加入新连接与目标表。
+10. 验收：WebUI `/connections` 看到新连接；`/admin/audit` 能看到 MCP smoke 的 allow / deny；用真实 Agent token 跑最小 smoke。
+
+本地开发路径（仓库根即项目根）：
+
+```bash
+cd <PROJECT_ROOT>
+mkdir -p .ktx/secrets
+printf '%s' '<DB_PASSWORD>' > .ktx/secrets/<connection-id>-password
+chmod 600 .ktx/secrets/<connection-id>-password
+
+# 验证连通
+ktx --project-dir <PROJECT_ROOT> connection test <connection-id>
+
+# 生成 manifest 前，先确认 scan.enrichment / LLM / embedding 外部数据流已获授权。
+# 未授权时不要执行 ingest，改用受控 Manifest 上传或获批的无 enrichment 扫描路径。
+ktx --project-dir <PROJECT_ROOT> ingest <connection-id>
+
+# 重建索引
+ktx --project-dir <PROJECT_ROOT> admin reindex --force
+
+# 验证目标 source
+ktx --project-dir <PROJECT_ROOT> sl validate <source-name> --connection-id <connection-id>
+```
+
+Docker / customer-config 路径（容器内项目根为 `/data/lucy`）：
+
+```bash
+# 在容器内准备 secret 目录
+docker compose exec lucy mkdir -p /data/lucy/.ktx/secrets
+
+# 从宿主机把密钥文件灌进容器
+docker compose exec -T lucy sh -c 'cat > /data/lucy/.ktx/secrets/<connection-id>-password' \
+  < ./<connection-id>-password
+
+# 收紧权限 + 重启服务
+docker compose exec lucy chmod 600 /data/lucy/.ktx/secrets/<connection-id>-password
+docker compose restart lucy
+
+# 容器内跑通验证
+docker compose exec lucy ktx --project-dir /data/lucy connection test <connection-id>
+
+# 生成 manifest 前，先确认 scan.enrichment / LLM / embedding 外部数据流已获授权。
+# 未授权时不要执行 ingest，改用受控 Manifest 上传或获批的无 enrichment 扫描路径。
+docker compose exec lucy ktx --project-dir /data/lucy ingest <connection-id>
+
+docker compose exec lucy ktx --project-dir /data/lucy admin reindex --force
+docker compose exec lucy ktx --project-dir /data/lucy sl validate <source-name> --connection-id <connection-id>
+```
+
+如果是 bind mount 部署，宿主机的 `customer-config/` 通常映射为：
+
+```text
+customer-config/ktx.yaml             -> /data/lucy/ktx.yaml
+customer-config/.ktx/secrets/        -> /data/lucy/.ktx/secrets/
+```
+
+WebUI 验收：
+
+| 页面 | 验收点 |
+| --- | --- |
+| `/connections` | 新连接可见，driver / engine / Schema / enabled table 数量正确 |
+| `/connections/test` 或连接卡片 | 连通测试成功；失败时展示可诊断原因 |
+| `/connections/whitelist` | 只出现本地 manifest 中可选表；白名单与 `enabled_tables` 对齐 |
+| `/admin/roles` 或 `access.yaml` | role 已授权新连接和目标表 |
+| `/admin/audit` | MCP smoke 的 allow / deny 记录可追溯 |
+
+> WebUI 的"刷新本地目录"只重新读取 `ktx.yaml` 与 `semantic-layer/**` YAML。它不会连接物理数据库扫描新表，也不会替代 `ktx ingest` 或受控 manifest 上传。
+> 物理库扫描、列变更、Doris / StarRocks 形态识别都靠 `ktx ingest` 或受控 Manifest 上传；新增连接、换驱动、加表后必须在授权数据流下重跑 `ktx ingest` + `ktx admin reindex --force`，或先上传 Manifest 再 reindex，然后回 WebUI 点"刷新本地目录"。
+
+#### Agent 可见性与 ACL 同步
+
+新增连接后，Agent 是否可见由两层配置共同决定，缺一不可：
+
+| 层 | 配置文件 | 控制内容 |
+| --- | --- | --- |
+| 连接层 | `ktx.yaml` | connection、Schema、`enabled_tables`、secret 路径 |
+| 治理层 | `webui/config/access.yaml` | role 的 `allow.connections`、`tableSelectors`、`tools` |
+
+通用 role 片段（脱敏占位符）：
+
+```yaml
+roles:
+  <role-id>:
+    description: <role-description>
+    allow:
+      connections:
+        - <connection-id>
+      tableSelectors:
+        - connection: <connection-id>
+          schema: <schema>
+          names:
+            - <table_or_view>
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+```
+
+新增连接后必须做的同步动作：
+
+| 动作 | 入口 | 落点 |
+| --- | --- | --- |
+| 在 `access.yaml` 把新连接加进 role | 编辑 YAML 或 WebUI `/admin/roles` | `roles.<role>.allow.connections` |
+| 在 `access.yaml` 把新表白名单加进 role | 编辑 YAML 或 WebUI `/admin/roles` | `roles.<role>.allow.tableSelectors` |
+| 确认 role 的 `tools` 列表仍含 `lucy_*` 工具 | 编辑 YAML 或 WebUI `/admin/roles` | `roles.<role>.allow.tools` |
+| Proxy / MCP 重新加载配置 | 改完保存即生效；如未生效，重启 Proxy | 同进程 Fastify / 容器重启 |
+| 跑最小 smoke | `lucy_catalog` + 一条只读 query | 写到 `LUCY_AUDIT_DB` |
+
+常见失败原因（与 `/admin/audit` 决策 reason 对应）：
+
+| 症状 | 首查位置 | 处理 |
+| --- | --- | --- |
+| WebUI 看不到新连接 | `ktx.yaml`、环境变量 `KTX_PROJECT_ROOT`、容器挂载路径 | 确认运行时实际加载的配置根 |
+| 连通测试失败 | host / port / 网络 / 只读账号 / secret 文件路径 | 容器内跑 `ktx connection test`；不要只在宿主机验证 |
+| 提示缺失 Manifest | `semantic-layer/<conn>/_schema/<schema>.yaml` | 跑 `ktx ingest` 或上传受控 manifest，再刷新本地目录 |
+| 白名单表不可选 | manifest 未包含目标表 | 检查 manifest 内容和 `enabled_tables` 拼写 |
+| Agent 看不到新连接 | `webui/config/access.yaml` role | 同步 `connections` 与 `tableSelectors`；等待缓存刷新或重启 Proxy |
+| 查询被拒 | `/admin/audit` decision reason | 按下表 `reason` 分类处理 |
+
+| decision_reason | 含义 | 处理 |
+| --- | --- | --- |
+| `unknown_or_forbidden_connection:<conn>` | connection 缺失或未授权 | 在 role 的 `allow.connections` 加上该 connection |
+| `table_forbidden:<table>` | 请求表不在授权范围 | 在 role 的 `allow.tableSelectors` 加上该表 |
+| `tool_forbidden` / `tool_forbidden_global` | role 未授权该工具，或命中全局 deny | 调整 `allow.tools` 或 `defaults.deny_tools` |
+| `raw_query_forbidden` | `lucy_query` / `sl_query` 传入了原始 SQL | 改用 measure / dimension 形式；只在受控场景下用 `lucy_read_source` |
+
+排障命令：
+
+```bash
+# 1. 看 access.yaml 是否包含新连接与表
+rg -n "roles:|tableSelectors|tools|<connection-id>|<role-id>" webui/config/access.yaml
+
+# 2. 看最近拒绝记录
+curl -s "http://127.0.0.1:5174/api/admin/audit?outcome=denied&limit=20"
+
+# 3. 看 connection 是否被加载
+ktx --project-dir <PROJECT_ROOT> connection list
+```
 
 ### 3.3 语义层维护
 

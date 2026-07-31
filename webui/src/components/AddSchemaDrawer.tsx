@@ -60,7 +60,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connection.id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
-      toast.success(`已添加 schema: ${trimmed}`);
+      toast.success(`已添加 Schema: ${trimmed}`);
     },
     onError: (err) => {
       handleSubmitError(setStep, setSubmitError, err);
@@ -85,10 +85,11 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
 
   return (
     <div
-      className="pl-drawer-backdrop"
+      className="pl-drawer-backdrop notranslate"
       role="dialog"
       aria-modal="true"
-      aria-label="添加 schema"
+      aria-label="添加 Schema"
+      translate="no"
       data-testid="add-schema-drawer-backdrop"
     >
       <div
@@ -98,9 +99,9 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         <header className="pl-drawer-header">
           <div>
             <p className="pl-eyebrow">数据库接入</p>
-            <h2 className="pl-panel-title">添加 schema 到 {connection.id}</h2>
-            <p className="pl-notice">
-              添加 schema 会写入 <code>ktx.yaml</code>，不会扫描物理数据库。
+            <h2 className="pl-panel-title notranslate" translate="no">添加 Schema 到 {connection.id}</h2>
+            <p className="pl-notice notranslate" translate="no">
+              添加 Schema 会写入 <code className="notranslate" translate="no">ktx.yaml</code>，不会扫描物理数据库。
               连接测试会使用当前项目已有凭据验证访问权限。
             </p>
           </div>
@@ -128,7 +129,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         </ol>
 
         {step === "input" && (
-          <section className="pl-drawer-body" aria-label="输入 schema 名">
+          <section className="pl-drawer-body notranslate" aria-label="输入 Schema 名" translate="no">
             <label className="grid gap-1.5 text-sm">
               <span>{fieldLabel} 名</span>
               <input
@@ -149,7 +150,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               </span>
             </label>
             <p className="text-xs text-fg-muted">
-              添加前会自动调用 <code>ktx connection test {connection.id}</code>，
+              添加前会自动调用 <code className="notranslate" translate="no">ktx connection test {connection.id}</code>，
               使用项目已配置的凭据验证连通性，不会扫描物理数据库。
             </p>
             <div className="pl-drawer-footer">
@@ -173,7 +174,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
 
         {step === "preview" && preview && (
           <section className="pl-drawer-body" aria-label="预览变更">
-            <p className="text-sm">ktx.yaml 计划变更（unified diff）：</p>
+            <p className="text-sm notranslate" translate="no">ktx.yaml 计划变更（unified diff）：</p>
             <DiffViewer diff={preview.diff} />
             <p className="text-xs text-fg-muted">
               旧 schemas：<code>{preview.oldSchemas.join(", ") || "（空）"}</code> → 新：{" "}
@@ -205,7 +206,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
 
         {step === "submitting" && (
           <section className="pl-drawer-body" aria-label="写入中">
-            <p className="text-sm">正在写入 ktx.yaml...</p>
+            <p className="text-sm notranslate" translate="no">正在写入 ktx.yaml...</p>
             {writeMutation.error && <ErrorPanel error={writeMutation.error} />}
             <div className="pl-drawer-footer">
               <button
@@ -221,15 +222,15 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
 
         {step === "success" && (
           <section className="pl-drawer-body" aria-label="完成">
-            <p className="text-sm font-semibold text-green-700" data-testid="add-schema-success-message">
-              ✓ 已添加 schema：{trimmed}
+            <p className="text-sm font-semibold text-green-700 notranslate" translate="no" data-testid="add-schema-success-message">
+              ✓ 已添加 Schema：{trimmed}
             </p>
             <p className="text-sm">
               <code>{trimmed}</code> 已添加到 <code>{connection.id}</code>。
             </p>
-            <p className="text-xs text-fg-muted" data-testid="add-schema-static-loading-hint">
-              WebUI 不会自动扫描物理数据库。若你已有该 schema 的 <code>semantic-layer</code>{" "}
-              manifest YAML，可以现在上传；否则稍后由离线流程生成后上传，或在清单页直接编辑白名单。
+            <p className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-static-loading-hint">
+              WebUI 不会自动扫描物理数据库。若你已有该 Schema 的 <code className="notranslate" translate="no">semantic-layer</code>{" "}
+              Manifest YAML，可以现在上传；否则稍后由离线流程生成后上传，或在清单页直接编辑白名单。
             </p>
             <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
@@ -298,8 +299,8 @@ function ErrorPanel({ error }: { error: unknown }) {
   if (code === "KTX_YAML_PARSE_ERROR") {
     return (
       <div className="pl-drawer-error" role="alert" data-testid="add-schema-fatal-error">
-        <p className="font-semibold">ktx.yaml 解析失败</p>
-        <p>请在终端检查 ktx.yaml，修正后再回来重试。</p>
+        <p className="font-semibold notranslate" translate="no">ktx.yaml 解析失败</p>
+        <p className="notranslate" translate="no">请在终端检查 ktx.yaml，修正后再回来重试。</p>
         <p className="text-fg-muted">{message}</p>
       </div>
     );

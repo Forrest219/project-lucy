@@ -129,7 +129,7 @@ describe("AddSchemaDrawer", () => {
     fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
 
     await waitFor(() => {
-      expect(screen.getByText(/已添加 schema/)).toBeInTheDocument();
+      expect(screen.getByText(/已添加 Schema/)).toBeInTheDocument();
     });
   });
 
@@ -262,7 +262,7 @@ describe("AddSchemaDrawer", () => {
         Boolean(
           element &&
             element.classList?.contains("pl-notice") &&
-            element.textContent?.includes("添加 schema 会写入") &&
+            element.textContent?.includes("添加 Schema 会写入") &&
             element.textContent?.includes("不会扫描物理数据库")
         )
       )
@@ -404,7 +404,7 @@ describe("AddSchemaDrawer", () => {
     // M17: success step surfaces the upload-YAML next step + the "added"
     // copy in the prescribed format.
     expect(
-      screen.getByText(/已添加 schema：finance_mart/)
+      screen.getByText(/已添加 Schema：finance_mart/)
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上传 YAML" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();

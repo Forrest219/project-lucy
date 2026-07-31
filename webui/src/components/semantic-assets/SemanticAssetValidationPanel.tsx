@@ -99,8 +99,8 @@ export function SemanticAssetValidationPanel({
         data-state="idle"
         aria-live="polite"
       >
-        <p className="text-xs text-fg-muted">
-          请拖入 schema manifest 和/或 semantic overlay YAML（最多 50 个，单文件 ≤ 512 KB）。
+        <p className="text-xs text-fg-muted notranslate" translate="no">
+          请拖入 Schema Manifest 和/或 Semantic Overlay YAML（最多 50 个，单文件 ≤ 512 KB）。
           目标路径由后端计算，前端不会写入。
         </p>
       </div>

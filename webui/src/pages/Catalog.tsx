@@ -47,7 +47,7 @@ export function Catalog() {
   const tables = data?.tables ?? [];
   const schemas = useMemo(() => unique(tables.map((table) => table.schema)), [tables]);
   const schemaOptions = useMemo(
-    () => [{ value: "all", label: "全部 schema" }, ...schemas.map((value) => ({ value, label: value }))],
+    () => [{ value: "all", label: "全部 Schema" }, ...schemas.map((value) => ({ value, label: value }))],
     [schemas]
   );
   const statusOptions = useMemo(
@@ -87,7 +87,7 @@ export function Catalog() {
       <PageHeader
         title="语义维护工作台"
         breadcrumbs={["语义层维护", "表目录"]}
-        description="浏览当前 KTX 项目的语义层数据表，按 schema、状态和关键词定位需要维护的对象。"
+        description={<span className="notranslate" translate="no">浏览当前 KTX 项目的语义层数据表，按 Schema、状态和关键词定位需要维护的对象。</span>}
         badges={
           <span data-testid="catalog-count">
             {filtered.length} / {tables.length} 张表
@@ -104,8 +104,8 @@ export function Catalog() {
       <section className="pl-panel">
       <div className="pl-toolbar">
         <label className="grid gap-1.5 text-sm">
-          <span>Schema</span>
-          <SelectField ariaLabel="按 schema 筛选" value={schema} onValueChange={setSchema} options={schemaOptions} placeholder="全部 schema" />
+          <span className="notranslate" translate="no">Schema</span>
+          <SelectField className="notranslate" translate="no" ariaLabel="按 Schema 筛选" value={schema} onValueChange={setSchema} options={schemaOptions} placeholder="全部 Schema" />
         </label>
         <label className="grid gap-1.5 text-sm">
           <span>状态</span>
@@ -113,7 +113,7 @@ export function Catalog() {
         </label>
         <label className="flex-1 min-w-50">
           <span className="block mb-1.5 text-sm">搜索</span>
-          <input className="pl-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="表名、字段名或 schema" />
+          <input className="pl-input notranslate" translate="no" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="表名、字段名或 Schema" />
         </label>
       </div>
 
@@ -136,14 +136,16 @@ export function Catalog() {
               <div className="pl-table-row-actions">
                 <Link
                   aria-label={`打开 ${table.schema}.${table.table} 的业务 Wiki`}
-                  className="pl-btn pl-btn--ghost"
+                  className="pl-btn pl-btn--ghost notranslate"
+                  translate="no"
                   to={wikiHref}
                 >
                   业务 Wiki
                 </Link>
                 <Link
                   aria-label={`维护表语义：${table.schema}.${table.table}`}
-                  className="pl-btn pl-btn--secondary"
+                  className="pl-btn pl-btn--secondary notranslate"
+                  translate="no"
                   to={editorHref}
                 >
                   维护语义

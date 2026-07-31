@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CatalogReloadButton,
@@ -208,12 +208,13 @@ describe("CatalogReloadButton", () => {
 });
 
 describe("CatalogReloadResultPanel", () => {
-  it("renders counts and the requested scope", () => {
+  it("M21: concise main summary and details stay collapsed with metrics + scope", () => {
     const run = makeRun({
       tables: 5,
       enabledTables: 4,
       configuredSchemas: 3,
       manifestSchemas: 2,
+      durationMs: 8,
       warnings: [
         {
           code: "SCHEMA_MANIFEST_MISSING",
@@ -225,14 +226,49 @@ describe("CatalogReloadResultPanel", () => {
     });
     renderWithClient(<CatalogReloadResultPanel run={run} />);
 
-    expect(screen.getByTestId("catalog-reload-result-success")).toHaveTextContent("5 张表");
-    expect(screen.getByTestId("catalog-reload-result-success")).toHaveTextContent("4 已启用");
-    expect(screen.getByTestId("catalog-reload-result-success")).toHaveTextContent("2 / 3 schemas");
+    const result = screen.getByTestId("catalog-reload-result");
+    expect(result).toHaveTextContent("本地 Catalog 已重新加载");
+    expect(result).toHaveTextContent("1 个提示");
+    // Duration, schema ratio and table counts must not pollute the main line.
+    expect(result).not.toHaveTextContent(/耗时 8 ms/);
+    expect(result).not.toHaveTextContent(/1 \/ 2 schemas/);
+    expect(result).not.toHaveTextContent("5 张表");
+    expect(result).not.toHaveTextContent("4 已启用");
+    expect(result).not.toHaveTextContent("耗时");
+
+    // Warnings are visible without expanding details, using Manifest terminology.
+    expect(screen.getByText("缺失 Manifest · openclaw_db")).toBeInTheDocument();
     expect(screen.getByText("openclaw_db manifest missing")).toBeInTheDocument();
   });
 
-  it("does not render when the run is missing", () => {
+  it("M21: details section carries scope, duration, table, and schema counts when expanded", () => {
+    const run = makeRun({
+      tables: 5,
+      enabledTables: 4,
+      configuredSchemas: 3,
+      manifestSchemas: 2,
+      durationMs: 8
+    });
+    renderWithClient(<CatalogReloadResultPanel run={run} />);
+
+    const details = screen.getByTestId("catalog-reload-result-details");
+    fireEvent.click(within(details).getByRole("button", { name: "详情" }));
+    const list = within(details).getByTestId("catalog-reload-result-details-list");
+    expect(list).toHaveTextContent("5 张表");
+    expect(list).toHaveTextContent("2 / 3 Schema");
+    expect(list).toHaveTextContent("8 ms");
+    expect(list).toHaveTextContent("范围");
+    expect(list).toHaveTextContent("耗时");
+    expect(list).toHaveTextContent("表");
+    expect(list).toHaveTextContent("已启用");
+  });
+
+  it("renders an explicit empty state when the run is missing", () => {
     renderWithClient(<CatalogReloadResultPanel run={null} />);
+    expect(screen.getByTestId("catalog-reload-result-empty")).toHaveTextContent(
+      "尚未运行本地 Catalog 重新加载。"
+    );
+    // The normal result panel is not rendered in the empty state.
     expect(screen.queryByTestId("catalog-reload-result")).toBeNull();
   });
 });

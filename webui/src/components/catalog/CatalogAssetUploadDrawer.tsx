@@ -25,6 +25,15 @@ export type CatalogAssetUploadDrawerProps = {
 };
 
 const FILENAME_HINT = "openclaw_db.yaml";
+const YAML_PLACEHOLDER = [
+  "tables:",
+  "  customers:",
+  "    table: openclaw_db.customers",
+  "    columns:",
+  "      - name: customer_id",
+  "      - name: customer_name",
+  ""
+].join("\n");
 
 function buildRequest(
   connectionId: string,
@@ -204,13 +213,20 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
         <header className="pl-drawer-header">
           <div>
             <p className="pl-eyebrow">数据库接入</p>
-            <h2 className="pl-panel-title">上传 {connectionId} 的 schema manifest</h2>
+            <h2 className="pl-panel-title notranslate" translate="no">
+              上传 {connectionId} 的 Schema Manifest
+            </h2>
             <p className="pl-notice">
-              目标路径由后端计算；后端会校验连接、schema、YAML 结构、文件大小与目标路径。
-              写入成功后会自动调用静态 Catalog Reload。
+              目标路径由系统计算；会校验连接、<code className="notranslate" translate="no">Schema</code>、<code className="notranslate" translate="no">YAML</code> 结构、文件大小与目标路径。
+              写入成功后会自动刷新本地目录。
             </p>
           </div>
-          <button className="pl-btn pl-btn--ghost" onClick={onClose}>
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost pl-drawer-close"
+            onClick={onClose}
+            data-testid="catalog-asset-upload-close"
+          >
             关闭
           </button>
         </header>
@@ -219,12 +235,16 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
           <section className="pl-drawer-body" aria-label="上传表单">
             <div className="grid gap-2">
               {schemaLocked ? (
-                <p className="text-sm">
-                  目标 Schema：<code>{schema}</code>
+                <p
+                  className="text-sm notranslate"
+                  data-testid="catalog-asset-upload-target-schema"
+                  translate="no"
+                >
+                  目标 Schema：<code className="notranslate" translate="no">{schema}</code>
                 </p>
               ) : (
                 <label className="grid gap-1.5 text-sm">
-                  <span>Schema</span>
+                  <span className="notranslate" translate="no">Schema</span>
                   <select
                     className="pl-input"
                     value={schema}
@@ -234,7 +254,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                     }}
                     data-testid="catalog-asset-upload-schema"
                   >
-                    <option value="">请选择 schema</option>
+                    <option className="notranslate" value="" translate="no">请选择 Schema</option>
                     {(schemaOptions ?? []).map((s) => (
                       <option key={s} value={s}>
                         {s}
@@ -276,7 +296,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                   data-testid="catalog-asset-upload-file"
                 />
                 <p className="text-sm">
-                  选择 <code>.yaml</code> / <code>.yml</code> 文件或拖入此处。
+                  选择 <code className="notranslate" translate="no">.yaml</code> / <code className="notranslate" translate="no">.yml</code> 文件或拖入此处。
                 </p>
                 <div className="pl-upload-file-summary" data-testid="catalog-asset-upload-file-summary">
                   <button
@@ -288,7 +308,15 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                     选择文件
                   </button>
                   {filename ? (
-                    <span className="text-xs text-fg-muted">已选择：{filename}</span>
+                    <span
+                      className="text-xs text-fg-muted"
+                      data-testid="catalog-asset-upload-filename-display"
+                    >
+                      已选择：
+                      <span className="notranslate" translate="no" dir="ltr">
+                        {filename}
+                      </span>
+                    </span>
                   ) : null}
                 </div>
               </div>
@@ -299,7 +327,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                   rows={10}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="tables:\n  customers:\n    table: openclaw_db.customers\n"
+                  placeholder={YAML_PLACEHOLDER}
                   data-testid="catalog-asset-upload-textarea"
                 />
               </label>

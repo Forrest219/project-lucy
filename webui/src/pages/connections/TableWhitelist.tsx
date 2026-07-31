@@ -411,19 +411,20 @@ export function TableWhitelist() {
             />
           </label>
           <label className="grid gap-1.5 text-sm">
-            <span>Schema 筛选</span>
+            <span className="notranslate" translate="no">Schema 筛选</span>
             <select
-              className="pl-input"
+              className="pl-input notranslate"
               value={schemaFilter}
               onChange={(e) => {
                 setUserOverrodeSchema(true);
                 setSchemaFilter(e.target.value);
               }}
               aria-label="Schema 筛选"
+              translate="no"
             >
-              <option value="all">全部 Schema</option>
+              <option className="notranslate" value="all" translate="no">全部 Schema</option>
               {allSchemas.map((s) => (
-                <option key={s} value={s}>
+                <option className="notranslate" key={s} value={s} translate="no">
                   {s}
                 </option>
               ))}
@@ -463,8 +464,8 @@ export function TableWhitelist() {
 
       {visibleGroups.map(({ conn, schema, rows }) => (
         <section key={`${conn.id}-${schema}`} className="pl-table-group mt-4">
-          <div className="pl-table-group-heading">
-            Connection: {conn.id} · Schema: {schema}
+          <div className="pl-table-group-heading notranslate" translate="no">
+            连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
           </div>
           <table className="pl-data-table">
             <thead>
@@ -535,19 +536,19 @@ export function TableWhitelist() {
           className="pl-table-group mt-4"
           data-testid={`configured-schema-empty-${conn.id}-${schema}`}
         >
-          <div className="pl-table-group-heading">
-            Connection: {conn.id} · Schema: {schema}
+          <div className="pl-table-group-heading notranslate" translate="no">
+            连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
           </div>
           <div className="pl-empty-state">
-            <strong>{schema} 已在连接配置中启用，但本地 semantic-layer 尚未提供表清单。</strong>
+            <strong className="notranslate" translate="no">{schema} 已在连接配置中启用，但本地语义层尚未提供 Manifest。</strong>
             <p className="mt-1">
-              请将 manifest 文件放入下方 YAML 路径，或在具备 KTX/数据库权限的离线环境中生成后提交。
-              白名单只读取本地 YAML 资产，不会访问物理数据库。
+              请将 <code className="notranslate" translate="no">Manifest</code> 文件放入下方 <code className="notranslate" translate="no">YAML</code> 路径，或在具备 <code className="notranslate" translate="no">KTX</code>/数据库权限的离线环境中生成后提交。
+              白名单只读取本地 <code className="notranslate" translate="no">YAML</code> 资产，不会访问物理数据库。
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <details className="pl-yaml-path-details">
                 <summary>查看 YAML 路径说明</summary>
-                <code>semantic-layer/{conn.id}/_schema/{schema}.yaml</code>
+                <code className="notranslate" translate="no" dir="ltr">semantic-layer/{conn.id}/_schema/{schema}.yaml</code>
               </details>
               <CatalogAssetUploadButton
                 connectionId={conn.id}
@@ -598,13 +599,13 @@ export function TableWhitelist() {
           aria-label="白名单变更操作"
           data-testid="whitelist-floating-bar"
         >
-          <div className="pl-floating-action-bar-text">
+          <div className="pl-floating-action-bar-text notranslate" translate="no">
             已修改 {changedTableCount} 张表，尚未写入 ktx.yaml
-            <span className="block text-xs font-normal text-fg-muted">
+            <span className="block text-xs font-normal text-fg-muted notranslate" translate="no">
               新增 {diffStats.added} 张表 / 移除 {diffStats.removed} 张表，保存不会自动重载 Catalog。
             </span>
             {saveMutation.isPending && (
-              <span className="block text-xs font-normal text-fg-muted">
+              <span className="block text-xs font-normal text-fg-muted notranslate" translate="no">
                 正在写入 ktx.yaml（共 {changedConnections.length} 个连接）
               </span>
             )}
@@ -646,7 +647,7 @@ export function TableWhitelist() {
             <header className="pl-drawer-header">
               <div>
                 <h2 className="pl-panel-title">YAML 预览</h2>
-                <p className="pl-notice">
+                <p className="pl-notice notranslate" translate="no">
                   写入 ktx.yaml 前的最终检查，共 {previewMutation.data.length} 个连接。
                 </p>
               </div>
@@ -662,8 +663,8 @@ export function TableWhitelist() {
             <div className="pl-drawer-body">
               {previewMutation.data.map(({ connId, preview }) => (
                 <section className="pl-preview-section" key={connId}>
-                  <h3 className="text-sm font-semibold">Connection: {connId}</h3>
-                  <p className="text-sm">
+                  <h3 className="text-sm font-semibold notranslate" translate="no">Connection: {connId}</h3>
+                  <p className="text-sm notranslate" translate="no">
                     enabled_tables: {preview.oldEnabledTables.length} -&gt;{" "}
                     {preview.newEnabledTables.length}
                   </p>

@@ -40,6 +40,8 @@ jobs:
           cache-dependency-path: webui/package-lock.json
       - run: npm ci
         working-directory: webui
+      - run: npm run lint:terminology
+        working-directory: webui
       - run: npm test
         working-directory: webui
       - run: npm run build

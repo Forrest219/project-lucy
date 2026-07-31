@@ -44,7 +44,7 @@ export function AuditSources() {
         <>
           <div className="pl-metric-grid">
             <div className="pl-metric-card"><span>连接</span><strong>{data?.connections.length ?? 0}</strong><small>审计派生</small></div>
-            <div className="pl-metric-card"><span>Schema</span><strong>{data?.schemas.length ?? 0}</strong><small>有访问记录</small></div>
+            <div className="pl-metric-card"><span className="notranslate" translate="no">Schema</span><strong>{data?.schemas.length ?? 0}</strong><small>有访问记录</small></div>
             <div className="pl-metric-card"><span>表</span><strong>{data?.topTables.length ?? 0}</strong><small>Top 50</small></div>
             <div className="pl-metric-card"><span>拒绝表</span><strong>{data?.deniedTables.length ?? 0}</strong><small>有 denied</small></div>
           </div>
