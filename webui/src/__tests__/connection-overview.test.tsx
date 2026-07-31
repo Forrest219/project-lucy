@@ -508,24 +508,34 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    const status = await screen.findByTestId("catalog-status-mysql-aliyun");
-    expect(status).toHaveTextContent("Catalog 已同步");
+    const status = await screen.findByTestId("catalog-reload-status-mysql-aliyun");
+    expect(status).toHaveTextContent("本地目录已刷新");
     expect(status).toHaveTextContent("2026-07-29 10:30");
+    expect(status).toHaveTextContent("已完成");
+    expect(status).toHaveTextContent("4 张表");
+    expect(within(status).queryByRole("button", { name: /完成/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalog-last-run")).not.toBeInTheDocument();
     expect(screen.queryByText("上次刷新")).not.toBeInTheDocument();
   });
 
-  it("renders concrete catalog warning summaries instead of abstract tips", async () => {
+  it("M24: renders card-local reload status, Schema context, and inline missing Manifest diagnostics", async () => {
     stubOverviewFetch({
       connections: [
         {
-          id: "mysql-aliyun",
+          id: "demo-mysql",
           driver: "mysql",
+          host: "demo-db",
+          port: "3306",
+          database: "dataforai",
           schemas: ["dataforai", "openclaw_db"],
           enabledTables: ["dataforai.superstore_orders"]
         }
       ],
-      tables: [sourceSummary("superstore_orders")],
+      tables: [
+        { ...sourceSummary("superstore_orders"), conn: "demo-mysql", schema: "dataforai" },
+        { ...sourceSummary("customers"), conn: "demo-mysql", schema: "dataforai" },
+        { ...sourceSummary("orders"), conn: "demo-mysql", schema: "dataforai" }
+      ],
       catalogReloadsResponse: {
         runs: [],
         last: {
@@ -534,44 +544,44 @@ describe("ConnectionOverview", () => {
           startedAt: "2026-07-29T02:30:00.000Z",
           finishedAt: "2026-07-29T02:30:00.045Z",
           durationMs: 45,
-          requestedConnectionId: "mysql-aliyun",
-          connectionIds: ["mysql-aliyun"],
+          requestedConnectionId: "demo-mysql",
+          connectionIds: ["demo-mysql"],
           connections: 1,
           configuredSchemas: 2,
           manifestSchemas: 1,
-          tables: 1,
+          tables: 3,
           enabledTables: 1,
           warnings: [
             {
               code: "SCHEMA_MANIFEST_MISSING",
-              connectionId: "mysql-aliyun",
+              connectionId: "demo-mysql",
               schema: "openclaw_db",
-              filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+              filePath: "semantic-layer/demo-mysql/_schema/openclaw_db.yaml",
               message: "openclaw_db manifest missing"
             }
           ],
           source: "static-yaml"
         },
         lastByConnection: {
-          "mysql-aliyun": {
+          "demo-mysql": {
             id: "rel_20260729_103000_001",
             status: "success",
             startedAt: "2026-07-29T02:30:00.000Z",
             finishedAt: "2026-07-29T02:30:00.045Z",
             durationMs: 45,
-            requestedConnectionId: "mysql-aliyun",
-            connectionIds: ["mysql-aliyun"],
+            requestedConnectionId: "demo-mysql",
+            connectionIds: ["demo-mysql"],
             connections: 1,
             configuredSchemas: 2,
             manifestSchemas: 1,
-            tables: 1,
+            tables: 3,
             enabledTables: 1,
             warnings: [
               {
                 code: "SCHEMA_MANIFEST_MISSING",
-                connectionId: "mysql-aliyun",
+                connectionId: "demo-mysql",
                 schema: "openclaw_db",
-                filePath: "semantic-layer/mysql-aliyun/_schema/openclaw_db.yaml",
+                filePath: "semantic-layer/demo-mysql/_schema/openclaw_db.yaml",
                 message: "openclaw_db manifest missing"
               }
             ],
@@ -582,10 +592,34 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    expect(await screen.findByText("1 个待处理")).toBeInTheDocument();
-    expect(screen.getAllByText(/openclaw_db 缺失 Manifest/).length).toBeGreaterThan(0);
+    const card = await screen.findByTestId("connection-card-demo-mysql");
+    const status = within(card).getByTestId("catalog-reload-status-demo-mysql");
+    expect(status).toHaveTextContent("本地目录已刷新");
+    expect(status).toHaveTextContent("已完成");
+    expect(status).toHaveTextContent("3 张表");
+    expect(status).toHaveTextContent("1 个提示");
+    expect(within(status).queryByRole("button", { name: /完成/ })).not.toBeInTheDocument();
+    expect(within(card).getByTestId("catalog-reload-demo-mysql")).toHaveTextContent("刷新本地目录");
+
+    const table = within(card).getByTestId("schema-asset-table-demo-mysql");
+    const warning = within(card).getByTestId("catalog-reload-warning-demo-mysql-openclaw_db");
+    expect(table.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(card).getByText("关联 Schema 资产列表")).toBeInTheDocument();
+    expect(within(card).getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
+    expect(within(card).getByTestId("schema-asset-status-demo-mysql-openclaw_db")).toHaveTextContent(
+      "缺失 Manifest"
+    );
+    expect(within(card).getByTestId("schema-row-demo-mysql-openclaw_db")).toHaveTextContent("0 张表");
+    expect(warning).toHaveTextContent("缺少 Manifest：openclaw_db");
+    expect(warning).toHaveTextContent("semantic-layer/demo-mysql/_schema/openclaw_db.yaml");
+
+    const detailsButton = within(warning).getByRole("button", { name: "展开详情" });
+    expect(detailsButton).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(detailsButton);
+    expect(detailsButton).toHaveAttribute("aria-expanded", "true");
+    expect(warning).toHaveTextContent("missing_manifest");
+    expect(warning).toHaveTextContent("刷新本地目录只读取本地 YAML，不会连接数据库。");
     expect(screen.queryByText("有提示")).not.toBeInTheDocument();
-    expect(screen.queryByText(/1 个提示/)).not.toBeInTheDocument();
   });
 
   it("renders the never-run catalog status when the sidecar has no entry for the connection", async () => {
@@ -603,8 +637,8 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    const status = await screen.findByTestId("catalog-status-mysql-aliyun");
-    expect(status).toHaveTextContent("Catalog 未刷新");
+    const status = await screen.findByTestId("catalog-reload-status-mysql-aliyun");
+    expect(status).toHaveTextContent("本地目录未刷新");
     expect(status).toHaveTextContent("尚未读取本地 YAML");
   });
 

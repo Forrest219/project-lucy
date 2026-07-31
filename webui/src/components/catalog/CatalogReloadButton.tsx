@@ -10,7 +10,11 @@ export type CatalogReloadButtonProps = {
   variant?: "primary" | "secondary" | "ghost";
   size?: "sm" | "md";
   testId?: string;
+  showCompletionLabel?: boolean;
+  showInlineResult?: boolean;
+  onReloadStart?: () => void;
   onReloadComplete?: (run: CatalogReloadRun) => void;
+  onReloadError?: (error: Error) => void;
 };
 
 function defaultLabel(): string {
@@ -41,7 +45,11 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
     variant = "primary",
     size = "md",
     testId,
-    onReloadComplete
+    showCompletionLabel = true,
+    showInlineResult = true,
+    onReloadStart,
+    onReloadComplete,
+    onReloadError
   } = props;
   const reload = useCatalogReload({
     ...(connectionId ? { connectionId } : {}),
@@ -52,19 +60,21 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
   const baseLabel = label ?? defaultLabel();
   const buttonText = reload.isPending
     ? "刷新本地目录中..."
-    : reload.lastRun
+    : showCompletionLabel && reload.lastRun
       ? `完成 ✓ · ${reload.lastRun.tables} 张表`
       : baseLabel;
 
   async function handleClick() {
     setShowPanel(true);
+    onReloadStart?.();
     try {
       const result = await reload.reload();
       if (result) {
         onReloadComplete?.(result);
       }
-    } catch {
+    } catch (error) {
       // The hook clears lastRun on error; show the panel with whatever we have.
+      onReloadError?.(error instanceof Error ? error : new Error("Catalog reload failed"));
     }
   }
 
@@ -83,7 +93,7 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
       >
         {buttonText}
       </button>
-      {showPanel && reload.lastRun && (
+      {showInlineResult && showPanel && reload.lastRun && (
         <div
           className="pl-catalog-reload-inline"
           data-testid="catalog-reload-inline"
@@ -92,7 +102,7 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
           <CatalogReloadResultPanel run={reload.lastRun} />
         </div>
       )}
-      {showPanel && reload.error && (
+      {showInlineResult && showPanel && reload.error && (
         <div
           className="pl-catalog-reload-error notranslate"
           role="alert"

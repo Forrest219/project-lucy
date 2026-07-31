@@ -28,6 +28,7 @@
 | [24-yaml-delivery-runbook-spec.md](24-yaml-delivery-runbook-spec.md) | YAML 交付规范与自助运维手册：manifest/overlay/new source 分型、GO/NO-GO checklist、Agent 自检协议 | 产品 / 文档 / 运维 / Agent |
 | [25-connection-module-terminology-ia-refresh-spec.md](25-connection-module-terminology-ia-refresh-spec.md) | 数据库接入模块术语与 IA 刷新：Connection 中心化、Schema / Manifest / Catalog 术语治理、连接卡片动作收敛 | 产品 / 前端 / 运维 |
 | [26-database-connection-operations-runbook-spec.md](26-database-connection-operations-runbook-spec.md) | 数据库连接运维 Runbook：明确 WebUI 不新建物理连接，给出通用 `ktx.yaml` / secret / ACL / 验收路径 | 产品 / 文档 / 运维 / 安全 |
+| [28-catalog-reload-result-ops-ux-spec.md](28-catalog-reload-result-ops-ux-spec.md) | 本地目录刷新结果运维体验：卡片内状态栏、Schema 资产列表优先、inline 缺失 Manifest 诊断与修复闭环 | 产品 / 前端 / 运维 |
 | [29-connection-semantic-boundary-automation-spec.md](29-connection-semantic-boundary-automation-spec.md) | 数据库接入与语义层维护边界自动化：职责矩阵、asset kind、上传结构校验、IA boundary lint 与 Review checklist | 产品 / 前端 / 后端 / 运维 |
 | [30-help-markdown-rendering-spec.md](30-help-markdown-rendering-spec.md) | Help Center Markdown 渲染修复：系统手册表格、深链、安全渲染与翻译防御 | 产品 / 前端 / 文档 / 安全 |
 

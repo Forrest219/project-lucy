@@ -355,6 +355,28 @@
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
+  .pl-catalog-reload-status { @apply flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-bg-subtle px-3 py-2 text-sm; }
+  .pl-catalog-reload-status-main { @apply font-medium text-fg-default; }
+  .pl-catalog-reload-status--success { @apply border-success-strong bg-success-soft; }
+  .pl-catalog-reload-status--warning { @apply border-warning-strong bg-warning-soft; }
+  .pl-catalog-reload-status--danger { @apply border-danger-strong bg-danger-soft; }
+  .pl-catalog-reload-status--muted { @apply border-border-default bg-bg-subtle; }
+  .pl-catalog-reload-badge { @apply inline-flex items-center rounded-pill border border-border-default bg-bg-surface px-2 py-0.5 text-xs font-medium text-fg-muted; }
+  .pl-catalog-reload-badge--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-catalog-reload-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-catalog-reload-badge--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-catalog-reload-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+  .pl-catalog-reload-warning { @apply grid gap-2 rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-sm text-warning-strong; }
+  .pl-catalog-reload-warning-copy { @apply grid gap-1; }
+  .pl-catalog-reload-warning-copy strong { @apply font-semibold; }
+  .pl-catalog-reload-warning-copy p { @apply text-xs text-fg-body; }
+  .pl-catalog-reload-warning-copy code,
+  .pl-catalog-reload-warning-details code { @apply rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-fg-default; }
+  .pl-catalog-reload-warning-actions { @apply flex flex-wrap items-center gap-2; }
+  .pl-catalog-reload-warning-details { @apply grid gap-1 rounded-sm border border-warning-soft bg-bg-surface px-2 py-2 text-xs text-fg-muted; }
+  .pl-catalog-reload-warning-details div { @apply flex flex-wrap items-center gap-x-2 gap-y-1; }
+  .pl-catalog-reload-warning-details dt { @apply font-medium text-fg-muted; }
+  .pl-catalog-reload-warning-details dd { @apply text-fg-default; }
   .pl-catalog-status-line { @apply flex flex-wrap items-center gap-2 text-sm; }
   .pl-catalog-status-line strong { @apply font-semibold; }
   .pl-catalog-status-line span { @apply text-xs text-fg-muted; }
