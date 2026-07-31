@@ -23,6 +23,8 @@ vi.mock("../pages/admin/AgentList", () => ({ AgentList: () => <StubPage name="Ag
 vi.mock("../pages/admin/AgentDetail", () => ({ AgentDetail: () => <StubPage name="AgentDetail" /> }));
 vi.mock("../pages/admin/NewToken", () => ({ NewToken: () => <StubPage name="NewToken" /> }));
 vi.mock("../pages/admin/Audit", () => ({ Audit: () => <StubPage name="Audit" /> }));
+vi.mock("../pages/admin/AuditSources", () => ({ AuditSources: () => <StubPage name="AuditSources" /> }));
+vi.mock("../pages/admin/ConfigAudit", () => ({ ConfigAudit: () => <StubPage name="ConfigAudit" /> }));
 vi.mock("../pages/admin/RoleList", () => ({ RoleList: () => <StubPage name="RoleList" /> }));
 vi.mock("../pages/admin/RoleDetail", () => ({ RoleDetail: () => <StubPage name="RoleDetail" /> }));
 vi.mock("../pages/eval/CaseList", () => ({ CaseList: () => <StubPage name="CaseList" /> }));
@@ -99,18 +101,20 @@ describe("AppFrame shell", () => {
   it.each([
     ["/onboarding", "Onboarding", "系统概览"],
     ["/connections", "ConnectionOverview", "连接概览"],
-    ["/connections/whitelist", "TableWhitelist", "表白名单"],
-    ["/connections/test", "ConnectionTest", "连通测试"],
+    ["/connections/whitelist", "TableWhitelist", "启用表范围"],
+    ["/connections/test", "ConnectionTest", "连通测试（兼容）"],
     ["/", "Catalog", "表目录"],
-    ["/wiki", "WikiEditor", "Wiki 文档"],
+    ["/wiki", "WikiEditor", "业务 Wiki"],
     ["/publish/workbench", "PublishWorkbench", "发布工作台"],
     ["/publish/history", "PublishHistory", "发布记录"],
-    ["/eval/cases", "CaseList", "Case 管理"],
+    ["/eval/cases", "CaseList", "评测用例"],
     ["/eval/runs", "RunList", "运行历史"],
     ["/eval/monitor", "Monitor", "趋势监控"],
     ["/admin/agents", "AgentList", "Agent 实例"],
     ["/admin/audit", "Audit", "访问日志"],
-    ["/admin/roles", "RoleList", "角色配置"]
+    ["/admin/audit?tab=heatmap", "Audit", "访问日志"],
+    ["/admin/roles", "RoleList", "角色权限"],
+    ["/admin/config-audit", "ConfigAudit", "配置审计"]
   ])("renders route %s and marks active navigation", (path, pageName, activeLink) => {
     renderAt(path);
     expect(screen.getByTestId("route-page")).toHaveTextContent(pageName);
@@ -121,10 +125,42 @@ describe("AppFrame shell", () => {
     renderAt("/onboarding");
     expect(screen.getByText("Lucy WebUI")).toBeInTheDocument();
     expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
-    expect(screen.getByText("运行状态")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "运行状态" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "系统概览" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByText("部署向导")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "上线检查" })).not.toBeInTheDocument();
+  });
+
+  it("renders the M34 5+1 lifecycle sidebar shape with renamed second-level items", () => {
+    renderAt("/");
+
+    const groups = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理"];
+    for (const group of groups) {
+      expect(screen.getByRole("heading", { name: group })).toBeInTheDocument();
+    }
+
+    const overviewLink = screen.getByRole("link", { name: "系统概览" });
+    expect(overviewLink).toBeInTheDocument();
+    expect(overviewLink.closest(".pl-nav-section")?.querySelector(".pl-nav-section-title")).toBeNull();
+
+    for (const title of ["运行状态", "语义层维护", "业务文档", "数据库接入"]) {
+      expect(screen.queryByRole("heading", { name: title })).not.toBeInTheDocument();
+    }
+
+    for (const label of ["启用表范围", "业务 Wiki", "评测用例", "角色权限", "配置审计"]) {
+      expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
+    }
+
+    // M35: 数据热力已下沉为 /admin/audit?tab=heatmap 内的 Tab，不再作为侧边栏二级项。
+    expect(screen.queryByRole("link", { name: "数据热力" })).not.toBeInTheDocument();
+
+    const compatLink = screen.getByRole("link", { name: /连通测试/ });
+    expect(compatLink).toHaveTextContent("兼容");
+    expect(compatLink).toHaveClass("pl-nav-link--compat");
+
+    for (const label of ["表白名单", "Wiki 文档", "Case 管理", "角色配置", "数据源热力"]) {
+      expect(screen.queryByRole("link", { name: new RegExp(`^${label}$`) })).not.toBeInTheDocument();
+    }
   });
 
   it("exposes the semantic-publish module with only workbench + history in the sidebar", () => {
@@ -164,6 +200,7 @@ describe("AppFrame shell", () => {
   it("renders the help route", () => {
     renderAt("/help");
     expect(screen.getByTestId("route-page")).toHaveTextContent("HelpCenter");
+    expect(document.querySelector(".pl-app-shell")).toHaveClass("pl-app-shell--help");
   });
 
   it("marks source and join pages as table catalog navigation", () => {
@@ -175,6 +212,7 @@ describe("AppFrame shell", () => {
   it("exposes density shell classes and active nav styling hook", () => {
     renderAt("/connections");
     expect(document.querySelector(".pl-app-shell")).toBeInTheDocument();
+    expect(document.querySelector(".pl-app-shell")).not.toHaveClass("pl-app-shell--help");
     expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "主导航" })).toHaveClass("pl-nav");
     expect(screen.getByRole("link", { name: "连接概览" })).toHaveClass("pl-nav-link", "pl-nav-link--active");
@@ -183,7 +221,7 @@ describe("AppFrame shell", () => {
   it("renders PageHeader with the global H1 styling hook", () => {
     render(
       <MemoryRouter>
-        <PageHeader title="连接概览" breadcrumbs={["数据库接入"]} />
+        <PageHeader title="连接概览" breadcrumbs={["数据接入"]} />
       </MemoryRouter>
     );
     expect(screen.getByRole("heading", { level: 1, name: "连接概览" })).toHaveClass("pl-page-header-title");
@@ -199,7 +237,7 @@ describe("AppFrame shell", () => {
 
   it("uses 连通测试 for the connection-test sidebar entry and renders no machine-translation artifacts", () => {
     renderAt("/connections");
-    expect(screen.getByRole("link", { name: "连通测试" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "连通测试（兼容）" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "替代测试" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "添加架构" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "上传报价包" })).not.toBeInTheDocument();

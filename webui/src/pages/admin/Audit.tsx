@@ -1,14 +1,73 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
-import type { AuditResponse, AuditLogEntry } from "../../lib/types";
+import type { AuditLogEntry, AuditResponse, AuditSourcesResponse } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
 const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
 const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
+
+function HeatRow({ label, calls, denied, max }: { label: string; calls: number; denied?: number; max: number }) {
+  const width = max > 0 ? Math.max(4, Math.round((calls / max) * 100)) : 0;
+  return (
+    <div className="grid grid-cols-[minmax(180px,1fr)_minmax(160px,260px)_80px_80px] items-center gap-3 text-sm">
+      <span className="font-mono text-fg-muted truncate">{label}</span>
+      <div className="h-2 rounded-pill bg-bg-muted overflow-hidden">
+        <div className="h-full bg-accent" style={{ width: `${width}%` }} />
+      </div>
+      <span>{calls}</span>
+      <span className={denied ? "text-danger font-medium" : "text-fg-muted"}>{denied ?? 0}</span>
+    </div>
+  );
+}
+
+function HeatmapView() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "audit", "heatmap"],
+    queryFn: () => apiGet<AuditSourcesResponse>("/api/admin/audit/sources")
+  });
+  const maxCalls = Math.max(1, ...(data?.topTables ?? []).map((item) => item.calls));
+
+  if (isLoading) return <div className="pl-notice">加载中…</div>;
+  if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
+
+  return (
+    <>
+      <div className="pl-metric-grid">
+        <div className="pl-metric-card"><span>连接</span><strong>{data?.connections.length ?? 0}</strong><small>审计派生</small></div>
+        <div className="pl-metric-card"><span className="notranslate" translate="no">Schema</span><strong>{data?.schemas.length ?? 0}</strong><small>有访问记录</small></div>
+        <div className="pl-metric-card"><span>表</span><strong>{data?.topTables.length ?? 0}</strong><small>Top 50</small></div>
+        <div className="pl-metric-card"><span>拒绝表</span><strong>{data?.deniedTables.length ?? 0}</strong><small>有 denied</small></div>
+      </div>
+      <section className="pl-card grid gap-3">
+        <div className="flex items-center justify-between">
+          <p className="text-base font-semibold mb-0">Top Tables</p>
+          <span className="text-xs text-fg-muted">calls / denied</span>
+        </div>
+        {(data?.topTables ?? []).length === 0 ? (
+          <p className="text-sm text-fg-muted">暂无表级访问记录。</p>
+        ) : (
+          data?.topTables.map((item) => (
+            <HeatRow key={item.table} label={item.table} calls={item.calls} denied={item.denied} max={maxCalls} />
+          ))
+        )}
+      </section>
+      <section className="pl-card grid gap-3">
+        <p className="text-base font-semibold mb-0">Denied Tables</p>
+        {(data?.deniedTables ?? []).length === 0 ? (
+          <p className="text-sm text-fg-muted">暂无表级拒绝记录。</p>
+        ) : (
+          data?.deniedTables.map((item) => (
+            <HeatRow key={item.table} label={item.table} calls={item.calls} denied={item.denied} max={maxCalls} />
+          ))
+        )}
+      </section>
+    </>
+  );
+}
 
 function buildQuery(params: Record<string, string | undefined | number | boolean>): string {
   const q = new URLSearchParams();
@@ -164,6 +223,7 @@ export function Audit() {
   const turnId = searchParams.get("turnId") ?? "";
   const platform = searchParams.get("platform") ?? "";
   const includeProtocol = searchParams.get("includeProtocol") === "true";
+  const tab: "log" | "heatmap" = searchParams.get("tab") === "heatmap" ? "heatmap" : "log";
 
   // Default: last 24h
   const [since, setSince] = useState(() => {
@@ -197,7 +257,8 @@ export function Audit() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "audit", queryStr],
-    queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${queryStr}`)
+    queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${queryStr}`),
+    enabled: tab === "log"
   });
 
   const entries = data?.entries ?? [];
@@ -210,15 +271,30 @@ export function Audit() {
     <div className="pl-page-stack">
       <PageHeader
         title="访问日志"
-        breadcrumbs={["访问治理", "访问日志"]}
+        breadcrumbs={tab === "heatmap" ? ["访问治理", "访问日志", "数据热力"] : ["访问治理", "访问日志"]}
         description="查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。"
-        badges={
-          <span>{total} 条记录</span>
-        }
-        actions={
-          <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a>
-        }
+        badges={tab === "log" ? <span>{total} 条记录</span> : undefined}
+        actions={tab === "log" ? <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a> : undefined}
       />
+
+      <div className="flex items-center gap-2" role="tablist" aria-label="访问日志视图">
+        <Link
+          to="/admin/audit"
+          role="tab"
+          aria-selected={tab === "log"}
+          className="pl-btn pl-btn--ghost text-sm"
+        >
+          明细
+        </Link>
+        <Link
+          to="/admin/audit?tab=heatmap"
+          role="tab"
+          aria-selected={tab === "heatmap"}
+          className="pl-btn pl-btn--ghost text-sm"
+        >
+          数据热力
+        </Link>
+      </div>
 
       <div className="pl-admin-filterbar">
         <input
@@ -290,7 +366,7 @@ export function Audit() {
         </label>
       </div>
 
-      {isLoading ? (
+      {tab === "log" && (isLoading ? (
         <div className="pl-notice">加载中…</div>
       ) : error ? (
         <div className="pl-notice">加载失败：{(error as Error).message}</div>
@@ -345,7 +421,9 @@ export function Audit() {
             </button>
           </div>
         </>
-      )}
+      ))}
+
+      {tab === "heatmap" && <HeatmapView />}
     </div>
   );
 }
