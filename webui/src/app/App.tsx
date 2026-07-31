@@ -29,34 +29,47 @@ import { HelpButton } from "../components/HelpButton";
 
 const queryClient = new QueryClient();
 
-type NavItem = { label: string; to: string; active: (pathname: string) => boolean };
+type NavItem = {
+  label: string;
+  to: string;
+  active: (pathname: string) => boolean;
+  compatibility?: boolean;
+};
+
+const topLevelEntry: NavItem = {
+  label: "系统概览",
+  to: "/onboarding",
+  active: (path) => path === "/onboarding"
+};
 
 const navGroups: Array<{ title: string; items: NavItem[] }> = [
   {
-    title: "运行状态",
-    items: [{ label: "系统概览", to: "/onboarding", active: (path) => path === "/onboarding" }]
-  },
-  {
-    title: "数据库接入",
+    title: "数据接入",
     items: [
       { label: "连接概览", to: "/connections", active: (path) => path === "/connections" },
-      { label: "表白名单", to: "/connections/whitelist", active: (path) => path === "/connections/whitelist" },
-      { label: "连通测试", to: "/connections/test", active: (path) => path === "/connections/test" }
+      { label: "启用表范围", to: "/connections/whitelist", active: (path) => path === "/connections/whitelist" },
+      {
+        label: "连通测试（兼容）",
+        to: "/connections/test",
+        active: (path) => path === "/connections/test",
+        compatibility: true
+      }
     ]
   },
   {
-    title: "语义层维护",
+    title: "语义建模",
     items: [
       {
         label: "表目录",
         to: "/",
         active: (path) => path === "/" || path.startsWith("/sources/") || path.startsWith("/joins/")
+      },
+      {
+        label: "业务 Wiki",
+        to: "/wiki",
+        active: (path) => path === "/wiki"
       }
     ]
-  },
-  {
-    title: "业务文档",
-    items: [{ label: "Wiki 文档", to: "/wiki", active: (path) => path === "/wiki" }]
   },
   {
     title: "语义发布",
@@ -68,7 +81,7 @@ const navGroups: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "质量评测",
     items: [
-      { label: "Case 管理", to: "/eval/cases", active: (path) => path.startsWith("/eval/cases") },
+      { label: "评测用例", to: "/eval/cases", active: (path) => path.startsWith("/eval/cases") },
       { label: "运行历史", to: "/eval/runs", active: (path) => path.startsWith("/eval/runs") },
       { label: "趋势监控", to: "/eval/monitor", active: (path) => path === "/eval/monitor" }
     ]
@@ -77,10 +90,9 @@ const navGroups: Array<{ title: string; items: NavItem[] }> = [
     title: "访问治理",
     items: [
       { label: "Agent 实例", to: "/admin/agents", active: (path) => path.startsWith("/admin/agents") },
-      { label: "角色配置", to: "/admin/roles", active: (path) => path.startsWith("/admin/roles") },
-      { label: "访问日志", to: "/admin/audit", active: (path) => path === "/admin/audit" },
-      { label: "数据源热力", to: "/admin/audit-sources", active: (path) => path === "/admin/audit-sources" },
-      { label: "配置变更", to: "/admin/config-audit", active: (path) => path === "/admin/config-audit" }
+      { label: "角色权限", to: "/admin/roles", active: (path) => path.startsWith("/admin/roles") },
+      { label: "访问日志", to: "/admin/audit", active: (path) => path === "/admin/audit" || path.startsWith("/admin/audit/") },
+      { label: "配置审计", to: "/admin/config-audit", active: (path) => path === "/admin/config-audit" }
     ]
   }
 ];
@@ -91,9 +103,10 @@ function navLinkClass(isActive: boolean) {
 
 export function AppFrame() {
   const location = useLocation();
+  const appShellClass = `pl-app-shell${location.pathname === "/help" ? " pl-app-shell--help" : ""}`;
 
   return (
-    <div className="pl-app-shell">
+    <div className={appShellClass}>
       <aside className="pl-sidebar">
         <div className="pl-brand-block">
           <strong>Lucy WebUI</strong>
@@ -101,6 +114,17 @@ export function AppFrame() {
         </div>
 
         <nav className="pl-nav" aria-label="主导航">
+          <section className="pl-nav-section pl-nav-section--top" key="top">
+            <div className="grid gap-1">
+              <Link
+                aria-current={topLevelEntry.active(location.pathname) ? "page" : undefined}
+                className={navLinkClass(topLevelEntry.active(location.pathname))}
+                to={topLevelEntry.to}
+              >
+                {topLevelEntry.label}
+              </Link>
+            </div>
+          </section>
           {navGroups.map((group) => (
             <section className="pl-nav-section" key={group.title}>
               <h2 className="pl-nav-section-title">{group.title}</h2>
@@ -110,7 +134,7 @@ export function AppFrame() {
                   return (
                     <Link
                       aria-current={active ? "page" : undefined}
-                      className={navLinkClass(active)}
+                      className={`${navLinkClass(active)}${item.compatibility ? " pl-nav-link--compat" : ""}`}
                       key={item.to}
                       to={item.to}
                     >

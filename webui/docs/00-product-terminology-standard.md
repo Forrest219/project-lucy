@@ -138,10 +138,13 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | YAML Asset | YAML 资产 | 语义层 YAML | YAML 报价 | 语义层资产文件 |
 | Asset Package | 资产包 | 语义资产包 | 报价包 | zip / bundle 形式的资产交付物 |
 | Asset Kind | asset kind / 资产类型 | 上传资产类型 | 上传类别泛化 | 上传 API 与 Validate Gate 中区分 Schema Manifest、semantic overlay、资产包 |
-| Schema Manifest Upload | 上传 Schema Manifest | 上传 Manifest、上传该 Schema 的 YAML | 裸用“上传 YAML” | 数据库接入中的受控 manifest 上传动作 |
+| Schema Manifest Upload | 上传 Schema Manifest | 上传 Manifest | 上传该 Schema 的 YAML、裸用“上传 YAML” | 数据库接入中的受控 manifest 上传动作；主入口位于 `/connections` |
+| Schema Manifest Repair Link | 去连接概览上传 Manifest | 打开连接概览 | 上传该 Schema 的 YAML、当前页独立上传 YAML | `/connections/whitelist` 缺失 Manifest 诊断中的跳转动作 |
 | Semantic Overlay Upload | 上传 semantic overlay | 上传 overlay YAML | 裸用“上传 YAML” | 语义层维护中的 overlay 上传动作 |
-| Whitelist | 表白名单 | 白名单 | 表白、白表 | 控制进入语义层的表范围 |
+| Whitelist | 启用表范围 | 白名单、表白名单（兼容） | 表白、白表 | 控制进入语义层的表范围 |
+| Enabled Tables | 启用表范围 | 启用的表 | 表白名单（主导航禁用）、白表、表白 | 控制进入语义层的表范围 |
 | Semantic Layer | 语义层 | semantic-layer | 语义图层 | 表、指标、维度、业务语义定义层 |
+| Semantic Modeling | 语义建模 | 语义模型 | 语义层维护 + 业务文档作为两个分组 | 涵盖结构化语义（YAML Overlay）与非结构化业务文档（Markdown Wiki） |
 | Metric | 指标 | Metric | 度量混用 | 可聚合的业务数值定义 |
 | Dimension | 维度 | Dimension | 维数 | 分析分组或切片字段 |
 | Measure | 度量 | Measure | 指标混用 | 语义模型内的聚合表达式；当面向业务用户时优先叫“指标” |
@@ -149,6 +152,10 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Join | 关联 | Join | 加入、连接表 | 表之间的 join 关系 |
 | Business Wiki | 业务 Wiki | Wiki 文档 | 维基文档可用于导航 | 业务解释和口径文档 |
 | Evaluation | 质量评测 | 评测 | 质量评价混用 | 数据问答或语义质量评测 |
+| Evaluation Case | 评测用例 | 评测集 | Case 管理、案例管理 | 数据问答 / 语义质量评测的单条样例 |
+| Role Permission | 角色权限 | Role、RBAC 角色 | 角色配置、角色模板 | access.yaml 中的 role 模板 |
+| Data Heatmap | 数据热力 | 表级访问热力 | 数据源热力、源热力 | 从访问审计派生的表级访问与拒绝分布；UI 收敛为访问日志内的 heatmap Tab（`/admin/audit?tab=heatmap`），原独立路由 `/admin/audit-sources` 保留为兼容重定向（M35） |
+| Config Audit | 配置审计 | 配置变更审计 | 配置变更（仅限主导航/PageHeader 标题） | 访问配置写入的审计记录 |
 | Review | 审阅 | 变更审阅 | 审核混用 | 人工审阅、PR-like review |
 | Approval | 审批 | 批准 | 审阅混用 | 需要明确批准 / 驳回的流程 |
 | Audit | 审计 | 审计日志 | 审阅 | 操作追踪、合规记录 |
@@ -185,20 +192,21 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
 | Connection Overview | 连接概览 | 连接总览混用 | 数据库接入主工作台 |
-| Table Whitelist | 表白名单 | 白表、表白 | `enabled_tables` 的 UI 管理入口 |
+| Table Whitelist | 启用表范围 | 白表、表白、表白名单（主导航禁用） | `enabled_tables` 的 UI 管理入口 |
 | Add Schema | 添加 Schema | 添加架构、添加模式 | 向连接配置追加 Schema |
 | Target Schema | 目标 Schema | 目标架构、目标模式 | 上传或添加流程中的目标 Schema |
 | Manifest Status | Manifest 状态 | 清单状态、舱单状态 | Schema manifest 是否存在 |
 | Missing Manifest | 缺失 Manifest | 财政部舱单、缺失清单 | 本地 manifest 文件不存在 |
-| Upload Schema YAML | 上传该 Schema 的 YAML | 上传该架构的 YAML | 上传特定 Schema 的 YAML 资产 |
-| Upload Schema Manifest | 上传 Schema Manifest | 上传 Manifest | 裸用“上传 YAML” | 写入 `semantic-layer/<connection>/_schema/<schema>.yaml` |
+| Upload Schema Manifest | 上传 Schema Manifest | 上传 Manifest | 上传该 Schema 的 YAML、裸用“上传 YAML” | 写入 `semantic-layer/<connection>/_schema/<schema>.yaml`；主入口位于 `/connections` |
+| Schema Manifest Repair Link | 去连接概览上传 Manifest | 打开连接概览 | 当前页独立上传 YAML | 启用表范围缺失 Manifest 诊断只跳转，不在当前页上传 |
 | Refresh Local Catalog | 刷新本地目录 | 重新加载资产 | 重新读取本地 YAML 资产 |
 
-### 4.2 语义层维护
+### 4.2 语义建模
 
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
 | Table Catalog | 表目录 | 表格目录 | 已入库语义层对象列表 |
+| Business Wiki | 业务 Wiki | Wiki 文档（仅兼容期） | 业务解释和口径文档 |
 | Business Annotation | 业务注释 | 查看注释可接受 | 面向业务的表 / 字段解释 |
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |
@@ -221,18 +229,18 @@ Connection (连接)
 - 业务页面：`新增指标`、`指标定义`、`指标口径`
 - 模型内部：`Measure 表达式`、`Measure SQL`
 
-### 4.2.1 数据库接入 / 语义层维护 / 语义资产交付边界
+### 4.2.1 数据接入 / 语义建模 / 语义资产交付边界
 
-数据库接入负责让 Connection、Schema、表白名单和 Schema Manifest 进入 Lucy，并保持本地 Catalog 可读。
-语义层维护负责维护已进入 Lucy 的表的业务语义，包括字段说明、grain、指标、分群和 Join。
+数据接入负责让 Connection、Schema、启用表范围和 Schema Manifest 进入 Lucy，并保持本地 Catalog 可读。
+语义建模负责维护已进入 Lucy 的表的业务语义，包括字段说明、grain、指标、分群和 Join。
 语义资产交付负责资产包级导入、导出、Validate Gate 与发布。
 
-| 能力 | 数据库接入 | 语义层维护 | 语义资产交付 |
+| 能力 | 数据接入 | 语义建模 | 语义资产交付 |
 |---|---|---|---|
 | 查看 Connection | Owner | Consumer | Consumer |
 | 添加 Schema 到 `ktx.yaml` | Owner | 不负责 | 不负责 |
 | 连通测试 | Owner | 不负责 | 不负责 |
-| 表白名单 / `enabled_tables` | Owner | Consumer | Consumer |
+| 启用表范围 / `enabled_tables` | Owner | Consumer | Consumer |
 | Manifest 状态 | Owner | Consumer | Consumer |
 | 上传 Schema Manifest | Owner | 不作为主入口 | 可包含在资产包中 |
 | 刷新本地目录 | Owner | 可提示 | 可触发发布后刷新 |
@@ -247,6 +255,12 @@ Connection (连接)
 | validate / reindex | 基础刷新后可触发 | 语义变更后必须触发 | 发布 gate 必须触发 |
 
 按钮、Drawer 标题、Toast 主动作不得裸用 `上传 YAML`。必须写明 `上传 Schema Manifest`、`上传 semantic overlay` 或 `上传资产包`；说明文中使用 `YAML 资产` 总称时，必须在同一段落中说明具体类型。
+
+入口归属：
+
+- Schema 级 YAML（Schema Manifest）上传主入口位于 `/connections`。
+- `/connections/whitelist` 只展示缺失 Manifest 诊断与 `去连接概览上传 Manifest` / `打开连接概览` 跳转，不提供独立上传入口。
+- Table 级 YAML（semantic overlay）上传入口位于语义层维护的 `表目录` 或表详情业务语义区域。
 
 ### 4.3 审阅与审核
 
@@ -268,7 +282,7 @@ Connection (连接)
 
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
-| Evaluation Case | 评测案例 | 案例管理可作为菜单名 | 单条测试问题或评测样例 |
+| Evaluation Case | 评测用例 / 评测集 | Case 管理、案例管理 | 单条测试问题或评测样例 |
 | Evaluation Run | 评测运行 | 评价运行 | 一次批量评测执行 |
 | Trend Monitoring | 趋势监控 | 趋势监管 | 质量指标随时间变化 |
 | Pass Rate | 通过率 | 成功率混用 | 评测通过比例 |
@@ -281,6 +295,7 @@ Connection (连接)
 | Runtime Status | 运行状态 | 运行时间状态 | 服务运行健康情况 |
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
+| Sidebar Group | 系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 | 5+1 主导航 | 运行状态、数据库接入、语义层维护、业务文档作为主导航分组 | Lucy WebUI 侧边栏固定 IA |
 
 ## 5. 新术语登记流程
 
