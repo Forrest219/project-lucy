@@ -42,6 +42,28 @@ function runnerCommandFor(domain: string): string {
   return `node scripts/lucy-eval-runner.mjs --suite ${domain || "eval"}-eval-suite.yaml --output result.json`;
 }
 
+function filenameFromContentDisposition(value: string | null, fallback: string): string {
+  if (!value) return fallback;
+  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/^"|"$/g, ""));
+  const plainMatch = value.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] ?? fallback;
+}
+
+function triggerFileDownload(href: string, filename: string): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
 function errorDetail(err: unknown): string {
   if (err instanceof ApiError && err.detail && typeof err.detail === "object" && "errors" in err.detail) {
     const errors = (err.detail as { errors?: Array<{ path?: string; message?: string }> }).errors ?? [];
@@ -96,6 +118,7 @@ export function CaseList() {
   const [resultPreview, setResultPreview] = useState<ResultImportResponse | null>(null);
   const [downloadedYaml, setDownloadedYaml] = useState("");
   const [runnerCommand, setRunnerCommand] = useState("");
+  const [resultActionHint, setResultActionHint] = useState<"sync-suite" | null>(null);
   const filteredCases = search
     ? cases.filter((c) => c.id.includes(search) || (c.question ?? "").includes(search))
     : cases;
@@ -123,6 +146,12 @@ export function CaseList() {
         toast.success("Eval YAML 已导入");
         void qc.invalidateQueries({ queryKey: ["eval", "domains"] });
         void qc.invalidateQueries({ queryKey: ["eval", "cases", data.domain] });
+        if (resultActionHint === "sync-suite") {
+          setResultActionHint(null);
+          setResultPreview(null);
+          setSuitePanel("result");
+          toast.success("Eval YAML 已同步，请重新预检运行结果");
+        }
       }
     },
     onError: (err) => toast.error(`Eval YAML 导入失败：${errorDetail(err)}`)
@@ -140,6 +169,7 @@ export function CaseList() {
         toast.success(data.hashStatus === "mismatch" ? "运行结果可作为本地变体归档" : "运行结果预检通过");
       } else {
         toast.success("运行结果已归档");
+        setResultActionHint(null);
         void qc.invalidateQueries({ queryKey: ["eval", "runs"] });
         if (data.runId) navigate(`/eval/runs/${data.runId}`);
       }
@@ -149,13 +179,19 @@ export function CaseList() {
 
   async function downloadSuite() {
     if (!activeDomain) return;
-    const response = await fetch(`/api/eval/suites/${encodeURIComponent(activeDomain)}/download`);
+    const downloadHref = `/api/eval/suites/${encodeURIComponent(activeDomain)}/download`;
+    const response = await fetch(downloadHref);
     if (!response.ok) {
       toast.error("下载 Eval YAML 失败");
       return;
     }
     const text = await response.text();
     const command = response.headers.get("X-Lucy-Runner-Command") ?? runnerCommandFor(activeDomain);
+    const filename = filenameFromContentDisposition(
+      response.headers.get("Content-Disposition"),
+      `${activeDomain}-eval-suite.yaml`
+    );
+    triggerFileDownload(downloadHref, filename);
     setDownloadedYaml(text);
     setRunnerCommand(command);
     setSuitePanel("command");
@@ -257,6 +293,11 @@ export function CaseList() {
             value={suiteYaml}
             onChange={(e) => setSuiteYaml(e.target.value)}
           />
+          {resultActionHint === "sync-suite" && (
+            <div className="pl-notice text-xs">
+              正在同步本地 <span className="notranslate" translate="no">Eval YAML</span>：确认导入后会回到上传运行结果，请重新预检并归档。
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
             <button type="button" className="pl-btn pl-btn--ghost text-sm" disabled={!suiteYaml || suiteImportMutation.isPending} onClick={() => suiteImportMutation.mutate(true)}>预检</button>
             <button type="button" className="pl-btn pl-btn--primary text-sm" disabled={!suiteYaml || suiteImportMutation.isPending} onClick={() => suiteImportMutation.mutate(false)}>确认导入</button>
@@ -284,14 +325,56 @@ export function CaseList() {
           />
           <div className="flex gap-2 justify-end">
             <button type="button" className="pl-btn pl-btn--ghost text-sm" disabled={!resultJson || resultImportMutation.isPending} onClick={() => resultImportMutation.mutate({ dryRun: true })}>预检</button>
-            <button type="button" className="pl-btn pl-btn--primary text-sm" disabled={!resultJson || resultImportMutation.isPending} onClick={() => resultImportMutation.mutate({ dryRun: false, archiveLocalVariant: resultPreview?.hashStatus === "mismatch" })}>
-              确认归档
-            </button>
+            {resultPreview?.hashStatus !== "mismatch" && (
+              <button type="button" className="pl-btn pl-btn--primary text-sm" disabled={!resultJson || resultImportMutation.isPending} onClick={() => resultImportMutation.mutate({ dryRun: false })}>
+                确认归档
+              </button>
+            )}
           </div>
           {resultPreview && (
-            <div className="pl-notice text-xs">
-              {resultPreview.hashStatus === "mismatch" ? "本地变体 · 默认不进入趋势和质量门禁" : "Hash 匹配"} · PASS {resultPreview.passCount} / FAIL {resultPreview.failCount} / SKIP {resultPreview.skippedCount}
-            </div>
+            resultPreview.hashStatus === "mismatch" ? (
+              <div className="pl-notice text-xs grid gap-3">
+                <div>Hash 不匹配 · 可作为本地变体归档，默认不进入趋势和质量门禁 · PASS {resultPreview.passCount} / FAIL {resultPreview.failCount} / SKIP {resultPreview.skippedCount}</div>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost text-xs"
+                    disabled={resultImportMutation.isPending}
+                    onClick={() => {
+                      setResultJson("");
+                      setResultPreview(null);
+                      setResultActionHint(null);
+                      setSuitePanel(null);
+                    }}
+                  >
+                    取消导入
+                  </button>
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost text-xs"
+                    disabled={resultImportMutation.isPending}
+                    onClick={() => {
+                      setResultActionHint("sync-suite");
+                      setSuitePanel("import");
+                    }}
+                  >
+                    同步本地 <span className="notranslate" translate="no">Eval YAML</span> 后归档
+                  </button>
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--primary text-xs"
+                    disabled={resultImportMutation.isPending}
+                    onClick={() => resultImportMutation.mutate({ dryRun: false, archiveLocalVariant: true })}
+                  >
+                    归档为本地变体
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="pl-notice text-xs">
+                Hash 匹配 · PASS {resultPreview.passCount} / FAIL {resultPreview.failCount} / SKIP {resultPreview.skippedCount}
+              </div>
+            )
           )}
         </div>
       )}

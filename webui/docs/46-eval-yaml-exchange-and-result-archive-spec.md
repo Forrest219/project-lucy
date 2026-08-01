@@ -318,6 +318,8 @@ domain "kx financial" 不是安全 ID
 node lucy-eval-runner.mjs --suite kx_financial.yaml --output result.json
 ```
 
+`下载 Eval YAML` 必须触发浏览器文件下载，默认文件名为 `<domain>-eval-suite.yaml`。页面可以同时展开本地运行命令和 YAML 预览，方便复制或检查内容，但不得只展示文本而不产生下载动作。
+
 Hermes profile 或 Claude Code 命令可作为 runner adapter 说明，但不得替代标准 runner 输出 Result JSON。
 
 ### 8.4 上传运行结果
@@ -331,6 +333,7 @@ Hermes profile 或 Claude Code 命令可作为 runner adapter 说明，但不得
   -> suite_id / suite_hash check
   -> case_id match
   -> import preview
+  -> hash mismatch 三选项（如适用）
   -> 确认归档为 Eval Run
 ```
 
@@ -341,6 +344,7 @@ Hermes profile 或 Claude Code 命令可作为 runner adapter 说明，但不得
 - 影响的 case 数。
 - 归档为本地变体后是否进入趋势和质量门禁。
 - “同步本地 Eval YAML 后归档”的入口。
+- “归档为本地变体”“同步本地 Eval YAML 后归档”“取消导入”三个互斥动作。
 
 导入成功后，跳转到 `/eval/runs/:runId`。
 

@@ -36,6 +36,9 @@
 - [x] **T11 安全与术语**：上传内容执行敏感词扫描、大小限制和安全路径校验；新增 UI 文案加翻译防御并通过术语 lint。
 - [x] **T12 测试**：覆盖 schema parse、hash 稳定性、legacy migration preview、standard runner result schema、result import mismatch local variant、CaseList 无服务器 Agent 空态、Header 动作收敛、结果导入跳转。
 - [x] **T13 验证**：运行术语 lint、前后端聚焦测试、build；浏览器复核按需执行，本轮按用户约束不做浏览器测试。
+- [x] **T14 浏览器反馈修复：真实下载**：`下载 Eval YAML` 必须触发浏览器文件下载，同时保留页面内本地运行命令和 YAML 预览。
+- [x] **T15 浏览器反馈修复：hash mismatch 三选项**：Result JSON dry-run 出现 hash mismatch 时必须明确提供 `归档为本地变体`、`同步本地 Eval YAML 后归档`、`取消导入` 三个选择，不得用隐式确认替代。
+- [x] **T16 Docker 浏览器验收**：重建 Docker 后访问 `/eval/cases/kx_financial`，真实验证下载事件、YAML 预检、Result JSON mismatch 三选项、归档跳转和 `/eval/runs` 服务器运行降级入口。
 
 ## 实现顺序
 
@@ -95,7 +98,7 @@ http://localhost:5174/eval/runs
 - 上传 Eval YAML dry-run preview 是否展示 case 数、suite hash、diff。
 - 下载 YAML 是否包含 `lucy_eval_schema_version`、`suite_id`、`suite_hash` 和标准 runner 命令。
 - 上传 Result JSON 成功后是否进入运行详情页。
-- hash 错配是否可归档为本地变体，并清晰提示默认不进入趋势和质量门禁。
+- hash 错配是否提供 `归档为本地变体`、`同步本地 Eval YAML 后归档`、`取消导入` 三选项，并清晰提示默认不进入趋势和质量门禁。
 - 未知 case、schema 错误是否可读且不写入运行历史。
 
 ## 风险与边界
