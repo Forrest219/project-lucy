@@ -336,6 +336,9 @@ describe("TableWhitelist", () => {
       within(toolbar).queryByTestId("whitelist-reload-catalog")
     ).not.toBeInTheDocument();
     expect(within(toolbar).getByTestId("whitelist-batch-menu")).toBeInTheDocument();
+    const batchTrigger = within(toolbar).getByTestId("whitelist-batch-menu-trigger");
+    expect(batchTrigger.className).toContain("pl-btn--secondary");
+    expect(batchTrigger.className).not.toContain("pl-btn--sm");
     expect(within(toolbar).getByTestId("pl-whitelist-selection-summary")).toHaveTextContent(
       "已选 2/3 张表"
     );

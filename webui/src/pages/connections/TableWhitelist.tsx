@@ -565,7 +565,7 @@ export function TableWhitelist() {
               {visibleTotal > 0 ? (
                 <details className="pl-whitelist-batch-menu" data-testid="whitelist-batch-menu">
                   <summary
-                    className="pl-btn pl-btn--secondary pl-btn--sm pl-whitelist-batch-summary"
+                    className="pl-btn pl-btn--secondary pl-whitelist-batch-summary"
                     data-testid="whitelist-batch-menu-trigger"
                     translate="no"
                   >

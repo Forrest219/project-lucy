@@ -769,7 +769,7 @@
     display: grid;
   }
   .pl-whitelist-batch-summary {
-    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm border border-border-default bg-bg-surface px-3 py-1 text-sm font-medium text-fg-default;
+    @apply cursor-pointer;
     list-style: none;
   }
   .pl-whitelist-batch-summary::-webkit-details-marker {
