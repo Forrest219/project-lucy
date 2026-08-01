@@ -8,6 +8,12 @@ import { queryKeys } from "../lib/queryKeys";
 import type { Agent, ChangedFilesResponse, McpEndpointInfo, ProjectInfo, SourcesResponse } from "../lib/types";
 import { buildMcpConfig } from "../lib/mcpEndpoint";
 import { PageHeader } from "../components/PageHeader";
+import {
+  buildActionRequiredItems,
+  buildServiceHealth,
+  NO_ACTION_REQUIRED_MESSAGE,
+  pendingSemanticCount
+} from "../lib/opsDashboard";
 
 type AgentsResponse = { agents: Agent[] };
 type HealthTone = "ready" | "warning" | "info" | "danger";
@@ -97,6 +103,30 @@ function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
   return null;
 }
 
+function SeverityBadge({ severity }: { severity: "critical" | "warning" | "ready" | "info" }) {
+  const className =
+    severity === "critical"
+      ? "pl-status-validation_failed"
+      : severity === "warning"
+        ? "pl-status-partial"
+        : severity === "ready"
+          ? "pl-status-done"
+          : "pl-status-not_started";
+  const label =
+    severity === "critical"
+      ? "Critical"
+      : severity === "warning"
+        ? "Warning"
+        : severity === "ready"
+          ? "Ready"
+          : "Info";
+  return (
+    <span className={`pl-status-badge ${className}`} data-severity={severity}>
+      {label}
+    </span>
+  );
+}
+
 export function Onboarding() {
   const [copied, setCopied] = useState(false);
   const projectQuery = useQuery({
@@ -114,6 +144,17 @@ export function Onboarding() {
   const agentsQuery = useQuery({
     queryKey: ["admin", "agents"],
     queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+  });
+  // M36 review follow-up: query the latest eval run so the "近 30 天无评测数据"
+  // item is honest. We only fetch the head of the list (limit=1); the API
+  // already supports this filter. If the call fails (older deployments,
+  // missing endpoint) we silently fall back to 0 so the dashboard never
+  // fabricates a critical alert.
+  const evalLastRunQuery = useQuery({
+    queryKey: ["eval", "runs", "last"],
+    queryFn: () => apiGet<{ total: number; runs: unknown[] }>("/api/eval/runs?limit=1"),
+    retry: false,
+    staleTime: 60_000
   });
 
   const connections = projectQuery.data?.connections ?? [];
@@ -166,6 +207,50 @@ export function Onboarding() {
   const semanticPercent = percent(doneSources, sources.length);
   const deliveryBannerReady = readyCount === 5 && canCopyMcp;
 
+  // M36: Ops Dashboard view-model inputs.
+  // `pendingCatalogItems` and `aclDenied7d` are not exposed by a single
+  // dedicated endpoint today; we derive them from existing surfaces so the
+  // queue stays honest without inventing new backend work. The page-level
+  // acceptance criteria in the spec call out that the "待处理事项" must
+  // include the catalog / access risk items whenever their counts are > 0.
+  const pendingCatalogItems = Math.max(0, sources.length - doneSources);
+  const aclDenied7d = agents.reduce(
+    (sum, agent) => sum + (agent.stats?.deniedLast7d ?? 0),
+    0
+  );
+  const actionItems = useMemo(
+    () =>
+      buildActionRequiredItems({
+        semanticCoverage: { done: doneSources, total: sources.length },
+        pendingCatalogItems,
+        pendingPublishFiles: changedFiles.length,
+        // M36 review follow-up: derive from `/api/eval/runs?limit=1` so the
+        // "近 30 天无评测数据" item disappears once eval has run. We do not
+        // try to filter by date on the client; the server is the source of
+        // truth and we only need the boolean "has any run at all". If the
+        // query is still loading or errored we conservatively report 0 so
+        // the dashboard does not flash a false positive.
+        evalRunsLast30d: evalLastRunQuery.isLoading || evalLastRunQuery.error
+          ? 0
+          : (evalLastRunQuery.data?.runs.length ?? 0),
+        aclDenied7d
+      }),
+    [doneSources, sources.length, pendingCatalogItems, changedFiles.length, evalLastRunQuery.isLoading, evalLastRunQuery.error, evalLastRunQuery.data, aclDenied7d]
+  );
+  const serviceHealth = useMemo(
+    () =>
+      buildServiceHealth({
+        ktxAvailable: projectQuery.data?.ktxAvailable === true,
+        mcpReady,
+        semanticCoverage: { done: doneSources, total: sources.length },
+        agentsEnabled: enabledAgents.length,
+        agentsTotal: agents.length,
+        enabledTokenCount
+      }),
+    [projectQuery.data?.ktxAvailable, mcpReady, doneSources, sources.length, enabledAgents.length, agents.length, enabledTokenCount]
+  );
+  const semanticGap = pendingSemanticCount({ done: doneSources, total: sources.length });
+
   async function copyConfig() {
     if (!canCopyMcp) {
       toast.error("当前 Lucy MCP endpoint 不可用，无法复制配置");
@@ -200,17 +285,15 @@ export function Onboarding() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="系统概览"
-        breadcrumbs={["运行状态", "系统概览"]}
-        description="查看 Lucy MCP、KTX runtime、语义资产与 Agent 接入的当前健康状态。"
+        title="运维驾驶舱"
+        breadcrumbs={["系统概览"]}
+        description="查看 Lucy MCP、KTX runtime、语义资产与 Agent 接入的当前健康状态。聚合首页待办，判断 data agent 是否处于可交付状态。"
         badges={
-          projectQuery.data ? (
-            <>
-              <span>KTX {projectQuery.data.ktxAvailable ? "可用" : "不可用"}</span>
-              <span>{doneSources}/{sources.length} 语义完成</span>
-              <span>{enabledTokenCount} 活跃 Token</span>
-            </>
-          ) : null
+          <>
+            <span>KTX {projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</span>
+            <span>{doneSources}/{sources.length} 语义完成</span>
+            <span>{enabledTokenCount} 活跃 Token</span>
+          </>
         }
         actions={
           <button type="button" className="pl-btn pl-btn--secondary" onClick={refreshStatus}>
@@ -252,28 +335,154 @@ export function Onboarding() {
         )}
       </section>
 
-      <div className="pl-metric-grid pl-metric-grid--three grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="pl-metric-card">
-          <span>KTX Runtime</span>
-          <strong className={projectQuery.data?.ktxAvailable ? "pl-metric-value--success" : "pl-metric-value--danger"}>
-            {projectQuery.data?.ktxAvailable ? "Ready" : "Unavailable"}
-          </strong>
-          <small>{projectQuery.data?.root ?? "项目根未知"}</small>
+      <section className="pl-panel" data-testid="ops-service-health">
+        <div className="pl-section-heading">
+          <div>
+            <h2 className="pl-panel-title mb-1">服务健康</h2>
+            <p className="pl-notice">Lucy MCP、KTX runtime、语义层、Agent 接入四个核心组件的当前状态。</p>
+          </div>
         </div>
-        <div className="pl-metric-card">
-          <span>语义资产覆盖度</span>
-          <strong>
-            {doneSources}/{sources.length}
-          </strong>
-          <small>{semanticPercent}% 已维护</small>
+        <div className="pl-service-health-strip">
+          {serviceHealth.map((item) => (
+            <div key={item.key} className="pl-service-health-item" data-status={item.status}>
+              <span className="pl-service-health-status" aria-hidden="true" />
+              <div>
+                <div className="pl-service-health-label">{item.label}</div>
+                <div className="pl-service-health-detail">{item.detail}</div>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="pl-metric-card">
-          <span>Agent 接入与安全</span>
-          <strong>{enabledAgents.length}</strong>
-          <small>
-            {agents.length} agents · {tokenCount} tokens · {enabledTokenCount} usable
-          </small>
+      </section>
+
+      <section className="pl-panel" data-testid="ops-action-required">
+        <div className="pl-section-heading">
+          <div>
+            <h2 className="pl-panel-title mb-1">待处理事项</h2>
+            <p className="pl-notice">聚合语义缺口、待发布变更、评测缺口、ACL 风险。点击任一项可直接进入处理页面。</p>
+          </div>
+          <span className="pl-notice" data-testid="ops-action-required-count">{actionItems.length} 项</span>
         </div>
+        {actionItems.length === 0 ? (
+          <div className="pl-action-required-empty" data-testid="ops-action-required-empty">
+            {NO_ACTION_REQUIRED_MESSAGE}
+          </div>
+        ) : (
+          <div className="pl-action-required-list">
+            {actionItems.map((item) => (
+              <div
+                key={item.id}
+                className="pl-action-required-item"
+                data-severity={item.severity}
+                data-testid={item.testId}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <SeverityBadge severity={item.severity} />
+                  <span className="text-sm text-fg-default">{item.label}</span>
+                </div>
+                {item.href ? (
+                  <Link
+                    className="pl-btn pl-btn--ghost text-sm notranslate"
+                    translate="no"
+                    to={item.href}
+                    data-testid={`${item.testId}-link`}
+                  >
+                    前往处理 →
+                  </Link>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="pl-ops-grid">
+        <section className="pl-panel" data-testid="ops-quality-snapshot">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title mb-1">质量快照</h2>
+              <p className="pl-notice">语义资产覆盖度与变更审阅状态，决定发布前的最后一道关。</p>
+            </div>
+          </div>
+          <div className="pl-snapshot-grid">
+            <div className="pl-snapshot-card">
+              <span className="pl-snapshot-card-label">语义资产覆盖度</span>
+              <strong className="pl-snapshot-card-value">
+                {doneSources}/{sources.length} ({semanticPercent}%)
+              </strong>
+              <small className="text-fg-muted">{semanticGap} 张表待补</small>
+            </div>
+            <div className="pl-snapshot-card">
+              <span className="pl-snapshot-card-label">待发布变更</span>
+              <strong className="pl-snapshot-card-value">{changedFiles.length} 个文件</strong>
+              <small className="text-fg-muted">
+                {validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
+              </small>
+            </div>
+            <div className="pl-snapshot-card">
+              <span className="pl-snapshot-card-label">最近一次发布</span>
+              <strong className="pl-snapshot-card-value">—</strong>
+              <small className="text-fg-muted">
+                前往 <Link to="/publish/history" className="text-accent underline">发布记录</Link> 查看历史
+              </small>
+            </div>
+            <div className="pl-snapshot-card">
+              <span className="pl-snapshot-card-label">趋势监控</span>
+              <strong className="pl-snapshot-card-value">0 次 Run</strong>
+              <small className="text-fg-muted">
+                <Link to="/eval/monitor" className="text-accent underline">触发首次 Run</Link> 以建立质量基线
+              </small>
+            </div>
+          </div>
+        </section>
+
+        <section className="pl-panel" data-testid="ops-access-risk">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title mb-1">访问风险</h2>
+              <p className="pl-notice">Agent / token / ACL 风险摘要，触发条件来自近 7 天访问统计。</p>
+            </div>
+          </div>
+          <div className="pl-risk-list">
+            <div className="pl-risk-item" data-tone={enabledAgents.length === 0 ? "danger" : "default"}>
+              <div>
+                <strong>Agent 启用与禁用</strong>
+                <div className="text-xs text-fg-muted">
+                  {enabledAgents.length} 启用 / {agents.length} 总数
+                </div>
+              </div>
+              <Link to="/admin/agents" className="pl-btn pl-btn--ghost text-sm notranslate" translate="no">
+                查看 Agent 管理 →
+              </Link>
+            </div>
+            <div className="pl-risk-item" data-tone={aclDenied7d > 0 ? "danger" : "default"}>
+              <div>
+                <strong>近 7 天 ACL deny</strong>
+                <div className="text-xs text-fg-muted">
+                  {aclDenied7d} 次拒绝
+                </div>
+              </div>
+              <Link
+                to="/admin/audit?outcome=denied"
+                className="pl-btn pl-btn--ghost text-sm notranslate"
+                translate="no"
+              >
+                查看访问日志 →
+              </Link>
+            </div>
+            <div className="pl-risk-item" data-tone={enabledTokenCount === 0 && agents.length > 0 ? "warning" : "default"}>
+              <div>
+                <strong>可用 token</strong>
+                <div className="text-xs text-fg-muted">
+                  {enabledTokenCount} 个活跃 token
+                </div>
+              </div>
+              <Link to="/admin/agents" className="pl-btn pl-btn--ghost text-sm notranslate" translate="no">
+                管理 token →
+              </Link>
+            </div>
+          </div>
+        </section>
       </div>
 
       <section className="pl-panel">

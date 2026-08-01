@@ -41,9 +41,11 @@ function renderPage(options: {
     configured: boolean;
     diagnostics: Array<{ code: string; message: string }>;
   };
+  evalRuns?: { total: number; runs: unknown[] };
 } = {}) {
   const agents = options.agents ?? [readyAgent];
   const sources = options.sources ?? [readySource];
+  const evalRuns = options.evalRuns ?? { total: 1, runs: [{ id: 1 }] };
   const mcpEndpoint = options.mcpEndpoint ?? {
     url: "https://lucy.example.com/mcp",
     status: "configured" as const,
@@ -90,6 +92,12 @@ function renderPage(options: {
         }
       }));
     }
+    // M36 review follow-up: the dashboard now asks the eval API whether
+    // any run has happened. Default fixture says "yes, one run" so the
+    // "近 30 天无评测数据" item is not falsely surfaced.
+    if (url === "/api/eval/runs?limit=1") {
+      return new Response(JSON.stringify({ ok: true, data: evalRuns }));
+    }
     return new Response(JSON.stringify({ ok: true, data: {} }));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -119,21 +127,23 @@ describe("Onboarding", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "系统概览" })).toBeInTheDocument();
-    expect(screen.getByText("运行状态")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "运维驾驶舱" })).toBeInTheDocument();
+    expect(screen.queryByText("运行状态")).not.toBeInTheDocument();
     const pageActions = screen.getByLabelText("页面操作");
     expect(within(pageActions).queryByRole("link", { name: "打开系统手册" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新状态" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "数据库接入" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "配置 Agent" })).not.toBeInTheDocument();
     expect(screen.queryByText("Deployment readiness")).not.toBeInTheDocument();
+    // M36: KTX Runtime is now rendered inside the service-health strip
+    // (not a `.pl-metric-card`) but the label must still be present.
     expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
-    expect(screen.getByText("KTX Runtime").closest(".pl-metric-card")).not.toHaveClass("pl-metric-card--success");
-    expect(screen.getByText("语义资产覆盖度")).toBeInTheDocument();
-    expect(screen.getByText("Agent 接入与安全")).toBeInTheDocument();
-    const metricGrid = document.querySelector(".pl-metric-grid");
-    expect(metricGrid).toHaveClass("grid", "grid-cols-1", "md:grid-cols-3", "gap-4");
-    expect(document.querySelectorAll(".pl-metric-grid > .pl-metric-card")).toHaveLength(3);
+    expect(screen.getByText("Lucy MCP")).toBeInTheDocument();
+    expect(screen.getByText("语义层覆盖")).toBeInTheDocument();
+    expect(screen.getByText("Agent 接入")).toBeInTheDocument();
+    // The legacy 3-up metric grid is intentionally not rendered anymore; the
+    // service-health strip replaces it.
+    expect(document.querySelectorAll(".pl-metric-grid > .pl-metric-card")).toHaveLength(0);
     expect(screen.getByText("mysql-demo")).toBeInTheDocument();
     expect(screen.getByText("https://lucy.example.com/mcp")).toBeInTheDocument();
     expect(screen.queryByText("http://localhost:7879/mcp")).not.toBeInTheDocument();
@@ -254,5 +264,54 @@ describe("Onboarding", () => {
     renderPage({ agents: agents as Agent[] });
 
     expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
+  it("renders the M36 ops dashboard sections", async () => {
+    renderPage();
+
+    // Header moved from "系统概览" to "运维驾驶舱".
+    expect(await screen.findByRole("heading", { name: "运维驾驶舱" })).toBeInTheDocument();
+    // M36 review follow-up: the static DEV badge was removed because the
+    // environment switcher is out of scope for M36. If we ever re-introduce
+    // a badge it must come from runtime config, not be hard-coded.
+    expect(screen.queryByTestId("onboarding-env-badge")).not.toBeInTheDocument();
+    // Service health strip
+    expect(screen.getByTestId("ops-service-health")).toBeInTheDocument();
+    expect(screen.getByText("服务健康")).toBeInTheDocument();
+    expect(screen.getByText("Lucy MCP")).toBeInTheDocument();
+    expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
+    expect(screen.getByText("语义层覆盖")).toBeInTheDocument();
+    expect(screen.getByText("Agent 接入")).toBeInTheDocument();
+    // Action required queue
+    expect(screen.getByTestId("ops-action-required")).toBeInTheDocument();
+    expect(screen.getByText("待处理事项")).toBeInTheDocument();
+    // Quality + Access snapshots
+    expect(screen.getByTestId("ops-quality-snapshot")).toBeInTheDocument();
+    expect(screen.getByTestId("ops-access-risk")).toBeInTheDocument();
+    expect(screen.getByText("质量快照")).toBeInTheDocument();
+    expect(screen.getByText("访问风险")).toBeInTheDocument();
+  });
+
+  it("shows the eval monitor entry link with the 触发首次 Run copy in the quality snapshot", async () => {
+    renderPage();
+    const qualitySnapshot = await screen.findByTestId("ops-quality-snapshot");
+    const link = within(qualitySnapshot).getByRole("link", { name: "触发首次 Run" });
+    expect(link).toHaveAttribute("href", "/eval/monitor");
+  });
+
+  it("suppresses the eval-gap queue item once any eval run exists", async () => {
+    // Default fixture stubs /api/eval/runs?limit=1 to return one run, so
+    // the "近 30 天无评测数据" item must NOT appear in the queue.
+    renderPage();
+
+    const actionRequired = await screen.findByTestId("ops-action-required");
+    expect(actionRequired).not.toHaveTextContent("近 30 天无评测数据");
+  });
+
+  it("shows the eval-gap queue item when no eval run has happened", async () => {
+    renderPage({ evalRuns: { total: 0, runs: [] } });
+
+    const actionRequired = await screen.findByTestId("ops-action-required");
+    expect(actionRequired).toHaveTextContent("近 30 天无评测数据");
   });
 });
