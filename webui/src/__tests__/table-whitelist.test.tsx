@@ -226,6 +226,21 @@ afterEach(() => {
 });
 
 describe("TableWhitelist", () => {
+  async function openBatchMenu() {
+    // jsdom does not implement <details> open/close semantics, so we open
+    // the menu programmatically before clicking menu items.
+    const details = document.querySelector(
+      '[data-testid="whitelist-batch-menu"]'
+    ) as HTMLDetailsElement | null;
+    if (details && !details.open) details.open = true;
+  }
+
+  async function clickBatchAction(name: "全选" | "反选") {
+    await openBatchMenu();
+    const menu = await screen.findByTestId("whitelist-batch-menu-panel");
+    fireEvent.click(within(menu).getByRole("menuitem", { name }));
+  }
+
   it("renders toolbar, grouped table, and status badges from existing API data", async () => {
     stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
@@ -238,9 +253,12 @@ describe("TableWhitelist", () => {
     expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
     expect(screen.getByText("superstore_orders")).toBeInTheDocument();
     expect(screen.getByText("8 个")).toBeInTheDocument();
-    expect(screen.getByText("已纳入")).toBeInTheDocument();
+    expect(screen.getByText("已启用，语义完成")).toBeInTheDocument();
     expect(screen.getByText("已启用，待补语义")).toBeInTheDocument();
     expect(screen.getByText("未启用")).toBeInTheDocument();
+    // Forbidden legacy labels from M45 terminology refresh must not appear.
+    expect(screen.queryByText("已纳入")).not.toBeInTheDocument();
+    expect(screen.queryByText("待同步")).not.toBeInTheDocument();
   });
 
   it("links semantic-ready whitelisted rows to the source detail page", async () => {
@@ -248,7 +266,7 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const row = await screen.findByTestId("whitelist-row-dataforai.superstore_orders");
-    expect(within(row).getByRole("link", { name: "查看语义" })).toHaveAttribute(
+    expect(within(row).getByRole("link", { name: /查看语义/ })).toHaveAttribute(
       "href",
       "/sources/mysql-aliyun/dataforai/superstore_orders"
     );
@@ -260,9 +278,66 @@ describe("TableWhitelist", () => {
 
     const row = await screen.findByTestId("whitelist-row-dataforai.superstore_people");
     expect(within(row).getByText("已启用，待补语义")).toBeInTheDocument();
-    expect(within(row).getByRole("link", { name: "查看语义" })).toHaveAttribute(
+    expect(within(row).getByRole("link", { name: /编辑语义/ })).toHaveAttribute(
       "href",
       "/sources/mysql-aliyun/dataforai/superstore_people"
+    );
+  });
+
+  it("renders one shared table head plus a lightweight group header row per (connection, schema)", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const table = await screen.findByTestId("pl-whitelist-table");
+    const headers = within(table).getAllByRole("row", { name: /表名/ });
+    expect(headers).toHaveLength(1);
+
+    const groupRow = await screen.findByTestId("whitelist-group-mysql-aliyun-dataforai");
+    expect(within(groupRow).getByText(/连接：MYSQL-ALIYUN/)).toBeInTheDocument();
+    expect(within(groupRow).getByText(/共 3 张表/)).toBeInTheDocument();
+  });
+
+  it("replaces the 加入白名单 status-toggle button with a 查看字段 link for disabled rows", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    // superstore_returns is not in the persisted enabledTables — it is
+    // currently 未启用. The action cell must be a navigation link, not a
+    // status toggle button.
+    const disabledRow = await screen.findByTestId(
+      "whitelist-row-dataforai.superstore_returns"
+    );
+    expect(
+      within(disabledRow).queryByRole("button", { name: "加入白名单" })
+    ).not.toBeInTheDocument();
+    const link = within(disabledRow).getByRole("link", { name: /查看字段/ });
+    expect(link).toHaveAttribute(
+      "href",
+      "/sources/mysql-aliyun/dataforai/superstore_returns"
+    );
+  });
+
+  it("hoists 刷新本地目录 to PageHeader and moves 批量操作 into the toolbar", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const pageActions = await screen.findByTestId("page-header-actions");
+    expect(within(pageActions).getByTestId("whitelist-reload-catalog")).toHaveTextContent(
+      "刷新本地目录"
+    );
+    // M45: batch ops no longer live in PageHeader.actions.
+    expect(within(pageActions).queryByTestId("whitelist-batch-menu")).not.toBeInTheDocument();
+    expect(within(pageActions).queryByTestId("whitelist-select-all")).not.toBeInTheDocument();
+    expect(within(pageActions).queryByTestId("whitelist-invert")).not.toBeInTheDocument();
+
+    // Filter toolbar keeps filters + selection summary + batch menu only.
+    const toolbar = screen.getByRole("toolbar", { name: "启用表范围工具栏" });
+    expect(
+      within(toolbar).queryByTestId("whitelist-reload-catalog")
+    ).not.toBeInTheDocument();
+    expect(within(toolbar).getByTestId("whitelist-batch-menu")).toBeInTheDocument();
+    expect(within(toolbar).getByTestId("pl-whitelist-selection-summary")).toHaveTextContent(
+      "已选 2/3 张表"
     );
   });
 
@@ -360,13 +435,13 @@ describe("TableWhitelist", () => {
       expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    await clickBatchAction("全选");
 
     expect(await screen.findAllByText("已选 1/1 张表")).toHaveLength(1);
     expect(screen.getByText(/已修改 1 张表/)).toBeInTheDocument();
     expect(screen.getByText(/新增 1 张表/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "反选" }));
+    await clickBatchAction("反选");
 
     await waitFor(() => {
       expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
@@ -384,11 +459,11 @@ describe("TableWhitelist", () => {
       expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    await clickBatchAction("全选");
     fireEvent.click(screen.getByRole("button", { name: "预览 YAML" }));
 
     const drawer = await screen.findByRole("dialog", { name: "YAML 预览" });
-    expect(within(drawer).getByText("enabled_tables: 2 -> 3")).toBeInTheDocument();
+    expect(within(drawer).getByText("启用表范围：2 -> 3")).toBeInTheDocument();
     expect(
       within(drawer).getAllByText(/dataforai\.superstore_returns/).length
     ).toBeGreaterThan(0);
@@ -404,7 +479,7 @@ describe("TableWhitelist", () => {
     fireEvent.click(screen.getByRole("button", { name: "预览 YAML" }));
 
     const drawer = await screen.findByRole("dialog", { name: "YAML 预览" });
-    expect(within(drawer).getByText("enabled_tables: 2 -> 1")).toBeInTheDocument();
+    expect(within(drawer).getByText("启用表范围：2 -> 1")).toBeInTheDocument();
     expect(within(drawer).getByText("移除：dataforai.superstore_people")).toBeInTheDocument();
   });
 
@@ -438,11 +513,11 @@ describe("TableWhitelist", () => {
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
     await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    await clickBatchAction("全选");
 
     fireEvent.change(search, { target: { value: "monthly" } });
     await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    await clickBatchAction("全选");
 
     fireEvent.click(screen.getByRole("button", { name: "预览 YAML" }));
 
@@ -464,9 +539,10 @@ describe("TableWhitelist", () => {
       expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
-    // M14: saving the whitelist must only write enabled_tables; catalog reload
-    // remains an explicit toolbar action.
+    await clickBatchAction("全选");
+    // M45: saving the whitelist must only write enabled_tables; the page
+    // will follow up by auto-reloading the local catalog. Ingest must
+    // never be triggered.
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
     await waitFor(() => {
@@ -480,13 +556,16 @@ describe("TableWhitelist", () => {
       return url.includes("/api/connections/mysql-aliyun/ingest");
     });
     expect(ingestCalls).toHaveLength(0);
-    const reloadCalls = fetchMock.mock.calls.filter((call) => {
-      const url = String(call[0]);
-      return url.includes("/api/catalog/reload");
+    // Auto-reload is allowed and expected (one POST per changed connection).
+    await waitFor(() => {
+      const reloadCalls = fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("/api/catalog/reload")
+      );
+      expect(reloadCalls.length).toBeGreaterThan(0);
     });
-    expect(reloadCalls).toHaveLength(0);
     expect(await screen.findByText(/启用表范围已保存/)).toBeInTheDocument();
     expect(screen.queryByText(/请刷新本地目录/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/保存不会自动刷新本地目录/)).not.toBeInTheDocument();
   });
 
   it("surfaces a 刷新本地目录 action in the toolbar even without any draft changes", async () => {
@@ -676,7 +755,7 @@ describe("TableWhitelist", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("surfaces the save success copy without stale reload guidance when the whitelist is saved", async () => {
+  it("surfaces the save success copy and triggers auto-reload when the whitelist is saved", async () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
@@ -685,13 +764,14 @@ describe("TableWhitelist", () => {
     await waitFor(() => {
       expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    await clickBatchAction("全选");
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
+    // M45: success copy no longer carries "保存不会自动刷新本地目录".
     expect(
       await screen.findByText(/启用表范围已保存/)
     ).toBeInTheDocument();
-    expect(screen.getByText(/保存不会自动刷新本地目录/)).toBeInTheDocument();
+    expect(screen.queryByText(/保存不会自动刷新本地目录/)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/若你同时更新了 YAML 文件，请刷新本地目录/)
     ).not.toBeInTheDocument();
@@ -723,23 +803,25 @@ describe("TableWhitelist", () => {
     fireEvent.click(within(row).getByRole("checkbox", { name: "选择 superstore_people" }));
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
+    // M45: save must surface the auto-reload path and never the legacy
+    // "保存不会自动刷新本地目录" copy.
     expect(await screen.findByText(/启用表范围已保存/)).toBeInTheDocument();
-    expect(screen.getByText(/保存不会自动刷新本地目录/)).toBeInTheDocument();
+    expect(screen.queryByText(/保存不会自动刷新本地目录/)).not.toBeInTheDocument();
 
-    fireEvent.click(await screen.findByTestId("whitelist-reload-catalog"));
-
+    // Auto-reload kicked off in onSuccess; the toast includes the standard
+    // 启用表范围已保存 success message.
     await waitFor(() => {
       expect(
         toastMocks.success.mock.calls.some(([message]) =>
-          String(message).includes("本地目录已刷新 · 发现 3 张表 · 启用表范围 2 张 · 1 个提示")
+          String(message).includes("启用表范围已保存")
         )
       ).toBe(true);
     });
 
+    // Save success banner now ends in 本地目录已刷新.
     expect(
-      await screen.findByText("本地目录已刷新。发现 3 张表，当前启用表范围 2 张，1 个提示。")
+      await screen.findByText(/本地目录已刷新/)
     ).toBeInTheDocument();
-    expect(screen.queryByText(/保存不会自动刷新本地目录/)).not.toBeInTheDocument();
     expect(screen.queryByText(/请刷新本地目录/)).not.toBeInTheDocument();
   });
 
@@ -773,11 +855,11 @@ describe("TableWhitelist", () => {
     const search = await screen.findByPlaceholderText("搜索表名/描述...");
     fireEvent.change(search, { target: { value: "returns" } });
     await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    await clickBatchAction("全选");
 
     fireEvent.change(search, { target: { value: "monthly" } });
     await waitFor(() => expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    await clickBatchAction("全选");
 
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
@@ -833,13 +915,17 @@ describe("TableWhitelist", () => {
     assertNoForbiddenTerms(document.body);
   });
 
-  it("M31: toolbar splits filters and operations, and the reload button returns to 刷新本地目录 after success", async () => {
+  it("M31: toolbar keeps only filter + selection summary, and the reload button returns to 刷新本地目录 after success", async () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
     const toolbar = await screen.findByRole("toolbar", { name: "启用表范围工具栏" });
     expect(within(toolbar).getByTestId("pl-whitelist-filter-area")).toBeInTheDocument();
-    expect(within(toolbar).getByTestId("pl-whitelist-ops-area")).toBeInTheDocument();
+    expect(
+      within(toolbar).getByTestId("pl-whitelist-selection-summary")
+    ).toBeInTheDocument();
+    // Reload stays in PageHeader.actions; batch ops belong to the toolbar.
+    expect(within(toolbar).queryByTestId("whitelist-reload-catalog")).not.toBeInTheDocument();
 
     const reloadButton = await screen.findByTestId("whitelist-reload-catalog");
     expect(reloadButton).toHaveTextContent("刷新本地目录");
@@ -916,7 +1002,7 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const row = await screen.findByTestId("whitelist-row-dataforai.superstore_orders");
-    const link = within(row).getByRole("link", { name: "查看语义" });
+    const link = within(row).getByRole("link", { name: /查看语义/ });
 
     expect(link).toHaveAttribute(
       "href",

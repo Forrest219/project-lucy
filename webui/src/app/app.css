@@ -728,8 +728,9 @@
   .pl-status-badge--disabled { @apply bg-bg-muted text-fg-muted; }
 
   /* 启用表范围 (M8) */
-  /* Toolbar collapsed to "filter + selection" only; primary ops (刷新本地目录)
-     are hoisted to PageHeader.actions, while batch ops live behind a quiet menu. */
+  /* M45: toolbar keeps filter zone on the left and a paired actions zone on
+     the right (selection summary + batch operations menu). PageHeader.actions
+     only owns the page-level primary action: 刷新本地目录. */
   .pl-whitelist-toolbar {
     @apply flex flex-wrap items-end justify-between gap-x-4 gap-y-3 rounded-md border border-border-default bg-bg-surface p-3;
   }
@@ -737,29 +738,49 @@
   .pl-whitelist-filter-area {
     @apply flex flex-wrap items-end gap-3;
   }
+  .pl-whitelist-toolbar-actions {
+    @apply ml-auto flex flex-wrap items-center gap-3;
+  }
   .pl-whitelist-selection-summary {
     @apply whitespace-nowrap text-sm text-fg-muted;
+  }
+  /* Search input grew from ~182px to ~360px on desktop widths so users can
+     scan long connection/schema tables without losing query context. */
+  .pl-whitelist-search { @apply w-full sm:w-auto; }
+  .pl-whitelist-search-input {
+    @apply w-full sm:w-auto;
+    min-width: 16rem;
+  }
+  @media (min-width: 1024px) {
+    .pl-whitelist-search-input {
+      width: 22.5rem;
+      max-width: 22.5rem;
+    }
+  }
+  @media (max-width: 640px) {
+    .pl-whitelist-search-input {
+      min-width: 0;
+    }
   }
   .pl-whitelist-batch-menu {
     @apply relative inline-flex;
   }
+  .pl-whitelist-batch-menu[open] > .pl-whitelist-batch-menu-panel {
+    display: grid;
+  }
   .pl-whitelist-batch-summary {
-    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm text-sm font-normal text-primary underline-offset-4 no-underline;
+    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm border border-border-default bg-bg-surface px-3 py-1 text-sm font-medium text-fg-default;
     list-style: none;
   }
   .pl-whitelist-batch-summary::-webkit-details-marker {
     display: none;
   }
-  .pl-whitelist-batch-summary:hover,
-  .pl-whitelist-batch-summary:focus-visible {
-    @apply underline;
-    outline: none;
-  }
   .pl-whitelist-batch-menu-panel {
-    @apply absolute right-0 top-full z-50 mt-2 grid min-w-28 gap-1 rounded-md border border-border-default bg-bg-elevated p-1 shadow-md;
+    display: none;
+    @apply absolute right-0 top-full z-50 mt-2 grid min-w-32 gap-1 rounded-md border border-border-default bg-bg-elevated p-1 shadow-md;
   }
   .pl-whitelist-batch-link {
-    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm px-2 py-1.5 text-left text-sm font-normal text-fg-default hover:bg-bg-muted disabled:cursor-not-allowed disabled:text-fg-muted disabled:opacity-60;
+    @apply inline-flex w-full cursor-pointer items-center whitespace-nowrap rounded-sm px-2 py-1.5 text-left text-sm font-normal text-fg-default hover:bg-bg-muted disabled:cursor-not-allowed disabled:text-fg-muted disabled:opacity-60;
   }
   .pl-whitelist-batch-link:focus-visible {
     outline: none;

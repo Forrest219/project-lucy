@@ -91,6 +91,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M37-lucy-webui-positioning-control-plane.md](wo-M37-lucy-webui-positioning-control-plane.md) | M37 | Lucy WebUI 品牌定位升级到 Data Agent Ops Control Plane：品牌区副标题、术语标准 v0.2、过期设计 spec 备注与测试断言 |
 | [wo-M39-system-overview-enterprise-ops-polish.md](wo-M39-system-overview-enterprise-ops-polish.md) | M39 | 系统概览企业级运维控制台 polish：`/overview` 主入口、顶栏上下文、待处理事项治理、Metric-first 快照与 MCP 配置 Drawer |
 | [wo-M44-connection-overview-visual-simplification.md](wo-M44-connection-overview-visual-simplification.md) | M44 | 连接概览视觉收敛修复：移除工作目录、去双层方框、刷新状态右移、Schema 表新增启用表数与术语降噪 |
+| [wo-M45-table-whitelist-productization-followup.md](wo-M45-table-whitelist-productization-followup.md) | M45 | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 |
 
 ## 6. 如何把工单喂给 codex
 

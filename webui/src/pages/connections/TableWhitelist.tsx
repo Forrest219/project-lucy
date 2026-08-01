@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { apiGet, apiPut } from "../../lib/apiClient";
+import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   CompletionStatus,
   ConnectionInfo,
   ConnectionTablesResponse,
-  ProjectInfo,
   SourceSummary,
   SourcesResponse
 } from "../../lib/types";
@@ -28,7 +27,12 @@ type WhitelistTableRow = {
   completion?: CompletionStatus;
 };
 
-type WhitelistStatus = "included" | "pending" | "semantic_pending" | "disabled";
+type WhitelistStatus =
+  | "enabled_complete"
+  | "enabled_semantic_pending"
+  | "disabled"
+  | "draft_enable"
+  | "draft_disable";
 
 type EnabledTablesPreview = {
   diff: string;
@@ -50,17 +54,19 @@ type EnabledTablesWrite = {
 };
 
 const STATUS_LABELS: Record<WhitelistStatus, string> = {
-  included: "已纳入",
-  pending: "待同步",
-  semantic_pending: "已启用，待补语义",
-  disabled: "未启用"
+  enabled_complete: "已启用，语义完成",
+  enabled_semantic_pending: "已启用，待补语义",
+  disabled: "未启用",
+  draft_enable: "待启用",
+  draft_disable: "待禁用"
 };
 
 const STATUS_CLASS: Record<WhitelistStatus, string> = {
-  included: "pl-status-badge pl-status-badge--included",
-  pending: "pl-status-badge pl-status-badge--pending",
-  semantic_pending: "pl-status-badge pl-status-badge--semantic-pending",
-  disabled: "pl-status-badge pl-status-badge--disabled"
+  enabled_complete: "pl-status-badge pl-status-badge--included",
+  enabled_semantic_pending: "pl-status-badge pl-status-badge--semantic-pending",
+  disabled: "pl-status-badge pl-status-badge--disabled",
+  draft_enable: "pl-status-badge pl-status-badge--pending",
+  draft_disable: "pl-status-badge pl-status-badge--pending"
 };
 
 function parseQualifiedName(name: string): { schema: string; table: string } {
@@ -70,9 +76,11 @@ function parseQualifiedName(name: string): { schema: string; table: string } {
 }
 
 function whitelistStatus(row: WhitelistTableRow): WhitelistStatus {
-  if (row.enabledDraft !== row.enabledPersisted) return "pending";
-  if (row.enabledPersisted && row.completion === "done") return "included";
-  if (row.enabledPersisted) return "semantic_pending";
+  if (row.enabledDraft !== row.enabledPersisted) {
+    return row.enabledDraft ? "draft_enable" : "draft_disable";
+  }
+  if (row.enabledPersisted && row.completion === "done") return "enabled_complete";
+  if (row.enabledPersisted) return "enabled_semantic_pending";
   return "disabled";
 }
 
@@ -119,10 +127,6 @@ export function TableWhitelist() {
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
     queryFn: () => apiGet<{ connections: ConnectionInfo[] }>("/api/connections")
-  });
-  const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
   });
   const connections = connectionsQuery.data?.connections ?? [];
 
@@ -312,6 +316,48 @@ export function TableWhitelist() {
     setStatusTone(null);
   }
 
+  /**
+   * Action-column cell renderer. The action column must never mix in-page
+   * state toggles with cross-module navigation; enable / disable is owned
+   * exclusively by the row checkbox. Draft states always render 待保存.
+   */
+  function renderActionCell(status: WhitelistStatus, row: WhitelistTableRow) {
+    if (status === "draft_enable" || status === "draft_disable") {
+      return (
+        <span
+          className="text-xs text-fg-muted notranslate"
+          translate="no"
+          data-testid="whitelist-action-draft"
+        >
+          待保存
+        </span>
+      );
+    }
+    const target = `/sources/${encodeURIComponent(row.connectionId)}/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`;
+    const label =
+      status === "enabled_complete"
+        ? "查看语义 ↗"
+        : status === "enabled_semantic_pending"
+          ? "编辑语义 ↗"
+          : "查看字段 ↗";
+    const testId =
+      status === "enabled_complete"
+        ? "whitelist-action-view"
+        : status === "enabled_semantic_pending"
+          ? "whitelist-action-edit"
+          : "whitelist-action-fields";
+    return (
+      <Link
+        className="pl-inline-link text-xs notranslate"
+        to={target}
+        data-testid={testId}
+        translate="no"
+      >
+        {label}
+      </Link>
+    );
+  }
+
   function toggleDetails(key: string) {
     setOpenDetails((prev) => ({ ...prev, [key]: !prev[key] }));
   }
@@ -367,18 +413,16 @@ export function TableWhitelist() {
       }
       return results;
     },
-    onSuccess: (results) => {
+    onSuccess: async (results) => {
       const allWritten = results.every((r) => r.write.written);
-      if (allWritten) {
-        toast.success("启用表范围已保存");
-        setStatusMessage("启用表范围已保存。保存不会自动刷新本地目录。");
-        setStatusTone("success");
-      } else {
+      if (!allWritten) {
         toast.error("启用表范围保存未完成，请重试。");
         setStatusMessage("启用表范围保存未完成");
         setStatusTone("danger");
+        return;
       }
-      // Sync drafts to the just-persisted state for the changed connections
+
+      // Sync drafts to the just-persisted state for the changed connections.
       setDraftByConnection((prev) => {
         const next = { ...prev };
         for (const r of results) delete next[r.connId];
@@ -390,6 +434,35 @@ export function TableWhitelist() {
       for (const r of results) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(r.connId) });
       }
+
+      // M45: auto-reload local catalog after save so the user never sees a
+      // stale "保存不会自动刷新本地目录" warning with no follow-up.
+      toast.success("启用表范围已保存");
+      setStatusMessage("启用表范围已保存，正在刷新本地目录...");
+      setStatusTone("success");
+      const reloadErrors: string[] = [];
+      for (const { connId } of results) {
+        try {
+          await apiPost<{ tables: number; enabledTables: number; warnings: unknown[] }>(
+            "/api/catalog/reload",
+            { connectionId: connId }
+          );
+        } catch (err) {
+          reloadErrors.push(
+            `${connId}: ${err instanceof Error ? err.message : "未知错误"}`
+          );
+        }
+      }
+      if (reloadErrors.length === 0) {
+        setStatusMessage("启用表范围已保存，本地目录已刷新。");
+        setStatusTone("success");
+      } else {
+        setStatusMessage(
+          `启用表范围已保存；本地目录刷新失败，请重试。${reloadErrors.join(" / ")}`
+        );
+        setStatusTone("danger");
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
     },
     onError: (err) => {
       toast.error(`保存失败：${err instanceof Error ? err.message : "未知错误"}`);
@@ -408,7 +481,9 @@ export function TableWhitelist() {
   }
 
   return (
-    <div className="pl-page-stack">
+    <div
+      className={`pl-page-stack${diffStats.isDirty ? " pl-page-stack--safe-bottom" : ""}`}
+    >
       <PageHeader
         title="启用表范围"
         description={
@@ -416,8 +491,28 @@ export function TableWhitelist() {
             维护进入语义层的表范围，保存后写入 <code>ktx.yaml</code> 的 <code>enabled_tables</code> 字段。
           </>
         }
-        badges={
-          projectQuery.data ? <span>{projectQuery.data.root}</span> : null
+        actions={
+          connections.length > 0 ? (
+            <CatalogReloadButton
+              connectionId={toolbarReloadConnId}
+              schema={toolbarReloadSchema}
+              label="刷新本地目录"
+              variant="secondary"
+              testId="whitelist-reload-catalog"
+              showCompletionLabel={false}
+              showInlineResult={false}
+              onReloadComplete={(run) => {
+                toast.success(catalogReloadToastSummary(run));
+                setStatusMessage(catalogReloadBannerSummary(run));
+                setStatusTone(run.warnings.length > 0 ? "warning" : "success");
+              }}
+              onReloadError={(error) => {
+                toast.error(`本地目录刷新失败：${error.message}`);
+                setStatusMessage(`本地目录刷新失败：${error.message}`);
+                setStatusTone("danger");
+              }}
+            />
+          ) : null
         }
       />
 
@@ -429,10 +524,10 @@ export function TableWhitelist() {
         {connections.length > 0 && (
           <div className="pl-whitelist-toolbar" role="toolbar" aria-label="启用表范围工具栏">
             <div className="pl-whitelist-filter-area" data-testid="pl-whitelist-filter-area">
-              <label className="grid gap-1.5 text-sm">
+              <label className="grid gap-1.5 text-sm pl-whitelist-search">
                 <span>搜索</span>
                 <input
-                  className="pl-input"
+                  className="pl-input pl-whitelist-search-input"
                   placeholder="搜索表名/描述..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -459,55 +554,58 @@ export function TableWhitelist() {
                 </select>
               </label>
             </div>
-            <div className="pl-whitelist-ops-area" data-testid="pl-whitelist-ops-area">
-              <span className="pl-whitelist-selection-summary" aria-live="polite">
+            <div className="pl-whitelist-toolbar-actions" data-testid="pl-whitelist-toolbar-actions">
+              <span
+                className="pl-whitelist-selection-summary"
+                aria-live="polite"
+                data-testid="pl-whitelist-selection-summary"
+              >
                 已选 {visibleChecked}/{visibleTotal} 张表
               </span>
-              <button
-                type="button"
-                className="pl-inline-link pl-inline-link--quiet"
-                onClick={selectAllVisible}
-                disabled={visibleTotal === 0}
-              >
-                全选
-              </button>
-              <button
-                type="button"
-                className="pl-inline-link pl-inline-link--quiet"
-                onClick={invertVisible}
-                disabled={visibleTotal === 0}
-              >
-                反选
-              </button>
-              <CatalogReloadButton
-                connectionId={toolbarReloadConnId}
-                schema={toolbarReloadSchema}
-                label="刷新本地目录"
-                variant="secondary"
-                testId="whitelist-reload-catalog"
-                showCompletionLabel={false}
-                showInlineResult={false}
-                onReloadComplete={(run) => {
-                  toast.success(catalogReloadToastSummary(run));
-                  setStatusMessage(catalogReloadBannerSummary(run));
-                  setStatusTone(run.warnings.length > 0 ? "warning" : "success");
-                }}
-                onReloadError={(error) => {
-                  toast.error(`本地目录刷新失败：${error.message}`);
-                  setStatusMessage(`本地目录刷新失败：${error.message}`);
-                  setStatusTone("danger");
-                }}
-              />
+              {visibleTotal > 0 ? (
+                <details className="pl-whitelist-batch-menu" data-testid="whitelist-batch-menu">
+                  <summary
+                    className="pl-btn pl-btn--secondary pl-btn--sm pl-whitelist-batch-summary"
+                    data-testid="whitelist-batch-menu-trigger"
+                    translate="no"
+                  >
+                    批量操作
+                  </summary>
+                  <div
+                    className="pl-whitelist-batch-menu-panel"
+                    role="menu"
+                    data-testid="whitelist-batch-menu-panel"
+                  >
+                    <button
+                      type="button"
+                      className="pl-whitelist-batch-link"
+                      onClick={selectAllVisible}
+                      role="menuitem"
+                      data-testid="whitelist-select-all"
+                      translate="no"
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      className="pl-whitelist-batch-link"
+                      onClick={invertVisible}
+                      role="menuitem"
+                      data-testid="whitelist-invert"
+                      translate="no"
+                    >
+                      反选
+                    </button>
+                  </div>
+                </details>
+              ) : null}
             </div>
           </div>
         )}
 
-      {visibleGroups.map(({ conn, schema, rows }) => (
-        <section key={`${conn.id}-${schema}`} className="pl-table-group mt-4">
-          <div className="pl-table-group-heading notranslate" translate="no">
-            连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
-          </div>
-          <table className="pl-data-table">
+      {visibleGroups.length > 0 && (
+        <div className="pl-table-wrapper mt-4">
+          <table className="pl-data-table" data-testid="pl-whitelist-table">
             <thead>
               <tr>
                 <th>选择</th>
@@ -517,58 +615,56 @@ export function TableWhitelist() {
                 <th>动作</th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map((row) => {
-                const status = whitelistStatus(row);
-                return (
-                  <tr
-                    key={`${row.connectionId}-${row.qualifiedName}`}
-                    data-testid={`whitelist-row-${row.qualifiedName}`}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={row.enabledDraft}
-                        onChange={() => toggleRow(row)}
-                        aria-label={`选择 ${row.table}`}
-                      />
-                    </td>
-                    <td>
-                      <span className="font-medium notranslate" translate="no">{row.table}</span>
-                    </td>
-                    <td>
-                      {row.columnCount !== undefined ? `${row.columnCount} 个` : "-"}
-                    </td>
-                    <td>
-                      <span className={STATUS_CLASS[status]}>{STATUS_LABELS[status]}</span>
-                    </td>
-                    <td>
-                      {status === "included" || status === "semantic_pending" ? (
-                        <Link
-                          className="pl-inline-link text-xs"
-                          to={`/sources/${encodeURIComponent(row.connectionId)}/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`}
-                        >
-                          查看语义
-                        </Link>
-                      ) : status === "disabled" ? (
-                        <button
-                          type="button"
-                          className="pl-btn pl-btn--ghost pl-btn--sm"
-                          onClick={() => toggleRow(row)}
-                        >
-                          加入白名单
-                        </button>
-                      ) : status === "pending" ? (
-                        <span className="text-xs text-fg-muted">待保存</span>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
+            {visibleGroups.map(({ conn, schema, rows }) => (
+              <tbody
+                key={`${conn.id}-${schema}`}
+                data-testid={`whitelist-group-${conn.id}-${schema}`}
+              >
+                <tr className="pl-table-group-row">
+                  <td colSpan={5}>
+                    <span className="notranslate" translate="no">
+                      连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
+                    </span>
+                    <span className="pl-table-group-row-count notranslate" translate="no">
+                      （共 {rows.length} 张表）
+                    </span>
+                  </td>
+                </tr>
+                {rows.map((row) => {
+                  const status = whitelistStatus(row);
+                  return (
+                    <tr
+                      key={`${row.connectionId}-${row.qualifiedName}`}
+                      data-testid={`whitelist-row-${row.qualifiedName}`}
+                    >
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={row.enabledDraft}
+                          onChange={() => toggleRow(row)}
+                          aria-label={`选择 ${row.table}`}
+                        />
+                      </td>
+                      <td>
+                        <span className="font-medium notranslate" translate="no">{row.table}</span>
+                      </td>
+                      <td>
+                        {row.columnCount !== undefined ? `${row.columnCount} 个` : "-"}
+                      </td>
+                      <td>
+                        <span className={STATUS_CLASS[status]}>{STATUS_LABELS[status]}</span>
+                      </td>
+                      <td>
+                        {renderActionCell(status, row)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            ))}
           </table>
-        </section>
-      ))}
+        </div>
+      )}
 
       {configuredSchemasWithoutTables.map(({ conn, schema }) => {
         const schemaManifestPath = `semantic-layer/${conn.id}/_schema/${schema}.yaml`;
@@ -616,7 +712,7 @@ export function TableWhitelist() {
                   translate="no"
                   data-testid={`whitelist-missing-manifest-details-${conn.id}-${schema}`}
                 >
-                  白名单只读取本地 <code className="notranslate" translate="no">YAML</code> 资产。刷新本地目录不会连接数据库，也不会生成新的 Manifest。
+                  启用表范围只读取本地 <code className="notranslate" translate="no">YAML</code> 资产。刷新本地目录不会连接数据库，也不会生成新的 Manifest。
                 </p>
               ) : null}
               <div className="pl-missing-manifest-actions">
@@ -654,7 +750,7 @@ export function TableWhitelist() {
 
       {connections.length > 0 && visibleGroups.length === 0 && configuredSchemasWithoutTables.length === 0 && (
         <div className="pl-empty-state mt-4">
-          当前筛选条件下没有可加入白名单的表。
+          当前筛选条件下没有可启用的表。
         </div>
       )}
       </section>
@@ -678,15 +774,15 @@ export function TableWhitelist() {
 
       {diffStats.isDirty && (
         <div
-          className="pl-floating-action-bar"
+          className="pl-floating-dock"
           role="region"
-          aria-label="白名单变更操作"
+          aria-label="启用表范围变更操作"
           data-testid="whitelist-floating-bar"
         >
-          <div className="pl-floating-action-bar-text notranslate" translate="no">
+          <div className="pl-floating-dock-text notranslate" translate="no">
             已修改 {changedTableCount} 张表，尚未写入 ktx.yaml
             <span className="block text-xs font-normal text-fg-muted notranslate" translate="no">
-              新增 {diffStats.added} 张表 / 移除 {diffStats.removed} 张表，保存不会自动重载 Catalog。
+              新增 {diffStats.added} 张表 / 移除 {diffStats.removed} 张表，保存成功后会自动刷新本地目录。
             </span>
             {saveMutation.isPending && (
               <span className="block text-xs font-normal text-fg-muted notranslate" translate="no">
@@ -749,7 +845,7 @@ export function TableWhitelist() {
                 <section className="pl-preview-section" key={connId}>
                   <h3 className="text-sm font-semibold notranslate" translate="no">Connection: {connId}</h3>
                   <p className="text-sm notranslate" translate="no">
-                    enabled_tables: {preview.oldEnabledTables.length} -&gt;{" "}
+                    启用表范围：{preview.oldEnabledTables.length} -&gt;{" "}
                     {preview.newEnabledTables.length}
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -776,7 +872,12 @@ export function TableWhitelist() {
                       </span>
                     ))}
                   </div>
-                  <DiffViewer diff={preview.diff} />
+                  <details className="pl-preview-diff" data-testid={`preview-diff-${connId}`}>
+                    <summary className="text-xs font-medium text-fg-muted cursor-pointer">
+                      完整 YAML diff
+                    </summary>
+                    <DiffViewer diff={preview.diff} />
+                  </details>
                 </section>
               ))}
             </div>

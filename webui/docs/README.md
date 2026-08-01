@@ -35,6 +35,7 @@
 | [40-lucy-webui-positioning-control-plane.md](40-lucy-webui-positioning-control-plane.md) | Lucy WebUI 品牌定位升级到 Data Agent Ops Control Plane：品牌区副标题、术语标准 v0.2、过期设计 spec 备注与测试断言 | 产品 / 前端 / 文档 |
 | [41-system-overview-enterprise-ops-polish-spec.md](41-system-overview-enterprise-ops-polish-spec.md) | 系统概览企业级运维控制台 polish：canonical `/overview`、顶栏上下文、待处理事项治理、Metric-first 快照与 MCP 配置 Drawer | 产品 / UX / 前端 / Accessibility |
 | [44-connection-overview-productization-spec.md](44-connection-overview-productization-spec.md) | 连接概览产品化改版 v0.2：移除冗余上下文、收敛卡片容器、刷新状态右移、Schema 表新增启用表数与术语降噪 | 产品 / UX / 前端 / Accessibility |
+| [47-table-whitelist-productization-followup-spec.md](47-table-whitelist-productization-followup-spec.md) | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 | 产品 / UX / API / 前端 |
 
 ## 与原 README 的关键校正
 

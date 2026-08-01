@@ -3,9 +3,9 @@ import { lstat, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
-import { parse, stringify } from "yaml";
+import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
-import { changedFiles, type SessionWrittenFile } from "./diff";
+import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
 import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
@@ -145,24 +145,110 @@ async function staticFilePath(urlPath: string): Promise<string> {
   return path.join(root, "index.html");
 }
 
-function makeDiff(oldText: string, newText: string): string {
-  const oldLines = oldText.split("\n");
-  const newLines = newText.split("\n");
-  const lines: string[] = [];
-  const maxLen = Math.max(oldLines.length, newLines.length);
-  for (let i = 0; i < maxLen; i += 1) {
-    const oldLine = oldLines[i];
-    const newLine = newLines[i];
-    if (oldLine === undefined) lines.push(`+${newLine}`);
-    else if (newLine === undefined) lines.push(`-${oldLine}`);
-    else if (oldLine !== newLine) {
-      lines.push(`-${oldLine}`);
-      lines.push(`+${newLine}`);
-    } else {
-      lines.push(` ${oldLine}`);
+/**
+ * Apply a local patch to a single connection's `enabled_tables` list while
+ * preserving every other connection, field, comment and quoting in the file.
+ *
+ * Previously the endpoint round-tripped through `parse() -> mutate -> stringify()`,
+ * which reordered keys and produced a large noisy diff for a 1-table change.
+ * This helper validates the structure with the YAML parser, then applies a
+ * line-level replacement to the target block so unrelated bytes stay untouched.
+ */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function lineIndent(line: string): number {
+  return line.match(/^ */)?.[0].length ?? 0;
+}
+
+function isStructuralYamlLine(line: string): boolean {
+  const trimmed = line.trim();
+  return Boolean(trimmed) && !trimmed.startsWith("#");
+}
+
+function findYamlBlockEnd(lines: string[], start: number, parentIndent: number): number {
+  for (let i = start; i < lines.length; i += 1) {
+    if (!isStructuralYamlLine(lines[i])) continue;
+    if (lineIndent(lines[i]) <= parentIndent) return i;
+  }
+  return lines.length;
+}
+
+function enabledTablesBlock(indent: number, enabledTables: string[]): string[] {
+  const pad = " ".repeat(indent);
+  if (enabledTables.length === 0) {
+    return [`${pad}enabled_tables: []`];
+  }
+  return [`${pad}enabled_tables:`, ...enabledTables.map((table) => `${pad}  - ${table}`)];
+}
+
+function patchConnectionEnabledTablesYaml(
+  yamlText: string,
+  connId: string,
+  newEnabledTables: string[]
+): { proposedYaml: string } {
+  const doc = parseDocument(yamlText, { keepSourceTokens: true });
+  const connections = doc.get("connections", true);
+  if (!connections || typeof connections !== "object") {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+  const connNode = connections.get(connId, true);
+  if (!connNode) {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+
+  const lines = yamlText.split("\n");
+  const connectionsLine = lines.findIndex((line) => /^(\s*)connections:\s*(?:#.*)?$/.test(line));
+  if (connectionsLine === -1) {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+
+  const connectionsIndent = lineIndent(lines[connectionsLine]);
+  const connectionsEnd = findYamlBlockEnd(lines, connectionsLine + 1, connectionsIndent);
+  const connPattern = new RegExp(`^(\\s*)${escapeRegExp(connId)}:\\s*(?:#.*)?$`);
+  let connLine = -1;
+  for (let i = connectionsLine + 1; i < connectionsEnd; i += 1) {
+    if (connPattern.test(lines[i]) && lineIndent(lines[i]) > connectionsIndent) {
+      connLine = i;
+      break;
     }
   }
-  return lines.join("\n");
+  if (connLine === -1) {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+
+  const connIndent = lineIndent(lines[connLine]);
+  const connEnd = findYamlBlockEnd(lines, connLine + 1, connIndent);
+  let enabledTablesLine = -1;
+  for (let i = connLine + 1; i < connEnd; i += 1) {
+    if (/^\s*enabled_tables:\s*(?:.*)?$/.test(lines[i]) && lineIndent(lines[i]) > connIndent) {
+      enabledTablesLine = i;
+      break;
+    }
+  }
+
+  if (enabledTablesLine === -1) {
+    const firstFieldLine = lines
+      .slice(connLine + 1, connEnd)
+      .find((line) => isStructuralYamlLine(line) && lineIndent(line) > connIndent);
+    const fieldIndent = firstFieldLine ? lineIndent(firstFieldLine) : connIndent + 2;
+    lines.splice(connEnd, 0, ...enabledTablesBlock(fieldIndent, newEnabledTables));
+    return { proposedYaml: lines.join("\n") };
+  }
+
+  const fieldIndent = lineIndent(lines[enabledTablesLine]);
+  const enabledTablesEnd = findYamlBlockEnd(lines, enabledTablesLine + 1, fieldIndent);
+  lines.splice(
+    enabledTablesLine,
+    enabledTablesEnd - enabledTablesLine,
+    ...enabledTablesBlock(fieldIndent, newEnabledTables)
+  );
+  return { proposedYaml: lines.join("\n") };
+}
+
+function makeDiff(oldText: string, newText: string): string {
+  return previewDiff(oldText, newText, "ktx.yaml");
 }
 
 function enabledTableError(code: string, message: string) {
@@ -506,8 +592,11 @@ export function buildServer() {
     const oldEnabledTables = Array.isArray(connections[connId].enabled_tables)
       ? connections[connId].enabled_tables.filter((item): item is string => typeof item === "string")
       : [];
-    connections[connId].enabled_tables = newEnabledTables;
-    const proposedYaml = stringify(config, { lineWidth: 0 });
+
+    // M45: local patch preserves order, comments and unknown
+    // fields in unrelated parts of ktx.yaml so the dry-run diff only shows
+    // the enabled_tables sequence change.
+    const { proposedYaml } = patchConnectionEnabledTablesYaml(yamlText, connId, newEnabledTables);
     const diff = makeDiff(yamlText, proposedYaml);
 
     if (dryRun) {

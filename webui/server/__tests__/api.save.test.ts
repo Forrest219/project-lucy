@@ -30,7 +30,24 @@ const schemaYaml = `tables:
           ai: Machine text.
     descriptions:
       ai: Demo table.
+  superstore_people:
+    table: dataforai.superstore_people
+    columns:
+      - name: id
+        type: number
+    descriptions:
+      ai: Demo people table.
 `;
+
+function expectNoUnrelatedEnabledTablesDiff(diff: string) {
+  expect(diff).not.toMatch(/^[+-]\s+(driver|host|schemas):/m);
+  expect(diff).not.toMatch(/^[+-]\s+other-pg:/m);
+  expect(diff).not.toMatch(/^[+-]\s+- public\.orders$/m);
+}
+
+function changedDiffBodyLines(diff: string): string[] {
+  return diff.split("\n").filter((line) => /^[+-](?![+-]{2})/.test(line));
+}
 
 async function makeProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-api-save-"));
@@ -108,6 +125,7 @@ describe("source save API", () => {
     });
     await app.close();
   });
+
 });
 
 describe("connection enabled_tables API", () => {
@@ -175,6 +193,108 @@ describe("connection enabled_tables API", () => {
     expect(response.body.data.written).toBe(true);
     expect(response.body.data.auditId).toBeTruthy();
     await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.not.toContain("dataforai.superstore_orders");
+    await app.close();
+  });
+
+  // M45: enabled_tables patch must be AST-local so dry-run diff never
+  // churns unrelated connections, fields or comments.
+  it("emits a minimal diff for adding a single enabled table", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `# header comment
+connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+  other-pg:
+    driver: postgres
+    enabled_tables:
+      - public.orders
+schemas:
+  - mysql-aliyun
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+      .expect(200);
+
+    const diff = response.body.data.diff as string;
+    // The actual structural change must be a single added enabled_table line.
+    expect(diff).toContain("+      - dataforai.superstore_people");
+    expectNoUnrelatedEnabledTablesDiff(diff);
+    expect(changedDiffBodyLines(diff)).toEqual(["+      - dataforai.superstore_people"]);
+    await app.close();
+  });
+
+  it("emits a minimal diff for removing a single enabled table", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    host: example.com
+    schemas: ['dataforai']
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_people
+  other-pg:
+    driver: postgres
+    enabled_tables:
+      - public.orders
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: ["dataforai.superstore_orders"]
+      })
+      .expect(200);
+
+    const diff = response.body.data.diff as string;
+    expect(diff).toContain("-      - dataforai.superstore_people");
+    expectNoUnrelatedEnabledTablesDiff(diff);
+    expect(changedDiffBodyLines(diff)).toEqual(["-      - dataforai.superstore_people"]);
+    await app.close();
+  });
+
+  it("uses the same patch function for dryRun:true and dryRun:false", async () => {
+    await writeConnectionProject();
+    const app = buildServer();
+    await app.ready();
+
+    const dryRunResponse = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+      .expect(200);
+    const proposed = dryRunResponse.body.data.proposedYaml as string;
+
+    const writeResponse = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: false,
+        enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+      .expect(200);
+    expect(writeResponse.body.data.written).toBe(true);
+    const written = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+
+    // dryRun and write should produce the same body (modulo final newline).
+    expect(written.replace(/\s+$/g, "")).toBe(proposed.replace(/\s+$/g, ""));
     await app.close();
   });
 });
