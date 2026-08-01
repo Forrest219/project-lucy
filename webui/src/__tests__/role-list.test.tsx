@@ -93,6 +93,9 @@ describe("RoleList", () => {
     ]);
 
     renderRoleList();
+    expect(await screen.findByRole("heading", { name: "角色权限" })).toBeInTheDocument();
+    expect(screen.getByText("访问治理")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "角色配置" })).not.toBeInTheDocument();
     expect(await screen.findByText("analyst")).toBeInTheDocument();
     expect(screen.getByText("wiki_only")).toBeInTheDocument();
     expect(screen.getByText(/2\s*位 Agent 引用/)).toBeInTheDocument();

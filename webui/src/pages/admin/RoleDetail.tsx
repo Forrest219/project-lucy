@@ -427,8 +427,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         }
         breadcrumbs={
           mode === "create"
-            ? ["访问治理", "角色配置", "新建 Role"]
-            : ["访问治理", "角色配置", roleId]
+            ? ["访问治理", "角色权限", "新建 Role"]
+            : ["访问治理", "角色权限", roleId]
         }
         description={
           <>

@@ -124,8 +124,8 @@ export function CaseEditor() {
   return (
     <div className="grid gap-6">
       <PageHeader
-        title={isNew ? "新建 Case" : form.id}
-        breadcrumbs={["质量评测", "Case 管理", domain, isNew ? "新建" : form.id]}
+        title={isNew ? "新建评测用例" : form.id}
+        breadcrumbs={["质量评测", "评测用例", domain, isNew ? "新建" : form.id]}
         badges={
           <>
             <span>{domain}</span>

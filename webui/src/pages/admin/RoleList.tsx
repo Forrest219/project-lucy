@@ -165,8 +165,8 @@ export function RoleList() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="角色配置"
-        breadcrumbs={["访问治理", "角色配置"]}
+        title="角色权限"
+        breadcrumbs={["访问治理", "角色权限"]}
         description="管理 access.yaml 中的 role 模板：新建、编辑、删除、复制。每个 role 决定 Agent 可访问的数据源和 MCP 工具。"
         badges={
           <>
