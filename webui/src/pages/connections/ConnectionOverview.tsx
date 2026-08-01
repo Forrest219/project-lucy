@@ -447,14 +447,16 @@ export function ConnectionOverview() {
                     <strong className="notranslate" translate="no">{conn.id}</strong>
                   </div>
                   <div className="pl-connection-card-meta notranslate" translate="no">
-                    <span
-                      className={`pl-connection-readonly-status pl-connection-readonly-status--${readOnly.tone}`}
-                      translate="no"
-                      title={readOnly.title}
-                      data-testid={`connection-readonly-${conn.id}`}
-                    >
-                      {readOnly.label}
-                    </span>
+                    {readOnly.tone === "risk" ? (
+                      <span
+                        className={`pl-connection-readonly-status pl-connection-readonly-status--${readOnly.tone}`}
+                        translate="no"
+                        title={readOnly.title}
+                        data-testid={`connection-readonly-${conn.id}`}
+                      >
+                        {readOnly.label}
+                      </span>
+                    ) : null}
                     {headerTimestamp ? (
                       <span
                         className={`pl-connection-last-reload pl-connection-last-reload--${lastRun?.status === "failed" ? "danger" : "muted"}`}
@@ -524,26 +526,23 @@ export function ConnectionOverview() {
                     </div>
                   ) : null}
 
-                  <div className="pl-schema-asset-heading">
-                    <span className="notranslate" translate="no">关联 Schema 资产列表</span>
-                  </div>
-	                  {conn.schemas.length === 0 ? (
-	                    <p className="text-sm text-fg-muted py-3 notranslate" translate="no">尚未配置 Schema。请先添加 Schema。</p>
-	                  ) : (
-	                    <table className="pl-schema-asset-table" data-testid={`schema-asset-table-${conn.id}`}>
-                        <colgroup>
-                          <col className="pl-schema-asset-col-schema" />
-                          <col className="pl-schema-asset-col-status" />
+                  {conn.schemas.length === 0 ? (
+                    <p className="text-sm text-fg-muted py-3 notranslate" translate="no">尚未配置 Schema。请先添加 Schema。</p>
+                  ) : (
+                    <table className="pl-schema-asset-table" data-testid={`schema-asset-table-${conn.id}`}>
+                      <colgroup>
+                        <col className="pl-schema-asset-col-schema" />
+                        <col className="pl-schema-asset-col-status" />
                           <col className="pl-schema-asset-col-local-count" />
-                          <col className="pl-schema-asset-col-enabled-count" />
-                          <col className="pl-schema-asset-col-action" />
-                        </colgroup>
-	                      <thead>
+                        <col className="pl-schema-asset-col-enabled-count" />
+                        <col className="pl-schema-asset-col-action" />
+                      </colgroup>
+                      <thead>
                         <tr>
                           <th className="notranslate" translate="no">Schema</th>
                           <th className="notranslate" translate="no">Manifest 状态</th>
-                          <th>本地表数</th>
-                          <th>启用表数</th>
+                          <th className="pl-schema-asset-table-num-head">本地表数</th>
+                          <th className="pl-schema-asset-table-num-head">启用表数</th>
                           <th>操作</th>
                         </tr>
                       </thead>
@@ -575,30 +574,43 @@ export function ConnectionOverview() {
                                   className="pl-schema-asset-table-num"
                                   data-testid={`schema-enabled-count-${conn.id}-${schema}`}
                                 >
-                                  {enabledTableCount}
+                                  {enabledTableCount} 张表
                                 </td>
-                                <td>
-                                  {hasManifest ? (
-                                    <Link
-                                      className="pl-row-action-link"
-                                      to={`/connections/whitelist?schema=${encodeURIComponent(schema)}`}
-                                      data-testid={`schema-whitelist-${conn.id}-${schema}`}
-                                    >
-                                      维护启用范围
-                                    </Link>
-                                  ) : (
-                                    <CatalogAssetUploadButton
-                                      connectionId={conn.id}
-                                      schema={schema}
-                                      label="上传 Manifest"
-                                      variant="link"
-                                      size="sm"
-                                      testId={`upload-yaml-${conn.id}-${schema}`}
-                                    />
-                                  )}
+                                <td className="pl-schema-asset-table-action">
+                                  <div className="pl-schema-asset-actions">
+                                    {hasManifest ? (
+                                      <Link
+                                        className="pl-row-action-link"
+                                        to={`/connections/whitelist?schema=${encodeURIComponent(schema)}`}
+                                        data-testid={`schema-whitelist-${conn.id}-${schema}`}
+                                      >
+                                        维护启用范围
+                                      </Link>
+                                    ) : (
+                                      <CatalogAssetUploadButton
+                                        connectionId={conn.id}
+                                        schema={schema}
+                                        label="上传 Manifest"
+                                        variant="link"
+                                        size="sm"
+                                        testId={`upload-yaml-${conn.id}-${schema}`}
+                                      />
+                                    )}
+                                    {warning ? (
+                                      <button
+                                        type="button"
+                                        className="pl-row-action-link pl-row-action-link--muted"
+                                        aria-expanded={expanded}
+                                        onClick={() => toggleWarning(key)}
+                                        data-testid={`catalog-reload-warning-toggle-${conn.id}-${schema}`}
+                                      >
+                                        {expanded ? "收起详情" : "查看详情"}
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 </td>
                               </tr>
-                              {warning ? (
+                              {warning && expanded ? (
                                 <tr
                                   className="pl-schema-warning-subrow notranslate"
                                   data-testid={`catalog-reload-warning-${conn.id}-${schema}`}
@@ -621,8 +633,8 @@ export function ConnectionOverview() {
                                           aria-expanded={expanded}
                                           onClick={() => toggleWarning(key)}
                                         >
-                                          <span aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
-                                          {expanded ? "收起详情" : "展开详情"}
+                                          <span aria-hidden="true">⌃</span>
+                                          收起详情
                                         </button>
                                         <button
                                           type="button"
@@ -674,21 +686,21 @@ export function ConnectionOverview() {
                       </tbody>
                     </table>
                   )}
-	                </div>
-	                <div className="pl-connection-card-footer">
-                    {showCatalogRunStatus ? (
-                      <div
-                        className={`pl-catalog-reload-status pl-catalog-reload-status--${catalogState.tone} notranslate`}
+                </div>
+                <div className="pl-connection-card-footer">
+                  {showCatalogRunStatus ? (
+                    <div
+                      className={`pl-catalog-reload-status pl-catalog-reload-status--${catalogState.tone} notranslate`}
                         data-testid={`catalog-reload-status-${conn.id}`}
                         role={catalogState.tone === "danger" ? "alert" : "status"}
                         translate="no"
                       >
                         <span className="pl-catalog-reload-status-main">{catalogState.label}</span>
-                        {catalogState.detail ? <span>{catalogState.detail}</span> : null}
-                      </div>
-                    ) : null}
-	                  <div
-	                    className="pl-connection-card-schema-actions"
+                      {catalogState.detail ? <span>{catalogState.detail}</span> : null}
+                    </div>
+                  ) : null}
+                  <div
+                    className="pl-connection-card-schema-actions"
                     data-testid={`connection-card-schema-actions-${conn.id}`}
                   >
                     <button
@@ -725,6 +737,6 @@ export function ConnectionOverview() {
           onClose={() => setAddTarget(null)}
         />
       )}
-	    </div>
-	  );
-	}
+    </div>
+  );
+}

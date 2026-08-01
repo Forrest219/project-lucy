@@ -332,13 +332,9 @@
   .pl-metric-value--danger { color: var(--token-color-danger-strong); }
   .pl-metric-card--success { @apply border-success-strong bg-success-soft; }
   .pl-metric-card--success strong { @apply text-success-strong; }
-  /* M44: soften warning tone — the overview's Catalog 状态 is rarely a hard
-     error, so the card keeps its neutral shell with a top amber rail and
-     subtle warning fill to stay visually subordinate to danger states. */
-  .pl-metric-card--warning {
-    @apply border-warning-soft bg-warning-soft/40;
-    border-top: 2px solid var(--token-color-warning-strong);
-  }
+  /* Warning metrics keep the same card shell as neutral metrics; only the
+     headline value carries the warning emphasis. */
+  .pl-metric-card--warning { @apply border-border-default bg-bg-subtle; }
   .pl-metric-card--warning strong { @apply text-warning-strong; }
   .pl-metric-card--danger { @apply border-danger-strong bg-danger-soft; }
   .pl-metric-card--danger strong { @apply text-danger-strong; }
@@ -551,10 +547,9 @@
   .pl-schema-list { @apply grid gap-1 list-none p-0 m-0; }
   .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border-0 bg-bg-subtle px-2 py-1; }
   .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
-  .pl-schema-asset-heading { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-schema-asset-table { @apply w-full border-collapse text-sm; table-layout: fixed; }
   .pl-schema-asset-table th { @apply border-b border-border-default px-3 py-2 text-left text-xs font-semibold text-fg-muted; }
-  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-body; }
+  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-2 align-middle leading-5 text-fg-body; }
   .pl-schema-asset-table tbody tr:last-child td { @apply border-b-0; }
   .pl-schema-asset-table code { @apply font-mono text-sm text-fg-default; }
   /* M44: stable column widths so Schema / Manifest 状态 / 本地表数 /
@@ -564,7 +559,12 @@
   .pl-schema-asset-col-local-count { width: 16%; }
   .pl-schema-asset-col-enabled-count { width: 16%; }
   .pl-schema-asset-col-action { width: 16%; }
+  .pl-schema-asset-table-num-head { @apply text-right; }
   .pl-schema-asset-table-num { @apply text-right tabular-nums whitespace-nowrap; }
+  .pl-schema-asset-table-action { @apply whitespace-nowrap; }
+  .pl-schema-asset-actions { @apply flex flex-wrap items-center gap-x-3 gap-y-1; }
+  .pl-schema-asset-table .pl-row-action-link { @apply font-medium text-primary; }
+  .pl-schema-asset-table .pl-row-action-link--muted { @apply text-fg-muted; }
   .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
   .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }

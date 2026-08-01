@@ -249,14 +249,15 @@ L1 PR Smoke 8 条（与 §10 用例矩阵对齐）：
 | Test ID / 角色 | 元素 | 出现位置 | 关键文案约束 |
 |---|---|---|---|
 | `connection-card-${conn.id}` | 连接卡片根节点 | ConnectionOverview | — |
-| `connection-readonly-${conn.id}` | `预期只读` 低权重提醒 | ConnectionOverview | 禁止 `Read-only expected` 露出 |
+| `connection-readonly-${conn.id}` | `未声明只读` 风险提醒 | ConnectionOverview | 仅 `readOnlyExpected === false` 时出现；禁止 `Read-only expected` 露出 |
 | `connection-kv-${conn.id}` | 连接属性 KeyValue 网格 | ConnectionOverview | 必含 `Host / Database`；不得逐卡出现 `配置文件 / 凭据来源` |
 | `connection-refresh-warning-${conn.id}` | 未刷新 Warning Banner | ConnectionOverview | 必含 `本地目录未刷新：尚未读取本地 YAML 资产配置。` |
 | `connection-refresh-warning-action-${conn.id}` | Banner `立即刷新` 按钮 | ConnectionOverview | 禁止 `↗` / `→` |
 | `connection-last-reload-${conn.id}` | Header 右侧上次刷新时间 | ConnectionOverview | 仅展示 `上次刷新：<timestamp>`，不得展示表数/提示数摘要 |
 | `catalog-reload-status-${conn.id}` | Catalog 刷新加载/失败状态 | ConnectionOverview | 仅用于 pending / error / 最近失败状态；健康成功态不出现 |
 | `schema-row-${conn.id}-${schema}` | Schema 表行 | ConnectionOverview | 状态 `已存在` / `缺失 Manifest` / `Manifest 解析失败` |
-| `schema-enabled-count-${conn.id}-${schema}` | Schema 启用表数 cell | ConnectionOverview | 数值来自该 Schema 下 `enabled_tables` 计数 |
+| `catalog-reload-warning-toggle-${conn.id}-${schema}` | Schema 警告详情开关 | ConnectionOverview | 默认 `查看详情` 且 `aria-expanded=false`；点击后变 `收起详情` |
+| `schema-enabled-count-${conn.id}-${schema}` | Schema 启用表数 cell | ConnectionOverview | 文案为 `<n> 张表`，数值来自该 Schema 下 `enabled_tables` 计数 |
 | `schema-whitelist-${conn.id}-${schema}` | Schema 行内启用范围动作 | ConnectionOverview | 必含 `维护启用范围`；禁止 `维护白名单` |
 | `add-schema-${conn.id}` | `+ 添加 Schema` 按钮 | ConnectionOverview | 禁止 `添加架构` / `添加模式` |
 | `catalog-reload-${conn.id}` | `刷新本地目录` 按钮 | ConnectionOverview | 禁止 `重新加载资产` / `触发 ingest` |
@@ -638,7 +639,7 @@ E2E-<模块>-<序号>[-<变体>]
 | ID | 核心断言（节选） |
 |---|---|
 | E2E-PUB-02 | 访问 `/review` → `expect(page).toHaveURL(/\/publish\/workbench$/)` |
-| E2E-CON-01 | `connection-readonly-mysql-aliyun` 文案 `预期只读`；Header 右侧无 `表白名单` `连通测试` 跨页按钮（v0.4 起原 header 跨页按钮上提为侧栏 Link） |
+| E2E-CON-01 | 健康只读连接不渲染 `connection-readonly-mysql-aliyun`；Header 右侧无 `表白名单` `连通测试` 跨页按钮（v0.4 起原 header 跨页按钮上提为侧栏 Link） |
 | E2E-CON-03 | `catalog-upload-input` 拖入 `finance_mart.yaml` → `校验` → `上传` → Toast `已上传 finance_mart.yaml` |
 | E2E-WIKI-01 | `/wiki` 默认 `wiki-mode-read`；`textarea` 计数 0；Tree 节点主标签为文档标题 |
 | E2E-WIKI-03 | `sl-ref-badge-mysql-aliyun-dataforai-superstore_orders` 点击 → URL 跳 `/sources/...`；反向跳转回 `/wiki?key=...` |

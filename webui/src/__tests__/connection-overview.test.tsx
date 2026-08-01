@@ -271,7 +271,8 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    expect(await screen.findByText("关联 Schema 资产列表")).toBeInTheDocument();
+    expect(await screen.findByTestId("schema-asset-table-mysql-aliyun")).toBeInTheDocument();
+    expect(screen.queryByText("关联 Schema 资产列表")).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Schema" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "本地表数" })).toBeInTheDocument();
@@ -298,8 +299,8 @@ describe("ConnectionOverview", () => {
       "pl-btn--secondary"
     );
     expect(screen.queryByText("维护白名单")).not.toBeInTheDocument();
-    expect(screen.getByTestId("schema-enabled-count-mysql-aliyun-dataforai")).toHaveTextContent("1");
-    expect(screen.getByTestId("schema-enabled-count-mysql-aliyun-openclaw_db")).toHaveTextContent("0");
+    expect(screen.getByTestId("schema-enabled-count-mysql-aliyun-dataforai")).toHaveTextContent("1 张表");
+    expect(screen.getByTestId("schema-enabled-count-mysql-aliyun-openclaw_db")).toHaveTextContent("0 张表");
 
     expect(screen.getByTestId("schema-asset-status-mysql-aliyun-openclaw_db")).toHaveTextContent(
       "缺失 Manifest"
@@ -313,6 +314,10 @@ describe("ConnectionOverview", () => {
     );
     expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).toHaveTextContent("0 张表");
     expect(screen.getByTestId("upload-yaml-mysql-aliyun-openclaw_db")).toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-reload-warning-mysql-aliyun-openclaw_db")).not.toBeInTheDocument();
+    const warningToggle = screen.getByTestId("catalog-reload-warning-toggle-mysql-aliyun-openclaw_db");
+    expect(warningToggle).toHaveTextContent("查看详情");
+    fireEvent.click(warningToggle);
     const warningSubrow = screen.getByTestId("catalog-reload-warning-mysql-aliyun-openclaw_db");
     expect(warningSubrow.tagName).toBe("TR");
     expect(warningSubrow).toHaveTextContent("缺少 Manifest");
@@ -386,7 +391,8 @@ describe("ConnectionOverview", () => {
     expect(await screen.findByText("doris-r1")).toBeInTheDocument();
     expect(screen.getByTestId("engine-badge-doris-r1")).toHaveTextContent("Doris");
     expect(screen.getByText("10.0.0.8:9030")).toBeInTheDocument();
-    expect(screen.getByTestId("connection-card-doris-r1")).toHaveTextContent("预期只读");
+    expect(screen.getByTestId("connection-card-doris-r1")).not.toHaveTextContent("预期只读");
+    expect(screen.queryByTestId("connection-readonly-doris-r1")).not.toBeInTheDocument();
     expect(screen.getByTestId("connection-card-doris-r1")).not.toHaveTextContent("Read-only expected");
   });
 
@@ -416,7 +422,8 @@ describe("ConnectionOverview", () => {
     expect(screen.getByTestId("engine-badge-starrocks-r1")).toHaveTextContent("StarRocks");
     expect(screen.getByText("10.0.0.9:9030")).toBeInTheDocument();
     const card = screen.getByTestId("connection-card-starrocks-r1");
-    expect(card).toHaveTextContent("预期只读");
+    expect(card).not.toHaveTextContent("预期只读");
+    expect(within(card).queryByTestId("connection-readonly-starrocks-r1")).not.toBeInTheDocument();
     expect(card).not.toHaveTextContent("Read-only expected");
   });
 
@@ -713,27 +720,32 @@ describe("ConnectionOverview", () => {
     expect(within(card).getByTestId("catalog-reload-demo-mysql")).toHaveTextContent("刷新本地目录");
 
     const table = within(card).getByTestId("schema-asset-table-demo-mysql");
-    const warning = within(card).getByTestId("catalog-reload-warning-demo-mysql-openclaw_db");
-    expect(table).toContainElement(warning);
-    expect(within(card).getByText("关联 Schema 资产列表")).toBeInTheDocument();
+    expect(within(card).queryByText("关联 Schema 资产列表")).not.toBeInTheDocument();
     expect(within(card).getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
     expect(within(card).getByTestId("schema-asset-status-demo-mysql-openclaw_db")).toHaveTextContent(
       "缺失 Manifest"
     );
     expect(within(card).getByTestId("schema-row-demo-mysql-openclaw_db")).toHaveTextContent("0 张表");
+    expect(within(card).getByTestId("schema-enabled-count-demo-mysql-openclaw_db")).toHaveTextContent("0 张表");
+    expect(within(card).queryByTestId("catalog-reload-warning-demo-mysql-openclaw_db")).not.toBeInTheDocument();
+    const detailsButton = within(card).getByTestId("catalog-reload-warning-toggle-demo-mysql-openclaw_db");
+    expect(detailsButton).toHaveTextContent("查看详情");
+    expect(detailsButton).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(detailsButton);
+    expect(detailsButton).toHaveTextContent("收起详情");
+    expect(detailsButton).toHaveAttribute("aria-expanded", "true");
+    const warning = within(card).getByTestId("catalog-reload-warning-demo-mysql-openclaw_db");
+    expect(table).toContainElement(warning);
     expect(warning).toHaveTextContent("缺少 Manifest：openclaw_db");
     expect(warning).toHaveTextContent("semantic-layer/demo-mysql/_schema/openclaw_db.yaml");
 
-    const detailsButton = within(warning).getByRole("button", { name: "展开详情" });
-    expect(detailsButton).toHaveClass("pl-btn", "pl-btn--ghost", "pl-btn--sm");
+    const collapseButton = within(warning).getByRole("button", { name: "收起详情" });
+    expect(collapseButton).toHaveClass("pl-btn", "pl-btn--ghost", "pl-btn--sm");
     const copyButton = within(warning).getByRole("button", { name: "复制路径" });
     expect(copyButton).toHaveClass("pl-btn", "pl-btn--ghost", "pl-btn--sm");
     const recheckButton = within(warning).getByTestId("catalog-reload-recheck-demo-mysql-openclaw_db");
     expect(recheckButton).toHaveClass("pl-btn", "pl-btn--secondary", "pl-btn--sm");
     expect(recheckButton).toHaveTextContent("重新检查");
-    expect(detailsButton).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(detailsButton);
-    expect(detailsButton).toHaveAttribute("aria-expanded", "true");
     expect(warning).toHaveTextContent("missing_manifest");
     expect(warning).toHaveTextContent("刷新本地目录只读取本地 YAML，不会连接数据库。");
     expect(screen.queryByText("有提示")).not.toBeInTheDocument();

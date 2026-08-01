@@ -40,7 +40,7 @@
 |---|---|---|
 | `connection-metric` | 顶部指标卡 | — |
 | `connection-card-${conn.id}` | 连接卡片根 | — |
-| `connection-readonly-${conn.id}` | `预期只读` 低权重提醒 | 禁止 `Read-only expected` 露出 |
+| `connection-readonly-${conn.id}` | `未声明只读` 风险提醒 | 仅 `readOnlyExpected === false` 时出现；禁止 `Read-only expected` 露出 |
 | `connection-kv-${conn.id}` | 卡片 KeyValue 网格 | 必含 `Host / Database`；不得逐卡出现 `配置文件 / 凭据来源` |
 | `connection-refresh-warning-${conn.id}` | 未刷新 amber Banner | 文案 `本地目录未刷新：尚未读取本地 YAML 资产配置。` + `立即刷新` |
 | `connection-refresh-warning-action-${conn.id}` | Banner `立即刷新` 按钮 | 必含 `立即刷新`，无 `↗` |
@@ -48,12 +48,13 @@
 | `engine-badge-${conn.id}` | 驱动 Badge | — |
 | `connection-last-reload-${conn.id}` | Header 右侧上次刷新时间 | 仅展示 `上次刷新：<timestamp>`，不得展示表数/提示数摘要 |
 | `catalog-reload-status-${conn.id}` | Catalog 刷新加载/失败状态 | 仅用于 pending / error / 最近失败状态；健康成功态不出现 |
-| `catalog-reload-warning-${conn.id}-${schema}` | Schema Catalog 警告 | — |
+| `catalog-reload-warning-toggle-${conn.id}-${schema}` | Schema 警告详情开关 | 默认 `查看详情` 且 `aria-expanded=false`；点击后变 `收起详情` |
+| `catalog-reload-warning-${conn.id}-${schema}` | Schema Catalog 警告详情行 | 默认不出现；展开后显示 |
 | `catalog-reload-warning-details-${conn.id}-${schema}` | 警告详情 | — |
 | `schema-asset-table-${conn.id}` | Schema 资产表 | 列：`Schema / Manifest 状态 / 本地表数 / 启用表数 / 操作` |
 | `schema-row-${conn.id}-${schema}` | Schema 行 | 状态枚举 `已存在` / `缺失 Manifest` / `解析失败` |
 | `schema-asset-status-${conn.id}-${schema}` | Schema Manifest 状态 cell | 必含 `已存在` / `缺失 Manifest` / `解析失败` 之一 |
-| `schema-enabled-count-${conn.id}-${schema}` | Schema 启用表数 cell | 数值来自该 Schema 下 `enabled_tables` 计数 |
+| `schema-enabled-count-${conn.id}-${schema}` | Schema 启用表数 cell | 文案为 `<n> 张表`，数值来自该 Schema 下 `enabled_tables` 计数 |
 | `schema-whitelist-${conn.id}-${schema}` | `维护启用范围` / `上传 Manifest` 上下文动作 | 必含 `维护启用范围` 或 `上传 Manifest`；不得出现 `维护白名单` |
 | `add-schema-${conn.id}` | `+ 添加 Schema` 按钮 | 禁止 `添加架构` / `添加模式` |
 
