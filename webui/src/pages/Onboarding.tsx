@@ -222,24 +222,13 @@ function McpConfigDrawer({
   open,
   onClose,
   endpointInfo,
-  mcpConfig,
-  onCopy,
-  copied
+  mcpConfig
 }: {
   open: boolean;
   onClose: () => void;
   endpointInfo: McpEndpointInfo | undefined;
   mcpConfig: string;
-  onCopy: () => void;
-  // M39 polish (SEVERE-4): the Drawer uses its own copy flag so toggling
-  // the main page copy state never desyncs the Drawer button label. The
-  // `copied` prop is therefore ignored; we manage the local flag below.
-  copied: boolean;
 }) {
-  // M39 polish (SEVERE-4): internal copy-feedback flag for the Drawer
-  // button. The parent state (`copiedMain`) drives the main page button,
-  // so the Drawer keeps its own state to avoid cross-talk.
-  const [drawerCopied, setDrawerCopied] = useState(false);
   // M39: close on ESC so users get the standard modal behaviour without
   // us having to pull in a dialog library.
   useEffect(() => {
@@ -253,7 +242,6 @@ function McpConfigDrawer({
 
   if (!open) return null;
   const endpointUrl = endpointInfo?.url ?? "—";
-  const hasDiagnostics = endpointInfo?.diagnostics && endpointInfo.diagnostics.length > 0;
 
   return (
     <div
@@ -280,7 +268,7 @@ function McpConfigDrawer({
           </div>
           <button
             type="button"
-            className="pl-drawer-close notranslate"
+            className="pl-drawer-close pl-drawer-close--prominent notranslate"
             translate="no"
             onClick={onClose}
             aria-label="关闭 MCP 配置抽屉"
@@ -299,43 +287,12 @@ function McpConfigDrawer({
                 {endpointUrl}
               </code>
             </div>
-            {hasDiagnostics ? (
-              <div className="grid gap-1">
-                <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
-                  诊断信息
-                </span>
-                <ul className="grid gap-1 text-sm text-fg-body">
-                  {endpointInfo?.diagnostics.map((d) => (
-                    <li
-                      key={d.code}
-                      className="notranslate"
-                      translate="no"
-                    >
-                      {d.message}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
           </div>
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
                 JSON
               </span>
-              <button
-                type="button"
-                className="pl-btn pl-btn--secondary pl-btn--sm notranslate"
-                translate="no"
-                onClick={async () => {
-                  await onCopy();
-                  setDrawerCopied(true);
-                  window.setTimeout(() => setDrawerCopied(false), 1500);
-                }}
-                data-testid="mcp-config-drawer-copy"
-              >
-                {drawerCopied ? "已复制" : (<>复制 <span className="notranslate" translate="no">MCP</span> 配置</>)}
-              </button>
             </div>
             <pre className="pl-code-snippet pl-code-snippet--drawer">
               <code className="notranslate" translate="no">{mcpConfig}</code>
@@ -347,9 +304,6 @@ function McpConfigDrawer({
           </div>
         </div>
         <footer className="pl-drawer-footer pl-drawer-footer-border-t">
-          <span className="text-xs text-fg-muted">
-            配置示例使用 <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code>
-          </span>
           <Link
             to="/admin/agents"
             className="pl-btn pl-btn--ghost text-sm notranslate"
@@ -409,7 +363,7 @@ function SemanticCoverageCard({
   const percentValue = percent(done, total);
   const gap = pendingSemanticCount({ done, total });
   return (
-    <div className="pl-snapshot-item">
+    <div className="pl-snapshot-item pl-snapshot-item--semantic">
       <div className="min-w-0">
         <strong>
           语义覆盖率 <span className="notranslate" translate="no" data-testid="ops-semantic-percent">{percentValue}%</span>
@@ -437,12 +391,9 @@ function SemanticCoverageCard({
 }
 
 export function Onboarding() {
-  // M39 polish (SEVERE-4): split the copy-affordance feedback state so the
-  // main button and the Drawer copy button don't desync each other. We
-  // also auto-reset both flags after 1.5s so the user sees a brief
-  // "已复制" flash before the label reverts.
+  // M39 polish (SEVERE-4): auto-reset the main copy label after 1.5s so
+  // the user sees a brief "已复制" flash before the label reverts.
   const [copiedMain, setCopiedMain] = useState(false);
-  const [copiedDrawer, setCopiedDrawer] = useState(false);
   // M39: Drawer open state. The main page never shows the raw JSON
   // config; the user must explicitly open the Drawer to inspect it.
   const [mcpDrawerOpen, setMcpDrawerOpen] = useState(false);
@@ -612,18 +563,6 @@ export function Onboarding() {
     if (!ok) return;
     setCopiedMain(true);
     window.setTimeout(() => setCopiedMain(false), 1500);
-    toast.success(
-      <>
-        <span className="notranslate" translate="no">MCP</span> 配置已复制
-      </>
-    );
-  }
-
-  async function copyConfigFromDrawer() {
-    const ok = await writeMcpConfigToClipboard();
-    if (!ok) return;
-    // The Drawer's own flag is set inside McpConfigDrawer; the main
-    // page's flag stays untouched.
     toast.success(
       <>
         <span className="notranslate" translate="no">MCP</span> 配置已复制
@@ -839,7 +778,7 @@ export function Onboarding() {
               </div>
               <Link
                 to="/admin/audit?outcome=denied"
-                className="pl-card-cta self-end"
+                className="pl-card-cta"
               >
                 查看访问日志 ↗
               </Link>
@@ -904,8 +843,6 @@ export function Onboarding() {
         onClose={() => setMcpDrawerOpen(false)}
         endpointInfo={endpointInfo}
         mcpConfig={mcpConfig}
-        onCopy={copyConfigFromDrawer}
-        copied={copiedMain}
       />
     </div>
   );

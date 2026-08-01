@@ -1138,6 +1138,7 @@
   /* M21: stable 32x32 close button. `whitespace-nowrap` keeps the two glyphs of
      "关闭" on one line so it never stacks vertically. */
   .pl-drawer-close { @apply inline-flex h-8 w-8 shrink-0 items-center justify-center whitespace-nowrap rounded-sm; }
+  .pl-drawer-close--prominent { @apply w-auto min-w-16 border border-border-default bg-bg-muted px-3 text-sm font-medium shadow-card hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   .pl-drawer-footer-border-t { @apply border-t border-border-default pt-4 mt-2; }
   .pl-drawer-error { @apply rounded-md border border-danger-strong bg-danger-soft p-3 text-xs text-danger-strong; }
   .pl-drawer-error pre { @apply mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-bg-surface p-2 text-fg-default; }
@@ -1759,8 +1760,11 @@
     @apply grid min-h-[5.625rem] items-center gap-3 rounded-md border border-border-default bg-bg-subtle p-3;
     grid-template-columns: minmax(0, 1fr) auto;
   }
+  .pl-snapshot-item--semantic {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .pl-snapshot-item strong { @apply text-sm font-semibold text-fg-default; }
-  .pl-snapshot-item .pl-progress { @apply my-2 max-w-md; }
+  .pl-snapshot-item .pl-progress { @apply my-2 w-full max-w-none; }
   .pl-snapshot-card { @apply grid gap-1 rounded-md border border-border-default bg-bg-subtle p-3; }
   /* v1.9.x 收口：去掉 uppercase，避免 "Agent 启用" 被渲染成 "AGENT 启用"，与
    * 访问风险卡片（pl-risk-item strong）的术语大小写保持一致。 */

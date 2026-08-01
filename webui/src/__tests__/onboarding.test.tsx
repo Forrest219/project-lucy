@@ -626,9 +626,12 @@ describe("Onboarding", () => {
     const drawer = await screen.findByRole("dialog", { name: "MCP 配置" });
     expect(drawer).toBeInTheDocument();
     expect(within(drawer).getByTestId("mcp-config-drawer-title")).toHaveTextContent("MCP 配置");
-    // The Drawer must host the JSON config + the copy button + the
-    // `查看 Agent 实例 ↗` deep link.
-    expect(within(drawer).getByRole("button", { name: "复制 MCP 配置" })).toBeInTheDocument();
+    // The Drawer hosts the JSON config + the `查看 Agent 实例 ↗` deep link.
+    // The duplicate copy button and env / diagnostic hints stay out of
+    // the Drawer; the main page already has the primary copy action.
+    expect(within(drawer).queryByRole("button", { name: "复制 MCP 配置" })).not.toBeInTheDocument();
+    expect(drawer).not.toHaveTextContent("诊断信息");
+    expect(drawer).not.toHaveTextContent("LUCY_PUBLIC_MCP_URL");
     const agentLink = within(drawer).getByRole("link", { name: /查看 Agent 实例/ });
     expect(agentLink).toHaveAttribute("href", "/admin/agents");
     expect(agentLink.textContent ?? "").toMatch(/↗/);
@@ -646,15 +649,16 @@ describe("Onboarding", () => {
       expect(code.getAttribute("translate")).toBe("no");
       expect(code.classList.contains("notranslate")).toBe(true);
     }
-    // The Endpoint URL and the env-var name `LUCY_PUBLIC_MCP_URL` must
-    // also carry translation defense.
+    // The Endpoint URL must also carry translation defense. The env-var
+    // note is intentionally absent from the simplified Drawer.
     const drawerText = drawer.textContent ?? "";
-    expect(drawerText).toMatch(/LUCY_PUBLIC_MCP_URL|MCP/);
+    expect(drawerText).toMatch(/MCP/);
+    expect(drawerText).not.toMatch(/LUCY_PUBLIC_MCP_URL/);
     const urlNodes = drawer.querySelectorAll("code, span, a");
     let defendedNodes = 0;
     for (const node of Array.from(urlNodes)) {
       const t = node.textContent ?? "";
-      if (t.includes("LUCY_PUBLIC_MCP_URL") || t.includes("/mcp")) {
+      if (t.includes("/mcp")) {
         if (node.getAttribute("translate") === "no" || node.classList.contains("notranslate")) {
           defendedNodes += 1;
         }
