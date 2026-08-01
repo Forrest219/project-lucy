@@ -19,5 +19,9 @@ export const queryKeys = {
   // M19 self-service publish and sanitized export.
   semanticAssetReleases: ["semantic-assets", "releases"] as const,
   semanticAssetRelease: (releaseId: string) =>
-    ["semantic-assets", "releases", releaseId] as const
+    ["semantic-assets", "releases", releaseId] as const,
+  // M36 Data Agent Ops Platform. The Onboarding page aggregates multiple
+  // existing endpoints; we keep a dedicated cache key so the dashboard
+  // sections can be invalidated independently from per-module queries.
+  opsDashboard: ["ops", "dashboard"] as const
 };

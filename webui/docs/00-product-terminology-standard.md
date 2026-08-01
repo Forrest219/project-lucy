@@ -168,6 +168,11 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Download | 下载 | 导出 | 下传 | 用户获取文件 |
 | Export | 导出 | 下载资产包 | 输出 | 从系统生成可下载交付物 |
 | Import | 导入 | 上传资产包 | 输入 | 将外部资产纳入系统 |
+| Ops Dashboard | 运维驾驶舱 | 系统概览 | 大屏、看板（作为主标题） | 系统概览的产品心智升级，强调 data agent 可服务状态 |
+| Action Required | 待处理事项 | 运维待办 | 告警列表泛化 | 首页聚合的跨模块待处理队列 |
+| Object Detail Drawer | 对象详情抽屉 | 详情抽屉 | 详情弹窗泛化 | 跨模块查看 Connection / Table / Agent / Eval Run / Audit Event 等对象上下文 |
+| Change Impact | 变更影响范围 | 影响范围 | 影响分析（作为按钮主名） | 发布前说明哪些对象、Agent、eval 可能被影响 |
+| Quality Operations | 质量运营 | 质量评测运营 | 质量评价 | 评测模块从列表管理升级为持续运营，含趋势、阈值、失败归因 |
 
 ### 3.1 Review 与 Approval 的边界
 
