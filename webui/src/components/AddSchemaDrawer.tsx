@@ -5,7 +5,7 @@ import { apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { DiffViewer } from "./DiffViewer";
 import { CatalogAssetUploadButton, CatalogReloadButton } from "./catalog";
-import { schemaFieldLabel, validateSchemaName } from "../lib/schemas";
+import { schemaFieldHelper, schemaFieldLabel, validateSchemaName } from "../lib/schemas";
 import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo } from "../lib/types";
 
 type Step = "input" | "preview" | "submitting" | "success" | "fatal";
@@ -20,8 +20,11 @@ const STEP_LABELS = ["输入 Schema", "测试连接", "确认并完成"];
 
 export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerProps) {
   const queryClient = useQueryClient();
-  const fieldLabel = schemaFieldLabel(connection.engine);
+  const fieldLabel = schemaFieldLabel();
+  const fieldHelper = schemaFieldHelper(connection.engine, connection.driver);
   const [schema, setSchema] = useState("");
+  const [schemaTouched, setSchemaTouched] = useState(false);
+  const [previewAttempted, setPreviewAttempted] = useState(false);
   const [step, setStep] = useState<Step>("input");
   const [preview, setPreview] = useState<AddSchemaPreview | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -29,6 +32,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
   const trimmed = schema.trim();
   const issue = useMemo(() => validateSchemaName(trimmed), [trimmed]);
   const canPreview = trimmed.length > 0 && !issue;
+  const showSchemaIssue = Boolean(issue && (schemaTouched || previewAttempted));
 
   const previewMutation = useMutation({
     mutationFn: () =>
@@ -69,6 +73,8 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
 
   function reset() {
     setSchema("");
+    setSchemaTouched(false);
+    setPreviewAttempted(false);
     setStep("input");
     setPreview(null);
     setSubmitError(null);
@@ -98,31 +104,38 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
       >
         <header className="pl-drawer-header">
           <div>
-            <p className="pl-eyebrow">数据库接入</p>
+            <p className="pl-eyebrow">数据接入</p>
             <h2 className="pl-panel-title notranslate" translate="no">添加 Schema 到 {connection.id}</h2>
             <p className="pl-notice notranslate" translate="no">
               添加 Schema 会写入 <code className="notranslate" translate="no">ktx.yaml</code>，不会扫描物理数据库。
               连接测试会使用当前项目已有凭据验证访问权限。
             </p>
           </div>
-          <button className="pl-btn pl-btn--ghost" onClick={close}>
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost pl-drawer-close"
+            onClick={close}
+            aria-label="关闭"
+            data-testid="add-schema-close"
+          >
             关闭
           </button>
         </header>
 
-        <ol className="flex items-center gap-2 text-xs text-fg-muted" aria-label="步骤">
+        <ol className="pl-steps" aria-label="步骤">
           {STEP_LABELS.map((label, idx) => {
-            const active =
-              (idx === 0 && step === "input") ||
-              (idx === 1 && (step === "preview" || step === "submitting")) ||
-              (idx === 2 && step === "success");
+            const activeIndex =
+              step === "success" ? 2 : step === "preview" || step === "submitting" ? 1 : 0;
+            const state = idx < activeIndex ? "complete" : idx === activeIndex ? "active" : "upcoming";
             return (
               <li
                 key={label}
-                className={active ? "font-semibold text-fg-default" : ""}
+                className={`pl-step pl-step--${state}`}
                 data-step={idx}
+                aria-current={state === "active" ? "step" : undefined}
               >
-                {idx + 1}. {label}
+                <span className="pl-step-index">{state === "complete" ? "✓" : idx + 1}</span>
+                <span>{label}</span>
               </li>
             );
           })}
@@ -131,16 +144,17 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         {step === "input" && (
           <section className="pl-drawer-body notranslate" aria-label="输入 Schema 名" translate="no">
             <label className="grid gap-1.5 text-sm">
-              <span>{fieldLabel} 名</span>
+              <span>{fieldLabel}</span>
               <input
                 className="pl-input"
                 placeholder="例如 finance_mart"
                 value={schema}
                 onChange={(e) => setSchema(e.target.value)}
-                aria-invalid={issue ? true : undefined}
+                onBlur={() => setSchemaTouched(true)}
+                aria-invalid={showSchemaIssue ? true : undefined}
                 data-testid="add-schema-input"
               />
-              {issue && (
+              {showSchemaIssue && issue && (
                 <span className="text-xs text-danger" data-testid="add-schema-input-error">
                   {issue.message}
                 </span>
@@ -148,6 +162,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               <span className="text-xs text-fg-muted">
                 须以字母或下划线开头，仅含字母、数字、下划线，最多 63 字符。
               </span>
+              <span className="text-xs text-fg-muted">{fieldHelper}</span>
             </label>
             <p className="text-xs text-fg-muted">
               添加前会自动调用 <code className="notranslate" translate="no">ktx connection test {connection.id}</code>，
@@ -160,7 +175,11 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               <button
                 className="pl-btn pl-btn--primary"
                 disabled={!canPreview || previewMutation.isPending}
-                onClick={() => previewMutation.mutate()}
+                onClick={() => {
+                  setPreviewAttempted(true);
+                  if (!canPreview) return;
+                  previewMutation.mutate();
+                }}
                 data-testid="add-schema-preview-btn"
               >
                 {previewMutation.isPending ? "生成预览..." : "下一步"}

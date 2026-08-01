@@ -23,15 +23,18 @@ export function validateSchemaName(value: string): SchemaNameIssue | null {
   return { message: result.error.issues[0]?.message ?? "非法 Schema 名" };
 }
 
-export function schemaFieldLabel(engine?: string): string {
-  switch (engine) {
-    case "postgres":
-      return "Schema";
-    case "mysql":
-    case "doris":
-    case "starrocks":
-      return "Schema 或 database";
-    default:
-      return "Schema";
+export function schemaFieldLabel(): string {
+  return "Schema 名称";
+}
+
+export function schemaFieldHelper(engine?: string, driver?: string): string {
+  const normalized = (engine ?? driver ?? "").toLowerCase();
+  if (normalized === "mysql") return "MySQL 中通常对应 database 名。";
+  if (normalized === "doris" || normalized === "starrocks") {
+    return "Doris / StarRocks 使用 MySQL wire protocol 时，通常填写 database 名。";
   }
+  if (normalized === "postgres" || normalized === "postgresql") {
+    return "PostgreSQL 中请填写 schema，不是 database。";
+  }
+  return "填写要纳入该连接治理的 Schema。";
 }

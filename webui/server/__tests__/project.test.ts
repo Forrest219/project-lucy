@@ -110,6 +110,8 @@ connections:
       schemas: ["mart"],
       enabledTables: ["mart.ceo_metric_snapshot"]
     });
+    expect(project.connections[0]).not.toHaveProperty("password");
+    expect(JSON.stringify(project.connections[0])).not.toContain("starrocks-password");
     expect(project.connections[1]).toMatchObject({
       id: "analytics-starrocks",
       driver: "starrocks",

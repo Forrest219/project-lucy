@@ -222,7 +222,7 @@ function redactNode(node: Node | null | undefined): void {
       if (!pair) continue;
       const key = isScalar(pair.key) ? String(pair.key.value ?? "").toLowerCase() : "";
       if (REDACT_KEYS.has(key)) {
-        pair.value = makeScalar("<REDACTED>", pair.value);
+        pair.value = makeScalar("<REDACTED>", pair.value as Node | null | undefined);
       } else {
         redactNode(pair.value as Node | null | undefined);
       }

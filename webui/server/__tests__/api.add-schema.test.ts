@@ -13,7 +13,12 @@ vi.mock("../ktx", async () => {
     testConnection: vi.fn(async () => ({
       status: "ok" as const,
       latencyMs: 5,
-      detail: "ok"
+      detail: "ok",
+      command: "ktx connection test mysql-aliyun",
+      args: ["connection", "test", "mysql-aliyun"],
+      exitCode: 0,
+      stdout: "ok",
+      stderr: ""
     })),
     runIngest: vi.fn(async () => ({ exitCode: 0, stdout: "ok", stderr: "" })),
     validateSource: vi.fn(async () => ({
@@ -243,6 +248,9 @@ describe("POST /api/connections/:connId/schemas", () => {
     vi.mocked(ktx.testConnection).mockResolvedValueOnce({
       status: "error",
       reason: "authentication failed",
+      command: "ktx connection test mysql-aliyun",
+      args: ["connection", "test", "mysql-aliyun"],
+      exitCode: 1,
       stdout: "connection output",
       stderr: "authentication failed"
     });

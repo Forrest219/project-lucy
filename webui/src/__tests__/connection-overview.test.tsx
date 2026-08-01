@@ -259,6 +259,15 @@ describe("ConnectionOverview", () => {
       "href",
       "/connections/whitelist?schema=dataforai"
     );
+    expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).toHaveClass(
+      "pl-row-action-link"
+    );
+    expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).not.toHaveClass(
+      "pl-btn",
+      "pl-btn--ghost",
+      "pl-btn--primary",
+      "pl-btn--secondary"
+    );
 
     expect(screen.getByTestId("schema-asset-status-mysql-aliyun-openclaw_db")).toHaveTextContent(
       "缺失 Manifest"
@@ -267,8 +276,14 @@ describe("ConnectionOverview", () => {
       "data-tone",
       "warning"
     );
+    expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).not.toHaveClass(
+      "pl-catalog-reload-warning"
+    );
     expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).toHaveTextContent("0 张表");
     expect(screen.getByTestId("upload-yaml-mysql-aliyun-openclaw_db")).toBeInTheDocument();
+    const warningSubrow = screen.getByTestId("catalog-reload-warning-mysql-aliyun-openclaw_db");
+    expect(warningSubrow.tagName).toBe("TR");
+    expect(warningSubrow).toHaveTextContent("缺少 Manifest");
   });
 
   it("shows management-meaning Tooltip content on the 数据连接 help trigger", async () => {
@@ -339,7 +354,8 @@ describe("ConnectionOverview", () => {
     expect(await screen.findByText("doris-r1")).toBeInTheDocument();
     expect(screen.getByTestId("engine-badge-doris-r1")).toHaveTextContent("Doris");
     expect(screen.getByText("10.0.0.8:9030")).toBeInTheDocument();
-    expect(screen.getByTestId("connection-card-doris-r1")).toHaveTextContent("Read-only expected");
+    expect(screen.getByTestId("connection-card-doris-r1")).toHaveTextContent("预期只读");
+    expect(screen.getByTestId("connection-card-doris-r1")).not.toHaveTextContent("Read-only expected");
   });
 
   it("shows the StarRocks R1 target connection profile", async () => {
@@ -367,7 +383,41 @@ describe("ConnectionOverview", () => {
     expect(await screen.findByText("starrocks-r1")).toBeInTheDocument();
     expect(screen.getByTestId("engine-badge-starrocks-r1")).toHaveTextContent("StarRocks");
     expect(screen.getByText("10.0.0.9:9030")).toBeInTheDocument();
-    expect(screen.getByTestId("connection-card-starrocks-r1")).toHaveTextContent("Read-only expected");
+    const card = screen.getByTestId("connection-card-starrocks-r1");
+    expect(card).toHaveTextContent("预期只读");
+    expect(card).not.toHaveTextContent("Read-only expected");
+  });
+
+  it("shows localized status for non-read-only connection metadata", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "write-risk-db",
+          driver: "mysql",
+          readOnlyExpected: false,
+          passwordSource: "inline",
+          host: "127.0.0.1",
+          port: "3306",
+          database: "demo",
+          schemas: ["demo"],
+          enabledTables: ["demo.orders"]
+        }
+      ],
+      tables: [sourceSummary("orders", "demo")]
+    });
+
+    renderOverview();
+
+    const card = await screen.findByTestId("connection-card-write-risk-db");
+    expect(card).toHaveTextContent("未声明只读");
+    expect(card).not.toHaveTextContent("Write-risk");
+    expect(within(card).getByTestId("connection-readonly-write-risk-db")).toHaveAttribute(
+      "title",
+      "来自 ktx.yaml 的 readonly 标记；真实只读能力由数据库账号权限保证。"
+    );
+    const credentialMeta = within(card).getByText("凭据：inline");
+    expect(credentialMeta).toHaveClass("pl-connection-meta-tag");
+    expect(credentialMeta).not.toHaveClass("pl-connection-meta-tag--warning");
   });
 
   it("keeps the overview layout stable with no connections", async () => {
@@ -405,7 +455,16 @@ describe("ConnectionOverview", () => {
       screen.queryByText("连接配置来自当前项目，不在 WebUI 中直接编辑凭据。")
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。")
+      screen.queryByText("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。")
+    ).not.toBeInTheDocument();
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    expect(card).toHaveTextContent("配置：ktx.yaml");
+    expect(within(card).getByText("配置：ktx.yaml")).toHaveAttribute(
+      "title",
+      "连接基础配置与凭据来源由 ktx.yaml 管理，WebUI 不直接编辑凭据。"
+    );
+    expect(
+      within(card).getByText("配置：ktx.yaml")
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
@@ -511,8 +570,9 @@ describe("ConnectionOverview", () => {
     const status = await screen.findByTestId("catalog-reload-status-mysql-aliyun");
     expect(status).toHaveTextContent("本地目录已刷新");
     expect(status).toHaveTextContent("2026-07-29 10:30");
-    expect(status).toHaveTextContent("已完成");
     expect(status).toHaveTextContent("4 张表");
+    expect(status).toHaveTextContent("已完成");
+    expect(status.querySelectorAll(".pl-catalog-reload-badge")).toHaveLength(0);
     expect(within(status).queryByRole("button", { name: /完成/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalog-last-run")).not.toBeInTheDocument();
     expect(screen.queryByText("上次刷新")).not.toBeInTheDocument();
@@ -593,17 +653,20 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const card = await screen.findByTestId("connection-card-demo-mysql");
+    expect(card).toHaveTextContent("配置：ktx.yaml");
+    expect(card).not.toHaveTextContent("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。");
     const status = within(card).getByTestId("catalog-reload-status-demo-mysql");
     expect(status).toHaveTextContent("本地目录已刷新");
-    expect(status).toHaveTextContent("已完成");
     expect(status).toHaveTextContent("3 张表");
     expect(status).toHaveTextContent("1 个提示");
+    expect(status).toHaveTextContent("已完成");
+    expect(status.querySelectorAll(".pl-catalog-reload-badge")).toHaveLength(0);
     expect(within(status).queryByRole("button", { name: /完成/ })).not.toBeInTheDocument();
     expect(within(card).getByTestId("catalog-reload-demo-mysql")).toHaveTextContent("刷新本地目录");
 
     const table = within(card).getByTestId("schema-asset-table-demo-mysql");
     const warning = within(card).getByTestId("catalog-reload-warning-demo-mysql-openclaw_db");
-    expect(table.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(table).toContainElement(warning);
     expect(within(card).getByText("关联 Schema 资产列表")).toBeInTheDocument();
     expect(within(card).getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
     expect(within(card).getByTestId("schema-asset-status-demo-mysql-openclaw_db")).toHaveTextContent(
@@ -614,6 +677,12 @@ describe("ConnectionOverview", () => {
     expect(warning).toHaveTextContent("semantic-layer/demo-mysql/_schema/openclaw_db.yaml");
 
     const detailsButton = within(warning).getByRole("button", { name: "展开详情" });
+    expect(detailsButton).toHaveClass("pl-btn", "pl-btn--ghost", "pl-btn--sm");
+    const copyButton = within(warning).getByRole("button", { name: "复制路径" });
+    expect(copyButton).toHaveClass("pl-btn", "pl-btn--ghost", "pl-btn--sm");
+    const recheckButton = within(warning).getByTestId("catalog-reload-recheck-demo-mysql-openclaw_db");
+    expect(recheckButton).toHaveClass("pl-btn", "pl-btn--secondary", "pl-btn--sm");
+    expect(recheckButton).toHaveTextContent("重新检查");
     expect(detailsButton).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(detailsButton);
     expect(detailsButton).toHaveAttribute("aria-expanded", "true");
@@ -642,21 +711,23 @@ describe("ConnectionOverview", () => {
     expect(status).toHaveTextContent("尚未读取本地 YAML");
   });
 
-  it("M23: separates Connection-level header actions from Schema-level footer actions", async () => {
+  it("M29: centralizes Connection actions in the footer action bar", async () => {
     stubOverviewFetch();
     renderOverview();
 
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
-    const headerActions = within(card).getByTestId("connection-card-header-actions-mysql-aliyun");
-    expect(within(headerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
-    expect(within(headerActions).getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+    expect(within(card).queryByTestId("connection-card-header-actions-mysql-aliyun")).not.toBeInTheDocument();
 
     const footerActions = within(card).getByTestId("connection-card-schema-actions-mysql-aliyun");
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toBeInTheDocument();
+    expect(within(footerActions).getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
     expect(within(footerActions).getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
+    expect(
+      within(footerActions).getAllByRole("button").map((button) => button.textContent?.trim())
+    ).toEqual(["+ 添加 Schema", "刷新本地目录", "上传 Schema Manifest"]);
+    expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toHaveClass("pl-btn--secondary");
     expect(within(footerActions).queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
-    expect(within(footerActions).queryByRole("button", { name: "刷新本地目录" })).not.toBeInTheDocument();
     expect(within(card).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "上传语义包" })
@@ -673,6 +744,7 @@ describe("ConnectionOverview", () => {
     expect(
       screen.queryByTestId("semantic-asset-export-panel")
     ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("connections-export-hint")).not.toBeInTheDocument();
     expect(
       screen.queryByText("下载当前全量资产包")
     ).not.toBeInTheDocument();
@@ -727,6 +799,13 @@ describe("ConnectionOverview", () => {
     ).toHaveTextContent("缺失 Manifest");
     const uploadBtn = await screen.findByTestId("upload-yaml-demo-mysql-openclaw_db");
     expect(uploadBtn).toHaveTextContent("上传 Manifest");
+    expect(uploadBtn).toHaveClass("pl-row-action-link");
+    expect(uploadBtn).not.toHaveClass(
+      "pl-btn",
+      "pl-btn--ghost",
+      "pl-btn--primary",
+      "pl-btn--secondary"
+    );
     fireEvent.click(uploadBtn);
     expect(
       await screen.findByRole("heading", { name: /上传 openclaw_db 的 Schema Manifest/ })

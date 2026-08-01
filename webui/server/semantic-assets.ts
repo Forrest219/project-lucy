@@ -38,6 +38,8 @@ import {
 import path from "node:path";
 import { parseDocument } from "yaml";
 import { createTwoFilesPatch } from "diff";
+
+type YamlDocument = ReturnType<typeof parseDocument>;
 import { readProject } from "./project";
 import { assertSafeTarget } from "./catalog-assets";
 import { ForbiddenPathError } from "./fs-safe";
@@ -349,14 +351,13 @@ type Classification =
 
 type YamlAstError = { code: string; message: string; line?: number; column?: number };
 
-function parseYamlAst(text: string): { doc: Document | null; errors: YamlAstError[] } {
+function parseYamlAst(text: string): { doc: YamlDocument | null; errors: YamlAstError[] } {
   try {
     const doc = parseDocument(text, { prettyErrors: true, keepSourceTokens: false });
     if (doc.errors.length === 0) {
       return { doc, errors: [] };
     }
     const first = doc.errors[0];
-    const pos = first?.pos?.[0];
     // `prettyErrors: true` exposes `linePos` with absolute 1-based positions.
     const linePos = (first as unknown as { linePos?: Array<{ line: number; col: number }> })?.linePos?.[0];
     return {
@@ -365,8 +366,8 @@ function parseYamlAst(text: string): { doc: Document | null; errors: YamlAstErro
         {
           code: "YAML_PARSE_FAILED",
           message: first?.message ?? "YAML 解析失败",
-          line: linePos?.line ?? pos?.line,
-          column: linePos?.col ?? pos?.col
+          line: linePos?.line,
+          column: linePos?.col
         }
       ]
     };

@@ -230,7 +230,8 @@ describe("TableWhitelist", () => {
     stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
-    expect(await screen.findByRole("heading", { name: "表白名单" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "启用表范围" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "表白名单" })).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("搜索表名/描述...")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Schema 筛选" })).toBeInTheDocument();
     expect(screen.getAllByText("已选 2/3 张表")[0]).toBeInTheDocument();
@@ -484,7 +485,7 @@ describe("TableWhitelist", () => {
       return url.includes("/api/catalog/reload");
     });
     expect(reloadCalls).toHaveLength(0);
-    expect(await screen.findByText(/表白名单已保存/)).toBeInTheDocument();
+    expect(await screen.findByText(/启用表范围已保存/)).toBeInTheDocument();
     expect(screen.queryByText(/请刷新本地目录/)).not.toBeInTheDocument();
   });
 
@@ -688,7 +689,7 @@ describe("TableWhitelist", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
     expect(
-      await screen.findByText(/表白名单已保存/)
+      await screen.findByText(/启用表范围已保存/)
     ).toBeInTheDocument();
     expect(screen.getByText(/保存不会自动刷新本地目录/)).toBeInTheDocument();
     expect(
@@ -722,7 +723,7 @@ describe("TableWhitelist", () => {
     fireEvent.click(within(row).getByRole("checkbox", { name: "选择 superstore_people" }));
     fireEvent.click(screen.getByRole("button", { name: "保存变更" }));
 
-    expect(await screen.findByText(/表白名单已保存/)).toBeInTheDocument();
+    expect(await screen.findByText(/启用表范围已保存/)).toBeInTheDocument();
     expect(screen.getByText(/保存不会自动刷新本地目录/)).toBeInTheDocument();
 
     fireEvent.click(await screen.findByTestId("whitelist-reload-catalog"));
@@ -730,13 +731,13 @@ describe("TableWhitelist", () => {
     await waitFor(() => {
       expect(
         toastMocks.success.mock.calls.some(([message]) =>
-          String(message).includes("本地目录已刷新 · 发现 3 张表 · 表白名单 2 张 · 1 个提示")
+          String(message).includes("本地目录已刷新 · 发现 3 张表 · 启用表范围 2 张 · 1 个提示")
         )
       ).toBe(true);
     });
 
     expect(
-      await screen.findByText("本地目录已刷新。发现 3 张表，当前表白名单 2 张，1 个提示。")
+      await screen.findByText("本地目录已刷新。发现 3 张表，当前启用表范围 2 张，1 个提示。")
     ).toBeInTheDocument();
     expect(screen.queryByText(/保存不会自动刷新本地目录/)).not.toBeInTheDocument();
     expect(screen.queryByText(/请刷新本地目录/)).not.toBeInTheDocument();
@@ -836,7 +837,7 @@ describe("TableWhitelist", () => {
     const { fetchMock } = stubWhitelistFetch(defaultHandlers());
     renderWhitelist();
 
-    const toolbar = await screen.findByRole("toolbar", { name: "表白名单工具栏" });
+    const toolbar = await screen.findByRole("toolbar", { name: "启用表范围工具栏" });
     expect(within(toolbar).getByTestId("pl-whitelist-filter-area")).toBeInTheDocument();
     expect(within(toolbar).getByTestId("pl-whitelist-ops-area")).toBeInTheDocument();
 
@@ -865,7 +866,7 @@ describe("TableWhitelist", () => {
     await waitFor(() => {
       expect(
         toastMocks.success.mock.calls.some(([message]) =>
-          String(message).includes("本地目录已刷新 · 发现 3 张表 · 表白名单 3 张")
+          String(message).includes("本地目录已刷新 · 发现 3 张表 · 启用表范围 3 张")
         )
       ).toBe(true);
       void fetchMock;

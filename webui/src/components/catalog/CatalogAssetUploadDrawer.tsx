@@ -25,15 +25,23 @@ export type CatalogAssetUploadDrawerProps = {
 };
 
 const FILENAME_HINT = "openclaw_db.yaml";
-const YAML_PLACEHOLDER = [
-  "tables:",
-  "  customers:",
-  "    table: openclaw_db.customers",
-  "    columns:",
-  "      - name: customer_id",
-  "      - name: customer_name",
-  ""
-].join("\n");
+
+function defaultFilenameForSchema(schema: string): string {
+  return schema ? `${schema}.yaml` : FILENAME_HINT;
+}
+
+function yamlPlaceholderForSchema(schema: string): string {
+  const qualifiedTable = schema ? `${schema}.customers` : "<schema>.customers";
+  return [
+    "tables:",
+    "  customers:",
+    `    table: ${qualifiedTable}`,
+    "    columns:",
+    "      - name: customer_id",
+    "      - name: customer_name",
+    ""
+  ].join("\n");
+}
 
 function buildRequest(
   connectionId: string,
@@ -75,7 +83,8 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
   const schemaLocked = typeof schemaProp === "string" && schemaProp.length > 0;
   const fallbackSchema = schemaOptions?.[0] ?? "";
   const [schema, setSchema] = useState<string>(schemaProp ?? fallbackSchema);
-  const [filename, setFilename] = useState<string>(schemaProp ? `${schemaProp}.yaml` : FILENAME_HINT);
+  const [filename, setFilename] = useState<string>(defaultFilenameForSchema(schemaProp ?? fallbackSchema));
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [content, setContent] = useState<string>("");
   const [confirmOverwrite, setConfirmOverwrite] = useState<boolean>(false);
   const [validation, setValidation] = useState<CatalogAssetValidateResponse | null>(null);
@@ -86,11 +95,16 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
   const title = schemaLocked
     ? `上传 ${schema} 的 Schema Manifest`
     : `上传 ${connectionId} 的 Schema Manifest`;
+  const targetFile = schema
+    ? `semantic-layer/${connectionId}/_schema/${schema}.yaml`
+    : `semantic-layer/${connectionId}/_schema/<schema>.yaml`;
 
   useEffect(() => {
     if (!open) return;
-    setSchema(schemaProp ?? fallbackSchema);
-    setFilename(schemaProp ? `${schemaProp}.yaml` : FILENAME_HINT);
+    const nextSchema = schemaProp ?? fallbackSchema;
+    setSchema(nextSchema);
+    setFilename(defaultFilenameForSchema(nextSchema));
+    setSelectedFileName(null);
     setContent("");
     setConfirmOverwrite(false);
     setValidation(null);
@@ -181,6 +195,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
     if (!file) return;
     const safeName = file.name || filename;
     setFilename(safeName);
+    setSelectedFileName(safeName);
     const text = await file.text();
     setContent(text);
   }
@@ -230,17 +245,12 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
       <div className="pl-drawer-panel" data-testid="catalog-asset-upload-panel">
         <header className="pl-drawer-header">
           <div>
-            <p className="pl-eyebrow">数据库接入</p>
+            <p className="pl-eyebrow">数据接入</p>
             <h2 className="pl-panel-title notranslate" translate="no">
               {title}
             </h2>
             <p className="pl-notice">
-              目标路径由系统计算；会校验连接、<code className="notranslate" translate="no">Schema</code>、<code className="notranslate" translate="no">YAML</code> 结构、文件大小与目标路径。
-              提交前会自动校验，写入成功后会自动刷新本地目录。
-            </p>
-            <p className="pl-notice">
-              此操作只写入 <code className="notranslate" translate="no">semantic-layer/&lt;connection&gt;/_schema/&lt;schema&gt;.yaml</code>，
-              不会编辑指标、<code className="notranslate" translate="no">Join</code> 或业务语义。
+              受控上传 <code className="notranslate" translate="no">Schema Manifest</code>；系统计算目标路径并校验文件，成功后刷新本地目录。
             </p>
           </div>
           <button
@@ -256,15 +266,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
         {!uploadMutation.data ? (
           <section className="pl-drawer-body" aria-label="上传表单">
             <div className="grid gap-2">
-              {schemaLocked ? (
-                <p
-                  className="text-sm notranslate"
-                  data-testid="catalog-asset-upload-target-schema"
-                  translate="no"
-                >
-                  目标 Schema：<code className="notranslate" translate="no">{schema}</code>
-                </p>
-              ) : (
+              {!schemaLocked ? (
                 <label className="grid gap-1.5 text-sm">
                   <span className="notranslate" translate="no">Schema</span>
                   <select
@@ -272,7 +274,8 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                     value={schema}
                     onChange={(e) => {
                       setSchema(e.target.value);
-                      setFilename(`${e.target.value}.yaml`);
+                      setFilename(defaultFilenameForSchema(e.target.value));
+                      setSelectedFileName(null);
                     }}
                     data-testid="catalog-asset-upload-schema"
                   >
@@ -284,16 +287,30 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                     ))}
                   </select>
                 </label>
-              )}
-              <label className="grid gap-1.5 text-sm">
-                <span>文件名</span>
-                <input
-                  className="pl-input"
-                  value={filename}
-                  onChange={(e) => setFilename(e.target.value)}
+              ) : null}
+              <div className="pl-upload-target-group">
+                <span className="text-sm font-medium">目标文件</span>
+                <code
+                  className="pl-upload-target-file notranslate"
+                  data-testid="catalog-asset-upload-target-file"
+                  translate="no"
+                  dir="ltr"
+                >
+                  {targetFile}
+                </code>
+                <span className="text-sm font-medium">所选文件</span>
+                <code
+                  className="pl-upload-filename-readonly notranslate"
                   data-testid="catalog-asset-upload-filename"
-                />
-              </label>
+                  translate="no"
+                  dir="ltr"
+                >
+                  {filename}
+                </code>
+                <span className="col-span-2 text-xs text-fg-muted">
+                  只写入目标文件；不会编辑指标、<code className="notranslate" translate="no">Join</code> 或业务语义。
+                </span>
+              </div>
               <div
                 className="pl-upload-dropzone"
                 onDragOver={(e) => {
@@ -329,14 +346,14 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                   >
                     选择文件
                   </button>
-                  {filename ? (
+                  {selectedFileName ? (
                     <span
                       className="text-xs text-fg-muted"
                       data-testid="catalog-asset-upload-filename-display"
                     >
                       已选择：
                       <span className="notranslate" translate="no" dir="ltr">
-                        {filename}
+                        {selectedFileName}
                       </span>
                     </span>
                   ) : null}
@@ -350,7 +367,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   onKeyDown={handleTextareaKeyDown}
-                  placeholder={YAML_PLACEHOLDER}
+                  placeholder={yamlPlaceholderForSchema(schema)}
                   data-testid="catalog-asset-upload-textarea"
                 />
               </label>
@@ -426,7 +443,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                 onClick={onClose}
                 data-testid="catalog-asset-upload-primary"
               >
-                前往配置表白名单 →
+                前往配置启用表范围 →
               </Link>
             </div>
           </section>

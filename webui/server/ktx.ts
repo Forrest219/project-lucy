@@ -37,8 +37,11 @@ export type ConnectionTestResult = {
   latencyMs?: number;
   detail?: string;
   reason?: string;
-  stdout?: string;
-  stderr?: string;
+  command: string;
+  args: string[];
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
 };
 
 export type IngestResult = {
@@ -53,27 +56,42 @@ export async function testConnection(
   execFileImpl: ExecFileImpl = execFile
 ): Promise<ConnectionTestResult> {
   const start = Date.now();
+  const args = ["connection", "test", connId];
+  const command = `ktx ${args.join(" ")}`;
   return new Promise((resolve, reject) => {
     execFileImpl(
       "ktx",
-      ["connection", "test", connId],
+      args,
       { cwd: projectRoot, timeout: 30_000, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
       (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
         const latencyMs = Date.now() - start;
         const out = stdout.toString();
         const err = stderr.toString();
         if (!error) {
-          resolve({ status: "ok", latencyMs, detail: out.trim() || undefined, stdout: out, stderr: err });
+          resolve({
+            status: "ok",
+            latencyMs,
+            detail: out.trim() || undefined,
+            command,
+            args,
+            exitCode: 0,
+            stdout: out,
+            stderr: err
+          });
           return;
         }
         if (error.code === "ENOENT") {
           reject(new KtxCliError("ktx CLI was not found in PATH"));
           return;
         }
+        const exitCode = typeof error.code === "number" ? error.code : 1;
         resolve({
           status: "error",
           latencyMs,
           reason: (err || out).trim() || "Connection failed",
+          command,
+          args,
+          exitCode,
           stdout: out,
           stderr: err
         });

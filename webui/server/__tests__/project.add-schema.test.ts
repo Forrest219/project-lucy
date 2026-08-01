@@ -116,7 +116,12 @@ describe("addSchema — write path", () => {
     const fakeTest = vi.fn(async () => ({
       status: "ok" as const,
       latencyMs: 5,
-      detail: "ok"
+      detail: "ok",
+      command: "ktx connection test mysql-aliyun",
+      args: ["connection", "test", "mysql-aliyun"],
+      exitCode: 0,
+      stdout: "ok",
+      stderr: ""
     }));
 
     const result = await addSchema(root, "mysql-aliyun", "finance_mart", false, {
@@ -150,7 +155,12 @@ describe("addSchema — write path", () => {
 
     const fakeTest = vi.fn(async () => ({
       status: "error" as const,
-      reason: "auth failed for user 'sc'"
+      reason: "auth failed for user 'sc'",
+      command: "ktx connection test mysql-aliyun",
+      args: ["connection", "test", "mysql-aliyun"],
+      exitCode: 1,
+      stdout: "",
+      stderr: "auth failed for user 'sc'"
     }));
 
     await expect(

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ConnectionInfo, ConnectionTestResult } from "../../lib/types";
 
 type LatencyTone = "muted" | "success" | "warning" | "danger";
@@ -41,6 +42,25 @@ function rawLogSections(result: ConnectionTestResult): Array<{ label: string; va
   ].filter((section) => section.value.trim().length > 0);
 }
 
+function commandFor(connection: ConnectionInfo, result: ConnectionTestResult): string {
+  return result.command || `ktx connection test ${connection.id}`;
+}
+
+function logCopyText(connection: ConnectionInfo, result: ConnectionTestResult): string {
+  const command = commandFor(connection, result);
+  return [
+    `$ ${command}`,
+    "",
+    "[stdout]",
+    result.stdout || "",
+    "",
+    "[stderr]",
+    result.stderr || "",
+    ...(result.detail && !result.stdout ? ["", "[detail]", result.detail] : []),
+    ...(result.reason && !result.stderr ? ["", "[reason]", result.reason] : [])
+  ].join("\n");
+}
+
 export type ConnectionTestResultPanelProps = {
   connection: ConnectionInfo;
   result: ConnectionTestResult | null;
@@ -56,8 +76,19 @@ export function ConnectionTestResultPanel({
   logsExpanded,
   onToggleLogs
 }: ConnectionTestResultPanelProps) {
+  const [copyStatus, setCopyStatus] = useState("");
   const latency = latencyTone(result?.latencyMs);
   const logSections = result ? rawLogSections(result) : [];
+  const command = result ? commandFor(connection, result) : `ktx connection test ${connection.id}`;
+
+  async function copyText(text: string, message: string) {
+    try {
+      await navigator.clipboard?.writeText(text);
+      setCopyStatus(message);
+    } catch {
+      setCopyStatus("复制失败，请手动选择文本");
+    }
+  }
 
   let bannerText: string;
   let bannerClass: string;
@@ -110,6 +141,12 @@ export function ConnectionTestResultPanel({
             <span>访问模式</span>
             <strong>{accessModeLabel(connection.readOnlyExpected)}</strong>
           </div>
+          <div>
+            <span>退出码</span>
+            <strong className="notranslate" translate="no" data-testid="connection-test-exit-code">
+              {result.exitCode ?? "未返回"}
+            </strong>
+          </div>
         </div>
       )}
 
@@ -121,6 +158,30 @@ export function ConnectionTestResultPanel({
           data-testid="connection-test-log"
           translate="no"
         >
+          <div className="pl-raw-log-toolbar">
+            <code data-testid="connection-test-command">{command}</code>
+            <div className="pl-raw-log-actions">
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost pl-btn--sm"
+                onClick={() => void copyText(command, "命令已复制")}
+              >
+                复制命令
+              </button>
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost pl-btn--sm"
+                onClick={() => void copyText(logCopyText(connection, result), "Log 已复制")}
+              >
+                复制 Log
+              </button>
+            </div>
+          </div>
+          {copyStatus ? (
+            <span className="text-xs text-fg-muted" role="status" aria-live="polite">
+              {copyStatus}
+            </span>
+          ) : null}
           <button
             type="button"
             className="pl-btn pl-btn--ghost text-sm notranslate"
@@ -141,7 +202,7 @@ export function ConnectionTestResultPanel({
                 ))
               ) : (
                 <p className="pl-raw-log-placeholder" data-testid="connection-test-log-empty">
-                  暂无原始日志输出
+                  ktx 未返回原始日志输出
                 </p>
               )}
             </div>

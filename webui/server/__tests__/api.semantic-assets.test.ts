@@ -173,7 +173,9 @@ describe("POST /api/semantic-assets/validate", () => {
     }>;
     expect(files).toHaveLength(2);
     const manifest = files.find((f) => f.kind === "schemaManifest");
-    const overlay = files.find((f) => f.kind === "semanticSource");
+    const overlay = files.find((f) => f.kind === "semanticSource") as
+      | { targetPath: string; sourceName?: string; physicalTable?: string }
+      | undefined;
     expect(manifest).toBeDefined();
     expect(overlay).toBeDefined();
     expect(manifest!.targetPath).toBe("semantic-layer/customer-db/_schema/chatbi.yaml");

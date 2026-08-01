@@ -68,10 +68,17 @@ afterEach(() => {
 });
 
 describe("AddSchemaDrawer", () => {
-  it("blocks and explains an empty schema name", () => {
+  it("blocks an empty schema name without showing an immediate error", () => {
     renderDrawer(makeConn());
 
     expect(screen.getByTestId("add-schema-preview-btn")).toBeDisabled();
+    expect(screen.queryByTestId("add-schema-input-error")).not.toBeInTheDocument();
+  });
+
+  it("explains an empty schema name after the field is touched", () => {
+    renderDrawer(makeConn());
+
+    fireEvent.blur(screen.getByTestId("add-schema-input"));
     expect(screen.getByTestId("add-schema-input-error")).toHaveTextContent("Schema 名不能为空");
   });
 
@@ -83,6 +90,8 @@ describe("AddSchemaDrawer", () => {
 
     const next = screen.getByTestId("add-schema-preview-btn") as HTMLButtonElement;
     expect(next).toBeDisabled();
+    expect(screen.queryByTestId("add-schema-input-error")).not.toBeInTheDocument();
+    fireEvent.blur(input);
     expect(screen.getByTestId("add-schema-input-error")).toBeInTheDocument();
 
     fireEvent.change(input, { target: { value: "finance_mart" } });
@@ -252,6 +261,9 @@ describe("AddSchemaDrawer", () => {
     const backdrop = screen.getByTestId("add-schema-drawer-backdrop");
     expect(backdrop).toHaveClass("pl-drawer-backdrop");
     expect(backdrop).not.toHaveClass("pl-modal-backdrop");
+    expect(screen.getByTestId("add-schema-close")).toHaveClass("pl-drawer-close");
+    expect(screen.getByRole("list", { name: "步骤" })).toHaveClass("pl-steps");
+    expect(screen.getByText("输入 Schema").closest("li")).toHaveAttribute("aria-current", "step");
   });
 
   it("M17: rewrites the intro copy to distinguish connection-test vs add-schema vs upload", () => {
@@ -273,9 +285,11 @@ describe("AddSchemaDrawer", () => {
     expect(screen.queryByText(/不会触碰凭据/)).not.toBeInTheDocument();
   });
 
-  it("uses the postgres-aware field label", () => {
+  it("uses a stable Schema label and Postgres helper text", () => {
     renderDrawer(makeConn({ engine: "postgres", id: "pg-main" }));
-    expect(screen.getByText(/^Schema 名$/)).toBeInTheDocument();
+    expect(screen.getByText("Schema 名称")).toBeInTheDocument();
+    expect(screen.queryByText(/Schema 或 database 名/)).not.toBeInTheDocument();
+    expect(screen.getByText(/PostgreSQL 中请填写 schema，不是 database/)).toBeInTheDocument();
   });
 
   it("after a successful add, surfaces the static loading hint and the reload-catalog button, no ingest CTA", async () => {
@@ -438,8 +452,10 @@ describe("AddSchemaDrawer", () => {
     });
   });
 
-  it("uses the MySQL/Doris/StarRocks-aware field label", () => {
+  it("uses a stable Schema label and MySQL helper text", () => {
     renderDrawer(makeConn({ engine: "mysql" }));
-    expect(screen.getByText(/Schema 或 database 名/)).toBeInTheDocument();
+    expect(screen.getByText("Schema 名称")).toBeInTheDocument();
+    expect(screen.queryByText(/Schema 或 database 名/)).not.toBeInTheDocument();
+    expect(screen.getByText(/MySQL 中通常对应 database 名/)).toBeInTheDocument();
   });
 });

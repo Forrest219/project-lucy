@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionTest } from "../pages/connections/ConnectionTest";
-import type { ConnectionInfo } from "../lib/types";
+import type { ConnectionInfo, ConnectionTestResult } from "../lib/types";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
 
 const TEST_CONN: ConnectionInfo = {
@@ -47,16 +47,23 @@ function stubConnTestFetch(handlers: HandlerMap = {}) {
   return { fetchMock, handlers };
 }
 
+function makeTestResult(overrides: Partial<ConnectionTestResult> = {}): ConnectionTestResult {
+  return {
+    status: "ok",
+    latencyMs: 100,
+    detail: "ok",
+    command: "ktx connection test mysql-aliyun",
+    args: ["connection", "test", "mysql-aliyun"],
+    exitCode: 0,
+    stdout: "ok",
+    stderr: "",
+    ...overrides
+  };
+}
+
 function defaultHandlers(opts: {
   connection?: ConnectionInfo;
-  testResult?: {
-    status: "ok" | "error";
-    latencyMs?: number;
-    detail?: string;
-    reason?: string;
-    stdout?: string;
-    stderr?: string;
-  };
+  testResult?: ConnectionTestResult;
   testDelayMs?: number;
 } = {}): HandlerMap {
   const conn = opts.connection ?? TEST_CONN;
@@ -79,7 +86,7 @@ function defaultHandlers(opts: {
       return new Response(
         JSON.stringify({
           ok: true,
-          data: result ?? { status: "ok", latencyMs: 100, detail: "ok", stdout: "ok", stderr: "" }
+          data: result ?? makeTestResult()
         })
       );
     }
@@ -102,6 +109,9 @@ function renderConnectionTest() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  Object.assign(navigator, {
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) }
+  });
 });
 
 afterEach(() => {
@@ -125,13 +135,12 @@ describe("ConnectionTest", () => {
   it("shows success state with structured latency, metadata, and visible logs", async () => {
     stubConnTestFetch(
       defaultHandlers({
-        testResult: {
-          status: "ok",
+        testResult: makeTestResult({
           latencyMs: 504,
           detail: "Status: ok\nDriver: mysql",
           stdout: "Status: ok\nDriver: mysql",
           stderr: ""
-        }
+        })
       })
     );
     renderConnectionTest();
@@ -148,22 +157,36 @@ describe("ConnectionTest", () => {
     expect(screen.getByText("MySQL Wire")).toBeInTheDocument();
     expect(screen.getByText("访问模式")).toBeInTheDocument();
     expect(screen.getByText("Read-Only (受控访问)")).toBeInTheDocument();
+    expect(screen.getByTestId("connection-test-command")).toHaveTextContent("ktx connection test mysql-aliyun");
+    expect(screen.getByRole("button", { name: "复制命令" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "复制 Log" })).toBeInTheDocument();
+    expect(screen.getByTestId("connection-test-exit-code")).toHaveTextContent("0");
 
     const toggle = screen.getByRole("button", { name: /原始诊断日志/ });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("connection-test-raw-log-frame")).toBeInTheDocument();
     expect(screen.getByTestId("connection-test-stdout")).toHaveTextContent("Status: ok");
+
+    fireEvent.click(screen.getByRole("button", { name: "复制命令" }));
+    await waitFor(() => {
+      expect(vi.mocked(navigator.clipboard.writeText)).toHaveBeenCalledWith("ktx connection test mysql-aliyun");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "复制 Log" }));
+    await waitFor(() => {
+      expect(vi.mocked(navigator.clipboard.writeText)).toHaveBeenCalledWith(
+        expect.stringContaining("[stdout]")
+      );
+    });
   });
 
   it("can collapse and re-expand the raw log block", async () => {
     stubConnTestFetch(
       defaultHandlers({
-        testResult: {
-          status: "ok",
+        testResult: makeTestResult({
           latencyMs: 120,
           stdout: "Status: ok\nDriver: mysql",
           stderr: ""
-        }
+        })
       })
     );
     renderConnectionTest();
@@ -190,13 +213,14 @@ describe("ConnectionTest", () => {
   it("shows failure state with the access-denied reason in the visible log", async () => {
     stubConnTestFetch(
       defaultHandlers({
-        testResult: {
+        testResult: makeTestResult({
           status: "error",
           latencyMs: 1200,
           reason: "Access denied",
+          exitCode: 1,
           stdout: "",
           stderr: "Access denied"
-        }
+        })
       })
     );
     renderConnectionTest();
@@ -216,12 +240,13 @@ describe("ConnectionTest", () => {
   it("shows a placeholder when the connection test returns no raw log text", async () => {
     stubConnTestFetch(
       defaultHandlers({
-        testResult: {
-          status: "ok",
+        testResult: makeTestResult({
           latencyMs: 88,
+          detail: undefined,
+          reason: undefined,
           stdout: "",
           stderr: ""
-        }
+        })
       })
     );
     renderConnectionTest();
@@ -230,7 +255,7 @@ describe("ConnectionTest", () => {
     fireEvent.click(button);
 
     expect(await screen.findByText("连接成功 (Connection Passed)")).toBeInTheDocument();
-    expect(screen.getByTestId("connection-test-log-empty")).toHaveTextContent("暂无原始日志输出");
+    expect(screen.getByTestId("connection-test-log-empty")).toHaveTextContent("ktx 未返回原始日志输出");
   });
 
   it("renders an empty state link when no connection is configured", async () => {
@@ -274,14 +299,14 @@ describe("ConnectionTest", () => {
     assertNoForbiddenTerms(document.body);
   });
 
-  it("keeps connection testing centralized on the 连通测试 page", async () => {
+  it("shows the compatibility hint toward connection overview card testing", async () => {
     stubConnTestFetch(defaultHandlers());
     renderConnectionTest();
 
     expect(await screen.findByRole("heading", { name: "连通测试" })).toBeInTheDocument();
     const hint = screen.getByTestId("connection-test-overview-hint");
-    expect(hint).toHaveTextContent(/数据库连通性统一在本页测试/);
-    expect(hint).not.toHaveTextContent(/连接卡片会直接打开连通测试 Drawer/);
+    expect(hint).toHaveTextContent(/也可以在连接概览中对单个连接执行测试/);
+    expect(hint).not.toHaveTextContent(/数据库连通性统一在本页测试/);
     expect(within(hint).getByRole("link", { name: "连接概览" })).toHaveAttribute(
       "href",
       "/connections"

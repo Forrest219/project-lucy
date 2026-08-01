@@ -6,13 +6,13 @@ export type CatalogAssetUploadButtonProps = {
   schema?: string;
   schemaOptions?: string[];
   label?: string;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "ghost" | "link";
   size?: "default" | "sm";
   testId?: string;
 };
 
 function defaultLabel(schema?: string): string {
-  if (schema) return "上传该 Schema 的 YAML";
+  if (schema) return "上传 Manifest";
   return "上传 Schema Manifest";
 }
 
@@ -20,6 +20,7 @@ function buttonClass(
   variant: NonNullable<CatalogAssetUploadButtonProps["variant"]>,
   size: NonNullable<CatalogAssetUploadButtonProps["size"]>
 ): string {
+  if (variant === "link") return "pl-row-action-link";
   const variantClass =
     variant === "primary"
       ? "pl-btn pl-btn--primary"

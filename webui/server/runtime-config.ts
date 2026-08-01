@@ -21,7 +21,7 @@ export type McpEndpointInfo = {
 
 export const LOCAL_MCP_ENDPOINT = "http://127.0.0.1:7879/mcp";
 
-type RuntimeEnv = Pick<NodeJS.ProcessEnv, "LUCY_PUBLIC_MCP_URL">;
+type RuntimeEnv = Partial<Pick<NodeJS.ProcessEnv, "LUCY_PUBLIC_MCP_URL">>;
 
 function normalizedPathname(pathname: string): string {
   // Strip trailing slashes so that `/mcp/` does not raise a false

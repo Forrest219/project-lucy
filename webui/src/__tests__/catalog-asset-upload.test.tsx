@@ -151,7 +151,7 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
       </Wrapper>
     );
     expect(
-      screen.getByRole("button", { name: "上传该 Schema 的 YAML" })
+      screen.getByRole("button", { name: "上传 Manifest" })
     ).toBeInTheDocument();
   });
 
@@ -177,19 +177,104 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
     expect(screen.getByTestId("catalog-asset-upload-drawer")).toHaveTextContent(
       "不会编辑指标、Join 或业务语义"
     );
-    expect(screen.getByTestId("catalog-asset-upload-target-schema")).toHaveTextContent(
-      "openclaw_db"
+    expect(screen.queryByTestId("catalog-asset-upload-target-schema")).not.toBeInTheDocument();
+    expect(screen.getByTestId("catalog-asset-upload-target-file")).toHaveTextContent(
+      "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"
     );
     expect(screen.queryByTestId("catalog-asset-upload-schema")).not.toBeInTheDocument();
-    expect(screen.getByTestId("catalog-asset-upload-filename")).toHaveValue(
-      "openclaw_db.yaml"
+    const filename = screen.getByTestId("catalog-asset-upload-filename");
+    expect(filename.tagName).not.toBe("INPUT");
+    expect(filename).toHaveTextContent("openclaw_db.yaml");
+    expect(filename).toHaveAttribute("translate", "no");
+    expect(filename).toHaveAttribute("dir", "ltr");
+    expect(filename).toHaveClass("notranslate");
+  });
+
+  it("uses the selected Schema for the default read-only filename", async () => {
+    stubFetch({});
+    const { Wrapper } = makeWrapper();
+    render(
+      <Wrapper>
+        <CatalogAssetUploadDrawer
+          open
+          onClose={vi.fn()}
+          connectionId="demo-mysql"
+          schemaOptions={["dataforai", "openclaw_db"]}
+        />
+      </Wrapper>
     );
+
+    const filename = screen.getByTestId("catalog-asset-upload-filename");
+    expect(filename).toHaveTextContent("dataforai.yaml");
+    expect(screen.getByTestId("catalog-asset-upload-target-file")).toHaveTextContent(
+      "semantic-layer/demo-mysql/_schema/dataforai.yaml"
+    );
+    const textarea = screen.getByTestId("catalog-asset-upload-textarea") as HTMLTextAreaElement;
+    expect(textarea.placeholder).toContain("dataforai.customers");
+    expect(textarea.placeholder).not.toContain("openclaw_db.customers");
+
+    fireEvent.change(screen.getByTestId("catalog-asset-upload-schema"), {
+      target: { value: "openclaw_db" }
+    });
+    expect(filename).toHaveTextContent("openclaw_db.yaml");
+    expect(screen.getByTestId("catalog-asset-upload-target-file")).toHaveTextContent(
+      "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"
+    );
+    expect(textarea.placeholder).toContain("openclaw_db.customers");
+    expect(textarea.placeholder).not.toContain("dataforai.customers");
+  });
+
+  it("shows the selected file name as read-only text", async () => {
+    const requests: unknown[] = [];
+    const handlers: HandlerMap = {
+      "POST /api/catalog/assets/validate": (body) => {
+        requests.push(body);
+        return new Response(JSON.stringify({ ok: true, data: makeValidateResponse() }));
+      }
+    };
+    stubFetch(handlers);
+    const { Wrapper } = makeWrapper();
+    render(
+      <Wrapper>
+        <CatalogAssetUploadDrawer
+          open
+          onClose={vi.fn()}
+          connectionId="demo-mysql"
+          schema="openclaw_db"
+        />
+      </Wrapper>
+    );
+
+    const input = screen.getByTestId("catalog-asset-upload-file") as HTMLInputElement;
+    const file = new File(
+      ["tables:\n  customers:\n    table: openclaw_db.customers\n"],
+      "selected_schema.yaml",
+      { type: "application/x-yaml" }
+    );
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      const filename = screen.getByTestId("catalog-asset-upload-filename");
+      expect(filename.tagName).not.toBe("INPUT");
+      expect(filename).toHaveTextContent("selected_schema.yaml");
+      expect(filename).toHaveClass("notranslate");
+      expect(filename).toHaveAttribute("translate", "no");
+      expect(filename).toHaveAttribute("dir", "ltr");
+    });
+    await waitFor(() => {
+      expect(requests.at(-1)).toMatchObject({
+        filename: "selected_schema.yaml"
+      });
+    });
   });
 
   it("triggers validate on textarea paste without selecting a file", async () => {
+    const requests: unknown[] = [];
     const handlers: HandlerMap = {
-      "POST /api/catalog/assets/validate": () =>
-        new Response(JSON.stringify({ ok: true, data: makeValidateResponse() }))
+      "POST /api/catalog/assets/validate": (body) => {
+        requests.push(body);
+        return new Response(JSON.stringify({ ok: true, data: makeValidateResponse() }));
+      }
     };
     stubFetch(handlers);
     const { Wrapper } = makeWrapper();
@@ -198,7 +283,7 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
         <CatalogAssetUploadButton connectionId="demo-mysql" schema="openclaw_db" />
       </Wrapper>
     );
-    fireEvent.click(screen.getByRole("button", { name: "上传该 Schema 的 YAML" }));
+    fireEvent.click(screen.getByRole("button", { name: "上传 Manifest" }));
 
     const textarea = await screen.findByTestId("catalog-asset-upload-textarea");
     fireEvent.change(textarea, {
@@ -208,6 +293,12 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
       expect(screen.getByTestId("catalog-asset-target-path")).toHaveTextContent(
         "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"
       );
+    });
+    expect(requests.at(-1)).toMatchObject({
+      connectionId: "demo-mysql",
+      schema: "openclaw_db",
+      assetKind: "schema_manifest",
+      filename: "openclaw_db.yaml"
     });
     expect(screen.getByTestId("catalog-asset-validation-panel")).toHaveTextContent("1");
   });
@@ -251,7 +342,7 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
         <CatalogAssetUploadButton connectionId="demo-mysql" schema="openclaw_db" />
       </Wrapper>
     );
-    fireEvent.click(screen.getByRole("button", { name: "上传该 Schema 的 YAML" }));
+    fireEvent.click(screen.getByRole("button", { name: "上传 Manifest" }));
     const textarea = await screen.findByTestId("catalog-asset-upload-textarea");
     fireEvent.change(textarea, { target: { value: "tables: {}\n" } });
     await waitFor(() => screen.getByTestId("catalog-asset-upload-confirm-overwrite"));
@@ -267,11 +358,14 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
   });
 
   it("uploads, shows the success summary, and the primary action navigates to the whitelist", async () => {
+    const uploadRequests: unknown[] = [];
     const handlers: HandlerMap = {
       "POST /api/catalog/assets/validate": () =>
         new Response(JSON.stringify({ ok: true, data: makeValidateResponse() })),
-      "POST /api/catalog/assets/upload": () =>
-        new Response(JSON.stringify({ ok: true, data: makeUploadResponse() })),
+      "POST /api/catalog/assets/upload": (body) => {
+        uploadRequests.push(body);
+        return new Response(JSON.stringify({ ok: true, data: makeUploadResponse() }));
+      },
       "GET /api/catalog/asset-uploads": () =>
         new Response(
           JSON.stringify({ ok: true, data: { records: [], lastBySchema: {} } })
@@ -301,6 +395,12 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("catalog-asset-upload-success")).toBeInTheDocument();
+    });
+    expect(uploadRequests.at(-1)).toMatchObject({
+      connectionId: "demo-mysql",
+      schema: "openclaw_db",
+      assetKind: "schema_manifest",
+      filename: "openclaw_db.yaml"
     });
     const primary = screen.getByTestId("catalog-asset-upload-primary");
     expect(primary).toHaveAttribute("href", "/connections/whitelist?schema=openclaw_db");
@@ -389,14 +489,14 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
         <CatalogAssetUploadButton connectionId="demo-mysql" schema="openclaw_db" />
       </Wrapper>
     );
-    fireEvent.click(screen.getByRole("button", { name: "上传该 Schema 的 YAML" }));
+    fireEvent.click(screen.getByRole("button", { name: "上传 Manifest" }));
     const textarea = await screen.findByTestId("catalog-asset-upload-textarea");
     // MVP uses a plain <textarea>; assert tag name to guard against future
     // accidental Monaco introduction.
     expect(textarea.tagName).toBe("TEXTAREA");
   });
 
-  it("M21: drawer uses Schema Manifest title, 目标 Schema label, legal YAML placeholder, exact filename display, and no machine-translation artifacts", async () => {
+  it("M21: drawer uses Schema Manifest title, target file display, legal YAML placeholder, exact filename display, and no machine-translation artifacts", async () => {
     stubFetch({});
     const { Wrapper } = makeWrapper();
     render(
@@ -412,7 +512,10 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
 
     const drawer = await screen.findByTestId("catalog-asset-upload-drawer");
     expect(within(drawer).getByRole("heading", { name: /Schema Manifest/i })).toBeInTheDocument();
-    expect(within(drawer).getByText(/目标 Schema/)).toBeInTheDocument();
+    expect(within(drawer).queryByText(/目标 Schema/)).not.toBeInTheDocument();
+    expect(within(drawer).getByTestId("catalog-asset-upload-target-file")).toHaveTextContent(
+      "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"
+    );
     expect(within(drawer).queryByText("目标架构")).not.toBeInTheDocument();
     expect(within(drawer).queryByText("目标模式")).not.toBeInTheDocument();
     expect(within(drawer).queryByText("模式清单")).not.toBeInTheDocument();
@@ -432,8 +535,10 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
 
     // Filename display is exact, with translate="no" + dir="ltr" so browser
     // translation plugins cannot corrupt the file name.
-    const nameNode = within(drawer).getByText("openclaw_db.yaml");
+    const nameNode = within(drawer).getByTestId("catalog-asset-upload-filename");
     expect(nameNode).toBeInTheDocument();
+    expect(nameNode).toHaveTextContent("openclaw_db.yaml");
+    expect(nameNode.tagName).not.toBe("INPUT");
     expect(nameNode).toHaveAttribute("translate", "no");
     expect(nameNode).toHaveAttribute("dir", "ltr");
     expect(within(drawer).queryByText("openclaw_db已.yaml")).not.toBeInTheDocument();

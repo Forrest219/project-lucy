@@ -51,7 +51,12 @@ export function ConnectionTest() {
       if (connId === activeConnId) {
         setResult({
           status: "error",
-          reason: err instanceof Error ? err.message : "未知错误"
+          reason: err instanceof Error ? err.message : "未知错误",
+          command: `ktx connection test ${connId}`,
+          args: ["connection", "test", connId],
+          exitCode: null,
+          stdout: "",
+          stderr: err instanceof Error ? err.message : ""
         });
         setLogsExpanded(true);
       }
@@ -68,7 +73,7 @@ export function ConnectionTest() {
     <div className="pl-page-stack">
       <PageHeader
         title="连通测试"
-        breadcrumbs={["数据库接入", "连通测试"]}
+        breadcrumbs={["数据接入", "连通测试"]}
         description="测试数据库连通性，验证凭据、网络与驱动配置是否正确。"
         badges={
           projectQuery.data ? <span>{projectQuery.data.root}</span> : null
@@ -80,8 +85,8 @@ export function ConnectionTest() {
         data-testid="connection-test-overview-hint"
         translate="no"
       >
-        连接概览用于维护 Schema、YAML 资产与本地 Catalog；数据库连通性统一在本页测试。
-        如需核对连接配置，请回到{" "}
+        也可以在连接概览中对单个连接执行测试。
+        如需核对连接配置，请前往{" "}
         <Link to="/connections" className="pl-link" data-testid="connection-test-overview-link">
           连接概览
         </Link>

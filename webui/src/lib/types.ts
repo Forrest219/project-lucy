@@ -135,8 +135,11 @@ export type ConnectionTestResult = {
   latencyMs?: number;
   detail?: string;
   reason?: string;
-  stdout?: string;
-  stderr?: string;
+  command: string;
+  args: string[];
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
 };
 
 export type AddSchemaPreview = {

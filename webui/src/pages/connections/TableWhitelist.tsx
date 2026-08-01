@@ -93,12 +93,12 @@ function isEqualSet<T>(a: Iterable<T>, b: Iterable<T>): boolean {
 
 function catalogReloadToastSummary(run: { tables: number; enabledTables: number; warnings: unknown[] }): string {
   const warningPart = run.warnings.length > 0 ? ` · ${run.warnings.length} 个提示` : "";
-  return `本地目录已刷新 · 发现 ${run.tables} 张表 · 表白名单 ${run.enabledTables} 张${warningPart}`;
+  return `本地目录已刷新 · 发现 ${run.tables} 张表 · 启用表范围 ${run.enabledTables} 张${warningPart}`;
 }
 
 function catalogReloadBannerSummary(run: { tables: number; enabledTables: number; warnings: unknown[] }): string {
   const warningPart = run.warnings.length > 0 ? `，${run.warnings.length} 个提示` : "";
-  return `本地目录已刷新。发现 ${run.tables} 张表，当前表白名单 ${run.enabledTables} 张${warningPart}。`;
+  return `本地目录已刷新。发现 ${run.tables} 张表，当前启用表范围 ${run.enabledTables} 张${warningPart}。`;
 }
 
 export function TableWhitelist() {
@@ -370,12 +370,12 @@ export function TableWhitelist() {
     onSuccess: (results) => {
       const allWritten = results.every((r) => r.write.written);
       if (allWritten) {
-        toast.success("表白名单已保存");
-        setStatusMessage("表白名单已保存。保存不会自动刷新本地目录。");
+        toast.success("启用表范围已保存");
+        setStatusMessage("启用表范围已保存。保存不会自动刷新本地目录。");
         setStatusTone("success");
       } else {
-        toast.error("表白名单保存未完成，请重试。");
-        setStatusMessage("表白名单保存未完成");
+        toast.error("启用表范围保存未完成，请重试。");
+        setStatusMessage("启用表范围保存未完成");
         setStatusTone("danger");
       }
       // Sync drafts to the just-persisted state for the changed connections
@@ -410,8 +410,8 @@ export function TableWhitelist() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="表白名单"
-        breadcrumbs={["数据库接入", "表白名单"]}
+        title="启用表范围"
+        breadcrumbs={["数据接入", "启用表范围"]}
         description={
           <>
             维护进入语义层的表范围，保存后写入 <code>ktx.yaml</code> 的 <code>enabled_tables</code> 字段。
@@ -428,7 +428,7 @@ export function TableWhitelist() {
         )}
 
         {connections.length > 0 && (
-          <div className="pl-whitelist-toolbar" role="toolbar" aria-label="表白名单工具栏">
+          <div className="pl-whitelist-toolbar" role="toolbar" aria-label="启用表范围工具栏">
             <div className="pl-whitelist-filter-area" data-testid="pl-whitelist-filter-area">
               <label className="grid gap-1.5 text-sm">
                 <span>搜索</span>
