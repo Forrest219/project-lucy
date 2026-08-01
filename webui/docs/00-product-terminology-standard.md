@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-07-31 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名） |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -168,11 +168,21 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Download | 下载 | 导出 | 下传 | 用户获取文件 |
 | Export | 导出 | 下载资产包 | 输出 | 从系统生成可下载交付物 |
 | Import | 导入 | 上传资产包 | 输入 | 将外部资产纳入系统 |
+| Data Agent Ops Control Plane | Data Agent Ops Control Plane | Data Agent 运维控制台 | 语义维护工作台、KTX WebUI（仅作为 UI 副标题时）、控制台（作为唯一称谓）、运维控制面（M37 后视为弃用） | Lucy WebUI 的产品定位；自 M37 起在品牌区副标题出现，文档叙事中以英文 brand term 优先 |
 | Ops Dashboard | 运维驾驶舱 | 系统概览 | 大屏、看板（作为主标题） | 系统概览的产品心智升级，强调 data agent 可服务状态 |
 | Action Required | 待处理事项 | 运维待办 | 告警列表泛化 | 首页聚合的跨模块待处理队列 |
 | Object Detail Drawer | 对象详情抽屉 | 详情抽屉 | 详情弹窗泛化 | 跨模块查看 Connection / Table / Agent / Eval Run / Audit Event 等对象上下文 |
 | Change Impact | 变更影响范围 | 影响范围 | 影响分析（作为按钮主名） | 发布前说明哪些对象、Agent、eval 可能被影响 |
 | Quality Operations | 质量运营 | 质量评测运营 | 质量评价 | 评测模块从列表管理升级为持续运营，含趋势、阈值、失败归因 |
+
+### 3.0 弃用别名（仅供溯源，不允许出现在新代码 / 新文档）
+
+| 弃用别名 | 最后出现 | 弃用理由 | 替代 |
+|---|---|---|---|
+| 语义维护工作台 | `webui/src/app/App.tsx:114`（v0.1 及之前） | M36 §4 已将 Lucy WebUI 心智从「资源维护」升级为「运维控制台」 | Data Agent Ops Control Plane |
+| 运维控制面 | `webui/docs/39-data-agent-ops-platform-global-ux-spec.md` §1 背景 line 25（v0.1） | M37 顺手统一为「运维控制台」，避免 spec 39 ↔ spec 40 漂移 | Data Agent 运维控制台 |
+| KTX WebUI 治理控制台 | `docs/webui-module-guide.md:19`（v1.3 及之前） | 品牌已切到 Lucy | Data Agent Ops Control Plane |
+| 本地治理工作台 | `docs/project-overview.md:67` | 同上 | Data Agent Ops Control Plane |
 
 ### 3.1 Review 与 Approval 的边界
 
@@ -411,6 +421,7 @@ Spec、Plan、Runbook 中的新概念也必须遵守本标准。文档可以解�
 
 ### P0
 
+- 把品牌区副标题从「语义维护工作台」替换为 `Data Agent Ops Control Plane` + `Data Agent 运维控制台`（M37 已完成；后续 brand term 调整才需再回到本节）。
 - 删除所有机器翻译幻觉：
   - `财政部舱单`
   - `替代测试`
