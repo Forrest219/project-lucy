@@ -128,7 +128,7 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
             fill={belowRed ? "var(--color-danger)" : "var(--color-accent)"}
             data-testid={belowRed ? `monitor-below-red-${p.date}` : `monitor-point-${p.date}`}
           >
-            <title>{p.date}: {Math.round(p.passRate * 100)}% ({p.totalRuns} runs)</title>
+            <title>{p.date}: {Math.round(p.passRate * 100)}% ({p.totalRuns} 个运行)</title>
           </circle>
         );
       })}
@@ -180,7 +180,7 @@ function clampNumber(rawValue: string, min: number, max: number): number | null 
  */
 function emptyActionHref(action: string, domain: string): string {
   switch (action) {
-    case "触发首次 Run":
+    case "触发首次运行":
       return `/eval/runs${domain ? `?domain=${encodeURIComponent(domain)}` : ""}`;
     case "导入评测用例":
       return `/eval/cases${domain ? `/${encodeURIComponent(domain)}` : ""}`;
@@ -193,10 +193,12 @@ function emptyActionHref(action: string, domain: string): string {
 
 /**
  * Build a deep-link to the run list filtered to a specific date. M36 polish:
- * the link is documented as "查看相关 Run" (not "查看失败 Case") because
+ * the link is documented as "查看相关运行" (not "查看失败 Case") because
  * the RunList page does not yet consume the `?date=` filter. The
  * `?domain=` half is honoured and lands the user on the right list; once
  * RunList honours `?date=` we can re-label the CTA back to "查看失败 Case".
+ * M39 polish: "运行" replaces the English "Run" word in user-facing copy
+ * per spec §11.
  */
 function belowRedDeepLinkHref(
   points: EvalTrendPoint[],
@@ -325,7 +327,7 @@ export function Monitor() {
 
       <div className="pl-metric-grid">
         <MetricCard label="最新通过率" value={pct(lastPoint?.passRate)} hint={lastPoint?.date ?? "暂无趋势数据"} tone={statusTone} />
-        <MetricCard label="最近 run" value={lastPoint?.totalRuns ?? 0} hint={`近 ${days} 天最后统计点`} />
+        <MetricCard label="最近运行" value={lastPoint?.totalRuns ?? 0} hint={`近 ${days} 天最后统计点`} />
         <MetricCard label="失败 case" value={topFails.length} hint={topFails.length > 0 ? "见 Top failures" : "暂无失败集中项"} tone={topFails.length > 0 ? "warning" : "success"} />
         <MetricCard label="红线状态" value={statusText} hint={`红线 ${pct(thresholds.red)} / 黄线 ${pct(thresholds.yellow)}`} tone={statusTone} />
       </div>
@@ -385,7 +387,7 @@ export function Monitor() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
-                      {points.filter((point) => point.passRate < thresholds.red).length} 个点跌破红线，请查看相关 Run。
+                      {points.filter((point) => point.passRate < thresholds.red).length} 个点跌破红线，请查看相关运行。
                     </span>
                     <Link
                       to={belowRedDeepLinkHref(points, thresholds.red, activeDomain)}
@@ -393,7 +395,7 @@ export function Monitor() {
                       translate="no"
                       data-testid="monitor-below-red-drilldown"
                     >
-                      查看相关 Run →
+                      查看相关运行 →
                     </Link>
                   </div>
                 </div>

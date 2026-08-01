@@ -33,6 +33,7 @@
 | [30-help-markdown-rendering-spec.md](30-help-markdown-rendering-spec.md) | Help Center Markdown 渲染修复：系统手册表格、深链、安全渲染与翻译防御 | 产品 / 前端 / 文档 / 安全 |
 | [34-table-whitelist-catalog-reload-layout-stability-spec.md](34-table-whitelist-catalog-reload-layout-stability-spec.md) | 表白名单刷新反馈与布局稳定性：Toast 成功反馈、Schema 内缺失 Manifest 诊断、工具栏和行内操作降噪 | 产品 / 前端 |
 | [40-lucy-webui-positioning-control-plane.md](40-lucy-webui-positioning-control-plane.md) | Lucy WebUI 品牌定位升级到 Data Agent Ops Control Plane：品牌区副标题、术语标准 v0.2、过期设计 spec 备注与测试断言 | 产品 / 前端 / 文档 |
+| [41-system-overview-enterprise-ops-polish-spec.md](41-system-overview-enterprise-ops-polish-spec.md) | 系统概览企业级运维控制台 polish：canonical `/overview`、顶栏上下文、待处理事项治理、Metric-first 快照与 MCP 配置 Drawer | 产品 / UX / 前端 / Accessibility |
 
 ## 与原 README 的关键校正
 

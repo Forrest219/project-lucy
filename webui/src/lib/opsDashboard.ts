@@ -5,10 +5,10 @@
 // live data; tests in `__tests__/ops-dashboard.test.ts` exercise the helpers
 // in isolation.
 //
-// The view model owns the "运维驾驶舱" (Ops Dashboard) mental model: it
+// The view model owns the "系统概览" (System Overview) mental model: it
 // converts raw counts (semantic coverage, pending files, ACL denies, etc.)
 // into the action-required queue and service-health strip the user sees on
-// `/onboarding`.
+// `/overview`.
 
 export type Severity = "critical" | "warning" | "ready" | "info";
 
@@ -19,17 +19,42 @@ export const severityOrder: Record<Severity, number> = {
   info: 3
 };
 
+/**
+ * M39: User-facing severity label. Never render the raw `Severity` value to
+ * end users; the system overview polish spec bans `Critical / Warning /
+ * Ready / Info` as visible labels. Mapping is deterministic and lives here
+ * so every UI surface stays in sync.
+ */
+export type SeverityLabel = "高风险" | "待处理" | "提醒" | "就绪";
+
+export const severityLabelBySeverity: Record<Severity, SeverityLabel> = {
+  critical: "高风险",
+  warning: "待处理",
+  info: "提醒",
+  ready: "就绪"
+};
+
 export type ActionRequiredItem = {
   /** Stable identifier so UI can key React lists without re-rendering. */
   id: string;
   /** User-facing summary, e.g. "12 张表待补语义". */
   label: string;
-  /** Severity drives the colour and sort order. */
+  /** Internal sort key; never render directly. */
   severity: Severity;
+  /** User-facing Chinese severity label. */
+  severityLabel: SeverityLabel;
   /** Optional deep-link target. `null` means the item is informational. */
   href: string | null;
   /** Short test-id hook for stable Vitest assertions. */
   testId: string;
+  /** M39: impact scope, e.g. "问答召回率". */
+  impact: string;
+  /** M39: owning team, e.g. "数据治理组". */
+  owner: string;
+  /** M39: deterministic evidence string, e.g. "语义覆盖 4/66". */
+  evidence: string;
+  /** M39: user-facing update time, e.g. "今天 10:12" or "更新时间未知". */
+  updatedAtLabel: string;
 };
 
 export type ServiceHealthKey =
@@ -53,6 +78,8 @@ export type ActionRequiredInput = {
   pendingPublishFiles: number;
   evalRunsLast30d: number;
   aclDenied7d: number;
+  /** Optional dashboard refresh time used to render "今天 HH:mm". */
+  dashboardUpdatedAt?: Date;
 };
 
 const SEVERITY_BY_COUNT: Array<{ severity: Severity; test: (n: number) => boolean }> = [
@@ -80,55 +107,134 @@ export function pendingSemanticCount(coverage: SemanticCoverage): number {
 }
 
 /**
+ * Decide the severity for a semantic-gap item.
+ *
+ * - `total <= 0`: no item.
+ * - gap ratio ≥ 2/3 (`done < total/3`): critical ("高风险").
+ * - otherwise: warning ("待处理").
+ *
+ * The 2/3 threshold matches spec 41 §6.2 "待发布变更、Catalog 待处理、语义
+ * 覆盖不足" warning bucket; large gaps surface as `高风险` so users see the
+ * governance posture immediately.
+ */
+function semanticGapSeverity(coverage: SemanticCoverage): Severity | null {
+  if (coverage.total <= 0) return null;
+  if (coverage.done >= coverage.total) return null;
+  return coverage.done * 3 < coverage.total ? "critical" : "warning";
+}
+
+/**
+ * Format the dashboard refresh time as "今天 HH:mm" when the timestamp
+ * matches today in the runtime timezone, falling back to an explicit
+ * `更新时间未知` sentinel when no timestamp is provided. We deliberately
+ * avoid fabricating a precise wall-clock time the user cannot verify.
+ */
+export function formatUpdatedAtLabel(date: Date | undefined): string {
+  if (!date) return "更新时间未知";
+  const today = new Date();
+  const sameDay =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return sameDay ? `今天 ${hh}:${mm}` : "更新时间未知";
+}
+
+/**
  * Build the cross-module "待处理事项" (Action Required) queue shown at the
- * top of `/onboarding`. The order below is contractual: critical items come
+ * top of `/overview`. The order below is contractual: critical items come
  * first, then warning, then info. Items with count 0 are omitted.
+ *
+ * M39 additions: every emitted item carries Chinese severity label,
+ * `impact`, `owner`, deterministic `evidence` string and an `updatedAtLabel`
+ * derived from the optional `dashboardUpdatedAt` input.
  */
 export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequiredItem[] {
+  // M39 polish (MINOR-1): guard against negative inputs. Production
+  // callers always pass non-negative counts, but a buggy upstream
+  // payload (e.g. an ETL miscount) used to surface as a phantom
+  // "X 张表待补语义" item with a negative number. Clamp here so the
+  // helper stays total: a downstream caller can trust the result.
+  const safePendingCatalog = Math.max(0, input.pendingCatalogItems);
+  const safePendingPublish = Math.max(0, input.pendingPublishFiles);
+  const safeEvalRuns = Math.max(0, input.evalRunsLast30d);
+  const safeAclDenied = Math.max(0, input.aclDenied7d);
+  const semanticGap = pendingSemanticCount(input.semanticCoverage);
+  const semanticSeverity = semanticGapSeverity(input.semanticCoverage);
+  const updatedAtLabel = formatUpdatedAtLabel(input.dashboardUpdatedAt);
+
   const items: Array<ActionRequiredItem | null> = [
-    pendingSemanticCount(input.semanticCoverage) > 0
+    semanticSeverity
       ? {
           id: "semantic-gap",
-          label: `${formatCount(pendingSemanticCount(input.semanticCoverage))} 张表待补语义`,
-          severity: "warning",
+          label: `${formatCount(semanticGap)} 张表待补语义`,
+          severity: semanticSeverity,
+          severityLabel: severityLabelBySeverity[semanticSeverity],
           href: "/?status=partial",
-          testId: "ops-action-semantic-gap"
+          testId: "ops-action-semantic-gap",
+          impact: "问答召回率",
+          owner: "数据治理组",
+          evidence: `语义覆盖 ${formatCount(input.semanticCoverage.done)}/${formatCount(
+            input.semanticCoverage.total
+          )}`,
+          updatedAtLabel
         }
       : null,
-    input.pendingCatalogItems > 0
+    safePendingCatalog > 0
       ? {
           id: "catalog-pending",
-          label: `${formatCount(input.pendingCatalogItems)} 个 Catalog 对象待处理`,
+          label: `${formatCount(safePendingCatalog)} 个 Catalog 对象待处理`,
           severity: "warning",
+          severityLabel: severityLabelBySeverity.warning,
           href: "/connections",
-          testId: "ops-action-catalog-pending"
+          testId: "ops-action-catalog-pending",
+          impact: "资产同步",
+          owner: "架构组",
+          evidence: `Catalog 待处理 ${formatCount(safePendingCatalog)} 项`,
+          updatedAtLabel
         }
       : null,
-    input.pendingPublishFiles > 0
+    safePendingPublish > 0
       ? {
           id: "publish-pending",
-          label: `存在 ${formatCount(input.pendingPublishFiles)} 个待发布文件`,
+          label: `存在 ${formatCount(safePendingPublish)} 个待发布文件`,
           severity: "warning",
+          severityLabel: severityLabelBySeverity.warning,
           href: "/publish/workbench",
-          testId: "ops-action-publish-pending"
+          testId: "ops-action-publish-pending",
+          impact: "发布一致性",
+          owner: "语义发布负责人",
+          evidence: `diff files: ${formatCount(safePendingPublish)}`,
+          updatedAtLabel
         }
       : null,
-    input.evalRunsLast30d === 0
+    safeEvalRuns === 0
       ? {
           id: "eval-gap",
           label: "近 30 天无评测数据",
-          severity: "warning",
+          severity: "info",
+          severityLabel: severityLabelBySeverity.info,
           href: "/eval/monitor",
-          testId: "ops-action-eval-gap"
+          testId: "ops-action-eval-gap",
+          impact: "质量基线",
+          owner: "QA 团队",
+          evidence: "近 30 天无评测数据",
+          updatedAtLabel
         }
       : null,
-    input.aclDenied7d > 0
+    safeAclDenied > 0
       ? {
           id: "acl-deny",
-          label: "近 7 天存在 ACL deny",
+          label: "近 7 天存在 ACL 拒绝",
           severity: "critical",
+          severityLabel: severityLabelBySeverity.critical,
           href: "/admin/audit?outcome=denied",
-          testId: "ops-action-acl-deny"
+          testId: "ops-action-acl-deny",
+          impact: "访问安全",
+          owner: "访问治理组",
+          evidence: `ACL 拒绝: ${formatCount(safeAclDenied)}`,
+          updatedAtLabel
         }
       : null
   ];
@@ -215,7 +321,7 @@ export const NO_ACTION_REQUIRED_MESSAGE = "暂无高优先级待处理事项";
  * The Monitor page references these in its empty state.
  */
 export const EVAL_MONITOR_EMPTY_ACTIONS = [
-  "触发首次 Run",
+  "触发首次运行",
   "导入评测用例",
   "配置阈值"
 ] as const;

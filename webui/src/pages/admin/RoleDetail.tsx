@@ -521,7 +521,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
               />
             </label>
             <label className="grid gap-1" htmlFor="role-tools-input">
-              <span className="text-sm font-medium">MCP 工具</span>
+              <span className="text-sm font-medium"><span className="notranslate" translate="no">MCP</span> 工具</span>
               <textarea
                 id="role-tools-input"
                 className="pl-input"
@@ -684,7 +684,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                   <div className="pl-metric-card"><span>Source</span><strong>{detail.effectivePermissions?.sources.length ?? 0}</strong><small>{detail.effectivePermissions?.snapshotHash.slice(0, 12)}</small></div>
                 </div>
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium">允许的 MCP 工具</div>
+                  <div className="text-sm font-medium">允许的 <span className="notranslate" translate="no">MCP</span> 工具</div>
                   <div className="flex flex-wrap gap-2">
                     {(detail.effectivePermissions?.tools ?? []).map((tool) => (
                       <span key={tool} className="pl-status-badge pl-status-included">{tool}</span>
@@ -711,7 +711,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
             {!detail ? (
               <p className="text-sm text-fg-muted">尚未保存。</p>
             ) : (detail.users ?? []).length === 0 ? (
-              <p className="text-sm text-fg-muted">当前没有 Agent 引用此 role。</p>
+              <p className="text-sm text-fg-muted">当前没有 <span className="notranslate" translate="no">Agent</span> 引用此 role。</p>
             ) : (
               <div className="grid gap-2">
                 {detail.users!.map((u) => (

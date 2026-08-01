@@ -266,7 +266,7 @@ describe("NewToken", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
 
     expect(await screen.findByText("lucy_oneshot_token")).toBeInTheDocument();
-    expect(screen.getByText(/当前使用本地默认 MCP endpoint/)).toBeInTheDocument();
+    expect(screen.getByText(/当前使用本地默认/)).toBeInTheDocument();
     expect(screen.getByTestId("snippet-active")).toHaveTextContent("http://127.0.0.1:7879/mcp");
   });
 });

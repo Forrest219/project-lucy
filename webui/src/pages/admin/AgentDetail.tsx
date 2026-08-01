@@ -332,7 +332,7 @@ export function AgentDetail() {
               </select>
               {!agent.role && agent.allow && (
                 <span className="text-xs text-fg-muted">
-                  旧 ACL 只读兼容；保存角色后会移除该 Agent 的 legacy allow。
+                  旧 ACL 只读兼容；保存角色后会移除该 <span className="notranslate" translate="no">Agent</span> 的 legacy allow。
                 </span>
               )}
             </label>
@@ -347,14 +347,15 @@ export function AgentDetail() {
               </p>
               <Link
                 to={`/admin/agents/${userId}/tokens/new`}
-                className="pl-btn pl-btn--primary text-sm"
+                className="pl-btn pl-btn--primary text-sm notranslate"
+                translate="no"
                 aria-label="生成新 Token"
               >
-                + 生成新 Token
+                + 生成新 <span className="notranslate" translate="no">Token</span>
               </Link>
             </div>
             {agent.tokens.length === 0 ? (
-              <p className="text-sm text-fg-muted">暂无 token，点「生成新 Token」创建。</p>
+              <p className="text-sm text-fg-muted">暂无 token，点「生成新 <span className="notranslate" translate="no">Token</span>」创建。</p>
             ) : (
               <div className="grid gap-2">
                 {agent.tokens.map((token) => (
@@ -389,11 +390,12 @@ export function AgentDetail() {
                       </button>
                       <button
                         type="button"
-                        className="pl-btn pl-btn--danger text-xs"
+                        className="pl-btn pl-btn--danger text-xs notranslate"
+                        translate="no"
                         onClick={() => handleRevokeToken(token.label)}
                         aria-label={`撤销 ${token.label}`}
                       >
-                        撤销 Token
+                        撤销 <span className="notranslate" translate="no">Token</span>
                       </button>
                     </div>
                   </div>
@@ -472,7 +474,7 @@ export function AgentDetail() {
                   )}
                 </div>
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium">允许的 MCP 工具</div>
+                  <div className="text-sm font-medium">允许的 <span className="notranslate" translate="no">MCP</span> 工具</div>
                   <div className="flex flex-wrap gap-2">
                     {effective.tools.length === 0 ? (
                       <span className="text-sm text-fg-muted">—</span>

@@ -106,17 +106,18 @@ describe("Monitor", () => {
     expect(screen.getByText("case_sales")).toBeInTheDocument();
   });
 
-  it("labels the below-red drilldown as 查看相关 Run (M36 polish)", async () => {
+  it("labels the below-red drilldown as 查看相关运行 (M36/M39 polish)", async () => {
     stubMonitorFetch();
     renderMonitor();
 
     // The default fixture has a 75% point below the 80% red threshold, so
     // the below-red callout should be visible. M36 review follow-up: the
-    // CTA copy was softened from "查看失败 Case" to "查看相关 Run" because
+    // CTA copy was softened from "查看失败 Case" to "查看相关运行" because
     // RunList does not yet consume the `?date=` filter. Once it does we
-    // can re-introduce the stronger copy.
+    // can re-introduce the stronger copy. M39 polish: "运行" replaces
+    // the English "Run" word in user-facing copy per spec §11.
     const callout = await screen.findByTestId("monitor-below-red-callout");
-    expect(callout).toHaveTextContent("查看相关 Run");
+    expect(callout).toHaveTextContent("查看相关运行");
     const drilldown = screen.getByTestId("monitor-below-red-drilldown");
     expect(drilldown).toHaveAttribute("href", expect.stringMatching(/^\/eval\/runs\?/));
     expect(drilldown).not.toHaveTextContent("查看失败 Case");
@@ -130,11 +131,11 @@ describe("Monitor", () => {
     // user can take to bootstrap the eval monitor.
     const empty = await screen.findByTestId("monitor-trend-empty");
     expect(empty).toHaveTextContent("暂无趋势数据");
-    // 触发首次 Run / 导入评测用例 point at the run / case pages. The exact
+    // 触发首次运行 / 导入评测用例 point at the run / case pages. The exact
     // `?domain=...` suffix depends on the first domain arriving from the
     // API, which is async; assert the prefix and that the empty-state
     // hook is present.
-    const triggerLink = screen.getByTestId("monitor-empty-action-触发首次 Run");
+    const triggerLink = screen.getByTestId("monitor-empty-action-触发首次运行");
     expect(triggerLink.getAttribute("href") ?? "").toMatch(/^\/eval\/runs($|\?)/);
     const importLink = screen.getByTestId("monitor-empty-action-导入评测用例");
     expect(importLink.getAttribute("href") ?? "").toMatch(/^\/eval\/cases($|\/|\?)/);

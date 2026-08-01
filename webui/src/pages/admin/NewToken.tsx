@@ -45,7 +45,7 @@ function EndpointFallbackNotice({ endpointInfo }: { endpointInfo?: McpEndpointIn
   if (endpointInfo?.status !== "fallback") return null;
   return (
     <div className="pl-notice" data-testid="mcp-fallback-notice">
-      当前使用本地默认 MCP endpoint。客户部署请配置 LUCY_PUBLIC_MCP_URL，避免 Agent 复制到只能在本机访问的地址。
+      当前使用本地默认 <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span>。客户部署请配置 <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code>，避免 <span className="notranslate" translate="no">Agent</span> 复制到只能在本机访问的地址。
     </div>
   );
 }
@@ -123,7 +123,11 @@ export function NewToken() {
         <PageHeader
           title="Token 已生成"
           breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
-          description="⚠ 关闭后无法再次查看 token 明文。请立即复制保存，或将下方配置交给 Agent 使用者。"
+          description={
+            <>
+              <span className="notranslate" translate="no">⚠</span> 关闭后无法再次查看 token 明文。请立即复制保存，或将下方配置交给 <span className="notranslate" translate="no">Agent</span> 使用者。
+            </>
+          }
         />
 
         <div className="pl-card grid gap-3">
@@ -153,7 +157,7 @@ export function NewToken() {
 
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-fg-muted">选择客户端，将以下配置交给 Agent 使用者：</p>
+            <p className="text-sm text-fg-muted">选择客户端，将以下配置交给 <span className="notranslate" translate="no">Agent</span> 使用者：</p>
             <button
               type="button"
               className="pl-btn pl-btn--secondary text-sm"
@@ -223,7 +227,11 @@ export function NewToken() {
         <PageHeader
           title="Token 已生成"
           breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
-          description="⚠ Token 已生成，但 Lucy MCP endpoint 当前不可用，无法生成可复制的客户端配置片段。"
+          description={
+            <>
+              <span className="notranslate" translate="no">⚠</span> Token 已生成，但 Lucy <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span> 当前不可用，无法生成可复制的客户端配置片段。
+            </>
+          }
         />
         <div className="pl-card grid gap-3">
           <code
@@ -250,14 +258,14 @@ export function NewToken() {
   return (
     <div className="grid gap-6 max-w-xl">
       <PageHeader
-        title={`为 ${userId} 创建新 Token`}
+        title={<>为 {userId} 创建新 <span className="notranslate" translate="no">Token</span></>}
         breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
         description="一旦关闭生成页面，将无法再看到 token 明文。请立即复制保存。"
       />
 
       <div className="pl-card grid gap-4">
         <label className="grid gap-1">
-          <span className="text-sm font-medium">Token 标签 <span className="text-danger">*</span></span>
+          <span className="text-sm font-medium"><span className="notranslate" translate="no">Token</span> 标签 <span className="text-danger">*</span></span>
           <input
             className="pl-input"
             placeholder="例：hermes-laptop"

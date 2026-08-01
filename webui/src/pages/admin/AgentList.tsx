@@ -151,7 +151,8 @@ function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: st
             <Link to={`/admin/agents/${agent.id}`} className="pl-btn pl-btn--ghost text-sm">编辑</Link>
             <button
               type="button"
-              className="pl-btn pl-btn--ghost text-sm"
+              className="pl-btn pl-btn--ghost text-sm notranslate"
+              translate="no"
               onClick={() => {
                 void copyAgentMcpConfig(endpoint);
               }}
@@ -159,7 +160,7 @@ function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: st
               disabled={!canCopyMcp}
               title={canCopyMcp ? undefined : "Lucy MCP endpoint 不可用"}
             >
-              📋 复制 MCP 配置
+              📋 复制 <span className="notranslate" translate="no">MCP</span> 配置
             </button>
             <button type="button" onClick={onViewLogs} className="pl-btn pl-btn--ghost text-sm">查看日志</button>
           </div>
@@ -211,7 +212,7 @@ function RoleSummaryCard({ role }: { role: Role | undefined }) {
         </div>
       </div>
       <div className="grid gap-1">
-        <span className="text-xs text-fg-muted">MCP 工具</span>
+        <span className="text-xs text-fg-muted"><span className="notranslate" translate="no">MCP</span> 工具</span>
         <div className="flex flex-wrap gap-1.5">
           {role.tools.length === 0 ? (
             <span className="text-xs text-fg-muted">—</span>
@@ -290,7 +291,7 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
   return (
     <div className="pl-modal-backdrop">
       <div className="pl-modal-panel">
-        <h2 className="text-lg font-semibold mb-4">新建 Agent</h2>
+        <h2 className="text-lg font-semibold mb-4">新建 <span className="notranslate" translate="no">Agent</span></h2>
         {step === "form" ? (
           <div className="grid gap-4">
             <label className="grid gap-1">
@@ -400,7 +401,11 @@ export function AgentList() {
       <PageHeader
         title="Agent 实例"
         breadcrumbs={["访问治理", "Agent 实例"]}
-        description="配置每个 Agent 实例能用哪些 MCP 工具和访问哪些表。"
+        description={
+          <>
+            配置每个 <span className="notranslate" translate="no">Agent</span> 实例能用哪些 <span className="notranslate" translate="no">MCP</span> 工具和访问哪些表。
+          </>
+        }
         badges={
           <>
             <span>{agents.length} 个 Agent</span>
@@ -450,8 +455,8 @@ export function AgentList() {
         <div className="pl-notice">
           {agents.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-fg-muted mb-4">还没有任何 Agent。创建第一个 Agent 以开始管理访问权限。</p>
-              <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建第一个 Agent</button>
+              <p className="text-fg-muted mb-4">还没有任何 <span className="notranslate" translate="no">Agent</span>。创建第一个 <span className="notranslate" translate="no">Agent</span> 以开始管理访问权限。</p>
+              <button type="button" className="pl-btn pl-btn--primary notranslate" translate="no" onClick={() => setShowNew(true)}>新建第一个 <span className="notranslate" translate="no">Agent</span></button>
             </div>
           ) : "没有匹配的 Agent"}
         </div>

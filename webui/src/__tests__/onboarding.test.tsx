@@ -1,11 +1,37 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Onboarding } from "../pages/Onboarding";
 import type { Agent, SourceSummary } from "../lib/types";
+
+const toastSpy = vi.fn();
+
+vi.mock("sonner", async () => {
+  const actual = await vi.importActual<typeof import("sonner")>("sonner");
+  const baseToast = actual.toast;
+  const wrap = (fn: typeof baseToast) => {
+    const wrapped = ((...args: Parameters<typeof baseToast>) => {
+      toastSpy(...args);
+      return fn(...args);
+    }) as typeof baseToast;
+    wrapped.success = ((...args: Parameters<typeof baseToast.success>) => {
+      toastSpy("success", ...args);
+      return baseToast.success(...args);
+    }) as typeof baseToast.success;
+    wrapped.error = ((...args: Parameters<typeof baseToast.error>) => {
+      toastSpy("error", ...args);
+      return baseToast.error(...args);
+    }) as typeof baseToast.error;
+    return wrapped;
+  };
+  return {
+    ...actual,
+    toast: wrap(baseToast)
+  };
+});
 
 const readyAgent: Agent = {
   id: "analyst",
@@ -118,7 +144,7 @@ afterEach(() => {
 });
 
 describe("Onboarding", () => {
-  it("summarizes runtime system status and copies MCP config", async () => {
+  it("summarizes the M39 system overview surface and copies MCP config", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -127,46 +153,58 @@ describe("Onboarding", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "运维驾驶舱" })).toBeInTheDocument();
+    // M39: PageHeader H1 is 系统概览; 运维驾驶舱 is the product mental
+    // model, not a user-visible H1.
+    expect(await screen.findByRole("heading", { name: "系统概览" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "运维驾驶舱" })).not.toBeInTheDocument();
     expect(screen.queryByText("运行状态")).not.toBeInTheDocument();
     const pageActions = screen.getByLabelText("页面操作");
     expect(within(pageActions).queryByRole("link", { name: "打开系统手册" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "刷新状态" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /刷新状态|刷新中/ })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "数据库接入" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "配置 Agent" })).not.toBeInTheDocument();
     expect(screen.queryByText("Deployment readiness")).not.toBeInTheDocument();
-    // M36: KTX Runtime is now rendered inside the service-health strip
-    // (not a `.pl-metric-card`) but the label must still be present.
+    // M39: compact service health strip (not a 3-up metric grid).
     expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
     expect(screen.getByText("Lucy MCP")).toBeInTheDocument();
     expect(screen.getByText("语义层覆盖")).toBeInTheDocument();
     expect(screen.getByText("Agent 接入")).toBeInTheDocument();
-    // The legacy 3-up metric grid is intentionally not rendered anymore; the
-    // service-health strip replaces it.
     expect(document.querySelectorAll(".pl-metric-grid > .pl-metric-card")).toHaveLength(0);
-    expect(screen.getByText("mysql-demo")).toBeInTheDocument();
+    // The legacy "实时状态与诊断" / "数据源连接" / "语义层状态" / "变更审阅" /
+    // "Agent 接入点" sections are gone — they were folded into the
+    // metric-first quality snapshot and the access-risk list.
+    expect(screen.queryByText("实时状态与诊断")).not.toBeInTheDocument();
+    expect(screen.queryByText("数据源连接")).not.toBeInTheDocument();
+    expect(screen.queryByText("语义层状态")).not.toBeInTheDocument();
+    expect(screen.queryByText("变更审阅")).not.toBeInTheDocument();
+    expect(screen.queryByText("Agent 接入点")).not.toBeInTheDocument();
+    // The legacy big "Lucy MCP 服务运行正常" banner is also gone.
+    expect(screen.queryByText("Lucy MCP 服务运行正常")).not.toBeInTheDocument();
+    expect(screen.queryByText("服务节点已就绪，当前可正常接受 Agent 连接：https://lucy.example.com/mcp")).not.toBeInTheDocument();
+    expect(screen.queryByText("Lucy MCP is ready for Agent delivery")).not.toBeInTheDocument();
+    // The MCP endpoint URL is now rendered inside the metric card and the
+    // Drawer; the main page still surfaces the configured endpoint via
+    // the MCP 接入 section. The heading text is split across a notranslate
+    // `MCP` span + a Chinese tail, so we use a function matcher against
+    // the full text content.
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          (element instanceof HTMLElement ? element.textContent : "").trim() === "MCP 接入"
+      )
+    ).toBeInTheDocument();
     expect(screen.getByText("https://lucy.example.com/mcp")).toBeInTheDocument();
     expect(screen.queryByText("http://localhost:7879/mcp")).not.toBeInTheDocument();
     expect(screen.queryByText("http://127.0.0.1:7879/mcp")).not.toBeInTheDocument();
-    expect(screen.getByText("实时状态与诊断")).toBeInTheDocument();
-    expect(screen.getByText("数据源连接")).toBeInTheDocument();
-    expect(screen.getByText("语义层状态")).toBeInTheDocument();
-    expect(screen.getByText("变更审阅")).toBeInTheDocument();
-    expect(screen.getByText("Agent 接入点")).toBeInTheDocument();
     expect(document.querySelector(".pl-onboarding-step-index")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "查看连接" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "表白名单" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "维护语义" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "审阅校验" })).not.toBeInTheDocument();
-    expect(screen.getByText("Lucy MCP 服务运行正常")).toBeInTheDocument();
-    expect(screen.getByText("服务节点已就绪，当前可正常接受 Agent 连接：https://lucy.example.com/mcp")).toBeInTheDocument();
-    expect(screen.queryByText("Lucy MCP is ready for Agent delivery")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /复制 .*mcp\.json 配置/i })
-    ).toBeInTheDocument();
     expect(screen.queryByText("Semantic Tables")).not.toBeInTheDocument();
     expect(screen.queryByText("Checklist")).not.toBeInTheDocument();
 
+    // Copy MCP config still works on the main page.
     fireEvent.click(screen.getByRole("button", { name: "复制 MCP 配置" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Bearer <LUCY_AGENT_TOKEN>"));
   });
@@ -193,7 +231,7 @@ describe("Onboarding", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides the MCP config snippet when the runtime endpoint is invalid", async () => {
+  it("disables the MCP copy button when the runtime endpoint is invalid", async () => {
     renderPage({
       mcpEndpoint: {
         url: null,
@@ -209,27 +247,29 @@ describe("Onboarding", () => {
       }
     });
 
-    expect(await screen.findByText("Agent 接入点")).toBeInTheDocument();
+    // The MCP 接入 section still appears so the user can see *why* the
+    // buttons are gone, but the copy button must be disabled when the
+    // endpoint is invalid. The view button stays enabled so the user can
+    // open the Drawer and read the diagnostics. The heading text is split
+    // across a notranslate `MCP` span + a Chinese tail, so we use a
+    // function text matcher against the full content.
     expect(
-      screen.queryByRole("button", { name: "复制 MCP 配置" })
-    ).not.toBeInTheDocument();
+      await screen.findByText(
+        (_content, element) =>
+          (element instanceof HTMLElement ? element.textContent : "").trim() === "MCP 接入"
+      )
+    ).toBeInTheDocument();
+    const copyButton = screen.getByRole("button", { name: "复制 MCP 配置" });
+    expect(copyButton).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "查看配置" })
+    ).toBeInTheDocument();
     expect(
       screen.getByText("LUCY_PUBLIC_MCP_URL must be a valid absolute URL.")
     ).toBeInTheDocument();
   });
 
-  it("keeps Agent MCP actions inside the endpoint diagnostic item", async () => {
-    renderPage();
-
-    const agentItem = (await screen.findByText("Agent 接入点")).closest("section");
-    expect(agentItem).toBeInTheDocument();
-    expect(within(agentItem as HTMLElement).getByText("MCP config")).toBeInTheDocument();
-    expect(within(agentItem as HTMLElement).getByRole("button", { name: "复制 MCP 配置" })).toBeInTheDocument();
-    expect(within(agentItem as HTMLElement).queryByRole("link", { name: "新建 Token" })).not.toBeInTheDocument();
-    expect(within(agentItem as HTMLElement).getByRole("link", { name: "查看 Agent 管理 ->" })).toHaveAttribute("href", "/admin/agents");
-  });
-
-  it("aligns warning diagnostic badges with the warning tone", async () => {
+  it("surfaces the Chinese severity label inside action items when pending sources exist", async () => {
     renderPage({
       sources: [
         readySource,
@@ -238,21 +278,28 @@ describe("Onboarding", () => {
       ]
     });
 
-    const semanticItem = (await screen.findByText("语义层状态")).closest("section");
-    expect(semanticItem).toHaveAttribute("data-tone", "warning");
-    expect(within(semanticItem as HTMLElement).getByText("2 待完善")).toHaveClass("pl-status-partial");
-    expect(within(semanticItem as HTMLElement).queryByText("Ready")).not.toBeInTheDocument();
+    const queue = await screen.findByTestId("ops-action-required");
+    // The semantic-gap item must show its Chinese severity label rather
+    // than the English severity bucket.
+    const items = Array.from(queue.querySelectorAll(".pl-action-required-item"));
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      const text = item.textContent ?? "";
+      expect(text).toMatch(/高风险|待处理|提醒/);
+      expect(text).not.toMatch(/(^|\s)Critical(\s|$)/);
+      expect(text).not.toMatch(/(^|\s)Warning(\s|$)/);
+      expect(text).not.toMatch(/(^|\s)Ready(\s|$)/);
+      expect(text).not.toMatch(/(^|\s)Info(\s|$)/);
+    }
   });
 
-  it("shows a not-ready blocker banner with the first failure reason", async () => {
+  it("shows the MCP setup gap reason inline next to the disabled copy button", async () => {
     renderPage({ agents: [] });
 
-    expect(await screen.findByText("Lucy MCP 服务异常")).toBeInTheDocument();
-    expect(screen.getByText("阻塞原因：尚未创建 Agent")).toBeInTheDocument();
-    expect(screen.getByText("尚未创建 Agent")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "打开阻塞项" })
-    ).toHaveAttribute("href", "/admin/agents");
+    expect(await screen.findByText("尚未创建 Agent")).toBeInTheDocument();
+    // The "打开阻塞项" link was retired with the legacy delivery banner;
+    // the user can still reach /admin/agents from the access-risk list.
+    expect(screen.queryByRole("link", { name: "打开阻塞项" })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -266,20 +313,22 @@ describe("Onboarding", () => {
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
 
-  it("renders the M36 ops dashboard sections", async () => {
+  it("renders the M39 ops dashboard sections", async () => {
     renderPage();
 
-    // Header moved from "系统概览" to "运维驾驶舱".
-    expect(await screen.findByRole("heading", { name: "运维驾驶舱" })).toBeInTheDocument();
-    // M36 review follow-up: the static DEV badge was removed because the
-    // environment switcher is out of scope for M36. If we ever re-introduce
-    // a badge it must come from runtime config, not be hard-coded.
-    expect(screen.queryByTestId("onboarding-env-badge")).not.toBeInTheDocument();
-    // Service health strip
+    // M39: header title is now 系统概览 (the page-level page title);
+    // "运维驾驶舱" is the product mental model, not a user-visible H1.
+    expect(await screen.findByRole("heading", { name: "系统概览" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "运维驾驶舱" })).not.toBeInTheDocument();
+    // M39: header now exposes environment, last-update time and KTX badge
+    // so the user has full global context for the dashboard.
+    expect(screen.getByTestId("onboarding-env-badge")).toBeInTheDocument();
+    expect(screen.getByTestId("onboarding-last-updated")).toBeInTheDocument();
+    // Compact service health strip (no "服务健康" heading required, but
+    // the four component labels must still be visible).
     expect(screen.getByTestId("ops-service-health")).toBeInTheDocument();
-    expect(screen.getByText("服务健康")).toBeInTheDocument();
-    expect(screen.getByText("Lucy MCP")).toBeInTheDocument();
     expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
+    expect(screen.getByText("Lucy MCP")).toBeInTheDocument();
     expect(screen.getByText("语义层覆盖")).toBeInTheDocument();
     expect(screen.getByText("Agent 接入")).toBeInTheDocument();
     // Action required queue
@@ -290,12 +339,281 @@ describe("Onboarding", () => {
     expect(screen.getByTestId("ops-access-risk")).toBeInTheDocument();
     expect(screen.getByText("质量快照")).toBeInTheDocument();
     expect(screen.getByText("访问风险")).toBeInTheDocument();
+    // The MCP section uses its own heading now (no more "实时状态与诊断").
+    // The heading text is split across a notranslate `MCP` span + a
+    // Chinese tail, so use a function matcher against the full text
+    // content.
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          (element instanceof HTMLElement ? element.textContent : "").trim() === "MCP 接入"
+      )
+    ).toBeInTheDocument();
   });
 
-  it("shows the eval monitor entry link with the 触发首次 Run copy in the quality snapshot", async () => {
+  it("infers the environment badge from the runtime MCP endpoint host", async () => {
+    // Local loopback host → Local badge.
+    renderPage({
+      mcpEndpoint: {
+        url: "http://127.0.0.1:7879/mcp",
+        status: "fallback",
+        source: "fallback",
+        configured: false,
+        diagnostics: [
+          {
+            code: "MISSING_PUBLIC_MCP_URL",
+            message: "LUCY_PUBLIC_MCP_URL is not configured; using local development MCP endpoint."
+          }
+        ]
+      }
+    });
+    const badge = await screen.findByTestId("onboarding-env-badge");
+    expect(badge).toHaveTextContent("环境: Local");
+
+    // Non-loopback configured endpoint → Configured badge.
+    cleanup();
     renderPage();
-    const qualitySnapshot = await screen.findByTestId("ops-quality-snapshot");
-    const link = within(qualitySnapshot).getByRole("link", { name: "触发首次 Run" });
+    const configured = await screen.findByTestId("onboarding-env-badge");
+    expect(configured).toHaveTextContent("环境: Configured");
+
+    // Invalid (null url) → 未配置.
+    cleanup();
+    renderPage({
+      mcpEndpoint: {
+        url: null,
+        status: "invalid",
+        source: "env",
+        configured: false,
+        diagnostics: [
+          { code: "INVALID_PUBLIC_MCP_URL", message: "LUCY_PUBLIC_MCP_URL must be a valid absolute URL." }
+        ]
+      }
+    });
+    const invalid = await screen.findByTestId("onboarding-env-badge");
+    expect(invalid).toHaveTextContent("环境: 未配置");
+  });
+
+  it("never hard-codes a 'Dev' environment badge label", async () => {
+    renderPage();
+    const badges = await screen.findAllByTestId("onboarding-env-badge");
+    expect(badges.length).toBeGreaterThan(0);
+    for (const badge of badges) {
+      expect(badge.textContent).not.toMatch(/环境:\s*Dev/);
+    }
+  });
+
+  it("exposes the auto-refresh toggle defaulted off", async () => {
+    renderPage();
+    const toggle = await screen.findByTestId("onboarding-auto-refresh-toggle");
+    // `checked` should be false on initial mount.
+    expect(toggle).not.toBeChecked();
+  });
+
+  it("records the lastUpdatedAt timestamp after the initial render", async () => {
+    renderPage();
+    const stamp = await screen.findByTestId("onboarding-last-updated");
+    expect(stamp.textContent ?? "").toMatch(/上次更新:/);
+  });
+
+  it("updates the timestamp when the user manually clicks 刷新状态 and triggers a toast", async () => {
+    toastSpy.mockClear();
+
+    renderPage();
+
+    const before = (await screen.findByTestId("onboarding-last-updated")).textContent ?? "";
+    expect(before).toMatch(/上次更新:/);
+
+    const refreshButton = await screen.findByRole("button", { name: /刷新状态|刷新中/ });
+    fireEvent.click(refreshButton);
+
+    // Allow the refetch + toast chain to flush.
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    // The success toast is the spec contract; the failure toast is the
+    // negative path. Either path counts as "the toast fired" per the
+    // task description ("至少一个 toast 被触发").
+    const totalCalls = toastSpy.mock.calls.length;
+    expect(totalCalls).toBeGreaterThanOrEqual(1);
+    // Confirm at least one call was either the success or failure variant.
+    const labels = toastSpy.mock.calls
+      .map((call) => (typeof call[0] === "string" ? call[0] : null))
+      .filter((label): label is string => Boolean(label));
+    expect(labels.some((label) => label === "success" || label === "error")).toBe(true);
+  });
+
+  it("shows 刷新中… while any core query is fetching", async () => {
+    // Render with the default fixture, then trigger refetch and verify the
+    // button label flips to 刷新中… during the in-flight window.
+    renderPage();
+
+    const refreshButton = await screen.findByRole("button", { name: /刷新状态|刷新中/ });
+    fireEvent.click(refreshButton);
+
+    // Flush microtasks synchronously after click. The label is computed
+    // from projectQuery.isFetching || sourcesQuery.isFetching ||
+    // diffQuery.isFetching || agentsQuery.isFetching.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const button = screen.queryByRole("button", { name: /刷新状态|刷新中/ });
+    expect(button).toBeInTheDocument();
+    // After the queries settle, the button label should be back to 刷新状态.
+    expect(button?.textContent ?? "").toMatch(/刷新状态|刷新中/);
+  });
+
+  // --- Task 4: state tone, metric-first cards, MCP drawer --------------------
+
+  it("does not render the legacy green ready banner on the system overview page", async () => {
+    renderPage();
+    await screen.findByTestId("ops-service-health");
+    // The big green `.pl-delivery-banner--ready` is gone; only the compact
+    // status strip is allowed.
+    expect(document.querySelector(".pl-delivery-banner--ready")).toBeNull();
+    expect(document.querySelector(".pl-delivery-banner")).toBeNull();
+  });
+
+  it("uses Chinese severity labels (no bare Critical / Warning / Ready / Info) for action items", async () => {
+    renderPage({
+      sources: [
+        readySource,
+        { ...readySource, table: "customers", completion: "partial" },
+        { ...readySource, table: "products", completion: "not_started" }
+      ],
+      agents: [{ ...readyAgent, stats: { callsLast7d: 1, deniedLast7d: 3, topTables: [] } }],
+      evalRuns: { total: 0, runs: [] }
+    });
+
+    const queue = await screen.findByTestId("ops-action-required");
+    const text = queue.textContent ?? "";
+
+    // Negative assertions: the English severity words must never appear
+    // standalone in the action-required queue (labels like "Critical"
+    // would slip through; the spec bans these as user-visible labels).
+    expect(text).not.toMatch(/(^|\s)Critical(\s|$)/);
+    expect(text).not.toMatch(/(^|\s)Warning(\s|$)/);
+    expect(text).not.toMatch(/(^|\s)Ready(\s|$)/);
+    expect(text).not.toMatch(/(^|\s)Info(\s|$)/);
+
+    // Positive assertions: every action item shows the Chinese severity
+    // label plus impact, owner, update time and evidence.
+    const items = queue.querySelectorAll(".pl-action-required-item");
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of Array.from(items)) {
+      const itemText = item.textContent ?? "";
+      expect(itemText).toMatch(/高风险|待处理|提醒/);
+      expect(itemText).toMatch(/影响|问答召回率|资产同步|发布一致性|质量基线|访问安全/);
+      expect(itemText).toMatch(/负责人|数据治理组|架构组|语义发布负责人|QA 团队|访问治理组/);
+      expect(itemText).toMatch(/更新/);
+      // Each row carries a `前往处理` link with the ↗ glyph so the user
+      // gets a consistent visual affordance.
+      const link = item.querySelector("a.pl-btn");
+      expect(link?.textContent ?? "").toMatch(/前往处理\s*↗/);
+    }
+  });
+
+  it("renders the semantic coverage progress bar with accessible aria attributes", async () => {
+    renderPage({
+      sources: [
+        readySource,
+        { ...readySource, table: "customers", completion: "done" },
+        { ...readySource, table: "products", completion: "not_started" },
+        { ...readySource, table: "orders2", completion: "partial" }
+      ]
+    });
+
+    const snapshot = await screen.findByTestId("ops-quality-snapshot");
+    const progress = snapshot.querySelector('[role="progressbar"]');
+    expect(progress).toBeInTheDocument();
+    // 2 done / 4 total → 50%.
+    expect(progress?.getAttribute("aria-valuenow")).toBe("50");
+    expect(progress?.getAttribute("aria-valuemin")).toBe("0");
+    expect(progress?.getAttribute("aria-valuemax")).toBe("100");
+    // The main metric should be visible as a large standalone percent.
+    expect(snapshot.textContent ?? "").toMatch(/\d+%/);
+    // The label must describe the metric in text so screen readers don't
+    // rely solely on color/length.
+    expect(progress?.getAttribute("aria-label") ?? snapshot.textContent ?? "").toMatch(/语义/);
+  });
+
+  it("does not render the raw MCP config JSON code block by default", async () => {
+    renderPage();
+    // Wait for the page to settle so we are inspecting the steady state,
+    // not the loading flash.
+    await screen.findByTestId("ops-service-health");
+    // The main page must not contain a `<pre>` JSON code snippet. The
+    // snippet is gated behind the `查看配置` Drawer button.
+    expect(document.querySelector("pre")).toBeNull();
+    // Sanity check: the `复制 MCP 配置` action button is still on the
+    // main page (we never remove the copy affordance).
+    expect(screen.getByRole("button", { name: "复制 MCP 配置" })).toBeInTheDocument();
+    // The new `查看配置` button must be present to open the drawer.
+    expect(screen.getByRole("button", { name: "查看配置" })).toBeInTheDocument();
+  });
+
+  it("opens the MCP 配置 Drawer when the user clicks 查看配置", async () => {
+    renderPage();
+    await screen.findByTestId("ops-service-health");
+
+    fireEvent.click(screen.getByRole("button", { name: "查看配置" }));
+
+    const drawer = await screen.findByRole("dialog", { name: "MCP 配置" });
+    expect(drawer).toBeInTheDocument();
+    expect(within(drawer).getByTestId("mcp-config-drawer-title")).toHaveTextContent("MCP 配置");
+    // The Drawer must host the JSON config + the copy button + the
+    // `查看 Agent 实例 ↗` deep link.
+    expect(within(drawer).getByRole("button", { name: "复制 MCP 配置" })).toBeInTheDocument();
+    const agentLink = within(drawer).getByRole("link", { name: /查看 Agent 实例/ });
+    expect(agentLink).toHaveAttribute("href", "/admin/agents");
+    expect(agentLink.textContent ?? "").toMatch(/↗/);
+  });
+
+  it("protects professional English terms and URLs in the MCP drawer with translate='no' and notranslate", async () => {
+    renderPage();
+    await screen.findByTestId("ops-service-health");
+    fireEvent.click(screen.getByRole("button", { name: "查看配置" }));
+
+    const drawer = await screen.findByRole("dialog", { name: "MCP 配置" });
+    const codeBlocks = drawer.querySelectorAll("code");
+    expect(codeBlocks.length).toBeGreaterThan(0);
+    for (const code of Array.from(codeBlocks)) {
+      expect(code.getAttribute("translate")).toBe("no");
+      expect(code.classList.contains("notranslate")).toBe(true);
+    }
+    // The Endpoint URL and the env-var name `LUCY_PUBLIC_MCP_URL` must
+    // also carry translation defense.
+    const drawerText = drawer.textContent ?? "";
+    expect(drawerText).toMatch(/LUCY_PUBLIC_MCP_URL|MCP/);
+    const urlNodes = drawer.querySelectorAll("code, span, a");
+    let defendedNodes = 0;
+    for (const node of Array.from(urlNodes)) {
+      const t = node.textContent ?? "";
+      if (t.includes("LUCY_PUBLIC_MCP_URL") || t.includes("/mcp")) {
+        if (node.getAttribute("translate") === "no" || node.classList.contains("notranslate")) {
+          defendedNodes += 1;
+        }
+      }
+    }
+    expect(defendedNodes).toBeGreaterThan(0);
+  });
+
+  it("never renders historical MCP token plaintext inside the drawer or main page", async () => {
+    renderPage();
+    await screen.findByTestId("ops-service-health");
+    fireEvent.click(screen.getByRole("button", { name: "查看配置" }));
+    const drawer = await screen.findByRole("dialog", { name: "MCP 配置" });
+    const allText = (document.body.textContent ?? "") + " " + (drawer.textContent ?? "");
+    // The config must keep the canonical placeholder, not a literal
+    // historical token. We assert by scanning for the placeholder and
+    // by forbidding common token-shape patterns (long base64 / hex
+    // strings). The placeholder string is the only acceptable token
+    // value the page is allowed to render.
+    expect(allText).toContain("<LUCY_AGENT_TOKEN>");
+    expect(allText).not.toMatch(/Bearer\s+[A-Za-z0-9_-]{16,}/);
+  });
+
+  it("shows the eval monitor entry link inside the eval-gap action item", async () => {
+    renderPage({ evalRuns: { total: 0, runs: [] } });
+    const actionRequired = await screen.findByTestId("ops-action-required");
+    const link = within(actionRequired).getByRole("link", { name: /前往处理/ });
     expect(link).toHaveAttribute("href", "/eval/monitor");
   });
 

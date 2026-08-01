@@ -143,6 +143,7 @@ function scanForbiddenTerms(file, mode) {
 // surface through the JSX layer where the user actually sees them.
 
 const highRiskTerms = [
+  // Original M21 P0 terms
   /\bSchema\b/,
   /\bschema\b/,
   /\bManifest\b/,
@@ -153,7 +154,19 @@ const highRiskTerms = [
   /ktx ingest/,
   /enabled_tables/,
   /semantic-layer/,
-  /\.ya?ml\b/
+  /\.ya?ml\b/,
+  // M39 polish: spec §11 red-line terms. These are professional
+  // English nouns that browser translation plugins love to mangle
+  // when they appear as user-facing copy. Every JSX node that
+  // renders one of these MUST defend itself with both
+  // `translate="no"` and `className="notranslate"`.
+  /\bMCP\b/,
+  /\bKTX\b/,
+  /\bAgent\b/,
+  /\bEndpoint\b/,
+  /\bToken\b/,
+  /\bRuntime\b/,
+  /Eval Run/
 ];
 
 const userFacingAttributeNames = ["aria-label", "placeholder", "title"];

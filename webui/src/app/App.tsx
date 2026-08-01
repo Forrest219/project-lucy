@@ -39,8 +39,8 @@ type NavItem = {
 
 const topLevelEntry: NavItem = {
   label: "系统概览",
-  to: "/onboarding",
-  active: (path) => path === "/onboarding"
+  to: "/overview",
+  active: (path) => path === "/overview"
 };
 
 const navGroups: Array<{ title: string; items: NavItem[] }> = [
@@ -118,7 +118,7 @@ export function AppFrame() {
           >
             Data Agent Ops Control Plane
           </span>
-          <span className="pl-brand-tagline">Data Agent 运维控制台</span>
+          <span className="pl-brand-tagline notranslate" translate="no">Data Agent 运维控制台</span>
         </div>
 
         <nav className="pl-nav" aria-label="主导航">
@@ -168,7 +168,8 @@ export function AppFrame() {
       <main className="pl-workspace">
         <div className="pl-workspace-body">
           <Routes>
-            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/overview" element={<Onboarding />} />
+            <Route path="/onboarding" element={<Navigate to="/overview" replace />} />
             <Route path="/connections" element={<ConnectionOverview />} />
             <Route path="/connections/whitelist" element={<TableWhitelist />} />
             <Route path="/connections/test" element={<ConnectionTest />} />

@@ -120,7 +120,7 @@ export function RunList() {
       {/* Trigger dialog */}
       {showTrigger && (
         <div className="border border-border rounded p-5 grid gap-4 max-w-lg bg-bg-muted/30">
-          <h2 className="font-medium">触发一次 Eval Run</h2>
+          <h2 className="font-medium">触发一次 <span className="notranslate" translate="no">Eval Run</span></h2>
           <div className="grid gap-1">
             <label className="text-sm font-medium">Domain <span className="text-red-500">*</span></label>
             <select
@@ -160,7 +160,7 @@ export function RunList() {
             </div>
           )}
           <div className="grid gap-1">
-            <label className="text-sm font-medium">KTX MCP URL</label>
+            <label className="text-sm font-medium"><span className="notranslate" translate="no">KTX MCP</span> URL</label>
             <input
               className="pl-input"
               value={triggerForm.ktxMcpUrl}

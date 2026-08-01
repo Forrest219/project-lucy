@@ -127,7 +127,7 @@ export function ConfigAudit() {
       {data?.actorNotice ? <div className="pl-notice">{data.actorNotice}</div> : null}
 
       <div className="pl-admin-filterbar">
-        <input className="pl-input w-40" placeholder="Agent / target" value={targetId} onChange={(e) => updateParam("targetId", e.target.value)} />
+        <input className="pl-input w-40 notranslate" translate="no" placeholder="Agent / target" value={targetId} onChange={(e) => updateParam("targetId", e.target.value)} />
         <input className="pl-input w-56" placeholder="文件路径" value={filePath} onChange={(e) => updateParam("filePath", e.target.value)} />
       </div>
 

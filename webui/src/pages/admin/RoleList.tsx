@@ -69,7 +69,7 @@ function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
             </ul>
           )}
           <div className="text-sm">
-            <span className="text-fg-muted">{role.usageCount ?? 0} 位 Agent 引用</span>
+            <span className="text-fg-muted">{role.usageCount ?? 0} 位 <span className="notranslate" translate="no">Agent</span> 引用</span>
             {inUse && (role.users?.length ?? 0) > 0 && (
               <span className="text-fg-muted"> · {role.users!.map((u) => u.id).join(", ")}</span>
             )}
@@ -224,7 +224,7 @@ export function RoleList() {
         <div className="pl-notice">
           {roles.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-fg-muted mb-4">还没有任何 role。创建第一个 role 以开始管理 Agent 权限边界。</p>
+              <p className="text-fg-muted mb-4">还没有任何 role。创建第一个 role 以开始管理 <span className="notranslate" translate="no">Agent</span> 权限边界。</p>
               <Link to="/admin/roles/new" className="pl-btn pl-btn--primary text-sm">
                 新建第一个 Role
               </Link>

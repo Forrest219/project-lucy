@@ -85,7 +85,14 @@ describe("Audit", () => {
 
     fireEvent.click(await screen.findByText("zhangsan"));
     expect(await screen.findByText("Args：")).toBeInTheDocument();
-    expect(screen.getByText("Token：")).toBeInTheDocument();
+    // M39 polish: the "Token" word is wrapped in a notranslate span for
+    // translation defense, which splits the text node. Use a custom
+    // matcher to assert the text content across the wrapping span.
+    expect(
+      screen.getByText((_content, element) => {
+        return element?.textContent?.trim() === "Token：";
+      })
+    ).toBeInTheDocument();
     expect(document.body).toHaveTextContent("hermes-laptop");
     expect(screen.getByText("角色：")).toBeInTheDocument();
     expect(document.body).toHaveTextContent("kx_readonly");

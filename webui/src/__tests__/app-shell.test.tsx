@@ -99,7 +99,7 @@ afterEach(() => {
 
 describe("AppFrame shell", () => {
   it.each([
-    ["/onboarding", "Onboarding", "系统概览"],
+    ["/overview", "Onboarding", "系统概览"],
     ["/connections", "ConnectionOverview", "连接概览"],
     ["/connections/whitelist", "TableWhitelist", "启用表范围"],
     ["/connections/test", "ConnectionTest", "连通测试（兼容）"],
@@ -121,8 +121,51 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
   });
 
-  it("labels onboarding as the runtime system overview area", () => {
+  it("treats /overview as the canonical system overview route and keeps /onboarding as a redirect", () => {
+    renderAt("/overview");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    const overviewLink = screen.getByRole("link", { name: "系统概览" });
+    expect(overviewLink).toHaveAttribute("href", "/overview");
+    expect(overviewLink).toHaveAttribute("aria-current", "page");
+  });
+
+  it("redirects /onboarding to /overview and renders the system overview page", () => {
     renderAt("/onboarding");
+    // MemoryRouter issues a history.replace("/overview") so the final render
+    // must show the Onboarding stub. The sidebar link "系统概览" remains
+    // active because the canonical predicate is now keyed on /overview.
+    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    const overviewLink = screen.getByRole("link", { name: "系统概览" });
+    expect(overviewLink).toHaveAttribute("href", "/overview");
+    expect(overviewLink).toHaveAttribute("aria-current", "page");
+  });
+
+  it("keeps / on the catalog route and marks 表目录 active", () => {
+    renderAt("/");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("Catalog");
+    expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("exposes each 5+1 navigation group heading exactly once", () => {
+    renderAt("/overview");
+    const groupTitles = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理"];
+    for (const title of groupTitles) {
+      expect(screen.getAllByRole("heading", { name: title })).toHaveLength(1);
+    }
+  });
+
+  it("does not render any nav section inside the sidebar footer", () => {
+    renderAt("/overview");
+    const sidebarFooter = screen.getByTestId("sidebar-footer");
+    expect(sidebarFooter.querySelectorAll(".pl-nav-section")).toHaveLength(0);
+    // The footer must still carry the help link and version text — guards
+    // against an accidental re-introduction of the full nav into the footer.
+    expect(within(sidebarFooter).getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
+    expect(sidebarFooter).toHaveTextContent("Lucy v1.8 · © 2026");
+  });
+
+  it("labels the system overview entry as the runtime control plane", () => {
+    renderAt("/overview");
     expect(screen.getByText("Lucy WebUI")).toBeInTheDocument();
     expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运行状态" })).not.toBeInTheDocument();
@@ -132,7 +175,7 @@ describe("AppFrame shell", () => {
   });
 
   it("renders the Data Agent Ops Control Plane tagline in the brand block", () => {
-    renderAt("/onboarding");
+    renderAt("/overview");
     expect(
       screen.getByText("Data Agent Ops Control Plane"),
     ).toBeInTheDocument();

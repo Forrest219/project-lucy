@@ -98,7 +98,14 @@ describe("RoleList", () => {
     expect(screen.queryByRole("heading", { name: "角色配置" })).not.toBeInTheDocument();
     expect(await screen.findByText("analyst")).toBeInTheDocument();
     expect(screen.getByText("wiki_only")).toBeInTheDocument();
-    expect(screen.getByText(/2\s*位 Agent 引用/)).toBeInTheDocument();
+    // M39 polish: the "Agent" word is wrapped in a notranslate span for
+    // translation defense, which splits the text node. Use a custom
+    // matcher to assert the text content across the wrapping span.
+    expect(
+      screen.getByText((_content, element) => {
+        return element?.textContent?.replace(/\s+/g, " ").trim() === "2 位 Agent 引用";
+      })
+    ).toBeInTheDocument();
     expect(screen.getByText("template")).toBeInTheDocument();
   });
 

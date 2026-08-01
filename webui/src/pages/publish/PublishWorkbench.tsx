@@ -442,7 +442,7 @@ export function PublishWorkbench() {
           </section>
 
           <section className="grid gap-3">
-            <p className="pl-panel-title">KTX 索引</p>
+            <p className="pl-panel-title"><span className="notranslate" translate="no">KTX</span> 索引</p>
             {reindexMutation.data ? (
               <div
                 className={
@@ -466,7 +466,7 @@ export function PublishWorkbench() {
                   : "reindex 失败"}
               </div>
             ) : (
-              <p className="pl-notice">让 Agent / MCP 检索读取最新语义资产。</p>
+              <p className="pl-notice">让 <span className="notranslate" translate="no">Agent</span> / <span className="notranslate" translate="no">MCP</span> 检索读取最新语义资产。</p>
             )}
           </section>
 
@@ -480,9 +480,9 @@ export function PublishWorkbench() {
               className="grid gap-3"
               data-testid="publish-post-eval-prompt"
             >
-              <p className="pl-panel-title">下一步 · 触发相关 Domain 的评测 Run</p>
+              <p className="pl-panel-title">下一步 · 触发相关 Domain 的评测 <span className="notranslate" translate="no">Run</span></p>
               <p className="text-xs text-fg-muted">
-                发布已完成 KTX 索引重建。建议立即触发相关 domain 的 eval run，确认语义变更没有引入回归。
+                发布已完成 <span className="notranslate" translate="no">KTX</span> 索引重建。建议立即触发相关 domain 的 <span className="notranslate" translate="no">eval run</span>，确认语义变更没有引入回归。
               </p>
               <div className="flex flex-wrap gap-2">
                 {postPublishEvalDomains.map((domain) => (
@@ -504,7 +504,7 @@ export function PublishWorkbench() {
             <section className="grid gap-3" data-testid="publish-post-eval-blocked">
               <p className="pl-panel-title">下一步</p>
               <p className="text-xs text-fg-muted">
-                KTX 索引重建失败，请先解决索引问题后再触发 eval。
+                <span className="notranslate" translate="no">KTX</span> 索引重建失败，请先解决索引问题后再触发 eval。
               </p>
             </section>
           ) : null}
@@ -513,7 +513,7 @@ export function PublishWorkbench() {
             <section className="grid gap-3">
               <p className="pl-panel-title">下一步</p>
               <p className="text-xs text-fg-muted">
-                没有待发布变更，KTX 索引已生效。
+                没有待发布变更，<span className="notranslate" translate="no">KTX</span> 索引已生效。
               </p>
             </section>
           ) : null}

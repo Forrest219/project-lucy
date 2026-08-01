@@ -170,7 +170,7 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
           <td colSpan={7} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-grid">
               <div>
-                <span className="font-medium">关联 Agent：</span>
+                <span className="font-medium">关联 <span className="notranslate" translate="no">Agent</span>：</span>
                 <span className="ml-2 inline-flex flex-wrap items-center gap-2">
                   <Link
                     to={buildObjectDetailSearch({ kind: "agent", agentId: entry.userId })}
@@ -190,7 +190,7 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
               </div>
               {(entry.tokenLabel || entry.tokenHashPrefix) && (
                 <div>
-                  <span className="font-medium">Token：</span>
+                  <span className="font-medium"><span className="notranslate" translate="no">Token</span>：</span>
                   <span className="ml-2 text-fg-muted">
                     {entry.tokenLabel ?? "—"} {entry.tokenHashPrefix ? <span className="font-mono">({entry.tokenHashPrefix}…)</span> : null}
                   </span>
