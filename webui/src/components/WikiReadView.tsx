@@ -17,7 +17,7 @@ export type WikiReadViewProps = {
 };
 
 const EMPTY_BODY_HINT =
-  "Wiki 维护 Markdown 业务说明。Schema Manifest 请在连接概览上传；semantic overlay 请在表目录或表详情维护。";
+  "Wiki 维护 Markdown 业务说明。Schema Manifest 请在连接概览上传；semantic overlay 请在表详情维护。";
 
 /**
  * Read-only document surface for the Business Wiki workbench.
@@ -46,6 +46,7 @@ export function WikiReadView({
   const toc = useMemo(() => (trimmed ? extractWikiToc(content) : []), [content, trimmed]);
   const tags = frontmatter.tags ?? [];
   const slRefs = frontmatter.sl_refs ?? [];
+  const summary = frontmatter.summary?.trim();
   const placeholders = useMemo(
     () => (trimmed ? extractTemplatePlaceholders(content) : []),
     [content, trimmed]
@@ -57,15 +58,15 @@ export function WikiReadView({
         <h1 className="pl-wiki-read-title" data-testid="wiki-read-title">
           {title}
         </h1>
-        <p className="pl-wiki-read-key notranslate" translate="no" title={keyName}>
-          wiki/{keyName}
-        </p>
-        {frontmatter.summary ? (
+        {summary && summary !== title ? (
           <p className="pl-wiki-read-summary" data-testid="wiki-read-summary">
-            {frontmatter.summary}
+            {summary}
           </p>
         ) : null}
         <div className="pl-wiki-read-meta" data-testid="wiki-read-meta">
+          <code className="pl-wiki-read-key notranslate" translate="no" title={keyName}>
+            wiki/{keyName}
+          </code>
           {tags.length > 0 ? (
             <ul
               aria-label="文档标签"
@@ -152,13 +153,13 @@ export function WikiReadView({
             </section>
           )}
         </div>
-        <aside
-          aria-label="文档目录"
-          className="pl-wiki-read-toc"
-          data-testid="wiki-read-toc"
-        >
-          <p className="pl-wiki-read-toc-title">目录</p>
-          {toc.length > 0 ? (
+        {toc.length > 0 ? (
+          <aside
+            aria-label="文档目录"
+            className="pl-wiki-read-toc"
+            data-testid="wiki-read-toc"
+          >
+            <p className="pl-wiki-read-toc-title">目录</p>
             <ol className="pl-wiki-read-toc-list">
               {toc.map((item) => (
                 <li
@@ -174,10 +175,8 @@ export function WikiReadView({
                 </li>
               ))}
             </ol>
-          ) : (
-            <p className="pl-notice">正文暂无可跳转的章节。</p>
-          )}
-        </aside>
+          </aside>
+        ) : null}
       </div>
     </article>
   );

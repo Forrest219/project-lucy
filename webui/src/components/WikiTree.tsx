@@ -28,7 +28,8 @@ type EnrichedPage = WikiSummary & {
  * basename) as the primary label, with the raw key rendered as muted
  * secondary text. Filtering matches across title, summary, tags and
  * `sl_refs` so the search bar in the page header and the tree stay in
- * sync.
+ * sync. The UI labels use user-facing "关联表" wording even though
+ * the underlying metadata field remains `sl_refs`.
  */
 export function WikiTree({ pages, activeKey, onSelect, initialSearch = "" }: WikiTreeProps) {
   const [search, setSearch] = useState(initialSearch);
@@ -53,11 +54,11 @@ export function WikiTree({ pages, activeKey, onSelect, initialSearch = "" }: Wik
       data-testid="wiki-tree"
     >
       <input
-        aria-label="按标题、标签或 sl_ref 搜索 Wiki"
+        aria-label="搜索文档标题、标签、关联表"
         className="pl-input pl-wiki-tree-search notranslate"
         data-testid="wiki-tree-search"
         onChange={(event) => setSearch(event.target.value)}
-        placeholder="搜索标题、标签、sl_ref…"
+        placeholder="搜索文档标题、标签、关联表..."
         translate="no"
         value={search}
       />

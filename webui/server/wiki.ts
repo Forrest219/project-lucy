@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
 import { previewDiff } from "./diff";
@@ -38,7 +38,22 @@ export type WikiPreview = {
   proposedMarkdown: string;
 };
 
-function normalizeKey(key: string): string {
+export type WikiUploadInput = {
+  key: string;
+  markdown: string;
+  overwrite?: boolean;
+};
+
+export type WikiUploadPreview = WikiPreview & {
+  exists: boolean;
+  title: string;
+  slRefs: string[];
+  warnings: string[];
+};
+
+const MAX_MARKDOWN_UPLOAD_BYTES = 1024 * 1024;
+
+export function normalizeWikiKey(key: string): string {
   const decoded = decodeURIComponent(key);
   if (!decoded || decoded.startsWith("/") || path.isAbsolute(decoded)) {
     throw new ForbiddenPathError("Wiki key must be relative to wiki/");
@@ -57,7 +72,7 @@ function normalizeKey(key: string): string {
 }
 
 function relPathForKey(key: string): string {
-  return path.posix.join("wiki", normalizeKey(key));
+  return path.posix.join("wiki", normalizeWikiKey(key));
 }
 
 function stringArray(value: unknown): string[] {
@@ -90,6 +105,18 @@ async function readExisting(projectRoot: string, key: string): Promise<string> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return "";
+    }
+    throw error;
+  }
+}
+
+async function wikiExists(projectRoot: string, key: string): Promise<boolean> {
+  try {
+    await stat(await assertReadable(projectRoot, relPathForKey(key)));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
     }
     throw error;
   }
@@ -130,7 +157,7 @@ export async function listWiki(projectRoot: string): Promise<WikiSummary[]> {
 }
 
 export async function readWiki(projectRoot: string, key: string): Promise<WikiPage> {
-  const normalized = normalizeKey(key);
+  const normalized = normalizeWikiKey(key);
   const rawMarkdown = await readExisting(projectRoot, normalized);
   const parsed = matter(rawMarkdown);
   return {
@@ -142,7 +169,7 @@ export async function readWiki(projectRoot: string, key: string): Promise<WikiPa
 }
 
 export async function previewWikiWrite(projectRoot: string, key: string, input: WikiWriteInput): Promise<WikiPreview> {
-  const normalized = normalizeKey(key);
+  const normalized = normalizeWikiKey(key);
   const oldText = await readExisting(projectRoot, normalized);
   const current = matter(oldText);
   const frontmatter = {
@@ -161,6 +188,64 @@ export async function previewWikiWrite(projectRoot: string, key: string, input: 
 
 export async function writeWiki(projectRoot: string, key: string, input: WikiWriteInput): Promise<WikiPreview> {
   const preview = await previewWikiWrite(projectRoot, key, input);
+  await safeWrite(projectRoot, preview.filePath, preview.proposedMarkdown);
+  return preview;
+}
+
+function validateUploadMarkdown(markdown: string): void {
+  const size = Buffer.byteLength(markdown, "utf8");
+  if (size > MAX_MARKDOWN_UPLOAD_BYTES) {
+    const err = new ForbiddenPathError("Markdown file exceeds the 1MB upload limit");
+    err.statusCode = 400;
+    err.code = "WIKI_MARKDOWN_TOO_LARGE";
+    throw err;
+  }
+}
+
+function uploadTitle(markdown: string, key: string, frontmatter: WikiFrontmatter): string {
+  if (frontmatter.summary?.trim()) {
+    return frontmatter.summary.trim();
+  }
+  const heading = markdown
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("# "));
+  if (heading) {
+    const title = heading.replace(/^#\s+/, "").trim();
+    if (title) return title;
+  }
+  return path.posix.basename(key).replace(/\.md$/, "");
+}
+
+export async function previewWikiUpload(projectRoot: string, input: WikiUploadInput): Promise<WikiUploadPreview> {
+  const normalized = normalizeWikiKey(input.key);
+  validateUploadMarkdown(input.markdown);
+  const exists = await wikiExists(projectRoot, normalized);
+  const oldText = await readExisting(projectRoot, normalized);
+  const parsed = matter(input.markdown);
+  const frontmatter = frontmatterFromData(parsed.data);
+  const filePath = relPathForKey(normalized);
+  const warnings: string[] = [];
+  if (exists && !input.overwrite) {
+    warnings.push("目标文档已存在，确认后将按覆盖处理。");
+  }
+  if (!parsed.content.trim()) {
+    warnings.push("Markdown 正文为空。");
+  }
+  return {
+    key: normalized,
+    filePath,
+    diff: previewDiff(oldText, input.markdown, filePath),
+    proposedMarkdown: input.markdown,
+    exists,
+    title: uploadTitle(input.markdown, normalized, frontmatter),
+    slRefs: frontmatter.sl_refs ?? [],
+    warnings
+  };
+}
+
+export async function commitWikiUpload(projectRoot: string, input: WikiUploadInput): Promise<WikiUploadPreview> {
+  const preview = await previewWikiUpload(projectRoot, input);
   await safeWrite(projectRoot, preview.filePath, preview.proposedMarkdown);
   return preview;
 }

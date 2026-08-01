@@ -1304,7 +1304,7 @@
   .pl-wiki-shortcut-hint { @apply text-xs text-fg-muted; }
   .pl-wiki-markdown-input { @apply min-h-[420px]; }
 
-  /* Header actions: keep the mode toggle + new / save CTAs inline. */
+  /* Header actions: document operations only. */
   .pl-wiki-header-actions { @apply flex flex-wrap items-center gap-2; }
   .pl-wiki-header-modes { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-surface p-0.5; }
   .pl-wiki-header-mode--active { @apply bg-bg-muted text-fg-default font-semibold; }
@@ -1323,13 +1323,42 @@
   .pl-wiki-inspector-tab--active { @apply bg-bg-muted font-medium text-fg-default; }
   .pl-wiki-inspector-section { @apply min-h-[300px] grid gap-2; }
 
-  /* Read Mode: clean business document surface. */
-  .pl-wiki-read-view { @apply grid gap-5 rounded-lg border border-border-default bg-bg-surface p-6 shadow-card; }
-  .pl-wiki-read-header { @apply grid gap-3; }
+  /* Library home: the neutral /wiki entrypoint before a document is selected. */
+  .pl-wiki-library-home { @apply grid gap-4; }
+  .pl-wiki-library-hero {
+    @apply flex flex-wrap items-start justify-between gap-4 rounded-md border border-border-default bg-bg-surface p-4;
+  }
+  .pl-wiki-library-copy { @apply grid max-w-2xl gap-1; }
+  .pl-wiki-library-kicker { @apply text-xs font-semibold uppercase text-fg-muted; }
+  .pl-wiki-library-title { @apply text-lg font-semibold text-fg-default; }
+  .pl-wiki-library-description { @apply text-sm text-fg-muted; }
+  .pl-wiki-library-actions { @apply flex flex-wrap items-center gap-2; }
+  .pl-wiki-library-empty { @apply grid gap-3 rounded-md border border-border-default bg-bg-subtle p-4 text-sm text-fg-muted; }
+  .pl-wiki-library-groups { @apply grid gap-3; }
+  .pl-wiki-library-group { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-wiki-library-group-header { @apply flex items-center gap-2; }
+  .pl-wiki-library-folder-icon { @apply text-xs text-fg-muted; }
+  .pl-wiki-library-group-title { @apply text-sm font-semibold text-fg-default; }
+  .pl-wiki-library-count { @apply ml-auto rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-wiki-library-list { @apply grid list-none gap-1 p-0 m-0 sm:grid-cols-2; }
+  .pl-wiki-library-item { @apply min-w-0; }
+  .pl-wiki-library-item-button {
+    @apply grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-sm px-2 py-2 text-left hover:bg-bg-muted;
+  }
+  .pl-wiki-library-md-icon {
+    @apply inline-flex items-center rounded-sm border border-border-default bg-bg-muted px-1.5 py-0.5 font-mono text-[10px] text-fg-muted;
+  }
+  .pl-wiki-library-item-main { @apply grid min-w-0 gap-0.5; }
+  .pl-wiki-library-item-title { @apply truncate text-sm font-medium text-fg-default; }
+  .pl-wiki-library-item-path { @apply truncate font-mono text-xs text-fg-muted; }
+
+  /* Read Mode: compact business document surface. */
+  .pl-wiki-read-view { @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-wiki-read-header { @apply grid gap-2; }
   .pl-wiki-read-title { @apply text-2xl font-semibold leading-tight text-fg-default; }
-  .pl-wiki-read-key { @apply font-mono text-xs text-fg-muted; }
+  .pl-wiki-read-key { @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted; }
   .pl-wiki-read-summary { @apply text-sm text-fg-body; }
-  .pl-wiki-read-meta { @apply flex flex-wrap items-center gap-3; }
+  .pl-wiki-read-meta { @apply flex flex-wrap items-center gap-2; }
   .pl-wiki-read-tags { @apply flex flex-wrap items-center gap-1 list-none p-0 m-0; }
   .pl-wiki-read-tag { @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
   .pl-wiki-read-refs { @apply flex flex-wrap items-center gap-1 list-none p-0 m-0; }
@@ -1587,6 +1616,16 @@
   .pl-wiki-meta-title { @apply text-base font-semibold text-fg-default; }
   .pl-wiki-meta-description { @apply text-xs text-fg-muted; }
   .pl-wiki-meta-close { @apply justify-self-end; }
+  .pl-wiki-upload-ref {
+    @apply ml-1 inline-flex rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs;
+  }
+  .pl-wiki-upload-directory {
+    @apply grid gap-1 text-sm font-medium text-fg-body;
+  }
+  .pl-wiki-upload-warnings {
+    @apply grid gap-1 rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+  .pl-notice-inline { @apply text-sm text-fg-muted; }
 
   /* Markdown preview typography. Small enough to keep a workbench
      feel, large enough to remain readable. */

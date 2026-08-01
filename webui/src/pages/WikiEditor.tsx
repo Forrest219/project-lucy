@@ -1,16 +1,17 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FrontmatterDrawer } from "../components/FrontmatterDrawer";
 import { PageHeader } from "../components/PageHeader";
 import { TemplatePicker } from "../components/TemplatePicker";
+import { WikiLibraryHome } from "../components/WikiLibraryHome";
 import { WikiReadView } from "../components/WikiReadView";
 import { WikiEditView } from "../components/WikiEditView";
 import { WikiSavePreflight } from "../components/WikiSavePreflight";
 import { WikiTree } from "../components/WikiTree";
-import { apiGet, apiPut } from "../lib/apiClient";
+import { WikiUploadPreflight } from "../components/WikiUploadPreflight";
+import { apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import {
   draftKeyForSlRef,
@@ -24,18 +25,20 @@ import type {
   WikiListResponse,
   WikiPage,
   WikiPreview,
-  WikiSummary
+  WikiSummary,
+  WikiUploadPreview
 } from "../lib/types";
 
-type PageMode = "loaded" | "draft";
+type PageMode = "library" | "loaded" | "draft";
 type WikiUiMode = "read" | "edit";
+type WikiUploadMode = "create" | "replace";
 
 /**
  * Compute the effective key + mode for the editor. The URL is the
  * source of truth:
  *   - `?key=...`     -> loaded (or draft if no matching page)
  *   - `?sl_ref=...`  -> matched page (loaded) or new draft
- *   - neither        -> first page (loaded) or new draft
+ *   - neither        -> library home
  */
 function resolveKey(
   keyParam: string,
@@ -52,10 +55,7 @@ function resolveKey(
     }
     return { key: draftKeyForSlRef(slRef, pages.map((p) => p.key)), mode: "draft" };
   }
-  if (pages.length > 0) {
-    return { key: pages[0]?.key ?? "global/new-note.md", mode: "loaded" };
-  }
-  return { key: "global/new-note.md", mode: "draft" };
+  return { key: "", mode: "library" };
 }
 
 export function WikiEditor() {
@@ -105,11 +105,17 @@ export function WikiEditor() {
   const [previewVersion, setPreviewVersion] = useState<string | null>(null);
   const [uiMode, setUiMode] = useState<WikiUiMode>("read");
   const [preflightOpen, setPreflightOpen] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
   const [previewTab, setPreviewTab] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
-  const [showMetaDrawer, setShowMetaDrawer] = useState(false);
-  const [copyHint, setCopyHint] = useState<string | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadMode, setUploadMode] = useState<WikiUploadMode>("create");
+  const [uploadTargetKey, setUploadTargetKey] = useState("");
+  const [uploadFileName, setUploadFileName] = useState("");
+  const [uploadMarkdown, setUploadMarkdown] = useState("");
+  const [uploadPreview, setUploadPreview] = useState<WikiUploadPreview | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const dirtyRef = useRef(false);
   const sourceRef = useRef<string>(`${key}::${mode}::init`);
   const preserveBufferForKeyRef = useRef<string | null>(null);
@@ -241,6 +247,31 @@ export function WikiEditor() {
     }
   });
 
+  const uploadCommitMutation = useMutation({
+    mutationFn: () =>
+      apiPost<WikiUploadPreview>("/api/wiki/upload/commit", {
+        key: uploadTargetKey,
+        markdown: uploadMarkdown,
+        overwrite: uploadMode === "replace" || uploadPreview?.exists === true
+      }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(result.key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+      dirtyRef.current = false;
+      sourceRef.current = `${result.key}::uploaded`;
+      setUiMode("read");
+      setUploadOpen(false);
+      setUploadPreview(null);
+      setUploadError(null);
+      setSearchParams({ key: result.key }, { replace: true });
+      toast.success(uploadMode === "replace" ? "Markdown 已覆盖" : "Markdown 已上传");
+    },
+    onError: (error) => {
+      toast.error(`上传失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  });
+
   const previewBody = useMemo(
     () => ({ dryRun: true, frontmatter, content }),
     [content, frontmatter]
@@ -325,7 +356,21 @@ export function WikiEditor() {
     setUiMode("edit");
   }
 
+  function confirmDiscardUnsaved(message: string): boolean {
+    if (!dirtyRef.current) {
+      return true;
+    }
+    return window.confirm(message);
+  }
+
   function navigateTo(nextKey: string) {
+    if (
+      !confirmDiscardUnsaved(
+        "当前编辑未保存。切换文档会放弃未保存内容，是否继续？"
+      )
+    ) {
+      return;
+    }
     const next: Record<string, string> = { key: nextKey };
     if (slRef) {
       next.sl_ref = slRef;
@@ -336,6 +381,13 @@ export function WikiEditor() {
   }
 
   function startNewWiki() {
+    if (
+      !confirmDiscardUnsaved(
+        "当前编辑未保存。新建文档会放弃未保存内容，是否继续？"
+      )
+    ) {
+      return;
+    }
     const draftKey = nextNewNoteKey(pages.map((p) => p.key));
     const next: Record<string, string> = { key: draftKey };
     if (slRef) {
@@ -344,9 +396,14 @@ export function WikiEditor() {
     setSearchParams(next, { replace: true });
     dirtyRef.current = false;
     sourceRef.current = `${draftKey}::navigated`;
+    setUiMode("edit");
   }
 
   function openSavePreflight() {
+    if (!key) {
+      toast.error("请先选择或新建 Markdown 文档。");
+      return;
+    }
     if (!key.endsWith(".md")) {
       toast.error("路径必须以 .md 结尾才能保存。");
       return;
@@ -363,6 +420,10 @@ export function WikiEditor() {
   }
 
   function switchToEdit() {
+    if (!key) {
+      toast.error("请先选择或新建 Markdown 文档。");
+      return;
+    }
     if (uiMode === "edit") {
       return;
     }
@@ -370,15 +431,149 @@ export function WikiEditor() {
   }
 
   function requestBackToRead() {
-    if (uiMode === "edit" && dirtyRef.current) {
-      const confirmed = window.confirm(
-        "当前编辑未保存。返回阅读态后，未保存的草稿仍会保留在 Markdown 编辑器中。"
-      );
-      if (!confirmed) {
-        return;
+    if (
+      uiMode === "edit" &&
+      !confirmDiscardUnsaved("当前编辑未保存。取消编辑会放弃未保存内容，是否继续？")
+    ) {
+      return;
+    }
+    if (mode === "loaded" && pageQuery.data) {
+      setFrontmatter(pageQuery.data.frontmatter);
+      frontmatterRef.current = pageQuery.data.frontmatter;
+      setContent(pageQuery.data.content);
+      contentRef.current = pageQuery.data.content;
+      sourceRef.current = `${key}::${mode}::cancelled`;
+    }
+    if (mode === "draft") {
+      setContent("");
+      contentRef.current = "";
+      setFrontmatter(slRef ? { sl_refs: [slRef] } : {});
+      frontmatterRef.current = slRef ? { sl_refs: [slRef] } : {};
+    }
+    dirtyRef.current = false;
+    setUiMode("read");
+  }
+
+  const currentDirectory = useMemo(() => {
+    if (!key || !key.includes("/")) {
+      return "global";
+    }
+    return key.split("/").slice(0, -1).join("/") || "global";
+  }, [key]);
+
+  const uploadDirectories = useMemo(() => {
+    const directories = new Set<string>(["global"]);
+    for (const page of pages) {
+      const segments = page.key.split("/").filter(Boolean);
+      if (segments.length > 1) {
+        directories.add(segments.slice(0, -1).join("/"));
       }
     }
-    setUiMode("read");
+    directories.add(currentDirectory);
+    return Array.from(directories).sort((a, b) => a.localeCompare(b));
+  }, [currentDirectory, pages]);
+
+  function openUpload(modeToOpen: WikiUploadMode) {
+    if (
+      !confirmDiscardUnsaved(
+        modeToOpen === "replace"
+          ? "当前编辑未保存。上传覆盖会放弃未保存内容，是否继续？"
+          : "当前编辑未保存。上传新文档会放弃未保存内容，是否继续？"
+      )
+    ) {
+      return;
+    }
+    if (modeToOpen === "replace" && !key) {
+      toast.error("请先选择要覆盖的 Markdown 文档。");
+      return;
+    }
+    setUploadMode(modeToOpen);
+    setUploadPreview(null);
+    setUploadError(null);
+    uploadInputRef.current?.click();
+  }
+
+  async function previewUpload(targetKey: string, markdown: string, modeToPreview: WikiUploadMode) {
+    setUploadLoading(true);
+    setUploadOpen(true);
+    setUploadError(null);
+    setUploadPreview(null);
+    try {
+      const result = await apiPost<WikiUploadPreview>("/api/wiki/upload/preview", {
+        key: targetKey,
+        markdown,
+        overwrite: modeToPreview === "replace"
+      });
+      setUploadPreview(result);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "未知错误");
+    } finally {
+      setUploadLoading(false);
+    }
+  }
+
+  async function handleUploadFile(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+    if (!file.name.endsWith(".md")) {
+      toast.error("请选择 .md Markdown 文件。");
+      return;
+    }
+    const markdown = await file.text();
+    const fileName = file.name.split(/[\\/]/).pop() ?? file.name;
+    setUploadFileName(fileName);
+    const targetKey =
+      uploadMode === "replace"
+        ? key
+        : `${currentDirectory}/${fileName}`.replaceAll(/\/+/g, "/");
+    setUploadTargetKey(targetKey);
+    setUploadMarkdown(markdown);
+    await previewUpload(targetKey, markdown, uploadMode);
+    if (uploadInputRef.current) {
+      uploadInputRef.current.value = "";
+    }
+  }
+
+  function handleUploadDirectoryChange(directory: string) {
+    if (!uploadFileName || !uploadMarkdown) {
+      return;
+    }
+    const targetKey = `${directory}/${uploadFileName}`.replaceAll(/\/+/g, "/");
+    setUploadTargetKey(targetKey);
+    void previewUpload(targetKey, uploadMarkdown, "create");
+  }
+
+  async function handleDownloadMarkdown() {
+    if (!key) {
+      toast.error("请先选择 Markdown 文档。");
+      return;
+    }
+    if (
+      uiMode === "edit" &&
+      dirtyRef.current &&
+      !window.confirm("当前有未保存编辑。下载的是已保存版本，是否继续？")
+    ) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/wiki/${encodeURIComponent(key)}/raw`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const markdown = await response.text();
+      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = key.split("/").pop() ?? "wiki.md";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(`下载失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
   }
 
   // Cmd/Ctrl+S opens the Save Preflight. This is the single source of
@@ -393,6 +588,10 @@ export function WikiEditor() {
         return;
       }
       event.preventDefault();
+      if (!key) {
+        toast.error("请先选择或新建 Markdown 文档。");
+        return;
+      }
       if (uiMode !== "edit") {
         setUiMode("edit");
       }
@@ -419,41 +618,30 @@ export function WikiEditor() {
     [content, currentDraftVersion, frontmatter, key, knownSlRefs, preview, previewError, previewLoading, previewVersion]
   );
 
-  const handleCopyLink = useCallback(async () => {
-    const url = `${window.location.origin}/wiki?key=${encodeURIComponent(key)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopyHint("已复制链接");
-      window.setTimeout(() => setCopyHint(null), 1600);
-    } catch {
-      setCopyHint("复制失败，请手动复制地址栏 URL");
-      window.setTimeout(() => setCopyHint(null), 2400);
-    }
-  }, [key]);
-
   return (
     <div className="pl-page-stack">
       <PageHeader
         title={
-          uiMode === "read" ? (
-            "业务 Wiki"
-          ) : (
+          uiMode === "edit" ? (
             <span className="pl-wiki-header-edit-title">
-              业务 Wiki ·{" "}
-              <code
-                className="pl-wiki-header-edit-key notranslate"
-                translate="no"
-              >
-                {key}
-              </code>
+              编辑 Wiki 文档
+              {key ? (
+                <code
+                  className="pl-wiki-header-edit-key notranslate"
+                  translate="no"
+                >
+                  {key}
+                </code>
+              ) : null}
             </span>
+          ) : (
+            "业务 Wiki"
           )
         }
-        breadcrumbs={["语义建模", "业务 Wiki", key]}
         description={
           uiMode === "read"
-            ? "用 Markdown 沉淀表口径、指标说明与分析 Playbook。"
-            : "直接撰写 Markdown；保存预检会显示 Diff 与校验结果。"
+            ? "管理业务口径、指标说明和分析 Playbook 的 Markdown 文档。"
+            : "直接撰写 Markdown；保存并发布前会显示 Diff 与校验结果。"
         }
         badges={
           uiMode === "read" ? null : (
@@ -469,65 +657,62 @@ export function WikiEditor() {
         actions={
           <div className="pl-wiki-header-actions" data-testid="wiki-header-actions">
             {uiMode === "read" ? (
-              <>
-                <button
-                  aria-label="复制当前 Wiki 链接"
-                  className="pl-btn pl-btn--ghost"
-                  data-testid="wiki-copy-link-button"
-                  onClick={handleCopyLink}
-                  type="button"
-                >
-                  复制链接
-                </button>
-                <button
-                  className="pl-btn pl-btn--ghost"
-                  data-testid="wiki-new-button"
-                  onClick={startNewWiki}
-                  type="button"
-                >
-                  + 新建 Wiki
-                </button>
-                <button
-                  className="pl-btn pl-btn--primary"
-                  data-testid="wiki-edit-button"
-                  onClick={switchToEdit}
-                  type="button"
-                >
-                  编辑
-                </button>
-              </>
+              mode === "library" ? (
+                <>
+                  <button
+                    className="pl-btn pl-btn--primary"
+                    data-testid="wiki-upload-button"
+                    onClick={() => openUpload("create")}
+                    type="button"
+                  >
+                    上传 Markdown
+                  </button>
+                  <button
+                    className="pl-btn pl-btn--ghost"
+                    data-testid="wiki-new-button"
+                    onClick={startNewWiki}
+                    type="button"
+                  >
+                    新建文档
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="pl-btn pl-btn--ghost"
+                    data-testid="wiki-download-button"
+                    onClick={handleDownloadMarkdown}
+                    type="button"
+                  >
+                    下载 Markdown
+                  </button>
+                  <button
+                    className="pl-btn pl-btn--primary"
+                    data-testid="wiki-upload-replace-button"
+                    onClick={() => openUpload("replace")}
+                    type="button"
+                  >
+                    上传覆盖
+                  </button>
+                  <button
+                    className="pl-btn pl-btn--ghost"
+                    data-testid="wiki-edit-button"
+                    onClick={switchToEdit}
+                    type="button"
+                  >
+                    编辑
+                  </button>
+                </>
+              )
             ) : (
               <>
-                <button
-                  aria-pressed={focusMode}
-                  className={clsx(
-                    "pl-btn",
-                    "pl-btn--ghost",
-                    focusMode && "pl-wiki-header-focus--active"
-                  )}
-                  data-testid="wiki-focus-toggle"
-                  onClick={() => setFocusMode((current) => !current)}
-                  title="隐藏左侧导航，专注 Markdown 与 Preview"
-                  type="button"
-                >
-                  专注编辑
-                </button>
-                <button
-                  aria-label="文档信息"
-                  className="pl-btn pl-btn--ghost"
-                  data-testid="wiki-meta-toggle"
-                  onClick={() => setShowMetaDrawer((current) => !current)}
-                  type="button"
-                >
-                  文档信息
-                </button>
                 <button
                   className="pl-btn pl-btn--ghost"
                   data-testid="wiki-back-to-read"
                   onClick={requestBackToRead}
                   type="button"
                 >
-                  返回阅读
+                  取消
                 </button>
                 <button
                   className="pl-btn pl-btn--primary"
@@ -536,20 +721,10 @@ export function WikiEditor() {
                   onClick={openSavePreflight}
                   type="button"
                 >
-                  保存预检
+                  保存并发布
                 </button>
               </>
             )}
-            {copyHint ? (
-              <span
-                aria-live="polite"
-                className="pl-wiki-header-copy-hint"
-                data-testid="wiki-copy-hint"
-                role="status"
-              >
-                {copyHint}
-              </span>
-            ) : null}
           </div>
         }
       />
@@ -560,10 +735,8 @@ export function WikiEditor() {
           "pl-editor-layout",
           "pl-wiki-layout",
           `pl-wiki-layout--${uiMode}`,
-          focusMode && uiMode === "edit" && "pl-wiki-layout--focus",
           previewTab && uiMode === "edit" && "pl-wiki-layout--preview-tab"
         )}
-        data-focus={focusMode || undefined}
         data-key={key || undefined}
         data-mode={uiMode}
         data-preview-tab={previewTab || undefined}
@@ -571,29 +744,12 @@ export function WikiEditor() {
       >
         <aside
           aria-label="业务 Wiki 目录"
-          className={clsx(
-            "grid content-start gap-3 pl-wiki-sidebar",
-            focusMode && uiMode === "edit" && "pl-wiki-sidebar--collapsed"
-          )}
+          className="grid content-start gap-3 pl-wiki-sidebar"
           data-testid="wiki-sidebar"
-          hidden={focusMode && uiMode === "edit"}
         >
-          <Link className="pl-btn pl-btn--ghost justify-start" to="/">
-            表目录
-          </Link>
           <div className="pl-wiki-sidebar-header">
-            <h2 className="pl-wiki-sidebar-title">业务 Wiki</h2>
+            <h2 className="pl-wiki-sidebar-title">目录</h2>
           </div>
-          {key && uiMode === "read" ? (
-            <p
-              className="pl-wiki-sidebar-key notranslate"
-              data-testid="wiki-sidebar-key"
-              title={key}
-              translate="no"
-            >
-              {key}
-            </p>
-          ) : null}
           {slRef ? (
             <p
               className="pl-notice pl-wiki-context-hint"
@@ -609,7 +765,14 @@ export function WikiEditor() {
 
         <div className="grid gap-4 pl-wiki-main">
           <div className="pl-wiki-body" data-testid="wiki-body">
-            {uiMode === "read" ? (
+            {mode === "library" ? (
+              <WikiLibraryHome
+                onNew={startNewWiki}
+                onSelect={navigateTo}
+                onUpload={() => openUpload("create")}
+                pages={pages}
+              />
+            ) : uiMode === "read" ? (
               <WikiReadView
                 content={content}
                 frontmatter={frontmatter}
@@ -652,11 +815,38 @@ export function WikiEditor() {
         state={preflightState}
       />
 
-      <FrontmatterDrawer
-        frontmatter={frontmatter}
-        onClose={() => setShowMetaDrawer(false)}
-        onChange={updateFrontmatter}
-        open={showMetaDrawer}
+      <input
+        accept=".md,text/markdown,text/plain"
+        aria-label="选择 Markdown 文件"
+        className="sr-only"
+        data-testid="wiki-upload-input"
+        onChange={(event) => {
+          void handleUploadFile(event.target.files?.[0]);
+        }}
+        ref={uploadInputRef}
+        type="file"
+      />
+
+      <WikiUploadPreflight
+        error={uploadError}
+        directories={uploadDirectories}
+        isCommitting={uploadCommitMutation.isPending}
+        isLoading={uploadLoading}
+        mode={uploadMode}
+        onCancel={() => {
+          setUploadOpen(false);
+          setUploadPreview(null);
+          setUploadError(null);
+        }}
+        onConfirm={() => uploadCommitMutation.mutate()}
+        onTargetDirectoryChange={handleUploadDirectoryChange}
+        open={uploadOpen}
+        preview={uploadPreview}
+        targetDirectory={
+          uploadTargetKey.includes("/")
+            ? uploadTargetKey.split("/").slice(0, -1).join("/")
+            : currentDirectory
+        }
       />
     </div>
   );

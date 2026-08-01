@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,50 @@ function buildFetchMock(pages = WIKI_PAGES, sources = SOURCES) {
     const url = String(input);
     if (url === "/api/wiki" && (!init || init.method === undefined)) {
       return new Response(JSON.stringify({ ok: true, data: { pages } }));
+    }
+    const rawMatch = url.match(/^\/api\/wiki\/(.+)\/raw$/);
+    if (rawMatch && (!init || init.method === undefined)) {
+      const key = decodeURIComponent(rawMatch[1]);
+      const page = pages.find((p) => p.key === key);
+      return new Response(`# ${page?.summary ?? "Raw"}\n\nDownloaded body.\n`, {
+        headers: { "Content-Type": "text/markdown" }
+      });
+    }
+    if (url === "/api/wiki/upload/preview" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: body.key,
+            filePath: `wiki/${body.key}`,
+            diff: `@@\n+# Uploaded\n`,
+            proposedMarkdown: body.markdown,
+            exists: Boolean(body.overwrite),
+            title: "Uploaded",
+            slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
+            warnings: body.overwrite ? [] : ["目标文档已存在，确认后将按覆盖处理。"]
+          }
+        })
+      );
+    }
+    if (url === "/api/wiki/upload/commit" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: body.key,
+            filePath: `wiki/${body.key}`,
+            diff: `@@\n+# Uploaded\n`,
+            proposedMarkdown: body.markdown,
+            exists: Boolean(body.overwrite),
+            title: "Uploaded",
+            slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
+            warnings: []
+          }
+        })
+      );
     }
     const pageMatch = url.match(/^\/api\/wiki\/(.+)$/);
     if (pageMatch && (!init || init.method === undefined)) {
@@ -302,7 +346,7 @@ describe("WikiEditor Read Mode default (P0)", () => {
     expect(screen.queryByRole("tab", { name: "Raw" })).not.toBeInTheDocument();
   });
 
-  it("renders title from first heading, summary, tags and sl_ref badges in Meta Header", async () => {
+  it("renders title, compact path, tags and linked table badges in the document header", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
@@ -311,8 +355,8 @@ describe("WikiEditor Read Mode default (P0)", () => {
       expect(title).toHaveTextContent("Superstore guide");
     });
 
-    const summary = await screen.findByTestId("wiki-read-summary");
-    expect(summary).toHaveTextContent("Superstore guide");
+    const meta = await screen.findByTestId("wiki-read-meta");
+    expect(meta).toHaveTextContent("wiki/global/superstore-analysis-playbook.md");
 
     const tags = screen.getByTestId("wiki-read-tags");
     expect(tags.textContent).toContain("analysis");
@@ -569,80 +613,17 @@ describe("WikiEditor Edit Mode (P0)", () => {
     expect(screen.queryByRole("tab", { name: "Raw" })).not.toBeInTheDocument();
   });
 
-  it("opens the 文档信息 drawer from the header and exposes the frontmatter form", async () => {
+  it("keeps low-frequency metadata and focus controls out of the edit header", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
 
-    const drawer = await screen.findByTestId("wiki-meta-drawer");
-    expect(drawer).toBeInTheDocument();
-    expect(screen.getByLabelText("添加关联语义对象")).toBeInTheDocument();
-    expect(screen.getByText("关联语义对象")).toBeInTheDocument();
-    expect(screen.getByText("标签")).toBeInTheDocument();
-    expect(screen.getByText("摘要")).toBeInTheDocument();
-  });
-
-  it("expanding 更多元信息 inside the drawer still reveals refs / usage_mode", async () => {
-    vi.stubGlobal("fetch", buildFetchMock());
-    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
-
-    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
-    await screen.findByTestId("wiki-meta-drawer");
-    const advanced = screen.getByRole("button", { name: /更多元信息/ });
-    fireEvent.click(advanced);
-
-    expect(screen.getByLabelText(/外部引用/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/使用方式/)).toBeInTheDocument();
-  });
-
-  it("removes an sl_ref chip from the drawer and updates the dry-run payload", async () => {
-    const fetchMock = buildFetchMock();
-    vi.stubGlobal("fetch", fetchMock);
-    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
-
-    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
-
-    const removeButton = await screen.findByLabelText(
-      /移除关联语义对象 mysql-aliyun\/dataforai\/superstore_orders/
-    );
-    fireEvent.click(removeButton);
-
-    await waitFor(() => {
-      expect(
-        screen.queryByLabelText(/移除关联语义对象 mysql-aliyun\/dataforai\/superstore_orders/)
-      ).not.toBeInTheDocument();
-    });
-
-    await waitFor(() => {
-      const latestDryRun = [...fetchMock.mock.calls]
-        .reverse()
-        .find((call) => call[1]?.method === "PUT" && JSON.parse(String(call[1]?.body)).dryRun === true);
-      expect(latestDryRun).toBeTruthy();
-      const body = JSON.parse(String(latestDryRun?.[1]?.body));
-      expect(body.frontmatter?.sl_refs ?? []).not.toContain(
-        "mysql-aliyun/dataforai/superstore_orders"
-      );
-    });
-  });
-
-  it("normalizes manually entered sl_refs inside the drawer before adding them", async () => {
-    vi.stubGlobal("fetch", buildFetchMock());
-    renderWiki("/wiki?sl_ref=mysql-aliyun/dataforai/ghost_table");
-
-    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
-
-    const input = await screen.findByLabelText("添加关联语义对象");
-    fireEvent.change(input, { target: { value: " mysql-aliyun//dataforai / second_ghost " } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    expect(
-      await screen.findByLabelText(/移除关联语义对象 mysql-aliyun\/dataforai\/second_ghost/)
-    ).toBeInTheDocument();
+    expect(await screen.findByTestId("wiki-edit-textarea")).toBeInTheDocument();
+    expect(screen.queryByTestId("wiki-meta-toggle")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("wiki-focus-toggle")).not.toBeInTheDocument();
+    expect(screen.getByTestId("wiki-back-to-read")).toHaveTextContent("取消");
+    expect(screen.getByTestId("wiki-save-preflight-button")).toHaveTextContent("保存并发布");
   });
 
   it("renders the Markdown toolbar above the textarea with insertion actions", async () => {
@@ -669,32 +650,57 @@ describe("WikiEditor Edit Mode (P0)", () => {
     });
   });
 
-  it("switches back to read mode via the header 返回阅读 button", async () => {
+  it("prompts before cancelling dirty edit mode and then restores the saved body", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    expect(await screen.findByTestId("wiki-edit-textarea")).toBeInTheDocument();
+    const textarea = (await screen.findByTestId("wiki-edit-textarea")) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "# Unsaved\n\nDraft" } });
+
+    fireEvent.click(await screen.findByTestId("wiki-back-to-read"));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "edit");
 
     fireEvent.click(await screen.findByTestId("wiki-back-to-read"));
     await waitFor(() => {
       expect(screen.queryByTestId("wiki-edit-textarea")).not.toBeInTheDocument();
     });
     expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "read");
+    expect(await screen.findByTestId("wiki-read-body")).toHaveTextContent("Detailed notes here.");
   });
 
-  it("toggles 专注编辑 to collapse the sidebar in edit mode", async () => {
-    vi.stubGlobal("fetch", buildFetchMock());
+  it("prompts before navigating away from a dirty document", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
-    expect(screen.getByTestId("wiki-sidebar")).toBeVisible();
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    fireEvent.click(await screen.findByTestId("wiki-focus-toggle"));
+    const textarea = (await screen.findByTestId("wiki-edit-textarea")) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "# Unsaved\n\nDraft" } });
+
+    const tree = within(screen.getByTestId("wiki-tree"));
+    fireEvent.click(tree.getByRole("button", { name: /Financial playbook/ }));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("wiki-layout")).toHaveAttribute(
+      "data-key",
+      "global/superstore-analysis-playbook.md"
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId("wiki-sidebar")).not.toBeVisible();
+      expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "edit");
     });
-    expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-focus", "true");
+
+    fireEvent.click(tree.getByRole("button", { name: /Financial playbook/ }));
+    await waitFor(() => {
+      expect(screen.getByTestId("wiki-layout")).toHaveAttribute(
+        "data-key",
+        "kx/financial-analysis-playbook.md"
+      );
+    });
+    expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "read");
   });
 });
 
@@ -895,7 +901,9 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
 
     // Page detail should be loaded into the read view
     expect(await screen.findByTestId("wiki-read-title")).toHaveTextContent("Superstore guide");
-    expect(await screen.findByTestId("wiki-read-summary")).toHaveTextContent("Superstore guide");
+    expect(await screen.findByTestId("wiki-read-meta")).toHaveTextContent(
+      "wiki/global/superstore-analysis-playbook.md"
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("current-location")).toHaveTextContent(
@@ -952,14 +960,114 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
     });
   });
 
-  it("renders the new-document button and a draft when a key is empty", async () => {
+  it("renders the neutral Markdown library home when the key is empty", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki");
 
     expect(screen.getByTestId("wiki-new-button")).toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", { name: /Superstore guide/ })
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("wiki-upload-button")).toBeInTheDocument();
+    expect(await screen.findByTestId("wiki-library-home")).toHaveTextContent("Markdown 文档库");
+    expect(screen.queryByTestId("wiki-read-title")).not.toBeInTheDocument();
+    expect(screen.getByTestId("wiki-layout")).not.toHaveAttribute("data-key");
+  });
+});
+
+describe("WikiEditor Markdown file operations (M47)", () => {
+  it("downloads the saved raw Markdown for the selected document", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.fn(() => "blob:wiki-download");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL
+    });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+    fireEvent.click(await screen.findByTestId("wiki-download-button"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/wiki/global%2Fsuperstore-analysis-playbook.md/raw"
+      );
+    });
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:wiki-download");
+  });
+
+  it("opens upload preview from the library home and commits a new Markdown document", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-upload-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    const file = new File(
+      ["---\nsummary: Uploaded\nsl_refs:\n  - mysql-aliyun/dataforai/superstore_orders\n---\n# Uploaded\n"],
+      "uploaded.md",
+      { type: "text/markdown" }
+    );
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    await waitFor(() => {
+      expect(dialog).toHaveTextContent("wiki/global/uploaded.md");
+    });
+    expect(dialog).toHaveTextContent("关联表");
+    expect(dialog).toHaveTextContent("mysql-aliyun/dataforai/superstore_orders");
+
+    fireEvent.change(screen.getByTestId("wiki-upload-directory-select"), {
+      target: { value: "kx" }
+    });
+    await waitFor(() => {
+      expect(dialog).toHaveTextContent("wiki/kx/uploaded.md");
+    });
+
+    fireEvent.click(screen.getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      const commit = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/upload/commit");
+      expect(commit).toBeTruthy();
+      const body = JSON.parse(String(commit?.[1]?.body));
+      expect(body.key).toBe("kx/uploaded.md");
+      expect(body.markdown).toContain("# Uploaded");
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        "/wiki?key=kx%2Fuploaded.md"
+      );
+    });
+  });
+
+  it("opens upload overwrite preview for the current document", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-upload-replace-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    const file = new File(["# Replacement\n"], "replacement.md", { type: "text/markdown" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    await waitFor(() => {
+      expect(dialog).toHaveTextContent("上传覆盖预检");
+    });
+    expect(dialog).toHaveTextContent("wiki/global/superstore-analysis-playbook.md");
+
+    fireEvent.click(screen.getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      const commit = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/upload/commit");
+      expect(commit).toBeTruthy();
+      const body = JSON.parse(String(commit?.[1]?.body));
+      expect(body.key).toBe("global/superstore-analysis-playbook.md");
+      expect(body.overwrite).toBe(true);
+    });
   });
 });
 
@@ -968,14 +1076,18 @@ describe("WikiEditor Tree View (P1)", () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki");
 
-    const groups = await screen.findAllByTestId("wiki-tree-group");
+    const tree = await screen.findByTestId("wiki-tree");
+    await waitFor(() => {
+      expect(within(tree).getAllByTestId("wiki-tree-group").length).toBeGreaterThan(0);
+    });
+    const groups = within(tree).getAllByTestId("wiki-tree-group");
     const labels = groups.map((group) =>
       group.querySelector(".pl-wiki-tree-group-label")?.textContent
     );
     expect(labels).toEqual(expect.arrayContaining(["global", "poc", "kx"]));
 
     // Each row shows the summary as the primary title
-    const superstoreRow = await screen.findByRole("button", { name: /Superstore guide/ });
+    const superstoreRow = within(tree).getByRole("button", { name: /Superstore guide/ });
     expect(superstoreRow.textContent).toContain("global/superstore-analysis-playbook.md");
     // The primary label is rendered before the muted path
     const title = superstoreRow.querySelector(".pl-wiki-tree-page-title")?.textContent;
@@ -986,22 +1098,23 @@ describe("WikiEditor Tree View (P1)", () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki");
 
-    const search = await screen.findByTestId("wiki-tree-search");
+    const tree = await screen.findByTestId("wiki-tree");
+    const search = within(tree).getByTestId("wiki-tree-search");
     // Search by tag
     fireEvent.change(search, { target: { value: "playbook" } });
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /Superstore guide/ })).not.toBeInTheDocument();
+      expect(within(tree).queryByRole("button", { name: /Superstore guide/ })).not.toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /Financial playbook/ })).toBeInTheDocument();
+    expect(within(tree).getByRole("button", { name: /Financial playbook/ })).toBeInTheDocument();
 
-    // Search by sl_ref
+    // Search by linked table.
     fireEvent.change(search, { target: { value: "finance_orders" } });
-    expect(screen.getByRole("button", { name: /Financial playbook/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /POC active/ })).not.toBeInTheDocument();
+    expect(within(tree).getByRole("button", { name: /Financial playbook/ })).toBeInTheDocument();
+    expect(within(tree).queryByRole("button", { name: /POC active/ })).not.toBeInTheDocument();
 
     // Reset search
     fireEvent.change(search, { target: { value: "" } });
-    expect(screen.getByRole("button", { name: /POC active/ })).toBeInTheDocument();
+    expect(within(tree).getByRole("button", { name: /POC active/ })).toBeInTheDocument();
   });
 });
 

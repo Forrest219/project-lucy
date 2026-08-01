@@ -265,6 +265,13 @@ export type WikiPreview = {
   proposedMarkdown: string;
 };
 
+export type WikiUploadPreview = WikiPreview & {
+  exists: boolean;
+  title: string;
+  slRefs: string[];
+  warnings: string[];
+};
+
 export type HelpTocItem = {
   id: string;
   level: 2 | 3 | 4;

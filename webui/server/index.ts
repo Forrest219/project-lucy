@@ -38,7 +38,16 @@ import {
   writeSourcePatch,
   writeSourceYamlImport
 } from "./semantic-layer";
-import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
+import {
+  commitWikiUpload,
+  listWiki,
+  previewWikiUpload,
+  previewWikiWrite,
+  readWiki,
+  writeWiki,
+  type WikiUploadInput,
+  type WikiWriteInput
+} from "./wiki";
 import { readHelpHandbook } from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
@@ -479,6 +488,39 @@ export function buildServer() {
     return {
       ok: true,
       data: { pages: await listWiki(projectRoot) }
+    };
+  });
+
+  app.get<{
+    Params: { key: string };
+  }>("/api/wiki/:key/raw", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const page = await readWiki(projectRoot, request.params.key);
+    reply
+      .header("Content-Type", "text/markdown; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="${path.posix.basename(page.key)}"`)
+      .send(page.rawMarkdown);
+  });
+
+  app.post<{
+    Body: WikiUploadInput;
+  }>("/api/wiki/upload/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await previewWikiUpload(projectRoot, request.body)
+    };
+  });
+
+  app.post<{
+    Body: WikiUploadInput;
+  }>("/api/wiki/upload/commit", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const preview = await commitWikiUpload(projectRoot, request.body);
+    writtenFiles.push({ filePath: preview.filePath });
+    return {
+      ok: true,
+      data: preview
     };
   });
 

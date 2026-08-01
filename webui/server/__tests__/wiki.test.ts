@@ -2,7 +2,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
-import { listWiki, previewWikiWrite, readWiki, writeWiki } from "../wiki";
+import {
+  commitWikiUpload,
+  listWiki,
+  previewWikiUpload,
+  previewWikiWrite,
+  readWiki,
+  writeWiki
+} from "../wiki";
 import { ForbiddenPathError } from "../fs-safe";
 
 let projectRoot: string;
@@ -54,5 +61,41 @@ describe("wiki editor storage", () => {
     ]);
     await expect(previewWikiWrite(projectRoot, "../raw-sources/a.md", { content: "bad" })).rejects.toBeInstanceOf(ForbiddenPathError);
     await expect(previewWikiWrite(projectRoot, "/tmp/a.md", { content: "bad" })).rejects.toBeInstanceOf(ForbiddenPathError);
+  });
+
+  it("previews uploaded markdown without writing, then commits through the wiki allowlist", async () => {
+    const markdown = "---\nsummary: Uploaded\nsl_refs:\n  - mysql/schema/table\n---\n# Uploaded\n";
+    const preview = await previewWikiUpload(projectRoot, {
+      key: "global/uploaded.md",
+      markdown
+    });
+
+    expect(preview.filePath).toBe("wiki/global/uploaded.md");
+    expect(preview.exists).toBe(false);
+    expect(preview.title).toBe("Uploaded");
+    expect(preview.slRefs).toEqual(["mysql/schema/table"]);
+    expect(preview.diff).toContain("+summary: Uploaded");
+    await expect(readFile(path.join(projectRoot, "wiki", "global", "uploaded.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+
+    await commitWikiUpload(projectRoot, {
+      key: "global/uploaded.md",
+      markdown
+    });
+    await expect(readFile(path.join(projectRoot, "wiki", "global", "uploaded.md"), "utf8")).resolves.toBe(markdown);
+  });
+
+  it("rejects unsafe upload keys and non-markdown targets", async () => {
+    await expect(
+      previewWikiUpload(projectRoot, {
+        key: "../raw-sources/leak.md",
+        markdown: "# Bad\n"
+      })
+    ).rejects.toBeInstanceOf(ForbiddenPathError);
+    await expect(
+      previewWikiUpload(projectRoot, {
+        key: "global/not-markdown.txt",
+        markdown: "# Bad\n"
+      })
+    ).rejects.toBeInstanceOf(ForbiddenPathError);
   });
 });
