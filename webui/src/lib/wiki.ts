@@ -15,6 +15,8 @@ export type WikiTemplate = {
   description: string;
   /** Markdown body seeded when the user picks the template. */
   content: string;
+  /** Ordered list of placeholder strings the user must replace. */
+  placeholders: string[];
 };
 
 export const WIKI_TEMPLATES: ReadonlyArray<WikiTemplate> = [
@@ -22,82 +24,152 @@ export const WIKI_TEMPLATES: ReadonlyArray<WikiTemplate> = [
     label: "表使用说明",
     description: "记录表的主题、覆盖场景、典型查询示例与已知限制。",
     content: [
-      "## 表主题",
+      "# [请输入表标题]",
       "",
-      "一句话说明这张表解决了什么业务问题。",
+      "[请输入表主题说明，一句话讲清楚这张表解决什么业务问题]",
+      "",
+      "## 主题",
+      "",
+      "[请输入主题描述]",
       "",
       "## 典型查询",
       "",
       "```sql",
+      "-- [请输入典型查询示例]",
       "SELECT 1;",
       "```",
       "",
       "## 已知限制",
       "",
-      "- 数据更新窗口：",
-      "- 取舍说明："
-    ].join("\n")
+      "- 数据更新窗口：[请输入数据更新窗口]",
+      "- 取舍说明：[请输入取舍说明]"
+    ].join("\n"),
+    placeholders: [
+      "[请输入表标题]",
+      "[请输入表主题说明，一句话讲清楚这张表解决什么业务问题]",
+      "[请输入主题描述]",
+      "[请输入典型查询示例]",
+      "[请输入数据更新窗口]",
+      "[请输入取舍说明]"
+    ]
   },
   {
     label: "指标口径",
     description: "锁定指标定义、计算口径、责任人与变更记录。",
     content: [
+      "# [请输入指标名称]",
+      "",
+      "[请输入指标定义]",
+      "",
       "## 指标定义",
       "",
-      "指标名、所属业务域、计算口径。",
+      "- 所属业务域：[请选择业务 Owner]",
+      "- 计算口径：[请输入计算口径]",
       "",
       "## 责任人与审阅",
       "",
-      "- 业务 Owner：",
-      "- 数据 Owner：",
-      "- 最近审阅：",
+      "- 业务 Owner：[请选择业务 Owner]",
+      "- 数据 Owner：[请选择数据 Owner]",
+      "- 最近审阅：[YYYY-MM-DD]",
       "",
       "## 变更记录",
       "",
-      "- YYYY-MM-DD：初版"
-    ].join("\n")
+      "- [YYYY-MM-DD]：初版"
+    ].join("\n"),
+    placeholders: [
+      "[请输入指标名称]",
+      "[请输入指标定义]",
+      "[请选择业务 Owner]",
+      "[请输入计算口径]",
+      "[请选择业务 Owner]",
+      "[请选择数据 Owner]",
+      "[YYYY-MM-DD]"
+    ]
   },
   {
     label: "分析 Playbook",
     description: "把一个常见分析问题拆成步骤、依赖与结论模板。",
     content: [
+      "# [请输入分析主题]",
+      "",
+      "[请输入业务问题]",
+      "",
       "## 业务问题",
       "",
-      "要回答什么业务问题。",
+      "[请输入业务问题]",
       "",
       "## 数据依赖",
       "",
-      "需要哪些表与字段。",
+      "[请输入依赖的表与字段]",
       "",
       "## 分析步骤",
       "",
-      "1. 明确口径",
-      "2. 取数",
-      "3. 校验",
-      "4. 结论",
+      "1. 明确口径：[请输入口径要点]",
+      "2. 取数：[请输入取数来源]",
+      "3. 校验：[请输入校验要点]",
+      "4. 结论：[请输入结论模板]",
       "",
       "## 结论模板",
       "",
-      "一句话结论 + 关键数据点。"
-    ].join("\n")
+      "[一句话结论 + 关键数据点]"
+    ].join("\n"),
+    placeholders: [
+      "[请输入分析主题]",
+      "[请输入业务问题]",
+      "[请输入业务问题]",
+      "[请输入依赖的表与字段]",
+      "[请输入口径要点]",
+      "[请输入取数来源]",
+      "[请输入校验要点]",
+      "[请输入结论模板]"
+    ]
   },
   {
     label: "FAQ / 注意事项",
     description: "沉淀常见疑问、踩坑、容易误用的边界条件。",
     content: [
+      "# [请输入主题]",
+      "",
       "## FAQ",
       "",
-      "- Q：",
-      "  A：",
+      "- Q：[请输入常见疑问]",
+      "  A：[请输入回答]",
       "",
       "## 注意事项",
       "",
-      "- 数据来源：",
-      "- 取数频次：",
-      "- 容易误用的字段："
-    ].join("\n")
+      "- 数据来源：[请输入数据来源]",
+      "- 取数频次：[请输入取数频次]",
+      "- 容易误用的字段：[请输入易误用字段]"
+    ].join("\n"),
+    placeholders: [
+      "[请输入主题]",
+      "[请输入常见疑问]",
+      "[请输入回答]",
+      "[请输入数据来源]",
+      "[请输入取数频次]",
+      "[请输入易误用字段]"
+    ]
   }
 ];
+
+/**
+ * Extract the unique `[请输入...]` / `[YYYY-MM-DD]` placeholders from a
+ * Markdown body. The empty-state picker uses this list to show a
+ * checklist of the items the user still needs to fill in.
+ */
+export function extractTemplatePlaceholders(content: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  const pattern = /\[\s*[^\]\n]*请[^\]\n]*\]|\[\s*YYYY-MM-DD\s*\]/g;
+  for (const match of content.match(pattern) ?? []) {
+    const trimmed = match.trim();
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      result.push(trimmed);
+    }
+  }
+  return result;
+}
 
 /**
  * Extract a human-readable title for a Wiki page.

@@ -1,13 +1,8 @@
 import clsx from "clsx";
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { LinkedSemanticObjects } from "./LinkedSemanticObjects";
 import { MarkdownPreview } from "./MarkdownPreview";
-import {
-  WIKI_TEMPLATES,
-  extractWikiToc,
-  wikiTitleFromContent
-} from "../lib/wiki";
-import { splitSlRef } from "../lib/slRef";
+import { extractTemplatePlaceholders, extractWikiToc, wikiTitleFromContent } from "../lib/wiki";
 import type { SourceSummary, WikiFrontmatter } from "../lib/types";
 
 export type WikiReadViewProps = {
@@ -17,6 +12,7 @@ export type WikiReadViewProps = {
   knownSources: ReadonlySet<string>;
   knownTables: SourceSummary[];
   onApplyTemplate: (content: string) => void;
+  onOpenTemplatePicker: () => void;
   onSwitchToEdit: () => void;
 };
 
@@ -28,8 +24,9 @@ const EMPTY_BODY_HINT =
  *
  * Renders the article title, a compact meta header, the rendered
  * Markdown body and a sticky table of contents. When the underlying
- * body is empty, the surface doubles as a guided empty state with the
- * four canonical templates.
+ * body is empty, the surface doubles as a guided empty state that
+ * opens the dedicated Template Picker modal instead of rendering
+ * templates inline.
  */
 export function WikiReadView({
   keyName,
@@ -38,6 +35,7 @@ export function WikiReadView({
   knownSources,
   knownTables,
   onApplyTemplate,
+  onOpenTemplatePicker,
   onSwitchToEdit
 }: WikiReadViewProps) {
   const trimmed = content.trim();
@@ -46,8 +44,12 @@ export function WikiReadView({
     [content, frontmatter, keyName]
   );
   const toc = useMemo(() => (trimmed ? extractWikiToc(content) : []), [content, trimmed]);
-  const slRefs = frontmatter.sl_refs ?? [];
   const tags = frontmatter.tags ?? [];
+  const slRefs = frontmatter.sl_refs ?? [];
+  const placeholders = useMemo(
+    () => (trimmed ? extractTemplatePlaceholders(content) : []),
+    [content, trimmed]
+  );
 
   return (
     <article className="pl-wiki-read-view" aria-label={`${title} 阅读视图`}>
@@ -77,57 +79,30 @@ export function WikiReadView({
               ))}
             </ul>
           ) : null}
-          {slRefs.length > 0 ? (
-            <ul
-              aria-label="关联语义对象"
-              className="pl-wiki-read-refs"
-              data-testid="wiki-read-refs"
-            >
-              {slRefs.map((ref) => {
-                const split = splitSlRef(ref);
-                const known = split ? knownSources.has(ref) : false;
-                const state = known ? "known" : "unknown";
-                const label = split ? `${split.schema}.${split.table}` : ref;
-                const table = known ? knownTables.find((t) => `${t.conn}/${t.schema}/${t.table}` === ref) : undefined;
-                const content = (
-                  <>
-                    <span className="pl-wiki-read-ref-label notranslate" translate="no">{label}</span>
-                    {!known ? (
-                      <span className="pl-wiki-read-ref-warning" aria-label="未知语义对象">
-                        未知语义对象
-                      </span>
-                    ) : null}
-                  </>
-                );
-                return (
-                  <li
-                    className={clsx("pl-wiki-read-ref", `pl-wiki-read-ref--${state}`)}
-                    data-sl-ref-state={state}
-                    data-testid="wiki-read-ref"
-                    key={ref}
-                  >
-                    {known && split && table ? (
-                      <Link
-                        aria-label={`打开 ${table.table} 表语义编辑器`}
-                        className="pl-wiki-read-ref-link"
-                        to={`/sources/${encodeURIComponent(split.conn)}/${encodeURIComponent(split.schema)}/${encodeURIComponent(split.table)}`}
-                      >
-                        {content}
-                      </Link>
-                    ) : (
-                      <span
-                        aria-label={known ? `关联语义对象 ${ref}` : `未知关联语义对象 ${ref}`}
-                        className="pl-wiki-read-ref-text"
-                      >
-                        {content}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
+          <LinkedSemanticObjects
+            knownSources={knownSources}
+            knownTables={knownTables}
+            refs={slRefs}
+          />
         </div>
+        {placeholders.length > 0 ? (
+          <p
+            aria-label="模板待补全占位符"
+            className="pl-wiki-read-placeholder-hint"
+            data-testid="wiki-read-placeholder-hint"
+          >
+            还有 {placeholders.length} 个待补全模板占位符，进入
+            <button
+              className="pl-inline-link"
+              data-testid="wiki-read-placeholder-edit"
+              onClick={onSwitchToEdit}
+              type="button"
+            >
+              编辑态
+            </button>
+            完善。
+          </p>
+        ) : null}
       </header>
 
       <div
@@ -145,29 +120,35 @@ export function WikiReadView({
             >
               <p className="pl-wiki-read-empty-hint">{EMPTY_BODY_HINT}</p>
               <p className="pl-wiki-read-empty-subhint">
-                选一个模板开始撰写，或直接进入 <button
+                打开模板选择填充 Markdown 骨架，或直接进入
+                <button
                   className="pl-inline-link"
+                  data-testid="wiki-read-empty-edit"
                   onClick={onSwitchToEdit}
                   type="button"
                 >
                   编辑
-                </button> 模式。
+                </button>
+                模式。
               </p>
-              <ul className="pl-wiki-read-empty-templates" data-testid="wiki-read-templates">
-                {WIKI_TEMPLATES.map((template) => (
-                  <li className="pl-wiki-read-template" key={template.label}>
-                    <button
-                      className="pl-wiki-read-template-button"
-                      data-testid={`wiki-read-template-${template.label}`}
-                      onClick={() => onApplyTemplate(template.content)}
-                      type="button"
-                    >
-                      <strong className="notranslate" translate="no">{template.label}</strong>
-                      <span>{template.description}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="pl-wiki-read-empty-actions">
+                <button
+                  className="pl-btn pl-btn--primary"
+                  data-testid="wiki-read-empty-pick-template"
+                  onClick={onOpenTemplatePicker}
+                  type="button"
+                >
+                  模板选择
+                </button>
+                <button
+                  className="pl-btn pl-btn--ghost"
+                  data-testid="wiki-read-empty-blank"
+                  onClick={() => onApplyTemplate("")}
+                  type="button"
+                >
+                  从空白草稿开始
+                </button>
+              </div>
             </section>
           )}
         </div>

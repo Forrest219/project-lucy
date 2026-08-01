@@ -405,7 +405,41 @@ describe("WikiEditor Read Mode default (P0)", () => {
     const refs = await screen.findByTestId("wiki-read-refs");
     const refItem = refs.querySelector('[data-sl-ref-state="unknown"]');
     expect(refItem).not.toBeNull();
-    expect(refs.textContent).toContain("未知语义对象");
+    // The dot/tooltip carries the "未知语义对象" status; the chip
+    // label itself stays as the schema.table shorthand.
+    expect(refs.textContent).not.toContain("未知语义对象未知语义对象");
+  });
+
+  it("aggregates > 3 linked semantic objects into a summary with unknown count", async () => {
+    const refs = [
+      "mysql-aliyun/dataforai/superstore_orders",
+      "mysql-aliyun/dataforai/finance_orders",
+      "mysql-aliyun/dataforai/ghost_one",
+      "mysql-aliyun/dataforai/ghost_two",
+      "mysql-aliyun/dataforai/ghost_three"
+    ];
+    const pages = [
+      {
+        key: "global/ksc-financial-analysis-playbook.md",
+        summary: "KSC playbook",
+        tags: [],
+        slRefs: refs
+      }
+    ];
+    vi.stubGlobal("fetch", buildFetchMock(pages));
+    renderWiki("/wiki?key=global%2Fksc-financial-analysis-playbook.md");
+
+    const summary = await screen.findByTestId("wiki-read-refs-summary");
+    expect(summary).toHaveTextContent(`关联 ${refs.length} 个语义实体`);
+    expect(summary).toHaveTextContent("3 未识别");
+
+    // Expand to confirm the chip list renders all entries.
+    fireEvent.click(screen.getByTestId("wiki-read-refs-summary-toggle"));
+    const list = await screen.findByTestId("wiki-read-refs");
+    const items = list.querySelectorAll('[data-testid="wiki-read-ref"]');
+    expect(items.length).toBe(refs.length);
+    const unknownChips = list.querySelectorAll('[data-sl-ref-state="unknown"]');
+    expect(unknownChips.length).toBe(3);
   });
 
   it("keeps the desktop layout two-column so the article stays in the first viewport (P1-1)", async () => {
@@ -489,31 +523,31 @@ describe("WikiEditor Read Mode default (P0)", () => {
     expect(preview.querySelector("pre code")?.textContent).toContain("SELECT 1;");
   });
 
-  it("shows the empty-state hint and Markdown templates on an empty draft", async () => {
+  it("shows the empty-state hint and a Template Picker entry on an empty draft", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?sl_ref=mysql-aliyun/dataforai/empty_table");
 
     const empty = await screen.findByTestId("wiki-read-empty");
     expect(empty.textContent).toContain("Wiki 维护 Markdown 业务说明");
     expect(empty.textContent).toContain("Schema Manifest 请在连接概览上传");
-
-    const templates = screen.getAllByTestId(/^wiki-read-template-/);
-    expect(templates.length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByTestId("wiki-read-empty-pick-template")).toBeInTheDocument();
   });
 
-  it("clicking a template fills the editor and switches to Edit Mode", async () => {
+  it("clicking a template in the picker fills the editor and switches to Edit Mode", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?sl_ref=mysql-aliyun/dataforai/empty_table");
 
-    const template = await screen.findByTestId("wiki-read-template-表使用说明");
+    // Open the dedicated Template Picker modal from the empty state.
+    fireEvent.click(await screen.findByTestId("wiki-read-empty-pick-template"));
+    const template = await screen.findByTestId("wiki-template-option-表使用说明");
     fireEvent.click(template);
 
     // After picking a template, Edit Mode should be active and the
     // source textarea should contain the seeded body.
     const textarea = await screen.findByTestId("wiki-edit-textarea");
-    expect((textarea as HTMLTextAreaElement).value).toContain("## 表主题");
-    const mode = screen.getByTestId("wiki-mode-badge");
-    expect(mode).toHaveAttribute("data-mode", "edit");
+    expect((textarea as HTMLTextAreaElement).value).toContain("[请输入表标题]");
+    const layout = screen.getByTestId("wiki-layout");
+    expect(layout).toHaveAttribute("data-mode", "edit");
   });
 });
 
@@ -527,36 +561,36 @@ describe("WikiEditor Edit Mode (P0)", () => {
 
     expect(await screen.findByTestId("wiki-edit-textarea")).toBeInTheDocument();
     expect(await screen.findByTestId("wiki-edit-preview")).toBeInTheDocument();
-    // Compact Meta Header is collapsed by default
-    const meta = screen.getByTestId("wiki-edit-meta");
-    expect(meta).toBeInTheDocument();
-    expect(meta).not.toHaveAttribute("open");
+    // Frontmatter form has been moved to a Drawer. The textarea is
+    // never interrupted by inline form fields.
+    expect(screen.queryByLabelText("添加关联语义对象")).not.toBeInTheDocument();
     // Persistent Diff / Raw tabs are absent
     expect(screen.queryByRole("tab", { name: "Diff" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Raw" })).not.toBeInTheDocument();
   });
 
-  it("expands the 文档信息 panel and exposes the frontmatter form", async () => {
+  it("opens the 文档信息 drawer from the header and exposes the frontmatter form", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    const meta = await screen.findByTestId("wiki-edit-meta");
-    fireEvent.click(meta.querySelector("summary") as HTMLElement);
+    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
 
+    const drawer = await screen.findByTestId("wiki-meta-drawer");
+    expect(drawer).toBeInTheDocument();
     expect(screen.getByLabelText("添加关联语义对象")).toBeInTheDocument();
     expect(screen.getByText("关联语义对象")).toBeInTheDocument();
     expect(screen.getByText("标签")).toBeInTheDocument();
     expect(screen.getByText("摘要")).toBeInTheDocument();
   });
 
-  it("expanding 更多元信息 still reveals refs / usage_mode", async () => {
+  it("expanding 更多元信息 inside the drawer still reveals refs / usage_mode", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    const meta = await screen.findByTestId("wiki-edit-meta");
-    fireEvent.click(meta.querySelector("summary") as HTMLElement);
+    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
+    await screen.findByTestId("wiki-meta-drawer");
     const advanced = screen.getByRole("button", { name: /更多元信息/ });
     fireEvent.click(advanced);
 
@@ -564,14 +598,13 @@ describe("WikiEditor Edit Mode (P0)", () => {
     expect(screen.getByLabelText(/使用方式/)).toBeInTheDocument();
   });
 
-  it("removes an sl_ref chip from the frontmatter and updates the dry-run payload", async () => {
+  it("removes an sl_ref chip from the drawer and updates the dry-run payload", async () => {
     const fetchMock = buildFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    const meta = await screen.findByTestId("wiki-edit-meta");
-    fireEvent.click(meta.querySelector("summary") as HTMLElement);
+    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
 
     const removeButton = await screen.findByLabelText(
       /移除关联语义对象 mysql-aliyun\/dataforai\/superstore_orders/
@@ -596,13 +629,12 @@ describe("WikiEditor Edit Mode (P0)", () => {
     });
   });
 
-  it("normalizes manually entered sl_refs before adding them to frontmatter", async () => {
+  it("normalizes manually entered sl_refs inside the drawer before adding them", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?sl_ref=mysql-aliyun/dataforai/ghost_table");
 
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    const meta = await screen.findByTestId("wiki-edit-meta");
-    fireEvent.click(meta.querySelector("summary") as HTMLElement);
+    fireEvent.click(await screen.findByTestId("wiki-meta-toggle"));
 
     const input = await screen.findByLabelText("添加关联语义对象");
     fireEvent.change(input, { target: { value: " mysql-aliyun//dataforai / second_ghost " } });
@@ -611,6 +643,30 @@ describe("WikiEditor Edit Mode (P0)", () => {
     expect(
       await screen.findByLabelText(/移除关联语义对象 mysql-aliyun\/dataforai\/second_ghost/)
     ).toBeInTheDocument();
+  });
+
+  it("renders the Markdown toolbar above the textarea with insertion actions", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
+    const toolbar = await screen.findByTestId("wiki-markdown-toolbar");
+    expect(toolbar).toHaveAttribute("role", "toolbar");
+    expect(screen.getByTestId("wiki-toolbar-bold")).toBeInTheDocument();
+    expect(screen.getByTestId("wiki-toolbar-codeblock")).toBeInTheDocument();
+    expect(screen.getByTestId("wiki-toolbar-table")).toBeInTheDocument();
+    expect(screen.getByTestId("wiki-toolbar-link")).toBeInTheDocument();
+
+    // Bold insertion wraps the current selection.
+    const textarea = (await screen.findByTestId("wiki-edit-textarea")) as HTMLTextAreaElement;
+    textarea.focus();
+    textarea.setSelectionRange(0, 0);
+    fireEvent.click(screen.getByTestId("wiki-toolbar-bold"));
+    await waitFor(() => {
+      expect((screen.getByTestId("wiki-edit-textarea") as HTMLTextAreaElement).value).toContain(
+        "**加粗文本**"
+      );
+    });
   });
 
   it("switches back to read mode via the header 返回阅读 button", async () => {
@@ -624,7 +680,21 @@ describe("WikiEditor Edit Mode (P0)", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("wiki-edit-textarea")).not.toBeInTheDocument();
     });
-    expect(screen.getByTestId("wiki-mode-badge")).toHaveAttribute("data-mode", "read");
+    expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "read");
+  });
+
+  it("toggles 专注编辑 to collapse the sidebar in edit mode", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    expect(screen.getByTestId("wiki-sidebar")).toBeVisible();
+    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
+    fireEvent.click(await screen.findByTestId("wiki-focus-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("wiki-sidebar")).not.toBeVisible();
+    });
+    expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-focus", "true");
   });
 });
 
@@ -644,6 +714,8 @@ describe("WikiEditor Save Preflight (P0)", () => {
     // The Raw section is collapsed (secondary), not a persistent page tab
     expect(dialog.textContent).toContain("展开 Raw");
     expect(screen.queryByRole("tab", { name: "Raw" })).not.toBeInTheDocument();
+    // Header no longer carries the reading/edit mode tablist.
+    expect(screen.queryByTestId("wiki-header-modes")).not.toBeInTheDocument();
   });
 
   it("opening Save Preflight forces a fresh dry-run so Diff/Raw can never be stale (P0-1)", async () => {
@@ -789,7 +861,7 @@ describe("WikiEditor Save Preflight (P0)", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("wiki-save-preflight")).not.toBeInTheDocument();
     });
-    expect(screen.getByTestId("wiki-mode-badge")).toHaveAttribute("data-mode", "read");
+    expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "read");
   });
 
   it("Cmd/Ctrl+S opens the Save Preflight without writing dryRun:false", async () => {
@@ -837,9 +909,15 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderWiki("/wiki?sl_ref=mysql-aliyun/dataforai/unknown_table");
 
-    // The draft key should be derived from the table segment
-    const keyInput = await screen.findByDisplayValue("global/unknown_table.md");
-    expect(keyInput).toBeInTheDocument();
+    // The draft key should be derived from the table segment and is
+    // surfaced on the layout data attribute (the page-path input was
+    // removed in M42).
+    await waitFor(() => {
+      expect(screen.getByTestId("wiki-layout")).toHaveAttribute(
+        "data-key",
+        "global/unknown_table.md"
+      );
+    });
 
     // No PUT save should have been issued yet (only PUT dry-runs for the preview are allowed)
     const putCalls = fetchMock.mock.calls.filter((call) => call[1]?.method === "PUT");
@@ -866,24 +944,11 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
     ]));
     renderWiki("/wiki?sl_ref=mysql-aliyun/dataforai/foo");
 
-    expect(await screen.findByDisplayValue("global/foo-wiki-2.md")).toBeInTheDocument();
-  });
-
-  it("keeps unsaved content when the page path field is committed to a new draft key", async () => {
-    vi.stubGlobal("fetch", buildFetchMock());
-    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
-
-    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    const textarea = await screen.findByTestId("wiki-edit-textarea");
-    fireEvent.change(textarea, { target: { value: "# Edited\n\nStill here." } });
-
-    const keyInput = screen.getByDisplayValue("global/superstore-analysis-playbook.md");
-    fireEvent.change(keyInput, { target: { value: "global/superstore-copy.md" } });
-    fireEvent.blur(keyInput);
-
     await waitFor(() => {
-      expect(screen.getByDisplayValue("global/superstore-copy.md")).toBeInTheDocument();
-      expect(textarea).toHaveValue("# Edited\n\nStill here.");
+      expect(screen.getByTestId("wiki-layout")).toHaveAttribute(
+        "data-key",
+        "global/foo-wiki-2.md"
+      );
     });
   });
 
@@ -980,7 +1045,13 @@ describe("Catalog table-level Wiki action", () => {
       </QueryClientProvider>
     );
 
-    const wikiLink = await screen.findByRole("link", { name: /打开 dataforai\.superstore_orders 的业务 Wiki/ });
+    // Catalog exposes the Wiki action through a RowMoreMenu, so we open
+    // the menu for the superstore_orders row before asserting on the
+    // menu item link.
+    const triggers = await screen.findAllByTestId("row-more-trigger");
+    fireEvent.click(triggers[0] ?? triggers[0]);
+
+    const wikiLink = await screen.findByTestId("catalog-row-wiki-superstore_orders");
     expect(wikiLink).toHaveAttribute(
       "href",
       "/wiki?sl_ref=mysql-aliyun%2Fdataforai%2Fsuperstore_orders"

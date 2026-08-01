@@ -264,6 +264,21 @@
   .pl-page-header-description {
     @apply text-[13px] leading-5 text-fg-muted;
   }
+  /* M44: unframed, in-description context line for the project root.
+     Sits beneath the main description copy without competing with the
+     state badges / actions on the right. */
+  .pl-page-header-context-stack {
+    @apply grid gap-1;
+  }
+  .pl-page-header-context-line {
+    @apply flex flex-wrap items-baseline gap-x-1.5 text-[13px] text-fg-muted;
+  }
+  .pl-page-header-context-line code {
+    @apply font-mono text-fg-default;
+  }
+  .pl-page-header-context-path {
+    @apply font-mono text-[12px] text-fg-default;
+  }
 
   .pl-page-header-actions {
     @apply flex flex-wrap items-center justify-end gap-2;
@@ -315,7 +330,13 @@
   .pl-metric-value--danger { color: var(--token-color-danger-strong); }
   .pl-metric-card--success { @apply border-success-strong bg-success-soft; }
   .pl-metric-card--success strong { @apply text-success-strong; }
-  .pl-metric-card--warning { @apply border-warning-strong bg-warning-soft; }
+  /* M44: soften warning tone — the overview's Catalog 状态 is rarely a hard
+     error, so the card keeps its neutral shell with a top amber rail and
+     subtle warning fill to stay visually subordinate to danger states. */
+  .pl-metric-card--warning {
+    @apply border-warning-soft bg-warning-soft/40;
+    border-top: 2px solid var(--token-color-warning-strong);
+  }
   .pl-metric-card--warning strong { @apply text-warning-strong; }
   .pl-metric-card--danger { @apply border-danger-strong bg-danger-soft; }
   .pl-metric-card--danger strong { @apply text-danger-strong; }
@@ -430,6 +451,32 @@
   .pl-table-row:hover { @apply border-border-strong; }
   .pl-table-row strong { @apply font-medium; }
   .pl-table-row span { @apply text-sm text-fg-muted; }
+
+  /* Catalog 紧凑表格（数据网格） */
+  .pl-catalog-table-wrap { @apply overflow-x-auto; }
+  .pl-catalog-table { @apply w-full border-separate border-spacing-0 text-sm; }
+  .pl-catalog-table thead th { @apply sticky top-0 z-10 border-b border-border-default bg-bg-subtle px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-fg-muted; }
+  .pl-catalog-table tbody tr { @apply border-b border-border-default last:border-b-0; }
+  .pl-catalog-table tbody tr:hover { @apply bg-bg-subtle; }
+  .pl-catalog-table tbody td { @apply px-3 py-2 align-middle text-fg-default; }
+  .pl-catalog-table-name { @apply grid gap-0.5; }
+  .pl-catalog-table-name-link { @apply text-sm font-medium text-fg-default no-underline hover:underline; }
+  .pl-catalog-table-qualified { @apply text-xs text-fg-muted; }
+  .pl-catalog-table-schema { @apply text-sm text-fg-default; }
+  .pl-catalog-table-structure { @apply text-xs text-fg-muted; }
+  .pl-catalog-table-agents { @apply text-sm text-fg-default tabular-nums; }
+  .pl-catalog-table-updated { @apply text-xs text-fg-default tabular-nums; }
+  .pl-catalog-table-actions { @apply flex items-center justify-end gap-2; }
+  .pl-catalog-table-actions-col { @apply w-px whitespace-nowrap text-right; }
+  /* Catalog 表内标签等宽居中，避免列抖动；不影响其它页面 StatusBadge */
+  .pl-catalog-table .pl-status-badge { @apply min-w-[64px] justify-center whitespace-nowrap; }
+
+  /* 行内 More 菜单（lucide-react MoreHorizontal） */
+  .pl-row-more { @apply relative inline-block; }
+  .pl-row-more-trigger { @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-border-default bg-bg-surface text-fg-muted transition hover:border-border-strong hover:text-fg-default; }
+  .pl-row-more-icon { @apply h-4 w-4; }
+  .pl-row-more-menu { @apply absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-md border border-border-default bg-bg-surface py-1 shadow-card; }
+  .pl-row-more-item { @apply block w-full px-3 py-1.5 text-left text-sm text-fg-default no-underline transition hover:bg-bg-muted focus:bg-bg-muted focus:outline-none; }
   .pl-overview-grid { @apply grid gap-4; }
   .pl-connection-row { @apply overflow-hidden rounded-lg border border-border-default bg-bg-surface; }
   .pl-connection-card-header { @apply grid gap-2 border-b border-border-default bg-bg-subtle px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto]; }
@@ -446,6 +493,42 @@
   .pl-connection-card-identity code { @apply rounded bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-default; }
   .pl-connection-card-header-actions { @apply hidden; }
   .pl-connection-card-body { @apply grid gap-3 px-4 py-4; }
+  /* M44: structured 2x2 KeyValue grid replacing the legacy meta-tag + code
+     badge row. Uses an auto-fit minmax(0,1fr) template so long Host values
+     can wrap without breaking the row layout. */
+  .pl-connection-kv-grid {
+    @apply grid min-w-0 grid-cols-1 gap-x-4 gap-y-2 text-xs md:col-span-2 sm:grid-cols-2;
+  }
+  .pl-connection-kv {
+    @apply grid min-w-0 gap-0.5;
+  }
+  .pl-connection-kv dt {
+    @apply text-[11px] font-medium uppercase tracking-wider text-fg-muted;
+  }
+  .pl-connection-kv dd {
+    @apply flex min-w-0 items-baseline gap-1 text-xs text-fg-default;
+  }
+  .pl-connection-kv dd code {
+    @apply min-w-0 break-words font-mono text-xs text-fg-default;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* Long Host values: explicit overflow rules so the row never overflows the
+     card on narrow widths. Title still carries the full value. */
+  .pl-connection-kv--wide dd { @apply flex min-w-0; }
+  .pl-connection-kv-host {
+    @apply block min-w-0 max-w-full font-mono text-xs text-fg-default;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* M44: in-card amber banner for Connection 尚未读取本地目录.
+     Lightweight fill + soft warning border; never uses danger red. */
+  .pl-connection-refresh-warning {
+    @apply flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-warning-soft bg-warning-soft/60 px-3 py-2 text-sm text-warning-strong;
+  }
+  .pl-connection-refresh-warning-text {
+    @apply grid gap-0.5 text-warning-strong;
+  }
   .pl-connection-card-footer { @apply flex flex-wrap items-center justify-end gap-3 border-t border-border-default bg-bg-subtle px-4 py-3; }
   .pl-connection-card-actions { @apply flex flex-wrap items-center justify-end gap-2; }
   .pl-connection-card-schema-actions { @apply flex flex-wrap items-center justify-end gap-2; }
@@ -626,19 +709,41 @@
   .pl-status-badge--disabled { @apply bg-bg-muted text-fg-muted; }
 
   /* 启用表范围 (M8) */
-  .pl-whitelist-toolbar { @apply flex flex-wrap items-end justify-between gap-x-4 gap-y-3 rounded-md border border-border-default bg-bg-surface p-3; }
+  /* Toolbar collapsed to "filter + selection" only; primary ops (刷新本地目录)
+     are hoisted to PageHeader.actions, while batch ops live behind a quiet menu. */
+  .pl-whitelist-toolbar {
+    @apply flex flex-wrap items-end justify-between gap-x-4 gap-y-3 rounded-md border border-border-default bg-bg-surface p-3;
+  }
   .pl-whitelist-toolbar label { @apply grid gap-1.5 text-sm; }
-  /* M31: stable two-zone toolbar — filters on the left, batch / ops on the
-     right. Each zone wraps internally so the toolbar keeps a predictable
-     height when controls overflow. */
   .pl-whitelist-filter-area {
     @apply flex flex-wrap items-end gap-3;
   }
-  .pl-whitelist-ops-area {
-    @apply ml-auto flex flex-wrap items-center gap-3;
-  }
   .pl-whitelist-selection-summary {
     @apply whitespace-nowrap text-sm text-fg-muted;
+  }
+  .pl-whitelist-batch-menu {
+    @apply relative inline-flex;
+  }
+  .pl-whitelist-batch-summary {
+    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm text-sm font-normal text-primary underline-offset-4 no-underline;
+    list-style: none;
+  }
+  .pl-whitelist-batch-summary::-webkit-details-marker {
+    display: none;
+  }
+  .pl-whitelist-batch-summary:hover,
+  .pl-whitelist-batch-summary:focus-visible {
+    @apply underline;
+    outline: none;
+  }
+  .pl-whitelist-batch-menu-panel {
+    @apply absolute right-0 top-full z-50 mt-2 grid min-w-28 gap-1 rounded-md border border-border-default bg-bg-elevated p-1 shadow-md;
+  }
+  .pl-whitelist-batch-link {
+    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm px-2 py-1.5 text-left text-sm font-normal text-fg-default hover:bg-bg-muted disabled:cursor-not-allowed disabled:text-fg-muted disabled:opacity-60;
+  }
+  .pl-whitelist-batch-link:focus-visible {
+    outline: none;
   }
   .pl-missing-manifest-diagnostic {
     @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3 text-sm text-fg-body;
@@ -665,14 +770,62 @@
     @apply flex flex-wrap items-center gap-2;
   }
   .pl-table-group { @apply grid gap-2; }
+  /* Heading element inside the group section (kept for backward-compat with
+     diagnostic blocks like the missing-Manifest card). */
   .pl-table-group-heading { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  /* Lightweight group header row inside the unified <table>; sits at the top
+     of each <tbody> with a subdued background and no top border. */
+  .pl-table-group-row {
+    @apply border-0 bg-bg-subtle text-xs font-medium tracking-wider text-fg-muted;
+  }
+  .pl-table-group-row td {
+    @apply border-b border-border-default px-3 py-2 align-middle;
+  }
+  .pl-table-group-row-count {
+    @apply ml-2 text-[11px] font-normal text-fg-muted;
+  }
+  .pl-table-wrapper { @apply grid gap-2; }
   .pl-data-table { @apply w-full border-collapse text-sm; }
   .pl-data-table thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-data-table tbody td { @apply border-b border-border-default px-3 py-2 align-middle; }
   .pl-data-table tbody tr:hover { @apply bg-bg-muted; }
 
+  .pl-page-stack--safe-bottom {
+    /* Reserve room for the floating dock so the last table row never sits
+       under it. Tuned for two-line summary + 3 buttons; safe-area-inset for
+       notched mobile browsers. */
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+    transition: padding-bottom 180ms ease-out;
+  }
+  .pl-floating-dock {
+    @apply fixed inset-x-4 bottom-6 z-40 mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-lg border border-border-strong bg-bg-elevated p-4 shadow-lg;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    animation: pl-floating-dock-in 180ms ease-out;
+  }
+  /* Align the dock with the main content column on desktop widths where the
+     216px sidebar is sticky. Without this, the dock centers on the viewport
+     and feels detached from the table it modifies. */
+  @media (min-width: 901px) {
+    .pl-floating-dock {
+      left: calc(216px + 2rem);
+      right: 2rem;
+      max-width: none;
+    }
+  }
+  .pl-floating-dock-text { @apply text-sm font-medium; }
   .pl-floating-action-bar { @apply sticky bottom-6 z-30 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-strong bg-bg-elevated p-4 shadow-md; }
   .pl-floating-action-bar-text { @apply text-sm font-medium; }
+
+  @keyframes pl-floating-dock-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
   .pl-yaml-path-details { @apply grid gap-1 text-xs text-fg-muted; }
   .pl-yaml-path-details summary { @apply cursor-pointer font-medium text-fg-default; }
   .pl-yaml-path-details code { @apply block rounded-md border border-border-default bg-bg-base px-2 py-1 font-mono; }
@@ -1234,14 +1387,138 @@
   .pl-wiki-tree-pages { @apply list-none p-0 m-0 grid gap-0.5 pl-3; }
   .pl-wiki-tree-page { @apply grid; }
   .pl-wiki-tree-page-button {
-    @apply grid gap-0.5 rounded-sm px-2 py-1.5 text-left text-sm text-fg-body;
+    @apply grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 rounded-sm px-2 py-1.5 text-left text-sm text-fg-body;
   }
   .pl-wiki-tree-page-button:hover { @apply bg-bg-muted; }
   .pl-wiki-tree-page--active .pl-wiki-tree-page-button {
     @apply bg-bg-selected text-fg-default font-semibold;
   }
-  .pl-wiki-tree-page-title { @apply truncate; }
-  .pl-wiki-tree-page-path { @apply truncate font-mono text-[10px] text-fg-muted; }
+  .pl-wiki-tree-page-ext {
+    @apply inline-flex items-center justify-center rounded-sm border border-border-default bg-bg-muted px-1.5 font-mono text-[10px] uppercase text-fg-muted;
+  }
+  .pl-wiki-tree-page-title {
+    @apply truncate col-span-1;
+    grid-column-start: 2;
+  }
+  .pl-wiki-tree-page-path {
+    @apply col-span-2 truncate font-mono text-[10px] text-fg-muted;
+  }
+
+  /* M42: Header converged. Status pill + focus toggle + copy hint. */
+  .pl-wiki-header-status {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted;
+  }
+  .pl-wiki-header-status[data-status="draft"] {
+    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  }
+  .pl-wiki-header-focus--active {
+    @apply border-accent/40 bg-accent/10 text-accent;
+  }
+  .pl-wiki-header-edit-title {
+    @apply inline-flex flex-wrap items-baseline gap-2;
+  }
+  .pl-wiki-header-edit-key {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted;
+  }
+  .pl-wiki-header-copy-hint {
+    @apply text-xs text-fg-muted;
+  }
+
+  /* M42: Sidebar shrinks to the search box + tree. Path input removed. */
+  .pl-wiki-sidebar-key {
+    @apply truncate rounded-sm bg-bg-muted px-2 py-1 font-mono text-[10px] text-fg-muted;
+  }
+
+  /* M42: Focus mode collapses the sidebar to a thin icon strip. The
+     main column then claims the full grid width. */
+  .pl-wiki-sidebar--collapsed {
+    @apply p-0;
+  }
+  .pl-wiki-layout--focus { grid-template-columns: 0 minmax(0, 1fr); }
+  .pl-wiki-layout--focus .pl-wiki-sidebar { display: none; }
+
+  /* M42: Preview tab mode for narrow edit viewports. Markdown and
+     Preview stack instead of fighting for 420px each. */
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* M42: Markdown toolbar sits directly above the textarea. */
+  .pl-wiki-markdown-toolbar {
+    @apply flex flex-wrap items-center gap-1 rounded-md border border-border-default bg-bg-subtle px-1.5 py-1 text-xs;
+  }
+  .pl-wiki-markdown-toolbar-button {
+    @apply rounded-sm px-2 py-0.5 font-mono text-xs text-fg-body;
+  }
+  .pl-wiki-markdown-toolbar-button:hover {
+    @apply bg-bg-muted text-fg-default;
+  }
+
+  /* M42: Tab toggle for the Markdown / Preview fallback. */
+  .pl-wiki-edit-tab-toggle {
+    @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-surface p-0.5;
+  }
+  .pl-wiki-edit-tab-toggle--active {
+    @apply bg-bg-muted text-fg-default font-semibold;
+  }
+
+  /* M42: Linked semantic object summary (>3 refs). */
+  .pl-wiki-read-refs-summary { @apply grid gap-2; }
+  .pl-wiki-read-refs-summary-button {
+    @apply inline-flex items-center gap-2 rounded-md border border-border-default bg-bg-subtle px-2 py-1 text-xs text-fg-body;
+  }
+  .pl-wiki-read-refs-summary-button:hover { @apply border-border-strong; }
+  .pl-wiki-read-refs-summary-unknown {
+    @apply rounded-pill border border-border-default bg-bg-muted px-1.5 py-0.5 text-[10px] text-fg-muted;
+  }
+  .pl-wiki-read-refs-summary-unknown--warn {
+    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  }
+  .pl-wiki-read-refs-summary-caret {
+    @apply ml-auto text-[10px] text-fg-muted;
+  }
+  .pl-wiki-read-ref-dot {
+    @apply inline-block size-2 rounded-pill;
+  }
+  .pl-wiki-read-ref-dot--known { @apply bg-success; }
+  .pl-wiki-read-ref-dot--unknown { @apply bg-warning; }
+  .pl-wiki-read-ref-sr { @apply sr-only; }
+
+  /* M42: Empty-state actions row + placeholder hints. */
+  .pl-wiki-read-empty-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-read-placeholder-hint,
+  .pl-wiki-edit-placeholder-hint {
+    @apply rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+
+  /* M42: Template picker modal. */
+  .pl-wiki-template-overlay { @apply fixed inset-0 z-40 bg-fg-default/40 backdrop-blur-sm; }
+  .pl-wiki-template-content {
+    @apply fixed left-1/2 top-1/2 z-50 grid max-h-[80vh] w-[min(720px,90vw)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-auto rounded-xl border border-border-default bg-bg-surface p-5 shadow-card;
+  }
+  .pl-wiki-template-title { @apply text-lg font-semibold text-fg-default; }
+  .pl-wiki-template-description { @apply text-sm text-fg-muted; }
+  .pl-wiki-template-list { @apply grid list-none gap-2 p-0 m-0 sm:grid-cols-2; }
+  .pl-wiki-template-button {
+    @apply grid gap-1 rounded-md border border-border-default bg-bg-surface p-3 text-left text-sm transition-colors;
+  }
+  .pl-wiki-template-button:hover { @apply border-border-strong bg-bg-muted; }
+  .pl-wiki-template-label { @apply text-sm font-semibold text-fg-default; }
+  .pl-wiki-template-desc { @apply text-xs text-fg-muted; }
+  .pl-wiki-template-placeholder-hint { @apply text-[11px] text-fg-subtle; }
+  .pl-wiki-template-actions { @apply flex justify-end; }
+
+  /* M42: Frontmatter drawer (replaces inline form). */
+  .pl-wiki-meta-overlay { @apply fixed inset-0 z-40 bg-fg-default/40 backdrop-blur-sm; }
+  .pl-wiki-meta-content {
+    @apply fixed right-0 top-0 z-50 grid h-full w-[min(420px,90vw)] gap-4 overflow-auto border-l border-border-default bg-bg-surface p-5 shadow-card;
+  }
+  .pl-wiki-meta-header { @apply grid gap-2; }
+  .pl-wiki-meta-title { @apply text-base font-semibold text-fg-default; }
+  .pl-wiki-meta-description { @apply text-xs text-fg-muted; }
+  .pl-wiki-meta-close { @apply justify-self-end; }
 
   /* Markdown preview typography. Small enough to keep a workbench
      feel, large enough to remain readable. */

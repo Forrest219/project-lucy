@@ -99,6 +99,7 @@ export function WikiTree({ pages, activeKey, onSelect, initialSearch = "" }: Wik
                   <ul className="pl-wiki-tree-pages">
                     {group.pages.map((page) => {
                       const enriched = page as EnrichedPage;
+                      const extension = page.key.split(".").pop() ?? "";
                       return (
                         <li
                           className={clsx(
@@ -115,6 +116,14 @@ export function WikiTree({ pages, activeKey, onSelect, initialSearch = "" }: Wik
                             onClick={() => onSelect(page.key)}
                             type="button"
                           >
+                            <span
+                              aria-hidden
+                              className="pl-wiki-tree-page-ext notranslate"
+                              data-ext={extension}
+                              translate="no"
+                            >
+                              {extension}
+                            </span>
                             <span className="pl-wiki-tree-page-title">{enriched.displayTitle}</span>
                             <span
                               className="pl-wiki-tree-page-path notranslate"

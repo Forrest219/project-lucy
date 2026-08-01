@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { FrontmatterDrawer } from "../components/FrontmatterDrawer";
 import { PageHeader } from "../components/PageHeader";
+import { TemplatePicker } from "../components/TemplatePicker";
 import { WikiReadView } from "../components/WikiReadView";
 import { WikiEditView } from "../components/WikiEditView";
 import { WikiSavePreflight } from "../components/WikiSavePreflight";
@@ -18,7 +20,6 @@ import {
 import { buildSavePreflightState, wikiDraftVersion } from "../lib/wiki";
 import type {
   SourcesResponse,
-  SourceSummary,
   WikiFrontmatter,
   WikiListResponse,
   WikiPage,
@@ -104,11 +105,24 @@ export function WikiEditor() {
   const [previewVersion, setPreviewVersion] = useState<string | null>(null);
   const [uiMode, setUiMode] = useState<WikiUiMode>("read");
   const [preflightOpen, setPreflightOpen] = useState(false);
-  const [pathDraft, setPathDraft] = useState("");
+  const [focusMode, setFocusMode] = useState(false);
+  const [previewTab, setPreviewTab] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [showMetaDrawer, setShowMetaDrawer] = useState(false);
+  const [copyHint, setCopyHint] = useState<string | null>(null);
   const dirtyRef = useRef(false);
   const sourceRef = useRef<string>(`${key}::${mode}::init`);
   const preserveBufferForKeyRef = useRef<string | null>(null);
   const lastResolvedKeyRef = useRef<string>(key);
+  // Refs that always reflect the latest content / frontmatter. Updated
+  // synchronously from the change handlers so the Save Preflight and
+  // debounced dry-run see fresh values even before React commits the
+  // batched state update. We intentionally do NOT mirror `content` /
+  // `frontmatter` back into the ref during render, otherwise a render
+  // triggered by an unrelated state change would clobber the latest
+  // edit before downstream consumers have a chance to read it.
+  const contentRef = useRef(content);
+  const frontmatterRef = useRef(frontmatter);
   // Live draft version. Updated every time the editor buffer changes.
   // Stored in a ref so the async runDryRun closure can compare it
   // against the version it started with without going stale.
@@ -121,13 +135,6 @@ export function WikiEditor() {
     currentDraftVersionRef.current = currentDraftVersion;
   }, [currentDraftVersion]);
 
-  useEffect(() => {
-    setPathDraft(key);
-  }, [key]);
-
-  // When the resolved key changes, default back to Read Mode so the
-  // user always lands on a clean document surface unless they were
-  // actively editing the same key.
   useEffect(() => {
     if (lastResolvedKeyRef.current === key) {
       return;
@@ -166,10 +173,13 @@ export function WikiEditor() {
       return;
     }
     if (slRef) {
+      frontmatterRef.current = { sl_refs: [slRef] };
       setFrontmatter({ sl_refs: [slRef] });
     } else {
+      frontmatterRef.current = {};
       setFrontmatter({});
     }
+    contentRef.current = "";
     setContent("");
     setPreview(null);
     dirtyRef.current = false;
@@ -191,18 +201,22 @@ export function WikiEditor() {
     if (!pageQuery.data) {
       return;
     }
+    // The buffer was hydrated for a draft on this key — keep that
+    // state unless the user explicitly starts editing. The dirty flag
+    // is set by every change handler, so once the user types anything
+    // we MUST NOT overwrite their input.
+    if (dirtyRef.current) {
+      return;
+    }
     const sourceKey = `${key}::${mode}::loaded`;
     if (sourceRef.current === sourceKey) {
       return;
     }
-    if (sourceRef.current.startsWith(`${key}::loaded::`) && dirtyRef.current) {
-      // User edited; only apply once.
-      return;
-    }
     setFrontmatter(pageQuery.data.frontmatter);
+    frontmatterRef.current = pageQuery.data.frontmatter;
     setContent(pageQuery.data.content);
+    contentRef.current = pageQuery.data.content;
     setPreview(null);
-    dirtyRef.current = false;
     sourceRef.current = sourceKey;
   }, [key, mode, pageQuery.data]);
 
@@ -232,25 +246,38 @@ export function WikiEditor() {
     [content, frontmatter]
   );
 
+  // Refs that always reflect the latest content / frontmatter. Updated
+  // synchronously from the change handlers so the Save Preflight and
+  // debounced dry-run see fresh values even before React commits the
+  // batched state update. We intentionally do NOT mirror `content` /
+  // `frontmatter` back into the ref during render, otherwise a render
+  // triggered by an unrelated state change would clobber the latest
+  // edit before downstream consumers have a chance to read it.
   // Debounced dry-run preview. Only PUTs with dryRun: true.
   useEffect(() => {
     if (!key.endsWith(".md")) {
       return;
     }
     const timeout = window.setTimeout(() => {
-      runDryRun();
+      runDryRunRef.current();
     }, 350);
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, previewBody]);
 
+  const runDryRunRef = useRef<() => void>(() => undefined);
   const runDryRun = useCallback(() => {
     if (!key.endsWith(".md")) {
       return;
     }
-    const startedVersion = wikiDraftVersion(previewBody.frontmatter, previewBody.content);
+    const body = {
+      dryRun: true,
+      frontmatter: frontmatterRef.current,
+      content: contentRef.current
+    };
+    const startedVersion = wikiDraftVersion(body.frontmatter, body.content);
     setPreviewLoading(true);
-    apiPut<WikiPreview>(`/api/wiki/${encodeURIComponent(key)}`, previewBody)
+    apiPut<WikiPreview>(`/api/wiki/${encodeURIComponent(key)}`, body)
       .then((data) => {
         // Drop the response if the user kept editing while the
         // request was in flight. A later runDryRun will pick up the
@@ -276,20 +303,24 @@ export function WikiEditor() {
           setPreviewLoading(false);
         }
       });
-  }, [key, previewBody]);
+  }, [key]);
+  runDryRunRef.current = runDryRun;
 
   function updateFrontmatter(next: WikiFrontmatter) {
     dirtyRef.current = true;
+    frontmatterRef.current = next;
     setFrontmatter(next);
   }
 
   function updateContent(next: string) {
     dirtyRef.current = true;
+    contentRef.current = next;
     setContent(next);
   }
 
   function applyTemplate(templateContent: string) {
     dirtyRef.current = true;
+    contentRef.current = templateContent;
     setContent(templateContent);
     setUiMode("edit");
   }
@@ -302,24 +333,6 @@ export function WikiEditor() {
     dirtyRef.current = false;
     sourceRef.current = `${nextKey}::navigated`;
     setSearchParams(next, { replace: true });
-  }
-
-  function commitPathDraft() {
-    const nextKey = pathDraft.trim();
-    if (!nextKey || nextKey === key) {
-      setPathDraft(key);
-      return;
-    }
-    const next: Record<string, string> = {};
-    if (nextKey) {
-      next.key = nextKey;
-    }
-    if (slRef) {
-      next.sl_ref = slRef;
-    }
-    preserveBufferForKeyRef.current = nextKey;
-    setSearchParams(next, { replace: true });
-    dirtyRef.current = true;
   }
 
   function startNewWiki() {
@@ -406,81 +419,108 @@ export function WikiEditor() {
     [content, currentDraftVersion, frontmatter, key, knownSlRefs, preview, previewError, previewLoading, previewVersion]
   );
 
-  const tabs = useMemo(
-    () => [
-      { key: "read", label: "阅读态", active: uiMode === "read" },
-      { key: "edit", label: "编辑态", active: uiMode === "edit" }
-    ],
-    [uiMode]
-  );
+  const handleCopyLink = useCallback(async () => {
+    const url = `${window.location.origin}/wiki?key=${encodeURIComponent(key)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyHint("已复制链接");
+      window.setTimeout(() => setCopyHint(null), 1600);
+    } catch {
+      setCopyHint("复制失败，请手动复制地址栏 URL");
+      window.setTimeout(() => setCopyHint(null), 2400);
+    }
+  }, [key]);
 
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title={uiMode === "read" ? "业务 Wiki" : `业务 Wiki · ${key}`}
+        title={
+          uiMode === "read" ? (
+            "业务 Wiki"
+          ) : (
+            <span className="pl-wiki-header-edit-title">
+              业务 Wiki ·{" "}
+              <code
+                className="pl-wiki-header-edit-key notranslate"
+                translate="no"
+              >
+                {key}
+              </code>
+            </span>
+          )
+        }
         breadcrumbs={["语义建模", "业务 Wiki", key]}
         description={
           uiMode === "read"
-            ? "阅读态：先看清业务 Wiki，再决定是否进入编辑态。"
-            : "编辑态：直接撰写 Markdown，Diff 与原始 Markdown 通过保存预检查看。"
+            ? "用 Markdown 沉淀表口径、指标说明与分析 Playbook。"
+            : "直接撰写 Markdown；保存预检会显示 Diff 与校验结果。"
         }
         badges={
-          <>
-            <span data-testid="wiki-mode-badge" data-mode={uiMode}>
-              {uiMode === "read" ? "阅读态" : "编辑态"}
-            </span>
-            <span data-testid="wiki-status-badge" data-status={mode}>
+          uiMode === "read" ? null : (
+            <span
+              className="pl-wiki-header-status"
+              data-testid="wiki-status-pill"
+              data-status={mode}
+            >
               {mode === "draft" ? "未保存草稿" : "已保存"}
             </span>
-          </>
+          )
         }
         actions={
           <div className="pl-wiki-header-actions" data-testid="wiki-header-actions">
-            <div className="pl-wiki-header-modes" data-testid="wiki-header-modes" role="tablist">
-              {tabs.map((tab) => (
+            {uiMode === "read" ? (
+              <>
                 <button
-                  aria-selected={tab.active}
+                  aria-label="复制当前 Wiki 链接"
+                  className="pl-btn pl-btn--ghost"
+                  data-testid="wiki-copy-link-button"
+                  onClick={handleCopyLink}
+                  type="button"
+                >
+                  复制链接
+                </button>
+                <button
+                  className="pl-btn pl-btn--ghost"
+                  data-testid="wiki-new-button"
+                  onClick={startNewWiki}
+                  type="button"
+                >
+                  + 新建 Wiki
+                </button>
+                <button
+                  className="pl-btn pl-btn--primary"
+                  data-testid="wiki-edit-button"
+                  onClick={switchToEdit}
+                  type="button"
+                >
+                  编辑
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  aria-pressed={focusMode}
                   className={clsx(
                     "pl-btn",
                     "pl-btn--ghost",
-                    tab.active && "pl-wiki-header-mode--active"
+                    focusMode && "pl-wiki-header-focus--active"
                   )}
-                  data-mode={tab.key}
-                  data-testid={`wiki-mode-${tab.key}`}
-                  key={tab.key}
-                  onClick={() => {
-                    if (tab.key === "read") {
-                      requestBackToRead();
-                    } else {
-                      switchToEdit();
-                    }
-                  }}
-                  role="tab"
+                  data-testid="wiki-focus-toggle"
+                  onClick={() => setFocusMode((current) => !current)}
+                  title="隐藏左侧导航，专注 Markdown 与 Preview"
                   type="button"
                 >
-                  {tab.label}
+                  专注编辑
                 </button>
-              ))}
-            </div>
-            <button
-              className="pl-btn pl-btn--ghost"
-              data-testid="wiki-new-button"
-              onClick={startNewWiki}
-              type="button"
-            >
-              + 新建 Wiki
-            </button>
-            {uiMode === "read" ? (
-              <button
-                className="pl-btn pl-btn--primary"
-                data-testid="wiki-edit-button"
-                onClick={switchToEdit}
-                type="button"
-              >
-                编辑
-              </button>
-            ) : (
-              <>
+                <button
+                  aria-label="文档信息"
+                  className="pl-btn pl-btn--ghost"
+                  data-testid="wiki-meta-toggle"
+                  onClick={() => setShowMetaDrawer((current) => !current)}
+                  type="button"
+                >
+                  文档信息
+                </button>
                 <button
                   className="pl-btn pl-btn--ghost"
                   data-testid="wiki-back-to-read"
@@ -500,19 +540,43 @@ export function WikiEditor() {
                 </button>
               </>
             )}
+            {copyHint ? (
+              <span
+                aria-live="polite"
+                className="pl-wiki-header-copy-hint"
+                data-testid="wiki-copy-hint"
+                role="status"
+              >
+                {copyHint}
+              </span>
+            ) : null}
           </div>
         }
       />
 
       <section
         aria-label="业务 Wiki 工作区"
-        className={clsx("pl-editor-layout", "pl-wiki-layout", `pl-wiki-layout--${uiMode}`)}
+        className={clsx(
+          "pl-editor-layout",
+          "pl-wiki-layout",
+          `pl-wiki-layout--${uiMode}`,
+          focusMode && uiMode === "edit" && "pl-wiki-layout--focus",
+          previewTab && uiMode === "edit" && "pl-wiki-layout--preview-tab"
+        )}
+        data-focus={focusMode || undefined}
+        data-key={key || undefined}
+        data-mode={uiMode}
+        data-preview-tab={previewTab || undefined}
         data-testid="wiki-layout"
       >
         <aside
           aria-label="业务 Wiki 目录"
-          className="grid content-start gap-3 pl-wiki-sidebar"
+          className={clsx(
+            "grid content-start gap-3 pl-wiki-sidebar",
+            focusMode && uiMode === "edit" && "pl-wiki-sidebar--collapsed"
+          )}
           data-testid="wiki-sidebar"
+          hidden={focusMode && uiMode === "edit"}
         >
           <Link className="pl-btn pl-btn--ghost justify-start" to="/">
             表目录
@@ -520,23 +584,16 @@ export function WikiEditor() {
           <div className="pl-wiki-sidebar-header">
             <h2 className="pl-wiki-sidebar-title">业务 Wiki</h2>
           </div>
-          <label className="pl-field-label">
-            <span>页面路径</span>
-            <input
-              className="pl-input notranslate"
-              data-testid="wiki-path-input"
-              onBlur={commitPathDraft}
-              onChange={(event) => setPathDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commitPathDraft();
-                }
-              }}
+          {key && uiMode === "read" ? (
+            <p
+              className="pl-wiki-sidebar-key notranslate"
+              data-testid="wiki-sidebar-key"
+              title={key}
               translate="no"
-              value={pathDraft}
-            />
-          </label>
+            >
+              {key}
+            </p>
+          ) : null}
           {slRef ? (
             <p
               className="pl-notice pl-wiki-context-hint"
@@ -560,6 +617,7 @@ export function WikiEditor() {
                 knownSources={knownSlRefs}
                 knownTables={tables}
                 onApplyTemplate={applyTemplate}
+                onOpenTemplatePicker={() => setTemplatePickerOpen(true)}
                 onSwitchToEdit={switchToEdit}
               />
             ) : (
@@ -568,11 +626,23 @@ export function WikiEditor() {
                 frontmatter={frontmatter}
                 onContentChange={updateContent}
                 onFrontmatterChange={updateFrontmatter}
+                previewTab={previewTab}
+                onPreviewTabChange={setPreviewTab}
               />
             )}
           </div>
         </div>
       </section>
+
+      <TemplatePicker
+        onClose={() => setTemplatePickerOpen(false)}
+        onPick={(picked) => {
+          applyTemplate(picked.content);
+          setTemplatePickerOpen(false);
+          toast.success("模板已填充，请补全高亮字段后保存预检。");
+        }}
+        open={templatePickerOpen}
+      />
 
       <WikiSavePreflight
         isSaving={saveMutation.isPending}
@@ -580,6 +650,13 @@ export function WikiEditor() {
         onConfirmSave={() => saveMutation.mutate()}
         open={preflightOpen}
         state={preflightState}
+      />
+
+      <FrontmatterDrawer
+        frontmatter={frontmatter}
+        onClose={() => setShowMetaDrawer(false)}
+        onChange={updateFrontmatter}
+        open={showMetaDrawer}
       />
     </div>
   );
