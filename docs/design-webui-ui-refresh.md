@@ -116,7 +116,7 @@ Lucy WebUI 当前已经覆盖数据库接入、语义层维护、业务文档、
 - 每个分组使用小号 uppercase/中文小标题，颜色弱化。
 - 每个导航项增加图标位置，后续开发使用 lucide icons。
 - 当前项使用浅绿色/浅灰背景，不使用高饱和蓝紫。
-- 顶部品牌区暂不拍板最终品牌文案。Phase 1 默认保留当前 `KTX WebUI` 主标题，只把副标题从视觉上弱化；若产品确认切换品牌，再单独改为 `Lucy`。
+- 顶部品牌区已升级为 `Data Agent Ops Control Plane`（中文 caption：`Data Agent 运维控制台`），详见 spec 40 与 `39-data-agent-ops-platform-global-ux-spec.md` §4 / v0.2。
 - 底部固定工具区可放：主题切换、帮助、运行状态，第一批可只保留占位样式。
 
 导航树在 Phase 1 固定为一层导航组 + 上下文页面，不新增二级折叠：
@@ -613,7 +613,7 @@ Phase 1-3 还必须补充或保留以下自动化覆盖：
 
 本文档立场如下，reviewer 只需标注异议：
 
-1. **品牌口径**：Phase 1 保留 `KTX WebUI`，不改为 `Lucy`；只改善视觉层级。
+1. **品牌口径（已完成）**：品牌区副标题已升级为 `Data Agent Ops Control Plane`（spec 40 / M37）。后续仅当 brand term 再次调整时回到本节。
 2. **颜色口径**：接受绿色作为主操作色，蓝色退为信息辅助色；具体色值按 §6.1 token。
 3. **优先级**：`TableEditor` 三栏工作台优先于对全部页面做平均美化。
 4. **默认首页**：本次不切首页；`/` 继续是表目录。
@@ -627,7 +627,7 @@ Phase 1-3 还必须补充或保留以下自动化覆盖：
 
 | 问题 | 本文档立场 |
 |---|---|
-| WebUI 顶部品牌是 `Lucy` 还是 `KTX WebUI` | Phase 1 保留 `KTX WebUI`；品牌改名另审 |
+| WebUI 顶部品牌是 `Lucy` 还是 `KTX WebUI` | 已在 spec 40 / M37 解决（升级为 `Data Agent Ops Control Plane`），本行关闭 |
 | 默认首页是否切换到 `/connections` | 不切，保留 `/` 为表目录 |
 | 是否引入 lucide-react | 开发前先查 `package.json`；未安装则不因图标单独扩大范围 |
 | 是否抽公共 React 组件 | Phase 2 起只抽必要组件，见 §6.2 |
