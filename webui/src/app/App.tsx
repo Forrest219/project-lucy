@@ -26,6 +26,7 @@ import { TableWhitelist } from "../pages/connections/TableWhitelist";
 import { ConnectionTest } from "../pages/connections/ConnectionTest";
 import { HelpCenter } from "../pages/HelpCenter";
 import { HelpButton } from "../components/HelpButton";
+import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
 
 const queryClient = new QueryClient();
 
@@ -190,6 +191,10 @@ export function AppFrame() {
             <Route path="/help" element={<HelpCenter />} />
           </Routes>
         </div>
+        {/* M36: ObjectDetailDrawer is mounted once at the AppFrame level so any
+            page can open it by updating URL query parameters (e.g.
+            `?object=table&conn=...&schema=...&table=...`). */}
+        <ObjectDetailDrawer />
       </main>
     </div>
   );
