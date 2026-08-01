@@ -29,6 +29,7 @@
 4. 系统级资产包导出不再挂在连接列表下方，应迁移到语义资产交付或运维管理页面。
 5. 上传 YAML Drawer 必须提供合法英文 YAML 示例，并修复关闭按钮、文件名回显和底部操作区布局。
 6. Reload 结果主提示只保留面向用户的摘要；耗时、schema 比例、warning 明细进入可展开详情。
+7. 连接卡片必须使用企业级低噪声状态表达：`Read-only expected` 本地化为 `预期只读`，配置来源提示收纳为短标签 + Tooltip，StarRocks 进入 template 展示与 API 合同测试范围。
 
 ## 2. 术语合规与模块增补
 
@@ -160,7 +161,7 @@
 ```text
 ┌──────────────────────────────────────────────────────────────┐
 │ [MySQL] demo-mysql                [未测试] [预期只读]          │
-│ 配置来源：ktx.yaml。凭据不在 WebUI 中编辑。                    │
+│ [配置：ktx.yaml]                                              │
 ├──────────────────────────────────────────────────────────────┤
 │ 关联 Schema 资产列表                                           │
 │ Schema        Manifest 状态       本地表数       上下文动作     │
@@ -171,6 +172,14 @@
 │                    [添加 Schema] [上传 YAML] [测试连接] [刷新本地目录] │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+企业级展示修订：
+
+- 只读状态主文案使用 `预期只读`，不得在中文界面直接展示 `Read-only expected`。
+- `预期只读` 使用灰色或淡蓝色 Badge。Tooltip 说明：`来自 ktx.yaml 的 readonly 标记；真实只读能力由数据库账号权限保证。`
+- 当 `readOnlyExpected === false` 时，状态文案使用 `未声明只读` 或 `存在写入风险`，不得使用裸英文 `Write-risk`。
+- `配置来源：ktx.yaml。凭据不在 WebUI 中编辑。` 不应作为每张卡片标题下方的长灰字常驻说明。推荐改为标题区短标签 `配置：ktx.yaml`，Tooltip 说明：`连接基础配置与凭据来源由 ktx.yaml 管理，WebUI 不直接编辑凭据。`
+- 如接口暴露 `passwordSource`，卡片或详情区可展示 `凭据：file` / `凭据：env` / `凭据：inline`。其中 `inline` 应使用风险提示语气，因为它不符合推荐的 secret 文件或环境变量管理方式。
 
 按钮层级：
 
@@ -237,7 +246,7 @@ openclaw_db 已在连接配置中启用，但本地语义层尚未提供 Manifes
 - Drawer 展示：
   - 状态 Banner：成功 / 失败 / 尚未测试。
   - 延时。
-  - Driver / Wire Protocol / Read-only expected。
+  - Driver / Wire Protocol / 预期只读。
   - 可折叠原始日志 stdout / stderr。
 - `/connections/test` 页面作为兼容入口调用同一套组件，不再维护第二套 UI。
 
@@ -326,6 +335,22 @@ openclaw_db 已在连接配置中启用，但 semantic-layer/demo-mysql/_schema/
 
 不得使用橙色外框套橙色内框的大面积双重警告样式。主容器和 warning item 应有清晰层级：摘要为轻量状态，warning 为可展开明细。
 
+### 4.6 StarRocks Template 覆盖
+
+StarRocks 属于 R1 P1 gated support，但必须进入 template / fixture 层面的展示与合同测试范围。
+
+Scope:
+
+- template 或测试 fixture 中必须覆盖至少一个 `engine: starrocks`、`wire_protocol: mysql`、`readonly: true`、`r1_target: true` 的连接。
+- `/api/project` 与 `/api/connections` 必须能把该连接解析为 `engine: "starrocks"`、`wireProtocol: "mysql"`、`readOnlyExpected: true`、`r1Target: true`。
+- `/connections` 必须显示 `StarRocks` engine badge、连接 id、host / database、`预期只读` Badge。
+
+Non-goals:
+
+- template 测试不等于 live certification。
+- 不在该测试中验证真实 StarRocks 连通、SQL 方言、类型映射、分页或权限拒绝。
+- release verified matrix 仍以 StarRocks live certification evidence 为准。
+
 ## 5. 功能与 API 影响
 
 本规格不要求新增后端 API。主要是前端 IA、文案和组件复用调整。
@@ -363,6 +388,9 @@ openclaw_db 已在连接配置中启用，但 semantic-layer/demo-mysql/_schema/
   - `目标架构`
   - `模式清单`
 - 缺失 manifest 状态显示为 `缺失 Manifest` 或 `待上传 Manifest`。
+- 连接只读状态显示为 `预期只读`，不得显示 `Read-only expected`。
+- 写风险状态不得显示裸英文 `Write-risk`。
+- 配置来源提示应以短标签 + Tooltip 或详情字段呈现，不作为长句灰字反复占据卡片主标题区。
 - Connection Test 页面和导航显示 `连通测试`。
 - Schema 相关控件统一使用 `Schema`。
 
@@ -385,6 +413,7 @@ openclaw_db 已在连接配置中启用，但 semantic-layer/demo-mysql/_schema/
 - Catalog reload 成功提示主文案精简。
 - 耗时、schema 比例等细节默认不挤在主标题中。
 - Warning 明细不再形成橙色外框套橙色内框的双重嵌套。
+- StarRocks template / fixture 连接能在 `/connections` 中显示为 `StarRocks`，并展示 `预期只读`。
 
 ### 7.5 技术验收
 

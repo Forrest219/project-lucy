@@ -23,7 +23,7 @@
 
 ```text
 [MySQL] demo-mysql                                      预期只读
-配置来源：ktx.yaml。凭据不在 WebUI 中编辑。
+[配置：ktx.yaml]
 Host demo-db:3306    Database dataforai
 
 本地目录已刷新 · 11:54     已完成     3 张表     1 个提示
@@ -53,6 +53,7 @@ openclaw_db 已在连接配置中启用，但本地 schema 文件不存在。
 | 形成排障闭环 | 缺失 Manifest 行提供 `上传 Manifest`，warning 面板提供 `打开目录`、`重新检查` 和可展开详情 |
 | 统一术语层级 | 主视图面向用户使用 `本地目录`；二级详情可显示 `Catalog`、`Manifest`、`schema 文件` 和路径 |
 | 提升信息密度 | 卡片高度由内容自然撑开，不再为了右侧提示制造大面积空白 |
+| 降低视觉噪声 | 成功反馈不得常驻为强 Alert；warning 不得使用橙色大块套橙色大块的双重告警 |
 
 ### 2.2 非目标
 
@@ -167,6 +168,15 @@ Recommended states:
 
 `已完成` should be visually a Badge / Tag, not a button. If using a `<button>` for implementation convenience, it must be replaced with a non-interactive element.
 
+Transient completion feedback may also appear as a Toast, but only as a short-lived confirmation after the click. The persistent source of truth remains the compact status bar inside the Connection Card.
+
+Recommended toast behavior:
+
+- Position: app-standard toast region, preferably top-right if the global system supports it.
+- Duration: about 3 seconds for success.
+- Content: `本地目录已刷新 · 3 张表` with optional `1 个提示`.
+- No toast is required for initial page load or already-stored reload state.
+
 ### 5.3 Schema Asset Table
 
 The `关联 Schema 资产列表` remains visible after reload and must appear above any warning panel.
@@ -203,6 +213,7 @@ Rules:
 
 - The panel is compact and inline, not a large side card.
 - Warning is amber / neutral-warning, not destructive red.
+- Do not render a full-width amber bordered status bar immediately followed by another full-width amber bordered warning panel. Use one lightweight status row plus one compact inline diagnostic.
 - The first line is a clear diagnosis, not a generic `1 个提示`.
 - `展开详情` uses a button with `aria-expanded`.
 - `打开目录` opens or reveals the local folder when the environment supports it; if not supported, it can copy the path and show an inline fallback.
@@ -256,6 +267,8 @@ If opening a folder is unavailable in browser-only deployments, `打开目录` m
 5. Avoid a one-note amber page: warning color is reserved for the Tag and the alert accent, not the whole card background.
 6. Button text must fit at desktop and mobile widths; row actions may collapse into an action menu on narrow screens.
 7. No visible text should explain generic UI mechanics such as “点击按钮查看详情”; use standard labels and affordances.
+8. The missing Manifest diagnostic should visually attach to the affected Schema row, either as an expandable row detail or as a compact inline alert directly below the table.
+9. The `+ 添加 Schema` / upload action area must remain visually connected to the card; warning panels must not sever the table from the footer actions with a large high-contrast block.
 
 ## 8. Accessibility And Responsive Behavior
 
@@ -275,6 +288,8 @@ If opening a folder is unavailable in browser-only deployments, `打开目录` m
 - `关联 Schema 资产列表` remains visible and appears above warning diagnostics.
 - Missing Manifest appears both as a row status (`缺失 Manifest`) and as an inline diagnostic (`缺少 Manifest：openclaw_db`).
 - Warning panel shows the missing manifest path and provides `展开详情` plus a remediation action.
+- The interface does not show two prominent amber notification boxes at the same hierarchy level.
+- A successful reload may show a short-lived Toast, but the persistent status is a compact in-card row.
 - `展开详情` is visibly a control, not centered plain text.
 - Main view uses `本地目录` for the reload concept; `Manifest` and `Schema` remain untranslated.
 - The layout has no large unexplained blank area at the tested desktop viewport.

@@ -268,7 +268,36 @@ PUT /api/connections/:connId/enabled-tables
 4. 确认后以 `dryRun:false` 写入。
 5. 写入会进入配置变更审计，表名必须已经出现在本地 `_schema/*.yaml` manifest 中。
 
-静态 Catalog reload：
+#### 刷新本地目录
+
+`刷新本地目录` 是数据库接入模块的 Catalog Reload 动作，只重新读取本地 `ktx.yaml` 与 `semantic-layer/**` YAML，不连接物理数据库，不执行 `ktx ingest`，也不会触发 AI enrichment。
+
+入口地址：
+
+```text
+/connections
+```
+
+深链地址：
+
+```text
+/help?section=catalog-reload
+```
+
+刷新后的“本地目录”不是一个独立页面。它是 WebUI 从本地文件读出的资产视图，按查看目的分布在不同入口：
+
+- 看刷新是否成功：打开 `/connections`，在对应 connection 卡片内查看 `本地目录已刷新`、表数量、warning 数量和缺失 Manifest 诊断。
+- 看哪些表可被纳入白名单：打开 `/connections/whitelist`。这里展示的是本地 manifest 中已经存在、可写入 `ktx.yaml enabled_tables` 的表。
+- 看哪些表已经进入语义层维护：打开 WebUI 首页 `/`。这里展示的是已被系统读入并可维护描述、指标、分群、joins 的 semantic table。
+- 看底层 YAML 文件：在仓库中查看 `semantic-layer/<conn>/_schema/<schema>.yaml`（manifest）和 `semantic-layer/<conn>/<source>.yaml`（overlay）。
+- 看最近 reload 历史：调用 `GET /api/catalog/reloads`，或查看系统生成文件 `.ktx-ui/catalog-reloads.json`。当前 WebUI 暂无独立的“本地目录历史”页面。
+
+自检顺序：
+
+1. 在 `/connections` 点击 `刷新本地目录`，先看当前 connection 卡片是否出现成功状态和 warning。
+2. 如果提示缺失 Manifest，先补齐或上传 `semantic-layer/<conn>/_schema/<schema>.yaml`，再重新刷新。
+3. 如果刷新成功但表白名单中没有目标表，检查目标表是否已经存在于本地 manifest。
+4. 如果 WebUI 能看到 YAML 改动，但 Agent / MCP 搜索不到，运行 `ktx admin reindex` 重建 KTX 检索索引；Reload Catalog 只更新 WebUI 对本地 YAML 的读取状态，不等同于 KTX reindex。
 
 | API | 行为 |
 | --- | --- |

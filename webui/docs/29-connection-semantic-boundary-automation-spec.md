@@ -28,6 +28,12 @@
 - `上传 semantic overlay`：语义层维护动作，写入 `semantic-layer/<connection>/<table>.yaml`。
 - `上传资产包`：语义资产交付动作，按资产包验证与发布流程处理。
 
+入口也必须显式收敛，避免客户把同一种 Schema 级 YAML 当成多套补充流程：
+
+- Schema 级 YAML 的主入口只保留在 `/connections` 连接概览，包含连接级 `上传 Schema Manifest` 和 Schema 行内 `上传 Manifest`。
+- `/connections/whitelist` 只展示缺失 Manifest 诊断与跳转，不作为独立 Schema Manifest 上传入口。
+- Table 级 YAML 的主入口放在语义层维护的 `表目录` / 表详情，不进入数据库接入或表白名单页面。
+
 本规格新增自动化机制：
 
 1. 系统术语标准新增模块职责矩阵。
@@ -130,6 +136,12 @@
 | 边界说明 | `用于维护 grain、指标、分群、Join 等业务语义，不用于新增数据库 Schema。` |
 | 成功 Toast | `已上传 semantic overlay，请运行 validate。` |
 
+推荐位置：
+
+- `语义层维护 / 表目录` 的表行操作：`上传 semantic overlay`。
+- 表详情页或编辑 Drawer 的业务语义区域：`上传 semantic overlay` / `编辑 semantic overlay`。
+- 不在 `/connections` 或 `/connections/whitelist` 中展示 table 级 YAML 上传入口。
+
 ### 4.4 资产交付推荐文案
 
 | 场景 | 推荐文案 |
@@ -211,18 +223,23 @@ type SemanticAssetKind =
 
 - Schema 行内缺失 manifest 的主动作必须是 `上传 Manifest`。
 - 连接级上传入口如保留，必须显示 `上传 Schema Manifest` 或在 tooltip 中说明只处理 Schema Manifest。
-- Drawer 必须锁定 `connectionId` 和已知 `schema`，目标路径由后端计算。
+- 连接级上传 Drawer 可选择 Schema；Schema 行内上传 Drawer 必须锁定 `connectionId` 和已知 `schema`。
+- 目标路径必须由后端按 `connectionId + schema` 计算。
 - Drawer 中必须显示边界说明：不编辑指标、Join 或业务语义。
+- YAML 示例、校验提示和错误文案必须随当前 Schema 更新，避免出现所选 Schema 与示例 YAML 中 Schema 不一致。
 
 ### 6.2 `/connections/whitelist`
 
-- 空 Schema 状态中的上传 CTA 必须是 `上传该 Schema 的 YAML` 或 `上传 Manifest`。
-- 同一提示块必须说明白名单只读取本地 YAML 资产，不访问物理数据库。
+- 表白名单页面不再提供独立 Schema Manifest 上传入口。
+- 空 Schema / 缺失 Manifest 诊断中的主修复动作应为 `去连接概览上传 Manifest` 或 `打开连接概览`，并携带或展示目标 `connection + schema` 上下文。
+- 页面不得显示 `上传该 Schema 的 YAML`、裸 `上传 YAML` 或看起来会在当前页直接补充 YAML 的按钮。
+- 同一提示块必须说明白名单只读取本地 YAML 资产，不访问物理数据库，也不会生成新的 Manifest。
 
 ### 6.3 语义层维护 / TableEditor
 
 - 表编辑保存仍走 patch / overlay 写入路径，不复用数据库接入的 Schema Manifest 上传文案。
 - 如果新增 overlay 上传入口，按钮必须为 `上传 semantic overlay`。
+- Table 级 YAML 上传入口优先放在 `表目录` 表行或表详情业务语义区域。
 - 保存或上传成功后必须提示 validate / reindex 闭环。
 
 ### 6.4 语义资产发布
@@ -316,6 +333,8 @@ Review 页或 PR 模板应根据 changed files 自动提示：
 - 连接概览缺失 Manifest 行显示 `上传 Manifest`。
 - 上传 Drawer 标题显示 `Schema Manifest`。
 - Drawer 边界说明包含“不编辑指标、Join 或业务语义”。
+- 表白名单缺失 Manifest 诊断不出现直接上传入口，只跳转到连接概览。
+- 语义层表目录或表详情中的 table 级 YAML 入口显示 `上传 semantic overlay`。
 - TableEditor 不出现数据库接入主动作。
 - 语义资产发布显示分类后的 asset kind。
 
@@ -353,6 +372,8 @@ New terms:
 - `webui/docs/00-product-terminology-standard.md` 包含数据库接入 / 语义层维护 / 语义资产交付职责矩阵。
 - `webui/docs/README.md` 和 `webui/docs/plans/README.md` 登记本规格与工单。
 - UI 中不存在裸按钮 `上传 YAML`。
+- `/connections/whitelist` 不再出现 `上传该 Schema 的 YAML` 或独立 Schema Manifest 上传 Drawer。
+- Table 级 YAML 上传入口位于语义层维护，不位于数据库接入。
 - 上传 API 接收 canonical `assetKind`，并兼容旧 `assetType: "schemaManifest"`。
 - 错传 manifest / overlay 时返回结构化错误，不靠 Toast 模糊失败。
 - `npm run lint:terminology` 通过。

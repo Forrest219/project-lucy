@@ -58,6 +58,10 @@
 - [ ] T6.6 安全回归：写 `ktx.yaml` 经 `ALLOW_FILES` 通道放行；写 `.ktx/secrets/` / `raw-sources/` / `.git/` 仍 403
 - **验收**：连接概览 → + 添加 schema → 输入名 → test → diff → 确认 → `ktx.yaml` 仅 + 1 行 → ingest → 表目录筛出新 schema → 审计有记录
 
+## v1.9.0 · 兼容主导航清理
+
+- [ ] M34-cleanup-compat-connection-test：移除侧边栏 `连通测试（兼容）` 主导航项，前置依赖为 M25「连接概览-卡片内测试 Drawer」上线且验证稳定。若 M25 未完成，v1.9.0 延期；`/connections/test` 路由继续保留为兼容跳转页。
+
 ## 总验收（对齐原 README §验收标准）
 1. 读取真实 semantic sources ✔  2. 承载 ~300 表目录 ✔  3. 搜索/筛选/打开单表 ✔
 4. 编辑描述/grain/measures/segments/joins ✔；字段 `role/visibility` 暂只读或草稿，不落盘  5. 保存回 YAML ✔
