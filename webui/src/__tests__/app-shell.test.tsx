@@ -131,6 +131,19 @@ describe("AppFrame shell", () => {
     expect(screen.queryByRole("link", { name: "上线检查" })).not.toBeInTheDocument();
   });
 
+  it("renders the Data Agent Ops Control Plane tagline in the brand block", () => {
+    renderAt("/onboarding");
+    expect(
+      screen.getByText("Data Agent Ops Control Plane"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Data Agent 运维控制台"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("语义维护工作台"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the M34 5+1 lifecycle sidebar shape with renamed second-level items", () => {
     renderAt("/");
 
