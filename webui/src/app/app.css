@@ -126,7 +126,6 @@
     @apply flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium text-fg-body no-underline transition-colors;
   }
   .pl-sidebar-help-link:hover { @apply bg-bg-muted text-fg-default; }
-  .pl-sidebar-version { @apply px-3 text-xs text-fg-muted; }
   .pl-help-button {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
   }
@@ -1300,7 +1299,9 @@
   .pl-risk-item[data-tone="danger"] { @apply border-danger-strong bg-danger-soft; }
   .pl-snapshot-grid { @apply grid gap-2 sm:grid-cols-2; }
   .pl-snapshot-card { @apply grid gap-1 rounded-md border border-border-default bg-bg-subtle p-3; }
-  .pl-snapshot-card-label { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  /* v1.9.x 收口：去掉 uppercase，避免 "Agent 启用" 被渲染成 "AGENT 启用"，与
+   * 访问风险卡片（pl-risk-item strong）的术语大小写保持一致。 */
+  .pl-snapshot-card-label { @apply text-xs font-semibold tracking-wider text-fg-muted; }
   .pl-snapshot-card-value { @apply text-base font-semibold text-fg-default; }
   .pl-mcp-actions { @apply grid gap-3; }
   .pl-code-snippet--drawer { @apply max-h-72 overflow-auto rounded-md border border-border-default bg-bg-base p-3; }

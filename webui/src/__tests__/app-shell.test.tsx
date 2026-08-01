@@ -198,10 +198,9 @@ describe("AppFrame shell", () => {
     renderAt("/overview");
     const sidebarFooter = screen.getByTestId("sidebar-footer");
     expect(sidebarFooter.querySelectorAll(".pl-nav-section")).toHaveLength(0);
-    // The footer must still carry the help link and version text — guards
-    // against an accidental re-introduction of the full nav into the footer.
+    // The footer must still carry the help link — guards against an accidental
+    // re-introduction of the full nav into the footer.
     expect(within(sidebarFooter).getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
-    expect(sidebarFooter).toHaveTextContent("Lucy v1.9 · © 2026");
   });
 
   it("labels the system overview entry as the runtime control plane", () => {
@@ -287,7 +286,6 @@ describe("AppFrame shell", () => {
     const sidebarHelp = within(sidebarFooter).getByRole("link", { name: "打开系统手册" });
     expect(sidebarHelp).toHaveAttribute("href", "/help");
     expect(sidebarHelp).toHaveTextContent("系统手册");
-    expect(sidebarFooter).toHaveTextContent("Lucy v1.9 · © 2026");
     expect(within(sidebarFooter).getAllByRole("link")).toHaveLength(1);
     expect(within(sidebarFooter).queryByRole("link", { name: "配置变更" })).not.toBeInTheDocument();
     expect(within(sidebarFooter).queryByRole("navigation")).not.toBeInTheDocument();

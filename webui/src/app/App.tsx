@@ -174,7 +174,6 @@ export function AppFrame() {
               <span>系统手册</span>
             </HelpButton>
           </div>
-          <div className="pl-sidebar-version">Lucy v1.9 · © 2026</div>
         </div>
       </aside>
 
