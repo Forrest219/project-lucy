@@ -425,7 +425,7 @@ function CandidateJoinDisclosure({
     <details className="pl-workbench-disclosure" data-testid="candidate-joins-disclosure">
       <summary className="pl-workbench-disclosure-summary">
         <span>待处理建议（{candidates.length}）</span>
-        <small>智能推断的候选关联关系</small>
+        <small>在 Joins 中处理</small>
       </summary>
       <CandidateJoinBanner
         candidates={candidates}
@@ -461,12 +461,12 @@ function SourceObjectTree({
   ];
 
   return (
-    <aside className="pl-object-tree pl-object-tree--secondary">
-      <Link className="pl-btn pl-btn--ghost justify-start" to="/catalog">表目录</Link>
+    <div className="pl-object-tree pl-object-tree--secondary">
+      <Link className="pl-btn pl-btn--ghost justify-start" to="/catalog">返回表目录</Link>
       <div className="pl-object-tree-group">
         <details className="pl-secondary-disclosure">
           <summary className="pl-secondary-disclosure-summary">
-            <span>目录导航</span>
+            <span className="notranslate" translate="no">同 Schema 表</span>
             <small className="notranslate" translate="no">{schema || "Schema"}</small>
           </summary>
           <nav className="grid gap-1 notranslate" aria-label="同 Schema 表" translate="no">
@@ -501,7 +501,7 @@ function SourceObjectTree({
           ))}
         </div>
       </div>
-    </aside>
+    </div>
   );
 }
 
@@ -720,6 +720,7 @@ export function TableEditor() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [importedYaml, setImportedYaml] = useState<string | null>(null);
   const [importedYamlName, setImportedYamlName] = useState<string | null>(null);
+  const [pastedYaml, setPastedYaml] = useState("");
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const sidecarCandidates = candidatesQuery.data?.candidates ?? [];
@@ -937,6 +938,7 @@ export function TableEditor() {
       setValidationError(null);
       setImportedYaml(null);
       setImportedYamlName(null);
+      setPastedYaml("");
     }
   }, [source]);
 
@@ -1031,6 +1033,24 @@ export function TableEditor() {
       setPreviewError(message);
       setInspectorTab("validate");
       toast.error(message);
+    }
+  }
+
+  async function handlePasteYamlPreview() {
+    const yaml = pastedYaml.trim();
+    if (!yaml) {
+      toast.error("请先粘贴 YAML 内容");
+      return;
+    }
+    setImportedYaml(yaml);
+    setImportedYamlName("粘贴 YAML");
+    const previewResult = await runImportPreview(yaml);
+    if (previewResult) {
+      toast.success("已生成导入预览");
+    } else {
+      setImportedYaml(null);
+      setImportedYamlName(null);
+      toast.error("导入预览失败");
     }
   }
 
@@ -1195,15 +1215,6 @@ export function TableEditor() {
         className="pl-table-workbench"
         onKeyDown={source ? handleSaveShortcut : undefined}
       >
-        <SourceObjectTree
-          activeSection={activeSection}
-          currentTable={table}
-          onSectionChange={setActiveSection}
-          schema={schema}
-          siblingTables={siblingTables}
-          source={source}
-        />
-
         <div className="pl-table-editor-main">
           {sourceQuery.isLoading ? <p className="pl-notice">正在加载表信息...</p> : null}
           {sourceQuery.error ? (
@@ -1226,6 +1237,30 @@ export function TableEditor() {
                   <p className="pl-notice notranslate" translate="no">
                     主流程：导出 YAML，交给 Claude Code / Codex 完善，再导入当前表 YAML 进行 dry-run 校验。
                   </p>
+                  <details className="pl-secondary-disclosure" data-testid="paste-yaml-disclosure">
+                    <summary className="pl-secondary-disclosure-summary">
+                      <span>粘贴 YAML</span>
+                      <small>用于 Claude Code / Codex 返回内容</small>
+                    </summary>
+                    <div className="pl-paste-yaml-box">
+                      <textarea
+                        className="pl-textarea notranslate"
+                        data-testid="paste-yaml-textarea"
+                        onChange={(event) => setPastedYaml(event.target.value)}
+                        placeholder="粘贴完善后的当前表 YAML"
+                        rows={8}
+                        translate="no"
+                        value={pastedYaml}
+                      />
+                      <button
+                        className="pl-btn pl-btn--secondary"
+                        onClick={handlePasteYamlPreview}
+                        type="button"
+                      >
+                        生成导入预览
+                      </button>
+                    </div>
+                  </details>
                 </div>
                 <dl className="pl-asset-exchange-facts">
                   <div>
@@ -1234,7 +1269,13 @@ export function TableEditor() {
                   </div>
                   <div>
                     <dt>导入文件</dt>
-                    <dd className="notranslate" translate="no">{importedYamlName ?? "未导入"}</dd>
+                    <dd
+                      className="notranslate"
+                      data-testid="table-editor-imported-yaml-name"
+                      translate="no"
+                    >
+                      {importedYamlName ?? "未导入"}
+                    </dd>
                   </div>
                   <div>
                     <dt>影响文件</dt>
@@ -1250,134 +1291,153 @@ export function TableEditor() {
                 onReject={handleRejectCandidate}
               />
 
-              {activeSection === "overview" ? (
-                <section className="pl-panel">
-                  <div className="pl-source-metadata-grid">
-                    <div className="pl-source-metadata-cell pl-source-metadata-cell--wide">
-                      <span className="pl-source-metadata-label">完整表名</span>
-                      <div className="pl-copy-line">
-                        <strong className="truncate" title={qualifiedName}>{qualifiedName || "无"}</strong>
-                        <button
-                          type="button"
-                          aria-label="复制完整表名"
-                          className="pl-btn pl-btn--ghost"
-                          onClick={handleCopyQualifiedName}
-                        >
-                          复制
-                        </button>
-                      </div>
-                    </div>
-                    <div className="pl-source-metadata-cell">
-                      <span className="pl-source-metadata-label">字段数</span>
-                      <strong>{source.model.columns.length}</strong>
-                    </div>
-                    <div className="pl-source-metadata-cell">
-                      <span className="pl-source-metadata-label">关联数</span>
-                      <strong>{source.model.joins?.length ?? 0}</strong>
-                    </div>
-                    <div className="pl-source-metadata-cell">
-                      <span className="pl-source-metadata-label">
-                        行粒度
-                        <OverlayBadge source={source} />
-                      </span>
-                      <strong className="truncate" title={grainLabel}>{grainLabel}</strong>
-                    </div>
-                  </div>
-                  <label className="pl-field-label">
-                    <span>表描述</span>
-                    <textarea rows={4} className="pl-textarea" value={form.tableDescription} onChange={(event) => setForm({ ...form, tableDescription: event.target.value })} />
-                  </label>
-                  <label className="pl-field-label">
-                    <span className="pl-field-label-with-overlay">
-                      行粒度
-                      <OverlayBadge source={source} />
-                    </span>
-                    <input className="pl-input" placeholder="customer_id, signup_date" value={form.grain} onChange={(event) => setForm({ ...form, grain: event.target.value })} />
-                  </label>
-                </section>
-              ) : null}
-
-              {activeSection === "measures" ? (
-                <section className="pl-panel">
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="pl-panel-title mb-0">Measures</p>
-                    <OverlayBadge source={source} />
-                  </div>
-                  <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
-                  <MeasureForm
-                    measures={form.measures}
-                    onChange={(measures) => setForm({ ...form, measures })}
+              <details className="pl-workbench-disclosure" data-testid="manual-semantic-disclosure">
+                <summary className="pl-workbench-disclosure-summary">
+                  <span>高级：手工维护语义字段</span>
+                  <small>表描述、字段、指标、分群、关联</small>
+                </summary>
+                <div className="pl-manual-semantic-workspace">
+                  <SourceObjectTree
+                    activeSection={activeSection}
+                    currentTable={table}
+                    onSectionChange={setActiveSection}
+                    schema={schema}
+                    siblingTables={siblingTables}
+                    source={source}
                   />
-                </section>
-              ) : null}
 
-              {activeSection === "segments" ? (
-                <section className="pl-panel">
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="pl-panel-title mb-0">Segments</p>
-                    <OverlayBadge source={source} />
-                  </div>
-                  <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
-                  <SegmentForm
-                    segments={form.segments}
-                    onChange={(segments) => setForm({ ...form, segments })}
-                  />
-                </section>
-              ) : null}
+                  <div className="pl-manual-semantic-panel">
+                    {activeSection === "overview" ? (
+                      <section className="pl-panel">
+                        <div className="pl-source-metadata-grid">
+                          <div className="pl-source-metadata-cell pl-source-metadata-cell--wide">
+                            <span className="pl-source-metadata-label">完整表名</span>
+                            <div className="pl-copy-line">
+                              <strong className="truncate" title={qualifiedName}>{qualifiedName || "无"}</strong>
+                              <button
+                                type="button"
+                                aria-label="复制完整表名"
+                                className="pl-btn pl-btn--ghost"
+                                onClick={handleCopyQualifiedName}
+                              >
+                                复制
+                              </button>
+                            </div>
+                          </div>
+                          <div className="pl-source-metadata-cell">
+                            <span className="pl-source-metadata-label">字段数</span>
+                            <strong>{source.model.columns.length}</strong>
+                          </div>
+                          <div className="pl-source-metadata-cell">
+                            <span className="pl-source-metadata-label">关联数</span>
+                            <strong>{source.model.joins?.length ?? 0}</strong>
+                          </div>
+                          <div className="pl-source-metadata-cell">
+                            <span className="pl-source-metadata-label">
+                              行粒度
+                              <OverlayBadge source={source} />
+                            </span>
+                            <strong className="truncate" title={grainLabel}>{grainLabel}</strong>
+                          </div>
+                        </div>
+                        <label className="pl-field-label">
+                          <span>表描述</span>
+                          <textarea rows={4} className="pl-textarea" value={form.tableDescription} onChange={(event) => setForm({ ...form, tableDescription: event.target.value })} />
+                        </label>
+                        <label className="pl-field-label">
+                          <span className="pl-field-label-with-overlay">
+                            行粒度
+                            <OverlayBadge source={source} />
+                          </span>
+                          <input className="pl-input" placeholder="customer_id, signup_date" value={form.grain} onChange={(event) => setForm({ ...form, grain: event.target.value })} />
+                        </label>
+                      </section>
+                    ) : null}
 
-              {activeSection === "columns" ? (
-                <section className="pl-panel">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <p className="pl-notice mb-0">每张卡片展示 PK/类型/可空性与 AI 建议。Human 文本框初始仅载入 descriptions.human，点击「采纳 AI 描述」才会把 AI 文本写进 Human。</p>
-                    <label className="pl-field-search shrink-0">
-                      <span className="sr-only">搜索字段</span>
-                      <input className="pl-input" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="搜索字段" />
-                    </label>
-                  </div>
-                  <div className="pl-field-editor-list">
-                    {filteredColumns.map((column) => {
-                      const sourceColumn = columnsByName.get(column.name);
-                      if (!sourceColumn) {
-                        return null;
-                      }
-                      return (
-                        <FieldCard
-                          key={column.name}
-                          sourceColumn={sourceColumn}
-                          description={column.description}
-                          onDescriptionChange={(next) => updateColumnDescription(column.name, next)}
-                          onAdoptAi={() => adoptAiDescription(column.name)}
+                    {activeSection === "measures" ? (
+                      <section className="pl-panel">
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="pl-panel-title mb-0">Measures</p>
+                          <OverlayBadge source={source} />
+                        </div>
+                        <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
+                        <MeasureForm
+                          measures={form.measures}
+                          onChange={(measures) => setForm({ ...form, measures })}
                         />
-                      );
-                    })}
-                    {filteredColumns.length === 0 ? <p className="pl-notice">没有匹配字段。</p> : null}
-                  </div>
-                </section>
-              ) : null}
+                      </section>
+                    ) : null}
 
-              {activeSection === "joins" ? (
-                <section className="pl-panel">
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <p className="pl-notice mb-0">正式关联关系仍在关联关系页面维护，这里只展示当前表上下文。</p>
-                    <Link
-                      className="pl-btn pl-btn--secondary shrink-0"
-                      to={`/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`}
-                    >
-                      打开关联关系
-                    </Link>
+                    {activeSection === "segments" ? (
+                      <section className="pl-panel">
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="pl-panel-title mb-0">Segments</p>
+                          <OverlayBadge source={source} />
+                        </div>
+                        <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
+                        <SegmentForm
+                          segments={form.segments}
+                          onChange={(segments) => setForm({ ...form, segments })}
+                        />
+                      </section>
+                    ) : null}
+
+                    {activeSection === "columns" ? (
+                      <section className="pl-panel">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="pl-notice mb-0">每张卡片展示 PK/类型/可空性与 AI 建议。Human 文本框初始仅载入 descriptions.human，点击「采纳 AI 描述」才会把 AI 文本写进 Human。</p>
+                          <label className="pl-field-search shrink-0">
+                            <span className="sr-only">搜索字段</span>
+                            <input className="pl-input" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="搜索字段" />
+                          </label>
+                        </div>
+                        <div className="pl-field-editor-list">
+                          {filteredColumns.map((column) => {
+                            const sourceColumn = columnsByName.get(column.name);
+                            if (!sourceColumn) {
+                              return null;
+                            }
+                            return (
+                              <FieldCard
+                                key={column.name}
+                                sourceColumn={sourceColumn}
+                                description={column.description}
+                                onDescriptionChange={(next) => updateColumnDescription(column.name, next)}
+                                onAdoptAi={() => adoptAiDescription(column.name)}
+                              />
+                            );
+                          })}
+                          {filteredColumns.length === 0 ? <p className="pl-notice">没有匹配字段。</p> : null}
+                        </div>
+                      </section>
+                    ) : null}
+
+                    {activeSection === "joins" ? (
+                      <section className="pl-panel">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="pl-notice mb-0">正式关联关系仍在关联关系页面维护，这里只展示当前表上下文。</p>
+                          <Link
+                            className="pl-btn pl-btn--secondary shrink-0"
+                            to={`/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`}
+                          >
+                            打开关联关系
+                          </Link>
+                        </div>
+                        <div className="pl-relation-list">
+                          {(source.model.joins ?? []).map((join) => (
+                            <div className="pl-relation-row" key={`${join.to}-${join.on}`}>
+                              <strong>{join.to}</strong>
+                              <span>{RELATIONSHIP_LABELS[join.relationship]}</span>
+                              <code>{join.on}</code>
+                            </div>
+                          ))}
+                          {(source.model.joins ?? []).length === 0 ? <p className="pl-notice">当前表还没有正式关联关系。</p> : null}
+                        </div>
+                      </section>
+                    ) : null}
                   </div>
-                  <div className="pl-relation-list">
-                    {(source.model.joins ?? []).map((join) => (
-                      <div className="pl-relation-row" key={`${join.to}-${join.on}`}>
-                        <strong>{join.to}</strong>
-                        <span>{RELATIONSHIP_LABELS[join.relationship]}</span>
-                        <code>{join.on}</code>
-                      </div>
-                    ))}
-                    {(source.model.joins ?? []).length === 0 ? <p className="pl-notice">当前表还没有正式关联关系。</p> : null}
-                  </div>
-                </section>
-              ) : null}
+                </div>
+              </details>
             </form>
           </>
         ) : null}

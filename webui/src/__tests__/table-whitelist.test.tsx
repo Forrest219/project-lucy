@@ -268,7 +268,7 @@ describe("TableWhitelist", () => {
     const row = await screen.findByTestId("whitelist-row-dataforai.superstore_orders");
     expect(within(row).getByRole("link", { name: /查看语义/ })).toHaveAttribute(
       "href",
-      "/sources/mysql-aliyun/dataforai/superstore_orders"
+      "/catalog/mysql-aliyun/dataforai/superstore_orders"
     );
   });
 
@@ -280,7 +280,7 @@ describe("TableWhitelist", () => {
     expect(within(row).getByText("已启用，待补语义")).toBeInTheDocument();
     expect(within(row).getByRole("link", { name: /编辑语义/ })).toHaveAttribute(
       "href",
-      "/sources/mysql-aliyun/dataforai/superstore_people"
+      "/catalog/mysql-aliyun/dataforai/superstore_people"
     );
   });
 
@@ -313,7 +313,7 @@ describe("TableWhitelist", () => {
     const link = within(disabledRow).getByRole("link", { name: /查看字段/ });
     expect(link).toHaveAttribute(
       "href",
-      "/sources/mysql-aliyun/dataforai/superstore_returns"
+      "/catalog/mysql-aliyun/dataforai/superstore_returns"
     );
   });
 
@@ -1009,7 +1009,7 @@ describe("TableWhitelist", () => {
 
     expect(link).toHaveAttribute(
       "href",
-      "/sources/mysql-aliyun/dataforai/superstore_orders"
+      "/catalog/mysql-aliyun/dataforai/superstore_orders"
     );
     expect(link.className).toContain("pl-inline-link");
     expect(link.className).not.toContain("pl-btn--ghost");

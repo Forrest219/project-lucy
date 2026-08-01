@@ -82,7 +82,7 @@ export function JoinEditor() {
           </>
         }
         actions={
-          <Link className="pl-btn pl-btn--ghost" to={`/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`}>
+          <Link className="pl-btn pl-btn--ghost" to={`/catalog/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`}>
             返回表编辑
           </Link>
         }

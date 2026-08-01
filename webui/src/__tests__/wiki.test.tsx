@@ -431,7 +431,7 @@ describe("WikiEditor Read Mode default (P0)", () => {
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
     const link = await screen.findByLabelText("打开 superstore_orders 表语义编辑器");
-    expect(link).toHaveAttribute("href", "/sources/mysql-aliyun/dataforai/superstore_orders");
+    expect(link).toHaveAttribute("href", "/catalog/mysql-aliyun/dataforai/superstore_orders");
   });
 
   it("marks an unknown sl_ref as a warning badge in Read Mode", async () => {

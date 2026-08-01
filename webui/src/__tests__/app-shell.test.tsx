@@ -18,6 +18,7 @@ function StubPage({ name }: { name: string }) {
 // ObjectDetailDrawer after the redirect. The mock captures the post-redirect
 // location via a side-channel so individual tests can assert against it.
 let lastOnboardingLocation: { pathname: string; search: string; hash: string } | null = null;
+let lastTableEditorLocation: { pathname: string; search: string; hash: string } | null = null;
 
 vi.mock("../pages/Catalog", () => ({ Catalog: () => <StubPage name="Catalog" /> }));
 vi.mock("../pages/JoinEditor", () => ({ JoinEditor: () => <StubPage name="JoinEditor" /> }));
@@ -35,7 +36,18 @@ vi.mock("../pages/Onboarding", async () => {
 });
 vi.mock("../pages/publish/PublishWorkbench", () => ({ PublishWorkbench: () => <StubPage name="PublishWorkbench" /> }));
 vi.mock("../pages/publish/PublishHistory", () => ({ PublishHistory: () => <StubPage name="PublishHistory" /> }));
-vi.mock("../pages/TableEditor", () => ({ TableEditor: () => <StubPage name="TableEditor" /> }));
+vi.mock("../pages/TableEditor", async () => {
+  const { useLocation } = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom"
+  );
+  return {
+    TableEditor: () => {
+      const loc = useLocation();
+      lastTableEditorLocation = { pathname: loc.pathname, search: loc.search, hash: loc.hash };
+      return <div data-testid="route-page">TableEditor</div>;
+    }
+  };
+});
 vi.mock("../pages/WikiEditor", () => ({ WikiEditor: () => <StubPage name="WikiEditor" /> }));
 vi.mock("../pages/admin/AgentList", () => ({ AgentList: () => <StubPage name="AgentList" /> }));
 vi.mock("../pages/admin/AgentDetail", () => ({ AgentDetail: () => <StubPage name="AgentDetail" /> }));
@@ -114,6 +126,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   lastOnboardingLocation = null;
+  lastTableEditorLocation = null;
 });
 
 describe("AppFrame shell", () => {
@@ -196,6 +209,17 @@ describe("AppFrame shell", () => {
     const catalogLink = screen.getByRole("link", { name: "表目录" });
     expect(catalogLink).toHaveAttribute("href", "/catalog");
     expect(catalogLink).toHaveAttribute("aria-current", "page");
+  });
+
+  it("redirects legacy /sources table URLs to the canonical /catalog table route", () => {
+    renderAt("/sources/mysql-aliyun/dataforai/superstore_orders?tab=diff#preview");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
+    expect(lastTableEditorLocation).toEqual({
+      pathname: "/catalog/mysql-aliyun/dataforai/superstore_orders",
+      search: "?tab=diff",
+      hash: "#preview"
+    });
+    expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
   });
 
   it("exposes each 5+1 navigation group heading exactly once", () => {

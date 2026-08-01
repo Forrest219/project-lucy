@@ -25,7 +25,7 @@ function structureLabel(table: SourceSummary): string {
   return `字段 ${table.columnCount} / 关联 ${table.joinCount} / 指标 ${table.measureCount}`;
 }
 
-function authorizedAgentLabel(count: number): string {
+function agentReferenceLabel(count: number): string {
   return `${count} 个`;
 }
 
@@ -181,7 +181,7 @@ export function Catalog() {
                 <th scope="col" className="notranslate" translate="no">Schema</th>
                 <th scope="col">语义状态</th>
                 <th scope="col">结构</th>
-                <th scope="col"><span className="notranslate" translate="no">授权 Agent</span></th>
+                <th scope="col"><span className="notranslate" translate="no">Agent 引用</span></th>
                 <th scope="col">语义更新时间</th>
                 <th scope="col" className="pl-catalog-table-actions-col">操作</th>
               </tr>
@@ -216,7 +216,7 @@ export function Catalog() {
                     <td><StatusBadge status={table.completion} /></td>
                     <td className="pl-catalog-table-structure notranslate" translate="no">{structureLabel(table)}</td>
                     <td className="pl-catalog-table-agents" data-testid={`catalog-row-agents-${table.table}`}>
-                      {authorizedAgentLabel(table.authorizedAgentCount)}
+                      {agentReferenceLabel(table.authorizedAgentCount)}
                     </td>
                     <td className="pl-catalog-table-updated notranslate" translate="no" title={semanticUpdatedTooltip(table)}>
                       {formatSemanticUpdatedAt(table.semanticUpdatedAt)}

@@ -165,7 +165,7 @@ function closeSourceLabel(source: CloseSource): string {
 function deepLinkHref(target: NonNullable<ReturnType<typeof parseObjectDetailSearch>>): string {
   switch (target.kind) {
     case "table":
-      return `/sources/${encodeURIComponent(target.conn)}/${encodeURIComponent(target.schema)}/${encodeURIComponent(target.table)}`;
+      return `/catalog/${encodeURIComponent(target.conn)}/${encodeURIComponent(target.schema)}/${encodeURIComponent(target.table)}`;
     case "agent":
       return `/admin/agents/${encodeURIComponent(target.agentId)}`;
     case "evalRun":

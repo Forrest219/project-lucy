@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Catalog } from "../pages/Catalog";
 import { JoinEditor } from "../pages/JoinEditor";
 import { Onboarding } from "../pages/Onboarding";
@@ -55,6 +55,21 @@ function OnboardingRedirect() {
   return (
     <Navigate
       to={{ pathname: "/overview", search: location.search, hash: location.hash }}
+      replace
+    />
+  );
+}
+
+function SourceRouteRedirect() {
+  const location = useLocation();
+  const { conn = "", schema = "", table = "" } = useParams();
+  return (
+    <Navigate
+      to={{
+        pathname: `/catalog/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`,
+        search: location.search,
+        hash: location.hash
+      }}
       replace
     />
   );
@@ -201,7 +216,7 @@ export function AppFrame() {
             <Route path="/" element={<Navigate to="/catalog" replace />} />
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/catalog/:conn/:schema/:table" element={<TableEditor />} />
-            <Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
+            <Route path="/sources/:conn/:schema/:table" element={<SourceRouteRedirect />} />
             <Route path="/joins/:conn/:schema/:table" element={<JoinEditor />} />
             <Route path="/publish/workbench" element={<PublishWorkbench />} />
             <Route path="/publish/history" element={<PublishHistory />} />

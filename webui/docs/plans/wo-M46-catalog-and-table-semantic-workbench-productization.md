@@ -46,7 +46,7 @@
 ### Phase 2: Table Semantic Workbench
 
 1. 新增 canonical route `/catalog/:conn/:schema/:table`。
-2. 旧 `/sources/:conn/:schema/:table` 保持兼容，可 redirect 或 alias。
+2. 旧 `/sources/:conn/:schema/:table` redirect 到 canonical `/catalog/:conn/:schema/:table`，并保留 query/hash。
 3. 面包屑改为：
    `表目录 / {Connection} / {Schema} / {table}`。
 4. Header 聚焦当前表和主链路动作：
@@ -54,14 +54,15 @@
    - `导入 YAML`
    - `校验`
    - `保存`
+   - `粘贴 YAML` 作为导入补充路径，放在语义资产交换区内并默认折叠。
 5. Header 删除固定按钮：
    - `业务 Wiki`
    - `关联关系`
    - `审阅`
 6. 次要操作放更多菜单或区块内。
-7. 候选关联默认折叠为 `待处理建议（n）`。
-8. 左侧表目录树默认折叠或弱化，不抢占编辑主视觉。
-9. 手工表单默认降级为 `轻量修正` 或 `高级手工编辑`。
+7. 候选关联默认折叠为低噪声 `待处理建议（n）`。
+8. 表目录导航默认折叠到高级区，不抢占编辑主视觉。
+9. 手工表单默认降级为 `高级：手工维护语义字段`，用户展开后再编辑。
 10. 变更预览改为摘要优先，原始 Diff 折叠。
 
 ## Implementation Notes
@@ -76,10 +77,10 @@
 <Route path="/" element={<Navigate to="/catalog" replace />} />
 <Route path="/catalog" element={<Catalog />} />
 <Route path="/catalog/:conn/:schema/:table" element={<TableEditor />} />
-<Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
+<Route path="/sources/:conn/:schema/:table" element={<SourceRouteRedirect />} />
 ```
 
-如果使用 alias 而非 redirect，确保旧链接仍可打开；如果 redirect，保留 query / params。
+实际实现如封装 redirect component，必须保留 params / query / hash。
 
 ### Catalog Filtering
 
@@ -167,14 +168,17 @@ Collapsed / Secondary
 - 切换 Connection 后 Schema 选项联动。
 - 表名不重复展示 `{schema}.{table}`。
 - 表头不会视觉 uppercase `Schema` / `Agent`。
+- 表头使用 `Agent 引用`，显示 `/api/sources[].authorizedAgentCount`，含义是 data agent mcp 系统中的 Agent 引用 / 可见数量，不写成“授权 Agent”。
 
 ### Table Editor
 
 - `/catalog/:conn/:schema/:table` 渲染 TableEditor。
-- `/sources/:conn/:schema/:table` 兼容。
+- `/sources/:conn/:schema/:table` redirect 到 canonical `/catalog/:conn/:schema/:table`。
 - Header 不显示固定 `业务 Wiki`、`关联关系`、`审阅`。
 - Header 显示导出 / 导入 / 校验 / 保存主动作。
-- 候选关联默认折叠。
+- 支持粘贴 Claude Code / Codex 返回的 YAML 并生成 dry-run 预览。
+- 候选关联默认折叠，折叠态不展示长句“发现 x 个智能推断的候选关联关系”。
+- 手工表单默认折叠在高级区。
 - 原始 Diff 默认折叠。
 - 变更摘要在表描述修改后出现。
 
@@ -203,7 +207,7 @@ npm test -- src/__tests__/catalog.test.tsx src/__tests__/table-editor.test.tsx
 - `http://localhost:5174/` 自动进入 `/catalog`。
 - `http://localhost:5174/catalog` 可用。
 - `http://localhost:5174/catalog/mysql-aliyun/dataforai/kx_dim_company` 可用。
-- 旧 `http://localhost:5174/sources/mysql-aliyun/dataforai/kx_dim_company` 可用或跳转。
+- 旧 `http://localhost:5174/sources/mysql-aliyun/dataforai/kx_dim_company` 跳转到 `/catalog/mysql-aliyun/dataforai/kx_dim_company`。
 
 ## Acceptance Checklist
 
@@ -211,12 +215,15 @@ npm test -- src/__tests__/catalog.test.tsx src/__tests__/table-editor.test.tsx
 - [ ] `/` 不再直接承载 Catalog 页面。
 - [ ] Catalog Header 无统计 badge 和跨模块 actions。
 - [ ] Catalog 有 `Connection` 筛选。
+- [ ] Catalog 使用 `Agent 引用`，不再显示 `授权 Agent`。
 - [ ] Catalog 表名不重复。
 - [ ] Catalog 中等宽度不横向撑出页面。
 - [ ] 单表页是 Catalog 二级页面。
 - [ ] 单表页 Header 主操作聚焦导出 / 导入 / 校验 / 保存。
+- [ ] 单表页支持粘贴 YAML 生成导入 dry-run 预览。
 - [ ] `业务 Wiki`、`审阅`、`关联关系` 不再固定占据 Header。
 - [ ] 候选关联默认折叠。
+- [ ] 手工表单默认折叠。
 - [ ] 变更预览摘要优先。
 - [ ] 原始 Diff 折叠但可访问。
 - [ ] 术语 lint 通过。

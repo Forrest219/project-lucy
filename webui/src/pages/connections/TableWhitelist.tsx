@@ -333,7 +333,7 @@ export function TableWhitelist() {
         </span>
       );
     }
-    const target = `/sources/${encodeURIComponent(row.connectionId)}/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`;
+    const target = `/catalog/${encodeURIComponent(row.connectionId)}/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`;
     const label =
       status === "enabled_complete"
         ? "查看语义 ↗"

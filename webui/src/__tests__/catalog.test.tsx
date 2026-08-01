@@ -80,7 +80,7 @@ describe("Catalog density (M- Catalog table refactor)", () => {
       "Schema",
       "语义状态",
       "结构",
-      "授权 Agent",
+      "Agent 引用",
       "语义更新时间",
       "操作"
     ]);

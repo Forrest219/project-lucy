@@ -72,6 +72,28 @@ afterEach(async () => {
 });
 
 describe("source YAML import API", () => {
+  it("returns rawYaml as a re-importable table snippet", async () => {
+    const app = buildServer();
+    await app.ready();
+    const sourceResponse = await request(app.server)
+      .get("/api/sources/mysql-aliyun/dataforai/superstore_orders")
+      .expect(200);
+
+    const rawYaml = sourceResponse.body.data.rawYaml;
+    expect(rawYaml).toContain("table: dataforai.superstore_orders");
+    expect(rawYaml).toContain("\ncolumns:");
+
+    const importResponse = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({
+        yaml: rawYaml.replace("Demo table.", "Re-imported table description.")
+      })
+      .expect(200);
+
+    expect(importResponse.body.data.diff).toContain("Re-imported table description.");
+    await app.close();
+  });
+
   it("previews imported table YAML by default without writing disk files", async () => {
     const app = buildServer();
     await app.ready();

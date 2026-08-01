@@ -237,7 +237,7 @@ describe("ObjectDetailDrawer", () => {
     const link = await screen.findByTestId("object-detail-deep-link");
     expect(link).toHaveAttribute(
       "href",
-      "/sources/mysql-aliyun/dataforai/superstore_orders"
+      "/catalog/mysql-aliyun/dataforai/superstore_orders"
     );
   });
 

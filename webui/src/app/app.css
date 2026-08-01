@@ -983,8 +983,8 @@
   /* 编辑器布局 */
   .pl-editor-layout { @apply grid grid-cols-[240px_minmax(0,1fr)] gap-6; }
   .pl-editor-three-panel { @apply grid gap-4; }
-  .pl-table-workbench { @apply grid min-h-[calc(100vh-128px)] grid-cols-[220px_minmax(420px,1fr)_360px] gap-4; }
-  .pl-object-tree,
+  .pl-table-workbench { @apply grid min-h-[calc(100vh-128px)] grid-cols-[minmax(520px,1fr)_360px] gap-4; }
+  .pl-object-tree { @apply rounded-md border border-border-default bg-bg-surface p-3; }
   .pl-inspector { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto rounded-md border border-border-default bg-bg-surface p-3; }
   .pl-table-editor-main { @apply min-w-0; }
   .pl-table-editor-header { @apply mb-4 flex flex-wrap items-start justify-between gap-4; }
@@ -1001,6 +1001,8 @@
   .pl-object-tree-item:hover { @apply bg-bg-muted; }
   .pl-object-tree-item--active { @apply bg-bg-muted font-semibold text-primary; }
   .pl-object-tree-item small { @apply shrink-0 text-xs font-normal text-fg-muted; }
+  .pl-manual-semantic-workspace { @apply grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]; }
+  .pl-manual-semantic-panel { @apply min-w-0; }
   .pl-field-search { @apply grid min-w-56 gap-1.5 text-sm; }
   .pl-field-search > span { @apply text-xs font-medium text-fg-muted; }
   .pl-inspector { @apply grid content-start gap-3; }
@@ -1020,6 +1022,8 @@
   .pl-asset-exchange-facts div { @apply grid gap-1 rounded-md border border-border-default bg-bg-base px-3 py-2; }
   .pl-asset-exchange-facts dt { @apply text-xs font-medium text-fg-muted; }
   .pl-asset-exchange-facts dd { @apply min-w-0 truncate text-fg-default; }
+  .pl-paste-yaml-box { @apply mt-2 grid gap-2; }
+  .pl-paste-yaml-box .pl-btn { @apply justify-self-start; }
   .pl-change-summary { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-change-summary-header { @apply flex items-center justify-between gap-3 text-sm; }
   .pl-change-summary-header strong { @apply font-semibold text-fg-default; }
@@ -1772,7 +1776,7 @@
 
 @media (max-width: 1280px) {
   .pl-table-workbench {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pl-inspector {

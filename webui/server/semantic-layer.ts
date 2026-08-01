@@ -1,6 +1,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { isMap, parse, parseDocument, Scalar, YAMLMap, YAMLSeq, type Document, type ParsedNode } from "yaml";
+import { Document, isMap, parse, parseDocument, Scalar, YAMLMap, YAMLSeq, type ParsedNode } from "yaml";
 import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
@@ -194,16 +194,12 @@ function columnsNode(tableNode: ParsedNode): ParsedNode[] {
   return node.items.filter((item): item is ParsedNode => typeof item === "object" && item !== null);
 }
 
-function tableYaml(doc: Document, table: string, sourceText: string): string {
+function tableYaml(doc: Document, table: string, _sourceText: string): string {
   const node = tableNodeFromDocument(doc, table);
   if (!node) {
     return "";
   }
-  const range = node.range;
-  if (Array.isArray(range) && typeof range[0] === "number") {
-    return sourceText.slice(range[0], range[2] ?? range[1]);
-  }
-  return node.toString();
+  return new Document(node.toJSON()).toString({ lineWidth: 0 });
 }
 
 function parseYaml(text: string, source: string): Document {

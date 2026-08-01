@@ -154,7 +154,7 @@ function LinkedChip({ entry }: { entry: ChipEntry }) {
         <Link
           aria-label={`打开 ${table.table} 表语义编辑器`}
           className="pl-wiki-read-ref-link"
-          to={`/sources/${encodeURIComponent(split.conn)}/${encodeURIComponent(split.schema)}/${encodeURIComponent(split.table)}`}
+          to={`/catalog/${encodeURIComponent(split.conn)}/${encodeURIComponent(split.schema)}/${encodeURIComponent(split.table)}`}
         >
           {content}
           <span className="sr-only pl-wiki-read-ref-sr">{dotLabel}</span>

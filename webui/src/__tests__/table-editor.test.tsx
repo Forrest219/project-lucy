@@ -31,11 +31,18 @@ function renderEditor(path = "/catalog/mysql-aliyun/dataforai/superstore_orders"
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/catalog/:conn/:schema/:table" element={<TableEditor />} />
-          <Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
+}
+
+async function openManualSemanticEditor() {
+  const disclosure = await screen.findByTestId("manual-semantic-disclosure");
+  if (!disclosure.hasAttribute("open")) {
+    fireEvent.click(within(disclosure).getByText("高级：手工维护语义字段"));
+  }
+  return disclosure;
 }
 
 function buildSourceDetail() {
@@ -251,15 +258,21 @@ afterEach(() => {
 });
 
 describe("TableEditor", () => {
-  it("renders on the canonical /catalog table route and keeps /sources as a compat alias", async () => {
+  it("renders on the canonical /catalog table route", async () => {
     stubEditorFetch();
     renderEditor("/catalog/mysql-aliyun/dataforai/superstore_orders");
     expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
+  });
 
-    cleanup();
+  it("keeps manual semantic editing collapsed by default so YAML exchange is the primary path", async () => {
     stubEditorFetch();
-    renderEditor("/sources/mysql-aliyun/dataforai/superstore_orders");
-    expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
+    renderEditor();
+
+    expect(await screen.findByTestId("semantic-asset-exchange")).toHaveTextContent("导出 YAML");
+    const manual = await screen.findByTestId("manual-semantic-disclosure");
+    expect(manual).not.toHaveAttribute("open");
+    expect(within(manual).getByText("高级：手工维护语义字段")).toBeInTheDocument();
+    expect(await screen.findByTestId("candidate-joins-disclosure")).not.toHaveAttribute("open");
   });
 
   it("focuses header actions on export, import, validate, and save while moving secondary links into more", async () => {
@@ -286,6 +299,7 @@ describe("TableEditor", () => {
     stubEditorFetch();
     renderEditor();
 
+    await openManualSemanticEditor();
     expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
     // The human description populates the table description textarea; AI does not.
     const tableTextarea = await screen.findByDisplayValue("Aggregate order rows for revenue analytics");
@@ -298,6 +312,7 @@ describe("TableEditor", () => {
     stubEditorFetch();
     renderEditor();
 
+    await openManualSemanticEditor();
     const tableTextarea = await screen.findByDisplayValue("Aggregate order rows for revenue analytics");
     fireEvent.change(tableTextarea, { target: { value: "Updated order semantics" } });
 
@@ -307,6 +322,47 @@ describe("TableEditor", () => {
     expect(summary).toHaveTextContent("修改 1");
     const rawDiff = screen.getByTestId("raw-diff-disclosure");
     expect(rawDiff).not.toHaveAttribute("open");
+  });
+
+  it("previews pasted YAML as an import dry-run without saving", async () => {
+    const fetchMock = stubEditorFetch();
+    renderEditor();
+
+    const pasteDisclosure = await screen.findByTestId("paste-yaml-disclosure");
+    expect(pasteDisclosure).not.toHaveAttribute("open");
+    fireEvent.click(within(pasteDisclosure).getByText("粘贴 YAML"));
+    fireEvent.change(await screen.findByTestId("paste-yaml-textarea"), {
+      target: { value: "table: dataforai.superstore_orders\n    descriptions:\n      human: Updated from Codex\n" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "生成导入预览" }));
+
+    await waitFor(() => {
+      const importPreviewCall = fetchMock.mock.calls.find((call) => {
+        if (!String(call[0]).endsWith("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")) {
+          return false;
+        }
+        if (call[1]?.method !== "POST") {
+          return false;
+        }
+        const body = JSON.parse(String(call[1].body));
+        return body.dryRun === true && String(body.yaml).includes("Updated from Codex");
+      });
+      expect(importPreviewCall).toBeTruthy();
+    });
+
+    expect(await screen.findByTestId("table-editor-imported-yaml-name")).toHaveTextContent("粘贴 YAML");
+    const summary = await screen.findByTestId("change-summary");
+    expect(summary).toHaveTextContent("导入 YAML");
+    const saveCalls = fetchMock.mock.calls.filter((call) => {
+      if (!String(call[0]).endsWith("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")) {
+        return false;
+      }
+      if (call[1]?.method !== "POST") {
+        return false;
+      }
+      return JSON.parse(String(call[1].body)).dryRun === false;
+    });
+    expect(saveCalls).toHaveLength(0);
   });
 
   it("runs Validate from the header and shows the result in the inspector", async () => {
@@ -330,6 +386,7 @@ describe("TableEditor", () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
     renderEditor();
 
+    await openManualSemanticEditor();
     const copyButton = await screen.findByRole("button", { name: "复制完整表名" });
     fireEvent.click(copyButton);
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(LONG_QUALIFIED_NAME);
@@ -344,6 +401,7 @@ describe("TableEditor", () => {
     stubEditorFetch();
     renderEditor();
 
+    await openManualSemanticEditor();
     fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
 
     // Wait for the columns section to actually render before asserting on
@@ -371,6 +429,7 @@ describe("TableEditor", () => {
     const fetchMock = stubEditorFetch();
     renderEditor();
 
+    await openManualSemanticEditor();
     fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
     await screen.findByText(/每张卡片展示 PK/);
 
@@ -430,6 +489,7 @@ describe("TableEditor", () => {
     stubEditorFetch();
     renderEditor();
 
+    await openManualSemanticEditor();
     // The overview page already exposes overlay badge for grain and the table grain metadata
     expect(await screen.findAllByText("Overlay")).not.toHaveLength(0);
     // The tooltip should resolve to a concrete overlay path. There can be
@@ -636,6 +696,7 @@ describe("TableEditor", () => {
     const fetchMock = stubEditorFetch();
     renderEditor();
 
+    await openManualSemanticEditor();
     // Switch to columns section first so the form has something to dry-run
     fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
     await screen.findByText(/每张卡片展示 PK/);

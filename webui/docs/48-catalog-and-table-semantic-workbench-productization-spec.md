@@ -86,7 +86,7 @@ Protected terms:
 | 页面 | 当前 | 新 canonical | 兼容策略 |
 |---|---|---|---|
 | 表目录 | `/` | `/catalog` | `/` redirect 到 `/catalog` |
-| 表语义资产工作台 | `/sources/:conn/:schema/:table` | `/catalog/:conn/:schema/:table` | 旧 `/sources/...` redirect 或 alias 到新路由 |
+| 表语义资产工作台 | `/sources/:conn/:schema/:table` | `/catalog/:conn/:schema/:table` | 旧 `/sources/...` 必须 redirect 到新路由，并保留 query/hash |
 
 ### Navigation
 
@@ -148,7 +148,7 @@ Behavior:
 3. `Schema`
 4. `语义状态`
 5. `结构`
-6. `授权 Agent`
+6. `Agent 引用`
 7. `语义更新时间`
 8. `操作`
 
@@ -157,6 +157,12 @@ Behavior:
 - 主文本只显示 `table`。
 - 不再在同一格重复显示 `{schema}.{table}`。
 - 完整引用 `{conn}/{schema}/{table}` 放入 tooltip 或 copy affordance。
+
+`Agent 引用` 列：
+
+- 取 `/api/sources[].authorizedAgentCount`。
+- 含义是当前 data agent mcp 系统中引用 / 可见该表的 Agent 数。
+- 不表达业务审批意义上的“授权”，也不允许根据表名、schema 或描述猜测。
 
 `操作` 列：
 
@@ -227,6 +233,7 @@ Header 移除或收敛：
 1. `语义资产交换`
    - 导出当前表 YAML。
    - 导入完善后的 YAML。
+   - 支持粘贴 Claude Code / Codex 返回的 YAML 并生成 dry-run 预览。
    - 展示导入文件名、校验状态、影响文件。
 
 2. `变更摘要`
@@ -386,13 +393,13 @@ Catalog:
 Table Semantic Workbench:
 
 - `/catalog/:conn/:schema/:table` 可访问。
-- 旧 `/sources/:conn/:schema/:table` 兼容跳转或 alias。
+- 旧 `/sources/:conn/:schema/:table` redirect 到 `/catalog/:conn/:schema/:table`，并保留 query/hash。
 - Header 只保留当前表上下文和主链路动作。
 - `业务 Wiki`、`审阅` 不再作为 Header 固定按钮。
 - `关联关系` 不再作为 Header 固定按钮。
 - 页面默认主路径体现 `导出 YAML / 导入 YAML / 校验 / 保存`。
 - 候选关联默认折叠。
-- 左侧表目录树默认折叠或降级，不抢占主视觉。
+- 表目录导航和手工维护区默认折叠或降级，不抢占主视觉。
 - 变更预览默认展示摘要，原始 Diff 折叠。
 
 Tests:
@@ -401,7 +408,7 @@ Tests:
 - Catalog Header 降噪。
 - Connection filter 联动 Schema。
 - 表名不重复。
-- 旧 `/sources/...` 兼容。
+- 旧 `/sources/...` redirect 到 canonical `/catalog/...`。
 - 单表页 Header 动作收敛。
 - 候选关联默认折叠。
 - 变更摘要渲染。

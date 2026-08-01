@@ -155,7 +155,7 @@ export function SlRefPicker({ value, onChange }: Props) {
                 <Link
                   aria-label={`打开 ${split?.table ?? ""} 表语义编辑器`}
                   className="pl-chip-link"
-                  to={`/sources/${encodeURIComponent(known.conn)}/${encodeURIComponent(known.schema)}/${encodeURIComponent(known.table)}`}
+                  to={`/catalog/${encodeURIComponent(known.conn)}/${encodeURIComponent(known.schema)}/${encodeURIComponent(known.table)}`}
                 >
                   🔗
                 </Link>
