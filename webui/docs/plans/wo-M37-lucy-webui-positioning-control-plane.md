@@ -507,10 +507,10 @@ git commit -m "docs(webui): register M37 spec and plan in index"
 
 - [ ] **术语 v0.2** — `cd webui/docs && grep -c "Data Agent Ops Control Plane" 00-product-terminology-standard.md` ≥ 2；`grep "语义维护工作台" 00-product-terminology-standard.md` 命中弃用别名表。
   Expected: count = 2，命中位置在 §3 表格 + §3.0 弃用别名。
-- [ ] **App 品牌区** — `cd webui && grep -n "Data Agent Ops Control Plane" src/app/App.tsx` 命中 1 行；`grep -n "Data Agent 运维控制台" src/app/App.tsx` 命中 1 行。
-  Expected: brand block 包含两个新 span。
-- [ ] **CSS 新 class** — `cd webui && grep -n "pl-brand-eyebrow\|pl-brand-tagline" src/app/app.css` 至少 4 命中（每个 class 至少 2 处：rule 定义 + App.tsx 引用）。
-  Expected: 命中数 ≥ 4；新选择器前缀为 `.pl-brand-block .` 以保证 specificity。
+- [ ] **App 品牌区** — `cd webui && grep -n "Data Agent Ops Control Plane" src/app/App.tsx` 命中 2 行（`title` 属性 + 可见文本）；`grep -n "Data Agent 运维控制台" src/app/App.tsx` 命中 1 行。
+  Expected: brand block 包含两个新 span，英文 brand term span 带完整 `title`。
+- [ ] **CSS 新 class** — `cd webui && grep -n "pl-brand-eyebrow\|pl-brand-tagline" src/app/App.tsx src/app/app.css` 至少 4 命中（每个 class 至少 2 处：App.tsx 引用 + CSS rule 定义）。
+  Expected: 命中数 ≥ 4；CSS rule 新选择器前缀为 `.pl-brand-block .` 以保证 specificity。
 - [ ] **`<title>` 未扩展** — `cd webui && grep -n "<title>Lucy WebUI</title>" index.html` 命中 1 行。
   Expected: 行内容 = `    <title>Lucy WebUI</title>`（无 `· Data Agent` 后缀）。
 - [ ] **design spec 备注** — `cd docs && grep -n "已升级为" design-webui-ui-refresh.md | wc -l` ≥ 1；`grep -n "Phase 1 保留 KTX WebUI" design-webui-ui-refresh.md` 0 命中。
