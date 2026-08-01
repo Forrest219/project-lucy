@@ -75,8 +75,13 @@ const navGroups: Array<{ title: string; items: NavItem[] }> = [
     items: [
       {
         label: "表目录",
-        to: "/",
-        active: (path) => path === "/" || path.startsWith("/sources/") || path.startsWith("/joins/")
+        to: "/catalog",
+        active: (path) =>
+          path === "/" ||
+          path === "/catalog" ||
+          path.startsWith("/catalog/") ||
+          path.startsWith("/sources/") ||
+          path.startsWith("/joins/")
       },
       {
         label: "业务 Wiki",
@@ -185,7 +190,9 @@ export function AppFrame() {
             <Route path="/connections" element={<ConnectionOverview />} />
             <Route path="/connections/whitelist" element={<TableWhitelist />} />
             <Route path="/connections/test" element={<ConnectionTest />} />
-            <Route path="/" element={<Catalog />} />
+            <Route path="/" element={<Navigate to="/catalog" replace />} />
+            <Route path="/catalog" element={<Catalog />} />
+            <Route path="/catalog/:conn/:schema/:table" element={<TableEditor />} />
             <Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
             <Route path="/joins/:conn/:schema/:table" element={<JoinEditor />} />
             <Route path="/publish/workbench" element={<PublishWorkbench />} />

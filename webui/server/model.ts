@@ -65,6 +65,19 @@ export type SourceSummary = {
   wikiRefCount: number;
   completion: CompletionStatus;
   mtime: string;
+  /**
+   * Number of enabled Agents whose effective permissions include this source
+   * (matches by `connectionId === conn && schema === schema && sourceName === table`).
+   * Disabled Agents are not counted. Returns 0 when access config cannot be read.
+   */
+  authorizedAgentCount: number;
+  /**
+   * Latest mtime between the Schema Manifest and the table's semantic overlay
+   * YAML (when present). Format: ISO 8601.
+   */
+  semanticUpdatedAt: string;
+  /** Source of `semanticUpdatedAt`: `manifest` if the overlay is absent or older. */
+  semanticUpdatedAtSource: "manifest" | "overlay";
 };
 
 export type ConnectionInfo = {

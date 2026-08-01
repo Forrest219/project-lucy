@@ -453,20 +453,21 @@
   .pl-table-row span { @apply text-sm text-fg-muted; }
 
   /* Catalog 紧凑表格（数据网格） */
-  .pl-catalog-table-wrap { @apply overflow-x-auto; }
-  .pl-catalog-table { @apply w-full border-separate border-spacing-0 text-sm; }
-  .pl-catalog-table thead th { @apply sticky top-0 z-10 border-b border-border-default bg-bg-subtle px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-fg-muted; }
+  .pl-catalog-table-wrap { @apply max-w-full overflow-x-auto; }
+  .pl-catalog-result-count { @apply ml-auto self-end pb-2 text-xs text-fg-muted; }
+  .pl-catalog-table { @apply w-full border-separate border-spacing-0 text-sm; min-width: 1040px; table-layout: fixed; }
+  .pl-catalog-table thead th { @apply sticky top-0 z-10 border-b border-border-default bg-bg-subtle px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
   .pl-catalog-table tbody tr { @apply border-b border-border-default last:border-b-0; }
   .pl-catalog-table tbody tr:hover { @apply bg-bg-subtle; }
   .pl-catalog-table tbody td { @apply px-3 py-2 align-middle text-fg-default; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
   .pl-catalog-table-name-link { @apply text-sm font-medium text-fg-default no-underline hover:underline; }
-  .pl-catalog-table-qualified { @apply text-xs text-fg-muted; }
+  .pl-catalog-table-connection { @apply text-sm text-fg-default; }
   .pl-catalog-table-schema { @apply text-sm text-fg-default; }
-  .pl-catalog-table-structure { @apply text-xs text-fg-muted; }
+  .pl-catalog-table-structure { @apply whitespace-nowrap text-xs text-fg-muted; }
   .pl-catalog-table-agents { @apply text-sm text-fg-default tabular-nums; }
-  .pl-catalog-table-updated { @apply text-xs text-fg-default tabular-nums; }
-  .pl-catalog-table-actions { @apply flex items-center justify-end gap-2; }
+  .pl-catalog-table-updated { @apply whitespace-nowrap text-xs text-fg-default tabular-nums; }
+  .pl-catalog-table-actions { @apply flex items-center justify-end gap-2 whitespace-nowrap; }
   .pl-catalog-table-actions-col { @apply w-px whitespace-nowrap text-right; }
   /* Catalog 表内标签等宽居中，避免列抖动；不影响其它页面 StatusBadge */
   .pl-catalog-table .pl-status-badge { @apply min-w-[64px] justify-center whitespace-nowrap; }
@@ -947,6 +948,11 @@
   }
   .pl-candidate-join-note { @apply text-xs text-fg-muted; }
   .pl-candidate-join-actions { @apply flex flex-wrap items-center gap-2 md:justify-end; }
+  .pl-workbench-disclosure { @apply rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-workbench-disclosure[open] { @apply grid gap-3; }
+  .pl-workbench-disclosure-summary { @apply flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-fg-default; }
+  .pl-workbench-disclosure-summary::-webkit-details-marker { display: none; }
+  .pl-workbench-disclosure-summary small { @apply text-xs font-normal text-fg-muted; }
   .pl-inline-grid { @apply grid gap-2; }
   .pl-measure-grid { @apply grid gap-3 md:grid-cols-4; }
   .pl-segment-grid { @apply grid gap-3 md:grid-cols-3; }
@@ -961,6 +967,12 @@
   .pl-table-editor-header { @apply mb-4 flex flex-wrap items-start justify-between gap-4; }
   .pl-table-editor-form { @apply grid gap-4; }
   .pl-object-tree-group { @apply mt-4 grid gap-2; }
+  .pl-object-tree--secondary { @apply bg-bg-subtle; }
+  .pl-secondary-disclosure { @apply rounded-md border border-border-default bg-bg-surface p-2; }
+  .pl-secondary-disclosure[open] { @apply grid gap-2; }
+  .pl-secondary-disclosure-summary { @apply flex cursor-pointer list-none items-center justify-between gap-2 px-1 text-sm font-semibold text-fg-default; }
+  .pl-secondary-disclosure-summary::-webkit-details-marker { display: none; }
+  .pl-secondary-disclosure-summary small { @apply min-w-0 truncate text-xs font-normal text-fg-muted; }
   .pl-object-tree-title { @apply px-2 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-object-tree-item { @apply flex min-h-9 items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-fg-default; }
   .pl-object-tree-item:hover { @apply bg-bg-muted; }
@@ -979,6 +991,23 @@
   .pl-inspector-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
   .pl-inspector-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-inspector-badge--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-asset-exchange { @apply grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,0.75fr)]; }
+  .pl-asset-exchange-copy { @apply grid content-start gap-2; }
+  .pl-asset-exchange-facts { @apply grid gap-2 text-sm; }
+  .pl-asset-exchange-facts div { @apply grid gap-1 rounded-md border border-border-default bg-bg-base px-3 py-2; }
+  .pl-asset-exchange-facts dt { @apply text-xs font-medium text-fg-muted; }
+  .pl-asset-exchange-facts dd { @apply min-w-0 truncate text-fg-default; }
+  .pl-change-summary { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
+  .pl-change-summary-header { @apply flex items-center justify-between gap-3 text-sm; }
+  .pl-change-summary-header strong { @apply font-semibold text-fg-default; }
+  .pl-change-summary-header span { @apply text-xs text-fg-muted; }
+  .pl-change-summary-list { @apply grid gap-2 list-none p-0; }
+  .pl-change-summary-list li { @apply flex items-center justify-between gap-3 rounded-sm bg-bg-surface px-2 py-1.5 text-sm; }
+  .pl-change-summary-list span { @apply text-fg-default; }
+  .pl-change-summary-list strong { @apply whitespace-nowrap text-xs font-medium text-fg-muted; }
+  .pl-change-summary-files { @apply grid gap-1 text-xs text-fg-muted; }
+  .pl-change-summary-files ul { @apply grid gap-1 list-none p-0; }
+  .pl-change-summary-files li { @apply min-w-0 truncate rounded-sm bg-bg-surface px-2 py-1 font-mono text-fg-default; }
   .pl-validation-summary { @apply grid gap-2; }
   .pl-validation-summary > div { @apply flex items-center justify-between gap-3 rounded-md border border-border-default bg-bg-base px-3 py-2; }
   .pl-validation-summary span { @apply text-sm text-fg-muted; }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TableEditor } from "../pages/TableEditor";
@@ -19,7 +19,7 @@ const LONG_QUALIFIED_NAME =
   "dataforai.superstore_orders_with_a_very_long_business_name_for_layout_regression";
 const OVERLAY_TOOLTIP = "修改将写入独立 overlay 文件：semantic-layer/mysql-aliyun/superstore_orders.yaml";
 
-function renderEditor() {
+function renderEditor(path = "/catalog/mysql-aliyun/dataforai/superstore_orders") {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -28,8 +28,9 @@ function renderEditor() {
 
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/sources/mysql-aliyun/dataforai/superstore_orders"]}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
+          <Route path="/catalog/:conn/:schema/:table" element={<TableEditor />} />
           <Route path="/sources/:conn/:schema/:table" element={<TableEditor />} />
         </Routes>
       </MemoryRouter>
@@ -181,6 +182,45 @@ function stubEditorFetch({ failSave = false, failPreview = false, candidates }: 
         })
       );
     }
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/import" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      if (body.dryRun) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              diff: "- descriptions:\n+ descriptions:",
+              proposedYaml: body.yaml,
+              files: [
+                {
+                  filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+                  diff: "- descriptions:\n+ descriptions:",
+                  proposedYaml: body.yaml
+                }
+              ]
+            }
+          })
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            written: true,
+            validation: { ok: true, exitCode: 0, stdout: "", stderr: "" },
+            changedFiles: []
+          }
+        })
+      );
+    }
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/validate" && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: { ok: true, exitCode: 0, stdout: "ok", stderr: "", issues: [] }
+        })
+      );
+    }
     if (url === "/api/joins/candidates" && init?.method === "PUT") {
       const body = JSON.parse(String(init.body));
       return new Response(
@@ -211,16 +251,78 @@ afterEach(() => {
 });
 
 describe("TableEditor", () => {
+  it("renders on the canonical /catalog table route and keeps /sources as a compat alias", async () => {
+    stubEditorFetch();
+    renderEditor("/catalog/mysql-aliyun/dataforai/superstore_orders");
+    expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
+
+    cleanup();
+    stubEditorFetch();
+    renderEditor("/sources/mysql-aliyun/dataforai/superstore_orders");
+    expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
+  });
+
+  it("focuses header actions on export, import, validate, and save while moving secondary links into more", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    const actions = await screen.findByTestId("page-header-actions");
+    expect(within(actions).getByRole("button", { name: "导出 YAML" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "导入 YAML" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "校验" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "保存" })).toBeInTheDocument();
+    expect(within(actions).queryByRole("link", { name: "业务 Wiki" })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole("link", { name: "关联关系" })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole("link", { name: "审阅" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(actions).getByTestId("row-more-trigger"));
+    const menu = await within(actions).findByTestId("row-more-menu");
+    expect(within(menu).getByTestId("table-editor-more-wiki")).toHaveTextContent("业务 Wiki");
+    expect(within(menu).getByTestId("table-editor-more-review")).toHaveTextContent("审阅");
+    expect(within(menu).getByTestId("table-editor-more-joins")).toHaveTextContent("关联关系");
+  });
+
   it("renders metadata grid and human description from source, not from AI", async () => {
     stubEditorFetch();
     renderEditor();
 
-    expect(await screen.findByText("维护表语义：superstore_orders")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
     // The human description populates the table description textarea; AI does not.
     const tableTextarea = await screen.findByDisplayValue("Aggregate order rows for revenue analytics");
     expect(tableTextarea).toBeInTheDocument();
     // AI table description should not silently fill the human textarea.
     expect(screen.queryByDisplayValue("AI-suggested table description")).not.toBeInTheDocument();
+  });
+
+  it("shows change summary first and keeps raw Diff collapsed", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    const tableTextarea = await screen.findByDisplayValue("Aggregate order rows for revenue analytics");
+    fireEvent.change(tableTextarea, { target: { value: "Updated order semantics" } });
+
+    const summary = await screen.findByTestId("change-summary");
+    expect(summary).toHaveTextContent("本次变更");
+    expect(summary).toHaveTextContent("表描述");
+    expect(summary).toHaveTextContent("修改 1");
+    const rawDiff = screen.getByTestId("raw-diff-disclosure");
+    expect(rawDiff).not.toHaveAttribute("open");
+  });
+
+  it("runs Validate from the header and shows the result in the inspector", async () => {
+    const fetchMock = stubEditorFetch();
+    renderEditor();
+
+    const actions = await screen.findByTestId("page-header-actions");
+    fireEvent.click(within(actions).getByRole("button", { name: "校验" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/sources/mysql-aliyun/dataforai/superstore_orders/validate",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    expect(await screen.findByTestId("table-editor-validation-result")).toHaveTextContent("通过");
   });
 
   it("renders stable metadata grid with truncation and copy button", async () => {
@@ -311,7 +413,7 @@ describe("TableEditor", () => {
     const fetchMock = stubEditorFetch();
     renderEditor();
 
-    await screen.findByText("维护表语义：superstore_orders");
+    await screen.findByRole("heading", { name: "superstore_orders" });
 
     await waitFor(() => {
       const dryRunCall = fetchMock.mock.calls.find(
@@ -346,7 +448,7 @@ describe("TableEditor", () => {
     expect(screen.getAllByText("Overlay").length).toBeGreaterThan(0);
   });
 
-  it("embeds candidate join banner with three action buttons", async () => {
+  it("folds candidate joins behind a pending suggestions disclosure with three action buttons", async () => {
     stubEditorFetch({
       candidates: [
         {
@@ -366,6 +468,9 @@ describe("TableEditor", () => {
     });
     renderEditor();
 
+    const disclosure = await screen.findByTestId("candidate-joins-disclosure");
+    expect(disclosure).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("待处理建议（1）"));
     expect(await screen.findByText(/发现 1 个智能推断的候选关联关系/)).toBeInTheDocument();
     expect(screen.getByText("rows")).toBeInTheDocument();
     expect(screen.getByText("superstore_orders.row_id = rows.row_id")).toBeInTheDocument();
@@ -395,6 +500,7 @@ describe("TableEditor", () => {
     });
     renderEditor();
 
+    fireEvent.click(await screen.findByText("待处理建议（1）"));
     expect(await screen.findByText(/发现 1 个智能推断的候选关联关系/)).toBeInTheDocument();
     expect(screen.queryByText("return_reasons")).not.toBeInTheDocument();
     expect(screen.queryByText("superstore_returns.reason_id = return_reasons.reason_id")).not.toBeInTheDocument();
@@ -420,7 +526,7 @@ describe("TableEditor", () => {
     });
     renderEditor();
 
-    expect(await screen.findByText("维护表语义：superstore_orders")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.queryByText(/发现 \d+ 个智能推断的候选关联关系/)).not.toBeInTheDocument();
     });
@@ -448,6 +554,7 @@ describe("TableEditor", () => {
     });
     renderEditor();
 
+    fireEvent.click(await screen.findByText("待处理建议（1）"));
     const rejectButton = await screen.findByRole("button", { name: "标记不采用" });
     fireEvent.click(rejectButton);
 
@@ -496,6 +603,7 @@ describe("TableEditor", () => {
     });
     renderEditor();
 
+    fireEvent.click(await screen.findByText("待处理建议（1）"));
     const confirmButton = await screen.findByRole("button", { name: "确认写入语义层" });
     fireEvent.click(confirmButton);
 
@@ -579,7 +687,7 @@ describe("TableEditor", () => {
     stubEditorFetch({ failPreview: true });
     renderEditor();
 
-    await screen.findByText("维护表语义：superstore_orders");
+    await screen.findByRole("heading", { name: "superstore_orders" });
     const form = document.getElementById("table-editor-form");
     expect(form).toBeTruthy();
 

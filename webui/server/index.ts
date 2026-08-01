@@ -30,7 +30,14 @@ import {
   type CatalogAssetValidateRequest
 } from "./catalog-assets";
 import type { TablePatch } from "./model";
-import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
+import {
+  listSources,
+  previewSourcePatch,
+  previewSourceYamlImport,
+  readSource,
+  writeSourcePatch,
+  writeSourceYamlImport
+} from "./semantic-layer";
 import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
 import { readHelpHandbook } from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
@@ -289,6 +296,48 @@ export function buildServer() {
     }
 
     const preview = await writeSourcePatch(projectRoot, conn, schema, table, request.body?.patch ?? {});
+    for (const file of preview.files) {
+      writtenFiles.push({ filePath: file.filePath });
+    }
+    changedSources.set(`${conn}/${schema}/${table}`, { conn, schema, table });
+    const validation = await validateSource(projectRoot, conn, schema, table);
+    const files = await changedFiles(projectRoot, writtenFiles);
+    return reply.send({
+      ok: true,
+      data: {
+        written: true,
+        validation,
+        changedFiles: files
+      }
+    });
+  });
+
+  app.post<{
+    Params: { conn: string; schema: string; table: string };
+    Body: { yaml?: string; dryRun?: boolean };
+  }>("/api/sources/:conn/:schema/:table/import", async (request, reply) => {
+    const dryRun = request.body?.dryRun !== false;
+    const yaml = request.body?.yaml;
+    if (typeof yaml !== "string" || !yaml.trim()) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "INVALID_IMPORT_YAML",
+          message: "Imported YAML must be a non-empty string"
+        }
+      });
+    }
+    const projectRoot = await resolveProjectRoot();
+    const { conn, schema, table } = request.params;
+    if (dryRun) {
+      const data = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
+      return reply.send({
+        ok: true,
+        data
+      });
+    }
+
+    const preview = await writeSourceYamlImport(projectRoot, conn, schema, table, yaml);
     for (const file of preview.files) {
       writtenFiles.push({ filePath: file.filePath });
     }

@@ -1,11 +1,12 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { isMap, parseDocument, Scalar, YAMLMap, YAMLSeq, type Document, type ParsedNode } from "yaml";
+import { isMap, parse, parseDocument, Scalar, YAMLMap, YAMLSeq, type Document, type ParsedNode } from "yaml";
 import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
 import type { AuthoredText, Column, Join, Measure, Segment, SourceSummary, TableModel, TablePatch } from "./model";
 import { previewOverlayUpdate } from "./overlay";
+import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -275,6 +276,83 @@ async function readOverlay(projectRoot: string, conn: string, table: string): Pr
   }
 }
 
+async function statOverlay(projectRoot: string, conn: string, table: string): Promise<Date | null> {
+  const absPath = path.join(projectRoot, "semantic-layer", conn, `${table}.yaml`);
+  try {
+    const s = await stat(absPath);
+    return s.mtime;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function sourceKey(conn: string, schema: string, table: string): string {
+  return `${conn}${schema}${table}`;
+}
+
+type AuthorizedCountInput = {
+  conn: string;
+  schema: string;
+  table: string;
+};
+
+/**
+ * Counts enabled Agents whose effective permissions include each source.
+ * Matches `connectionId === conn && schema === schema && sourceName === table`.
+ * Disabled Agents are skipped. Returns 0 for every source when access.yaml is
+ * missing, malformed, or any per-agent resolution fails — never throws.
+ */
+async function computeAuthorizedAgentCounts(
+  projectRoot: string,
+  sources: AuthorizedCountInput[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  for (const s of sources) {
+    counts.set(sourceKey(s.conn, s.schema, s.table), 0);
+  }
+  const accessPath = path.join(projectRoot, "webui", "config", "access.yaml");
+  let raw: string;
+  try {
+    raw = await readFile(accessPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return counts;
+    return counts;
+  }
+  let users: Array<{ id?: unknown; enabled?: unknown }> = [];
+  try {
+    const parsed = parse(raw);
+    if (parsed && typeof parsed === "object" && Array.isArray((parsed as { users?: unknown }).users)) {
+      users = (parsed as { users: Array<{ id?: unknown; enabled?: unknown }> }).users;
+    }
+  } catch {
+    return counts;
+  }
+  const enabledUsers = users.filter((u) => u && typeof u.id === "string" && u.enabled !== false);
+  const resolutions = await Promise.all(
+    enabledUsers.map(async (user) => {
+      try {
+        const resolved = await resolveEffectivePermissionsForAdmin(user.id as string);
+        if (!resolved.ok) return [];
+        return resolved.permissions.sources;
+      } catch {
+        return [];
+      }
+    })
+  );
+  for (const sources of resolutions) {
+    for (const source of sources) {
+      if (!source.connectionId) continue;
+      const key = sourceKey(source.connectionId, source.schema, source.sourceName);
+      if (!counts.has(key)) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 function modelFromTable(
   conn: string,
   schema: string,
@@ -309,40 +387,76 @@ function modelFromTable(
 }
 
 export async function listSources(projectRoot: string): Promise<SourceSummary[]> {
-  const summaries: SourceSummary[] = [];
+  type Pending = {
+    file: SchemaFile;
+    table: string;
+    tableValue: unknown;
+    tableNode: ParsedNode | null;
+    overlay: Record<string, unknown>;
+    overlayMtime: Date | null;
+  };
+
+  const pending: Pending[] = [];
+  const authorizedInputs: AuthorizedCountInput[] = [];
+
   for (const file of await listSchemaFiles(projectRoot)) {
     const { doc } = await readYamlDocument(projectRoot, file.relPath);
     const root = valueAsRecord(doc.toJSON());
     const tables = valueAsRecord(root.tables);
 
     for (const [table, tableValue] of Object.entries(tables)) {
-      const overlay = await readOverlay(projectRoot, file.conn, table);
-      const model = modelFromTable(
-        file.conn,
-        file.schema,
+      const overlayMtime = await statOverlay(projectRoot, file.conn, table);
+      const overlay = overlayMtime ? await readOverlay(projectRoot, file.conn, table) : {};
+      pending.push({
+        file,
         table,
-        file.relPath,
         tableValue,
-        tableNodeFromDocument(doc, table),
-        overlay
-      );
-      summaries.push({
-        conn: file.conn,
-        schema: file.schema,
-        table,
-        filePath: file.relPath,
-        columnCount: model.columns.length,
-        columnNames: model.columns.map((column) => column.name),
-        hasTableDesc: hasDescription(model.descriptions),
-        hasGrain: Boolean(model.grain?.length),
-        measureCount: model.measures?.length ?? 0,
-        joinCount: model.joins?.length ?? 0,
-        wikiRefCount: 0,
-        completion: computeCompletion(model),
-        mtime: file.mtime.toISOString()
+        tableNode: tableNodeFromDocument(doc, table),
+        overlay,
+        overlayMtime
       });
+      authorizedInputs.push({ conn: file.conn, schema: file.schema, table });
     }
   }
+
+  const authorizedCounts = await computeAuthorizedAgentCounts(projectRoot, authorizedInputs);
+
+  const summaries: SourceSummary[] = pending.map((entry) => {
+    const manifestMtime = entry.file.mtime;
+    const overlayMtime = entry.overlayMtime;
+    const useOverlay = overlayMtime !== null && overlayMtime.getTime() > manifestMtime.getTime();
+    const semanticUpdatedAt = (useOverlay ? overlayMtime : manifestMtime)!.toISOString();
+    const semanticUpdatedAtSource: SourceSummary["semanticUpdatedAtSource"] = useOverlay ? "overlay" : "manifest";
+
+    const model = modelFromTable(
+      entry.file.conn,
+      entry.file.schema,
+      entry.table,
+      entry.file.relPath,
+      entry.tableValue,
+      entry.tableNode,
+      entry.overlay
+    );
+
+    return {
+      conn: entry.file.conn,
+      schema: entry.file.schema,
+      table: entry.table,
+      filePath: entry.file.relPath,
+      columnCount: model.columns.length,
+      columnNames: model.columns.map((column) => column.name),
+      hasTableDesc: hasDescription(model.descriptions),
+      hasGrain: Boolean(model.grain?.length),
+      measureCount: model.measures?.length ?? 0,
+      joinCount: model.joins?.length ?? 0,
+      wikiRefCount: 0,
+      completion: computeCompletion(model),
+      mtime: manifestMtime.toISOString(),
+      authorizedAgentCount: authorizedCounts.get(sourceKey(entry.file.conn, entry.file.schema, entry.table)) ?? 0,
+      semanticUpdatedAt,
+      semanticUpdatedAtSource
+    };
+  });
 
   return summaries.sort((a, b) => `${a.conn}/${a.schema}/${a.table}`.localeCompare(`${b.conn}/${b.schema}/${b.table}`));
 }
@@ -491,6 +605,69 @@ export async function writeSourcePatch(
   patch: TablePatch
 ): Promise<SourcePreview> {
   const preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
+  for (const file of preview.files) {
+    await safeWrite(projectRoot, file.filePath, file.proposedYaml);
+  }
+  return preview;
+}
+
+function importedTableValue(importedYaml: string, table: string): unknown {
+  const doc = parseYaml(importedYaml, "imported table YAML");
+  const json = doc.toJSON();
+  const root = valueAsRecord(json);
+  if (root.tables && typeof root.tables === "object" && !Array.isArray(root.tables)) {
+    const value = valueAsRecord(root.tables)[table];
+    if (!value) {
+      throw new SourceNotFoundError(`Imported YAML does not contain table ${table}`);
+    }
+    return value;
+  }
+  if ("table" in root || "descriptions" in root || "columns" in root || "grain" in root) {
+    return root;
+  }
+  throw new YamlParseError("Imported YAML must be a table YAML snippet or a schema YAML with tables");
+}
+
+export async function previewSourceYamlImport(
+  projectRoot: string,
+  conn: string,
+  schema: string,
+  table: string,
+  yaml: string
+): Promise<SourcePreview> {
+  assertSafeSegment(table, "table");
+  const relPath = schemaRelPath(conn, schema);
+  const { doc, text } = await readYamlDocument(projectRoot, relPath);
+  if (!valueAsRecord(valueAsRecord(doc.toJSON()).tables)[table]) {
+    throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
+  }
+
+  doc.setIn(["tables", table], doc.createNode(importedTableValue(yaml, table)));
+  const proposedYaml = serialize(doc);
+  const diff = previewDiff(text, proposedYaml, relPath);
+  return {
+    diff,
+    proposedYaml,
+    files: diff
+      ? [
+          {
+            filePath: relPath,
+            diff,
+            proposedYaml
+          }
+        ]
+      : []
+  };
+}
+
+export async function writeSourceYamlImport(
+  projectRoot: string,
+  conn: string,
+  schema: string,
+  table: string,
+  yaml: string
+): Promise<SourcePreview> {
+  const preview = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
   for (const file of preview.files) {
     await safeWrite(projectRoot, file.filePath, file.proposedYaml);
   }

@@ -30,6 +30,7 @@ GET  /api/sources
 GET  /api/sources/:conn/:schema/:table
 PUT  /api/sources/:conn/:schema/:table         # body.dryRun 控制预览/落盘
 POST /api/sources/:conn/:schema/:table/validate
+POST /api/sources/:conn/:schema/:table/import
 
 GET  /api/wiki
 GET  /api/wiki/:key
@@ -158,9 +159,17 @@ POST /mcp                                      # MCP proxy, port 7879
   "filePath": "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
   "columnCount": 8, "hasTableDesc": true, "hasGrain": false,
   "measureCount": 0, "joinCount": 2, "wikiRefCount": 0,
-  "completion": "partial", "mtime": "2026-06-15T08:00:00Z"
+  "completion": "partial", "mtime": "2026-06-15T08:00:00Z",
+  "authorizedAgentCount": 3,
+  "semanticUpdatedAt": "2026-07-01T10:30:00Z",
+  "semanticUpdatedAtSource": "overlay"
 }]}}
 ```
+
+- `mtime`：该表所在 Schema Manifest 文件的文件修改时间，保留兼容；不要在 UI 中直接命名为“最近更新”。
+- `authorizedAgentCount`：启用 Agent 中，有效权限包含当前 Source 的 Agent 数量。禁用 Agent 不计入，只返回数量。
+- `semanticUpdatedAt`：该表语义资产更新时间，取 Schema Manifest 与表级 semantic overlay 文件修改时间中的较晚者；overlay 不存在时取 Schema Manifest。
+- `semanticUpdatedAtSource`：`semanticUpdatedAt` 的来源，取值为 `manifest` 或 `overlay`。
 
 ### `GET /api/sources/:conn/:schema/:table`
 ```jsonc
@@ -180,6 +189,26 @@ POST /mcp                                      # MCP proxy, port 7879
 - `dryRun:false` → 经 `fs-safe` 写回，自动 validate，返回 `{ written:true, validation, changedFiles }`。
 
 非法路径 → `403 FORBIDDEN_PATH`；YAML 解析失败 → `422 YAML_PARSE_ERROR`。
+
+### `POST /api/sources/:conn/:schema/:table/import`
+导入当前表的 YAML 片段，供表语义资产工作台的 `导入 YAML -> dry-run -> 保存` 主链路使用。
+
+请求：
+```jsonc
+{ "yaml": "table: dataforai.superstore_orders\n...", "dryRun": true }
+```
+
+- `yaml` 可以是单表 YAML 片段，也可以是包含 `tables.<table>` 的 Schema YAML。
+- `dryRun:true`（默认）→ 不落盘，返回 `{ diff, proposedYaml, files }`；
+- `dryRun:false` → 只替换当前 `{conn}/{schema}/{table}` 对应的 Schema Manifest 节点，经 `fs-safe` 写回并自动 validate，返回 `{ written:true, validation, changedFiles }`。
+
+约束：
+
+- 该接口只处理当前表在 Schema Manifest 中的节点；不导入、不覆盖其他表。
+- `grain` / `measures` / `segments` 等表级 semantic overlay 完整导入仍走后续专用契约；当前接口不得猜测 overlay 归属。
+- 空 YAML → `400 INVALID_IMPORT_YAML`。
+- 导入 YAML 不包含当前表 → `404 SOURCE_NOT_FOUND`。
+- YAML 解析失败 → `422 YAML_PARSE_ERROR`。
 
 ### `POST /api/sources/:conn/:schema/:table/validate`
 ```jsonc

@@ -122,6 +122,7 @@ describe("AppFrame shell", () => {
     ["/connections", "ConnectionOverview", "连接概览"],
     ["/connections/whitelist", "TableWhitelist", "启用表范围"],
     ["/", "Catalog", "表目录"],
+    ["/catalog", "Catalog", "表目录"],
     ["/wiki", "WikiEditor", "业务 Wiki"],
     ["/publish/workbench", "PublishWorkbench", "发布工作台"],
     ["/publish/history", "PublishHistory", "发布记录"],
@@ -180,10 +181,12 @@ describe("AppFrame shell", () => {
     expect(lastOnboardingLocation?.hash).toBe("#section-1");
   });
 
-  it("keeps / on the catalog route and marks 表目录 active", () => {
+  it("redirects / to the canonical /catalog route and marks 表目录 active", () => {
     renderAt("/");
     expect(screen.getByTestId("route-page")).toHaveTextContent("Catalog");
-    expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
+    const catalogLink = screen.getByRole("link", { name: "表目录" });
+    expect(catalogLink).toHaveAttribute("href", "/catalog");
+    expect(catalogLink).toHaveAttribute("aria-current", "page");
   });
 
   it("exposes each 5+1 navigation group heading exactly once", () => {
@@ -300,6 +303,11 @@ describe("AppFrame shell", () => {
 
   it("marks source and join pages as table catalog navigation", () => {
     renderAt("/sources/mysql-aliyun/dataforai/superstore_orders");
+    expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
+
+    cleanup();
+    renderAt("/catalog/mysql-aliyun/dataforai/superstore_orders");
     expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
   });

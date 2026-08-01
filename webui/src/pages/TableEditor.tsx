@@ -9,7 +9,8 @@ import { SegmentForm } from "../components/SegmentForm";
 import { StatusBadge } from "../components/StatusBadge";
 import { YamlPreview } from "../components/YamlPreview";
 import { PageHeader } from "../components/PageHeader";
-import { apiGet, apiPut } from "../lib/apiClient";
+import { RowMoreMenu } from "../components/RowMoreMenu";
+import { apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
 import type {
@@ -21,7 +22,8 @@ import type {
   SourceSaveResponse,
   SourceSummary,
   SourcesResponse,
-  TablePatch
+  TablePatch,
+  ValidationResult
 } from "../lib/types";
 import {
   RELATIONSHIP_LABELS,
@@ -57,6 +59,15 @@ const editorSchema = z.object({
 type EditorForm = z.infer<typeof editorSchema>;
 type EditorSection = "overview" | "columns" | "measures" | "segments" | "joins";
 type InspectorTab = "diff" | "yaml" | "validate";
+type ChangeSummaryRow = {
+  section: string;
+  added: number;
+  modified: number;
+  removed: number;
+};
+type SaveInput =
+  | { kind: "patch"; patch: TablePatch }
+  | { kind: "import"; yaml: string };
 
 /**
  * Initialise the editable form from the source detail.
@@ -138,6 +149,72 @@ const SECTION_LABELS: Record<EditorSection, string> = {
 
 function countLabel(count: number, unit: string) {
   return `${count} ${unit}`;
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(value ?? null);
+}
+
+function compareNamedItems(
+  current: Array<{ name: string }> | undefined,
+  next: Array<{ name: string }> | undefined
+): Pick<ChangeSummaryRow, "added" | "modified" | "removed"> {
+  const currentByName = new Map((current ?? []).map((item) => [item.name, stableJson(item)]));
+  const nextByName = new Map((next ?? []).map((item) => [item.name, stableJson(item)]));
+  let added = 0;
+  let modified = 0;
+  let removed = 0;
+  for (const [name, value] of nextByName) {
+    if (!currentByName.has(name)) added += 1;
+    else if (currentByName.get(name) !== value) modified += 1;
+  }
+  for (const name of currentByName.keys()) {
+    if (!nextByName.has(name)) removed += 1;
+  }
+  return { added, modified, removed };
+}
+
+function buildChangeSummary({
+  form,
+  importedYamlName,
+  source
+}: {
+  form: EditorForm;
+  importedYamlName: string | null;
+  source: SourceDetail;
+}): ChangeSummaryRow[] {
+  if (importedYamlName) {
+    return [
+      {
+        section: "导入 YAML",
+        added: 0,
+        modified: 1,
+        removed: 0
+      }
+    ];
+  }
+
+  const rows: ChangeSummaryRow[] = [];
+  if (form.tableDescription !== (source.model.descriptions.human ?? "")) {
+    rows.push({ section: "表描述", added: source.model.descriptions.human ? 0 : 1, modified: source.model.descriptions.human ? 1 : 0, removed: 0 });
+  }
+  if (form.grain !== (source.model.grain?.join(", ") ?? "")) {
+    rows.push({ section: "行粒度", added: source.model.grain?.length ? 0 : 1, modified: source.model.grain?.length ? 1 : 0, removed: form.grain.trim() ? 0 : 1 });
+  }
+  const sourceColumns = new Map(source.model.columns.map((column) => [column.name, column.descriptions.human ?? ""]));
+  const modifiedColumns = form.columns.filter((column) => column.description !== (sourceColumns.get(column.name) ?? "")).length;
+  if (modifiedColumns > 0) {
+    rows.push({ section: "字段描述", added: 0, modified: modifiedColumns, removed: 0 });
+  }
+  const measures = compareNamedItems(source.model.measures, form.measures);
+  if (measures.added || measures.modified || measures.removed) {
+    rows.push({ section: "Measures", ...measures });
+  }
+  const segments = compareNamedItems(source.model.segments, form.segments);
+  if (segments.added || segments.modified || segments.removed) {
+    rows.push({ section: "Segments", ...segments });
+  }
+  return rows;
 }
 
 function overlayPathFor(source: SourceDetail): string {
@@ -330,6 +407,36 @@ function CandidateJoinBanner({
   );
 }
 
+function CandidateJoinDisclosure({
+  candidates,
+  onKeep,
+  onReject,
+  onConfirm
+}: {
+  candidates: JoinCandidate[];
+  onKeep: (candidate: JoinCandidate) => void;
+  onReject: (candidate: JoinCandidate) => void;
+  onConfirm: (candidate: JoinCandidate) => void;
+}) {
+  if (candidates.length === 0) {
+    return null;
+  }
+  return (
+    <details className="pl-workbench-disclosure" data-testid="candidate-joins-disclosure">
+      <summary className="pl-workbench-disclosure-summary">
+        <span>待处理建议（{candidates.length}）</span>
+        <small>智能推断的候选关联关系</small>
+      </summary>
+      <CandidateJoinBanner
+        candidates={candidates}
+        onConfirm={onConfirm}
+        onKeep={onKeep}
+        onReject={onReject}
+      />
+    </details>
+  );
+}
+
 function SourceObjectTree({
   activeSection,
   currentTable,
@@ -354,22 +461,27 @@ function SourceObjectTree({
   ];
 
   return (
-    <aside className="pl-object-tree">
-      <Link className="pl-btn pl-btn--ghost justify-start" to="/">表目录</Link>
+    <aside className="pl-object-tree pl-object-tree--secondary">
+      <Link className="pl-btn pl-btn--ghost justify-start" to="/catalog">表目录</Link>
       <div className="pl-object-tree-group">
-        <h2 className="pl-object-tree-title notranslate" translate="no">{schema || "Schema"}</h2>
-        <nav className="grid gap-1 notranslate" aria-label="同 Schema 表" translate="no">
-          {siblingTables.map((item) => (
-            <Link
-              aria-current={item.table === currentTable ? "page" : undefined}
-              className={`pl-nav-link ${item.table === currentTable ? "pl-nav-link--active" : ""}`}
-              key={item.table}
-              to={`/sources/${encodeURIComponent(item.conn)}/${encodeURIComponent(item.schema)}/${encodeURIComponent(item.table)}`}
-            >
-              <span className="truncate">{item.table}</span>
-            </Link>
-          ))}
-        </nav>
+        <details className="pl-secondary-disclosure">
+          <summary className="pl-secondary-disclosure-summary">
+            <span>目录导航</span>
+            <small className="notranslate" translate="no">{schema || "Schema"}</small>
+          </summary>
+          <nav className="grid gap-1 notranslate" aria-label="同 Schema 表" translate="no">
+            {siblingTables.map((item) => (
+              <Link
+                aria-current={item.table === currentTable ? "page" : undefined}
+                className={`pl-nav-link ${item.table === currentTable ? "pl-nav-link--active" : ""}`}
+                key={item.table}
+                to={`/catalog/${encodeURIComponent(item.conn)}/${encodeURIComponent(item.schema)}/${encodeURIComponent(item.table)}`}
+              >
+                <span className="truncate">{item.table}</span>
+              </Link>
+            ))}
+          </nav>
+        </details>
       </div>
 
       <div className="pl-object-tree-group">
@@ -403,17 +515,23 @@ type InspectorBadges = {
 
 function Inspector({
   activeTab,
+  changeSummary,
   preview,
   previewError,
   saveError,
   source,
+  validation,
+  validationError,
   onTabChange
 }: {
   activeTab: InspectorTab;
+  changeSummary: ChangeSummaryRow[];
   preview: SourcePreview | null;
   previewError: string | null;
   saveError: string | null;
   source: SourceDetail;
+  validation: ValidationResult | null;
+  validationError: string | null;
   onTabChange: (tab: InspectorTab) => void;
 }) {
   const unknownKeys = source.model.unknownKeys?.length ?? 0;
@@ -447,11 +565,19 @@ function Inspector({
 
       {previewError ? <p className="pl-error">{previewError}</p> : null}
       {saveError ? <p className="pl-error">{saveError}</p> : null}
+      {validationError ? <p className="pl-error">{validationError}</p> : null}
 
       {activeTab === "diff" ? (
         <section className="pl-inspector-section">
           <p className="pl-panel-title">变更预览</p>
-          <DiffViewer diff={preview?.diff ?? ""} />
+          <ChangeSummary rows={changeSummary} files={preview?.files ?? []} />
+          <details className="pl-workbench-disclosure" data-testid="raw-diff-disclosure">
+            <summary className="pl-workbench-disclosure-summary">
+              <span>高级：查看原始 Diff</span>
+              <small>{preview?.diff ? "可展开核对完整 YAML 差异" : "暂无 Diff"}</small>
+            </summary>
+            <DiffViewer diff={preview?.diff ?? ""} />
+          </details>
         </section>
       ) : null}
       {activeTab === "yaml" ? (
@@ -472,9 +598,60 @@ function Inspector({
               Dry-run 包含 {fileCount} 个文件，未知 YAML Key {unknownKeys} 个。
             </p>
           )}
+          {validation ? (
+            <div className="pl-validation-summary" data-testid="table-editor-validation-result">
+              <div>
+                <span>Validate 状态</span>
+                <strong>{validation.ok ? "通过" : "未通过"}</strong>
+              </div>
+              <div>
+                <span>Exit Code</span>
+                <strong>{validation.exitCode}</strong>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </aside>
+  );
+}
+
+function ChangeSummary({
+  rows,
+  files
+}: {
+  rows: ChangeSummaryRow[];
+  files: SourcePreview["files"];
+}) {
+  return (
+    <section className="pl-change-summary" data-testid="change-summary">
+      <div className="pl-change-summary-header">
+        <strong>本次变更</strong>
+        <span>{files.length} 个影响文件</span>
+      </div>
+      {rows.length > 0 ? (
+        <ul className="pl-change-summary-list">
+          {rows.map((row) => (
+            <li key={row.section}>
+              <span>{row.section}</span>
+              <strong>{`新增 ${row.added} / 修改 ${row.modified} / 删除 ${row.removed}`}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="pl-notice">暂无业务语义变更。</p>
+      )}
+      {files.length > 0 ? (
+        <div className="pl-change-summary-files">
+          <span>影响文件</span>
+          <ul>
+            {files.map((file) => (
+              <li key={file.filePath} className="notranslate" translate="no">{file.filePath}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -539,6 +716,11 @@ export function TableEditor() {
   const [preview, setPreview] = useState<SourcePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [importedYaml, setImportedYaml] = useState<string | null>(null);
+  const [importedYamlName, setImportedYamlName] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const sidecarCandidates = candidatesQuery.data?.candidates ?? [];
   const visibleCandidates = useMemo(
@@ -551,11 +733,19 @@ export function TableEditor() {
   );
 
   const saveMutation = useMutation({
-    mutationFn: (patch: TablePatch) =>
-      apiPut<SourceSaveResponse>(`/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, {
+    mutationFn: (input: SaveInput) => {
+      const url = `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`;
+      if (input.kind === "import") {
+        return apiPost<SourceSaveResponse>(`${url}/import`, {
+          dryRun: false,
+          yaml: input.yaml
+        });
+      }
+      return apiPut<SourceSaveResponse>(url, {
         dryRun: false,
-        patch
-      }),
+        patch: input.patch
+      });
+    },
     onMutate: () => {
       setSaveError(null);
     },
@@ -634,6 +824,52 @@ export function TableEditor() {
     [conn, schema, source, table]
   );
 
+  const runImportPreview = useCallback(
+    async (yaml: string): Promise<SourcePreview | null> => {
+      if (!source) {
+        return null;
+      }
+      try {
+        const data = await apiPost<SourcePreview>(
+          `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/import`,
+          {
+            dryRun: true,
+            yaml
+          }
+        );
+        setPreview(data);
+        setPreviewError(null);
+        setInspectorTab("diff");
+        return data;
+      } catch (caught: unknown) {
+        setPreview(null);
+        setPreviewError(caught instanceof Error ? caught.message : "导入预览失败");
+        setInspectorTab("validate");
+        return null;
+      }
+    },
+    [conn, schema, source, table]
+  );
+
+  const runValidate = useCallback(async (): Promise<boolean> => {
+    if (!source) {
+      return false;
+    }
+    try {
+      const data = await apiPost<ValidationResult>(
+        `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/validate`,
+        {}
+      );
+      setValidation(data);
+      setValidationError(null);
+      return data.ok;
+    } catch (caught: unknown) {
+      setValidation(null);
+      setValidationError(caught instanceof Error ? caught.message : "Validate 失败");
+      return false;
+    }
+  }, [conn, schema, source, table]);
+
   const parsedValues = useMemo(() => editorSchema.safeParse(form), [form]);
 
   const columnsByName = useMemo(() => {
@@ -697,18 +933,22 @@ export function TableEditor() {
       setPreview(null);
       setPreviewError(null);
       setSaveError(null);
+      setValidation(null);
+      setValidationError(null);
+      setImportedYaml(null);
+      setImportedYamlName(null);
     }
   }, [source]);
 
   useEffect(() => {
-    if (!source || !parsedValues.success) {
+    if (!source || !parsedValues.success || importedYaml) {
       return;
     }
     const timeout = window.setTimeout(() => {
       void runPreview(form);
     }, 350);
     return () => window.clearTimeout(timeout);
-  }, [form, parsedValues.success, runPreview, source]);
+  }, [form, importedYaml, parsedValues.success, runPreview, source]);
 
   function adoptAiDescription(columnName: string) {
     const sourceColumn = source?.model.columns.find((column) => column.name === columnName);
@@ -747,6 +987,78 @@ export function TableEditor() {
     }
   }
 
+  function handleExportYaml() {
+    if (!source) {
+      return;
+    }
+    const blob = new Blob([source.rawYaml], { type: "text/yaml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${source.model.conn}-${source.model.schema}-${source.model.table}.yaml`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleOpenImportPicker() {
+    importInputRef.current?.click();
+  }
+
+  async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    try {
+      const yaml = await file.text();
+      setImportedYaml(yaml);
+      setImportedYamlName(file.name);
+      const previewResult = await runImportPreview(yaml);
+      if (previewResult) {
+        toast.success("已导入 YAML 并生成变更预览");
+      } else {
+        setImportedYaml(null);
+        setImportedYamlName(null);
+        toast.error("导入预览失败");
+      }
+    } catch (caught: unknown) {
+      const message = `导入失败：${caught instanceof Error ? caught.message : "未知错误"}`;
+      setImportedYaml(null);
+      setImportedYamlName(null);
+      setPreviewError(message);
+      setInspectorTab("validate");
+      toast.error(message);
+    }
+  }
+
+  function handleValidateCurrent() {
+    const action = importedYaml
+      ? runImportPreview(importedYaml)
+      : runPreview(form);
+    void Promise.resolve(action).then(async (previewOk) => {
+      const validateOk = await runValidate();
+      setInspectorTab("validate");
+      if (previewOk && validateOk) {
+        toast.success("Validate 通过");
+      } else {
+        toast.error("Validate 未通过");
+      }
+    });
+  }
+
+  function handleSubmit() {
+    if (importedYaml) {
+      saveMutation.mutate({ kind: "import", yaml: importedYaml });
+      return;
+    }
+    if (source) {
+      saveMutation.mutate({ kind: "patch", patch: patchFromForm(form, source) });
+    }
+  }
+
   function handleSaveShortcut(event: React.KeyboardEvent<HTMLDivElement>) {
     if (!(event.metaKey || event.ctrlKey)) {
       return;
@@ -755,7 +1067,10 @@ export function TableEditor() {
       return;
     }
     event.preventDefault();
-    void runPreview(form).then((ok) => {
+    const action = importedYaml
+      ? runImportPreview(importedYaml)
+      : runPreview(form);
+    void Promise.resolve(action).then((ok) => {
       setInspectorTab("diff");
       if (ok) {
         toast.success("已更新 Dry-run 预览");
@@ -801,23 +1116,26 @@ export function TableEditor() {
 
   const qualifiedName = source?.model.qualifiedName ?? (source ? `${source.model.schema}.${source.model.table}` : "");
   const grainLabel = source?.model.grain?.join(", ") || "无";
+  const changeSummary = source
+    ? buildChangeSummary({ form, importedYamlName, source })
+    : [];
 
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title={source ? `维护表语义：${source.model.table}` : "维护表语义"}
+        title={source ? source.model.table : "表语义资产工作台"}
         breadcrumbs={[
-          "语义建模",
+          "表目录",
           source?.model.conn ?? conn,
           source?.model.schema ?? schema,
           source?.model.table ?? table
         ]}
-        description={<span className="notranslate" translate="no">维护 semantic-layer 的结构化语义，包括表描述、行粒度、字段描述、指标和分群。</span>}
+        description={<span className="notranslate" translate="no">导出、导入、校验并审阅当前表的 semantic-layer YAML。</span>}
         badges={
           source ? (
             <>
-              <span data-testid="table-editor-conn">{source.model.conn}</span>
-              <span>{source.model.schema}</span>
+              <span className="notranslate" translate="no" data-testid="table-editor-conn">{source.model.conn}</span>
+              <span className="notranslate" translate="no">{source.model.schema}</span>
               <span>完成度 {source.completion}</span>
             </>
           ) : null
@@ -825,24 +1143,49 @@ export function TableEditor() {
         actions={
           source ? (
             <>
-              <Link
-                aria-label={`打开或创建 ${source.model.table} 的业务 Wiki`}
-                className="pl-btn pl-btn--ghost"
-                title={`打开或创建 ${source.model.conn}/${source.model.schema}/${source.model.table} 的业务 Wiki`}
-                to={`/wiki?sl_ref=${encodeURIComponent(`${source.model.conn}/${source.model.schema}/${source.model.table}`)}`}
-              >
-                业务 Wiki
-              </Link>
-              <Link
-                className="pl-btn pl-btn--ghost"
-                to={`/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`}
-              >
-                关联关系
-              </Link>
-              <Link className="pl-btn pl-btn--ghost" to="/review">审阅</Link>
+              <button className="pl-btn pl-btn--secondary" type="button" onClick={handleExportYaml}>
+                导出 YAML
+              </button>
+              <button className="pl-btn pl-btn--secondary" type="button" onClick={handleOpenImportPicker}>
+                导入 YAML
+              </button>
+              <button className="pl-btn pl-btn--ghost" type="button" onClick={handleValidateCurrent}>
+                校验
+              </button>
               <button className="pl-btn pl-btn--primary" disabled={saveMutation.isPending} form="table-editor-form" type="submit">
                 {saveMutation.isPending ? "保存中..." : "保存"}
               </button>
+              <RowMoreMenu
+                ariaLabel={`更多操作：${source.model.conn}/${source.model.schema}/${source.model.table}`}
+                items={[
+                  {
+                    kind: "link",
+                    label: "业务 Wiki",
+                    href: `/wiki?sl_ref=${encodeURIComponent(`${source.model.conn}/${source.model.schema}/${source.model.table}`)}`,
+                    testId: "table-editor-more-wiki"
+                  },
+                  {
+                    kind: "link",
+                    label: "审阅",
+                    href: "/review",
+                    testId: "table-editor-more-review"
+                  },
+                  {
+                    kind: "link",
+                    label: "关联关系",
+                    href: `/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`,
+                    testId: "table-editor-more-joins"
+                  }
+                ]}
+              />
+              <input
+                ref={importInputRef}
+                type="file"
+                className="sr-only"
+                accept=".yaml,.yml,text/yaml,text/plain"
+                onChange={handleImportFile}
+                data-testid="table-editor-import-input"
+              />
             </>
           ) : null
         }
@@ -874,10 +1217,33 @@ export function TableEditor() {
               id="table-editor-form"
               onSubmit={(event) => {
                 event.preventDefault();
-                saveMutation.mutate(patchFromForm(form, source));
+                handleSubmit();
               }}
             >
-              <CandidateJoinBanner
+              <section className="pl-panel pl-asset-exchange" data-testid="semantic-asset-exchange">
+                <div className="pl-asset-exchange-copy">
+                  <p className="pl-panel-title">语义资产交换</p>
+                  <p className="pl-notice notranslate" translate="no">
+                    主流程：导出 YAML，交给 Claude Code / Codex 完善，再导入当前表 YAML 进行 dry-run 校验。
+                  </p>
+                </div>
+                <dl className="pl-asset-exchange-facts">
+                  <div>
+                    <dt>当前表</dt>
+                    <dd className="notranslate" translate="no">{`${source.model.conn}/${source.model.schema}/${source.model.table}`}</dd>
+                  </div>
+                  <div>
+                    <dt>导入文件</dt>
+                    <dd className="notranslate" translate="no">{importedYamlName ?? "未导入"}</dd>
+                  </div>
+                  <div>
+                    <dt>影响文件</dt>
+                    <dd>{preview?.files.length ?? 0}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <CandidateJoinDisclosure
                 candidates={visibleCandidates}
                 onConfirm={handleConfirmCandidate}
                 onKeep={handleKeepCandidate}
@@ -1020,11 +1386,14 @@ export function TableEditor() {
       {source ? (
         <Inspector
           activeTab={inspectorTab}
+          changeSummary={changeSummary}
           onTabChange={setInspectorTab}
           preview={preview}
           previewError={previewError}
           saveError={saveError}
           source={source}
+          validation={validation}
+          validationError={validationError}
         />
       ) : null}
       </section>
