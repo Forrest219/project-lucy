@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type { EvalCase, EvalRun, EvalDomainInfo } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 
@@ -100,7 +101,7 @@ export function RunList() {
         breadcrumbs={["质量评测", "运行历史"]}
         description="查看 eval run 历史，触发新 run，查看结果详情。"
         badges={
-          <span>{runs.length} / {data?.total ?? 0} 条</span>
+          <span>{runs.length} / {runsData?.total ?? 0} 条</span>
         }
         actions={
           <button
@@ -224,7 +225,21 @@ export function RunList() {
                   className="border-b border-border hover:bg-bg-muted/50 cursor-pointer"
                   onClick={() => navigate(`/eval/runs/${run.id}`)}
                 >
-                  <td className="px-3 py-2 font-mono text-xs">#{run.id}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    <div className="flex items-center gap-2">
+                      <span>#{run.id}</span>
+                      <a
+                        href={buildObjectDetailSearch({ kind: "evalRun", runId: run.id })}
+                        className="pl-inline-link notranslate"
+                        translate="no"
+                        aria-label={`查看 Run #${run.id} 的对象详情`}
+                        data-testid={`run-row-detail-${run.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        查看详情
+                      </a>
+                    </div>
+                  </td>
                   <td className="px-3 py-2">{run.domain}</td>
                   <td className="px-3 py-2">
                     <span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>

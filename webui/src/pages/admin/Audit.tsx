@@ -1,12 +1,46 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type { AuditLogEntry, AuditResponse, AuditSourcesResponse } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
+
+/**
+ * localStorage key for the Audit page's last-used filter snapshot. We
+ * persist only the "non-shareable" filter values (the most-recent tab and
+ * the last non-empty filter values) so users can come back to the page
+ * and see what they were investigating, but URL params still drive the
+ * shareable surface.
+ */
+const AUDIT_FILTER_STORAGE_KEY = "lucy:webui:audit:filters:v1";
+const FILTER_PERSIST_FIELDS = ["tab", "user", "tool", "outcome", "tableSearch", "sessionId", "turnId", "platform"] as const;
+type FilterSnapshot = Partial<Record<(typeof FILTER_PERSIST_FIELDS)[number], string>>;
+
+function readFilterSnapshot(): FilterSnapshot {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(AUDIT_FILTER_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as FilterSnapshot;
+  } catch {
+    return {};
+  }
+}
+
+function writeFilterSnapshot(snapshot: FilterSnapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(AUDIT_FILTER_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // localStorage may be disabled (e.g. private mode); fall back to URL-only.
+  }
+}
 const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
 const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
 
@@ -114,12 +148,46 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
         <td className="px-3 py-2">
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
-        <td className="px-3 py-2 text-xs text-fg-muted">{entry.durationMs}ms</td>
+        <td className="px-3 py-2 text-xs text-fg-muted">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{entry.durationMs}ms</span>
+            <Link
+              to={buildObjectDetailSearch({ kind: "auditEvent", eventId: entry.id })}
+              state={{ initialAuditEntry: entry }}
+              className="pl-inline-link notranslate"
+              translate="no"
+              aria-label={`查看审计事件 #${entry.id} 的对象详情`}
+              data-testid={`audit-row-detail-${entry.id}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              查看详情
+            </Link>
+          </div>
+        </td>
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
           <td colSpan={7} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-grid">
+              <div>
+                <span className="font-medium">关联 Agent：</span>
+                <span className="ml-2 inline-flex flex-wrap items-center gap-2">
+                  <Link
+                    to={buildObjectDetailSearch({ kind: "agent", agentId: entry.userId })}
+                    className="pl-inline-link notranslate"
+                    translate="no"
+                    aria-label={`查看 Agent ${entry.userId} 的对象详情`}
+                    data-testid={`audit-related-agent-${entry.id}`}
+                  >
+                    查看 Agent 详情
+                  </Link>
+                  {entry.userId ? (
+                    <span className="font-mono text-fg-muted notranslate" translate="no">
+                      ({entry.userId})
+                    </span>
+                  ) : null}
+                </span>
+              </div>
               {(entry.tokenLabel || entry.tokenHashPrefix) && (
                 <div>
                   <span className="font-medium">Token：</span>
@@ -214,6 +282,7 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
 export function Audit() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
+  const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
 
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
@@ -224,6 +293,31 @@ export function Audit() {
   const platform = searchParams.get("platform") ?? "";
   const includeProtocol = searchParams.get("includeProtocol") === "true";
   const tab: "log" | "heatmap" = searchParams.get("tab") === "heatmap" ? "heatmap" : "log";
+
+  // M36: hydrate the last-used tab + filter values from localStorage so the
+  // user comes back to the same investigation context. URL params still
+  // win when present (so a shared link overrides the local cache).
+  useEffect(() => {
+    if (hasHydratedFromStorage) return;
+    if (searchParams.toString().length > 0) {
+      setHasHydratedFromStorage(true);
+      return;
+    }
+    const snapshot = readFilterSnapshot();
+    if (Object.keys(snapshot).length === 0) {
+      setHasHydratedFromStorage(true);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    for (const field of FILTER_PERSIST_FIELDS) {
+      const value = snapshot[field];
+      if (value) next.set(field, value);
+    }
+    setSearchParams(next, { replace: true });
+    setHasHydratedFromStorage(true);
+    // searchParams intentionally not in deps: we only want to read on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasHydratedFromStorage]);
 
   // Default: last 24h
   const [since, setSince] = useState(() => {
@@ -238,6 +332,15 @@ export function Audit() {
     if (value) next.set(key, value); else next.delete(key);
     setSearchParams(next);
     setPage(0);
+    if ((FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) {
+      const snapshot = readFilterSnapshot();
+      if (value) {
+        snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
+      } else {
+        delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
+      }
+      writeFilterSnapshot(snapshot);
+    }
   }
 
   const queryStr = buildQuery({

@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentList } from "../pages/admin/AgentList";
-import type { Agent, Role } from "../lib/types";
+import type { Agent, McpEndpointInfo, Role } from "../lib/types";
 
 function renderAgentList() {
   const client = new QueryClient({
@@ -63,7 +63,7 @@ afterEach(() => {
 function stubAgentsEndpoints(
   agents: Agent[],
   roles: Role[] = [analystRole],
-  mcpEndpoint = {
+  mcpEndpoint: McpEndpointInfo = {
     url: "https://lucy.example.com/mcp",
     status: "configured" as const,
     source: "env" as const,
@@ -118,6 +118,8 @@ describe("AgentList", () => {
     stubAgentsEndpoints([makeAgent({ id: "no1", name: "无访问", stats: { callsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
 
     renderAgentList();
+    expect(await screen.findByRole("heading", { name: "Agent 实例" })).toBeInTheDocument();
+    expect(screen.getByText("访问治理")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("无访问")).toBeInTheDocument();
     });
@@ -152,7 +154,10 @@ describe("AgentList", () => {
     await waitFor(() => {
       expect(screen.getByText("旧ACL")).toBeInTheDocument();
     });
-    expect(screen.getByText(/legacy wildcard/)).toBeInTheDocument();
+    // M36: the resource-scope row exposes "legacy wildcard" by name. Use
+    // the test-id so we don't accidentally match the duplicate headline.
+    const scopeRow = screen.getByTestId("agent-scope-resource-legacy1");
+    expect(scopeRow).toHaveTextContent(/legacy wildcard/);
   });
 
   it("copy MCP config writes a safe template with placeholder token and no plaintext", async () => {

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type { Agent, CreateAgentBody, ProjectInfo, Role } from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
@@ -101,6 +102,12 @@ function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: st
   const tokenCount = agent.tokens.length;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
   const canCopyMcp = endpoint !== null;
+  const resourceScope = agent.effectivePermissions?.sources
+    ? `${agent.effectivePermissions.sources.length} 个源 / ${agent.effectivePermissions.connections.length} 个 connection`
+    : legacyWildcard
+      ? "legacy wildcard"
+      : `${sourceCount} 个源`;
+  const toolScope = agent.effectivePermissions?.tools?.join(", ") ?? (Array.isArray(agent.allow?.tools) ? agent.allow!.tools.join(", ") : "—");
 
   return (
     <div className="pl-card">
@@ -108,13 +115,21 @@ function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: st
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="font-semibold">{agent.name}</span>
-            <span className="text-fg-muted text-sm">({agent.id})</span>
+            <span className="text-fg-muted text-sm notranslate" translate="no">({agent.id})</span>
             <span className={`pl-status-badge ${agent.enabled ? "pl-status-done" : "pl-status-not_started"}`}>
               {agent.enabled ? "启用" : "禁用"}
             </span>
           </div>
           <div className="text-sm text-fg-muted mt-1">
-            role: {agent.role ?? "旧 ACL"} · {tokenCount} 个 token · {legacyWildcard ? "legacy wildcard" : `${sourceCount} 个源`} · {toolCount} 个工具
+            role: <span className="notranslate" translate="no">{agent.role ?? "旧 ACL"}</span> · {tokenCount} 个 token · {legacyWildcard ? "legacy wildcard" : `${sourceCount} 个源`} · {toolCount} 个工具
+          </div>
+          <div className="text-sm text-fg-muted mt-0.5" data-testid={`agent-scope-resource-${agent.id}`}>
+            <span className="text-fg-default">Resource scope：</span>
+            <span className="notranslate" translate="no">{resourceScope}</span>
+          </div>
+          <div className="text-sm text-fg-muted mt-0.5" data-testid={`agent-scope-tool-${agent.id}`}>
+            <span className="text-fg-default">Tool scope：</span>
+            <span className="notranslate" translate="no">{toolScope}</span>
           </div>
           <div className="text-sm text-fg-muted mt-0.5">
             最近访问 <LastSeen lastSeen={agent.stats?.lastSeen} /> ·{" "}
@@ -124,6 +139,15 @@ function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: st
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <div className="flex gap-2">
+            <Link
+              to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
+              className="pl-btn pl-btn--ghost text-sm notranslate"
+              translate="no"
+              aria-label={`查看 ${agent.name} 的对象详情`}
+              data-testid={`agent-row-detail-${agent.id}`}
+            >
+              查看详情
+            </Link>
             <Link to={`/admin/agents/${agent.id}`} className="pl-btn pl-btn--ghost text-sm">编辑</Link>
             <button
               type="button"

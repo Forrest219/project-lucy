@@ -39,9 +39,9 @@ describe("PublishWorkbench", () => {
         "webui/server/semantic-assets.ts"
       ])
     ).toEqual([
-      "检查数据库接入是否只处理 Connection / Schema / Manifest / Catalog / 白名单 / 连通测试。",
+      "检查数据接入是否只处理 Connection / Schema / Manifest / Catalog / 启用表范围 / 连通测试。",
       "检查 asset kind、路径约束、结构校验和 sidecar raw content 禁止。",
-      "检查语义层维护是否只处理业务语义和 overlay。",
+      "检查语义建模是否只处理业务语义和 overlay。",
       "检查资产包分类、secret hard block 和 Validate Gate。"
     ]);
   });
@@ -368,9 +368,106 @@ describe("PublishWorkbench", () => {
 
     const checklist = await screen.findByTestId("review-boundary-checklist");
     expect(checklist).toHaveTextContent(
-      "检查数据库接入是否只处理 Connection / Schema / Manifest / Catalog / 白名单 / 连通测试。"
+      "检查数据接入是否只处理 Connection / Schema / Manifest / Catalog / 启用表范围 / 连通测试。"
     );
     expect(checklist).toHaveTextContent("检查 asset kind、路径约束、结构校验和 sidecar raw content 禁止。");
-    expect(checklist).toHaveTextContent("检查语义层维护是否只处理业务语义和 overlay。");
+    expect(checklist).toHaveTextContent("检查语义建模是否只处理业务语义和 overlay。");
+  });
+
+  it("renders real conn/schema in the change-impact drawer link when sources are loaded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  { filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml", status: "modified", diff: "+ diff" }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                tables: [
+                  {
+                    conn: "mysql-aliyun",
+                    schema: "dataforai",
+                    table: "superstore_orders",
+                    filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+                    columnCount: 1,
+                    columnNames: [],
+                    hasTableDesc: true,
+                    hasGrain: true,
+                    measureCount: 0,
+                    joinCount: 0,
+                    wikiRefCount: 0,
+                    completion: "done",
+                    mtime: "2026-07-30T00:00:00.000Z"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    const link = await screen.findByTestId("publish-impact-table-superstore_orders");
+    expect(link.tagName).toBe("A");
+    expect(link).toHaveAttribute(
+      "href",
+      "/?object=table&conn=mysql-aliyun&schema=dataforai&table=superstore_orders"
+    );
+  });
+
+  it("renders impacted table as plain text when sources lookup misses", async () => {
+    // /api/diff mentions a table that does not exist in the sources
+    // endpoint. M36 review follow-up: the impact panel must NOT use a
+    // `_/_/<table>` placeholder that silently opens the "未找到该表"
+    // drawer; instead it renders the table name as plain text and labels
+    // it "未在 Catalog 中".
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  { filePath: "semantic-layer/mysql-aliyun/ghost_table.yaml", status: "modified", diff: "+ diff" }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    const label = await screen.findByTestId("publish-impact-table-ghost_table");
+    expect(label.tagName).toBe("SPAN");
+    expect(label).toHaveTextContent("ghost_table");
+    // Make sure no <a> exists with the legacy placeholder href.
+    expect(
+      document.querySelector('a[href*="conn=_"][href*="schema=_"]')
+    ).not.toBeInTheDocument();
   });
 });

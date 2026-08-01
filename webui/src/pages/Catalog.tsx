@@ -6,6 +6,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
+import { buildObjectDetailSearch } from "../lib/objectDetail";
 import type { CompletionStatus, SourcesResponse, SourceSummary } from "../lib/types";
 
 const STATUS_LABELS: Record<CompletionStatus, string> = {
@@ -86,7 +87,7 @@ export function Catalog() {
     <div className="pl-page-stack">
       <PageHeader
         title="语义维护工作台"
-        breadcrumbs={["语义层维护", "表目录"]}
+        breadcrumbs={["语义建模", "表目录"]}
         description={<span className="notranslate" translate="no">浏览当前 KTX 项目的语义层数据表，按 Schema、状态和关键词定位需要维护的对象。</span>}
         badges={
           <span data-testid="catalog-count">
@@ -121,6 +122,12 @@ export function Catalog() {
         {filtered.map((table) => {
           const editorHref = `/sources/${encodeURIComponent(table.conn)}/${encodeURIComponent(table.schema)}/${encodeURIComponent(table.table)}`;
           const wikiHref = slRefWikiHref(table);
+          const detailHref = buildObjectDetailSearch({
+            kind: "table",
+            conn: table.conn,
+            schema: table.schema,
+            table: table.table
+          });
           return (
             <div
               className="pl-table-row"
@@ -134,6 +141,15 @@ export function Catalog() {
               <span className="pl-table-row-stats">{displayDescription(table)}</span>
               <StatusBadge status={table.completion} />
               <div className="pl-table-row-actions">
+                <Link
+                  aria-label={`查看 ${table.schema}.${table.table} 的对象详情`}
+                  className="pl-btn pl-btn--ghost notranslate"
+                  translate="no"
+                  to={detailHref}
+                  data-testid={`catalog-row-detail-${table.table}`}
+                >
+                  查看详情
+                </Link>
                 <Link
                   aria-label={`打开 ${table.schema}.${table.table} 的业务 Wiki`}
                   className="pl-btn pl-btn--ghost notranslate"
