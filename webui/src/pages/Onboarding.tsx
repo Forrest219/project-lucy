@@ -964,46 +964,52 @@ export function Onboarding() {
           <div className="pl-snapshot-grid">
             <SemanticCoverageCard done={doneSources} total={sources.length} />
             <div className="pl-metric-card">
-              <span className="pl-snapshot-card-label">待发布变更</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="pl-snapshot-card-label">待发布变更</span>
+                <Link
+                  to="/publish/workbench"
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                >
+                  打开发布工作台 ↗
+                </Link>
+              </div>
               <strong className="pl-metric-card-value notranslate" translate="no">
                 {changedFiles.length}
               </strong>
               <small className="text-fg-muted">
                 {validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
               </small>
-              <Link
-                to="/publish/workbench"
-                className="text-sm font-medium text-blue-600 hover:underline self-end"
-              >
-                打开发布工作台 ↗
-              </Link>
             </div>
             <div className="pl-metric-card">
-              <span className="pl-snapshot-card-label"><span className="notranslate" translate="no">Agent</span> 启用</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="pl-snapshot-card-label"><span className="notranslate" translate="no">Agent</span> 启用</span>
+                <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline notranslate" translate="no">
+                  查看 <span className="notranslate" translate="no">Agent</span> 实例 ↗
+                </Link>
+              </div>
               <strong className="pl-metric-card-value notranslate" translate="no">
                 {enabledAgents.length}/{agents.length}
               </strong>
               <small className="text-fg-muted">
                 <span className="notranslate" translate="no">{enabledAgents.length}</span> 个 <span className="notranslate" translate="no">Agent</span> 已启用
               </small>
-              <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline self-end notranslate" translate="no">
-                查看 <span className="notranslate" translate="no">Agent</span> 实例 ↗
-              </Link>
             </div>
             <div className="pl-metric-card">
-              <span className="pl-snapshot-card-label">ACL 拒绝</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="pl-snapshot-card-label">ACL 拒绝</span>
+                <Link
+                  to="/admin/audit?outcome=denied"
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                >
+                  查看访问日志 ↗
+                </Link>
+              </div>
               <strong className="pl-metric-card-value notranslate" translate="no">
                 {aclDenied7d}
               </strong>
               <small className="text-fg-muted">
                 {aclDenied7d === 0 ? "近 7 天无拒绝" : "近 7 天存在 ACL 拒绝"}
               </small>
-              <Link
-                to="/admin/audit?outcome=denied"
-                className="text-sm font-medium text-blue-600 hover:underline self-end"
-              >
-                查看访问日志 ↗
-              </Link>
             </div>
           </div>
         </section>
