@@ -1,15 +1,18 @@
 import clsx from "clsx";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { toast } from "sonner";
 import type {
   ChangedFilesResponse,
   SemanticAssetManualReindexResponse,
+  SourcesResponse,
+  SourceSummary,
   ValidateChangedResponse
 } from "../../lib/types";
 import {
@@ -21,10 +24,45 @@ function tableNameFromPath(filePath: string) {
   return filePath.split("/").pop()?.replace(/\.ya?ml$/, "") ?? filePath;
 }
 
+/**
+ * M36: extract table-domain hints from a changed file path so we can show
+ * the user which eval domain(s) are likely affected by the change.
+ *
+ * The path layout is `semantic-layer/<conn>/<file>.yaml` for table-level
+ * overlays and `semantic-layer/<conn>/_schema/<schema>.yaml` for schema
+ * manifests. We cannot reverse-engineer the schema from the file path so
+ * we key the impact on the connection (e.g. `mysql-aliyun`).
+ */
+function impactedTableNames(filePaths: string[]): string[] {
+  const seen = new Set<string>();
+  for (const filePath of filePaths) {
+    const tableName = tableNameFromPath(filePath);
+    if (tableName.endsWith(".yaml") || tableName.endsWith(".yml")) continue;
+    if (tableName.startsWith("_")) continue;
+    if (tableName.includes("/")) continue;
+    seen.add(tableName);
+  }
+  return [...seen].sort();
+}
+
+/**
+ * M36 review follow-up: reverse-resolve a table name to the first matching
+ * `conn/schema/table` tuple from the live sources. If the same table name
+ * exists under multiple connections (rare, but possible) we deliberately
+ * take the first hit to keep the impact panel bounded; the deep-link still
+ * lands on a real drawer instead of the "未找到该表" error state.
+ */
+function findSourceForTable(
+  sources: SourceSummary[],
+  tableName: string
+): SourceSummary | null {
+  return sources.find((source) => source.table === tableName) ?? null;
+}
+
 const boundaryChecklistRules: Array<{ pattern: RegExp; prompt: string }> = [
   {
     pattern: /^webui\/src\/pages\/connections\//,
-    prompt: "检查数据库接入是否只处理 Connection / Schema / Manifest / Catalog / 白名单 / 连通测试。"
+    prompt: "检查数据接入是否只处理 Connection / Schema / Manifest / Catalog / 启用表范围 / 连通测试。"
   },
   {
     pattern: /^webui\/src\/components\/catalog\//,
@@ -32,7 +70,7 @@ const boundaryChecklistRules: Array<{ pattern: RegExp; prompt: string }> = [
   },
   {
     pattern: /^webui\/src\/pages\/TableEditor\.tsx$/,
-    prompt: "检查语义层维护是否只处理业务语义和 overlay。"
+    prompt: "检查语义建模是否只处理业务语义和 overlay。"
   },
   {
     pattern: /^webui\/server\/catalog-assets\.ts$/,
@@ -114,18 +152,43 @@ export function PublishWorkbench() {
       toast.error(`KTX 索引重建失败：${error instanceof Error ? error.message : "未知错误"}`);
     }
   });
+  // M36 review follow-up: pull sources so we can reverse-resolve
+  // `conn/schema/table` for each impacted table name and produce a real
+  // drawer link instead of a `_/_/<table>` placeholder.
+  const sourcesQuery = useQuery({
+    queryKey: queryKeys.sources,
+    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+  });
 
   const files = diffQuery.data?.files ?? [];
   const boundaryChecklist = boundaryChecklistForChangedFiles(files.map((file) => file.filePath));
   const active = files.find((file) => file.filePath === (selected ?? files[0]?.filePath));
   const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
   const publishGate = derivePublishGate(files.length, validateMutation.data);
+  const publishCtaDisabled = publishGate.state !== "ready";
+  const impactedTables = useMemo(() => impactedTableNames(files.map((file) => file.filePath)), [files]);
+  // For each impacted table name, find the first matching `conn/schema/table`
+  // tuple from `/api/sources`. If the lookup fails (table not yet in the
+  // catalog, sources query errored, etc.) we degrade gracefully and only
+  // render the table name without a link — the previous behaviour silently
+  // opened a "未找到该表" drawer which misled users.
+  const impactedTableRefs = useMemo(() => {
+    const sources = sourcesQuery.data?.tables ?? [];
+    return impactedTables.map((tableName) => ({
+      tableName,
+      source: findSourceForTable(sources, tableName)
+    }));
+  }, [impactedTables, sourcesQuery.data]);
+  const postPublishEvalDomains = impactedTables.length > 0 ? impactedTables : ["all"];
+  const reindexSucceeded = reindexMutation.data?.reindex.ok === true;
+  const reindexFinished = reindexSucceeded && publishGate.state !== "ready";
+  const reindexFailed = reindexMutation.data ? !reindexMutation.data.reindex.ok : false;
+  const showPostPublishPrompt = reindexSucceeded && files.length > 0 && !publishCtaDisabled;
   function validationForFile(filePath: string) {
     const tableName = tableNameFromPath(filePath);
     return validateMutation.data?.results.find((item) => item.table === tableName)?.validation;
   }
 
-  const publishCtaDisabled = publishGate.state !== "ready";
   const publishCtaLabel =
     reindexMutation.isPending || validateMutation.isPending
       ? "处理中…"
@@ -258,6 +321,73 @@ export function PublishWorkbench() {
         </section>
 
         <aside className="pl-review-sidebar">
+          <section
+            className="grid gap-3"
+            data-testid="publish-change-impact"
+            data-impact-state={
+              files.length === 0
+                ? "empty"
+                : validateMutation.data && failedCount > 0
+                  ? "validation-failed"
+                  : validateMutation.data
+                    ? "validated"
+                    : "pending"
+            }
+          >
+            <p className="pl-panel-title">变更影响范围</p>
+            {files.length === 0 ? (
+              <p className="pl-notice">暂无待发布变更。</p>
+            ) : impactedTables.length === 0 ? (
+              <p className="pl-notice">影响范围待校验</p>
+            ) : (
+              <div className="grid gap-2">
+                <div className="text-xs text-fg-muted">
+                  共影响 {impactedTables.length} 张表
+                </div>
+                <ul className="grid gap-1.5 text-sm" data-testid="publish-change-impact-list">
+                  {impactedTableRefs.map(({ tableName, source }) => (
+                    <li key={tableName} className="flex items-center justify-between gap-2">
+                      {source ? (
+                        <Link
+                          to={buildObjectDetailSearch({
+                            kind: "table",
+                            conn: source.conn,
+                            schema: source.schema,
+                            table: source.table
+                          })}
+                          className="pl-inline-link notranslate"
+                          translate="no"
+                          data-testid={`publish-impact-table-${tableName}`}
+                        >
+                          {tableName}
+                        </Link>
+                      ) : (
+                        <span
+                          className="text-fg-default notranslate"
+                          translate="no"
+                          data-testid={`publish-impact-table-${tableName}`}
+                        >
+                          {tableName}
+                        </span>
+                      )}
+                      <span className="text-xs text-fg-muted">
+                        {source ? `${source.conn}/${source.schema}` : "未在 Catalog 中"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {failedCount > 0 ? (
+                  <p className="pl-error text-xs" data-testid="publish-change-impact-blocked">
+                    {failedCount} 张表校验未通过，发布已被阻断。
+                  </p>
+                ) : null}
+                {!validateMutation.data ? (
+                  <p className="pl-notice text-xs">点击「校验变更」以确认影响范围。</p>
+                ) : null}
+              </div>
+            )}
+          </section>
+
           {boundaryChecklist.length > 0 ? (
             <section
               className="grid gap-3 notranslate"
@@ -344,6 +474,49 @@ export function PublishWorkbench() {
             <p className="pl-panel-title">建议命令</p>
             <pre className="pl-yaml-preview">git diff{"\n"}git status --short</pre>
           </section>
+
+          {showPostPublishPrompt ? (
+            <section
+              className="grid gap-3"
+              data-testid="publish-post-eval-prompt"
+            >
+              <p className="pl-panel-title">下一步 · 触发相关 Domain 的评测 Run</p>
+              <p className="text-xs text-fg-muted">
+                发布已完成 KTX 索引重建。建议立即触发相关 domain 的 eval run，确认语义变更没有引入回归。
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {postPublishEvalDomains.map((domain) => (
+                  <Link
+                    key={domain}
+                    to={`/eval/runs?domain=${encodeURIComponent(domain)}`}
+                    className="pl-btn pl-btn--secondary text-sm notranslate"
+                    translate="no"
+                    data-testid={`publish-post-eval-${domain}`}
+                  >
+                    触发 {domain} Run →
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {reindexFailed ? (
+            <section className="grid gap-3" data-testid="publish-post-eval-blocked">
+              <p className="pl-panel-title">下一步</p>
+              <p className="text-xs text-fg-muted">
+                KTX 索引重建失败，请先解决索引问题后再触发 eval。
+              </p>
+            </section>
+          ) : null}
+
+          {(reindexFinished || reindexFailed) && !showPostPublishPrompt && !reindexFailed ? (
+            <section className="grid gap-3">
+              <p className="pl-panel-title">下一步</p>
+              <p className="text-xs text-fg-muted">
+                没有待发布变更，KTX 索引已生效。
+              </p>
+            </section>
+          ) : null}
         </aside>
       </div>
       <SemanticAssetPublishDrawer
