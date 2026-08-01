@@ -111,7 +111,14 @@ export function AppFrame() {
       <aside className="pl-sidebar">
         <div className="pl-brand-block">
           <strong>Lucy WebUI</strong>
-          <span>语义维护工作台</span>
+          <span
+            translate="no"
+            className="notranslate pl-brand-eyebrow"
+            title="Data Agent Ops Control Plane"
+          >
+            Data Agent Ops Control Plane
+          </span>
+          <span className="pl-brand-tagline">Data Agent 运维控制台</span>
         </div>
 
         <nav className="pl-nav" aria-label="主导航">

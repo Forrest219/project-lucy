@@ -111,6 +111,23 @@
   .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
   .pl-brand-block span { @apply text-xs text-fg-muted; }
+  .pl-brand-block .pl-brand-eyebrow {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #475569;
+    margin-top: 2px;
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pl-brand-block .pl-brand-tagline {
+    display: block;
+    font-size: 0.72rem;
+    color: #64748b;
+    margin-top: 1px;
+  }
   .pl-sidebar-footer { @apply relative z-10 mt-4 grid shrink-0 gap-2 border-t border-border-default bg-bg-surface px-4 pt-4; }
   .pl-sidebar-utility { @apply grid gap-1; }
   .pl-sidebar-help-link {
