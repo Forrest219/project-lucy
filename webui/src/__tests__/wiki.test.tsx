@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { WikiEditor } from "../pages/WikiEditor";
 import {
@@ -165,7 +165,7 @@ describe("MarkdownPreview", () => {
         markdown={[
           "| 字段 | 说明 |",
           "|---|---|",
-          "| `enabled_tables` | 表白名单 |"
+          "| `enabled_tables` | 启用表范围 |"
         ].join("\n")}
       />
     );
@@ -174,7 +174,7 @@ describe("MarkdownPreview", () => {
     expect(table).toHaveClass("pl-markdown-table");
     expect(table).toHaveAttribute("translate", "no");
     expect(screen.getByRole("columnheader", { name: "字段" })).toBeInTheDocument();
-    expect(screen.getByText("表白名单")).toBeInTheDocument();
+    expect(screen.getByText("启用表范围")).toBeInTheDocument();
     expect(screen.getByText("enabled_tables")).toHaveAttribute("translate", "no");
   });
 
@@ -745,8 +745,9 @@ describe("WikiEditor Save Preflight (P0)", () => {
 
     // Resolve the dry-run so the dialog finishes loading and the
     // confirm button unlocks, then verify normal save flow.
-    if (resolveDryRun) {
-      resolveDryRun(
+    const completeDryRun = resolveDryRun as ((value: Response) => void) | null;
+    if (completeDryRun) {
+      completeDryRun(
         new Response(
           JSON.stringify({
             ok: true,

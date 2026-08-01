@@ -29,7 +29,17 @@ export const FORBIDDEN_TERMS: ReadonlyArray<string> = [
   "模式筛选",
   "全部架构",
   // Mixed/legacy phrases that already accumulated in earlier M-stories
-  "运行连通测试"
+  "运行连通测试",
+  // M34 sidebar IA and title-layer terminology
+  "运行状态",
+  "语义层维护",
+  "业务文档",
+  "数据库接入",
+  "表白名单",
+  "Wiki 文档",
+  "Case 管理",
+  "角色配置",
+  "数据源热力"
 ];
 
 export function assertNoForbiddenTerms(container: HTMLElement | Document) {

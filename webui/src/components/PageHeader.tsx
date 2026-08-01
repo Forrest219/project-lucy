@@ -4,7 +4,7 @@ export type PageHeaderProps = {
   /**
    * H1 标题，左下区域。
    */
-  title: string;
+  title: ReactNode;
   /**
    * 面包屑路径，左上区域。从首段到当前页逐级渲染。
    */

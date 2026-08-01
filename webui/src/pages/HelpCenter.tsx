@@ -18,6 +18,10 @@ type HeadingMatch = {
   title: string;
 };
 
+type TocItemWithIndex = HelpTocItem & {
+  index: number;
+};
+
 function headingMatchesOutsideFences(markdown: string, toc: HelpTocItem[]): HeadingMatch[] {
   const matches: HeadingMatch[] = [];
   const tocTitles = new Set(toc.map((item) => item.title));
@@ -86,6 +90,77 @@ function splitIntoSections(markdown: string, toc: HelpTocItem[]): HelpSection[] 
   return sections.filter((section) => section.markdown.length > 0);
 }
 
+function isHelpTableSeparatorLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|")) return false;
+  const inner = trimmed.replace(/^\|/, "").replace(/\|$/, "");
+  if (!inner) return false;
+  return inner
+    .split("|")
+    .map((cell) => cell.trim())
+    .every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+/**
+ * Strip the leading handbook H1, immediately-following metadata pipe table,
+ * and the optional hand-authored "目录" section. The backend `markdown` field
+ * and the `toc` array remain the single source of truth and are not mutated.
+ */
+function stripLeadingHandbookPreface(markdown: string): string {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  let i = 0;
+
+  // Skip leading blank lines, then expect a top-level H1.
+  while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+  if (i >= lines.length || !/^#\s+/.test(lines[i] ?? "")) return markdown;
+  i++;
+
+  // Skip blank lines between the H1 and the metadata table.
+  while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+
+  // The metadata block is a GFM pipe table: header row, separator row, body rows.
+  if (i + 1 >= lines.length) return markdown;
+  const headerLine = lines[i] ?? "";
+  const separatorLine = lines[i + 1] ?? "";
+  if (!headerLine.includes("|") || !isHelpTableSeparatorLine(separatorLine)) return markdown;
+
+  i += 2;
+  while (i < lines.length && (lines[i] ?? "").trim() !== "") {
+    if (!(lines[i] ?? "").includes("|")) break;
+    i++;
+  }
+
+  // Trim trailing blank lines so subsequent splitting starts at the first H2.
+  while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+
+  if (/^##\s+目录\s*#*\s*$/.test(lines[i] ?? "")) {
+    i++;
+    while (i < lines.length && !/^##\s+/.test(lines[i] ?? "")) i++;
+    while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
+  }
+
+  return lines.slice(i).join("\n");
+}
+
+function visibleHelpTocItems(toc: HelpTocItem[], activeSection: string): HelpTocItem[] {
+  const indexed = toc.map<TocItemWithIndex>((item, index) => ({ ...item, index }));
+  const activeItem = indexed.find((item) => item.id === activeSection);
+  if (!activeItem || activeItem.level < 4) {
+    return toc.filter((item) => item.level <= 3);
+  }
+
+  let parentIndex = activeItem.index;
+  while (parentIndex >= 0 && indexed[parentIndex]?.level !== 3) parentIndex--;
+  const nextPeerIndex = indexed.findIndex(
+    (item) => item.index > parentIndex && item.level <= 3
+  );
+  const sectionEnd = nextPeerIndex === -1 ? indexed.length : nextPeerIndex;
+
+  return indexed
+    .filter((item) => item.level <= 3 || (item.index > parentIndex && item.index < sectionEnd))
+    .map(({ index: _index, ...item }) => item);
+}
+
 function sectionHref(id: string) {
   return `/help?section=${encodeURIComponent(id)}`;
 }
@@ -109,14 +184,29 @@ export function HelpCenter() {
   });
 
   const sections = useMemo(
-    () => handbookQuery.data ? splitIntoSections(handbookQuery.data.markdown, handbookQuery.data.toc) : [],
+    () =>
+      handbookQuery.data
+        ? splitIntoSections(
+            stripLeadingHandbookPreface(handbookQuery.data.markdown),
+            handbookQuery.data.toc
+          )
+        : [],
     [handbookQuery.data]
+  );
+  const visibleToc = useMemo(
+    () => (handbookQuery.data ? visibleHelpTocItems(handbookQuery.data.toc, activeSection) : []),
+    [activeSection, handbookQuery.data]
   );
 
   useEffect(() => {
     if (!activeSection || sections.length === 0) return;
-    const target = document.getElementById(activeSection);
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(activeSection)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [activeSection, sections.length]);
 
   if (handbookQuery.isLoading) {
@@ -131,7 +221,7 @@ export function HelpCenter() {
 
   return (
     <div className="pl-help-page">
-      <header className="pl-page-header">
+      <header className="pl-page-header" data-testid="help-header">
         <div className="pl-page-header-grid">
           <div className="pl-page-header-cell pl-page-header-cell--breadcrumbs">
             <ol className="pl-page-header-breadcrumbs">
@@ -143,8 +233,12 @@ export function HelpCenter() {
             </ol>
           </div>
           <div className="pl-page-header-cell pl-page-header-cell--badges">
-            <span>{handbook.sourcePath}</span>
-            <span>{formatUpdatedAt(handbook.updatedAt)}</span>
+            <div className="pl-page-header-badges" aria-label="系统手册元数据">
+              <span>
+                来源 <code className="notranslate" translate="no">{handbook.sourcePath}</code>
+              </span>
+              <span>更新时间 {formatUpdatedAt(handbook.updatedAt)}</span>
+            </div>
           </div>
           <div className="pl-page-header-cell pl-page-header-cell--title">
             <h1 className="pl-page-header-title">系统手册</h1>
@@ -162,7 +256,7 @@ export function HelpCenter() {
         <aside className="pl-help-toc" aria-label="系统手册目录">
           <div className="pl-help-toc-title">目录</div>
           <nav className="grid gap-1">
-            {handbook.toc.map((item) => (
+            {visibleToc.map((item) => (
               <Link
                 aria-current={activeSection === item.id ? "location" : undefined}
                 className={`pl-help-toc-link pl-help-toc-link--level-${item.level}`}

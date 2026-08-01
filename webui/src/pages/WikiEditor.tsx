@@ -417,11 +417,11 @@ export function WikiEditor() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title={uiMode === "read" ? "业务 Wiki 工作台" : `业务 Wiki 工作台 · ${key}`}
-        breadcrumbs={["业务文档", "Wiki 文档", key]}
+        title={uiMode === "read" ? "业务 Wiki" : `业务 Wiki · ${key}`}
+        breadcrumbs={["语义建模", "业务 Wiki", key]}
         description={
           uiMode === "read"
-            ? "阅读态：先看清业务文档，再决定是否进入编辑态。"
+            ? "阅读态：先看清业务 Wiki，再决定是否进入编辑态。"
             : "编辑态：直接撰写 Markdown，Diff 与原始 Markdown 通过保存预检查看。"
         }
         badges={

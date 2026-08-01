@@ -73,7 +73,7 @@ export function JoinEditor() {
     <div className="pl-page-stack">
       <PageHeader
         title={`维护关联关系：${table}`}
-        breadcrumbs={["语义层维护", "关联关系", table]}
+        breadcrumbs={["语义建模", "关联关系", table]}
         description="候选关系先保存在 .ktx-ui sidecar，只有确认后的正式关系才写入 semantic-layer。"
         badges={
           <>

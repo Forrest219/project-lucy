@@ -19,7 +19,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/新增数据库连接（运维 Runbook）|Database Connection Operations/i, "database-connection-operations-runbook"],
   [/Agent 可见性与 ACL 同步|ACL 同步/i, "database-connection-acl-sync"],
   [/表白名单/, "table-whitelist"],
-  [/静态 Catalog reload|Reload Catalog/i, "catalog-reload"],
+  [/刷新本地目录|静态 Catalog reload|Catalog Reload|Reload Catalog/i, "catalog-reload"],
   [/语义层维护/, "semantic-layer"],
   [/表目录/, "semantic-catalog"],
   [/表语义编辑|Human vs AI/, "semantic-table-editor"],
@@ -54,6 +54,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
 
 const DATABASE_OPS_HEADING_TITLES = new Set([
   "WebUI 与 ktx.yaml 的职责边界",
+  "刷新本地目录",
   "连接形态与配置字段",
   "新增数据库连接（运维 Runbook）",
   "Agent 可见性与 ACL 同步"

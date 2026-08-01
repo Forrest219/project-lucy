@@ -52,7 +52,7 @@ export function WikiSavePreflight({
             className="pl-wiki-preflight-description"
             id="wiki-save-preflight-description"
           >
-            确认目标路径、Diff 与校验结果后再写入 Wiki 文档。
+            确认目标路径、Diff 与校验结果后再写入业务 Wiki。
           </Dialog.Description>
 
           <section

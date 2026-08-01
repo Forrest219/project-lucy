@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
+// @ts-ignore lint fixture imports the script directly without generated declarations.
 import { RULE_IDS, scanText } from "../../scripts/lint-ia-boundary.mjs";
 
 describe("lint-ia-boundary.mjs", () => {
@@ -11,7 +12,7 @@ describe("lint-ia-boundary.mjs", () => {
       `<button>上传 YAML</button>`
     );
 
-    expect(issues.map((issue) => issue.ruleId)).toContain(RULE_IDS.CONNECTION_BARE_UPLOAD_YAML);
+    expect(issues.map((issue: { ruleId: string }) => issue.ruleId)).toContain(RULE_IDS.CONNECTION_BARE_UPLOAD_YAML);
   });
 
   it("allows a typed Manifest upload action in the connection module", () => {
@@ -29,7 +30,7 @@ describe("lint-ia-boundary.mjs", () => {
       `<button>新增指标</button>`
     );
 
-    expect(issues.map((issue) => issue.ruleId)).toContain(
+    expect(issues.map((issue: { ruleId: string }) => issue.ruleId)).toContain(
       RULE_IDS.CONNECTION_SEMANTIC_MODELING_ACTION
     );
   });
@@ -37,7 +38,7 @@ describe("lint-ia-boundary.mjs", () => {
   it("flags connection onboarding actions in TableEditor", () => {
     const issues = scanText("/repo/webui/src/pages/TableEditor.tsx", `<button>添加 Schema</button>`);
 
-    expect(issues.map((issue) => issue.ruleId)).toContain(
+    expect(issues.map((issue: { ruleId: string }) => issue.ruleId)).toContain(
       RULE_IDS.SEMANTIC_LAYER_CONNECTION_ACTION
     );
   });

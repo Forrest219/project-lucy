@@ -310,7 +310,7 @@ export function validateWikiDraft(ctx: WikiValidationContext): WikiValidationFin
     }
   }
   if (!key.endsWith(".md")) {
-    findings.push({ level: "error", message: "路径必须以 `.md` 结尾，Wiki 文档使用 Markdown 存储。" });
+    findings.push({ level: "error", message: "路径必须以 `.md` 结尾，业务 Wiki 使用 Markdown 存储。" });
   }
   // Match an H1 at the start of the document OR after a blank line,
   // not just one preceded by a newline. Otherwise a Markdown body

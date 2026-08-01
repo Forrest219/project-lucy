@@ -807,7 +807,7 @@ export function TableEditor() {
       <PageHeader
         title={source ? `维护表语义：${source.model.table}` : "维护表语义"}
         breadcrumbs={[
-          "语义层维护",
+          "语义建模",
           source?.model.conn ?? conn,
           source?.model.schema ?? schema,
           source?.model.table ?? table

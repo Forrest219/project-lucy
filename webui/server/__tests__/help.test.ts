@@ -110,6 +110,7 @@ describe("Help handbook", () => {
   it("exposes stable level-4 aliases for the database connection operations runbook", () => {
     const toc = parseHelpToc([
       "### 3.2 数据库接入",
+      "#### 刷新本地目录",
       "#### WebUI 与 ktx.yaml 的职责边界",
       "#### 连接形态与配置字段",
       "#### 新增数据库连接（运维 Runbook）",
@@ -118,6 +119,7 @@ describe("Help handbook", () => {
 
     expect(toc).toEqual([
       { id: "database-connections", level: 3, title: "3.2 数据库接入" },
+      { id: "catalog-reload", level: 4, title: "刷新本地目录" },
       { id: "database-connection-boundary", level: 4, title: "WebUI 与 ktx.yaml 的职责边界" },
       { id: "database-connection-shapes", level: 4, title: "连接形态与配置字段" },
       {
@@ -308,6 +310,7 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("连接形态与配置字段");
     expect(handbook.markdown).toContain("WebUI 与 ktx.yaml 的职责边界");
     expect(handbook.markdown).toContain("刷新本地目录");
+    expect(handbook.markdown).toContain("/help?section=catalog-reload");
     expect(handbook.markdown).toContain("当前 `scan.enrichment`、LLM 和 embedding 配置涉及的外部数据流已获得客户 / 数据 Owner 授权");
     expect(handbook.markdown).toContain("docker compose exec lucy ktx --project-dir /data/lucy ingest <connection-id>");
     // Catalog Reload must not be conflated with physical scanning / ingest.
@@ -328,6 +331,7 @@ describe("Help handbook", () => {
     expect(handbook.toc).toEqual(
       expect.arrayContaining([
         { id: "database-connections", level: 3, title: "3.2 数据库接入" },
+        { id: "catalog-reload", level: 4, title: "刷新本地目录" },
         {
           id: "database-connection-boundary",
           level: 4,
