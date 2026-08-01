@@ -121,7 +121,6 @@ describe("AppFrame shell", () => {
     ["/overview", "Onboarding", "系统概览"],
     ["/connections", "ConnectionOverview", "连接概览"],
     ["/connections/whitelist", "TableWhitelist", "启用表范围"],
-    ["/connections/test", "ConnectionTest", "连通测试（兼容）"],
     ["/", "Catalog", "表目录"],
     ["/wiki", "WikiEditor", "业务 Wiki"],
     ["/publish/workbench", "PublishWorkbench", "发布工作台"],
@@ -138,6 +137,14 @@ describe("AppFrame shell", () => {
     renderAt(path);
     expect(screen.getByTestId("route-page")).toHaveTextContent(pageName);
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("keeps /connections/test as a compat alias route with no sidebar entry", () => {
+    // v1.9.0: 连通测试（兼容）已从主导航移除，但 /connections/test 仍需可访问，
+    // 承接外链/历史书签。连接卡内测试 Drawer（M25）是当前正式入口。
+    renderAt("/connections/test");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("ConnectionTest");
+    expect(screen.queryByRole("link", { name: /连通测试/ })).not.toBeInTheDocument();
   });
 
   it("treats /overview as the canonical system overview route and keeps /onboarding as a redirect", () => {
@@ -194,7 +201,7 @@ describe("AppFrame shell", () => {
     // The footer must still carry the help link and version text — guards
     // against an accidental re-introduction of the full nav into the footer.
     expect(within(sidebarFooter).getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
-    expect(sidebarFooter).toHaveTextContent("Lucy v1.8 · © 2026");
+    expect(sidebarFooter).toHaveTextContent("Lucy v1.9 · © 2026");
   });
 
   it("labels the system overview entry as the runtime control plane", () => {
@@ -243,9 +250,8 @@ describe("AppFrame shell", () => {
     // M35: 数据热力已下沉为 /admin/audit?tab=heatmap 内的 Tab，不再作为侧边栏二级项。
     expect(screen.queryByRole("link", { name: "数据热力" })).not.toBeInTheDocument();
 
-    const compatLink = screen.getByRole("link", { name: /连通测试/ });
-    expect(compatLink).toHaveTextContent("兼容");
-    expect(compatLink).toHaveClass("pl-nav-link--compat");
+    // v1.9.0: 连通测试（兼容）从主导航移除，连接卡内测试 Drawer（M25）成为唯一入口。
+    expect(screen.queryByRole("link", { name: /连通测试/ })).not.toBeInTheDocument();
 
     for (const label of ["表白名单", "Wiki 文档", "Case 管理", "角色配置", "数据源热力"]) {
       expect(screen.queryByRole("link", { name: new RegExp(`^${label}$`) })).not.toBeInTheDocument();
@@ -279,7 +285,7 @@ describe("AppFrame shell", () => {
     const sidebarHelp = within(sidebarFooter).getByRole("link", { name: "打开系统手册" });
     expect(sidebarHelp).toHaveAttribute("href", "/help");
     expect(sidebarHelp).toHaveTextContent("系统手册");
-    expect(sidebarFooter).toHaveTextContent("Lucy v1.8 · © 2026");
+    expect(sidebarFooter).toHaveTextContent("Lucy v1.9 · © 2026");
     expect(within(sidebarFooter).getAllByRole("link")).toHaveLength(1);
     expect(within(sidebarFooter).queryByRole("link", { name: "配置变更" })).not.toBeInTheDocument();
     expect(within(sidebarFooter).queryByRole("navigation")).not.toBeInTheDocument();
@@ -324,9 +330,10 @@ describe("AppFrame shell", () => {
     expect(screen.getByTestId("route-page")).toHaveTextContent("NewToken");
   });
 
-  it("uses 连通测试 for the connection-test sidebar entry and renders no machine-translation artifacts", () => {
+  it("removes the compat 连通测试 sidebar entry while keeping no machine-translation artifacts", () => {
+    // v1.9.0: 连通测试（兼容）已从主导航移除；/connections/test 路由继续保留为兼容页。
     renderAt("/connections");
-    expect(screen.getByRole("link", { name: "连通测试（兼容）" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "连通测试（兼容）" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "替代测试" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "添加架构" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "上传报价包" })).not.toBeInTheDocument();

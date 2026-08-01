@@ -107,7 +107,6 @@
   .pl-nav-link { @apply flex min-h-10 items-center gap-2 rounded-xl px-3 py-0 pl-7 text-sm font-normal text-fg-body no-underline transition-colors; }
   .pl-nav-link:hover { @apply bg-bg-muted text-fg-default; }
   .pl-nav-link--active { @apply bg-bg-selected text-fg-body font-medium; }
-  .pl-nav-link--compat { @apply text-fg-muted; }
   .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
   .pl-brand-block span { @apply text-xs text-fg-muted; }

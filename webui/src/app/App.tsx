@@ -34,7 +34,6 @@ type NavItem = {
   label: string;
   to: string;
   active: (pathname: string) => boolean;
-  compatibility?: boolean;
 };
 
 const topLevelEntry: NavItem = {
@@ -66,13 +65,9 @@ const navGroups: Array<{ title: string; items: NavItem[] }> = [
     title: "数据接入",
     items: [
       { label: "连接概览", to: "/connections", active: (path) => path === "/connections" },
-      { label: "启用表范围", to: "/connections/whitelist", active: (path) => path === "/connections/whitelist" },
-      {
-        label: "连通测试（兼容）",
-        to: "/connections/test",
-        active: (path) => path === "/connections/test",
-        compatibility: true
-      }
+      { label: "启用表范围", to: "/connections/whitelist", active: (path) => path === "/connections/whitelist" }
+      // v1.9.0: 连通测试（兼容）从主导航移除；连接卡内测试 Drawer（M25）成为唯一入口。
+      // /connections/test 路由继续保留为兼容跳转页（见下方 <Route>），保留外链与历史书签。
     ]
   },
   {
@@ -160,7 +155,7 @@ export function AppFrame() {
                   return (
                     <Link
                       aria-current={active ? "page" : undefined}
-                      className={`${navLinkClass(active)}${item.compatibility ? " pl-nav-link--compat" : ""}`}
+                      className={navLinkClass(active)}
                       key={item.to}
                       to={item.to}
                     >
@@ -179,7 +174,7 @@ export function AppFrame() {
               <span>系统手册</span>
             </HelpButton>
           </div>
-          <div className="pl-sidebar-version">Lucy v1.8 · © 2026</div>
+          <div className="pl-sidebar-version">Lucy v1.9 · © 2026</div>
         </div>
       </aside>
 
