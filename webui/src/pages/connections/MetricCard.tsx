@@ -6,14 +6,17 @@ type MetricCardProps = {
   type: MetricType;
   value: ReactNode;
   subValue?: ReactNode;
+  tone?: "success" | "warning" | "danger" | "muted";
 };
 
-export function MetricCard({ type, value, subValue }: MetricCardProps) {
+export function MetricCard({ type, value, subValue, tone }: MetricCardProps) {
   const meta = METRIC_METADATA[type];
+
+  const toneClass = tone ? `pl-metric-card--${tone}` : undefined;
 
   return (
     <div
-      className="pl-metric-card pl-metric-card--with-help"
+      className={["pl-metric-card", "pl-metric-card--with-help", toneClass].filter(Boolean).join(" ")}
       data-testid="connection-metric"
       data-metric={type}
     >

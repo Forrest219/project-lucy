@@ -478,32 +478,43 @@
   .pl-row-more-menu { @apply absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-md border border-border-default bg-bg-surface py-1 shadow-card; }
   .pl-row-more-item { @apply block w-full px-3 py-1.5 text-left text-sm text-fg-default no-underline transition hover:bg-bg-muted focus:bg-bg-muted focus:outline-none; }
   .pl-overview-grid { @apply grid gap-4; }
+  /* M44: outer flat grid replaces the legacy pl-panel wrapper. Cards keep
+     their own border; the gap provides a light visual separator between
+     consecutive connections. */
+  .pl-overview-grid--flat { @apply gap-3; }
   .pl-connection-row { @apply overflow-hidden rounded-lg border border-border-default bg-bg-surface; }
-  .pl-connection-card-header { @apply grid gap-2 border-b border-border-default bg-bg-subtle px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto]; }
+  .pl-connection-card-header { @apply grid gap-2 border-b border-border-default bg-bg-subtle px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start; }
   .pl-connection-card-title { @apply flex flex-wrap items-center gap-2; }
   .pl-connection-card-title strong { @apply text-base font-semibold text-fg-default; }
-  .pl-connection-card-badges { @apply flex flex-wrap items-center gap-2 md:justify-end; }
-  .pl-connection-card-meta { @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted md:col-span-2; }
+  .pl-connection-card-badges { @apply hidden; }
+  .pl-connection-card-meta { @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted md:col-start-2 md:row-start-1 md:justify-self-end md:justify-end; }
   .pl-connection-meta-tag { @apply inline-flex items-center text-xs font-medium text-fg-muted; }
   .pl-connection-meta-tag--warning { @apply text-fg-muted; }
-  .pl-connection-readonly-status { @apply inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-medium; }
-  .pl-connection-readonly-status--safe { @apply border-primary/30 bg-primary/10 text-primary; }
-  .pl-connection-readonly-status--risk { @apply border-warning-strong bg-warning-soft text-warning-strong; }
-  .pl-connection-card-identity { @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted md:col-span-2; }
-  .pl-connection-card-identity code { @apply rounded bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-default; }
+  /* M44: downgraded to a quiet text reminder; no pill border / background. */
+  .pl-connection-readonly-status {
+    @apply inline-flex items-center text-xs font-normal text-fg-muted;
+  }
+  .pl-connection-readonly-status--safe { @apply text-fg-muted; }
+  .pl-connection-readonly-status--risk { @apply text-warning-strong; }
+  /* M44: header-right refresh timestamp; sits next to the readonly status. */
+  .pl-connection-last-reload {
+    @apply inline-flex items-baseline gap-1 text-xs text-fg-muted;
+  }
+  .pl-connection-last-reload--danger { @apply text-danger-strong; }
+  .pl-connection-card-identity { @apply hidden; }
   .pl-connection-card-header-actions { @apply hidden; }
   .pl-connection-card-body { @apply grid gap-3 px-4 py-4; }
-  /* M44: structured 2x2 KeyValue grid replacing the legacy meta-tag + code
-     badge row. Uses an auto-fit minmax(0,1fr) template so long Host values
-     can wrap without breaking the row layout. */
+  /* M44: compact 2-key KeyValue grid for Host / Database. Single column on
+     mobile, two columns from sm+; long Host values wrap safely. */
   .pl-connection-kv-grid {
     @apply grid min-w-0 grid-cols-1 gap-x-4 gap-y-2 text-xs md:col-span-2 sm:grid-cols-2;
   }
+  .pl-connection-kv-grid--compact { @apply gap-y-1.5; }
   .pl-connection-kv {
     @apply grid min-w-0 gap-0.5;
   }
   .pl-connection-kv dt {
-    @apply text-[11px] font-medium uppercase tracking-wider text-fg-muted;
+    @apply text-[12px] font-normal text-fg-muted;
   }
   .pl-connection-kv dd {
     @apply flex min-w-0 items-baseline gap-1 text-xs text-fg-default;
@@ -515,7 +526,6 @@
   }
   /* Long Host values: explicit overflow rules so the row never overflows the
      card on narrow widths. Title still carries the full value. */
-  .pl-connection-kv--wide dd { @apply flex min-w-0; }
   .pl-connection-kv-host {
     @apply block min-w-0 max-w-full font-mono text-xs text-fg-default;
     overflow-wrap: anywhere;
@@ -529,7 +539,7 @@
   .pl-connection-refresh-warning-text {
     @apply grid gap-0.5 text-warning-strong;
   }
-  .pl-connection-card-footer { @apply flex flex-wrap items-center justify-end gap-3 border-t border-border-default bg-bg-subtle px-4 py-3; }
+  .pl-connection-card-footer { @apply flex flex-wrap items-center justify-between gap-3 border-t border-border-default bg-bg-subtle px-4 py-3; }
   .pl-connection-card-actions { @apply flex flex-wrap items-center justify-end gap-2; }
   .pl-connection-card-schema-actions { @apply flex flex-wrap items-center justify-end gap-2; }
 
@@ -539,17 +549,25 @@
   .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border-0 bg-bg-subtle px-2 py-1; }
   .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
   .pl-schema-asset-heading { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-schema-asset-table { @apply w-full border-collapse text-sm; }
+  .pl-schema-asset-table { @apply w-full border-collapse text-sm; table-layout: fixed; }
   .pl-schema-asset-table th { @apply border-b border-border-default px-3 py-2 text-left text-xs font-semibold text-fg-muted; }
   .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-body; }
   .pl-schema-asset-table tbody tr:last-child td { @apply border-b-0; }
   .pl-schema-asset-table code { @apply font-mono text-sm text-fg-default; }
+  /* M44: stable column widths so Schema / Manifest 状态 / 本地表数 /
+     启用表数 / 操作 line up across all connection cards. */
+  .pl-schema-asset-col-schema { width: 30%; }
+  .pl-schema-asset-col-status { width: 22%; }
+  .pl-schema-asset-col-local-count { width: 16%; }
+  .pl-schema-asset-col-enabled-count { width: 16%; }
+  .pl-schema-asset-col-action { width: 16%; }
+  .pl-schema-asset-table-num { @apply text-right tabular-nums whitespace-nowrap; }
   .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
   .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
-  .pl-catalog-reload-status { @apply flex flex-wrap items-center gap-2 text-sm text-fg-muted; }
+  .pl-catalog-reload-status { @apply flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm text-fg-muted; }
   .pl-catalog-reload-status-main { @apply font-medium text-fg-default; }
   .pl-catalog-reload-status--success { @apply text-fg-muted; }
   .pl-catalog-reload-status--warning { @apply text-fg-muted; }

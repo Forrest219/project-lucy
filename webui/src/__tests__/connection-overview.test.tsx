@@ -42,7 +42,7 @@ function sourceSummary(table: string, schema = "dataforai") {
   };
 }
 
-type TestHandler = (body: unknown, init?: RequestInit) => Response;
+type TestHandler = (body: unknown, init?: RequestInit) => Response | Promise<Response>;
 
 function makeHandlerMap(
   projectHandler: TestHandler,
@@ -76,15 +76,21 @@ function stubOverviewFetch({
   ktxAvailable = true,
   projectError = false,
   tables = [sourceSummary("superstore_orders"), sourceSummary("customers"), sourceSummary("orders", "crm")],
-  catalogReloadsResponse,
-  mcpEndpoint
-}: {
-  connections?: ConnectionInfo[];
-  ktxAvailable?: boolean;
-  projectError?: boolean;
+	  catalogReloadsResponse,
+	  catalogReloadsPending = false,
+	  catalogReloadsError,
+	  catalogReloadPostError,
+	  mcpEndpoint
+	}: {
+	  connections?: ConnectionInfo[];
+	  ktxAvailable?: boolean;
+	  projectError?: boolean;
   tables?: ReturnType<typeof sourceSummary>[];
-  catalogReloadsResponse?: { runs: unknown[]; last: unknown | null; lastByConnection: Record<string, unknown> };
-  mcpEndpoint?: {
+	  catalogReloadsResponse?: { runs: unknown[]; last: unknown | null; lastByConnection: Record<string, unknown> };
+	  catalogReloadsPending?: boolean;
+	  catalogReloadsError?: string;
+	  catalogReloadPostError?: string;
+	  mcpEndpoint?: {
     url: string | null;
     status: "configured" | "fallback" | "invalid";
     source: "env" | "fallback";
@@ -121,13 +127,31 @@ function stubOverviewFetch({
           })
         );
     })(),
-    catalogReloadsResponse
-      ? () => new Response(JSON.stringify({ ok: true, data: catalogReloadsResponse }))
-      : undefined
+    catalogReloadsPending
+      ? () => new Promise<Response>(() => {})
+      : catalogReloadsError
+        ? () =>
+            new Response(
+              JSON.stringify({ ok: false, error: { code: "CATALOG_RELOADS_FAILED", message: catalogReloadsError } }),
+              { status: 500 }
+            )
+        : catalogReloadsResponse
+          ? () => new Response(JSON.stringify({ ok: true, data: catalogReloadsResponse }))
+          : undefined
   );
-  // tables override
-  handlers["GET /api/sources"] = () =>
-    new Response(JSON.stringify({ ok: true, data: { tables } }));
+	  // tables override
+	  handlers["GET /api/sources"] = () =>
+	    new Response(JSON.stringify({ ok: true, data: { tables } }));
+	  if (catalogReloadPostError) {
+	    handlers["POST /api/catalog/reload"] = () =>
+	      new Response(
+	        JSON.stringify({
+	          ok: false,
+	          error: { code: "CATALOG_RELOAD_FAILED", message: catalogReloadPostError }
+	        }),
+	        { status: 500 }
+	      );
+	  }
 
   vi.stubGlobal(
     "fetch",
@@ -182,8 +206,9 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByRole("link", { name: "表白名单" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "连通测试" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "打开表目录" })).not.toBeInTheDocument();
-    // The per-connection card still surfaces the upload + reload actions.
-    expect(screen.getAllByRole("button", { name: "上传 Schema Manifest" }).length).toBeGreaterThan(0);
+    // M44: connection-level upload is no longer in the card footer.
+    // The row-level "上传 Manifest" link is the only upload affordance.
+    expect(screen.queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "刷新本地目录" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
@@ -250,6 +275,7 @@ describe("ConnectionOverview", () => {
     expect(screen.getByRole("columnheader", { name: "Schema" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "本地表数" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "启用表数" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       await screen.findByTestId("schema-asset-status-mysql-aliyun-dataforai")
@@ -262,12 +288,18 @@ describe("ConnectionOverview", () => {
     expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).toHaveClass(
       "pl-row-action-link"
     );
+    expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).toHaveTextContent(
+      "维护启用范围"
+    );
     expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).not.toHaveClass(
       "pl-btn",
       "pl-btn--ghost",
       "pl-btn--primary",
       "pl-btn--secondary"
     );
+    expect(screen.queryByText("维护白名单")).not.toBeInTheDocument();
+    expect(screen.getByTestId("schema-enabled-count-mysql-aliyun-dataforai")).toHaveTextContent("1");
+    expect(screen.getByTestId("schema-enabled-count-mysql-aliyun-openclaw_db")).toHaveTextContent("0");
 
     expect(screen.getByTestId("schema-asset-status-mysql-aliyun-openclaw_db")).toHaveTextContent(
       "缺失 Manifest"
@@ -415,9 +447,12 @@ describe("ConnectionOverview", () => {
       "title",
       "来自 ktx.yaml 的 readonly 标记；真实只读能力由数据库账号权限保证。"
     );
-    const credentialMeta = within(card).getByText("凭据：inline");
-    expect(credentialMeta).toHaveClass("pl-connection-meta-tag");
-    expect(credentialMeta).not.toHaveClass("pl-connection-meta-tag--warning");
+    // M44: the credential source is no longer surfaced per card; only Host/Database
+    // remain in the KeyValue grid.
+    expect(within(card).queryByText("inline")).not.toBeInTheDocument();
+    expect(within(card).queryByText("凭据：inline")).not.toBeInTheDocument();
+    expect(within(card).queryByText("凭据来源")).not.toBeInTheDocument();
+    expect(within(card).queryByText("配置文件")).not.toBeInTheDocument();
   });
 
   it("keeps the overview layout stable with no connections", async () => {
@@ -436,12 +471,17 @@ describe("ConnectionOverview", () => {
     expect(await screen.findByText("连接状态加载失败：project unavailable")).toBeInTheDocument();
   });
 
-  it("surfaces project root as the only environment badge in the header", async () => {
+  it("M44: keeps the header compact (no project-root context, no pill badge)", async () => {
     stubOverviewFetch({ ktxAvailable: false });
     renderOverview();
 
-    expect(await screen.findByTestId("page-header-badge-root")).toHaveTextContent("/tmp/project-lucy");
-    expect(screen.queryByText("KTX 不可用")).not.toBeInTheDocument();
+    const header = await screen.findByTestId("page-header");
+    expect(header.querySelector(".pl-page-header-badges")).toBeNull();
+    expect(header).toHaveTextContent("维护每个连接的 Schema、YAML 资产与本地目录刷新状态。");
+    expect(within(header).queryByText("工作目录：")).not.toBeInTheDocument();
+    expect(within(header).queryByText("/tmp/project-lucy")).not.toBeInTheDocument();
+    expect(within(header).queryByText("KTX 不可用")).not.toBeInTheDocument();
+    expect(within(header).queryByTestId("page-header-badge-root")).not.toBeInTheDocument();
   });
 
   it("M17: keeps the header compact (no connection count, no KTX badge, no big description card)", async () => {
@@ -458,15 +498,16 @@ describe("ConnectionOverview", () => {
       screen.queryByText("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。")
     ).not.toBeInTheDocument();
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
-    expect(card).toHaveTextContent("配置：ktx.yaml");
-    expect(within(card).getByText("配置：ktx.yaml")).toHaveAttribute(
-      "title",
-      "连接基础配置与凭据来源由 ktx.yaml 管理，WebUI 不直接编辑凭据。"
-    );
-    expect(
-      within(card).getByText("配置：ktx.yaml")
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
+    const kv = within(card).getByTestId("connection-kv-mysql-aliyun");
+    expect(within(kv).getByText("Host")).toBeInTheDocument();
+    expect(within(kv).getByText("Database")).toBeInTheDocument();
+    // M44: ktx.yaml and credential source no longer surface per card.
+    expect(within(card).queryByText("配置文件")).not.toBeInTheDocument();
+    expect(within(card).queryByText("凭据来源")).not.toBeInTheDocument();
+    expect(within(card).queryByText("ktx.yaml")).not.toBeInTheDocument();
+    expect(within(card).queryByText("配置：ktx.yaml")).not.toBeInTheDocument();
+    expect(within(card).queryByText("凭据：file")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
@@ -567,15 +608,18 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    const status = await screen.findByTestId("catalog-reload-status-mysql-aliyun");
-    expect(status).toHaveTextContent("本地目录已刷新");
-    expect(status).toHaveTextContent("2026-07-29 10:30");
-    expect(status).toHaveTextContent("4 张表");
-    expect(status).toHaveTextContent("已完成");
-    expect(status.querySelectorAll(".pl-catalog-reload-badge")).toHaveLength(0);
-    expect(within(status).queryByRole("button", { name: /完成/ })).not.toBeInTheDocument();
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    // M44: success state lives in the header-right refresh timestamp only;
+    // the body no longer renders `本地目录已刷新 ... 已完成 ... 4 张表`.
+    const headerTimestamp = within(card).getByTestId("connection-last-reload-mysql-aliyun");
+    expect(headerTimestamp).toHaveTextContent("上次刷新：");
+    expect(headerTimestamp).toHaveTextContent("2026-07-29 10:30");
+    expect(within(card).queryByTestId("catalog-reload-status-mysql-aliyun")).not.toBeInTheDocument();
+    expect(within(card).queryByText("本地目录已刷新")).not.toBeInTheDocument();
+    expect(within(card).queryByText("已完成")).not.toBeInTheDocument();
+    expect(within(card).queryByText("4 张表")).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalog-last-run")).not.toBeInTheDocument();
-    expect(screen.queryByText("上次刷新")).not.toBeInTheDocument();
+    expect(within(card).queryByText("尚未读取本地 YAML")).not.toBeInTheDocument();
   });
 
   it("M24: renders card-local reload status, Schema context, and inline missing Manifest diagnostics", async () => {
@@ -653,15 +697,19 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const card = await screen.findByTestId("connection-card-demo-mysql");
-    expect(card).toHaveTextContent("配置：ktx.yaml");
+    const kv = within(card).getByTestId("connection-kv-demo-mysql");
+    expect(within(kv).getByText("Host")).toBeInTheDocument();
+    expect(within(kv).getByText("Database")).toBeInTheDocument();
+    expect(within(card).queryByText("配置文件")).not.toBeInTheDocument();
+    expect(within(card).queryByText("凭据来源")).not.toBeInTheDocument();
+    expect(card).not.toHaveTextContent("配置：ktx.yaml");
     expect(card).not.toHaveTextContent("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。");
-    const status = within(card).getByTestId("catalog-reload-status-demo-mysql");
-    expect(status).toHaveTextContent("本地目录已刷新");
-    expect(status).toHaveTextContent("3 张表");
-    expect(status).toHaveTextContent("1 个提示");
-    expect(status).toHaveTextContent("已完成");
-    expect(status.querySelectorAll(".pl-catalog-reload-badge")).toHaveLength(0);
-    expect(within(status).queryByRole("button", { name: /完成/ })).not.toBeInTheDocument();
+    // M44: success status now lives in the header-right refresh timestamp;
+    // the body no longer renders `pl-catalog-reload-status` while a Banner
+    // would otherwise be hidden. Healthy status surfaces as `上次刷新：<ts>`.
+    const headerTimestamp = within(card).getByTestId("connection-last-reload-demo-mysql");
+    expect(headerTimestamp).toHaveTextContent("上次刷新：");
+    expect(within(card).queryByTestId("catalog-reload-status-demo-mysql")).not.toBeInTheDocument();
     expect(within(card).getByTestId("catalog-reload-demo-mysql")).toHaveTextContent("刷新本地目录");
 
     const table = within(card).getByTestId("schema-asset-table-demo-mysql");
@@ -691,7 +739,7 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByText("有提示")).not.toBeInTheDocument();
   });
 
-  it("renders the never-run catalog status when the sidecar has no entry for the connection", async () => {
+  it("never-run: surfaces the refresh warning banner and hides the legacy muted status row", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -706,12 +754,257 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
-    const status = await screen.findByTestId("catalog-reload-status-mysql-aliyun");
-    expect(status).toHaveTextContent("本地目录未刷新");
-    expect(status).toHaveTextContent("尚未读取本地 YAML");
+    const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
+    expect(banner).toHaveTextContent("本地目录未刷新：尚未读取本地 YAML 资产配置。");
+    // M44: when a Banner is shown, the body no longer renders the legacy
+    // `本地目录未刷新 · 尚未读取本地 YAML` muted status row.
+    expect(within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun")).toHaveTextContent(
+      "立即刷新"
+    );
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    expect(within(card).queryByTestId("catalog-reload-status-mysql-aliyun")).not.toBeInTheDocument();
+    expect(within(card).queryByText("尚未读取本地 YAML")).not.toBeInTheDocument();
+    expect(within(card).queryByTestId("connection-last-reload-mysql-aliyun")).not.toBeInTheDocument();
   });
 
-  it("M29: centralizes Connection actions in the footer action bar", async () => {
+  it("M44: surfaces an amber refresh warning banner with 立即刷新 for never-run connections", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")],
+      catalogReloadsResponse: { runs: [], last: null, lastByConnection: {} }
+    });
+    renderOverview();
+
+    const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
+    expect(banner).toHaveTextContent("本地目录未刷新：尚未读取本地 YAML 资产配置。");
+    expect(banner).toHaveClass("pl-connection-refresh-warning");
+    const refreshAction = within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun");
+    expect(refreshAction).toHaveTextContent("立即刷新");
+    expect(refreshAction.textContent ?? "").not.toMatch(/[↗→]/);
+    expect(refreshAction).toHaveClass("pl-btn--ghost");
+    expect(refreshAction).not.toHaveClass("pl-btn--primary");
+    // The Catalog 状态 metric carries the warning tone.
+    const catalogMetric = screen
+      .getAllByTestId("connection-metric")
+      .find((node) => node.getAttribute("data-metric") === "catalogStatus");
+    expect(catalogMetric).toHaveClass("pl-metric-card--warning");
+    assertNoForbiddenTerms(document.body);
+  });
+
+  it("M44: does not show never-run warnings while catalog reload history is still loading", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")],
+      catalogReloadsPending: true
+    });
+    renderOverview();
+
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    expect(within(card).queryByTestId("connection-refresh-warning-mysql-aliyun")).not.toBeInTheDocument();
+    expect(within(card).getByTestId("catalog-reload-status-mysql-aliyun")).toHaveTextContent(
+      "正在读取本地目录状态..."
+    );
+    const catalogMetric = screen
+      .getAllByTestId("connection-metric")
+      .find((node) => node.getAttribute("data-metric") === "catalogStatus");
+    expect(catalogMetric).toHaveTextContent("加载中");
+    expect(catalogMetric).not.toHaveClass("pl-metric-card--warning");
+  });
+
+  it("M44: does not show never-run warnings when catalog reload history fails to load", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")],
+      catalogReloadsError: "reload history unavailable"
+    });
+    renderOverview();
+
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    expect(within(card).queryByTestId("connection-refresh-warning-mysql-aliyun")).not.toBeInTheDocument();
+    expect(within(card).getByTestId("catalog-reload-status-mysql-aliyun")).toHaveTextContent(
+      "本地目录状态加载失败"
+    );
+    const catalogMetric = screen
+      .getAllByTestId("connection-metric")
+      .find((node) => node.getAttribute("data-metric") === "catalogStatus");
+    expect(catalogMetric).toHaveTextContent("加载失败");
+    expect(catalogMetric).toHaveClass("pl-metric-card--danger");
+  });
+
+	  it("M44: hides the refresh warning and warning tone once a successful catalog run exists", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")],
+      catalogReloadsResponse: {
+        runs: [],
+        last: {
+          id: "rel_20260729_103000_001",
+          status: "success",
+          startedAt: "2026-07-29T02:30:00.000Z",
+          finishedAt: "2026-07-29T02:30:00.045Z",
+          durationMs: 45,
+          requestedConnectionId: "mysql-aliyun",
+          connectionIds: ["mysql-aliyun"],
+          connections: 1,
+          configuredSchemas: 1,
+          manifestSchemas: 1,
+          tables: 1,
+          enabledTables: 1,
+          warnings: [],
+          source: "static-yaml"
+        },
+        lastByConnection: {
+          "mysql-aliyun": {
+            id: "rel_20260729_103000_001",
+            status: "success",
+            startedAt: "2026-07-29T02:30:00.000Z",
+            finishedAt: "2026-07-29T02:30:00.045Z",
+            durationMs: 45,
+            requestedConnectionId: "mysql-aliyun",
+            connectionIds: ["mysql-aliyun"],
+            connections: 1,
+            configuredSchemas: 1,
+            manifestSchemas: 1,
+            tables: 1,
+            enabledTables: 1,
+            warnings: [],
+            source: "static-yaml"
+          }
+        }
+      }
+    });
+    renderOverview();
+
+    expect(
+      screen.queryByTestId("connection-refresh-warning-mysql-aliyun")
+    ).not.toBeInTheDocument();
+    const catalogMetric = await screen
+      .findAllByTestId("connection-metric")
+      .then((nodes) => nodes.find((node) => node.getAttribute("data-metric") === "catalogStatus"));
+    expect(catalogMetric).toBeDefined();
+	    expect(catalogMetric).not.toHaveClass("pl-metric-card--warning");
+	  });
+
+	  it("M44: surfaces a footer alert when manual catalog reload fails", async () => {
+	    stubOverviewFetch({
+	      catalogReloadPostError: "local YAML scan failed",
+	      catalogReloadsResponse: {
+	        runs: [],
+	        last: {
+	          id: "rel_20260729_103000_001",
+	          status: "success",
+	          startedAt: "2026-07-29T02:30:00.000Z",
+	          finishedAt: "2026-07-29T02:30:00.045Z",
+	          durationMs: 45,
+	          requestedConnectionId: "mysql-aliyun",
+	          connectionIds: ["mysql-aliyun"],
+	          connections: 1,
+	          configuredSchemas: 1,
+	          manifestSchemas: 1,
+	          tables: 1,
+	          enabledTables: 1,
+	          warnings: [],
+	          source: "static-yaml"
+	        },
+	        lastByConnection: {
+	          "mysql-aliyun": {
+	            id: "rel_20260729_103000_001",
+	            status: "success",
+	            startedAt: "2026-07-29T02:30:00.000Z",
+	            finishedAt: "2026-07-29T02:30:00.045Z",
+	            durationMs: 45,
+	            requestedConnectionId: "mysql-aliyun",
+	            connectionIds: ["mysql-aliyun"],
+	            connections: 1,
+	            configuredSchemas: 1,
+	            manifestSchemas: 1,
+	            tables: 1,
+	            enabledTables: 1,
+	            warnings: [],
+	            source: "static-yaml"
+	          }
+	        }
+	      }
+	    });
+	    renderOverview();
+
+	    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+	    fireEvent.click(within(card).getByTestId("catalog-reload-mysql-aliyun"));
+
+	    const status = await within(card).findByTestId("catalog-reload-status-mysql-aliyun");
+	    expect(status).toHaveAttribute("role", "alert");
+	    expect(status).toHaveTextContent("本地目录刷新失败");
+	    expect(status).toHaveTextContent("local YAML scan failed");
+	  });
+
+	  it("M44: long Host values render with overflow defenses and full value as title", async () => {
+    const longHost = "rm-very-long-cluster-name-shanghai-1.cluster-abcdefghi.rds.aliyuncs.com";
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          host: longHost,
+          port: "3306",
+          database: "data_agent_poc",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"],
+          passwordSource: "file"
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")],
+      catalogReloadsResponse: { runs: [], last: null, lastByConnection: {} }
+    });
+    renderOverview();
+
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    expect(card.textContent ?? "").toContain(longHost);
+    const hostNode = card.querySelector("code.pl-connection-kv-host");
+    expect(hostNode).not.toBeNull();
+    expect(hostNode).toHaveTextContent(`${longHost}:3306`);
+    expect(hostNode).toHaveAttribute("title", `${longHost}:3306`);
+    expect(hostNode).toHaveAttribute("dir", "ltr");
+    expect(hostNode).toHaveClass("notranslate");
+    expect(hostNode.closest("[translate='no']")).not.toBeNull();
+    const kvHost = hostNode.closest(".pl-connection-kv");
+    expect(kvHost).not.toBeNull();
+    const dbNodes = Array.from(card.querySelectorAll("dd code"));
+    const dbNode = dbNodes.find((node) => node.textContent === "data_agent_poc");
+    expect(dbNode).toBeDefined();
+    expect(dbNode).toHaveAttribute("dir", "ltr");
+    expect(dbNode).toHaveClass("notranslate");
+    expect(dbNode.closest("[translate='no']")).not.toBeNull();
+  });
+
+  it("M29/M44: footer hosts exactly one Primary (刷新本地目录) and the row keeps 上传 Manifest", async () => {
     stubOverviewFetch();
     renderOverview();
 
@@ -721,13 +1014,21 @@ describe("ConnectionOverview", () => {
     const footerActions = within(card).getByTestId("connection-card-schema-actions-mysql-aliyun");
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toBeInTheDocument();
     expect(within(footerActions).getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
-    expect(within(footerActions).getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
     expect(
       within(footerActions).getAllByRole("button").map((button) => button.textContent?.trim())
-    ).toEqual(["+ 添加 Schema", "刷新本地目录", "上传 Schema Manifest"]);
+    ).toEqual(["+ 添加 Schema", "刷新本地目录"]);
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toHaveClass("pl-btn--secondary");
+    const refreshButton = within(footerActions).getByRole("button", { name: "刷新本地目录" });
+    expect(refreshButton).toHaveClass("pl-btn--primary");
+    expect(within(footerActions).queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
+    // Each card exposes at most one Primary across footer + banner.
+    const primaryButtons = within(card).getAllByRole("button", { hidden: true }).filter((button) =>
+      button.className.includes("pl-btn--primary")
+    );
+    expect(primaryButtons).toHaveLength(1);
+    expect(primaryButtons[0]).toHaveTextContent("刷新本地目录");
     expect(within(card).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "上传语义包" })
@@ -800,6 +1101,8 @@ describe("ConnectionOverview", () => {
     const uploadBtn = await screen.findByTestId("upload-yaml-demo-mysql-openclaw_db");
     expect(uploadBtn).toHaveTextContent("上传 Manifest");
     expect(uploadBtn).toHaveClass("pl-row-action-link");
+    expect(uploadBtn).toHaveClass("notranslate");
+    expect(uploadBtn).toHaveAttribute("translate", "no");
     expect(uploadBtn).not.toHaveClass(
       "pl-btn",
       "pl-btn--ghost",
@@ -859,6 +1162,8 @@ describe("ConnectionOverview", () => {
 
     const status = await screen.findByTestId("schema-asset-status-mysql-aliyun-openclaw_db");
     expect(status).toHaveTextContent("缺失 Manifest");
+    expect(status).toHaveClass("notranslate");
+    expect(status).toHaveAttribute("translate", "no");
     expect(status).not.toHaveTextContent("缺失 manifest");
     expect(screen.queryByText("财政部舱单")).not.toBeInTheDocument();
     expect(screen.queryByText("模式清单")).not.toBeInTheDocument();

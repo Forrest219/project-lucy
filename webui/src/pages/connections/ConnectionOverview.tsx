@@ -14,10 +14,7 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
-import {
-  CatalogAssetUploadButton,
-  CatalogReloadButton
-} from "../../components/catalog";
+import { CatalogAssetUploadButton, CatalogReloadButton } from "../../components/catalog";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
 
@@ -30,7 +27,13 @@ function engineLabel(engine?: string) {
   return "DB";
 }
 
-function catalogStatusLabel(run: CatalogReloadsResponse["last"]): string {
+function catalogStatusLabel(
+  run: CatalogReloadsResponse["last"],
+  isLoading = false,
+  error: Error | null = null
+): string {
+  if (isLoading) return "加载中";
+  if (error) return "加载失败";
   if (!run) return "未运行";
   if (run.status === "failed") return "失败";
   if (run.warnings.length > 0) return `${run.warnings.length} 个待处理`;
@@ -57,14 +60,35 @@ function warningSummary(warnings: CatalogReloadWarning[]): string {
   return `${summary} 等 ${warnings.length} 个待处理`;
 }
 
-function catalogStatusDetail(run: CatalogReloadsResponse["last"]): string {
+function catalogStatusDetail(
+  run: CatalogReloadsResponse["last"],
+  isLoading = false,
+  error: Error | null = null
+): string {
+  if (isLoading) return "正在读取本地目录刷新记录";
+  if (error) return `本地目录状态加载失败：${error.message}`;
   if (!run) return "尚未运行过本地目录刷新";
   const warningText = run.warnings.length > 0 ? ` · ${warningSummary(run.warnings)}` : "";
   return `${run.tables} 张表 · ${run.connectionIds.length} 个连接${warningText}`;
 }
 
-function catalogStatusSubValue(run: CatalogReloadsResponse["last"]): ReactNode {
-  return <span className="notranslate" translate="no">{catalogStatusDetail(run)}</span>;
+function catalogStatusSubValue(
+  run: CatalogReloadsResponse["last"],
+  isLoading = false,
+  error: Error | null = null
+): ReactNode {
+  return <span className="notranslate" translate="no">{catalogStatusDetail(run, isLoading, error)}</span>;
+}
+
+function catalogStatusTone(
+  run: CatalogReloadsResponse["last"],
+  isLoading = false,
+  error: Error | null = null
+): "warning" | "danger" | undefined {
+  if (isLoading) return undefined;
+  if (error) return "danger";
+  if (!run || run.status === "failed" || run.warnings.length > 0) return "warning";
+  return undefined;
 }
 
 function formatLocalTime(iso: string): string {
@@ -129,7 +153,9 @@ function schemaAssetState(
 function catalogRunState(
   run: CatalogReloadsResponse["lastByConnection"][string] | undefined,
   isLoading = false,
-  error: Error | null = null
+  error: Error | null = null,
+  isHistoryLoading = false,
+  historyError: Error | null = null
 ): CatalogRunState {
   if (isLoading) {
     return {
@@ -145,6 +171,26 @@ function catalogRunState(
     return {
       label: "本地目录刷新失败",
       detail: error.message,
+      tone: "danger",
+      badgeLabel: "失败",
+      tableCount: run?.tables ?? 0,
+      warningCount: run?.warnings.length ?? 0
+    };
+  }
+  if (isHistoryLoading) {
+    return {
+      label: "正在读取本地目录状态...",
+      detail: "",
+      tone: "muted",
+      badgeLabel: "加载中",
+      tableCount: run?.tables ?? 0,
+      warningCount: run?.warnings.length ?? 0
+    };
+  }
+  if (historyError) {
+    return {
+      label: "本地目录状态加载失败",
+      detail: historyError.message,
       tone: "danger",
       badgeLabel: "失败",
       tableCount: run?.tables ?? 0,
@@ -194,18 +240,6 @@ function warningKey(connectionId: string, schema: string): string {
   return `${connectionId}:${schema}`;
 }
 
-function catalogRunSummary(catalogState: CatalogRunState, hasRun: boolean): string {
-  const statusLabel = catalogState.badgeLabel === "未刷新" ? "" : catalogState.badgeLabel;
-  const parts = [
-    catalogState.label,
-    catalogState.detail,
-    statusLabel,
-    hasRun ? `${catalogState.tableCount} 张表` : "",
-    catalogState.warningCount > 0 ? `${catalogState.warningCount} 个提示` : ""
-  ].filter(Boolean);
-  return parts.join(" · ");
-}
-
 function readOnlyStatus(conn: ConnectionInfo): { label: string; tone: "safe" | "risk"; title: string } {
   return {
     label: conn.readOnlyExpected === false ? "未声明只读" : "预期只读",
@@ -214,20 +248,41 @@ function readOnlyStatus(conn: ConnectionInfo): { label: string; tone: "safe" | "
   };
 }
 
-function credentialSourceLabel(source: ConnectionInfo["passwordSource"]): string | null {
-  if (!source) return null;
-  return `凭据：${source}`;
+function hostValue(conn: ConnectionInfo): { text: string; title: string } {
+  if (!conn.host) {
+    return { text: "未声明 Host", title: "未声明 Host" };
+  }
+  const text = conn.port ? `${conn.host}:${conn.port}` : conn.host;
+  return { text, title: text };
 }
 
-function connectionIdentity(conn: ConnectionInfo): ReactNode {
-  const host = conn.host ? `${conn.host}${conn.port ? `:${conn.port}` : ""}` : "未声明 Host";
-  const database = conn.database ?? "未声明 Database";
-  return (
-    <span className="pl-connection-card-identity notranslate" translate="no">
-      <span>Host <code>{host}</code></span>
-      <span>Database <code>{database}</code></span>
-    </span>
-  );
+function databaseValue(conn: ConnectionInfo): { text: string; title: string } {
+  if (!conn.database) {
+    return { text: "未声明 Database", title: "未声明 Database" };
+  }
+  return { text: conn.database, title: conn.database };
+}
+
+function shouldShowRefreshWarning(
+  lastRun: CatalogReloadRun | null,
+  isReloading: boolean,
+  hasError: boolean,
+  hasReloadHistory: boolean
+): boolean {
+  if (!hasReloadHistory) return false;
+  if (isReloading) return false;
+  if (hasError) return false;
+  return !lastRun;
+}
+
+function shouldShowCatalogRunStatus(
+  lastRun: CatalogReloadRun | undefined,
+  isReloading: boolean,
+  hasReloadError: boolean,
+  isHistoryLoading: boolean,
+  hasHistoryError: boolean
+): boolean {
+  return Boolean(isReloading || hasReloadError || isHistoryLoading || hasHistoryError || lastRun?.status === "failed");
 }
 
 export function ConnectionOverview() {
@@ -249,7 +304,10 @@ export function ConnectionOverview() {
   const semanticTables = sourcesQuery.data?.tables ?? [];
   const semanticTableCount = semanticTables.length;
   const schemaCount = connections.reduce((sum, conn) => sum + conn.schemas.length, 0);
-  const lastCatalogRun = catalogReloadsQuery.data?.last ?? null;
+  const catalogReloadHistoryReady = catalogReloadsQuery.isSuccess;
+  const catalogReloadHistoryLoading = catalogReloadsQuery.isLoading;
+  const catalogReloadHistoryError = catalogReloadsQuery.error instanceof Error ? catalogReloadsQuery.error : null;
+  const lastCatalogRun = catalogReloadHistoryReady ? catalogReloadsQuery.data.last : null;
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
@@ -296,11 +354,8 @@ export function ConnectionOverview() {
     <div className="pl-page-stack">
       <PageHeader
         title="连接概览"
-        description={<span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与本地目录刷新状态。</span>}
-        badges={
-          projectQuery.data ? (
-            <span data-testid="page-header-badge-root">{projectQuery.data.root}</span>
-          ) : null
+        description={
+          <span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与本地目录刷新状态。</span>
         }
       />
 
@@ -322,33 +377,62 @@ export function ConnectionOverview() {
         />
         <MetricCard
           type="catalogStatus"
-          value={catalogStatusLabel(lastCatalogRun)}
-          subValue={catalogStatusSubValue(lastCatalogRun)}
+          value={catalogStatusLabel(lastCatalogRun, catalogReloadHistoryLoading, catalogReloadHistoryError)}
+          subValue={catalogStatusSubValue(lastCatalogRun, catalogReloadHistoryLoading, catalogReloadHistoryError)}
+          tone={catalogStatusTone(lastCatalogRun, catalogReloadHistoryLoading, catalogReloadHistoryError)}
         />
       </div>
 
-      <div className="pl-overview-grid">
-        <section className="pl-panel">
-          {connections.length === 0 && (
-            <p className="text-sm text-fg-muted py-4 notranslate" translate="no">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
-          )}
-          {connections.map((conn) => {
-            const lastRun = reloadRunsByConnection[conn.id] ?? catalogReloadsQuery.data?.lastByConnection[conn.id];
+      <div className="pl-overview-grid pl-overview-grid--flat">
+        {connections.length === 0 && (
+          <p className="text-sm text-fg-muted py-4 notranslate" translate="no">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
+        )}
+        {connections.map((conn) => {
+            const lastRun =
+              reloadRunsByConnection[conn.id] ??
+              (catalogReloadHistoryReady ? catalogReloadsQuery.data.lastByConnection[conn.id] : undefined);
             const reloadError = reloadErrorsByConnection[conn.id] ?? null;
-            const catalogState = catalogRunState(lastRun, Boolean(reloadingConnections[conn.id]), reloadError);
-            const schemaRows = conn.schemas.map((schema) => ({
-              schema,
-              assetState: schemaAssetState(conn.id, schema, semanticTables, lastRun)
-            }));
+            const catalogState = catalogRunState(
+              lastRun,
+              Boolean(reloadingConnections[conn.id]),
+              reloadError,
+              catalogReloadHistoryLoading,
+              catalogReloadHistoryError
+            );
+            const schemaRows = conn.schemas.map((schema) => {
+              const enabledTableCountForSchema = conn.enabledTables.filter((entry) =>
+                entry.startsWith(`${schema}.`)
+              ).length;
+              return {
+                schema,
+                assetState: schemaAssetState(conn.id, schema, semanticTables, lastRun),
+                enabledTableCount: enabledTableCountForSchema
+              };
+            });
             const missingManifestWarnings = (lastRun?.warnings ?? []).filter(
               (warning) => warning.connectionId === conn.id && warning.code === "SCHEMA_MANIFEST_MISSING" && warning.schema
             );
             const missingManifestWarningsBySchema = new Map(
               missingManifestWarnings.map((warning) => [warning.schema, warning])
             );
-            const hasManifestGap = schemaRows.some(({ assetState }) => assetState.tone !== "success");
             const readOnly = readOnlyStatus(conn);
-            const credentialLabel = credentialSourceLabel(conn.passwordSource);
+            const host = hostValue(conn);
+            const database = databaseValue(conn);
+            const showRefreshWarning = shouldShowRefreshWarning(
+              lastRun ?? null,
+              Boolean(reloadingConnections[conn.id]),
+              Boolean(reloadError || catalogReloadHistoryError),
+              catalogReloadHistoryReady
+            );
+            const headerTimestamp = lastRun ? formatLocalTime(lastRun.startedAt) : null;
+            const headerTimestampIso = lastRun?.startedAt ?? null;
+            const showCatalogRunStatus = shouldShowCatalogRunStatus(
+              lastRun,
+              Boolean(reloadingConnections[conn.id]),
+              Boolean(reloadError),
+              catalogReloadHistoryLoading,
+              Boolean(catalogReloadHistoryError)
+            );
             return (
               <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
                 <div className="pl-connection-card-header">
@@ -362,7 +446,7 @@ export function ConnectionOverview() {
                     </span>
                     <strong className="notranslate" translate="no">{conn.id}</strong>
                   </div>
-                  <div className="pl-connection-card-badges">
+                  <div className="pl-connection-card-meta notranslate" translate="no">
                     <span
                       className={`pl-connection-readonly-status pl-connection-readonly-status--${readOnly.tone}`}
                       translate="no"
@@ -371,60 +455,100 @@ export function ConnectionOverview() {
                     >
                       {readOnly.label}
                     </span>
-                  </div>
-                  <div className="pl-connection-card-meta">
-                    <span
-                      className="pl-connection-meta-tag notranslate"
-                      title="连接基础配置与凭据来源由 ktx.yaml 管理，WebUI 不直接编辑凭据。"
-                      translate="no"
-                    >
-                      配置：ktx.yaml
-                    </span>
-                    {credentialLabel ? (
+                    {headerTimestamp ? (
                       <span
-                        className="pl-connection-meta-tag notranslate"
-                        title={
-                          conn.passwordSource === "inline"
-                            ? "当前连接使用 inline 凭据；推荐改为 file 或 env 方式管理。"
-                            : "凭据来源由 ktx.yaml 声明，WebUI 不显示密码值。"
-                        }
+                        className={`pl-connection-last-reload pl-connection-last-reload--${lastRun?.status === "failed" ? "danger" : "muted"}`}
+                        data-testid={`connection-last-reload-${conn.id}`}
+                        title={headerTimestampIso ?? undefined}
                         translate="no"
                       >
-                        {credentialLabel}
+                        <span>上次刷新：</span>
+                        <time className="notranslate" translate="no" dir="ltr">{headerTimestamp}</time>
+                        {lastRun?.status === "failed" ? <span> · 失败</span> : null}
                       </span>
                     ) : null}
                   </div>
-                  {connectionIdentity(conn)}
+                  <dl className="pl-connection-kv-grid pl-connection-kv-grid--compact" data-testid={`connection-kv-${conn.id}`}>
+                    <div className="pl-connection-kv">
+                      <dt className="notranslate" translate="no">Host</dt>
+                      <dd>
+                        <code
+                          className="pl-connection-kv-host notranslate"
+                          translate="no"
+                          dir="ltr"
+                          title={host.title}
+                        >
+                          {host.text}
+                        </code>
+                      </dd>
+                    </div>
+                    <div className="pl-connection-kv">
+                      <dt className="notranslate" translate="no">Database</dt>
+                      <dd>
+                        <code
+                          className="notranslate"
+                          translate="no"
+                          dir="ltr"
+                          title={database.title}
+                        >
+                          {database.text}
+                        </code>
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
                 <div className="pl-connection-card-body">
-                  <div
-                    className={`pl-catalog-reload-status pl-catalog-reload-status--${catalogState.tone} notranslate`}
-                    data-testid={`catalog-reload-status-${conn.id}`}
-                    role={catalogState.tone === "danger" ? "alert" : "status"}
-                    translate="no"
-                  >
-                    <span className="pl-catalog-reload-status-main">
-                      {catalogRunSummary(catalogState, Boolean(lastRun))}
-                    </span>
-                  </div>
+                  {showRefreshWarning ? (
+                    <div
+                      className="pl-connection-refresh-warning notranslate"
+                      data-testid={`connection-refresh-warning-${conn.id}`}
+                      role="status"
+                      translate="no"
+                    >
+                      <p className="pl-connection-refresh-warning-text">
+                        <span>本地目录未刷新：</span>
+                        <span>尚未读取本地 YAML 资产配置。</span>
+                      </p>
+                      <CatalogReloadButton
+                        connectionId={conn.id}
+                        label="立即刷新"
+                        variant="ghost"
+                        size="sm"
+                        testId={`connection-refresh-warning-action-${conn.id}`}
+                        showCompletionLabel={false}
+                        showInlineResult={false}
+                        onReloadStart={() => handleReloadStart(conn.id)}
+                        onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
+                        onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
+                      />
+                    </div>
+                  ) : null}
 
                   <div className="pl-schema-asset-heading">
                     <span className="notranslate" translate="no">关联 Schema 资产列表</span>
                   </div>
-                  {conn.schemas.length === 0 ? (
-                    <p className="text-sm text-fg-muted py-3 notranslate" translate="no">尚未配置 Schema。请先添加 Schema。</p>
-                  ) : (
-                    <table className="pl-schema-asset-table" data-testid={`schema-asset-table-${conn.id}`}>
-                      <thead>
+	                  {conn.schemas.length === 0 ? (
+	                    <p className="text-sm text-fg-muted py-3 notranslate" translate="no">尚未配置 Schema。请先添加 Schema。</p>
+	                  ) : (
+	                    <table className="pl-schema-asset-table" data-testid={`schema-asset-table-${conn.id}`}>
+                        <colgroup>
+                          <col className="pl-schema-asset-col-schema" />
+                          <col className="pl-schema-asset-col-status" />
+                          <col className="pl-schema-asset-col-local-count" />
+                          <col className="pl-schema-asset-col-enabled-count" />
+                          <col className="pl-schema-asset-col-action" />
+                        </colgroup>
+	                      <thead>
                         <tr>
                           <th className="notranslate" translate="no">Schema</th>
                           <th className="notranslate" translate="no">Manifest 状态</th>
                           <th>本地表数</th>
+                          <th>启用表数</th>
                           <th>操作</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {schemaRows.map(({ schema, assetState }) => {
+                        {schemaRows.map(({ schema, assetState, enabledTableCount }) => {
                           const hasManifest = assetState.tone === "success";
                           const warning = missingManifestWarningsBySchema.get(schema);
                           const key = warning ? warningKey(conn.id, schema) : "";
@@ -436,17 +560,23 @@ export function ConnectionOverview() {
                                 data-tone={assetState.tone}
                                 data-testid={`schema-row-${conn.id}-${schema}`}
                               >
-                                <td><code className="notranslate" translate="no">{schema}</code></td>
+                                <td><code className="notranslate" translate="no" dir="ltr">{schema}</code></td>
                                 <td>
                                   <span
-                                    className={`pl-schema-asset-status pl-schema-asset-status--${assetState.tone}`}
+                                    className={`pl-schema-asset-status pl-schema-asset-status--${assetState.tone} notranslate`}
                                     data-testid={`schema-asset-status-${conn.id}-${schema}`}
                                     translate="no"
                                   >
                                     {assetState.label}
                                   </span>
                                 </td>
-                                <td>{assetState.tableCount} 张表</td>
+                                <td className="pl-schema-asset-table-num">{assetState.tableCount} 张表</td>
+                                <td
+                                  className="pl-schema-asset-table-num"
+                                  data-testid={`schema-enabled-count-${conn.id}-${schema}`}
+                                >
+                                  {enabledTableCount}
+                                </td>
                                 <td>
                                   {hasManifest ? (
                                     <Link
@@ -454,7 +584,7 @@ export function ConnectionOverview() {
                                       to={`/connections/whitelist?schema=${encodeURIComponent(schema)}`}
                                       data-testid={`schema-whitelist-${conn.id}-${schema}`}
                                     >
-                                      维护白名单
+                                      维护启用范围
                                     </Link>
                                   ) : (
                                     <CatalogAssetUploadButton
@@ -474,11 +604,11 @@ export function ConnectionOverview() {
                                   data-testid={`catalog-reload-warning-${conn.id}-${schema}`}
                                   translate="no"
                                 >
-                                  <td colSpan={4}>
+                                  <td colSpan={5}>
                                     <div className="pl-schema-warning-subrow-content">
                                       <div className="pl-catalog-reload-warning-copy">
                                         <strong className="notranslate" translate="no">
-                                          缺少 Manifest：<span>{schema}</span>
+                                          缺少 Manifest：<span className="notranslate" translate="no">{schema}</span>
                                         </strong>
                                         <p className="notranslate" translate="no">
                                           已启用但本地 schema 文件不存在。路径：<code dir="ltr">{manifestPath}</code>
@@ -544,10 +674,21 @@ export function ConnectionOverview() {
                       </tbody>
                     </table>
                   )}
-                </div>
-                <div className="pl-connection-card-footer">
-                  <div
-                    className="pl-connection-card-schema-actions"
+	                </div>
+	                <div className="pl-connection-card-footer">
+                    {showCatalogRunStatus ? (
+                      <div
+                        className={`pl-catalog-reload-status pl-catalog-reload-status--${catalogState.tone} notranslate`}
+                        data-testid={`catalog-reload-status-${conn.id}`}
+                        role={catalogState.tone === "danger" ? "alert" : "status"}
+                        translate="no"
+                      >
+                        <span className="pl-catalog-reload-status-main">{catalogState.label}</span>
+                        {catalogState.detail ? <span>{catalogState.detail}</span> : null}
+                      </div>
+                    ) : null}
+	                  <div
+	                    className="pl-connection-card-schema-actions"
                     data-testid={`connection-card-schema-actions-${conn.id}`}
                   >
                     <button
@@ -562,7 +703,7 @@ export function ConnectionOverview() {
                     <CatalogReloadButton
                       connectionId={conn.id}
                       label="刷新本地目录"
-                      variant="secondary"
+                      variant="primary"
                       testId={`catalog-reload-${conn.id}`}
                       showCompletionLabel={false}
                       showInlineResult={false}
@@ -570,19 +711,11 @@ export function ConnectionOverview() {
                       onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
                       onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
                     />
-                    <CatalogAssetUploadButton
-                      connectionId={conn.id}
-                      schemaOptions={conn.schemas}
-                      label="上传 Schema Manifest"
-                      variant={hasManifestGap ? "primary" : "secondary"}
-                      testId={`upload-yaml-${conn.id}`}
-                    />
                   </div>
                 </div>
               </div>
             );
           })}
-        </section>
       </div>
 
       {addTarget && (

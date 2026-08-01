@@ -26,7 +26,8 @@
 | Test ID | 元素 | 出现位置 |
 |---|---|---|
 | `page-header` | 页面 header 根 | `components/PageHeader.tsx` |
-| `page-header-badge-root` | 环境路径 Badge | `pages/connections/ConnectionOverview.tsx` |
+| `page-header-badges` | 状态徽章容器 | `components/PageHeader.tsx` |
+| `page-header-actions` | 页面操作容器 | `components/PageHeader.tsx` |
 | `current-location` | 当前导航高亮 | `app/App.tsx` |
 | `sidebar-footer` | 侧栏底部 | `app/App.tsx` |
 | `sidebar-utility` | 侧栏工具区 | `app/App.tsx` |
@@ -39,16 +40,21 @@
 |---|---|---|
 | `connection-metric` | 顶部指标卡 | — |
 | `connection-card-${conn.id}` | 连接卡片根 | — |
-| `connection-readonly-${conn.id}` | `预期只读` Badge | 禁止 `Read-only expected` 露出 |
+| `connection-readonly-${conn.id}` | `预期只读` 低权重提醒 | 禁止 `Read-only expected` 露出 |
+| `connection-kv-${conn.id}` | 卡片 KeyValue 网格 | 必含 `Host / Database`；不得逐卡出现 `配置文件 / 凭据来源` |
+| `connection-refresh-warning-${conn.id}` | 未刷新 amber Banner | 文案 `本地目录未刷新：尚未读取本地 YAML 资产配置。` + `立即刷新` |
+| `connection-refresh-warning-action-${conn.id}` | Banner `立即刷新` 按钮 | 必含 `立即刷新`，无 `↗` |
 | `connection-card-schema-actions-${conn.id}` | 卡片 Schema 上下文操作区 | — |
 | `engine-badge-${conn.id}` | 驱动 Badge | — |
-| `catalog-reload-status-${conn.id}` | Catalog 刷新状态 | — |
+| `connection-last-reload-${conn.id}` | Header 右侧上次刷新时间 | 仅展示 `上次刷新：<timestamp>`，不得展示表数/提示数摘要 |
+| `catalog-reload-status-${conn.id}` | Catalog 刷新加载/失败状态 | 仅用于 pending / error / 最近失败状态；健康成功态不出现 |
 | `catalog-reload-warning-${conn.id}-${schema}` | Schema Catalog 警告 | — |
 | `catalog-reload-warning-details-${conn.id}-${schema}` | 警告详情 | — |
-| `schema-asset-table-${conn.id}` | Schema 资产表 | 列：`Schema / Manifest 状态 / 本地表数 / 下一步` |
+| `schema-asset-table-${conn.id}` | Schema 资产表 | 列：`Schema / Manifest 状态 / 本地表数 / 启用表数 / 操作` |
 | `schema-row-${conn.id}-${schema}` | Schema 行 | 状态枚举 `已存在` / `缺失 Manifest` / `解析失败` |
 | `schema-asset-status-${conn.id}-${schema}` | Schema Manifest 状态 cell | 必含 `已存在` / `缺失 Manifest` / `解析失败` 之一 |
-| `schema-whitelist-${conn.id}-${schema}` | `维护白名单` / `上传 Manifest` 上下文动作 | 必含 `维护白名单` 或 `上传 Manifest` |
+| `schema-enabled-count-${conn.id}-${schema}` | Schema 启用表数 cell | 数值来自该 Schema 下 `enabled_tables` 计数 |
+| `schema-whitelist-${conn.id}-${schema}` | `维护启用范围` / `上传 Manifest` 上下文动作 | 必含 `维护启用范围` 或 `上传 Manifest`；不得出现 `维护白名单` |
 | `add-schema-${conn.id}` | `+ 添加 Schema` 按钮 | 禁止 `添加架构` / `添加模式` |
 
 ### 2.2 AddSchemaDrawer.tsx

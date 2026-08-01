@@ -49,11 +49,12 @@ export function CatalogAssetUploadButton(props: CatalogAssetUploadButtonProps) {
     <>
       <button
         type="button"
-        className={buttonClass(variant, size)}
+        className={`${buttonClass(variant, size)} notranslate`}
         onClick={() => setOpen(true)}
         data-testid={testId ?? "catalog-asset-upload-button"}
         data-connection={connectionId}
         data-schema={schema ?? undefined}
+        translate="no"
       >
         {label ?? defaultLabel(schema)}
       </button>
