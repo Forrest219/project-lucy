@@ -296,7 +296,6 @@ export function ConnectionOverview() {
     <div className="pl-page-stack">
       <PageHeader
         title="连接概览"
-        breadcrumbs={["数据接入", "连接概览"]}
         description={<span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与本地目录刷新状态。</span>}
         badges={
           projectQuery.data ? (

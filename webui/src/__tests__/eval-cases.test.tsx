@@ -43,7 +43,8 @@ describe("CaseList M34 IA", () => {
     renderCaseList();
 
     expect(await screen.findByRole("heading", { name: "评测用例" })).toBeInTheDocument();
-    expect(screen.getByText("质量评测")).toBeInTheDocument();
+    // M40: 一级根页面不再渲染面包屑
+    expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Case 管理" })).not.toBeInTheDocument();
   });
 });

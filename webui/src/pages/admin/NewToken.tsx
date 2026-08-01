@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
@@ -122,7 +122,17 @@ export function NewToken() {
       <div className="grid gap-6 max-w-2xl">
         <PageHeader
           title="Token 已生成"
-          breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
+          backAction={
+            userId ? (
+              <Link to={`/admin/agents/${userId}`} className="pl-page-header-back">
+                ‹ 返回 Agent 详情
+              </Link>
+            ) : (
+              <Link to="/admin/agents" className="pl-page-header-back">
+                ‹ 返回 Agent 实例
+              </Link>
+            )
+          }
           description={
             <>
               <span className="notranslate" translate="no">⚠</span> 关闭后无法再次查看 token 明文。请立即复制保存，或将下方配置交给 <span className="notranslate" translate="no">Agent</span> 使用者。
@@ -226,7 +236,17 @@ export function NewToken() {
       <div className="grid gap-6 max-w-2xl">
         <PageHeader
           title="Token 已生成"
-          breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
+          backAction={
+            userId ? (
+              <Link to={`/admin/agents/${userId}`} className="pl-page-header-back">
+                ‹ 返回 Agent 详情
+              </Link>
+            ) : (
+              <Link to="/admin/agents" className="pl-page-header-back">
+                ‹ 返回 Agent 实例
+              </Link>
+            )
+          }
           description={
             <>
               <span className="notranslate" translate="no">⚠</span> Token 已生成，但 Lucy <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span> 当前不可用，无法生成可复制的客户端配置片段。
@@ -259,7 +279,17 @@ export function NewToken() {
     <div className="grid gap-6 max-w-xl">
       <PageHeader
         title={<>为 {userId} 创建新 <span className="notranslate" translate="no">Token</span></>}
-        breadcrumbs={["访问治理", "Agent 实例", userId ?? "", "新建 Token"]}
+        backAction={
+          userId ? (
+            <Link to={`/admin/agents/${userId}`} className="pl-page-header-back">
+              ‹ 返回 Agent 详情
+            </Link>
+          ) : (
+            <Link to="/admin/agents" className="pl-page-header-back">
+              ‹ 返回 Agent 实例
+            </Link>
+          )
+        }
         description="一旦关闭生成页面，将无法再看到 token 明文。请立即复制保存。"
       />
 

@@ -42,7 +42,8 @@ describe("ConfigAudit M34 IA", () => {
     renderConfigAudit();
 
     expect(await screen.findByRole("heading", { name: "配置审计" })).toBeInTheDocument();
-    expect(screen.getByText("访问治理")).toBeInTheDocument();
+    // M40: 一级根页面不再渲染面包屑
+    expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "配置变更日志" })).not.toBeInTheDocument();
   });
 });

@@ -86,8 +86,7 @@ export function Catalog() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="语义维护工作台"
-        breadcrumbs={["语义建模", "表目录"]}
+        title="表目录"
         description={<span className="notranslate" translate="no">浏览当前 KTX 项目的语义层数据表，按 Schema、状态和关键词定位需要维护的对象。</span>}
         badges={
           <span data-testid="catalog-count">

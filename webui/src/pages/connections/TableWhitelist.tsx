@@ -411,7 +411,6 @@ export function TableWhitelist() {
     <div className="pl-page-stack">
       <PageHeader
         title="启用表范围"
-        breadcrumbs={["数据接入", "启用表范围"]}
         description={
           <>
             维护进入语义层的表范围，保存后写入 <code>ktx.yaml</code> 的 <code>enabled_tables</code> 字段。

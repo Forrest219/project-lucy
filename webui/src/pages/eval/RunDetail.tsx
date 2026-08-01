@@ -136,7 +136,15 @@ export function RunDetail() {
     <div className="grid gap-6">
       <PageHeader
         title={`Run #${run.id}`}
-        breadcrumbs={["质量评测", "运行历史", `Run #${run.id}`]}
+        backAction={
+          <button
+            type="button"
+            className="pl-page-header-back"
+            onClick={() => navigate("/eval/runs")}
+          >
+            ‹ 返回运行历史
+          </button>
+        }
         badges={
           <>
             <span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>{run.status}</span>
@@ -146,9 +154,6 @@ export function RunDetail() {
         }
         actions={
           <>
-            <button type="button" className="pl-btn pl-btn--ghost text-sm" onClick={() => navigate("/eval/runs")}>
-              ‹ 返回
-            </button>
             <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=json`} download>
               下载 JSON
             </a>

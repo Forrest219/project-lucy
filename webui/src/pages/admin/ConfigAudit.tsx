@@ -111,7 +111,6 @@ export function ConfigAudit() {
     <div className="pl-page-stack">
       <PageHeader
         title="配置审计"
-        breadcrumbs={["访问治理", "配置审计"]}
         description="查看访问配置写入历史，当前 actor 为单管理员本机语义。"
         badges={
           <span>{total} 条记录</span>

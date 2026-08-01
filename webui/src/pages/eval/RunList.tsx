@@ -98,7 +98,6 @@ export function RunList() {
     <div className="grid gap-6">
       <PageHeader
         title="运行历史"
-        breadcrumbs={["质量评测", "运行历史"]}
         description="查看 eval run 历史，触发新 run，查看结果详情。"
         badges={
           <span>{runs.length} / {runsData?.total ?? 0} 条</span>

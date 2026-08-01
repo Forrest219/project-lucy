@@ -77,7 +77,8 @@ describe("Audit", () => {
     renderAudit();
 
     expect(await screen.findByRole("heading", { name: "访问日志" })).toBeInTheDocument();
-    expect(screen.getByText("访问治理")).toBeInTheDocument();
+    // M40: 一级根页面不再渲染面包屑
+    expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(await screen.findByText("业务调用")).toBeInTheDocument();
     expect(screen.getByText("协议调用")).toBeInTheDocument();
     expect(screen.getByText("tool_denied")).toBeInTheDocument();

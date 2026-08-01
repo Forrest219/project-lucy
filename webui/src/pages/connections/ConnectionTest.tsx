@@ -73,7 +73,6 @@ export function ConnectionTest() {
     <div className="pl-page-stack">
       <PageHeader
         title="连通测试"
-        breadcrumbs={["数据接入", "连通测试"]}
         description="测试数据库连通性，验证凭据、网络与驱动配置是否正确。"
         badges={
           projectQuery.data ? <span>{projectQuery.data.root}</span> : null

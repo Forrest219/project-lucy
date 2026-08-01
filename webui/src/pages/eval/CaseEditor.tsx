@@ -125,7 +125,15 @@ export function CaseEditor() {
     <div className="grid gap-6">
       <PageHeader
         title={isNew ? "新建评测用例" : form.id}
-        breadcrumbs={["质量评测", "评测用例", domain, isNew ? "新建" : form.id]}
+        backAction={
+          <button
+            type="button"
+            className="pl-page-header-back"
+            onClick={() => navigate(`/eval/cases/${domain}`)}
+          >
+            ‹ 返回评测用例
+          </button>
+        }
         badges={
           <>
             <span>{domain}</span>
@@ -134,9 +142,6 @@ export function CaseEditor() {
         }
         actions={
           <>
-            <button type="button" className="pl-btn pl-btn--ghost text-sm" onClick={() => navigate(`/eval/cases/${domain}`)}>
-              ‹ 返回
-            </button>
             {!isNew && (
               <button
                 type="button"

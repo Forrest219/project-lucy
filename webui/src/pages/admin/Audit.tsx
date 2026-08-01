@@ -374,7 +374,7 @@ export function Audit() {
     <div className="pl-page-stack">
       <PageHeader
         title="访问日志"
-        breadcrumbs={tab === "heatmap" ? ["访问治理", "访问日志", "数据热力"] : ["访问治理", "访问日志"]}
+        breadcrumbs={tab === "heatmap" ? ["访问治理", "访问日志", "数据热力"] : undefined}
         description="查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。"
         badges={tab === "log" ? <span>{total} 条记录</span> : undefined}
         actions={tab === "log" ? <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a> : undefined}

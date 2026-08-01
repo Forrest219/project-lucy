@@ -15,7 +15,6 @@ import {
   pendingSemanticCount,
   type ActionRequiredItem,
   type Severity,
-  type SeverityLabel,
   type ServiceHealthItem,
   severityLabelBySeverity
 } from "../lib/opsDashboard";
@@ -88,18 +87,16 @@ function severityBadgeClass(severity: Severity): string {
  * one of `高风险 / 待处理 / 提醒 / 就绪`.
  */
 function SeverityBadge({
-  severity,
-  severityLabel
+  severity
 }: {
   severity: Severity;
-  severityLabel: SeverityLabel;
 }) {
   return (
     <span
       className={`pl-status-badge ${severityBadgeClass(severity)}`}
       data-severity={severity}
     >
-      {severityLabel}
+      {severityLabelBySeverity[severity]}
     </span>
   );
 }
@@ -463,53 +460,31 @@ function McpConfigDrawer({
   );
 }
 
-/**
- * Action Required row. M39 spec 41 §7 requires every queue item to expose
- * severity (中文), impact, owner, update time and evidence, plus a uniform
- * `前往处理 ↗` link. We pack the metadata into a compact grid so a single
- * queue item never exceeds three visual rows.
- */
 function ActionRequiredRow({ item }: { item: ActionRequiredItem }) {
+  const testId = `ops-action-${item.id}`;
   return (
     <div
       className="pl-action-required-item"
       data-severity={item.severity}
-      data-testid={item.testId}
+      data-testid={testId}
     >
       <div className="pl-action-required-item-row">
         <div className="pl-action-required-item-title">
-          <SeverityBadge severity={item.severity} severityLabel={item.severityLabel} />
-          <span className="text-sm text-fg-default">{item.label}</span>
+          <SeverityBadge severity={item.severity} />
+          <div className="min-w-0">
+            <span className="pl-action-required-item-heading">{item.title}</span>
+            <p className="pl-action-required-item-description">{item.description}</p>
+          </div>
         </div>
-        {item.href ? (
-          <Link
-            className="pl-action-required-item-cta text-sm font-medium text-blue-600 hover:underline notranslate"
-            translate="no"
-            to={item.href}
-            data-testid={`${item.testId}-link`}
-          >
-            前往处理 ↗
-          </Link>
-        ) : null}
+        <Link
+          className="pl-action-required-item-cta pl-card-cta notranslate"
+          translate="no"
+          to={item.actionUrl}
+          data-testid={`${testId}-link`}
+        >
+          {item.actionText} ↗
+        </Link>
       </div>
-      <dl className="pl-action-required-item-meta">
-        <div>
-          <dt>影响</dt>
-          <dd className="notranslate" translate="no">{item.impact}</dd>
-        </div>
-        <div>
-          <dt>负责人</dt>
-          <dd className="notranslate" translate="no">{item.owner}</dd>
-        </div>
-        <div>
-          <dt>更新时间</dt>
-          <dd>{item.updatedAtLabel}</dd>
-        </div>
-        <div>
-          <dt>证据</dt>
-          <dd className="notranslate" translate="no">{item.evidence}</dd>
-        </div>
-      </dl>
     </div>
   );
 }
@@ -741,8 +716,7 @@ export function Onboarding() {
         evalRunsLast30d: evalLastRunQuery.isSuccess
           ? (evalLastRunQuery.data?.runs.length ?? 0)
           : null,
-        aclDenied7d,
-        dashboardUpdatedAt: lastUpdatedAt ?? undefined
+        aclDenied7d
       }),
     [
       doneSources,
@@ -751,8 +725,7 @@ export function Onboarding() {
       changedFiles.length,
       evalLastRunQuery.isSuccess,
       evalLastRunQuery.data,
-      aclDenied7d,
-      lastUpdatedAt
+      aclDenied7d
     ]
   );
   const serviceHealth = useMemo(
@@ -899,13 +872,10 @@ export function Onboarding() {
             <span>
               <span className="notranslate" translate="no">{doneSources}/{sources.length}</span> 语义完成
             </span>
-            <span className="notranslate" translate="no">
-              <span className="notranslate" translate="no">{enabledTokenCount}</span> 活跃 Token
-            </span>
           </>
         }
         actions={
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="pl-page-header-actions pl-page-header-actions--stacked">
             <RefreshMenu
               isFetching={coreFetching}
               autoRefresh={autoRefresh}
@@ -915,6 +885,12 @@ export function Onboarding() {
           </div>
         }
       />
+
+      <div className="pl-page-intro flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted" data-testid="onboarding-active-token-meta">
+        <span className="notranslate" translate="no">
+          <span className="notranslate" translate="no">{enabledTokenCount}</span> 活跃 Token
+        </span>
+      </div>
 
       {overall === "danger" ? (
         <section className="pl-panel pl-service-health-critical" role="alert" data-testid="ops-service-health-critical">
@@ -968,7 +944,7 @@ export function Onboarding() {
                 <span className="pl-snapshot-card-label">待发布变更</span>
                 <Link
                   to="/publish/workbench"
-                  className="text-sm font-medium text-blue-600 hover:underline"
+                  className="pl-card-cta"
                 >
                   打开发布工作台 ↗
                 </Link>
@@ -983,7 +959,7 @@ export function Onboarding() {
             <div className="pl-metric-card">
               <div className="flex items-center justify-between gap-2">
                 <span className="pl-snapshot-card-label"><span className="notranslate" translate="no">Agent</span> 启用</span>
-                <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline notranslate" translate="no">
+                <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
                   查看 <span className="notranslate" translate="no">Agent</span> 实例 ↗
                 </Link>
               </div>
@@ -999,7 +975,7 @@ export function Onboarding() {
                 <span className="pl-snapshot-card-label">ACL 拒绝</span>
                 <Link
                   to="/admin/audit?outcome=denied"
-                  className="text-sm font-medium text-blue-600 hover:underline"
+                  className="pl-card-cta"
                 >
                   查看访问日志 ↗
                 </Link>
@@ -1032,7 +1008,7 @@ export function Onboarding() {
                   <span className="notranslate" translate="no">{enabledAgents.length}</span> 启用 / <span className="notranslate" translate="no">{agents.length}</span> 总数
                 </div>
               </div>
-              <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline notranslate" translate="no">
+              <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
                 查看 <span className="notranslate" translate="no">Agent</span> 管理 ↗
               </Link>
             </div>
@@ -1048,7 +1024,7 @@ export function Onboarding() {
               </div>
               <Link
                 to="/admin/audit?outcome=denied"
-                className="text-sm font-medium text-blue-600 hover:underline self-end"
+                className="pl-card-cta self-end"
               >
                 查看访问日志 ↗
               </Link>
@@ -1063,7 +1039,7 @@ export function Onboarding() {
                   <span className="notranslate" translate="no">{enabledTokenCount}</span> 个活跃 <span className="notranslate" translate="no">Token</span>
                 </div>
               </div>
-              <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline notranslate" translate="no">
+              <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
                 管理 <span className="notranslate" translate="no">Token</span> ↗
               </Link>
             </div>
@@ -1096,7 +1072,7 @@ export function Onboarding() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="pl-btn pl-btn--primary notranslate"
+              className="pl-btn pl-btn--primary pl-btn--xs notranslate"
               translate="no"
               onClick={copyConfig}
               disabled={!canCopyMcp}
@@ -1106,7 +1082,7 @@ export function Onboarding() {
             </button>
             <button
               type="button"
-              className="pl-btn pl-btn--secondary"
+              className="pl-btn pl-btn--secondary pl-btn--xs"
               onClick={() => setMcpDrawerOpen(true)}
               data-testid="mcp-config-view-button"
             >

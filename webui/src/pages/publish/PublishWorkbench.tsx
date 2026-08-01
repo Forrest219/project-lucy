@@ -198,7 +198,6 @@ export function PublishWorkbench() {
     <div className="pl-page-stack">
       <PageHeader
         title="发布工作台"
-        breadcrumbs={["语义发布", "发布工作台"]}
         description="查看并发布当前待生效的语义资产，系统将在发布后自动重建 KTX 索引。"
         badges={
           <>

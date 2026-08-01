@@ -400,7 +400,6 @@ export function AgentList() {
     <div className="pl-page-stack">
       <PageHeader
         title="Agent 实例"
-        breadcrumbs={["访问治理", "Agent 实例"]}
         description={
           <>
             配置每个 <span className="notranslate" translate="no">Agent</span> 实例能用哪些 <span className="notranslate" translate="no">MCP</span> 工具和访问哪些表。

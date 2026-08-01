@@ -68,7 +68,6 @@ export function CaseList() {
       <div className="grid gap-6">
         <PageHeader
           title="评测用例"
-          breadcrumbs={["质量评测", "评测用例"]}
           description="管理各 domain 的 eval case 定义（YAML 源文件）。"
         />
         <div className="pl-notice">未找到 eval domain，请确认 evals/ 目录下有对应的 cases yaml 文件。</div>
@@ -80,7 +79,6 @@ export function CaseList() {
     <div className="grid gap-6">
       <PageHeader
         title="评测用例"
-        breadcrumbs={["质量评测", "评测用例"]}
         description="管理各 domain 的 eval case 定义（YAML 源文件）。"
         badges={
           <>

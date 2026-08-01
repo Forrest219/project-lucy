@@ -231,7 +231,11 @@ export function AgentDetail() {
             {agent.name} <span className="text-fg-muted font-normal text-base">({agent.id})</span>
           </>
         }
-        breadcrumbs={["访问治理", "Agent 实例", agent.id]}
+        backAction={
+          <Link to="/admin/agents" className="pl-page-header-back">
+            ‹ 返回 Agent 实例
+          </Link>
+        }
         description="编辑前先生成变更预览，确认后写入访问配置。Cmd+S / Ctrl+S 触发预览。"
         badges={
           <>
@@ -242,7 +246,6 @@ export function AgentDetail() {
         }
         actions={
           <>
-            <Link to="/admin/agents" className="pl-btn pl-btn--ghost text-sm">‹ 返回列表</Link>
             <Link to={`/admin/config-audit?targetId=${encodeURIComponent(agent.id)}`} className="pl-btn pl-btn--secondary text-sm">
               变更历史
             </Link>

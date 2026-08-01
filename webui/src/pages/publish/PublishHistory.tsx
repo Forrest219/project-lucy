@@ -265,7 +265,6 @@ export function PublishHistory() {
     <div className="pl-page-stack">
       <PageHeader
         title="发布历史与审计"
-        breadcrumbs={["语义发布", "发布记录"]}
         description="查看历史发布批次、Reindex 执行结果及当前版本快照。"
         badges={
           releasesQuery.data ? (

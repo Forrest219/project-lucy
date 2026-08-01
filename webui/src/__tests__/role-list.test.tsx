@@ -94,7 +94,8 @@ describe("RoleList", () => {
 
     renderRoleList();
     expect(await screen.findByRole("heading", { name: "角色权限" })).toBeInTheDocument();
-    expect(screen.getByText("访问治理")).toBeInTheDocument();
+    // M40: 一级根页面不再渲染面包屑
+    expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "角色配置" })).not.toBeInTheDocument();
     expect(await screen.findByText("analyst")).toBeInTheDocument();
     expect(screen.getByText("wiki_only")).toBeInTheDocument();

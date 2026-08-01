@@ -283,7 +283,6 @@ export function Monitor() {
     <div className="pl-page-stack">
       <PageHeader
         title="趋势监控"
-        breadcrumbs={["质量评测", "趋势监控"]}
         description="查看 eval 质量趋势、失败集中度与 drift 分布。"
         badges={
           <>

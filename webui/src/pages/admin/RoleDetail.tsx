@@ -425,10 +425,10 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 ? `删除 Role · ${roleId}`
                 : `${detail?.id ?? roleId}`
         }
-        breadcrumbs={
-          mode === "create"
-            ? ["访问治理", "角色权限", "新建 Role"]
-            : ["访问治理", "角色权限", roleId]
+        backAction={
+          <Link to="/admin/roles" className="pl-page-header-back">
+            ‹ 返回角色权限
+          </Link>
         }
         description={
           <>
@@ -449,7 +449,6 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         }
         actions={
           <>
-            <Link to="/admin/roles" className="pl-btn pl-btn--ghost text-sm">‹ 返回列表</Link>
             {mode === "delete" && (
               <button
                 type="button"
