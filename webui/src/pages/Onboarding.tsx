@@ -136,47 +136,24 @@ function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
  * `Agent` / numeric counts in `notranslate` spans per terminology standard.
  */
 function ServiceHealthSummaryView({ summary }: { summary: ServiceHealthSummary }) {
-  const { tone, semantic, agents } = summary;
   return (
-    <div
-      className="pl-page-intro text-sm text-fg-default"
+    <section
+      className="pl-system-health-summary"
       data-testid="ops-service-health-summary"
-      data-tone={tone}
+      data-tone={summary.tone}
     >
-      <span className="notranslate" translate="no">Lucy MCP</span> 可用，
-      <span className="notranslate" translate="no">KTX Runtime</span> 可用；
-      语义覆盖{" "}
-      <span className="notranslate" translate="no">
-        {semantic.done}/{semantic.total}
-      </span>
-      {semantic.gap > 0 ? (
-        <>
-          ，仍有{" "}
-          <span className="notranslate" translate="no">
-            {semantic.gap}
-          </span>{" "}
-          张表待补
-        </>
-      ) : null}
-      ；<span className="notranslate" translate="no">Agent</span>{" "}
-      <span className="notranslate" translate="no">
-        {agents.enabled}/{agents.total}
-      </span>{" "}
-      启用
-      {agents.gap > 0 ? (
-        <>
-          ，仍有{" "}
-          <span className="notranslate" translate="no">
-            {agents.gap}
-          </span>{" "}
-          个未启用
-        </>
-      ) : null}
-      {" · "}
+      <span className="pl-system-health-summary-dot" aria-hidden="true" />
+      <div className="min-w-0">
+        <strong>
+          <span className="notranslate" translate="no">Lucy MCP</span> 与{" "}
+          <span className="notranslate" translate="no">KTX Runtime</span> 运行正常
+        </strong>
+        <p>核心接入链路可用，交付待办见下方处理事项。</p>
+      </div>
       <Link to="/admin/audit" className="pl-card-cta">
         控制台日志 ↗
       </Link>
-    </div>
+    </section>
   );
 }
 
@@ -432,31 +409,29 @@ function SemanticCoverageCard({
   const percentValue = percent(done, total);
   const gap = pendingSemanticCount({ done, total });
   return (
-    <div className="pl-metric-card">
-      <span className="pl-snapshot-card-label">语义覆盖率</span>
-      <strong
-        className="pl-metric-card-value pl-metric-card-value--xl"
-        data-testid="ops-semantic-percent"
-      >
-        {percentValue}%
-      </strong>
-      <div
-        className="pl-progress"
-        role="progressbar"
-        aria-label={`语义覆盖率 ${percentValue}%`}
-        aria-valuenow={percentValue}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        data-testid="ops-semantic-progress"
-      >
-        <span
-          className="pl-progress-bar"
-          style={{ width: `${percentValue}%` }}
-        />
+    <div className="pl-snapshot-item">
+      <div className="min-w-0">
+        <strong>
+          语义覆盖率 <span className="notranslate" translate="no" data-testid="ops-semantic-percent">{percentValue}%</span>
+        </strong>
+        <div
+          className="pl-progress"
+          role="progressbar"
+          aria-label={`语义覆盖率 ${percentValue}%`}
+          aria-valuenow={percentValue}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          data-testid="ops-semantic-progress"
+        >
+          <span
+            className="pl-progress-bar"
+            style={{ width: `${percentValue}%` }}
+          />
+        </div>
+        <div className="text-xs text-fg-muted">
+          <span className="notranslate" translate="no">{done}</span>/<span className="notranslate" translate="no">{total}</span> 语义完成，<span className="notranslate" translate="no">{gap}</span> 张表待补
+        </div>
       </div>
-      <small className="text-fg-muted">
-        <span className="notranslate" translate="no">{done}</span>/<span className="notranslate" translate="no">{total}</span> 语义完成，<span className="notranslate" translate="no">{gap}</span> 张表待补
-      </small>
     </div>
   );
 }
@@ -524,7 +499,8 @@ export function Onboarding() {
   const tableScopeReady = enabledTables > 0;
   const semanticReady = sources.length > 0 && doneSources > 0;
   const validationReady = changedFiles.length === 0;
-  const mcpReady = !mcpNotReadyReason && endpointInfo?.status !== "invalid";
+  const mcpEndpointReady = endpointInfo?.status !== "invalid";
+  const mcpAccessReady = !mcpNotReadyReason && mcpEndpointReady;
   const semanticPendingCount = sources.length - doneSources;
   const semanticTone: HealthTone =
     semanticReady && tableScopeReady
@@ -574,7 +550,7 @@ export function Onboarding() {
     () =>
       buildServiceHealth({
         ktxAvailable: projectQuery.data?.ktxAvailable === true,
-        mcpReady,
+        mcpReady: mcpAccessReady,
         semanticCoverage: { done: doneSources, total: sources.length },
         agentsEnabled: enabledAgents.length,
         agentsTotal: agents.length,
@@ -582,7 +558,7 @@ export function Onboarding() {
       }),
     [
       projectQuery.data?.ktxAvailable,
-      mcpReady,
+      mcpAccessReady,
       doneSources,
       sources.length,
       enabledAgents.length,
@@ -596,12 +572,12 @@ export function Onboarding() {
   const summary = useMemo(
     () =>
       summarizeServiceHealth(
-        mcpReady,
+        mcpEndpointReady,
         projectQuery.data?.ktxAvailable === true,
         { done: doneSources, total: sources.length },
         { enabled: enabledAgents.length, total: agents.length }
       ),
-    [mcpReady, projectQuery.data?.ktxAvailable, doneSources, sources.length, enabledAgents.length, agents.length]
+    [mcpEndpointReady, projectQuery.data?.ktxAvailable, doneSources, sources.length, enabledAgents.length, agents.length]
   );
   const ktxAvailable = projectQuery.data?.ktxAvailable === true;
   const semanticPercent = percent(doneSources, sources.length);
@@ -711,12 +687,11 @@ export function Onboarding() {
   // M39: a critical-tone service-health panel must remain a high-emphasis
   // Alert. M41: ready / warning now render a single summary line; the
   // legacy compact strip is no longer shown on `/overview`. The danger
-  // state is driven by raw readiness (mcpReady + ktxAvailable) rather
+  // state is driven by raw endpoint readiness (mcpEndpointReady + ktxAvailable) rather
   // than the legacy `overallTone` aggregation, so an unavailable Lucy MCP
   // surfaces the alert even when KTX is fine.
-  const overall = overallTone(serviceHealth);
-  const isDanger = !mcpReady || !ktxAvailable;
-  const alertText = systemAlertText(mcpReady, ktxAvailable);
+  const isDanger = !mcpEndpointReady || !ktxAvailable;
+  const alertText = systemAlertText(mcpEndpointReady, ktxAvailable);
 
   return (
     <div className="pl-page-stack">
@@ -786,58 +761,46 @@ export function Onboarding() {
           <div className="pl-section-heading">
             <div>
               <h2 className="pl-panel-title mb-1">质量快照</h2>
-              <p className="pl-notice">语义资产覆盖度与变更审阅状态，决定发布前的最后一道关。</p>
+              <p className="pl-notice">语义覆盖、发布审阅与评测基线，决定发布前的最后一道关。</p>
             </div>
           </div>
-          <div className="pl-snapshot-grid">
+          <div className="pl-snapshot-list">
             <SemanticCoverageCard done={doneSources} total={sources.length} />
-            <div className="pl-metric-card">
-              <div className="flex items-center justify-between gap-2">
-                <span className="pl-snapshot-card-label">待发布变更</span>
-                <Link
-                  to="/publish/workbench"
-                  className="pl-card-cta"
-                >
-                  打开发布工作台 ↗
-                </Link>
+            <div className="pl-snapshot-item">
+              <div>
+                <strong>
+                  待发布变更 <span className="notranslate" translate="no">{changedFiles.length}</span>
+                </strong>
+                <div className="text-xs text-fg-muted">
+                  {validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
+                </div>
               </div>
-              <strong className="pl-metric-card-value notranslate" translate="no">
-                {changedFiles.length}
-              </strong>
-              <small className="text-fg-muted">
-                {validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
-              </small>
+              <Link
+                to="/publish/workbench"
+                className="pl-card-cta"
+              >
+                打开发布工作台 ↗
+              </Link>
             </div>
-            <div className="pl-metric-card">
-              <div className="flex items-center justify-between gap-2">
-                <span className="pl-snapshot-card-label"><span className="notranslate" translate="no">Agent</span> 启用</span>
-                <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
-                  查看 <span className="notranslate" translate="no">Agent</span> 实例 ↗
-                </Link>
+            <div className="pl-snapshot-item">
+              <div>
+                <strong>
+                  评测数据 <span className="notranslate" translate="no">{evalLastRunQuery.isSuccess ? (evalLastRunQuery.data?.runs.length ?? 0) : "—"}</span>
+                </strong>
+                <div className="text-xs text-fg-muted">
+                  {evalLastRunQuery.isSuccess
+                    ? (evalLastRunQuery.data?.runs.length ?? 0) > 0
+                      ? "近 30 天已有评测记录"
+                      : "近 30 天无评测数据"
+                    : "评测状态待刷新"}
+                </div>
               </div>
-              <strong className="pl-metric-card-value notranslate" translate="no">
-                {enabledAgents.length}/{agents.length}
-              </strong>
-              <small className="text-fg-muted">
-                <span className="notranslate" translate="no">{enabledAgents.length}</span> 个 <span className="notranslate" translate="no">Agent</span> 已启用
-              </small>
-            </div>
-            <div className="pl-metric-card">
-              <div className="flex items-center justify-between gap-2">
-                <span className="pl-snapshot-card-label">ACL 拒绝</span>
-                <Link
-                  to="/admin/audit?outcome=denied"
-                  className="pl-card-cta"
-                >
-                  查看访问日志 ↗
-                </Link>
-              </div>
-              <strong className="pl-metric-card-value notranslate" translate="no">
-                {aclDenied7d}
-              </strong>
-              <small className="text-fg-muted">
-                {aclDenied7d === 0 ? "近 7 天无拒绝" : "近 7 天存在 ACL 拒绝"}
-              </small>
+              <Link
+                to="/eval/monitor"
+                className="pl-card-cta"
+              >
+                查看趋势监控 ↗
+              </Link>
             </div>
           </div>
         </section>
@@ -903,20 +866,11 @@ export function Onboarding() {
         <div className="pl-section-heading">
           <div>
             <h2 className="pl-panel-title mb-1"><span className="notranslate" translate="no">MCP</span> 接入</h2>
-            <p className="pl-notice">
-              <span className="notranslate" translate="no">Agent</span> 通过 <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code> 与 Lucy 通讯。请将下面 JSON 写入 <code className="notranslate" translate="no">.mcp.json</code>。
-            </p>
           </div>
         </div>
 
         <div className="pl-mcp-actions">
-          <div className="pl-onboarding-facts">
-            <span>
-              <span className="notranslate" translate="no">Agent</span>: <span className="notranslate" translate="no">{agents.length}</span> 个
-            </span>
-            <span>
-              <span className="notranslate" translate="no">Token</span>: <span className="notranslate" translate="no">{availableTokenCountValue}</span> 可用
-            </span>
+          <div className="pl-onboarding-facts pl-onboarding-facts--endpoint">
             <span>
               <span className="notranslate" translate="no">Endpoint</span>: <code className="notranslate break-all" translate="no">{endpoint ?? "—"}</code>
             </span>
@@ -941,10 +895,7 @@ export function Onboarding() {
               查看配置
             </button>
           </div>
-          {fallbackNotice(endpointInfo)}
-          {!mcpReady && mcpNotReadyReason ? (
-            <div className="pl-notice">{mcpNotReadyReason}</div>
-          ) : null}
+          {endpointInfo?.status === "invalid" ? fallbackNotice(endpointInfo) : null}
         </div>
       </section>
 

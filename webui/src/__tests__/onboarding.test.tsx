@@ -54,7 +54,10 @@ const readySource: SourceSummary = {
   joinCount: 0,
   wikiRefCount: 0,
   completion: "done",
-  mtime: "2026-06-21T00:00:00.000Z"
+  mtime: "2026-06-21T00:00:00.000Z",
+  authorizedAgentCount: 1,
+  semanticUpdatedAt: "2026-06-21T00:00:00.000Z",
+  semanticUpdatedAtSource: "manifest"
 };
 
 function renderPage(options: {
@@ -191,15 +194,8 @@ describe("Onboarding", () => {
     expect(screen.queryByText("Lucy MCP is ready for Agent delivery")).not.toBeInTheDocument();
     // The MCP endpoint URL is now rendered inside the metric card and the
     // Drawer; the main page still surfaces the configured endpoint via
-    // the MCP 接入 section. The heading text is split across a notranslate
-    // `MCP` span + a Chinese tail, so we use a function matcher against
-    // the full text content.
-    expect(
-      screen.getByText(
-        (_content, element) =>
-          (element instanceof HTMLElement ? element.textContent : "").trim() === "MCP 接入"
-      )
-    ).toBeInTheDocument();
+    // the MCP 接入 section.
+    expect(screen.getByRole("heading", { name: "MCP 接入" })).toBeInTheDocument();
     expect(screen.getByText("https://lucy.example.com/mcp")).toBeInTheDocument();
     expect(screen.queryByText("http://localhost:7879/mcp")).not.toBeInTheDocument();
     expect(screen.queryByText("http://127.0.0.1:7879/mcp")).not.toBeInTheDocument();
@@ -215,16 +211,13 @@ describe("Onboarding", () => {
     // a high-weight alert. With the default fixture the page is ready.
     expect(await screen.findByTestId("ops-service-health-summary")).toBeInTheDocument();
     expect(document.querySelector('[data-testid="ops-service-health"]')).toBeNull();
-    // 访问风险 + MCP 接入 area uses "可用 Token" wording; "活跃 Token" is gone.
-    // Both surfaces (访问风险 + MCP 接入 facts) render "可用 Token", so we
-    // assert the count is at least 1 rather than picking a single element.
-    expect(
-      screen.getAllByText(
-        (_content, element) =>
-          (element instanceof HTMLElement ? element.textContent : "").includes("可用") &&
-          (element instanceof HTMLElement ? element.textContent : "").includes("Token")
-      ).length
-    ).toBeGreaterThan(0);
+    // 访问风险区使用「可用 Token」；MCP 接入区只保留 Endpoint 固定配置。
+    const accessRisk = await screen.findByTestId("ops-access-risk");
+    expect(accessRisk.textContent ?? "").toContain("可用");
+    expect(accessRisk.textContent ?? "").toContain("Token");
+    const mcpSection = screen.getByRole("heading", { name: "MCP 接入" }).closest("section");
+    expect(mcpSection?.textContent ?? "").not.toMatch(/Agent:\s*\d+/);
+    expect(mcpSection?.textContent ?? "").not.toMatch(/Token:\s*\d+/);
     expect(screen.queryByText(/活跃\s*Token/)).not.toBeInTheDocument();
 
     // Copy MCP config still works on the main page.
@@ -232,7 +225,7 @@ describe("Onboarding", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Bearer <LUCY_AGENT_TOKEN>"));
   });
 
-  it("surfaces the local fallback URL and a deployment warning when LUCY_PUBLIC_MCP_URL is unset", async () => {
+  it("surfaces the local fallback URL without deployment guidance when LUCY_PUBLIC_MCP_URL is unset", async () => {
     renderPage({
       mcpEndpoint: {
         url: "http://127.0.0.1:7879/mcp",
@@ -249,9 +242,7 @@ describe("Onboarding", () => {
     });
 
     expect(await screen.findByText("http://127.0.0.1:7879/mcp")).toBeInTheDocument();
-    expect(
-      await screen.findByText(/当前使用本地默认 MCP endpoint|本地默认/)
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/当前使用本地默认|本地默认 MCP Endpoint|客户部署请配置/)).not.toBeInTheDocument();
   });
 
   it("disables the MCP copy button when the runtime endpoint is invalid", async () => {
@@ -270,18 +261,11 @@ describe("Onboarding", () => {
       }
     });
 
-    // The MCP 接入 section still appears so the user can see *why* the
-    // buttons are gone, but the copy button must be disabled when the
+    // The MCP 接入 section still appears so the user can see the fixed
+    // Endpoint state, but the copy button must be disabled when the
     // endpoint is invalid. The view button stays enabled so the user can
-    // open the Drawer and read the diagnostics. The heading text is split
-    // across a notranslate `MCP` span + a Chinese tail, so we use a
-    // function text matcher against the full content.
-    expect(
-      await screen.findByText(
-        (_content, element) =>
-          (element instanceof HTMLElement ? element.textContent : "").trim() === "MCP 接入"
-      )
-    ).toBeInTheDocument();
+    // open the Drawer and read the diagnostics.
+    expect(await screen.findByRole("heading", { name: "MCP 接入" })).toBeInTheDocument();
     const copyButton = screen.getByRole("button", { name: "复制 MCP 配置" });
     expect(copyButton).toBeDisabled();
     expect(
@@ -316,12 +300,15 @@ describe("Onboarding", () => {
     }
   });
 
-  it("shows the MCP setup gap reason inline next to the disabled copy button", async () => {
+  it("keeps MCP 接入 focused on Endpoint when Agent setup is incomplete", async () => {
     renderPage({ agents: [] });
 
-    expect(await screen.findByText("尚未创建 Agent")).toBeInTheDocument();
-    // The "打开阻塞项" link was retired with the legacy delivery banner;
-    // the user can still reach /admin/agents from the access-risk list.
+    const mcpSection = (await screen.findByRole("heading", { name: "MCP 接入" })).closest("section");
+    expect(mcpSection?.textContent ?? "").toContain("https://lucy.example.com/mcp");
+    expect(mcpSection?.textContent ?? "").not.toContain("尚未创建 Agent");
+    expect(mcpSection?.textContent ?? "").not.toMatch(/Agent:\s*\d+/);
+    expect(mcpSection?.textContent ?? "").not.toMatch(/Token:\s*\d+/);
+    expect(screen.getByRole("button", { name: "复制 MCP 配置" })).toBeEnabled();
     expect(screen.queryByRole("link", { name: "打开阻塞项" })).not.toBeInTheDocument();
   });
 
@@ -330,10 +317,11 @@ describe("Onboarding", () => {
     ["启用的 Agent 暂无可用 token", [{ ...readyAgent, tokens: [] }]],
     ["所有 Agent 均已禁用", [{ ...readyAgent, enabled: false }]],
     ["所有 Agent 仍为 legacy allow，需迁移到 role", [{ ...readyAgent, role: undefined, allow: { tables: ["*"], tools: ["*"] } }]]
-  ])("explains MCP setup gap: %s", async (message, agents) => {
+  ])("does not explain Agent setup gaps inside MCP 接入: %s", async (message, agents) => {
     renderPage({ agents: agents as Agent[] });
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
+    const mcpSection = (await screen.findByRole("heading", { name: "MCP 接入" })).closest("section");
+    expect(mcpSection?.textContent ?? "").not.toContain(message);
   });
 
   it("renders the M39 ops dashboard sections", async () => {
@@ -371,26 +359,21 @@ describe("Onboarding", () => {
     expect(screen.getByTestId("ops-access-risk")).toBeInTheDocument();
     expect(screen.getByText("质量快照")).toBeInTheDocument();
     expect(screen.getByText("访问风险")).toBeInTheDocument();
-    // M41: 访问风险 + MCP 接入 area uses "可用 Token" wording; no more
-    // "活跃 Token" anywhere in the document.
-    expect(
-      screen.getAllByText(
-        (_content, element) =>
-          (element instanceof HTMLElement ? element.textContent : "").includes("可用") &&
-          (element instanceof HTMLElement ? element.textContent : "").includes("Token")
-      ).length
-    ).toBeGreaterThan(0);
+    // 质量快照只覆盖语义 / 发布 / 评测；访问风险负责 Agent / ACL / Token。
+    const qualitySnapshot = screen.getByTestId("ops-quality-snapshot");
+    const accessRisk = screen.getByTestId("ops-access-risk");
+    expect(qualitySnapshot.textContent ?? "").toContain("语义覆盖率");
+    expect(qualitySnapshot.textContent ?? "").toContain("待发布变更");
+    expect(qualitySnapshot.textContent ?? "").toContain("评测数据");
+    expect(qualitySnapshot.textContent ?? "").not.toContain("Agent 启用");
+    expect(qualitySnapshot.textContent ?? "").not.toContain("ACL 拒绝");
+    expect(accessRisk.textContent ?? "").toContain("Agent 启用与禁用");
+    expect(accessRisk.textContent ?? "").toContain("近 7 天 ACL 拒绝");
+    expect(accessRisk.textContent ?? "").toContain("可用");
+    expect(accessRisk.textContent ?? "").toContain("Token");
     expect(screen.queryByText(/活跃\s*Token/)).not.toBeInTheDocument();
     // The MCP section uses its own heading now (no more "实时状态与诊断").
-    // The heading text is split across a notranslate `MCP` span + a
-    // Chinese tail, so use a function matcher against the full text
-    // content.
-    expect(
-      screen.getByText(
-        (_content, element) =>
-          (element instanceof HTMLElement ? element.textContent : "").trim() === "MCP 接入"
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "MCP 接入" })).toBeInTheDocument();
   });
 
   it("shows 刷新中… while any core query is fetching and 刷新 when idle", async () => {
@@ -486,8 +469,10 @@ describe("Onboarding", () => {
     expect(accessRisk.textContent ?? "").toContain("可用");
     expect(accessRisk.textContent ?? "").toContain("Token");
     expect(accessRisk.textContent ?? "").not.toContain("活跃");
-    // MCP 接入 facts 也同步显示 1
-    expect(document.body.textContent ?? "").toMatch(/Token:\s*1\s*可用/);
+    // MCP 接入区不再同步显示 Token / Agent 汇总。
+    const mcpSection = screen.getByRole("heading", { name: "MCP 接入" }).closest("section");
+    expect(mcpSection?.textContent ?? "").not.toMatch(/Token:\s*1\s*可用/);
+    expect(mcpSection?.textContent ?? "").not.toMatch(/Agent:\s*\d+/);
   });
 
   it("treats unparseable expires_at as NOT available", async () => {
