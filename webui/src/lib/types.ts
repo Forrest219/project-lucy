@@ -63,6 +63,17 @@ export type SourceSummary = {
   wikiRefCount: number;
   completion: CompletionStatus;
   mtime: string;
+  /**
+   * Number of enabled Agents whose effective permissions include this source.
+   * See `webui/server/semantic-layer.ts` for the matching rule.
+   */
+  authorizedAgentCount: number;
+  /**
+   * Latest mtime between the Schema Manifest and the table's semantic overlay
+   * YAML (when present). ISO 8601.
+   */
+  semanticUpdatedAt: string;
+  semanticUpdatedAtSource: "manifest" | "overlay";
 };
 
 export type ConnectionInfo = {
@@ -606,6 +617,146 @@ export type EvalRunCompare = {
     fixed: number;
     unchanged: number;
   };
+};
+
+// ─── Eval Suite canonical (M43) ───────────────────────────────────────────────
+// Lucy-recognized canonical Eval YAML protocol. See
+// `webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md` §5.
+
+export const EVAL_SUITE_SCHEMA_VERSION = 1 as const;
+export const EVAL_SUITE_KIND = "lucy_eval_suite" as const;
+export const EVAL_RESULT_VERSION = 1 as const;
+
+export type EvalSuiteSnapshot = {
+  mode: "live_readonly" | "snapshot";
+  /** YYYY-MM-DD */
+  snapshot_date: string;
+};
+
+export type EvalRunnerHints = {
+  default_mcp_endpoint?: string;
+  supported_runners: string[];
+};
+
+export type ToolAssertion = {
+  type: "required_tool" | "forbidden_tool" | "required_tool_input_regex" | "forbidden_tool_input_regex";
+  /** Tool name or regex against tool input. Use `|` to separate multiple tools. */
+  value: string;
+  reason: string;
+};
+
+export type ContextAssertion = {
+  inherit_measures?: string[];
+  inherit_filters?: string[];
+  inherit_dimensions?: string[];
+  inherit_time_grain?: string;
+  sql_assertions?: SqlAssertion[];
+  tool_assertions?: ToolAssertion[];
+};
+
+export type EvalSuiteCaseTurn = {
+  user: string;
+  expected_measures?: string[];
+  result_assertions?: ResultAssertion[];
+  context_assertions?: ContextAssertion;
+};
+
+export type EvalSuiteCase = {
+  id: string;
+  case_type: "single_turn" | "multi_turn";
+  question?: string;
+  turns?: EvalSuiteCaseTurn[];
+  expected_source: "semantic_layer" | "raw_sql_fallback" | "manual_debug_only";
+  expected_measures?: string[];
+  model_id?: string;
+  skill_version?: string;
+  semantic_version?: string;
+  sql_assertions?: SqlAssertion[];
+  tool_assertions?: ToolAssertion[];
+  result_assertions?: ResultAssertion[];
+  context_assertions?: ContextAssertion;
+  snapshot_date?: string;
+  linked_quiz_questions?: string[];
+  coverage?: string;
+  notes?: string;
+};
+
+export type EvalSuite = {
+  lucy_eval_schema_version: 1;
+  kind: "lucy_eval_suite";
+  /** Globally stable ID, matches `[a-z0-9][a-z0-9_-]*`. */
+  suite_id: string;
+  domain: string;
+  title: string;
+  snapshot?: EvalSuiteSnapshot;
+  runner_hints?: EvalRunnerHints;
+  cases: EvalSuiteCase[];
+  /** Computed (sha256 over canonical JSON). Empty before first hash. */
+  suite_hash?: string;
+};
+
+// ─── Eval Result JSON (M43) ──────────────────────────────────────────────────
+// Optional archive of locally-run evaluation results. See spec §6.
+
+export type EvalResultStatus = "PASS" | "FAIL" | "SKIPPED" | "ERROR";
+
+export type EvalResultCase = {
+  case_id: string;
+  status: EvalResultStatus;
+  duration_ms?: number;
+  sql?: string;
+  actual?: Record<string, unknown>;
+  expected?: Record<string, unknown>;
+  failures?: string[];
+  final_text?: string;
+  error_message?: string;
+};
+
+export type EvalResultRunner = {
+  kind: string;
+  version?: string;
+  model?: string;
+  host?: string;
+};
+
+export type EvalResultImport = {
+  lucy_eval_result_version: 1;
+  suite_id: string;
+  /** sha256:hex */
+  suite_hash: string;
+  domain: string;
+  runner: EvalResultRunner;
+  /** ISO 8601 */
+  started_at: string;
+  /** ISO 8601 */
+  finished_at: string;
+  results: EvalResultCase[];
+};
+
+export type EvalResultHashStatus = "matched" | "mismatch" | "suite_missing";
+
+export type EvalSuiteImportDiff = {
+  suiteId?: string;
+  suiteHash?: string;
+  added: Array<{ id: string }>;
+  modified: Array<{ id: string; reason?: string }>;
+  removed: Array<{ id: string }>;
+  conflicts: Array<{ id?: string; code: string; path: string; message: string }>;
+};
+
+export type EvalResultImportPreview = {
+  runId?: number;
+  domain?: string;
+  totalCases?: number;
+  passCount?: number;
+  failCount?: number;
+  skippedCount?: number;
+  errorCount?: number;
+  suiteHashMatched?: boolean;
+  hashStatus?: EvalResultHashStatus;
+  unknownCaseIds: string[];
+  unknownSuiteId?: boolean;
+  warnings: string[];
 };
 
 export type EvalDriftDistribution = {
