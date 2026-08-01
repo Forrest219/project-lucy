@@ -525,15 +525,21 @@ export function Onboarding() {
     previousSettledRef.current = coreSettled;
   }, [coreSettled]);
 
-  // M39: auto-refresh interval. Re-fetches the four core queries every
-  // 60s when enabled, and pauses while the tab is hidden. The cleanup
-  // function clears the timer so we don't leak handles.
+  // M39: auto-refresh interval. Re-fetches the four core queries plus
+  // the eval-runs probe every 60s when enabled, and pauses while the
+  // tab is hidden. The cleanup function clears the timer so we don't
+  // leak handles.
   //
   // M39 polish (MAJOR-4): use Promise.allSettled so a single failing
   // endpoint doesn't mask the others, and aggregate failures into a
   // single low-noise toast instead of failing silently every 60s. The
   // threshold (`AUTO_REFRESH_FAILURE_TOAST_THRESHOLD`) keeps the toast
   // from firing on transient single-endpoint hiccups.
+  //
+  // M39 review follow-up (P2-A): a clean cycle (no failures across all
+  // five queries) updates `lastUpdatedAt` so the header `上次更新` badge
+  // and the action-required row 的 更新时间 both track the live
+  // refresh, not just the initial settlement.
   const AUTO_REFRESH_FAILURE_TOAST_THRESHOLD = 2;
   useEffect(() => {
     if (!autoRefresh) return;
@@ -545,12 +551,20 @@ export function Onboarding() {
         projectQuery.refetch(),
         sourcesQuery.refetch(),
         diffQuery.refetch(),
-        agentsQuery.refetch()
+        agentsQuery.refetch(),
+        // M39 review follow-up (P2-B): the eval probe is now part of
+        // the same refresh cycle so the eval-gap item can't drift out of
+        // sync with the rest of the action-required queue.
+        evalLastRunQuery.refetch()
       ]).then((settled) => {
         if (cancelled) return;
         const failedCount = settled.filter(
           (result) => result.status === "rejected" || (result.status === "fulfilled" && (result.value as { error?: unknown })?.error)
         ).length;
+        if (failedCount === 0) {
+          // Clean cycle — bump the dashboard-wide freshness stamp.
+          setLastUpdatedAt(new Date());
+        }
         if (failedCount >= AUTO_REFRESH_FAILURE_TOAST_THRESHOLD) {
           toast.error("部分状态刷新失败，可在控制台查看详情");
         }
@@ -559,7 +573,9 @@ export function Onboarding() {
     const timer = window.setInterval(schedule, AUTO_REFRESH_INTERVAL_MS);
     function onVisibility() {
       // When the tab reappears we immediately refetch so the user sees
-      // fresh data without waiting for the next interval tick.
+      // fresh data without waiting for the next interval tick. The
+      // success path of `schedule` itself updates `lastUpdatedAt`, so
+      // re-foregrounding also refreshes the timestamp without extra code.
       if (!document.hidden && autoRefresh) schedule();
     }
     document.addEventListener("visibilitychange", onVisibility);
@@ -623,9 +639,13 @@ export function Onboarding() {
         semanticCoverage: { done: doneSources, total: sources.length },
         pendingCatalogItems,
         pendingPublishFiles: changedFiles.length,
-        evalRunsLast30d: evalLastRunQuery.isLoading || evalLastRunQuery.error
-          ? 0
-          : (evalLastRunQuery.data?.runs.length ?? 0),
+        // M39 review follow-up (P2-B): pass `null` while the eval probe is
+        // still loading or has errored so the dashboard never fabricates
+        // a misleading "近 30 天无评测数据" item against unknown data.
+        // Only an explicit `0` from the eval API surfaces the item.
+        evalRunsLast30d: evalLastRunQuery.isSuccess
+          ? (evalLastRunQuery.data?.runs.length ?? 0)
+          : null,
         aclDenied7d,
         dashboardUpdatedAt: lastUpdatedAt ?? undefined
       }),
@@ -634,8 +654,7 @@ export function Onboarding() {
       sources.length,
       pendingCatalogItems,
       changedFiles.length,
-      evalLastRunQuery.isLoading,
-      evalLastRunQuery.error,
+      evalLastRunQuery.isSuccess,
       evalLastRunQuery.data,
       aclDenied7d,
       lastUpdatedAt
@@ -707,12 +726,16 @@ export function Onboarding() {
   async function refreshStatus() {
     // M39: toast on success / failure so the user always sees feedback
     // when they tap the manual refresh button. We deliberately resolve
-    // all four queries so a single failing endpoint doesn't get masked.
+    // all five queries (the four core ones plus the eval-runs probe)
+    // so a single failing endpoint doesn't get masked and so the eval
+    // item in the action-required queue actually tracks new runs after
+    // a click.
     const settled = await Promise.allSettled([
       projectQuery.refetch(),
       sourcesQuery.refetch(),
       diffQuery.refetch(),
-      agentsQuery.refetch()
+      agentsQuery.refetch(),
+      evalLastRunQuery.refetch()
     ]);
     const failed = settled.find((result) => result.status === "rejected");
     if (failed) {
@@ -744,7 +767,11 @@ export function Onboarding() {
     projectQuery.isFetching ||
     sourcesQuery.isFetching ||
     diffQuery.isFetching ||
-    agentsQuery.isFetching;
+    agentsQuery.isFetching ||
+    // M39 review follow-up (P2-B): include the eval probe's in-flight
+    // window in the refresh button label so the manual refresh that
+    // touches `?limit=1` is reflected by the "刷新中..." state.
+    evalLastRunQuery.isFetching;
   const refreshButtonLabel = coreFetching ? "刷新中..." : "刷新状态";
 
   if (loading) {

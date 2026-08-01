@@ -12,9 +12,27 @@ function StubPage({ name }: { name: string }) {
   return <div data-testid="route-page">{name}</div>;
 }
 
+// M39 review follow-up (P1): when `/onboarding` redirects to `/overview`, the
+// canonical route must keep the incoming `search` and `hash` so legacy
+// bookmarks like `/onboarding?object=table&conn=...` continue to open the
+// ObjectDetailDrawer after the redirect. The mock captures the post-redirect
+// location via a side-channel so individual tests can assert against it.
+let lastOnboardingLocation: { pathname: string; search: string; hash: string } | null = null;
+
 vi.mock("../pages/Catalog", () => ({ Catalog: () => <StubPage name="Catalog" /> }));
 vi.mock("../pages/JoinEditor", () => ({ JoinEditor: () => <StubPage name="JoinEditor" /> }));
-vi.mock("../pages/Onboarding", () => ({ Onboarding: () => <StubPage name="Onboarding" /> }));
+vi.mock("../pages/Onboarding", async () => {
+  const { useLocation } = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom"
+  );
+  return {
+    Onboarding: () => {
+      const loc = useLocation();
+      lastOnboardingLocation = { pathname: loc.pathname, search: loc.search, hash: loc.hash };
+      return <div data-testid="route-page">Onboarding</div>;
+    }
+  };
+});
 vi.mock("../pages/publish/PublishWorkbench", () => ({ PublishWorkbench: () => <StubPage name="PublishWorkbench" /> }));
 vi.mock("../pages/publish/PublishHistory", () => ({ PublishHistory: () => <StubPage name="PublishHistory" /> }));
 vi.mock("../pages/TableEditor", () => ({ TableEditor: () => <StubPage name="TableEditor" /> }));
@@ -95,6 +113,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  lastOnboardingLocation = null;
 });
 
 describe("AppFrame shell", () => {
@@ -138,6 +157,20 @@ describe("AppFrame shell", () => {
     const overviewLink = screen.getByRole("link", { name: "系统概览" });
     expect(overviewLink).toHaveAttribute("href", "/overview");
     expect(overviewLink).toHaveAttribute("aria-current", "page");
+  });
+
+  it("preserves search and hash when redirecting /onboarding to /overview", () => {
+    // Legacy bookmark from M36 / pre-M39 — must still resolve to /overview
+    // with the same query so ObjectDetailDrawer can open the right object.
+    renderAt("/onboarding?object=table&conn=mysql-aliyun&schema=dataforai&table=orders#section-1");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    // The post-redirect location must be /overview with the original
+    // `search` and `hash` intact. A naive `<Navigate to="/overview" />`
+    // would silently drop both.
+    expect(lastOnboardingLocation?.pathname).toBe("/overview");
+    expect(lastOnboardingLocation?.search).toContain("object=table");
+    expect(lastOnboardingLocation?.search).toContain("conn=mysql-aliyun");
+    expect(lastOnboardingLocation?.hash).toBe("#section-1");
   });
 
   it("keeps / on the catalog route and marks 表目录 active", () => {

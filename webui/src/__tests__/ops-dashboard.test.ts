@@ -211,6 +211,24 @@ describe("opsDashboard view model", () => {
     expect(evalGap?.severityLabel).toBe("提醒");
   });
 
+  it("omits the eval-gap item when evalRunsLast30d is null (still loading or errored)", () => {
+    // M39 review follow-up (P2-B): when the eval probe hasn't returned
+    // data yet, passing `null` must suppress the item entirely so the
+    // dashboard never fabricates a misleading "近 30 天无评测数据"
+    // against unknown data. Collapsing `null` to `0` (the previous
+    // behaviour) used to surface that item during both initial load and
+    // errored states.
+    const items = buildActionRequiredItems({
+      semanticCoverage: { done: 8, total: 8 },
+      pendingCatalogItems: 0,
+      pendingPublishFiles: 0,
+      evalRunsLast30d: null,
+      aclDenied7d: 0
+    });
+    const evalGap = items.find((item) => item.id === "eval-gap");
+    expect(evalGap).toBeUndefined();
+  });
+
   it("attaches deterministic impact / owner / evidence / updatedAtLabel metadata to every action item", () => {
     const dashboardUpdatedAt = new Date("2026-08-01T10:12:00.000Z");
     const items = buildActionRequiredItems({

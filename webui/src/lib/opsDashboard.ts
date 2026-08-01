@@ -76,7 +76,13 @@ export type ActionRequiredInput = {
   semanticCoverage: SemanticCoverage;
   pendingCatalogItems: number;
   pendingPublishFiles: number;
-  evalRunsLast30d: number;
+  /**
+   * Number of eval runs in the last 30 days. Pass `null` when we don't yet
+   * know — e.g. the eval endpoint is still loading or has errored — so the
+   * dashboard never fabricates a fake "近 30 天无评测数据" item.
+   * `0` means "we confirmed zero runs"; `n>0` means "n runs exist".
+   */
+  evalRunsLast30d: number | null;
   aclDenied7d: number;
   /** Optional dashboard refresh time used to render "今天 HH:mm". */
   dashboardUpdatedAt?: Date;
@@ -158,7 +164,11 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
   // helper stays total: a downstream caller can trust the result.
   const safePendingCatalog = Math.max(0, input.pendingCatalogItems);
   const safePendingPublish = Math.max(0, input.pendingPublishFiles);
-  const safeEvalRuns = Math.max(0, input.evalRunsLast30d);
+  // `evalRunsLast30d === null` means we have no data yet — never
+  // collapse that to 0, or the helper would fabricate a misleading
+  // "近 30 天无评测数据" item against a still-loading / failed query.
+  const safeEvalRuns =
+    input.evalRunsLast30d === null ? null : Math.max(0, input.evalRunsLast30d);
   const safeAclDenied = Math.max(0, input.aclDenied7d);
   const semanticGap = pendingSemanticCount(input.semanticCoverage);
   const semanticSeverity = semanticGapSeverity(input.semanticCoverage);
@@ -209,6 +219,9 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           updatedAtLabel
         }
       : null,
+    // Only `safeEvalRuns === 0` (confirmed zero runs) surfaces the
+    // eval-gap item; both `safeEvalRuns === null` (still loading /
+    // errored) and `safeEvalRuns > 0` collapse to `null`.
     safeEvalRuns === 0
       ? {
           id: "eval-gap",

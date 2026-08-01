@@ -43,6 +43,24 @@ const topLevelEntry: NavItem = {
   active: (path) => path === "/overview"
 };
 
+/**
+ * M39 review follow-up: keep `/onboarding` as a compatibility alias for
+ * `/overview`, but forward the incoming `search` and `hash` so legacy
+ * bookmarks such as `/onboarding?object=table&conn=...&schema=...&table=...`
+ * still open the ObjectDetailDrawer on the canonical route. The naked
+ * `<Navigate to="/overview" replace />` element drops `search` by default,
+ * which silently breaks any pre-M36 share / QA link.
+ */
+function OnboardingRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: "/overview", search: location.search, hash: location.hash }}
+      replace
+    />
+  );
+}
+
 const navGroups: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "数据接入",
@@ -169,7 +187,7 @@ export function AppFrame() {
         <div className="pl-workspace-body">
           <Routes>
             <Route path="/overview" element={<Onboarding />} />
-            <Route path="/onboarding" element={<Navigate to="/overview" replace />} />
+            <Route path="/onboarding" element={<OnboardingRedirect />} />
             <Route path="/connections" element={<ConnectionOverview />} />
             <Route path="/connections/whitelist" element={<TableWhitelist />} />
             <Route path="/connections/test" element={<ConnectionTest />} />
