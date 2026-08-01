@@ -57,6 +57,23 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_run_case_status    ON eval_run_case(case_id, status);
 `;
 
+function ensureEvalRunColumns(instance: Database.Database): void {
+  const rows = instance.prepare("PRAGMA table_info(eval_run)").all() as Array<{ name: string }>;
+  const columns = new Set(rows.map((row) => row.name));
+  const additions: Array<[string, string]> = [
+    ["suite_id", "TEXT"],
+    ["suite_hash", "TEXT"],
+    ["runner_metadata_raw", "TEXT"],
+    ["import_source", "TEXT"],
+    ["hash_status", "TEXT"]
+  ];
+  for (const [name, type] of additions) {
+    if (!columns.has(name)) {
+      instance.exec(`ALTER TABLE eval_run ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
 function ensureEvalRunCaseColumns(instance: Database.Database): void {
   const rows = instance.prepare("PRAGMA table_info(eval_run_case)").all() as Array<{ name: string }>;
   const columns = new Set(rows.map((row) => row.name));
@@ -90,6 +107,7 @@ export async function getEvalDb(dbPath?: string): Promise<Database.Database> {
   instance.pragma("journal_mode = WAL");
   instance.pragma("foreign_keys = ON");
   instance.exec(SCHEMA);
+  ensureEvalRunColumns(instance);
   ensureEvalRunCaseColumns(instance);
   if (!dbPath) {
     db = instance;
@@ -118,6 +136,11 @@ export interface EvalRunRow {
   runner_pid: number | null;
   log_path: string | null;
   json_path: string | null;
+  suite_id: string | null;
+  suite_hash: string | null;
+  runner_metadata_raw: string | null;
+  import_source: string | null;
+  hash_status: string | null;
 }
 
 export interface EvalRunCaseRow {

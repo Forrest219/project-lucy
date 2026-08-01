@@ -2,13 +2,53 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { apiGet, apiDelete } from "../../lib/apiClient";
+import { ApiError, apiGet, apiDelete, apiPost } from "../../lib/apiClient";
 import type { EvalDomainInfo, EvalCase, EvalRun, EvalRunWithResults } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type CasesResponse = { cases: EvalCase[] };
 type RunsResponse = { total: number; runs: EvalRun[] };
+type SuiteImportResponse = {
+  domain: string;
+  suiteId: string;
+  suiteHash: string;
+  caseCount: number;
+  format: string;
+  warnings: string[];
+  errors: unknown[];
+  diff: string;
+  proposedYaml: string;
+  written?: true;
+};
+type ResultImportResponse = {
+  runId?: number;
+  domain: string;
+  suiteId: string;
+  suiteHash: string;
+  currentSuiteHash: string;
+  totalCases: number;
+  passCount: number;
+  failCount: number;
+  skippedCount: number;
+  errorCount: number;
+  suiteHashMatched: boolean;
+  hashStatus: "matched" | "mismatch";
+  warnings: string[];
+  written?: true;
+};
+
+function runnerCommandFor(domain: string): string {
+  return `node scripts/lucy-eval-runner.mjs --suite ${domain || "eval"}-eval-suite.yaml --output result.json`;
+}
+
+function errorDetail(err: unknown): string {
+  if (err instanceof ApiError && err.detail && typeof err.detail === "object" && "errors" in err.detail) {
+    const errors = (err.detail as { errors?: Array<{ path?: string; message?: string }> }).errors ?? [];
+    return errors.map((e) => `${e.path ?? ""} ${e.message ?? ""}`.trim()).filter(Boolean).join("\n");
+  }
+  return err instanceof Error ? err.message : String(err);
+}
 
 export function CaseList() {
   const { domain: paramDomain } = useParams<{ domain?: string }>();
@@ -48,6 +88,14 @@ export function CaseList() {
   const latestStatusByCase = new Map((latestRunDetail?.results ?? []).map((r) => [r.caseId, r.status]));
 
   const [search, setSearch] = useState("");
+  const [suiteMenuOpen, setSuiteMenuOpen] = useState(false);
+  const [suitePanel, setSuitePanel] = useState<"import" | "result" | "command" | null>(null);
+  const [suiteYaml, setSuiteYaml] = useState("");
+  const [resultJson, setResultJson] = useState("");
+  const [suitePreview, setSuitePreview] = useState<SuiteImportResponse | null>(null);
+  const [resultPreview, setResultPreview] = useState<ResultImportResponse | null>(null);
+  const [downloadedYaml, setDownloadedYaml] = useState("");
+  const [runnerCommand, setRunnerCommand] = useState("");
   const filteredCases = search
     ? cases.filter((c) => c.id.includes(search) || (c.question ?? "").includes(search))
     : cases;
@@ -60,6 +108,59 @@ export function CaseList() {
     },
     onError: (err) => toast.error(`删除失败：${(err as Error).message}`)
   });
+
+  const suiteImportMutation = useMutation({
+    mutationFn: (dryRun: boolean) => apiPost<SuiteImportResponse>("/api/eval/suites/import", {
+      dryRun,
+      filename: `${activeDomain || "eval"}-eval-suite.yaml`,
+      content: suiteYaml
+    }),
+    onSuccess: (data, dryRun) => {
+      setSuitePreview(data);
+      if (dryRun) {
+        toast.success(`Eval YAML 预检通过：${data.caseCount} 个 case`);
+      } else {
+        toast.success("Eval YAML 已导入");
+        void qc.invalidateQueries({ queryKey: ["eval", "domains"] });
+        void qc.invalidateQueries({ queryKey: ["eval", "cases", data.domain] });
+      }
+    },
+    onError: (err) => toast.error(`Eval YAML 导入失败：${errorDetail(err)}`)
+  });
+
+  const resultImportMutation = useMutation({
+    mutationFn: (options: { dryRun: boolean; archiveLocalVariant?: boolean }) => apiPost<ResultImportResponse>("/api/eval/results/import", {
+      dryRun: options.dryRun,
+      archiveLocalVariant: options.archiveLocalVariant,
+      content: resultJson
+    }),
+    onSuccess: (data, options) => {
+      setResultPreview(data);
+      if (options.dryRun) {
+        toast.success(data.hashStatus === "mismatch" ? "运行结果可作为本地变体归档" : "运行结果预检通过");
+      } else {
+        toast.success("运行结果已归档");
+        void qc.invalidateQueries({ queryKey: ["eval", "runs"] });
+        if (data.runId) navigate(`/eval/runs/${data.runId}`);
+      }
+    },
+    onError: (err) => toast.error(`运行结果导入失败：${errorDetail(err)}`)
+  });
+
+  async function downloadSuite() {
+    if (!activeDomain) return;
+    const response = await fetch(`/api/eval/suites/${encodeURIComponent(activeDomain)}/download`);
+    if (!response.ok) {
+      toast.error("下载 Eval YAML 失败");
+      return;
+    }
+    const text = await response.text();
+    const command = response.headers.get("X-Lucy-Runner-Command") ?? runnerCommandFor(activeDomain);
+    setDownloadedYaml(text);
+    setRunnerCommand(command);
+    setSuitePanel("command");
+    toast.success("Eval YAML 已准备，可在本地 runner 中运行");
+  }
 
   if (loadingDomains) return <div className="pl-notice">加载中…</div>;
 
@@ -89,16 +190,111 @@ export function CaseList() {
           </>
         }
         actions={
-          <button
-            type="button"
-            className="pl-btn pl-btn--primary text-sm"
-            onClick={() => navigate(`/eval/cases/${activeDomain}/new`)}
-            disabled={!activeDomain}
-          >
-            新建 Case
-          </button>
+          <div className="relative flex gap-2">
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary text-sm"
+              onClick={() => void downloadSuite()}
+              disabled={!activeDomain}
+            >
+              下载 <span className="notranslate" translate="no">Eval YAML</span>
+            </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-sm"
+              aria-expanded={suiteMenuOpen}
+              onClick={() => setSuiteMenuOpen((v) => !v)}
+            >
+              评测套件 <span className="notranslate" translate="no">(YAML)</span> ▾
+            </button>
+            {suiteMenuOpen && (
+              <div className="absolute right-0 top-10 z-10 min-w-56 rounded border border-border bg-bg p-2 shadow-lg grid gap-1">
+                <button type="button" className="pl-btn pl-btn--ghost text-sm justify-start" onClick={() => { setSuitePanel("import"); setSuiteMenuOpen(false); }}>
+                  上传 <span className="notranslate" translate="no">Eval YAML</span>
+                </button>
+                <button type="button" className="pl-btn pl-btn--ghost text-sm justify-start" onClick={() => { setSuiteMenuOpen(false); void downloadSuite(); }}>
+                  下载 <span className="notranslate" translate="no">Eval YAML</span>
+                </button>
+                <button type="button" className="pl-btn pl-btn--ghost text-sm justify-start" onClick={() => { setRunnerCommand(runnerCommandFor(activeDomain)); setSuitePanel("command"); setSuiteMenuOpen(false); }}>
+                  查看本地运行命令
+                </button>
+                <button type="button" className="pl-btn pl-btn--ghost text-sm justify-start" onClick={() => { setSuitePanel("result"); setSuiteMenuOpen(false); }}>
+                  上传运行结果
+                </button>
+              </div>
+            )}
+          </div>
         }
       />
+
+      <div className="pl-notice">
+        当前服务器未配置 <span className="notranslate" translate="no">Agent runtime</span> 时，仍可下载 <span className="notranslate" translate="no">Eval YAML</span>，在本机 <span className="notranslate" translate="no">Claude Code</span> 或 <span className="notranslate" translate="no">Hermes</span> 中运行；结果可选择上传归档。
+      </div>
+
+      {suitePanel === "command" && (
+        <div className="border border-border rounded p-4 grid gap-3">
+          <div className="flex justify-between gap-3">
+            <h2 className="font-medium">本地运行命令</h2>
+            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={() => setSuitePanel(null)}>关闭</button>
+          </div>
+          <code className="notranslate block rounded bg-bg-muted p-3 text-xs overflow-x-auto" translate="no">{runnerCommand || runnerCommandFor(activeDomain)}</code>
+          {downloadedYaml && (
+            <textarea className="pl-input min-h-40 font-mono text-xs notranslate" translate="no" readOnly value={downloadedYaml} />
+          )}
+        </div>
+      )}
+
+      {suitePanel === "import" && (
+        <div className="border border-border rounded p-4 grid gap-3">
+          <div className="flex justify-between gap-3">
+            <h2 className="font-medium">上传 <span className="notranslate" translate="no">Eval YAML</span></h2>
+            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={() => setSuitePanel(null)}>关闭</button>
+          </div>
+          <textarea
+            className="pl-input min-h-52 font-mono text-xs notranslate"
+            translate="no"
+            placeholder="粘贴 Eval YAML 内容..."
+            value={suiteYaml}
+            onChange={(e) => setSuiteYaml(e.target.value)}
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="pl-btn pl-btn--ghost text-sm" disabled={!suiteYaml || suiteImportMutation.isPending} onClick={() => suiteImportMutation.mutate(true)}>预检</button>
+            <button type="button" className="pl-btn pl-btn--primary text-sm" disabled={!suiteYaml || suiteImportMutation.isPending} onClick={() => suiteImportMutation.mutate(false)}>确认导入</button>
+          </div>
+          {suitePreview && (
+            <div className="pl-notice text-xs">
+              <span className="notranslate" translate="no">{suitePreview.suiteId}</span> · {suitePreview.caseCount} 个 case · <span className="notranslate" translate="no">{suitePreview.suiteHash}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {suitePanel === "result" && (
+        <div className="border border-border rounded p-4 grid gap-3">
+          <div className="flex justify-between gap-3">
+            <h2 className="font-medium">上传运行结果</h2>
+            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={() => setSuitePanel(null)}>关闭</button>
+          </div>
+          <textarea
+            className="pl-input min-h-52 font-mono text-xs notranslate"
+            translate="no"
+            placeholder="粘贴 Result JSON 内容..."
+            value={resultJson}
+            onChange={(e) => setResultJson(e.target.value)}
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="pl-btn pl-btn--ghost text-sm" disabled={!resultJson || resultImportMutation.isPending} onClick={() => resultImportMutation.mutate({ dryRun: true })}>预检</button>
+            <button type="button" className="pl-btn pl-btn--primary text-sm" disabled={!resultJson || resultImportMutation.isPending} onClick={() => resultImportMutation.mutate({ dryRun: false, archiveLocalVariant: resultPreview?.hashStatus === "mismatch" })}>
+              确认归档
+            </button>
+          </div>
+          {resultPreview && (
+            <div className="pl-notice text-xs">
+              {resultPreview.hashStatus === "mismatch" ? "本地变体 · 默认不进入趋势和质量门禁" : "Hash 匹配"} · PASS {resultPreview.passCount} / FAIL {resultPreview.failCount} / SKIP {resultPreview.skippedCount}
+            </div>
+          )}
+        </div>
+      )}
 
       <div
         className="pl-metric-grid pl-metric-grid--three"
@@ -147,12 +343,22 @@ export function CaseList() {
       </div>
 
       {/* Search */}
-      <input
-        className="pl-input w-72"
-        placeholder="搜索 case id 或问题…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="flex gap-2 flex-wrap items-center">
+        <input
+          className="pl-input w-72"
+          placeholder="搜索 case id 或问题…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost text-sm"
+          onClick={() => navigate(`/eval/cases/${activeDomain}/new`)}
+          disabled={!activeDomain}
+        >
+          新建 Case
+        </button>
+      </div>
 
       {/* Table */}
       {loadingCases ? (

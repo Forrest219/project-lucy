@@ -98,20 +98,20 @@ export function RunList() {
     <div className="grid gap-6">
       <PageHeader
         title="运行历史"
-        description="查看 eval run 历史，触发新 run，查看结果详情。"
+        description="查看评测运行历史；服务器运行作为高级入口保留。"
         badges={
           <span>{runs.length} / {runsData?.total ?? 0} 条</span>
         }
         actions={
           <button
             type="button"
-            className="pl-btn pl-btn--primary text-sm"
+            className="pl-btn pl-btn--ghost text-sm"
             onClick={() => {
               setTriggerForm((p) => ({ ...p, domain: domains[0]?.domain ?? "", selectedCaseId: "" }));
               setShowTrigger(true);
             }}
           >
-            触发新 Run
+            服务器运行
           </button>
         }
       />

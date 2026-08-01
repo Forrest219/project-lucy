@@ -39,6 +39,7 @@ import { registerTokenRoutes } from "./admin/tokens.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerCaseRoutes } from "./eval/cases.js";
+import { registerSuiteImportRoutes } from "./eval/suite-import.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
 import { registerR1ObservabilityRoutes } from "./observability.js";
@@ -868,6 +869,7 @@ export function buildServer() {
   registerAuditRoutes(app);
   registerMcpToolsRoutes(app);
   registerCaseRoutes(app);
+  registerSuiteImportRoutes(app);
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
   registerR1ObservabilityRoutes(app);

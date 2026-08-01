@@ -11,6 +11,7 @@
     "audit:ktx-diff": "node scripts/ktx-lucy-diff-audit.mjs",
     "compat:ktx-upgrade": "node scripts/ktx-upgrade-compat.mjs",
     "eval": "node scripts/eval-runner.mjs",
+    "eval:local": "node scripts/lucy-eval-runner.mjs",
     "eval:list": "node scripts/eval-runner.mjs --list-cases",
     "lint:spec": "node scripts/lint-spec.mjs",
     "lint:terminology": "node webui/scripts/lint-terminology.mjs",

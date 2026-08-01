@@ -34,7 +34,8 @@ export type SuiteSchemaErrorCode =
   | "RESULT_INVALID_TIMESTAMP"
   | "RESULT_EMPTY"
   | "RESULT_DUPLICATE_CASE_ID"
-  | "RESULT_SUITE_ID_SUSPICIOUS";
+  | "RESULT_SUITE_ID_SUSPICIOUS"
+  | "SENSITIVE_FIELD_DETECTED";
 
 export type SuiteSchemaError = {
   code: SuiteSchemaErrorCode;
@@ -106,7 +107,7 @@ const VALID_EXPECTED_SOURCES = new Set<NonNullable<EvalSuiteCase["expected_sourc
 export function parseEvalSuite(text: string): ParseEvalSuiteResult {
   const errors: SuiteSchemaError[] = [];
 
-  if (text.length >= MAX_SUITE_BYTES) {
+  if (Buffer.byteLength(text, "utf8") >= MAX_SUITE_BYTES) {
     errors.push(
       err(
         "INVALID_YAML",
@@ -427,7 +428,7 @@ const ISO_8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2
 export function parseEvalResultImport(text: string): ParseEvalResultResult {
   const errors: SuiteSchemaError[] = [];
 
-  if (text.length > MAX_RESULT_BYTES) {
+  if (Buffer.byteLength(text, "utf8") >= MAX_RESULT_BYTES) {
     errors.push(err("INVALID_YAML", "", `Result JSON exceeds ${MAX_RESULT_BYTES} bytes`));
     return { ok: false, errors };
   }

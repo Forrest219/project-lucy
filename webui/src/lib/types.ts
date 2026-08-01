@@ -569,12 +569,17 @@ export type EvalRun = {
   passCount: number;
   failCount: number;
   passRate?: number;
+  suiteId?: string;
+  suiteHash?: string;
+  runnerMetadata?: unknown;
+  importSource?: string;
+  hashStatus?: EvalResultHashStatus;
 };
 
 export type EvalRunWithResults = EvalRun & {
   results: Array<{
     caseId: string;
-    status: "PASS" | "FAIL";
+    status: "PASS" | "FAIL" | "SKIPPED" | "ERROR";
     drift?: string;
     exitCode?: number;
     durationMs?: number;

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CaseList } from "../pages/eval/CaseList";
+import { RunList } from "../pages/eval/RunList";
 
 function renderCaseList() {
   const client = new QueryClient({
@@ -15,6 +16,21 @@ function renderCaseList() {
       <MemoryRouter initialEntries={["/eval/cases"]}>
         <Routes>
           <Route path="/eval/cases" element={<CaseList />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+function renderRunList() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/eval/runs"]}>
+        <Routes>
+          <Route path="/eval/runs" element={<RunList />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -46,5 +62,84 @@ describe("CaseList M34 IA", () => {
     // M40: 一级根页面不再渲染面包屑
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Case 管理" })).not.toBeInTheDocument();
+  });
+});
+
+describe("CaseList M43 Eval YAML exchange", () => {
+  it("keeps one primary CTA and exposes suite actions from the YAML menu", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/eval/domains") {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: { domains: [{ domain: "kx_financial", filePath: "evals/kx_financial/eval/kx_financial-eval-cases.yaml", caseCount: 1 }] }
+        }));
+      }
+      if (url === "/api/eval/cases/kx_financial") {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: { cases: [{ id: "kx-income-001", case_type: "single_turn", question: "查询收入", expected_measures: ["operating_revenue"] }] }
+        }));
+      }
+      if (url === "/api/eval/runs?domain=kx_financial&limit=1") {
+        return new Response(JSON.stringify({ ok: true, data: { total: 0, runs: [] } }));
+      }
+      if (url === "/api/eval/suites/kx_financial/download") {
+        return new Response("lucy_eval_schema_version: 1\n", {
+          headers: {
+            "Content-Type": "text/yaml",
+            "X-Lucy-Runner-Command": "node scripts/lucy-eval-runner.mjs --suite kx_financial-eval-suite.yaml --output result.json"
+          }
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, data: {} }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderCaseList();
+
+    expect(await screen.findByRole("button", { name: /下载\s*Eval YAML/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /评测套件/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /上传\s*Eval YAML/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /评测套件/ }));
+    expect(screen.getByRole("button", { name: /上传\s*Eval YAML/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /上传运行结果/ }));
+    expect(screen.getByPlaceholderText("粘贴 Result JSON 内容...")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /评测套件/ }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: /下载\s*Eval YAML/ })[0]);
+    await waitFor(() => {
+      expect(screen.getByText(/本地运行命令/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/lucy-eval-runner\.mjs/)).toBeInTheDocument();
+  });
+});
+
+describe("RunList M43 server runtime downgrade", () => {
+  it("keeps server-side eval as an advanced action", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval/domains") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: { domains: [{ domain: "kx_financial", filePath: "evals/kx_financial/eval/kx_financial-eval-cases.yaml", caseCount: 1 }] }
+          }));
+        }
+        if (url === "/api/eval/runs") {
+          return new Response(JSON.stringify({ ok: true, data: { total: 0, runs: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: true, data: {} }));
+      })
+    );
+
+    renderRunList();
+
+    expect(await screen.findByRole("heading", { name: "运行历史" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "服务器运行" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /触发新 Run/ })).not.toBeInTheDocument();
   });
 });

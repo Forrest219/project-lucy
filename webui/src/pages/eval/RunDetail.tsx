@@ -21,7 +21,7 @@ type SseProgress = {
 
 type SseCaseDone = {
   caseId: string;
-  status: "PASS" | "FAIL";
+  status: "PASS" | "FAIL" | "SKIPPED" | "ERROR";
 };
 
 type SseFinished = {
@@ -61,7 +61,7 @@ export function RunDetail() {
   const navigate = useNavigate();
   const [expandedCase, setExpandedCase] = useState<string | null>(null);
   const [sseProgress, setSseProgress] = useState<{ current: number; total?: number; caseId: string } | null>(null);
-  const [sseCaseDone, setSseCaseDone] = useState<Record<string, "PASS" | "FAIL">>({});
+  const [sseCaseDone, setSseCaseDone] = useState<Record<string, "PASS" | "FAIL" | "SKIPPED" | "ERROR">>({});
   const [sseFinished, setSseFinished] = useState(false);
   const [compareWith, setCompareWith] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
