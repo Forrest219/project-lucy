@@ -162,6 +162,101 @@ function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
 }
 
 /**
+ * v1.9.x 收口：把「原生 Checkbox + 按钮」改成下拉式 RefreshMenu。
+ * - 按钮自带状态点（绿点 = 自动刷新开，灰点 = 关）
+ * - 点开下拉：立即刷新 / 自动刷新切换
+ * - 点外部 / Esc 关掉
+ */
+function RefreshMenu({
+  isFetching,
+  autoRefresh,
+  onManualRefresh,
+  onToggleAutoRefresh
+}: {
+  isFetching: boolean;
+  autoRefresh: boolean;
+  onManualRefresh: () => void;
+  onToggleAutoRefresh: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const label = isFetching ? "刷新中..." : "刷新状态";
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        className="pl-btn pl-btn--secondary inline-flex items-center gap-2"
+        onClick={() => setOpen((prev) => !prev)}
+        disabled={isFetching}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-testid="onboarding-refresh-button"
+      >
+        <span
+          aria-hidden
+          className={`size-1.5 rounded-pill ${autoRefresh ? "bg-success" : "bg-fg-muted"}`}
+        />
+        <span>{label}</span>
+        <span aria-hidden className="text-xs">▾</span>
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-20 mt-1 grid min-w-[12rem] gap-0.5 rounded-md border border-border-default bg-bg-surface p-1 shadow-card"
+          data-testid="onboarding-refresh-menu"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-bg-muted"
+            onClick={() => {
+              onManualRefresh();
+              setOpen(false);
+            }}
+            data-testid="onboarding-refresh-menu-manual"
+          >
+            立即刷新
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            aria-checked={autoRefresh}
+            className="flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm hover:bg-bg-muted"
+            onClick={onToggleAutoRefresh}
+            data-testid="onboarding-refresh-menu-auto"
+          >
+            <span>自动刷新</span>
+            <span
+              aria-hidden
+              className={`inline-block size-2.5 rounded-pill ${
+                autoRefresh ? "bg-success" : "border border-fg-muted bg-bg-surface"
+              }`}
+            />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Compact Service Health strip. Per M39 spec 41 §6.1, ready state must NOT
  * use a large coloured banner. We render a single neutral row with four
  * mini-items and a `[控制台日志]` affordance.
@@ -198,7 +293,7 @@ function ServiceHealthStrip({ items }: { items: ServiceHealthItem[] }) {
           ))}
         </ul>
         <Link
-          to="/help"
+          to="/admin/audit"
           className="pl-service-health-compact-log"
           data-testid="ops-service-health-log-link"
         >
@@ -388,7 +483,7 @@ function ActionRequiredRow({ item }: { item: ActionRequiredItem }) {
         </div>
         {item.href ? (
           <Link
-            className="pl-btn pl-btn--ghost text-sm notranslate"
+            className="pl-action-required-item-cta text-sm font-medium text-blue-600 hover:underline notranslate"
             translate="no"
             to={item.href}
             data-testid={`${item.testId}-link`}
@@ -772,7 +867,6 @@ export function Onboarding() {
     // window in the refresh button label so the manual refresh that
     // touches `?limit=1` is reflected by the "刷新中..." state.
     evalLastRunQuery.isFetching;
-  const refreshButtonLabel = coreFetching ? "刷新中..." : "刷新状态";
 
   if (loading) {
     return <p className="pl-notice">正在加载系统概览...</p>;
@@ -790,7 +884,6 @@ export function Onboarding() {
     <div className="pl-page-stack">
       <PageHeader
         title="系统概览"
-        breadcrumbs={["系统概览"]}
         description={
           <>
             查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。聚合首页待办，判断 data agent 是否处于可交付状态。
@@ -813,28 +906,12 @@ export function Onboarding() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-3">
-            <label
-              className="flex items-center gap-2 text-sm text-fg-body"
-              data-testid="onboarding-auto-refresh-wrapper"
-            >
-              <input
-                type="checkbox"
-                className="pl-checkbox"
-                data-testid="onboarding-auto-refresh-toggle"
-                checked={autoRefresh}
-                onChange={(event) => setAutoRefresh(event.target.checked)}
-              />
-              <span>自动刷新</span>
-            </label>
-            <button
-              type="button"
-              className="pl-btn pl-btn--secondary"
-              onClick={refreshStatus}
-              disabled={coreFetching}
-              data-testid="onboarding-refresh-button"
-            >
-              {refreshButtonLabel}
-            </button>
+            <RefreshMenu
+              isFetching={coreFetching}
+              autoRefresh={autoRefresh}
+              onManualRefresh={refreshStatus}
+              onToggleAutoRefresh={() => setAutoRefresh((prev) => !prev)}
+            />
           </div>
         }
       />
@@ -896,7 +973,7 @@ export function Onboarding() {
               </small>
               <Link
                 to="/publish/workbench"
-                className="pl-btn pl-btn--ghost text-sm"
+                className="text-sm font-medium text-blue-600 hover:underline self-end"
               >
                 打开发布工作台 ↗
               </Link>
@@ -909,7 +986,7 @@ export function Onboarding() {
               <small className="text-fg-muted">
                 <span className="notranslate" translate="no">{enabledAgents.length}</span> 个 <span className="notranslate" translate="no">Agent</span> 已启用
               </small>
-              <Link to="/admin/agents" className="pl-btn pl-btn--ghost text-sm notranslate" translate="no">
+              <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline self-end notranslate" translate="no">
                 查看 <span className="notranslate" translate="no">Agent</span> 实例 ↗
               </Link>
             </div>
@@ -923,7 +1000,7 @@ export function Onboarding() {
               </small>
               <Link
                 to="/admin/audit?outcome=denied"
-                className="pl-btn pl-btn--ghost text-sm"
+                className="text-sm font-medium text-blue-600 hover:underline self-end"
               >
                 查看访问日志 ↗
               </Link>
@@ -949,7 +1026,7 @@ export function Onboarding() {
                   <span className="notranslate" translate="no">{enabledAgents.length}</span> 启用 / <span className="notranslate" translate="no">{agents.length}</span> 总数
                 </div>
               </div>
-              <Link to="/admin/agents" className="pl-btn pl-btn--ghost text-sm notranslate" translate="no">
+              <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline notranslate" translate="no">
                 查看 <span className="notranslate" translate="no">Agent</span> 管理 ↗
               </Link>
             </div>
@@ -965,7 +1042,7 @@ export function Onboarding() {
               </div>
               <Link
                 to="/admin/audit?outcome=denied"
-                className="pl-btn pl-btn--ghost text-sm"
+                className="text-sm font-medium text-blue-600 hover:underline self-end"
               >
                 查看访问日志 ↗
               </Link>
@@ -980,7 +1057,7 @@ export function Onboarding() {
                   <span className="notranslate" translate="no">{enabledTokenCount}</span> 个活跃 <span className="notranslate" translate="no">Token</span>
                 </div>
               </div>
-              <Link to="/admin/agents" className="pl-btn pl-btn--ghost text-sm notranslate" translate="no">
+              <Link to="/admin/agents" className="text-sm font-medium text-blue-600 hover:underline notranslate" translate="no">
                 管理 <span className="notranslate" translate="no">Token</span> ↗
               </Link>
             </div>

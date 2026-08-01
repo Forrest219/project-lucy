@@ -214,14 +214,16 @@ describe("AppFrame shell", () => {
     expect(screen.queryByRole("link", { name: "上线检查" })).not.toBeInTheDocument();
   });
 
-  it("renders the Data Agent Ops Control Plane tagline in the brand block", () => {
+  it("renders only the Chinese brand tagline (no English duplicate) in the brand block", () => {
+    // v1.9.x 收口：英文 Subtitle 'Data Agent Ops Control Plane' 已移除，避免与
+    // 中文 tagline 重复；240px 侧栏宽度下保证不截断、不折行。
     renderAt("/overview");
-    expect(
-      screen.getByText("Data Agent Ops Control Plane"),
-    ).toBeInTheDocument();
     expect(
       screen.getByText("Data Agent 运维控制台"),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Data Agent Ops Control Plane"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("语义维护工作台"),
     ).not.toBeInTheDocument();

@@ -124,14 +124,14 @@ export function AppFrame() {
       <aside className="pl-sidebar">
         <div className="pl-brand-block">
           <strong>Lucy WebUI</strong>
+          {/* v1.9.x 收口：移除英文 Subtitle（与中文 tagline 重复），仅保留一行干净中文。 */}
           <span
+            className="pl-brand-tagline notranslate"
             translate="no"
-            className="notranslate pl-brand-eyebrow"
-            title="Data Agent Ops Control Plane"
+            title="Data Agent 运维控制台"
           >
-            Data Agent Ops Control Plane
+            Data Agent 运维控制台
           </span>
-          <span className="pl-brand-tagline notranslate" translate="no">Data Agent 运维控制台</span>
         </div>
 
         <nav className="pl-nav" aria-label="主导航">

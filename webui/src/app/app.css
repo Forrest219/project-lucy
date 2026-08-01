@@ -109,23 +109,16 @@
   .pl-nav-link--active { @apply bg-bg-selected text-fg-body font-medium; }
   .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
-  .pl-brand-block span { @apply text-xs text-fg-muted; }
-  .pl-brand-block .pl-brand-eyebrow {
-    display: block;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #475569;
-    margin-top: 2px;
-    white-space: nowrap;
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   .pl-brand-block .pl-brand-tagline {
     display: block;
     font-size: 0.72rem;
     color: #64748b;
     margin-top: 1px;
+    /* v1.9.x 收口：240px 侧栏宽度下不截断、不折行。 */
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .pl-sidebar-footer { @apply relative z-10 mt-4 grid shrink-0 gap-2 border-t border-border-default bg-bg-surface px-4 pt-4; }
   .pl-sidebar-utility { @apply grid gap-1; }
@@ -1279,15 +1272,24 @@
   .pl-service-health-critical strong { @apply text-sm font-semibold text-danger-strong; }
   .pl-service-health-critical .pl-notice { @apply text-danger-strong; }
   .pl-action-required-list { @apply grid gap-2; }
-  .pl-action-required-item { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3; }
-  .pl-action-required-item[data-severity="critical"] { @apply border-danger-strong bg-danger-soft; }
-  .pl-action-required-item[data-severity="warning"] { @apply border-warning-strong bg-warning-soft; }
+  /* v1.9.x 收口：取消全包围彩色粗边框 / 高饱和背景卡片；改为左侧 3px 状态条区分等级
+   *（红=critical, 黄=warning, 蓝=info, 绿=ready），整体高度收紧。 */
+  .pl-action-required-item {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-surface py-2 pl-4 pr-3;
+    box-shadow: inset 3px 0 0 0 theme(colors.fg.muted);
+  }
+  .pl-action-required-item[data-severity="critical"] { box-shadow: inset 3px 0 0 0 theme(colors.danger); }
+  .pl-action-required-item[data-severity="warning"] { box-shadow: inset 3px 0 0 0 theme(colors.warning); }
+  .pl-action-required-item[data-severity="info"] { box-shadow: inset 3px 0 0 0 theme(colors.accent); }
+  .pl-action-required-item[data-severity="ready"] { box-shadow: inset 3px 0 0 0 theme(colors.success); }
   .pl-action-required-item-row { @apply flex flex-wrap items-center justify-between gap-2; }
   .pl-action-required-item-title { @apply flex flex-wrap items-center gap-2; }
+  /* v1.9.x 收口：影响/负责人/更新时间/证据并排紧凑展示，整体高度更紧。 */
   .pl-action-required-item-meta {
     @apply grid gap-x-4 gap-y-1 text-xs text-fg-muted;
-    grid-template-columns: repeat(auto-fit, minmax(160px, max-content));
+    grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
   }
+  .pl-action-required-item-meta > div { @apply flex items-baseline gap-1.5; }
   .pl-action-required-item-meta dt { @apply text-[10px] font-semibold uppercase tracking-wider text-fg-muted; }
   .pl-action-required-item-meta dd { @apply text-xs text-fg-default; }
   .pl-action-required-empty { @apply rounded-md border border-success-strong bg-success-soft p-3 text-sm text-success-strong; }

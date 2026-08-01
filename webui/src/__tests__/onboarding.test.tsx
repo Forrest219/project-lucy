@@ -403,10 +403,12 @@ describe("Onboarding", () => {
   });
 
   it("exposes the auto-refresh toggle defaulted off", async () => {
+    // v1.9.x 收口：原生 Checkbox 已被下拉菜单项替代；展开 RefreshMenu 后，
+    // "自动刷新" 项的 aria-checked 应为 false。
     renderPage();
-    const toggle = await screen.findByTestId("onboarding-auto-refresh-toggle");
-    // `checked` should be false on initial mount.
-    expect(toggle).not.toBeChecked();
+    fireEvent.click(await screen.findByTestId("onboarding-refresh-button"));
+    const toggle = await screen.findByTestId("onboarding-refresh-menu-auto");
+    expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 
   it("records the lastUpdatedAt timestamp after the initial render", async () => {
@@ -424,7 +426,9 @@ describe("Onboarding", () => {
     expect(before).toMatch(/上次更新:/);
 
     const refreshButton = await screen.findByRole("button", { name: /刷新状态|刷新中/ });
+    // v1.9.x 收口：外层按钮展开下拉菜单，刷新动作走「立即刷新」菜单项。
     fireEvent.click(refreshButton);
+    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-manual"));
 
     // Allow the refetch + toast chain to flush.
     await new Promise((resolve) => setTimeout(resolve, 80));
@@ -447,7 +451,9 @@ describe("Onboarding", () => {
     renderPage();
 
     const refreshButton = await screen.findByRole("button", { name: /刷新状态|刷新中/ });
+    // v1.9.x 收口：外层按钮展开下拉菜单，刷新动作走「立即刷新」菜单项。
     fireEvent.click(refreshButton);
+    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-manual"));
 
     // Flush microtasks synchronously after click. The label is computed
     // from projectQuery.isFetching || sourcesQuery.isFetching ||
@@ -505,7 +511,8 @@ describe("Onboarding", () => {
       expect(itemText).toMatch(/更新/);
       // Each row carries a `前往处理` link with the ↗ glyph so the user
       // gets a consistent visual affordance.
-      const link = item.querySelector("a.pl-btn");
+      // v1.9.x 收口：CTA 链接样式从 pl-btn 改为蓝色文本链接。
+      const link = item.querySelector("a.pl-action-required-item-cta");
       expect(link?.textContent ?? "").toMatch(/前往处理\s*↗/);
     }
   });
@@ -817,7 +824,9 @@ describe("Onboarding", () => {
     const evalCallsBefore = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs?limit=1").length;
 
     // Click 刷新状态 and let the Promise.allSettled chain flush.
+    // v1.9.x 收口：外层按钮展开下拉菜单，刷新动作走「立即刷新」菜单项。
     fireEvent.click(screen.getByRole("button", { name: /刷新状态|刷新中/ }));
+    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-manual"));
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const evalCallsAfter = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs?limit=1").length;
@@ -853,7 +862,8 @@ describe("Onboarding", () => {
     // Enable auto-refresh so the visibility-change handler runs
     // `schedule()` directly (jsdom defaults `document.hidden` to
     // `false`).
-    fireEvent.click(screen.getByTestId("onboarding-auto-refresh-toggle"));
+    fireEvent.click(screen.getByTestId("onboarding-refresh-button"));
+    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-auto"));
     document.dispatchEvent(new Event("visibilitychange"));
 
     // Wait for the Promise.allSettled chain + the .then() callback
