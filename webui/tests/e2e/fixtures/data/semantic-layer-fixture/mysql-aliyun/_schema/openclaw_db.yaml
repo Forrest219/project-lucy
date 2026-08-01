@@ -1,0 +1,7 @@
+# E2E fixture: openclaw_db schema manifest
+# 关联：E2E-CON-* / E2E-SEM-* / E2E-WHL-*
+
+schema: openclaw_db
+tables:
+  - name: sample_table
+    comment: 最小 fixture 表

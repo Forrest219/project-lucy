@@ -13,7 +13,20 @@
     "lint:terminology": "node scripts/lint-terminology.mjs",
     "lint:ia-boundary": "node scripts/lint-ia-boundary.mjs",
     "acceptance:api": "tsx scripts/api-acceptance.ts",
-    "backfill:access-log-sources": "tsx scripts/backfill-access-log-sources.ts"
+    "backfill:access-log-sources": "tsx scripts/backfill-access-log-sources.ts",
+    "e2e:install": "playwright install --with-deps chromium webkit firefox",
+    "e2e:fixture": "bash ../scripts/init-e2e-fixture.sh",
+    "e2e:smoke": "playwright test --grep @pr-smoke --project=chromium",
+    "pree2e:smoke": "npm run e2e:selector-contract && npm run e2e:fixture",
+    "e2e:impacted": "playwright test --grep '@pr-smoke|@pr-impacted' --project=chromium",
+    "pree2e:impacted": "npm run e2e:selector-contract && npm run e2e:fixture",
+    "e2e:nightly": "playwright test --grep '@pr-smoke|@pr-impacted|@nightly'",
+    "pree2e:nightly": "npm run e2e:selector-contract && npm run e2e:fixture",
+    "e2e:release": "playwright test",
+    "pree2e:release": "npm run e2e:selector-contract && npm run e2e:fixture",
+    "e2e:report": "playwright show-report playwright-report",
+    "e2e:selector-contract": "node scripts/check-selector-contract.mjs",
+    "pretest:e2e": "npm run e2e:selector-contract"
   },
   "keywords": [],
   "author": "",
@@ -39,6 +52,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

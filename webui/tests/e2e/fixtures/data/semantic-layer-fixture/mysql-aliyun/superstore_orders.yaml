@@ -1,0 +1,29 @@
+# E2E fixture: superstore_orders semantic overlay
+# 关联：E2E-PUB-01 / E2E-SEM-*
+
+table: superstore_orders
+grain: [order_id, line_id]
+columns:
+  - name: order_id
+    type: string
+  - name: line_id
+    type: int
+  - name: order_date
+    type: date
+    role: time
+  - name: ship_date
+    type: date
+  - name: sales
+    type: decimal
+  - name: profit
+    type: decimal
+  - name: discount
+    type: decimal
+measures:
+  - name: total_profit
+    expr: sum(profit)
+  - name: total_sales
+    expr: sum(sales)
+segments:
+  - name: profitable_orders
+    expr: profit > 0
