@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPut } from "../../lib/apiClient";
 import type { EvalDomainInfo, EvalDriftDistribution, EvalTrendPoint, MonitorConfig } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { EVAL_MONITOR_EMPTY_ACTIONS } from "../../lib/opsDashboard";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type TrendResponse = { points: EvalTrendPoint[]; thresholds: { yellow: number; red: number } };
@@ -48,12 +50,14 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
 
   const yellowY = yPos(thresholds.yellow).toFixed(1);
   const redY = yPos(thresholds.red).toFixed(1);
+  const yellowPct = Math.round(thresholds.yellow * 100);
+  const redPct = Math.round(thresholds.red * 100);
 
   // Y axis ticks
   const yTicks = [0, 0.2, 0.4, 0.6, 0.8, 1.0];
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: "220px" }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: "220px" }} data-testid="monitor-trend-chart">
       {/* Grid lines */}
       {yTicks.map((t) => (
         <g key={t}>
@@ -78,35 +82,56 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
         </g>
       ))}
 
-      {/* Threshold lines */}
+      {/* Threshold lines (yellow + red) with text labels so colour is
+          not the only carrier. M36 spec calls for explicit text labels
+          next to the dashed lines. */}
       <line
         x1={PAD.left} x2={W - PAD.right}
         y1={yellowY} y2={yellowY}
         stroke="var(--color-warning)" strokeWidth={1.5} strokeDasharray="6 3"
+        data-testid="monitor-threshold-yellow-line"
       />
-      <text x={W - PAD.right + 3} y={Number(yellowY) + 4} fontSize={9} fill="var(--color-warning)">黄线</text>
+      <text
+        x={W - PAD.right + 3}
+        y={Number(yellowY) + 4}
+        fontSize={9}
+        fill="var(--color-warning)"
+        data-testid="monitor-threshold-yellow-label"
+      >黄线 {yellowPct}%</text>
       <line
         x1={PAD.left} x2={W - PAD.right}
         y1={redY} y2={redY}
         stroke="var(--color-danger)" strokeWidth={1.5} strokeDasharray="6 3"
+        data-testid="monitor-threshold-red-line"
       />
-      <text x={W - PAD.right + 3} y={Number(redY) + 4} fontSize={9} fill="var(--color-danger)">红线</text>
+      <text
+        x={W - PAD.right + 3}
+        y={Number(redY) + 4}
+        fontSize={9}
+        fill="var(--color-danger)"
+        data-testid="monitor-threshold-red-label"
+      >红线 {redPct}%</text>
 
       {/* Pass rate line */}
       <path d={pathD} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
 
-      {/* Data points */}
-      {points.map((p) => (
-        <circle
-          key={p.date}
-          cx={xPos(p.date)}
-          cy={yPos(p.passRate)}
-          r={3}
-          fill="var(--color-accent)"
-        >
-          <title>{p.date}: {Math.round(p.passRate * 100)}% ({p.totalRuns} runs)</title>
-        </circle>
-      ))}
+      {/* Data points. Points below the red threshold are highlighted in
+          danger colour and exposed as the drill-down target. */}
+      {points.map((p) => {
+        const belowRed = p.passRate < thresholds.red;
+        return (
+          <circle
+            key={p.date}
+            cx={xPos(p.date)}
+            cy={yPos(p.passRate)}
+            r={belowRed ? 4 : 3}
+            fill={belowRed ? "var(--color-danger)" : "var(--color-accent)"}
+            data-testid={belowRed ? `monitor-below-red-${p.date}` : `monitor-point-${p.date}`}
+          >
+            <title>{p.date}: {Math.round(p.passRate * 100)}% ({p.totalRuns} runs)</title>
+          </circle>
+        );
+      })}
 
       {/* X axis labels */}
       {points
@@ -147,6 +172,42 @@ function clampNumber(rawValue: string, min: number, max: number): number | null 
     return null;
   }
   return Math.min(max, Math.max(min, parsed));
+}
+
+/**
+ * Map an empty-state CTA to a destination href. Centralised here so the
+ * Monitor empty state stays in sync with the dashboard view model.
+ */
+function emptyActionHref(action: string, domain: string): string {
+  switch (action) {
+    case "触发首次 Run":
+      return `/eval/runs${domain ? `?domain=${encodeURIComponent(domain)}` : ""}`;
+    case "导入评测用例":
+      return `/eval/cases${domain ? `/${encodeURIComponent(domain)}` : ""}`;
+    case "配置阈值":
+      return "#monitor-threshold-config";
+    default:
+      return "/eval/monitor";
+  }
+}
+
+/**
+ * Build a deep-link to the run list filtered to a specific date. M36 polish:
+ * the link is documented as "查看相关 Run" (not "查看失败 Case") because
+ * the RunList page does not yet consume the `?date=` filter. The
+ * `?domain=` half is honoured and lands the user on the right list; once
+ * RunList honours `?date=` we can re-label the CTA back to "查看失败 Case".
+ */
+function belowRedDeepLinkHref(
+  points: EvalTrendPoint[],
+  red: number,
+  domain: string
+): string {
+  const first = [...points].reverse().find((point) => point.passRate < red) ?? points[0];
+  const params = new URLSearchParams();
+  if (domain) params.set("domain", domain);
+  if (first) params.set("date", first.date);
+  return `/eval/runs${params.toString() ? `?${params.toString()}` : ""}`;
 }
 
 export function Monitor() {
@@ -270,9 +331,75 @@ export function Monitor() {
       </div>
 
       <div className="pl-monitor-grid">
-        <section className="pl-panel pl-monitor-trend">
-          <p className="pl-panel-title">通过率趋势（近 {days} 天）</p>
-          {loadingTrend ? <div className="pl-notice">加载中...</div> : <TrendChart points={points} thresholds={thresholds} />}
+        <section className="pl-panel pl-monitor-trend" data-testid="monitor-trend-panel">
+          <div className="flex items-center justify-between gap-2">
+            <p className="pl-panel-title mb-0">通过率趋势（近 {days} 天）</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+              <span data-testid="monitor-threshold-summary">
+                黄线 {Math.round(thresholds.yellow * 100)}% · 红线 {Math.round(thresholds.red * 100)}%
+              </span>
+              {points.some((point) => point.passRate < thresholds.red) ? (
+                <span
+                  className="pl-status-badge pl-status-validation_failed"
+                  data-testid="monitor-below-red-summary"
+                >
+                  {points.filter((point) => point.passRate < thresholds.red).length} 个点跌破红线
+                </span>
+              ) : null}
+            </div>
+          </div>
+          {loadingTrend ? (
+            <div className="pl-notice mt-2">加载中...</div>
+          ) : points.length === 0 ? (
+            <div
+              className="mt-3 grid gap-3 rounded-md border border-dashed border-border-default bg-bg-subtle p-4"
+              data-testid="monitor-trend-empty"
+            >
+              <div className="grid gap-1">
+                <strong>暂无趋势数据</strong>
+                <p className="text-xs text-fg-muted">
+                  你可以选择下面任一动作建立质量基线。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2" data-testid="monitor-trend-empty-actions">
+                {EVAL_MONITOR_EMPTY_ACTIONS.map((action) => (
+                  <a
+                    key={action}
+                    href={emptyActionHref(action, activeDomain)}
+                    className="pl-btn pl-btn--secondary text-sm notranslate"
+                    translate="no"
+                    data-testid={`monitor-empty-action-${action}`}
+                  >
+                    {action}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <TrendChart points={points} thresholds={thresholds} />
+              {points.some((point) => point.passRate < thresholds.red) ? (
+                <div
+                  className="mt-3 rounded-md border border-danger-strong bg-danger-soft p-3 text-sm text-danger-strong"
+                  data-testid="monitor-below-red-callout"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      {points.filter((point) => point.passRate < thresholds.red).length} 个点跌破红线，请查看相关 Run。
+                    </span>
+                    <Link
+                      to={belowRedDeepLinkHref(points, thresholds.red, activeDomain)}
+                      className="pl-btn pl-btn--secondary text-sm notranslate"
+                      translate="no"
+                      data-testid="monitor-below-red-drilldown"
+                    >
+                      查看相关 Run →
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
         </section>
 
         <section className="pl-panel">

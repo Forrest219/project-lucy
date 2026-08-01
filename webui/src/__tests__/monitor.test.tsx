@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Monitor } from "../pages/eval/Monitor";
 
@@ -13,7 +14,9 @@ function renderMonitor() {
   });
   render(
     <QueryClientProvider client={client}>
-      <Monitor />
+      <MemoryRouter>
+        <Monitor />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -103,11 +106,39 @@ describe("Monitor", () => {
     expect(screen.getByText("case_sales")).toBeInTheDocument();
   });
 
+  it("labels the below-red drilldown as 查看相关 Run (M36 polish)", async () => {
+    stubMonitorFetch();
+    renderMonitor();
+
+    // The default fixture has a 75% point below the 80% red threshold, so
+    // the below-red callout should be visible. M36 review follow-up: the
+    // CTA copy was softened from "查看失败 Case" to "查看相关 Run" because
+    // RunList does not yet consume the `?date=` filter. Once it does we
+    // can re-introduce the stronger copy.
+    const callout = await screen.findByTestId("monitor-below-red-callout");
+    expect(callout).toHaveTextContent("查看相关 Run");
+    const drilldown = screen.getByTestId("monitor-below-red-drilldown");
+    expect(drilldown).toHaveAttribute("href", expect.stringMatching(/^\/eval\/runs\?/));
+    expect(drilldown).not.toHaveTextContent("查看失败 Case");
+  });
+
   it("shows stable empty states for trend, drift and top failures", async () => {
     stubMonitorFetch({ empty: true });
     renderMonitor();
 
-    expect(await screen.findByText("暂无数据")).toBeInTheDocument();
+    // M36: the trend empty state now exposes the three primary CTAs the
+    // user can take to bootstrap the eval monitor.
+    const empty = await screen.findByTestId("monitor-trend-empty");
+    expect(empty).toHaveTextContent("暂无趋势数据");
+    // 触发首次 Run / 导入评测用例 point at the run / case pages. The exact
+    // `?domain=...` suffix depends on the first domain arriving from the
+    // API, which is async; assert the prefix and that the empty-state
+    // hook is present.
+    const triggerLink = screen.getByTestId("monitor-empty-action-触发首次 Run");
+    expect(triggerLink.getAttribute("href") ?? "").toMatch(/^\/eval\/runs($|\?)/);
+    const importLink = screen.getByTestId("monitor-empty-action-导入评测用例");
+    expect(importLink.getAttribute("href") ?? "").toMatch(/^\/eval\/cases($|\/|\?)/);
+    expect(screen.getByTestId("monitor-empty-action-配置阈值")).toBeInTheDocument();
     expect(screen.getByText("暂无 drift 数据")).toBeInTheDocument();
     expect(screen.getByText("暂无失败 case")).toBeInTheDocument();
   });

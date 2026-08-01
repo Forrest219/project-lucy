@@ -67,8 +67,8 @@ export function CaseList() {
     return (
       <div className="grid gap-6">
         <PageHeader
-          title="Case 管理"
-          breadcrumbs={["质量评测", "Case 管理"]}
+          title="评测用例"
+          breadcrumbs={["质量评测", "评测用例"]}
           description="管理各 domain 的 eval case 定义（YAML 源文件）。"
         />
         <div className="pl-notice">未找到 eval domain，请确认 evals/ 目录下有对应的 cases yaml 文件。</div>
@@ -79,11 +79,16 @@ export function CaseList() {
   return (
     <div className="grid gap-6">
       <PageHeader
-        title="Case 管理"
-        breadcrumbs={["质量评测", "Case 管理"]}
+        title="评测用例"
+        breadcrumbs={["质量评测", "评测用例"]}
         description="管理各 domain 的 eval case 定义（YAML 源文件）。"
         badges={
-          <span>{cases.length} 个 case</span>
+          <>
+            <span>{cases.length} 个 case</span>
+            <span data-testid="case-list-coverage">
+              {latestRun ? `最近一次 Run #${latestRun.id} 通过率 ${Math.round((latestRun.passRate ?? 0) * 100)}%` : "尚未运行"}
+            </span>
+          </>
         }
         actions={
           <button
@@ -96,6 +101,37 @@ export function CaseList() {
           </button>
         }
       />
+
+      <div
+        className="pl-metric-grid pl-metric-grid--three"
+        data-testid="case-list-coverage-card"
+      >
+        <div className="pl-metric-card">
+          <span>Case 总数</span>
+          <strong>{cases.length}</strong>
+          <small>{activeDomain} domain</small>
+        </div>
+        <div className="pl-metric-card">
+          <span>最近 Run 通过率</span>
+          <strong>
+            {latestRun ? `${Math.round((latestRun.passRate ?? 0) * 100)}%` : "—"}
+          </strong>
+          <small>
+            {latestRun
+              ? `${latestRun.passCount}/${latestRun.totalCases}`
+              : "运行后才会出现"}
+          </small>
+        </div>
+        <div className="pl-metric-card">
+          <span>最近 Run 失败数</span>
+          <strong>{latestRun?.failCount ?? 0}</strong>
+          <small>
+            {latestRun
+              ? `Run #${latestRun.id} · ${new Date(latestRun.startedAt).toLocaleString("zh-CN")}`
+              : "等待首次运行"}
+          </small>
+        </div>
+      </div>
 
       {/* Domain tabs */}
       <div className="flex gap-2 flex-wrap">
