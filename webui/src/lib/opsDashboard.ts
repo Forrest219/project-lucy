@@ -7,8 +7,10 @@
 //
 // The view model owns the "系统概览" (System Overview) mental model: it
 // converts raw counts (semantic coverage, pending files, ACL denies, etc.)
-// into the action-required queue and service-health strip the user sees on
+// into the action-required queue and service-health summary the user sees on
 // `/overview`.
+
+import type { Agent, TokenSummary } from "./types";
 
 export type Severity = "critical" | "warning" | "ready" | "info";
 
@@ -38,23 +40,15 @@ export type ActionRequiredItem = {
   /** Stable identifier so UI can key React lists without re-rendering. */
   id: string;
   /** User-facing summary, e.g. "12 张表待补语义". */
-  label: string;
+  title: string;
+  /** Fact-based status text derived from available dashboard counts. */
+  description: string;
   /** Internal sort key; never render directly. */
-  severity: Severity;
-  /** User-facing Chinese severity label. */
-  severityLabel: SeverityLabel;
-  /** Optional deep-link target. `null` means the item is informational. */
-  href: string | null;
-  /** Short test-id hook for stable Vitest assertions. */
-  testId: string;
-  /** M39: impact scope, e.g. "问答召回率". */
-  impact: string;
-  /** M39: owning team, e.g. "数据治理组". */
-  owner: string;
-  /** M39: deterministic evidence string, e.g. "语义覆盖 4/66". */
-  evidence: string;
-  /** M39: user-facing update time, e.g. "今天 10:12" or "更新时间未知". */
-  updatedAtLabel: string;
+  severity: Exclude<Severity, "ready">;
+  /** User-facing action label. */
+  actionText: string;
+  /** Deep-link target for handling the item. */
+  actionUrl: string;
 };
 
 export type ServiceHealthKey =
@@ -84,8 +78,6 @@ export type ActionRequiredInput = {
    */
   evalRunsLast30d: number | null;
   aclDenied7d: number;
-  /** Optional dashboard refresh time used to render "今天 HH:mm". */
-  dashboardUpdatedAt?: Date;
 };
 
 const SEVERITY_BY_COUNT: Array<{ severity: Severity; test: (n: number) => boolean }> = [
@@ -123,38 +115,16 @@ export function pendingSemanticCount(coverage: SemanticCoverage): number {
  * 覆盖不足" warning bucket; large gaps surface as `高风险` so users see the
  * governance posture immediately.
  */
-function semanticGapSeverity(coverage: SemanticCoverage): Severity | null {
+function semanticGapSeverity(coverage: SemanticCoverage): Exclude<Severity, "ready"> | null {
   if (coverage.total <= 0) return null;
   if (coverage.done >= coverage.total) return null;
   return coverage.done * 3 < coverage.total ? "critical" : "warning";
 }
 
 /**
- * Format the dashboard refresh time as "今天 HH:mm" when the timestamp
- * matches today in the runtime timezone, falling back to an explicit
- * `更新时间未知` sentinel when no timestamp is provided. We deliberately
- * avoid fabricating a precise wall-clock time the user cannot verify.
- */
-export function formatUpdatedAtLabel(date: Date | undefined): string {
-  if (!date) return "更新时间未知";
-  const today = new Date();
-  const sameDay =
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth() &&
-    date.getDate() === today.getDate();
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  return sameDay ? `今天 ${hh}:${mm}` : "更新时间未知";
-}
-
-/**
  * Build the cross-module "待处理事项" (Action Required) queue shown at the
  * top of `/overview`. The order below is contractual: critical items come
  * first, then warning, then info. Items with count 0 are omitted.
- *
- * M39 additions: every emitted item carries Chinese severity label,
- * `impact`, `owner`, deterministic `evidence` string and an `updatedAtLabel`
- * derived from the optional `dashboardUpdatedAt` input.
  */
 export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequiredItem[] {
   // M39 polish (MINOR-1): guard against negative inputs. Production
@@ -172,51 +142,38 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
   const safeAclDenied = Math.max(0, input.aclDenied7d);
   const semanticGap = pendingSemanticCount(input.semanticCoverage);
   const semanticSeverity = semanticGapSeverity(input.semanticCoverage);
-  const updatedAtLabel = formatUpdatedAtLabel(input.dashboardUpdatedAt);
 
   const items: Array<ActionRequiredItem | null> = [
     semanticSeverity
       ? {
           id: "semantic-gap",
-          label: `${formatCount(semanticGap)} 张表待补语义`,
-          severity: semanticSeverity,
-          severityLabel: severityLabelBySeverity[semanticSeverity],
-          href: "/?status=partial",
-          testId: "ops-action-semantic-gap",
-          impact: "问答召回率",
-          owner: "数据治理组",
-          evidence: `语义覆盖 ${formatCount(input.semanticCoverage.done)}/${formatCount(
+          title: `${formatCount(semanticGap)} 张表待补语义`,
+          description: `当前语义覆盖 ${formatCount(input.semanticCoverage.done)}/${formatCount(
             input.semanticCoverage.total
-          )}`,
-          updatedAtLabel
+          )}，仍有 ${formatCount(semanticGap)} 张表缺少可用语义`,
+          severity: semanticSeverity,
+          actionText: "前往补全",
+          actionUrl: "/?status=partial"
         }
       : null,
     safePendingCatalog > 0
       ? {
           id: "catalog-pending",
-          label: `${formatCount(safePendingCatalog)} 个 Catalog 对象待处理`,
+          title: `${formatCount(safePendingCatalog)} 个 Catalog 对象待处理`,
+          description: `Catalog 同步发现 ${formatCount(safePendingCatalog)} 个对象处于 partial 状态`,
           severity: "warning",
-          severityLabel: severityLabelBySeverity.warning,
-          href: "/connections",
-          testId: "ops-action-catalog-pending",
-          impact: "资产同步",
-          owner: "架构组",
-          evidence: `Catalog 待处理 ${formatCount(safePendingCatalog)} 项`,
-          updatedAtLabel
+          actionText: "查看连接",
+          actionUrl: "/connections"
         }
       : null,
     safePendingPublish > 0
       ? {
           id: "publish-pending",
-          label: `存在 ${formatCount(safePendingPublish)} 个待发布文件`,
+          title: `存在 ${formatCount(safePendingPublish)} 个待发布文件`,
+          description: `当前有 ${formatCount(safePendingPublish)} 个语义变更尚未发布`,
           severity: "warning",
-          severityLabel: severityLabelBySeverity.warning,
-          href: "/publish/workbench",
-          testId: "ops-action-publish-pending",
-          impact: "发布一致性",
-          owner: "语义发布负责人",
-          evidence: `diff files: ${formatCount(safePendingPublish)}`,
-          updatedAtLabel
+          actionText: "打开发布工作台",
+          actionUrl: "/publish/workbench"
         }
       : null,
     // Only `safeEvalRuns === 0` (confirmed zero runs) surfaces the
@@ -225,29 +182,21 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
     safeEvalRuns === 0
       ? {
           id: "eval-gap",
-          label: "近 30 天无评测数据",
+          title: "近 30 天无评测数据",
+          description: "尚未检测到近 30 天评测运行记录",
           severity: "info",
-          severityLabel: severityLabelBySeverity.info,
-          href: "/eval/monitor",
-          testId: "ops-action-eval-gap",
-          impact: "质量基线",
-          owner: "QA 团队",
-          evidence: "近 30 天无评测数据",
-          updatedAtLabel
+          actionText: "查看趋势监控",
+          actionUrl: "/eval/monitor"
         }
       : null,
     safeAclDenied > 0
       ? {
           id: "acl-deny",
-          label: "近 7 天存在 ACL 拒绝",
+          title: "近 7 天存在 ACL 拒绝",
+          description: `访问日志记录到 ${formatCount(safeAclDenied)} 次 ACL 拒绝`,
           severity: "critical",
-          severityLabel: severityLabelBySeverity.critical,
-          href: "/admin/audit?outcome=denied",
-          testId: "ops-action-acl-deny",
-          impact: "访问安全",
-          owner: "访问治理组",
-          evidence: `ACL 拒绝: ${formatCount(safeAclDenied)}`,
-          updatedAtLabel
+          actionText: "查看访问日志",
+          actionUrl: "/admin/audit?outcome=denied"
         }
       : null
   ];
@@ -262,12 +211,93 @@ export type ServiceHealthInput = {
   semanticCoverage: SemanticCoverage;
   agentsEnabled: number;
   agentsTotal: number;
-  enabledTokenCount: number;
+  availableTokenCount: number;
 };
 
 /**
- * Build the 4-up "服务健康" (Service Health) strip. Returns ready / warning /
- * danger / info tones the page header can render with existing CSS tokens.
+ * M41: A token is considered "可用" (available) when:
+ *  - the parent agent is `enabled === true`
+ *  - `token.revoked !== true`
+ *  - `token.expires_at` is null/empty (永不过期), OR
+ *    `expires_at` parses to a valid ISO timestamp strictly in the future
+ *
+ * Invalid `expires_at` strings (e.g. "not-a-date") are conservatively treated
+ * as NOT available — the helper never fabricates availability from
+ * unparseable data.
+ */
+export function isTokenAvailable(token: TokenSummary, now: Date = new Date()): boolean {
+  if (token.revoked) return false;
+  if (!token.expires_at) return true;
+  const expiresAt = new Date(token.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) return false;
+  return expiresAt.getTime() > now.getTime();
+}
+
+/**
+ * M41: count tokens that are usable right now across all enabled agents.
+ * Replaces the M39 `enabledTokenCount` which only filtered on `!revoked` and
+ * therefore mis-counted expired tokens.
+ */
+export function availableTokenCount(agents: Agent[], now: Date = new Date()): number {
+  return agents
+    .filter((agent) => agent.enabled)
+    .reduce((sum, agent) => sum + agent.tokens.filter((t) => isTokenAvailable(t, now)).length, 0);
+}
+
+/**
+ * M41: structured view model for the single-line "系统状态" summary.
+ *
+ * Returns `null` when mcp / ktx is not ready — the page falls back to the
+ * high-weight alert and does NOT render this summary in that case. Tone is
+ * `warning` whenever there's a semantic gap or agent gap, otherwise `ready`.
+ *
+ * The React layer is responsible for assembling the final JSX so it can
+ * wrap `Lucy MCP` / `KTX Runtime` / `Agent` in `notranslate` spans — the
+ * helper intentionally returns structured data, not a plain string.
+ */
+export type ServiceHealthSummary = {
+  tone: "ready" | "warning";
+  semantic: { done: number; total: number; gap: number };
+  agents: { enabled: number; total: number; gap: number };
+};
+
+export function summarizeServiceHealth(
+  mcpReady: boolean,
+  ktxAvailable: boolean,
+  semantic: { done: number; total: number },
+  agents: { enabled: number; total: number }
+): ServiceHealthSummary | null {
+  if (!mcpReady || !ktxAvailable) return null;
+  const semanticGap = Math.max(0, semantic.total - semantic.done);
+  const agentGap = Math.max(0, agents.total - agents.enabled);
+  const tone: ServiceHealthSummary["tone"] =
+    semanticGap > 0 || agentGap > 0 ? "warning" : "ready";
+  return {
+    tone,
+    semantic: { done: semantic.done, total: semantic.total, gap: semanticGap },
+    agents: { enabled: agents.enabled, total: agents.total, gap: agentGap }
+  };
+}
+
+/**
+ * M41: produce a specific alert headline for the danger state. Splits the
+ * "which component failed" decision out of the React layer so the test can
+ * cover the four branches deterministically.
+ */
+export function systemAlertText(mcpReady: boolean, ktxAvailable: boolean): string {
+  if (mcpReady && ktxAvailable) return "系统状态正常。";
+  if (!mcpReady && !ktxAvailable) {
+    return "系统异常：Lucy MCP 与 KTX Runtime 不可用，请检查接入。";
+  }
+  if (!mcpReady) return "系统异常：Lucy MCP 未就绪，请检查 Endpoint 配置。";
+  return "系统异常：KTX Runtime 不可用，请检查运行时配置。";
+}
+
+/**
+ * M36/M41: Build the legacy 4-up "服务健康" (Service Health) strip. M41
+ * removes this strip from `/overview` in favour of the one-line summary;
+ * the helper is retained because other surfaces (e.g. tests, future
+ * dashboard pages) may still want the per-component breakdown.
  */
 export function buildServiceHealth(input: ServiceHealthInput): ServiceHealthItem[] {
   const semanticGap = pendingSemanticCount(input.semanticCoverage);
@@ -287,13 +317,13 @@ export function buildServiceHealth(input: ServiceHealthInput): ServiceHealthItem
       ? "danger"
       : input.agentsEnabled === 0
         ? "warning"
-        : input.enabledTokenCount === 0
+        : input.availableTokenCount === 0
           ? "warning"
           : "ready";
   const accessDetail =
     input.agentsTotal === 0
       ? "0 个 Agent"
-      : `${input.agentsEnabled} 启用 / ${input.agentsTotal} 总数 · ${input.enabledTokenCount} 可用 token`;
+      : `${input.agentsEnabled} 启用 / ${input.agentsTotal} 总数 · ${input.availableTokenCount} 可用 token`;
 
   return [
     {

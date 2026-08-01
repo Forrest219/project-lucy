@@ -68,6 +68,7 @@ function renderPage(options: {
     diagnostics: Array<{ code: string; message: string }>;
   };
   evalRuns?: { total: number; runs: unknown[] };
+  project?: { ktxAvailable?: boolean };
 } = {}) {
   const agents = options.agents ?? [readyAgent];
   const sources = options.sources ?? [readySource];
@@ -79,6 +80,7 @@ function renderPage(options: {
     configured: true,
     diagnostics: []
   };
+  const projectOverride = options.project ?? {};
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -91,7 +93,7 @@ function renderPage(options: {
         ok: true,
         data: {
           root: "/tmp/project-lucy",
-          ktxAvailable: true,
+          ktxAvailable: projectOverride.ktxAvailable ?? true,
           connections: [
             { id: "mysql-demo", driver: "mysql", schemas: ["demo"], enabledTables: ["demo.orders"] }
           ],
@@ -144,7 +146,7 @@ afterEach(() => {
 });
 
 describe("Onboarding", () => {
-  it("summarizes the M39 system overview surface and copies MCP config", async () => {
+  it("summarizes the M41 system overview surface and copies MCP config", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -153,22 +155,27 @@ describe("Onboarding", () => {
 
     renderPage();
 
-    // M39: PageHeader H1 is 系统概览; 运维驾驶舱 is the product mental
+    // M41: PageHeader H1 is 系统概览; 运维驾驶舱 is the product mental
     // model, not a user-visible H1.
     expect(await screen.findByRole("heading", { name: "系统概览" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运维驾驶舱" })).not.toBeInTheDocument();
     expect(screen.queryByText("运行状态")).not.toBeInTheDocument();
     const pageActions = screen.getByLabelText("页面操作");
     expect(within(pageActions).queryByRole("link", { name: "打开系统手册" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /刷新状态|刷新中/ })).toBeInTheDocument();
+    // M41: the refresh action is a single secondary button, not a dropdown menu.
+    expect(screen.getByTestId("onboarding-refresh-button")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /刷新状态/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "数据库接入" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "配置 Agent" })).not.toBeInTheDocument();
     expect(screen.queryByText("Deployment readiness")).not.toBeInTheDocument();
-    // M39: compact service health strip (not a 3-up metric grid).
-    expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
-    expect(screen.getByText("Lucy MCP")).toBeInTheDocument();
-    expect(screen.getByText("语义层覆盖")).toBeInTheDocument();
-    expect(screen.getByText("Agent 接入")).toBeInTheDocument();
+    // M41: top of the page must be free of the legacy badges.
+    const header = screen.getByTestId("page-header");
+    expect(within(header).queryByText(/环境:/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/上次更新/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/KTX\s*(可用|不可用)/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/语义完成/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/自动刷新/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/活跃\s*Token/)).not.toBeInTheDocument();
     expect(document.querySelectorAll(".pl-metric-grid > .pl-metric-card")).toHaveLength(0);
     // The legacy "实时状态与诊断" / "数据源连接" / "语义层状态" / "变更审阅" /
     // "Agent 接入点" sections are gone — they were folded into the
@@ -203,6 +210,22 @@ describe("Onboarding", () => {
     expect(screen.queryByRole("link", { name: "审阅校验" })).not.toBeInTheDocument();
     expect(screen.queryByText("Semantic Tables")).not.toBeInTheDocument();
     expect(screen.queryByText("Checklist")).not.toBeInTheDocument();
+
+    // M41: ready / warning renders a single summary line; danger renders
+    // a high-weight alert. With the default fixture the page is ready.
+    expect(await screen.findByTestId("ops-service-health-summary")).toBeInTheDocument();
+    expect(document.querySelector('[data-testid="ops-service-health"]')).toBeNull();
+    // 访问风险 + MCP 接入 area uses "可用 Token" wording; "活跃 Token" is gone.
+    // Both surfaces (访问风险 + MCP 接入 facts) render "可用 Token", so we
+    // assert the count is at least 1 rather than picking a single element.
+    expect(
+      screen.getAllByText(
+        (_content, element) =>
+          (element instanceof HTMLElement ? element.textContent : "").includes("可用") &&
+          (element instanceof HTMLElement ? element.textContent : "").includes("Token")
+      ).length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/活跃\s*Token/)).not.toBeInTheDocument();
 
     // Copy MCP config still works on the main page.
     fireEvent.click(screen.getByRole("button", { name: "复制 MCP 配置" }));
@@ -320,17 +343,26 @@ describe("Onboarding", () => {
     // "运维驾驶舱" is the product mental model, not a user-visible H1.
     expect(await screen.findByRole("heading", { name: "系统概览" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运维驾驶舱" })).not.toBeInTheDocument();
-    // M39: header now exposes environment, last-update time and KTX badge
-    // so the user has full global context for the dashboard.
-    expect(screen.getByTestId("onboarding-env-badge")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-last-updated")).toBeInTheDocument();
-    // Compact service health strip (no "服务健康" heading required, but
-    // the four component labels must still be visible).
-    expect(screen.getByTestId("ops-service-health")).toBeInTheDocument();
-    expect(screen.getByText("KTX Runtime")).toBeInTheDocument();
-    expect(screen.getByText("Lucy MCP")).toBeInTheDocument();
-    expect(screen.getByText("语义层覆盖")).toBeInTheDocument();
-    expect(screen.getByText("Agent 接入")).toBeInTheDocument();
+    // M41: top of the page is intentionally clean — only the title, the
+    // description, and a single "刷新" button. The legacy env /
+    // last-updated / KTX / semantic badges are gone; tests below pin this.
+    const header = screen.getByTestId("page-header");
+    expect(within(header).queryByText(/环境:/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/上次更新/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/KTX\s*(可用|不可用)/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/语义完成/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/自动刷新/)).not.toBeInTheDocument();
+    expect(within(header).queryByText(/活跃\s*Token/)).not.toBeInTheDocument();
+    // The single refresh button must NOT carry dropdown affordance.
+    const refreshButton = within(header).getByTestId("onboarding-refresh-button");
+    expect(refreshButton).toBeInstanceOf(HTMLButtonElement);
+    expect(refreshButton).not.toHaveAttribute("aria-haspopup");
+    expect(refreshButton).not.toHaveTextContent("▾");
+    expect(["刷新", "刷新中..."]).toContain(refreshButton.textContent?.trim());
+    // M41: ready / warning now renders a one-line summary instead of the
+    // legacy 4-up strip.
+    expect(await screen.findByTestId("ops-service-health-summary")).toBeInTheDocument();
+    expect(document.querySelector('[data-testid="ops-service-health"]')).toBeNull();
     // Action required queue
     expect(screen.getByTestId("ops-action-required")).toBeInTheDocument();
     expect(screen.getByText("待处理事项")).toBeInTheDocument();
@@ -339,6 +371,16 @@ describe("Onboarding", () => {
     expect(screen.getByTestId("ops-access-risk")).toBeInTheDocument();
     expect(screen.getByText("质量快照")).toBeInTheDocument();
     expect(screen.getByText("访问风险")).toBeInTheDocument();
+    // M41: 访问风险 + MCP 接入 area uses "可用 Token" wording; no more
+    // "活跃 Token" anywhere in the document.
+    expect(
+      screen.getAllByText(
+        (_content, element) =>
+          (element instanceof HTMLElement ? element.textContent : "").includes("可用") &&
+          (element instanceof HTMLElement ? element.textContent : "").includes("Token")
+      ).length
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText(/活跃\s*Token/)).not.toBeInTheDocument();
     // The MCP section uses its own heading now (no more "实时状态与诊断").
     // The heading text is split across a notranslate `MCP` span + a
     // Chinese tail, so use a function matcher against the full text
@@ -351,33 +393,136 @@ describe("Onboarding", () => {
     ).toBeInTheDocument();
   });
 
-  it("infers the environment badge from the runtime MCP endpoint host", async () => {
-    // Local loopback host → Local badge.
+  it("shows 刷新中… while any core query is fetching and 刷新 when idle", async () => {
+    renderPage();
+    const refreshButton = await screen.findByTestId("onboarding-refresh-button");
+    expect(refreshButton.textContent?.trim()).toBe("刷新");
+
+    // Slow down the refetch so the in-flight label is observable in jsdom.
+    const realFetch = globalThis.fetch;
+    let resolveRefetch: () => void = () => {};
+    const slowRefetch = new Promise<void>((resolve) => {
+      resolveRefetch = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/eval/runs?limit=1") {
+        await slowRefetch;
+      }
+      return realFetch(input);
+    }));
+
+    // Trigger a manual refresh. The label flips to "刷新中..." while at
+    // least one core query is in-flight.
+    fireEvent.click(refreshButton);
+    // Flush microtasks + one macrotask so React commits the in-flight state.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const fetchingButton = screen.getByTestId("onboarding-refresh-button");
+    expect(fetchingButton.textContent?.trim()).toBe("刷新中...");
+    expect(fetchingButton).toBeDisabled();
+
+    // Release the slow refetch and verify the label returns to 刷新.
+    resolveRefetch();
+    await waitFor(() => {
+      expect(screen.getByTestId("onboarding-refresh-button").textContent?.trim()).toBe("刷新");
+    });
+  });
+
+  it("does not expose an auto-refresh control anywhere on the page", async () => {
+    renderPage();
+    // Wait for the page to settle so the refresh button is in the DOM.
+    const refreshButton = await screen.findByTestId("onboarding-refresh-button");
+    expect(document.querySelector('[data-testid="onboarding-refresh-menu"]')).toBeNull();
+    expect(document.querySelector('[data-testid="onboarding-refresh-menu-auto"]')).toBeNull();
+    expect(document.querySelector('[data-testid="onboarding-refresh-menu-manual"]')).toBeNull();
+    // No aria-haspopup on the refresh button means no dropdown menu.
+    expect(refreshButton).not.toHaveAttribute("aria-haspopup");
+    // No "自动刷新" text in the document (header + page).
+    expect(screen.queryByText(/自动刷新/)).not.toBeInTheDocument();
+  });
+
+  it("does not show a lastUpdatedAt badge anywhere on the page", async () => {
+    renderPage();
+    await screen.findByTestId("onboarding-refresh-button");
+    expect(document.querySelector('[data-testid="onboarding-last-updated"]')).toBeNull();
+    expect(document.querySelector('[data-testid="onboarding-env-badge"]')).toBeNull();
+    expect(screen.queryByText(/上次更新:/)).not.toBeInTheDocument();
+  });
+
+  it("excludes revoked and expired tokens from the 可用 Token count", async () => {
+    const now = new Date("2026-08-01T00:00:00Z");
+    const future = new Date("2027-01-01T00:00:00Z").toISOString();
+    const past = new Date("2026-06-24T00:00:00Z").toISOString();
+
     renderPage({
-      mcpEndpoint: {
-        url: "http://127.0.0.1:7879/mcp",
-        status: "fallback",
-        source: "fallback",
-        configured: false,
-        diagnostics: [
-          {
-            code: "MISSING_PUBLIC_MCP_URL",
-            message: "LUCY_PUBLIC_MCP_URL is not configured; using local development MCP endpoint."
-          }
-        ]
+      agents: [
+        {
+          ...readyAgent,
+          id: "agent-enabled",
+          name: "enabled-agent",
+          enabled: true,
+          tokens: [
+            { hash: "h1", label: "fresh", created: now.toISOString(), expires_at: future }, // counts
+            { hash: "h2", label: "expired", created: now.toISOString(), expires_at: past, revoked: true }, // revoked + expired
+            { hash: "h3", label: "past", created: now.toISOString(), expires_at: past } // expired
+            // unparseable expires_at → unparseable strings need explicit fixture; see next test
+          ]
+        },
+        {
+          ...readyAgent,
+          id: "agent-disabled",
+          name: "disabled-agent",
+          enabled: false,
+          tokens: [
+            { hash: "h4", label: "future", created: now.toISOString(), expires_at: future }
+          ]
+        }
+      ]
+    });
+
+    // 访问风险区显示「可用 Token：1 个」
+    const accessRisk = await screen.findByTestId("ops-access-risk");
+    expect(accessRisk.textContent ?? "").toMatch(/1/);
+    expect(accessRisk.textContent ?? "").toContain("可用");
+    expect(accessRisk.textContent ?? "").toContain("Token");
+    expect(accessRisk.textContent ?? "").not.toContain("活跃");
+    // MCP 接入 facts 也同步显示 1
+    expect(document.body.textContent ?? "").toMatch(/Token:\s*1\s*可用/);
+  });
+
+  it("treats unparseable expires_at as NOT available", async () => {
+    renderPage({
+      agents: [
+        {
+          ...readyAgent,
+          id: "agent-bad-expires",
+          name: "bad-expires-agent",
+          enabled: true,
+          tokens: [
+            { hash: "h5", label: "no-expires", created: "2026-01-01T00:00:00Z", expires_at: null }, // counts (永不过期)
+            { hash: "h6", label: "bad-string", created: "2026-01-01T00:00:00Z", expires_at: "not-a-date" } // ignored
+          ]
+        }
+      ]
+    });
+    const accessRisk = await screen.findByTestId("ops-access-risk");
+    expect(accessRisk.textContent ?? "").toMatch(/1/);
+    expect(accessRisk.textContent ?? "").toContain("可用");
+  });
+
+  it("renders the danger alert with component-specific copy when KTX is unavailable", async () => {
+    renderPage({
+      project: {
+        ktxAvailable: false
       }
     });
-    const badge = await screen.findByTestId("onboarding-env-badge");
-    expect(badge).toHaveTextContent("环境: Local");
+    const alert = await screen.findByTestId("ops-service-health-critical");
+    expect(alert.textContent ?? "").toContain("KTX Runtime 不可用，请检查运行时配置。");
+    // danger 态不渲染摘要行
+    expect(document.querySelector('[data-testid="ops-service-health-summary"]')).toBeNull();
+  });
 
-    // Non-loopback configured endpoint → Configured badge.
-    cleanup();
-    renderPage();
-    const configured = await screen.findByTestId("onboarding-env-badge");
-    expect(configured).toHaveTextContent("环境: Configured");
-
-    // Invalid (null url) → 未配置.
-    cleanup();
+  it("renders the danger alert with component-specific copy when Lucy MCP is unavailable", async () => {
     renderPage({
       mcpEndpoint: {
         url: null,
@@ -389,92 +534,22 @@ describe("Onboarding", () => {
         ]
       }
     });
-    const invalid = await screen.findByTestId("onboarding-env-badge");
-    expect(invalid).toHaveTextContent("环境: 未配置");
-  });
-
-  it("never hard-codes a 'Dev' environment badge label", async () => {
-    renderPage();
-    const badges = await screen.findAllByTestId("onboarding-env-badge");
-    expect(badges.length).toBeGreaterThan(0);
-    for (const badge of badges) {
-      expect(badge.textContent).not.toMatch(/环境:\s*Dev/);
-    }
-  });
-
-  it("exposes the auto-refresh toggle defaulted off", async () => {
-    // v1.9.x 收口：原生 Checkbox 已被下拉菜单项替代；展开 RefreshMenu 后，
-    // "自动刷新" 项的 aria-checked 应为 false。
-    renderPage();
-    fireEvent.click(await screen.findByTestId("onboarding-refresh-button"));
-    const toggle = await screen.findByTestId("onboarding-refresh-menu-auto");
-    expect(toggle).toHaveAttribute("aria-checked", "false");
-  });
-
-  it("records the lastUpdatedAt timestamp after the initial render", async () => {
-    renderPage();
-    const stamp = await screen.findByTestId("onboarding-last-updated");
-    expect(stamp.textContent ?? "").toMatch(/上次更新:/);
-  });
-
-  it("updates the timestamp when the user manually clicks 刷新状态 and triggers a toast", async () => {
-    toastSpy.mockClear();
-
-    renderPage();
-
-    const before = (await screen.findByTestId("onboarding-last-updated")).textContent ?? "";
-    expect(before).toMatch(/上次更新:/);
-
-    const refreshButton = await screen.findByRole("button", { name: /刷新状态|刷新中/ });
-    // v1.9.x 收口：外层按钮展开下拉菜单，刷新动作走「立即刷新」菜单项。
-    fireEvent.click(refreshButton);
-    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-manual"));
-
-    // Allow the refetch + toast chain to flush.
-    await new Promise((resolve) => setTimeout(resolve, 80));
-
-    // The success toast is the spec contract; the failure toast is the
-    // negative path. Either path counts as "the toast fired" per the
-    // task description ("至少一个 toast 被触发").
-    const totalCalls = toastSpy.mock.calls.length;
-    expect(totalCalls).toBeGreaterThanOrEqual(1);
-    // Confirm at least one call was either the success or failure variant.
-    const labels = toastSpy.mock.calls
-      .map((call) => (typeof call[0] === "string" ? call[0] : null))
-      .filter((label): label is string => Boolean(label));
-    expect(labels.some((label) => label === "success" || label === "error")).toBe(true);
-  });
-
-  it("shows 刷新中… while any core query is fetching", async () => {
-    // Render with the default fixture, then trigger refetch and verify the
-    // button label flips to 刷新中… during the in-flight window.
-    renderPage();
-
-    const refreshButton = await screen.findByRole("button", { name: /刷新状态|刷新中/ });
-    // v1.9.x 收口：外层按钮展开下拉菜单，刷新动作走「立即刷新」菜单项。
-    fireEvent.click(refreshButton);
-    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-manual"));
-
-    // Flush microtasks synchronously after click. The label is computed
-    // from projectQuery.isFetching || sourcesQuery.isFetching ||
-    // diffQuery.isFetching || agentsQuery.isFetching.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const button = screen.queryByRole("button", { name: /刷新状态|刷新中/ });
-    expect(button).toBeInTheDocument();
-    // After the queries settle, the button label should be back to 刷新状态.
-    expect(button?.textContent ?? "").toMatch(/刷新状态|刷新中/);
+    const alert = await screen.findByTestId("ops-service-health-critical");
+    expect(alert.textContent ?? "").toContain("Lucy MCP 未就绪，请检查 Endpoint 配置。");
+    expect(document.querySelector('[data-testid="ops-service-health-summary"]')).toBeNull();
   });
 
   // --- Task 4: state tone, metric-first cards, MCP drawer --------------------
 
   it("does not render the legacy green ready banner on the system overview page", async () => {
     renderPage();
-    await screen.findByTestId("ops-service-health");
-    // The big green `.pl-delivery-banner--ready` is gone; only the compact
-    // status strip is allowed.
+    await screen.findByTestId("ops-service-health-summary");
+    // The big green `.pl-delivery-banner--ready` is gone; only the
+    // one-line summary is shown in ready / warning states.
     expect(document.querySelector(".pl-delivery-banner--ready")).toBeNull();
     expect(document.querySelector(".pl-delivery-banner")).toBeNull();
+    // The legacy 4-up strip is gone as well.
+    expect(document.querySelector('[data-testid="ops-service-health"]')).toBeNull();
   });
 
   it("uses Chinese severity labels (no bare Critical / Warning / Ready / Info) for action items", async () => {
@@ -499,21 +574,22 @@ describe("Onboarding", () => {
     expect(text).not.toMatch(/(^|\s)Ready(\s|$)/);
     expect(text).not.toMatch(/(^|\s)Info(\s|$)/);
 
-    // Positive assertions: every action item shows the Chinese severity
-    // label plus impact, owner, update time and evidence.
+    // Positive assertions: every action item shows a Chinese severity label,
+    // a fact-based description and a lightweight action link. Fabricated
+    // workflow fields must not come back as layout filler.
     const items = queue.querySelectorAll(".pl-action-required-item");
     expect(items.length).toBeGreaterThan(0);
     for (const item of Array.from(items)) {
       const itemText = item.textContent ?? "";
       expect(itemText).toMatch(/高风险|待处理|提醒/);
-      expect(itemText).toMatch(/影响|问答召回率|资产同步|发布一致性|质量基线|访问安全/);
-      expect(itemText).toMatch(/负责人|数据治理组|架构组|语义发布负责人|QA 团队|访问治理组/);
-      expect(itemText).toMatch(/更新/);
-      // Each row carries a `前往处理` link with the ↗ glyph so the user
-      // gets a consistent visual affordance.
+      expect(itemText).toMatch(/语义覆盖|Catalog 同步|语义变更|评测运行|访问日志/);
+      expect(itemText).not.toMatch(/负责人|数据治理组|架构组|语义发布负责人|QA 团队|访问治理组/);
+      expect(itemText).not.toMatch(/更新时间|证据/);
+      // Each row carries a lightweight link with the ↗ glyph so the user
+      // gets a consistent visual affordance without button chrome.
       // v1.9.x 收口：CTA 链接样式从 pl-btn 改为蓝色文本链接。
       const link = item.querySelector("a.pl-action-required-item-cta");
-      expect(link?.textContent ?? "").toMatch(/前往处理\s*↗/);
+      expect(link?.textContent ?? "").toMatch(/↗/);
     }
   });
 
@@ -545,7 +621,7 @@ describe("Onboarding", () => {
     renderPage();
     // Wait for the page to settle so we are inspecting the steady state,
     // not the loading flash.
-    await screen.findByTestId("ops-service-health");
+    await screen.findByTestId("ops-service-health-summary").catch(async () => { await screen.findByTestId("ops-service-health-critical"); });
     // The main page must not contain a `<pre>` JSON code snippet. The
     // snippet is gated behind the `查看配置` Drawer button.
     expect(document.querySelector("pre")).toBeNull();
@@ -558,7 +634,7 @@ describe("Onboarding", () => {
 
   it("opens the MCP 配置 Drawer when the user clicks 查看配置", async () => {
     renderPage();
-    await screen.findByTestId("ops-service-health");
+    await screen.findByTestId("ops-service-health-summary").catch(async () => { await screen.findByTestId("ops-service-health-critical"); });
 
     fireEvent.click(screen.getByRole("button", { name: "查看配置" }));
 
@@ -575,7 +651,7 @@ describe("Onboarding", () => {
 
   it("protects professional English terms and URLs in the MCP drawer with translate='no' and notranslate", async () => {
     renderPage();
-    await screen.findByTestId("ops-service-health");
+    await screen.findByTestId("ops-service-health-summary").catch(async () => { await screen.findByTestId("ops-service-health-critical"); });
     fireEvent.click(screen.getByRole("button", { name: "查看配置" }));
 
     const drawer = await screen.findByRole("dialog", { name: "MCP 配置" });
@@ -604,7 +680,7 @@ describe("Onboarding", () => {
 
   it("never renders historical MCP token plaintext inside the drawer or main page", async () => {
     renderPage();
-    await screen.findByTestId("ops-service-health");
+    await screen.findByTestId("ops-service-health-summary").catch(async () => { await screen.findByTestId("ops-service-health-critical"); });
     fireEvent.click(screen.getByRole("button", { name: "查看配置" }));
     const drawer = await screen.findByRole("dialog", { name: "MCP 配置" });
     const allText = (document.body.textContent ?? "") + " " + (drawer.textContent ?? "");
@@ -620,7 +696,7 @@ describe("Onboarding", () => {
   it("shows the eval monitor entry link inside the eval-gap action item", async () => {
     renderPage({ evalRuns: { total: 0, runs: [] } });
     const actionRequired = await screen.findByTestId("ops-action-required");
-    const link = within(actionRequired).getByRole("link", { name: /前往处理/ });
+    const link = within(actionRequired).getByRole("link", { name: /查看趋势监控/ });
     expect(link).toHaveAttribute("href", "/eval/monitor");
   });
 
@@ -823,10 +899,10 @@ describe("Onboarding", () => {
     // (initial settle + any auto-refresh handshakes).
     const evalCallsBefore = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs?limit=1").length;
 
-    // Click 刷新状态 and let the Promise.allSettled chain flush.
-    // v1.9.x 收口：外层按钮展开下拉菜单，刷新动作走「立即刷新」菜单项。
-    fireEvent.click(screen.getByRole("button", { name: /刷新状态|刷新中/ }));
-    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-manual"));
+    // Click the single 刷新 button and let the Promise.allSettled chain flush.
+    // M41: there is no longer a dropdown menu — the button itself triggers the
+    // refetch.
+    fireEvent.click(screen.getByTestId("onboarding-refresh-button"));
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const evalCallsAfter = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs?limit=1").length;
@@ -842,39 +918,35 @@ describe("Onboarding", () => {
     });
   });
 
-  // --- P2-A follow-up: a clean auto-refresh cycle bumps
-  // lastUpdatedAt so the header badge and action-row 更新时间 track
-  // each tick (not just the initial settlement). --------------------------
+  // --- P2-A follow-up (M41): the auto-refresh interval / visibility-change
+  // toggle is gone. The page is now driven only by manual clicks on the
+  // single 刷新 button. The test below pins that contract by counting
+  // fetch calls before / after a click.
 
-  it("bumps lastUpdatedAt after auto-refresh completes a clean cycle", async () => {
-    // We don't try to spoof the wall-clock — that races with the
-    // initial settlement in jsdom. Instead we verify the auto-refresh
-    // code path runs end-to-end: enabling auto-refresh + firing a
-    // visibility-change event must drive a fresh refetch cycle (extra
-    // fetch calls) and the badge must remain a well-formed
-    // `上次更新: HH:mm:ss` (no NaN / `--` regression), confirming
-    // `setLastUpdatedAt` inside the cycle still updates the stamp.
+  it("M41: a manual 刷新 click refetches core + eval queries without auto-refresh", async () => {
     const { fetchMock } = renderPage();
-    const stampEl = await screen.findByTestId("onboarding-last-updated");
-    expect(stampEl.textContent ?? "").toMatch(/上次更新: \d{2}:\d{2}:\d{2}/);
-
+    // Wait for the page to settle so the refresh button is in the DOM.
+    const refreshButton = await screen.findByTestId("onboarding-refresh-button");
     const callsBefore = fetchMock.mock.calls.length;
-    // Enable auto-refresh so the visibility-change handler runs
-    // `schedule()` directly (jsdom defaults `document.hidden` to
-    // `false`).
-    fireEvent.click(screen.getByTestId("onboarding-refresh-button"));
-    fireEvent.click(await screen.findByTestId("onboarding-refresh-menu-auto"));
-    document.dispatchEvent(new Event("visibilitychange"));
+    fireEvent.click(refreshButton);
+    // Allow the Promise.allSettled chain + the .then() callback to flush.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const callsAfter = fetchMock.mock.calls.length;
+    // Manual click drives at least one fresh refetch cycle.
+    expect(callsAfter).toBeGreaterThan(callsBefore);
+    // And there is no setInterval timer in the document — the cleanest way
+    // to check is to confirm the auto-refresh testid never appears.
+    expect(document.querySelector('[data-testid="onboarding-refresh-menu-auto"]')).toBeNull();
+    // No last-updated stamp element either.
+    expect(document.querySelector('[data-testid="onboarding-last-updated"]')).toBeNull();
 
-    // Wait for the Promise.allSettled chain + the .then() callback
-    // (which calls `setLastUpdatedAt`) to flush.
+    // Wait for the Promise.allSettled chain + the .then() callback to flush.
     await waitFor(() => {
       expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore);
     });
     // The label is still a well-formed timestamp; if the clean cycle
     // path skipped `setLastUpdatedAt` we'd see `上次更新: --`.
-    expect(screen.getByTestId("onboarding-last-updated").textContent ?? "").toMatch(
-      /上次更新: \d{2}:\d{2}:\d{2}/
-    );
+    // M41: last-updated is gone — the toast carries refresh feedback instead.
+    expect(toastSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 });

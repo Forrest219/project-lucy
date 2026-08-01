@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -9,47 +9,19 @@ import type { Agent, ChangedFilesResponse, McpEndpointInfo, ProjectInfo, Sources
 import { buildMcpConfig } from "../lib/mcpEndpoint";
 import { PageHeader } from "../components/PageHeader";
 import {
+  availableTokenCount,
   buildActionRequiredItems,
   buildServiceHealth,
   NO_ACTION_REQUIRED_MESSAGE,
   pendingSemanticCount,
+  summarizeServiceHealth,
+  systemAlertText,
   type ActionRequiredItem,
   type Severity,
   type ServiceHealthItem,
+  type ServiceHealthSummary,
   severityLabelBySeverity
 } from "../lib/opsDashboard";
-
-const AUTO_REFRESH_INTERVAL_MS = 60_000;
-
-/**
- * M39: derive an environment label from the runtime MCP endpoint host.
- *
- * - `localhost` / `127.0.0.1` -> "Local"
- * - non-loopback configured host -> "Configured"
- * - invalid / null endpoint -> "未配置"
- *
- * We intentionally do NOT hard-code "Dev" because the spec 41 §5 forbids it.
- */
-function deriveEnvironmentLabel(endpointInfo: McpEndpointInfo | undefined): string {
-  if (!endpointInfo) return "环境: 未配置";
-  if (endpointInfo.status === "invalid" || !endpointInfo.url) return "环境: 未配置";
-  try {
-    const host = new URL(endpointInfo.url).hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
-      return "环境: Local";
-    }
-    return "环境: Configured";
-  } catch {
-    return "环境: 未配置";
-  }
-}
-
-function formatTimestamp(date: Date): string {
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
-}
 
 type AgentsResponse = { agents: Agent[] };
 type HealthTone = "ready" | "warning" | "info" | "danger";
@@ -58,12 +30,12 @@ function isLegacyAllowAgent(agent: Agent): boolean {
   return !agent.role && Boolean(agent.allow);
 }
 
-function mcpAccessReason(agents: Agent[], enabledTokenCount: number): string | undefined {
+function mcpAccessReason(agents: Agent[], availableTokenCount: number): string | undefined {
   if (agents.length === 0) return "尚未创建 Agent";
   const enabledAgents = agents.filter((agent) => agent.enabled);
   if (enabledAgents.length === 0) return "所有 Agent 均已禁用";
   if (agents.every(isLegacyAllowAgent)) return "所有 Agent 仍为 legacy allow，需迁移到 role";
-  if (enabledTokenCount === 0) return "启用的 Agent 暂无可用 token";
+  if (availableTokenCount === 0) return "启用的 Agent 暂无可用 token";
   return undefined;
 }
 
@@ -159,104 +131,59 @@ function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
 }
 
 /**
- * v1.9.x 收口：把「原生 Checkbox + 按钮」改成下拉式 RefreshMenu。
- * - 按钮自带状态点（绿点 = 自动刷新开，灰点 = 关）
- * - 点开下拉：立即刷新 / 自动刷新切换
- * - 点外部 / Esc 关掉
+ * M41: render the system-status summary line. The view-model is structured
+ * (not a plain string) so we can wrap `Lucy MCP` / `KTX Runtime` /
+ * `Agent` / numeric counts in `notranslate` spans per terminology standard.
  */
-function RefreshMenu({
-  isFetching,
-  autoRefresh,
-  onManualRefresh,
-  onToggleAutoRefresh
-}: {
-  isFetching: boolean;
-  autoRefresh: boolean;
-  onManualRefresh: () => void;
-  onToggleAutoRefresh: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    function onMouseDown(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  const label = isFetching ? "刷新中..." : "刷新状态";
+function ServiceHealthSummaryView({ summary }: { summary: ServiceHealthSummary }) {
+  const { tone, semantic, agents } = summary;
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        className="pl-btn pl-btn--secondary inline-flex items-center gap-2"
-        onClick={() => setOpen((prev) => !prev)}
-        disabled={isFetching}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        data-testid="onboarding-refresh-button"
-      >
-        <span
-          aria-hidden
-          className={`size-1.5 rounded-pill ${autoRefresh ? "bg-success" : "bg-fg-muted"}`}
-        />
-        <span>{label}</span>
-        <span aria-hidden className="text-xs">▾</span>
-      </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-20 mt-1 grid min-w-[12rem] gap-0.5 rounded-md border border-border-default bg-bg-surface p-1 shadow-card"
-          data-testid="onboarding-refresh-menu"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-bg-muted"
-            onClick={() => {
-              onManualRefresh();
-              setOpen(false);
-            }}
-            data-testid="onboarding-refresh-menu-manual"
-          >
-            立即刷新
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            aria-checked={autoRefresh}
-            className="flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm hover:bg-bg-muted"
-            onClick={onToggleAutoRefresh}
-            data-testid="onboarding-refresh-menu-auto"
-          >
-            <span>自动刷新</span>
-            <span
-              aria-hidden
-              className={`inline-block size-2.5 rounded-pill ${
-                autoRefresh ? "bg-success" : "border border-fg-muted bg-bg-surface"
-              }`}
-            />
-          </button>
-        </div>
+    <div
+      className="pl-page-intro text-sm text-fg-default"
+      data-testid="ops-service-health-summary"
+      data-tone={tone}
+    >
+      <span className="notranslate" translate="no">Lucy MCP</span> 可用，
+      <span className="notranslate" translate="no">KTX Runtime</span> 可用；
+      语义覆盖{" "}
+      <span className="notranslate" translate="no">
+        {semantic.done}/{semantic.total}
+      </span>
+      {semantic.gap > 0 ? (
+        <>
+          ，仍有{" "}
+          <span className="notranslate" translate="no">
+            {semantic.gap}
+          </span>{" "}
+          张表待补
+        </>
       ) : null}
+      ；<span className="notranslate" translate="no">Agent</span>{" "}
+      <span className="notranslate" translate="no">
+        {agents.enabled}/{agents.total}
+      </span>{" "}
+      启用
+      {agents.gap > 0 ? (
+        <>
+          ，仍有{" "}
+          <span className="notranslate" translate="no">
+            {agents.gap}
+          </span>{" "}
+          个未启用
+        </>
+      ) : null}
+      {" · "}
+      <Link to="/admin/audit" className="pl-card-cta">
+        控制台日志 ↗
+      </Link>
     </div>
   );
 }
 
 /**
- * Compact Service Health strip. Per M39 spec 41 §6.1, ready state must NOT
- * use a large coloured banner. We render a single neutral row with four
- * mini-items and a `[控制台日志]` affordance.
+ * Compact Service Health strip. M41 replaces this with `ServiceHealthSummaryView`
+ * on `/overview`; the helper is retained here in case other surfaces need
+ * the per-component breakdown.
  */
 function ServiceHealthStrip({ items }: { items: ServiceHealthItem[] }) {
   return (
@@ -541,13 +468,6 @@ export function Onboarding() {
   // "已复制" flash before the label reverts.
   const [copiedMain, setCopiedMain] = useState(false);
   const [copiedDrawer, setCopiedDrawer] = useState(false);
-  // M39: track the last time the dashboard successfully finished a fetch
-  // cycle. The header renders this as `上次更新: HH:mm:ss`.
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  // M39: auto-refresh switch (default off). When toggled on we refetch the
-  // four core queries every 60s, but pause the timer whenever
-  // `document.hidden` is true so background tabs don't pile up work.
-  const [autoRefresh, setAutoRefresh] = useState(false);
   // M39: Drawer open state. The main page never shows the raw JSON
   // config; the user must explicitly open the Drawer to inspect it.
   const [mcpDrawerOpen, setMcpDrawerOpen] = useState(false);
@@ -579,87 +499,6 @@ export function Onboarding() {
     staleTime: 60_000
   });
 
-  // M39: record the wall-clock time when all four core queries settle with
-  // data. We only consider a query "settled" once it has produced data at
-  // least once — a permanent error does not advance the timestamp.
-  const coreSettled =
-    projectQuery.isSuccess &&
-    sourcesQuery.isSuccess &&
-    diffQuery.isSuccess &&
-    agentsQuery.isSuccess;
-  const previousSettledRef = useRef(coreSettled);
-  useEffect(() => {
-    if (!previousSettledRef.current && coreSettled) {
-      setLastUpdatedAt(new Date());
-    }
-    previousSettledRef.current = coreSettled;
-  }, [coreSettled]);
-
-  // M39: auto-refresh interval. Re-fetches the four core queries plus
-  // the eval-runs probe every 60s when enabled, and pauses while the
-  // tab is hidden. The cleanup function clears the timer so we don't
-  // leak handles.
-  //
-  // M39 polish (MAJOR-4): use Promise.allSettled so a single failing
-  // endpoint doesn't mask the others, and aggregate failures into a
-  // single low-noise toast instead of failing silently every 60s. The
-  // threshold (`AUTO_REFRESH_FAILURE_TOAST_THRESHOLD`) keeps the toast
-  // from firing on transient single-endpoint hiccups.
-  //
-  // M39 review follow-up (P2-A): a clean cycle (no failures across all
-  // five queries) updates `lastUpdatedAt` so the header `上次更新` badge
-  // and the action-required row 的 更新时间 both track the live
-  // refresh, not just the initial settlement.
-  const AUTO_REFRESH_FAILURE_TOAST_THRESHOLD = 2;
-  useEffect(() => {
-    if (!autoRefresh) return;
-    if (typeof document === "undefined") return;
-    let cancelled = false;
-    function schedule() {
-      if (cancelled || document.hidden) return;
-      void Promise.allSettled([
-        projectQuery.refetch(),
-        sourcesQuery.refetch(),
-        diffQuery.refetch(),
-        agentsQuery.refetch(),
-        // M39 review follow-up (P2-B): the eval probe is now part of
-        // the same refresh cycle so the eval-gap item can't drift out of
-        // sync with the rest of the action-required queue.
-        evalLastRunQuery.refetch()
-      ]).then((settled) => {
-        if (cancelled) return;
-        const failedCount = settled.filter(
-          (result) => result.status === "rejected" || (result.status === "fulfilled" && (result.value as { error?: unknown })?.error)
-        ).length;
-        if (failedCount === 0) {
-          // Clean cycle — bump the dashboard-wide freshness stamp.
-          setLastUpdatedAt(new Date());
-        }
-        if (failedCount >= AUTO_REFRESH_FAILURE_TOAST_THRESHOLD) {
-          toast.error("部分状态刷新失败，可在控制台查看详情");
-        }
-      });
-    }
-    const timer = window.setInterval(schedule, AUTO_REFRESH_INTERVAL_MS);
-    function onVisibility() {
-      // When the tab reappears we immediately refetch so the user sees
-      // fresh data without waiting for the next interval tick. The
-      // success path of `schedule` itself updates `lastUpdatedAt`, so
-      // re-foregrounding also refreshes the timestamp without extra code.
-      if (!document.hidden && autoRefresh) schedule();
-    }
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-    // We intentionally exclude the query handles from deps — TanStack
-    // Query returns stable refetch functions per query instance and we
-    // want the timer to be set up exactly once per toggle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRefresh]);
-
   const connections = projectQuery.data?.connections ?? [];
   const enabledTables = connections.reduce((sum, conn) => sum + conn.enabledTables.length, 0);
   const sources = sourcesQuery.data?.tables ?? [];
@@ -667,8 +506,11 @@ export function Onboarding() {
   const changedFiles = diffQuery.data?.files ?? [];
   const agents = agentsQuery.data?.agents ?? [];
   const enabledAgents = agents.filter((agent) => agent.enabled);
-  const enabledTokenCount = enabledAgents.reduce((sum, agent) => sum + agent.tokens.filter((token) => !token.revoked).length, 0);
-  const mcpNotReadyReason = mcpAccessReason(agents, enabledTokenCount);
+  // M41: token count follows new "可用 Token" semantics — excluded are
+  // `enabled=false` parents, `revoked=true` tokens, expired tokens
+  // (`expires_at <= now`), and tokens with unparseable `expires_at`.
+  const availableTokenCountValue = availableTokenCount(agents);
+  const mcpNotReadyReason = mcpAccessReason(agents, availableTokenCountValue);
   const endpointInfo = projectQuery.data?.mcpEndpoint;
   const endpoint = endpointInfo?.url ?? null;
   const mcpConfig = useMemo(
@@ -736,10 +578,32 @@ export function Onboarding() {
         semanticCoverage: { done: doneSources, total: sources.length },
         agentsEnabled: enabledAgents.length,
         agentsTotal: agents.length,
-        enabledTokenCount
+        availableTokenCount: availableTokenCountValue
       }),
-    [projectQuery.data?.ktxAvailable, mcpReady, doneSources, sources.length, enabledAgents.length, agents.length, enabledTokenCount]
+    [
+      projectQuery.data?.ktxAvailable,
+      mcpReady,
+      doneSources,
+      sources.length,
+      enabledAgents.length,
+      agents.length,
+      availableTokenCountValue
+    ]
   );
+  // M41: structured view model for the one-line "系统状态" summary.
+  // Returns null when mcp / ktx is not ready; the page falls back to the
+  // high-weight alert in that case.
+  const summary = useMemo(
+    () =>
+      summarizeServiceHealth(
+        mcpReady,
+        projectQuery.data?.ktxAvailable === true,
+        { done: doneSources, total: sources.length },
+        { enabled: enabledAgents.length, total: agents.length }
+      ),
+    [mcpReady, projectQuery.data?.ktxAvailable, doneSources, sources.length, enabledAgents.length, agents.length]
+  );
+  const ktxAvailable = projectQuery.data?.ktxAvailable === true;
   const semanticPercent = percent(doneSources, sources.length);
 
   /**
@@ -792,7 +656,7 @@ export function Onboarding() {
   }
 
   async function refreshStatus() {
-    // M39: toast on success / failure so the user always sees feedback
+    // M41: toast on success / failure so the user always sees feedback
     // when they tap the manual refresh button. We deliberately resolve
     // all five queries (the four core ones plus the eval-runs probe)
     // so a single failing endpoint doesn't get masked and so the eval
@@ -823,14 +687,9 @@ export function Onboarding() {
       toast.error("系统概览刷新失败");
       return;
     }
-    setLastUpdatedAt(new Date());
     toast.success("系统概览已刷新");
   }
 
-  const environmentLabel = deriveEnvironmentLabel(endpointInfo);
-  const lastUpdatedLabel = lastUpdatedAt
-    ? `上次更新: ${formatTimestamp(lastUpdatedAt)}`
-    : "上次更新: --";
   const coreFetching =
     projectQuery.isFetching ||
     sourcesQuery.isFetching ||
@@ -850,8 +709,14 @@ export function Onboarding() {
   }
 
   // M39: a critical-tone service-health panel must remain a high-emphasis
-  // Alert; ready/warning use the compact strip.
+  // Alert. M41: ready / warning now render a single summary line; the
+  // legacy compact strip is no longer shown on `/overview`. The danger
+  // state is driven by raw readiness (mcpReady + ktxAvailable) rather
+  // than the legacy `overallTone` aggregation, so an unavailable Lucy MCP
+  // surfaces the alert even when KTX is fine.
   const overall = overallTone(serviceHealth);
+  const isDanger = !mcpReady || !ktxAvailable;
+  const alertText = systemAlertText(mcpReady, ktxAvailable);
 
   return (
     <div className="pl-page-stack">
@@ -862,49 +727,36 @@ export function Onboarding() {
             查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。聚合首页待办，判断 data agent 是否处于可交付状态。
           </>
         }
-        badges={
-          <>
-            <span data-testid="onboarding-env-badge">{environmentLabel}</span>
-            <span data-testid="onboarding-last-updated">{lastUpdatedLabel}</span>
-            <span>
-              <span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">{projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</span>
-            </span>
-            <span>
-              <span className="notranslate" translate="no">{doneSources}/{sources.length}</span> 语义完成
-            </span>
-          </>
-        }
         actions={
-          <div className="pl-page-header-actions pl-page-header-actions--stacked">
-            <RefreshMenu
-              isFetching={coreFetching}
-              autoRefresh={autoRefresh}
-              onManualRefresh={refreshStatus}
-              onToggleAutoRefresh={() => setAutoRefresh((prev) => !prev)}
-            />
-          </div>
+          <button
+            type="button"
+            className="pl-btn pl-btn--secondary text-sm"
+            onClick={refreshStatus}
+            disabled={coreFetching}
+            data-testid="onboarding-refresh-button"
+          >
+            {coreFetching ? "刷新中..." : "刷新"}
+          </button>
         }
       />
 
-      <div className="pl-page-intro flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted" data-testid="onboarding-active-token-meta">
-        <span className="notranslate" translate="no">
-          <span className="notranslate" translate="no">{enabledTokenCount}</span> 活跃 Token
-        </span>
-      </div>
-
-      {overall === "danger" ? (
-        <section className="pl-panel pl-service-health-critical" role="alert" data-testid="ops-service-health-critical">
+      {isDanger ? (
+        <section
+          className="pl-panel pl-service-health-critical"
+          role="alert"
+          data-testid="ops-service-health-critical"
+        >
           <div className="flex items-center gap-3">
             <span className="pl-service-health-critical-dot" aria-hidden="true" />
             <div>
               <strong>系统异常</strong>
-              <p className="pl-notice">关键组件未就绪，请查看待处理事项。</p>
+              <p className="pl-notice notranslate" translate="no">{alertText}</p>
             </div>
           </div>
         </section>
+      ) : summary ? (
+        <ServiceHealthSummaryView summary={summary} />
       ) : null}
-
-      <ServiceHealthStrip items={serviceHealth} />
 
       <section className="pl-panel" data-testid="ops-action-required">
         <div className="pl-section-heading">
@@ -1031,12 +883,12 @@ export function Onboarding() {
             </div>
             <div
               className="pl-risk-item"
-              data-tone={enabledTokenCount === 0 && agents.length > 0 ? "warning" : "default"}
+              data-tone={availableTokenCountValue === 0 && agents.length > 0 ? "warning" : "default"}
             >
               <div>
                 <strong>可用 <span className="notranslate" translate="no">Token</span></strong>
                 <div className="text-xs text-fg-muted">
-                  <span className="notranslate" translate="no">{enabledTokenCount}</span> 个活跃 <span className="notranslate" translate="no">Token</span>
+                  <span className="notranslate" translate="no">{availableTokenCountValue}</span> 个可用 <span className="notranslate" translate="no">Token</span>
                 </div>
               </div>
               <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
@@ -1063,7 +915,7 @@ export function Onboarding() {
               <span className="notranslate" translate="no">Agent</span>: <span className="notranslate" translate="no">{agents.length}</span> 个
             </span>
             <span>
-              <span className="notranslate" translate="no">Token</span>: <span className="notranslate" translate="no">{enabledTokenCount}</span> 可用
+              <span className="notranslate" translate="no">Token</span>: <span className="notranslate" translate="no">{availableTokenCountValue}</span> 可用
             </span>
             <span>
               <span className="notranslate" translate="no">Endpoint</span>: <code className="notranslate break-all" translate="no">{endpoint ?? "—"}</code>

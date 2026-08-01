@@ -18,7 +18,7 @@ describe("opsDashboard view model", () => {
       evalRunsLast30d: 0,
       aclDenied7d: 2
     });
-    expect(items.map((item) => item.label)).toEqual([
+    expect(items.map((item) => item.title)).toEqual([
       "12 张表待补语义",
       "近 7 天存在 ACL 拒绝",
       "10 个 Catalog 对象待处理",
@@ -53,7 +53,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 5, total: 10 },
       agentsEnabled: 2,
       agentsTotal: 3,
-      enabledTokenCount: 4
+      availableTokenCount: 4
     });
     expect(items.map((item) => item.key)).toEqual([
       "lucyMcp",
@@ -72,7 +72,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 0, total: 0 },
       agentsEnabled: 0,
       agentsTotal: 0,
-      enabledTokenCount: 0
+      availableTokenCount: 0
     });
     expect(items.find((item) => item.key === "ktxRuntime")?.status).toBe("danger");
     expect(items.find((item) => item.key === "agentAccess")?.status).toBe("danger");
@@ -93,7 +93,7 @@ describe("opsDashboard view model", () => {
     expect(severityOrder.ready).toBeLessThan(severityOrder.info);
   });
 
-  it("maps every severity to a user-facing Chinese label", () => {
+  it("keeps action items fact-based and free of fabricated workflow metadata", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 2, total: 16 },
       pendingCatalogItems: 4,
@@ -101,19 +101,18 @@ describe("opsDashboard view model", () => {
       evalRunsLast30d: 0,
       aclDenied7d: 1
     });
-    const allowedLabels = new Set(["高风险", "待处理", "提醒", "就绪"]);
     for (const item of items) {
-      expect(allowedLabels.has(item.severityLabel)).toBe(true);
-      // severityLabel must never be the raw English severity word.
-      expect(item.severityLabel).not.toBe("Critical");
-      expect(item.severityLabel).not.toBe("Warning");
-      expect(item.severityLabel).not.toBe("Ready");
-      expect(item.severityLabel).not.toBe("Info");
+      expect(item.title).toBeTruthy();
+      expect(item.description).toBeTruthy();
+      expect(item.actionText).toBeTruthy();
+      expect(item.actionUrl).toBeTruthy();
+      expect("owner" in item).toBe(false);
+      expect("evidence" in item).toBe(false);
+      expect("updatedAtLabel" in item).toBe(false);
+      expect("impact" in item).toBe(false);
     }
-    // ACL deny keeps the critical → 高风险 mapping.
     const acl = items.find((item) => item.id === "acl-deny");
     expect(acl?.severity).toBe("critical");
-    expect(acl?.severityLabel).toBe("高风险");
   });
 
   it("labels a large semantic gap as critical and a small gap as warning", () => {
@@ -127,7 +126,6 @@ describe("opsDashboard view model", () => {
     const gapLarge = large.find((item) => item.id === "semantic-gap");
     expect(gapLarge).toBeDefined();
     expect(gapLarge?.severity).toBe("critical");
-    expect(gapLarge?.severityLabel).toBe("高风险");
 
     const small = buildActionRequiredItems({
       semanticCoverage: { done: 12, total: 16 },
@@ -139,7 +137,6 @@ describe("opsDashboard view model", () => {
     const gapSmall = small.find((item) => item.id === "semantic-gap");
     expect(gapSmall).toBeDefined();
     expect(gapSmall?.severity).toBe("warning");
-    expect(gapSmall?.severityLabel).toBe("待处理");
 
     const none = buildActionRequiredItems({
       semanticCoverage: { done: 16, total: 16 },
@@ -166,7 +163,6 @@ describe("opsDashboard view model", () => {
     const gap = items.find((item) => item.id === "semantic-gap");
     expect(gap).toBeDefined();
     expect(gap?.severity).toBe("warning");
-    expect(gap?.severityLabel).toBe("待处理");
   });
 
   it("boundary: done=5 total=16 -> critical (5*3=15 < 16)", () => {
@@ -180,7 +176,6 @@ describe("opsDashboard view model", () => {
     const gap = items.find((item) => item.id === "semantic-gap");
     expect(gap).toBeDefined();
     expect(gap?.severity).toBe("critical");
-    expect(gap?.severityLabel).toBe("高风险");
   });
 
   it("boundary: done=4 total=13 -> critical (4*3=12 < 13)", () => {
@@ -194,7 +189,6 @@ describe("opsDashboard view model", () => {
     const gap = items.find((item) => item.id === "semantic-gap");
     expect(gap).toBeDefined();
     expect(gap?.severity).toBe("critical");
-    expect(gap?.severityLabel).toBe("高风险");
   });
 
   it("downgrades the eval-gap severity from warning to info", () => {
@@ -208,7 +202,6 @@ describe("opsDashboard view model", () => {
     const evalGap = items.find((item) => item.id === "eval-gap");
     expect(evalGap).toBeDefined();
     expect(evalGap?.severity).toBe("info");
-    expect(evalGap?.severityLabel).toBe("提醒");
   });
 
   it("omits the eval-gap item when evalRunsLast30d is null (still loading or errored)", () => {
@@ -229,67 +222,27 @@ describe("opsDashboard view model", () => {
     expect(evalGap).toBeUndefined();
   });
 
-  it("attaches deterministic impact / owner / evidence / updatedAtLabel metadata to every action item", () => {
-    const dashboardUpdatedAt = new Date("2026-08-01T10:12:00.000Z");
+  it("folds real supporting counts into title or description", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 4, total: 16 },
       pendingCatalogItems: 5,
       pendingPublishFiles: 3,
       evalRunsLast30d: 0,
-      aclDenied7d: 2,
-      dashboardUpdatedAt
+      aclDenied7d: 2
     });
-    const expected: Record<string, { impact: string; owner: string; evidence: string }> = {
+    const expected: Record<string, { text: string }> = {
       "semantic-gap": {
-        impact: "问答召回率",
-        owner: "数据治理组",
-        evidence: "语义覆盖 4/16"
+        text: "当前语义覆盖 4/16，仍有 12 张表缺少可用语义"
       },
-      "catalog-pending": {
-        impact: "资产同步",
-        owner: "架构组",
-        evidence: "Catalog 待处理 5 项"
-      },
-      "publish-pending": {
-        impact: "发布一致性",
-        owner: "语义发布负责人",
-        evidence: "diff files: 3"
-      },
-      "eval-gap": {
-        impact: "质量基线",
-        owner: "QA 团队",
-        evidence: "近 30 天无评测数据"
-      },
-      "acl-deny": {
-        impact: "访问安全",
-        owner: "访问治理组",
-        evidence: "ACL 拒绝: 2"
-      }
+      "catalog-pending": { text: "Catalog 同步发现 5 个对象处于 partial 状态" },
+      "publish-pending": { text: "当前有 3 个语义变更尚未发布" },
+      "eval-gap": { text: "尚未检测到近 30 天评测运行记录" },
+      "acl-deny": { text: "访问日志记录到 2 次 ACL 拒绝" }
     };
     for (const item of items) {
       const want = expected[item.id];
       expect(want, `unexpected action item id: ${item.id}`).toBeDefined();
-      expect(item.impact).toBe(want.impact);
-      expect(item.owner).toBe(want.owner);
-      expect(item.evidence).toBe(want.evidence);
-      // updatedAtLabel is generated from dashboardUpdatedAt (formatted as
-      // "今天 HH:mm"). The exact time depends on the test runner timezone;
-      // we only assert that the label is a non-empty string when an updated
-      // time is provided.
-      expect(item.updatedAtLabel).toBeTruthy();
-    }
-  });
-
-  it("renders '更新时间未知' when dashboardUpdatedAt is omitted", () => {
-    const items = buildActionRequiredItems({
-      semanticCoverage: { done: 4, total: 16 },
-      pendingCatalogItems: 0,
-      pendingPublishFiles: 0,
-      evalRunsLast30d: 0,
-      aclDenied7d: 0
-    });
-    for (const item of items) {
-      expect(item.updatedAtLabel).toBe("更新时间未知");
+      expect(`${item.title} ${item.description}`).toContain(want.text);
     }
   });
 
@@ -303,11 +256,11 @@ describe("opsDashboard view model", () => {
     });
     const acl = items.find((item) => item.id === "acl-deny");
     expect(acl).toBeDefined();
-    expect(acl?.label).toContain("拒绝");
-    expect(acl?.label).not.toContain("deny");
-    expect(acl?.label).not.toMatch(/Deny/);
-    expect(acl?.evidence).toContain("拒绝");
-    expect(acl?.evidence).not.toContain("deny");
+    expect(acl?.title).toContain("拒绝");
+    expect(acl?.title).not.toContain("deny");
+    expect(acl?.title).not.toMatch(/Deny/);
+    expect(acl?.description).toContain("拒绝");
+    expect(acl?.description).not.toContain("deny");
   });
 
   // M39 polish (MINOR-1): negative-input guards. A buggy upstream ETL
