@@ -123,7 +123,6 @@ describe("AppFrame shell", () => {
     ["/connections/whitelist", "TableWhitelist", "启用表范围"],
     ["/", "Catalog", "表目录"],
     ["/catalog", "Catalog", "表目录"],
-    ["/wiki", "WikiEditor", "业务 Wiki"],
     ["/publish/workbench", "PublishWorkbench", "发布工作台"],
     ["/publish/history", "PublishHistory", "发布记录"],
     ["/eval/cases", "CaseList", "评测用例"],
@@ -138,6 +137,16 @@ describe("AppFrame shell", () => {
     renderAt(path);
     expect(screen.getByTestId("route-page")).toHaveTextContent(pageName);
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("uses a dedicated Wiki shell without the global navigation", () => {
+    renderAt("/wiki");
+
+    expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor");
+    expect(document.querySelector(".pl-app-shell")).toHaveClass("pl-app-shell--wiki");
+    expect(document.querySelector(".pl-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "业务 Wiki" })).not.toBeInTheDocument();
   });
 
   it("keeps /connections/test as a compat alias route with no sidebar entry", () => {

@@ -625,14 +625,6 @@ export function WikiEditor() {
           uiMode === "edit" ? (
             <span className="pl-wiki-header-edit-title">
               编辑 Wiki 文档
-              {key ? (
-                <code
-                  className="pl-wiki-header-edit-key notranslate"
-                  translate="no"
-                >
-                  {key}
-                </code>
-              ) : null}
             </span>
           ) : (
             "业务 Wiki"

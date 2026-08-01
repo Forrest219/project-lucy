@@ -46,6 +46,7 @@ export function WikiReadView({
   const toc = useMemo(() => (trimmed ? extractWikiToc(content) : []), [content, trimmed]);
   const tags = frontmatter.tags ?? [];
   const slRefs = frontmatter.sl_refs ?? [];
+  const hasMeta = tags.length > 0 || slRefs.length > 0;
   const summary = frontmatter.summary?.trim();
   const placeholders = useMemo(
     () => (trimmed ? extractTemplatePlaceholders(content) : []),
@@ -63,29 +64,28 @@ export function WikiReadView({
             {summary}
           </p>
         ) : null}
-        <div className="pl-wiki-read-meta" data-testid="wiki-read-meta">
-          <code className="pl-wiki-read-key notranslate" translate="no" title={keyName}>
-            wiki/{keyName}
-          </code>
-          {tags.length > 0 ? (
-            <ul
-              aria-label="文档标签"
-              className="pl-wiki-read-tags"
-              data-testid="wiki-read-tags"
-            >
-              {tags.map((tag) => (
-                <li className="pl-wiki-read-tag notranslate" key={tag} translate="no">
-                  #{tag}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <LinkedSemanticObjects
-            knownSources={knownSources}
-            knownTables={knownTables}
-            refs={slRefs}
-          />
-        </div>
+        {hasMeta ? (
+          <div className="pl-wiki-read-meta" data-testid="wiki-read-meta">
+            {tags.length > 0 ? (
+              <ul
+                aria-label="文档标签"
+                className="pl-wiki-read-tags"
+                data-testid="wiki-read-tags"
+              >
+                {tags.map((tag) => (
+                  <li className="pl-wiki-read-tag notranslate" key={tag} translate="no">
+                    #{tag}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <LinkedSemanticObjects
+              knownSources={knownSources}
+              knownTables={knownTables}
+              refs={slRefs}
+            />
+          </div>
+        ) : null}
         {placeholders.length > 0 ? (
           <p
             aria-label="模板待补全占位符"

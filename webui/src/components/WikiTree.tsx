@@ -25,8 +25,7 @@ type EnrichedPage = WikiSummary & {
  *
  * Pages are grouped by their leading path segments. Each row shows the
  * document's display title (frontmatter summary, first heading or
- * basename) as the primary label, with the raw key rendered as muted
- * secondary text. Filtering matches across title, summary, tags and
+ * basename) as the primary label. Filtering matches across title, summary, tags and
  * `sl_refs` so the search bar in the page header and the tree stay in
  * sync. The UI labels use user-facing "关联表" wording even though
  * the underlying metadata field remains `sl_refs`.
@@ -125,13 +124,11 @@ export function WikiTree({ pages, activeKey, onSelect, initialSearch = "" }: Wik
                             >
                               {extension}
                             </span>
-                            <span className="pl-wiki-tree-page-title">{enriched.displayTitle}</span>
                             <span
-                              className="pl-wiki-tree-page-path notranslate"
+                              className="pl-wiki-tree-page-title"
                               title={page.key}
-                              translate="no"
                             >
-                              {page.key}
+                              {enriched.displayTitle}
                             </span>
                           </button>
                         </li>

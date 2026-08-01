@@ -346,7 +346,7 @@ describe("WikiEditor Read Mode default (P0)", () => {
     expect(screen.queryByRole("tab", { name: "Raw" })).not.toBeInTheDocument();
   });
 
-  it("renders title, compact path, tags and linked table badges in the document header", async () => {
+  it("renders title, tags and linked table badges without a visible file path", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
@@ -356,7 +356,7 @@ describe("WikiEditor Read Mode default (P0)", () => {
     });
 
     const meta = await screen.findByTestId("wiki-read-meta");
-    expect(meta).toHaveTextContent("wiki/global/superstore-analysis-playbook.md");
+    expect(meta).not.toHaveTextContent("wiki/global/superstore-analysis-playbook.md");
 
     const tags = screen.getByTestId("wiki-read-tags");
     expect(tags.textContent).toContain("analysis");
@@ -901,9 +901,9 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
 
     // Page detail should be loaded into the read view
     expect(await screen.findByTestId("wiki-read-title")).toHaveTextContent("Superstore guide");
-    expect(await screen.findByTestId("wiki-read-meta")).toHaveTextContent(
-      "wiki/global/superstore-analysis-playbook.md"
-    );
+    const meta = await screen.findByTestId("wiki-read-meta");
+    expect(meta).not.toHaveTextContent("wiki/global/superstore-analysis-playbook.md");
+    expect(meta).toHaveTextContent("dataforai.superstore_orders");
 
     await waitFor(() => {
       expect(screen.getByTestId("current-location")).toHaveTextContent(
@@ -1072,7 +1072,7 @@ describe("WikiEditor Markdown file operations (M47)", () => {
 });
 
 describe("WikiEditor Tree View (P1)", () => {
-  it("groups pages by directory, shows document title as primary label and path as secondary text", async () => {
+  it("groups pages by directory and shows document title without visible raw path", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki");
 
@@ -1088,8 +1088,7 @@ describe("WikiEditor Tree View (P1)", () => {
 
     // Each row shows the summary as the primary title
     const superstoreRow = within(tree).getByRole("button", { name: /Superstore guide/ });
-    expect(superstoreRow.textContent).toContain("global/superstore-analysis-playbook.md");
-    // The primary label is rendered before the muted path
+    expect(superstoreRow.textContent).not.toContain("global/superstore-analysis-playbook.md");
     const title = superstoreRow.querySelector(".pl-wiki-tree-page-title")?.textContent;
     expect(title).toBe("Superstore guide");
   });

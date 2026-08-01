@@ -85,16 +85,9 @@ export function WikiLibraryHome({
                       <span className="pl-wiki-library-md-icon notranslate" translate="no">
                         MD
                       </span>
-                      <span className="pl-wiki-library-item-main">
+                      <span className="pl-wiki-library-item-main" title={page.key}>
                         <span className="pl-wiki-library-item-title">
                           {page.summary?.trim() || wikiTitleFromKey(page.key)}
-                        </span>
-                        <span
-                          className="pl-wiki-library-item-path notranslate"
-                          title={page.key}
-                          translate="no"
-                        >
-                          {page.key}
                         </span>
                       </span>
                     </button>
