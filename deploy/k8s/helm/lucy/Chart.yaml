@@ -1,0 +1,41 @@
+apiVersion: v2
+name: lucy
+description: |
+  Lucy single-replica Kubernetes / Helm package.
+
+  This chart installs the Lucy data agent context compiler and governed MCP
+  runtime in a single-replica Kubernetes environment. It is not an HA chart:
+  Deployment strategy is Recreate so that a single RWO PVC can be safely
+  remounted across upgrades.
+
+  The chart mirrors the bundled Docker Compose contract:
+    * `KTX_PROJECT_ROOT=/data/lucy`
+    * WebUI/API on container port 5174
+    * Lucy MCP Proxy on container port 7879 (external agent entry)
+    * KTX MCP upstream on container port 7878 (NOT exposed via Service)
+
+  Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
+type: application
+version: 0.1.0
+appVersion: "0.16.0"
+kubeVersion: ">=1.24.0-0"
+home: https://github.com/kaelio/lucy
+sources:
+  - https://github.com/kaelio/lucy
+  - https://github.com/kaelio/ktx
+keywords:
+  - lucy
+  - ktx
+  - semantic-layer
+  - mcp-proxy
+  - data-agent
+maintainers:
+  - name: Lucy Delivery Engineering
+    email: lucy-delivery@kaelio.example
+icon: https://raw.githubusercontent.com/kaelio/lucy/main/docs/assets/lucy-icon.png
+annotations:
+  category: DataAgent
+  licenses: Apache-2.0
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial single-replica Kubernetes install package.

@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lucy.fullname" . }}
+  labels:
+    {{- include "lucy.labels" . | nindent 4 }}
+spec:
+  {{- if ne (int .Values.replicaCount) 1 }}
+  {{- fail "Lucy Helm chart currently supports replicaCount=1 only because /data/lucy is backed by a single RWO PVC" }}
+  {{- end }}
+  {{- if not .Values.persistence.enabled }}
+  {{- fail "Lucy Helm chart requires persistence.enabled=true so /data/lucy is backed by a PVC" }}
+  {{- end }}
+  # Single-replica only. HA is intentionally not supported yet.
+  replicas: {{ .Values.replicaCount }}
+  # Recreate is REQUIRED while we mount an RWO PVC at /data/lucy.
+  # Any other strategy (e.g. RollingUpdate) would attempt to spin up a second
+  # pod before tearing down the first, and the second pod would fail to bind
+  # the volume — or worse, two pods could briefly see divergent views.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "lucy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lucy.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "lucy.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: lucy
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Named ports so Service / probes stay aligned even if values change.
+          ports:
+            - name: webui
+              containerPort: {{ .Values.service.webuiPort }}
+              protocol: TCP
+            - name: mcp
+              containerPort: {{ .Values.service.mcpPort }}
+              protocol: TCP
+          env:
+            {{- include "lucy.composeEnv" . | nindent 12 }}
+          {{- if .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml .Values.extraEnvFrom | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: /data/lucy
+            {{- end }}
+            {{- if or .Values.existingSecret .Values.extraSecretData }}
+            - name: secrets
+              mountPath: /data/lucy/.ktx/secrets
+              readOnly: false
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "lucy.pvcName" . }}
+        {{- end }}
+        {{- if or .Values.existingSecret .Values.extraSecretData }}
+        - name: secrets
+          secret:
+            secretName: {{ include "lucy.secretName" . }}
+            defaultMode: 0400
+        {{- end }}

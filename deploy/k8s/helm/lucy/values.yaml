@@ -1,0 +1,205 @@
+# Default values for the Lucy Helm chart.
+#
+# This chart is the Kubernetes counterpart of `docker-compose.yml` + `docker-compose.customer-config.yml`.
+# It is single-replica only and uses Deployment strategy Recreate so that the
+# RWO PVC mounted at /data/lucy is never shared between two pods.
+#
+# IMPORTANT — secrets / customer DB credentials:
+#   * NEVER commit real passwords, tokens, customer DB DSNs or one-time
+#     `LUCY_*` tokens into this file or the rendered ConfigMap.
+#   * Customers must create their own Secret (e.g. via sealed-secrets / external
+#     secrets / Vault) and reference it via `existingSecret` below.
+#   * The chart ships `templates/secret.example.yaml` as a Helm-commented
+#     reference only; it does NOT render by default.
+
+# -------------------------------------------------------------------
+# Image
+# -------------------------------------------------------------------
+image:
+  # Customer should override `repository` to point at their own registry mirror
+  # (e.g. `registry.example.com/data-team/project-lucy`).
+  repository: project-lucy
+  tag: "0.16.0"
+  pullPolicy: IfNotPresent
+
+# -------------------------------------------------------------------
+# Replicas — explicitly single-replica only. No HA yet.
+# -------------------------------------------------------------------
+replicaCount: 1
+
+# -------------------------------------------------------------------
+# Image pull secrets for private registries
+# -------------------------------------------------------------------
+imagePullSecrets: []
+
+# -------------------------------------------------------------------
+# Service
+# -------------------------------------------------------------------
+# Only 5174 (Lucy health/API) and 7879 (Lucy MCP Proxy — external agent entry)
+# are exposed. Port 7878 (KTX upstream) MUST stay inside the pod only.
+service:
+  type: ClusterIP
+  webuiPort: 5174
+  mcpPort: 7879
+
+# -------------------------------------------------------------------
+# Ingress — opt-in. Customers should still set `env.LUCY_PUBLIC_MCP_URL`
+# to the externally reachable URL behind the ingress.
+# -------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # List one or more host entries; each entry may have its own TLS block.
+  hosts:
+    - host: lucy.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# -------------------------------------------------------------------
+# Persistence
+#
+# /data/lucy holds ktx.yaml, semantic-layer/, wiki/, evals/, skills/,
+# webui/config/access.yaml, .ktx/, .ktx-ui/. This MUST be backed by a
+# PVC; without it the pod will re-seed a CHANGE-ME ktx.yaml on every
+# restart.
+# -------------------------------------------------------------------
+persistence:
+  enabled: true
+  # RWO is sufficient for the single-replica deployment.
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  storageClass: ""
+  # When `existingClaim` is set, the chart does NOT create a PVC and
+  # expects the cluster operator to provision it.
+  existingClaim: ""
+
+# -------------------------------------------------------------------
+# Env / runtime configuration
+# -------------------------------------------------------------------
+env:
+  # REQUIRED for any non-local deployment: the externally reachable MCP URL
+  # that agent platforms actually call. The chart does NOT default this to
+  # the in-cluster service URL — using 127.0.0.1 / cluster-local URLs would
+  # mislead external agents.
+  LUCY_PUBLIC_MCP_URL: ""
+
+  # Demo / template-only switches. Production must keep these empty / 0.
+  LUCY_ALLOW_PLACEHOLDER_KTX: ""
+
+  # Compose contract — pinned by Dockerfile. Kept here for documentation;
+  # the template also pins them as hardcoded env entries.
+  KTX_PROJECT_ROOT: /data/lucy
+  POSTHOG_DISABLED: "1"
+
+# -------------------------------------------------------------------
+# Secret wiring
+# -------------------------------------------------------------------
+# Either reference an externally-managed Secret (recommended) via
+# `existingSecret`, or let the chart render a Secret from `extraSecretData`
+# (intended ONLY for local-test / demo, NEVER for production). Values in
+# `extraSecretData` are plain strings; the chart base64-encodes them into
+# Secret.data.
+#
+# Secret keys mounted into /data/lucy/.ktx/secrets/<key>:
+#   * `mysql-password` / `postgres-password` etc. — referenced from
+#     customer ktx.yaml as `password: file:/data/lucy/.ktx/secrets/<key>`
+# All keys from the Secret are mounted as files under /data/lucy/.ktx/secrets/.
+existingSecret: ""
+extraSecretData: {}
+
+# Extra env sources — for example, projecting keys from existingSecret as
+# env vars (NOT as files). Use sparingly; most customer secrets should
+# land as files in /data/lucy/.ktx/secrets/.
+extraEnvFrom: []
+
+# -------------------------------------------------------------------
+# Probes — startup must allow seed + first reindex + KTX MCP boot.
+# -------------------------------------------------------------------
+startupProbe:
+  exec:
+    command:
+      - /app/scripts/docker-healthcheck.sh
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 15
+  failureThreshold: 60   # ~10 minutes total
+  successThreshold: 1
+
+readinessProbe:
+  exec:
+    command:
+      - /app/scripts/docker-healthcheck.sh
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 3
+  successThreshold: 1
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: webui
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+# -------------------------------------------------------------------
+# Resources — conservative defaults; customers MUST tune.
+# -------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+# -------------------------------------------------------------------
+# Scheduling
+# -------------------------------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# -------------------------------------------------------------------
+# Security context
+# -------------------------------------------------------------------
+podSecurityContext:
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: false    # Lucy image's entrypoint runs as root for KTX runtime install; revisit with non-root image later.
+  runAsUser: 0
+
+# -------------------------------------------------------------------
+# Annotations / labels
+# -------------------------------------------------------------------
+podAnnotations: {}
+podLabels: {}
+
+# -------------------------------------------------------------------
+# ServiceAccount
+# -------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# -------------------------------------------------------------------
+# Optional: lucy-specific toggles (documented for future expansion)
+# -------------------------------------------------------------------
+lucy:
+  # When false, the chart will not include the KTX_PROJECT_ROOT / WebUI /
+  # Proxy env block (used by templates to keep parity with Compose).
+  enabled: true
+  # Bundled KTX version baked into the image — must match the Dockerfile ARG.
+  bundledKtxVersion: "0.16.0"

@@ -1,0 +1,30 @@
+{{- /*
+Service intentionally exposes ONLY 5174 and 7879.
+
+Port 7878 (KTX upstream) MUST NOT be exposed via this Service — KTX upstream
+binds to 127.0.0.1 inside the pod and has no auth on top. Exposing it would
+let any pod-with-the-same-port-forward reach it without a bearer token.
+
+`port.webui` / `port.mcp` use the IANA-friendly named port mapping pattern so
+K8s service proxy still works even if the customer overrides the numeric
+values via `service.webuiPort` / `service.mcpPort`.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lucy.fullname" . }}
+  labels:
+    {{- include "lucy.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: webui
+      port: {{ .Values.service.webuiPort }}
+      targetPort: webui
+      protocol: TCP
+    - name: mcp
+      port: {{ .Values.service.mcpPort }}
+      targetPort: mcp
+      protocol: TCP
+  selector:
+    {{- include "lucy.selectorLabels" . | nindent 4 }}

@@ -1,0 +1,46 @@
+{{- /* Render-time notes — shown at the end of `helm install`. */ -}}
+Lucy single-replica Kubernetes package installed.
+
+Release:        {{ .Release.Name }}
+Namespace:      {{ .Release.Namespace }}
+Lucy Service:   {{ include "lucy.fullname" . }}.{{ .Release.Namespace }}.svc
+Chart version:  {{ .Chart.Version }}
+App version:    {{ .Chart.AppVersion }}
+Bundled KTX:    {{ .Values.lucy.bundledKtxVersion | default "0.16.0" }}
+
+⚠ This package is single-replica only.
+   - replicas={{ .Values.replicaCount }}
+   - Deployment strategy: Recreate (because /data/lucy is backed by an RWO PVC)
+
+⚠ LUCY_PUBLIC_MCP_URL is the URL your agents should be configured with.
+   Current value: {{ .Values.env.LUCY_PUBLIC_MCP_URL | default "(unset — agents will see http://127.0.0.1:7879/mcp fallback)" | quote }}
+   For production you MUST set this to the externally reachable URL
+   (e.g. https://lucy.example.com/mcp) via:
+       helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+         --reuse-values \
+         --set env.LUCY_PUBLIC_MCP_URL=https://lucy.example.com/mcp
+
+⚠ KTX upstream (container port 7878) is intentionally NOT exposed via
+   the Service. It binds to 127.0.0.1 inside the pod and has no auth;
+   exposing it would be a security regression vs. the Docker Compose path.
+
+Quick checks:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "lucy.name" . }}
+  kubectl logs -n {{ .Release.Namespace }} deploy/{{ include "lucy.fullname" . }}
+  kubectl exec -n {{ .Release.Namespace }} deploy/{{ include "lucy.fullname" . }} -- ktx --version
+
+For the full deployer runbook see
+  docs/customer-k8s-deployer-quickstart.md
+
+{{- if not .Values.env.LUCY_PUBLIC_MCP_URL }}
+
+⚠ LUCY_PUBLIC_MCP_URL is empty. Agent config snippets served by WebUI
+   will fall back to http://127.0.0.1:7879/mcp and be flagged as a
+   fallback URL — set the public URL before going to production.
+{{- end }}
+
+{{- if eq (.Values.env.LUCY_ALLOW_PLACEHOLDER_KTX | default "") "1" }}
+
+⚠ LUCY_ALLOW_PLACEHOLDER_KTX=1 — the pod will start with a CHANGE-ME
+   ktx.yaml. This is allowed ONLY for demo / template-only validation.
+{{- end }}

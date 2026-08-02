@@ -1,0 +1,56 @@
+# Local-test values for the Lucy Helm chart.
+#
+# This file is safe to commit: it contains no real customer database DSN,
+# password, token, or one-time Lucy credential. Copy it to values.customer.yaml
+# and replace the image, public URL, storage class, and Secret references.
+
+image:
+  repository: project-lucy
+  tag: "0.16.0"
+  pullPolicy: Never
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  webuiPort: 5174
+  mcpPort: 7879
+
+ingress:
+  enabled: false
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  storageClass: ""
+  existingClaim: ""
+
+env:
+  LUCY_PUBLIC_MCP_URL: "http://lucy.localtest.example.com/mcp"
+  LUCY_ALLOW_PLACEHOLDER_KTX: "1"
+  KTX_PROJECT_ROOT: /data/lucy
+  POSTHOG_DISABLED: "1"
+
+# Local-test only. Production should set existingSecret to an externally
+# managed Secret and keep extraSecretData empty.
+existingSecret: ""
+extraSecretData:
+  demo-password: change-me
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+lucy:
+  enabled: true
+  bundledKtxVersion: "0.16.0"
+
+serviceAccount:
+  create: true
+  name: ""

@@ -1,0 +1,43 @@
+{{- /*
+ConfigMap for non-secret bootstrap data only.
+
+This deliberately does NOT include:
+  * ktx.yaml                (customer context package on the PVC; DB
+                             credentials should use `password: file:/...`
+                             references to files mounted from Secret).
+  * access.yaml / tokens    (customer context package on the PVC; plaintext
+                             tokens must not be stored in ConfigMap).
+  * semantic-layer / wiki   (bulk persistent content shipped on the PVC,
+                             not config).
+
+What this DOES include:
+  * A small bootstrap note documenting the Compose contract env that the
+    entrypoint expects. The actual env values are pinned in deployment.yaml
+    so that customers always see the live values via `kubectl describe`.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lucy.fullname" . }}-runtime-contract
+  labels:
+    {{- include "lucy.labels" . | nindent 4 }}
+data:
+  RUNTIME_CONTRACT.md: |-
+    # Lucy K8s runtime contract (single-replica)
+
+    The Lucy pod is built from the same image as the Docker Compose delivery
+    path. The following env contract is enforced by deployment.yaml and must
+    not be overridden via ConfigMap (use `env.LUCY_PUBLIC_MCP_URL` in
+    values.yaml for the only customer-tunable public field).
+
+    | Env                       | Pinned value          | Why                              |
+    |---------------------------|-----------------------|----------------------------------|
+    | KTX_PROJECT_ROOT          | /data/lucy            | Matches Compose + Dockerfile     |
+    | LUCY_WEBUI_HOST/PORT      | 0.0.0.0 / 5174        | Health/API service               |
+    | LUCY_PROXY_HOST/PORT      | 0.0.0.0 / 7879        | External MCP Proxy               |
+    | LUCY_PROXY_UPSTREAM_*     | 127.0.0.1 / 7878      | KTX MCP upstream (pod-internal)  |
+    | KTX_TELEMETRY_DISABLED    | 1                     | Matches Dockerfile               |
+    | POSTHOG_DISABLED          | 1                     | Matches Compose                  |
+    | LUCY_PUBLIC_MCP_URL       | values.env.LUCY_PUBLIC_MCP_URL | Required for external agents |
+    | LUCY_ALLOW_PLACEHOLDER_KTX| "" (off by default)   | Demo only; production must leave off |
+  BUNDLED_KTX_VERSION: {{ .Values.lucy.bundledKtxVersion | default "0.16.0" | quote }}
