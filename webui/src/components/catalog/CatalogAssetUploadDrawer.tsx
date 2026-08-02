@@ -21,6 +21,9 @@ export type CatalogAssetUploadDrawerProps = {
   connectionId: string;
   schema?: string;
   schemaOptions?: string[];
+  mode?: "create" | "update";
+  initialContent?: string;
+  initialFilename?: string;
   onUploaded?: (result: CatalogAssetUploadResponse) => void;
 };
 
@@ -76,6 +79,9 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
     connectionId,
     schema: schemaProp,
     schemaOptions,
+    mode = "create",
+    initialContent = "",
+    initialFilename,
     onUploaded
   } = props;
   const queryClient = useQueryClient();
@@ -93,7 +99,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastRequestedRef = useRef<string>("");
   const title = schemaLocked
-    ? `上传 ${schema} 的 Schema Manifest`
+    ? `${mode === "update" ? "更新" : "上传"} ${schema} 的 Schema Manifest`
     : `上传 ${connectionId} 的 Schema Manifest`;
   const targetFile = schema
     ? `semantic-layer/${connectionId}/_schema/${schema}.yaml`
@@ -103,15 +109,15 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
     if (!open) return;
     const nextSchema = schemaProp ?? fallbackSchema;
     setSchema(nextSchema);
-    setFilename(defaultFilenameForSchema(nextSchema));
-    setSelectedFileName(null);
-    setContent("");
-    setConfirmOverwrite(false);
+    setFilename(initialFilename ?? defaultFilenameForSchema(nextSchema));
+    setSelectedFileName(initialFilename ?? null);
+    setContent(initialContent);
+    setConfirmOverwrite(mode === "update");
     setValidation(null);
     setValidationError(null);
     setValidatedSignature("");
     lastRequestedRef.current = "";
-  }, [open, schemaProp, fallbackSchema]);
+  }, [open, schemaProp, fallbackSchema, mode, initialContent, initialFilename]);
 
   const validateMutation = useMutation({
     mutationFn: (input: CatalogAssetValidateRequest) => validateCatalogAsset(input),
@@ -133,7 +139,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
     mutationFn: () =>
       uploadCatalogAsset({
         ...buildRequest(connectionId, schema, filename, content),
-        confirmOverwrite
+        confirmOverwrite: mode === "update" || confirmOverwrite
       }),
     onSuccess: (data) => {
       setValidation(data.validation);
@@ -203,7 +209,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
   function handleSubmit() {
     const currentSignature = requestSignature(buildRequest(connectionId, schema, filename, content));
     if (!validation || validation.errors.length > 0 || validatedSignature !== currentSignature) return;
-    if (validation.exists && !confirmOverwrite) return;
+    if (validation.exists && mode !== "update" && !confirmOverwrite) return;
     if (!schema) return;
     uploadMutation.mutate();
   }
@@ -227,9 +233,9 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
     if (!validation.valid) return false;
     if (!content.trim()) return false;
     if (validatedSignature !== requestSignature(buildRequest(connectionId, schema, filename, content))) return false;
-    if (validation.exists && !confirmOverwrite) return false;
+    if (validation.exists && mode !== "update" && !confirmOverwrite) return false;
     return true;
-  }, [validation, confirmOverwrite, content, validatedSignature, connectionId, schema, filename]);
+  }, [validation, confirmOverwrite, content, validatedSignature, connectionId, schema, filename, mode]);
 
   if (!open) return null;
 
@@ -245,7 +251,6 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
       <div className="pl-drawer-panel" data-testid="catalog-asset-upload-panel">
         <header className="pl-drawer-header">
           <div>
-            <p className="pl-eyebrow">数据接入</p>
             <h2 className="pl-panel-title notranslate" translate="no">
               {title}
             </h2>
@@ -334,13 +339,13 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                   }}
                   data-testid="catalog-asset-upload-file"
                 />
-                <p className="text-sm">
-                  选择 <code className="notranslate" translate="no">.yaml</code> / <code className="notranslate" translate="no">.yml</code> 文件或拖入此处。
+                <p className="pl-upload-dropzone-copy">
+                  拖入 <code className="notranslate" translate="no">.yaml</code> / <code className="notranslate" translate="no">.yml</code> 文件到此处。
                 </p>
                 <div className="pl-upload-file-summary" data-testid="catalog-asset-upload-file-summary">
                   <button
                     type="button"
-                    className="pl-btn pl-btn--ghost pl-btn--sm"
+                    className="pl-btn pl-btn--secondary pl-btn--sm pl-upload-pick-file-button"
                     onClick={() => fileInputRef.current?.click()}
                     data-testid="catalog-asset-upload-pick-file"
                   >
@@ -378,7 +383,11 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                 errorMessage={validationError}
               />
 
-              {validation?.exists ? (
+              {mode === "update" ? (
+                <p className="text-xs text-warning-strong" data-testid="catalog-asset-upload-overwrite-note">
+                  将覆盖现有 YAML。
+                </p>
+              ) : validation?.exists ? (
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -439,7 +448,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
               </button>
               <Link
                 className="pl-btn pl-btn--primary"
-                to={`/connections/whitelist?schema=${encodeURIComponent(schema)}`}
+                to={`/connections/enabled-tables?connection=${encodeURIComponent(connectionId)}&schema=${encodeURIComponent(schema)}`}
                 onClick={onClose}
                 data-testid="catalog-asset-upload-primary"
               >

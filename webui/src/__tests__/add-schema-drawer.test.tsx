@@ -266,7 +266,7 @@ describe("AddSchemaDrawer", () => {
     expect(screen.getByText("输入 Schema").closest("li")).toHaveAttribute("aria-current", "step");
   });
 
-  it("M17: rewrites the intro copy to distinguish connection-test vs add-schema vs upload", () => {
+  it("M47: keeps the first Add Schema step concise without repeated connection-test copy", () => {
     renderDrawer(makeConn());
 
     expect(
@@ -274,14 +274,15 @@ describe("AddSchemaDrawer", () => {
         Boolean(
           element &&
             element.classList?.contains("pl-notice") &&
-            element.textContent?.includes("添加 Schema 会写入") &&
-            element.textContent?.includes("不会扫描物理数据库")
+            element.textContent?.includes("添加后会写入") &&
+            element.textContent?.includes("下一步将先验证连接权限")
         )
       )
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/连接测试会使用当前项目已有凭据验证访问权限/)
-    ).toBeInTheDocument();
+    expect(screen.queryByText("数据接入")).not.toBeInTheDocument();
+    expect(screen.queryByText(/添加前会自动调用/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ktx connection test mysql-aliyun/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/不会扫描物理数据库/)).not.toBeInTheDocument();
     expect(screen.queryByText(/不会触碰凭据/)).not.toBeInTheDocument();
   });
 

@@ -133,7 +133,7 @@ describe("AppFrame shell", () => {
   it.each([
     ["/overview", "Onboarding", "系统概览"],
     ["/connections", "ConnectionOverview", "连接概览"],
-    ["/connections/whitelist", "TableWhitelist", "启用表范围"],
+    ["/connections/enabled-tables", "TableWhitelist", "启用表范围"],
     ["/", "Catalog", "表目录"],
     ["/catalog", "Catalog", "表目录"],
     ["/publish/workbench", "PublishWorkbench", "发布工作台"],
@@ -150,6 +150,12 @@ describe("AppFrame shell", () => {
     renderAt(path);
     expect(screen.getByTestId("route-page")).toHaveTextContent(pageName);
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("keeps /connections/whitelist as a compatibility alias for enabled table scope", () => {
+    renderAt("/connections/whitelist?schema=dataforai");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("TableWhitelist");
+    expect(screen.getByRole("link", { name: "启用表范围" })).toHaveAttribute("aria-current", "page");
   });
 
   it("uses a dedicated Wiki shell without the global navigation", () => {

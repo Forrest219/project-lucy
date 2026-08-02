@@ -28,7 +28,7 @@ export function MetricCard({ type, value, subValue, tone }: MetricCardProps) {
               <button
                 type="button"
                 className="pl-icon-help"
-                aria-label={`${meta.title} 管理含义`}
+                aria-label={`${meta.title} 说明`}
                 data-testid={`metric-help-${type}`}
               >
                 <span aria-hidden="true">ⓘ</span>
@@ -41,19 +41,7 @@ export function MetricCard({ type, value, subValue, tone }: MetricCardProps) {
                 sideOffset={8}
                 collisionPadding={8}
               >
-                <p className="pl-metric-tooltip-title" data-testid="metric-tooltip-title">{meta.title} · 管理含义</p>
-                <div>
-                  <span>关注问题：</span>
-                  <p>{meta.question}</p>
-                </div>
-                <div>
-                  <span>定义：</span>
-                  <p>{meta.description}</p>
-                </div>
-                <div className="pl-metric-tooltip-rule">
-                  <span>健康标准：</span>
-                  {meta.healthyRule}
-                </div>
+                <p className="pl-metric-tooltip-text" data-testid="metric-tooltip-hint">{meta.hint}</p>
                 <Tooltip.Arrow className="pl-metric-tooltip-arrow" />
               </Tooltip.Content>
             </Tooltip.Portal>

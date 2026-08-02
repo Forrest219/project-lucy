@@ -75,12 +75,26 @@ function SourceRouteRedirect() {
   );
 }
 
+function TableWhitelistRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: "/connections/enabled-tables", search: location.search, hash: location.hash }}
+      replace
+    />
+  );
+}
+
 const navGroups: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "数据接入",
     items: [
       { label: "连接概览", to: "/connections", active: (path) => path === "/connections" },
-      { label: "启用表范围", to: "/connections/whitelist", active: (path) => path === "/connections/whitelist" }
+      {
+        label: "启用表范围",
+        to: "/connections/enabled-tables",
+        active: (path) => path === "/connections/enabled-tables" || path === "/connections/whitelist"
+      }
       // v1.9.0: 连通测试（兼容）从主导航移除；连接卡内测试 Drawer（M25）成为唯一入口。
       // /connections/test 路由继续保留为兼容跳转页（见下方 <Route>），保留外链与历史书签。
     ]
@@ -211,7 +225,8 @@ export function AppFrame() {
             <Route path="/overview" element={<Onboarding />} />
             <Route path="/onboarding" element={<OnboardingRedirect />} />
             <Route path="/connections" element={<ConnectionOverview />} />
-            <Route path="/connections/whitelist" element={<TableWhitelist />} />
+            <Route path="/connections/enabled-tables" element={<TableWhitelist />} />
+            <Route path="/connections/whitelist" element={<TableWhitelistRedirect />} />
             <Route path="/connections/test" element={<ConnectionTest />} />
             <Route path="/" element={<Navigate to="/catalog" replace />} />
             <Route path="/catalog" element={<Catalog />} />

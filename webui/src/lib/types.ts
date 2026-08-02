@@ -38,6 +38,7 @@ export type TableModel = {
   conn: string;
   schema: string;
   table: string;
+  qualifiedName?: string;
   filePath: string;
   qualifiedName?: string;
   descriptions: AuthoredText;
@@ -74,6 +75,14 @@ export type SourceSummary = {
    */
   semanticUpdatedAt: string;
   semanticUpdatedAtSource: "manifest" | "overlay";
+};
+
+export type ManifestSchemaSummary = {
+  conn: string;
+  schema: string;
+  filePath: string;
+  tableCount: number;
+  mtime: string;
 };
 
 export type ConnectionInfo = {
@@ -169,6 +178,7 @@ export type AddSchemaResult = {
 
 export type SourcesResponse = {
   tables: SourceSummary[];
+  manifestSchemas?: ManifestSchemaSummary[];
 };
 
 export type SourceDetail = {
@@ -883,7 +893,8 @@ export type CatalogAssetErrorCode =
   | "SEMANTIC_OVERLAY_EXPECTED"
   | "OVERLAY_FIELD_IN_MANIFEST"
   | "MANIFEST_SHAPE_IN_OVERLAY"
-  | "PATH_NOT_ALLOWED";
+  | "PATH_NOT_ALLOWED"
+  | "ASSET_NOT_FOUND";
 
 export type CatalogAssetError = {
   code: CatalogAssetErrorCode;
@@ -947,6 +958,18 @@ export type CatalogAssetUploadResponse = {
 export type CatalogAssetUploadsResponse = {
   records: CatalogAssetUploadRecord[];
   lastBySchema: Record<string, CatalogAssetUploadRecord>;
+};
+
+export type CatalogSchemaManifestReadResponse = {
+  connectionId: string;
+  schema: string;
+  assetKind: CatalogAssetKind;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  filename: string;
+  content: string;
+  sizeBytes: number;
+  sha256: string;
 };
 
 // ─── M19 Semantic Asset Self-Service Publish And Export ────────────────────

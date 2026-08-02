@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { listSources, readSource } from "../semantic-layer";
+import { listManifestSchemas, listSources, readSource } from "../semantic-layer";
 
 let projectRoot: string;
 
@@ -63,6 +63,7 @@ describe("semantic-layer read", () => {
       conn: "mysql-aliyun",
       schema: "dataforai",
       table: "superstore_orders",
+      qualifiedName: "dataforai.superstore_orders",
       columnCount: 2,
       hasTableDesc: true,
       hasGrain: true,
@@ -70,6 +71,20 @@ describe("semantic-layer read", () => {
       joinCount: 1,
       completion: "done"
     });
+  });
+
+  it("lists local Schema Manifest files as first-hand catalog facts", async () => {
+    const manifests = await listManifestSchemas(projectRoot);
+
+    expect(manifests).toEqual([
+      {
+        conn: "mysql-aliyun",
+        schema: "dataforai",
+        filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+        tableCount: 1,
+        mtime: expect.any(String)
+      }
+    ]);
   });
 
   it("normalizes one table and preserves raw yaml and unknown keys", async () => {

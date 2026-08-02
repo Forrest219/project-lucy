@@ -159,21 +159,31 @@ POST /mcp                                      # MCP proxy, port 7879
 后端不会从 `Host` / `X-Forwarded-*` 推断 endpoint；只读取环境变量 `LUCY_PUBLIC_MCP_URL`，未设置时使用 `http://127.0.0.1:7879/mcp` 作为本地开发 fallback。`LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 控制的是 MCP proxy 的内部监听地址，与 `LUCY_PUBLIC_MCP_URL` 是不同的两个变量。
 
 ### `GET /api/sources`
-扫描全部 `_schema/*.yaml`，返回逐表目录摘要（供 Catalog）。
+扫描全部 `_schema/*.yaml`，返回逐表目录摘要（供 Catalog）与本地 Schema Manifest 文件摘要。
 ```jsonc
-{ "ok": true, "data": { "tables": [{
-  "conn": "mysql-aliyun", "schema": "dataforai", "table": "superstore_orders",
-  "filePath": "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
-  "columnCount": 8, "hasTableDesc": true, "hasGrain": false,
-  "measureCount": 0, "joinCount": 2, "wikiRefCount": 0,
-  "completion": "partial", "mtime": "2026-06-15T08:00:00Z",
-  "authorizedAgentCount": 3,
-  "semanticUpdatedAt": "2026-07-01T10:30:00Z",
-  "semanticUpdatedAtSource": "overlay"
-}]}}
+{ "ok": true, "data": {
+  "tables": [{
+    "conn": "mysql-aliyun", "schema": "dataforai", "table": "superstore_orders",
+    "qualifiedName": "dataforai.superstore_orders",
+    "filePath": "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+    "columnCount": 8, "hasTableDesc": true, "hasGrain": false,
+    "measureCount": 0, "joinCount": 2, "wikiRefCount": 0,
+    "completion": "partial", "mtime": "2026-06-15T08:00:00Z",
+    "authorizedAgentCount": 3,
+    "semanticUpdatedAt": "2026-07-01T10:30:00Z",
+    "semanticUpdatedAtSource": "overlay"
+  }],
+  "manifestSchemas": [{
+    "conn": "mysql-aliyun", "schema": "dataforai",
+    "filePath": "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
+    "tableCount": 3, "mtime": "2026-06-15T08:00:00Z"
+  }]
+}}
 ```
 
 - `mtime`：该表所在 Schema Manifest 文件的文件修改时间，保留兼容；不要在 UI 中直接命名为“最近更新”。
+- `qualifiedName`：Manifest 中声明的物理表名；连接概览用它与 `ktx.yaml enabled_tables` 对齐。
+- `manifestSchemas`：本地实际存在并可解析的 Schema Manifest 文件列表；用于连接概览按第一手文件事实统计 `缺 Manifest 的 Schema` 与 `本地表目录`。
 - `authorizedAgentCount`：启用 Agent 中，有效权限包含当前 Source 的 Agent 数量。禁用 Agent 不计入，只返回数量。
 - `semanticUpdatedAt`：该表语义资产更新时间，取 Schema Manifest 与表级 semantic overlay 文件修改时间中的较晚者；overlay 不存在时取 Schema Manifest。
 - `semanticUpdatedAtSource`：`semanticUpdatedAt` 的来源，取值为 `manifest` 或 `overlay`。

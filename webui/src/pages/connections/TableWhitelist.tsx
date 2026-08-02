@@ -12,7 +12,6 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
-import { CatalogReloadButton } from "../../components/catalog";
 import { PageHeader } from "../../components/PageHeader";
 
 type WhitelistTableRow = {
@@ -99,23 +98,18 @@ function isEqualSet<T>(a: Iterable<T>, b: Iterable<T>): boolean {
   return true;
 }
 
-function catalogReloadToastSummary(run: { tables: number; enabledTables: number; warnings: unknown[] }): string {
-  const warningPart = run.warnings.length > 0 ? ` · ${run.warnings.length} 个提示` : "";
-  return `本地目录已刷新 · 发现 ${run.tables} 张表 · 启用表范围 ${run.enabledTables} 张${warningPart}`;
-}
-
-function catalogReloadBannerSummary(run: { tables: number; enabledTables: number; warnings: unknown[] }): string {
-  const warningPart = run.warnings.length > 0 ? `，${run.warnings.length} 个提示` : "";
-  return `本地目录已刷新。发现 ${run.tables} 张表，当前启用表范围 ${run.enabledTables} 张${warningPart}。`;
-}
-
 export function TableWhitelist() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const initialConnectionParam = searchParams.get("connection") ?? null;
   const initialSchemaParam = searchParams.get("schema") ?? null;
+  const [connectionFilter, setConnectionFilter] = useState<string>(
+    initialConnectionParam && initialConnectionParam.length > 0 ? initialConnectionParam : "all"
+  );
   const [schemaFilter, setSchemaFilter] = useState<string>(
     initialSchemaParam && initialSchemaParam.length > 0 ? initialSchemaParam : "all"
   );
+  const [userOverrodeConnection, setUserOverrodeConnection] = useState<boolean>(false);
   const [userOverrodeSchema, setUserOverrodeSchema] = useState<boolean>(false);
   const [search, setSearch] = useState("");
   const [draftByConnection, setDraftByConnection] = useState<Record<string, string[]>>({});
@@ -182,14 +176,33 @@ export function TableWhitelist() {
     });
   }, [connections, tablesQueries, sourceByKey, draftByConnection]);
 
+  const allConnectionIds = useMemo(() => connections.map((conn) => conn.id).sort(), [connections]);
+
+  // M46: connection is a first-class filter because Schema names can repeat
+  // across physical connections.
+  useEffect(() => {
+    if (userOverrodeConnection) return;
+    if (!initialConnectionParam) return;
+    if (allConnectionIds.includes(initialConnectionParam)) {
+      setConnectionFilter(initialConnectionParam);
+    } else if (allConnectionIds.length > 0) {
+      setConnectionFilter("all");
+    }
+  }, [allConnectionIds, initialConnectionParam, userOverrodeConnection]);
+
+  const connectionFilteredRows = useMemo(() => {
+    if (connectionFilter === "all") return connectionRows;
+    return connectionRows.filter(({ conn }) => conn.id === connectionFilter);
+  }, [connectionRows, connectionFilter]);
+
   const allSchemas = useMemo(() => {
     const set = new Set<string>();
-    for (const { conn, rows } of connectionRows) {
+    for (const { conn, rows } of connectionFilteredRows) {
       for (const schema of conn.schemas) if (schema) set.add(schema);
       for (const r of rows) if (r.schema) set.add(r.schema);
     }
     return Array.from(set).sort();
-  }, [connectionRows]);
+  }, [connectionFilteredRows]);
 
   // M17: re-honor the ?schema= query param when the user lands on the page.
   // Do not override a later manual selection. Falls back to "all" if the
@@ -204,10 +217,16 @@ export function TableWhitelist() {
     }
   }, [allSchemas, initialSchemaParam, userOverrodeSchema]);
 
+  useEffect(() => {
+    if (schemaFilter === "all") return;
+    if (allSchemas.length === 0) return;
+    if (!allSchemas.includes(schemaFilter)) setSchemaFilter("all");
+  }, [allSchemas, schemaFilter]);
+
   // Apply search + schema filter for visible groups
   const visibleGroups = useMemo(() => {
     const lowerSearch = search.trim().toLowerCase();
-    return connectionRows.flatMap(({ conn, rows }) => {
+    return connectionFilteredRows.flatMap(({ conn, rows }) => {
       const rowsBySchema = new Map<string, WhitelistTableRow[]>();
       for (const row of rows) {
         if (schemaFilter !== "all" && row.schema !== schemaFilter) continue;
@@ -226,18 +245,21 @@ export function TableWhitelist() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([schema, groupedRows]) => ({ conn, schema, rows: groupedRows }));
     });
-  }, [connectionRows, search, schemaFilter]);
+  }, [connectionFilteredRows, search, schemaFilter]);
 
   const configuredSchemasWithoutTables = useMemo(() => {
     if (search.trim()) return [];
-    return connectionRows.flatMap(({ conn, rows }) => {
+    return connectionFilteredRows.flatMap(({ conn, rows }) => {
       const scannedSchemas = new Set(rows.map((row) => row.schema).filter(Boolean));
       return conn.schemas
         .filter((schema) => schema && (schemaFilter === "all" || schemaFilter === schema))
         .filter((schema) => !scannedSchemas.has(schema))
         .map((schema) => ({ conn, schema }));
     });
-  }, [connectionRows, search, schemaFilter]);
+  }, [connectionFilteredRows, search, schemaFilter]);
+
+  const showFocusedMissingManifest =
+    schemaFilter !== "all" && configuredSchemasWithoutTables.length === 1;
 
   const visibleTotal = visibleGroups.reduce((sum, g) => sum + g.rows.length, 0);
   const visibleChecked = visibleGroups.reduce(
@@ -469,13 +491,6 @@ export function TableWhitelist() {
     }
   });
 
-  // M14: pick a catalog reload target for the toolbar button.
-  // - single connection + specific schema → connection/schema scope
-  // - single connection + "all"           → connection scope
-  // - multiple connections                → global scope, with optional schema filter
-  const toolbarReloadConnId = connections.length === 1 ? connections[0]?.id : undefined;
-  const toolbarReloadSchema = schemaFilter !== "all" ? schemaFilter : undefined;
-
   if (connectionsQuery.isLoading) {
     return <p className="pl-notice">正在加载连接列表...</p>;
   }
@@ -490,29 +505,6 @@ export function TableWhitelist() {
           <>
             维护进入语义层的表范围，保存后写入 <code>ktx.yaml</code> 的 <code>enabled_tables</code> 字段。
           </>
-        }
-        actions={
-          connections.length > 0 ? (
-            <CatalogReloadButton
-              connectionId={toolbarReloadConnId}
-              schema={toolbarReloadSchema}
-              label="刷新本地目录"
-              variant="secondary"
-              testId="whitelist-reload-catalog"
-              showCompletionLabel={false}
-              showInlineResult={false}
-              onReloadComplete={(run) => {
-                toast.success(catalogReloadToastSummary(run));
-                setStatusMessage(catalogReloadBannerSummary(run));
-                setStatusTone(run.warnings.length > 0 ? "warning" : "success");
-              }}
-              onReloadError={(error) => {
-                toast.error(`本地目录刷新失败：${error.message}`);
-                setStatusMessage(`本地目录刷新失败：${error.message}`);
-                setStatusTone("danger");
-              }}
-            />
-          ) : null
         }
       />
 
@@ -532,6 +524,26 @@ export function TableWhitelist() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="notranslate" translate="no">连接筛选</span>
+                <select
+                  className="pl-input notranslate"
+                  value={connectionFilter}
+                  onChange={(e) => {
+                    setUserOverrodeConnection(true);
+                    setConnectionFilter(e.target.value);
+                  }}
+                  aria-label="连接筛选"
+                  translate="no"
+                >
+                  <option className="notranslate" value="all" translate="no">全部连接</option>
+                  {allConnectionIds.map((connId) => (
+                    <option className="notranslate" key={connId} value={connId} translate="no">
+                      {connId}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="grid gap-1.5 text-sm">
                 <span className="notranslate" translate="no">Schema 筛选</span>
@@ -563,41 +575,26 @@ export function TableWhitelist() {
                 已选 {visibleChecked}/{visibleTotal} 张表
               </span>
               {visibleTotal > 0 ? (
-                <details className="pl-whitelist-batch-menu" data-testid="whitelist-batch-menu">
-                  <summary
-                    className="pl-btn pl-btn--secondary pl-whitelist-batch-summary"
-                    data-testid="whitelist-batch-menu-trigger"
+                <div className="pl-whitelist-batch-actions" data-testid="whitelist-batch-actions">
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--secondary"
+                    onClick={selectAllVisible}
+                    data-testid="whitelist-select-all"
                     translate="no"
                   >
-                    批量操作
-                  </summary>
-                  <div
-                    className="pl-whitelist-batch-menu-panel"
-                    role="menu"
-                    data-testid="whitelist-batch-menu-panel"
+                    全选
+                  </button>
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--secondary"
+                    onClick={invertVisible}
+                    data-testid="whitelist-invert"
+                    translate="no"
                   >
-                    <button
-                      type="button"
-                      className="pl-whitelist-batch-link"
-                      onClick={selectAllVisible}
-                      role="menuitem"
-                      data-testid="whitelist-select-all"
-                      translate="no"
-                    >
-                      全选
-                    </button>
-                    <button
-                      type="button"
-                      className="pl-whitelist-batch-link"
-                      onClick={invertVisible}
-                      role="menuitem"
-                      data-testid="whitelist-invert"
-                      translate="no"
-                    >
-                      反选
-                    </button>
-                  </div>
-                </details>
+                    反选
+                  </button>
+                </div>
               ) : null}
             </div>
           </div>
@@ -666,7 +663,27 @@ export function TableWhitelist() {
         </div>
       )}
 
-      {configuredSchemasWithoutTables.map(({ conn, schema }) => {
+      {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
+        <div
+          className="pl-whitelist-missing-summary notranslate"
+          translate="no"
+          data-testid="whitelist-missing-manifest-summary"
+        >
+          <span className="notranslate" translate="no">
+            {configuredSchemasWithoutTables.length} 个 Schema 缺少 Manifest，暂不可配置表范围。
+          </span>
+          <Link
+            to="/connections"
+            className="pl-inline-link notranslate"
+            translate="no"
+            data-testid="whitelist-missing-manifest-summary-link"
+          >
+            去连接概览上传 Manifest
+          </Link>
+        </div>
+      ) : null}
+
+      {showFocusedMissingManifest && configuredSchemasWithoutTables.map(({ conn, schema }) => {
         const schemaManifestPath = `semantic-layer/${conn.id}/_schema/${schema}.yaml`;
         const detailsKey = `${conn.id}-${schema}`;
         const detailsId = `whitelist-missing-manifest-details-${conn.id}-${schema}`;

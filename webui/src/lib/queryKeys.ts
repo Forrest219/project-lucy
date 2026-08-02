@@ -16,6 +16,8 @@ export const queryKeys = {
   catalogReloads: ["catalog", "reloads"] as const,
   // M17 controlled YAML asset upload history (`.ktx-ui/catalog-asset-uploads.json`).
   catalogAssetUploads: ["catalog", "asset-uploads"] as const,
+  catalogSchemaManifest: (connId: string, schema: string) =>
+    ["catalog", "schema-manifest", connId, schema] as const,
   // M19 self-service publish and sanitized export.
   semanticAssetReleases: ["semantic-assets", "releases"] as const,
   semanticAssetRelease: (releaseId: string) =>

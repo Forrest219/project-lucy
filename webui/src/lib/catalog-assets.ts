@@ -3,6 +3,7 @@ import type {
   CatalogAssetUploadsResponse,
   CatalogAssetUploadRequest,
   CatalogAssetUploadResponse,
+  CatalogSchemaManifestReadResponse,
   CatalogAssetValidateRequest,
   CatalogAssetValidateResponse
 } from "./types";
@@ -25,4 +26,14 @@ export async function uploadCatalogAsset(
 
 export async function fetchCatalogAssetUploads(): Promise<CatalogAssetUploadsResponse> {
   return apiGet<CatalogAssetUploadsResponse>("/api/catalog/assets/uploads");
+}
+
+export async function fetchCatalogSchemaManifest(
+  connectionId: string,
+  schema: string
+): Promise<CatalogSchemaManifestReadResponse> {
+  const params = new URLSearchParams({ connectionId, schema });
+  return apiGet<CatalogSchemaManifestReadResponse>(
+    `/api/catalog/assets/schema-manifest?${params.toString()}`
+  );
 }

@@ -104,11 +104,9 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
       >
         <header className="pl-drawer-header">
           <div>
-            <p className="pl-eyebrow">数据接入</p>
             <h2 className="pl-panel-title notranslate" translate="no">添加 Schema 到 {connection.id}</h2>
             <p className="pl-notice notranslate" translate="no">
-              添加 Schema 会写入 <code className="notranslate" translate="no">ktx.yaml</code>，不会扫描物理数据库。
-              连接测试会使用当前项目已有凭据验证访问权限。
+              添加后会写入 <code className="notranslate" translate="no">ktx.yaml</code>；下一步将先验证连接权限。
             </p>
           </div>
           <button
@@ -164,10 +162,6 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               </span>
               <span className="text-xs text-fg-muted">{fieldHelper}</span>
             </label>
-            <p className="text-xs text-fg-muted">
-              添加前会自动调用 <code className="notranslate" translate="no">ktx connection test {connection.id}</code>，
-              使用项目已配置的凭据验证连通性，不会扫描物理数据库。
-            </p>
             <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>
                 取消

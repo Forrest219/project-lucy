@@ -143,16 +143,29 @@
 保留 4 张指标卡：
 
 1. 数据连接。
-2. 启用的表。
-3. 语义层对象。
-4. Catalog 状态。
+2. 缺 Manifest 的 Schema。
+3. 本地表目录。
+4. 未启用表。
 
 指标卡内术语必须统一：
 
 - `2 个 Schema`
-- `来自 ktx.yaml enabled_tables`
-- `已进入语义层的表`
-- `Catalog 状态`
+- `配置 6 个 Schema / 有 Manifest 2 个`
+- `来自 1 个 Schema Manifest`
+- `已启用 3 / 本地 3 张表`
+
+指标卡只展示一手可数对象，不展示 `可信`、`需刷新`、`不完整` 等推断型状态。每张卡必须能在下方 Connection Card 找到明细呼应：
+
+指标卡 Tooltip 只提供一句提示性说明，避免使用 `关注问题`、`定义`、`健康标准` 等培训式结构。
+
+| 指标卡 | 主值来源 | 下方呼应 |
+|---|---|---|
+| 数据连接 | `ktx.yaml connections` | Connection Card 数量 |
+| 缺 Manifest 的 Schema | 配置 Schema 对比本地 Schema Manifest | Schema 行的 `缺失 Manifest` |
+| 本地表目录 | 本地 Schema Manifest 解析出的 `tables` | Schema 行的 `本地表数` |
+| 未启用表 | 本地表目录对比 `ktx.yaml enabled_tables` | Schema 行的 `本地表数 / 启用表数` 与启用表范围入口 |
+
+注意：缺 Manifest 的 Schema 中真实表数未知，不得把这些未知表计入 `未启用表`。已启用但未出现在 Manifest 中的表，应在对应 Connection Card 的 Manifest 诊断里解释，不在顶部 KPI 重复打包成抽象 warning 总数。
 
 #### Connection Card
 

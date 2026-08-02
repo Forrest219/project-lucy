@@ -403,7 +403,10 @@ describe("CatalogAssetUploadButton + CatalogAssetUploadDrawer", () => {
       filename: "openclaw_db.yaml"
     });
     const primary = screen.getByTestId("catalog-asset-upload-primary");
-    expect(primary).toHaveAttribute("href", "/connections/whitelist?schema=openclaw_db");
+    expect(primary).toHaveAttribute(
+      "href",
+      "/connections/enabled-tables?connection=demo-mysql&schema=openclaw_db"
+    );
     expect(screen.getByTestId("catalog-asset-upload-secondary")).toBeInTheDocument();
   });
 

@@ -48,7 +48,8 @@ export type CatalogAssetErrorCode =
   | "SEMANTIC_OVERLAY_EXPECTED"
   | "OVERLAY_FIELD_IN_MANIFEST"
   | "MANIFEST_SHAPE_IN_OVERLAY"
-  | "PATH_NOT_ALLOWED";
+  | "PATH_NOT_ALLOWED"
+  | "ASSET_NOT_FOUND";
 
 export type CatalogAssetError = {
   code: CatalogAssetErrorCode;
@@ -119,6 +120,23 @@ export type CatalogAssetUploadsResponse = {
   lastBySchema: Record<string, CatalogAssetUploadRecord>;
 };
 
+export type CatalogSchemaManifestReadRequest = {
+  connectionId: string;
+  schema: string;
+};
+
+export type CatalogSchemaManifestReadResponse = {
+  connectionId: string;
+  schema: string;
+  assetKind: CatalogAssetKind;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  filename: string;
+  content: string;
+  sizeBytes: number;
+  sha256: string;
+};
+
 export class CatalogAssetValidationError extends Error {
   code: CatalogAssetErrorCode;
   statusCode: 400 | 403;
@@ -150,6 +168,18 @@ export class CatalogAssetOverwriteRequiredError extends Error {
     super("目标 YAML 已存在，请确认覆盖后重试。");
     this.name = "CatalogAssetOverwriteRequiredError";
     this.validation = validation;
+  }
+}
+
+export class CatalogAssetReadError extends Error {
+  code: CatalogAssetErrorCode;
+  statusCode: 400 | 403 | 404;
+
+  constructor(code: CatalogAssetErrorCode, message: string, statusCode: 400 | 403 | 404 = 400) {
+    super(message);
+    this.name = "CatalogAssetReadError";
+    this.code = code;
+    this.statusCode = statusCode;
   }
 }
 
@@ -708,6 +738,62 @@ export async function readCatalogAssetUploads(
   return {
     records,
     lastBySchema: buildLastBySchema(records)
+  };
+}
+
+export async function readCatalogSchemaManifest(
+  projectRoot: string,
+  request: CatalogSchemaManifestReadRequest
+): Promise<CatalogSchemaManifestReadResponse> {
+  const safeSegments =
+    isSafePathSegment(request.connectionId) && isSafePathSegment(request.schema);
+  if (!safeSegments) {
+    throw new CatalogAssetReadError(
+      "PATH_NOT_ALLOWED",
+      "connectionId 与 schema 只能作为安全路径段使用",
+      403
+    );
+  }
+
+  const configCheck = await validateSchemaAgainstConfig(
+    projectRoot,
+    request.connectionId,
+    request.schema
+  );
+  if (!configCheck.ok) {
+    throw new CatalogAssetReadError(configCheck.code, configCheck.message, 400);
+  }
+
+  const targetPath = buildTargetRel(request.connectionId, request.schema);
+  const errors: CatalogAssetError[] = [];
+  const safety = await assertSafeTarget(projectRoot, targetPath, errors);
+  if (!safety) {
+    const first = errors[0];
+    throw new CatalogAssetReadError(
+      first?.code ?? "PATH_NOT_ALLOWED",
+      first?.message ?? "目标路径不安全",
+      403
+    );
+  }
+  if (!safety.exists) {
+    throw new CatalogAssetReadError(
+      "ASSET_NOT_FOUND",
+      `未找到 Schema Manifest：${targetPath}`,
+      404
+    );
+  }
+
+  const content = await readFile(safety.targetAbs, "utf8");
+  return {
+    connectionId: request.connectionId,
+    schema: request.schema,
+    assetKind: "schema_manifest",
+    assetType: "schemaManifest",
+    targetPath,
+    filename: `${request.schema}.yaml`,
+    content,
+    sizeBytes: Buffer.byteLength(content, "utf8"),
+    sha256: sha256(content)
   };
 }
 

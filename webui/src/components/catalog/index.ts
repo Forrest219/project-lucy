@@ -13,5 +13,11 @@ export type { CatalogAssetUploadButtonProps } from "./CatalogAssetUploadButton";
 export { CatalogAssetUploadDrawer } from "./CatalogAssetUploadDrawer";
 export type { CatalogAssetUploadDrawerProps } from "./CatalogAssetUploadDrawer";
 
+export {
+  CatalogAssetManifestDrawer,
+  triggerCatalogManifestDownload
+} from "./CatalogAssetManifestDrawer";
+export type { CatalogAssetManifestDrawerProps } from "./CatalogAssetManifestDrawer";
+
 export { CatalogAssetValidationPanel } from "./CatalogAssetValidationPanel";
 export type { CatalogAssetValidationPanelProps } from "./CatalogAssetValidationPanel";

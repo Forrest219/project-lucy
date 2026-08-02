@@ -1,20 +1,30 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment } from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
 import { apiGet } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   CatalogReloadsResponse,
   CatalogReloadRun,
   CatalogReloadWarning,
+  CatalogSchemaManifestReadResponse,
   ConnectionInfo,
   ProjectInfo,
   SourceSummary,
   SourcesResponse
 } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
-import { CatalogAssetUploadButton, CatalogReloadButton } from "../../components/catalog";
+import {
+  CatalogAssetManifestDrawer,
+  CatalogAssetUploadButton,
+  CatalogAssetUploadDrawer,
+  CatalogReloadButton,
+  triggerCatalogManifestDownload
+} from "../../components/catalog";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
 
@@ -27,68 +37,17 @@ function engineLabel(engine?: string) {
   return "DB";
 }
 
-function catalogStatusLabel(
-  run: CatalogReloadsResponse["last"],
-  isLoading = false,
-  error: Error | null = null
-): string {
-  if (isLoading) return "加载中";
-  if (error) return "加载失败";
-  if (!run) return "未运行";
-  if (run.status === "failed") return "失败";
-  if (run.warnings.length > 0) return `${run.warnings.length} 个待处理`;
-  return "成功";
+function engineKey(engine?: string): "mysql" | "postgres" | "doris" | "starrocks" | "db" {
+  const normalized = engine?.toLowerCase();
+  if (normalized === "mysql") return "mysql";
+  if (normalized === "postgres" || normalized === "postgresql") return "postgres";
+  if (normalized === "doris") return "doris";
+  if (normalized === "starrocks") return "starrocks";
+  return "db";
 }
 
-function warningIssueLabel(warning: CatalogReloadWarning): string {
-  if (warning.code === "MANIFEST_PARSE_FAILED") return "Manifest 解析失败";
-  if (warning.code === "SCHEMA_MANIFEST_MISSING") return "缺失 Manifest";
-  if (warning.code === "SCHEMA_MANIFEST_EMPTY") return "空 Manifest";
-  if (warning.code === "ENABLED_TABLE_NOT_SCANNED") return "enabled_tables 未扫描";
-  return warning.message;
-}
-
-function warningSubject(warning: CatalogReloadWarning): string {
-  return warning.schema ?? warning.table ?? warning.connectionId;
-}
-
-function warningSummary(warnings: CatalogReloadWarning[]): string {
-  if (warnings.length === 0) return "";
-  const first = warnings[0];
-  const summary = `${warningSubject(first)} ${warningIssueLabel(first)}`;
-  if (warnings.length === 1) return summary;
-  return `${summary} 等 ${warnings.length} 个待处理`;
-}
-
-function catalogStatusDetail(
-  run: CatalogReloadsResponse["last"],
-  isLoading = false,
-  error: Error | null = null
-): string {
-  if (isLoading) return "正在读取本地目录刷新记录";
-  if (error) return `本地目录状态加载失败：${error.message}`;
-  if (!run) return "尚未运行过本地目录刷新";
-  const warningText = run.warnings.length > 0 ? ` · ${warningSummary(run.warnings)}` : "";
-  return `${run.tables} 张表 · ${run.connectionIds.length} 个连接${warningText}`;
-}
-
-function catalogStatusSubValue(
-  run: CatalogReloadsResponse["last"],
-  isLoading = false,
-  error: Error | null = null
-): ReactNode {
-  return <span className="notranslate" translate="no">{catalogStatusDetail(run, isLoading, error)}</span>;
-}
-
-function catalogStatusTone(
-  run: CatalogReloadsResponse["last"],
-  isLoading = false,
-  error: Error | null = null
-): "warning" | "danger" | undefined {
-  if (isLoading) return undefined;
-  if (error) return "danger";
-  if (!run || run.status === "failed" || run.warnings.length > 0) return "warning";
-  return undefined;
+function catalogReloadTimestampTitle(iso: string): string {
+  return `本地目录刷新时间：${iso}。读取本地 YAML / Schema Manifest 后生成的 Catalog 快照时间，不会连接数据库。`;
 }
 
 function formatLocalTime(iso: string): string {
@@ -121,6 +80,16 @@ type CatalogRunState = {
   badgeLabel: string;
   tableCount: number;
   warningCount: number;
+};
+
+type ManifestViewTarget = {
+  connectionId: string;
+  schema: string;
+};
+
+type ManifestUploadTarget = ManifestViewTarget & {
+  initialContent: string;
+  initialFilename: string;
 };
 
 function matchingSchemaWarnings(
@@ -156,6 +125,14 @@ function schemaAssetState(
     return { label: "已存在", tableCount, tone: "success" };
   }
   return { label: "未发现本地 Manifest", tableCount, tone: "muted" };
+}
+
+function schemaHasReadableManifest(assetState: SchemaAssetState): boolean {
+  return (
+    assetState.label === "已存在" ||
+    assetState.label === "空 Manifest" ||
+    assetState.label === "Manifest 解析失败"
+  );
 }
 
 function catalogRunState(
@@ -248,6 +225,44 @@ function warningKey(connectionId: string, schema: string): string {
   return `${connectionId}:${schema}`;
 }
 
+function schemaRefKey(connectionId: string, schema: string): string {
+  return `${connectionId}\u0001${schema}`;
+}
+
+function configuredSchemaRefs(connections: ConnectionInfo[]): Set<string> {
+  const refs = new Set<string>();
+  for (const conn of connections) {
+    for (const schema of conn.schemas) {
+      refs.add(schemaRefKey(conn.id, schema));
+    }
+  }
+  return refs;
+}
+
+function localManifestSchemaRefs(
+  tables: SourceSummary[],
+  manifestSchemas?: SourcesResponse["manifestSchemas"]
+): Set<string> {
+  const refs = new Set<string>();
+  if (manifestSchemas) {
+    for (const manifest of manifestSchemas) {
+      refs.add(schemaRefKey(manifest.conn, manifest.schema));
+    }
+    return refs;
+  }
+  for (const table of tables) {
+    refs.add(schemaRefKey(table.conn, table.schema));
+  }
+  return refs;
+}
+
+function enabledLocalTableCount(connections: ConnectionInfo[], tables: SourceSummary[]): number {
+  const enabledByConnection = new Map(connections.map((conn) => [conn.id, new Set(conn.enabledTables)]));
+  return tables.filter((table) =>
+    enabledByConnection.get(table.conn)?.has(table.qualifiedName ?? `${table.schema}.${table.table}`)
+  ).length;
+}
+
 function readOnlyStatus(conn: ConnectionInfo): { label: string; tone: "safe" | "risk"; title: string } {
   return {
     label: conn.readOnlyExpected === false ? "未声明只读" : "预期只读",
@@ -308,14 +323,16 @@ export function ConnectionOverview() {
   });
 
   const connections = projectQuery.data?.connections ?? [];
-  const enabledTableCount = connections.reduce((sum, conn) => sum + conn.enabledTables.length, 0);
   const semanticTables = sourcesQuery.data?.tables ?? [];
-  const semanticTableCount = semanticTables.length;
   const schemaCount = connections.reduce((sum, conn) => sum + conn.schemas.length, 0);
+  const configuredSchemas = configuredSchemaRefs(connections);
+  const localManifestSchemas = localManifestSchemaRefs(semanticTables, sourcesQuery.data?.manifestSchemas);
+  const missingManifestSchemaCount = [...configuredSchemas].filter((schemaRef) => !localManifestSchemas.has(schemaRef)).length;
+  const enabledLocalCount = enabledLocalTableCount(connections, semanticTables);
+  const unenabledLocalTableCount = semanticTables.length - enabledLocalCount;
   const catalogReloadHistoryReady = catalogReloadsQuery.isSuccess;
   const catalogReloadHistoryLoading = catalogReloadsQuery.isLoading;
   const catalogReloadHistoryError = catalogReloadsQuery.error instanceof Error ? catalogReloadsQuery.error : null;
-  const lastCatalogRun = catalogReloadHistoryReady ? catalogReloadsQuery.data.last : null;
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
@@ -324,6 +341,9 @@ export function ConnectionOverview() {
   const [reloadingConnections, setReloadingConnections] = useState<Record<string, boolean>>({});
   const [expandedWarnings, setExpandedWarnings] = useState<Record<string, boolean>>({});
   const [copiedWarningPath, setCopiedWarningPath] = useState<string | null>(null);
+  const [manifestViewTarget, setManifestViewTarget] = useState<ManifestViewTarget | null>(null);
+  const [manifestUploadTarget, setManifestUploadTarget] = useState<ManifestUploadTarget | null>(null);
+  const [downloadingManifestKey, setDownloadingManifestKey] = useState<string | null>(null);
 
   function handleReloadStart(connectionId: string) {
     setReloadingConnections((current) => ({ ...current, [connectionId]: true }));
@@ -350,6 +370,32 @@ export function ConnectionOverview() {
     setCopiedWarningPath(key);
   }
 
+  function openReuploadDrawer(asset: CatalogSchemaManifestReadResponse) {
+    setManifestViewTarget(null);
+    setManifestUploadTarget({
+      connectionId: asset.connectionId,
+      schema: asset.schema,
+      initialContent: asset.content,
+      initialFilename: asset.filename
+    });
+  }
+
+  async function downloadManifest(connectionId: string, schema: string) {
+    const key = warningKey(connectionId, schema);
+    setDownloadingManifestKey(key);
+    try {
+      const asset = await fetchCatalogSchemaManifest(connectionId, schema);
+      triggerCatalogManifestDownload(asset);
+      toast.success("Schema Manifest 已开始下载");
+    } catch (downloadError) {
+      toast.error(
+        `下载失败：${downloadError instanceof Error ? downloadError.message : "未知错误"}`
+      );
+    } finally {
+      setDownloadingManifestKey(null);
+    }
+  }
+
   if (loading) {
     return <p className="pl-notice">正在加载连接状态...</p>;
   }
@@ -374,20 +420,20 @@ export function ConnectionOverview() {
           subValue={schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
         />
         <MetricCard
-          type="enabledTables"
-          value={enabledTableCount}
-          subValue="来自 ktx.yaml enabled_tables"
+          type="missingManifestSchemas"
+          value={missingManifestSchemaCount}
+          subValue={`配置 ${configuredSchemas.size} 个 Schema / 有 Manifest ${localManifestSchemas.size} 个`}
+          tone={missingManifestSchemaCount > 0 ? "warning" : undefined}
         />
         <MetricCard
-          type="semanticTables"
-          value={semanticTableCount}
-          subValue="已进入 semantic-layer 的表"
+          type="localCatalogTables"
+          value={semanticTables.length}
+          subValue={`来自 ${localManifestSchemas.size} 个 Schema Manifest`}
         />
         <MetricCard
-          type="catalogStatus"
-          value={catalogStatusLabel(lastCatalogRun, catalogReloadHistoryLoading, catalogReloadHistoryError)}
-          subValue={catalogStatusSubValue(lastCatalogRun, catalogReloadHistoryLoading, catalogReloadHistoryError)}
-          tone={catalogStatusTone(lastCatalogRun, catalogReloadHistoryLoading, catalogReloadHistoryError)}
+          type="unenabledTables"
+          value={unenabledLocalTableCount}
+          subValue={`已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表`}
         />
       </div>
 
@@ -434,6 +480,8 @@ export function ConnectionOverview() {
             );
             const headerTimestamp = lastRun ? formatLocalTime(lastRun.startedAt) : null;
             const headerTimestampIso = lastRun?.startedAt ?? null;
+            const engine = engineLabel(conn.engine ?? conn.driver);
+            const engineTone = engineKey(conn.engine ?? conn.driver);
             const showCatalogRunStatus = shouldShowCatalogRunStatus(
               lastRun,
               Boolean(reloadingConnections[conn.id]),
@@ -445,14 +493,19 @@ export function ConnectionOverview() {
               <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
                 <div className="pl-connection-card-header">
                   <div className="pl-connection-card-title">
-                    <span
-                      className="pl-engine-badge notranslate"
-                      data-testid={`engine-badge-${conn.id}`}
-                      translate="no"
-                    >
-                      {engineLabel(conn.engine ?? conn.driver)}
+                    <span className="pl-connection-engine-icon" data-engine={engineTone} aria-hidden="true">
+                      <Database className="pl-connection-engine-icon-svg" strokeWidth={1.8} />
                     </span>
-                    <strong className="notranslate" translate="no">{conn.id}</strong>
+                    <span className="pl-connection-title-copy">
+                      <strong className="notranslate" translate="no">{conn.id}</strong>
+                      <span
+                        className="pl-engine-badge notranslate"
+                        data-testid={`engine-badge-${conn.id}`}
+                        translate="no"
+                      >
+                        {engine}
+                      </span>
+                    </span>
                   </div>
                   <div className="pl-connection-card-meta notranslate" translate="no">
                     {readOnly.tone === "risk" ? (
@@ -469,10 +522,10 @@ export function ConnectionOverview() {
                       <span
                         className={`pl-connection-last-reload pl-connection-last-reload--${lastRun?.status === "failed" ? "danger" : "muted"}`}
                         data-testid={`connection-last-reload-${conn.id}`}
-                        title={headerTimestampIso ?? undefined}
+                        title={headerTimestampIso ? catalogReloadTimestampTitle(headerTimestampIso) : undefined}
                         translate="no"
                       >
-                        <span>上次刷新：</span>
+                        <span>本地目录刷新：</span>
                         <time className="notranslate" translate="no" dir="ltr">{headerTimestamp}</time>
                         {lastRun?.status === "failed" ? <span> · 失败</span> : null}
                       </span>
@@ -482,6 +535,7 @@ export function ConnectionOverview() {
                     <div className="pl-connection-kv">
                       <dt className="notranslate" translate="no">Host</dt>
                       <dd>
+                        <Server className="pl-connection-kv-icon" aria-hidden="true" strokeWidth={1.8} />
                         <code
                           className="pl-connection-kv-host notranslate"
                           translate="no"
@@ -495,6 +549,7 @@ export function ConnectionOverview() {
                     <div className="pl-connection-kv">
                       <dt className="notranslate" translate="no">Database</dt>
                       <dd>
+                        <Database className="pl-connection-kv-icon" aria-hidden="true" strokeWidth={1.8} />
                         <code
                           className="notranslate"
                           translate="no"
@@ -556,11 +611,12 @@ export function ConnectionOverview() {
                       </thead>
                       <tbody>
                         {schemaRows.map(({ schema, assetState, enabledTableCount }) => {
-                          const hasManifest = assetState.tone === "success";
+                          const hasReadableManifest = schemaHasReadableManifest(assetState);
                           const warning = missingManifestWarningsBySchema.get(schema);
                           const key = warning ? warningKey(conn.id, schema) : "";
                           const expanded = key ? Boolean(expandedWarnings[key]) : false;
                           const manifestPath = warning ? missingManifestPath(conn.id, schema, warning) : "";
+                          const rowManifestKey = warningKey(conn.id, schema);
                           return (
                             <Fragment key={schema}>
                               <tr
@@ -586,14 +642,51 @@ export function ConnectionOverview() {
                                 </td>
                                 <td className="pl-schema-asset-table-action">
                                   <div className="pl-schema-asset-actions">
-                                    {hasManifest ? (
-                                      <Link
-                                        className="pl-row-action-link"
-                                        to={`/connections/whitelist?schema=${encodeURIComponent(schema)}`}
-                                        data-testid={`schema-whitelist-${conn.id}-${schema}`}
-                                      >
-                                        维护启用范围
-                                      </Link>
+                                    {hasReadableManifest ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className="pl-row-action-link notranslate"
+                                          translate="no"
+                                          onClick={() => setManifestViewTarget({ connectionId: conn.id, schema })}
+                                          data-testid={`view-manifest-${conn.id}-${schema}`}
+                                        >
+                                          查看 Manifest
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="pl-row-action-link pl-row-action-link--muted"
+                                          disabled={downloadingManifestKey === rowManifestKey}
+                                          onClick={() => void downloadManifest(conn.id, schema)}
+                                          data-testid={`download-manifest-${conn.id}-${schema}`}
+                                        >
+                                          {downloadingManifestKey === rowManifestKey ? "下载中..." : "下载"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="pl-row-action-link"
+                                          onClick={async () => {
+                                            try {
+                                              const asset = await fetchCatalogSchemaManifest(conn.id, schema);
+                                              openReuploadDrawer(asset);
+                                            } catch (openError) {
+                                              toast.error(
+                                                `读取失败：${openError instanceof Error ? openError.message : "未知错误"}`
+                                              );
+                                            }
+                                          }}
+                                          data-testid={`reupload-manifest-${conn.id}-${schema}`}
+                                        >
+                                          重新上传
+                                        </button>
+                                        <Link
+                                          className="pl-row-action-link pl-row-action-link--muted"
+                                          to={`/connections/enabled-tables?connection=${encodeURIComponent(conn.id)}&schema=${encodeURIComponent(schema)}`}
+                                          data-testid={`schema-whitelist-${conn.id}-${schema}`}
+                                        >
+                                          维护启用范围
+                                        </Link>
+                                      </>
                                     ) : (
                                       <CatalogAssetUploadButton
                                         connectionId={conn.id}
@@ -626,44 +719,50 @@ export function ConnectionOverview() {
                                 >
                                   <td colSpan={5}>
                                     <div className="pl-schema-warning-subrow-content">
-                                      <div className="pl-catalog-reload-warning-copy">
-                                        <strong className="notranslate" translate="no">
-                                          缺少 Manifest：<span className="notranslate" translate="no">{schema}</span>
-                                        </strong>
-                                        <p className="notranslate" translate="no">
-                                          已启用但本地 schema 文件不存在。路径：<code dir="ltr">{manifestPath}</code>
-                                        </p>
-                                      </div>
-                                      <div className="pl-catalog-reload-warning-actions">
-                                        <button
-                                          type="button"
-                                          className="pl-btn pl-btn--ghost pl-btn--sm"
-                                          aria-expanded={expanded}
-                                          onClick={() => toggleWarning(key)}
-                                        >
-                                          <span aria-hidden="true">⌃</span>
-                                          收起详情
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="pl-btn pl-btn--ghost pl-btn--sm"
-                                          onClick={() => void copyWarningPath(key, manifestPath)}
-                                        >
-                                          <span aria-hidden="true">⧉</span>
-                                          {copiedWarningPath === key ? "已复制路径" : "复制路径"}
-                                        </button>
-                                        <CatalogReloadButton
-                                          connectionId={conn.id}
-                                          label="↻ 重新检查"
-                                          variant="secondary"
-                                          size="sm"
-                                          testId={`catalog-reload-recheck-${conn.id}-${schema}`}
-                                          showCompletionLabel={false}
-                                          showInlineResult={false}
-                                          onReloadStart={() => handleReloadStart(conn.id)}
-                                          onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
-                                          onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
-                                        />
+                                      <div className="pl-catalog-reload-warning-main">
+                                        <div className="pl-catalog-reload-warning-copy">
+                                          <strong className="notranslate" translate="no">
+                                            缺少 Manifest：<span className="notranslate" translate="no">{schema}</span>
+                                          </strong>
+                                          <p className="notranslate" translate="no">
+                                            已启用但本地 Schema Manifest 文件不存在。
+                                          </p>
+                                          <div className="pl-catalog-reload-warning-path notranslate" translate="no">
+                                            <span>预期路径</span>
+                                            <code dir="ltr">{manifestPath}</code>
+                                          </div>
+                                        </div>
+                                        <div className="pl-catalog-reload-warning-actions">
+                                          <button
+                                            type="button"
+                                            className="pl-btn pl-btn--ghost pl-btn--sm"
+                                            aria-expanded={expanded}
+                                            onClick={() => toggleWarning(key)}
+                                          >
+                                            <span aria-hidden="true">⌃</span>
+                                            收起详情
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="pl-btn pl-btn--ghost pl-btn--sm"
+                                            onClick={() => void copyWarningPath(key, manifestPath)}
+                                          >
+                                            <span aria-hidden="true">⧉</span>
+                                            {copiedWarningPath === key ? "已复制路径" : "复制路径"}
+                                          </button>
+                                          <CatalogReloadButton
+                                            connectionId={conn.id}
+                                            label="↻ 重新检查"
+                                            variant="secondary"
+                                            size="sm"
+                                            testId={`catalog-reload-recheck-${conn.id}-${schema}`}
+                                            showCompletionLabel={false}
+                                            showInlineResult={false}
+                                            onReloadStart={() => handleReloadStart(conn.id)}
+                                            onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
+                                            onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
+                                          />
+                                        </div>
                                       </div>
                                       {expanded ? (
                                         <dl
@@ -745,6 +844,26 @@ export function ConnectionOverview() {
           onClose={() => setAddTarget(null)}
         />
       )}
+      {manifestViewTarget ? (
+        <CatalogAssetManifestDrawer
+          open={Boolean(manifestViewTarget)}
+          onClose={() => setManifestViewTarget(null)}
+          connectionId={manifestViewTarget.connectionId}
+          schema={manifestViewTarget.schema}
+          onReupload={openReuploadDrawer}
+        />
+      ) : null}
+      {manifestUploadTarget ? (
+        <CatalogAssetUploadDrawer
+          open={Boolean(manifestUploadTarget)}
+          onClose={() => setManifestUploadTarget(null)}
+          connectionId={manifestUploadTarget.connectionId}
+          schema={manifestUploadTarget.schema}
+          mode="update"
+          initialContent={manifestUploadTarget.initialContent}
+          initialFilename={manifestUploadTarget.initialFilename}
+        />
+      ) : null}
     </div>
   );
 }

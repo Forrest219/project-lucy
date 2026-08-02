@@ -4,7 +4,7 @@ import { Document, isMap, parse, parseDocument, Scalar, YAMLMap, YAMLSeq, type P
 import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
-import type { AuthoredText, Column, Join, Measure, Segment, SourceSummary, TableModel, TablePatch } from "./model";
+import type { AuthoredText, Column, Join, ManifestSchemaSummary, Measure, Segment, SourceSummary, TableModel, TablePatch } from "./model";
 import { previewOverlayUpdate } from "./overlay";
 import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
 
@@ -438,6 +438,7 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
       conn: entry.file.conn,
       schema: entry.file.schema,
       table: entry.table,
+      qualifiedName: model.qualifiedName,
       filePath: entry.file.relPath,
       columnCount: model.columns.length,
       columnNames: model.columns.map((column) => column.name),
@@ -455,6 +456,23 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
   });
 
   return summaries.sort((a, b) => `${a.conn}/${a.schema}/${a.table}`.localeCompare(`${b.conn}/${b.schema}/${b.table}`));
+}
+
+export async function listManifestSchemas(projectRoot: string): Promise<ManifestSchemaSummary[]> {
+  const summaries: ManifestSchemaSummary[] = [];
+  for (const file of await listSchemaFiles(projectRoot)) {
+    const { doc } = await readYamlDocument(projectRoot, file.relPath);
+    const root = valueAsRecord(doc.toJSON());
+    const tables = valueAsRecord(root.tables);
+    summaries.push({
+      conn: file.conn,
+      schema: file.schema,
+      filePath: file.relPath,
+      tableCount: Object.keys(tables).length,
+      mtime: file.mtime.toISOString()
+    });
+  }
+  return summaries;
 }
 
 export async function readSource(

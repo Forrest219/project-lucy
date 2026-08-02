@@ -22,15 +22,19 @@ import {
 } from "./catalog-reload";
 import {
   CatalogAssetOverwriteRequiredError,
+  CatalogAssetReadError,
   CatalogAssetValidationError,
   readCatalogAssetUploads,
+  readCatalogSchemaManifest,
   uploadCatalogAsset,
   validateCatalogAsset,
+  type CatalogSchemaManifestReadRequest,
   type CatalogAssetUploadRequest,
   type CatalogAssetValidateRequest
 } from "./catalog-assets";
 import type { TablePatch } from "./model";
 import {
+  listManifestSchemas,
   listSources,
   previewSourcePatch,
   previewSourceYamlImport,
@@ -358,9 +362,13 @@ export function buildServer() {
 
   app.get("/api/sources", async () => {
     const projectRoot = await resolveProjectRoot();
+    const [tables, manifestSchemas] = await Promise.all([
+      listSources(projectRoot),
+      listManifestSchemas(projectRoot)
+    ]);
     return {
       ok: true,
-      data: { tables: await listSources(projectRoot) }
+      data: { tables, manifestSchemas }
     };
   });
 
@@ -826,6 +834,28 @@ export function buildServer() {
   app.get("/api/catalog/assets/uploads", async () => {
     const projectRoot = await resolveProjectRoot();
     return { ok: true, data: await readCatalogAssetUploads(projectRoot) };
+  });
+
+  app.get<{
+    Querystring: Partial<CatalogSchemaManifestReadRequest>;
+  }>("/api/catalog/assets/schema-manifest", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    try {
+      const data = await readCatalogSchemaManifest(projectRoot, {
+        connectionId: typeof request.query.connectionId === "string" ? request.query.connectionId : "",
+        schema: typeof request.query.schema === "string" ? request.query.schema : ""
+      });
+      return reply.send({ ok: true, data });
+    } catch (error) {
+      if (error instanceof CatalogAssetReadError) {
+        reply.status(error.statusCode);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message }
+        });
+      }
+      throw error;
+    }
   });
 
   // ─── M19: Semantic Asset Self-Service Publish And Export ────────────────

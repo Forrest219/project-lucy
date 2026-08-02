@@ -795,3 +795,64 @@ describe("GET /api/catalog/assets/uploads", () => {
     await app.close();
   });
 });
+
+describe("GET /api/catalog/assets/schema-manifest", () => {
+  it("reads the server-computed schema manifest path", async () => {
+    projectRoot = await makeProject(baseYaml(), {
+      dataforai: "tables:\n  superstore_orders:\n    table: dataforai.superstore_orders\n"
+    });
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/catalog/assets/schema-manifest")
+      .query({ connectionId: "demo-mysql", schema: "dataforai" })
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data.targetPath).toBe("semantic-layer/demo-mysql/_schema/dataforai.yaml");
+    expect(res.body.data.filename).toBe("dataforai.yaml");
+    expect(res.body.data.content).toContain("dataforai.superstore_orders");
+    expect(res.body.data.sha256).toMatch(/^[0-9a-f]{64}$/);
+    await app.close();
+  });
+
+  it("returns 404 when the configured schema has no manifest file", async () => {
+    projectRoot = await makeProject(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/catalog/assets/schema-manifest")
+      .query({ connectionId: "demo-mysql", schema: "dataforai" })
+      .expect(404);
+
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error.code).toBe("ASSET_NOT_FOUND");
+    await app.close();
+  });
+
+  it("rejects unsafe connection and schema path segments", async () => {
+    projectRoot = await makeProject(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/catalog/assets/schema-manifest")
+      .query({ connectionId: "../demo-mysql", schema: "dataforai" })
+      .expect(403);
+
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error.code).toBe("PATH_NOT_ALLOWED");
+    await app.close();
+  });
+});

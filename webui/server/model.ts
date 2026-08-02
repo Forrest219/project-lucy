@@ -40,6 +40,7 @@ export type TableModel = {
   conn: string;
   schema: string;
   table: string;
+  qualifiedName?: string;
   filePath: string;
   qualifiedName?: string;
   descriptions: AuthoredText;
@@ -78,6 +79,14 @@ export type SourceSummary = {
   semanticUpdatedAt: string;
   /** Source of `semanticUpdatedAt`: `manifest` if the overlay is absent or older. */
   semanticUpdatedAtSource: "manifest" | "overlay";
+};
+
+export type ManifestSchemaSummary = {
+  conn: string;
+  schema: string;
+  filePath: string;
+  tableCount: number;
+  mtime: string;
 };
 
 export type ConnectionInfo = {

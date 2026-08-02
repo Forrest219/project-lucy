@@ -53,6 +53,7 @@
 | `webui-feature-map.md` | WebUI 功能地图 |
 | `webui-impl-status.md` | 模块实现状态（⚠️ `scripts/lint-spec.mjs` 据此做 stale-status 校验，CI gate 依赖） |
 | `webui-module-guide.md` | WebUI 模块使用说明 |
+| `ui-ux-feedback/` | 页面级 UI/UX 反馈台账，用于定向浏览器核查与修复验收 |
 
 > WebUI 自身的架构/API/数据模型细节在 `webui/docs/01-architecture.md` … `07-mcp-auth-proxy-spec.md`（子模块就近 docs，已是编号有序的好范例）。
 
