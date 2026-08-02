@@ -42,6 +42,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-02 | Catalog `/catalog/:conn/:schema/:table` | 根据单表语义维护页最新反馈修订 `UX-CATALOG-010`、`UX-CATALOG-013`、`UX-CATALOG-016`，追加 `UX-CATALOG-017`：YAML 导入导出不占主编辑流、状态与变更详情合并为常驻变更审阅、长页面字段编辑必须对象级说明变更。 |
 | 2026-08-02 | Agent Admin `/admin/roles`, `/admin/roles/:roleId` | 根据 Role Admin UI/UX 反馈追加 `UX-ADMIN-AGENTS-005` 至 `UX-ADMIN-AGENTS-008`：Role 指标运维语义、筛选器业务口径、参考模板 / 待修复状态区分、模板创建心智降噪。M57 已落地并在 Docker 重建后完成浏览器复核，状态均为 `Verified`。 |
 | 2026-08-02 | Business Wiki `/wiki` | Docker 重建后完成 M56 浏览器复核，`UX-WIKI-007`、`UX-WIKI-008`、`UX-WIKI-010` 至 `UX-WIKI-013` 更新为 `Verified`：顶层空目录、目录删除拦截、文档移动、下载作用域、上传创建 / 覆盖预检均通过。 |
 | 2026-08-02 | Ledger governance | 根据 Agent Admin 反馈补充跨页面规则：对象关系指标必须说明统计口径；权限 / 能力数量必须绑定配置位置、允许范围和运行时生效边界。 |
@@ -65,7 +66,10 @@ docs/ui-ux-feedback/
 - Header 只承载对象身份、位置上下文和关键状态；不得放低价值统计 chips 或页面功能说明。
 - 同一视口内，同一个全局命令只能有一个主触发点；不得依赖 aria label 来补救可见命令重复。
 - 辅助流程入口必须可发现，但不得挤占主任务首屏空间。
-- Inspector / sticky status rail 只展示动态反馈；全局操作、变更预览和 raw detail 应进入独立命令面或详情面板。
+- Inspector / sticky rail 不承载全局操作；当页面存在长表单或长列表编辑时，应优先作为常驻审阅反馈区，集中展示状态摘要、对象级变更摘要和必要证据。
+- 当“状态”和“详情”对用户都像提醒时，应合并为一个审阅反馈区；状态是摘要，详情 / Diff 是证据，不应拆成两个相邻心智模型。
+- 长页面编辑的变更审阅必须对象级表达，不得只显示 `修改 1` 这类计数；可识别对象时应展示字段 / 指标 / 分群名称及关键 old -> new 值。
+- Raw Diff / YAML Diff 如果是用户识别变更的最直接证据，不得默认藏在 `高级` 折叠里；可用 tabs 降级 YAML / 校验等次要视图，但核心 Diff 应默认可见。
 - 生产 UI 不展示研发 spec 式说明文案；必要帮助使用短 label、tooltip、帮助入口或文档链接承载。
 - 全局侧栏之外，页面主体内不得再引入视觉上等价的第二侧栏；局部导航优先使用 tabs、segmented controls 或紧凑切换器。
 - 运维指标必须区分静态配置数量与真实使用观测；涉及时间窗的指标必须在 label 或 hint 中明确时间范围和数据来源。
