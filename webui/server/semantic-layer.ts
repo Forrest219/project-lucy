@@ -57,6 +57,7 @@ function stringArray(value: unknown): string[] | undefined {
 function authoredText(value: unknown): AuthoredText {
   const record = valueAsRecord(value);
   return {
+    db: stringValue(record.db),
     ai: stringValue(record.ai),
     human: stringValue(record.human)
   };
@@ -194,12 +195,22 @@ function columnsNode(tableNode: ParsedNode): ParsedNode[] {
   return node.items.filter((item): item is ParsedNode => typeof item === "object" && item !== null);
 }
 
-function tableYaml(doc: Document, table: string, _sourceText: string): string {
+function tableYaml(doc: Document, table: string, _sourceText: string, overlay: Record<string, unknown> = {}): string {
   const node = tableNodeFromDocument(doc, table);
   if (!node) {
     return "";
   }
-  return new Document(node.toJSON()).toString({ lineWidth: 0 });
+  const value = valueAsRecord(node.toJSON());
+  if ("grain" in overlay) {
+    value.grain = stringArray(overlay.grain) ?? [];
+  }
+  if (Array.isArray(overlay.measures)) {
+    value.measures = overlay.measures;
+  }
+  if (Array.isArray(overlay.segments)) {
+    value.segments = overlay.segments;
+  }
+  return new Document(value).toString({ lineWidth: 0 });
 }
 
 function parseYaml(text: string, source: string): Document {
@@ -495,7 +506,7 @@ export async function readSource(
   const model = modelFromTable(conn, schema, table, relPath, tableValue, tableNodeFromDocument(doc, table), overlay);
   return {
     model,
-    rawYaml: tableYaml(doc, table, text),
+    rawYaml: tableYaml(doc, table, text, overlay),
     completion: computeCompletion(model)
   };
 }
@@ -656,21 +667,41 @@ export async function previewSourceYamlImport(
     throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
   }
 
-  doc.setIn(["tables", table], doc.createNode(importedTableValue(yaml, table)));
+  const importedValue = valueAsRecord(importedTableValue(yaml, table));
+  const schemaValue = { ...importedValue };
+  delete schemaValue.grain;
+  delete schemaValue.measures;
+  delete schemaValue.segments;
+  doc.setIn(["tables", table], doc.createNode(schemaValue));
   const proposedYaml = serialize(doc);
   const diff = previewDiff(text, proposedYaml, relPath);
+  const overlayPreview = await previewOverlayUpdate(projectRoot, conn, table, {
+    grain: stringArray(importedValue.grain) ?? [],
+    measures: compact((Array.isArray(importedValue.measures) ? importedValue.measures : []).map(normalizeMeasure)),
+    segments: compact((Array.isArray(importedValue.segments) ? importedValue.segments : []).map(normalizeSegment))
+  });
+  const files = [];
+  if (diff) {
+    files.push({
+      filePath: relPath,
+      diff,
+      proposedYaml
+    });
+  }
+  if (overlayPreview) {
+    const overlayDiff = previewDiff(overlayPreview.oldText, overlayPreview.proposedText, overlayPreview.relPath);
+    if (overlayDiff) {
+      files.push({
+        filePath: overlayPreview.relPath,
+        diff: overlayDiff,
+        proposedYaml: overlayPreview.proposedText
+      });
+    }
+  }
   return {
-    diff,
-    proposedYaml,
-    files: diff
-      ? [
-          {
-            filePath: relPath,
-            diff,
-            proposedYaml
-          }
-        ]
-      : []
+    diff: files.map((file) => file.diff).filter(Boolean).join("\n"),
+    proposedYaml: files.map((file) => `# ${file.filePath}\n${file.proposedYaml}`).join("\n"),
+    files
   };
 }
 

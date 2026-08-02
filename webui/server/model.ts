@@ -1,6 +1,7 @@
 export type CompletionStatus = "not_started" | "partial" | "done" | "validation_failed";
 
 export type AuthoredText = {
+  db?: string;
   ai?: string;
   human?: string;
 };

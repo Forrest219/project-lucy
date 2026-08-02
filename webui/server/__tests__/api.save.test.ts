@@ -105,9 +105,33 @@ describe("source save API", () => {
 
     expect(response.body.data.written).toBe(true);
     expect(response.body.data.validation.ok).toBe(true);
+    expect(response.body.data.version).toMatchObject({
+      key: "mysql-aliyun/dataforai/superstore_orders",
+      operation: "save"
+    });
     expect(validateSource).toHaveBeenCalledWith(projectRoot, "mysql-aliyun", "dataforai", "superstore_orders");
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toContain("human: Human description.");
     await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"), "utf8")).resolves.toContain("grain:");
+
+    const versionId = response.body.data.version.versionId;
+    const listResponse = await request(app.server)
+      .get("/api/sources/mysql-aliyun/dataforai/superstore_orders/versions")
+      .expect(200);
+    expect(listResponse.body.data.versions[0].versionId).toBe(versionId);
+
+    const detailResponse = await request(app.server)
+      .get(`/api/sources/mysql-aliyun/dataforai/superstore_orders/versions/${versionId}`)
+      .expect(200);
+    expect(detailResponse.body.data.rawYaml).toContain("human: Human description.");
+    expect(detailResponse.body.data.rawYaml).toContain("grain:");
+    expect(detailResponse.body.data.rawYaml).toContain("- id");
+
+    const restoreResponse = await request(app.server)
+      .post(`/api/sources/mysql-aliyun/dataforai/superstore_orders/versions/${versionId}/restore`)
+      .send({})
+      .expect(200);
+    expect(restoreResponse.body.data.restoredFromVersionId).toBe(versionId);
+    expect(restoreResponse.body.data.rawYaml).toContain("human: Human description.");
     await app.close();
   });
 

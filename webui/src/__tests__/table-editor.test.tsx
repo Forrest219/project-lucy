@@ -38,11 +38,7 @@ function renderEditor(path = "/catalog/mysql-aliyun/dataforai/superstore_orders"
 }
 
 async function openManualSemanticEditor() {
-  const disclosure = await screen.findByTestId("manual-semantic-disclosure");
-  if (!disclosure.hasAttribute("open")) {
-    fireEvent.click(within(disclosure).getByText("高级：手工维护语义字段"));
-  }
-  return disclosure;
+  return screen.findByTestId("semantic-content");
 }
 
 function buildSourceDetail() {
@@ -65,6 +61,7 @@ function buildSourceDetail() {
           pk: true,
           nullable: false,
           descriptions: {
+            db: "订单行 ID",
             ai: "Business key grouping multiple line items belonging to one order."
           }
         },
@@ -220,6 +217,57 @@ function stubEditorFetch({ failSave = false, failPreview = false, candidates }: 
         })
       );
     }
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/versions" && !init) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: "mysql-aliyun/dataforai/superstore_orders",
+            retentionLimit: 5,
+            versions: [
+              {
+                versionId: "20260615T000000000Z-abcd1234",
+                key: "mysql-aliyun/dataforai/superstore_orders",
+                createdAt: "2026-06-15T00:00:00.000Z",
+                operation: "save",
+                contentHash: "sha256:abcdef123456",
+                affectedFiles: ["semantic-layer/mysql-aliyun/_schema/dataforai.yaml"]
+              }
+            ]
+          }
+        })
+      );
+    }
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/versions/20260615T000000000Z-abcd1234" && !init) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            versionId: "20260615T000000000Z-abcd1234",
+            key: "mysql-aliyun/dataforai/superstore_orders",
+            createdAt: "2026-06-15T00:00:00.000Z",
+            operation: "save",
+            contentHash: "sha256:abcdef123456",
+            affectedFiles: ["semantic-layer/mysql-aliyun/_schema/dataforai.yaml"],
+            rawYaml: "table: dataforai.superstore_orders\nversion: restored\n",
+            diffFromCurrent: "- table: dataforai.superstore_orders\n+ version: restored\n"
+          }
+        })
+      );
+    }
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/versions/20260615T000000000Z-abcd1234/restore" && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: "mysql-aliyun/dataforai/superstore_orders",
+            restoredFromVersionId: "20260615T000000000Z-abcd1234",
+            rawYaml: "table: dataforai.superstore_orders\nversion: restored\n",
+            diff: "- table: dataforai.superstore_orders\n+ version: restored\n"
+          }
+        })
+      );
+    }
     if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/validate" && init?.method === "POST") {
       return new Response(
         JSON.stringify({
@@ -264,35 +312,110 @@ describe("TableEditor", () => {
     expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
   });
 
-  it("keeps manual semantic editing collapsed by default so YAML exchange is the primary path", async () => {
+  it("prioritizes online editing and removes the inline import/export section", async () => {
     stubEditorFetch();
     renderEditor();
 
-    expect(await screen.findByTestId("semantic-asset-exchange")).toHaveTextContent("导出 YAML");
-    const manual = await screen.findByTestId("manual-semantic-disclosure");
-    expect(manual).not.toHaveAttribute("open");
-    expect(within(manual).getByText("高级：手工维护语义字段")).toBeInTheDocument();
-    expect(await screen.findByTestId("candidate-joins-disclosure")).not.toHaveAttribute("open");
+    const semanticContent = await screen.findByTestId("semantic-content");
+    expect(within(semanticContent).getByText("在线编辑")).toBeInTheDocument();
+    expect(within(semanticContent).getByRole("tablist", { name: "在线编辑" })).toBeInTheDocument();
+
+    expect(screen.queryByTestId("semantic-asset-exchange")).not.toBeInTheDocument();
+    expect(screen.queryByText("导入 / 导出")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("table-editor-import-drawer")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("主流程：导出 YAML");
+    expect(document.body).not.toHaveTextContent("Claude Code");
+    expect(document.body).not.toHaveTextContent("Codex");
+    expect(screen.queryByText("高级：手工维护语义字段")).not.toBeInTheDocument();
+    expect(screen.queryByText(/待处理建议/)).not.toBeInTheDocument();
   });
 
-  it("focuses header actions on export, import, validate, and save while moving secondary links into more", async () => {
+  it("hides the native file input while keeping 导入 YAML as the user-facing entry", async () => {
     stubEditorFetch();
     renderEditor();
 
-    const actions = await screen.findByTestId("page-header-actions");
-    expect(within(actions).getByRole("button", { name: "导出 YAML" })).toBeInTheDocument();
-    expect(within(actions).getByRole("button", { name: "导入 YAML" })).toBeInTheDocument();
-    expect(within(actions).getByRole("button", { name: "校验" })).toBeInTheDocument();
-    expect(within(actions).getByRole("button", { name: "保存" })).toBeInTheDocument();
-    expect(within(actions).queryByRole("link", { name: "业务 Wiki" })).not.toBeInTheDocument();
-    expect(within(actions).queryByRole("link", { name: "关联关系" })).not.toBeInTheDocument();
-    expect(within(actions).queryByRole("link", { name: "审阅" })).not.toBeInTheDocument();
+    const headerActions = await screen.findByTestId("page-header-actions");
+    fireEvent.click(within(headerActions).getByRole("button", { name: "导入 YAML" }));
+    const drawer = await screen.findByTestId("table-editor-import-drawer");
+    expect(within(drawer).getByRole("button", { name: "选择 YAML 文件" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Choose File/i })).not.toBeInTheDocument();
+    const input = await screen.findByTestId("table-editor-import-input");
+    expect(input).toHaveAttribute("aria-hidden", "true");
+    expect(input).toHaveAttribute("tabindex", "-1");
+  });
 
-    fireEvent.click(within(actions).getByTestId("row-more-trigger"));
-    const menu = await within(actions).findByTestId("row-more-menu");
-    expect(within(menu).getByTestId("table-editor-more-wiki")).toHaveTextContent("业务 Wiki");
+  it("uses a single page header action group and keeps secondary links in more", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    const headerActions = await screen.findByTestId("page-header-actions");
+    expect(screen.queryByTestId("table-editor-command-bar")).not.toBeInTheDocument();
+    expect(within(headerActions).getByRole("button", { name: "校验" })).toBeInTheDocument();
+    expect(within(headerActions).getByRole("button", { name: "保存" })).toBeInTheDocument();
+    expect(screen.getAllByText("导出 YAML")).toHaveLength(1);
+    expect(screen.getAllByText("导入 YAML")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "校验" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "保存" })).toHaveLength(1);
+    expect(within(headerActions).queryByRole("link", { name: "查看关联的业务 Wiki" })).not.toBeInTheDocument();
+    expect(within(headerActions).queryByRole("link", { name: "关联关系" })).not.toBeInTheDocument();
+    expect(within(headerActions).queryByRole("link", { name: "审阅" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(headerActions).getByTestId("row-more-trigger"));
+    const menu = await within(headerActions).findByTestId("row-more-menu");
+    expect(within(menu).getByTestId("table-editor-more-versions")).toHaveTextContent("版本记录");
+    expect(within(menu).getByTestId("table-editor-more-wiki")).toHaveTextContent("查看关联的业务 Wiki");
     expect(within(menu).getByTestId("table-editor-more-review")).toHaveTextContent("审阅");
     expect(within(menu).getByTestId("table-editor-more-joins")).toHaveTextContent("关联关系");
+  });
+
+  it("opens version history and restores a version as an unsaved import draft", async () => {
+    const fetchMock = stubEditorFetch();
+    renderEditor();
+
+    const headerActions = await screen.findByTestId("page-header-actions");
+    fireEvent.click(within(headerActions).getByTestId("row-more-trigger"));
+    fireEvent.click(await screen.findByTestId("table-editor-more-versions"));
+
+    const panel = await screen.findByTestId("table-editor-version-panel");
+    expect(panel).toHaveTextContent("版本记录");
+    expect(await within(panel).findByText("保存")).toBeInTheDocument();
+    expect(await within(panel).findByText("abcdef12")).toBeInTheDocument();
+    expect(await within(panel).findByText("恢复此版本")).toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole("button", { name: "恢复此版本" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("table-editor-imported-yaml-name")).toHaveTextContent("恢复版本 20260615");
+    });
+    expect(toastMock.success).toHaveBeenCalledWith("已恢复为未保存草稿");
+
+    fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+    await waitFor(() => {
+      const restoreSaveCall = fetchMock.mock.calls.find((call) => {
+        if (!String(call[0]).endsWith("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")) {
+          return false;
+        }
+        if (call[1]?.method !== "POST") {
+          return false;
+        }
+        const body = JSON.parse(String(call[1].body));
+        return body.dryRun === false && body.restoredFromVersionId === "20260615T000000000Z-abcd1234";
+      });
+      expect(restoreSaveCall).toBeTruthy();
+    });
+  });
+
+  it("anchors the current table with a compact header and no redundant chips", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
+    const context = screen.getByTestId("table-editor-header-context");
+    expect(context).toHaveTextContent("连接：mysql-aliyun");
+    expect(context).toHaveTextContent("Schema：dataforai");
+    expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
+    expect(screen.queryByText("完成度 partial")).not.toBeInTheDocument();
+    expect(screen.queryByText("导出、导入、校验并审阅当前表的 semantic-layer YAML。")).not.toBeInTheDocument();
   });
 
   it("renders metadata grid and human description from source, not from AI", async () => {
@@ -308,7 +431,7 @@ describe("TableEditor", () => {
     expect(screen.queryByDisplayValue("AI-suggested table description")).not.toBeInTheDocument();
   });
 
-  it("shows change summary first and keeps raw Diff collapsed", async () => {
+  it("shows object-level change summary and raw YAML Diff in the sticky review", async () => {
     stubEditorFetch();
     renderEditor();
 
@@ -316,25 +439,44 @@ describe("TableEditor", () => {
     const tableTextarea = await screen.findByDisplayValue("Aggregate order rows for revenue analytics");
     fireEvent.change(tableTextarea, { target: { value: "Updated order semantics" } });
 
-    const summary = await screen.findByTestId("change-summary");
+    const review = await screen.findByTestId("table-editor-change-review");
+    const summary = await within(review).findByTestId("change-summary");
     expect(summary).toHaveTextContent("本次变更");
     expect(summary).toHaveTextContent("表描述");
     expect(summary).toHaveTextContent("修改 1");
-    const rawDiff = screen.getByTestId("raw-diff-disclosure");
-    expect(rawDiff).not.toHaveAttribute("open");
+    expect(summary).toHaveTextContent("Aggregate order rows for revenue analytics -> Updated order semantics");
+    expect(within(review).getByRole("tab", { name: "YAML Diff" })).toHaveAttribute("aria-selected", "true");
+    expect(within(review).getAllByText("YAML Diff").length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("raw-diff-disclosure")).not.toBeInTheDocument();
+  });
+
+  it("names the edited field in the change review summary", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    await openManualSemanticEditor();
+    fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
+    const rowIdTextarea = await screen.findByLabelText("row_id 人工描述");
+    fireEvent.change(rowIdTextarea, { target: { value: "这是一个段测试" } });
+
+    const review = await screen.findByTestId("table-editor-change-review");
+    const summary = await within(review).findByTestId("change-summary");
+    expect(summary).toHaveTextContent("字段描述");
+    expect(summary).toHaveTextContent("修改 1");
+    expect(summary).toHaveTextContent("字段 row_id · 人工描述：Unique row identifier -> 这是一个段测试");
   });
 
   it("previews pasted YAML as an import dry-run without saving", async () => {
     const fetchMock = stubEditorFetch();
     renderEditor();
 
-    const pasteDisclosure = await screen.findByTestId("paste-yaml-disclosure");
-    expect(pasteDisclosure).not.toHaveAttribute("open");
-    fireEvent.click(within(pasteDisclosure).getByText("粘贴 YAML"));
-    fireEvent.change(await screen.findByTestId("paste-yaml-textarea"), {
-      target: { value: "table: dataforai.superstore_orders\n    descriptions:\n      human: Updated from Codex\n" }
+    const headerActions = await screen.findByTestId("page-header-actions");
+    fireEvent.click(within(headerActions).getByRole("button", { name: "导入 YAML" }));
+    const drawer = await screen.findByTestId("table-editor-import-drawer");
+    fireEvent.change(within(drawer).getByTestId("paste-yaml-textarea"), {
+      target: { value: "table: dataforai.superstore_orders\n    descriptions:\n      human: Updated from external editor\n" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "生成导入预览" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "生成导入预览" }));
 
     await waitFor(() => {
       const importPreviewCall = fetchMock.mock.calls.find((call) => {
@@ -345,7 +487,7 @@ describe("TableEditor", () => {
           return false;
         }
         const body = JSON.parse(String(call[1].body));
-        return body.dryRun === true && String(body.yaml).includes("Updated from Codex");
+        return body.dryRun === true && String(body.yaml).includes("Updated from external editor");
       });
       expect(importPreviewCall).toBeTruthy();
     });
@@ -365,12 +507,12 @@ describe("TableEditor", () => {
     expect(saveCalls).toHaveLength(0);
   });
 
-  it("runs Validate from the header and shows the result in the inspector", async () => {
+  it("runs Validate from the page header and shows the result in change details", async () => {
     const fetchMock = stubEditorFetch();
     renderEditor();
 
-    const actions = await screen.findByTestId("page-header-actions");
-    fireEvent.click(within(actions).getByRole("button", { name: "校验" }));
+    const headerActions = await screen.findByTestId("page-header-actions");
+    fireEvent.click(within(headerActions).getByRole("button", { name: "校验" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -381,20 +523,38 @@ describe("TableEditor", () => {
     expect(await screen.findByTestId("table-editor-validation-result")).toHaveTextContent("通过");
   });
 
-  it("renders stable metadata grid with truncation and copy button", async () => {
+  it("clears stale validation after a new import preview", async () => {
     stubEditorFetch();
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
     renderEditor();
 
-    await openManualSemanticEditor();
-    const copyButton = await screen.findByRole("button", { name: "复制完整表名" });
-    fireEvent.click(copyButton);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(LONG_QUALIFIED_NAME);
+    const headerActions = await screen.findByTestId("page-header-actions");
+    fireEvent.click(within(headerActions).getByRole("button", { name: "校验" }));
+    expect(await screen.findByTestId("table-editor-validation-result")).toHaveTextContent("通过");
+    expect(await screen.findByTestId("table-editor-change-review")).toHaveTextContent("校验通过");
 
-    // Truncated long name still has a title tooltip
-    const truncated = screen.getByTitle(LONG_QUALIFIED_NAME);
-    expect(truncated).toBeInTheDocument();
-    expect(truncated).toHaveClass("truncate");
+    fireEvent.click(within(headerActions).getByRole("button", { name: "导入 YAML" }));
+    const drawer = await screen.findByTestId("table-editor-import-drawer");
+    fireEvent.change(within(drawer).getByTestId("paste-yaml-textarea"), {
+      target: { value: "table: dataforai.superstore_orders\n    descriptions:\n      human: Updated after validate\n" }
+    });
+    fireEvent.click(within(drawer).getByRole("button", { name: "生成导入预览" }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("table-editor-validation-result")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("table-editor-change-review")).not.toHaveTextContent("校验通过");
+  });
+
+  it("keeps duplicate table metadata out of the semantic content overview", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    const semanticContent = await openManualSemanticEditor();
+    expect(within(semanticContent).queryByText("完整表名")).not.toBeInTheDocument();
+    expect(within(semanticContent).queryByText("字段数")).not.toBeInTheDocument();
+    expect(within(semanticContent).queryByText("关联数")).not.toBeInTheDocument();
+    expect(within(semanticContent).queryByRole("button", { name: "复制完整表名" })).not.toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Aggregate order rows for revenue analytics")).toBeInTheDocument();
   });
 
   it("renders field cards with badges and Adopt AI button", async () => {
@@ -402,7 +562,7 @@ describe("TableEditor", () => {
     renderEditor();
 
     await openManualSemanticEditor();
-    fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
 
     // Wait for the columns section to actually render before asserting on
     // its cards (the grain field on the overview tab also contains the
@@ -414,6 +574,7 @@ describe("TableEditor", () => {
     expect(screen.getAllByText("PK").length).toBeGreaterThan(0);
     expect(screen.getAllByText("string").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Not Null").length).toBeGreaterThan(0);
+    expect(screen.getByText("订单行 ID")).toBeInTheDocument();
     // AI text is visible (read-only)
     expect(screen.getByText(/Business key grouping/)).toBeInTheDocument();
     // Adopt AI buttons exist (one per column that has AI; fixture has 2)
@@ -430,14 +591,13 @@ describe("TableEditor", () => {
     renderEditor();
 
     await openManualSemanticEditor();
-    fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
     await screen.findByText(/每张卡片展示 PK/);
 
     // The first Adopt button belongs to order_key (the first card with AI
     // and an empty human description).
-    const adoptButtons = await screen.findAllByRole("button", { name: /采纳 AI 描述/ });
-    expect(adoptButtons.length).toBeGreaterThan(0);
-    fireEvent.click(adoptButtons[0]);
+    const adoptButton = await screen.findByRole("button", { name: "采纳 AI 描述：order_key" });
+    fireEvent.click(adoptButton);
 
     // After click, Human textarea now contains the AI text
     expect(
@@ -465,6 +625,65 @@ describe("TableEditor", () => {
         name: "order_key",
         description: "Business key grouping multiple line items belonging to one order."
       });
+    });
+  });
+
+  it("renders sticky change review as pure feedback while the semantic editor is open", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    await openManualSemanticEditor();
+    const review = await screen.findByTestId("table-editor-change-review");
+    expect(review).toHaveTextContent("变更审阅");
+    expect(within(review).queryByRole("button", { name: /保存/ })).not.toBeInTheDocument();
+    expect(within(review).getByRole("tab", { name: "YAML Diff" })).toBeInTheDocument();
+    expect(within(review).getAllByText(/影响文件/).length).toBeGreaterThan(0);
+    expect(within(review).getAllByText(/未知 YAML Key/).length).toBeGreaterThan(0);
+  });
+
+  it("batch adopts AI descriptions only into selected empty Human fields", async () => {
+    const fetchMock = stubEditorFetch();
+    renderEditor();
+
+    await openManualSemanticEditor();
+    fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
+    await screen.findByTestId("field-batch-toolbar");
+
+    fireEvent.click(screen.getByRole("button", { name: "缺少人工描述" }));
+    expect(screen.getByTestId("field-batch-selection-count")).toHaveTextContent("已选 0 / 可见 2");
+    fireEvent.click(screen.getByRole("button", { name: "全选筛选结果" }));
+    expect(screen.getByTestId("field-batch-selection-count")).toHaveTextContent("已选 2 / 可见 2");
+    fireEvent.click(screen.getByRole("button", { name: "批量采纳 AI 描述" }));
+    fireEvent.click(screen.getByRole("button", { name: "全部字段" }));
+
+    expect(
+      await screen.findByDisplayValue(
+        "Business key grouping multiple line items belonging to one order."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Date when the order was placed.")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Unique row identifier")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Unique row identifier generated by the source system.")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const dryRunCall = fetchMock.mock.calls.find(
+        (call) =>
+          call[1]?.method === "PUT" &&
+          JSON.parse(String(call[1]?.body)).dryRun === true &&
+          JSON.parse(String(call[1]?.body)).patch.columns?.length === 2
+      );
+      expect(dryRunCall).toBeTruthy();
+      const body = JSON.parse(String(dryRunCall?.[1]?.body));
+      expect(body.patch.columns).toEqual([
+        {
+          name: "order_key",
+          description: "Business key grouping multiple line items belonging to one order."
+        },
+        {
+          name: "order_date",
+          description: "Date when the order was placed."
+        }
+      ]);
     });
   });
 
@@ -501,15 +720,15 @@ describe("TableEditor", () => {
     ).toBeGreaterThan(0);
 
     // Measures section also exposes the overlay badge
-    fireEvent.click(screen.getByRole("button", { name: /^Measures/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^指标/ }));
     expect((await screen.findAllByText("Overlay")).length).toBeGreaterThan(0);
     // Segments section too
-    fireEvent.click(screen.getByRole("button", { name: /^Segments/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^分群/ }));
     expect(screen.getAllByText("Overlay").length).toBeGreaterThan(0);
   });
 
-  it("folds candidate joins behind a pending suggestions disclosure with three action buttons", async () => {
-    stubEditorFetch({
+  it("removes prominent candidate suggestions from the table workbench", async () => {
+    const fetchMock = stubEditorFetch({
       candidates: [
         {
           conn: "mysql-aliyun",
@@ -522,64 +741,6 @@ describe("TableEditor", () => {
             source: "candidate"
           },
           confidence: "candidate",
-          note: "字段名匹配"
-        }
-      ]
-    });
-    renderEditor();
-
-    const disclosure = await screen.findByTestId("candidate-joins-disclosure");
-    expect(disclosure).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByText("待处理建议（1）"));
-    expect(await screen.findByText(/发现 1 个智能推断的候选关联关系/)).toBeInTheDocument();
-    expect(screen.getByText("rows")).toBeInTheDocument();
-    expect(screen.getByText("superstore_orders.row_id = rows.row_id")).toBeInTheDocument();
-    expect(screen.getByText(/推断依据: 字段名匹配/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "确认写入语义层" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保留为候选" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "标记不采用" })).toBeInTheDocument();
-  });
-
-  it("does not show sidecar candidates for another source table", async () => {
-    stubEditorFetch({
-      candidates: [
-        {
-          conn: "mysql-aliyun",
-          schema: "dataforai",
-          fromTable: "superstore_returns",
-          join: {
-            to: "return_reasons",
-            on: "superstore_returns.reason_id = return_reasons.reason_id",
-            relationship: "many_to_one",
-            source: "candidate"
-          },
-          confidence: "candidate",
-          note: "字段名匹配"
-        }
-      ]
-    });
-    renderEditor();
-
-    fireEvent.click(await screen.findByText("待处理建议（1）"));
-    expect(await screen.findByText(/发现 1 个智能推断的候选关联关系/)).toBeInTheDocument();
-    expect(screen.queryByText("return_reasons")).not.toBeInTheDocument();
-    expect(screen.queryByText("superstore_returns.reason_id = return_reasons.reason_id")).not.toBeInTheDocument();
-  });
-
-  it("keeps rejected live suggestions out of the prominent candidate banner", async () => {
-    stubEditorFetch({
-      candidates: [
-        {
-          conn: "mysql-aliyun",
-          schema: "dataforai",
-          fromTable: "superstore_orders",
-          join: {
-            to: "rows",
-            on: "superstore_orders.row_id = rows.row_id",
-            relationship: "many_to_one",
-            source: "candidate"
-          },
-          confidence: "rejected",
           note: "字段名匹配"
         }
       ]
@@ -587,109 +748,28 @@ describe("TableEditor", () => {
     renderEditor();
 
     expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.queryByText(/发现 \d+ 个智能推断的候选关联关系/)).not.toBeInTheDocument();
-    });
-    expect(screen.queryByText("rows")).not.toBeInTheDocument();
-    expect(screen.queryByText("superstore_orders.row_id = rows.row_id")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("candidate-joins-disclosure")).not.toBeInTheDocument();
+    expect(screen.queryByText(/待处理建议/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/智能推断的候选关联关系/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "确认写入 rows 关联" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保留 rows 为候选关联" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "标记 rows 关联不采用" })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/api/joins/candidates"))).toBe(false);
   });
 
-  it("rejects a candidate by sending PUT to /api/joins/candidates with confidence rejected", async () => {
-    const fetchMock = stubEditorFetch({
-      candidates: [
-        {
-          conn: "mysql-aliyun",
-          schema: "dataforai",
-          fromTable: "superstore_orders",
-          join: {
-            to: "rows",
-            on: "superstore_orders.row_id = rows.row_id",
-            relationship: "many_to_one",
-            source: "candidate"
-          },
-          confidence: "candidate",
-          note: "字段名匹配"
-        }
-      ]
-    });
+  it("keeps formal join maintenance available under semantic content", async () => {
+    stubEditorFetch();
     renderEditor();
 
-    fireEvent.click(await screen.findByText("待处理建议（1）"));
-    const rejectButton = await screen.findByRole("button", { name: "标记不采用" });
-    fireEvent.click(rejectButton);
+    await openManualSemanticEditor();
+    fireEvent.click(screen.getByRole("tab", { name: /^关联/ }));
 
-    await waitFor(() => {
-      const putCall = fetchMock.mock.calls.find(
-        (call) =>
-          call[1]?.method === "PUT" &&
-          String(call[0]).endsWith("/api/joins/candidates")
-      );
-      expect(putCall).toBeTruthy();
-      const body = JSON.parse(String(putCall?.[1]?.body));
-      expect(body.candidates).toEqual([
-        expect.objectContaining({
-          conn: "mysql-aliyun",
-          schema: "dataforai",
-          fromTable: "superstore_orders",
-          confidence: "rejected",
-          join: expect.objectContaining({
-            to: "rows",
-            on: "superstore_orders.row_id = rows.row_id",
-            relationship: "many_to_one",
-            source: "candidate"
-          })
-        })
-      ]);
-    });
-  });
-
-  it("confirms a candidate as a formal join via PUT /api/sources with dryRun false", async () => {
-    const fetchMock = stubEditorFetch({
-      candidates: [
-        {
-          conn: "mysql-aliyun",
-          schema: "dataforai",
-          fromTable: "superstore_orders",
-          join: {
-            to: "rows",
-            on: "superstore_orders.row_id = rows.row_id",
-            relationship: "many_to_one",
-            source: "candidate"
-          },
-          confidence: "candidate",
-          note: "字段名匹配"
-        }
-      ]
-    });
-    renderEditor();
-
-    fireEvent.click(await screen.findByText("待处理建议（1）"));
-    const confirmButton = await screen.findByRole("button", { name: "确认写入语义层" });
-    fireEvent.click(confirmButton);
-
-    await waitFor(() => {
-      const putCall = fetchMock.mock.calls.find(
-        (call) =>
-          call[1]?.method === "PUT" &&
-          String(call[0]).endsWith("/api/sources/mysql-aliyun/dataforai/superstore_orders") &&
-          JSON.parse(String(call[1]?.body)).dryRun === false
-      );
-      expect(putCall).toBeTruthy();
-      const body = JSON.parse(String(putCall?.[1]?.body));
-      expect(body).toEqual({
-        dryRun: false,
-        patch: {
-          joins: expect.arrayContaining([
-            expect.objectContaining({
-              to: "rows",
-              on: "superstore_orders.row_id = rows.row_id",
-              relationship: "many_to_one",
-              source: "formal"
-            })
-          ])
-        }
-      });
-    });
+    expect(await screen.findByText("正式关联关系仍在关联关系页面维护，这里只展示当前表上下文。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "打开关联关系" })).toHaveAttribute(
+      "href",
+      "/joins/mysql-aliyun/dataforai/superstore_orders"
+    );
+    expect(screen.getByText("当前表还没有正式关联关系。")).toBeInTheDocument();
   });
 
   it("Cmd+S triggers DryRun and switches to Diff tab, never saves", async () => {
@@ -698,7 +778,7 @@ describe("TableEditor", () => {
 
     await openManualSemanticEditor();
     // Switch to columns section first so the form has something to dry-run
-    fireEvent.click(screen.getByRole("button", { name: /^字段/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
     await screen.findByText(/每张卡片展示 PK/);
     expect(screen.getByText("order_key")).toBeInTheDocument();
 
@@ -737,11 +817,30 @@ describe("TableEditor", () => {
 
     // The Diff tab should be selected
     await waitFor(() => {
-      const diffTab = screen.getByRole("tab", { name: "Diff" });
+      const diffTab = screen.getByRole("tab", { name: "YAML Diff" });
       expect(diffTab).toHaveAttribute("aria-selected", "true");
     });
-    expect(toastMock.success).toHaveBeenCalledWith("已更新 Dry-run 预览");
-    expect(toastMock.error).not.toHaveBeenCalledWith("Dry-run 预览失败");
+    expect(toastMock.success).toHaveBeenCalledWith("已更新预览");
+    expect(toastMock.error).not.toHaveBeenCalledWith("预览失败");
+  });
+
+  it("does not intercept Tab navigation in the table editor form", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    await screen.findByRole("heading", { name: "superstore_orders" });
+    const form = document.getElementById("table-editor-form");
+    expect(form).toBeTruthy();
+
+    const keyEvent = new KeyboardEvent("keydown", {
+      key: "Tab",
+      bubbles: true,
+      cancelable: true
+    });
+    const preventDefaultSpy = vi.spyOn(keyEvent, "preventDefault");
+    fireEvent(form as HTMLElement, keyEvent);
+
+    expect(preventDefaultSpy).not.toHaveBeenCalled();
   });
 
   it("Cmd+S reports DryRun failure instead of showing a success toast", async () => {
@@ -763,8 +862,8 @@ describe("TableEditor", () => {
     );
 
     expect(await screen.findByText("preview denied")).toBeInTheDocument();
-    expect(toastMock.error).toHaveBeenCalledWith("Dry-run 预览失败");
-    expect(toastMock.success).not.toHaveBeenCalledWith("已更新 Dry-run 预览");
+    expect(toastMock.error).toHaveBeenCalledWith("预览失败");
+    expect(toastMock.success).not.toHaveBeenCalledWith("已更新预览");
   });
 
   it("saves with dryRun false from the page-level save button", async () => {

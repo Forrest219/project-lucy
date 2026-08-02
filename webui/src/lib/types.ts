@@ -1,6 +1,7 @@
 export type CompletionStatus = "not_started" | "partial" | "done" | "validation_failed";
 
 export type AuthoredText = {
+  db?: string;
   ai?: string;
   human?: string;
 };
@@ -227,6 +228,38 @@ export type SourceSaveResponse = {
   written: true;
   validation: ValidationResult;
   changedFiles: ChangedFile[];
+  version?: TableYamlVersionSummary | null;
+};
+
+export type TableYamlVersionOperation = "save" | "import" | "restore";
+
+export type TableYamlVersionSummary = {
+  versionId: string;
+  key: string;
+  createdAt: string;
+  operation: TableYamlVersionOperation;
+  contentHash: string;
+  sourceFileName?: string;
+  restoredFromVersionId?: string;
+  affectedFiles: string[];
+};
+
+export type TableYamlVersionDetail = TableYamlVersionSummary & {
+  rawYaml: string;
+  diffFromCurrent: string;
+};
+
+export type TableYamlVersionListResponse = {
+  key: string;
+  retentionLimit: number;
+  versions: TableYamlVersionSummary[];
+};
+
+export type TableYamlVersionRestoreResult = {
+  key: string;
+  restoredFromVersionId: string;
+  rawYaml: string;
+  diff: string;
 };
 
 export type ChangedFilesResponse = {
@@ -512,7 +545,34 @@ export type AgentStats = {
   callsLast7d: number;
   deniedLast7d: number;
   lastSeen?: string;
+  /**
+   * Distinct tokens that have appeared in `access_log` for this user
+   * inside the last 7 days. May be `undefined` for legacy backends
+   * (pre-M55) that do not emit the metric; callers must fall back to
+   * `token.last_used` based bookkeeping in that case.
+   */
+  activeTokensLast7d?: number;
+  /**
+   * Number of token rows still present in `access.yaml` for this agent
+   * (regardless of expiry). Mirrors `Agent.tokens.length`.
+   */
+  configuredTokens?: number;
   topTables: Array<{ table: string; calls: number }>;
+};
+
+/**
+ * Aggregate metrics returned by `GET /api/admin/agents` so the
+ * AgentList header does not have to re-derive counts from per-row data.
+ * Older backends may omit `summary`; the front-end must compute a
+ * fallback from `agents[]` in that case.
+ */
+export type AgentsResponseSummary = {
+  agentCount: number;
+  enabledAgentCount: number;
+  configuredTokenCount: number;
+  activeTokenCountLast7d: number;
+  callsLast7d: number;
+  deniedLast7d: number;
 };
 
 export type AgentPatch = {

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { parseDocument } from "yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { applyOverlayUpdate, serializeOverlay } from "../overlay";
+import { applyOverlayUpdate, previewOverlayUpdate, serializeOverlay } from "../overlay";
 import { applyPatch, previewSourcePatch, serialize } from "../semantic-layer";
 
 let projectRoot: string;
@@ -52,6 +52,35 @@ describe("measures and segments overlay", () => {
     expect(overlay?.proposedYaml).toContain("measures:");
     expect(overlay?.proposedYaml).toContain("segments:");
     await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), "utf8")).resolves.toBe(schemaYaml);
+  });
+
+  it("does not emit overlay preview for formatting-only differences", async () => {
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"),
+      `name: superstore_orders
+
+grain:
+  - sales
+
+measures:
+  - name: total_sales
+    expr: sum(sales)
+    description: Total sales
+
+segments:
+  - name: positive_sales
+    expr: sales > 0
+`,
+      "utf8"
+    );
+
+    const preview = await previewOverlayUpdate(projectRoot, "mysql-aliyun", "superstore_orders", {
+      grain: ["sales"],
+      measures: [{ name: "total_sales", expr: "sum(sales)", description: "Total sales" }],
+      segments: [{ name: "positive_sales", expr: "sales > 0" }]
+    });
+
+    expect(preview).toBeNull();
   });
 });
 

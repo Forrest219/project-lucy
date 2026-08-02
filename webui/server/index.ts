@@ -43,6 +43,13 @@ import {
   writeSourceYamlImport
 } from "./semantic-layer";
 import {
+  createTableYamlVersionSnapshot,
+  listTableYamlVersions,
+  previewTableYamlVersionRestore,
+  readTableYamlVersion,
+  restoreTableYamlVersionDraft
+} from "./table-yaml-history";
+import {
   createWikiDirectory,
   commitWikiUpload,
   deleteWikiDirectory,
@@ -396,7 +403,7 @@ export function buildServer() {
 
   app.put<{
     Params: { conn: string; schema: string; table: string };
-    Body: { patch?: TablePatch; dryRun?: boolean };
+    Body: { patch?: TablePatch; dryRun?: boolean; restoredFromVersionId?: string };
   }>("/api/sources/:conn/:schema/:table", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
@@ -416,19 +423,33 @@ export function buildServer() {
     changedSources.set(`${conn}/${schema}/${table}`, { conn, schema, table });
     const validation = await validateSource(projectRoot, conn, schema, table);
     const files = await changedFiles(projectRoot, writtenFiles);
+    const nextSource = await readSource(projectRoot, conn, schema, table);
+    const version = await createTableYamlVersionSnapshot(
+      projectRoot,
+      conn,
+      schema,
+      table,
+      nextSource.rawYaml,
+      {
+        operation: request.body?.restoredFromVersionId ? "restore" : "save",
+        restoredFromVersionId: request.body?.restoredFromVersionId,
+        affectedFiles: preview.files.map((file) => file.filePath)
+      }
+    );
     return reply.send({
       ok: true,
       data: {
         written: true,
         validation,
-        changedFiles: files
+        changedFiles: files,
+        version
       }
     });
   });
 
   app.post<{
     Params: { conn: string; schema: string; table: string };
-    Body: { yaml?: string; dryRun?: boolean };
+    Body: { yaml?: string; dryRun?: boolean; sourceFileName?: string; restoredFromVersionId?: string };
   }>("/api/sources/:conn/:schema/:table/import", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const yaml = request.body?.yaml;
@@ -458,14 +479,76 @@ export function buildServer() {
     changedSources.set(`${conn}/${schema}/${table}`, { conn, schema, table });
     const validation = await validateSource(projectRoot, conn, schema, table);
     const files = await changedFiles(projectRoot, writtenFiles);
+    const nextSource = await readSource(projectRoot, conn, schema, table);
+    const version = await createTableYamlVersionSnapshot(
+      projectRoot,
+      conn,
+      schema,
+      table,
+      nextSource.rawYaml,
+      {
+        operation: request.body?.restoredFromVersionId ? "restore" : "import",
+        sourceFileName: request.body?.sourceFileName,
+        restoredFromVersionId: request.body?.restoredFromVersionId,
+        affectedFiles: preview.files.map((file) => file.filePath)
+      }
+    );
     return reply.send({
       ok: true,
       data: {
         written: true,
         validation,
-        changedFiles: files
+        changedFiles: files,
+        version
       }
     });
+  });
+
+  app.get<{
+    Params: { conn: string; schema: string; table: string };
+  }>("/api/sources/:conn/:schema/:table/versions", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { conn, schema, table } = request.params;
+    return {
+      ok: true,
+      data: await listTableYamlVersions(projectRoot, conn, schema, table)
+    };
+  });
+
+  app.get<{
+    Params: { conn: string; schema: string; table: string; versionId: string };
+  }>("/api/sources/:conn/:schema/:table/versions/:versionId", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { conn, schema, table, versionId } = request.params;
+    const current = await readSource(projectRoot, conn, schema, table);
+    return {
+      ok: true,
+      data: await readTableYamlVersion(projectRoot, conn, schema, table, versionId, current.rawYaml)
+    };
+  });
+
+  app.post<{
+    Params: { conn: string; schema: string; table: string; versionId: string };
+  }>("/api/sources/:conn/:schema/:table/versions/:versionId/restore/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { conn, schema, table, versionId } = request.params;
+    const current = await readSource(projectRoot, conn, schema, table);
+    return {
+      ok: true,
+      data: await previewTableYamlVersionRestore(projectRoot, conn, schema, table, versionId, current.rawYaml)
+    };
+  });
+
+  app.post<{
+    Params: { conn: string; schema: string; table: string; versionId: string };
+  }>("/api/sources/:conn/:schema/:table/versions/:versionId/restore", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { conn, schema, table, versionId } = request.params;
+    const current = await readSource(projectRoot, conn, schema, table);
+    return {
+      ok: true,
+      data: await restoreTableYamlVersionDraft(projectRoot, conn, schema, table, versionId, current.rawYaml)
+    };
   });
 
   app.post<{

@@ -61,6 +61,10 @@ export function applyOverlayUpdate(doc: Document, table: string, update: Overlay
   return doc;
 }
 
+function stableJson(value: unknown): string {
+  return JSON.stringify(value ?? null);
+}
+
 export async function previewOverlayUpdate(projectRoot: string, conn: string, table: string, update: OverlayUpdate): Promise<OverlayPreview | null> {
   if (!update.grain && !update.measures && !update.segments) {
     return null;
@@ -68,7 +72,11 @@ export async function previewOverlayUpdate(projectRoot: string, conn: string, ta
   const relPath = path.posix.join("semantic-layer", conn, `${table}.yaml`);
   const oldText = await readOverlayText(projectRoot, relPath);
   const doc = parseOverlay(oldText);
+  const oldJson = stableJson(doc.toJSON());
   applyOverlayUpdate(doc, table, update);
+  if (oldJson === stableJson(doc.toJSON())) {
+    return null;
+  }
   return {
     relPath,
     oldText,

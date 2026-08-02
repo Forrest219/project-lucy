@@ -22,6 +22,7 @@ beforeEach(async () => {
         pk: true
         nullable: false
         descriptions:
+          db: 订单 ID
           ai: Unique order identifier.
       - name: order_name
         type: string
@@ -92,6 +93,7 @@ describe("semantic-layer read", () => {
 
     expect(result.model.descriptions.ai).toBe("Order registry.");
     expect(result.model.columns.map((column) => column.name)).toEqual(["order_id", "order_name"]);
+    expect(result.model.columns[0].descriptions.db).toBe("订单 ID");
     expect(result.model.columns[1].descriptions.human).toBe("Order display name.");
     expect(result.model.grain).toEqual(["order_id"]);
     expect(result.model.measures).toEqual([{ name: "order_count", expr: "count(*)", filter: undefined, description: undefined }]);

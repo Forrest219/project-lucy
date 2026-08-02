@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import clsx from "clsx";
 import { DiffViewer } from "../components/DiffViewer";
 import { MeasureForm } from "../components/MeasureForm";
 import { SegmentForm } from "../components/SegmentForm";
-import { StatusBadge } from "../components/StatusBadge";
 import { YamlPreview } from "../components/YamlPreview";
 import { PageHeader } from "../components/PageHeader";
 import { RowMoreMenu } from "../components/RowMoreMenu";
@@ -15,20 +14,17 @@ import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
 import type {
   Join,
-  JoinCandidate,
-  JoinCandidatesResponse,
   SourceDetail,
   SourcePreview,
   SourceSaveResponse,
-  SourceSummary,
-  SourcesResponse,
   TablePatch,
+  TableYamlVersionDetail,
+  TableYamlVersionListResponse,
+  TableYamlVersionRestoreResult,
+  TableYamlVersionSummary,
   ValidationResult
 } from "../lib/types";
-import {
-  RELATIONSHIP_LABELS,
-  tableJoinCandidates
-} from "./semantic/join-utils";
+import { RELATIONSHIP_LABELS } from "./semantic/join-utils";
 
 const editorSchema = z.object({
   tableDescription: z.string(),
@@ -58,16 +54,18 @@ const editorSchema = z.object({
 
 type EditorForm = z.infer<typeof editorSchema>;
 type EditorSection = "overview" | "columns" | "measures" | "segments" | "joins";
+type FieldFilterMode = "all" | "missingHuman" | "hasAi" | "pkOrRequired";
 type InspectorTab = "diff" | "yaml" | "validate";
 type ChangeSummaryRow = {
   section: string;
   added: number;
   modified: number;
   removed: number;
+  details?: string[];
 };
 type SaveInput =
   | { kind: "patch"; patch: TablePatch }
-  | { kind: "import"; yaml: string };
+  | { kind: "import"; yaml: string; sourceFileName?: string; restoredFromVersionId?: string };
 
 /**
  * Initialise the editable form from the source detail.
@@ -142,13 +140,43 @@ const EMPTY_FORM: EditorForm = {
 const SECTION_LABELS: Record<EditorSection, string> = {
   overview: "基础语义",
   columns: "字段",
-  measures: "Measures",
-  segments: "Segments",
-  joins: "Joins"
+  measures: "指标",
+  segments: "分群",
+  joins: "关联"
+};
+
+const FIELD_FILTER_LABELS: Record<FieldFilterMode, string> = {
+  all: "全部字段",
+  missingHuman: "缺少人工描述",
+  hasAi: "有 AI 建议",
+  pkOrRequired: "PK / Not Null"
 };
 
 function countLabel(count: number, unit: string) {
   return `${count} ${unit}`;
+}
+
+const VERSION_OPERATION_LABELS: Record<TableYamlVersionSummary["operation"], string> = {
+  save: "保存",
+  import: "导入",
+  restore: "恢复"
+};
+
+function shortHash(contentHash: string) {
+  return contentHash.replace(/^sha256:/, "").slice(0, 8);
+}
+
+function formatVersionTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function stableJson(value: unknown): string {
@@ -174,6 +202,36 @@ function compareNamedItems(
   return { added, modified, removed };
 }
 
+function namedItemChangeDetails(
+  label: string,
+  current: Array<{ name: string }> | undefined,
+  next: Array<{ name: string }> | undefined
+): string[] {
+  const currentByName = new Map((current ?? []).map((item) => [item.name, stableJson(item)]));
+  const nextByName = new Map((next ?? []).map((item) => [item.name, stableJson(item)]));
+  const details: string[] = [];
+
+  for (const [name, value] of nextByName) {
+    if (!currentByName.has(name)) {
+      details.push(`新增${label} ${name}`);
+    } else if (currentByName.get(name) !== value) {
+      details.push(`修改${label} ${name}`);
+    }
+  }
+  for (const name of currentByName.keys()) {
+    if (!nextByName.has(name)) {
+      details.push(`删除${label} ${name}`);
+    }
+  }
+
+  return details;
+}
+
+function displaySemanticValue(value: string | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  return trimmed || "空";
+}
+
 function buildChangeSummary({
   form,
   importedYamlName,
@@ -189,30 +247,60 @@ function buildChangeSummary({
         section: "导入 YAML",
         added: 0,
         modified: 1,
-        removed: 0
+        removed: 0,
+        details: [`导入来源：${importedYamlName}`]
       }
     ];
   }
 
   const rows: ChangeSummaryRow[] = [];
   if (form.tableDescription !== (source.model.descriptions.human ?? "")) {
-    rows.push({ section: "表描述", added: source.model.descriptions.human ? 0 : 1, modified: source.model.descriptions.human ? 1 : 0, removed: 0 });
+    rows.push({
+      section: "表描述",
+      added: source.model.descriptions.human ? 0 : 1,
+      modified: source.model.descriptions.human ? 1 : 0,
+      removed: 0,
+      details: [
+        `表描述：${displaySemanticValue(source.model.descriptions.human)} -> ${displaySemanticValue(form.tableDescription)}`
+      ]
+    });
   }
   if (form.grain !== (source.model.grain?.join(", ") ?? "")) {
-    rows.push({ section: "行粒度", added: source.model.grain?.length ? 0 : 1, modified: source.model.grain?.length ? 1 : 0, removed: form.grain.trim() ? 0 : 1 });
+    rows.push({
+      section: "行粒度",
+      added: source.model.grain?.length ? 0 : 1,
+      modified: source.model.grain?.length ? 1 : 0,
+      removed: form.grain.trim() ? 0 : 1,
+      details: [
+        `行粒度：${displaySemanticValue(source.model.grain?.join(", "))} -> ${displaySemanticValue(form.grain)}`
+      ]
+    });
   }
   const sourceColumns = new Map(source.model.columns.map((column) => [column.name, column.descriptions.human ?? ""]));
-  const modifiedColumns = form.columns.filter((column) => column.description !== (sourceColumns.get(column.name) ?? "")).length;
+  const modifiedColumnDetails = form.columns
+    .filter((column) => column.description !== (sourceColumns.get(column.name) ?? ""))
+    .map((column) => (
+      `字段 ${column.name} · 人工描述：${displaySemanticValue(sourceColumns.get(column.name))} -> ${displaySemanticValue(column.description)}`
+    ));
+  const modifiedColumns = modifiedColumnDetails.length;
   if (modifiedColumns > 0) {
-    rows.push({ section: "字段描述", added: 0, modified: modifiedColumns, removed: 0 });
+    rows.push({ section: "字段描述", added: 0, modified: modifiedColumns, removed: 0, details: modifiedColumnDetails });
   }
   const measures = compareNamedItems(source.model.measures, form.measures);
   if (measures.added || measures.modified || measures.removed) {
-    rows.push({ section: "Measures", ...measures });
+    rows.push({
+      section: "指标",
+      ...measures,
+      details: namedItemChangeDetails("指标", source.model.measures, form.measures)
+    });
   }
   const segments = compareNamedItems(source.model.segments, form.segments);
   if (segments.added || segments.modified || segments.removed) {
-    rows.push({ section: "Segments", ...segments });
+    rows.push({
+      section: "分群",
+      ...segments,
+      details: namedItemChangeDetails("分群", source.model.segments, form.segments)
+    });
   }
   return rows;
 }
@@ -233,26 +321,6 @@ function OverlayBadge({ source }: { source: SourceDetail }) {
   );
 }
 
-async function copyTextToClipboard(value: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-  // Fallback for older browsers / non-secure contexts: synthesise a textarea
-  // and select+copy through the deprecated execCommand path.
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand("copy");
-  } finally {
-    document.body.removeChild(textarea);
-  }
-}
-
 function FieldMetaBadge({
   tone = "muted",
   children
@@ -263,28 +331,99 @@ function FieldMetaBadge({
   return <span className={clsx("pl-meta-badge", `pl-meta-badge--${tone}`)}>{children}</span>;
 }
 
+function WorkbenchDisclosure({
+  id,
+  title,
+  summary,
+  children,
+  className = "pl-workbench-disclosure",
+  buttonClassName = "pl-workbench-disclosure-summary",
+  panelClassName,
+  defaultOpen = false,
+  testId
+}: {
+  id: string;
+  title: ReactNode;
+  summary?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  buttonClassName?: string;
+  panelClassName?: string;
+  defaultOpen?: boolean;
+  testId?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const panelId = `${id}-panel`;
+
+  return (
+    <div
+      className={clsx(className, open && `${className}--open`)}
+      data-open={open ? "true" : "false"}
+      data-testid={testId}
+    >
+      <button
+        aria-controls={panelId}
+        aria-expanded={open}
+        className={buttonClassName}
+        id={id}
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span className="pl-disclosure-title">
+          <span aria-hidden="true" className="pl-disclosure-chevron">
+            {open ? "▾" : "▸"}
+          </span>
+          <span>{title}</span>
+        </span>
+        {summary ? <small>{summary}</small> : null}
+      </button>
+      <div
+        className={panelClassName}
+        hidden={!open}
+        id={panelId}
+        role="region"
+        aria-labelledby={id}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function FieldCard({
   sourceColumn,
   description,
+  selected,
   onDescriptionChange,
-  onAdoptAi
+  onAdoptAi,
+  onSelectedChange
 }: {
   sourceColumn: SourceDetail["model"]["columns"][number];
   description: string;
+  selected: boolean;
   onDescriptionChange: (next: string) => void;
   onAdoptAi: () => void;
+  onSelectedChange: (checked: boolean) => void;
 }) {
   const ai = sourceColumn.descriptions.ai ?? "";
+  const db = sourceColumn.descriptions.db ?? "";
   const human = description;
   const hasHuman = human.trim().length > 0;
   const hasAi = ai.length > 0;
+  const hasDb = db.trim().length > 0;
 
   return (
     <article className="pl-field-card" data-column={sourceColumn.name}>
       <div className="pl-field-card-header">
-        <div className="pl-field-card-name">
-          <strong>{sourceColumn.name}</strong>
-        </div>
+        <label className="pl-field-card-select">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(event) => onSelectedChange(event.target.checked)}
+            aria-label={`选择字段 ${sourceColumn.name}`}
+          />
+          <strong className="notranslate" translate="no">{sourceColumn.name}</strong>
+        </label>
         <div className="pl-field-badges">
           {sourceColumn.pk ? <FieldMetaBadge tone="pk">PK</FieldMetaBadge> : null}
           <FieldMetaBadge tone="muted">{sourceColumn.type}</FieldMetaBadge>
@@ -300,7 +439,13 @@ function FieldCard({
       <div className="pl-description-buckets">
         <div className="pl-description-bucket">
           <span className="pl-description-label">物理注释 (DB)</span>
-          <p className="pl-description-muted">暂无物理注释</p>
+          {hasDb ? (
+            <p className="pl-description-text" title={db}>
+              {db}
+            </p>
+          ) : (
+            <p className="pl-description-muted">暂无物理注释</p>
+          )}
         </div>
 
         <div className="pl-description-bucket">
@@ -310,6 +455,7 @@ function FieldCard({
               <button
                 type="button"
                 className="pl-btn pl-btn--ghost"
+                aria-label={`${hasHuman ? "覆盖为 AI 描述" : "采纳 AI 描述"}：${sourceColumn.name}`}
                 onClick={onAdoptAi}
               >
                 {hasHuman ? "覆盖为 AI 描述" : "采纳 AI 描述"}
@@ -328,6 +474,7 @@ function FieldCard({
         <div className="pl-description-bucket">
           <span className="pl-description-label">人工描述 (Human)</span>
           <textarea
+            aria-label={`${sourceColumn.name} 人工描述`}
             rows={3}
             className="pl-textarea"
             value={description}
@@ -340,207 +487,94 @@ function FieldCard({
   );
 }
 
-function CandidateJoinBanner({
-  candidates,
-  onKeep,
-  onReject,
-  onConfirm
-}: {
-  candidates: JoinCandidate[];
-  onKeep: (candidate: JoinCandidate) => void;
-  onReject: (candidate: JoinCandidate) => void;
-  onConfirm: (candidate: JoinCandidate) => void;
-}) {
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="pl-candidate-joins-banner" aria-label="候选关联关系">
-      <header className="pl-candidate-joins-banner-header">
-        <strong>发现 {candidates.length} 个智能推断的候选关联关系</strong>
-        <span className="pl-notice">这些关系来自 *_id 启发式推断。确认后写入正式 YAML；保留/拒绝仅修改 .ktx-ui sidecar。</span>
-      </header>
-      <div className="pl-candidate-joins-list">
-        {candidates.map((candidate) => (
-          <div
-            className="pl-candidate-join-row"
-            key={`${candidate.join.to}-${candidate.join.on}-${candidate.confidence}`}
-          >
-            <div className="pl-candidate-join-body">
-              <div className="pl-candidate-join-line">
-                <strong>{candidate.join.to}</strong>
-                <span className="pl-candidate-join-rel">
-                  [{RELATIONSHIP_LABELS[candidate.join.relationship]}]
-                </span>
-              </div>
-              <code className="pl-candidate-join-on">{candidate.join.on}</code>
-              <div className="pl-candidate-join-note">{`推断依据: ${candidate.note ?? "字段名匹配"}`}</div>
-            </div>
-            <div className="pl-candidate-join-actions">
-              <button
-                type="button"
-                className="pl-btn pl-btn--primary"
-                onClick={() => onConfirm(candidate)}
-              >
-                确认写入语义层
-              </button>
-              <button
-                type="button"
-                className="pl-btn pl-btn--secondary"
-                onClick={() => onKeep(candidate)}
-              >
-                保留为候选
-              </button>
-              <button
-                type="button"
-                className="pl-btn pl-btn--ghost"
-                onClick={() => onReject(candidate)}
-              >
-                标记不采用
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function CandidateJoinDisclosure({
-  candidates,
-  onKeep,
-  onReject,
-  onConfirm
-}: {
-  candidates: JoinCandidate[];
-  onKeep: (candidate: JoinCandidate) => void;
-  onReject: (candidate: JoinCandidate) => void;
-  onConfirm: (candidate: JoinCandidate) => void;
-}) {
-  if (candidates.length === 0) {
-    return null;
-  }
-  return (
-    <details className="pl-workbench-disclosure" data-testid="candidate-joins-disclosure">
-      <summary className="pl-workbench-disclosure-summary">
-        <span>待处理建议（{candidates.length}）</span>
-        <small>在 Joins 中处理</small>
-      </summary>
-      <CandidateJoinBanner
-        candidates={candidates}
-        onConfirm={onConfirm}
-        onKeep={onKeep}
-        onReject={onReject}
-      />
-    </details>
-  );
-}
-
-function SourceObjectTree({
-  activeSection,
-  currentTable,
-  onSectionChange,
-  schema,
-  siblingTables,
-  source
-}: {
-  activeSection: EditorSection;
-  currentTable: string;
-  onSectionChange: (section: EditorSection) => void;
-  schema: string;
-  siblingTables: SourceSummary[];
-  source: SourceDetail | undefined;
-}) {
-  const sectionCounts: Array<{ section: EditorSection; count?: number; unit?: string }> = [
-    { section: "overview" },
-    { section: "columns", count: source?.model.columns.length ?? 0, unit: "字段" },
-    { section: "measures", count: source?.model.measures?.length ?? 0, unit: "指标" },
-    { section: "segments", count: source?.model.segments?.length ?? 0, unit: "分群" },
-    { section: "joins", count: source?.model.joins?.length ?? 0, unit: "关联" }
-  ];
-
-  return (
-    <div className="pl-object-tree pl-object-tree--secondary">
-      <Link className="pl-btn pl-btn--ghost justify-start" to="/catalog">返回表目录</Link>
-      <div className="pl-object-tree-group">
-        <details className="pl-secondary-disclosure">
-          <summary className="pl-secondary-disclosure-summary">
-            <span className="notranslate" translate="no">同 Schema 表</span>
-            <small className="notranslate" translate="no">{schema || "Schema"}</small>
-          </summary>
-          <nav className="grid gap-1 notranslate" aria-label="同 Schema 表" translate="no">
-            {siblingTables.map((item) => (
-              <Link
-                aria-current={item.table === currentTable ? "page" : undefined}
-                className={`pl-nav-link ${item.table === currentTable ? "pl-nav-link--active" : ""}`}
-                key={item.table}
-                to={`/catalog/${encodeURIComponent(item.conn)}/${encodeURIComponent(item.schema)}/${encodeURIComponent(item.table)}`}
-              >
-                <span className="truncate">{item.table}</span>
-              </Link>
-            ))}
-          </nav>
-        </details>
-      </div>
-
-      <div className="pl-object-tree-group">
-        <h2 className="pl-object-tree-title">当前表</h2>
-        <div className="grid gap-1" role="list" aria-label="表编辑区域">
-          {sectionCounts.map((item) => (
-            <button
-              aria-current={item.section === activeSection ? "true" : undefined}
-              className={`pl-object-tree-item ${item.section === activeSection ? "pl-object-tree-item--active" : ""}`}
-              key={item.section}
-              onClick={() => onSectionChange(item.section)}
-              type="button"
-            >
-              <span>{SECTION_LABELS[item.section]}</span>
-              {typeof item.count === "number" && item.unit ? <small>{countLabel(item.count, item.unit)}</small> : null}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type InspectorBadges = {
-  completion: SourceDetail["completion"];
+type SaveStatusBadges = {
+  hasDraftChanges: boolean;
   preview: SourcePreview | null;
   unknownKeys: number;
   previewError: string | null;
   saveError: string | null;
+  isSaving: boolean;
+  validation: ValidationResult | null;
+  validationError: string | null;
 };
 
-function Inspector({
+function ChangeReview({
   activeTab,
   changeSummary,
+  hasDraftChanges,
+  importedYamlName,
+  isSaving,
   preview,
   previewError,
   saveError,
   source,
+  unknownKeys,
   validation,
   validationError,
   onTabChange
 }: {
   activeTab: InspectorTab;
   changeSummary: ChangeSummaryRow[];
+  hasDraftChanges: boolean;
+  importedYamlName: string | null;
+  isSaving: boolean;
   preview: SourcePreview | null;
   previewError: string | null;
   saveError: string | null;
   source: SourceDetail;
+  unknownKeys: number;
   validation: ValidationResult | null;
   validationError: string | null;
   onTabChange: (tab: InspectorTab) => void;
 }) {
-  const unknownKeys = source.model.unknownKeys?.length ?? 0;
   const fileCount = preview?.files.length ?? 0;
 
   return (
-    <aside className="pl-inspector" aria-label="变更检查器">
+    <aside className="pl-inspector pl-change-review" aria-label="变更审阅" data-testid="table-editor-change-review">
       <div className="pl-inspector-header">
-        <div className="pl-segmented-control" role="tablist" aria-label="检查器视图">
+        <div className="pl-inspector-title-row">
+          <div>
+            <p className="pl-panel-title mb-0">变更审阅</p>
+          </div>
+        </div>
+        <SaveStatusBadges
+          hasDraftChanges={hasDraftChanges}
+          preview={preview}
+          previewError={previewError}
+          saveError={saveError}
+          isSaving={isSaving}
+          validation={validation}
+          validationError={validationError}
+          unknownKeys={unknownKeys}
+        />
+        <dl className="pl-review-facts">
+          <div>
+            <dt>导入来源</dt>
+            <dd
+              className="notranslate"
+              data-testid="table-editor-imported-yaml-name"
+              translate="no"
+            >
+              {importedYamlName ?? "未导入"}
+            </dd>
+          </div>
+          <div>
+            <dt>影响文件</dt>
+            <dd>{fileCount}</dd>
+          </div>
+        </dl>
+      </div>
+
+      {previewError ? <p className="pl-error">{previewError}</p> : null}
+      {saveError ? <p className="pl-error">{saveError}</p> : null}
+      {validationError ? <p className="pl-error">{validationError}</p> : null}
+
+      <section className="pl-inspector-section">
+        <ChangeSummary rows={changeSummary} files={preview?.files ?? []} />
+      </section>
+
+      <div className="pl-change-review-tabs">
+        <div className="pl-segmented-control" role="tablist" aria-label="变更详情视图">
           {(["diff", "yaml", "validate"] as InspectorTab[]).map((tab) => (
             <button
               aria-selected={activeTab === tab}
@@ -550,52 +584,33 @@ function Inspector({
               role="tab"
               type="button"
             >
-              {tab === "diff" ? "Diff" : tab === "yaml" ? "YAML" : "Validate"}
+              {tab === "diff" ? "YAML Diff" : tab === "yaml" ? "YAML" : "校验"}
             </button>
           ))}
         </div>
-        <InspectorBadges
-          completion={source.completion}
-          preview={preview}
-          previewError={previewError}
-          saveError={saveError}
-          unknownKeys={unknownKeys}
-        />
       </div>
-
-      {previewError ? <p className="pl-error">{previewError}</p> : null}
-      {saveError ? <p className="pl-error">{saveError}</p> : null}
-      {validationError ? <p className="pl-error">{validationError}</p> : null}
-
       {activeTab === "diff" ? (
-        <section className="pl-inspector-section">
-          <p className="pl-panel-title">变更预览</p>
-          <ChangeSummary rows={changeSummary} files={preview?.files ?? []} />
-          <details className="pl-workbench-disclosure" data-testid="raw-diff-disclosure">
-            <summary className="pl-workbench-disclosure-summary">
-              <span>高级：查看原始 Diff</span>
-              <small>{preview?.diff ? "可展开核对完整 YAML 差异" : "暂无 Diff"}</small>
-            </summary>
-            <DiffViewer diff={preview?.diff ?? ""} />
-          </details>
+        <section className="pl-inspector-section" role="tabpanel">
+          <p className="pl-panel-title">YAML Diff</p>
+          {preview?.diff ? (
+            <DiffViewer diff={preview.diff} />
+          ) : (
+            <p className="pl-notice">暂无 Diff。</p>
+          )}
         </section>
       ) : null}
       {activeTab === "yaml" ? (
-        <section className="pl-inspector-section">
+        <section className="pl-inspector-section" role="tabpanel">
           <p className="pl-panel-title">拟写入 YAML</p>
           <YamlPreview yaml={preview?.proposedYaml ?? source.rawYaml} />
         </section>
       ) : null}
       {activeTab === "validate" ? (
-        <section className="pl-inspector-section">
+        <section className="pl-inspector-section" role="tabpanel">
           <p className="pl-panel-title">保存与校验</p>
-          <p className="pl-notice">
-            保存会调用现有语义层写入接口（dryRun:false）；成功后进入审阅页查看 changed files 与 validate 结果。
-            Cmd+S / Ctrl+S 不会落盘，只会刷新 DryRun 预览并切到 Diff 面板。
-          </p>
           {previewError ? null : (
             <p className="pl-notice">
-              Dry-run 包含 {fileCount} 个文件，未知 YAML Key {unknownKeys} 个。
+              预览包含 {fileCount} 个文件，未知 YAML Key {unknownKeys} 个。
             </p>
           )}
           {validation ? (
@@ -616,6 +631,102 @@ function Inspector({
   );
 }
 
+function ImportYamlDrawer({
+  onClose,
+  onOpenFile,
+  onPastePreview,
+  onPastedYamlChange,
+  pastedYaml
+}: {
+  onClose: () => void;
+  onOpenFile: () => void;
+  onPastePreview: () => void;
+  onPastedYamlChange: (value: string) => void;
+  pastedYaml: string;
+}) {
+  return (
+    <div className="pl-drawer-backdrop" role="presentation" data-testid="table-editor-import-drawer-backdrop">
+      <aside
+        aria-label="导入 YAML"
+        aria-modal="true"
+        className="pl-drawer-panel"
+        data-testid="table-editor-import-drawer"
+        role="dialog"
+      >
+        <header className="pl-drawer-header">
+          <div>
+            <p className="pl-panel-title mb-0">导入 YAML</p>
+          </div>
+          <button className="pl-drawer-close pl-drawer-close--prominent" onClick={onClose} type="button">
+            关闭
+          </button>
+        </header>
+        <section className="pl-drawer-body" aria-label="导入 YAML 内容">
+          <button className="pl-btn pl-btn--secondary" onClick={onOpenFile} type="button">
+            选择 YAML 文件
+          </button>
+          <label className="pl-field-label">
+            <span>粘贴 YAML</span>
+            <textarea
+              className="pl-textarea notranslate"
+              data-testid="paste-yaml-textarea"
+              onChange={(event) => onPastedYamlChange(event.target.value)}
+              placeholder="粘贴完善后的当前表 YAML"
+              rows={12}
+              translate="no"
+              value={pastedYaml}
+            />
+          </label>
+        </section>
+        <footer className="pl-drawer-footer pl-drawer-footer-border-t">
+          <button className="pl-btn pl-btn--secondary" onClick={onPastePreview} type="button">
+            生成导入预览
+          </button>
+        </footer>
+      </aside>
+    </div>
+  );
+}
+
+function SemanticTabs({
+  activeSection,
+  onSectionChange,
+  source
+}: {
+  activeSection: EditorSection;
+  onSectionChange: (section: EditorSection) => void;
+  source: SourceDetail;
+}) {
+  const sectionCounts: Array<{ section: EditorSection; count?: number; unit?: string }> = [
+    { section: "overview" },
+    { section: "columns", count: source.model.columns.length, unit: "字段" },
+    { section: "measures", count: source.model.measures?.length ?? 0, unit: "指标" },
+    { section: "segments", count: source.model.segments?.length ?? 0, unit: "分群" },
+    { section: "joins", count: source.model.joins?.length ?? 0, unit: "关联" }
+  ];
+
+  return (
+    <div className="pl-semantic-tabs" role="tablist" aria-label="在线编辑">
+      {sectionCounts.map((item) => (
+        <button
+          aria-selected={item.section === activeSection}
+          className={clsx(
+            "pl-semantic-tab",
+            item.section === activeSection && "pl-semantic-tab--active"
+          )}
+          key={item.section}
+          onClick={() => onSectionChange(item.section)}
+          role="tab"
+          type="button"
+        >
+          <span>{SECTION_LABELS[item.section]}</span>
+          {typeof item.count === "number" && item.unit ? <small>{countLabel(item.count, item.unit)}</small> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ChangeSummary({
   rows,
   files
@@ -633,8 +744,19 @@ function ChangeSummary({
         <ul className="pl-change-summary-list">
           {rows.map((row) => (
             <li key={row.section}>
-              <span>{row.section}</span>
-              <strong>{`新增 ${row.added} / 修改 ${row.modified} / 删除 ${row.removed}`}</strong>
+              <div className="pl-change-summary-row-head">
+                <span>{row.section}</span>
+                <strong>{`新增 ${row.added} / 修改 ${row.modified} / 删除 ${row.removed}`}</strong>
+              </div>
+              {row.details?.length ? (
+                <ul className="pl-change-summary-detail-list">
+                  {row.details.map((detail) => (
+                    <li className="notranslate" key={detail} translate="no">
+                      {detail}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -655,18 +777,46 @@ function ChangeSummary({
   );
 }
 
-function InspectorBadges({
-  completion,
+function SaveStatusBadges({
+  hasDraftChanges,
   preview,
   unknownKeys,
   previewError,
-  saveError
-}: InspectorBadges) {
+  saveError,
+  isSaving,
+  validation,
+  validationError
+}: SaveStatusBadges) {
+  const primaryStatus = saveError
+    ? "保存失败"
+    : validationError
+      ? "校验失败"
+      : isSaving
+        ? "保存中"
+        : validation
+          ? validation.ok ? "校验通过" : "校验未通过"
+          : hasDraftChanges
+            ? "有未保存修改"
+            : "已保存";
+
   return (
-    <div className="pl-inspector-badges" aria-label="检查器状态">
-      <StatusBadge status={completion} />
+    <div className="pl-inspector-badges" aria-label="保存状态摘要">
+      <span
+        className={clsx(
+          "pl-inspector-badge",
+          saveError || validationError || (validation && !validation.ok)
+            ? "pl-inspector-badge--danger"
+            : validation?.ok
+              ? "pl-inspector-badge--success"
+              : hasDraftChanges
+                ? "pl-inspector-badge--warning"
+                : "pl-inspector-badge--muted"
+        )}
+      >
+        {primaryStatus}
+      </span>
       <span className="pl-inspector-badge pl-inspector-badge--muted">
-        Dry-run {preview?.files.length ?? 0}
+        影响文件 {preview?.files.length ?? 0}
       </span>
       <span
         className={clsx(
@@ -674,44 +824,170 @@ function InspectorBadges({
           unknownKeys > 0 ? "pl-inspector-badge--warning" : "pl-inspector-badge--muted"
         )}
       >
-        Unknown {unknownKeys}
+        未知 YAML Key {unknownKeys}
       </span>
       {previewError ? (
-        <span className="pl-inspector-badge pl-inspector-badge--danger">Preview error</span>
+        <span className="pl-inspector-badge pl-inspector-badge--danger">预览失败</span>
       ) : null}
       {saveError ? (
-        <span className="pl-inspector-badge pl-inspector-badge--danger">Save error</span>
+        <span className="pl-inspector-badge pl-inspector-badge--danger">保存失败</span>
       ) : null}
+      {isSaving ? (
+        <span className="pl-inspector-badge pl-inspector-badge--muted">保存中</span>
+      ) : null}
+      {validation ? (
+        <span className={clsx("pl-inspector-badge", validation.ok ? "pl-inspector-badge--success" : "pl-inspector-badge--danger")}>
+          Validate {validation.ok ? "通过" : "未通过"}
+        </span>
+      ) : null}
+      {validationError ? (
+        <span className="pl-inspector-badge pl-inspector-badge--danger">Validate 失败</span>
+      ) : null}
+    </div>
+  );
+}
+
+function VersionHistoryPanel({
+  detail,
+  detailLoading,
+  onClose,
+  onRestore,
+  onSelectVersion,
+  restorePending,
+  selectedVersionId,
+  versions,
+  versionsLoading
+}: {
+  detail: TableYamlVersionDetail | undefined;
+  detailLoading: boolean;
+  onClose: () => void;
+  onRestore: (versionId: string) => void;
+  onSelectVersion: (versionId: string) => void;
+  restorePending: boolean;
+  selectedVersionId: string | null;
+  versions: TableYamlVersionSummary[];
+  versionsLoading: boolean;
+}) {
+  return (
+    <div className="pl-version-panel-backdrop" role="presentation">
+      <aside
+        aria-label="版本记录"
+        aria-modal="true"
+        className="pl-version-panel"
+        data-testid="table-editor-version-panel"
+        role="dialog"
+      >
+        <div className="pl-version-panel-header">
+          <div>
+            <p className="pl-panel-title mb-0">版本记录</p>
+            <span>保留最近 5 版 YAML，可预览并恢复为未保存草稿。</span>
+          </div>
+          <button className="pl-drawer-close pl-drawer-close--prominent" onClick={onClose} type="button">
+            关闭
+          </button>
+        </div>
+
+        <div className="pl-version-panel-body">
+          <div className="pl-version-list" aria-label="YAML 历史版本">
+            {versionsLoading ? <p className="pl-notice">正在加载版本记录...</p> : null}
+            {!versionsLoading && versions.length === 0 ? (
+              <p className="pl-notice">暂无版本记录。保存或导入 YAML 后会生成记录。</p>
+            ) : null}
+            {versions.map((version) => (
+              <button
+                aria-pressed={selectedVersionId === version.versionId}
+                className={clsx(
+                  "pl-version-list-item",
+                  selectedVersionId === version.versionId && "pl-version-list-item--active"
+                )}
+                key={version.versionId}
+                onClick={() => onSelectVersion(version.versionId)}
+                type="button"
+              >
+                <span>
+                  <strong>{VERSION_OPERATION_LABELS[version.operation]}</strong>
+                  <small>{formatVersionTime(version.createdAt)}</small>
+                </span>
+                <code className="notranslate" translate="no">{shortHash(version.contentHash)}</code>
+              </button>
+            ))}
+          </div>
+
+          <div className="pl-version-detail">
+            {detailLoading ? <p className="pl-notice">正在加载版本详情...</p> : null}
+            {detail ? (
+              <>
+                <div className="pl-version-detail-summary">
+                  <div>
+                    <span>操作</span>
+                    <strong>{VERSION_OPERATION_LABELS[detail.operation]}</strong>
+                  </div>
+                  <div>
+                    <span>时间</span>
+                    <strong>{formatVersionTime(detail.createdAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Hash</span>
+                    <code className="notranslate" translate="no">{shortHash(detail.contentHash)}</code>
+                  </div>
+                </div>
+                <div className="pl-version-detail-actions">
+                  <button
+                    className="pl-btn pl-btn--primary"
+                    disabled={restorePending}
+                    onClick={() => onRestore(detail.versionId)}
+                    type="button"
+                  >
+                    {restorePending ? "恢复中..." : "恢复此版本"}
+                  </button>
+                </div>
+                <WorkbenchDisclosure
+                  defaultOpen
+                  id="version-diff-disclosure-trigger"
+                  title="Diff"
+                  summary="当前 YAML 与历史版本的差异"
+                  testId="version-diff-disclosure"
+                >
+                  <DiffViewer diff={detail.diffFromCurrent} />
+                </WorkbenchDisclosure>
+                <WorkbenchDisclosure
+                  id="version-yaml-disclosure-trigger"
+                  title="YAML"
+                  summary="历史版本快照"
+                  testId="version-yaml-disclosure"
+                >
+                  <YamlPreview yaml={detail.rawYaml} />
+                </WorkbenchDisclosure>
+              </>
+            ) : !detailLoading ? (
+              <p className="pl-notice">选择一个历史版本查看详情。</p>
+            ) : null}
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }
 
 export function TableEditor() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const params = useParams();
   const conn = params.conn ?? "";
   const schema = params.schema ?? "";
   const table = params.table ?? "";
-  const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
-  });
+  const sourceUrl = `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`;
   const sourceQuery = useQuery({
     queryKey: queryKeys.source(conn, schema, table),
-    queryFn: () => apiGet<SourceDetail>(`/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`),
+    queryFn: () => apiGet<SourceDetail>(sourceUrl),
     enabled: Boolean(conn && schema && table)
-  });
-  const candidatesQuery = useQuery({
-    queryKey: queryKeys.joinCandidates,
-    queryFn: () => apiGet<JoinCandidatesResponse>("/api/joins/candidates")
   });
 
   const source = sourceQuery.data;
-  const siblingTables = sourcesQuery.data?.tables.filter((item) => item.conn === conn && item.schema === schema) ?? [];
   const [form, setForm] = useState<EditorForm>(EMPTY_FORM);
   const [activeSection, setActiveSection] = useState<EditorSection>("overview");
   const [fieldSearch, setFieldSearch] = useState("");
+  const [fieldFilterMode, setFieldFilterMode] = useState<FieldFilterMode>("all");
+  const [selectedFieldNames, setSelectedFieldNames] = useState<Set<string>>(() => new Set());
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("diff");
   const [preview, setPreview] = useState<SourcePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -720,18 +996,24 @@ export function TableEditor() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [importedYaml, setImportedYaml] = useState<string | null>(null);
   const [importedYamlName, setImportedYamlName] = useState<string | null>(null);
+  const [restoredFromVersionId, setRestoredFromVersionId] = useState<string | null>(null);
   const [pastedYaml, setPastedYaml] = useState("");
+  const [isImportDrawerOpen, setIsImportDrawerOpen] = useState(false);
+  const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [isRestoringVersion, setIsRestoringVersion] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  const sidecarCandidates = candidatesQuery.data?.candidates ?? [];
-  const visibleCandidates = useMemo(
-    () =>
-      tableJoinCandidates({
-        source,
-        sidecarCandidates
-      }),
-    [source, sidecarCandidates]
-  );
+  const versionsQuery = useQuery({
+    queryKey: queryKeys.sourceVersions(conn, schema, table),
+    queryFn: () => apiGet<TableYamlVersionListResponse>(`${sourceUrl}/versions`),
+    enabled: Boolean(source && isVersionPanelOpen)
+  });
+  const selectedVersionQuery = useQuery({
+    queryKey: queryKeys.sourceVersion(conn, schema, table, selectedVersionId ?? ""),
+    queryFn: () => apiGet<TableYamlVersionDetail>(`${sourceUrl}/versions/${encodeURIComponent(selectedVersionId ?? "")}`),
+    enabled: Boolean(source && isVersionPanelOpen && selectedVersionId)
+  });
 
   const saveMutation = useMutation({
     mutationFn: (input: SaveInput) => {
@@ -739,7 +1021,9 @@ export function TableEditor() {
       if (input.kind === "import") {
         return apiPost<SourceSaveResponse>(`${url}/import`, {
           dryRun: false,
-          yaml: input.yaml
+          yaml: input.yaml,
+          sourceFileName: input.sourceFileName,
+          restoredFromVersionId: input.restoredFromVersionId
         });
       }
       return apiPut<SourceSaveResponse>(url, {
@@ -762,42 +1046,15 @@ export function TableEditor() {
     }
   });
 
-  const writeCandidatesMutation = useMutation({
-    mutationFn: (next: JoinCandidate[]) =>
-      apiPut<JoinCandidatesResponse>("/api/joins/candidates", { candidates: next }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.joinCandidates });
-      toast.success("候选已保存");
-    },
-    onError: (error) => {
-      toast.error(`保存候选失败：${error instanceof Error ? error.message : "未知错误"}`);
+  useEffect(() => {
+    if (!isVersionPanelOpen || selectedVersionId) {
+      return;
     }
-  });
-
-  const confirmJoinMutation = useMutation({
-    mutationFn: (candidate: JoinCandidate) =>
-      apiPut(
-        `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`,
-        {
-          dryRun: false,
-          patch: {
-            joins: [
-              ...(source?.model.joins ?? []),
-              { ...candidate.join, source: "formal" as const }
-            ]
-          }
-        }
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.source(conn, schema, table) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.joinCandidates });
-      toast.success("已写入语义层");
-      navigate("/review");
-    },
-    onError: (error) => {
-      toast.error(`确认失败：${error instanceof Error ? error.message : "未知错误"}`);
+    const firstVersion = versionsQuery.data?.versions[0];
+    if (firstVersion) {
+      setSelectedVersionId(firstVersion.versionId);
     }
-  });
+  }, [isVersionPanelOpen, selectedVersionId, versionsQuery.data?.versions]);
 
   const runPreview = useCallback(
     async (nextForm: EditorForm): Promise<boolean> => {
@@ -805,6 +1062,8 @@ export function TableEditor() {
       if (!source || !parsed.success) {
         return false;
       }
+      setValidation(null);
+      setValidationError(null);
       try {
         const data = await apiPut<SourcePreview>(
           `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`,
@@ -819,6 +1078,8 @@ export function TableEditor() {
       } catch (caught: unknown) {
         setPreview(null);
         setPreviewError(caught instanceof Error ? caught.message : "预览失败");
+        setValidation(null);
+        setValidationError(null);
         return false;
       }
     },
@@ -830,6 +1091,8 @@ export function TableEditor() {
       if (!source) {
         return null;
       }
+      setValidation(null);
+      setValidationError(null);
       try {
         const data = await apiPost<SourcePreview>(
           `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/import`,
@@ -845,6 +1108,8 @@ export function TableEditor() {
       } catch (caught: unknown) {
         setPreview(null);
         setPreviewError(caught instanceof Error ? caught.message : "导入预览失败");
+        setValidation(null);
+        setValidationError(null);
         setInspectorTab("validate");
         return null;
       }
@@ -885,11 +1150,24 @@ export function TableEditor() {
 
   const filteredColumns = useMemo(() => {
     const keyword = fieldSearch.trim().toLowerCase();
-    if (!keyword) {
-      return form.columns;
-    }
     return form.columns.filter((column) => {
       const sourceColumn = columnsByName.get(column.name);
+      if (fieldFilterMode === "missingHuman" && column.description.trim()) {
+        return false;
+      }
+      if (fieldFilterMode === "hasAi" && !sourceColumn?.descriptions.ai) {
+        return false;
+      }
+      if (
+        fieldFilterMode === "pkOrRequired" &&
+        !sourceColumn?.pk &&
+        sourceColumn?.nullable !== false
+      ) {
+        return false;
+      }
+      if (!keyword) {
+        return true;
+      }
       const haystack = [
         column.name,
         sourceColumn?.type ?? "",
@@ -900,7 +1178,13 @@ export function TableEditor() {
         .toLowerCase();
       return haystack.includes(keyword);
     });
-  }, [columnsByName, fieldSearch, form.columns]);
+  }, [columnsByName, fieldFilterMode, fieldSearch, form.columns]);
+
+  const filteredColumnNames = useMemo(
+    () => filteredColumns.map((column) => column.name),
+    [filteredColumns]
+  );
+  const selectedVisibleFieldCount = filteredColumnNames.filter((name) => selectedFieldNames.has(name)).length;
 
   // Track which source we have already initialised the form from. We use the
   // SourceDetail reference (not just the route key) because the same route
@@ -920,6 +1204,7 @@ export function TableEditor() {
     }
     lastInitialisedSource.current = source;
     setForm(formFromSource(source));
+    setSelectedFieldNames(new Set());
     if (isFirstInit.current) {
       // First source for this mount — keep the user's current active
       // section (which may already reflect a click that happened before
@@ -930,6 +1215,7 @@ export function TableEditor() {
       // everything so the user starts on the overview tab.
       setActiveSection("overview");
       setFieldSearch("");
+      setFieldFilterMode("all");
       setInspectorTab("diff");
       setPreview(null);
       setPreviewError(null);
@@ -938,7 +1224,11 @@ export function TableEditor() {
       setValidationError(null);
       setImportedYaml(null);
       setImportedYamlName(null);
+      setRestoredFromVersionId(null);
       setPastedYaml("");
+      setIsImportDrawerOpen(false);
+      setIsVersionPanelOpen(false);
+      setSelectedVersionId(null);
     }
   }, [source]);
 
@@ -975,17 +1265,58 @@ export function TableEditor() {
     }));
   }
 
-  async function handleCopyQualifiedName() {
-    if (!source) {
+  function setFieldSelected(columnName: string, selected: boolean) {
+    setSelectedFieldNames((current) => {
+      const next = new Set(current);
+      if (selected) {
+        next.add(columnName);
+      } else {
+        next.delete(columnName);
+      }
+      return next;
+    });
+  }
+
+  function selectVisibleFields() {
+    setSelectedFieldNames((current) => {
+      const next = new Set(current);
+      for (const name of filteredColumnNames) {
+        next.add(name);
+      }
+      return next;
+    });
+  }
+
+  function clearFieldSelection() {
+    setSelectedFieldNames(new Set());
+  }
+
+  function batchAdoptAiForSelectedFields() {
+    const selectedNames = new Set(filteredColumnNames.filter((name) => selectedFieldNames.has(name)));
+    if (selectedNames.size === 0) {
+      toast.error("请先选择字段");
       return;
     }
-    const value = source.model.qualifiedName ?? `${source.model.schema}.${source.model.table}`;
-    try {
-      await copyTextToClipboard(value);
-      toast.success("已复制完整表名");
-    } catch (caught: unknown) {
-      const message = `复制失败：${caught instanceof Error ? caught.message : "未知错误"}`;
-      toast.error(message);
+    let adopted = 0;
+    const nextColumns = form.columns.map((column) => {
+      if (!selectedNames.has(column.name) || column.description.trim()) {
+        return column;
+      }
+      const ai = columnsByName.get(column.name)?.descriptions.ai;
+      if (!ai) {
+        return column;
+      }
+      adopted += 1;
+      return { ...column, description: ai };
+    });
+    if (adopted > 0) {
+      setForm((current) => ({
+        ...current,
+        columns: nextColumns
+      }));
+      toast.success(`已批量采纳 ${adopted} 个字段的 AI 描述`);
+    } else {
+      toast.error("所选字段没有可填充的空白 AI 描述");
     }
   }
 
@@ -1018,8 +1349,10 @@ export function TableEditor() {
       const yaml = await file.text();
       setImportedYaml(yaml);
       setImportedYamlName(file.name);
+      setRestoredFromVersionId(null);
       const previewResult = await runImportPreview(yaml);
       if (previewResult) {
+        setIsImportDrawerOpen(false);
         toast.success("已导入 YAML 并生成变更预览");
       } else {
         setImportedYaml(null);
@@ -1044,8 +1377,10 @@ export function TableEditor() {
     }
     setImportedYaml(yaml);
     setImportedYamlName("粘贴 YAML");
+    setRestoredFromVersionId(null);
     const previewResult = await runImportPreview(yaml);
     if (previewResult) {
+      setIsImportDrawerOpen(false);
       toast.success("已生成导入预览");
     } else {
       setImportedYaml(null);
@@ -1071,7 +1406,12 @@ export function TableEditor() {
 
   function handleSubmit() {
     if (importedYaml) {
-      saveMutation.mutate({ kind: "import", yaml: importedYaml });
+      saveMutation.mutate({
+        kind: "import",
+        yaml: importedYaml,
+        sourceFileName: restoredFromVersionId ? undefined : importedYamlName ?? undefined,
+        restoredFromVersionId: restoredFromVersionId ?? undefined
+      });
       return;
     }
     if (source) {
@@ -1093,81 +1433,79 @@ export function TableEditor() {
     void Promise.resolve(action).then((ok) => {
       setInspectorTab("diff");
       if (ok) {
-        toast.success("已更新 Dry-run 预览");
+        toast.success("已更新预览");
       } else {
-        toast.error("Dry-run 预览失败");
+        toast.error("预览失败");
       }
     });
   }
 
-  function upsertCandidateInSidecar(candidate: JoinCandidate) {
-    const remaining = sidecarCandidates.filter(
-      (item) =>
-        !(
-          item.conn === candidate.conn &&
-          item.schema === candidate.schema &&
-          item.fromTable === candidate.fromTable &&
-          item.join.to === candidate.join.to &&
-          item.join.on === candidate.join.on
-        )
-    );
-    writeCandidatesMutation.mutate([...remaining, candidate]);
+  async function handleRestoreVersion(versionId: string) {
+    setIsRestoringVersion(true);
+    setSaveError(null);
+    try {
+      const data = await apiPost<TableYamlVersionRestoreResult>(
+        `${sourceUrl}/versions/${encodeURIComponent(versionId)}/restore`,
+        {}
+      );
+      setImportedYaml(data.rawYaml);
+      setImportedYamlName(`恢复版本 ${shortHash(data.restoredFromVersionId)}`);
+      setRestoredFromVersionId(data.restoredFromVersionId);
+      setPastedYaml("");
+      const previewResult = await runImportPreview(data.rawYaml);
+      if (previewResult) {
+        setInspectorTab("diff");
+        toast.success("已恢复为未保存草稿");
+      } else {
+        setImportedYaml(null);
+        setImportedYamlName(null);
+        setRestoredFromVersionId(null);
+        toast.error("恢复预览失败");
+      }
+    } catch (caught: unknown) {
+      const message = `恢复失败：${caught instanceof Error ? caught.message : "未知错误"}`;
+      setSaveError(message);
+      setInspectorTab("validate");
+      toast.error(message);
+    } finally {
+      setIsRestoringVersion(false);
+    }
   }
 
-  function handleKeepCandidate(candidate: JoinCandidate) {
-    upsertCandidateInSidecar({
-      ...candidate,
-      confidence: "candidate",
-      join: { ...candidate.join, source: "candidate" }
-    });
-  }
-
-  function handleRejectCandidate(candidate: JoinCandidate) {
-    upsertCandidateInSidecar({
-      ...candidate,
-      confidence: "rejected",
-      join: { ...candidate.join, source: "candidate" }
-    });
-  }
-
-  function handleConfirmCandidate(candidate: JoinCandidate) {
-    confirmJoinMutation.mutate(candidate);
-  }
-
-  const qualifiedName = source?.model.qualifiedName ?? (source ? `${source.model.schema}.${source.model.table}` : "");
-  const grainLabel = source?.model.grain?.join(", ") || "无";
   const changeSummary = source
     ? buildChangeSummary({ form, importedYamlName, source })
     : [];
+  const unknownKeys = source?.model.unknownKeys?.length ?? 0;
+  const hasDraftChanges = Boolean(preview?.diff || importedYaml);
 
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title={source ? source.model.table : "表语义资产工作台"}
-        breadcrumbs={[
-          "表目录",
-          source?.model.conn ?? conn,
-          source?.model.schema ?? schema,
-          source?.model.table ?? table
-        ]}
-        description={<span className="notranslate" translate="no">导出、导入、校验并审阅当前表的 semantic-layer YAML。</span>}
-        badges={
+        title={source ? <span className="notranslate" translate="no">{source.model.table}</span> : "语义维护"}
+        description={
           source ? (
-            <>
-              <span className="notranslate" translate="no" data-testid="table-editor-conn">{source.model.conn}</span>
-              <span className="notranslate" translate="no">{source.model.schema}</span>
-              <span>完成度 {source.completion}</span>
-            </>
-          ) : null
+            <span className="pl-table-editor-context" data-testid="table-editor-header-context">
+              <span>
+                连接：
+                <span className="notranslate" translate="no">{source.model.conn}</span>
+              </span>
+              <span>
+                Schema：
+                <span className="notranslate" translate="no">{source.model.schema}</span>
+              </span>
+            </span>
+          ) : (
+            null
+          )
         }
         actions={
           source ? (
-            <>
+            <div className="pl-table-header-actions">
+              <button className="pl-btn pl-btn--secondary" type="button" onClick={() => setIsImportDrawerOpen(true)}>
+                导入 YAML
+              </button>
               <button className="pl-btn pl-btn--secondary" type="button" onClick={handleExportYaml}>
                 导出 YAML
-              </button>
-              <button className="pl-btn pl-btn--secondary" type="button" onClick={handleOpenImportPicker}>
-                导入 YAML
               </button>
               <button className="pl-btn pl-btn--ghost" type="button" onClick={handleValidateCurrent}>
                 校验
@@ -1179,8 +1517,14 @@ export function TableEditor() {
                 ariaLabel={`更多操作：${source.model.conn}/${source.model.schema}/${source.model.table}`}
                 items={[
                   {
+                    kind: "action",
+                    label: "版本记录",
+                    onSelect: () => setIsVersionPanelOpen(true),
+                    testId: "table-editor-more-versions"
+                  },
+                  {
                     kind: "link",
-                    label: "业务 Wiki",
+                    label: "查看关联的业务 Wiki",
                     href: `/wiki?sl_ref=${encodeURIComponent(`${source.model.conn}/${source.model.schema}/${source.model.table}`)}`,
                     testId: "table-editor-more-wiki"
                   },
@@ -1198,15 +1542,7 @@ export function TableEditor() {
                   }
                 ]}
               />
-              <input
-                ref={importInputRef}
-                type="file"
-                className="sr-only"
-                accept=".yaml,.yml,text/yaml,text/plain"
-                onChange={handleImportFile}
-                data-testid="table-editor-import-input"
-              />
-            </>
+            </div>
           ) : null
         }
       />
@@ -1231,115 +1567,19 @@ export function TableEditor() {
                 handleSubmit();
               }}
             >
-              <section className="pl-panel pl-asset-exchange" data-testid="semantic-asset-exchange">
-                <div className="pl-asset-exchange-copy">
-                  <p className="pl-panel-title">语义资产交换</p>
-                  <p className="pl-notice notranslate" translate="no">
-                    主流程：导出 YAML，交给 Claude Code / Codex 完善，再导入当前表 YAML 进行 dry-run 校验。
-                  </p>
-                  <details className="pl-secondary-disclosure" data-testid="paste-yaml-disclosure">
-                    <summary className="pl-secondary-disclosure-summary">
-                      <span>粘贴 YAML</span>
-                      <small>用于 Claude Code / Codex 返回内容</small>
-                    </summary>
-                    <div className="pl-paste-yaml-box">
-                      <textarea
-                        className="pl-textarea notranslate"
-                        data-testid="paste-yaml-textarea"
-                        onChange={(event) => setPastedYaml(event.target.value)}
-                        placeholder="粘贴完善后的当前表 YAML"
-                        rows={8}
-                        translate="no"
-                        value={pastedYaml}
-                      />
-                      <button
-                        className="pl-btn pl-btn--secondary"
-                        onClick={handlePasteYamlPreview}
-                        type="button"
-                      >
-                        生成导入预览
-                      </button>
-                    </div>
-                  </details>
-                </div>
-                <dl className="pl-asset-exchange-facts">
-                  <div>
-                    <dt>当前表</dt>
-                    <dd className="notranslate" translate="no">{`${source.model.conn}/${source.model.schema}/${source.model.table}`}</dd>
-                  </div>
-                  <div>
-                    <dt>导入文件</dt>
-                    <dd
-                      className="notranslate"
-                      data-testid="table-editor-imported-yaml-name"
-                      translate="no"
-                    >
-                      {importedYamlName ?? "未导入"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>影响文件</dt>
-                    <dd>{preview?.files.length ?? 0}</dd>
-                  </div>
-                </dl>
-              </section>
-
-              <CandidateJoinDisclosure
-                candidates={visibleCandidates}
-                onConfirm={handleConfirmCandidate}
-                onKeep={handleKeepCandidate}
-                onReject={handleRejectCandidate}
-              />
-
-              <details className="pl-workbench-disclosure" data-testid="manual-semantic-disclosure">
-                <summary className="pl-workbench-disclosure-summary">
-                  <span>高级：手工维护语义字段</span>
-                  <small>表描述、字段、指标、分群、关联</small>
-                </summary>
-                <div className="pl-manual-semantic-workspace">
-                  <SourceObjectTree
+              <section className="pl-semantic-content" data-testid="semantic-content">
+                <div className="pl-semantic-content-header">
+                  <p className="pl-panel-title mb-0">在线编辑</p>
+                  <SemanticTabs
                     activeSection={activeSection}
-                    currentTable={table}
                     onSectionChange={setActiveSection}
-                    schema={schema}
-                    siblingTables={siblingTables}
                     source={source}
                   />
-
+                </div>
+                <div className="pl-manual-semantic-workspace">
                   <div className="pl-manual-semantic-panel">
                     {activeSection === "overview" ? (
                       <section className="pl-panel">
-                        <div className="pl-source-metadata-grid">
-                          <div className="pl-source-metadata-cell pl-source-metadata-cell--wide">
-                            <span className="pl-source-metadata-label">完整表名</span>
-                            <div className="pl-copy-line">
-                              <strong className="truncate" title={qualifiedName}>{qualifiedName || "无"}</strong>
-                              <button
-                                type="button"
-                                aria-label="复制完整表名"
-                                className="pl-btn pl-btn--ghost"
-                                onClick={handleCopyQualifiedName}
-                              >
-                                复制
-                              </button>
-                            </div>
-                          </div>
-                          <div className="pl-source-metadata-cell">
-                            <span className="pl-source-metadata-label">字段数</span>
-                            <strong>{source.model.columns.length}</strong>
-                          </div>
-                          <div className="pl-source-metadata-cell">
-                            <span className="pl-source-metadata-label">关联数</span>
-                            <strong>{source.model.joins?.length ?? 0}</strong>
-                          </div>
-                          <div className="pl-source-metadata-cell">
-                            <span className="pl-source-metadata-label">
-                              行粒度
-                              <OverlayBadge source={source} />
-                            </span>
-                            <strong className="truncate" title={grainLabel}>{grainLabel}</strong>
-                          </div>
-                        </div>
                         <label className="pl-field-label">
                           <span>表描述</span>
                           <textarea rows={4} className="pl-textarea" value={form.tableDescription} onChange={(event) => setForm({ ...form, tableDescription: event.target.value })} />
@@ -1357,7 +1597,7 @@ export function TableEditor() {
                     {activeSection === "measures" ? (
                       <section className="pl-panel">
                         <div className="flex items-center gap-2 mb-2">
-                          <p className="pl-panel-title mb-0">Measures</p>
+                          <p className="pl-panel-title mb-0">指标</p>
                           <OverlayBadge source={source} />
                         </div>
                         <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
@@ -1371,7 +1611,7 @@ export function TableEditor() {
                     {activeSection === "segments" ? (
                       <section className="pl-panel">
                         <div className="flex items-center gap-2 mb-2">
-                          <p className="pl-panel-title mb-0">Segments</p>
+                          <p className="pl-panel-title mb-0">分群</p>
                           <OverlayBadge source={source} />
                         </div>
                         <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
@@ -1391,6 +1631,38 @@ export function TableEditor() {
                             <input className="pl-input" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="搜索字段" />
                           </label>
                         </div>
+                        <div className="pl-field-batch-toolbar" data-testid="field-batch-toolbar">
+                          <div className="pl-field-filter-modes" aria-label="字段筛选模式">
+                            {(Object.entries(FIELD_FILTER_LABELS) as [FieldFilterMode, string][]).map(([mode, label]) => (
+                              <button
+                                aria-pressed={fieldFilterMode === mode}
+                                className={clsx(
+                                  "pl-field-filter-mode",
+                                  fieldFilterMode === mode && "pl-field-filter-mode--active"
+                                )}
+                                key={mode}
+                                onClick={() => setFieldFilterMode(mode)}
+                                type="button"
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="pl-field-batch-actions">
+                            <span data-testid="field-batch-selection-count">
+                              已选 {selectedVisibleFieldCount} / 可见 {filteredColumns.length}
+                            </span>
+                            <button className="pl-btn pl-btn--ghost pl-btn--sm" onClick={selectVisibleFields} type="button">
+                              全选筛选结果
+                            </button>
+                            <button className="pl-btn pl-btn--ghost pl-btn--sm" onClick={clearFieldSelection} type="button">
+                              清空选择
+                            </button>
+                            <button className="pl-btn pl-btn--secondary pl-btn--sm" onClick={batchAdoptAiForSelectedFields} type="button">
+                              批量采纳 AI 描述
+                            </button>
+                          </div>
+                        </div>
                         <div className="pl-field-editor-list">
                           {filteredColumns.map((column) => {
                             const sourceColumn = columnsByName.get(column.name);
@@ -1402,8 +1674,10 @@ export function TableEditor() {
                                 key={column.name}
                                 sourceColumn={sourceColumn}
                                 description={column.description}
+                                selected={selectedFieldNames.has(column.name)}
                                 onDescriptionChange={(next) => updateColumnDescription(column.name, next)}
                                 onAdoptAi={() => adoptAiDescription(column.name)}
+                                onSelectedChange={(checked) => setFieldSelected(column.name, checked)}
                               />
                             );
                           })}
@@ -1437,26 +1711,62 @@ export function TableEditor() {
                     ) : null}
                   </div>
                 </div>
-              </details>
+              </section>
+              <input
+                ref={importInputRef}
+                type="file"
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only"
+                accept=".yaml,.yml,text/yaml,text/plain"
+                onChange={handleImportFile}
+                data-testid="table-editor-import-input"
+              />
             </form>
           </>
         ) : null}
       </div>
 
       {source ? (
-        <Inspector
+        <ChangeReview
           activeTab={inspectorTab}
           changeSummary={changeSummary}
+          hasDraftChanges={hasDraftChanges}
+          importedYamlName={importedYamlName}
+          isSaving={saveMutation.isPending}
           onTabChange={setInspectorTab}
           preview={preview}
           previewError={previewError}
           saveError={saveError}
           source={source}
+          unknownKeys={unknownKeys}
           validation={validation}
           validationError={validationError}
         />
       ) : null}
       </section>
+      {isVersionPanelOpen ? (
+        <VersionHistoryPanel
+          detail={selectedVersionQuery.data}
+          detailLoading={selectedVersionQuery.isLoading}
+          onClose={() => setIsVersionPanelOpen(false)}
+          onRestore={handleRestoreVersion}
+          onSelectVersion={setSelectedVersionId}
+          restorePending={isRestoringVersion}
+          selectedVersionId={selectedVersionId}
+          versions={versionsQuery.data?.versions ?? []}
+          versionsLoading={versionsQuery.isLoading}
+        />
+      ) : null}
+      {isImportDrawerOpen ? (
+        <ImportYamlDrawer
+          onClose={() => setIsImportDrawerOpen(false)}
+          onOpenFile={handleOpenImportPicker}
+          onPastePreview={handlePasteYamlPreview}
+          onPastedYamlChange={setPastedYaml}
+          pastedYaml={pastedYaml}
+        />
+      ) : null}
     </div>
   );
 }

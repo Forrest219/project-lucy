@@ -1,0 +1,31 @@
+{
+  "/catalog/:conn/:schema/:table": [
+    { "conn": "demo-mysql", "schema": "dataforai", "table": "superstore_orders" },
+    { "conn": "demo-mysql", "schema": "dataforai", "table": "superstore_people" }
+  ],
+  "/joins/:conn/:schema/:table": [
+    { "conn": "demo-mysql", "schema": "dataforai", "table": "superstore_orders" }
+  ],
+  "/admin/agents/:userId": [
+    { "userId": "demo_agent" }
+  ],
+  "/admin/agents/:userId/tokens/new": [
+    { "userId": "demo_agent" }
+  ],
+  "/admin/roles/:roleId": [
+    { "roleId": "demo_readonly" }
+  ],
+  "/eval/cases/:domain": [
+    { "domain": "superstore" },
+    { "domain": "kx_financial" }
+  ],
+  "/eval/cases/:domain/new": [
+    { "domain": "superstore" }
+  ],
+  "/eval/cases/:domain/:caseId": [
+    { "domain": "superstore", "caseId": "superstore-discount-001" }
+  ],
+  "/eval/runs/:runId": [
+    { "runId": "demo-run" }
+  ]
+}

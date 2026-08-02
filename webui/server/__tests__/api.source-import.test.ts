@@ -40,6 +40,8 @@ const schemaYaml = `tables:
 `;
 
 const importedTableYaml = `table: dataforai.superstore_orders
+grain:
+  - id
 columns:
   - name: id
     type: number
@@ -114,12 +116,18 @@ describe("source YAML import API", () => {
     await app.ready();
     const response = await request(app.server)
       .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
-      .send({ dryRun: false, yaml: importedTableYaml })
+      .send({ dryRun: false, yaml: importedTableYaml, sourceFileName: "superstore_orders.yaml" })
       .expect(200);
 
     expect(response.body.data.written).toBe(true);
+    expect(response.body.data.version).toMatchObject({
+      key: "mysql-aliyun/dataforai/superstore_orders",
+      operation: "import",
+      sourceFileName: "superstore_orders.yaml"
+    });
     expect(validateSource).toHaveBeenCalledWith(projectRoot, "mysql-aliyun", "dataforai", "superstore_orders");
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toContain("human: Imported table description.");
+    await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"), "utf8")).resolves.toContain("grain:");
     await app.close();
   });
 });

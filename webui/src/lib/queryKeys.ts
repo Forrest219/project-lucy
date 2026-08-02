@@ -2,10 +2,15 @@ export const queryKeys = {
   project: ["project"] as const,
   sources: ["sources"] as const,
   source: (conn: string, schema: string, table: string) => ["sources", conn, schema, table] as const,
+  sourceVersions: (conn: string, schema: string, table: string) =>
+    ["sources", conn, schema, table, "versions"] as const,
+  sourceVersion: (conn: string, schema: string, table: string, versionId: string) =>
+    ["sources", conn, schema, table, "versions", versionId] as const,
   diff: ["diff"] as const,
   helpHandbook: ["help", "handbook"] as const,
   wiki: ["wiki"] as const,
   wikiPage: (key: string) => ["wiki", key] as const,
+  wikiVersions: (key: string) => ["wiki", "versions", key] as const,
   joinCandidates: ["joins", "candidates"] as const,
   connections: ["connections"] as const,
   connectionTables: (connId: string) => ["connections", connId, "tables"] as const,
