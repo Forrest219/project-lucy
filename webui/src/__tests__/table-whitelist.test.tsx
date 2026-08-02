@@ -279,6 +279,14 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const table = await screen.findByTestId("pl-whitelist-table");
+    expect(table.className).toContain("pl-data-grid");
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "选择",
+      "表名 (Table)",
+      "字段数",
+      "状态",
+      "操作"
+    ]);
     const headers = within(table).getAllByRole("row", { name: /表名/ });
     expect(headers).toHaveLength(1);
 

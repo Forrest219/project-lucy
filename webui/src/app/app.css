@@ -452,21 +452,24 @@
 
   /* Catalog 紧凑表格（数据网格） */
   .pl-catalog-table-wrap { @apply max-w-full overflow-x-auto; }
-  .pl-catalog-result-count { @apply ml-auto self-end pb-2 text-xs text-fg-muted; }
-  .pl-catalog-table { @apply w-full border-separate border-spacing-0 text-sm; min-width: 1040px; table-layout: fixed; }
-  .pl-catalog-table thead th { @apply sticky top-0 z-10 border-b border-border-default bg-bg-subtle px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
-  .pl-catalog-table tbody tr { @apply border-b border-border-default last:border-b-0; }
-  .pl-catalog-table tbody tr:hover { @apply bg-bg-subtle; }
-  .pl-catalog-table tbody td { @apply px-3 py-2 align-middle text-fg-default; }
+  .pl-catalog-result-count { @apply whitespace-nowrap text-sm text-fg-muted; }
+  .pl-catalog-filter-select { @apply w-full; min-width: 7.9375rem; }
+  .pl-data-grid { @apply w-full border-collapse text-sm; table-layout: auto; }
+  .pl-data-grid thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
+  .pl-data-grid tbody td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-default; }
+  .pl-data-grid tbody tr:hover { @apply bg-bg-muted; }
+  .pl-catalog-table { min-width: 0; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
   .pl-catalog-table-name-link { @apply text-sm font-medium text-fg-default no-underline hover:underline; }
-  .pl-catalog-table-connection { @apply text-sm text-fg-default; }
-  .pl-catalog-table-schema { @apply text-sm text-fg-default; }
   .pl-catalog-table-structure { @apply whitespace-nowrap text-xs text-fg-muted; }
   .pl-catalog-table-agents { @apply text-sm text-fg-default tabular-nums; }
   .pl-catalog-table-updated { @apply whitespace-nowrap text-xs text-fg-default tabular-nums; }
-  .pl-catalog-table-actions { @apply flex items-center justify-end gap-2 whitespace-nowrap; }
-  .pl-catalog-table-actions-col { @apply w-px whitespace-nowrap text-right; }
+  .pl-catalog-table-actions { @apply whitespace-nowrap; }
+  .pl-catalog-table-actions-inner { @apply flex items-center justify-start gap-1.5; }
+  .pl-catalog-table-actions-col { @apply whitespace-nowrap text-left; }
+  .pl-catalog-empty { @apply grid gap-1 rounded-md border border-dashed border-border-default bg-bg-subtle p-4 text-sm; }
+  .pl-catalog-empty strong { @apply text-fg-default; }
+  .pl-catalog-empty p { @apply text-fg-muted; }
   /* Catalog 表内标签等宽居中，避免列抖动；不影响其它页面 StatusBadge */
   .pl-catalog-table .pl-status-badge { @apply min-w-[64px] justify-center whitespace-nowrap; }
 
@@ -837,10 +840,7 @@
     @apply ml-2 text-[11px] font-normal text-fg-muted;
   }
   .pl-table-wrapper { @apply grid gap-2; }
-  .pl-data-table { @apply w-full border-collapse text-sm; }
-  .pl-data-table thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-data-table tbody td { @apply border-b border-border-default px-3 py-2 align-middle; }
-  .pl-data-table tbody tr:hover { @apply bg-bg-muted; }
+  .pl-data-table { @apply w-full; }
 
   .pl-page-stack--safe-bottom {
     /* Reserve room for the floating dock so the last table row never sits

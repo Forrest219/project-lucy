@@ -7,7 +7,6 @@ import { PageHeader } from "../components/PageHeader";
 import { RowMoreMenu } from "../components/RowMoreMenu";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
-import { buildObjectDetailSearch } from "../lib/objectDetail";
 import type { CompletionStatus, SourcesResponse, SourceSummary } from "../lib/types";
 
 const STATUS_LABELS: Record<CompletionStatus, string> = {
@@ -27,6 +26,10 @@ function structureLabel(table: SourceSummary): string {
 
 function agentReferenceLabel(count: number): string {
   return `${count} 个`;
+}
+
+function groupLabel(conn: string, schema: string, count: number): string {
+  return `连接：${conn.toUpperCase()} · Schema：${schema.toUpperCase()}（共 ${count} 张表）`;
 }
 
 function slRefWikiHref(table: SourceSummary): string {
@@ -56,6 +59,19 @@ function semanticUpdatedTooltip(table: SourceSummary): string {
   return `取该表 Schema Manifest 与语义 overlay 文件的较晚修改时间。来源：${source}`;
 }
 
+function catalogEmptyMessage(total: number): { title: string; detail: string } {
+  if (total === 0) {
+    return {
+      title: "尚未加载到语义资产",
+      detail: "请刷新本地 Catalog，或检查 semantic-layer YAML 是否已经存在。"
+    };
+  }
+  return {
+    title: "没有匹配的语义资产",
+    detail: "清空搜索或筛选条件后重试；如刚修改 YAML，可刷新本地 Catalog。"
+  };
+}
+
 export function Catalog() {
   const [connection, setConnection] = useState("all");
   const [schema, setSchema] = useState("all");
@@ -70,7 +86,7 @@ export function Catalog() {
   const connections = useMemo(() => unique(tables.map((table) => table.conn)), [tables]);
   const connectionOptions = useMemo(
     () => [
-      { value: "all", label: "全部 Connection" },
+      { value: "all", label: "全部连接" },
       ...connections.map((value) => ({ value, label: value }))
     ],
     [connections]
@@ -121,64 +137,81 @@ export function Catalog() {
     });
   }, [connection, schema, search, status, tables]);
 
-  function copyFullReference(table: SourceSummary) {
-    const fullRef = `${table.conn}/${table.schema}/${table.table}`;
-    void navigator.clipboard?.writeText(fullRef);
-  }
+  const groupedTables = useMemo(() => {
+    const groups = new Map<string, { conn: string; schema: string; rows: SourceSummary[] }>();
+    for (const table of filtered) {
+      const key = `${table.conn}/${table.schema}`;
+      const group = groups.get(key);
+      if (group) {
+        group.rows.push(table);
+      } else {
+        groups.set(key, { conn: table.conn, schema: table.schema, rows: [table] });
+      }
+    }
+    return Array.from(groups.values());
+  }, [filtered]);
 
   if (isLoading) {
-    return <p className="pl-notice">正在加载表目录...</p>;
+    return <p className="pl-notice">正在加载语义资产...</p>;
   }
 
   if (error) {
-    return <p className="pl-error">表目录加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
+    return <p className="pl-error">语义资产加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
   }
 
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="表目录"
-        description={<span className="notranslate" translate="no">浏览当前 KTX 项目的语义层数据表，按 Connection、Schema、状态和关键词定位需要维护的对象。</span>}
+        title="语义资产"
+        description={<span className="notranslate" translate="no">维护当前 KTX 项目的结构化 semantic-layer YAML 模型，按搜索、连接、Schema 和语义状态定位对象。</span>}
       />
 
       <section className="pl-panel">
-        <div className="pl-toolbar">
-          <label className="grid gap-1.5 text-sm">
-            <span className="notranslate" translate="no">Connection</span>
-            <SelectField
-              className="notranslate"
-              translate="no"
-              ariaLabel="按 Connection 筛选"
-              value={connection}
-              onValueChange={setConnection}
-              options={connectionOptions}
-              placeholder="全部 Connection"
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            <span className="notranslate" translate="no">Schema</span>
-            <SelectField className="notranslate" translate="no" ariaLabel="按 Schema 筛选" value={schema} onValueChange={setSchema} options={schemaOptions} placeholder="全部 Schema" />
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            <span>状态</span>
-            <SelectField ariaLabel="按完成状态筛选" value={status} onValueChange={(v) => setStatus(v as CompletionStatus | "all")} options={statusOptions} placeholder="全部状态" />
-          </label>
-          <label className="flex-1 min-w-50">
-            <span className="block mb-1.5 text-sm">搜索</span>
-            <input className="pl-input notranslate" translate="no" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Connection、Schema、表名或字段名" />
-          </label>
-          <span className="pl-catalog-result-count" data-testid="catalog-result-count">
-            {filtered.length} 条结果
-          </span>
+        <div className="pl-whitelist-toolbar" role="toolbar" aria-label="语义资产工具栏">
+          <div className="pl-whitelist-filter-area">
+            <label className="grid gap-1.5 text-sm pl-whitelist-search">
+              <span>搜索</span>
+              <input className="pl-input pl-whitelist-search-input notranslate" translate="no" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索表名或字段名..." />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span className="notranslate" translate="no">连接筛选</span>
+              <SelectField
+                className="notranslate pl-catalog-filter-select"
+                translate="no"
+                ariaLabel="连接筛选"
+                value={connection}
+                onValueChange={setConnection}
+                options={connectionOptions}
+                placeholder="全部连接"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span className="notranslate" translate="no">Schema 筛选</span>
+              <SelectField className="notranslate pl-catalog-filter-select" translate="no" ariaLabel="Schema 筛选" value={schema} onValueChange={setSchema} options={schemaOptions} placeholder="全部 Schema" />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span>语义状态</span>
+              <SelectField className="pl-catalog-filter-select" ariaLabel="语义状态" value={status} onValueChange={(v) => setStatus(v as CompletionStatus | "all")} options={statusOptions} placeholder="全部状态" />
+            </label>
+          </div>
+          <div className="pl-whitelist-toolbar-actions">
+            <span className="pl-catalog-result-count" data-testid="catalog-result-count">
+              {filtered.length} 条结果
+            </span>
+          </div>
         </div>
 
-        <div className="pl-catalog-table-wrap" data-testid="catalog-table">
-          <table className="pl-catalog-table">
+        {filtered.length === 0 ? (
+          <div className="pl-catalog-empty mt-4" data-testid="catalog-empty-state">
+            <strong>{catalogEmptyMessage(tables.length).title}</strong>
+            <p className="notranslate" translate="no">{catalogEmptyMessage(tables.length).detail}</p>
+          </div>
+        ) : (
+        <div className="pl-catalog-table-wrap mt-4" data-testid="catalog-table">
+          <table className="pl-data-grid pl-catalog-table">
             <thead>
               <tr>
                 <th scope="col">表名</th>
-                <th scope="col" className="notranslate" translate="no">Connection</th>
-                <th scope="col" className="notranslate" translate="no">Schema</th>
                 <th scope="col">语义状态</th>
                 <th scope="col">结构</th>
                 <th scope="col"><span className="notranslate" translate="no">Agent 引用</span></th>
@@ -186,16 +219,18 @@ export function Catalog() {
                 <th scope="col" className="pl-catalog-table-actions-col">操作</th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.map((table) => {
+            {groupedTables.map(({ conn, schema: schemaName, rows }) => (
+              <tbody key={`${conn}/${schemaName}`}>
+                <tr className="pl-table-group-row">
+                  <td colSpan={6}>
+                    <span className="notranslate" translate="no">
+                      {groupLabel(conn, schemaName, rows.length)}
+                    </span>
+                  </td>
+                </tr>
+                {rows.map((table) => {
                 const editorHref = `/catalog/${encodeURIComponent(table.conn)}/${encodeURIComponent(table.schema)}/${encodeURIComponent(table.table)}`;
                 const wikiHref = slRefWikiHref(table);
-                const detailHref = buildObjectDetailSearch({
-                  kind: "table",
-                  conn: table.conn,
-                  schema: table.schema,
-                  table: table.table
-                });
                 const fullRef = `${table.conn}/${table.schema}/${table.table}`;
                 const moreLabel = `更多操作：${fullRef}`;
                 return (
@@ -211,8 +246,6 @@ export function Catalog() {
                         {table.table}
                       </Link>
                     </td>
-                    <td className="pl-catalog-table-connection notranslate" translate="no">{table.conn}</td>
-                    <td className="pl-catalog-table-schema notranslate" translate="no">{table.schema}</td>
                     <td><StatusBadge status={table.completion} /></td>
                     <td className="pl-catalog-table-structure notranslate" translate="no">{structureLabel(table)}</td>
                     <td className="pl-catalog-table-agents" data-testid={`catalog-row-agents-${table.table}`}>
@@ -222,30 +255,34 @@ export function Catalog() {
                       {formatSemanticUpdatedAt(table.semanticUpdatedAt)}
                     </td>
                     <td className="pl-catalog-table-actions">
-                      <Link
-                        aria-label={`维护表语义：${table.schema}.${table.table}`}
-                        className="pl-btn pl-btn--secondary pl-btn--sm notranslate"
-                        translate="no"
-                        to={editorHref}
-                        data-testid={`catalog-row-maintain-${table.table}`}
-                      >
-                        维护语义
-                      </Link>
-                      <RowMoreMenu
-                        ariaLabel={moreLabel}
-                        items={[
-                          { kind: "action", label: "复制完整引用", onSelect: () => copyFullReference(table), testId: `catalog-row-copy-ref-${table.table}` },
-                          { kind: "link", label: "查看详情", href: detailHref, testId: `catalog-row-detail-${table.table}` },
-                          { kind: "link", label: "业务 Wiki", href: wikiHref, testId: `catalog-row-wiki-${table.table}` }
-                        ]}
-                      />
+                      <div className="pl-catalog-table-actions-inner">
+                        <Link
+                          aria-label={`维护 ${table.schema}.${table.table} 语义`}
+                          className="pl-inline-link text-xs notranslate"
+                          translate="no"
+                          to={editorHref}
+                          data-testid={`catalog-row-maintain-${table.table}`}
+                        >
+                          维护语义 ↗
+                        </Link>
+                        {table.wikiRefCount > 0 ? (
+                          <RowMoreMenu
+                            ariaLabel={moreLabel}
+                            items={[
+                              { kind: "link", label: "查看关联的 业务 Wiki", href: wikiHref, testId: `catalog-row-wiki-${table.table}` }
+                            ]}
+                          />
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
               })}
-            </tbody>
+              </tbody>
+            ))}
           </table>
         </div>
+        )}
       </section>
     </div>
   );

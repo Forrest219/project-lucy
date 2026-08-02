@@ -602,14 +602,14 @@ export function TableWhitelist() {
 
       {visibleGroups.length > 0 && (
         <div className="pl-table-wrapper mt-4">
-          <table className="pl-data-table" data-testid="pl-whitelist-table">
+          <table className="pl-data-grid pl-data-table" data-testid="pl-whitelist-table">
             <thead>
               <tr>
                 <th>选择</th>
                 <th className="notranslate" translate="no">表名 (Table)</th>
                 <th>字段数</th>
                 <th>状态</th>
-                <th>动作</th>
+                <th>操作</th>
               </tr>
             </thead>
             {visibleGroups.map(({ conn, schema, rows }) => (

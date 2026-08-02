@@ -145,6 +145,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Enabled Tables | 启用表范围 | 启用的表 | 表白名单（主导航禁用）、白表、表白 | 控制进入语义层的表范围 |
 | Semantic Layer | 语义层 | semantic-layer | 语义图层 | 表、指标、维度、业务语义定义层 |
 | Semantic Modeling | 语义建模 | 语义模型 | 语义层维护 + 业务文档作为两个分组 | 涵盖结构化语义（YAML Overlay）与非结构化业务文档（Markdown Wiki） |
+| Semantic Asset | 语义资产 | 表语义资产、结构化 YAML 模型 | 表目录（主导航 / PageHeader 禁用） | 语义建模下的结构化 YAML 模型维护入口 |
 | Metric | 指标 | Metric | 度量混用 | 可聚合的业务数值定义 |
 | Dimension | 维度 | Dimension | 维数 | 分析分组或切片字段 |
 | Measure | 度量 | Measure | 指标混用 | 语义模型内的聚合表达式；当面向业务用户时优先叫“指标” |
@@ -220,7 +221,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
-| Table Catalog | 表目录 | 表格目录 | 已入库语义层对象列表 |
+| Table Catalog | 语义资产 | 表目录（历史别名，仅兼容旧文档 / 深链语义） | 表格目录、表目录（主导航 / PageHeader 禁用） | 已入库语义层结构化 YAML 对象列表 |
 | Business Wiki | 业务 Wiki | Wiki 文档（仅兼容期） | 业务解释和口径文档 |
 | Business Annotation | 业务注释 | 查看注释可接受 | 面向业务的表 / 字段解释 |
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |

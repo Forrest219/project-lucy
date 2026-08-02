@@ -65,9 +65,9 @@ Protected terms:
 |---|---|---|
 | URL 是 `/`，缺少语义后缀 | 属实 | 新增 canonical `/catalog`，`/` redirect 到 `/catalog` |
 | `66 / 66 张表` 可删除 | 合理 | 从 PageHeader 移除，必要时移入筛选结果弱提示 |
-| Header `业务 Wiki / 审阅` 可删除 | 合理 | Header 不放跨模块入口，统一从侧边栏或行内菜单进入 |
-| 表名重复 | 属实 | 第一列只显示表名，完整路径放 tooltip / copy / 更多菜单 |
-| 仅按 Schema 筛选不够 | 属实 | 筛选顺序改为 `Connection -> Schema -> 状态 -> 搜索` |
+| Header `业务 Wiki / 审阅` 可删除 | 合理 | Header 不放跨模块入口，统一从侧边栏或关联对象入口进入 |
+| 表名重复 | 属实 | 第一列只显示表名，完整路径放 tooltip |
+| 仅按 Schema 筛选不够 | 属实 | 筛选顺序改为 `搜索 -> 连接筛选 -> Schema 筛选 -> 语义状态` |
 
 ### Table Semantic Workbench
 
@@ -85,19 +85,19 @@ Protected terms:
 
 | 页面 | 当前 | 新 canonical | 兼容策略 |
 |---|---|---|---|
-| 表目录 | `/` | `/catalog` | `/` redirect 到 `/catalog` |
+| 语义资产 | `/` | `/catalog` | `/` redirect 到 `/catalog` |
 | 表语义资产工作台 | `/sources/:conn/:schema/:table` | `/catalog/:conn/:schema/:table` | 旧 `/sources/...` 必须 redirect 到新路由，并保留 query/hash |
 
 ### Navigation
 
-侧边栏 `语义建模 -> 表目录` 指向 `/catalog`。
+侧边栏 `语义建模 -> 语义资产` 指向 `/catalog`。
 
-单表页不新增独立一级菜单。它是 `表目录` 的二级页面，不应在侧边栏新增“单表维护”入口。
+单表页不新增独立一级菜单。它是 `语义资产` 的二级页面，不应在侧边栏新增“单表维护”入口。
 
 Breadcrumb:
 
 ```txt
-表目录 / {Connection} / {Schema} / {table}
+语义资产 / {Connection} / {Schema} / {table}
 ```
 
 ## Catalog Requirements
@@ -106,7 +106,7 @@ Breadcrumb:
 
 Catalog PageHeader:
 
-- Title: `表目录`
+- Title: `语义资产`
 - Description: 保留一句说明即可。
 - 删除 PageHeader badge：`66 / 66 张表`。
 - 删除 Header actions：`业务 Wiki`、`审阅`。
@@ -121,17 +121,17 @@ Catalog PageHeader:
 
 筛选顺序：
 
-1. `Connection`
-2. `Schema`
-3. `状态`
-4. `搜索`
+1. `搜索`
+2. `连接筛选`
+3. `Schema 筛选`
+4. `语义状态`
 
 Data source:
 
-- `Connection` 来自 `/api/sources[].conn`。
-- `Schema` 来自当前 Connection 下的 `/api/sources[].schema`。
-- `状态` 来自 `/api/sources[].completion`。
-- `搜索` 继续匹配 `schema.table` 与 `columnNames`。
+- `连接筛选` 来自 `/api/sources[].conn`。
+- `Schema 筛选` 来自当前连接下的 `/api/sources[].schema`。
+- `语义状态` 来自 `/api/sources[].completion`。
+- `搜索` 继续匹配表名与 `columnNames`。
 
 Behavior:
 
@@ -144,19 +144,23 @@ Behavior:
 推荐列：
 
 1. `表名`
-2. `Connection`
-3. `Schema`
-4. `语义状态`
-5. `结构`
-6. `Agent 引用`
-7. `语义更新时间`
-8. `操作`
+2. `语义状态`
+3. `结构`
+4. `Agent 引用`
+5. `语义更新时间`
+6. `操作`
+
+`Connection` 与 `Schema` 不再作为重复列展示；用分组行表达：
+
+```txt
+连接：DEMO-MYSQL · Schema：DATAFORAI（共 3 张表）
+```
 
 `表名` 列：
 
 - 主文本只显示 `table`。
 - 不再在同一格重复显示 `{schema}.{table}`。
-- 完整引用 `{conn}/{schema}/{table}` 放入 tooltip 或 copy affordance。
+- 完整引用 `{conn}/{schema}/{table}` 仅放入 tooltip，不提供默认复制动作。
 
 `Agent 引用` 列：
 
@@ -167,10 +171,8 @@ Behavior:
 `操作` 列：
 
 - 主操作保留：`维护语义` 或改名为 `打开工作台`。
-- 更多菜单包含：
-  - `复制完整引用`
-  - `查看详情`
-  - `业务 Wiki`
+- 默认删除 `复制完整引用` 和 `查看详情`。
+- 仅当表存在 Wiki 引用时显示更多菜单，菜单项为 `查看关联的 业务 Wiki`。
 
 ### Responsive Layout
 
@@ -257,7 +259,7 @@ Header 移除或收敛：
 
 默认折叠或移到次级区域：
 
-- 左侧表目录树。
+- 左侧语义资产导航树。
 - 智能推断候选关联关系。
 - 基础语义指标卡。
 - 原始 YAML。
@@ -383,10 +385,10 @@ type TableYamlImportPreview = {
 Catalog:
 
 - `/catalog` 可访问，`/` redirect 到 `/catalog`。
-- 侧边栏 `表目录` 指向 `/catalog`。
+- 侧边栏 `语义资产` 指向 `/catalog`。
 - PageHeader 不再展示 `66 / 66 张表`。
 - PageHeader 不再展示 `业务 Wiki`、`审阅`。
-- 筛选栏包含 `Connection`，且在 `Schema` 前。
+- 筛选栏顺序为 `搜索 -> 连接筛选 -> Schema 筛选 -> 语义状态`。
 - 表名不重复展示。
 - `1024x768` 下无 document 级横向溢出。
 
@@ -399,7 +401,7 @@ Table Semantic Workbench:
 - `关联关系` 不再作为 Header 固定按钮。
 - 页面默认主路径体现 `导出 YAML / 导入 YAML / 校验 / 保存`。
 - 候选关联默认折叠。
-- 表目录导航和手工维护区默认折叠或降级，不抢占主视觉。
+- 语义资产导航和手工维护区默认折叠或降级，不抢占主视觉。
 - 变更预览默认展示摘要，原始 Diff 折叠。
 
 Tests:

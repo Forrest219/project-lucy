@@ -554,3 +554,32 @@ Toolbar 直接显示 `全选` 和 `反选` 两个按钮，作用于当前筛选�
 ### Notes
 2026-08-02 已将下拉改为直接按钮。
 2026-08-02 浏览器复核通过：toolbar 直接显示 `全选` / `反选`，无 `批量操作` 下拉；筛选到 `demo-mysql / dataforai` 后，全选从 `1/3` 更新为 `3/3`，反选更新为 `0/3`。
+
+## UX-CONNECTIONS-021: 启用表范围与语义资产表格网格实现不一致
+
+Status: Fixed
+Route: `/connections/enabled-tables`, `/catalog`
+Area: Enabled table scope table grid, action column terminology
+Severity: P2
+Reported: 2026-08-02
+
+### Feedback
+`/connections/enabled-tables` 和 `/catalog` 的表格网格线肉眼看起来不一致；同类行内操作列在两页分别命名为 `动作` 和 `操作`。
+
+### Evidence
+- Cross-page browser check before fix found `/connections/enabled-tables` used `.pl-data-table`, while `/catalog` used `.pl-catalog-table`.
+- Enabled table scope used final column header `动作`; Catalog used `操作`.
+- Main record: [`UX-CATALOG-008`](catalog.md#ux-catalog-008-catalog-and-enabled-table-scope-grids-use-divergent-implementation).
+
+### Expected
+启用表范围与语义资产复用同一基础数据网格样式；同类行内操作列统一命名为 `操作`。
+
+### Browser Check
+1. Open `/connections/enabled-tables` and `/catalog`.
+2. Verify both tables share the same base grid style.
+3. Verify both final column headers read `操作`.
+4. Verify row separators and action-cell alignment are visually consistent.
+
+### Notes
+2026-08-02 已在代码中将启用表范围和语义资产表格统一到 `pl-data-grid`，并将启用表范围列名 `动作` 改为 `操作`。本条为 Connections 台账交叉引用；详细证据与修复记录见 `UX-CATALOG-008`。修复当轮按用户约束未做浏览器复核，浏览器复核在 Docker 重建后补做。
+2026-08-02 Docker 重建后浏览器复核通过：`/connections/enabled-tables` 与 `/catalog` 均使用共享 `pl-data-grid`，最后一列表头均为 `操作`，表头 letter spacing / padding 与行分隔线一致，action 相对表头左缩进均为 `12px`，且无横向溢出。

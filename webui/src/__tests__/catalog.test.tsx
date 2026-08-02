@@ -73,11 +73,10 @@ describe("Catalog density (M- Catalog table refactor)", () => {
     renderCatalog([makeSummary()]);
 
     const table = await screen.findByTestId("catalog-table");
+    expect(within(table).getByRole("table").className).toContain("pl-data-grid");
     const headers = within(table).getAllByRole("columnheader");
     expect(headers.map((h) => h.textContent)).toEqual([
       "表名",
-      "Connection",
-      "Schema",
       "语义状态",
       "结构",
       "Agent 引用",
@@ -97,12 +96,14 @@ describe("Catalog density (M- Catalog table refactor)", () => {
     expect(within(header).queryByRole("link", { name: "审阅" })).not.toBeInTheDocument();
   });
 
-  it("shows Connection before Schema in the filter bar", async () => {
+  it("shows search before connection and Schema filters in the filter bar", async () => {
     renderCatalog([makeSummary()]);
 
     await screen.findByTestId("catalog-table");
-    const connectionTrigger = screen.getByLabelText("按 Connection 筛选");
-    const schemaTrigger = screen.getByLabelText("按 Schema 筛选");
+    const searchInput = screen.getByPlaceholderText("搜索表名或字段名...");
+    const connectionTrigger = screen.getByLabelText("连接筛选");
+    const schemaTrigger = screen.getByLabelText("Schema 筛选");
+    expect(searchInput.compareDocumentPosition(connectionTrigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(connectionTrigger.compareDocumentPosition(schemaTrigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -133,24 +134,27 @@ describe("Catalog density (M- Catalog table refactor)", () => {
     expect(updatedCell.title).toContain("来源：Schema Manifest");
   });
 
-  it("renders only the 维护语义 primary button by default; 查看详情 and 业务 Wiki live behind the more menu", async () => {
+  it("renders only the 维护语义 lightweight link by default when there is no associated Wiki", async () => {
     renderCatalog([makeSummary()]);
 
     const row = await screen.findByTestId("catalog-row-superstore_orders");
-    // primary action visible
-    expect(within(row).getByTestId("catalog-row-maintain-superstore_orders")).toHaveTextContent("维护语义");
-    expect(within(row).getByTestId("catalog-row-maintain-superstore_orders")).toHaveAttribute(
+    const action = within(row).getByTestId("catalog-row-maintain-superstore_orders");
+    expect(action).toHaveTextContent("维护语义");
+    expect(action).toHaveAttribute(
       "href",
       "/catalog/mysql-aliyun/dataforai/superstore_orders"
     );
-    // detail/wiki links NOT in the row yet
+    expect(action.className).toContain("pl-inline-link");
+    expect(action.className).not.toContain("pl-btn");
+    // secondary actions are not rendered when they do not have a concrete use.
     expect(within(row).queryByTestId("catalog-row-copy-ref-superstore_orders")).toBeNull();
     expect(within(row).queryByTestId("catalog-row-detail-superstore_orders")).toBeNull();
     expect(within(row).queryByTestId("catalog-row-wiki-superstore_orders")).toBeNull();
+    expect(within(row).queryByTestId("row-more-trigger")).toBeNull();
   });
 
-  it("opens the more menu on trigger click and closes on outside click + Escape", async () => {
-    renderCatalog([makeSummary()]);
+  it("opens the associated Wiki menu on trigger click and closes on outside click + Escape", async () => {
+    renderCatalog([makeSummary({ wikiRefCount: 1 })]);
 
     const row = await screen.findByTestId("catalog-row-superstore_orders");
     const trigger = within(row).getByTestId("row-more-trigger");
@@ -161,9 +165,9 @@ describe("Catalog density (M- Catalog table refactor)", () => {
     // click opens menu
     fireEvent.click(trigger);
     const menu = await within(row).findByTestId("row-more-menu");
-    expect(within(menu).getByTestId("catalog-row-copy-ref-superstore_orders")).toHaveTextContent("复制完整引用");
-    expect(within(menu).getByTestId("catalog-row-detail-superstore_orders")).toHaveTextContent("查看详情");
-    expect(within(menu).getByTestId("catalog-row-wiki-superstore_orders")).toHaveTextContent("业务 Wiki");
+    expect(within(menu).queryByTestId("catalog-row-copy-ref-superstore_orders")).toBeNull();
+    expect(within(menu).queryByTestId("catalog-row-detail-superstore_orders")).toBeNull();
+    expect(within(menu).getByTestId("catalog-row-wiki-superstore_orders")).toHaveTextContent("查看关联的 业务 Wiki");
 
     // outside click closes
     fireEvent.mouseDown(document.body);
@@ -183,6 +187,30 @@ describe("Catalog density (M- Catalog table refactor)", () => {
     const nameCell = within(row).getByTestId("catalog-row-edit-superstore_orders").closest("td");
     expect(nameCell).toHaveTextContent("superstore_orders");
     expect(nameCell).not.toHaveTextContent("dataforai.superstore_orders");
+  });
+
+  it("shows a recovery-oriented empty state when filters have no match", async () => {
+    renderCatalog([makeSummary()]);
+
+    await screen.findByTestId("catalog-table");
+    fireEvent.change(screen.getByPlaceholderText("搜索表名或字段名..."), {
+      target: { value: "missing_table" }
+    });
+
+    const empty = await screen.findByTestId("catalog-empty-state");
+    expect(empty).toHaveTextContent("没有匹配的语义资产");
+    expect(empty).toHaveTextContent("清空搜索或筛选条件");
+    expect(empty).toHaveTextContent("刷新本地 Catalog");
+    expect(screen.queryByTestId("catalog-table")).not.toBeInTheDocument();
+  });
+
+  it("shows a no-data empty state when the local Catalog has no semantic assets", async () => {
+    renderCatalog([]);
+
+    const empty = await screen.findByTestId("catalog-empty-state");
+    expect(empty).toHaveTextContent("尚未加载到语义资产");
+    expect(empty).toHaveTextContent("刷新本地 Catalog");
+    expect(empty).toHaveTextContent("semantic-layer YAML");
   });
 
   it("does not render Owner / 下游引用 / 看板引用 / 血缘 in the catalog page", async () => {
