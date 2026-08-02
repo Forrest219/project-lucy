@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-06-21；2026-07-06 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline） |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
@@ -22,7 +22,8 @@
 | Headless customer config | `customer-config/` bind mount to `/data/lucy` | `docker-compose.customer-config.yml`, `customer-config.example/`, `npm run smoke:p0:headless-config` |
 | Demo DB | `mysql:8.4`, `postgres:16-alpine` | `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml` |
 | Customer DB path | MySQL validated locally | `npm run smoke:p0:customer` |
-| MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/deployment-docker.md`, `npm run smoke:p0:demo` |
+| Kubernetes / Helm deployment | Single-replica only; `Recreate` strategy; RWO PVC at `/data/lucy` | `deploy/k8s/helm/lucy/`, `docs/customer-k8s-deployer-quickstart.md` |
+| MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/deployment-docker.md`, `docs/customer-k8s-deployer-quickstart.md`, `npm run smoke:p0:demo` |
 | Release CI | GitHub Actions release gates | `.github/workflows/lucy-release.yml`, `docs/release-ci.md` |
 
 ## 2. Runtime Compatibility
@@ -46,7 +47,7 @@
 | Docker Compose demo DB | supported smoke/demo path | MySQL demo DB + Lucy |
 | Docker Compose external MySQL | supported with customer config package | edit `customer-config/ktx.yaml`, use `file:/data/lucy/.ktx/secrets/<name>` |
 | Docker Compose external PostgreSQL | supported with customer config package | edit `customer-config/ktx.yaml`, use `file:/data/lucy/.ktx/secrets/<name>` |
-| Kubernetes / Helm | not supported | future P2/P3 |
+| Kubernetes / Helm (single-replica) | supported baseline | `deploy/k8s/helm/lucy/`, `Recreate` strategy, RWO PVC; HA not supported yet |
 | Hosted SaaS / multi-tenant | not supported | future product line |
 
 ## 4. Database Matrix
@@ -117,3 +118,4 @@ Update this matrix when any of these changes:
 - KTX Python runtime feature level.
 - Supported database or MCP client.
 - Required release gates.
+- Supported deployment topology (e.g. when K8s/Helm graduates from single-replica to HA).

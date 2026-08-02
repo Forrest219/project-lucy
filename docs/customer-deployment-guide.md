@@ -4,15 +4,21 @@
 |---|---|
 | 文档名称 | Lucy Customer Deployment Guide |
 | 文档类型 | Customer Deployment / Operations Guide |
-| 版本 | v0.3（2026-07-06 增补：headless customer config package 推荐交付模式） |
-| 撰写日期 | 2026-06-21（v0.1）；2026-06-23（v0.2 增补） |
-| 适用范围 | 单机 Docker Compose 形态的 Lucy 客户部署、升级、回滚和排障 |
+| 版本 | v0.4（2026-08-03 增补：Kubernetes / Helm 单副本交付路径） |
+| 撰写日期 | 2026-06-21（v0.1）；2026-06-23（v0.2 增补）；2026-07-06（v0.3 增补 headless customer config package） |
+| 适用范围 | Docker Compose 与 Kubernetes / Helm 单副本形态的 Lucy 客户部署、升级、回滚和排障 |
 
 ## 1. Deployment Model
 
-首版客户交付形态：
+Lucy 客户交付支持两条并行的形态：
 
-- 客户通过 Docker Compose 部署 Lucy。
+- **Docker Compose（单机 baseline）**：客户通过 Docker Compose 部署 Lucy。该路径适合小规模、POC 与单机环境；详见本文后续章节。
+- **Kubernetes / Helm（单副本 baseline）**：客户通过 `deploy/k8s/helm/lucy/` Helm chart 部署。**单副本** + `Recreate` strategy + RWO PVC；不支持 HA。详见 [`docs/customer-k8s-deployer-quickstart.md`](./customer-k8s-deployer-quickstart.md)。
+
+两种形态共享同一份 `project-lucy` image、`@kaelio/ktx@0.16.0` bundled runtime 与同一份客户 context package（`customer-config/` → `/data/lucy`）。
+
+共同约束：
+
 - 客户部署的是 **data agent context compiler + governed MCP runtime**：Lucy 负责把数据库、semantic-layer、wiki、eval、skills 和 access policy 组成的客户 context package 安全交付给 Agent。
 - Lucy Docker image 内置 pinned KTX runtime。
 - 客户标准外部入口为 Lucy MCP Proxy `/mcp`，由 Agent MCP client 通过 bearer token 访问。
@@ -34,7 +40,11 @@ MCP: <LUCY_PUBLIC_MCP_URL>
 >
 > 部署方式只决定怎么注入这个值，Lucy 内部只关心最终的 public MCP URL。
 
-本次客户交付不是 BI 可视化工具，也不是完整企业数据平台替代品；它提供受治理的数据上下文编译与 MCP 访问运行时。本次客户交付不承诺 WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、Kubernetes/Helm、系统 metrics/告警/日志聚合或对象存储归档。仓库内仍保留 WebUI/API 相关代码和测试作为内部质量门禁与后续产品化基础。
+本次客户交付不是 BI 可视化工具，也不是完整企业数据平台替代品；它提供受治理的数据上下文编译与 MCP 访问运行时。
+
+**不承诺范围**：WebUI 管理台、Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、系统 metrics/告警/日志聚合、对象存储归档、Kubernetes/Helm 多副本 HA 与自动扩缩容（单副本 baseline 已交付）。仓库内仍保留 WebUI/API 相关代码和测试作为内部质量门禁与后续产品化基础。
+
+**已交付范围**：Docker Compose 单机 baseline（首版）与 Kubernetes / Helm 单副本 baseline（2026-08-03 起 `deploy/k8s/helm/lucy/`）。两条路径共享同一份 image、KTX runtime 与客户 context package。
 
 ## 2. Prerequisites
 
