@@ -5,6 +5,12 @@
 
 Vibe coding 双核角色协作（thinker / builder）的角色库见 [`agents/README.md`](agents/README.md)，按需调用，非必经流程。
 
+## 浏览器测试约束
+
+正式治理见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 的“验证策略：浏览器测试约束”。
+
+简要规则：正常开发任务默认不需要做浏览器测试；Lucy 项目默认不需要做移动窄屏测试。只有在用户、当前任务说明或已批准计划明确要求浏览器测试 / 移动窄屏验证时，才执行对应测试。
+
 ## 全系统术语规范
 
 所有 WebUI、API 用户可见错误、Toast、Modal、Drawer、测试断言、Spec、Plan、Runbook 的术语必须遵守
