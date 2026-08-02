@@ -147,7 +147,7 @@ StarRocks 出现矛盾统计：`demo_finance` 中本地表数是 `0`，但启用
 
 ## UX-CONNECTIONS-006: Schema 表格后两列视觉拥挤
 
-Status: Fixed
+Status: Verified
 Route: `/connections`
 Area: Connection card schema table / columns
 Severity: P2

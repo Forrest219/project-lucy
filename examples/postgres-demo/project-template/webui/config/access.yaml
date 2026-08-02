@@ -23,7 +23,7 @@ users:
   - id: demo_agent
     name: Demo Agent
     enabled: true
-    note: "P0 PostgreSQL demo smoke token; not for production."
+    note: "Demo 烟测账号，请勿用于生产。"
     tokens:
       - hash: "sha256:8ccee2d00afbe164425d51333fe42a3e5a7381955e555a69c185edb8783018f7"
         label: p0-demo

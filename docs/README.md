@@ -23,6 +23,9 @@
 | `ceo-one-report-lucy-data-model-notes.md` | CEO 一眼报 MVP 源表/SQL 到 Lucy 专用服务层表的建模理解和 DDL 索取清单 |
 | `lucy-r1-controlled-data-service-plan.md` | Lucy R1 受控数据服务层底座方案与实施计划 |
 | `lucy-r1-release-runbook.md` | Lucy R1 发布检查、Doris/Hermes 证据、排障和回滚手册 |
+| `lucy-202608-reliable-delivery-upgrade-spec.md` | Lucy 202608 可靠性交付系统升级蓝图：Trace / Evidence Kernel、静态防御、分级 Publish Gate、Safe Log-to-Eval、FDE Copilot 候选建议与 Dynamic RLS POC |
+| `lucy-202608-upgrade-execution-control.md` | Lucy 202608 升级执行总控：spec / plan / task 状态、并行波次、minimax handoff、验证矩阵 |
+| `lucy-202608-dynamic-rls-poc-spec.md` | Lucy 202608 Dynamic RLS / CLS POC 安全规格 |
 | `starrocks-r1-support-plan.md` | StarRocks R1 P1 gated support 边界、证据路径与发布限制 |
 | `design-agent-permissions.md` | Module 1 Agent 权限管控详细设计 |
 | `design-db-connection.md` | 数据库接入模块技术设计 |
@@ -85,3 +88,10 @@
 | `eval-quiz-conventions.md` | eval YAML / quiz HTML 设计原则、命名约定（⚠️ `scripts/lint-spec.mjs` 依赖） |
 | `mysql-comment-maintenance.md` | `superstore_orders.discount`/`profit` 等字段 COMMENT 维护说明 |
 | `kx-security-guardrail-test-process.md` | KX Security Guardrail 测试流程 |
+
+## 9. 仓库级执行计划
+
+| 文档 | 用途 |
+|---|---|
+| `plans/README.md` | 仓库级 plan 索引 |
+| `plans/wo-202608-06-dynamic-rls-poc.md` | Dynamic RLS / CLS POC 执行工单 |
