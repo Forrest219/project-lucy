@@ -69,6 +69,7 @@ const docAllowancePatterns = [
   /queryBy/,
   /not\.toBe/,
   /not\.toContain/,
+  /not\.toMatch/,
   /No user-facing/i,
   /Do not/i,
   /防回归/,
