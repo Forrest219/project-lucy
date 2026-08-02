@@ -5,11 +5,16 @@ import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
-import type { Agent, CreateAgentBody, ProjectInfo, Role } from "../../lib/types";
+import type { Agent, AgentsResponseSummary, CreateAgentBody, ProjectInfo, Role } from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
 
-type AgentsResponse = { agents: Agent[]; version: string };
+type AgentsResponse = {
+  agents: Agent[];
+  version: string;
+  /** Optional server-side aggregate; absent on backends pre-dating M55. */
+  summary?: AgentsResponseSummary;
+};
 type RolesResponse = { roles: Role[] };
 
 /**
@@ -64,6 +69,77 @@ export function buildSafeMcpConfig(endpoint: string): string {
   return buildMcpConfig(endpoint, SAFE_MCP_TOKEN_PLACEHOLDER);
 }
 
+/**
+ * Configuration-side token count for an agent: tokens still present
+ * in `access.yaml`, regardless of expiry. Mirrors `Agent.tokens.length`
+ * and is also surfaced via `AgentStats.configuredTokens` from M55+.
+ */
+export function configuredTokenCount(agent: Pick<Agent, "tokens">): number {
+  return agent.tokens.length;
+}
+
+/**
+ * Whether a token's `last_used` timestamp falls inside the look-back
+ * window relative to `now`. Used as a fallback when the backend does
+ * not yet emit `stats.activeTokensLast7d` (older Lucy deployments).
+ */
+export function isTokenRecentlyActive(token: Agent["tokens"][number], now: Date = new Date()): boolean {
+  if (!token.last_used) return false;
+  const ts = new Date(token.last_used);
+  if (Number.isNaN(ts.getTime())) return false;
+  const diff = now.getTime() - ts.getTime();
+  return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Number of distinct, recently active tokens belonging to an agent.
+ *
+ * Prefers the backend-supplied `stats.activeTokensLast7d` (a denormalized
+ * `COUNT(DISTINCT token_hash_prefix)` against `access_log` for the last
+ * 7 days, scoped to this user_id). Falls back to `last_used` based
+ * counting for backends that pre-date M55 and do not emit the metric.
+ *
+ * The `now` parameter exists so tests can inject a deterministic clock
+ * without reaching into `Date.now` directly.
+ */
+export function activeTokenCount(agent: Agent, now: Date = new Date()): number {
+  const backend = agent.stats?.activeTokensLast7d;
+  if (typeof backend === "number") return backend;
+  return agent.tokens.filter((token) => isTokenRecentlyActive(token, now)).length;
+}
+
+/**
+ * Aggregate metrics for the AgentList page. Mirrors the optional
+ * `summary` field returned by `GET /api/admin/agents` and also acts
+ * as the client-side fallback when the backend has not yet shipped
+ * the field. Exposed for tests.
+ */
+export function summarizeAgents(
+  agents: Agent[],
+  now: Date = new Date()
+): AgentsResponseSummary {
+  let enabledAgentCount = 0;
+  let configuredTokens = 0;
+  let activeTokenCountLast7d = 0;
+  let callsLast7d = 0;
+  let deniedLast7d = 0;
+  for (const agent of agents) {
+    if (agent.enabled) enabledAgentCount += 1;
+    configuredTokens += configuredTokenCount(agent);
+    activeTokenCountLast7d += activeTokenCount(agent, now);
+    callsLast7d += agent.stats?.callsLast7d ?? 0;
+    deniedLast7d += agent.stats?.deniedLast7d ?? 0;
+  }
+  return {
+    agentCount: agents.length,
+    enabledAgentCount,
+    configuredTokenCount: configuredTokens,
+    activeTokenCountLast7d,
+    callsLast7d,
+    deniedLast7d
+  };
+}
+
 async function copyAgentMcpConfig(endpoint: string | null): Promise<void> {
   if (!endpoint) {
     toast.error("Lucy MCP endpoint 不可用，无法复制 MCP 配置");
@@ -74,9 +150,9 @@ async function copyAgentMcpConfig(endpoint: string | null): Promise<void> {
   toast.success("MCP 配置已复制");
 }
 
-function MetricCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
+function MetricCard({ label, value, hint, testId }: { label: string; value: string | number; hint: string; testId?: string }) {
   return (
-    <div className="pl-metric-card">
+    <div className="pl-metric-card" data-testid={testId}>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
@@ -97,20 +173,22 @@ function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
 }
 
 function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: string | null; onViewLogs: () => void }) {
-  const sourceCount = agent.effectivePermissions?.sources.length ?? agent.allow?.tables?.length ?? 0;
-  const toolCount = agent.effectivePermissions?.tools.length ?? agent.allow?.tools?.length ?? 0;
-  const tokenCount = agent.tokens.length;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
   const canCopyMcp = endpoint !== null;
-  const resourceScope = agent.effectivePermissions?.sources
+  const callsLast7d = agent.stats?.callsLast7d ?? 0;
+  const deniedLast7d = agent.stats?.deniedLast7d ?? 0;
+  const activeTokens = activeTokenCount(agent);
+  const configuredTokens = configuredTokenCount(agent);
+  const authorizedSourceCount =
+    agent.effectivePermissions?.sources.length ?? agent.allow?.tables?.length ?? 0;
+  const authorizedResourceLabel = agent.effectivePermissions
     ? `${agent.effectivePermissions.sources.length} 个源 / ${agent.effectivePermissions.connections.length} 个 connection`
     : legacyWildcard
       ? "legacy wildcard"
-      : `${sourceCount} 个源`;
-  const toolScope = agent.effectivePermissions?.tools?.join(", ") ?? (Array.isArray(agent.allow?.tools) ? agent.allow!.tools.join(", ") : "—");
+      : `${authorizedSourceCount} 个源`;
 
   return (
-    <div className="pl-card">
+    <div className="pl-card" data-testid={`agent-card-${agent.id}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -120,22 +198,70 @@ function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: st
               {agent.enabled ? "启用" : "禁用"}
             </span>
           </div>
-          <div className="text-sm text-fg-muted mt-1">
-            role: <span className="notranslate" translate="no">{agent.role ?? "旧 ACL"}</span> · {tokenCount} 个 token · {legacyWildcard ? "legacy wildcard" : `${sourceCount} 个源`} · {toolCount} 个工具
+          <div className="text-sm text-fg-muted mt-1" data-testid={`agent-role-line-${agent.id}`}>
+            {agent.role ? (
+              <>
+                <span>角色：</span>
+                <Link
+                  to={`/admin/roles/${encodeURIComponent(agent.role)}`}
+                  className="text-accent hover:underline notranslate"
+                  translate="no"
+                  aria-label={`查看角色 ${agent.role}`}
+                  data-testid={`agent-role-link-${agent.id}`}
+                >
+                  {agent.role}
+                </Link>
+                {!legacyWildcard && (
+                  <span className="ml-2">· {authorizedResourceLabel}</span>
+                )}
+                {legacyWildcard && <span className="ml-2">· legacy wildcard</span>}
+              </>
+            ) : (
+              <span className="notranslate" translate="no">旧 ACL · legacy wildcard</span>
+            )}
           </div>
-          <div className="text-sm text-fg-muted mt-0.5" data-testid={`agent-scope-resource-${agent.id}`}>
-            <span className="text-fg-default">Resource scope：</span>
-            <span className="notranslate" translate="no">{resourceScope}</span>
+          <div
+            className="text-sm text-fg-muted mt-0.5"
+            data-testid={`agent-usage-row-${agent.id}`}
+          >
+            最近访问 <LastSeen lastSeen={agent.stats?.lastSeen} />
+            <span className="ml-1">·</span>
+            <span className="ml-1" data-testid={`agent-calls-7d-${agent.id}`}>
+              近 7 天 {callsLast7d} 次调用
+            </span>
+            <span className="ml-1">·</span>
+            <span
+              className="ml-1 notranslate"
+              translate="no"
+              data-testid={`agent-active-tokens-${agent.id}`}
+            >
+              {activeTokens} 个活跃 Token
+            </span>
+            <span className="ml-1">·</span>
+            <span
+              className={`ml-1 ${deniedLast7d > 0 ? "text-warning-strong" : ""}`}
+              data-testid={`agent-denied-7d-${agent.id}`}
+            >
+              {deniedLast7d} 次拒绝
+            </span>
           </div>
-          <div className="text-sm text-fg-muted mt-0.5" data-testid={`agent-scope-tool-${agent.id}`}>
-            <span className="text-fg-default">Tool scope：</span>
-            <span className="notranslate" translate="no">{toolScope}</span>
+          <div
+            className="text-sm text-fg-muted mt-0.5 notranslate"
+            translate="no"
+            data-testid={`agent-config-row-${agent.id}`}
+          >
+            配置 Token：{configuredTokens} 个
+            <span className="ml-3">
+              <Link
+                to={`/admin/agents/${encodeURIComponent(agent.id)}?tab=permissions`}
+                className="text-accent hover:underline"
+                aria-label={`查看 ${agent.name} 的权限`}
+                data-testid={`agent-permissions-link-${agent.id}`}
+              >
+                查看权限
+              </Link>
+            </span>
           </div>
-          <div className="text-sm text-fg-muted mt-0.5">
-            最近访问 <LastSeen lastSeen={agent.stats?.lastSeen} /> ·{" "}
-            近 7 天 {agent.stats?.callsLast7d ?? 0} 次调用 / {agent.stats?.deniedLast7d ?? 0} 次拒绝
-          </div>
-          {agent.note && <div className="text-sm text-fg-muted mt-0.5">{agent.note}</div>}
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <div className="flex gap-2">
@@ -187,11 +313,17 @@ function RoleSummaryCard({ role }: { role: Role | undefined }) {
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">角色权限预览</span>
-        <span className="pl-status-badge pl-status-done">{role.id}</span>
+        <span className="pl-status-badge pl-status-done notranslate" translate="no">
+          {role.id}
+        </span>
         {role.source && (
-          <span className="pl-status-badge pl-status-not_started">{role.source === "template" ? "template" : "yaml"}</span>
+          <span className="pl-status-badge pl-status-partial">
+            {role.source === "template" ? "参考模板" : "正式 Role"}
+          </span>
         )}
-        {role.invalid && <span className="pl-status-badge pl-status-validation_failed">invalid</span>}
+        {role.invalid && (
+          <span className="pl-status-badge pl-status-validation_failed">待修复</span>
+        )}
       </div>
       <div className="grid gap-1">
         <span className="text-xs text-fg-muted">数据源</span>
@@ -229,7 +361,23 @@ function RoleSummaryCard({ role }: { role: Role | undefined }) {
       {role.warnings.length > 0 && (
         <ul className="grid gap-1 text-xs text-warning-strong">
           {role.warnings.map((w, idx) => (
-            <li key={idx}>⚠ {w}</li>
+            <li key={idx} className="grid gap-0.5">
+              <span>
+                ⚠{" "}
+                {w.startsWith("role_resolution_failed")
+                  ? "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。"
+                  : "权限配置需检查：系统返回了未识别的校验信息。"}
+              </span>
+              <span className="text-fg-muted">
+                技术详情：{" "}
+                <code
+                  className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]"
+                  translate="no"
+                >
+                  {w}
+                </code>
+              </span>
+            </li>
           ))}
         </ul>
       )}
@@ -316,11 +464,18 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
               </div>
               <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
                 {roles.length === 0 && <option value="" disabled>暂无可用角色</option>}
-                {roles.map((item) => (
-                  <option key={item.id} value={item.id} disabled={item.invalid}>
-                    {item.id}{item.source === "template" ? " (template)" : ""}{item.invalid ? " (invalid)" : ""}
-                  </option>
-                ))}
+                {roles.map((item) => {
+                  const tags: string[] = [];
+                  if (item.source === "template") tags.push("参考模板");
+                  if (item.invalid) tags.push("待修复");
+                  const suffix = tags.length > 0 ? ` · ${tags.join(" · ")}` : "";
+                  return (
+                    <option key={item.id} value={item.id} disabled={item.invalid}>
+                      {item.id}
+                      {suffix}
+                    </option>
+                  );
+                })}
               </select>
               {roles.length === 0 && (
                 <span className="text-xs text-warning-strong">
@@ -381,9 +536,15 @@ export function AgentList() {
   const mcpEndpoint = mcpEndpointInfo?.url ?? null;
 
   const agents = data?.agents ?? [];
-  const enabledCount = agents.filter((agent) => agent.enabled).length;
-  const tokenCount = agents.reduce((sum, agent) => sum + agent.tokens.length, 0);
-  const deniedLast7d = agents.reduce((sum, agent) => sum + (agent.stats?.deniedLast7d ?? 0), 0);
+  // Prefer the server-supplied aggregate when present, but always derive a
+  // client-side fallback so legacy backends (pre-M55) keep rendering the
+  // same metric grid without dropping the active-token column.
+  const summary = data?.summary ?? summarizeAgents(agents);
+  const enabledCount = summary.enabledAgentCount;
+  const configuredTokenTotal = summary.configuredTokenCount;
+  const activeTokenTotal = summary.activeTokenCountLast7d;
+  const callsLast7dTotal = summary.callsLast7d;
+  const deniedLast7dTotal = summary.deniedLast7d;
   const filtered = agents.filter((a) => {
     const matchSearch = !search || a.id.includes(search) || a.name.includes(search);
     const matchEnabled =
@@ -407,9 +568,9 @@ export function AgentList() {
         }
         badges={
           <>
-            <span>{agents.length} 个 Agent</span>
-            <span>{enabledCount} 已启用</span>
-            <span>{tokenCount} token</span>
+            <span data-testid="badge-agent-total">{agents.length} 个 Agent</span>
+            <span data-testid="badge-enabled-total">{enabledCount} 已启用</span>
+            <span data-testid="badge-configured-token-total">{configuredTokenTotal} 配置 Token</span>
           </>
         }
         actions={
@@ -417,11 +578,31 @@ export function AgentList() {
         }
       />
 
-      <div className="pl-metric-grid">
-        <MetricCard label="Agent 数" value={agents.length} hint="access.yaml 中的实例" />
-        <MetricCard label="启用数" value={enabledCount} hint={`${agents.length - enabledCount} 个禁用`} />
-        <MetricCard label="Token 数" value={tokenCount} hint="不含明文 token" />
-        <MetricCard label="7d denied" value={deniedLast7d} hint="来自 Agent stats 汇总" />
+      <div className="pl-metric-grid" data-testid="agent-metric-grid">
+        <MetricCard
+          label="Agent 数"
+          value={agents.length}
+          hint="access.yaml 中的实例"
+          testId="metric-agent-count"
+        />
+        <MetricCard
+          label="活跃 Token"
+          value={activeTokenTotal}
+          hint="近 7 天访问日志中出现过的去重 token"
+          testId="metric-active-tokens"
+        />
+        <MetricCard
+          label="近 7 天调用"
+          value={callsLast7dTotal}
+          hint="来自访问日志 access_log"
+          testId="metric-calls-last-7d"
+        />
+        <MetricCard
+          label="近 7 天拒绝"
+          value={deniedLast7dTotal}
+          hint="访问日志 access_log 中 outcome=denied"
+          testId="metric-denied-last-7d"
+        />
       </div>
 
       {mcpEndpointInfo?.status === "invalid" || projectData === undefined ? (

@@ -89,12 +89,21 @@ function computeVersion(raw: string, mtimeMs: number): string {
   return `${mtimeMs.toFixed(0)}-${hash}`;
 }
 
-async function getStats(userId: string): Promise<{
+export interface AgentStatsSummary {
   callsLast7d: number;
   deniedLast7d: number;
   lastSeen?: string;
+  /** Number of distinct `token_hash_prefix` values that appear in
+   * `access_log` for this user inside the last 7 days. Excludes rows
+   * where `token_hash_prefix` is null (uncorrelated protocol traffic). */
+  activeTokensLast7d: number;
+  /** Number of token rows still present in `access.yaml` (configured
+   * regardless of expiry). */
+  configuredTokens: number;
   topTables: Array<{ table: string; calls: number }>;
-}> {
+}
+
+async function getStats(userId: string, configuredTokenCount: number): Promise<AgentStatsSummary> {
   try {
     const db = await getAuditDb();
     const row = db
@@ -103,6 +112,18 @@ async function getStats(userId: string): Promise<{
          FROM access_log WHERE user_id = ? AND ts >= datetime('now','-7 days')`
       )
       .get(userId) as { calls7: number; denied7: number; last_seen: string | null } | undefined;
+
+    // `token_hash_prefix` IS NOT NULL keeps uncorrelated protocol traffic
+    // (e.g. tools/list without a token) out of the active-token denominator.
+    // `idx_al_user_token_ts` covers (user_id, token_hash_prefix, ts).
+    const activeTokensRow = db
+      .prepare(
+        `SELECT COUNT(DISTINCT token_hash_prefix) AS active_tokens
+         FROM access_log
+         WHERE user_id = ? AND token_hash_prefix IS NOT NULL
+           AND ts >= datetime('now','-7 days')`
+      )
+      .get(userId) as { active_tokens: number | null } | undefined;
 
     const topRows = db
       .prepare(
@@ -133,10 +154,12 @@ async function getStats(userId: string): Promise<{
       callsLast7d: row?.calls7 ?? 0,
       deniedLast7d: row?.denied7 ?? 0,
       lastSeen: row?.last_seen ?? undefined,
+      activeTokensLast7d: activeTokensRow?.active_tokens ?? 0,
+      configuredTokens: configuredTokenCount,
       topTables
     };
   } catch {
-    return { callsLast7d: 0, deniedLast7d: 0, topTables: [] };
+    return { callsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 0, configuredTokens: configuredTokenCount, topTables: [] };
   }
 }
 
@@ -224,6 +247,49 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
   };
 }
 
+/**
+ * Build a denormalized summary of agent counts and recent usage so the
+ * front-end can render aggregate metrics without re-aggregating per row.
+ * `activeTokenCountLast7d` deliberately uses the per-agent max:
+ * if one token in YAML is shared across two user rows (legacy state) we
+ * still surface the truthful total of distinct recently-active tokens,
+ * computed per `user_id` (count-DISTINCT scoped to the agent row).
+ * `activeTokenCountLast7d` is summed per agent because each agent row
+ * represents a distinct user_id boundary, and the access_log active-token
+ * query is already `WHERE user_id = ?` scoped.
+ */
+function buildAgentsSummary(
+  agents: Array<Awaited<ReturnType<typeof userToAgentWithPermissions>>>
+): {
+  agentCount: number;
+  enabledAgentCount: number;
+  configuredTokenCount: number;
+  activeTokenCountLast7d: number;
+  callsLast7d: number;
+  deniedLast7d: number;
+} {
+  let enabledAgentCount = 0;
+  let configuredTokenCount = 0;
+  let activeTokenCountLast7d = 0;
+  let callsLast7d = 0;
+  let deniedLast7d = 0;
+  for (const agent of agents) {
+    if (agent.enabled) enabledAgentCount += 1;
+    configuredTokenCount += agent.tokens.length;
+    activeTokenCountLast7d += agent.stats?.activeTokensLast7d ?? 0;
+    callsLast7d += agent.stats?.callsLast7d ?? 0;
+    deniedLast7d += agent.stats?.deniedLast7d ?? 0;
+  }
+  return {
+    agentCount: agents.length,
+    enabledAgentCount,
+    configuredTokenCount,
+    activeTokenCountLast7d,
+    callsLast7d,
+    deniedLast7d
+  };
+}
+
 async function userToAgentWithPermissions(
   user: YamlUser,
   stats?: Awaited<ReturnType<typeof getStats>>,
@@ -294,11 +360,12 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const tokenUsage = await getLastUsedMap(config.users.map((user) => user.id));
     const agents = await Promise.all(
       config.users.map(async (user) => {
-        const stats = await getStats(user.id);
+        const stats = await getStats(user.id, user.tokens.length);
         return userToAgentWithPermissions(user, stats, tokenUsage.get(user.id));
       })
     );
-    return { ok: true, data: { agents, version } };
+    const summary = buildAgentsSummary(agents);
+    return { ok: true, data: { agents, version, summary } };
   });
 
   // GET /api/admin/roles — moved to ./roles.ts (M12)
@@ -378,7 +445,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (!user) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
     }
-    const stats = await getStats(user.id);
+    const stats = await getStats(user.id, user.tokens.length);
     const tokenUsage = await getLastUsedMap([user.id]);
     return { ok: true, data: { agent: await userToAgentWithPermissions(user, stats, tokenUsage.get(user.id)), version } };
   });

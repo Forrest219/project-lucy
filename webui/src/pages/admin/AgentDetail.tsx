@@ -327,11 +327,18 @@ export function AgentDetail() {
                 onChange={(e) => updateEditRole(e.target.value)}
               >
                 <option value="" disabled>选择角色</option>
-                {roles.map((role) => (
-                  <option key={role.id} value={role.id} disabled={role.invalid}>
-                    {role.id}{role.source === "template" ? " (template)" : ""}{role.invalid ? " (invalid)" : ""}
-                  </option>
-                ))}
+                {roles.map((role) => {
+                  const tags: string[] = [];
+                  if (role.source === "template") tags.push("参考模板");
+                  if (role.invalid) tags.push("待修复");
+                  const suffix = tags.length > 0 ? ` · ${tags.join(" · ")}` : "";
+                  return (
+                    <option key={role.id} value={role.id} disabled={role.invalid}>
+                      {role.id}
+                      {suffix}
+                    </option>
+                  );
+                })}
               </select>
               {!agent.role && agent.allow && (
                 <span className="text-xs text-fg-muted">

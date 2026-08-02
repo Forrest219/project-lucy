@@ -24,6 +24,43 @@ vi.mock("../admin/audit.js", () => ({
             .sort((a, b) => b.ts.localeCompare(a.ts)))
         };
       }
+      // M55: active-token SQL is COUNT(DISTINCT token_hash_prefix)
+      // restricted to the last 7 days for the supplied user_id. The mock
+      // exercises the same shape so we can assert the helper emits
+      // distinct-token counts (not raw row counts).
+      if (sql.includes("COUNT(DISTINCT token_hash_prefix)")) {
+        const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        return {
+          get: vi.fn((userId: string) => {
+            const seen = new Set<string>();
+            for (const row of auditRows) {
+              if (row.user_id !== userId) continue;
+              if (!row.token_hash_prefix) continue;
+              if (new Date(row.ts).getTime() < CUTOFF) continue;
+              seen.add(row.token_hash_prefix);
+            }
+            return { active_tokens: seen.size };
+          })
+        };
+      }
+      if (sql.includes("COUNT(*) AS calls7")) {
+        const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        return {
+          get: vi.fn((userId: string) => {
+            const matched = auditRows.filter(
+              (row) => row.user_id === userId && new Date(row.ts).getTime() >= CUTOFF
+            );
+            return {
+              calls7: matched.length,
+              denied7: matched.filter((row) => row.outcome === "denied").length,
+              last_seen: matched
+                .map((row) => row.ts)
+                .sort()
+                .at(-1) ?? null
+            };
+          })
+        };
+      }
       return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() };
     }),
     exec: vi.fn(),
@@ -86,6 +123,8 @@ async function makeProject(yamlContent = ACCESS_YAML) {
 }
 
 beforeEach(async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
   projectRoot = await makeProject();
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
@@ -96,6 +135,7 @@ afterEach(async () => {
   if (prevRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = prevRoot;
   await rm(projectRoot, { recursive: true, force: true });
+  vi.useRealTimers();
 });
 
 describe("GET /api/admin/agents", () => {
@@ -144,6 +184,52 @@ describe("GET /api/admin/agents", () => {
       last_used: "2026-06-21T09:00:00.000Z",
       last_tool: "sl_query",
       last_outcome: "ok"
+    });
+    await app.close();
+  });
+
+  it("emits activeTokensLast7d as distinct token count in last 7 days", async () => {
+    const inside = "2026-08-02T08:00:00.000Z";
+    const outside = "2026-07-20T08:00:00.000Z";
+    auditRows.push(
+      // 同一 token 多次命中，应只计 1 个 active token
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: inside, tool: "sl_query", outcome: "ok" },
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: inside, tool: "sl_query", outcome: "ok" },
+      // 第二个 distinct token
+      { user_id: "zhangsan", token_hash_prefix: "sha256:bbbb", ts: inside, tool: "sl_query", outcome: "ok" },
+      // 超出 7 天窗口，忽略
+      { user_id: "zhangsan", token_hash_prefix: "sha256:cccc", ts: outside, tool: "sl_query", outcome: "ok" }
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents/zhangsan").expect(200);
+    expect(res.body.data.agent.stats.activeTokensLast7d).toBe(2);
+    expect(res.body.data.agent.stats.configuredTokens).toBe(1);
+    // 拒绝计数应独立于 active-token 去重：窗口内 3 条记录（aaaa/aaaa/bbbb），全部 ok
+    expect(res.body.data.agent.stats.callsLast7d).toBe(3);
+    expect(res.body.data.agent.stats.deniedLast7d).toBe(0);
+    await app.close();
+  });
+
+  it("GET /api/admin/agents surfaces the aggregate summary block", async () => {
+    auditRows.push(
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:00.000Z", tool: "sl_query", outcome: "ok" },
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T09:00:00.000Z", tool: "sl_query", outcome: "denied" },
+      { user_id: "zhangsan", token_hash_prefix: "sha256:bbbb", ts: "2026-08-02T10:00:00.000Z", tool: "sl_query", outcome: "ok" }
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents").expect(200);
+    expect(res.body.data.summary).toMatchObject({
+      agentCount: 2,
+      enabledAgentCount: 1,
+      configuredTokenCount: 1,
+      // zhangsan 的 3 条记录中 aaaa/bbbb 是 distinct token，所以 2 个活跃 token
+      activeTokenCountLast7d: 2,
+      callsLast7d: 3,
+      deniedLast7d: 1
     });
     await app.close();
   });

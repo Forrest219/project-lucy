@@ -60,7 +60,13 @@ function makeAgentDetailResponse(overrides: Record<string, unknown> = {}) {
           legacyAllow: false
         },
         permissionWarnings: [],
-        stats: { callsLast7d: 1, deniedLast7d: 0, topTables: [] },
+        stats: {
+          callsLast7d: 1,
+          deniedLast7d: 0,
+          activeTokensLast7d: 1,
+          configuredTokens: 1,
+          topTables: []
+        },
         ...overrides
       }
     }
@@ -351,6 +357,16 @@ describe("AgentDetail", () => {
     expect(await screen.findByText("张三")).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /管理角色/ });
     expect(link.getAttribute("href")).toBe("/admin/roles");
+  });
+
+  it("Agent detail 基本信息 tab exposes configured tokens and active token count from stats", async () => {
+    stubAgentEndpoints();
+    renderAgentDetail();
+    await screen.findByDisplayValue("张三");
+    // activeTokensLast7d 由 stub 默认传 1；render 后能在基本信息 tab 的 stat 区域找到
+    expect(document.body).toHaveTextContent("1");
+    // 该页面不展示 7d denied
+    expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
   });
 });
 

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentList } from "../pages/admin/AgentList";
+import { AgentList, activeTokenCount, configuredTokenCount, summarizeAgents } from "../pages/admin/AgentList";
 import type { Agent, McpEndpointInfo, Role } from "../lib/types";
 
 function renderAgentList() {
@@ -39,7 +39,13 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     enabled: true,
     role: "analyst",
     tokens: [],
-    stats: { callsLast7d: 0, deniedLast7d: 0, topTables: [] },
+    stats: {
+      callsLast7d: 0,
+      deniedLast7d: 0,
+      activeTokensLast7d: 0,
+      configuredTokens: 0,
+      topTables: []
+    },
     ...overrides
   };
 }
@@ -56,6 +62,7 @@ const analystRole: Role = {
 };
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -155,10 +162,11 @@ describe("AgentList", () => {
     await waitFor(() => {
       expect(screen.getByText("旧ACL")).toBeInTheDocument();
     });
-    // M36: the resource-scope row exposes "legacy wildcard" by name. Use
-    // the test-id so we don't accidentally match the duplicate headline.
-    const scopeRow = screen.getByTestId("agent-scope-resource-legacy1");
-    expect(scopeRow).toHaveTextContent(/legacy wildcard/);
+    // M55: the resource-scope row is gone; "旧 ACL · legacy wildcard"
+    // appears in the role line test-id instead.
+    const roleLine = screen.getByTestId("agent-role-line-legacy1");
+    expect(roleLine).toHaveTextContent(/旧 ACL/);
+    expect(roleLine).toHaveTextContent(/legacy wildcard/);
   });
 
   it("copy MCP config writes a safe template with placeholder token and no plaintext", async () => {
@@ -217,6 +225,37 @@ describe("AgentList", () => {
     await waitFor(() => {
       expect(screen.getByTestId("audit-page")).toBeInTheDocument();
     });
+  });
+
+  it("new agent modal role select labels templates/invalid with 中文业务 terms instead of bare English", async () => {
+    stubAgentsEndpoints([], [
+      {
+        ...analystRole,
+        id: "demo_template",
+        source: "template",
+        invalid: false
+      },
+      {
+        ...analystRole,
+        id: "broken_role",
+        invalid: true,
+        warnings: ["role_resolution_failed:broken_role"]
+      }
+    ]);
+
+    renderAgentList();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+
+    const select = await screen.findByDisplayValue(/demo_template/);
+    const optionTexts = Array.from((select as HTMLSelectElement).options).map((opt) => opt.textContent);
+    // 模板不能裸露 "template"，应展示「参考模板」；invalid 角色展示「待修复」。
+    expect(optionTexts.some((text) => text?.includes("参考模板"))).toBe(true);
+    expect(optionTexts.some((text) => text?.includes("待修复"))).toBe(true);
+    expect(optionTexts.some((text) => /\(template\)/.test(text ?? ""))).toBe(false);
+    expect(optionTexts.some((text) => /\(invalid\)/.test(text ?? ""))).toBe(false);
   });
 
   it("new agent modal shows role summary card with source count, connections, tools and warnings", async () => {
@@ -309,5 +348,305 @@ describe("AgentList", () => {
 
     const link = await screen.findByRole("link", { name: /管理角色/ });
     expect(link.getAttribute("href")).toBe("/admin/roles");
+  });
+
+  it("renders usage-aware top metrics instead of 7d denied", async () => {
+    stubAgentsEndpoints(
+      [
+        makeAgent({
+          id: "demo_agent",
+          name: "Demo Agent",
+          tokens: [
+            { hash: "sha256:aaa", label: "tok-a", created: "2026-06-01" }
+          ],
+          stats: {
+            callsLast7d: 10,
+            deniedLast7d: 0,
+            activeTokensLast7d: 1,
+            configuredTokens: 1,
+            topTables: []
+          }
+        })
+      ],
+      [
+        {
+          ...analystRole,
+          id: "demo_readonly"
+        }
+      ],
+      // stub mcp endpoint
+      {
+        url: "https://lucy.example.com/mcp",
+        status: "configured",
+        source: "env",
+        configured: true,
+        diagnostics: []
+      }
+    );
+
+    renderAgentList();
+    await screen.findByRole("heading", { name: "Agent 实例" });
+
+    // 顶部 4 个指标按 spec §6.1
+    expect(screen.getByTestId("metric-active-tokens")).toHaveTextContent("活跃 Token");
+    expect(screen.getByTestId("metric-active-tokens")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-calls-last-7d")).toHaveTextContent("近 7 天调用");
+    expect(screen.getByTestId("metric-calls-last-7d")).toHaveTextContent("10");
+    expect(screen.getByTestId("metric-denied-last-7d")).toHaveTextContent("近 7 天拒绝");
+    expect(screen.getByTestId("metric-denied-last-7d")).toHaveTextContent("0");
+
+    // 旧的 7d denied 文案必须彻底消失
+    expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
+    expect(document.body).not.toHaveTextContent(/^\s*Token 数\s*$/);
+
+    // PageHeader badge 暴露配置 Token 数量
+    expect(screen.getByTestId("badge-configured-token-total")).toHaveTextContent("1 配置 Token");
+  });
+
+  it("agent card links role id to role detail and exposes 查看权限 link", async () => {
+    stubAgentsEndpoints([
+      makeAgent({
+        id: "demo_agent",
+        name: "Demo Agent",
+        role: "demo_readonly",
+        stats: {
+          callsLast7d: 10,
+          deniedLast7d: 0,
+          activeTokensLast7d: 1,
+          configuredTokens: 1,
+          topTables: []
+        }
+      })
+    ]);
+
+    renderAgentList();
+    await screen.findByTestId("agent-card-demo_agent");
+
+    const roleLink = screen.getByTestId("agent-role-link-demo_agent");
+    expect(roleLink).toHaveTextContent("demo_readonly");
+    expect(roleLink).toHaveAttribute("href", "/admin/roles/demo_readonly");
+    expect(roleLink.getAttribute("aria-label") ?? "").toContain("demo_readonly");
+
+    const permissionsLink = screen.getByTestId("agent-permissions-link-demo_agent");
+    expect(permissionsLink.getAttribute("href")).toBe("/admin/agents/demo_agent?tab=permissions");
+
+    // 不再展示完整 Tool scope 行
+    expect(screen.queryByTestId("agent-scope-tool-demo_agent")).not.toBeInTheDocument();
+  });
+
+  it("uses backend summary when present and falls back to client-side aggregate when absent", async () => {
+    const withSummary = [
+      makeAgent({
+        id: "demo_agent",
+        name: "Demo Agent",
+        role: "demo_readonly",
+        tokens: [{ hash: "sha256:aa", label: "tok", created: "2026-06-01" }],
+        stats: {
+          callsLast7d: 10,
+          deniedLast7d: 0,
+          activeTokensLast7d: 1,
+          configuredTokens: 1,
+          topTables: []
+        }
+      })
+    ];
+    const fetchWithSummary = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/agents") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              agents: withSummary,
+              version: "v1",
+              summary: {
+                agentCount: 1,
+                enabledAgentCount: 1,
+                configuredTokenCount: 1,
+                activeTokenCountLast7d: 1,
+                callsLast7d: 10,
+                deniedLast7d: 0
+              }
+            }
+          })
+        );
+      }
+      if (url === "/api/project") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              root: "/tmp",
+              ktxAvailable: true,
+              connections: [],
+              mcpEndpoint: {
+                url: "https://lucy.example.com/mcp",
+                status: "configured",
+                source: "env",
+                configured: true,
+                diagnostics: []
+              }
+            }
+          })
+        );
+      }
+      if (url === "/api/admin/roles") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              roles: [{ ...analystRole, id: "demo_readonly" }]
+            }
+          })
+        );
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchWithSummary);
+    renderAgentList();
+    await screen.findByTestId("metric-active-tokens");
+    expect(screen.getByTestId("metric-active-tokens")).toHaveTextContent("1");
+
+    // Fallback 路径：移除 summary 后再次渲染，helper 仍能算出 1
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/admin/agents") {
+          return new Response(JSON.stringify({ ok: true, data: { agents: withSummary, version: "v1" } }));
+        }
+        if (url === "/api/project") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                root: "/tmp",
+                ktxAvailable: true,
+                connections: [],
+                mcpEndpoint: {
+                  url: "https://lucy.example.com/mcp",
+                  status: "configured",
+                  source: "env",
+                  configured: true,
+                  diagnostics: []
+                }
+              }
+            })
+          );
+        }
+        if (url === "/api/admin/roles") {
+          return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/admin/agents"]}>
+          <Routes>
+            <Route path="/admin/agents" element={<AgentList />} />
+            <Route path="/admin/agents/:userId" element={<div data-testid="agent-detail">detail</div>} />
+            <Route path="/admin/audit" element={<div data-testid="audit-page">audit</div>} />
+            <Route path="/admin/roles" element={<div data-testid="roles-page">roles</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    await waitFor(() => {
+      expect(screen.getAllByTestId("metric-active-tokens").at(-1)).toHaveTextContent("1");
+    });
+  });
+
+  it("warns when an agent has recent denials without changing the layout", async () => {
+    stubAgentsEndpoints([
+      makeAgent({
+        id: "demo_agent",
+        name: "Demo Agent",
+        stats: {
+          callsLast7d: 12,
+          deniedLast7d: 3,
+          activeTokensLast7d: 1,
+          configuredTokens: 1,
+          topTables: []
+        }
+      })
+    ]);
+
+    renderAgentList();
+    const deniedCell = await screen.findByTestId("agent-denied-7d-demo_agent");
+    expect(deniedCell).toHaveTextContent("3 次拒绝");
+    expect(deniedCell.className).toContain("text-warning-strong");
+  });
+});
+
+describe("agentList helpers", () => {
+  const NOW = new Date("2026-08-02T12:00:00.000Z");
+
+  it("configuredTokenCount mirrors agent.tokens.length", () => {
+    expect(configuredTokenCount(makeAgent({ tokens: [] }))).toBe(0);
+    expect(configuredTokenCount(makeAgent({ tokens: [
+      { hash: "sha256:aa", label: "a", created: "2026-06-01" },
+      { hash: "sha256:bb", label: "b", created: "2026-06-01" }
+    ] }))).toBe(2);
+  });
+
+  it("activeTokenCount prefers stats.activeTokensLast7d then falls back to last_used", () => {
+    const recent = new Date(NOW.getTime() - 2 * 60 * 60 * 1000).toISOString();
+    const stale = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const backendAgent = makeAgent({
+      tokens: [
+        { hash: "sha256:aa", label: "a", created: "2026-06-01", last_used: stale },
+        { hash: "sha256:bb", label: "b", created: "2026-06-01", last_used: recent }
+      ],
+      stats: { callsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 5, configuredTokens: 2, topTables: [] }
+    });
+    expect(activeTokenCount(backendAgent, NOW)).toBe(5);
+
+    // 无 backend 字段，按 last_used 在窗口内的数量统计
+    const fallbackAgent = makeAgent({
+      tokens: [
+        { hash: "sha256:aa", label: "a", created: "2026-06-01", last_used: recent },
+        { hash: "sha256:bb", label: "b", created: "2026-06-01", last_used: stale }
+      ],
+      stats: { callsLast7d: 0, deniedLast7d: 0, configuredTokens: 2, topTables: [] }
+    });
+    expect(activeTokenCount(fallbackAgent, NOW)).toBe(1);
+
+    // 完全无最近访问
+    const untouched = makeAgent({
+      tokens: [{ hash: "sha256:aa", label: "a", created: "2026-06-01" }],
+      stats: { callsLast7d: 0, deniedLast7d: 0, configuredTokens: 1, topTables: [] }
+    });
+    expect(activeTokenCount(untouched, NOW)).toBe(0);
+  });
+
+  it("summarizeAgents aggregates per-agent counts and stats", () => {
+    const agents = [
+      makeAgent({
+        id: "a1",
+        enabled: true,
+        tokens: [
+          { hash: "sha256:aa", label: "a", created: "2026-06-01", last_used: "2026-08-01T00:00:00.000Z" }
+        ],
+        stats: { callsLast7d: 3, deniedLast7d: 1, activeTokensLast7d: 1, configuredTokens: 1, topTables: [] }
+      }),
+      makeAgent({
+        id: "a2",
+        enabled: false,
+        tokens: [],
+        stats: { callsLast7d: 5, deniedLast7d: 0, activeTokensLast7d: 0, configuredTokens: 0, topTables: [] }
+      })
+    ];
+    const now = new Date("2026-08-02T00:00:00.000Z");
+    const summary = summarizeAgents(agents, now);
+    expect(summary).toEqual({
+      agentCount: 2,
+      enabledAgentCount: 1,
+      configuredTokenCount: 1,
+      activeTokenCountLast7d: 1,
+      callsLast7d: 8,
+      deniedLast7d: 1
+    });
   });
 });
