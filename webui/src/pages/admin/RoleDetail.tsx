@@ -75,6 +75,20 @@ function joinList(items: string[] | undefined): string {
   return items ? items.join("\n") : "";
 }
 
+function roleWarningDiagnosis(warning: string): { diagnosis: string; technical: string } {
+  const trimmed = warning.trim();
+  if (trimmed.startsWith("role_resolution_failed")) {
+    return {
+      diagnosis: "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。",
+      technical: trimmed
+    };
+  }
+  return {
+    diagnosis: "权限配置需检查：系统返回了未识别的校验信息。",
+    technical: trimmed
+  };
+}
+
 function selectorsToForm(selectors: RoleSelector[] | undefined): RoleFormState["selectors"] {
   if (!selectors) return [];
   return selectors.map((selector) => {
@@ -432,18 +446,40 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         }
         description={
           <>
-            {mode === "create" && "新建 YAML role，所有写入必须经过 dryRun diff 确认。"}
-            {mode === "edit" && detail?.source === "template" && "这是内置模板，UI 上只读。请使用「复制为 YAML Role」展开为普通 YAML role。"}
-            {mode === "edit" && detail?.source !== "template" && "编辑 YAML role，所有写入必须经过 dryRun diff 确认。"}
-            {mode === "copy" && "从已有 role 复制出新的 YAML role。需输入新 id。"}
-            {mode === "delete" && "删除前必须 dryRun diff。被 Agent 引用的 role 不可删除。"}
+            {mode === "create" && (
+              <>
+                新建正式 Role，所有写入必须经过 <span className="notranslate" translate="no">access.yaml</span> dryRun diff 确认。
+              </>
+            )}
+            {mode === "edit" && detail?.source === "template" && (
+              <>
+                这是参考模板，UI 上只读。请使用「基于此模板创建 Role」展开为正式 Role。
+              </>
+            )}
+            {mode === "edit" && detail?.source !== "template" && (
+              <>
+                编辑正式 Role，所有写入必须经过 <span className="notranslate" translate="no">access.yaml</span> dryRun diff 确认。
+              </>
+            )}
+            {mode === "copy" && (
+              <>
+                从已有 role 复制出新的正式 Role。需输入新 id。
+              </>
+            )}
+            {mode === "delete" && (
+              <>
+                删除前必须 dryRun diff。被 <span className="notranslate" translate="no">Agent</span> 引用的 role 不可删除。
+              </>
+            )}
           </>
         }
         badges={
           detail ? (
             <>
-              <span>{detail.source === "template" ? "template" : "YAML role"}</span>
-              <span>{detail.usageCount} 个 Agent 引用</span>
+              <span>{detail.source === "template" ? "参考模板" : "正式 Role"}</span>
+              <span>
+                {detail.usageCount} 个 <span className="notranslate" translate="no">Agent</span> 引用
+              </span>
             </>
           ) : null
         }
@@ -658,9 +694,19 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
             </div>
             {isReadOnlyTemplate && (
               <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">
-                这是内置模板，UI 上只读。
-                <Link to={`/admin/roles/${encodeURIComponent(detail!.id)}?mode=copy`} className="pl-btn pl-btn--secondary text-xs ml-3">
-                  复制为 YAML Role
+                <p>这是参考模板，UI 上只读。</p>
+                <p className="mt-1 text-warning-strong">
+                  创建后会写入 <span className="notranslate" translate="no">access.yaml</span>
+                  ，成为可编辑、可分配给 <span className="notranslate" translate="no">Agent</span>{" "}
+                  的正式 Role。保存前必须确认{" "}
+                  <span className="notranslate" translate="no">YAML</span> diff。
+                </p>
+                <Link
+                  to={`/admin/roles/${encodeURIComponent(detail!.id)}?mode=copy`}
+                  className="pl-btn pl-btn--secondary text-xs ml-0 mt-2"
+                  aria-label={`基于参考模板 ${detail!.id} 创建 Role`}
+                >
+                  基于此模板创建 Role
                 </Link>
               </div>
             )}
@@ -672,8 +718,34 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
             {!detail ? (
               <p className="text-sm text-fg-muted">尚未保存。先在「基本配置」中填写并预览保存。</p>
             ) : detail.invalid ? (
-              <div className="pl-card">
-                <p className="text-sm text-danger">该 role 当前无法解析：{detail.warnings.join("; ")}</p>
+              <div className="pl-card grid gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="pl-status-badge pl-status-validation_failed">待修复</span>
+                  <span className="text-sm text-danger">该 Role 当前无法生成有效权限边界。</span>
+                </div>
+                {(detail.warnings?.length ?? 0) > 0 ? (
+                  <ul className="grid gap-1 text-xs" data-testid="role-detail-invalid-warnings">
+                    {detail.warnings.map((warning, idx) => {
+                      const { diagnosis, technical } = roleWarningDiagnosis(warning);
+                      return (
+                        <li key={idx} className="text-danger">
+                          <span data-testid={`role-detail-warning-diagnosis-${idx}`}>{diagnosis}</span>
+                          <span className="ml-2 inline-flex items-center gap-1 text-fg-muted">
+                            <span aria-hidden>·</span>
+                            <span>技术详情：</span>
+                            <code
+                              className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]"
+                              translate="no"
+                              data-testid={`role-detail-warning-tech-${idx}`}
+                            >
+                              {technical}
+                            </code>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
               </div>
             ) : (
               <>
@@ -683,10 +755,29 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                   <div className="pl-metric-card"><span>Source</span><strong>{detail.effectivePermissions?.sources.length ?? 0}</strong><small>{detail.effectivePermissions?.snapshotHash.slice(0, 12)}</small></div>
                 </div>
                 <div className="grid gap-2">
-                  <div className="text-sm font-medium">允许的 <span className="notranslate" translate="no">MCP</span> 工具</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div
+                    className="text-sm font-medium notranslate"
+                    translate="no"
+                    data-testid="role-allowed-tools-label"
+                  >
+                    允许的 MCP 工具（过滤 <code>tools/list</code>，并拦截未授权 <code>tools/call</code>）
+                  </div>
+                  <p className="text-xs text-fg-muted">
+                    这些 <span className="notranslate" translate="no">tool</span> 会在 <span className="notranslate" translate="no">Lucy MCP Proxy</span> 中拦截未授权的{" "}
+                    <code className="notranslate" translate="no">tools/call</code>
+                    ，并在{" "}
+                    <code className="notranslate" translate="no">tools/list</code>
+                    中只暴露 role 列出的工具名。
+                  </p>
+                  <div className="flex flex-wrap gap-2" data-testid="role-allowed-tools-list">
                     {(detail.effectivePermissions?.tools ?? []).map((tool) => (
-                      <span key={tool} className="pl-status-badge pl-status-included">{tool}</span>
+                      <span
+                        key={tool}
+                        className="pl-status-badge pl-status-included notranslate"
+                        translate="no"
+                      >
+                        {tool}
+                      </span>
                     ))}
                   </div>
                 </div>

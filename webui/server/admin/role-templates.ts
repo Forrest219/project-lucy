@@ -44,7 +44,8 @@ const KX_NAMES = [
 export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
   lucy_r1_exact_readonly: {
     id: "lucy_r1_exact_readonly",
-    description: "Lucy R1 发布证据账号模板 — exact 6-tool controlled data service surface",
+    description:
+      "Lucy R1 发布证据账号模板：仅允许访问 POC 数据源和 6 个受控查询工具。用于发布验收，不建议作为日常 Agent 角色。",
     allow: {
       connections: ["poc-mysql-aliyun"],
       tableSelectors: [

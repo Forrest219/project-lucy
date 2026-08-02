@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RoleDetail } from "../pages/admin/RoleDetail";
@@ -85,6 +85,7 @@ function makeTemplateRole(): RoleDetailType {
 }
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -174,14 +175,20 @@ describe("RoleDetail", () => {
     expect(await screen.findByTestId("role-dirty-bar")).toBeInTheDocument();
   });
 
-  it("template role detail shows read-only banner and copy CTA", async () => {
+  it("template role detail shows read-only banner and 基于此模板创建 Role CTA", async () => {
     stubSingleRole(makeTemplateRole());
     renderAt("/admin/roles/wiki_only");
-    expect(await screen.findByText("template")).toBeInTheDocument();
-    // The page intro and the in-page banner both mention the template; we expect
-    // the banner copy inside the config tab to render the "复制为 YAML Role" link.
-    const copyLink = screen.getByRole("link", { name: /复制为 YAML Role/ });
+    // M57: 模板状态使用「参考模板」文案，且必须能跳到 detail/usage/perms 等 tab。
+    expect(await screen.findByText("参考模板")).toBeInTheDocument();
+    // 模板只读 banner 内的 CTA 必须改用「基于此模板创建 Role」，并把 role id 编入 aria-label。
+    const copyLink = screen.getByRole("link", { name: /基于参考模板 wiki_only 创建 Role/ });
+    expect(copyLink.textContent).toBe("基于此模板创建 Role");
     expect(copyLink.getAttribute("href")).toBe("/admin/roles/wiki_only?mode=copy");
+    // helper 文案说明 YAML diff 与正式 Role 语义（文本被 notranslate span 拆分，直接断言 body 文本）。
+    expect(document.body.textContent ?? "").toMatch(/写入\s*access\.yaml/);
+    expect(document.body.textContent ?? "").toMatch(/YAML\s*diff/);
+    // 旧「复制为 YAML Role」字样不得作为按钮文案出现。
+    expect(screen.queryByRole("link", { name: /^复制为 YAML Role$/ })).not.toBeInTheDocument();
   });
 
   it("copy mode pre-fills form from source and requires new role id", async () => {
@@ -266,6 +273,20 @@ describe("RoleDetail", () => {
     fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
     expect(screen.getByText("lucy_query")).toBeInTheDocument();
     expect(screen.getByText(/dataforai/)).toBeInTheDocument();
+  });
+
+  it("M55: 权限预览 explains that allowed MCP tools filter tools/list and intercept tools/call", async () => {
+    stubSingleRole(makeYamlRole());
+    renderAt("/admin/roles/analyst");
+    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    const label = await screen.findByTestId("role-allowed-tools-label");
+    // 标签需明确 runtime 影响，且不能丢失 tools/list、tools/call 提示
+    expect(label.textContent ?? "").toContain("允许的 MCP 工具");
+    expect(label.textContent ?? "").toContain("tools/list");
+    expect(label.textContent ?? "").toContain("tools/call");
+    // 工具 chip 列表数据-testid 保持
+    const toolList = screen.getByTestId("role-allowed-tools-list");
+    expect(toolList).toHaveTextContent("lucy_query");
   });
 
   it("usage tab lists agents that reference the role", async () => {
@@ -382,12 +403,18 @@ describe("RoleDetail", () => {
       makeYamlRole({
         id: "broken",
         invalid: true,
-        warnings: ["unknown tool: nope"],
+        warnings: ["role_resolution_failed:broken"],
         role: { allow: { tools: ["nope"] } }
       })
     );
     renderAt("/admin/roles/broken");
     fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
-    expect(await screen.findByText(/unknown tool: nope/)).toBeInTheDocument();
+    expect(await screen.findByText("待修复")).toBeInTheDocument();
+    expect(screen.getByText(/权限解析失败/)).toBeInTheDocument();
+    const technical = screen.getByTestId("role-detail-warning-tech-0");
+    expect(technical).toHaveTextContent("role_resolution_failed:broken");
+    expect(technical.getAttribute("translate")).toBe("no");
+    expect(technical.className).toContain("notranslate");
+    expect(screen.queryByText(/该 role 当前无法解析：role_resolution_failed/)).not.toBeInTheDocument();
   });
 });
