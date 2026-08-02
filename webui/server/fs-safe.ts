@@ -1,4 +1,4 @@
-import { lstat, mkdir, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, realpath, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const ALLOW = ["semantic-layer", "evals", "skills", "wiki", ".ktx-ui", "webui/config"];
@@ -107,6 +107,84 @@ export async function safeWrite(projectRoot: string, relPath: string, content: s
   const target = await resolveWritable(projectRoot, relPath);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, content, "utf8");
+}
+
+export async function safeMkdir(projectRoot: string, relPath: string): Promise<void> {
+  const target = await resolveWritable(projectRoot, relPath);
+  await mkdir(target, { recursive: true });
+}
+
+export async function safeRemove(projectRoot: string, relPath: string): Promise<void> {
+  const target = await resolveWritable(projectRoot, relPath);
+  try {
+    const targetStat = await lstat(target);
+    if (targetStat.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Removing symlinked path ${relPath} is forbidden`);
+    }
+    if (targetStat.isDirectory()) {
+      throw new ForbiddenPathError(`Removing directory ${relPath} is forbidden`);
+    }
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  await rm(target, { force: true });
+}
+
+/**
+ * Raised by `safeRemoveDirectory` when the target directory is not empty.
+ *
+ * Callers can translate this into a domain-specific error code (for
+ * example `WIKI_DIRECTORY_NOT_EMPTY`) without losing the underlying
+ * cause. Keeping the class here lets callers stay agnostic to which
+ * filesystem call detected the empty state.
+ */
+export class DirectoryNotEmptyError extends Error {
+  code = "DIRECTORY_NOT_EMPTY";
+  statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "DirectoryNotEmptyError";
+  }
+}
+
+/**
+ * Remove an empty directory under an allow-listed prefix (typically `wiki/`).
+ *
+ * M56 UX-WIKI-010: directory deletion is opt-in and conservative. We refuse
+ * symlinks (which may bypass the allow list via realpath) and refuse to
+ * recurse — non-empty directories raise {@link DirectoryNotEmptyError} so
+ * the caller can prompt the user to clear the contents first.
+ */
+export async function safeRemoveDirectory(projectRoot: string, relPath: string): Promise<void> {
+  const target = await resolveWritable(projectRoot, relPath);
+  let targetStat: Awaited<ReturnType<typeof lstat>>;
+  try {
+    targetStat = await lstat(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  if (targetStat.isSymbolicLink()) {
+    throw new ForbiddenPathError(`Removing symlinked directory ${relPath} is forbidden`);
+  }
+  if (!targetStat.isDirectory()) {
+    throw new ForbiddenPathError(`Path ${relPath} is not a directory`);
+  }
+  const entries = await readdir(target);
+  if (entries.length > 0) {
+    throw new DirectoryNotEmptyError(`Directory ${relPath} is not empty`);
+  }
+  // `rm` on macOS refuses to remove a directory without `recursive`,
+  // and `rmdir` already enforces the "empty" invariant we just
+  // verified, so it is the safe primitive here.
+  await rmdir(target);
 }
 
 export async function assertReadable(projectRoot: string, relPath: string): Promise<string> {

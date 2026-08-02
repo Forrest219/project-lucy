@@ -6,7 +6,7 @@
  * share the same conventions (title extraction, TOC, template seeds,
  * validation findings) without leaning on a heavy markdown parser.
  */
-import type { WikiFrontmatter, WikiPreview, WikiSummary } from "./types";
+import type { WikiDirectorySummary, WikiFrontmatter, WikiPreview, WikiSummary } from "./types";
 
 export type WikiTemplate = {
   /** Short Chinese label rendered on the empty-draft card. */
@@ -286,6 +286,133 @@ export type WikiGroup = {
   directoryLabel: string;
   pages: WikiSummary[];
 };
+
+export type WikiDirectoryNode<TPage extends WikiSummary = WikiSummary> = {
+  /** Directory path relative to `wiki/`; empty string represents root-level pages. */
+  path: string;
+  /** Last path segment shown in the tree. */
+  name: string;
+  /** Markdown documents in this directory and all descendants. */
+  documentCount: number;
+  /** True when this directory was explicitly persisted, not only inferred from pages. */
+  explicit?: boolean;
+  /** True when the directory currently has no Markdown documents in its subtree. */
+  empty?: boolean;
+  /** Markdown documents directly under this directory. */
+  pages: TPage[];
+  children: WikiDirectoryNode<TPage>[];
+};
+
+type MutableWikiDirectoryNode<TPage extends WikiSummary> = WikiDirectoryNode<TPage> & {
+  childMap: Map<string, MutableWikiDirectoryNode<TPage>>;
+};
+
+type WikiDirectoryTreeInput<TPage extends WikiSummary> =
+  | TPage[]
+  | {
+    pages: TPage[];
+    directories?: WikiDirectorySummary[];
+  };
+
+function createWikiDirectoryNode<TPage extends WikiSummary>(
+  path: string,
+  name: string
+): MutableWikiDirectoryNode<TPage> {
+  return {
+    path,
+    name,
+    documentCount: 0,
+    pages: [],
+    children: [],
+    childMap: new Map()
+  };
+}
+
+function finalizeWikiDirectoryNode<TPage extends WikiSummary>(
+  node: MutableWikiDirectoryNode<TPage>
+): WikiDirectoryNode<TPage> {
+  const children = Array.from(node.childMap.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(finalizeWikiDirectoryNode);
+  const pages = [...node.pages].sort((a, b) => a.key.localeCompare(b.key));
+  return {
+    path: node.path,
+    name: node.name || "根目录",
+    documentCount:
+      pages.length + children.reduce((sum, child) => sum + child.documentCount, 0),
+    explicit: node.explicit,
+    empty: pages.length + children.reduce((sum, child) => sum + child.documentCount, 0) === 0,
+    pages,
+    children
+  };
+}
+
+/**
+ * Build a true directory tree from Wiki markdown keys. Directories are
+ * inferred from existing files only; this deliberately does not create
+ * empty folders or require backend API changes.
+ */
+export function buildWikiDirectoryTree<TPage extends WikiSummary>(
+  input: WikiDirectoryTreeInput<TPage>
+): WikiDirectoryNode<TPage>[] {
+  const pages = Array.isArray(input) ? input : input.pages;
+  const directories = Array.isArray(input) ? [] : input.directories ?? [];
+  const root = createWikiDirectoryNode<TPage>("", "根目录");
+
+  for (const directory of directories) {
+    const segments = directory.path.split("/").filter(Boolean);
+    let current = root;
+    for (let index = 0; index < segments.length; index += 1) {
+      const name = segments[index];
+      const path = segments.slice(0, index + 1).join("/");
+      const existing = current.childMap.get(name);
+      if (existing) {
+        current = existing;
+      } else {
+        const next = createWikiDirectoryNode<TPage>(path, name);
+        current.childMap.set(name, next);
+        current = next;
+      }
+    }
+    current.explicit = current.explicit || directory.explicit;
+  }
+
+  for (const page of pages) {
+    const segments = page.key.split("/").filter(Boolean);
+    const directorySegments = segments.length > 1 ? segments.slice(0, -1) : [];
+    let current = root;
+    for (let index = 0; index < directorySegments.length; index += 1) {
+      const name = directorySegments[index];
+      const path = directorySegments.slice(0, index + 1).join("/");
+      const existing = current.childMap.get(name);
+      if (existing) {
+        current = existing;
+      } else {
+        const next = createWikiDirectoryNode<TPage>(path, name);
+        current.childMap.set(name, next);
+        current = next;
+      }
+    }
+    current.pages.push(page);
+  }
+
+  const children = Array.from(root.childMap.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(finalizeWikiDirectoryNode);
+  if (root.pages.length === 0) {
+    return children;
+  }
+  return [
+    {
+      path: "",
+      name: "根目录",
+      documentCount: root.pages.length,
+      pages: [...root.pages].sort((a, b) => a.key.localeCompare(b.key)),
+      children: []
+    },
+    ...children
+  ];
+}
 
 /**
  * Group Wiki pages by the leading path segments. The trailing segment is

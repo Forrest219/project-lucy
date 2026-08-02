@@ -7,7 +7,10 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { WikiEditor } from "../pages/WikiEditor";
+import { nextNewNoteKey } from "../lib/slRef";
+import type { WikiDirectorySummary } from "../lib/types";
 import {
+  buildWikiDirectoryTree,
   extractWikiToc,
   groupWikiPages,
   validateWikiDraft,
@@ -68,6 +71,81 @@ const SOURCES = [
   }
 ];
 
+const NESTED_WIKI_PAGES = [
+  ...WIKI_PAGES,
+  {
+    key: "ops/playbooks/month-end-close.md",
+    summary: "Month end close",
+    tags: ["ops"],
+    slRefs: []
+  },
+  {
+    key: "ops/runbooks/incident-response.md",
+    summary: "Incident response",
+    tags: ["ops"],
+    slRefs: []
+  }
+];
+
+const EMPTY_WIKI_DIRECTORIES: WikiDirectorySummary[] = [
+  {
+    path: "global",
+    name: "global",
+    documentCount: 1,
+    explicit: true,
+    empty: false
+  },
+  {
+    path: "ops",
+    name: "ops",
+    documentCount: 0,
+    explicit: true,
+    empty: true
+  },
+  {
+    path: "ops/playbooks",
+    name: "playbooks",
+    documentCount: 0,
+    explicit: true,
+    empty: true
+  }
+];
+
+const WIKI_VERSIONS = [
+  {
+    versionId: "v-upload-replace",
+    key: "global/superstore-analysis-playbook.md",
+    createdAt: "2026-08-02T08:30:00.000Z",
+    operation: "upload_replace",
+    title: "Superstore guide",
+    summary: "Uploaded replacement",
+    sourceFileName: "指标服务表设计草案.md",
+    contentHash: "hash-upload-replace"
+  },
+  {
+    versionId: "v-create",
+    key: "global/superstore-analysis-playbook.md",
+    createdAt: "2026-08-02T08:00:00.000Z",
+    operation: "create",
+    title: "Superstore guide",
+    summary: "Initial version",
+    contentHash: "hash-create"
+  }
+];
+
+const WIKI_VERSION_DETAILS = {
+  "v-upload-replace": {
+    ...WIKI_VERSIONS[0],
+    rawMarkdown: "# 指标服务表设计草案\n\n历史版本内容。",
+    diffFromCurrent: "@@\n-Detailed notes here.\n+历史版本内容。\n"
+  },
+  "v-create": {
+    ...WIKI_VERSIONS[1],
+    rawMarkdown: "# Superstore guide\n\nInitial body.",
+    diffFromCurrent: "@@\n-Detailed notes here.\n+Initial body.\n"
+  }
+};
+
 function LocationProbe() {
   const location = useLocation();
   return <span data-testid="current-location">{`${location.pathname}${location.search}`}</span>;
@@ -92,11 +170,36 @@ function renderWiki(initialPath: string) {
   return client;
 }
 
-function buildFetchMock(pages = WIKI_PAGES, sources = SOURCES) {
+function buildFetchMock(
+  pages = WIKI_PAGES,
+  sources = SOURCES,
+  directories: WikiDirectorySummary[] = []
+) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/wiki" && (!init || init.method === undefined)) {
-      return new Response(JSON.stringify({ ok: true, data: { pages } }));
+      return new Response(JSON.stringify({ ok: true, data: { pages, directories } }));
+    }
+    if (url === "/api/wiki/directories" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      const path = body.path ?? [body.parent, body.name].filter(Boolean).join("/");
+      const name = String(path).split("/").filter(Boolean).at(-1) ?? String(path);
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            directory: {
+              path,
+              name,
+              documentCount: 0,
+              explicit: true,
+              empty: true
+            },
+            created: true,
+            filePath: `wiki/${path}/`
+          }
+        })
+      );
     }
     const rawMatch = url.match(/^\/api\/wiki\/(.+)\/raw$/);
     if (rawMatch && (!init || init.method === undefined)) {
@@ -108,6 +211,16 @@ function buildFetchMock(pages = WIKI_PAGES, sources = SOURCES) {
     }
     if (url === "/api/wiki/upload/preview" && init?.method === "POST") {
       const body = JSON.parse(String(init.body));
+      const sourceFileName: string =
+        typeof body.sourceFileName === "string" && body.sourceFileName.trim()
+          ? String(body.sourceFileName).split(/[\\/]/).pop() || String(body.sourceFileName)
+          : body.key.split("/").pop() ?? body.key;
+      const warnings: string[] = [];
+      if (sourceFileName !== body.key.split("/").pop()) {
+        warnings.push(
+          `本地文件名 ${sourceFileName} 与目标路径文件名 ${body.key.split("/").pop()} 不一致，将按目标 Wiki 路径保存。`
+        );
+      }
       return new Response(
         JSON.stringify({
           ok: true,
@@ -117,15 +230,24 @@ function buildFetchMock(pages = WIKI_PAGES, sources = SOURCES) {
             diff: `@@\n+# Uploaded\n`,
             proposedMarkdown: body.markdown,
             exists: Boolean(body.overwrite),
+            mode: body.overwrite ? "replace" : "create",
+            sourceFileName,
+            targetKey: body.key,
+            existingTitle: body.overwrite ? "Existing title" : null,
+            targetTitle: "Uploaded",
             title: "Uploaded",
             slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
-            warnings: body.overwrite ? [] : ["目标文档已存在，确认后将按覆盖处理。"]
+            warnings
           }
         })
       );
     }
     if (url === "/api/wiki/upload/commit" && init?.method === "POST") {
       const body = JSON.parse(String(init.body));
+      const sourceFileName: string =
+        typeof body.sourceFileName === "string" && body.sourceFileName.trim()
+          ? String(body.sourceFileName).split(/[\\/]/).pop() || String(body.sourceFileName)
+          : body.key.split("/").pop() ?? body.key;
       return new Response(
         JSON.stringify({
           ok: true,
@@ -135,9 +257,119 @@ function buildFetchMock(pages = WIKI_PAGES, sources = SOURCES) {
             diff: `@@\n+# Uploaded\n`,
             proposedMarkdown: body.markdown,
             exists: Boolean(body.overwrite),
+            mode: body.overwrite ? "replace" : "create",
+            sourceFileName,
+            targetKey: body.key,
+            existingTitle: body.overwrite ? "Existing title" : null,
+            targetTitle: "Uploaded",
             title: "Uploaded",
             slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
             warnings: []
+          }
+        })
+      );
+    }
+    if (init?.method === "DELETE" && url.startsWith("/api/wiki/directories/")) {
+      const path = decodeURIComponent(url.replace("/api/wiki/directories/", ""));
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: { path, deleted: true, filePath: `wiki/${path}/` }
+        })
+      );
+    }
+    const movePreviewMatch = url.match(/^\/api\/wiki\/(.+)\/move\/preview$/);
+    if (movePreviewMatch && init?.method === "POST") {
+      const sourceKey = decodeURIComponent(movePreviewMatch[1]);
+      const body = JSON.parse(String(init.body));
+      const targetDirectory = String(body.targetDirectory ?? "").replace(/^\/+|\/+$/g, "");
+      const basename = sourceKey.split("/").pop() ?? sourceKey;
+      const targetKey = targetDirectory ? `${targetDirectory}/${basename}` : basename;
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: targetKey,
+            filePath: `wiki/${targetKey}`,
+            diff: "",
+            proposedMarkdown: "",
+            sourceKey,
+            targetKey,
+            targetDirectory: targetDirectory,
+            exists: false,
+            title: sourceKey.split("/").pop()?.replace(/\.md$/, "") ?? sourceKey,
+            basenameChanged: false,
+            warnings: []
+          }
+        })
+      );
+    }
+    const moveMatch = url.match(/^\/api\/wiki\/(.+)\/move$/);
+    if (moveMatch && init?.method === "POST") {
+      const sourceKey = decodeURIComponent(moveMatch[1]);
+      const body = JSON.parse(String(init.body));
+      const targetDirectory = String(body.targetDirectory ?? "").replace(/^\/+|\/+$/g, "");
+      const basename = sourceKey.split("/").pop() ?? sourceKey;
+      const targetKey = targetDirectory ? `${targetDirectory}/${basename}` : basename;
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            sourceKey,
+            key: targetKey,
+            targetDirectory,
+            previousKey: sourceKey,
+            newVersionId: "v-move",
+            filePath: `wiki/${targetKey}`
+          }
+        })
+      );
+    }
+    const versionsMatch = url.match(/^\/api\/wiki\/(.+)\/versions$/);
+    if (versionsMatch && (!init || init.method === undefined)) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: decodeURIComponent(versionsMatch[1]),
+            retentionLimit: 5,
+            versions: WIKI_VERSIONS
+          }
+        })
+      );
+    }
+    const versionDetailMatch = url.match(/^\/api\/wiki\/(.+)\/versions\/([^/]+)$/);
+    if (versionDetailMatch && (!init || init.method === undefined)) {
+      const versionId = decodeURIComponent(versionDetailMatch[2]);
+      const detail = WIKI_VERSION_DETAILS[versionId as keyof typeof WIKI_VERSION_DETAILS];
+      return new Response(JSON.stringify({ ok: true, data: detail }));
+    }
+    const restorePreviewMatch = url.match(
+      /^\/api\/wiki\/(.+)\/versions\/([^/]+)\/restore\/preview$/
+    );
+    if (restorePreviewMatch && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: decodeURIComponent(restorePreviewMatch[1]),
+            versionId: decodeURIComponent(restorePreviewMatch[2]),
+            targetTitle: "指标服务表设计草案",
+            diff: "@@\n-Detailed notes here.\n+历史版本内容。\n"
+          }
+        })
+      );
+    }
+    const restoreMatch = url.match(/^\/api\/wiki\/(.+)\/versions\/([^/]+)\/restore$/);
+    if (restoreMatch && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            key: decodeURIComponent(restoreMatch[1]),
+            restoredFromVersionId: decodeURIComponent(restoreMatch[2]),
+            newVersionId: "v-restored",
+            filePath: `wiki/${decodeURIComponent(restoreMatch[1])}`
           }
         })
       );
@@ -285,6 +517,38 @@ describe("wiki lib helpers", () => {
     const labels = groups.map((g) => g.directoryLabel);
     expect(labels).toEqual(["global", "kx", "poc"]);
     expect(groups[0]?.pages[0]?.key).toBe("global/superstore-analysis-playbook.md");
+  });
+
+  it("buildWikiDirectoryTree preserves sibling and nested directories with subtree document counts", () => {
+    const tree = buildWikiDirectoryTree(NESTED_WIKI_PAGES);
+    const ops = tree.find((node) => node.path === "ops");
+    expect(tree.map((node) => node.path)).toEqual(
+      expect.arrayContaining(["global", "kx", "ops", "poc"])
+    );
+    expect(ops?.documentCount).toBe(2);
+    expect(ops?.children.map((node) => node.path)).toEqual([
+      "ops/playbooks",
+      "ops/runbooks"
+    ]);
+    expect(ops?.children[0]?.pages[0]?.key).toBe("ops/playbooks/month-end-close.md");
+  });
+
+  it("buildWikiDirectoryTree keeps root-level markdown files separate from top-level directories", () => {
+    const tree = buildWikiDirectoryTree([
+      { key: "root-note.md", summary: "Root note", tags: [], slRefs: [] },
+      { key: "global/guide.md", summary: "Guide", tags: [], slRefs: [] }
+    ]);
+    expect(tree.map((node) => node.path)).toEqual(["", "global"]);
+    expect(tree[0]).toMatchObject({
+      path: "",
+      documentCount: 1
+    });
+    expect(tree[0]?.children).toEqual([]);
+    expect(tree[1]?.documentCount).toBe(1);
+  });
+
+  it("nextNewNoteKey can allocate a draft under a selected directory", () => {
+    expect(nextNewNoteKey(["kx/new-note.md"], "kx")).toBe("kx/new-note-2.md");
   });
 
   it("validateWikiDraft reports error / warning / info findings", () => {
@@ -967,8 +1231,60 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
     expect(screen.getByTestId("wiki-new-button")).toBeInTheDocument();
     expect(screen.getByTestId("wiki-upload-button")).toBeInTheDocument();
     expect(await screen.findByTestId("wiki-library-home")).toHaveTextContent("Markdown 文档库");
+    expect(screen.getAllByRole("button", { name: "上传 Markdown" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "新建文档" })).toHaveLength(1);
+    expect(screen.getByTestId("wiki-body")).toHaveClass("pl-wiki-body--library");
+    await waitFor(() => {
+      expect(screen.getByTestId("wiki-library-groups")).toHaveTextContent("1 篇");
+    });
     expect(screen.queryByTestId("wiki-read-title")).not.toBeInTheDocument();
     expect(screen.getByTestId("wiki-layout")).not.toHaveAttribute("data-key");
+  });
+
+  it("renders empty directories from the API as independent resources", async () => {
+    vi.stubGlobal("fetch", buildFetchMock(WIKI_PAGES, SOURCES, EMPTY_WIKI_DIRECTORIES));
+    renderWiki("/wiki");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    await waitFor(() => {
+      expect(within(tree).getByRole("button", { name: /ops\s*0\s*篇/ })).toBeInTheDocument();
+    });
+    expect(within(tree).getByRole("button", { name: /playbooks\s*0\s*篇/ })).toBeInTheDocument();
+    expect(await screen.findByTestId("wiki-library-groups")).toHaveTextContent("ops");
+    expect(screen.getByTestId("wiki-library-groups")).toHaveTextContent("0 篇");
+
+    fireEvent.change(within(tree).getByTestId("wiki-tree-search"), {
+      target: { value: "playbooks" }
+    });
+    expect(within(tree).getByRole("button", { name: /playbooks\s*0\s*篇/ })).toBeInTheDocument();
+  });
+
+  it("creates a draft in a selected subdirectory", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-new-button"));
+    const dialog = await screen.findByTestId("wiki-new-document-dialog");
+    fireEvent.change(within(dialog).getByTestId("wiki-new-directory-input"), {
+      target: { value: "kx" }
+    });
+    fireEvent.change(within(dialog).getByTestId("wiki-new-file-input"), {
+      target: { value: "metrics-playbook.md" }
+    });
+    expect(within(dialog).getByTestId("wiki-new-target-preview")).toHaveTextContent(
+      "wiki/kx/metrics-playbook.md"
+    );
+    fireEvent.click(within(dialog).getByTestId("wiki-new-confirm"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("wiki-layout")).toHaveAttribute(
+        "data-key",
+        "kx/metrics-playbook.md"
+      );
+    });
+    expect(screen.getByTestId("current-location")).toHaveTextContent(
+      "/wiki?key=kx%2Fmetrics-playbook.md"
+    );
   });
 });
 
@@ -1022,11 +1338,11 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     expect(dialog).toHaveTextContent("关联表");
     expect(dialog).toHaveTextContent("mysql-aliyun/dataforai/superstore_orders");
 
-    fireEvent.change(screen.getByTestId("wiki-upload-directory-select"), {
-      target: { value: "kx" }
+    fireEvent.change(screen.getByTestId("wiki-upload-directory-input"), {
+      target: { value: "ops/playbooks" }
     });
     await waitFor(() => {
-      expect(dialog).toHaveTextContent("wiki/kx/uploaded.md");
+      expect(dialog).toHaveTextContent("wiki/ops/playbooks/uploaded.md");
     });
 
     fireEvent.click(screen.getByTestId("wiki-upload-confirm"));
@@ -1034,12 +1350,13 @@ describe("WikiEditor Markdown file operations (M47)", () => {
       const commit = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/upload/commit");
       expect(commit).toBeTruthy();
       const body = JSON.parse(String(commit?.[1]?.body));
-      expect(body.key).toBe("kx/uploaded.md");
+      expect(body.key).toBe("ops/playbooks/uploaded.md");
       expect(body.markdown).toContain("# Uploaded");
+      expect(body.sourceFileName).toBe("uploaded.md");
     });
     await waitFor(() => {
       expect(screen.getByTestId("current-location")).toHaveTextContent(
-        "/wiki?key=kx%2Fuploaded.md"
+        "/wiki?key=ops%2Fplaybooks%2Fuploaded.md"
       );
     });
   });
@@ -1059,6 +1376,13 @@ describe("WikiEditor Markdown file operations (M47)", () => {
       expect(dialog).toHaveTextContent("上传覆盖预检");
     });
     expect(dialog).toHaveTextContent("wiki/global/superstore-analysis-playbook.md");
+    expect(within(dialog).getByTestId("wiki-upload-summary-source")).toHaveTextContent("replacement.md");
+    expect(within(dialog).getByTestId("wiki-upload-summary-target")).toHaveTextContent(
+      "wiki/global/superstore-analysis-playbook.md"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-summary-existing")).toHaveTextContent("Existing title");
+    expect(within(dialog).getByTestId("wiki-upload-summary-title")).toHaveTextContent("Uploaded");
+    expect(within(dialog).getByTestId("wiki-upload-warnings")).toHaveTextContent("replacement.md");
 
     fireEvent.click(screen.getByTestId("wiki-upload-confirm"));
     await waitFor(() => {
@@ -1067,6 +1391,50 @@ describe("WikiEditor Markdown file operations (M47)", () => {
       const body = JSON.parse(String(commit?.[1]?.body));
       expect(body.key).toBe("global/superstore-analysis-playbook.md");
       expect(body.overwrite).toBe(true);
+      expect(body.sourceFileName).toBe("replacement.md");
+    });
+  });
+
+  it("opens version history, previews a historical Markdown version and restores it", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("wiki-read-body")).toHaveTextContent("Detailed notes here.");
+    });
+    fireEvent.click(await screen.findByTestId("wiki-version-button"));
+
+    const dialog = await screen.findByTestId("wiki-version-history-dialog");
+    await waitFor(() => {
+      expect(dialog).toHaveTextContent("保留最近 5 版 Markdown 快照");
+    });
+    expect(dialog).toHaveTextContent("指标服务表设计草案.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-version-view-v-upload-replace"));
+    await waitFor(() => {
+      expect(screen.getByTestId("wiki-version-markdown-preview")).toHaveTextContent(
+        "历史版本内容"
+      );
+    });
+    expect(screen.getByTestId("wiki-version-diff")).toHaveTextContent("Detailed notes here");
+
+    fireEvent.click(screen.getByTestId("wiki-version-restore-v-upload-replace"));
+    const restoreDialog = await screen.findByTestId("wiki-restore-preflight");
+    await waitFor(() => {
+      expect(restoreDialog).toHaveTextContent("指标服务表设计草案");
+    });
+    expect(restoreDialog).toHaveTextContent("v-upload-replace");
+
+    fireEvent.click(screen.getByTestId("wiki-restore-confirm"));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/wiki/global%2Fsuperstore-analysis-playbook.md/versions/v-upload-replace/restore",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("wiki-restore-preflight")).not.toBeInTheDocument();
     });
   });
 });
@@ -1085,12 +1453,259 @@ describe("WikiEditor Tree View (P1)", () => {
       group.querySelector(".pl-wiki-tree-group-label")?.textContent
     );
     expect(labels).toEqual(expect.arrayContaining(["global", "poc", "kx"]));
+    expect(groups[0]).toHaveTextContent("1 篇");
 
     // Each row shows the summary as the primary title
     const superstoreRow = within(tree).getByRole("button", { name: /Superstore guide/ });
     expect(superstoreRow.textContent).not.toContain("global/superstore-analysis-playbook.md");
     const title = superstoreRow.querySelector(".pl-wiki-tree-page-title")?.textContent;
     expect(title).toBe("Superstore guide");
+  });
+
+  it("renders nested directories and keeps ancestor folders during search", async () => {
+    vi.stubGlobal("fetch", buildFetchMock(NESTED_WIKI_PAGES));
+    renderWiki("/wiki");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    await waitFor(() => {
+      expect(within(tree).getByRole("button", { name: /ops\s*2\s*篇/ })).toBeInTheDocument();
+    });
+    expect(within(tree).getByRole("button", { name: /playbooks\s*1\s*篇/ })).toBeInTheDocument();
+    expect(within(tree).getByRole("button", { name: /runbooks\s*1\s*篇/ })).toBeInTheDocument();
+
+    fireEvent.click(within(tree).getByRole("button", { name: /ops\s*2\s*篇/ }));
+    expect(within(tree).queryByRole("button", { name: /Month end close/ })).not.toBeInTheDocument();
+
+    fireEvent.change(within(tree).getByTestId("wiki-tree-search"), {
+      target: { value: "Month end" }
+    });
+
+    expect(within(tree).getByRole("button", { name: /ops\s*1\s*篇/ })).toBeInTheDocument();
+    expect(within(tree).getByRole("button", { name: /playbooks\s*1\s*篇/ })).toBeInTheDocument();
+    expect(within(tree).getByRole("button", { name: /Month end close/ })).toBeInTheDocument();
+    expect(within(tree).queryByRole("button", { name: /runbooks\s*1\s*篇/ })).not.toBeInTheDocument();
+  });
+
+  it("separates sidebar create-directory and create-document actions", async () => {
+    const fetchMock = buildFetchMock(WIKI_PAGES, SOURCES, EMPTY_WIKI_DIRECTORIES);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-sidebar-create-directory"));
+    const directoryDialog = await screen.findByTestId("wiki-new-directory-dialog");
+    expect(within(directoryDialog).getByTestId("wiki-new-directory-parent-input")).toHaveValue("global");
+    fireEvent.change(within(directoryDialog).getByTestId("wiki-new-directory-name-input"), {
+      target: { value: "playbooks" }
+    });
+    expect(within(directoryDialog).getByTestId("wiki-new-directory-target-preview")).toHaveTextContent(
+      "wiki/global/playbooks/"
+    );
+    fireEvent.click(within(directoryDialog).getByTestId("wiki-new-directory-confirm"));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/directories");
+      expect(createCall).toBeTruthy();
+      expect(JSON.parse(String(createCall?.[1]?.body))).toEqual({
+        parent: "global",
+        name: "playbooks"
+      });
+    });
+
+    fireEvent.click(await screen.findByTestId("wiki-sidebar-create-document"));
+    const documentDialog = await screen.findByTestId("wiki-new-document-dialog");
+    expect(within(documentDialog).getByTestId("wiki-new-directory-input")).toHaveValue("global");
+  });
+
+  it("opens scoped directory menus for child directories and documents", async () => {
+    vi.stubGlobal("fetch", buildFetchMock(NESTED_WIKI_PAGES));
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-sidebar-create-document"));
+    let dialog = await screen.findByTestId("wiki-new-document-dialog");
+    expect(within(dialog).getByTestId("wiki-new-directory-input")).toHaveValue("global");
+    expect(dialog.querySelector('option[value="ops"]')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    const tree = await screen.findByTestId("wiki-tree");
+    fireEvent.click(await within(tree).findByRole("button", { name: "ops/playbooks 目录操作" }));
+    fireEvent.click(await within(tree).findByTestId("wiki-tree-create-document-ops-playbooks"));
+    dialog = await screen.findByTestId("wiki-new-document-dialog");
+    expect(within(dialog).getByTestId("wiki-new-directory-input")).toHaveValue("ops/playbooks");
+    expect(within(dialog).getByTestId("wiki-new-target-preview")).toHaveTextContent(
+      "wiki/ops/playbooks/new-note.md"
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    fireEvent.click(await within(tree).findByRole("button", { name: "ops/playbooks 目录操作" }));
+    fireEvent.click(await within(tree).findByTestId("wiki-tree-create-directory-ops-playbooks"));
+    const directoryDialog = await screen.findByTestId("wiki-new-directory-dialog");
+    expect(within(directoryDialog).getByTestId("wiki-new-directory-parent-input")).toHaveValue(
+      "ops/playbooks"
+    );
+  });
+});
+
+describe("WikiEditor directory and document governance (M56)", () => {
+  it("creates a top-level directory via the 顶层目录 checkbox (UX-WIKI-008)", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-sidebar-create-directory"));
+    const dialog = await screen.findByTestId("wiki-new-directory-dialog");
+    const checkbox = within(dialog).getByTestId("wiki-new-directory-top-level-checkbox") as HTMLInputElement;
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(true);
+
+    fireEvent.change(within(dialog).getByTestId("wiki-new-directory-name-input"), {
+      target: { value: "browser-top" }
+    });
+
+    // Parent input is disabled + cleared when the top-level checkbox is on,
+    // and the preview reflects wiki/browser-top/.
+    expect(within(dialog).getByTestId("wiki-new-directory-parent-input")).toHaveValue("");
+    expect(within(dialog).getByTestId("wiki-new-directory-parent-input")).toBeDisabled();
+    expect(within(dialog).getByTestId("wiki-new-directory-target-preview")).toHaveTextContent(
+      "wiki/browser-top/"
+    );
+
+    fireEvent.click(within(dialog).getByTestId("wiki-new-directory-confirm"));
+
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/directories");
+      expect(createCall).toBeTruthy();
+      const body = JSON.parse(String(createCall?.[1]?.body));
+      expect(body).toEqual({ path: "browser-top" });
+    });
+  });
+
+  it("deletes an empty directory through the WikiTree menu (UX-WIKI-010)", async () => {
+    const fetchMock = buildFetchMock(WIKI_PAGES, SOURCES, EMPTY_WIKI_DIRECTORIES);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    const opsButton = await within(tree).findByRole("button", { name: /ops\s*0\s*篇/ });
+    // Open the ops directory `...` menu and pick 删除目录.
+    fireEvent.click(await within(tree).findByRole("button", { name: "ops 目录操作" }));
+    const deleteItem = await within(tree).findByTestId("wiki-tree-delete-directory-ops");
+    expect(deleteItem).not.toBeDisabled();
+    fireEvent.click(deleteItem);
+
+    const confirmDialog = await screen.findByTestId("wiki-delete-directory-dialog");
+    expect(within(confirmDialog).getByTestId("wiki-delete-directory-target")).toHaveTextContent(
+      "wiki/ops/"
+    );
+
+    fireEvent.click(within(confirmDialog).getByTestId("wiki-delete-directory-confirm"));
+
+    await waitFor(() => {
+      const deleteCall = fetchMock.mock.calls.find(
+        (call) => call[0] === "/api/wiki/directories/ops" && call[1]?.method === "DELETE"
+      );
+      expect(deleteCall).toBeTruthy();
+    });
+  });
+
+  it("disables 删除目录 for non-empty directories and explains why (UX-WIKI-010)", async () => {
+    const fetchMock = buildFetchMock(WIKI_PAGES, SOURCES, [
+      {
+        path: "global",
+        name: "global",
+        documentCount: 1,
+        explicit: true,
+        empty: false
+      }
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    fireEvent.click(await within(tree).findByRole("button", { name: "global 目录操作" }));
+    const deleteItem = await within(tree).findByTestId("wiki-tree-delete-directory-global");
+    expect(deleteItem).toBeDisabled();
+    expect(deleteItem).toHaveAttribute("aria-disabled", "true");
+    expect(deleteItem.getAttribute("title") ?? "").toContain("请先移动或删除内容");
+  });
+
+  it("moves the current document into another directory (UX-WIKI-011)", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-move-button"));
+    const dialog = await screen.findByTestId("wiki-move-document-dialog");
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-move-target-key-preview")).toHaveTextContent(
+        "wiki/global/superstore-analysis-playbook.md"
+      );
+    });
+
+    // Pick a new target directory.
+    const targetInput = within(dialog).getByTestId("wiki-move-target-directory-input");
+    fireEvent.change(targetInput, { target: { value: "ops/playbooks" } });
+
+    await waitFor(() => {
+      const previewCall = fetchMock.mock.calls
+        .filter(
+          (call) =>
+            typeof call[0] === "string" &&
+            call[0].endsWith("/global%2Fsuperstore-analysis-playbook.md/move/preview")
+        )
+        .at(-1);
+      expect(previewCall).toBeTruthy();
+      const body = JSON.parse(String(previewCall?.[1]?.body));
+      expect(body.targetDirectory).toBe("ops/playbooks");
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-move-target-key-preview")).toHaveTextContent(
+        "wiki/ops/playbooks/superstore-analysis-playbook.md"
+      );
+    });
+
+    fireEvent.click(within(dialog).getByTestId("wiki-move-confirm"));
+
+    await waitFor(() => {
+      const commitCall = fetchMock.mock.calls.find(
+        (call) =>
+          typeof call[0] === "string" &&
+          call[0].endsWith("/global%2Fsuperstore-analysis-playbook.md/move")
+      );
+      expect(commitCall).toBeTruthy();
+      const body = JSON.parse(String(commitCall?.[1]?.body));
+      expect(body.targetDirectory).toBe("ops/playbooks");
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        "/wiki?key=ops%2Fplaybooks%2Fsuperstore-analysis-playbook.md"
+      );
+    });
+  });
+
+  it("surfaces source file name, target key and titles in the upload preflight (UX-WIKI-013)", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-upload-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    const file = new File(["# Body\n"], "本地导入.md", { type: "text/markdown" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-summary-source")).toHaveTextContent(
+        "本地导入.md"
+      );
+      expect(within(dialog).getByTestId("wiki-upload-summary-target")).toHaveTextContent(
+        "wiki/global/本地导入.md"
+      );
+      expect(within(dialog).getByTestId("wiki-upload-summary-title")).toHaveTextContent(
+        "Uploaded"
+      );
+    });
+    expect(within(dialog).queryByTestId("wiki-upload-warnings")).not.toBeInTheDocument();
   });
 
   it("search matches title, tag, and sl_ref", async () => {
@@ -1130,7 +1745,7 @@ describe("Catalog table-level Wiki action", () => {
     }
   });
 
-  it("renders a 业务 Wiki action per table row linking to /wiki with sl_ref", async () => {
+  it("renders a 查看关联的 业务 Wiki action for rows with Wiki refs", async () => {
     const { Catalog } = await import("../pages/Catalog");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -1164,6 +1779,7 @@ describe("Catalog table-level Wiki action", () => {
     fireEvent.click(triggers[0] ?? triggers[0]);
 
     const wikiLink = await screen.findByTestId("catalog-row-wiki-superstore_orders");
+    expect(wikiLink).toHaveTextContent("查看关联的 业务 Wiki");
     expect(wikiLink).toHaveAttribute(
       "href",
       "/wiki?sl_ref=mysql-aliyun%2Fdataforai%2Fsuperstore_orders"

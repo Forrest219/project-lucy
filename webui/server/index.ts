@@ -43,12 +43,23 @@ import {
   writeSourceYamlImport
 } from "./semantic-layer";
 import {
+  createWikiDirectory,
   commitWikiUpload,
+  deleteWikiDirectory,
   listWiki,
+  listWikiDirectories,
+  listWikiVersions,
+  moveWiki,
+  previewWikiMove,
   previewWikiUpload,
+  previewWikiVersionRestore,
   previewWikiWrite,
   readWiki,
+  readWikiVersion,
+  restoreWikiVersion,
   writeWiki,
+  type WikiDirectoryCreateInput,
+  type WikiMoveInput,
   type WikiUploadInput,
   type WikiWriteInput
 } from "./wiki";
@@ -495,8 +506,62 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     return {
       ok: true,
-      data: { pages: await listWiki(projectRoot) }
+      data: {
+        pages: await listWiki(projectRoot),
+        directories: await listWikiDirectories(projectRoot)
+      }
     };
+  });
+
+  app.post<{
+    Body: WikiDirectoryCreateInput;
+  }>("/api/wiki/directories", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const result = await createWikiDirectory(projectRoot, request.body);
+    writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
+    writtenFiles.push({ filePath: result.filePath });
+    return {
+      ok: true,
+      data: result
+    };
+  });
+
+  app.delete<{
+    Params: { path: string };
+  }>("/api/wiki/directories/:path", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const result = await deleteWikiDirectory(projectRoot, request.params.path);
+    writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
+    writtenFiles.push({ filePath: result.filePath });
+    return {
+      ok: true,
+      data: result
+    };
+  });
+
+  app.post<{
+    Params: { key: string };
+    Body: { targetDirectory?: string };
+  }>("/api/wiki/:key/move/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const targetDirectory = request.body?.targetDirectory ?? "";
+    return {
+      ok: true,
+      data: await previewWikiMove(projectRoot, request.params.key, targetDirectory)
+    };
+  });
+
+  app.post<{
+    Params: { key: string };
+    Body: WikiMoveInput;
+  }>("/api/wiki/:key/move", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const targetDirectory = request.body?.targetDirectory ?? "";
+    const result = await moveWiki(projectRoot, request.params.key, targetDirectory);
+    writtenFiles.push({ filePath: result.filePath });
+    writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
+    writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
+    return reply.send({ ok: true, data: result });
   });
 
   app.get<{
@@ -526,9 +591,53 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     const preview = await commitWikiUpload(projectRoot, request.body);
     writtenFiles.push({ filePath: preview.filePath });
+    writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
       ok: true,
       data: preview
+    };
+  });
+
+  app.get<{
+    Params: { key: string };
+  }>("/api/wiki/:key/versions", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await listWikiVersions(projectRoot, request.params.key)
+    };
+  });
+
+  app.get<{
+    Params: { key: string; versionId: string };
+  }>("/api/wiki/:key/versions/:versionId", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await readWikiVersion(projectRoot, request.params.key, request.params.versionId)
+    };
+  });
+
+  app.post<{
+    Params: { key: string; versionId: string };
+  }>("/api/wiki/:key/versions/:versionId/restore/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await previewWikiVersionRestore(projectRoot, request.params.key, request.params.versionId)
+    };
+  });
+
+  app.post<{
+    Params: { key: string; versionId: string };
+  }>("/api/wiki/:key/versions/:versionId/restore", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const result = await restoreWikiVersion(projectRoot, request.params.key, request.params.versionId);
+    writtenFiles.push({ filePath: result.filePath });
+    writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
+    return {
+      ok: true,
+      data: result
     };
   });
 
@@ -556,6 +665,7 @@ export function buildServer() {
       : await previewWikiWrite(projectRoot, request.params.key, writeInput);
     if (request.body?.dryRun === false) {
       writtenFiles.push({ filePath: preview.filePath });
+      writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     }
     return {
       ok: true,

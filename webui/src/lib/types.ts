@@ -257,8 +257,42 @@ export type WikiSummary = {
   slRefs: string[];
 };
 
+export type WikiDirectorySummary = {
+  path: string;
+  name: string;
+  documentCount: number;
+  explicit: boolean;
+  empty: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type WikiDirectoryCreateInput = {
+  path?: string;
+  parent?: string;
+  name?: string;
+};
+
+export type WikiDirectoryCreateResult = {
+  directory: WikiDirectorySummary;
+  created: boolean;
+  filePath: string;
+};
+
+export type WikiDirectoryDeleteResult = {
+  path: string;
+  deleted: boolean;
+  filePath: string;
+};
+
+export type WikiMoveInput = {
+  targetDirectory: string;
+  overwrite?: boolean;
+};
+
 export type WikiListResponse = {
   pages: WikiSummary[];
+  directories?: WikiDirectorySummary[];
 };
 
 export type WikiPage = {
@@ -275,11 +309,91 @@ export type WikiPreview = {
   proposedMarkdown: string;
 };
 
+export type WikiUploadMode = "create" | "replace";
+
 export type WikiUploadPreview = WikiPreview & {
   exists: boolean;
+  mode: WikiUploadMode;
+  /** Local filename the user picked in the browser (basename only). */
+  sourceFileName: string;
+  /** Wiki key after applying the user's chosen target directory. */
+  targetKey: string;
+  /** Title currently persisted for the target document, or `null` when creating. */
+  existingTitle: string | null;
+  /** Title that will be written after the upload commits. */
+  targetTitle: string;
+  /** Legacy alias for `targetTitle` kept for downstream compatibility. */
   title: string;
   slRefs: string[];
   warnings: string[];
+};
+
+export type WikiMovePreview = WikiPreview & {
+  sourceKey: string;
+  targetKey: string;
+  targetDirectory: string;
+  exists: boolean;
+  title: string;
+  /** `true` when the basename of the source and target keys differs. */
+  basenameChanged: boolean;
+  warnings: string[];
+};
+
+export type WikiMoveResult = {
+  sourceKey: string;
+  key: string;
+  targetDirectory: string;
+  previousKey: string;
+  newVersionId: string;
+  filePath: string;
+};
+
+export type WikiVersionOperation =
+  | "create"
+  | "edit_save"
+  | "upload_create"
+  | "upload_replace"
+  | "restore"
+  | "move"
+  | "rename"
+  | "delete";
+
+export type WikiVersionSummary = {
+  versionId: string;
+  key: string;
+  createdAt: string;
+  operation: WikiVersionOperation;
+  title?: string;
+  summary?: string;
+  sourceFileName?: string;
+  previousKey?: string;
+  restoredFromVersionId?: string;
+  contentHash: string;
+};
+
+export type WikiVersionDetail = WikiVersionSummary & {
+  rawMarkdown: string;
+  diffFromCurrent: string;
+};
+
+export type WikiVersionListResponse = {
+  key: string;
+  retentionLimit: number;
+  versions: WikiVersionSummary[];
+};
+
+export type WikiVersionRestorePreview = {
+  key: string;
+  versionId: string;
+  targetTitle: string;
+  diff: string;
+};
+
+export type WikiVersionRestoreResult = {
+  key: string;
+  restoredFromVersionId: string;
+  newVersionId: string;
+  filePath: string;
 };
 
 export type HelpTocItem = {

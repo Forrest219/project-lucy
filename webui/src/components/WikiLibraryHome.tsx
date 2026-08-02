@@ -1,21 +1,21 @@
-import { groupWikiPages, wikiTitleFromKey } from "../lib/wiki";
-import type { WikiSummary } from "../lib/types";
+import { buildWikiDirectoryTree, wikiTitleFromKey } from "../lib/wiki";
+import type { WikiDirectoryNode } from "../lib/wiki";
+import type { WikiDirectorySummary, WikiSummary } from "../lib/types";
 
 export type WikiLibraryHomeProps = {
   pages: WikiSummary[];
-  onNew: () => void;
+  directories?: WikiDirectorySummary[];
   onSelect: (key: string) => void;
-  onUpload: () => void;
 };
 
 export function WikiLibraryHome({
+  directories = [],
   pages,
-  onNew,
-  onSelect,
-  onUpload
+  onSelect
 }: WikiLibraryHomeProps) {
-  const groups = groupWikiPages(pages);
+  const directoryTree = buildWikiDirectoryTree({ pages, directories });
   const total = pages.length;
+  const directoryCount = countDirectories(directoryTree);
 
   return (
     <section
@@ -28,76 +28,85 @@ export function WikiLibraryHome({
           <p className="pl-wiki-library-kicker">Markdown 文档库</p>
           <h2 className="pl-wiki-library-title">按目录管理业务口径文档</h2>
           <p className="pl-wiki-library-description">
-            当前收录 {total} 篇 Markdown 文档。选择左侧目录中的文件查看正文，或上传本地 `.md` 文件新建文档。
+            当前收录 {total} 篇 Markdown 文档，分布在 {directoryCount} 个目录中。
           </p>
-        </div>
-        <div className="pl-wiki-library-actions">
-          <button
-            className="pl-btn pl-btn--primary"
-            data-testid="wiki-library-upload"
-            onClick={onUpload}
-            type="button"
-          >
-            上传 Markdown
-          </button>
-          <button
-            className="pl-btn pl-btn--ghost"
-            data-testid="wiki-library-new"
-            onClick={onNew}
-            type="button"
-          >
-            新建文档
-          </button>
         </div>
       </header>
 
-      {groups.length === 0 ? (
+      {directoryTree.length === 0 ? (
         <div className="pl-wiki-library-empty" data-testid="wiki-library-empty">
           <p>还没有 Wiki 文档。</p>
-          <button className="pl-btn pl-btn--primary" onClick={onUpload} type="button">
-            上传 Markdown
-          </button>
         </div>
       ) : (
         <div className="pl-wiki-library-groups" data-testid="wiki-library-groups">
-          {groups.map((group) => (
-            <section className="pl-wiki-library-group" key={group.directory || "__root__"}>
-              <header className="pl-wiki-library-group-header">
-                <span className="pl-wiki-library-folder-icon" aria-hidden>
-                  ▾
-                </span>
-                <h3
-                  className="pl-wiki-library-group-title notranslate"
-                  translate="no"
-                >
-                  {group.directoryLabel}
-                </h3>
-                <span className="pl-wiki-library-count">{group.pages.length}</span>
-              </header>
-              <ul className="pl-wiki-library-list">
-                {group.pages.map((page) => (
-                  <li className="pl-wiki-library-item" key={page.key}>
-                    <button
-                      className="pl-wiki-library-item-button"
-                      onClick={() => onSelect(page.key)}
-                      type="button"
-                    >
-                      <span className="pl-wiki-library-md-icon notranslate" translate="no">
-                        MD
-                      </span>
-                      <span className="pl-wiki-library-item-main" title={page.key}>
-                        <span className="pl-wiki-library-item-title">
-                          {page.summary?.trim() || wikiTitleFromKey(page.key)}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
+          {directoryTree.map((node) => (
+            <DirectorySection
+              key={node.path || "__root__"}
+              node={node}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function countDirectories(nodes: WikiDirectoryNode[]): number {
+  return nodes.reduce(
+    (sum, node) => sum + 1 + countDirectories(node.children),
+    0
+  );
+}
+
+function DirectorySection({
+  node,
+  onSelect
+}: {
+  node: WikiDirectoryNode;
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <section className="pl-wiki-library-group">
+      <header className="pl-wiki-library-group-header">
+        <span className="pl-wiki-library-folder-icon" aria-hidden>
+          ▾
+        </span>
+        <h3
+          className="pl-wiki-library-group-title notranslate"
+          translate="no"
+        >
+          {node.path || node.name}
+        </h3>
+        <span className="pl-wiki-library-count">{node.documentCount} 篇</span>
+      </header>
+      <ul className="pl-wiki-library-list">
+        {node.pages.map((page) => (
+          <li className="pl-wiki-library-item" key={page.key}>
+            <button
+              className="pl-wiki-library-item-button"
+              onClick={() => onSelect(page.key)}
+              type="button"
+            >
+              <span className="pl-wiki-library-md-icon notranslate" translate="no">
+                MD
+              </span>
+              <span className="pl-wiki-library-item-main" title={page.key}>
+                <span className="pl-wiki-library-item-title">
+                  {page.summary?.trim() || wikiTitleFromKey(page.key)}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {node.children.length > 0 ? (
+        <div className="pl-wiki-library-children">
+          {node.children.map((child) => (
+            <DirectorySection key={child.path} node={child} onSelect={onSelect} />
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

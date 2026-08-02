@@ -83,19 +83,21 @@ export function findWikiBySlRef<T extends { slRefs: string[] }>(
  * Build a next-available `global/new-note.md` style key. Skips any
  * number that would collide with an existing key.
  */
-export function nextNewNoteKey(existingKeys: string[]): string {
+export function nextNewNoteKey(existingKeys: string[], directory = "global"): string {
   const taken = new Set(existingKeys);
-  if (!taken.has("global/new-note.md")) {
-    return "global/new-note.md";
+  const normalizedDirectory = directory.split("/").map((part) => part.trim()).filter(Boolean).join("/") || "global";
+  const base = `${normalizedDirectory}/new-note.md`;
+  if (!taken.has(base)) {
+    return base;
   }
   for (let n = 2; n < 1000; n += 1) {
-    const candidate = `global/new-note-${n}.md`;
+    const candidate = `${normalizedDirectory}/new-note-${n}.md`;
     if (!taken.has(candidate)) {
       return candidate;
     }
   }
   // Last-resort: append a timestamp suffix.
-  return `global/new-note-${Date.now()}.md`;
+  return `${normalizedDirectory}/new-note-${Date.now()}.md`;
 }
 
 /**

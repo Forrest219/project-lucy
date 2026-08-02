@@ -2,16 +2,23 @@ import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FilePlus, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "../components/PageHeader";
 import { TemplatePicker } from "../components/TemplatePicker";
+import { WikiDeleteDirectoryDialog } from "../components/WikiDeleteDirectoryDialog";
 import { WikiLibraryHome } from "../components/WikiLibraryHome";
+import { WikiMoveDocumentDialog } from "../components/WikiMoveDocumentDialog";
+import { WikiNewDirectoryDialog } from "../components/WikiNewDirectoryDialog";
+import { WikiNewDocumentDialog } from "../components/WikiNewDocumentDialog";
 import { WikiReadView } from "../components/WikiReadView";
 import { WikiEditView } from "../components/WikiEditView";
+import { WikiRestorePreflight } from "../components/WikiRestorePreflight";
 import { WikiSavePreflight } from "../components/WikiSavePreflight";
 import { WikiTree } from "../components/WikiTree";
 import { WikiUploadPreflight } from "../components/WikiUploadPreflight";
-import { apiGet, apiPost, apiPut } from "../lib/apiClient";
+import { WikiVersionHistoryDialog } from "../components/WikiVersionHistoryDialog";
+import { apiDelete, apiGet, apiPost, apiPut } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import {
   draftKeyForSlRef,
@@ -23,8 +30,17 @@ import type {
   SourcesResponse,
   WikiFrontmatter,
   WikiListResponse,
+  WikiMovePreview,
+  WikiMoveResult,
   WikiPage,
   WikiPreview,
+  WikiVersionDetail,
+  WikiVersionListResponse,
+  WikiVersionRestorePreview,
+  WikiVersionRestoreResult,
+  WikiDirectoryCreateInput,
+  WikiDirectoryCreateResult,
+  WikiDirectorySummary,
   WikiSummary,
   WikiUploadPreview
 } from "../lib/types";
@@ -75,6 +91,7 @@ export function WikiEditor() {
   });
 
   const pages = listQuery.data?.pages ?? [];
+  const serverDirectories = listQuery.data?.directories ?? [];
   const tables = sourcesQuery.data?.tables ?? [];
 
   const knownSlRefs = useMemo(() => {
@@ -107,6 +124,12 @@ export function WikiEditor() {
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [previewTab, setPreviewTab] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [newDirectoryOpen, setNewDirectoryOpen] = useState(false);
+  const [newDirectoryParent, setNewDirectoryParent] = useState("global");
+  const [newDirectoryError, setNewDirectoryError] = useState<string | null>(null);
+  const [newDocumentOpen, setNewDocumentOpen] = useState(false);
+  const [newDocumentDirectory, setNewDocumentDirectory] = useState("global");
+  const [newDocumentError, setNewDocumentError] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadMode, setUploadMode] = useState<WikiUploadMode>("create");
   const [uploadTargetKey, setUploadTargetKey] = useState("");
@@ -115,7 +138,21 @@ export function WikiEditor() {
   const [uploadPreview, setUploadPreview] = useState<WikiUploadPreview | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [deleteDirectoryPath, setDeleteDirectoryPath] = useState<string | null>(null);
+  const [deleteDirectoryError, setDeleteDirectoryError] = useState<string | null>(null);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveTargetDirectory, setMoveTargetDirectory] = useState("");
+  const [movePreview, setMovePreview] = useState<WikiMovePreview | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [moveLoading, setMoveLoading] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [restorePreflightOpen, setRestorePreflightOpen] = useState(false);
+  const [restorePreview, setRestorePreview] = useState<WikiVersionRestorePreview | null>(null);
+  const [restorePreviewError, setRestorePreviewError] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadPreviewRequestRef = useRef(0);
+  const moveTargetDirectoryRef = useRef("");
   const dirtyRef = useRef(false);
   const sourceRef = useRef<string>(`${key}::${mode}::init`);
   const preserveBufferForKeyRef = useRef<string | null>(null);
@@ -148,6 +185,11 @@ export function WikiEditor() {
     lastResolvedKeyRef.current = key;
     setUiMode("read");
     setPreflightOpen(false);
+    setVersionHistoryOpen(false);
+    setSelectedVersionId(null);
+    setRestorePreflightOpen(false);
+    setRestorePreview(null);
+    setRestorePreviewError(null);
   }, [key]);
 
   // When an object handoff comes in as only `?sl_ref=...`, resolve it
@@ -198,6 +240,35 @@ export function WikiEditor() {
     enabled: Boolean(key) && mode === "loaded"
   });
 
+  const versionsQuery = useQuery({
+    queryKey: queryKeys.wikiVersions(key),
+    queryFn: () =>
+      apiGet<WikiVersionListResponse>(`/api/wiki/${encodeURIComponent(key)}/versions`),
+    enabled: versionHistoryOpen && Boolean(key) && mode === "loaded"
+  });
+
+  const versionDetailQuery = useQuery({
+    queryKey: [...queryKeys.wikiVersions(key), selectedVersionId],
+    queryFn: () =>
+      apiGet<WikiVersionDetail>(
+        `/api/wiki/${encodeURIComponent(key)}/versions/${encodeURIComponent(
+          selectedVersionId ?? ""
+        )}`
+      ),
+    enabled:
+      versionHistoryOpen &&
+      Boolean(key) &&
+      mode === "loaded" &&
+      Boolean(selectedVersionId)
+  });
+
+  useEffect(() => {
+    if (!versionHistoryOpen || selectedVersionId || !versionsQuery.data?.versions.length) {
+      return;
+    }
+    setSelectedVersionId(versionsQuery.data.versions[0].versionId);
+  }, [selectedVersionId, versionHistoryOpen, versionsQuery.data]);
+
   // Apply page detail to local state when the user has not edited
   // anything since the last reset. We never clobber unsaved edits.
   useEffect(() => {
@@ -235,6 +306,8 @@ export function WikiEditor() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
       dirtyRef.current = false;
       sourceRef.current = `${key}::${mode}::saved`;
@@ -248,15 +321,21 @@ export function WikiEditor() {
   });
 
   const uploadCommitMutation = useMutation({
-    mutationFn: () =>
-      apiPost<WikiUploadPreview>("/api/wiki/upload/commit", {
-        key: uploadTargetKey,
-        markdown: uploadMarkdown,
+    mutationFn: () => {
+      if (!uploadPreview) {
+        throw new Error("缺少上传预检结果。");
+      }
+      return apiPost<WikiUploadPreview>("/api/wiki/upload/commit", {
+        key: uploadPreview.targetKey,
+        markdown: uploadPreview.proposedMarkdown,
+        sourceFileName: uploadPreview.sourceFileName,
         overwrite: uploadMode === "replace" || uploadPreview?.exists === true
-      }),
+      });
+    },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(result.key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(result.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
       dirtyRef.current = false;
       sourceRef.current = `${result.key}::uploaded`;
@@ -269,6 +348,155 @@ export function WikiEditor() {
     },
     onError: (error) => {
       toast.error(`上传失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  });
+
+  const restorePreviewMutation = useMutation({
+    mutationFn: (versionId: string) =>
+      apiPost<WikiVersionRestorePreview>(
+        `/api/wiki/${encodeURIComponent(key)}/versions/${encodeURIComponent(
+          versionId
+        )}/restore/preview`,
+        {}
+      ),
+    onMutate: () => {
+      setRestorePreview(null);
+      setRestorePreviewError(null);
+      setRestorePreflightOpen(true);
+    },
+    onSuccess: (result) => {
+      setRestorePreview(result);
+      setRestorePreviewError(null);
+    },
+    onError: (error) => {
+      setRestorePreviewError(error instanceof Error ? error.message : "未知错误");
+    }
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: () => {
+      if (!restorePreview) {
+        throw new Error("缺少恢复预检结果。");
+      }
+      return apiPost<WikiVersionRestoreResult>(
+        `/api/wiki/${encodeURIComponent(key)}/versions/${encodeURIComponent(
+          restorePreview.versionId
+        )}/restore`,
+        {}
+      );
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(result.key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(result.key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+      dirtyRef.current = false;
+      sourceRef.current = `${result.key}::restored`;
+      setUiMode("read");
+      setRestorePreflightOpen(false);
+      setRestorePreview(null);
+      setRestorePreviewError(null);
+      setVersionHistoryOpen(false);
+      setSelectedVersionId(null);
+      toast.success("已恢复历史版本");
+    },
+    onError: (error) => {
+      toast.error(`恢复失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  });
+
+  const createDirectoryMutation = useMutation({
+    mutationFn: (input: WikiDirectoryCreateInput | { parent: string; name: string }) =>
+      apiPost<WikiDirectoryCreateResult>("/api/wiki/directories", input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      setNewDirectoryOpen(false);
+      setNewDirectoryError(null);
+      toast.success("目录已创建");
+    },
+    onError: (error) => {
+      setNewDirectoryError(error instanceof Error ? error.message : "未知错误");
+    }
+  });
+
+  const deleteDirectoryMutation = useMutation({
+    mutationFn: (directoryPath: string) =>
+      apiDelete<{ path: string; deleted: boolean; filePath: string }>(
+        `/api/wiki/directories/${encodeURIComponent(directoryPath)}`
+      ),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      setDeleteDirectoryPath(null);
+      setDeleteDirectoryError(null);
+      toast.success(`已删除目录 ${result.path}`);
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error ? error.message : "未知错误";
+      setDeleteDirectoryError(message);
+    }
+  });
+
+  const movePreviewMutation = useMutation({
+    mutationFn: (targetDirectory: string) =>
+      apiPost<WikiMovePreview>(
+        `/api/wiki/${encodeURIComponent(key)}/move/preview`,
+        { targetDirectory }
+      ),
+    onMutate: (targetDirectory) => {
+      moveTargetDirectoryRef.current = targetDirectory;
+      setMoveTargetDirectory(targetDirectory);
+      setMoveLoading(true);
+      setMoveError(null);
+      setMovePreview(null);
+    },
+    onSuccess: (result, targetDirectory) => {
+      if (moveTargetDirectoryRef.current !== targetDirectory) {
+        return;
+      }
+      setMovePreview(result);
+      setMoveError(null);
+    },
+    onError: (error, targetDirectory) => {
+      if (moveTargetDirectoryRef.current !== targetDirectory) {
+        return;
+      }
+      setMovePreview(null);
+      setMoveError(error instanceof Error ? error.message : "未知错误");
+    },
+    onSettled: (_data, _error, targetDirectory) => {
+      if (moveTargetDirectoryRef.current !== targetDirectory) {
+        return;
+      }
+      setMoveLoading(false);
+    }
+  });
+
+  const moveMutation = useMutation({
+    mutationFn: (targetDirectory: string) =>
+      apiPost<WikiMoveResult>(
+        `/api/wiki/${encodeURIComponent(key)}/move`,
+        { targetDirectory }
+      ),
+    onSuccess: (result) => {
+      const previousKey = key;
+      queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(result.key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(previousKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(result.key) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(previousKey) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+      dirtyRef.current = false;
+      sourceRef.current = `${result.key}::moved`;
+      setUiMode("read");
+      setMoveOpen(false);
+      setMovePreview(null);
+      setMoveError(null);
+      setSearchParams({ key: result.key }, { replace: true });
+      toast.success("文档已移动");
+    },
+    onError: (error) => {
+      setMoveError(error instanceof Error ? error.message : "未知错误");
     }
   });
 
@@ -380,7 +608,173 @@ export function WikiEditor() {
     setSearchParams(next, { replace: true });
   }
 
-  function startNewWiki() {
+  const currentDirectory = useMemo(() => {
+    if (!key || !key.includes("/")) {
+      return "global";
+    }
+    return key.split("/").slice(0, -1).join("/") || "global";
+  }, [key]);
+
+  const uploadDirectories = useMemo(() => {
+    const directories = new Set<string>(["global"]);
+    for (const directory of serverDirectories) {
+      directories.add(normalizeDirectoryInput(directory.path));
+    }
+    for (const page of pages) {
+      const segments = page.key.split("/").filter(Boolean);
+      if (segments.length > 1) {
+        const directorySegments = segments.slice(0, -1);
+        for (let index = 1; index <= directorySegments.length; index += 1) {
+          directories.add(directorySegments.slice(0, index).join("/"));
+        }
+      }
+    }
+    directories.add(currentDirectory);
+    return Array.from(directories).sort((a, b) => a.localeCompare(b));
+  }, [currentDirectory, pages, serverDirectories]);
+
+  function normalizeDirectoryInput(value: string): string {
+    return value.trim().replaceAll("\\", "/").replaceAll(/\/+/g, "/").replace(/^\/+|\/+$/g, "") || "global";
+  }
+
+  function normalizeOptionalDirectoryInput(value: string): string {
+    return value.trim().replaceAll("\\", "/").replaceAll(/\/+/g, "/").replace(/^\/+|\/+$/g, "");
+  }
+
+  function normalizeFileNameInput(value: string): string {
+    const trimmed = value.trim().replaceAll("\\", "/").split("/").filter(Boolean).pop() ?? "";
+    if (!trimmed) {
+      return "new-note.md";
+    }
+    return trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
+  }
+
+  function validateDirectory(directory: string): string | null {
+    const segments = directory.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      return "目标目录不能为空。";
+    }
+    if (segments.some((segment) => segment === "." || segment === "..")) {
+      return "目标目录不能包含 `.` 或 `..`。";
+    }
+    return null;
+  }
+
+  function openNewDirectoryDialog(parentDirectory = currentDirectory) {
+    if (
+      !confirmDiscardUnsaved(
+        "当前编辑未保存。新建目录会放弃未保存内容，是否继续？"
+      )
+    ) {
+      return;
+    }
+    setNewDirectoryParent(normalizeDirectoryInput(parentDirectory));
+    setNewDirectoryError(null);
+    setNewDirectoryOpen(true);
+  }
+
+  function startNewDirectory(input: { parent: string; name: string }) {
+    const parent = normalizeOptionalDirectoryInput(input.parent);
+    if (parent) {
+      const parentError = validateDirectory(parent);
+      if (parentError) {
+        setNewDirectoryError(parentError);
+        return;
+      }
+    }
+    const name = input.name.trim().replaceAll("\\", "/");
+    if (!name) {
+      setNewDirectoryError("目录名称不能为空。");
+      return;
+    }
+    if (name.includes("/") || name === "." || name === ".." || name.startsWith(".")) {
+      setNewDirectoryError("目录名称必须是单个目录名。");
+      return;
+    }
+    // M56 UX-WIKI-008: an empty parent means the user explicitly chose
+    // "顶层目录". Forward that intent with `{ path: name }` instead of
+    // silently nesting the new directory under the legacy `global`
+    // bucket.
+    if (parent === "") {
+      createDirectoryMutation.mutate({ path: name });
+      return;
+    }
+    createDirectoryMutation.mutate({ parent, name });
+  }
+
+  function openDeleteDirectoryDialog(directoryPath: string) {
+    if (
+      !confirmDiscardUnsaved(
+        "当前编辑未保存。删除目录会放弃未保存内容，是否继续？"
+      )
+    ) {
+      return;
+    }
+    if (!directoryPath) {
+      // The pseudo "根目录" bucket is not user-managed, so refuse it.
+      toast.error("根目录不可删除。");
+      return;
+    }
+    setDeleteDirectoryPath(directoryPath);
+    setDeleteDirectoryError(null);
+  }
+
+  function cancelDeleteDirectory() {
+    setDeleteDirectoryPath(null);
+    setDeleteDirectoryError(null);
+  }
+
+  function confirmDeleteDirectory() {
+    if (!deleteDirectoryPath) {
+      return;
+    }
+    deleteDirectoryMutation.mutate(deleteDirectoryPath);
+  }
+
+  function openMoveDialog() {
+    if (!key) {
+      toast.error("请先选择已保存的 Markdown 文档。");
+      return;
+    }
+    if (mode !== "loaded") {
+      toast.error("只能移动已保存的 Markdown 文档。");
+      return;
+    }
+    if (
+      uiMode === "edit" &&
+      dirtyRef.current &&
+      !window.confirm("当前编辑未保存。移动文档会保留未保存内容，但源文档不会被更新，是否继续？")
+    ) {
+      return;
+    }
+    const currentDirectory = key.includes("/") ? key.split("/").slice(0, -1).join("/") : "";
+    moveTargetDirectoryRef.current = currentDirectory;
+    setMoveTargetDirectory(currentDirectory);
+    setMovePreview(null);
+    setMoveError(null);
+    setMoveOpen(true);
+    movePreviewMutation.mutate(currentDirectory);
+  }
+
+  function closeMoveDialog() {
+    setMoveOpen(false);
+    setMovePreview(null);
+    setMoveError(null);
+  }
+
+  function handleMoveTargetDirectoryChange(next: string) {
+    setMoveTargetDirectory(next);
+    movePreviewMutation.mutate(next);
+  }
+
+  function confirmMove() {
+    if (!movePreview || movePreview.exists) {
+      return;
+    }
+    moveMutation.mutate(movePreview.targetDirectory);
+  }
+
+  function openNewDocumentDialog(directory = currentDirectory) {
     if (
       !confirmDiscardUnsaved(
         "当前编辑未保存。新建文档会放弃未保存内容，是否继续？"
@@ -388,11 +782,37 @@ export function WikiEditor() {
     ) {
       return;
     }
-    const draftKey = nextNewNoteKey(pages.map((p) => p.key));
+    setNewDocumentDirectory(normalizeDirectoryInput(directory));
+    setNewDocumentError(null);
+    setNewDocumentOpen(true);
+  }
+
+  function startNewWiki(input: { directory: string; fileName: string }) {
+    const directory = normalizeDirectoryInput(input.directory);
+    const directoryError = validateDirectory(directory);
+    if (directoryError) {
+      setNewDocumentError(directoryError);
+      return;
+    }
+    const fileName = normalizeFileNameInput(input.fileName);
+    if (fileName === "." || fileName === ".." || fileName.includes("/") || fileName.includes("\\")) {
+      setNewDocumentError("文件名必须是单个 Markdown 文件名。");
+      return;
+    }
+    const draftKey =
+      fileName === "new-note.md"
+        ? nextNewNoteKey(pages.map((p) => p.key), directory)
+        : `${directory}/${fileName}`.replaceAll(/\/+/g, "/");
+    if (pages.some((page) => page.key === draftKey)) {
+      setNewDocumentError("目标文档已存在，请换一个文件名。");
+      return;
+    }
     const next: Record<string, string> = { key: draftKey };
     if (slRef) {
       next.sl_ref = slRef;
     }
+    setNewDocumentOpen(false);
+    setNewDocumentError(null);
     setSearchParams(next, { replace: true });
     dirtyRef.current = false;
     sourceRef.current = `${draftKey}::navigated`;
@@ -430,6 +850,22 @@ export function WikiEditor() {
     setUiMode("edit");
   }
 
+  function openVersionHistory() {
+    if (!key || mode !== "loaded") {
+      toast.error("请先选择已保存的 Markdown 文档。");
+      return;
+    }
+    if (
+      uiMode === "edit" &&
+      dirtyRef.current &&
+      !window.confirm("当前编辑未保存。查看版本记录会保留当前编辑，但恢复历史版本前需要确认，是否继续？")
+    ) {
+      return;
+    }
+    setSelectedVersionId(null);
+    setVersionHistoryOpen(true);
+  }
+
   function requestBackToRead() {
     if (
       uiMode === "edit" &&
@@ -454,25 +890,6 @@ export function WikiEditor() {
     setUiMode("read");
   }
 
-  const currentDirectory = useMemo(() => {
-    if (!key || !key.includes("/")) {
-      return "global";
-    }
-    return key.split("/").slice(0, -1).join("/") || "global";
-  }, [key]);
-
-  const uploadDirectories = useMemo(() => {
-    const directories = new Set<string>(["global"]);
-    for (const page of pages) {
-      const segments = page.key.split("/").filter(Boolean);
-      if (segments.length > 1) {
-        directories.add(segments.slice(0, -1).join("/"));
-      }
-    }
-    directories.add(currentDirectory);
-    return Array.from(directories).sort((a, b) => a.localeCompare(b));
-  }, [currentDirectory, pages]);
-
   function openUpload(modeToOpen: WikiUploadMode) {
     if (
       !confirmDiscardUnsaved(
@@ -493,7 +910,14 @@ export function WikiEditor() {
     uploadInputRef.current?.click();
   }
 
-  async function previewUpload(targetKey: string, markdown: string, modeToPreview: WikiUploadMode) {
+  async function previewUpload(
+    targetKey: string,
+    markdown: string,
+    modeToPreview: WikiUploadMode,
+    sourceFileName: string
+  ) {
+    const requestId = uploadPreviewRequestRef.current + 1;
+    uploadPreviewRequestRef.current = requestId;
     setUploadLoading(true);
     setUploadOpen(true);
     setUploadError(null);
@@ -502,13 +926,22 @@ export function WikiEditor() {
       const result = await apiPost<WikiUploadPreview>("/api/wiki/upload/preview", {
         key: targetKey,
         markdown,
+        sourceFileName,
         overwrite: modeToPreview === "replace"
       });
+      if (uploadPreviewRequestRef.current !== requestId) {
+        return;
+      }
       setUploadPreview(result);
     } catch (error) {
+      if (uploadPreviewRequestRef.current !== requestId) {
+        return;
+      }
       setUploadError(error instanceof Error ? error.message : "未知错误");
     } finally {
-      setUploadLoading(false);
+      if (uploadPreviewRequestRef.current === requestId) {
+        setUploadLoading(false);
+      }
     }
   }
 
@@ -529,7 +962,7 @@ export function WikiEditor() {
         : `${currentDirectory}/${fileName}`.replaceAll(/\/+/g, "/");
     setUploadTargetKey(targetKey);
     setUploadMarkdown(markdown);
-    await previewUpload(targetKey, markdown, uploadMode);
+    await previewUpload(targetKey, markdown, uploadMode, fileName);
     if (uploadInputRef.current) {
       uploadInputRef.current.value = "";
     }
@@ -539,9 +972,10 @@ export function WikiEditor() {
     if (!uploadFileName || !uploadMarkdown) {
       return;
     }
-    const targetKey = `${directory}/${uploadFileName}`.replaceAll(/\/+/g, "/");
+    const normalizedDirectory = normalizeDirectoryInput(directory);
+    const targetKey = `${normalizedDirectory}/${uploadFileName}`.replaceAll(/\/+/g, "/");
     setUploadTargetKey(targetKey);
-    void previewUpload(targetKey, uploadMarkdown, "create");
+    void previewUpload(targetKey, uploadMarkdown, "create", uploadFileName);
   }
 
   async function handleDownloadMarkdown() {
@@ -662,21 +1096,38 @@ export function WikiEditor() {
                   <button
                     className="pl-btn pl-btn--ghost"
                     data-testid="wiki-new-button"
-                    onClick={startNewWiki}
+                    onClick={() => openNewDocumentDialog()}
                     type="button"
                   >
                     新建文档
                   </button>
                 </>
-              ) : (
+              ) : mode === "loaded" ? (
                 <>
                   <button
                     className="pl-btn pl-btn--ghost"
                     data-testid="wiki-download-button"
                     onClick={handleDownloadMarkdown}
+                    title="下载当前打开的 Markdown 文档到本地"
                     type="button"
                   >
-                    下载 Markdown
+                    下载当前 Markdown
+                  </button>
+                  <button
+                    className="pl-btn pl-btn--ghost"
+                    data-testid="wiki-move-button"
+                    onClick={openMoveDialog}
+                    type="button"
+                  >
+                    移动到目录
+                  </button>
+                  <button
+                    className="pl-btn pl-btn--ghost"
+                    data-testid="wiki-version-button"
+                    onClick={openVersionHistory}
+                    type="button"
+                  >
+                    版本记录
                   </button>
                   <button
                     className="pl-btn pl-btn--primary"
@@ -695,7 +1146,7 @@ export function WikiEditor() {
                     编辑
                   </button>
                 </>
-              )
+              ) : null
             ) : (
               <>
                 <button
@@ -741,6 +1192,28 @@ export function WikiEditor() {
         >
           <div className="pl-wiki-sidebar-header">
             <h2 className="pl-wiki-sidebar-title">目录</h2>
+            <div className="pl-wiki-sidebar-actions">
+              <button
+                aria-label="新建目录"
+                className="pl-wiki-sidebar-action"
+                data-testid="wiki-sidebar-create-directory"
+                onClick={() => openNewDirectoryDialog()}
+                title="新建目录"
+                type="button"
+              >
+                <FolderPlus aria-hidden="true" focusable="false" size={15} />
+              </button>
+              <button
+                aria-label="在当前目录新建文档"
+                className="pl-wiki-sidebar-action"
+                data-testid="wiki-sidebar-create-document"
+                onClick={() => openNewDocumentDialog()}
+                title="新建文档"
+                type="button"
+              >
+                <FilePlus aria-hidden="true" focusable="false" size={15} />
+              </button>
+            </div>
           </div>
           {slRef ? (
             <p
@@ -752,16 +1225,29 @@ export function WikiEditor() {
               {mode === "loaded" ? "（已匹配）" : "（新草稿）"}
             </p>
           ) : null}
-          <WikiTree activeKey={key} onSelect={navigateTo} pages={pages} />
+          <WikiTree
+            activeKey={key}
+            directories={serverDirectories}
+            onCreateDirectory={openNewDirectoryDialog}
+            onCreateDocument={openNewDocumentDialog}
+            onDeleteDirectory={openDeleteDirectoryDialog}
+            onSelect={navigateTo}
+            pages={pages}
+          />
         </aside>
 
         <div className="grid gap-4 pl-wiki-main">
-          <div className="pl-wiki-body" data-testid="wiki-body">
+          <div
+            className={clsx(
+              "pl-wiki-body",
+              mode === "library" && "pl-wiki-body--library"
+            )}
+            data-testid="wiki-body"
+          >
             {mode === "library" ? (
               <WikiLibraryHome
-                onNew={startNewWiki}
+                directories={serverDirectories}
                 onSelect={navigateTo}
-                onUpload={() => openUpload("create")}
                 pages={pages}
               />
             ) : uiMode === "read" ? (
@@ -799,12 +1285,76 @@ export function WikiEditor() {
         open={templatePickerOpen}
       />
 
+      <WikiNewDirectoryDialog
+        defaultParentDirectory={newDirectoryParent}
+        directories={uploadDirectories}
+        error={newDirectoryError}
+        onCancel={() => {
+          setNewDirectoryOpen(false);
+          setNewDirectoryError(null);
+        }}
+        onConfirm={startNewDirectory}
+        open={newDirectoryOpen}
+      />
+
+      <WikiNewDocumentDialog
+        defaultDirectory={newDocumentDirectory}
+        defaultFileName="new-note.md"
+        directories={uploadDirectories}
+        error={newDocumentError}
+        onCancel={() => {
+          setNewDocumentOpen(false);
+          setNewDocumentError(null);
+        }}
+        onConfirm={startNewWiki}
+        open={newDocumentOpen}
+      />
+
       <WikiSavePreflight
         isSaving={saveMutation.isPending}
         onCancel={() => setPreflightOpen(false)}
         onConfirmSave={() => saveMutation.mutate()}
         open={preflightOpen}
         state={preflightState}
+      />
+
+      <WikiVersionHistoryDialog
+        error={
+          versionsQuery.error instanceof Error
+            ? versionsQuery.error.message
+            : versionDetailQuery.error instanceof Error
+              ? versionDetailQuery.error.message
+              : null
+        }
+        isDetailLoading={versionDetailQuery.isFetching}
+        isLoading={versionsQuery.isLoading}
+        keyName={key}
+        onClose={() => {
+          setVersionHistoryOpen(false);
+          setSelectedVersionId(null);
+        }}
+        onRestore={(versionId) => restorePreviewMutation.mutate(versionId)}
+        onSelectVersion={setSelectedVersionId}
+        open={versionHistoryOpen}
+        restoreLoading={restorePreviewMutation.isPending || restoreMutation.isPending}
+        retentionLimit={versionsQuery.data?.retentionLimit ?? 5}
+        selectedVersion={versionDetailQuery.data ?? null}
+        selectedVersionId={selectedVersionId}
+        versions={versionsQuery.data?.versions ?? []}
+      />
+
+      <WikiRestorePreflight
+        error={restorePreviewError}
+        isLoading={restorePreviewMutation.isPending}
+        isRestoring={restoreMutation.isPending}
+        onCancel={() => {
+          setRestorePreflightOpen(false);
+          setRestorePreview(null);
+          setRestorePreviewError(null);
+        }}
+        onConfirm={() => restoreMutation.mutate()}
+        open={restorePreflightOpen}
+        preview={restorePreview}
       />
 
       <input
@@ -817,6 +1367,28 @@ export function WikiEditor() {
         }}
         ref={uploadInputRef}
         type="file"
+      />
+
+      <WikiDeleteDirectoryDialog
+        directoryPath={deleteDirectoryPath}
+        error={deleteDirectoryError}
+        isDeleting={deleteDirectoryMutation.isPending}
+        onCancel={cancelDeleteDirectory}
+        onConfirm={confirmDeleteDirectory}
+      />
+
+      <WikiMoveDocumentDialog
+        directories={uploadDirectories}
+        error={moveError}
+        isLoading={moveLoading}
+        isMoving={moveMutation.isPending}
+        keyName={key}
+        onCancel={closeMoveDialog}
+        onConfirm={confirmMove}
+        onTargetDirectoryChange={handleMoveTargetDirectoryChange}
+        open={moveOpen && mode === "loaded"}
+        preview={movePreview}
+        targetDirectory={moveTargetDirectory}
       />
 
       <WikiUploadPreflight
@@ -835,8 +1407,8 @@ export function WikiEditor() {
         open={uploadOpen}
         preview={uploadPreview}
         targetDirectory={
-          uploadTargetKey.includes("/")
-            ? uploadTargetKey.split("/").slice(0, -1).join("/")
+          (uploadPreview?.targetKey ?? uploadTargetKey).includes("/")
+            ? (uploadPreview?.targetKey ?? uploadTargetKey).split("/").slice(0, -1).join("/")
             : currentDirectory
         }
       />

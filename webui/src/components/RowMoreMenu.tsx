@@ -4,7 +4,14 @@ import { MoreHorizontal } from "lucide-react";
 
 export type RowMoreMenuItem =
   | { kind: "link"; label: string; href: string; testId?: string }
-  | { kind: "action"; label: string; onSelect: () => void; testId?: string };
+  | {
+      kind: "action";
+      label: string;
+      onSelect: () => void;
+      testId?: string;
+      disabled?: boolean;
+      disabledReason?: string;
+    };
 
 type Props = {
   ariaLabel: string;
@@ -81,9 +88,13 @@ export function RowMoreMenu({ ariaLabel, items }: Props) {
                   role="menuitem"
                   type="button"
                   onClick={() => {
+                    if (item.disabled) return;
                     item.onSelect();
                     setOpen(false);
                   }}
+                  disabled={item.disabled}
+                  title={item.disabled ? item.disabledReason : undefined}
+                  aria-disabled={item.disabled || undefined}
                   className="pl-row-more-item notranslate"
                   translate="no"
                   data-testid={testId}

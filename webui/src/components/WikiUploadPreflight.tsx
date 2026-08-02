@@ -30,6 +30,7 @@ export function WikiUploadPreflight({
   onTargetDirectoryChange
 }: WikiUploadPreflightProps) {
   const title = mode === "replace" ? "上传覆盖预检" : "上传 Markdown 预检";
+  const directoryOptionsId = "wiki-upload-directory-options";
   return (
     <Dialog.Root onOpenChange={(next) => (!next ? onCancel() : null)} open={open}>
       <Dialog.Portal>
@@ -62,19 +63,22 @@ export function WikiUploadPreflight({
                 {mode === "create" ? (
                   <label className="pl-wiki-upload-directory">
                     <span>目标目录</span>
-                    <select
-                      className="pl-select notranslate"
-                      data-testid="wiki-upload-directory-select"
+                    <input
+                      className="pl-input notranslate"
+                      data-testid="wiki-upload-directory-input"
+                      list={directoryOptionsId}
                       onChange={(event) => onTargetDirectoryChange(event.target.value)}
+                      placeholder="global"
                       translate="no"
                       value={targetDirectory}
-                    >
+                    />
+                    <datalist id={directoryOptionsId}>
                       {directories.map((directory) => (
                         <option key={directory} value={directory}>
                           {directory}
                         </option>
                       ))}
-                    </select>
+                    </datalist>
                   </label>
                 ) : null}
                 <code className="pl-wiki-preflight-target notranslate" translate="no">
@@ -87,10 +91,44 @@ export function WikiUploadPreflight({
 
               <section className="pl-wiki-preflight-section" data-testid="wiki-upload-summary">
                 <h3 className="pl-wiki-preflight-section-title">解析摘要</h3>
-                <p>
-                  标题：
-                  <strong>{preview.title}</strong>
-                </p>
+                <dl className="pl-wiki-preflight-summary-list">
+                  <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-source">
+                    <dt>本地文件名</dt>
+                    <dd>
+                      <code className="notranslate" translate="no">
+                        {preview.sourceFileName}
+                      </code>
+                    </dd>
+                  </div>
+                  <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-target">
+                    <dt>目标 Wiki 路径</dt>
+                    <dd>
+                      <code className="notranslate" translate="no">
+                        {preview.filePath}
+                      </code>
+                    </dd>
+                  </div>
+                  <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-existing">
+                    <dt>{mode === "replace" ? "当前被覆盖文档" : "目标位置"}</dt>
+                    <dd>
+                      {preview.exists ? (
+                        preview.existingTitle ? (
+                          <strong>{preview.existingTitle}</strong>
+                        ) : (
+                          <span className="pl-notice-inline">未命名文档</span>
+                        )
+                      ) : (
+                        <span className="pl-notice-inline">新建文档</span>
+                      )}
+                    </dd>
+                  </div>
+                  <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-title">
+                    <dt>上传后标题</dt>
+                    <dd>
+                      <strong>{preview.targetTitle}</strong>
+                    </dd>
+                  </div>
+                </dl>
                 <p>
                   关联表：
                   {preview.slRefs.length > 0 ? (
@@ -108,7 +146,7 @@ export function WikiUploadPreflight({
                   )}
                 </p>
                 {preview.warnings.length > 0 ? (
-                  <ul className="pl-wiki-upload-warnings">
+                  <ul className="pl-wiki-upload-warnings" data-testid="wiki-upload-warnings">
                     {preview.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}

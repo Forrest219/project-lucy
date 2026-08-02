@@ -1,16 +1,25 @@
 import clsx from "clsx";
 import { useMemo, useState } from "react";
+import { RowMoreMenu } from "./RowMoreMenu";
 import {
-  groupWikiPages,
+  buildWikiDirectoryTree,
   pageMatchesSearch,
   wikiTitleFromKey
 } from "../lib/wiki";
-import type { WikiSummary } from "../lib/types";
+import type { WikiDirectorySummary, WikiSummary } from "../lib/types";
+import type { WikiDirectoryNode } from "../lib/wiki";
 
 export type WikiTreeProps = {
   pages: WikiSummary[];
+  directories?: WikiDirectorySummary[];
   activeKey: string;
   onSelect: (key: string) => void;
+  onCreateDocument?: (directory: string) => void;
+  onCreateDirectory?: (parentDirectory: string) => void;
+  /** Triggered when the user picks `删除目录` from a directory row menu.
+   *  The Wiki editor wires this up to the DELETE route; the tree stays
+   *  agnostic so other consumers can decide their own UX. */
+  onDeleteDirectory?: (directory: string) => void;
   /** Optional seeded search term so the tree can mirror a header input. */
   initialSearch?: string;
 };
@@ -25,26 +34,158 @@ type EnrichedPage = WikiSummary & {
  *
  * Pages are grouped by their leading path segments. Each row shows the
  * document's display title (frontmatter summary, first heading or
- * basename) as the primary label. Filtering matches across title, summary, tags and
- * `sl_refs` so the search bar in the page header and the tree stay in
- * sync. The UI labels use user-facing "关联表" wording even though
+ * basename) as the primary label. Filtering matches across title, summary,
+ * tags and `sl_refs` so the search bar in the page header and the tree stay
+ * in sync. The UI labels use user-facing "关联表" wording even though
  * the underlying metadata field remains `sl_refs`.
  */
-export function WikiTree({ pages, activeKey, onSelect, initialSearch = "" }: WikiTreeProps) {
+export function WikiTree({
+  pages,
+  directories = [],
+  activeKey,
+  onSelect,
+  onCreateDocument,
+  onCreateDirectory,
+  onDeleteDirectory,
+  initialSearch = ""
+}: WikiTreeProps) {
   const [search, setSearch] = useState(initialSearch);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const groups = useMemo(() => {
+  const directoryTree = useMemo(() => {
     const needle = search.trim();
-    const filtered = pages
-      .map<EnrichedPage>((page) => ({
+    const enriched = pages.map<EnrichedPage>((page) => ({
         ...page,
         displayTitle: page.summary?.trim() || wikiTitleFromKey(page.key),
         isActive: page.key === activeKey
-      }))
-      .filter((page) => pageMatchesSearch(page, page.displayTitle, needle));
-    return groupWikiPages(filtered);
-  }, [activeKey, pages, search]);
+      }));
+    return filterDirectoryTree(
+      buildWikiDirectoryTree({ pages: enriched, directories }),
+      needle
+    );
+  }, [activeKey, directories, pages, search]);
+
+  function toggleDirectory(path: string) {
+    setCollapsed((current) => ({
+      ...current,
+      [path]: !(current[path] ?? false)
+    }));
+  }
+
+  function renderPage(page: EnrichedPage, level: number) {
+    const extension = page.key.split(".").pop() ?? "";
+    return (
+      <li
+        className={clsx(
+          "pl-wiki-tree-page",
+          page.isActive && "pl-wiki-tree-page--active"
+        )}
+        data-active={page.isActive || undefined}
+        data-testid="wiki-tree-page"
+        key={page.key}
+      >
+        <button
+          aria-current={page.isActive ? "page" : undefined}
+          className="pl-wiki-tree-page-button"
+          onClick={() => onSelect(page.key)}
+          style={{ paddingLeft: `${Math.max(level, 0) * 12 + 8}px` }}
+          type="button"
+        >
+          <span
+            aria-hidden
+            className="pl-wiki-tree-page-ext notranslate"
+            data-ext={extension}
+            translate="no"
+          >
+            {extension}
+          </span>
+          <span
+            className="pl-wiki-tree-page-title"
+            title={page.key}
+          >
+            {page.displayTitle}
+          </span>
+        </button>
+      </li>
+    );
+  }
+
+  function renderDirectory(node: WikiDirectoryNode<EnrichedPage>, level: number) {
+    const isCollapsed = search.trim() ? false : collapsed[node.path] ?? false;
+    const key = node.path || "__root__";
+    const label = node.name || "根目录";
+    return (
+      <li
+        className="pl-wiki-tree-group"
+        data-testid="wiki-tree-group"
+        key={key}
+        role="treeitem"
+        aria-expanded={!isCollapsed}
+      >
+        <div
+          className="pl-wiki-tree-group-row"
+          style={{ paddingLeft: `${Math.max(level, 0) * 12}px` }}
+        >
+          <button
+            className="pl-wiki-tree-group-toggle"
+            onClick={() => toggleDirectory(node.path)}
+            type="button"
+          >
+            <span className="pl-wiki-tree-group-caret" aria-hidden>
+              {isCollapsed ? "▶" : "▼"}
+            </span>
+            <span className="pl-wiki-tree-group-label notranslate" translate="no">
+              {label}
+            </span>
+            <span className="pl-wiki-tree-group-count">{node.documentCount} 篇</span>
+          </button>
+          {onCreateDocument || onCreateDirectory || onDeleteDirectory ? (
+            <div className="pl-wiki-tree-group-menu">
+              <RowMoreMenu
+                ariaLabel={`${node.path || label} 目录操作`}
+                items={[
+                  ...(onCreateDirectory
+                    ? [{
+                      kind: "action" as const,
+                      label: "新建子目录",
+                      onSelect: () => onCreateDirectory(node.path || "global"),
+                      testId: `wiki-tree-create-directory-${(node.path || "root").replace(/[^a-zA-Z0-9_-]/g, "-")}`
+                    }]
+                    : []),
+                  ...(onCreateDocument
+                    ? [{
+                      kind: "action" as const,
+                      label: "在此目录新建文档",
+                      onSelect: () => onCreateDocument(node.path || "global"),
+                      testId: `wiki-tree-create-document-${(node.path || "root").replace(/[^a-zA-Z0-9_-]/g, "-")}`
+                    }]
+                    : []),
+                  ...(onDeleteDirectory
+                    ? [{
+                      kind: "action" as const,
+                      label: "删除目录",
+                      onSelect: () => onDeleteDirectory(node.path),
+                      disabled: !node.empty,
+                      disabledReason: node.empty
+                        ? undefined
+                        : "该目录下仍有 Markdown 文档或子目录，请先移动或删除内容。",
+                      testId: `wiki-tree-delete-directory-${(node.path || "root").replace(/[^a-zA-Z0-9_-]/g, "-")}`
+                    }]
+                    : [])
+                ]}
+              />
+            </div>
+          ) : null}
+        </div>
+        {!isCollapsed ? (
+          <ul className="pl-wiki-tree-pages">
+            {node.children.map((child) => renderDirectory(child, level + 1))}
+            {node.pages.map((page) => renderPage(page, level + 1))}
+          </ul>
+        ) : null}
+      </li>
+    );
+  }
 
   return (
     <div
@@ -61,86 +202,52 @@ export function WikiTree({ pages, activeKey, onSelect, initialSearch = "" }: Wik
         translate="no"
         value={search}
       />
-      {groups.length === 0 ? (
+      {directoryTree.length === 0 ? (
         <p className="pl-notice" data-testid="wiki-tree-empty">
           没有匹配的 Wiki 页面。
         </p>
       ) : (
         <ul className="pl-wiki-tree-list" role="tree">
-          {groups.map((group) => {
-            const isCollapsed = collapsed[group.directory] ?? false;
-            return (
-              <li
-                className="pl-wiki-tree-group"
-                data-testid="wiki-tree-group"
-                key={group.directory || "__root__"}
-                role="treeitem"
-                aria-expanded={!isCollapsed}
-              >
-                <button
-                  className="pl-wiki-tree-group-toggle"
-                  onClick={() =>
-                    setCollapsed((current) => ({
-                      ...current,
-                      [group.directory]: !isCollapsed
-                    }))
-                  }
-                  type="button"
-                >
-                  <span className="pl-wiki-tree-group-caret" aria-hidden>
-                    {isCollapsed ? "▶" : "▼"}
-                  </span>
-                  <span className="pl-wiki-tree-group-label notranslate" translate="no">
-                    {group.directoryLabel}
-                  </span>
-                  <span className="pl-wiki-tree-group-count">{group.pages.length}</span>
-                </button>
-                {!isCollapsed ? (
-                  <ul className="pl-wiki-tree-pages">
-                    {group.pages.map((page) => {
-                      const enriched = page as EnrichedPage;
-                      const extension = page.key.split(".").pop() ?? "";
-                      return (
-                        <li
-                          className={clsx(
-                            "pl-wiki-tree-page",
-                            enriched.isActive && "pl-wiki-tree-page--active"
-                          )}
-                          data-active={enriched.isActive || undefined}
-                          data-testid="wiki-tree-page"
-                          key={page.key}
-                        >
-                          <button
-                            aria-current={enriched.isActive ? "page" : undefined}
-                            className="pl-wiki-tree-page-button"
-                            onClick={() => onSelect(page.key)}
-                            type="button"
-                          >
-                            <span
-                              aria-hidden
-                              className="pl-wiki-tree-page-ext notranslate"
-                              data-ext={extension}
-                              translate="no"
-                            >
-                              {extension}
-                            </span>
-                            <span
-                              className="pl-wiki-tree-page-title"
-                              title={page.key}
-                            >
-                              {enriched.displayTitle}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : null}
-              </li>
-            );
-          })}
+          {directoryTree.map((node) => renderDirectory(node, 0))}
         </ul>
       )}
     </div>
   );
+}
+
+function directoryMatchesSearch<TPage extends EnrichedPage>(
+  node: WikiDirectoryNode<TPage>,
+  needle: string
+): boolean {
+  if (!needle) return true;
+  const lc = needle.toLowerCase();
+  return node.name.toLowerCase().includes(lc) || node.path.toLowerCase().includes(lc);
+}
+
+function filterDirectoryTree<TPage extends EnrichedPage>(
+  nodes: WikiDirectoryNode<TPage>[],
+  needle: string
+): WikiDirectoryNode<TPage>[] {
+  if (!needle) return nodes;
+  return nodes.flatMap((node) => {
+    if (directoryMatchesSearch(node, needle)) {
+      return [node];
+    }
+    const pages = node.pages.filter((page) =>
+      pageMatchesSearch(page, page.displayTitle, needle)
+    );
+    const children = filterDirectoryTree(node.children, needle);
+    if (pages.length === 0 && children.length === 0) {
+      return [];
+    }
+    return [{
+      ...node,
+      documentCount:
+        pages.length + children.reduce((sum, child) => sum + child.documentCount, 0),
+      empty:
+        pages.length + children.reduce((sum, child) => sum + child.documentCount, 0) === 0,
+      pages,
+      children
+    }];
+  });
 }
