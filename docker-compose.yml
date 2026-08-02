@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        KTX_VERSION: "${KTX_VERSION:-0.13.0}"
+        KTX_VERSION: "${KTX_VERSION:-0.16.0}"
     image: project-lucy:local
     environment:
       KTX_PROJECT_ROOT: /data/lucy
@@ -13,6 +13,7 @@ services:
       LUCY_PROXY_PORT: "7879"
       LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
       LUCY_PROXY_UPSTREAM_PORT: "7878"
+      LUCY_ALLOW_PLACEHOLDER_KTX: "${LUCY_ALLOW_PLACEHOLDER_KTX:-}"
       POSTHOG_DISABLED: "1"
     ports:
       - "${LUCY_WEBUI_HOST_PORT:-5174}:5174"

@@ -6,6 +6,7 @@ import { resolveProjectRoot } from "../project.js";
 import type { YamlAccessConfig } from "./agents.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
+const MANDATORY_DENY_TOOLS = ["sql_execution", "sql_dialect_notes", "memory_ingest", "memory_ingest_status"] as const;
 
 // Hard-coded known tools that the KTX MCP server exposes
 // These serve as the candidate list when the proxy hasn't cached them
@@ -27,6 +28,7 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "lucy_begin_question", description: "记录一次业务问题，用于审计链路关联" },
   { name: "kx_catalog", description: "列出当前 agent 可访问的 KX 财务语义层 source" },
   { name: "sql_execution", description: "执行原始 SQL（受限）" },
+  { name: "sql_dialect_notes", description: "读取 SQL 方言说明（受限）" },
   { name: "memory_ingest", description: "注入记忆" },
   { name: "memory_ingest_status", description: "查询记忆注入状态" }
 ];
@@ -35,12 +37,12 @@ export function registerMcpToolsRoutes(app: FastifyInstance) {
   app.get("/api/admin/mcp-tools", async () => {
     const projectRoot = await resolveProjectRoot();
     const filePath = path.join(projectRoot, ACCESS_YAML_REL);
-    let denyTools: string[] = [];
+    let denyTools: string[] = [...MANDATORY_DENY_TOOLS];
 
     try {
       const raw = await readFile(filePath, "utf-8");
       const config = parse(raw) as YamlAccessConfig;
-      denyTools = config.defaults?.deny_tools ?? [];
+      denyTools = [...new Set([...MANDATORY_DENY_TOOLS, ...(config.defaults?.deny_tools ?? [])])];
 
       // Collect user-level allowed tools as candidates (to augment KNOWN_TOOLS)
       const userTools = new Set<string>();

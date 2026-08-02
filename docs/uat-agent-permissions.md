@@ -655,7 +655,7 @@ grep -R "$TOKEN" .ktx-ui webui/config/access.yaml
 | UAT-18 | Agent 列表 | 访问 `/admin/agents` | 卡片展示 id、name、启用状态、token 数、表/工具授权摘要、近 7 天调用统计 |
 | UAT-19 | 搜索过滤 | 在搜索框输入 `uat-allow` | 只显示匹配 id/name 的 Agent |
 | UAT-20 | 状态过滤 | 禁用 `uat-allow-01` 后选择「已禁用」 | 只显示禁用 Agent |
-| UAT-21 | 工具全局 deny 展示 | 进入工具权限 Tab | `sql_execution`、`memory_ingest`、`memory_ingest_status` 显示全局禁用且不可选 |
+| UAT-21 | 工具全局 deny 展示 | 进入工具权限 Tab | `sql_execution`、`sql_dialect_notes`、`memory_ingest`、`memory_ingest_status` 显示全局禁用且不可选 |
 | UAT-22 | userId 不可改 | 进入基本信息 Tab | userId 只读展示，不可编辑 |
 | UAT-23 | 重复 id 拒绝 | 再次新建 `uat-allow-01` | 返回 `409 AGENT_ID_TAKEN`，yaml 不新增重复段 |
 | UAT-24 | 重复 token label 拒绝 | 对同一 Agent 再创建 `uat-token-01` | 返回 `409 TOKEN_LABEL_TAKEN`，不生成新 token |

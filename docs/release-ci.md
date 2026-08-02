@@ -25,7 +25,7 @@ Manual inputs:
 
 | Input | Default | Purpose |
 |---|---|---|
-| `ktx_version` | `0.13.0` | Candidate bundled `@kaelio/ktx` version |
+| `ktx_version` | `0.16.0` | Candidate bundled `@kaelio/ktx` version |
 | `release_tag` | empty | Optional image/release tag for manual release package |
 
 ## 2. Required Gates

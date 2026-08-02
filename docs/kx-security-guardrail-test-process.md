@@ -48,7 +48,7 @@ KX 域当前包含 6 个允许表：
 - `sl_query.measures[]` 聚合表达式中的 source。
 - `sl_query.dimensions[].field` 中的 source。
 - `entity_details.entities[].table` 直接表名。
-- `defaults.deny_tools` 对 `sql_execution` 的优先拦截。
+- `defaults.deny_tools` 对 `sql_execution` / `sql_dialect_notes` 的优先拦截。
 
 本轮测试刻意不依赖真实数据库，不调用生产 RDS，不生成或保存任何 token 明文。
 
@@ -493,7 +493,7 @@ claude -p "请对 KX ACL 安全围栏最新状态做最终安全复审。请阅�
    - `acl.ts` 读取配置优先，代码默认值仅作为配置缺失时的兜底。
    - 默认高危 deny、KX 敏感前缀、触表工具分类、敏感 metadata 工具分类会与配置取并集；误删或置空 defaults 不会关闭内置最低保护。
    - 测试覆盖：在测试配置中追加 `dataforai.sec_` 前缀后，`tables: ["*"]` agent 访问 `dataforai.sec_private_table` 仍需显式授权。
-   - 测试覆盖：将 `deny_tools`、`known_tools`、`table_touching_tools`、`sensitive_metadata_tools`、`sensitive_table_prefixes` 全部置空后，`sql_execution` 仍被全局拒绝，KX 表仍需显式授权，未知工具仍 fail-closed。
+   - 测试覆盖：将 `deny_tools`、`known_tools`、`table_touching_tools`、`sensitive_metadata_tools`、`sensitive_table_prefixes` 全部置空后，`sql_execution` / `sql_dialect_notes` 仍被全局拒绝，KX 表仍需显式授权，未知工具仍 fail-closed。
 2. `entity_details` 参数契约补强
    - 原覆盖：`entities[].table`。
    - 新增覆盖：顶层 `sourceName`、`entities[].sourceName`、`entities[].source`、`entities[].source_name`、`tableName` / `table_name`、`schema + name` / `schemaName + entityName` 等常见形态。

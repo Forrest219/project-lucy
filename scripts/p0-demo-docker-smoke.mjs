@@ -8,7 +8,7 @@ const project = process.env.LUCY_DEMO_COMPOSE_PROJECT ?? "lucy-p0-demo";
 const webPort = process.env.LUCY_DEMO_WEBUI_HOST_PORT ?? "55176";
 const proxyPort = process.env.LUCY_DEMO_PROXY_HOST_PORT ?? "57881";
 const demoToken = process.env.LUCY_DEMO_AGENT_TOKEN ?? "lucy-demo-agent-token";
-const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.13.0";
+const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 const composeFile = "docker-compose.demo.yml";
 const baselinePath = "examples/docker-demo/mysql/_baseline.json";
 let tempDockerConfig;

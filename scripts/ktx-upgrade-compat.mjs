@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 
-const DEFAULT_BASELINE = "0.13.0";
+const DEFAULT_BASELINE = "0.16.0";
 
 function parseArgs(argv) {
   const options = {

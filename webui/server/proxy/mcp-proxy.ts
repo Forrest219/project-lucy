@@ -557,6 +557,7 @@ function wikiSearchTool() {
       properties: {
         query: { type: "string" },
         q: { type: "string" },
+        connectionId: { type: "string" },
         limit: { type: "number", minimum: 1, maximum: 20 }
       },
       additionalProperties: true

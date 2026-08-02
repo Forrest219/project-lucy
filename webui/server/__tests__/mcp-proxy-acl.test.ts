@@ -45,6 +45,7 @@ const ACCESS_YAML = `users:
         - dictionary_search
         - discover_data
         - sql_execution
+        - sql_dialect_notes
   - id: disabled_agent
     name: Disabled Agent
     enabled: false
@@ -70,6 +71,7 @@ const ACCESS_YAML = `users:
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
 `;
 
 const SCHEMA_YAML = `tables:
@@ -207,6 +209,13 @@ describe("MCP proxy ACL enforcement", () => {
         id: "proxy-deny-global-tool",
         name: "sql_execution",
         args: {},
+        reason: "tool_forbidden_global"
+      });
+
+      await expectDenied(port, {
+        id: "proxy-deny-global-dialect-tool",
+        name: "sql_dialect_notes",
+        args: { connectionId: "mysql-aliyun" },
         reason: "tool_forbidden_global"
       });
 

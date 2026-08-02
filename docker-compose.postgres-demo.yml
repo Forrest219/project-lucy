@@ -21,7 +21,7 @@ services:
     build:
       context: .
       args:
-        KTX_VERSION: "${KTX_VERSION:-0.13.0}"
+        KTX_VERSION: "${KTX_VERSION:-0.16.0}"
     image: project-lucy:postgres-demo
     environment:
       KTX_PROJECT_ROOT: /data/lucy

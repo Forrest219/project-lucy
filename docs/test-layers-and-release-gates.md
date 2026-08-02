@@ -182,7 +182,7 @@ npm run compat:ktx-upgrade -- --candidate <version>
 | Semantic query | `ktx sl query --execute` returns rows |
 | MCP tools | required tools are present in `tools/list` |
 
-Current KTX `0.13.0` MCP `tools/list` does not expose `sl_validate`; validate is covered by CLI.
+Current KTX `0.16.0` MCP `tools/list` does not expose `sl_validate`; validate is covered by CLI.
 
 Candidate KTX versions are injected with `KTX_VERSION` and `LUCY_EXPECTED_KTX_VERSION`; the compatibility wrapper does not edit source files.
 

@@ -7,7 +7,7 @@ import path from "node:path";
 
 const args = new Set(process.argv.slice(2));
 const runDocker = args.has("--docker");
-const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.13.0";
+const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 let tempDockerConfig;
 let defaultDockerConfig;
 

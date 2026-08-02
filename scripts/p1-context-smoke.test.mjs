@@ -173,7 +173,7 @@ async function writeFakeKtx(dir) {
   const file = path.join(dir, "fake-ktx.sh");
   await writeFile(file, `#!/bin/sh
 if [ "$1" = "--version" ]; then
-  echo "@kaelio/ktx 0.13.0"
+  echo "@kaelio/ktx 0.16.0"
   exit 0
 fi
 if [ "$3" = "admin" ] && [ "$4" = "reindex" ]; then

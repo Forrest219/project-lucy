@@ -216,6 +216,7 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
   known_tools:
     - sl_query
     - sl_read_source
@@ -229,6 +230,7 @@ defaults:
     - lucy_catalog
     - kx_catalog
     - sql_execution
+    - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
   table_touching_tools:
@@ -397,8 +399,13 @@ describe("KX financial domain ACL guardrails", () => {
     const visibleForRoleWorkhorse = await allowedToolNames(identity("role_workhorse"));
     expect(visibleForRoleWorkhorse).toContain("lucy_begin_question");
     expect(visibleForRoleWorkhorse).toContain("kx_catalog");
+    expect(visibleForRoleWorkhorse).not.toContain("sql_dialect_notes");
     await expect(check(identity("role_workhorse"), "lucy_begin_question", { intentSummary: "test" }))
       .resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("wildcard_agent"), "sql_dialect_notes", {
+      connectionId: "mysql-aliyun"
+    })).resolves.toEqual({ allowed: false, reason: "tool_forbidden_global" });
 
     // no_table_agent explicitly lists lucy_begin_question but resolves to zero tables/sources
     // -> still listed in allow.tools, but filtered out of tools/list by the sources>0 gate.
@@ -873,8 +880,8 @@ describe("KX financial domain ACL guardrails", () => {
     const { check } = await loadAcl();
     const updatedAccess = ACCESS_YAML
       .replace(
-        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - lucy_catalog\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n",
-        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - lucy_catalog\n    - kx_catalog\n    - sql_execution\n    - memory_ingest\n    - memory_ingest_status\n    - future_table_export\n    - future_data_catalog\n"
+        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - lucy_catalog\n    - kx_catalog\n    - sql_execution\n    - sql_dialect_notes\n    - memory_ingest\n    - memory_ingest_status\n",
+        "  known_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - wiki_search\n    - wiki_read\n    - entity_details\n    - dictionary_search\n    - discover_data\n    - connection_list\n    - lucy_catalog\n    - kx_catalog\n    - sql_execution\n    - sql_dialect_notes\n    - memory_ingest\n    - memory_ingest_status\n    - future_table_export\n    - future_data_catalog\n"
       )
       .replace(
         "  table_touching_tools:\n    - sl_query\n    - sl_read_source\n    - sl_validate\n    - entity_details\n",

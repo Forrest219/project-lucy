@@ -58,7 +58,7 @@ async function checkAccessConfig() {
   }
 
   const denyTools = new Set(Array.isArray(defaults.deny_tools) ? defaults.deny_tools : []);
-  for (const tool of ["sql_execution", "memory_ingest", "memory_ingest_status"]) {
+  for (const tool of ["sql_execution", "sql_dialect_notes", "memory_ingest", "memory_ingest_status"]) {
     if (!denyTools.has(tool)) add("fail", `webui/config/access.yaml: defaults.deny_tools must include ${tool}`);
   }
   if (!Array.isArray(defaults.known_tools) || defaults.known_tools.length === 0) add("fail", "webui/config/access.yaml: defaults.known_tools must be explicit");

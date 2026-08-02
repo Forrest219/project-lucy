@@ -33,6 +33,7 @@ users:
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
   known_tools:
@@ -46,6 +47,7 @@ defaults:
     - connection_list
     - kx_catalog
     - sql_execution
+    - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
   table_touching_tools:

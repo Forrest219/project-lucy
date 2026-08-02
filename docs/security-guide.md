@@ -55,7 +55,7 @@ roles:
 Rules:
 
 - Enabled users must not use wildcard legacy `allow.tables: ["*"]` or `allow.tools: ["*"]`.
-- `defaults.deny_tools` must include `sql_execution`, `memory_ingest`, and `memory_ingest_status`.
+- `defaults.deny_tools` must include `sql_execution`, `sql_dialect_notes`, `memory_ingest`, and `memory_ingest_status`.
 - Table-touching tools must be explicitly classified.
 - Unknown or newly added KTX tools require review before exposure.
 

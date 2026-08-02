@@ -40,6 +40,7 @@ users: []
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
 `;
 
 const ANALYST_ACCESS_YAML = `roles:
@@ -65,6 +66,7 @@ users:
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
 `;
 
 const IN_USE_ACCESS_YAML = `roles:
@@ -94,6 +96,7 @@ users:
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
 `;
 
 const CUSTOM_KX_ACCESS_YAML = `roles:
@@ -113,6 +116,7 @@ users: []
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
 `;
 
 let projectRoot: string;
@@ -779,8 +783,11 @@ describe("GET /api/admin/mcp-tools", () => {
       "lucy_query",
       "lucy_explain_query",
       "lucy_freshness",
-      "lucy_begin_question"
+      "lucy_begin_question",
+      "sql_dialect_notes"
     ]));
+    const dialectNotes = res.body.data.tools.find((tool: { name: string }) => tool.name === "sql_dialect_notes");
+    expect(dialectNotes).toMatchObject({ globalDenied: true });
     await app.close();
   });
 });

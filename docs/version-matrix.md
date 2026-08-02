@@ -15,8 +15,8 @@
 | Lucy source | `main` after P0 release baseline | commit `e8863b8` established P0 Docker baseline |
 | Lucy package | `project-lucy-eval@0.1.0` | `package.json` |
 | WebUI package | `webui@1.0.0` | `webui/package.json` |
-| Bundled KTX npm package | `@kaelio/ktx@0.13.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
-| KTX Python runtime | `0.13.0`, feature `core` | `Dockerfile` runs `ktx admin runtime install --yes --feature core` |
+| Bundled KTX npm package | `@kaelio/ktx@0.16.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
+| KTX Python runtime | `0.16.0`, feature `core` | `Dockerfile` runs `ktx admin runtime install --yes --feature core` |
 | Node runtime | `node:22-bookworm-slim` | `Dockerfile` |
 | Docker deployment | Single-node Docker Compose | `docker-compose.yml`, `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml` |
 | Headless customer config | `customer-config/` bind mount to `/data/lucy` | `docker-compose.customer-config.yml`, `customer-config.example/`, `npm run smoke:p0:headless-config` |
@@ -29,11 +29,11 @@
 
 | Surface | Required Version / Behavior | Gate |
 |---|---|---|
-| KTX CLI | `ktx --version` returns `@kaelio/ktx 0.13.0` | `npm run smoke:p0:docker` |
+| KTX CLI | `ktx --version` returns `@kaelio/ktx 0.16.0` | `npm run smoke:p0:docker` |
 | KTX Python runtime | `ktx sl query --execute` runs without interactive install | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` |
 | KTX semantic layer validate | CLI `ktx sl validate` works | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` |
 | KTX MCP tools | `connection_list`, `sl_read_source`, `sl_query`, `wiki_search` are available | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` |
-| `sl_validate` MCP tool | Not exposed by KTX `0.13.0` MCP `tools/list` | validate via CLI gate |
+| `sl_validate` MCP tool | Not exposed by KTX `0.16.0` MCP `tools/list` | validate via CLI gate |
 | Lucy MCP Proxy | Bearer auth, ACL filtering, `kx_catalog`, `sl_read_source`, `sl_query` | `npm run smoke:p0:demo` |
 | KTX candidate upgrade | Candidate version must pass Docker/demo/business gates | `npm run compat:ktx-upgrade -- --candidate <version>` |
 
@@ -83,7 +83,7 @@ lucy:
   docker_image: <registry/image:tag>
 ktx:
   npm_package: "@kaelio/ktx"
-  npm_version: "0.13.0"
+  npm_version: "0.16.0"
   git_sha: <optional-upstream-sha>
   python_runtime_feature: core
 runtime:

@@ -24,13 +24,13 @@
 当前 Dockerfile 默认安装：
 
 ```text
-@kaelio/ktx@0.13.0
+@kaelio/ktx@0.16.0
 ```
 
 构建时可通过 build arg 覆盖：
 
 ```bash
-docker compose build --build-arg KTX_VERSION=0.13.0
+docker compose build --build-arg KTX_VERSION=0.16.0
 ```
 
 镜像运行后可验证：
@@ -39,7 +39,7 @@ docker compose build --build-arg KTX_VERSION=0.13.0
 docker compose exec lucy ktx --version
 ```
 
-当前 P0 smoke 期望 bundled KTX 为 `0.13.0`。如覆盖 build arg，请同步设置
+当前 P0 smoke 期望 bundled KTX 为 `0.16.0`。如覆盖 build arg，请同步设置
 `LUCY_EXPECTED_KTX_VERSION` 后再运行 smoke。
 
 镜像构建时还会预安装 KTX Python runtime：
@@ -256,7 +256,7 @@ Compose 宿主端口映射变量：
 - 镜像内包含 `git`，因为 KTX 启动时需要初始化/访问项目 git repository。
 - WebUI production server 当前使用 `tsx` 运行 TypeScript server；这是仓库内部实现细节，不是客户标准入口，后续可优化为编译后的 slim runtime image。
 - P0 smoke 已覆盖 image build、compose up、health API、MCP proxy 响应、镜像内 KTX version、semantic-layer validate、KTX CLI 查询、临时 MCP `tools/list` 与 `sl_query`。
-- KTX 0.13.0 MCP `tools/list` 当前不暴露 `sl_validate`；validate gate 使用 CLI `ktx sl validate`。
+- KTX 0.16.0 MCP `tools/list` 当前不暴露 `sl_validate`；validate gate 使用 CLI `ktx sl validate`。
 - Demo 数据库尚未内置；正式 CI/release 不应依赖生产或个人可访问数据库。
 - 业务 eval 仍依赖可访问的目标数据库和 agent CLI 环境。
 - Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、系统 metrics/告警/日志聚合、对象存储归档均不属于首版客户 headless 交付范围。

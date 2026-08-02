@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim
 
-ARG KTX_VERSION=0.13.0
+ARG KTX_VERSION=0.16.0
 
 ENV NODE_ENV=production \
     LUCY_BUNDLED_KTX_VERSION=${KTX_VERSION} \

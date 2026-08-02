@@ -12,7 +12,7 @@ export interface AclDecision {
   reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'agent_disabled' | 'raw_query_forbidden' | 'query_concurrency_exceeded' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>'
 }
 
-const DEFAULT_DENY_TOOLS = ["sql_execution", "memory_ingest", "memory_ingest_status"] as const;
+const DEFAULT_DENY_TOOLS = ["sql_execution", "sql_dialect_notes", "memory_ingest", "memory_ingest_status"] as const;
 
 const DEFAULT_KNOWN_TOOLS = [
   "sl_query",
@@ -32,6 +32,7 @@ const DEFAULT_KNOWN_TOOLS = [
   "kx_catalog",
   "lucy_begin_question",
   "sql_execution",
+  "sql_dialect_notes",
   "memory_ingest",
   "memory_ingest_status"
 ] as const;

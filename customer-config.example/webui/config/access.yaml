@@ -30,6 +30,7 @@ users:
 defaults:
   deny_tools:
     - sql_execution
+    - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
   known_tools:
@@ -42,6 +43,7 @@ defaults:
     - discover_data
     - connection_list
     - sql_execution
+    - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
   table_touching_tools:

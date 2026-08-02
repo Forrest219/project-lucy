@@ -79,12 +79,12 @@ Lucy Docker image = Lucy context compiler + governed MCP runtime + pinned KTX ru
 | 目标清单规范 | 已实现 | `docs/lucy-platform-goal-checklist.md` | 产品 goal、边界、scope、non-goals、capability checklist、release gates、open risks 已明确 |
 | 产品边界 | 已实现 | 本文 §2 | 文档明确 Lucy repo 不 fork KTX；Lucy Docker image 内置 pinned KTX runtime |
 | Docker 部署 | 已验证 | `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `scripts/docker-entrypoint.sh`, `docs/deployment-docker.md`; `npm run smoke:p0:docker`; `.github/workflows/lucy-release.yml` | `docker compose up` 后 WebUI `/api/health` 可访问，MCP proxy 端口可响应，容器内 `ktx --version` 可执行 |
-| 内置 KTX runtime | 已验证 | `Dockerfile` pins `@kaelio/ktx@0.13.0`; `npm run smoke:p0:docker` | 镜像内 `ktx --version` 与 `/api/health.data.bundledKtxVersion` 均验证为 `0.13.0` |
+| 内置 KTX runtime | 已验证 | `Dockerfile` pins `@kaelio/ktx@0.16.0`; `npm run smoke:p0:docker` | 镜像内 `ktx --version` 与 `/api/health.data.bundledKtxVersion` 均验证为 `0.16.0` |
 | 运行时健康检查 | 已验证 | `scripts/docker-healthcheck.sh`; `Dockerfile` `HEALTHCHECK`; `npm run smoke:p0:docker` | healthcheck 覆盖 KTX CLI、Lucy server、MCP endpoint 基础可用性；容器运行验证已通过 |
 | 数据库连接 | 已验证 | 本机 ignored `ktx.yaml`, `ktx.yaml.example`, `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml`, `examples/docker-demo/`, `examples/postgres-demo/`; `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` | Demo Docker MySQL、Demo Docker PostgreSQL 与本机真实 MySQL 连接均有验证路径；真实连接配置按机器本地维护，仓库只提交模板和示例；WebUI 配置向导属于后续体验增强 |
 | Headless 客户配置包 | 已验证 | `docker-compose.customer-config.yml`, `customer-config.example/`, `scripts/headless-config-smoke.mjs`, `docs/customer-deployment-guide.md`, `docs/deployment-docker.md`, `docs/admin-guide.md`; `npm run smoke:p0:headless-config`; 本机 Docker bind mount smoke | 客户以 `customer-config/` 维护 `ktx.yaml`、semantic-layer、wiki、eval、skills、access.yaml 和 secrets 引用；bind mount 到 `/data/lucy` 后容器 health、KTX reindex、Lucy MCP Proxy `tools/list` 与 `wiki_search` 已验证 |
 | 本机运行配置隔离 | 已实现 | `.gitignore`, `ktx.yaml.example`, `webui/config/access.yaml`; PR `codex/isolate-local-runtime-state` | 真实 `ktx.yaml` 不再作为共享主干配置提交；本机 secret path 与 token 明文只存在本机；`forrest_local` 过渡期同时接受 v3/v4 token hash |
-| Schema 扫描 / 读取 | 已验证 | `semantic-layer/`, `examples/docker-demo/project-template/semantic-layer/`, `examples/postgres-demo/project-template/semantic-layer/`; `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` | Demo gate 经 Lucy MCP Proxy 调用 `sl_read_source` 读取语义/schema 内容；KTX 0.13.0 无顶层 `scan` 命令，P0 以 manifest/read/reindex 覆盖 |
+| Schema 扫描 / 读取 | 已验证 | `semantic-layer/`, `examples/docker-demo/project-template/semantic-layer/`, `examples/postgres-demo/project-template/semantic-layer/`; `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` | Demo gate 经 Lucy MCP Proxy 调用 `sl_read_source` 读取语义/schema 内容；KTX 0.16.0 无顶层 `scan` 命令，P0 以 manifest/read/reindex 覆盖 |
 | Semantic layer 管理 | 已验证 | `semantic-layer/`, `customer-config.example/semantic-layer/`, `webui/server/semantic-layer.ts`, `webui/src/pages/TableEditor.tsx`, `scripts/headless-config-smoke.mjs`, `scripts/p1-context-smoke.mjs`; `npm run smoke:p0:headless-config`; 本机 Docker `ktx admin reindex --force` | 静态配置包 gate 校验 manifest/overlay 结构；Docker bind mount 后 KTX reindex 已扫描/更新 semantic-layer；业务源仍需按客户库逐表 `sl validate` |
 | Wiki / context 管理 | 已验证 | `wiki/`, `customer-config.example/wiki/`, `webui/server/wiki.ts`, `webui/src/pages/WikiEditor.tsx`, `scripts/headless-config-smoke.mjs`, `scripts/p1-context-smoke.mjs`; 本机 Docker Lucy MCP Proxy `wiki_search` | 配置包 gate 强制 wiki frontmatter `title`/`summary`；Docker bind mount 后 `wiki_search` 已命中样例 context |
 | Skill 管理 | 已实现 | `skills/`, `skills/README.md`, `scripts/p1-skills-smoke.mjs`, `webui/config/data-qa-instructions.md`; `npm run smoke:p1:skills` | 本期不交付 Skill Editor；文件治理、依赖、版本、runtime 边界与 eval `skill_version` 已可 headless 验证 |
@@ -165,13 +165,13 @@ Lucy 的测试与 eval 分三层，不能互相替代：
 
 | Question | Current Position | Required Decision |
 |---|---|---|
-| Bundled KTX pinning source | 首版 Dockerfile 使用 npm release `@kaelio/ktx@0.13.0` | 正式 release policy 是否允许只 pin npm release，还是还要记录 git SHA / SBOM |
+| Bundled KTX pinning source | 首版 Dockerfile 使用 npm release `@kaelio/ktx@0.16.0` | 正式 release policy 是否允许只 pin npm release，还是还要记录 git SHA / SBOM |
 | 首版部署形态 | 已按单机 Docker Compose 起步；Kubernetes/Helm 已决策本期不支持（2026-06-24，Forrest 决策，已写入 §4 Non-goals） | 后续阶段是否启动 Kubernetes/Helm 路径，本期不在范围内 |
 | 首版数据库范围 | MVP 明确支持 MySQL + PostgreSQL；StarRocks 进入 R1 P1 gated support，pending live certification；Oracle 仍为 roadmap candidate | StarRocks live certification 通过前不进入 release verified matrix；Oracle 是否启动协议兼容 spike 另行决策 |
 | MCP endpoint 暴露方式 | 首版 Docker 采用 Lucy proxy 对外统一暴露；KTX upstream 只在容器内使用 | 是否需要支持高级用户直连 KTX upstream |
 | P0 smoke 数据源 | 已新增 demo MySQL compose；本机客户主链路也已用真实 MySQL 验证 | demo DB 作为可重复 CI gate，真实库作为人工验收补充 |
 | secrets 管理 | 首版支持 `/data/lucy/.ktx/secrets/*` 文件路径；已补 `docker-compose.secrets.yml` 作为 Docker secrets override 示例 | 是否继续补 env var / WebUI secret onboarding |
-| `sl_validate` MCP tool | KTX 0.13.0 MCP `tools/list` 不暴露 `sl_validate`；CLI `ktx sl validate` 可用 | docs / ACL / eval 假设是否要按当前 KTX tool surface 校准 |
+| `sl_validate` MCP tool | KTX 0.16.0 MCP `tools/list` 不暴露 `sl_validate`；CLI `ktx sl validate` 可用 | docs / ACL / eval 假设是否要按当前 KTX tool surface 校准 |
 | 系统可观测性 / 监控告警 | 当前缺失：四份定位文档均无 metrics、告警、日志聚合机制，亦无 spec | 本期不交付，留作后续阶段；spec 范围（纯设计 vs 含现状盘点）待后续阶段确定 |
 
 ## 10. Update Rule

@@ -183,10 +183,10 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 
 - 优先级：P2
 - 执行：S
-- 命令：`KTX_VERSION=0.13.0 LUCY_EXPECTED_KTX_VERSION=0.13.0 docker compose -f docker-compose.demo.yml build lucy`
+- 命令：`KTX_VERSION=0.16.0 LUCY_EXPECTED_KTX_VERSION=0.16.0 docker compose -f docker-compose.demo.yml build lucy`
 - Pass 条件：
   - 构建成功
-  - `docker compose exec lucy ktx --version` 输出 `0.13.0`
+  - `docker compose exec lucy ktx --version` 输出 `0.16.0`
 
 ### TC-START-001 demo stack 启动
 
@@ -223,7 +223,7 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 - Pass 条件：
   - HTTP 200
   - 返回体含 `"ok": true`
-  - `data.bundledKtxVersion === "0.13.0"`（或与 `LUCY_EXPECTED_KTX_VERSION` 一致）
+  - `data.bundledKtxVersion === "0.16.0"`（或与 `LUCY_EXPECTED_KTX_VERSION` 一致）
 
 ### TC-NET-002 MCP Proxy 端口可连
 
@@ -524,7 +524,7 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 ```
 日期: 2026-06-23
 镜像 tag: project-lucy:demo
-KTX 版本: 0.13.0
+KTX 版本: 0.16.0
 宿主: macOS 14.4 / Docker 29.5.2 / Node 22.x
 测试人: <name>
 
@@ -532,7 +532,7 @@ KTX 版本: 0.13.0
 |---|---|---|
 | TC-BUILD-001 | Pass | |
 | TC-START-001 | Pass | demo-db health=healthy, lucy health=healthy |
-| TC-NET-001   | Pass | bundledKtxVersion=0.13.0 |
+| TC-NET-001   | Pass | bundledKtxVersion=0.16.0 |
 | TC-DATA-002  | Pass | |
 | TC-PROXY-005 | Pass | East=550670.8159, Central South=363958.9831, Northeast=302200.0925, Southwest=242646.2038 (baseline) |
 | TC-BIZ-001   | Pass | total_sales = 1459476.0953 (baseline) |

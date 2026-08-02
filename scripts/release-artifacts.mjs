@@ -109,7 +109,7 @@ if (help) {
 // Apply defaults + env fallbacks AFTER --help short-circuit.
 const FINAL_OUT_DIR = outDir ?? path.resolve("release");
 const FINAL_RELEASE_TAG = releaseTag ?? process.env.LUCY_RELEASE_TAG ?? process.env.GITHUB_REF_NAME ?? "local";
-const ktxVersion = process.env.KTX_VERSION ?? process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.13.0";
+const ktxVersion = process.env.KTX_VERSION ?? process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 const imageTag = process.env.LUCY_DOCKER_IMAGE ?? `project-lucy:${FINAL_RELEASE_TAG}`;
 
 function run(command, args, fallback = "unknown") {
