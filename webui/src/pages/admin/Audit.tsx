@@ -1,13 +1,107 @@
-import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
-import type { AuditResponse, AuditLogEntry } from "../../lib/types";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import type { AuditLogEntry, AuditResponse, AuditSourcesResponse } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
+
+/**
+ * localStorage key for the Audit page's last-used filter snapshot. We
+ * persist only the "non-shareable" filter values (the most-recent tab and
+ * the last non-empty filter values) so users can come back to the page
+ * and see what they were investigating, but URL params still drive the
+ * shareable surface.
+ */
+const AUDIT_FILTER_STORAGE_KEY = "lucy:webui:audit:filters:v1";
+const FILTER_PERSIST_FIELDS = ["tab", "user", "tool", "outcome", "tableSearch", "sessionId", "turnId", "platform"] as const;
+type FilterSnapshot = Partial<Record<(typeof FILTER_PERSIST_FIELDS)[number], string>>;
+
+function readFilterSnapshot(): FilterSnapshot {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(AUDIT_FILTER_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as FilterSnapshot;
+  } catch {
+    return {};
+  }
+}
+
+function writeFilterSnapshot(snapshot: FilterSnapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(AUDIT_FILTER_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // localStorage may be disabled (e.g. private mode); fall back to URL-only.
+  }
+}
 const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
 const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
+
+function HeatRow({ label, calls, denied, max }: { label: string; calls: number; denied?: number; max: number }) {
+  const width = max > 0 ? Math.max(4, Math.round((calls / max) * 100)) : 0;
+  return (
+    <div className="grid grid-cols-[minmax(180px,1fr)_minmax(160px,260px)_80px_80px] items-center gap-3 text-sm">
+      <span className="font-mono text-fg-muted truncate">{label}</span>
+      <div className="h-2 rounded-pill bg-bg-muted overflow-hidden">
+        <div className="h-full bg-accent" style={{ width: `${width}%` }} />
+      </div>
+      <span>{calls}</span>
+      <span className={denied ? "text-danger font-medium" : "text-fg-muted"}>{denied ?? 0}</span>
+    </div>
+  );
+}
+
+function HeatmapView() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "audit", "heatmap"],
+    queryFn: () => apiGet<AuditSourcesResponse>("/api/admin/audit/sources")
+  });
+  const maxCalls = Math.max(1, ...(data?.topTables ?? []).map((item) => item.calls));
+
+  if (isLoading) return <div className="pl-notice">加载中…</div>;
+  if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
+
+  return (
+    <>
+      <div className="pl-metric-grid">
+        <div className="pl-metric-card"><span>连接</span><strong>{data?.connections.length ?? 0}</strong><small>审计派生</small></div>
+        <div className="pl-metric-card"><span className="notranslate" translate="no">Schema</span><strong>{data?.schemas.length ?? 0}</strong><small>有访问记录</small></div>
+        <div className="pl-metric-card"><span>表</span><strong>{data?.topTables.length ?? 0}</strong><small>Top 50</small></div>
+        <div className="pl-metric-card"><span>拒绝表</span><strong>{data?.deniedTables.length ?? 0}</strong><small>有 denied</small></div>
+      </div>
+      <section className="pl-card grid gap-3">
+        <div className="flex items-center justify-between">
+          <p className="text-base font-semibold mb-0">Top Tables</p>
+          <span className="text-xs text-fg-muted">calls / denied</span>
+        </div>
+        {(data?.topTables ?? []).length === 0 ? (
+          <p className="text-sm text-fg-muted">暂无表级访问记录。</p>
+        ) : (
+          data?.topTables.map((item) => (
+            <HeatRow key={item.table} label={item.table} calls={item.calls} denied={item.denied} max={maxCalls} />
+          ))
+        )}
+      </section>
+      <section className="pl-card grid gap-3">
+        <p className="text-base font-semibold mb-0">Denied Tables</p>
+        {(data?.deniedTables ?? []).length === 0 ? (
+          <p className="text-sm text-fg-muted">暂无表级拒绝记录。</p>
+        ) : (
+          data?.deniedTables.map((item) => (
+            <HeatRow key={item.table} label={item.table} calls={item.calls} denied={item.denied} max={maxCalls} />
+          ))
+        )}
+      </section>
+    </>
+  );
+}
 
 function buildQuery(params: Record<string, string | undefined | number | boolean>): string {
   const q = new URLSearchParams();
@@ -54,15 +148,49 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
         <td className="px-3 py-2">
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
-        <td className="px-3 py-2 text-xs text-fg-muted">{entry.durationMs}ms</td>
+        <td className="px-3 py-2 text-xs text-fg-muted">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{entry.durationMs}ms</span>
+            <Link
+              to={buildObjectDetailSearch({ kind: "auditEvent", eventId: entry.id })}
+              state={{ initialAuditEntry: entry }}
+              className="pl-inline-link notranslate"
+              translate="no"
+              aria-label={`查看审计事件 #${entry.id} 的对象详情`}
+              data-testid={`audit-row-detail-${entry.id}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              查看详情
+            </Link>
+          </div>
+        </td>
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
           <td colSpan={7} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-grid">
+              <div>
+                <span className="font-medium">关联 <span className="notranslate" translate="no">Agent</span>：</span>
+                <span className="ml-2 inline-flex flex-wrap items-center gap-2">
+                  <Link
+                    to={buildObjectDetailSearch({ kind: "agent", agentId: entry.userId })}
+                    className="pl-inline-link notranslate"
+                    translate="no"
+                    aria-label={`查看 Agent ${entry.userId} 的对象详情`}
+                    data-testid={`audit-related-agent-${entry.id}`}
+                  >
+                    查看 Agent 详情
+                  </Link>
+                  {entry.userId ? (
+                    <span className="font-mono text-fg-muted notranslate" translate="no">
+                      ({entry.userId})
+                    </span>
+                  ) : null}
+                </span>
+              </div>
               {(entry.tokenLabel || entry.tokenHashPrefix) && (
                 <div>
-                  <span className="font-medium">Token：</span>
+                  <span className="font-medium"><span className="notranslate" translate="no">Token</span>：</span>
                   <span className="ml-2 text-fg-muted">
                     {entry.tokenLabel ?? "—"} {entry.tokenHashPrefix ? <span className="font-mono">({entry.tokenHashPrefix}…)</span> : null}
                   </span>
@@ -154,6 +282,7 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
 export function Audit() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
+  const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
 
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
@@ -163,6 +292,32 @@ export function Audit() {
   const turnId = searchParams.get("turnId") ?? "";
   const platform = searchParams.get("platform") ?? "";
   const includeProtocol = searchParams.get("includeProtocol") === "true";
+  const tab: "log" | "heatmap" = searchParams.get("tab") === "heatmap" ? "heatmap" : "log";
+
+  // M36: hydrate the last-used tab + filter values from localStorage so the
+  // user comes back to the same investigation context. URL params still
+  // win when present (so a shared link overrides the local cache).
+  useEffect(() => {
+    if (hasHydratedFromStorage) return;
+    if (searchParams.toString().length > 0) {
+      setHasHydratedFromStorage(true);
+      return;
+    }
+    const snapshot = readFilterSnapshot();
+    if (Object.keys(snapshot).length === 0) {
+      setHasHydratedFromStorage(true);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    for (const field of FILTER_PERSIST_FIELDS) {
+      const value = snapshot[field];
+      if (value) next.set(field, value);
+    }
+    setSearchParams(next, { replace: true });
+    setHasHydratedFromStorage(true);
+    // searchParams intentionally not in deps: we only want to read on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasHydratedFromStorage]);
 
   // Default: last 24h
   const [since, setSince] = useState(() => {
@@ -177,6 +332,15 @@ export function Audit() {
     if (value) next.set(key, value); else next.delete(key);
     setSearchParams(next);
     setPage(0);
+    if ((FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) {
+      const snapshot = readFilterSnapshot();
+      if (value) {
+        snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
+      } else {
+        delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
+      }
+      writeFilterSnapshot(snapshot);
+    }
   }
 
   const queryStr = buildQuery({
@@ -196,7 +360,8 @@ export function Audit() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "audit", queryStr],
-    queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${queryStr}`)
+    queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${queryStr}`),
+    enabled: tab === "log"
   });
 
   const entries = data?.entries ?? [];
@@ -207,13 +372,31 @@ export function Audit() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">访问日志</h1>
-          <p className="pl-page-intro">查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。</p>
-        </div>
-        <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a>
+      <PageHeader
+        title="访问日志"
+        breadcrumbs={tab === "heatmap" ? ["访问治理", "访问日志", "数据热力"] : undefined}
+        description="查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。"
+        badges={tab === "log" ? <span>{total} 条记录</span> : undefined}
+        actions={tab === "log" ? <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a> : undefined}
+      />
+
+      <div className="flex items-center gap-2" role="tablist" aria-label="访问日志视图">
+        <Link
+          to="/admin/audit"
+          role="tab"
+          aria-selected={tab === "log"}
+          className="pl-btn pl-btn--ghost text-sm"
+        >
+          明细
+        </Link>
+        <Link
+          to="/admin/audit?tab=heatmap"
+          role="tab"
+          aria-selected={tab === "heatmap"}
+          className="pl-btn pl-btn--ghost text-sm"
+        >
+          数据热力
+        </Link>
       </div>
 
       <div className="pl-admin-filterbar">
@@ -286,7 +469,7 @@ export function Audit() {
         </label>
       </div>
 
-      {isLoading ? (
+      {tab === "log" && (isLoading ? (
         <div className="pl-notice">加载中…</div>
       ) : error ? (
         <div className="pl-notice">加载失败：{(error as Error).message}</div>
@@ -341,7 +524,9 @@ export function Audit() {
             </button>
           </div>
         </>
-      )}
+      ))}
+
+      {tab === "heatmap" && <HeatmapView />}
     </div>
   );
 }

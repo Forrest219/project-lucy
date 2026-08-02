@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPut, apiPost } from "../../lib/apiClient";
 import type { EvalCase, EvalDomainInfo } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 
@@ -122,42 +123,54 @@ export function CaseEditor() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <button type="button" className="pl-btn pl-btn--ghost text-sm" onClick={() => navigate(`/eval/cases/${domain}`)}>
-            ‹ 返回
+      <PageHeader
+        title={isNew ? "新建评测用例" : form.id}
+        backAction={
+          <button
+            type="button"
+            className="pl-page-header-back"
+            onClick={() => navigate(`/eval/cases/${domain}`)}
+          >
+            ‹ 返回评测用例
           </button>
-          <h1 className="text-xl font-semibold">{isNew ? "新建 Case" : form.id}</h1>
-        </div>
-        <div className="flex gap-2">
-          {!isNew && (
+        }
+        badges={
+          <>
+            <span>{domain}</span>
+            <span>{form.case_type}</span>
+          </>
+        }
+        actions={
+          <>
+            {!isNew && (
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost text-sm"
+                onClick={() => navigate(`/eval/cases/${domain}/new?copyFrom=${encodeURIComponent(form.id)}`)}
+                disabled={saveMutation.isPending}
+              >
+                复制
+              </button>
+            )}
             <button
               type="button"
               className="pl-btn pl-btn--ghost text-sm"
-              onClick={() => navigate(`/eval/cases/${domain}/new?copyFrom=${encodeURIComponent(form.id)}`)}
+              onClick={() => saveMutation.mutate(true)}
               disabled={saveMutation.isPending}
             >
-              复制
+              预览 Diff
             </button>
-          )}
-          <button
-            type="button"
-            className="pl-btn pl-btn--ghost text-sm"
-            onClick={() => saveMutation.mutate(true)}
-            disabled={saveMutation.isPending}
-          >
-            预览 Diff
-          </button>
-          <button
-            type="button"
-            className="pl-btn pl-btn--primary text-sm"
-            onClick={() => saveMutation.mutate(false)}
-            disabled={saveMutation.isPending}
-          >
-            {saveMutation.isPending ? "保存中…" : "保存"}
-          </button>
-        </div>
-      </div>
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary text-sm"
+              onClick={() => saveMutation.mutate(false)}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "保存中…" : "保存"}
+            </button>
+          </>
+        }
+      />
 
       {/* Diff preview */}
       {diffPreview && (

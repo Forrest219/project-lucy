@@ -2,30 +2,44 @@
 
 /* 原值层：私有，主题切换或租户覆盖时改这一层 */
 :root {
-  --token-color-bg-base: #f6f7f8;
+  --token-color-bg-base: #ffffff;
   --token-color-bg-surface: #ffffff;
   --token-color-bg-elevated: #ffffff;
-  --token-color-bg-muted: #eef2f0;
-  --token-color-fg-default: #17201c;
-  --token-color-fg-muted: #66736d;
+  --token-color-bg-muted: #f3f4f6;
+  --token-color-bg-subtle: #f9fafb;
+  --token-color-bg-selected: #f2f3f5;
+  --token-color-fg-default: #030711;
+  --token-color-fg-body: #18181b;
+  --token-color-fg-strong: #181e25;
+  --token-color-fg-muted: #6b7280;
+  --token-color-fg-subtle: #86909c;
   --token-color-fg-inverse: #ffffff;
-  --token-color-border-default: #dde3df;
-  --token-color-border-strong: #b9c5be;
-  --token-color-primary: #10b981;
-  --token-color-primary-hover: #059669;
+  --token-color-border-default: #e5e7eb;
+  --token-color-border-muted: rgba(229, 231, 235, 0.6);
+  --token-color-border-strong: #cfd5dd;
+  --token-color-primary: #181e25;
+  --token-color-primary-hover: #030711;
   --token-color-primary-fg: #ffffff;
-  --token-color-accent: #2563eb;
-  --token-color-danger: #dc2626;
-  --token-color-warning: #d97706;
-  --token-color-warning-soft: #fef3c7;
+  --token-color-accent: #3c83f6;
+  --token-color-brand: #ff5a3d;
+  --token-color-danger: #ef4444;
+  --token-color-warning: #ff8f1f;
+  --token-color-warning-soft: #fff7ed;
   --token-color-warning-strong: #92400e;
-  --token-color-success: #15803d;
+  --token-color-success: #16a34a;
   --token-color-success-soft: #dcfce7;
   --token-color-success-strong: #166534;
   --token-color-danger-soft: #fee2e2;
   --token-color-danger-strong: #b42318;
   --token-color-diff-added-bg: #dcfce7;
   --token-color-diff-removed-bg: #fee2e2;
+  --token-radius-xs: 2px;
+  --token-radius-sm: 5px;
+  --token-radius-md: 8px;
+  --token-radius-lg: 10px;
+  --token-radius-xl: 12px;
+  --token-radius-pill: 9999px;
+  --token-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 /* @theme 层：暴露给 Tailwind utility 和 BEM 命名 */
@@ -34,15 +48,22 @@
   --color-bg-surface: var(--token-color-bg-surface);
   --color-bg-elevated: var(--token-color-bg-elevated);
   --color-bg-muted: var(--token-color-bg-muted);
+  --color-bg-subtle: var(--token-color-bg-subtle);
+  --color-bg-selected: var(--token-color-bg-selected);
   --color-fg-default: var(--token-color-fg-default);
+  --color-fg-body: var(--token-color-fg-body);
+  --color-fg-strong: var(--token-color-fg-strong);
   --color-fg-muted: var(--token-color-fg-muted);
+  --color-fg-subtle: var(--token-color-fg-subtle);
   --color-fg-inverse: var(--token-color-fg-inverse);
   --color-border-default: var(--token-color-border-default);
+  --color-border-muted: var(--token-color-border-muted);
   --color-border-strong: var(--token-color-border-strong);
   --color-primary: var(--token-color-primary);
   --color-primary-hover: var(--token-color-primary-hover);
   --color-primary-fg: var(--token-color-primary-fg);
   --color-accent: var(--token-color-accent);
+  --color-brand: var(--token-color-brand);
   --color-danger: var(--token-color-danger);
   --color-warning: var(--token-color-warning);
   --color-success: var(--token-color-success);
@@ -53,10 +74,13 @@
   --color-danger-soft: var(--token-color-danger-soft);
   --color-danger-strong: var(--token-color-danger-strong);
 
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-pill: 9999px;
+  --radius-xs: var(--token-radius-xs);
+  --radius-sm: var(--token-radius-sm);
+  --radius-md: var(--token-radius-md);
+  --radius-lg: var(--token-radius-lg);
+  --radius-xl: var(--token-radius-xl);
+  --radius-pill: var(--token-radius-pill);
+  --shadow-card: var(--token-shadow-card);
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "PingFang SC",
     "Microsoft YaHei", sans-serif;
@@ -67,57 +91,343 @@
 @layer base {
   body {
     background: var(--color-bg-base);
-    color: var(--color-fg-default);
+    color: var(--color-fg-body);
     font-family: var(--font-sans);
   }
 }
 
 @layer components {
   /* shell + 主布局 */
-  .pl-app-shell { @apply grid min-h-screen grid-cols-[264px_minmax(0,1fr)] bg-bg-base text-fg-default; }
-  .pl-sidebar { @apply sticky top-0 h-screen overflow-auto border-r border-border-default bg-bg-surface px-4 py-5; }
-  .pl-nav-section { @apply mb-6; }
-  .pl-nav-section-title { @apply mb-2 px-2 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-nav-link { @apply flex min-h-9 items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-fg-default no-underline; }
+  .pl-app-shell { @apply grid min-h-screen grid-cols-[216px_minmax(0,1fr)] bg-bg-base text-fg-body; }
+  .pl-app-shell--wiki { grid-template-columns: minmax(0, 1fr); }
+  .pl-app-shell--wiki .pl-workspace-body { @apply px-6 py-5; }
+  .pl-sidebar { @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r border-border-default bg-bg-surface px-3 py-4; }
+  .pl-nav { @apply grid min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pb-3; }
+  .pl-nav-section { @apply mb-3; }
+  .pl-nav-section--top { @apply border-b border-border-default pb-3; }
+  .pl-nav-section-title { @apply mb-1 px-4 py-[7px] text-sm font-semibold text-fg-strong; }
+  .pl-nav-link { @apply flex min-h-10 items-center gap-2 rounded-xl px-3 py-0 pl-7 text-sm font-normal text-fg-body no-underline transition-colors; }
   .pl-nav-link:hover { @apply bg-bg-muted text-fg-default; }
-  .pl-nav-link--active { @apply bg-bg-muted text-primary font-semibold; }
-  .pl-brand-block { @apply mb-7 grid gap-0.5 px-2; }
+  .pl-nav-link--active { @apply bg-bg-selected text-fg-body font-medium; }
+  .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
   .pl-brand-block strong { @apply text-base font-semibold; }
-  .pl-brand-block span { @apply text-xs text-fg-muted; }
-  .pl-workspace { @apply min-w-0 bg-bg-base; }
-  .pl-topbar { @apply sticky top-0 z-10 border-b border-border-default bg-bg-surface px-6 py-4; }
-  .pl-topbar-title { @apply mt-1 text-xl font-semibold leading-tight text-fg-default; }
-  .pl-topbar-facts { @apply mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
-  .pl-topbar-facts span { @apply rounded-pill border border-border-default bg-bg-muted px-2 py-0.5; }
-  .pl-workspace-body { @apply p-6; }
-  .pl-page-stack { @apply grid gap-5; }
+  .pl-brand-block .pl-brand-tagline {
+    display: block;
+    font-size: 0.72rem;
+    color: #64748b;
+    margin-top: 1px;
+    /* v1.9.x 收口：240px 侧栏宽度下不截断、不折行。 */
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pl-sidebar-footer { @apply relative z-10 mt-4 grid shrink-0 gap-2 border-t border-border-default bg-bg-surface px-4 pt-4; }
+  .pl-sidebar-utility { @apply grid gap-1; }
+  .pl-sidebar-help-link {
+    @apply flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium text-fg-body no-underline transition-colors;
+  }
+  .pl-sidebar-help-link:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-help-button {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
+  }
+  .pl-help-button:hover { @apply bg-bg-muted; }
+  .pl-tooltip-content {
+    @apply z-50 rounded-sm border border-border-default bg-bg-elevated px-2 py-1 text-xs text-fg-default shadow-card;
+  }
+  .pl-tooltip-arrow { fill: var(--token-color-bg-elevated); }
+  .pl-workspace { @apply flex min-h-screen min-w-0 flex-col bg-bg-base; }
+  .pl-workspace-body { @apply p-8; }
+  .pl-page-stack { @apply grid gap-4; }
+
+  .pl-help-page { @apply mx-auto grid w-full max-w-[1500px] gap-4; }
+  .pl-help-layout {
+    @apply grid items-start gap-4;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  }
+  .pl-help-toc {
+    @apply sticky top-6 max-h-[calc(100vh-48px)] overflow-auto rounded-lg border border-border-default bg-bg-surface p-3 shadow-card;
+  }
+  .pl-help-toc-title { @apply mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-fg-muted; }
+  .pl-help-toc-link {
+    @apply relative block rounded-sm px-2 py-1.5 text-xs text-fg-body no-underline hover:bg-bg-muted;
+    line-height: 1.35;
+  }
+  .pl-help-toc-link[aria-current="location"] {
+    @apply relative bg-bg-selected font-medium text-fg-default;
+  }
+  .pl-help-toc-link[aria-current="location"]::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--token-color-accent, var(--token-color-primary, currentColor));
+  }
+  .pl-help-toc-link--level-3 { @apply pl-5 text-fg-muted; }
+  .pl-help-toc-link--level-4 { @apply pl-8 text-fg-muted; }
+  .pl-help-content {
+    @apply min-w-0 max-w-[1120px] rounded-lg border border-border-default bg-bg-surface p-5 shadow-card;
+  }
+  .pl-help-section {
+    @apply scroll-mt-24 border-b border-border-muted py-4 first:pt-0 last:border-b-0 last:pb-0;
+  }
+  .pl-help-section .pl-markdown-preview { @apply gap-3; }
+  .pl-help-section .pl-markdown-preview h1 { @apply text-lg; }
+  .pl-help-section .pl-markdown-preview h2 { @apply text-base; }
+  .pl-help-section .pl-markdown-preview h4,
+  .pl-help-section .pl-markdown-preview h5,
+  .pl-help-section .pl-markdown-preview h6 { @apply text-sm font-semibold; }
+  .pl-help-section .pl-markdown-preview pre { @apply max-w-full overflow-auto; }
+  @media (max-width: 900px) {
+    .pl-app-shell--help {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pl-app-shell--help .pl-sidebar {
+      @apply static h-auto max-h-80;
+    }
+    .pl-app-shell--help .pl-workspace-body {
+      @apply p-4;
+    }
+    .pl-help-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pl-help-toc {
+      @apply static max-h-none;
+    }
+    .pl-help-content {
+      @apply w-full max-w-none p-4;
+    }
+  }
+
+  /* 统一 PageHeader (M40)：自然顶部 + 稳定两栏网格，消除全站 H1/分类名重复 */
+  .pl-page-header {
+    @apply mb-4 border-b border-border-default pb-3;
+  }
+  .pl-page-header-grid {
+    @apply grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-start;
+  }
+  .pl-page-header-cell {
+    @apply min-w-0;
+  }
+  .pl-page-header-cell--primary {
+    @apply flex min-w-0 flex-col gap-1.5;
+  }
+  .pl-page-header-cell--aside {
+    @apply flex min-w-0 flex-col items-end gap-2;
+  }
+
+  .pl-page-header-back-wrap {
+    @apply flex items-center;
+  }
+  .pl-page-header-back {
+    @apply inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg-default;
+  }
+
+  .pl-page-header-breadcrumbs-nav {
+    @apply block;
+  }
+  .pl-page-header-breadcrumbs {
+    @apply flex flex-wrap items-center gap-1.5 text-xs text-fg-muted list-none p-0 m-0;
+  }
+  .pl-page-header-breadcrumb-item {
+    @apply inline-flex items-center gap-1.5;
+  }
+  .pl-page-header-breadcrumb-sep {
+    @apply text-fg-muted/60;
+  }
+
+  .pl-page-header-badges {
+    @apply flex flex-wrap items-center justify-end gap-2;
+    max-width: 100%;
+  }
+  .pl-page-header-badges > * {
+    @apply inline-flex items-center gap-1 rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted;
+  }
+  .pl-page-header-badges > *:empty {
+    @apply hidden;
+  }
+  .pl-page-header-badges code {
+    overflow-wrap: anywhere;
+  }
+
+  .pl-page-header-title {
+    @apply text-[16px] font-semibold leading-6 text-fg-default;
+  }
+  /* 仅当 PageHeader 接收 string title 时由组件加上 data-truncate；ReactNode title 不动 */
+  .pl-page-header-title[data-truncate="true"] {
+    @apply block min-w-0 truncate;
+  }
+  .pl-page-header-title-text {
+    @apply block min-w-0 truncate;
+  }
+  .pl-page-header-description {
+    @apply text-[13px] leading-5 text-fg-muted;
+  }
+  /* M44: unframed, in-description context line for the project root.
+     Sits beneath the main description copy without competing with the
+     state badges / actions on the right. */
+  .pl-page-header-context-stack {
+    @apply grid gap-1;
+  }
+  .pl-page-header-context-line {
+    @apply flex flex-wrap items-baseline gap-x-1.5 text-[13px] text-fg-muted;
+  }
+  .pl-page-header-context-line code {
+    @apply font-mono text-fg-default;
+  }
+  .pl-page-header-context-path {
+    @apply font-mono text-[12px] text-fg-default;
+  }
+
+  .pl-page-header-actions {
+    @apply flex flex-wrap items-center justify-end gap-2;
+  }
+  /* Onboarding.tsx stacks its actions into a flex column so the refresh
+     button never floats in the middle of an empty badge area. */
+  .pl-page-header-actions--stacked {
+    @apply flex flex-col items-end gap-1.5;
+  }
+  @media (max-width: 767px) {
+    .pl-page-header-cell--aside {
+      @apply items-start;
+    }
+    .pl-page-header-badges { @apply justify-start; }
+    .pl-page-header-actions { @apply justify-start; }
+    .pl-page-header-actions--stacked { @apply items-start; }
+  }
 
   /* 面板/卡片 */
-  .pl-panel { @apply mb-4 rounded-md border border-border-default bg-bg-surface p-6; }
-  .pl-panel-title { @apply mb-3 text-base font-semibold; }
-  .pl-section-heading { @apply mb-4 flex items-start justify-between gap-4; }
+  .pl-panel { @apply mb-4 rounded-lg border border-border-default bg-bg-surface p-4 shadow-card; }
+  /* M39 polish v2: section title is the page anchor. 16px / 600 / leading-6
+     keeps it visually heavier than the 12-13px body copy while staying
+     one notch above the PageHeader H1 (17px) so panel cards don't
+     pretend to be page-level titles. The dedicated `pl-service-health-compact-label`
+     in ServiceHealthStrip is a one-off and keeps its own size. */
+  .pl-panel-title { @apply text-[16px] font-semibold leading-6 text-fg-default; }
+  .pl-section-heading { @apply mb-3 flex items-start justify-between gap-4; }
+  .pl-section-heading > div > .pl-panel-title { @apply mb-1; }
+  .pl-section-heading > div > .pl-notice { @apply mt-1 text-[13px] leading-5; }
   .pl-page-intro { @apply mb-4 text-sm text-fg-muted; }
   .pl-eyebrow { @apply mb-1 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-metric-grid { @apply grid gap-3 md:grid-cols-2 xl:grid-cols-4; }
-  .pl-metric-card { @apply grid gap-1 rounded-md border border-border-default bg-bg-surface p-4; }
-  .pl-metric-card span { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-metric-card strong { @apply text-2xl font-semibold text-fg-default; }
+  .pl-metric-grid--three { @apply md:grid-cols-3 xl:grid-cols-3; }
+  .pl-metric-card { @apply grid gap-1 rounded-lg border border-border-default bg-bg-subtle p-3 shadow-card; }
+  .pl-muted-block { @apply rounded-lg border border-border-default bg-bg-subtle shadow-card; }
+  /* M39 polish: do NOT force `text-transform: uppercase` on every
+     `.pl-metric-card span`. Snapshot cards in the ops dashboard mix
+     Chinese labels (e.g. "Agent 启用") with English terms; an
+     unconditional uppercase flips the latter into ALL CAPS and breaks
+     the "Agent 启用" rendered text. The dedicated label classes
+     (`.pl-snapshot-card-label`, `.pl-eyebrow`, `.pl-service-health-compact-label`)
+     keep their own visual treatment. */
+  .pl-metric-card strong { @apply text-xl font-semibold text-fg-default; }
   .pl-metric-card small { @apply text-xs text-fg-muted; }
+  .pl-metric-card-value { @apply text-xl font-semibold text-fg-default; }
+  .pl-metric-card-value--xl { @apply text-4xl font-semibold leading-none text-fg-default; }
+  .pl-checkbox { @apply size-4 cursor-pointer accent-primary; }
+  .pl-metric-value--success { color: var(--token-color-success-strong); }
+  .pl-metric-value--danger { color: var(--token-color-danger-strong); }
   .pl-metric-card--success { @apply border-success-strong bg-success-soft; }
   .pl-metric-card--success strong { @apply text-success-strong; }
-  .pl-metric-card--warning { @apply border-warning-strong bg-warning-soft; }
+  /* Warning metrics keep the same card shell as neutral metrics; only the
+     headline value carries the warning emphasis. */
+  .pl-metric-card--warning { @apply border-border-default bg-bg-subtle; }
   .pl-metric-card--warning strong { @apply text-warning-strong; }
   .pl-metric-card--danger { @apply border-danger-strong bg-danger-soft; }
   .pl-metric-card--danger strong { @apply text-danger-strong; }
-  .pl-empty-state { @apply rounded-md border border-border-default bg-bg-base p-4 text-sm text-fg-muted; }
+  .pl-empty-state { @apply rounded-lg bg-bg-subtle p-4 text-sm text-fg-muted; }
+
+  .pl-panel :where(
+    .pl-empty-state,
+    .pl-connection-row,
+    .pl-schema-row,
+    .pl-catalog-reload-result,
+    .pl-action-list a,
+    .pl-code-snippet,
+    .pl-save-progress-row,
+    .pl-field-card,
+    .pl-description-text,
+    .pl-candidate-join-row,
+    .pl-source-metadata-cell,
+    .pl-preview-section,
+    .pl-relation-row,
+    .pl-wiki-context-hint
+  ),
+  .pl-card :where(
+    .pl-empty-state,
+    .pl-catalog-reload-result,
+    .pl-action-list a,
+    .pl-code-snippet,
+    .pl-preview-section
+  ),
+  .pl-review-main :where(
+    .pl-validation-summary > div,
+    .pl-preview-section,
+    .pl-code-snippet
+  ) {
+    border-width: 0;
+    background: var(--token-color-bg-subtle);
+    box-shadow: none;
+  }
+
+  .pl-panel .pl-diagnostic-grid > div,
+  .pl-card .pl-diagnostic-grid > div {
+    border-width: 0;
+    background: var(--token-color-bg-subtle);
+  }
 
   /* 按钮 */
-  .pl-btn { @apply inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium; }
+  .pl-btn { @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium; }
   .pl-btn--primary { @apply bg-primary text-primary-fg hover:bg-primary-hover border border-transparent; }
   .pl-btn--secondary { @apply border border-border-default bg-bg-surface hover:bg-bg-muted text-fg-default; }
   .pl-btn--ghost { @apply text-fg-default hover:bg-bg-muted; }
   .pl-btn--danger { @apply border border-danger-strong bg-danger-soft text-danger-strong hover:bg-danger-soft; }
+  .pl-btn--sm { @apply px-2 py-0.5 text-xs; }
+  /* M39 polish v2: 32px tall button used by the MCP 接入 section. The
+     `min-w-[7.5rem]` (120px) forces "复制 MCP 配置" (~113px) and
+     "查看配置" (~74px) to share a single, predictable width so the two
+     actions line up vertically and visually feel like one button group
+     instead of two unrelated components. */
+  .pl-btn--xs { @apply h-8 min-w-[7.5rem] px-3 text-xs font-medium; }
   .pl-btn:disabled { @apply opacity-50 cursor-not-allowed; }
+  .pl-row-action-link { @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm text-sm font-normal text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
+  /* M39 polish: lightweight text-link CTA used by the snapshot / risk /
+     action-required cards on the ops dashboard. Replaces the ad-hoc
+     `text-sm font-medium text-blue-600 hover:underline` chains so every
+     `↗` link uses the same 12px / 500 / accent colour treatment and
+     stays visually subordinate to the panel's primary action button. */
+  .pl-card-cta {
+    @apply inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+  }
+  /* M31: lightweight inline link used for row actions (查看语义) and toolbar
+     batch selectors (全选 / 反选). Renders as a link, not a button. */
+  .pl-inline-link {
+    @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm text-sm font-normal text-primary underline-offset-4 no-underline;
+  }
+  .pl-inline-link:hover,
+  .pl-inline-link:focus-visible {
+    @apply underline;
+    outline: none;
+  }
+  .pl-inline-link:focus-visible {
+    @apply ring-2 ring-primary;
+  }
+  .pl-inline-link:disabled {
+    @apply cursor-not-allowed text-fg-muted no-underline opacity-60;
+  }
+  .pl-inline-link--quiet {
+    @apply text-sm font-normal;
+  }
+  .pl-steps { @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
+  .pl-step { @apply inline-flex items-center gap-1.5 rounded-sm px-1.5 py-1; }
+  .pl-step-index { @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border-default bg-bg-surface text-[11px] font-semibold; }
+  .pl-step--active { @apply font-semibold text-fg-default; }
+  .pl-step--active .pl-step-index { @apply border-primary bg-primary text-primary-fg; }
+  .pl-step--complete { @apply text-success-strong; }
+  .pl-step--complete .pl-step-index { @apply border-success-strong bg-success-soft text-success-strong; }
 
   /* 表单 */
   .pl-field-label { @apply grid gap-1.5 mb-3 text-sm; }
@@ -139,11 +449,249 @@
   .pl-table-row:hover { @apply border-border-strong; }
   .pl-table-row strong { @apply font-medium; }
   .pl-table-row span { @apply text-sm text-fg-muted; }
-  .pl-overview-grid { @apply grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]; }
-  .pl-connection-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-4 md:grid-cols-[1.2fr_1fr_auto]; }
-  .pl-connection-row > div { @apply grid gap-1; }
-  .pl-connection-row strong { @apply text-sm font-medium; }
-  .pl-connection-row span { @apply text-xs text-fg-muted; }
+
+  /* Catalog 紧凑表格（数据网格） */
+  .pl-catalog-table-wrap { @apply max-w-full overflow-x-auto; }
+  .pl-catalog-result-count { @apply ml-auto self-end pb-2 text-xs text-fg-muted; }
+  .pl-catalog-table { @apply w-full border-separate border-spacing-0 text-sm; min-width: 1040px; table-layout: fixed; }
+  .pl-catalog-table thead th { @apply sticky top-0 z-10 border-b border-border-default bg-bg-subtle px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
+  .pl-catalog-table tbody tr { @apply border-b border-border-default last:border-b-0; }
+  .pl-catalog-table tbody tr:hover { @apply bg-bg-subtle; }
+  .pl-catalog-table tbody td { @apply px-3 py-2 align-middle text-fg-default; }
+  .pl-catalog-table-name { @apply grid gap-0.5; }
+  .pl-catalog-table-name-link { @apply text-sm font-medium text-fg-default no-underline hover:underline; }
+  .pl-catalog-table-connection { @apply text-sm text-fg-default; }
+  .pl-catalog-table-schema { @apply text-sm text-fg-default; }
+  .pl-catalog-table-structure { @apply whitespace-nowrap text-xs text-fg-muted; }
+  .pl-catalog-table-agents { @apply text-sm text-fg-default tabular-nums; }
+  .pl-catalog-table-updated { @apply whitespace-nowrap text-xs text-fg-default tabular-nums; }
+  .pl-catalog-table-actions { @apply flex items-center justify-end gap-2 whitespace-nowrap; }
+  .pl-catalog-table-actions-col { @apply w-px whitespace-nowrap text-right; }
+  /* Catalog 表内标签等宽居中，避免列抖动；不影响其它页面 StatusBadge */
+  .pl-catalog-table .pl-status-badge { @apply min-w-[64px] justify-center whitespace-nowrap; }
+
+  /* 行内 More 菜单（lucide-react MoreHorizontal） */
+  .pl-row-more { @apply relative inline-block; }
+  .pl-row-more-trigger { @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-border-default bg-bg-surface text-fg-muted transition hover:border-border-strong hover:text-fg-default; }
+  .pl-row-more-icon { @apply h-4 w-4; }
+  .pl-row-more-menu { @apply absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-md border border-border-default bg-bg-surface py-1 shadow-card; }
+  .pl-row-more-item { @apply block w-full px-3 py-1.5 text-left text-sm text-fg-default no-underline transition hover:bg-bg-muted focus:bg-bg-muted focus:outline-none; }
+  .pl-overview-grid { @apply grid gap-4; }
+  /* M44: outer flat grid replaces the legacy pl-panel wrapper. Cards keep
+     their own border; the gap provides a light visual separator between
+     consecutive connections. */
+  .pl-overview-grid--flat { @apply gap-3; }
+  .pl-connection-row { @apply overflow-hidden rounded-lg border border-border-default bg-bg-surface; }
+  .pl-connection-card-header { @apply grid gap-2 border-b border-border-default bg-bg-subtle px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start; }
+  .pl-connection-card-title { @apply flex flex-wrap items-center gap-2; }
+  .pl-connection-card-title strong { @apply text-base font-semibold text-fg-default; }
+  .pl-connection-card-badges { @apply hidden; }
+  .pl-connection-card-meta { @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted md:col-start-2 md:row-start-1 md:justify-self-end md:justify-end; }
+  .pl-connection-meta-tag { @apply inline-flex items-center text-xs font-medium text-fg-muted; }
+  .pl-connection-meta-tag--warning { @apply text-fg-muted; }
+  /* M44: downgraded to a quiet text reminder; no pill border / background. */
+  .pl-connection-readonly-status {
+    @apply inline-flex items-center text-xs font-normal text-fg-muted;
+  }
+  .pl-connection-readonly-status--safe { @apply text-fg-muted; }
+  .pl-connection-readonly-status--risk { @apply text-warning-strong; }
+  /* M44: header-right refresh timestamp; sits next to the readonly status. */
+  .pl-connection-last-reload {
+    @apply inline-flex items-baseline gap-1 text-xs text-fg-muted;
+  }
+  .pl-connection-last-reload--danger { @apply text-danger-strong; }
+  .pl-connection-card-identity { @apply hidden; }
+  .pl-connection-card-header-actions { @apply hidden; }
+  .pl-connection-card-body { @apply grid gap-3 px-4 py-4; }
+  /* M44: compact 2-key KeyValue grid for Host / Database. Single column on
+     mobile, two columns from sm+; long Host values wrap safely. */
+  .pl-connection-kv-grid {
+    @apply grid min-w-0 grid-cols-1 gap-x-4 gap-y-2 text-xs md:col-span-2 sm:grid-cols-2;
+  }
+  .pl-connection-kv-grid--compact { @apply gap-y-1.5; }
+  .pl-connection-kv {
+    @apply grid min-w-0 gap-0.5;
+  }
+  .pl-connection-kv dt {
+    @apply text-[12px] font-normal text-fg-muted;
+  }
+  .pl-connection-kv dd {
+    @apply flex min-w-0 items-baseline gap-1 text-xs text-fg-default;
+  }
+  .pl-connection-kv dd code {
+    @apply min-w-0 break-words font-mono text-xs text-fg-default;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* Long Host values: explicit overflow rules so the row never overflows the
+     card on narrow widths. Title still carries the full value. */
+  .pl-connection-kv-host {
+    @apply block min-w-0 max-w-full font-mono text-xs text-fg-default;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* M44: in-card amber banner for Connection 尚未读取本地目录.
+     Lightweight fill + soft warning border; never uses danger red. */
+  .pl-connection-refresh-warning {
+    @apply flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-warning-soft bg-warning-soft/60 px-3 py-2 text-sm text-warning-strong;
+  }
+  .pl-connection-refresh-warning-text {
+    @apply grid gap-0.5 text-warning-strong;
+  }
+  .pl-connection-card-footer { @apply flex flex-wrap items-center justify-between gap-3 border-t border-border-default bg-bg-subtle px-4 py-3; }
+  .pl-connection-card-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+  .pl-connection-card-schema-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+
+  /* M13: connection-card schema chips and per-schema ingest rows. */
+  .pl-schema-cell { @apply grid gap-1; }
+  .pl-schema-list { @apply grid gap-1 list-none p-0 m-0; }
+  .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border-0 bg-bg-subtle px-2 py-1; }
+  .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
+  .pl-schema-asset-table { @apply w-full border-collapse text-sm; table-layout: fixed; }
+  .pl-schema-asset-table th { @apply border-b border-border-default px-3 py-2 text-left text-xs font-semibold text-fg-muted; }
+  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-2 align-middle leading-5 text-fg-body; }
+  .pl-schema-asset-table tbody tr:last-child td { @apply border-b-0; }
+  .pl-schema-asset-table code { @apply font-mono text-sm text-fg-default; }
+  /* M44: stable column widths so Schema / Manifest 状态 / 本地表数 /
+     启用表数 / 操作 line up across all connection cards. */
+  .pl-schema-asset-col-schema { width: 30%; }
+  .pl-schema-asset-col-status { width: 22%; }
+  .pl-schema-asset-col-local-count { width: 16%; }
+  .pl-schema-asset-col-enabled-count { width: 16%; }
+  .pl-schema-asset-col-action { width: 16%; }
+  .pl-schema-asset-table-num-head { @apply text-right; }
+  .pl-schema-asset-table-num { @apply text-right tabular-nums whitespace-nowrap; }
+  .pl-schema-asset-table-action { @apply whitespace-nowrap; }
+  .pl-schema-asset-actions { @apply flex flex-wrap items-center gap-x-3 gap-y-1; }
+  .pl-schema-asset-table .pl-row-action-link { @apply font-medium text-primary; }
+  .pl-schema-asset-table .pl-row-action-link--muted { @apply text-fg-muted; }
+  .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
+  .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
+  .pl-catalog-reload-status { @apply flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm text-fg-muted; }
+  .pl-catalog-reload-status-main { @apply font-medium text-fg-default; }
+  .pl-catalog-reload-status--success { @apply text-fg-muted; }
+  .pl-catalog-reload-status--warning { @apply text-fg-muted; }
+  .pl-catalog-reload-status--danger { @apply text-danger-strong; }
+  .pl-catalog-reload-status--muted { @apply text-fg-muted; }
+  .pl-catalog-reload-badge { @apply inline-flex items-center rounded-pill border border-border-default bg-bg-surface px-2 py-0.5 text-xs font-medium text-fg-muted; }
+  .pl-catalog-reload-badge--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-catalog-reload-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-catalog-reload-badge--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-catalog-reload-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+  .pl-catalog-reload-warning { @apply grid gap-2 rounded-md border border-l-4 border-border-default border-l-warning-strong bg-bg-surface px-3 py-2 text-sm text-fg-default; }
+  .pl-schema-warning-subrow td { @apply border-b border-border-default bg-bg-subtle px-3 py-2; }
+  .pl-schema-warning-subrow-content { @apply grid gap-2 border-l-2 border-warning-strong pl-3 text-sm text-fg-default; }
+  .pl-catalog-reload-warning-copy { @apply grid gap-1; }
+  .pl-catalog-reload-warning-copy strong { @apply font-semibold; }
+  .pl-catalog-reload-warning-copy p { @apply text-xs text-fg-body; }
+  .pl-catalog-reload-warning-copy code,
+  .pl-catalog-reload-warning-details code { @apply inline-block max-w-full overflow-x-auto whitespace-nowrap rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-fg-default; }
+  .pl-catalog-reload-warning-actions { @apply flex flex-wrap items-center gap-2; }
+  .pl-catalog-reload-warning-actions .pl-btn--ghost { @apply border border-border-default bg-bg-surface hover:bg-bg-muted; }
+  .pl-catalog-reload-warning-details { @apply grid gap-1 rounded-sm border border-warning-soft bg-bg-surface px-2 py-2 text-xs text-fg-muted; }
+  .pl-catalog-reload-warning-details div { @apply flex flex-wrap items-center gap-x-2 gap-y-1; }
+  .pl-catalog-reload-warning-details dt { @apply font-medium text-fg-muted; }
+  .pl-catalog-reload-warning-details dd { @apply text-fg-default; }
+  .pl-catalog-status-line { @apply flex flex-wrap items-center gap-2 text-sm; }
+  .pl-catalog-status-line strong { @apply font-semibold; }
+  .pl-catalog-status-line span { @apply text-xs text-fg-muted; }
+  .pl-catalog-status-line--success strong { color: var(--token-color-success-strong); }
+  .pl-catalog-status-line--warning strong { color: var(--token-color-warning-strong); }
+  .pl-catalog-status-line--danger strong { color: var(--token-color-danger-strong); }
+  .pl-catalog-status-line--muted strong { color: var(--token-color-fg-muted); }
+
+  /* M13: per-card "last ingest" badge + connection-level trigger button. */
+  .pl-ingest-last-run { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-ingest-last-run--success { @apply border-success bg-success-soft text-success-strong; }
+  .pl-ingest-last-run--failed { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-ingest-last-run--running { @apply border-warning bg-warning-soft text-warning-strong; }
+  .pl-ingest-last-run--never { @apply border-border-default bg-bg-muted text-fg-muted; }
+
+  /* M13: when a schema request still executes connection-scoped ingest. */
+  .pl-ingest-unsupported-hint { @apply text-xs text-fg-muted; }
+  .pl-ingest-unsupported-hint code { @apply mx-0.5 font-mono; }
+
+  /* M13: full diagnostics drawer layout. */
+  .pl-ingest-diagnostics { @apply grid gap-3; }
+  .pl-ingest-diagnostics-conn { @apply text-sm font-normal text-fg-muted; }
+  .pl-ingest-diagnostics-grid { @apply grid gap-3 sm:grid-cols-3; }
+  .pl-ingest-diagnostics-grid > div { @apply grid gap-0.5; }
+  .pl-ingest-diagnostics-grid span { @apply text-xs text-fg-muted; }
+  .pl-ingest-diagnostics-grid strong { @apply text-sm font-medium text-fg-default; }
+  .pl-ingest-diagnostics-hint { @apply rounded-md border border-warning bg-warning-soft px-3 py-2 text-sm text-warning-strong; }
+  .pl-log-section { @apply grid gap-2; }
+  .pl-log-section-title { @apply text-xs font-medium text-fg-muted; }
+  .pl-log-section pre { @apply max-h-64 overflow-auto rounded-md bg-bg-base p-2 font-mono text-xs text-fg-default whitespace-pre-wrap; }
+  .pl-ingest-diagnostics [aria-pressed="true"] { @apply bg-primary text-primary-fg; }
+
+  /* M14: per-card "last catalog reload" badge. */
+  .pl-catalog-last-run { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-catalog-last-run--success { @apply border-success bg-success-soft text-success-strong; }
+  .pl-catalog-last-run--warnings { @apply border-warning bg-warning-soft text-warning-strong; }
+  .pl-catalog-last-run--failed { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-catalog-last-run--never { @apply border-border-default bg-bg-muted text-fg-muted; }
+
+  /* M14: static catalog reload result panel (inline next to the button). */
+  .pl-catalog-reload-inline { @apply mt-2; }
+  /* M21: keep the outer container a neutral / subtle warning border; the
+     warning item itself is rendered without a heavy warning border to avoid
+     the previous orange-on-orange double-nested look. */
+  .pl-catalog-reload-result { @apply grid gap-2 rounded-md border border-border-default bg-bg-base p-3 text-sm text-fg-default; }
+  .pl-catalog-reload-result[data-state="warnings"] { @apply border-warning-soft; }
+  .pl-catalog-reload-result[data-state="clean"] { @apply border-border-default; }
+  .pl-catalog-reload-result[data-state="empty"] { @apply border-border-default bg-bg-subtle text-fg-muted; }
+  .pl-catalog-reload-warnings { @apply grid gap-1 list-none p-0 text-xs text-warning-strong; }
+  .pl-catalog-reload-warnings li { @apply rounded-sm bg-warning-soft px-2 py-1; }
+  .pl-catalog-reload-details { @apply flex flex-col gap-2; }
+  .pl-catalog-reload-details-list { @apply grid gap-1 list-none p-0 text-xs text-fg-muted; }
+  .pl-catalog-reload-details-list li { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-catalog-reload-details-list li strong { @apply text-sm text-fg-default; }
+  .pl-catalog-reload-error { @apply mt-2 rounded-md border border-danger-strong bg-danger-soft p-3 text-sm text-danger-strong; }
+
+  /* M17: controlled YAML asset upload UX. */
+  .pl-upload-dropzone {
+    @apply grid gap-2 rounded-md border border-dashed border-border-default bg-bg-subtle p-4 text-sm text-fg-muted;
+  }
+  .pl-upload-file-summary {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-upload-target-group {
+    @apply grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-sm bg-bg-subtle px-3 py-2 text-sm;
+  }
+  .pl-upload-target-file {
+    @apply min-w-0 overflow-auto font-mono text-xs text-fg-default;
+  }
+  .pl-upload-filename-readonly {
+    @apply inline-flex w-fit max-w-full overflow-auto rounded-sm bg-bg-subtle px-0 py-0.5 font-mono text-sm font-normal text-fg-default;
+  }
+  .pl-upload-source-textarea {
+    @apply min-h-72 resize-y font-mono text-xs leading-relaxed;
+  }
+  .pl-upload-validation {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3 text-sm;
+  }
+  .pl-upload-validation--success {
+    @apply border-success-strong bg-success-soft text-success-strong;
+  }
+  .pl-upload-validation--warning {
+    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  }
+  .pl-upload-validation--danger {
+    @apply border-danger-strong bg-danger-soft text-danger-strong;
+  }
+  .pl-upload-validation-list {
+    @apply grid gap-1 list-none p-0 text-xs;
+  }
+  .pl-upload-target-path {
+    @apply flex flex-col gap-1 rounded-md border border-border-default bg-bg-subtle p-2 text-xs;
+  }
+  .pl-upload-target-path code {
+    @apply break-all font-mono text-fg-default;
+  }
+
   .pl-action-list { @apply grid gap-2; }
   .pl-action-list a { @apply grid gap-0.5 rounded-md border border-border-default bg-bg-base p-3 text-fg-default no-underline; }
   .pl-action-list a:hover { @apply border-border-strong bg-bg-muted; }
@@ -155,10 +703,18 @@
 
   /* Onboarding */
   .pl-onboarding-list { @apply grid gap-3; }
-  .pl-onboarding-step { @apply grid gap-4 rounded-md border border-border-default bg-bg-surface p-5 lg:grid-cols-[40px_minmax(0,1fr)_auto]; }
+  .pl-onboarding-step { @apply grid items-start gap-4 rounded-md border border-border-default bg-bg-surface p-5 lg:grid-cols-[40px_minmax(0,1fr)_auto]; }
   .pl-onboarding-step-index { @apply flex size-10 items-center justify-center rounded-md bg-bg-muted text-sm font-semibold text-fg-muted; }
+  .pl-onboarding-step-action { @apply flex justify-end self-start; }
   .pl-onboarding-facts { @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
   .pl-onboarding-facts span { @apply rounded-pill border border-border-default bg-bg-muted px-2 py-0.5; }
+  .pl-health-list { @apply grid gap-3; }
+  .pl-health-item { @apply grid grid-cols-[10px_minmax(0,1fr)] items-start gap-4 rounded-md border border-border-default bg-bg-surface p-5; }
+  .pl-health-item-status { @apply mt-1 size-2.5 rounded-pill bg-fg-muted; }
+  .pl-health-item[data-tone="ready"] .pl-health-item-status { @apply bg-success; }
+  .pl-health-item[data-tone="warning"] .pl-health-item-status { @apply bg-warning; }
+  .pl-health-item[data-tone="danger"] .pl-health-item-status { @apply bg-danger; }
+  .pl-health-item[data-tone="info"] .pl-health-item-status { @apply bg-accent; }
 
   /* 状态徽章 */
   .pl-status-badge { @apply inline-flex items-center rounded-pill px-2 py-0.5 text-xs font-medium; }
@@ -167,12 +723,259 @@
   .pl-status-done { @apply bg-success-soft text-success-strong; }
   .pl-status-validation_failed { @apply bg-danger-soft text-danger-strong; }
 
+  /* 启用表范围专属状态徽章 (M8) */
+  .pl-status-badge--included { @apply bg-success-soft text-success-strong; }
+  .pl-status-badge--pending { @apply bg-warning-soft text-warning-strong; }
+  .pl-status-badge--semantic-pending { @apply bg-accent/15 text-accent; }
+  .pl-status-badge--disabled { @apply bg-bg-muted text-fg-muted; }
+
+  /* 启用表范围 (M8) */
+  /* M45: toolbar keeps filter zone on the left and a paired actions zone on
+     the right (selection summary + batch operations menu). PageHeader.actions
+     only owns the page-level primary action: 刷新本地目录. */
+  .pl-whitelist-toolbar {
+    @apply flex flex-wrap items-end justify-between gap-x-4 gap-y-3 rounded-md border border-border-default bg-bg-surface p-3;
+  }
+  .pl-whitelist-toolbar label { @apply grid gap-1.5 text-sm; }
+  .pl-whitelist-filter-area {
+    @apply flex flex-wrap items-end gap-3;
+  }
+  .pl-whitelist-toolbar-actions {
+    @apply ml-auto flex flex-wrap items-center gap-3;
+  }
+  .pl-whitelist-selection-summary {
+    @apply whitespace-nowrap text-sm text-fg-muted;
+  }
+  /* Search input grew from ~182px to ~360px on desktop widths so users can
+     scan long connection/schema tables without losing query context. */
+  .pl-whitelist-search { @apply w-full sm:w-auto; }
+  .pl-whitelist-search-input {
+    @apply w-full sm:w-auto;
+    min-width: 16rem;
+  }
+  @media (min-width: 1024px) {
+    .pl-whitelist-search-input {
+      width: 22.5rem;
+      max-width: 22.5rem;
+    }
+  }
+  @media (max-width: 640px) {
+    .pl-whitelist-search-input {
+      min-width: 0;
+    }
+  }
+  .pl-whitelist-batch-menu {
+    @apply relative inline-flex;
+  }
+  .pl-whitelist-batch-menu[open] > .pl-whitelist-batch-menu-panel {
+    display: grid;
+  }
+  .pl-whitelist-batch-summary {
+    @apply cursor-pointer;
+    list-style: none;
+  }
+  .pl-whitelist-batch-summary::-webkit-details-marker {
+    display: none;
+  }
+  .pl-whitelist-batch-menu-panel {
+    display: none;
+    @apply absolute right-0 top-full z-50 mt-2 grid min-w-32 gap-1 rounded-md border border-border-default bg-bg-elevated p-1 shadow-md;
+  }
+  .pl-whitelist-batch-link {
+    @apply inline-flex w-full cursor-pointer items-center whitespace-nowrap rounded-sm px-2 py-1.5 text-left text-sm font-normal text-fg-default hover:bg-bg-muted disabled:cursor-not-allowed disabled:text-fg-muted disabled:opacity-60;
+  }
+  .pl-whitelist-batch-link:focus-visible {
+    outline: none;
+  }
+  .pl-missing-manifest-diagnostic {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3 text-sm text-fg-body;
+  }
+  .pl-missing-manifest-title {
+    @apply text-sm font-semibold text-fg-default;
+  }
+  .pl-missing-manifest-description {
+    @apply text-sm text-fg-body;
+  }
+  .pl-missing-manifest-path-row {
+    @apply flex flex-wrap items-baseline gap-1 text-sm text-fg-muted;
+  }
+  .pl-missing-manifest-path-row code {
+    @apply break-all rounded-sm border border-border-default bg-bg-base px-1.5 py-0.5 font-mono text-xs text-fg-default;
+  }
+  .pl-missing-manifest-details-content {
+    @apply rounded-sm border border-border-muted bg-bg-base px-3 py-2 text-xs text-fg-body;
+  }
+  .pl-missing-manifest-details-content code {
+    @apply font-mono;
+  }
+  .pl-missing-manifest-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-table-group { @apply grid gap-2; }
+  /* Heading element inside the group section (kept for backward-compat with
+     diagnostic blocks like the missing-Manifest card). */
+  .pl-table-group-heading { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  /* Lightweight group header row inside the unified <table>; sits at the top
+     of each <tbody> with a subdued background and no top border. */
+  .pl-table-group-row {
+    @apply border-0 bg-bg-subtle text-xs font-medium tracking-wider text-fg-muted;
+  }
+  .pl-table-group-row td {
+    @apply border-b border-border-default px-3 py-2 align-middle;
+  }
+  .pl-table-group-row-count {
+    @apply ml-2 text-[11px] font-normal text-fg-muted;
+  }
+  .pl-table-wrapper { @apply grid gap-2; }
+  .pl-data-table { @apply w-full border-collapse text-sm; }
+  .pl-data-table thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  .pl-data-table tbody td { @apply border-b border-border-default px-3 py-2 align-middle; }
+  .pl-data-table tbody tr:hover { @apply bg-bg-muted; }
+
+  .pl-page-stack--safe-bottom {
+    /* Reserve room for the floating dock so the last table row never sits
+       under it. Tuned for two-line summary + 3 buttons; safe-area-inset for
+       notched mobile browsers. */
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+    transition: padding-bottom 180ms ease-out;
+  }
+  .pl-floating-dock {
+    @apply fixed inset-x-4 bottom-6 z-40 mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-lg border border-border-strong bg-bg-elevated p-4 shadow-lg;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    animation: pl-floating-dock-in 180ms ease-out;
+  }
+  /* Align the dock with the main content column on desktop widths where the
+     216px sidebar is sticky. Without this, the dock centers on the viewport
+     and feels detached from the table it modifies. */
+  @media (min-width: 901px) {
+    .pl-floating-dock {
+      left: calc(216px + 2rem);
+      right: 2rem;
+      max-width: none;
+    }
+  }
+  .pl-floating-dock-text { @apply text-sm font-medium; }
+  .pl-floating-action-bar { @apply sticky bottom-6 z-30 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-strong bg-bg-elevated p-4 shadow-md; }
+  .pl-floating-action-bar-text { @apply text-sm font-medium; }
+
+  @keyframes pl-floating-dock-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .pl-yaml-path-details { @apply grid gap-1 text-xs text-fg-muted; }
+  .pl-yaml-path-details summary { @apply cursor-pointer font-medium text-fg-default; }
+  .pl-yaml-path-details code { @apply block rounded-md border border-border-default bg-bg-base px-2 py-1 font-mono; }
+  .pl-save-progress-row { @apply flex flex-wrap items-center gap-2 rounded-md border border-border-default bg-bg-base px-3 py-2 text-sm; }
+  .pl-save-progress-row--queued { @apply bg-bg-muted text-fg-muted; }
+  .pl-save-progress-row--saving,
+  .pl-save-progress-row--scanning { @apply bg-warning-soft text-warning-strong; }
+  .pl-save-progress-row--done { @apply bg-success-soft text-success-strong; }
+  .pl-save-progress-row--scan_failed,
+  .pl-save-progress-row--save_failed { @apply bg-danger-soft text-danger-strong; }
+
+  /* 连通测试诊断面板 (M8) */
+  .pl-diagnostic-panel { @apply mt-6 grid gap-4; }
+  .pl-diagnostic-banner { @apply flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3; }
+  .pl-diagnostic-banner strong { @apply text-sm font-semibold; }
+  .pl-diagnostic-banner span { @apply text-xs; }
+  .pl-diagnostic-banner--muted { @apply border-border-default bg-bg-base text-fg-muted; }
+  .pl-diagnostic-banner--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-diagnostic-banner--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-diagnostic-banner--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-latency-badge { @apply inline-flex items-center rounded-pill px-2 py-0.5 text-xs font-medium; }
+  .pl-latency-badge--success { @apply bg-success-soft text-success-strong; }
+  .pl-latency-badge--warning { @apply bg-warning-soft text-warning-strong; }
+  .pl-latency-badge--danger { @apply bg-danger-soft text-danger-strong; }
+  .pl-latency-badge--muted { @apply bg-bg-muted text-fg-muted; }
+  .pl-diagnostic-grid { @apply grid grid-cols-1 gap-3 md:grid-cols-4; }
+  .pl-diagnostic-grid > div { @apply grid gap-1 rounded-md border border-border-default bg-bg-base p-3; }
+  .pl-diagnostic-grid span { @apply text-xs text-fg-muted; }
+  .pl-diagnostic-grid strong { @apply text-sm; }
+  .pl-collapsible-log { @apply grid gap-2; }
+  .pl-collapsible-log summary { @apply cursor-pointer text-sm font-medium text-fg-default; }
+  .pl-collapsible-log pre { @apply max-h-64 overflow-auto rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs whitespace-pre-wrap; }
+  .pl-raw-log-toolbar { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-default bg-bg-base px-3 py-2; }
+  .pl-raw-log-toolbar code { @apply overflow-auto whitespace-pre-wrap font-mono text-xs text-fg-default; }
+  .pl-raw-log-actions { @apply flex flex-wrap items-center gap-2; }
+  .pl-raw-log-frame { @apply h-72 overflow-auto rounded-md border border-border-strong bg-slate-950 p-3 font-mono text-xs text-slate-100; }
+  .pl-raw-log-frame pre { @apply mb-3 border-0 bg-transparent p-0 whitespace-pre-wrap; }
+  .pl-raw-log-frame pre:last-child { @apply mb-0; }
+  .pl-raw-log-frame pre span { @apply mb-1 block font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-400; }
+  .pl-raw-log-placeholder { @apply text-slate-300; }
+
   /* 通知 */
   .pl-notice { @apply text-sm text-fg-muted; }
   .pl-error { @apply text-sm text-danger; }
 
   /* 字段描述列表 */
   .pl-field-editor-list { @apply grid gap-3; }
+
+  /* Field card (M9) — human/AI separate buckets, metadata badges. */
+  .pl-field-card {
+    @apply grid min-w-0 gap-3 rounded-md border border-border-default bg-bg-base p-4;
+  }
+  .pl-field-card-header {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+  .pl-field-card-name strong { @apply font-mono text-base text-fg-default; }
+  .pl-field-badges { @apply flex flex-wrap items-center gap-1.5; }
+  .pl-meta-badge {
+    @apply inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium;
+  }
+  .pl-meta-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+  .pl-meta-badge--pk { @apply border-accent/40 bg-accent/10 text-accent; }
+  .pl-meta-badge--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-meta-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+
+  .pl-description-buckets { @apply grid gap-3; }
+  .pl-description-bucket { @apply grid gap-1.5; }
+  .pl-description-bucket-header {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+  .pl-description-label {
+    @apply text-xs font-semibold tracking-wider text-fg-muted uppercase;
+  }
+  .pl-description-muted { @apply text-xs text-fg-muted italic; }
+  .pl-description-text {
+    @apply rounded-md border border-border-default bg-bg-surface p-2 text-sm text-fg-default;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+
+  /* Candidate joins banner (M9) — embedded in the table editor. */
+  .pl-candidate-joins-banner {
+    @apply grid gap-3 rounded-md border border-accent/30 bg-accent/5 p-4;
+  }
+  .pl-candidate-joins-banner-header { @apply grid gap-1; }
+  .pl-candidate-joins-banner-header strong { @apply text-sm font-semibold text-accent; }
+  .pl-candidate-joins-list { @apply grid gap-2; }
+  .pl-candidate-join-row {
+    @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-3 md:grid-cols-[minmax(0,1fr)_auto];
+  }
+  .pl-candidate-join-body { @apply grid min-w-0 gap-1; }
+  .pl-candidate-join-line {
+    @apply flex flex-wrap items-center gap-2 text-sm;
+  }
+  .pl-candidate-join-rel { @apply text-xs text-fg-muted; }
+  .pl-candidate-join-on {
+    @apply min-w-0 truncate rounded bg-bg-base px-2 py-1 font-mono text-xs;
+  }
+  .pl-candidate-join-note { @apply text-xs text-fg-muted; }
+  .pl-candidate-join-actions { @apply flex flex-wrap items-center gap-2 md:justify-end; }
+  .pl-workbench-disclosure { @apply rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-workbench-disclosure[open] { @apply grid gap-3; }
+  .pl-workbench-disclosure-summary { @apply flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-fg-default; }
+  .pl-workbench-disclosure-summary::-webkit-details-marker { display: none; }
+  .pl-workbench-disclosure-summary small { @apply text-xs font-normal text-fg-muted; }
   .pl-inline-grid { @apply grid gap-2; }
   .pl-measure-grid { @apply grid gap-3 md:grid-cols-4; }
   .pl-segment-grid { @apply grid gap-3 md:grid-cols-3; }
@@ -180,18 +983,26 @@
   /* 编辑器布局 */
   .pl-editor-layout { @apply grid grid-cols-[240px_minmax(0,1fr)] gap-6; }
   .pl-editor-three-panel { @apply grid gap-4; }
-  .pl-table-workbench { @apply grid min-h-[calc(100vh-128px)] grid-cols-[220px_minmax(420px,1fr)_360px] gap-4; }
-  .pl-object-tree,
+  .pl-table-workbench { @apply grid min-h-[calc(100vh-128px)] grid-cols-[minmax(520px,1fr)_360px] gap-4; }
+  .pl-object-tree { @apply rounded-md border border-border-default bg-bg-surface p-3; }
   .pl-inspector { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto rounded-md border border-border-default bg-bg-surface p-3; }
   .pl-table-editor-main { @apply min-w-0; }
   .pl-table-editor-header { @apply mb-4 flex flex-wrap items-start justify-between gap-4; }
   .pl-table-editor-form { @apply grid gap-4; }
   .pl-object-tree-group { @apply mt-4 grid gap-2; }
+  .pl-object-tree--secondary { @apply bg-bg-subtle; }
+  .pl-secondary-disclosure { @apply rounded-md border border-border-default bg-bg-surface p-2; }
+  .pl-secondary-disclosure[open] { @apply grid gap-2; }
+  .pl-secondary-disclosure-summary { @apply flex cursor-pointer list-none items-center justify-between gap-2 px-1 text-sm font-semibold text-fg-default; }
+  .pl-secondary-disclosure-summary::-webkit-details-marker { display: none; }
+  .pl-secondary-disclosure-summary small { @apply min-w-0 truncate text-xs font-normal text-fg-muted; }
   .pl-object-tree-title { @apply px-2 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-object-tree-item { @apply flex min-h-9 items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-fg-default; }
   .pl-object-tree-item:hover { @apply bg-bg-muted; }
   .pl-object-tree-item--active { @apply bg-bg-muted font-semibold text-primary; }
   .pl-object-tree-item small { @apply shrink-0 text-xs font-normal text-fg-muted; }
+  .pl-manual-semantic-workspace { @apply grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]; }
+  .pl-manual-semantic-panel { @apply min-w-0; }
   .pl-field-search { @apply grid min-w-56 gap-1.5 text-sm; }
   .pl-field-search > span { @apply text-xs font-medium text-fg-muted; }
   .pl-inspector { @apply grid content-start gap-3; }
@@ -199,6 +1010,31 @@
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
   .pl-segmented-control-item { @apply rounded-sm px-2 py-1.5 text-sm text-fg-muted; }
   .pl-segmented-control-item--active { @apply bg-bg-surface text-fg-default shadow-sm; }
+  .pl-inspector-header { @apply grid gap-2; }
+  .pl-inspector-badges { @apply flex flex-wrap items-center gap-2; }
+  .pl-inspector-badge { @apply inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-medium; }
+  .pl-inspector-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+  .pl-inspector-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-inspector-badge--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-asset-exchange { @apply grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,0.75fr)]; }
+  .pl-asset-exchange-copy { @apply grid content-start gap-2; }
+  .pl-asset-exchange-facts { @apply grid gap-2 text-sm; }
+  .pl-asset-exchange-facts div { @apply grid gap-1 rounded-md border border-border-default bg-bg-base px-3 py-2; }
+  .pl-asset-exchange-facts dt { @apply text-xs font-medium text-fg-muted; }
+  .pl-asset-exchange-facts dd { @apply min-w-0 truncate text-fg-default; }
+  .pl-paste-yaml-box { @apply mt-2 grid gap-2; }
+  .pl-paste-yaml-box .pl-btn { @apply justify-self-start; }
+  .pl-change-summary { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
+  .pl-change-summary-header { @apply flex items-center justify-between gap-3 text-sm; }
+  .pl-change-summary-header strong { @apply font-semibold text-fg-default; }
+  .pl-change-summary-header span { @apply text-xs text-fg-muted; }
+  .pl-change-summary-list { @apply grid gap-2 list-none p-0; }
+  .pl-change-summary-list li { @apply flex items-center justify-between gap-3 rounded-sm bg-bg-surface px-2 py-1.5 text-sm; }
+  .pl-change-summary-list span { @apply text-fg-default; }
+  .pl-change-summary-list strong { @apply whitespace-nowrap text-xs font-medium text-fg-muted; }
+  .pl-change-summary-files { @apply grid gap-1 text-xs text-fg-muted; }
+  .pl-change-summary-files ul { @apply grid gap-1 list-none p-0; }
+  .pl-change-summary-files li { @apply min-w-0 truncate rounded-sm bg-bg-surface px-2 py-1 font-mono text-fg-default; }
   .pl-validation-summary { @apply grid gap-2; }
   .pl-validation-summary > div { @apply flex items-center justify-between gap-3 rounded-md border border-border-default bg-bg-base px-3 py-2; }
   .pl-validation-summary span { @apply text-sm text-fg-muted; }
@@ -210,13 +1046,45 @@
   .pl-monitor-trend { @apply xl:row-span-2; }
   .pl-distribution-row { @apply grid grid-cols-[120px_minmax(0,1fr)_48px] items-center gap-3 text-sm; }
   .pl-distribution-row span { @apply truncate font-mono text-xs; }
-  .pl-distribution-row div { @apply h-2 overflow-hidden rounded-pill bg-bg-muted; }
+  .pl-distribution-row div {
+    @apply h-2 overflow-hidden rounded-pill border border-border-strong bg-border-default;
+    box-sizing: border-box;
+  }
   .pl-distribution-row i { @apply block h-full rounded-pill bg-accent; }
   .pl-distribution-row strong { @apply text-right text-xs text-fg-muted; }
   .pl-metadata-grid { @apply grid grid-cols-2 gap-3 mb-4 md:grid-cols-4; }
   .pl-metadata-grid > div { @apply grid gap-0.5; }
   .pl-metadata-grid span { @apply text-xs text-fg-muted; }
   .pl-metadata-grid strong { @apply text-sm; }
+
+  /* Semantic-layer source metadata (M9) — fixed tracks, no value overflow. */
+  .pl-source-metadata-grid {
+    @apply mb-4 grid gap-3;
+    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(96px, 1fr));
+  }
+  .pl-source-metadata-cell {
+    @apply grid min-w-0 gap-1 rounded-md border border-border-default bg-bg-base p-3;
+  }
+  .pl-source-metadata-cell--wide { @apply col-span-1; }
+  .pl-source-metadata-label {
+    @apply flex flex-wrap items-center gap-2 text-xs font-semibold tracking-wider text-fg-muted uppercase;
+  }
+  .pl-copy-line {
+    @apply flex min-w-0 items-center justify-between gap-2;
+  }
+  .pl-copy-line strong {
+    @apply min-w-0 flex-1 truncate font-mono text-sm;
+  }
+
+  /* Overlay write-hint badge (M9) — used for grain/measures/segments. */
+  .pl-overlay-badge {
+    @apply inline-flex items-center gap-1 rounded-sm border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-accent uppercase;
+    cursor: help;
+  }
+
+  .pl-field-label-with-overlay {
+    @apply flex items-center gap-2;
+  }
 
   /* Diff / YAML preview */
   .pl-diff-viewer { @apply rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed overflow-auto; }
@@ -249,7 +1117,10 @@
   .pl-validation-row--failed > span { @apply text-danger-strong; }
   .pl-validation-banner { @apply rounded-md border px-3 py-2 text-sm font-medium; }
   .pl-validation-banner--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-validation-banner--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-validation-banner--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-boundary-checklist { @apply grid gap-2 text-xs text-fg-muted; }
+  .pl-boundary-checklist li { @apply rounded-md border border-border-default bg-bg-base px-3 py-2; }
 
   /* Admin */
   .pl-card { @apply rounded-md border border-border-default bg-bg-surface p-4; }
@@ -257,6 +1128,62 @@
   .pl-admin-tabbar { @apply flex flex-wrap gap-1 border-b border-border-default; }
   .pl-admin-tab { @apply -mb-px border-b-2 border-transparent px-4 py-2 text-sm text-fg-muted; }
   .pl-admin-tab--active { @apply border-accent text-fg-default font-medium; }
+  .pl-admin-tab-panel { @apply min-h-[400px]; }
+  /* Slide-over Drawer (right-anchored, replaces centered modal for Add Schema) */
+  .pl-drawer-backdrop { @apply fixed inset-0 z-50 flex justify-end bg-fg-default/40; }
+  .pl-drawer-panel { @apply flex h-full w-full max-w-xl flex-col gap-4 overflow-auto bg-bg-surface p-6 shadow-lg; }
+  .pl-drawer-header { @apply flex items-start justify-between gap-3; }
+  .pl-drawer-body { @apply grid gap-3; }
+  .pl-drawer-footer { @apply flex flex-wrap items-center justify-end gap-2 pt-2; }
+  /* M21: stable 32x32 close button. `whitespace-nowrap` keeps the two glyphs of
+     "关闭" on one line so it never stacks vertically. */
+  .pl-drawer-close { @apply inline-flex h-8 w-8 shrink-0 items-center justify-center whitespace-nowrap rounded-sm; }
+  .pl-drawer-close--prominent { @apply w-auto min-w-16 border border-border-default bg-bg-muted px-3 text-sm font-medium shadow-card hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
+  .pl-drawer-footer-border-t { @apply border-t border-border-default pt-4 mt-2; }
+  .pl-drawer-error { @apply rounded-md border border-danger-strong bg-danger-soft p-3 text-xs text-danger-strong; }
+  .pl-drawer-error pre { @apply mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-bg-surface p-2 text-fg-default; }
+  .pl-preview-section { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
+
+  /* Metric card with help (Connection Overview 5-card grid) */
+  .pl-metric-card--with-help { @apply gap-2; }
+  .pl-metric-card-title { @apply flex items-center justify-between gap-2 text-xs font-medium text-fg-muted; }
+  .pl-metric-card-title > span:first-child { @apply truncate; }
+  .pl-icon-help { @apply inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-xs text-fg-muted transition-colors; }
+  .pl-icon-help:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-icon-help:focus-visible { @apply outline-none ring-2 ring-primary; }
+  .pl-metric-tooltip { @apply z-50 grid max-w-xs gap-2 rounded-md border border-border-default bg-bg-elevated p-3 text-xs text-fg-default shadow-lg; }
+  .pl-metric-tooltip-title { @apply border-b border-border-default pb-1 font-semibold; }
+  .pl-metric-tooltip p { @apply mt-0.5; }
+  .pl-metric-tooltip-rule { @apply rounded-sm bg-bg-muted p-2 text-[11px]; }
+  .pl-metric-tooltip-rule span { @apply font-semibold text-success-strong; }
+  .pl-metric-tooltip-arrow { @apply fill-bg-elevated; }
+
+  /* Connection card visuals */
+  .pl-engine-badge { @apply inline-flex w-fit items-center rounded-sm border border-border-default bg-bg-muted px-2 py-0.5 text-xs font-medium text-fg-default; }
+  .pl-connection-status { @apply inline-flex w-fit items-center rounded-pill px-2 py-0.5 text-xs font-medium; }
+  .pl-connection-status--unknown { @apply bg-bg-muted text-fg-muted; }
+  .pl-connection-status--testing { @apply bg-warning-soft text-warning-strong; }
+  .pl-connection-status--connected { @apply bg-success-soft text-success-strong; }
+  .pl-connection-status--disconnected { @apply bg-danger-soft text-danger-strong; }
+  .pl-copy-line { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-copy-line code { @apply min-w-0 flex-1 break-all; }
+
+  /* Onboarding delivery banner + progress */
+  .pl-delivery-banner { @apply flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-delivery-banner > div { @apply grid gap-1; }
+  .pl-delivery-banner strong { @apply text-sm font-semibold; }
+  .pl-delivery-banner span { @apply text-sm text-fg-muted; }
+  .pl-delivery-banner--ready { @apply border-success-strong bg-success-soft; }
+  .pl-delivery-banner--ready > div span { @apply text-success-strong; }
+  .pl-progress {
+    @apply mt-2 h-2 overflow-hidden rounded-pill border border-border-strong bg-border-default;
+    box-sizing: border-box;
+  }
+  .pl-progress i,
+  .pl-progress-bar { @apply block h-full rounded-pill bg-primary; }
+  .pl-progress-bar--success { background-color: var(--token-color-success); }
+
+  /* Legacy centered modal (kept for other admin dialogs) */
   .pl-modal-backdrop { @apply fixed inset-0 z-50 flex items-center justify-center bg-fg-default/40 p-4; }
   .pl-modal-panel { @apply w-full max-w-lg rounded-md bg-bg-surface p-6 shadow-lg; }
   .pl-audit-table th,
@@ -284,16 +1211,614 @@
   .pl-select-item[data-highlighted] { @apply bg-bg-muted text-fg-default; }
   .pl-select-item[data-state="checked"] { @apply font-medium; }
   .pl-select-trigger[data-placeholder] { @apply text-fg-muted; }
+
+  /* M10 — Business Wiki UX refactor */
+
+  /* Catalog row: a non-anchor container with two action links to
+     avoid nested anchors. Stats, status and action group each get
+     their own column so the layout stays stable. */
+  .pl-table-row-meta { @apply grid gap-0.5; }
+  .pl-table-row-meta strong { @apply text-sm font-medium; }
+  .pl-table-row-meta span { @apply text-xs text-fg-muted; }
+  .pl-table-row-stats { @apply text-xs text-fg-muted; }
+  .pl-table-row-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+
+  /* Compact 2-col frontmatter grid (M10). Keeps the body markdown
+     editor visible in the first desktop viewport. */
+  .pl-frontmatter { @apply grid gap-3 p-4; }
+  .pl-frontmatter-header { @apply grid gap-1; }
+  .pl-frontmatter-header .pl-panel-title { @apply mb-0; }
+  .pl-frontmatter-grid {
+    @apply grid gap-3;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .pl-frontmatter-cell { @apply mb-0; }
+  .pl-frontmatter-cell--wide { @apply col-span-1 sm:col-span-2; }
+  .pl-frontmatter-advanced { @apply grid gap-2; }
+  .pl-frontmatter-advanced-toggle { @apply w-fit; }
+  .pl-frontmatter-advanced-body { @apply grid gap-3; }
+
+  /* sl_ref chips: known vs unknown visual states. Known chips carry
+     a 🔗 link back to the table editor. */
+  .pl-slref-picker { @apply relative grid gap-2; }
+  .pl-slref-chips {
+    @apply flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-border-default bg-bg-surface px-2 py-1.5;
+  }
+  .pl-slref-input,
+  .pl-tag-input-field {
+    @apply min-w-32 flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-fg-default focus:outline-none focus:ring-0;
+  }
+  .pl-slref-dropdown {
+    @apply absolute top-full left-0 right-0 z-30 mt-1 grid max-h-64 gap-0.5 overflow-auto rounded-md border border-border-default bg-bg-elevated p-1 shadow-lg;
+  }
+  .pl-slref-option-button {
+    @apply grid w-full grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-fg-default;
+  }
+  .pl-slref-option-button:hover { @apply bg-bg-muted; }
+  .pl-slref-option--active .pl-slref-option-button { @apply bg-bg-muted; }
+  .pl-slref-option-button strong { @apply font-medium; }
+  .pl-slref-option-button span { @apply text-xs text-fg-muted; }
+  .pl-slref-option-button code { @apply truncate font-mono text-xs text-fg-muted; }
+  .pl-slref-empty { @apply mt-2; }
+  .pl-slref-empty code { @apply rounded bg-bg-muted px-1 font-mono; }
+
+  .pl-tag-input {
+    @apply flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-border-default bg-bg-surface px-2 py-1.5;
+  }
+
+  /* Generic chip primitive. State variants carry color and the
+     warning state. */
+  .pl-chip {
+    @apply inline-flex max-w-full items-center gap-1 rounded-pill border px-2 py-0.5 text-xs;
+  }
+  .pl-chip-label { @apply min-w-0 truncate font-medium; }
+  .pl-chip-remove {
+    @apply inline-flex size-4 items-center justify-center rounded-pill text-base leading-none text-fg-muted hover:bg-bg-muted;
+  }
+  .pl-chip-link {
+    @apply inline-flex items-center rounded-pill px-1 text-primary no-underline hover:bg-bg-muted;
+  }
+  .pl-chip--known { @apply border-accent/30 bg-accent/10 text-accent; }
+  .pl-chip--unknown { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-chip--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+
+  /* Wiki sidebar: compact, with explicit new-document CTA. */
+  .pl-wiki-sidebar { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto; }
+  .pl-wiki-sidebar-header { @apply flex items-center justify-between gap-2; }
+  .pl-wiki-sidebar-title { @apply text-base font-semibold; }
+  .pl-wiki-new-button { @apply px-2 py-1 text-xs; }
+  .pl-wiki-filter { @apply text-xs; }
+  .pl-wiki-context-hint { @apply rounded-md border border-border-default bg-bg-base p-2 text-xs; }
+  .pl-wiki-context-hint code { @apply break-all font-mono; }
+  /* M33 Wiki workbench: read-mode-first layout. Desktop keeps the
+     sidebar + main two-column grid (inheriting `.pl-editor-layout`)
+     so the article stays in the first viewport on 1280x720. The
+     single-column stack is reserved for the mobile media query
+     further down. The persistent Diff / Raw inspector was removed
+     from the daily surface and lives inside the Save Preflight
+     modal instead. */
+  .pl-wiki-layout--read,
+  .pl-wiki-layout--edit {
+    /* Inherit the editor-layout 240px sidebar grid. Re-declared here
+       so the workbench layout never accidentally flips to single
+       column at desktop widths. */
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .pl-wiki-body { @apply grid gap-4; }
+  .pl-wiki-left { @apply min-w-0; }
+  .pl-wiki-editor-panel { @apply grid gap-3 p-4; }
+  .pl-wiki-editor-header { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-wiki-shortcut-hint { @apply text-xs text-fg-muted; }
+  .pl-wiki-markdown-input { @apply min-h-[420px]; }
+
+  /* Header actions: document operations only. */
+  .pl-wiki-header-actions { @apply flex flex-wrap items-center gap-2; }
+  .pl-wiki-header-modes { @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-surface p-0.5; }
+  .pl-wiki-header-mode--active { @apply bg-bg-muted text-fg-default font-semibold; }
+
+  /* Wiki inspector (right column): legacy tabs. Still rendered when
+     other code paths (e.g. tests, future drawer) opt in. The default
+     workbench surface no longer uses it. */
+  .pl-wiki-inspector {
+    @apply sticky top-[88px] grid h-fit min-h-[420px] gap-3 rounded-md border border-border-default bg-bg-surface p-3;
+  }
+  .pl-wiki-inspector-tabs { @apply flex flex-wrap gap-1; }
+  .pl-wiki-inspector-tab {
+    @apply rounded-sm px-2.5 py-1 text-sm text-fg-muted;
+  }
+  .pl-wiki-inspector-tab:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-wiki-inspector-tab--active { @apply bg-bg-muted font-medium text-fg-default; }
+  .pl-wiki-inspector-section { @apply min-h-[300px] grid gap-2; }
+
+  /* Library home: the neutral /wiki entrypoint before a document is selected. */
+  .pl-wiki-library-home { @apply grid gap-4; }
+  .pl-wiki-library-hero {
+    @apply flex flex-wrap items-start justify-between gap-4 rounded-md border border-border-default bg-bg-surface p-4;
+  }
+  .pl-wiki-library-copy { @apply grid max-w-2xl gap-1; }
+  .pl-wiki-library-kicker { @apply text-xs font-semibold uppercase text-fg-muted; }
+  .pl-wiki-library-title { @apply text-lg font-semibold text-fg-default; }
+  .pl-wiki-library-description { @apply text-sm text-fg-muted; }
+  .pl-wiki-library-actions { @apply flex flex-wrap items-center gap-2; }
+  .pl-wiki-library-empty { @apply grid gap-3 rounded-md border border-border-default bg-bg-subtle p-4 text-sm text-fg-muted; }
+  .pl-wiki-library-groups { @apply grid gap-3; }
+  .pl-wiki-library-group { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-wiki-library-group-header { @apply flex items-center gap-2; }
+  .pl-wiki-library-folder-icon { @apply text-xs text-fg-muted; }
+  .pl-wiki-library-group-title { @apply text-sm font-semibold text-fg-default; }
+  .pl-wiki-library-count { @apply ml-auto rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-wiki-library-list { @apply grid list-none gap-1 p-0 m-0 sm:grid-cols-2; }
+  .pl-wiki-library-item { @apply min-w-0; }
+  .pl-wiki-library-item-button {
+    @apply grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-sm px-2 py-2 text-left hover:bg-bg-muted;
+  }
+  .pl-wiki-library-md-icon {
+    @apply inline-flex items-center rounded-sm border border-border-default bg-bg-muted px-1.5 py-0.5 font-mono text-[10px] text-fg-muted;
+  }
+  .pl-wiki-library-item-main { @apply grid min-w-0 gap-0.5; }
+  .pl-wiki-library-item-title { @apply truncate text-sm font-medium text-fg-default; }
+  .pl-wiki-library-item-path { @apply truncate font-mono text-xs text-fg-muted; }
+
+  /* Read Mode: compact business document surface. */
+  .pl-wiki-read-view { @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-wiki-read-header { @apply grid gap-2; }
+  .pl-wiki-read-title { @apply text-2xl font-semibold leading-tight text-fg-default; }
+  .pl-wiki-read-key { @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted; }
+  .pl-wiki-read-summary { @apply text-sm text-fg-body; }
+  .pl-wiki-read-meta { @apply flex flex-wrap items-center gap-2; }
+  .pl-wiki-read-tags { @apply flex flex-wrap items-center gap-1 list-none p-0 m-0; }
+  .pl-wiki-read-tag { @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-wiki-read-refs { @apply flex flex-wrap items-center gap-1 list-none p-0 m-0; }
+  .pl-wiki-read-ref { @apply inline-flex; }
+  .pl-wiki-read-ref-link,
+  .pl-wiki-read-ref-text { @apply inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-xs; }
+  .pl-wiki-read-ref-label { @apply font-medium; }
+  .pl-wiki-read-ref-warning { @apply text-[10px] uppercase tracking-wide; }
+  .pl-wiki-read-ref--known .pl-wiki-read-ref-link { @apply border-accent/30 bg-accent/10 text-accent no-underline; }
+  .pl-wiki-read-ref--unknown .pl-wiki-read-ref-text { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+
+  .pl-wiki-read-layout {
+    @apply grid gap-6;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  }
+  .pl-wiki-read-layout--no-toc { grid-template-columns: minmax(0, 1fr); }
+  .pl-wiki-read-body { @apply min-w-0; }
+  .pl-wiki-read-toc {
+    @apply sticky top-[96px] grid h-fit gap-2 rounded-md border border-border-default bg-bg-subtle p-3 text-sm;
+  }
+  .pl-wiki-read-toc-title { @apply text-xs font-semibold uppercase tracking-wide text-fg-muted; }
+  .pl-wiki-read-toc-list { @apply list-none p-0 m-0 grid gap-1; }
+  .pl-wiki-read-toc-item--level-3 .pl-wiki-read-toc-link { @apply pl-3 text-fg-muted; }
+  .pl-wiki-read-toc-link { @apply block rounded-sm px-2 py-1 text-sm text-fg-body no-underline hover:bg-bg-muted; }
+
+  .pl-wiki-read-empty { @apply grid gap-3 rounded-md border border-border-default bg-bg-subtle p-4; }
+  .pl-wiki-read-empty-hint { @apply text-sm text-fg-body; }
+  .pl-wiki-read-empty-subhint { @apply text-sm text-fg-muted; }
+  .pl-wiki-read-empty-templates { @apply list-none p-0 m-0 grid gap-2 sm:grid-cols-2; }
+  .pl-wiki-read-template { @apply grid; }
+  .pl-wiki-read-template-button {
+    @apply grid gap-1 rounded-md border border-border-default bg-bg-surface p-3 text-left text-sm transition-colors;
+  }
+  .pl-wiki-read-template-button:hover { @apply border-border-strong bg-bg-muted; }
+  .pl-wiki-read-template-button strong { @apply text-sm font-semibold; }
+  .pl-wiki-read-template-button span { @apply text-xs text-fg-muted; }
+
+  /* Edit Mode: compact Meta Header + dual-pane editor + preview. */
+  .pl-wiki-edit-view { @apply grid gap-4; }
+  .pl-wiki-edit-meta {
+    @apply grid gap-2 rounded-lg border border-border-default bg-bg-surface p-3 shadow-card;
+  }
+  .pl-wiki-edit-meta[open] { @apply pb-3; }
+  .pl-wiki-edit-meta-summary {
+    @apply flex cursor-pointer flex-wrap items-baseline gap-2 text-sm font-semibold;
+    list-style: none;
+  }
+  .pl-wiki-edit-meta-summary::-webkit-details-marker { display: none; }
+  .pl-wiki-edit-meta-summary::before {
+    content: "▶";
+    @apply mr-1 text-xs text-fg-muted transition-transform;
+  }
+  .pl-wiki-edit-meta[open] > summary::before { transform: rotate(90deg); }
+  .pl-wiki-edit-meta-hint { @apply text-xs font-normal text-fg-muted; }
+  .pl-wiki-edit-meta-body { @apply pt-2; }
+  .pl-wiki-edit-grid {
+    @apply grid gap-4 rounded-lg border border-border-default bg-bg-surface p-4 shadow-card;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 60vh;
+  }
+  .pl-wiki-edit-source,
+  .pl-wiki-edit-preview { @apply grid gap-2 min-w-0; }
+  .pl-wiki-edit-source-header,
+  .pl-wiki-edit-preview-header { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-wiki-edit-source-title,
+  .pl-wiki-edit-preview-title { @apply text-sm font-semibold; }
+  .pl-wiki-edit-source-hint,
+  .pl-wiki-edit-preview-hint { @apply text-xs text-fg-muted; }
+  .pl-wiki-edit-source-input { @apply min-h-[60vh] font-mono text-sm; }
+  .pl-wiki-edit-preview { @apply rounded-md border border-border-default bg-bg-subtle p-3; }
+  .pl-wiki-edit-preview .pl-markdown-preview { @apply gap-2; }
+
+  /* Save Preflight modal: target, validation, diff, raw, actions. */
+  .pl-wiki-preflight-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    z-index: 50;
+  }
+  .pl-wiki-preflight-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 51;
+    width: min(960px, 92vw);
+    max-height: 90vh;
+    overflow: auto;
+    @apply grid gap-4 rounded-lg border border-border-default bg-bg-surface p-6 shadow-card;
+  }
+  .pl-wiki-preflight-title { @apply text-lg font-semibold; }
+  .pl-wiki-preflight-description { @apply text-sm text-fg-muted; }
+  .pl-wiki-preflight-section { @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3; }
+  .pl-wiki-preflight-section-title { @apply text-sm font-semibold; }
+  .pl-wiki-preflight-target { @apply break-all rounded bg-bg-muted px-2 py-1 font-mono text-sm; }
+  .pl-wiki-preflight-findings { @apply list-none p-0 m-0 grid gap-2; }
+  .pl-wiki-preflight-finding {
+    @apply grid grid-cols-[auto_1fr] items-baseline gap-2 rounded-md border bg-bg-surface px-3 py-2 text-sm;
+  }
+  .pl-wiki-preflight-finding--error { @apply border-danger-strong text-danger-strong; }
+  .pl-wiki-preflight-finding--warning { @apply border-warning-strong text-warning-strong; }
+  .pl-wiki-preflight-finding--info { @apply border-border-default text-fg-body; }
+  .pl-wiki-preflight-finding-level { @apply text-xs font-semibold; }
+  .pl-wiki-preflight-raw-toggle { @apply w-fit text-sm font-medium text-fg-default; }
+  .pl-wiki-preflight-raw {
+    @apply mt-2 max-h-[280px] overflow-auto rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs;
+  }
+  .pl-wiki-preflight-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+
+  /* Wiki tree (sidebar): search + directory groups + title-first rows. */
+  .pl-wiki-tree { @apply grid gap-2; }
+  .pl-wiki-tree-search { @apply text-sm; }
+  .pl-wiki-tree-list { @apply list-none p-0 m-0 grid gap-2; }
+  .pl-wiki-tree-group { @apply grid gap-1; }
+  .pl-wiki-tree-group-toggle {
+    @apply flex items-center gap-1 rounded-sm px-1 py-1 text-xs font-semibold text-fg-muted;
+  }
+  .pl-wiki-tree-group-toggle:hover { @apply text-fg-default; }
+  .pl-wiki-tree-group-caret { @apply text-[10px] text-fg-muted; }
+  .pl-wiki-tree-group-count {
+    @apply ml-auto inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-fg-muted;
+  }
+  .pl-wiki-tree-pages { @apply list-none p-0 m-0 grid gap-0.5 pl-3; }
+  .pl-wiki-tree-page { @apply grid; }
+  .pl-wiki-tree-page-button {
+    @apply grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 rounded-sm px-2 py-1.5 text-left text-sm text-fg-body;
+  }
+  .pl-wiki-tree-page-button:hover { @apply bg-bg-muted; }
+  .pl-wiki-tree-page--active .pl-wiki-tree-page-button {
+    @apply bg-bg-selected text-fg-default font-semibold;
+  }
+  .pl-wiki-tree-page-ext {
+    @apply inline-flex items-center justify-center rounded-sm border border-border-default bg-bg-muted px-1.5 font-mono text-[10px] uppercase text-fg-muted;
+  }
+  .pl-wiki-tree-page-title {
+    @apply truncate col-span-1;
+    grid-column-start: 2;
+  }
+  .pl-wiki-tree-page-path {
+    @apply col-span-2 truncate font-mono text-[10px] text-fg-muted;
+  }
+
+  /* M42: Header converged. Status pill + focus toggle + copy hint. */
+  .pl-wiki-header-status {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted;
+  }
+  .pl-wiki-header-status[data-status="draft"] {
+    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  }
+  .pl-wiki-header-focus--active {
+    @apply border-accent/40 bg-accent/10 text-accent;
+  }
+  .pl-wiki-header-edit-title {
+    @apply inline-flex flex-wrap items-baseline gap-2;
+  }
+  .pl-wiki-header-edit-key {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted;
+  }
+  .pl-wiki-header-copy-hint {
+    @apply text-xs text-fg-muted;
+  }
+
+  /* M42: Sidebar shrinks to the search box + tree. Path input removed. */
+  .pl-wiki-sidebar-key {
+    @apply truncate rounded-sm bg-bg-muted px-2 py-1 font-mono text-[10px] text-fg-muted;
+  }
+
+  /* M42: Focus mode collapses the sidebar to a thin icon strip. The
+     main column then claims the full grid width. */
+  .pl-wiki-sidebar--collapsed {
+    @apply p-0;
+  }
+  .pl-wiki-layout--focus { grid-template-columns: 0 minmax(0, 1fr); }
+  .pl-wiki-layout--focus .pl-wiki-sidebar { display: none; }
+
+  /* M42: Preview tab mode for narrow edit viewports. Markdown and
+     Preview stack instead of fighting for 420px each. */
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* M42: Markdown toolbar sits directly above the textarea. */
+  .pl-wiki-markdown-toolbar {
+    @apply flex flex-wrap items-center gap-1 rounded-md border border-border-default bg-bg-subtle px-1.5 py-1 text-xs;
+  }
+  .pl-wiki-markdown-toolbar-button {
+    @apply rounded-sm px-2 py-0.5 font-mono text-xs text-fg-body;
+  }
+  .pl-wiki-markdown-toolbar-button:hover {
+    @apply bg-bg-muted text-fg-default;
+  }
+
+  /* M42: Tab toggle for the Markdown / Preview fallback. */
+  .pl-wiki-edit-tab-toggle {
+    @apply inline-flex items-center gap-1 rounded-md border border-border-default bg-bg-surface p-0.5;
+  }
+  .pl-wiki-edit-tab-toggle--active {
+    @apply bg-bg-muted text-fg-default font-semibold;
+  }
+
+  /* M42: Linked semantic object summary (>3 refs). */
+  .pl-wiki-read-refs-summary { @apply grid gap-2; }
+  .pl-wiki-read-refs-summary-button {
+    @apply inline-flex items-center gap-2 rounded-md border border-border-default bg-bg-subtle px-2 py-1 text-xs text-fg-body;
+  }
+  .pl-wiki-read-refs-summary-button:hover { @apply border-border-strong; }
+  .pl-wiki-read-refs-summary-unknown {
+    @apply rounded-pill border border-border-default bg-bg-muted px-1.5 py-0.5 text-[10px] text-fg-muted;
+  }
+  .pl-wiki-read-refs-summary-unknown--warn {
+    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  }
+  .pl-wiki-read-refs-summary-caret {
+    @apply ml-auto text-[10px] text-fg-muted;
+  }
+  .pl-wiki-read-ref-dot {
+    @apply inline-block size-2 rounded-pill;
+  }
+  .pl-wiki-read-ref-dot--known { @apply bg-success; }
+  .pl-wiki-read-ref-dot--unknown { @apply bg-warning; }
+  .pl-wiki-read-ref-sr { @apply sr-only; }
+
+  /* M42: Empty-state actions row + placeholder hints. */
+  .pl-wiki-read-empty-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-read-placeholder-hint,
+  .pl-wiki-edit-placeholder-hint {
+    @apply rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+
+  /* M42: Template picker modal. */
+  .pl-wiki-template-overlay { @apply fixed inset-0 z-40 bg-fg-default/40 backdrop-blur-sm; }
+  .pl-wiki-template-content {
+    @apply fixed left-1/2 top-1/2 z-50 grid max-h-[80vh] w-[min(720px,90vw)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-auto rounded-xl border border-border-default bg-bg-surface p-5 shadow-card;
+  }
+  .pl-wiki-template-title { @apply text-lg font-semibold text-fg-default; }
+  .pl-wiki-template-description { @apply text-sm text-fg-muted; }
+  .pl-wiki-template-list { @apply grid list-none gap-2 p-0 m-0 sm:grid-cols-2; }
+  .pl-wiki-template-button {
+    @apply grid gap-1 rounded-md border border-border-default bg-bg-surface p-3 text-left text-sm transition-colors;
+  }
+  .pl-wiki-template-button:hover { @apply border-border-strong bg-bg-muted; }
+  .pl-wiki-template-label { @apply text-sm font-semibold text-fg-default; }
+  .pl-wiki-template-desc { @apply text-xs text-fg-muted; }
+  .pl-wiki-template-placeholder-hint { @apply text-[11px] text-fg-subtle; }
+  .pl-wiki-template-actions { @apply flex justify-end; }
+
+  /* M42: Frontmatter drawer (replaces inline form). */
+  .pl-wiki-meta-overlay { @apply fixed inset-0 z-40 bg-fg-default/40 backdrop-blur-sm; }
+  .pl-wiki-meta-content {
+    @apply fixed right-0 top-0 z-50 grid h-full w-[min(420px,90vw)] gap-4 overflow-auto border-l border-border-default bg-bg-surface p-5 shadow-card;
+  }
+  .pl-wiki-meta-header { @apply grid gap-2; }
+  .pl-wiki-meta-title { @apply text-base font-semibold text-fg-default; }
+  .pl-wiki-meta-description { @apply text-xs text-fg-muted; }
+  .pl-wiki-meta-close { @apply justify-self-end; }
+  .pl-wiki-upload-ref {
+    @apply ml-1 inline-flex rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs;
+  }
+  .pl-wiki-upload-directory {
+    @apply grid gap-1 text-sm font-medium text-fg-body;
+  }
+  .pl-wiki-upload-warnings {
+    @apply grid gap-1 rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+  .pl-notice-inline { @apply text-sm text-fg-muted; }
+
+  /* Markdown preview typography. Small enough to keep a workbench
+     feel, large enough to remain readable. */
+  .pl-markdown-preview { @apply grid gap-2 text-sm leading-relaxed text-fg-default; }
+  .pl-markdown-preview h1 { @apply text-xl font-semibold; }
+  .pl-markdown-preview h2 { @apply text-base font-semibold; }
+  .pl-markdown-preview h3 { @apply text-sm font-semibold; }
+  .pl-markdown-preview h4 { @apply text-sm font-semibold; }
+  .pl-markdown-preview h5,
+  .pl-markdown-preview h6 { @apply text-xs font-semibold uppercase tracking-wide text-fg-muted; }
+  .pl-markdown-preview p { @apply text-sm; }
+  .pl-markdown-preview ul { @apply list-disc space-y-1 pl-5 text-sm; }
+  .pl-markdown-preview ol { @apply list-decimal space-y-1 pl-5 text-sm; }
+  .pl-markdown-preview li { @apply text-sm; }
+  .pl-markdown-preview code {
+    @apply rounded bg-bg-muted px-1 py-0.5 font-mono text-xs;
+  }
+  .pl-markdown-preview pre {
+    @apply overflow-auto rounded-md border border-border-default bg-bg-base p-3;
+  }
+  .pl-markdown-preview pre code { @apply bg-transparent p-0 text-xs; }
+  .pl-markdown-preview blockquote {
+    @apply border-l-2 border-border-strong pl-3 text-fg-muted italic;
+  }
+  .pl-markdown-preview a { @apply text-accent underline; }
+  .pl-markdown-preview hr { @apply border-border-default; }
+  .pl-markdown-table-wrap { @apply my-3 w-full overflow-x-auto; }
+  .pl-markdown-table { @apply w-full border-collapse text-sm; }
+  .pl-markdown-table th,
+  .pl-markdown-table td { @apply border border-border-default px-3 py-2 align-top; }
+  .pl-markdown-table th { @apply bg-bg-muted font-semibold text-fg-default; }
+  .pl-markdown-table tbody tr:nth-child(even) { @apply bg-bg-subtle; }
+
+  /* M36: Ops Dashboard layout. Stays within the existing token system; do not
+     introduce new radii or decorative gradients. */
+  .pl-ops-grid { @apply grid gap-4 lg:grid-cols-2; }
+  .pl-ops-grid > .pl-panel { @apply mb-0; }
+  .pl-service-health-strip { @apply grid gap-2 sm:grid-cols-2 xl:grid-cols-4; }
+  .pl-service-health-item { @apply grid grid-cols-[10px_minmax(0,1fr)] items-start gap-3 rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-service-health-status { @apply mt-1 size-2.5 rounded-pill bg-fg-muted; }
+  .pl-service-health-item[data-status="ready"] .pl-service-health-status { @apply bg-success; }
+  .pl-service-health-item[data-status="warning"] .pl-service-health-status { @apply bg-warning; }
+  .pl-service-health-item[data-status="danger"] .pl-service-health-status { @apply bg-danger; }
+  .pl-service-health-item[data-status="info"] .pl-service-health-status { @apply bg-accent; }
+  .pl-service-health-label { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  .pl-service-health-detail { @apply text-sm text-fg-default; }
+  .pl-service-health-panel { @apply mb-4 rounded-lg border border-border-default bg-bg-surface px-4 py-3 shadow-card; }
+  .pl-service-health-compact { @apply flex flex-wrap items-center gap-3 text-sm text-fg-body; }
+  .pl-service-health-compact-dot { @apply size-2.5 rounded-pill bg-fg-muted; }
+  .pl-service-health-compact-dot[data-overall="ready"] { @apply bg-success; }
+  .pl-service-health-compact-dot[data-overall="warning"] { @apply bg-warning; }
+  .pl-service-health-compact-dot[data-overall="danger"] { @apply bg-danger; }
+  .pl-service-health-compact-dot[data-overall="info"] { @apply bg-accent; }
+  /* M39 polish v2: the "系统状态" inline label now matches the rest of
+     the section titles (16px / 600) so it no longer reads as a stray
+     status word but as a real section anchor. */
+  .pl-service-health-compact-label { @apply text-[16px] font-semibold leading-6 text-fg-default; }
+  .pl-service-health-compact-list { @apply flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-body; }
+  .pl-service-health-compact-item { @apply inline-flex items-baseline gap-2; }
+  .pl-service-health-compact-item[data-status="warning"] .pl-service-health-compact-name { @apply text-warning-strong; }
+  .pl-service-health-compact-item[data-status="danger"] .pl-service-health-compact-name { @apply text-danger-strong; }
+  .pl-service-health-compact-item[data-status="ready"] .pl-service-health-compact-name { @apply text-success-strong; }
+  .pl-service-health-compact-name { @apply text-sm font-medium text-fg-default; }
+  .pl-service-health-compact-detail { @apply text-xs text-fg-muted; }
+  .pl-service-health-compact-log { @apply text-xs text-accent underline-offset-4 hover:underline; }
+  .pl-service-health-critical { @apply mb-4 rounded-lg border border-danger-strong bg-danger-soft p-4 shadow-card; }
+  .pl-service-health-critical-dot { @apply size-3 rounded-pill bg-danger; }
+  .pl-service-health-critical strong { @apply text-sm font-semibold text-danger-strong; }
+  .pl-service-health-critical .pl-notice { @apply text-danger-strong; }
+  .pl-system-health-summary {
+    @apply mb-4 grid items-center gap-3 rounded-lg border border-border-default bg-bg-subtle px-4 py-3 shadow-card;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .pl-system-health-summary[data-tone="ready"] {
+    @apply border-success-strong bg-success-soft;
+  }
+  .pl-system-health-summary[data-tone="warning"] {
+    @apply border-success-strong bg-success-soft;
+  }
+  .pl-system-health-summary-dot {
+    @apply size-2.5 rounded-pill bg-success;
+  }
+  .pl-system-health-summary strong {
+    @apply block text-sm font-semibold leading-5 text-success-strong;
+  }
+  .pl-system-health-summary p {
+    @apply mt-0.5 text-xs leading-5 text-fg-muted;
+  }
+  .pl-action-required-list { @apply grid gap-2; }
+  /* v1.9.x 收口：取消全包围彩色粗边框 / 高饱和背景卡片；改为左侧 3px 状态条区分等级
+   *（红=critical, 黄=warning, 蓝=info, 绿=ready），整体高度收紧。 */
+  .pl-action-required-item {
+    @apply rounded-md border border-border-default bg-bg-surface py-2.5 pl-4 pr-3;
+    box-shadow: inset 3px 0 0 0 theme(colors.fg.muted);
+  }
+  .pl-action-required-item[data-severity="critical"] { box-shadow: inset 3px 0 0 0 theme(colors.danger); }
+  .pl-action-required-item[data-severity="warning"] { box-shadow: inset 3px 0 0 0 theme(colors.warning); }
+  .pl-action-required-item[data-severity="info"] { box-shadow: inset 3px 0 0 0 theme(colors.accent); }
+  .pl-action-required-item[data-severity="ready"] { box-shadow: inset 3px 0 0 0 theme(colors.success); }
+  .pl-action-required-item-row {
+    @apply grid items-center gap-x-4 gap-y-2;
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  }
+  .pl-action-required-item-title {
+    @apply contents;
+  }
+  .pl-action-required-item-title > .pl-status-badge {
+    @apply justify-self-start;
+  }
+  .pl-action-required-item-heading { @apply block text-sm font-semibold text-fg-default; }
+  .pl-action-required-item-description { @apply mt-0.5 text-xs leading-5 text-fg-muted; }
+  .pl-action-required-item-cta { @apply shrink-0 text-xs font-medium; }
+  .pl-action-required-empty { @apply rounded-md border border-success-strong bg-success-soft p-3 text-sm text-success-strong; }
+  .pl-env-badge { @apply inline-flex items-center rounded-pill border border-warning-strong bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning-strong; }
+  .pl-risk-list { @apply grid gap-2; }
+  .pl-risk-item {
+    @apply grid min-h-[5.625rem] items-center gap-3 rounded-md border border-border-default bg-bg-subtle p-3;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .pl-risk-item[data-tone="warning"] { @apply border-warning-strong bg-warning-soft; }
+  .pl-risk-item[data-tone="danger"] { @apply border-danger-strong bg-danger-soft; }
+  .pl-snapshot-grid { @apply grid gap-2 sm:grid-cols-2; }
+  .pl-snapshot-list { @apply grid gap-2; }
+  .pl-snapshot-item {
+    @apply grid min-h-[5.625rem] items-center gap-3 rounded-md border border-border-default bg-bg-subtle p-3;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .pl-snapshot-item--semantic {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pl-snapshot-item strong { @apply text-sm font-semibold text-fg-default; }
+  .pl-snapshot-item .pl-progress { @apply my-2 w-full max-w-none; }
+  .pl-snapshot-card { @apply grid gap-1 rounded-md border border-border-default bg-bg-subtle p-3; }
+  /* v1.9.x 收口：去掉 uppercase，避免 "Agent 启用" 被渲染成 "AGENT 启用"，与
+   * 访问风险卡片（pl-risk-item strong）的术语大小写保持一致。 */
+  .pl-snapshot-card-label { @apply text-xs font-semibold tracking-wider text-fg-muted; }
+  .pl-snapshot-card-value { @apply text-base font-semibold text-fg-default; }
+  .pl-mcp-actions { @apply grid gap-3; }
+  .pl-onboarding-facts--endpoint span {
+    @apply rounded-md;
+  }
+  .pl-code-snippet--drawer { @apply max-h-72 overflow-auto rounded-md border border-border-default bg-bg-base p-3; }
+  .pl-code-snippet--drawer code { @apply whitespace-pre-wrap break-all text-xs leading-relaxed; }
 }
 
 @media (max-width: 1280px) {
   .pl-table-workbench {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pl-inspector {
     position: static;
     grid-column: 1 / -1;
     height: auto;
+  }
+
+  .pl-source-metadata-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .pl-source-metadata-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pl-wiki-layout--read,
+  .pl-wiki-layout--edit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pl-wiki-sidebar,
+  .pl-wiki-inspector {
+    position: static;
+    height: auto;
+  }
+
+  .pl-frontmatter-grid,
+  .pl-wiki-read-layout,
+  .pl-wiki-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pl-wiki-read-toc { position: static; }
+
+  .pl-frontmatter-cell--wide {
+    grid-column: 1;
   }
 }

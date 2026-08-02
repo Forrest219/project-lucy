@@ -9,7 +9,7 @@ export function MeasureForm({ measures, onChange }: Props) {
   return (
     <section className="pl-panel">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="pl-panel-title">指标</h2>
+        <p className="pl-panel-title">指标</p>
         <button type="button" className="pl-btn pl-btn--secondary" onClick={() => onChange([...measures, { name: "", expr: "" }])}>新增</button>
       </div>
       <div className="pl-field-editor-list">

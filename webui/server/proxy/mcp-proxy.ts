@@ -1431,9 +1431,11 @@ async function writeLucySemanticResponse(
     const parsed = contentType.includes("application/json")
       ? JSON.parse(body) as Record<string, unknown>
       : decodeSseMessage(body) as Record<string, unknown> | undefined;
-    if (parsed?.error || (parsed?.result as Record<string, unknown> | undefined)?.isError) {
+    const parsedError = parsed?.error;
+    const parsedResult = parsed?.result as Record<string, unknown> | undefined;
+    if (parsedError || parsedResult?.isError) {
       outcome = "error";
-      errorDetail = errorDetail ?? JSON.stringify(parsed.error ?? (parsed.result as Record<string, unknown>)?.content);
+      errorDetail = errorDetail ?? JSON.stringify(parsedError ?? parsedResult?.content);
     }
   } catch {
     // audit remains best-effort

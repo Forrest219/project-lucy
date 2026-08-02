@@ -87,7 +87,7 @@ describe("semantic-layer read", () => {
     });
     expect(result.model.unknownKeys).toContain("x_custom");
     expect(result.rawYaml).toContain("x_custom");
-    expect(result.rawYaml).toContain('"on"');
+    expect(result.rawYaml).toContain("on:");
   });
 
   it("raises not found for missing tables", async () => {

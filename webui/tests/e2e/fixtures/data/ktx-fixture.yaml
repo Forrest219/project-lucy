@@ -1,0 +1,35 @@
+# ktx-fixture.yaml
+# E2E Fixture Project 专用 ktx.yaml，覆盖真实仓库的 ktx.yaml。
+# 与真实 ktx.yaml 同 schema（connections 必须为 map 格式）。
+# connection 指向本地 fixture 凭据文件，避免 E2E 进程读取真实密码。
+
+project:
+  name: lucy-e2e-fixture
+  root: .
+
+connections:
+  mysql-aliyun:
+    driver: mysql
+    engine: mysql
+    readOnlyExpected: true
+    host: 127.0.0.1
+    port: 3306
+    username: e2e_user
+    passwordSource:
+      type: file
+      path: .ktx/secrets/mysql-aliyun-password
+    database: e2e_db
+    schemas:
+      - dataforai
+      - openclaw_db
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_people
+
+agents:
+  - id: e2e-default
+    role: local_dev_full_access
+
+mcp:
+  bind: 127.0.0.1:7878
+  auth: none

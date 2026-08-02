@@ -83,8 +83,10 @@ describe("eval API contract gaps", () => {
   });
 
   it("returns rich run details, artifacts, compare, and drift distribution", async () => {
-    await seedRun(11, "2026-06-19T10:00:00Z", 2, 0);
-    await seedRun(12, "2026-06-19T11:00:00Z", 1, 1);
+    const recentPassStartedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const recentFailStartedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    await seedRun(11, recentPassStartedAt, 2, 0);
+    await seedRun(12, recentFailStartedAt, 1, 1);
     const db = await getEvalDb();
     db.prepare(`
       INSERT INTO eval_run_case (

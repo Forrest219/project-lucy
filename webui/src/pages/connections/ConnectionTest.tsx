@@ -1,54 +1,106 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { ConnectionsResponse } from "../../lib/types";
-
-type TestResult = {
-  status: "ok" | "error";
-  latencyMs?: number;
-  detail?: string;
-  reason?: string;
-};
+import type {
+  ConnectionInfo,
+  ConnectionTestResult,
+  ConnectionsResponse,
+  ProjectInfo
+} from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
+import { ConnectionTestResultPanel } from "../../components/connections";
 
 export function ConnectionTest() {
   const [selectedConnId, setSelectedConnId] = useState<string>("");
-  const [result, setResult] = useState<TestResult | null>(null);
+  const [result, setResult] = useState<ConnectionTestResult | null>(null);
+  const [logsExpanded, setLogsExpanded] = useState(false);
 
-  const { data: connData, isLoading: connLoading } = useQuery({
+  const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
     queryFn: () => apiGet<ConnectionsResponse>("/api/connections")
   });
+  const projectQuery = useQuery({
+    queryKey: queryKeys.project,
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
+  });
 
-  const connections = connData?.connections ?? [];
+  const connections = connectionsQuery.data?.connections ?? [];
   const activeConnId = selectedConnId || connections[0]?.id || "";
+  const activeConn: ConnectionInfo | null =
+    connections.find((c) => c.id === activeConnId) ?? null;
 
   const testMutation = useMutation({
-    mutationFn: () => apiPost<TestResult>(`/api/connections/${encodeURIComponent(activeConnId)}/test`, {}),
-    onSuccess: (data) => {
-      setResult(data);
+    mutationFn: (connId: string) =>
+      apiPost<ConnectionTestResult>(
+        `/api/connections/${encodeURIComponent(connId)}/test`,
+        {}
+      ),
+    onMutate: () => {
+      setResult(null);
+      setLogsExpanded(false);
     },
-    onError: (err) => {
-      setResult({ status: "error", reason: err instanceof Error ? err.message : "未知错误" });
+    onSuccess: (data, connId) => {
+      if (connId === activeConnId) {
+        setResult(data);
+        setLogsExpanded(true);
+      }
+    },
+    onError: (err, connId) => {
+      if (connId === activeConnId) {
+        setResult({
+          status: "error",
+          reason: err instanceof Error ? err.message : "未知错误",
+          command: `ktx connection test ${connId}`,
+          args: ["connection", "test", connId],
+          exitCode: null,
+          stdout: "",
+          stderr: err instanceof Error ? err.message : ""
+        });
+        setLogsExpanded(true);
+      }
     }
   });
 
-  if (connLoading) {
+  if (connectionsQuery.isLoading) {
     return <p className="pl-notice">正在加载连接列表...</p>;
   }
 
-  return (
-    <section className="pl-panel">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">数据库接入</p>
-          <h1 className="text-xl font-semibold">连通测试</h1>
-        </div>
-      </div>
-      <p className="pl-page-intro">测试数据库连通性，验证凭证与网络配置是否正确。</p>
+  const isPending = testMutation.isPending;
 
-      <div className="flex items-end gap-3 mt-4">
-        {connections.length > 0 ? (
+  return (
+    <div className="pl-page-stack">
+      <PageHeader
+        title="连通测试"
+        description="测试数据库连通性，验证凭据、网络与驱动配置是否正确。"
+        badges={
+          projectQuery.data ? <span>{projectQuery.data.root}</span> : null
+        }
+      />
+
+      <p
+        className="pl-notice notranslate"
+        data-testid="connection-test-overview-hint"
+        translate="no"
+      >
+        也可以在连接概览中对单个连接执行测试。
+        如需核对连接配置，请前往{" "}
+        <Link to="/connections" className="pl-link" data-testid="connection-test-overview-link">
+          连接概览
+        </Link>
+        。
+      </p>
+
+      <section className="pl-panel">
+        {connections.length === 0 && (
+          <div className="pl-empty-state">
+            暂无连接配置。请先在 <Link to="/connections">连接概览</Link> 添加连接。
+          </div>
+        )}
+
+        {connections.length > 0 && (
+          <div className="pl-toolbar">
           <label className="grid gap-1.5 text-sm">
             <span>选择连接</span>
             <select
@@ -57,54 +109,40 @@ export function ConnectionTest() {
               onChange={(e) => {
                 setSelectedConnId(e.target.value);
                 setResult(null);
+                setLogsExpanded(false);
               }}
               aria-label="选择连接"
             >
               {connections.map((c) => (
-                <option key={c.id} value={c.id}>{c.id}</option>
+                <option key={c.id} value={c.id}>
+                  {c.id}
+                </option>
               ))}
             </select>
           </label>
-        ) : (
-          <p className="text-sm text-fg-muted">暂无连接配置。</p>
-        )}
-
-        {connections.length > 0 && (
           <button
-            className="pl-btn"
+            className="pl-btn pl-btn--primary"
             onClick={() => {
-              setResult(null);
-              testMutation.mutate();
+              if (activeConnId) testMutation.mutate(activeConnId);
             }}
-            disabled={testMutation.isPending || !activeConnId}
+            disabled={isPending || !activeConnId}
+            data-testid="rerun-connection-test"
           >
-            {testMutation.isPending ? "测试中..." : "测试连接"}
+            {isPending ? "测试中..." : "重新测试连接"}
           </button>
-        )}
-      </div>
-
-      {result && (
-        <div className={`mt-6 p-4 rounded border ${result.status === "ok" ? "border-green-500 bg-green-50" : "border-red-400 bg-red-50"}`}>
-          {result.status === "ok" ? (
-            <div>
-              <p className="font-semibold text-green-700">连接成功</p>
-              {result.latencyMs !== undefined && (
-                <p className="text-sm text-green-600 mt-1">延迟：{result.latencyMs} ms</p>
-              )}
-              {result.detail && (
-                <pre className="text-xs mt-2 whitespace-pre-wrap text-green-700">{result.detail}</pre>
-              )}
-            </div>
-          ) : (
-            <div>
-              <p className="font-semibold text-red-700">连接失败</p>
-              {result.reason && (
-                <pre className="text-xs mt-2 whitespace-pre-wrap text-red-600">{result.reason}</pre>
-              )}
-            </div>
-          )}
         </div>
       )}
-    </section>
+
+      {activeConn && (
+        <ConnectionTestResultPanel
+          connection={activeConn}
+          result={result}
+          isPending={isPending}
+          logsExpanded={logsExpanded}
+          onToggleLogs={() => setLogsExpanded((v) => !v)}
+        />
+      )}
+      </section>
+    </div>
   );
 }

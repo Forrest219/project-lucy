@@ -3,10 +3,76 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, CreateAgentBody, Role } from "../../lib/types";
+import { queryKeys } from "../../lib/queryKeys";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import type { Agent, CreateAgentBody, ProjectInfo, Role } from "../../lib/types";
+import { buildMcpConfig } from "../../lib/mcpEndpoint";
+import { PageHeader } from "../../components/PageHeader";
 
 type AgentsResponse = { agents: Agent[]; version: string };
 type RolesResponse = { roles: Role[] };
+
+/**
+ * Placeholder token marker used in the safe .mcp.json template.
+ * Replaced by the user with their real LUCY_AGENT_TOKEN; we never embed
+ * a real token or hash in the safe template.
+ */
+export const SAFE_MCP_TOKEN_PLACEHOLDER = "${LUCY_AGENT_TOKEN}";
+
+/**
+ * Format a lastSeen timestamp as a relative label (e.g. "10 分钟前").
+ * The full ISO/local timestamp is returned as `title` for hover tooltip
+ * and accessibility consumers that need the absolute time.
+ */
+export function formatLastSeen(lastSeen?: string | null): { label: string; title: string | undefined } {
+  if (!lastSeen) {
+    return { label: "未访问", title: undefined };
+  }
+  const date = new Date(lastSeen);
+  if (Number.isNaN(date.getTime())) {
+    return { label: "未访问", title: undefined };
+  }
+  const diffMs = Date.now() - date.getTime();
+  const future = diffMs < 0;
+  const absMs = Math.abs(diffMs);
+  const sec = Math.floor(absMs / 1000);
+  const min = Math.floor(sec / 60);
+  const hr = Math.floor(min / 60);
+  const day = Math.floor(hr / 24);
+
+  let label: string;
+  if (sec < 45) label = future ? "即将" : "刚刚";
+  else if (min < 60) label = `${min} 分钟前`;
+  else if (hr < 24) label = `${hr} 小时前`;
+  else if (day < 30) label = `${day} 天前`;
+  else label = date.toLocaleDateString("zh-CN");
+
+  if (future && min >= 1) label = `${min} 分钟后`;
+
+  return {
+    label,
+    title: date.toLocaleString("zh-CN")
+  };
+}
+
+/**
+ * Build a safe .mcp.json snippet for a given endpoint.
+ * The snippet uses ${LUCY_AGENT_TOKEN} as a placeholder and never
+ * embeds a real token or hash, so it can be safely shared.
+ */
+export function buildSafeMcpConfig(endpoint: string): string {
+  return buildMcpConfig(endpoint, SAFE_MCP_TOKEN_PLACEHOLDER);
+}
+
+async function copyAgentMcpConfig(endpoint: string | null): Promise<void> {
+  if (!endpoint) {
+    toast.error("Lucy MCP endpoint 不可用，无法复制 MCP 配置");
+    return;
+  }
+  const snippet = buildSafeMcpConfig(endpoint);
+  await navigator.clipboard.writeText(snippet);
+  toast.success("MCP 配置已复制");
+}
 
 function MetricCard({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return (
@@ -18,11 +84,30 @@ function MetricCard({ label, value, hint }: { label: string; value: string | num
   );
 }
 
-function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void }) {
+function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
+  const { label, title } = formatLastSeen(lastSeen);
+  if (!title) {
+    return <span className="text-fg-muted">{label}</span>;
+  }
+  return (
+    <span title={title} aria-label={`最近访问：${title}`}>
+      {label}
+    </span>
+  );
+}
+
+function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: string | null; onViewLogs: () => void }) {
   const sourceCount = agent.effectivePermissions?.sources.length ?? agent.allow?.tables?.length ?? 0;
   const toolCount = agent.effectivePermissions?.tools.length ?? agent.allow?.tools?.length ?? 0;
   const tokenCount = agent.tokens.length;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
+  const canCopyMcp = endpoint !== null;
+  const resourceScope = agent.effectivePermissions?.sources
+    ? `${agent.effectivePermissions.sources.length} 个源 / ${agent.effectivePermissions.connections.length} 个 connection`
+    : legacyWildcard
+      ? "legacy wildcard"
+      : `${sourceCount} 个源`;
+  const toolScope = agent.effectivePermissions?.tools?.join(", ") ?? (Array.isArray(agent.allow?.tools) ? agent.allow!.tools.join(", ") : "—");
 
   return (
     <div className="pl-card">
@@ -30,25 +115,124 @@ function AgentCard({ agent, onViewLogs }: { agent: Agent; onViewLogs: () => void
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="font-semibold">{agent.name}</span>
-            <span className="text-fg-muted text-sm">({agent.id})</span>
+            <span className="text-fg-muted text-sm notranslate" translate="no">({agent.id})</span>
             <span className={`pl-status-badge ${agent.enabled ? "pl-status-done" : "pl-status-not_started"}`}>
               {agent.enabled ? "启用" : "禁用"}
             </span>
           </div>
           <div className="text-sm text-fg-muted mt-1">
-            role: {agent.role ?? "旧 ACL"} · {tokenCount} 个 token · {legacyWildcard ? "legacy wildcard" : `${sourceCount} 个源`} · {toolCount} 个工具
+            role: <span className="notranslate" translate="no">{agent.role ?? "旧 ACL"}</span> · {tokenCount} 个 token · {legacyWildcard ? "legacy wildcard" : `${sourceCount} 个源`} · {toolCount} 个工具
+          </div>
+          <div className="text-sm text-fg-muted mt-0.5" data-testid={`agent-scope-resource-${agent.id}`}>
+            <span className="text-fg-default">Resource scope：</span>
+            <span className="notranslate" translate="no">{resourceScope}</span>
+          </div>
+          <div className="text-sm text-fg-muted mt-0.5" data-testid={`agent-scope-tool-${agent.id}`}>
+            <span className="text-fg-default">Tool scope：</span>
+            <span className="notranslate" translate="no">{toolScope}</span>
           </div>
           <div className="text-sm text-fg-muted mt-0.5">
-            {agent.stats?.lastSeen ? `最近访问 ${new Date(agent.stats.lastSeen).toLocaleString("zh-CN")} · ` : "最近访问 — · "}
+            最近访问 <LastSeen lastSeen={agent.stats?.lastSeen} /> ·{" "}
             近 7 天 {agent.stats?.callsLast7d ?? 0} 次调用 / {agent.stats?.deniedLast7d ?? 0} 次拒绝
           </div>
           {agent.note && <div className="text-sm text-fg-muted mt-0.5">{agent.note}</div>}
         </div>
-        <div className="flex gap-2 shrink-0">
-          <Link to={`/admin/agents/${agent.id}`} className="pl-btn pl-btn--ghost text-sm">编辑</Link>
-          <button type="button" onClick={onViewLogs} className="pl-btn pl-btn--ghost text-sm">查看日志</button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="flex gap-2">
+            <Link
+              to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
+              className="pl-btn pl-btn--ghost text-sm notranslate"
+              translate="no"
+              aria-label={`查看 ${agent.name} 的对象详情`}
+              data-testid={`agent-row-detail-${agent.id}`}
+            >
+              查看详情
+            </Link>
+            <Link to={`/admin/agents/${agent.id}`} className="pl-btn pl-btn--ghost text-sm">编辑</Link>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-sm notranslate"
+              translate="no"
+              onClick={() => {
+                void copyAgentMcpConfig(endpoint);
+              }}
+              aria-label={`复制 ${agent.name} 的 MCP 配置`}
+              disabled={!canCopyMcp}
+              title={canCopyMcp ? undefined : "Lucy MCP endpoint 不可用"}
+            >
+              📋 复制 <span className="notranslate" translate="no">MCP</span> 配置
+            </button>
+            <button type="button" onClick={onViewLogs} className="pl-btn pl-btn--ghost text-sm">查看日志</button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RoleSummaryCard({ role }: { role: Role | undefined }) {
+  if (!role) {
+    return (
+      <div className="rounded-md border border-border-default bg-bg-base p-3 text-xs text-fg-muted">
+        请选择一个角色查看权限预览
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`grid gap-2 rounded-md border p-3 text-sm ${
+        role.invalid ? "border-danger-strong bg-danger-soft" : "border-border-default bg-bg-base"
+      }`}
+      data-testid="role-summary-card"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">角色权限预览</span>
+        <span className="pl-status-badge pl-status-done">{role.id}</span>
+        {role.source && (
+          <span className="pl-status-badge pl-status-not_started">{role.source === "template" ? "template" : "yaml"}</span>
+        )}
+        {role.invalid && <span className="pl-status-badge pl-status-validation_failed">invalid</span>}
+      </div>
+      <div className="grid gap-1">
+        <span className="text-xs text-fg-muted">数据源</span>
+        <strong>{role.sourceCount} 个授权 source</strong>
+      </div>
+      <div className="grid gap-1">
+        <span className="text-xs text-fg-muted">Connections</span>
+        <div className="flex flex-wrap gap-1.5">
+          {role.connections.length === 0 ? (
+            <span className="text-xs text-fg-muted">—</span>
+          ) : (
+            role.connections.map((conn) => (
+              <span key={conn} className="pl-status-badge pl-status-included">
+                {conn}
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+      <div className="grid gap-1">
+        <span className="text-xs text-fg-muted"><span className="notranslate" translate="no">MCP</span> 工具</span>
+        <div className="flex flex-wrap gap-1.5">
+          {role.tools.length === 0 ? (
+            <span className="text-xs text-fg-muted">—</span>
+          ) : (
+            role.tools.map((tool) => (
+              <span key={tool} className="pl-status-badge pl-status-included">
+                {tool}
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+      {role.description && <p className="text-xs text-fg-muted">{role.description}</p>}
+      {role.warnings.length > 0 && (
+        <ul className="grid gap-1 text-xs text-warning-strong">
+          {role.warnings.map((w, idx) => (
+            <li key={idx}>⚠ {w}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -88,7 +272,15 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
     };
   }
 
+  const selectedRole = roles.find((item) => item.id === role);
+  const isInvalid = !!selectedRole?.invalid;
+  const canSubmit = !!id.trim() && !!name.trim() && !!role && !isInvalid;
+
   function handlePreview() {
+    if (!canSubmit) {
+      toast.error("请先填写用户 ID、显示名，并选择一个有效角色");
+      return;
+    }
     previewMutation.mutate({ dryRun: true, agent: buildAgent() });
   }
 
@@ -99,7 +291,7 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
   return (
     <div className="pl-modal-backdrop">
       <div className="pl-modal-panel">
-        <h2 className="text-lg font-semibold mb-4">新建 Agent</h2>
+        <h2 className="text-lg font-semibold mb-4">新建 <span className="notranslate" translate="no">Agent</span></h2>
         {step === "form" ? (
           <div className="grid gap-4">
             <label className="grid gap-1">
@@ -116,37 +308,47 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
               <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
             <label className="grid gap-1">
-              <span className="text-sm font-medium">角色 <span className="text-danger">*</span></span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">角色 <span className="text-danger">*</span></span>
+                <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                  管理角色 →
+                </Link>
+              </div>
               <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
+                {roles.length === 0 && <option value="" disabled>暂无可用角色</option>}
                 {roles.map((item) => (
                   <option key={item.id} value={item.id} disabled={item.invalid}>
                     {item.id}{item.source === "template" ? " (template)" : ""}{item.invalid ? " (invalid)" : ""}
                   </option>
                 ))}
               </select>
-              {role && (
-                <span className="text-xs text-fg-muted">
-                  {roles.find((item) => item.id === role)?.description ?? "角色"}
+              {roles.length === 0 && (
+                <span className="text-xs text-warning-strong">
+                  还没有可用角色。请先创建角色。
+                  <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
+                    创建角色
+                  </Link>
                 </span>
               )}
             </label>
+            <RoleSummaryCard role={selectedRole} />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={onClose}>取消</button>
-              <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={previewMutation.isPending}>
-                {previewMutation.isPending ? "生成中…" : "预览变更"}
+              <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={!canSubmit || previewMutation.isPending}>
+                {previewMutation.isPending ? "生成中…" : "下一步：预览配置"}
               </button>
             </div>
           </div>
         ) : (
           <div className="grid gap-4">
-            <p className="text-sm text-fg-muted">以下改动将写入 access.yaml：</p>
+            <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
             <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
               {preview?.diff}
             </pre>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setStep("form")}>返回编辑</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handleSave} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? "保存中…" : "确认保存"}
+                {saveMutation.isPending ? "保存中…" : "确认创建"}
               </button>
             </div>
           </div>
@@ -171,6 +373,12 @@ export function AgentList() {
     queryKey: ["admin", "roles"],
     queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
   });
+  const { data: projectData } = useQuery({
+    queryKey: queryKeys.project,
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
+  });
+  const mcpEndpointInfo = projectData?.mcpEndpoint;
+  const mcpEndpoint = mcpEndpointInfo?.url ?? null;
 
   const agents = data?.agents ?? [];
   const enabledCount = agents.filter((agent) => agent.enabled).length;
@@ -190,14 +398,24 @@ export function AgentList() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">Agent 实例</h1>
-          <p className="pl-page-intro">配置每个 Agent 实例能用哪些 MCP 工具和访问哪些表。</p>
-        </div>
-        <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
-      </div>
+      <PageHeader
+        title="Agent 实例"
+        description={
+          <>
+            配置每个 <span className="notranslate" translate="no">Agent</span> 实例能用哪些 <span className="notranslate" translate="no">MCP</span> 工具和访问哪些表。
+          </>
+        }
+        badges={
+          <>
+            <span>{agents.length} 个 Agent</span>
+            <span>{enabledCount} 已启用</span>
+            <span>{tokenCount} token</span>
+          </>
+        }
+        actions={
+          <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
+        }
+      />
 
       <div className="pl-metric-grid">
         <MetricCard label="Agent 数" value={agents.length} hint="access.yaml 中的实例" />
@@ -205,6 +423,14 @@ export function AgentList() {
         <MetricCard label="Token 数" value={tokenCount} hint="不含明文 token" />
         <MetricCard label="7d denied" value={deniedLast7d} hint="来自 Agent stats 汇总" />
       </div>
+
+      {mcpEndpointInfo?.status === "invalid" || projectData === undefined ? (
+        <div className={mcpEndpointInfo?.status === "invalid" ? "pl-error" : "pl-notice"} data-testid="mcp-endpoint-diagnostic">
+          {mcpEndpointInfo?.diagnostics.length
+            ? mcpEndpointInfo.diagnostics.map((d, i) => <div key={`${d.code}-${i}`}>{d.message}</div>)
+            : "Lucy MCP endpoint 正在加载；加载完成前无法复制 MCP 配置。"}
+        </div>
+      ) : null}
 
       <div className="pl-admin-filterbar">
         <input
@@ -228,8 +454,8 @@ export function AgentList() {
         <div className="pl-notice">
           {agents.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-fg-muted mb-4">还没有任何 Agent。创建第一个 Agent 以开始管理访问权限。</p>
-              <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建第一个 Agent</button>
+              <p className="text-fg-muted mb-4">还没有任何 <span className="notranslate" translate="no">Agent</span>。创建第一个 <span className="notranslate" translate="no">Agent</span> 以开始管理访问权限。</p>
+              <button type="button" className="pl-btn pl-btn--primary notranslate" translate="no" onClick={() => setShowNew(true)}>新建第一个 <span className="notranslate" translate="no">Agent</span></button>
             </div>
           ) : "没有匹配的 Agent"}
         </div>
@@ -239,6 +465,7 @@ export function AgentList() {
             <AgentCard
               key={agent.id}
               agent={agent}
+              endpoint={mcpEndpoint}
               onViewLogs={() => navigate(`/admin/audit?user=${agent.id}`)}
             />
           ))}
@@ -252,7 +479,7 @@ export function AgentList() {
           onCreated={(id) => {
             setShowNew(false);
             void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
-            navigate(`/admin/agents/${id}`);
+            navigate(`/admin/agents/${id}?tab=tokens`);
           }}
         />
       )}

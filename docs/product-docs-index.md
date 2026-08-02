@@ -4,13 +4,13 @@
 |---|---|
 | 文档名称 | Lucy Product Docs Index |
 | 文档类型 | Product Docs Index |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-06-22；2026-07-06；v0.3 更新 2026-07-06（补充产品定位事实源） |
+| 版本 | v0.5 |
+| 撰写日期 | 2026-06-22；2026-07-06 v0.3；2026-07-24 v0.4（新增 WebUI 模块设计规范索引）；2026-07-26 v0.5（新增 WebUI 部署/连接体验升级 spec） |
 | 适用范围 | 客户交付文档、管理员文档、用户文档、Agent 接入文档 |
 
 ## 1. Customer-Facing Guides
 
-The first customer delivery is headless. Customer-facing docs should start with Docker Compose, configuration files, Lucy MCP Proxy, Agent MCP client config, and smoke/eval evidence. WebUI docs below are repository/productization references, not the standard customer entry point.
+The customer delivery is headless. Customer-facing docs start with Docker Compose or the single-replica Helm path, customer configuration, Lucy MCP Proxy, Agent MCP client config, and smoke/eval evidence.
 
 Lucy 的正式产品定位是 **data agent context compiler + governed MCP runtime**。定位与目标事实源如下：
 
@@ -33,6 +33,9 @@ Lucy 的正式产品定位是 **data agent context compiler + governed MCP runti
 | Guide | Purpose |
 |---|---|
 | `docs/customer-deployment-guide.md` | End-to-end customer deployment, headless config package, operations |
+| `docs/customer-deployer-quickstart.md` | Minimal customer installer guide for Docker deployment, Doris validation, and future `customer-config` maintenance |
+| `docs/customer-k8s-deployer-quickstart.md` | Minimal Helm installer guide for single-replica K8s deployment, Doris validation, persistence, and rollback |
+| `docs/customer-ops-deployment-runbook.md` | Customer operations manager deployment, acceptance, monitoring, load-test evidence, rollback, and incident runbook |
 | `docs/deployment-docker.md` | Docker Compose details and `customer-config/` bind mount |
 | `docs/release-ci.md` | Release CI and KTX upgrade gates |
 | `docs/version-matrix.md` | Supported runtime and compatibility matrix |
@@ -47,7 +50,18 @@ Lucy 的正式产品定位是 **data agent context compiler + governed MCP runti
 | `webui/docs/06-navigation-ia.md` | Navigation and information architecture reference |
 | `webui/docs/07-mcp-auth-proxy-spec.md` | MCP auth proxy technical spec |
 
-## 4. Existing HTML Help Center
+## 4. WebUI Module Design Specs
+
+Builder-facing technical designs that gate codex M-tickets. Spec is the source of truth; the WebUI module guide derives from these.
+
+| Spec | Purpose |
+|---|---|
+| `docs/design-db-connection.md` | WebUI 连接管理模块（连接概览 / 表白名单 / 连通测试） |
+| `docs/design-schema-onboarding.md` | WebUI schema onboarding 模块（M6：给已有连接追加 schema，ADR-11） |
+| `docs/design-system-handbook-help.md` | WebUI 内置系统手册与 Help Center（M15：全局 `?`、`/help`、上下文帮助抽屉） |
+| `webui/docs/10-deployment-connection-ux-refresh.md` | WebUI 部署向导与数据库连接概览体验升级（交付闭环、指标语义、连接卡片、Add Schema 抽屉） |
+
+## 5. Existing HTML Help Center
 
 The existing HTML help center remains under:
 

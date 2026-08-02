@@ -76,6 +76,9 @@ describe("Audit", () => {
 
     renderAudit();
 
+    expect(await screen.findByRole("heading", { name: "访问日志" })).toBeInTheDocument();
+    // M40: 一级根页面不再渲染面包屑
+    expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(await screen.findByText("业务调用")).toBeInTheDocument();
     expect(screen.getByText("协议调用")).toBeInTheDocument();
     expect(screen.getByText("tool_denied")).toBeInTheDocument();
@@ -83,7 +86,14 @@ describe("Audit", () => {
 
     fireEvent.click(await screen.findByText("zhangsan"));
     expect(await screen.findByText("Args：")).toBeInTheDocument();
-    expect(screen.getByText("Token：")).toBeInTheDocument();
+    // M39 polish: the "Token" word is wrapped in a notranslate span for
+    // translation defense, which splits the text node. Use a custom
+    // matcher to assert the text content across the wrapping span.
+    expect(
+      screen.getByText((_content, element) => {
+        return element?.textContent?.trim() === "Token：";
+      })
+    ).toBeInTheDocument();
     expect(document.body).toHaveTextContent("hermes-laptop");
     expect(screen.getByText("角色：")).toBeInTheDocument();
     expect(document.body).toHaveTextContent("kx_readonly");

@@ -3,9 +3,25 @@ export const queryKeys = {
   sources: ["sources"] as const,
   source: (conn: string, schema: string, table: string) => ["sources", conn, schema, table] as const,
   diff: ["diff"] as const,
+  helpHandbook: ["help", "handbook"] as const,
   wiki: ["wiki"] as const,
   wikiPage: (key: string) => ["wiki", key] as const,
   joinCandidates: ["joins", "candidates"] as const,
   connections: ["connections"] as const,
-  connectionTables: (connId: string) => ["connections", connId, "tables"] as const
+  connectionTables: (connId: string) => ["connections", connId, "tables"] as const,
+  // M13 Ingest sidecar (`.ktx-ui/ingest-runs.json`) — kept for the deprecated
+  // `/api/connections/:connId/ingest` alias. New UI surfaces should not use it.
+  ingestRuns: ["connections", "ingest-runs"] as const,
+  // M14 static catalog reload sidecar (`.ktx-ui/catalog-reloads.json`).
+  catalogReloads: ["catalog", "reloads"] as const,
+  // M17 controlled YAML asset upload history (`.ktx-ui/catalog-asset-uploads.json`).
+  catalogAssetUploads: ["catalog", "asset-uploads"] as const,
+  // M19 self-service publish and sanitized export.
+  semanticAssetReleases: ["semantic-assets", "releases"] as const,
+  semanticAssetRelease: (releaseId: string) =>
+    ["semantic-assets", "releases", releaseId] as const,
+  // M36 Data Agent Ops Platform. The Onboarding page aggregates multiple
+  // existing endpoints; we keep a dedicated cache key so the dashboard
+  // sections can be invalidated independently from per-module queries.
+  opsDashboard: ["ops", "dashboard"] as const
 };

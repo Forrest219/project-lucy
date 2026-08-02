@@ -42,6 +42,60 @@ defaults:
     - sql_execution
 `;
 
+const ANALYST_ACCESS_YAML = `roles:
+  analyst:
+    description: Analyst role
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+      tools:
+        - sl_query
+        - wiki_search
+users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    role: analyst
+    tokens: []
+defaults:
+  deny_tools:
+    - sql_execution
+`;
+
+const IN_USE_ACCESS_YAML = `roles:
+  analyst:
+    description: Analyst role
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+      tools:
+        - sl_query
+users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    role: analyst
+    tokens: []
+  - id: lisi
+    name: 李四
+    enabled: true
+    role: analyst
+    tokens: []
+defaults:
+  deny_tools:
+    - sql_execution
+`;
+
 const CUSTOM_KX_ACCESS_YAML = `roles:
   kx_readonly:
     description: Custom yaml KX role
@@ -121,7 +175,7 @@ describe("GET /api/admin/roles", () => {
       invalid: false,
       sourceCount: 5
     });
-    expect(ROLE_TEMPLATES.lucy_r1_exact_readonly.allow.tools).toEqual(LUCY_R1_EXACT_TOOLS);
+    expect(ROLE_TEMPLATES.lucy_r1_exact_readonly.allow?.tools).toEqual(LUCY_R1_EXACT_TOOLS);
     expect(res.body.data.roles.every((role: { source: string; invalid: boolean }) => role.source === "template" && !role.invalid)).toBe(true);
     await app.close();
   });
@@ -141,6 +195,573 @@ describe("GET /api/admin/roles", () => {
       description: "Custom yaml KX role",
       sourceCount: 1
     });
+    await app.close();
+  });
+
+  it("includes usageCount and users list for yaml roles", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(IN_USE_ACCESS_YAML);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/roles").expect(200);
+    const analyst = res.body.data.roles.find((role: { id: string }) => role.id === "analyst");
+    expect(analyst).toMatchObject({
+      source: "yaml",
+      usageCount: 2
+    });
+    expect(analyst.users).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "zhangsan", name: "张三", enabled: true, tokenCount: 0 }),
+        expect.objectContaining({ id: "lisi", name: "李四", enabled: true, tokenCount: 0 })
+      ])
+    );
+    await app.close();
+  });
+
+  it("hides templates when includeTemplates=false", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/roles?includeTemplates=false").expect(200);
+    expect(res.body.data.roles).toEqual([]);
+    await app.close();
+  });
+});
+
+describe("GET /api/admin/roles/:roleId", () => {
+  it("returns yaml role detail with allow body and effective permissions", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(ANALYST_ACCESS_YAML);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/roles/analyst").expect(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data).toMatchObject({
+      id: "analyst",
+      source: "yaml",
+      description: "Analyst role",
+      usageCount: 1
+    });
+    expect(res.body.data.role.allow.tableSelectors).toEqual([
+      { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+    ]);
+    expect(res.body.data.effectivePermissions.sources).toHaveLength(1);
+    expect(res.body.data.effectivePermissions.tools).toEqual(expect.arrayContaining(["sl_query", "wiki_search"]));
+    await app.close();
+  });
+
+  it("returns template role detail when the id is a built-in template", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/roles/wiki_only").expect(200);
+    expect(res.body.data.source).toBe("template");
+    expect(res.body.data.role.allow.tools).toEqual(expect.arrayContaining(["wiki_search", "wiki_read"]));
+    expect(res.body.data.usageCount).toBe(0);
+    await app.close();
+  });
+
+  it("returns 404 ROLE_NOT_FOUND when the role does not exist", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/roles/does_not_exist").expect(404);
+    expect(res.body.error.code).toBe("ROLE_NOT_FOUND");
+    await app.close();
+  });
+});
+
+describe("POST /api/admin/roles/_preview", () => {
+  it("returns effective permissions without writing yaml", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles/_preview")
+      .send({
+        roleId: "preview_only",
+        role: {
+          description: "preview only",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.effectivePermissions.sources).toHaveLength(1);
+    expect(res.body.data.effectivePermissions.tools).toContain("lucy_query");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("preview_only");
+    await app.close();
+  });
+
+  it("rejects an invalid role with 400 INVALID_ROLE", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles/_preview")
+      .send({
+        roleId: "bad_role",
+        role: {
+          allow: {
+            connections: [],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_ROLE");
+    await app.close();
+  });
+});
+
+describe("POST /api/admin/roles", () => {
+  it("returns diff on dryRun and does not write file", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: true,
+        roleId: "new_role",
+        role: {
+          description: "New role",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.diff).toMatch(/\+.*new_role/);
+    expect(res.body.data.proposedYaml).toContain("new_role");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("new_role");
+    await app.close();
+  });
+
+  it("writes role on dryRun:false", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "new_role",
+        role: {
+          description: "New role",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    expect(res.body.data.role).toMatchObject({
+      id: "new_role",
+      source: "yaml",
+      description: "New role"
+    });
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("new_role");
+    expect(yaml).toContain("lucy_query");
+    await app.close();
+  });
+
+  it("rejects duplicate role id with 409 ROLE_ID_TAKEN", async () => {
+    const app = buildServer();
+    await app.ready();
+    await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "new_role",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    const dup = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "new_role",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(409);
+    expect(dup.body.error.code).toBe("ROLE_ID_TAKEN");
+    await app.close();
+  });
+
+  it("rejects role id that collides with a built-in template", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "wiki_only",
+        role: {
+          allow: { tools: ["wiki_search"] }
+        }
+      })
+      .expect(409);
+    expect(res.body.error.code).toBe("ROLE_ID_TAKEN");
+    await app.close();
+  });
+
+  it("rejects wildcard tools with 400 INVALID_ROLE", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "wildcard_role",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tools: ["*"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_ROLE");
+    await app.close();
+  });
+
+  it("rejects table-touching role with empty connections", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "no_conn_role",
+        role: {
+          allow: {
+            connections: [],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_ROLE");
+    await app.close();
+  });
+
+  it("rejects role with empty selector", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "no_source_role",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: [] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_ROLE");
+    await app.close();
+  });
+
+  it("rejects role whose selectors do not resolve to any source", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "ghost_role",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["ghost_table"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_ROLE");
+    await app.close();
+  });
+
+  it("rejects bad role id with 400", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "bad id with spaces",
+        role: {
+          allow: { tools: ["wiki_search"] }
+        }
+      })
+      .expect(400);
+    expect(["BAD_REQUEST", "INVALID_ROLE_ID"]).toContain(res.body.error.code);
+    await app.close();
+  });
+});
+
+describe("PATCH /api/admin/roles/:roleId", () => {
+  it("updates description and allow on dryRun:false", async () => {
+    const app = buildServer();
+    await app.ready();
+    const created = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "patch_target",
+        role: {
+          description: "Original",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    const version = created.body.data.version;
+    const res = await request(app.server)
+      .patch("/api/admin/roles/patch_target")
+      .send({
+        dryRun: false,
+        version,
+        patch: {
+          description: "Patched",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_returns"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("Patched");
+    expect(yaml).toContain("superstore_returns");
+    expect(yaml).not.toContain("superstore_orders");
+    await app.close();
+  });
+
+  it("returns 400 TEMPLATE_ROLE_READONLY when patching a template", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .patch("/api/admin/roles/wiki_only")
+      .send({ dryRun: false, patch: { description: "no" } })
+      .expect(400);
+    expect(res.body.error.code).toBe("TEMPLATE_ROLE_READONLY");
+    await app.close();
+  });
+
+  it("returns 409 VERSION_CONFLICT on stale version", async () => {
+    const app = buildServer();
+    await app.ready();
+    await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "stale_role",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    const res = await request(app.server)
+      .patch("/api/admin/roles/stale_role")
+      .send({ dryRun: false, version: "0000000000000-stale", patch: { description: "x" } })
+      .expect(409);
+    expect(res.body.error.code).toBe("VERSION_CONFLICT");
+    await app.close();
+  });
+
+  it("allows editing a yaml role that shadows a built-in template id", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(CUSTOM_KX_ACCESS_YAML);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const detail = await request(app.server).get("/api/admin/roles/kx_readonly").expect(200);
+    expect(detail.body.data.source).toBe("yaml");
+
+    const res = await request(app.server)
+      .patch("/api/admin/roles/kx_readonly")
+      .send({
+        dryRun: false,
+        version: detail.body.data.version,
+        patch: {
+          description: "Patched yaml override",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_returns"] }
+            ],
+            tools: ["sl_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("Patched yaml override");
+    expect(yaml).toContain("superstore_returns");
+    await app.close();
+  });
+});
+
+describe("DELETE /api/admin/roles/:roleId", () => {
+  it("blocks delete of in-use role with 409 ROLE_IN_USE", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(IN_USE_ACCESS_YAML);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).delete("/api/admin/roles/analyst").expect(409);
+    expect(res.body.error.code).toBe("ROLE_IN_USE");
+    expect(res.body.error.detail).toBeDefined();
+    expect(res.body.error.detail.users).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "zhangsan" }),
+        expect.objectContaining({ id: "lisi" })
+      ])
+    );
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("analyst");
+    await app.close();
+  });
+
+  it("removes an unused yaml role", async () => {
+    const app = buildServer();
+    await app.ready();
+    await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "delete_me",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(200);
+    const res = await request(app.server)
+      .delete("/api/admin/roles/delete_me")
+      .send({ dryRun: false })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("delete_me");
+    await app.close();
+  });
+
+  it("returns 400 TEMPLATE_ROLE_READONLY when deleting a template", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).delete("/api/admin/roles/wiki_only").expect(400);
+    expect(res.body.error.code).toBe("TEMPLATE_ROLE_READONLY");
+    await app.close();
+  });
+});
+
+describe("POST /api/admin/roles/:roleId/copy", () => {
+  it("expands a template into a normal yaml role without template pointer fields", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles/wiki_only/copy")
+      .send({ dryRun: false, newRoleId: "wiki_clone" })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    expect(res.body.data.role.id).toBe("wiki_clone");
+    expect(res.body.data.role.source).toBe("yaml");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("wiki_clone:");
+    expect(yaml).toContain("wiki_search");
+    expect(yaml).not.toMatch(/role-template|templateId|templateRef|_template/);
+    await app.close();
+  });
+
+  it("rejects copy onto an existing role id", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles/wiki_only/copy")
+      .send({ dryRun: false, newRoleId: "wiki_only" })
+      .expect(409);
+    expect(res.body.error.code).toBe("ROLE_ID_TAKEN");
+    await app.close();
+  });
+
+  it("returns 404 for unknown source role", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles/missing_template/copy")
+      .send({ dryRun: false, newRoleId: "anything" })
+      .expect(404);
+    expect(res.body.error.code).toBe("ROLE_NOT_FOUND");
     await app.close();
   });
 });

@@ -37,6 +37,11 @@ export type ConnectionTestResult = {
   latencyMs?: number;
   detail?: string;
   reason?: string;
+  command: string;
+  args: string[];
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
 };
 
 export type IngestResult = {
@@ -51,24 +56,45 @@ export async function testConnection(
   execFileImpl: ExecFileImpl = execFile
 ): Promise<ConnectionTestResult> {
   const start = Date.now();
+  const args = ["connection", "test", connId];
+  const command = `ktx ${args.join(" ")}`;
   return new Promise((resolve, reject) => {
     execFileImpl(
       "ktx",
-      ["connection", "test", connId],
+      args,
       { cwd: projectRoot, timeout: 30_000, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
       (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
         const latencyMs = Date.now() - start;
         const out = stdout.toString();
         const err = stderr.toString();
         if (!error) {
-          resolve({ status: "ok", latencyMs, detail: out.trim() || undefined });
+          resolve({
+            status: "ok",
+            latencyMs,
+            detail: out.trim() || undefined,
+            command,
+            args,
+            exitCode: 0,
+            stdout: out,
+            stderr: err
+          });
           return;
         }
         if (error.code === "ENOENT") {
           reject(new KtxCliError("ktx CLI was not found in PATH"));
           return;
         }
-        resolve({ status: "error", latencyMs, reason: (err || out).trim() || "Connection failed" });
+        const exitCode = typeof error.code === "number" ? error.code : 1;
+        resolve({
+          status: "error",
+          latencyMs,
+          reason: (err || out).trim() || "Connection failed",
+          command,
+          args,
+          exitCode,
+          stdout: out,
+          stderr: err
+        });
       }
     );
   });
@@ -131,6 +157,38 @@ export async function validateSource(
           stderr: err,
           issues: issuesFromOutput(out, err)
         });
+      }
+    );
+  });
+}
+
+// M19: reindexProject shells out to `ktx admin reindex` for the M19 async
+// post-publish step. WebUI must NEVER call this without first promoting
+// validated YAML to the formal PVC. The MVP uses incremental reindex; pass
+// `force: true` only when the API explicitly demands a full rebuild.
+export async function reindexProject(
+  projectRoot: string,
+  options: { force?: boolean; execFileImpl?: ExecFileImpl } = {}
+): Promise<IngestResult> {
+  const execFileImpl = options.execFileImpl ?? execFile;
+  const args = ["admin", "reindex"];
+  if (options.force) {
+    args.push("--force");
+  }
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      "ktx",
+      args,
+      { cwd: projectRoot, timeout: 180_000, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
+      (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
+        const out = stdout.toString();
+        const err = stderr.toString();
+        if (error?.code === "ENOENT") {
+          reject(new KtxCliError("ktx CLI was not found in PATH"));
+          return;
+        }
+        const exitCode = !error ? 0 : (typeof error.code === "number" ? error.code : 1);
+        resolve({ exitCode, stdout: out, stderr: err });
       }
     );
   });

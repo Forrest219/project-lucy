@@ -62,7 +62,7 @@ git -C /Users/forrest/Projects/project-lucy status --short   # 记录开工前�
 
 ## 4. 串行交付节奏
 
-M0 → M1 → M2 → M3 →（M4、M5 可并行）。**每个里程碑结束后停下来交回**给用户/协调者确认，再领下一张工单。不要一口气从 M0 冲到 M5。
+M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完成的 fs-safe `ALLOW_FILES` 通道与 ktx CLI 封装。**每个里程碑结束后停下来交回**给用户/协调者确认，再领下一张工单。不要一口气从 M0 冲到 M6。
 
 ## 5. 工单清单
 
@@ -74,6 +74,28 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）。**每个里程碑结束后�
 | [wo-M3-save-validate.md](wo-M3-save-validate.md) | M3 | 落盘写回 + ktx validate + Review 页 |
 | [wo-M4-measures-segments-joins.md](wo-M4-measures-segments-joins.md) | M4 | measures/segments/joins + sidecar |
 | [wo-M5-wiki.md](wo-M5-wiki.md) | M5 | Wiki 编辑器 |
+| [wo-M6-schema-onboarding.md](wo-M6-schema-onboarding.md) | M6 | Schema Onboarding（给已有连接加 schema） |
+| [wo-M7-deployment-connection-ux-refresh.md](wo-M7-deployment-connection-ux-refresh.md) | M7 | 部署向导与连接概览体验升级 |
+| [wo-M11-agent-admin-enterprise-delivery.md](wo-M11-agent-admin-enterprise-delivery.md) | M11 | Agent Admin 企业级交付体验升级 |
+| [wo-M12-role-admin.md](wo-M12-role-admin.md) | M12 | Role Admin 角色配置管理 |
+| [wo-M13-ingest-first-class-ux.md](wo-M13-ingest-first-class-ux.md) | M13 | Ingest 一等功能化：连接/Schema/白名单入口与诊断闭环 |
+| [wo-M16-system-overview-runtime-monitoring.md](wo-M16-system-overview-runtime-monitoring.md) | M16 | 系统概览运行状态监控：`/onboarding` 去向导化 |
+| [wo-M19-semantic-asset-publish-export.md](wo-M19-semantic-asset-publish-export.md) | M19 | 语义资产自助发布与安全导出：上传 manifest/overlay、Validate Gate、reindex、secrets hard block |
+| [wo-M20-yaml-delivery-runbook.md](wo-M20-yaml-delivery-runbook.md) | M20 | YAML 交付规范进入 Help Center：用途、规则、常见错误、交付 checklist 与 Agent 自检协议 |
+| [wo-M21-connection-module-terminology-ia-refresh.md](wo-M21-connection-module-terminology-ia-refresh.md) | M21 | 数据库接入模块术语与 IA 刷新：Connection 中心化、Schema / Manifest / Catalog 术语治理 |
+| [wo-M22-database-connection-operations-runbook.md](wo-M22-database-connection-operations-runbook.md) | M22 | 数据库连接运维 Runbook：通用新增连接边界、配置、ACL 与验收 |
+| [wo-M24-catalog-reload-result-ops-ux.md](wo-M24-catalog-reload-result-ops-ux.md) | M24 | 本地目录刷新结果运维体验：卡片内状态栏、Schema 资产列表优先、inline 缺失 Manifest 诊断 |
+| [wo-M25-connection-semantic-boundary-automation.md](wo-M25-connection-semantic-boundary-automation.md) | M25 | 数据库接入与语义层维护边界自动化：asset kind、上传校验、IA lint 与 Review checklist |
+| [wo-M26-help-markdown-rendering.md](wo-M26-help-markdown-rendering.md) | M26 | Help Center Markdown 渲染修复：系统手册表格、安全渲染、深链与回归测试 |
+| [wo-M31-table-whitelist-catalog-reload-layout-stability.md](wo-M31-table-whitelist-catalog-reload-layout-stability.md) | M31 | 表白名单刷新反馈与布局稳定性：Toast 成功反馈、Schema 内缺失 Manifest 诊断、工具栏和行内操作降噪 |
+| [wo-M37-lucy-webui-positioning-control-plane.md](wo-M37-lucy-webui-positioning-control-plane.md) | M37 | Lucy WebUI 品牌定位升级到 Data Agent Ops Control Plane：品牌区副标题、术语标准 v0.2、过期设计 spec 备注与测试断言 |
+| [wo-M39-system-overview-enterprise-ops-polish.md](wo-M39-system-overview-enterprise-ops-polish.md) | M39 | 系统概览企业级运维控制台 polish：`/overview` 主入口、顶栏上下文、待处理事项治理、Metric-first 快照与 MCP 配置 Drawer |
+| [wo-M42-business-wiki-workbench-productization.md](wo-M42-business-wiki-workbench-productization.md) | M42 | 业务 Wiki 工作台产品化改版：顶栏收敛、语义实体降噪、专注编辑、Markdown 工具栏与模板选择 |
+| [wo-M43-eval-yaml-exchange-and-result-archive.md](wo-M43-eval-yaml-exchange-and-result-archive.md) | M43 | 质量评测 Eval YAML 上传 / 下载、本地运行指引与可选结果归档 |
+| [wo-M44-connection-overview-visual-simplification.md](wo-M44-connection-overview-visual-simplification.md) | M44 | 连接概览视觉收敛修复：移除工作目录、去双层方框、刷新状态右移、Schema 表新增启用表数与术语降噪 |
+| [wo-M45-table-whitelist-productization-followup.md](wo-M45-table-whitelist-productization-followup.md) | M45 | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 |
+| [wo-M46-catalog-and-table-semantic-workbench-productization.md](wo-M46-catalog-and-table-semantic-workbench-productization.md) | M46 | 表目录与表语义资产工作台产品化：`/catalog`、Connection 筛选、单表导出 / 导入 YAML 主路径与变更摘要 |
+| [wo-M47-business-wiki-md-library-operations.md](wo-M47-business-wiki-md-library-operations.md) | M47 | 业务 Wiki Markdown 文档库化：默认首页、目录瘦身、下载 / 上传 Markdown、上传覆盖与在线编辑降级 |
 
 ## 6. 如何把工单喂给 codex
 

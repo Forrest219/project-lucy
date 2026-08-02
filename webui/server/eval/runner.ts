@@ -733,6 +733,7 @@ export function registerRunnerRoutes(app: FastifyInstance) {
 }
 
 function rowToRun(row: EvalRunRow) {
+  const runnerMetadata = parseJsonText(row.runner_metadata_raw);
   return {
     id: row.id,
     domain: row.domain,
@@ -747,6 +748,11 @@ function rowToRun(row: EvalRunRow) {
     totalCases: row.total_cases,
     passCount: row.pass_count,
     failCount: row.fail_count,
-    passRate: row.total_cases > 0 ? row.pass_count / row.total_cases : undefined
+    passRate: row.total_cases > 0 ? row.pass_count / row.total_cases : undefined,
+    suiteId: row.suite_id ?? undefined,
+    suiteHash: row.suite_hash ?? undefined,
+    runnerMetadata,
+    importSource: row.import_source ?? undefined,
+    hashStatus: row.hash_status ?? undefined
   };
 }

@@ -30,10 +30,14 @@ GET  /api/sources
 GET  /api/sources/:conn/:schema/:table
 PUT  /api/sources/:conn/:schema/:table         # body.dryRun 控制预览/落盘
 POST /api/sources/:conn/:schema/:table/validate
+POST /api/sources/:conn/:schema/:table/import
 
 GET  /api/wiki
 GET  /api/wiki/:key
+GET  /api/wiki/:key/raw
 PUT  /api/wiki/:key
+POST /api/wiki/upload/preview
+POST /api/wiki/upload/commit
 
 GET  /api/diff
 POST /api/validate-changed
@@ -44,8 +48,16 @@ PUT  /api/joins/candidates
 GET  /api/connections
 GET  /api/connections/:connId/tables
 PUT  /api/connections/:connId/enabled-tables     # default dryRun
+POST /api/connections/:connId/schemas            # add schema metadata to existing connection
 POST /api/connections/:connId/test
 POST /api/connections/:connId/ingest
+GET  /api/connections/ingest-runs
+
+POST /api/catalog/reload
+GET  /api/catalog/reloads
+POST /api/catalog/assets/validate
+POST /api/catalog/assets/upload
+GET  /api/catalog/assets/uploads
 
 GET    /api/eval/domains
 GET    /api/eval/domains/:domain
@@ -54,6 +66,9 @@ GET    /api/eval/cases/:domain/:caseId
 POST   /api/eval/cases/:domain
 PUT    /api/eval/cases/:domain/:caseId
 DELETE /api/eval/cases/:domain/:caseId
+POST   /api/eval/suites/import
+GET    /api/eval/suites/:domain/download
+POST   /api/eval/results/import
 POST   /api/eval/runs
 GET    /api/eval/runs
 GET    /api/eval/runs/:runId
@@ -71,6 +86,15 @@ GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
 
 GET    /api/r1/observability
+GET    /api/help/handbook
+
+POST   /api/semantic-assets/validate
+POST   /api/semantic-assets/publish
+GET    /api/semantic-assets/releases
+GET    /api/semantic-assets/releases/:id/status
+POST   /api/semantic-assets/export
+GET    /api/semantic-assets/exports/:exportId/download
+POST   /api/semantic-assets/reindex
 
 GET    /api/admin/agents
 POST   /api/admin/agents
@@ -81,6 +105,9 @@ GET    /api/admin/agents/:userId/effective-permissions
 POST   /api/admin/agents/:userId/tokens
 DELETE /api/admin/agents/:userId/tokens/:label
 GET    /api/admin/roles
+GET    /api/admin/roles/:roleId
+POST   /api/admin/roles/_preview
+POST   /api/admin/roles/:roleId/copy
 GET    /api/admin/config-audit
 GET    /api/admin/config-audit/export.csv
 GET    /api/admin/audit
@@ -98,14 +125,38 @@ POST /mcp                                      # MCP proxy, port 7879
 ## 3. 端点细节
 
 ### `GET /api/project`
-返回项目根、连接列表（**剥离 password 值**）、schema 列表。
+返回项目根、连接列表（**剥离 password 值**）、schema 列表，以及 public MCP endpoint runtime 配置。
 ```jsonc
 { "ok": true, "data": {
   "root": "/Users/forrest/Projects/project-lucy",
   "connections": [{ "id": "mysql-aliyun", "driver": "mysql", "passwordSource": "file", "schemas": ["dataforai"] }],
-  "ktxAvailable": true
+  "ktxAvailable": true,
+  "mcpEndpoint": {
+    "url": "https://lucy.example.com/mcp",
+    "status": "configured",
+    "source": "env",
+    "configured": true,
+    "diagnostics": []
+  }
 }}
 ```
+
+`mcpEndpoint` 字段是 M18 起所有 WebUI 页面渲染和复制 MCP 配置片段的唯一事实源。前端禁止从 `window.location`、`Host` header 或其他浏览器信号推断 endpoint。
+
+| `status` | 含义 | `url` | UI 表现 |
+|---|---|---|---|
+| `configured` | `LUCY_PUBLIC_MCP_URL` 存在且合法（http/https，可解析） | 配置值 | 正常展示，允许复制 endpoint 与 MCP config；可选带 `MCP_PATH_RECOMMENDED` diagnostic（pathname 不以 `/mcp` 结尾） |
+| `fallback` | 未设置 `LUCY_PUBLIC_MCP_URL` | `http://127.0.0.1:7879/mcp`（本地开发默认） | 展示本地默认，附带 `MISSING_PUBLIC_MCP_URL` diagnostic；onboarding 与 token 页面提示客户部署需要配置 `LUCY_PUBLIC_MCP_URL` |
+| `invalid` | `LUCY_PUBLIC_MCP_URL` 存在但非法（非绝对 URL / 非 http/https） | `null` | 不生成可复制 MCP config；展示 diagnostic 提示修复 runtime 配置 |
+
+`diagnostics` 是诊断数组，元素结构为 `{ code, message }`。常见 code：
+
+- `MISSING_PUBLIC_MCP_URL`
+- `INVALID_PUBLIC_MCP_URL`
+- `UNSUPPORTED_PUBLIC_MCP_PROTOCOL`
+- `MCP_PATH_RECOMMENDED`（仅 informational，status 仍为 `configured`）
+
+后端不会从 `Host` / `X-Forwarded-*` 推断 endpoint；只读取环境变量 `LUCY_PUBLIC_MCP_URL`，未设置时使用 `http://127.0.0.1:7879/mcp` 作为本地开发 fallback。`LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 控制的是 MCP proxy 的内部监听地址，与 `LUCY_PUBLIC_MCP_URL` 是不同的两个变量。
 
 ### `GET /api/sources`
 扫描全部 `_schema/*.yaml`，返回逐表目录摘要（供 Catalog）。
@@ -115,9 +166,17 @@ POST /mcp                                      # MCP proxy, port 7879
   "filePath": "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
   "columnCount": 8, "hasTableDesc": true, "hasGrain": false,
   "measureCount": 0, "joinCount": 2, "wikiRefCount": 0,
-  "completion": "partial", "mtime": "2026-06-15T08:00:00Z"
+  "completion": "partial", "mtime": "2026-06-15T08:00:00Z",
+  "authorizedAgentCount": 3,
+  "semanticUpdatedAt": "2026-07-01T10:30:00Z",
+  "semanticUpdatedAtSource": "overlay"
 }]}}
 ```
+
+- `mtime`：该表所在 Schema Manifest 文件的文件修改时间，保留兼容；不要在 UI 中直接命名为“最近更新”。
+- `authorizedAgentCount`：启用 Agent 中，有效权限包含当前 Source 的 Agent 数量。禁用 Agent 不计入，只返回数量。
+- `semanticUpdatedAt`：该表语义资产更新时间，取 Schema Manifest 与表级 semantic overlay 文件修改时间中的较晚者；overlay 不存在时取 Schema Manifest。
+- `semanticUpdatedAtSource`：`semanticUpdatedAt` 的来源，取值为 `manifest` 或 `overlay`。
 
 ### `GET /api/sources/:conn/:schema/:table`
 ```jsonc
@@ -138,6 +197,26 @@ POST /mcp                                      # MCP proxy, port 7879
 
 非法路径 → `403 FORBIDDEN_PATH`；YAML 解析失败 → `422 YAML_PARSE_ERROR`。
 
+### `POST /api/sources/:conn/:schema/:table/import`
+导入当前表的 YAML 片段，供表语义资产工作台的 `导入 YAML -> dry-run -> 保存` 主链路使用。
+
+请求：
+```jsonc
+{ "yaml": "table: dataforai.superstore_orders\n...", "dryRun": true }
+```
+
+- `yaml` 可以是单表 YAML 片段，也可以是包含 `tables.<table>` 的 Schema YAML。
+- `dryRun:true`（默认）→ 不落盘，返回 `{ diff, proposedYaml, files }`；
+- `dryRun:false` → 只替换当前 `{conn}/{schema}/{table}` 对应的 Schema Manifest 节点，经 `fs-safe` 写回并自动 validate，返回 `{ written:true, validation, changedFiles }`。
+
+约束：
+
+- 该接口只处理当前表在 Schema Manifest 中的节点；不导入、不覆盖其他表。
+- `grain` / `measures` / `segments` 等表级 semantic overlay 完整导入仍走后续专用契约；当前接口不得猜测 overlay 归属。
+- 空 YAML → `400 INVALID_IMPORT_YAML`。
+- 导入 YAML 不包含当前表 → `404 SOURCE_NOT_FOUND`。
+- YAML 解析失败 → `422 YAML_PARSE_ERROR`。
+
 ### `POST /api/sources/:conn/:schema/:table/validate`
 ```jsonc
 { "ok": true, "data": { "ok": true, "exitCode": 0, "stdout": "...", "issues": [] } }
@@ -152,6 +231,24 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 - `key` 为相对 `wiki/` 的路径（如 `global/revenue.md`），服务端经 `fs-safe` 校验。
 - frontmatter 字段：`summary` `tags` `sl_refs` `refs` `usage_mode` + 正文 markdown。
 - `PUT` 同样支持 `dryRun` 预览 diff。
+
+`GET /api/wiki/:key/raw` 以 `text/markdown; charset=utf-8` 返回原始 Markdown，并带 `Content-Disposition` 下载文件名，供业务 Wiki 编辑器下载当前页面。
+
+`POST /api/wiki/upload/preview` 预览 Markdown 上传，不落盘；`POST /api/wiki/upload/commit` 在预览通过后写入目标 Wiki 页面并登记本次写入记录。
+
+请求：
+
+```jsonc
+{ "key": "global/revenue.md", "markdown": "# Revenue", "mode": "create" }
+```
+
+响应：
+
+```jsonc
+{ "ok": true, "data": { "key": "global/revenue.md", "filePath": "wiki/global/revenue.md", "diff": "...", "frontmatter": {}, "content": "# Revenue" }}
+```
+
+错误码：`BAD_REQUEST` `FORBIDDEN_PATH` `WIKI_NOT_FOUND`。
 
 ### `GET /api/diff`
 返回白名单目录（`semantic-layer/`、`wiki/`、`.ktx-ui/`）下的 `git diff`（name-status + 可选 patch）。非 git 仓库时回退会话写入记录。
@@ -203,11 +300,65 @@ dryRun 响应：
 
 `POST /api/connections/:connId/test` 调用连接测试；`POST /api/connections/:connId/ingest` 触发 schema 扫描。两者返回 `{ exitCode, stdout, stderr }` 风格结果。
 
+`POST /api/connections/:connId/schemas` 只在已有 connection 下登记 schema 元数据，默认 `dryRun:true`，写入目标是 `ktx.yaml`，不创建物理数据库连接、不触发扫描、不写语义层 overlay。
+
+`GET /api/connections/ingest-runs` 返回历史 ingest / catalog reload 记录 sidecar，用于兼容旧入口与运维状态面板。
+
+### Catalog Reload 与 Manifest 上传
+
+`POST /api/catalog/reload` 触发静态目录重载，生成 catalog reload 运行记录；`GET /api/catalog/reloads` 返回最近重载历史。
+
+`POST /api/catalog/assets/validate` 校验待上传 Schema Manifest。请求使用规范字段 `assetKind: "schema_manifest"`；兼容旧客户端 `assetType: "schemaManifest"`。其他 asset kind 必须走对应语义资产入口，不能混用。
+
+`POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。
+
+`GET /api/catalog/assets/uploads` 返回 Schema Manifest 上传审计记录。
+
+### 语义资产发布与导出
+
+`POST /api/semantic-assets/validate` 校验语义资产包或 semantic overlay，执行 secret hard block、结构校验和发布前 gate。
+
+`POST /api/semantic-assets/publish` 发布通过校验的语义资产，写入 release 记录；`GET /api/semantic-assets/releases` 查询 release 列表；`GET /api/semantic-assets/releases/:id/status` 查询单个 release 状态。
+
+`POST /api/semantic-assets/export` 生成语义资产导出任务；`GET /api/semantic-assets/exports/:exportId/download` 下载指定导出产物。
+
+`POST /api/semantic-assets/reindex` 手动触发 semantic-layer 索引重建，并把结果写入发布历史，供发布工作台和历史页展示。
+
+请求：
+
+```jsonc
+{ "force": false }
+```
+
+响应：
+
+```jsonc
+{ "ok": true, "data": { "force": false, "reindex": { "ok": true, "exitCode": 0, "stdout": "...", "stderr": "" }, "release": { "id": "manual-reindex-..." } }}
+```
+
+若 `.ktx-ui/semantic-publish.lock` 存在，返回 `409 REINDEX_IN_PROGRESS`。
+
 ### Eval / 质量评测
 
 `GET /api/eval/domains` 返回 domain 列表与最近运行摘要；`GET /api/eval/domains/:domain` 返回单个 domain。
 
 `GET /api/eval/cases/:domain` / `GET /api/eval/cases/:domain/:caseId` 读取 eval case。`POST /api/eval/cases/:domain` 新增 case；`PUT /api/eval/cases/:domain/:caseId` 更新 case，默认 dryRun；`DELETE` 删除 case。
+
+`POST /api/eval/suites/import` 导入 Eval Suite YAML，默认 `dryRun:true`；`GET /api/eval/suites/:domain/download` 以 YAML 附件下载当前 domain 的 canonical suite，并在响应头返回 suite id/hash 与 runner command；`POST /api/eval/results/import` 导入离线 Result JSON，默认 `dryRun:true`，可选归档本地变体。
+
+Suite 导入请求：
+
+```jsonc
+{ "filename": "kx_financial-eval-suite.yaml", "content": "metadata:\n  domain: kx_financial\n", "dryRun": true }
+```
+
+Result 导入请求：
+
+```jsonc
+{ "content": "{ \"run_id\": \"...\" }", "dryRun": true, "archiveLocalVariant": false }
+```
+
+常见错误码：`VALIDATION_FAILED` `RESULT_VALIDATION_FAILED` `BAD_REQUEST`。
 
 `POST /api/eval/runs` 创建运行：
 
@@ -316,6 +467,10 @@ Monitor：
 
 用途：回答 R1 runbook 中的核心问题：业务请求量、成功/错误/拒绝率、p50/p95、慢查询、source 失败分布、token/role 使用、Eval pass rate、Hermes QA accuracy，以及 Hermes 逐题结果是否具备 Lucy `_meta.lucy` provenance 或 policy/guardrail 受控拒绝证据。`trafficObservable` 只代表 `businessCalls > 0`，不把 MCP 握手或 `tools/list` 单独算作业务流量；`evalObservable` 代表最新 `r1_*` eval 已成功且 `passRate >= 0.95`，不只是存在 eval run。
 
+### Help
+
+`GET /api/help/handbook` 返回系统手册内容和元数据，供 WebUI 帮助入口展示。该端点只读，不暴露 secret 文件。
+
 ### Admin / 访问治理
 
 Agent 列表与详情：
@@ -357,6 +512,9 @@ Token：
 Roles：
 
 - `GET /api/admin/roles?includeTemplates=true` 返回 yaml role 与内置模板合并后的列表、工具、连接、展开 source 数与 warnings；返回项含 `source: "yaml" | "template"`，id 冲突时 yaml role 优先。`includeTemplates=false` 时只返回 yaml role。
+- `GET /api/admin/roles/:roleId` 返回单个 role 详情。
+- `POST /api/admin/roles/_preview` dryRun 预览 role 写入结果和权限展开。
+- `POST /api/admin/roles/:roleId/copy` 基于已有 role 复制新 role，默认 dryRun。
 - `GET /api/admin/agents/:userId/effective-permissions` 返回 role 展开后的 `tools`、`connections`、`sources`、`snapshotHash`、`sourceMapVersion`。
 
 Audit：

@@ -1,0 +1,7 @@
+# E2E fixture: dataforai schema manifest
+# 关联：E2E-CON-* / E2E-SEM-* / E2E-WHL-*
+
+schema: dataforai
+tables:
+  - name: superstore_orders
+    comment: 订单主表

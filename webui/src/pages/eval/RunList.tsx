@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type { EvalCase, EvalRun, EvalDomainInfo } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type RunsResponse = { total: number; runs: EvalRun[] };
@@ -94,27 +96,30 @@ export function RunList() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">运行历史</h1>
-          <p className="text-sm text-fg-muted mt-1">查看 eval run 历史，触发新 run，查看结果详情。</p>
-        </div>
-        <button
-          type="button"
-          className="pl-btn pl-btn--primary text-sm"
-          onClick={() => {
-            setTriggerForm((p) => ({ ...p, domain: domains[0]?.domain ?? "", selectedCaseId: "" }));
-            setShowTrigger(true);
-          }}
-        >
-          触发新 Run
-        </button>
-      </div>
+      <PageHeader
+        title="运行历史"
+        description="查看评测运行历史；服务器运行作为高级入口保留。"
+        badges={
+          <span>{runs.length} / {runsData?.total ?? 0} 条</span>
+        }
+        actions={
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost text-sm"
+            onClick={() => {
+              setTriggerForm((p) => ({ ...p, domain: domains[0]?.domain ?? "", selectedCaseId: "" }));
+              setShowTrigger(true);
+            }}
+          >
+            服务器运行
+          </button>
+        }
+      />
 
       {/* Trigger dialog */}
       {showTrigger && (
         <div className="border border-border rounded p-5 grid gap-4 max-w-lg bg-bg-muted/30">
-          <h2 className="font-medium">触发一次 Eval Run</h2>
+          <h2 className="font-medium">触发一次 <span className="notranslate" translate="no">Eval Run</span></h2>
           <div className="grid gap-1">
             <label className="text-sm font-medium">Domain <span className="text-red-500">*</span></label>
             <select
@@ -154,7 +159,7 @@ export function RunList() {
             </div>
           )}
           <div className="grid gap-1">
-            <label className="text-sm font-medium">KTX MCP URL</label>
+            <label className="text-sm font-medium"><span className="notranslate" translate="no">KTX MCP</span> URL</label>
             <input
               className="pl-input"
               value={triggerForm.ktxMcpUrl}
@@ -219,7 +224,21 @@ export function RunList() {
                   className="border-b border-border hover:bg-bg-muted/50 cursor-pointer"
                   onClick={() => navigate(`/eval/runs/${run.id}`)}
                 >
-                  <td className="px-3 py-2 font-mono text-xs">#{run.id}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    <div className="flex items-center gap-2">
+                      <span>#{run.id}</span>
+                      <a
+                        href={buildObjectDetailSearch({ kind: "evalRun", runId: run.id })}
+                        className="pl-inline-link notranslate"
+                        translate="no"
+                        aria-label={`查看 Run #${run.id} 的对象详情`}
+                        data-testid={`run-row-detail-${run.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        查看详情
+                      </a>
+                    </div>
+                  </td>
                   <td className="px-3 py-2">{run.domain}</td>
                   <td className="px-3 py-2">
                     <span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>

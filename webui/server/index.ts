@@ -1,26 +1,76 @@
 import { createReadStream } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
-import { parse, stringify } from "yaml";
+import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
-import { changedFiles, type SessionWrittenFile } from "./diff";
+import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
-import { validateSource, testConnection, runIngest, type ValidationResult } from "./ktx";
-import { readProject, readConnections, resolveProjectRoot } from "./project";
+import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
+import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
+import {
+  // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
+  // `/api/connections/:connId/ingest` alias compatibility route.
+  readIngestRuns as readLegacyIngestRuns,
+  type IngestRunsResponse
+} from "./ingest-runs";
+import {
+  reloadCatalog,
+  readCatalogReloads,
+  type CatalogReloadsResponse
+} from "./catalog-reload";
+import {
+  CatalogAssetOverwriteRequiredError,
+  CatalogAssetValidationError,
+  readCatalogAssetUploads,
+  uploadCatalogAsset,
+  validateCatalogAsset,
+  type CatalogAssetUploadRequest,
+  type CatalogAssetValidateRequest
+} from "./catalog-assets";
 import type { TablePatch } from "./model";
-import { listSources, previewSourcePatch, readSource, writeSourcePatch } from "./semantic-layer";
-import { listWiki, previewWikiWrite, readWiki, writeWiki, type WikiWriteInput } from "./wiki";
+import {
+  listSources,
+  previewSourcePatch,
+  previewSourceYamlImport,
+  readSource,
+  writeSourcePatch,
+  writeSourceYamlImport
+} from "./semantic-layer";
+import {
+  commitWikiUpload,
+  listWiki,
+  previewWikiUpload,
+  previewWikiWrite,
+  readWiki,
+  writeWiki,
+  type WikiUploadInput,
+  type WikiWriteInput
+} from "./wiki";
+import { readHelpHandbook } from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
+import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerCaseRoutes } from "./eval/cases.js";
+import { registerSuiteImportRoutes } from "./eval/suite-import.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
 import { registerR1ObservabilityRoutes } from "./observability.js";
 import { safeWrite } from "./fs-safe.js";
+import {
+  publishSemanticAssets,
+  readSemanticAssetRelease,
+  readSemanticAssetReleases,
+  recordManualReindex,
+  SemanticAssetValidationError,
+  validateSemanticAssets,
+  type SemanticAssetPublishRequest,
+  type SemanticAssetValidateRequest
+} from "./semantic-assets.js";
+import { exportSemanticAssetPackage } from "./semantic-asset-export.js";
 
 type ErrorEnvelope = {
   ok: false;
@@ -30,6 +80,38 @@ type ErrorEnvelope = {
     detail?: unknown;
   };
 };
+
+type SupportedError = FastifyError & {
+  code?: string;
+  statusCode?: number;
+  detail?: unknown;
+};
+
+function supportedErrorDetail(error: SupportedError): unknown {
+  if (error.code === "SCHEMA_NAME_INVALID") {
+    const detail = error.detail;
+    if (
+      detail &&
+      typeof detail === "object" &&
+      "pattern" in detail &&
+      typeof (detail as { pattern?: unknown }).pattern === "string"
+    ) {
+      return { pattern: (detail as { pattern: string }).pattern };
+    }
+  }
+  if (error.code === "CONNECTION_TEST_FAILED") {
+    const detail = error.detail;
+    if (detail && typeof detail === "object") {
+      const source = detail as Record<string, unknown>;
+      return Object.fromEntries(
+        ["stdout", "stderr", "reason"]
+          .filter((key) => typeof source[key] === "string")
+          .map((key) => [key, source[key]])
+      );
+    }
+  }
+  return undefined;
+}
 
 const DEFAULT_WEBUI_PORT = 5174;
 const STATIC_MIME_TYPES: Record<string, string> = {
@@ -72,24 +154,110 @@ async function staticFilePath(urlPath: string): Promise<string> {
   return path.join(root, "index.html");
 }
 
-function makeDiff(oldText: string, newText: string): string {
-  const oldLines = oldText.split("\n");
-  const newLines = newText.split("\n");
-  const lines: string[] = [];
-  const maxLen = Math.max(oldLines.length, newLines.length);
-  for (let i = 0; i < maxLen; i += 1) {
-    const oldLine = oldLines[i];
-    const newLine = newLines[i];
-    if (oldLine === undefined) lines.push(`+${newLine}`);
-    else if (newLine === undefined) lines.push(`-${oldLine}`);
-    else if (oldLine !== newLine) {
-      lines.push(`-${oldLine}`);
-      lines.push(`+${newLine}`);
-    } else {
-      lines.push(` ${oldLine}`);
+/**
+ * Apply a local patch to a single connection's `enabled_tables` list while
+ * preserving every other connection, field, comment and quoting in the file.
+ *
+ * Previously the endpoint round-tripped through `parse() -> mutate -> stringify()`,
+ * which reordered keys and produced a large noisy diff for a 1-table change.
+ * This helper validates the structure with the YAML parser, then applies a
+ * line-level replacement to the target block so unrelated bytes stay untouched.
+ */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function lineIndent(line: string): number {
+  return line.match(/^ */)?.[0].length ?? 0;
+}
+
+function isStructuralYamlLine(line: string): boolean {
+  const trimmed = line.trim();
+  return Boolean(trimmed) && !trimmed.startsWith("#");
+}
+
+function findYamlBlockEnd(lines: string[], start: number, parentIndent: number): number {
+  for (let i = start; i < lines.length; i += 1) {
+    if (!isStructuralYamlLine(lines[i])) continue;
+    if (lineIndent(lines[i]) <= parentIndent) return i;
+  }
+  return lines.length;
+}
+
+function enabledTablesBlock(indent: number, enabledTables: string[]): string[] {
+  const pad = " ".repeat(indent);
+  if (enabledTables.length === 0) {
+    return [`${pad}enabled_tables: []`];
+  }
+  return [`${pad}enabled_tables:`, ...enabledTables.map((table) => `${pad}  - ${table}`)];
+}
+
+function patchConnectionEnabledTablesYaml(
+  yamlText: string,
+  connId: string,
+  newEnabledTables: string[]
+): { proposedYaml: string } {
+  const doc = parseDocument(yamlText, { keepSourceTokens: true });
+  const connections = doc.get("connections", true);
+  if (!connections || typeof connections !== "object") {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+  const connNode = connections.get(connId, true);
+  if (!connNode) {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+
+  const lines = yamlText.split("\n");
+  const connectionsLine = lines.findIndex((line) => /^(\s*)connections:\s*(?:#.*)?$/.test(line));
+  if (connectionsLine === -1) {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+
+  const connectionsIndent = lineIndent(lines[connectionsLine]);
+  const connectionsEnd = findYamlBlockEnd(lines, connectionsLine + 1, connectionsIndent);
+  const connPattern = new RegExp(`^(\\s*)${escapeRegExp(connId)}:\\s*(?:#.*)?$`);
+  let connLine = -1;
+  for (let i = connectionsLine + 1; i < connectionsEnd; i += 1) {
+    if (connPattern.test(lines[i]) && lineIndent(lines[i]) > connectionsIndent) {
+      connLine = i;
+      break;
     }
   }
-  return lines.join("\n");
+  if (connLine === -1) {
+    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
+  }
+
+  const connIndent = lineIndent(lines[connLine]);
+  const connEnd = findYamlBlockEnd(lines, connLine + 1, connIndent);
+  let enabledTablesLine = -1;
+  for (let i = connLine + 1; i < connEnd; i += 1) {
+    if (/^\s*enabled_tables:\s*(?:.*)?$/.test(lines[i]) && lineIndent(lines[i]) > connIndent) {
+      enabledTablesLine = i;
+      break;
+    }
+  }
+
+  if (enabledTablesLine === -1) {
+    const firstFieldLine = lines
+      .slice(connLine + 1, connEnd)
+      .find((line) => isStructuralYamlLine(line) && lineIndent(line) > connIndent);
+    const fieldIndent = firstFieldLine ? lineIndent(firstFieldLine) : connIndent + 2;
+    lines.splice(connEnd, 0, ...enabledTablesBlock(fieldIndent, newEnabledTables));
+    return { proposedYaml: lines.join("\n") };
+  }
+
+  const fieldIndent = lineIndent(lines[enabledTablesLine]);
+  const enabledTablesEnd = findYamlBlockEnd(lines, enabledTablesLine + 1, fieldIndent);
+  lines.splice(
+    enabledTablesLine,
+    enabledTablesEnd - enabledTablesLine,
+    ...enabledTablesBlock(fieldIndent, newEnabledTables)
+  );
+  return { proposedYaml: lines.join("\n") };
+}
+
+function makeDiff(oldText: string, newText: string): string {
+  return previewDiff(oldText, newText, "ktx.yaml");
 }
 
 function enabledTableError(code: string, message: string) {
@@ -153,7 +321,7 @@ export function buildServer() {
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
 
-  app.setErrorHandler((error: FastifyError & { code?: string; statusCode?: number }, _request, reply) => {
+  app.setErrorHandler((error: SupportedError, _request, reply) => {
     const statusCode = error.statusCode ?? 500;
     const code = error.code ?? (statusCode === 500 ? "INTERNAL" : "BAD_REQUEST");
     const payload: ErrorEnvelope = {
@@ -163,6 +331,10 @@ export function buildServer() {
         message: error.message || "Internal server error"
       }
     };
+    const detail = supportedErrorDetail(error);
+    if (detail !== undefined) {
+      payload.error.detail = detail;
+    }
 
     reply.status(statusCode).send(payload);
   });
@@ -237,6 +409,48 @@ export function buildServer() {
 
   app.post<{
     Params: { conn: string; schema: string; table: string };
+    Body: { yaml?: string; dryRun?: boolean };
+  }>("/api/sources/:conn/:schema/:table/import", async (request, reply) => {
+    const dryRun = request.body?.dryRun !== false;
+    const yaml = request.body?.yaml;
+    if (typeof yaml !== "string" || !yaml.trim()) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "INVALID_IMPORT_YAML",
+          message: "Imported YAML must be a non-empty string"
+        }
+      });
+    }
+    const projectRoot = await resolveProjectRoot();
+    const { conn, schema, table } = request.params;
+    if (dryRun) {
+      const data = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
+      return reply.send({
+        ok: true,
+        data
+      });
+    }
+
+    const preview = await writeSourceYamlImport(projectRoot, conn, schema, table, yaml);
+    for (const file of preview.files) {
+      writtenFiles.push({ filePath: file.filePath });
+    }
+    changedSources.set(`${conn}/${schema}/${table}`, { conn, schema, table });
+    const validation = await validateSource(projectRoot, conn, schema, table);
+    const files = await changedFiles(projectRoot, writtenFiles);
+    return reply.send({
+      ok: true,
+      data: {
+        written: true,
+        validation,
+        changedFiles: files
+      }
+    });
+  });
+
+  app.post<{
+    Params: { conn: string; schema: string; table: string };
   }>("/api/sources/:conn/:schema/:table/validate", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const { conn, schema, table } = request.params;
@@ -279,6 +493,39 @@ export function buildServer() {
 
   app.get<{
     Params: { key: string };
+  }>("/api/wiki/:key/raw", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const page = await readWiki(projectRoot, request.params.key);
+    reply
+      .header("Content-Type", "text/markdown; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="${path.posix.basename(page.key)}"`)
+      .send(page.rawMarkdown);
+  });
+
+  app.post<{
+    Body: WikiUploadInput;
+  }>("/api/wiki/upload/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await previewWikiUpload(projectRoot, request.body)
+    };
+  });
+
+  app.post<{
+    Body: WikiUploadInput;
+  }>("/api/wiki/upload/commit", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const preview = await commitWikiUpload(projectRoot, request.body);
+    writtenFiles.push({ filePath: preview.filePath });
+    return {
+      ok: true,
+      data: preview
+    };
+  });
+
+  app.get<{
+    Params: { key: string };
   }>("/api/wiki/:key", async (request) => {
     const projectRoot = await resolveProjectRoot();
     return {
@@ -305,6 +552,13 @@ export function buildServer() {
     return {
       ok: true,
       data: preview
+    };
+  });
+
+  app.get("/api/help/handbook", async () => {
+    return {
+      ok: true,
+      data: await readHelpHandbook()
     };
   });
 
@@ -380,8 +634,11 @@ export function buildServer() {
     const oldEnabledTables = Array.isArray(connections[connId].enabled_tables)
       ? connections[connId].enabled_tables.filter((item): item is string => typeof item === "string")
       : [];
-    connections[connId].enabled_tables = newEnabledTables;
-    const proposedYaml = stringify(config, { lineWidth: 0 });
+
+    // M45: local patch preserves order, comments and unknown
+    // fields in unrelated parts of ktx.yaml so the dry-run diff only shows
+    // the enabled_tables sequence change.
+    const { proposedYaml } = patchConnectionEnabledTablesYaml(yamlText, connId, newEnabledTables);
     const diff = makeDiff(yamlText, proposedYaml);
 
     if (dryRun) {
@@ -411,18 +668,388 @@ export function buildServer() {
 
   app.post<{
     Params: { connId: string };
-  }>("/api/connections/:connId/ingest", async (request) => {
+    Body: { schema?: string; dryRun?: boolean };
+  }>("/api/connections/:connId/schemas", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
-    const result = await runIngest(projectRoot, connId);
+    const body = request.body ?? {};
+    const dryRun = body.dryRun !== false;
+    if (typeof body.schema !== "string") {
+      throw enabledTableError("BAD_REQUEST", "schema is required");
+    }
+    const result = await addSchema(projectRoot, connId, body.schema, dryRun, {
+      recordConfigChange
+    });
+    if (!dryRun) {
+      writtenFiles.push({ filePath: "ktx.yaml" });
+    }
     return { ok: true, data: result };
   });
 
+  // M14: deprecated alias for `/api/connections/:connId/ingest`. The M13
+  // route used to shell out to `ktx ingest <conn>`, which transitively
+  // required LLM/embedding/enrichment configuration. We now satisfy the
+  // request by reloading the static local catalog and return a `deprecated:
+  // true` envelope so legacy clients get a structured 200 response instead
+  // of a 404 or an enrichment-misconfiguration crash.
+  app.post<{
+    Params: { connId: string };
+    Body: { schema?: string };
+  }>("/api/connections/:connId/ingest", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const body = request.body ?? {};
+    const schema = typeof body.schema === "string" && body.schema.trim().length > 0
+      ? body.schema.trim()
+      : undefined;
+    const reload = await reloadCatalog(projectRoot, {
+      connectionId: connId,
+      ...(schema ? { schema } : {}),
+      deprecatedIngestAlias: true
+    });
+    return {
+      ok: true,
+      data: {
+        deprecated: true,
+        replacement: "/api/catalog/reload",
+        message: "WebUI no longer executes ktx ingest. Static catalog reload completed.",
+        reload
+      }
+    };
+  });
+
+  app.get<{
+    Params: { connId?: string };
+  }>("/api/connections/ingest-runs", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const data: IngestRunsResponse = await readLegacyIngestRuns(projectRoot);
+    if (request.params.connId && data.lastByConnection[request.params.connId] === undefined) {
+      // No history for that connection: still return an empty record so the
+      // frontend can render "未运行" without falling back to the global view.
+      return { ok: true, data: { runs: [], lastByConnection: {} } };
+    }
+    return { ok: true, data };
+  });
+
+  // M14: the new core catalog refresh endpoints. They read only the local
+  // filesystem and never shell out to the ktx CLI. They are the replacement
+  // for the M13 ingest route (which is preserved as a deprecated alias above).
+  app.post<{
+    Body: { connectionId?: string; schema?: string };
+  }>("/api/catalog/reload", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const connectionId =
+      typeof body.connectionId === "string" && body.connectionId.trim().length > 0
+        ? body.connectionId.trim()
+        : undefined;
+    const schema =
+      typeof body.schema === "string" && body.schema.trim().length > 0
+        ? body.schema.trim()
+        : undefined;
+    const run = await reloadCatalog(projectRoot, {
+      ...(connectionId ? { connectionId } : {}),
+      ...(schema ? { schema } : {})
+    });
+    return { ok: true, data: run };
+  });
+
+  app.get("/api/catalog/reloads", async () => {
+    const projectRoot = await resolveProjectRoot();
+    const data: CatalogReloadsResponse = await readCatalogReloads(projectRoot);
+    return { ok: true, data };
+  });
+
+  // ─── M17: Controlled YAML catalog asset upload ───────────────────────────
+  // WebUI uses these endpoints to let analysts commit a schema manifest
+  // without going through ops. The target path is server-computed, never
+  // client-supplied. Symlink chains and arbitrary writes are rejected.
+
+  app.post<{
+    Body: Partial<CatalogAssetValidateRequest>;
+  }>("/api/catalog/assets/validate", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const rawAssetKind = (body as { assetKind?: unknown }).assetKind;
+    const rawAssetType = (body as { assetType?: unknown }).assetType;
+    const validation = await validateCatalogAsset(projectRoot, {
+      connectionId: typeof body.connectionId === "string" ? body.connectionId : "",
+      schema: typeof body.schema === "string" ? body.schema : "",
+      assetKind: rawAssetKind as CatalogAssetValidateRequest["assetKind"],
+      assetType: rawAssetType as CatalogAssetValidateRequest["assetType"],
+      filename: typeof body.filename === "string" ? body.filename : "",
+      content: typeof body.content === "string" ? body.content : ""
+    });
+    return reply.send({ ok: true, data: validation });
+  });
+
+  app.post<{
+    Body: Partial<CatalogAssetUploadRequest>;
+  }>("/api/catalog/assets/upload", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const rawAssetKind = (body as { assetKind?: unknown }).assetKind;
+    const rawAssetType = (body as { assetType?: unknown }).assetType;
+    const upload: CatalogAssetUploadRequest = {
+      connectionId: typeof body.connectionId === "string" ? body.connectionId : "",
+      schema: typeof body.schema === "string" ? body.schema : "",
+      assetKind: rawAssetKind as CatalogAssetUploadRequest["assetKind"],
+      assetType: rawAssetType as CatalogAssetUploadRequest["assetType"],
+      filename: typeof body.filename === "string" ? body.filename : "",
+      content: typeof body.content === "string" ? body.content : "",
+      confirmOverwrite: body.confirmOverwrite === true
+    };
+    try {
+      const result = await uploadCatalogAsset(projectRoot, upload);
+      return reply.send({ ok: true, data: result });
+    } catch (error) {
+      if (error instanceof CatalogAssetValidationError) {
+        reply.status(error.statusCode);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: { validation: error.validation }
+        });
+      }
+      if (error instanceof CatalogAssetOverwriteRequiredError) {
+        reply.status(409);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: { validation: error.validation }
+        });
+      }
+      throw error;
+    }
+  });
+
+  app.get("/api/catalog/assets/uploads", async () => {
+    const projectRoot = await resolveProjectRoot();
+    return { ok: true, data: await readCatalogAssetUploads(projectRoot) };
+  });
+
+  // ─── M19: Semantic Asset Self-Service Publish And Export ────────────────
+
+  app.post<{
+    Body: Partial<SemanticAssetValidateRequest>;
+  }>("/api/semantic-assets/validate", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const files = Array.isArray(body.files)
+      ? body.files
+          .filter(
+            (item): item is { filename: string; content: string } =>
+              !!item &&
+              typeof (item as { filename?: unknown }).filename === "string" &&
+              typeof (item as { content?: unknown }).content === "string"
+          )
+          .map((item) => ({
+            filename: item.filename,
+            content: item.content
+          }))
+      : [];
+    const packages = Array.isArray(body.packages)
+      ? body.packages
+          .filter(
+            (item): item is { filename: string; contentBase64: string } =>
+              !!item &&
+              typeof (item as { filename?: unknown }).filename === "string" &&
+              typeof (item as { contentBase64?: unknown }).contentBase64 === "string"
+          )
+          .map((item) => ({
+            filename: item.filename,
+            contentBase64: item.contentBase64
+          }))
+      : [];
+    const result = await validateSemanticAssets(projectRoot, {
+      files,
+      packages,
+      defaultConnectionId:
+        typeof body.defaultConnectionId === "string" ? body.defaultConnectionId : undefined,
+      defaultSchema: typeof body.defaultSchema === "string" ? body.defaultSchema : undefined
+    });
+    return reply.send({ ok: true, data: result });
+  });
+
+  app.post<{
+    Body: Partial<SemanticAssetPublishRequest>;
+  }>("/api/semantic-assets/publish", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const validationId =
+      typeof body.validationId === "string" ? body.validationId : "";
+    try {
+      const result = await publishSemanticAssets(projectRoot, {
+        validationId,
+        confirmOverwrite: body.confirmOverwrite === true
+      });
+      return reply.send({ ok: true, data: result });
+    } catch (error) {
+      if (error instanceof SemanticAssetValidationError) {
+        reply.status(error.statusCode);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: {
+            errors: error.errors,
+            ...(error.release ? { release: error.release } : {})
+          }
+        });
+      }
+      throw error;
+    }
+  });
+
+  app.get("/api/semantic-assets/releases", async () => {
+    const projectRoot = await resolveProjectRoot();
+    return { ok: true, data: await readSemanticAssetReleases(projectRoot) };
+  });
+
+  app.get<{
+    Params: { id: string };
+  }>("/api/semantic-assets/releases/:id/status", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const record = await readSemanticAssetRelease(projectRoot, request.params.id);
+    if (!record) {
+      reply.status(404);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "RELEASE_NOT_FOUND",
+          message: `Release ${request.params.id} was not found`
+        }
+      });
+    }
+    return { ok: true, data: { release: record } };
+  });
+
+  app.post<{
+    Body: { force?: boolean };
+  }>("/api/semantic-assets/reindex", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const force = request.body?.force === true;
+    const lockPath = path.resolve(projectRoot, ".ktx-ui", "semantic-publish.lock");
+    try {
+      const lockStat = await lstat(lockPath);
+      if (lockStat.isFile()) {
+        reply.status(409);
+        return reply.send({
+          ok: false,
+          error: {
+            code: "REINDEX_IN_PROGRESS",
+            message: "已有发布批次正在重建索引，请等待当前批次完成后再试"
+          }
+        });
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+    const startedAt = new Date().toISOString();
+    const reindex = await reindexProject(projectRoot, { force });
+    const finishedAt = new Date().toISOString();
+    const reindexRecord = {
+      ok: reindex.exitCode === 0,
+      exitCode: reindex.exitCode,
+      stdout: reindex.stdout,
+      stderr: reindex.stderr
+    };
+    // M32: write a lightweight history record so /publish/history can show
+    // the reindex result alongside normal publish batches.
+    const historyRecord = await recordManualReindex(projectRoot, {
+      force,
+      startedAt,
+      reindex: reindexRecord
+    });
+    return {
+      ok: true,
+      data: {
+        id: historyRecord.id,
+        force,
+        startedAt,
+        finishedAt,
+        reindex: reindexRecord
+      }
+    };
+  });
+
+  app.post<{
+    Body: {
+      scope?: { connectionId?: string; schema?: string };
+      includeWiki?: boolean;
+      includeEvals?: boolean;
+      includeSkills?: boolean;
+      includeSanitizedKtxYaml?: boolean;
+    };
+  }>("/api/semantic-assets/export", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const scope =
+      body.scope && typeof body.scope === "object" && !Array.isArray(body.scope)
+        ? {
+            connectionId:
+              typeof body.scope.connectionId === "string" ? body.scope.connectionId : undefined,
+            schema: typeof body.scope.schema === "string" ? body.scope.schema : undefined
+          }
+        : undefined;
+    const result = await exportSemanticAssetPackage(projectRoot, {
+      ...(scope ? { scope } : {}),
+      includeWiki: body.includeWiki === true,
+      includeEvals: body.includeEvals === true,
+      includeSkills: body.includeSkills === true,
+      includeSanitizedKtxYaml: body.includeSanitizedKtxYaml !== false
+    });
+    return { ok: true, data: result };
+  });
+
+  app.get<{
+    Params: { exportId: string };
+  }>("/api/semantic-assets/exports/:exportId/download", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const exportId = request.params.exportId;
+    if (!/^exp_\d{8}_\d{6}_\d{3}_[0-9a-f]{8}$/.test(exportId)) {
+      reply.status(404);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "EXPORT_NOT_FOUND",
+          message: `Export ${exportId} 不存在或已过期`
+        }
+      });
+    }
+    const exportsDir = path.resolve(projectRoot, ".ktx-ui", "exports");
+    const zipPath = path.join(exportsDir, `${exportId}.zip`);
+    let exists = false;
+    try {
+      const info = await lstat(zipPath);
+      exists = info.isFile() && !info.isSymbolicLink();
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+    if (!exists) {
+      reply.status(404);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "EXPORT_NOT_FOUND",
+          message: `Export ${exportId} 不存在或已过期`
+        }
+      });
+    }
+    reply.type("application/zip");
+    reply.header(
+      "Content-Disposition",
+      `attachment; filename="lucy-semantic-asset-${exportId}.zip"`
+    );
+    return reply.send(createReadStream(zipPath));
+  });
+
   registerAgentRoutes(app);
+  registerRoleRoutes(app);
   registerTokenRoutes(app);
   registerAuditRoutes(app);
   registerMcpToolsRoutes(app);
   registerCaseRoutes(app);
+  registerSuiteImportRoutes(app);
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
   registerR1ObservabilityRoutes(app);

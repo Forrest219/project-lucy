@@ -1,4 +1,4 @@
-import { mkdir, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const ALLOW = ["semantic-layer", "evals", "skills", "wiki", ".ktx-ui", "webui/config"];
@@ -63,9 +63,24 @@ export async function resolveWritable(projectRoot: string, relPath: string): Pro
 
   if (ALLOW_FILES.includes(normalized)) {
     const rootReal = await realpath(projectRoot);
-    const target = path.join(rootReal, normalized);
+    const literalTarget = path.join(rootReal, normalized);
+    let target = literalTarget;
+    try {
+      const targetStat = await lstat(literalTarget);
+      if (targetStat.isSymbolicLink()) {
+        throw new ForbiddenPathError(`Writing symlinked allow-file ${normalized} is forbidden`);
+      }
+      target = await realpath(literalTarget);
+    } catch (error) {
+      if (error instanceof ForbiddenPathError) throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
     if (!isWithin(target, rootReal)) {
       throw new ForbiddenPathError("Resolved path escapes the project root");
+    }
+    const targetRel = path.relative(rootReal, target).replaceAll(path.sep, "/");
+    if (targetRel !== normalized) {
+      throw new ForbiddenPathError(`Resolved path ${targetRel} is not an allowed file`);
     }
     return target;
   }

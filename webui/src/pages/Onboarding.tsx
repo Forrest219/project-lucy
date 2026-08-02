@@ -1,94 +1,402 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
-import type { Agent, ChangedFilesResponse, ProjectInfo, SourcesResponse } from "../lib/types";
+import type { Agent, ChangedFilesResponse, McpEndpointInfo, ProjectInfo, SourcesResponse } from "../lib/types";
+import { buildMcpConfig } from "../lib/mcpEndpoint";
+import { PageHeader } from "../components/PageHeader";
+import {
+  availableTokenCount,
+  buildActionRequiredItems,
+  buildServiceHealth,
+  NO_ACTION_REQUIRED_MESSAGE,
+  pendingSemanticCount,
+  summarizeServiceHealth,
+  systemAlertText,
+  type ActionRequiredItem,
+  type Severity,
+  type ServiceHealthItem,
+  type ServiceHealthSummary,
+  severityLabelBySeverity
+} from "../lib/opsDashboard";
 
 type AgentsResponse = { agents: Agent[] };
+type HealthTone = "ready" | "warning" | "info" | "danger";
 
 function isLegacyAllowAgent(agent: Agent): boolean {
   return !agent.role && Boolean(agent.allow);
 }
 
-function mcpAccessReason(agents: Agent[], enabledTokenCount: number): string | undefined {
+function mcpAccessReason(agents: Agent[], availableTokenCount: number): string | undefined {
   if (agents.length === 0) return "尚未创建 Agent";
   const enabledAgents = agents.filter((agent) => agent.enabled);
   if (enabledAgents.length === 0) return "所有 Agent 均已禁用";
   if (agents.every(isLegacyAllowAgent)) return "所有 Agent 仍为 legacy allow，需迁移到 role";
-  if (enabledTokenCount === 0) return "启用的 Agent 暂无可用 token";
+  if (availableTokenCount === 0) return "启用的 Agent 暂无可用 token";
   return undefined;
 }
 
-function StepStatus({ ready }: { ready: boolean }) {
+function diagnosticStatusClass(tone: HealthTone) {
+  if (tone === "ready") return "pl-status-done";
+  if (tone === "danger") return "pl-status-validation_failed";
+  return "pl-status-partial";
+}
+
+function severityBadgeClass(severity: Severity): string {
+  if (severity === "critical") return "pl-status-validation_failed";
+  if (severity === "warning") return "pl-status-partial";
+  if (severity === "ready") return "pl-status-done";
+  return "pl-status-not_started";
+}
+
+/**
+ * Render a Severity as a Chinese-language status badge. The badge colour
+ * still tracks the underlying severity bucket for non-colour signals
+ * (icon, text label, icon shape), but the user-visible label is always
+ * one of `高风险 / 待处理 / 提醒 / 就绪`.
+ */
+function SeverityBadge({
+  severity
+}: {
+  severity: Severity;
+}) {
   return (
-    <span className={`pl-status-badge ${ready ? "pl-status-done" : "pl-status-partial"}`}>
-      {ready ? "Ready" : "Needs setup"}
+    <span
+      className={`pl-status-badge ${severityBadgeClass(severity)}`}
+      data-severity={severity}
+    >
+      {severityLabelBySeverity[severity]}
     </span>
   );
 }
 
-function OnboardingStep({
-  index,
+function HealthDiagnosticItem({
   title,
   description,
-  ready,
-  action,
+  tone,
+  statusLabel,
   children
 }: {
-  index: number;
   title: string;
   description: string;
-  ready: boolean;
-  action: { label: string; to: string };
-  children: ReactNode;
+  tone: HealthTone;
+  statusLabel: string;
+  children?: ReactNode;
 }) {
   return (
-    <section className="pl-onboarding-step">
-      <div className="pl-onboarding-step-index">{index}</div>
+    <section className="pl-health-item" data-tone={tone}>
+      <div className="pl-health-item-status" aria-hidden="true" />
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="pl-panel-title mb-0">{title}</h2>
-          <StepStatus ready={ready} />
+          <h3 className="pl-panel-title mb-0">{title}</h3>
+          <span className={`pl-status-badge ${diagnosticStatusClass(tone)}`} translate="no">
+            {statusLabel}
+          </span>
         </div>
         <p className="pl-notice mt-1">{description}</p>
-        <div className="mt-4">{children}</div>
-      </div>
-      <div className="flex justify-end">
-        <Link className="pl-btn pl-btn--secondary" to={action.to}>{action.label}</Link>
+        {children ? <div className="mt-4">{children}</div> : null}
       </div>
     </section>
   );
 }
 
-function buildMcpConfig(endpoint: string) {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        lucy: {
-          url: endpoint,
-          headers: {
-            Authorization: "Bearer <LUCY_AGENT_TOKEN>"
-          }
-        }
-      }
-    },
-    null,
-    2
+function percent(done: number, total: number) {
+  if (total <= 0) return 0;
+  return Math.round((done / total) * 100);
+}
+
+function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
+  if (!endpointInfo) return null;
+  if (endpointInfo.status === "fallback") {
+    return (
+      <div className="pl-notice" data-testid="mcp-fallback-notice">
+        当前使用本地默认 <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span>。客户部署请配置 <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code>，避免 <span className="notranslate" translate="no">Agent</span> 复制到只能在本机访问的地址。
+      </div>
+    );
+  }
+  if (endpointInfo.status === "invalid") {
+    return (
+      <div className="pl-error" data-testid="mcp-invalid-notice">
+        Lucy <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span> 配置无效：
+        {endpointInfo.diagnostics.map((d, i) => (
+          <span key={`${d.code}-${i}`} className="notranslate" translate="no">{d.message}</span>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+/**
+ * M41: render the system-status summary line. The view-model is structured
+ * (not a plain string) so we can wrap `Lucy MCP` / `KTX Runtime` /
+ * `Agent` / numeric counts in `notranslate` spans per terminology standard.
+ */
+function ServiceHealthSummaryView({ summary }: { summary: ServiceHealthSummary }) {
+  return (
+    <section
+      className="pl-system-health-summary"
+      data-testid="ops-service-health-summary"
+      data-tone={summary.tone}
+    >
+      <span className="pl-system-health-summary-dot" aria-hidden="true" />
+      <div className="min-w-0">
+        <strong>
+          <span className="notranslate" translate="no">Lucy MCP</span> 与{" "}
+          <span className="notranslate" translate="no">KTX Runtime</span> 运行正常
+        </strong>
+        <p>核心接入链路可用，交付待办见下方处理事项。</p>
+      </div>
+      <Link to="/admin/audit" className="pl-card-cta">
+        控制台日志 ↗
+      </Link>
+    </section>
   );
 }
 
-function defaultMcpEndpoint() {
-  if (typeof window === "undefined") return "http://127.0.0.1:7879/mcp";
-  const host = window.location.hostname || "127.0.0.1";
-  const protocol = window.location.protocol === "https:" ? "https:" : "http:";
-  return `${protocol}//${host}:7879/mcp`;
+/**
+ * Compact Service Health strip. M41 replaces this with `ServiceHealthSummaryView`
+ * on `/overview`; the helper is retained here in case other surfaces need
+ * the per-component breakdown.
+ */
+function ServiceHealthStrip({ items }: { items: ServiceHealthItem[] }) {
+  return (
+    <section
+      className="pl-panel pl-service-health-panel"
+      data-testid="ops-service-health"
+    >
+      <div className="pl-service-health-compact" role="status" aria-live="polite">
+        <span className="pl-service-health-compact-dot" aria-hidden="true" data-overall={overallTone(items)} />
+        <span className="pl-service-health-compact-label">系统状态</span>
+        <ul className="pl-service-health-compact-list">
+          {items.map((item) => (
+            <li
+              key={item.key}
+              className="pl-service-health-compact-item"
+              data-status={item.status}
+            >
+              <span
+                className="notranslate pl-service-health-compact-name"
+                translate="no"
+              >
+                {item.label}
+              </span>
+              <span
+                className="notranslate pl-service-health-compact-detail"
+                translate="no"
+              >
+                {item.detail}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <Link
+          to="/admin/audit"
+          className="pl-service-health-compact-log"
+          data-testid="ops-service-health-log-link"
+        >
+          [控制台日志]
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function overallTone(items: ServiceHealthItem[]): HealthTone {
+  if (items.some((item) => item.status === "danger")) return "danger";
+  if (items.some((item) => item.status === "warning")) return "warning";
+  if (items.every((item) => item.status === "ready")) return "ready";
+  return "info";
+}
+
+/**
+ * M39 MCP config Drawer. The Drawer is a small modal-style panel that lives
+ * inside the Onboarding page; it is only mounted when the user clicks
+ * `查看配置`. We deliberately reuse the existing `pl-drawer-*` CSS classes
+ * (introduced by ObjectDetailDrawer) so the visual style stays consistent.
+ */
+function McpConfigDrawer({
+  open,
+  onClose,
+  endpointInfo,
+  mcpConfig
+}: {
+  open: boolean;
+  onClose: () => void;
+  endpointInfo: McpEndpointInfo | undefined;
+  mcpConfig: string;
+}) {
+  // M39: close on ESC so users get the standard modal behaviour without
+  // us having to pull in a dialog library.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  const endpointUrl = endpointInfo?.url ?? "—";
+
+  return (
+    <div
+      className="pl-drawer-backdrop notranslate"
+      translate="no"
+      role="dialog"
+      aria-modal="true"
+      aria-label="MCP 配置"
+      data-testid="mcp-config-drawer"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="pl-drawer-panel" role="document">
+        <header className="pl-drawer-header">
+          <div className="grid gap-1 min-w-0">
+            <span className="pl-eyebrow"><span className="notranslate" translate="no">MCP</span> · 对象详情</span>
+            <h2
+              className="pl-panel-title mb-0"
+              data-testid="mcp-config-drawer-title"
+            >
+              <span className="notranslate" translate="no">MCP</span> 配置
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="pl-drawer-close pl-drawer-close--prominent notranslate"
+            translate="no"
+            onClick={onClose}
+            aria-label="关闭 MCP 配置抽屉"
+            data-testid="mcp-config-drawer-close"
+          >
+            关闭
+          </button>
+        </header>
+        <div className="pl-drawer-body">
+          <div className="pl-preview-section">
+            <div className="grid gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted notranslate" translate="no">
+                Endpoint
+              </span>
+              <code className="notranslate break-all text-sm text-fg-default" translate="no">
+                {endpointUrl}
+              </code>
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
+                JSON
+              </span>
+            </div>
+            <pre className="pl-code-snippet pl-code-snippet--drawer">
+              <code className="notranslate" translate="no">{mcpConfig}</code>
+            </pre>
+            <p className="text-xs text-fg-muted">
+              将上方 JSON 写入 <code className="notranslate" translate="no">.mcp.json</code>，
+              把 <code className="notranslate" translate="no">&lt;LUCY_AGENT_TOKEN&gt;</code> 替换为新创建的 <span className="notranslate" translate="no">Token</span> 明文（仅显示一次，请妥善保存）。
+            </p>
+          </div>
+        </div>
+        <footer className="pl-drawer-footer pl-drawer-footer-border-t">
+          <Link
+            to="/admin/agents"
+            className="pl-btn pl-btn--ghost text-sm notranslate"
+            translate="no"
+            data-testid="mcp-config-drawer-agent-link"
+          >
+            查看 <span className="notranslate" translate="no">Agent</span> 实例 ↗
+          </Link>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function ActionRequiredRow({ item }: { item: ActionRequiredItem }) {
+  const testId = `ops-action-${item.id}`;
+  return (
+    <div
+      className="pl-action-required-item"
+      data-severity={item.severity}
+      data-testid={testId}
+    >
+      <div className="pl-action-required-item-row">
+        <div className="pl-action-required-item-title">
+          <SeverityBadge severity={item.severity} />
+          <div className="min-w-0">
+            <span className="pl-action-required-item-heading">{item.title}</span>
+            <p className="pl-action-required-item-description">{item.description}</p>
+          </div>
+        </div>
+        <Link
+          className="pl-action-required-item-cta pl-card-cta notranslate"
+          translate="no"
+          to={item.actionUrl}
+          data-testid={`${testId}-link`}
+        >
+          {item.actionText} ↗
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Metric-first semantic-coverage card. M39 spec 41 §8 requires a standalone
+ * percent + progressbar with `role="progressbar"` and aria-valuenow /
+ * aria-valuemin / aria-valuemax, plus a text label so screen-reader users
+ * do not rely on colour or bar length alone.
+ */
+function SemanticCoverageCard({
+  done,
+  total
+}: {
+  done: number;
+  total: number;
+}) {
+  const percentValue = percent(done, total);
+  const gap = pendingSemanticCount({ done, total });
+  return (
+    <div className="pl-snapshot-item pl-snapshot-item--semantic">
+      <div className="min-w-0">
+        <strong>
+          语义覆盖率 <span className="notranslate" translate="no" data-testid="ops-semantic-percent">{percentValue}%</span>
+        </strong>
+        <div
+          className="pl-progress"
+          role="progressbar"
+          aria-label={`语义覆盖率 ${percentValue}%`}
+          aria-valuenow={percentValue}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          data-testid="ops-semantic-progress"
+        >
+          <span
+            className="pl-progress-bar"
+            style={{ width: `${percentValue}%` }}
+          />
+        </div>
+        <div className="text-xs text-fg-muted">
+          <span className="notranslate" translate="no">{done}</span>/<span className="notranslate" translate="no">{total}</span> 语义完成，<span className="notranslate" translate="no">{gap}</span> 张表待补
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function Onboarding() {
-  const [copied, setCopied] = useState(false);
+  // M39 polish (SEVERE-4): auto-reset the main copy label after 1.5s so
+  // the user sees a brief "已复制" flash before the label reverts.
+  const [copiedMain, setCopiedMain] = useState(false);
+  // M39: Drawer open state. The main page never shows the raw JSON
+  // config; the user must explicitly open the Drawer to inspect it.
+  const [mcpDrawerOpen, setMcpDrawerOpen] = useState(false);
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
     queryFn: () => apiGet<ProjectInfo>("/api/project")
@@ -105,6 +413,17 @@ export function Onboarding() {
     queryKey: ["admin", "agents"],
     queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
   });
+  // M36 review follow-up: query the latest eval run so the "近 30 天无评测数据"
+  // item is honest. We only fetch the head of the list (limit=1); the API
+  // already supports this filter. If the call fails (older deployments,
+  // missing endpoint) we silently fall back to 0 so the dashboard never
+  // fabricates a critical alert.
+  const evalLastRunQuery = useQuery({
+    queryKey: ["eval", "runs", "last"],
+    queryFn: () => apiGet<{ total: number; runs: unknown[] }>("/api/eval/runs?limit=1"),
+    retry: false,
+    staleTime: 60_000
+  });
 
   const connections = projectQuery.data?.connections ?? [];
   const enabledTables = connections.reduce((sum, conn) => sum + conn.enabledTables.length, 0);
@@ -113,159 +432,422 @@ export function Onboarding() {
   const changedFiles = diffQuery.data?.files ?? [];
   const agents = agentsQuery.data?.agents ?? [];
   const enabledAgents = agents.filter((agent) => agent.enabled);
-  const tokenCount = agents.reduce((sum, agent) => sum + agent.tokens.filter((token) => !token.revoked).length, 0);
-  const enabledTokenCount = enabledAgents.reduce((sum, agent) => sum + agent.tokens.filter((token) => !token.revoked).length, 0);
-  const mcpNotReadyReason = mcpAccessReason(agents, enabledTokenCount);
-  const endpoint = useMemo(defaultMcpEndpoint, []);
-  const mcpConfig = useMemo(() => buildMcpConfig(endpoint), [endpoint]);
+  // M41: token count follows new "可用 Token" semantics — excluded are
+  // `enabled=false` parents, `revoked=true` tokens, expired tokens
+  // (`expires_at <= now`), and tokens with unparseable `expires_at`.
+  const availableTokenCountValue = availableTokenCount(agents);
+  const mcpNotReadyReason = mcpAccessReason(agents, availableTokenCountValue);
+  const endpointInfo = projectQuery.data?.mcpEndpoint;
+  const endpoint = endpointInfo?.url ?? null;
+  const mcpConfig = useMemo(
+    () => (endpoint ? buildMcpConfig(endpoint) : ""),
+    [endpoint]
+  );
+  const canCopyMcp = endpoint !== null;
   const loading = projectQuery.isLoading || sourcesQuery.isLoading || diffQuery.isLoading || agentsQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error ?? diffQuery.error ?? agentsQuery.error;
   const connectionReady = connections.length > 0 && projectQuery.data?.ktxAvailable === true;
   const tableScopeReady = enabledTables > 0;
   const semanticReady = sources.length > 0 && doneSources > 0;
   const validationReady = changedFiles.length === 0;
-  const mcpReady = !mcpNotReadyReason;
-  const readyCount = [connectionReady, tableScopeReady, semanticReady, validationReady, mcpReady].filter(Boolean).length;
+  const mcpEndpointReady = endpointInfo?.status !== "invalid";
+  const mcpAccessReady = !mcpNotReadyReason && mcpEndpointReady;
+  const semanticPendingCount = sources.length - doneSources;
+  const semanticTone: HealthTone =
+    semanticReady && tableScopeReady
+      ? semanticPendingCount > 0
+        ? "warning"
+        : "ready"
+      : "warning";
+  const semanticStatusLabel =
+    semanticPendingCount > 0
+      ? `${semanticPendingCount} 待完善`
+      : semanticReady && tableScopeReady
+        ? "就绪"
+        : "需要完善";
 
-  async function copyConfig() {
+  // M36: Ops Dashboard view-model inputs.
+  const pendingCatalogItems = Math.max(0, sources.length - doneSources);
+  const aclDenied7d = agents.reduce(
+    (sum, agent) => sum + (agent.stats?.deniedLast7d ?? 0),
+    0
+  );
+  const actionItems = useMemo(
+    () =>
+      buildActionRequiredItems({
+        semanticCoverage: { done: doneSources, total: sources.length },
+        pendingCatalogItems,
+        pendingPublishFiles: changedFiles.length,
+        // M39 review follow-up (P2-B): pass `null` while the eval probe is
+        // still loading or has errored so the dashboard never fabricates
+        // a misleading "近 30 天无评测数据" item against unknown data.
+        // Only an explicit `0` from the eval API surfaces the item.
+        evalRunsLast30d: evalLastRunQuery.isSuccess
+          ? (evalLastRunQuery.data?.runs.length ?? 0)
+          : null,
+        aclDenied7d
+      }),
+    [
+      doneSources,
+      sources.length,
+      pendingCatalogItems,
+      changedFiles.length,
+      evalLastRunQuery.isSuccess,
+      evalLastRunQuery.data,
+      aclDenied7d
+    ]
+  );
+  const serviceHealth = useMemo(
+    () =>
+      buildServiceHealth({
+        ktxAvailable: projectQuery.data?.ktxAvailable === true,
+        mcpReady: mcpAccessReady,
+        semanticCoverage: { done: doneSources, total: sources.length },
+        agentsEnabled: enabledAgents.length,
+        agentsTotal: agents.length,
+        availableTokenCount: availableTokenCountValue
+      }),
+    [
+      projectQuery.data?.ktxAvailable,
+      mcpAccessReady,
+      doneSources,
+      sources.length,
+      enabledAgents.length,
+      agents.length,
+      availableTokenCountValue
+    ]
+  );
+  // M41: structured view model for the one-line "系统状态" summary.
+  // Returns null when mcp / ktx is not ready; the page falls back to the
+  // high-weight alert in that case.
+  const summary = useMemo(
+    () =>
+      summarizeServiceHealth(
+        mcpEndpointReady,
+        projectQuery.data?.ktxAvailable === true,
+        { done: doneSources, total: sources.length },
+        { enabled: enabledAgents.length, total: agents.length }
+      ),
+    [mcpEndpointReady, projectQuery.data?.ktxAvailable, doneSources, sources.length, enabledAgents.length, agents.length]
+  );
+  const ktxAvailable = projectQuery.data?.ktxAvailable === true;
+  const semanticPercent = percent(doneSources, sources.length);
+
+  /**
+   * M39 polish (SEVERE-4): the main page button and the Drawer button
+   * each manage their own copy-feedback flag. The two entry points below
+   * share only the clipboard write + error path; the "已复制" flash
+   * never crosses over.
+   */
+  async function writeMcpConfigToClipboard(): Promise<boolean> {
+    if (!canCopyMcp) {
+      toast.error(
+        <>
+          当前 Lucy <span className="notranslate" translate="no">MCP</span>{" "}
+          <span className="notranslate" translate="no">Endpoint</span> 不可用，无法复制配置
+        </>
+      );
+      return false;
+    }
     try {
       await navigator.clipboard.writeText(mcpConfig);
-      setCopied(true);
-      toast.success("MCP 配置已复制");
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "复制失败");
+      return false;
     }
   }
 
+  async function copyConfig() {
+    const ok = await writeMcpConfigToClipboard();
+    if (!ok) return;
+    setCopiedMain(true);
+    window.setTimeout(() => setCopiedMain(false), 1500);
+    toast.success(
+      <>
+        <span className="notranslate" translate="no">MCP</span> 配置已复制
+      </>
+    );
+  }
+
+  async function refreshStatus() {
+    // M41: toast on success / failure so the user always sees feedback
+    // when they tap the manual refresh button. We deliberately resolve
+    // all five queries (the four core ones plus the eval-runs probe)
+    // so a single failing endpoint doesn't get masked and so the eval
+    // item in the action-required queue actually tracks new runs after
+    // a click.
+    const settled = await Promise.allSettled([
+      projectQuery.refetch(),
+      sourcesQuery.refetch(),
+      diffQuery.refetch(),
+      agentsQuery.refetch(),
+      evalLastRunQuery.refetch()
+    ]);
+    const failed = settled.find((result) => result.status === "rejected");
+    if (failed) {
+      toast.error("系统概览刷新失败");
+      return;
+    }
+    const queryErrors = settled.flatMap((result) => {
+      if (result.status !== "fulfilled") return [];
+      // Each fulfilled entry is a QueryObserverResult; `error` is the only
+      // field that signals a query-level failure. We treat any truthy
+      // `error` as a refresh failure so a single broken endpoint surfaces
+      // immediately rather than silently succeeding.
+      const value = result.value as { error?: unknown } | undefined;
+      return value?.error ? [value.error] : [];
+    });
+    if (queryErrors.length > 0) {
+      toast.error("系统概览刷新失败");
+      return;
+    }
+    toast.success("系统概览已刷新");
+  }
+
+  const coreFetching =
+    projectQuery.isFetching ||
+    sourcesQuery.isFetching ||
+    diffQuery.isFetching ||
+    agentsQuery.isFetching ||
+    // M39 review follow-up (P2-B): include the eval probe's in-flight
+    // window in the refresh button label so the manual refresh that
+    // touches `?limit=1` is reflected by the "刷新中..." state.
+    evalLastRunQuery.isFetching;
+
   if (loading) {
-    return <p className="pl-notice">正在加载上线检查...</p>;
+    return <p className="pl-notice">正在加载系统概览...</p>;
   }
 
   if (error) {
-    return <p className="pl-error">上线检查加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
+    return <p className="pl-error">系统概览加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
   }
+
+  // M39: a critical-tone service-health panel must remain a high-emphasis
+  // Alert. M41: ready / warning now render a single summary line; the
+  // legacy compact strip is no longer shown on `/overview`. The danger
+  // state is driven by raw endpoint readiness (mcpEndpointReady + ktxAvailable) rather
+  // than the legacy `overallTone` aggregation, so an unavailable Lucy MCP
+  // surfaces the alert even when KTX is fine.
+  const isDanger = !mcpEndpointReady || !ktxAvailable;
+  const alertText = systemAlertText(mcpEndpointReady, ktxAvailable);
 
   return (
     <div className="pl-page-stack">
-      <div className="pl-section-heading">
-        <div>
-          <p className="pl-eyebrow">部署向导</p>
-          <h1 className="text-xl font-semibold">上线检查</h1>
-          <p className="pl-page-intro">按客户部署主链路检查 Lucy 是否已经可以作为 MCP 服务管理平台交付给 agent 使用。</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link className="pl-btn pl-btn--secondary" to="/connections">数据库接入</Link>
-          <Link className="pl-btn pl-btn--primary" to="/admin/agents">配置 Agent</Link>
-        </div>
-      </div>
+      <PageHeader
+        title="系统概览"
+        description={
+          <>
+            查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。聚合首页待办，判断 data agent 是否处于可交付状态。
+          </>
+        }
+        actions={
+          <button
+            type="button"
+            className="pl-btn pl-btn--secondary text-sm"
+            onClick={refreshStatus}
+            disabled={coreFetching}
+            data-testid="onboarding-refresh-button"
+          >
+            {coreFetching ? "刷新中..." : "刷新"}
+          </button>
+        }
+      />
 
-      <div className="pl-metric-grid">
-        <div className="pl-metric-card">
-          <span>Checklist</span>
-          <strong>{readyCount}/5</strong>
-          <small>上线主链路完成度</small>
-        </div>
-        <div className={projectQuery.data?.ktxAvailable ? "pl-metric-card pl-metric-card--success" : "pl-metric-card pl-metric-card--danger"}>
-          <span>KTX Runtime</span>
-          <strong>{projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</strong>
-          <small>{projectQuery.data?.root ?? "项目根未知"}</small>
-        </div>
-        <div className="pl-metric-card">
-          <span>Semantic Tables</span>
-          <strong>{doneSources}/{sources.length}</strong>
-          <small>已完成 / 已扫描</small>
-        </div>
-        <div className="pl-metric-card">
-          <span>MCP Access</span>
-          <strong>{agents.length}</strong>
-          <small>{tokenCount} 个可用 token</small>
-        </div>
-      </div>
-
-      <div className="pl-onboarding-list">
-        <OnboardingStep
-          index={1}
-          title="接入数据库"
-          description="确认 Lucy/KTX 能读取当前项目连接，并且 KTX runtime 在部署环境可用。"
-          ready={connectionReady}
-          action={{ label: "查看连接", to: "/connections" }}
+      {isDanger ? (
+        <section
+          className="pl-panel pl-service-health-critical"
+          role="alert"
+          data-testid="ops-service-health-critical"
         >
-          <div className="pl-onboarding-facts">
-            <span>{connections.length} 个连接</span>
-            {connections[0] ? <span>{connections.map((conn) => conn.id).join(", ")}</span> : null}
-            <span>{connections.reduce((sum, conn) => sum + conn.schemas.length, 0)} 个 schema</span>
-            <span>KTX {projectQuery.data?.ktxAvailable ? "可用" : "不可用"}</span>
-          </div>
-        </OnboardingStep>
-
-        <OnboardingStep
-          index={2}
-          title="限定表范围"
-          description="维护 enabled_tables，确保只有目标物理表进入语义层和 MCP 暴露范围。"
-          ready={tableScopeReady}
-          action={{ label: "表白名单", to: "/connections/whitelist" }}
-        >
-          <div className="pl-onboarding-facts">
-            <span>{enabledTables} 张 enabled table</span>
-            <span>{sources.length} 张 semantic table</span>
-          </div>
-        </OnboardingStep>
-
-        <OnboardingStep
-          index={3}
-          title="配置语义层"
-          description="补齐表描述、字段说明、指标、分段和关联关系，让 agent 使用稳定业务口径。"
-          ready={semanticReady}
-          action={{ label: "维护语义", to: "/" }}
-        >
-          <div className="pl-onboarding-facts">
-            <span>{doneSources} 张 done</span>
-            <span>{sources.length - doneSources} 张待完善</span>
-          </div>
-        </OnboardingStep>
-
-        <OnboardingStep
-          index={4}
-          title="校验并审阅变更"
-          description="上线前查看 semantic-layer/wiki/config 变更，并对本次保存过的表运行 validate。"
-          ready={validationReady}
-          action={{ label: "审阅校验", to: "/review" }}
-        >
-          <div className="pl-onboarding-facts">
-            <span>{changedFiles.length} 个待审阅文件</span>
-            <span>{validationReady ? "当前无未审阅变更" : "需要运行 Validate changed"}</span>
-          </div>
-        </OnboardingStep>
-
-        <OnboardingStep
-          index={5}
-          title="配置 Agent MCP"
-          description="创建 Agent 和 token，把 Lucy MCP endpoint 配到目标 agents 平台。"
-          ready={mcpReady}
-          action={{ label: "Agent 实例", to: "/admin/agents" }}
-        >
-          <div className="grid gap-3">
-            <div className="pl-onboarding-facts">
-              <span>{agents.length} 个 Agent</span>
-              <span>{enabledTokenCount} 个可用 token</span>
-              <span>{endpoint}</span>
+          <div className="flex items-center gap-3">
+            <span className="pl-service-health-critical-dot" aria-hidden="true" />
+            <div>
+              <strong>系统异常</strong>
+              <p className="pl-notice notranslate" translate="no">{alertText}</p>
             </div>
-            {!mcpReady && <div className="pl-notice">{mcpNotReadyReason}</div>}
-            <div className="pl-code-snippet">
-              <span>MCP config</span>
-              <code>{mcpConfig}</code>
+          </div>
+        </section>
+      ) : summary ? (
+        <ServiceHealthSummaryView summary={summary} />
+      ) : null}
+
+      <section className="pl-panel" data-testid="ops-action-required">
+        <div className="pl-section-heading">
+          <div>
+            <h2 className="pl-panel-title mb-1">待处理事项</h2>
+            <p className="pl-notice">聚合语义缺口、待发布变更、评测缺口、ACL 风险。点击任一项可直接进入处理页面。</p>
+          </div>
+          <span className="pl-notice" data-testid="ops-action-required-count">
+            {actionItems.length} 项
+          </span>
+        </div>
+        {actionItems.length === 0 ? (
+          <div className="pl-action-required-empty" data-testid="ops-action-required-empty">
+            {NO_ACTION_REQUIRED_MESSAGE}
+          </div>
+        ) : (
+          <div className="pl-action-required-list">
+            {actionItems.map((item) => (
+              <ActionRequiredRow key={item.id} item={item} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="pl-ops-grid">
+        <section className="pl-panel" data-testid="ops-quality-snapshot">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title mb-1">质量快照</h2>
+              <p className="pl-notice">语义覆盖、发布审阅与评测基线，决定发布前的最后一道关。</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="pl-btn pl-btn--secondary" onClick={copyConfig}>
-                {copied ? "已复制" : "复制 MCP 配置"}
-              </button>
-              <Link className="pl-btn pl-btn--ghost" to={agents[0] ? `/admin/agents/${agents[0].id}/tokens/new` : "/admin/agents"}>
-                新建 Token
+          </div>
+          <div className="pl-snapshot-list">
+            <SemanticCoverageCard done={doneSources} total={sources.length} />
+            <div className="pl-snapshot-item">
+              <div>
+                <strong>
+                  待发布变更 <span className="notranslate" translate="no">{changedFiles.length}</span>
+                </strong>
+                <div className="text-xs text-fg-muted">
+                  {validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
+                </div>
+              </div>
+              <Link
+                to="/publish/workbench"
+                className="pl-card-cta"
+              >
+                打开发布工作台 ↗
+              </Link>
+            </div>
+            <div className="pl-snapshot-item">
+              <div>
+                <strong>
+                  评测数据 <span className="notranslate" translate="no">{evalLastRunQuery.isSuccess ? (evalLastRunQuery.data?.runs.length ?? 0) : "—"}</span>
+                </strong>
+                <div className="text-xs text-fg-muted">
+                  {evalLastRunQuery.isSuccess
+                    ? (evalLastRunQuery.data?.runs.length ?? 0) > 0
+                      ? "近 30 天已有评测记录"
+                      : "近 30 天无评测数据"
+                    : "评测状态待刷新"}
+                </div>
+              </div>
+              <Link
+                to="/eval/monitor"
+                className="pl-card-cta"
+              >
+                查看趋势监控 ↗
               </Link>
             </div>
           </div>
-        </OnboardingStep>
+        </section>
+
+        <section className="pl-panel" data-testid="ops-access-risk">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title mb-1">访问风险</h2>
+              <p className="pl-notice"><span className="notranslate" translate="no">Agent</span> / token / ACL 风险摘要，触发条件来自近 7 天访问统计。</p>
+            </div>
+          </div>
+          <div className="pl-risk-list">
+            <div
+              className="pl-risk-item"
+              data-tone={enabledAgents.length === 0 ? "danger" : "default"}
+            >
+              <div>
+                <strong><span className="notranslate" translate="no">Agent</span> 启用与禁用</strong>
+                <div className="text-xs text-fg-muted">
+                  <span className="notranslate" translate="no">{enabledAgents.length}</span> 启用 / <span className="notranslate" translate="no">{agents.length}</span> 总数
+                </div>
+              </div>
+              <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
+                查看 <span className="notranslate" translate="no">Agent</span> 管理 ↗
+              </Link>
+            </div>
+            <div
+              className="pl-risk-item"
+              data-tone={aclDenied7d > 0 ? "danger" : "default"}
+            >
+              <div>
+                <strong>近 7 天 ACL 拒绝</strong>
+                <div className="text-xs text-fg-muted">
+                  <span className="notranslate" translate="no">{aclDenied7d}</span> 次拒绝
+                </div>
+              </div>
+              <Link
+                to="/admin/audit?outcome=denied"
+                className="pl-card-cta"
+              >
+                查看访问日志 ↗
+              </Link>
+            </div>
+            <div
+              className="pl-risk-item"
+              data-tone={availableTokenCountValue === 0 && agents.length > 0 ? "warning" : "default"}
+            >
+              <div>
+                <strong>可用 <span className="notranslate" translate="no">Token</span></strong>
+                <div className="text-xs text-fg-muted">
+                  <span className="notranslate" translate="no">{availableTokenCountValue}</span> 个可用 <span className="notranslate" translate="no">Token</span>
+                </div>
+              </div>
+              <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
+                管理 <span className="notranslate" translate="no">Token</span> ↗
+              </Link>
+            </div>
+          </div>
+        </section>
       </div>
+
+      <section className="pl-panel">
+        <div className="pl-section-heading">
+          <div>
+            <h2 className="pl-panel-title mb-1"><span className="notranslate" translate="no">MCP</span> 接入</h2>
+          </div>
+        </div>
+
+        <div className="pl-mcp-actions">
+          <div className="pl-onboarding-facts pl-onboarding-facts--endpoint">
+            <span>
+              <span className="notranslate" translate="no">Endpoint</span>: <code className="notranslate break-all" translate="no">{endpoint ?? "—"}</code>
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary pl-btn--xs notranslate"
+              translate="no"
+              onClick={copyConfig}
+              disabled={!canCopyMcp}
+              data-testid="mcp-config-copy-button"
+            >
+              {copiedMain ? "已复制" : (<>复制 <span className="notranslate" translate="no">MCP</span> 配置</>)}
+            </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary pl-btn--xs"
+              onClick={() => setMcpDrawerOpen(true)}
+              data-testid="mcp-config-view-button"
+            >
+              查看配置
+            </button>
+          </div>
+          {endpointInfo?.status === "invalid" ? fallbackNotice(endpointInfo) : null}
+        </div>
+      </section>
+
+      <McpConfigDrawer
+        open={mcpDrawerOpen}
+        onClose={() => setMcpDrawerOpen(false)}
+        endpointInfo={endpointInfo}
+        mcpConfig={mcpConfig}
+      />
     </div>
   );
 }
+
+// Re-export the severity label helper so other surfaces (e.g. the
+// Monitor page) can pick it up if they decide to render Chinese labels.
+export { severityLabelBySeverity };

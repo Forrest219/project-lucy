@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { KtxCliError, validateSource } from "../ktx";
+import { KtxCliError, testConnection, validateSource } from "../ktx";
 
 function fakeExecFile(
   impl: (command: string, args: readonly string[], options: { cwd?: string; timeout?: number; env?: NodeJS.ProcessEnv }) => { error: Error | null; stdout: string; stderr: string }
@@ -64,5 +64,43 @@ describe("validateSource", () => {
         fakeExecFile(() => ({ error, stdout: "", stderr: "" }))
       )
     ).rejects.toBeInstanceOf(KtxCliError);
+  });
+});
+
+describe("testConnection", () => {
+  it("returns command, args, exit code, stdout and stderr on success", async () => {
+    const result = await testConnection(
+      "/project",
+      "demo-mysql",
+      fakeExecFile((command, args, options) => {
+        expect(command).toBe("ktx");
+        expect(args).toEqual(["connection", "test", "demo-mysql"]);
+        expect(options).toMatchObject({ cwd: "/project", timeout: 30_000 });
+        expect(options.env?.POSTHOG_DISABLED).toBe("1");
+        return { error: null, stdout: "Status: ok\n", stderr: "" };
+      })
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.command).toBe("ktx connection test demo-mysql");
+    expect(result.args).toEqual(["connection", "test", "demo-mysql"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("Status: ok\n");
+    expect(result.stderr).toBe("");
+  });
+
+  it("returns diagnostic command output on failure without throwing", async () => {
+    const error = Object.assign(new Error("failed"), { code: 1 });
+    const result = await testConnection(
+      "/project",
+      "demo-mysql",
+      fakeExecFile(() => ({ error, stdout: "", stderr: "Access denied" }))
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toBe("Access denied");
+    expect(result.command).toBe("ktx connection test demo-mysql");
   });
 });

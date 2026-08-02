@@ -35,6 +35,14 @@
 - 单文件内的 typo / 注释 / 格式修正
 - 已经在被批准的计划范围内的后续小步执行
 
+## 验证策略：浏览器测试约束
+
+正常开发任务默认不需要做浏览器测试。只有在用户、当前任务说明或已批准计划明确要求浏览器测试、端到端浏览器验证、截图验证、Playwright/Cypress 浏览器运行，或交付标准本身以浏览器行为验证为准时，才执行浏览器测试。
+
+Lucy 项目默认不做移动窄屏测试。除非用户、当前任务说明或已批准计划明确要求移动端、窄屏、响应式断点验证，不要主动执行 mobile viewport、narrow viewport 或 mobile emulation 相关测试。
+
+现有 E2E 套件与 release gate 文档仍作为“被明确要求执行浏览器/E2E 验证时”的测试事实源；它们不改变普通开发任务的默认验证范围。
+
 ## 红线（Off-Limits）
 
 - `.ktx/secrets/` 下的密码/密钥文件：禁止读取内容后输出、禁止提交到 git
@@ -48,6 +56,36 @@
 - `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
 - eval cases（YAML，agent 测）与 quiz HTML（人类测）的设计原则、命名约定、数据获取路径见 `docs/eval-quiz-conventions.md`；新增 dataset 的 eval/quiz 前必读
+
+## 全系统术语规范
+
+Lucy 的系统级术语事实源是
+[`webui/docs/00-product-terminology-standard.md`](../webui/docs/00-product-terminology-standard.md)。
+所有 WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、
+Spec、Plan、Runbook 和交付文档都必须遵守该标准。
+
+### 新模块必填 Terminology Compliance
+
+每个新增或重大更新的功能 Spec 必须包含以下小节：
+
+```md
+## Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms:
+- None
+```
+
+如果引入新概念，必须先在 `webui/docs/00-product-terminology-standard.md` 登记或在该小节说明新增术语、UI 主术语和禁止文案。
+
+### 开发与 Review 要求
+
+- 新增 UI 文案前先查术语标准，不得临时自造译名。
+- 不得把 `Schema` 翻译成“架构 / 模式”，不得把 `Manifest` 翻译成“舱单 / 清单”，不得把 `Package` 翻译成“报价包”。
+- 专业英文术语、数据库对象名、文件名、路径和 URL 的 DOM 节点必须添加 `translate="no"` 和 `notranslate`。
+- Code Review 必须检查术语一致性、禁用词和浏览器翻译防御。
+- WebUI 变更提交前运行 `cd webui && npm run lint:terminology`；根目录也可运行 `npm run lint:terminology`。
 
 ## Onboarding（首次拉取本仓库）
 

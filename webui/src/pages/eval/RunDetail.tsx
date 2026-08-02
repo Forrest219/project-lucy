@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiGet } from "../../lib/apiClient";
 import type { EvalRun, EvalRunCompare, EvalRunWithResults } from "../../lib/types";
+import { PageHeader } from "../../components/PageHeader";
 
 const STATUS_CLASS: Record<string, string> = {
   queued: "pl-status-partial",
@@ -20,7 +21,7 @@ type SseProgress = {
 
 type SseCaseDone = {
   caseId: string;
-  status: "PASS" | "FAIL";
+  status: "PASS" | "FAIL" | "SKIPPED" | "ERROR";
 };
 
 type SseFinished = {
@@ -60,7 +61,7 @@ export function RunDetail() {
   const navigate = useNavigate();
   const [expandedCase, setExpandedCase] = useState<string | null>(null);
   const [sseProgress, setSseProgress] = useState<{ current: number; total?: number; caseId: string } | null>(null);
-  const [sseCaseDone, setSseCaseDone] = useState<Record<string, "PASS" | "FAIL">>({});
+  const [sseCaseDone, setSseCaseDone] = useState<Record<string, "PASS" | "FAIL" | "SKIPPED" | "ERROR">>({});
   const [sseFinished, setSseFinished] = useState(false);
   const [compareWith, setCompareWith] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -133,23 +134,35 @@ export function RunDetail() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <button type="button" className="pl-btn pl-btn--ghost text-sm" onClick={() => navigate("/eval/runs")}>
-            ‹ 返回
+      <PageHeader
+        title={`Run #${run.id}`}
+        backAction={
+          <button
+            type="button"
+            className="pl-page-header-back"
+            onClick={() => navigate("/eval/runs")}
+          >
+            ‹ 返回运行历史
           </button>
-          <h1 className="text-xl font-semibold">Run #{run.id}</h1>
-          <span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>{run.status}</span>
-        </div>
-        <div className="flex gap-2">
-          <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=json`} download>
-            下载 JSON
-          </a>
-          <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=md`} download>
-            下载 MD
-          </a>
-        </div>
-      </div>
+        }
+        badges={
+          <>
+            <span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>{run.status}</span>
+            <span>{run.domain}</span>
+            <span>通过率 {passRate.toFixed(1)}%</span>
+          </>
+        }
+        actions={
+          <>
+            <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=json`} download>
+              下载 JSON
+            </a>
+            <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=md`} download>
+              下载 MD
+            </a>
+          </>
+        }
+      />
 
       {/* Summary */}
       <div className="border border-border rounded p-4 grid gap-2 text-sm">
@@ -192,7 +205,7 @@ export function RunDetail() {
 
       <div className="border border-border rounded p-4 grid gap-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-medium text-sm">Run 对比</h2>
+          <p className="font-medium text-sm mb-0">Run 对比</p>
           <select
             className="pl-input w-48 text-sm"
             value={compareWith}
@@ -244,7 +257,7 @@ export function RunDetail() {
       {/* Case results */}
       {results.length > 0 && (
         <div>
-          <h2 className="font-medium mb-3">Case 明细</h2>
+          <p className="font-medium mb-3">Case 明细</p>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-fg-muted">

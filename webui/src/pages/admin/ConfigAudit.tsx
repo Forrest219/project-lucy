@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
+import { PageHeader } from "../../components/PageHeader";
 import { apiGet } from "../../lib/apiClient";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type { ConfigAuditEntry, ConfigAuditResponse } from "../../lib/types";
 
 const PAGE_SIZE = 50;
@@ -15,15 +17,44 @@ function buildQuery(params: Record<string, string | number | undefined>): string
   return q.toString() ? `?${q.toString()}` : "";
 }
 
+/**
+ * Map a Config Audit entry's `changeType` + `targetId` to a deep-link into
+ * the related admin page. Returns null when we cannot infer a target.
+ */
+function configTargetLink(entry: ConfigAuditEntry): string | null {
+  if (!entry.targetId) return null;
+  if (entry.changeType.includes("agent") || entry.filePath.includes("access.yaml")) {
+    return buildObjectDetailSearch({ kind: "agent", agentId: entry.targetId });
+  }
+  if (entry.changeType.includes("role")) {
+    return `/admin/roles/${encodeURIComponent(entry.targetId)}`;
+  }
+  return null;
+}
+
 function ChangeRow({ entry }: { entry: ConfigAuditEntry }) {
   const [expanded, setExpanded] = useState(false);
+  const targetLink = configTargetLink(entry);
   return (
     <>
       <tr className="pl-audit-row" onClick={() => setExpanded(!expanded)}>
         <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.ts).toLocaleString("zh-CN")}</td>
         <td className="px-3 py-2 text-sm font-mono">{entry.actor}</td>
         <td className="px-3 py-2 text-sm">{entry.changeType}</td>
-        <td className="px-3 py-2 text-sm font-mono">{entry.targetId ?? "—"}</td>
+        <td className="px-3 py-2 text-sm font-mono">
+          {targetLink ? (
+            <Link
+              to={targetLink}
+              className="pl-inline-link notranslate"
+              translate="no"
+              data-testid={`config-audit-target-link-${entry.id}`}
+            >
+              {entry.targetId ?? "—"}
+            </Link>
+          ) : (
+            entry.targetId ?? "—"
+          )}
+        </td>
         <td className="px-3 py-2 text-xs text-fg-muted">{entry.filePath}</td>
       </tr>
       {expanded && (
@@ -78,22 +109,24 @@ export function ConfigAudit() {
 
   return (
     <div className="pl-page-stack">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="pl-eyebrow">访问治理</p>
-          <h1 className="text-xl font-semibold">配置变更日志</h1>
-          <p className="pl-page-intro">查看访问配置写入历史，当前 actor 为单管理员本机语义。</p>
-        </div>
-        <div className="flex gap-2">
-          <a href={exportUrl} className="pl-btn pl-btn--ghost text-sm">导出 CSV</a>
-          <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
-        </div>
-      </div>
+      <PageHeader
+        title="配置审计"
+        description="查看访问配置写入历史，当前 actor 为单管理员本机语义。"
+        badges={
+          <span>{total} 条记录</span>
+        }
+        actions={
+          <>
+            <a href={exportUrl} className="pl-btn pl-btn--ghost text-sm">导出 CSV</a>
+            <Link to="/admin/audit" className="pl-btn pl-btn--secondary text-sm">访问日志</Link>
+          </>
+        }
+      />
 
       {data?.actorNotice ? <div className="pl-notice">{data.actorNotice}</div> : null}
 
       <div className="pl-admin-filterbar">
-        <input className="pl-input w-40" placeholder="Agent / target" value={targetId} onChange={(e) => updateParam("targetId", e.target.value)} />
+        <input className="pl-input w-40 notranslate" translate="no" placeholder="Agent / target" value={targetId} onChange={(e) => updateParam("targetId", e.target.value)} />
         <input className="pl-input w-56" placeholder="文件路径" value={filePath} onChange={(e) => updateParam("filePath", e.target.value)} />
       </div>
 

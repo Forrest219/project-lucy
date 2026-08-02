@@ -12,6 +12,8 @@ type Props = {
   options: Option[];
   placeholder?: string;
   ariaLabel: string;
+  className?: string;
+  translate?: "yes" | "no";
 };
 
 function CheckIcon() {
@@ -30,10 +32,14 @@ function ChevronIcon() {
   );
 }
 
-export function SelectField({ value, onValueChange, options, placeholder, ariaLabel }: Props) {
+export function SelectField({ value, onValueChange, options, placeholder, ariaLabel, className, translate }: Props) {
   return (
     <Select.Root value={value} onValueChange={onValueChange}>
-      <Select.Trigger className="pl-select-trigger inline-flex items-center justify-between gap-2" aria-label={ariaLabel}>
+      <Select.Trigger
+        className={clsx("pl-select-trigger inline-flex items-center justify-between gap-2", className)}
+        aria-label={ariaLabel}
+        translate={translate}
+      >
         <Select.Value placeholder={placeholder} />
         <Select.Icon className="text-fg-muted">
           <ChevronIcon />

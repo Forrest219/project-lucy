@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy WebUI 功能地图 |
 | 文档类型 | Design / Current Capability Map |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-19；v1.1 更新 2026-06-29 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-06-19；v1.1 更新 2026-06-29；v1.2 更新 2026-07-24（新增 M6 「添加 schema」行）；v1.3 更新 2026-07-26（新增部署/连接体验升级设计） |
 | 撰写人 | Claude Thinker / Codex |
 | 适用范围 | WebUI 当前能力索引、交付前 reviewer 核对 |
 | 当前状态源 | `docs/webui-impl-status.md`, `docs/project-overview.md`, `docs/lucy-platform-goal-checklist.md` |
@@ -75,6 +75,7 @@ Eval 管理已经从 CLI-only 发展为 WebUI 模块，但完整 LLM/agent eval 
 | 部署向导与上线检查 | 已实现 | 帮客户完成 Docker / MCP / Agent 配置主链路 | `/onboarding`, `src/pages/Onboarding.tsx` |
 | MCP config 复制入口 | 已实现 | 降低 Agent 接入配置错误 | `/onboarding` |
 | 连接概览 | 已实现 | 查看当前项目连接和安全剥离后的配置 | `/connections`, `GET /api/connections` |
+| 给已有连接添加 schema | ✅ M6 已实现 | 在 webui 内给连接加 schema(database)，不接管新建连接 | `POST /api/connections/:connId/schemas`，详见 [`docs/design-schema-onboarding.md`](design-schema-onboarding.md) |
 | 表白名单配置 | 已实现 | 控制连接启用表范围 | `PUT /api/connections/:connId/enabled-tables` |
 | 连接测试与 ingest | 已实现 | 验证 DB 可用并触发 schema 扫描 | `POST /api/connections/:connId/test`, `POST /api/connections/:connId/ingest` |
 | Lucy MCP Proxy | 已实现 | Bearer token、ACL、audit、tool forwarding | `POST /mcp` on 7879 |
@@ -88,6 +89,7 @@ Eval 管理已经从 CLI-only 发展为 WebUI 模块，但完整 LLM/agent eval 
 | Wiki 检索命中验收 | partial | 补充 KTX wiki_search 命中证据 |
 | Skill management | partial | 明确 v1 后的 Skill Editor / 版本化 / eval 回归闭环 |
 | MCP endpoint lifecycle management | partial | 从配置复制推进到 endpoint 生命周期、状态控制与健康反馈 |
+| 部署向导与连接概览体验升级 | designed | 按 `webui/docs/10-deployment-connection-ux-refresh.md` 优化指标语义、交付 banner、连接卡片、Add Schema 抽屉和 endpoint 复制 |
 | Business eval 完整执行 | partial | 在具备 agent/model secret 的环境跑完整 LLM/agent eval 并留痕 |
 
 ## 6. 相关文档
@@ -100,3 +102,4 @@ Eval 管理已经从 CLI-only 发展为 WebUI 模块，但完整 LLM/agent eval 
 | WebUI 使用说明 | `docs/webui-module-guide.md` |
 | API 契约 | `webui/docs/03-api-spec.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
+| 部署/连接体验升级 | `webui/docs/10-deployment-connection-ux-refresh.md` |

@@ -65,6 +65,19 @@ export type SourceSummary = {
   wikiRefCount: number;
   completion: CompletionStatus;
   mtime: string;
+  /**
+   * Number of enabled Agents whose effective permissions include this source
+   * (matches by `connectionId === conn && schema === schema && sourceName === table`).
+   * Disabled Agents are not counted. Returns 0 when access config cannot be read.
+   */
+  authorizedAgentCount: number;
+  /**
+   * Latest mtime between the Schema Manifest and the table's semantic overlay
+   * YAML (when present). Format: ISO 8601.
+   */
+  semanticUpdatedAt: string;
+  /** Source of `semanticUpdatedAt`: `manifest` if the overlay is absent or older. */
+  semanticUpdatedAtSource: "manifest" | "overlay";
 };
 
 export type ConnectionInfo = {
@@ -75,14 +88,48 @@ export type ConnectionInfo = {
   r1Target?: boolean;
   readOnlyExpected?: boolean;
   passwordSource?: "file" | "inline" | "env";
+  host?: string;
+  port?: string;
+  database?: string;
   schemas: string[];
   enabledTables: string[];
+};
+
+// ─── MCP Public Endpoint Runtime (M18) ────────────────────────────────────────
+//
+// `McpEndpointInfo` is the single fact-source that the WebUI uses to render
+// and copy MCP config fragments. The backend reads `LUCY_PUBLIC_MCP_URL` from
+// the runtime environment; when the variable is missing it returns a local
+// development fallback, and when the value is malformed it returns a null URL
+// with a diagnostic. Frontend pages must never infer the endpoint from
+// `window.location`, `Host`, or other browser-derived signals.
+
+export type McpEndpointStatus = "configured" | "fallback" | "invalid";
+
+export type McpEndpointDiagnosticCode =
+  | "MISSING_PUBLIC_MCP_URL"
+  | "INVALID_PUBLIC_MCP_URL"
+  | "UNSUPPORTED_PUBLIC_MCP_PROTOCOL"
+  | "MCP_PATH_RECOMMENDED";
+
+export type McpEndpointDiagnostic = {
+  code: McpEndpointDiagnosticCode;
+  message: string;
+};
+
+export type McpEndpointInfo = {
+  url: string | null;
+  status: McpEndpointStatus;
+  source: "env" | "fallback";
+  configured: boolean;
+  diagnostics: McpEndpointDiagnostic[];
 };
 
 export type ProjectInfo = {
   root: string;
   connections: ConnectionInfo[];
   ktxAvailable: boolean;
+  mcpEndpoint: McpEndpointInfo;
 };
 
 export type TablePatch = {
@@ -95,4 +142,25 @@ export type TablePatch = {
     name: string;
     description?: string;
   }>;
+};
+
+export type AddSchemaPreview = {
+  diff: string;
+  proposedYaml: string;
+  oldSchemas: string[];
+  newSchemas: string[];
+};
+
+export type AddSchemaResult = {
+  written: true;
+  auditId?: number;
+  oldSchemas: string[];
+  newSchemas: string[];
+};
+
+export type ConnectionTestDetail = {
+  status: "ok" | "error";
+  latencyMs?: number;
+  detail?: string;
+  reason?: string;
 };

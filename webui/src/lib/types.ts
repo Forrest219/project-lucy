@@ -63,6 +63,17 @@ export type SourceSummary = {
   wikiRefCount: number;
   completion: CompletionStatus;
   mtime: string;
+  /**
+   * Number of enabled Agents whose effective permissions include this source.
+   * See `webui/server/semantic-layer.ts` for the matching rule.
+   */
+  authorizedAgentCount: number;
+  /**
+   * Latest mtime between the Schema Manifest and the table's semantic overlay
+   * YAML (when present). ISO 8601.
+   */
+  semanticUpdatedAt: string;
+  semanticUpdatedAtSource: "manifest" | "overlay";
 };
 
 export type ConnectionInfo = {
@@ -73,14 +84,47 @@ export type ConnectionInfo = {
   r1Target?: boolean;
   readOnlyExpected?: boolean;
   passwordSource?: "file" | "inline" | "env";
+  host?: string;
+  port?: string;
+  database?: string;
   schemas: string[];
   enabledTables: string[];
+};
+
+// ─── MCP Public Endpoint Runtime (M18) ────────────────────────────────────────
+//
+// Mirrors the backend `McpEndpointInfo`. Frontend pages must read the
+// endpoint from the `mcpEndpoint` field returned by `GET /api/project` and
+// must not infer the endpoint from `window.location`, `Host`, or other
+// browser-derived signals. The runtime state is set by the backend from
+// `LUCY_PUBLIC_MCP_URL` (or the local development fallback).
+
+export type McpEndpointStatus = "configured" | "fallback" | "invalid";
+
+export type McpEndpointDiagnosticCode =
+  | "MISSING_PUBLIC_MCP_URL"
+  | "INVALID_PUBLIC_MCP_URL"
+  | "UNSUPPORTED_PUBLIC_MCP_PROTOCOL"
+  | "MCP_PATH_RECOMMENDED";
+
+export type McpEndpointDiagnostic = {
+  code: McpEndpointDiagnosticCode;
+  message: string;
+};
+
+export type McpEndpointInfo = {
+  url: string | null;
+  status: McpEndpointStatus;
+  source: "env" | "fallback";
+  configured: boolean;
+  diagnostics: McpEndpointDiagnostic[];
 };
 
 export type ProjectInfo = {
   root: string;
   connections: ConnectionInfo[];
   ktxAvailable: boolean;
+  mcpEndpoint: McpEndpointInfo;
 };
 
 export type ConnectionsResponse = {
@@ -89,6 +133,38 @@ export type ConnectionsResponse = {
 
 export type ConnectionTablesResponse = {
   tables: string[];
+};
+
+export type IngestResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+export type ConnectionTestResult = {
+  status: "ok" | "error";
+  latencyMs?: number;
+  detail?: string;
+  reason?: string;
+  command: string;
+  args: string[];
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+};
+
+export type AddSchemaPreview = {
+  diff: string;
+  proposedYaml: string;
+  oldSchemas: string[];
+  newSchemas: string[];
+};
+
+export type AddSchemaResult = {
+  written: true;
+  auditId?: number;
+  oldSchemas: string[];
+  newSchemas: string[];
 };
 
 export type SourcesResponse = {
@@ -189,6 +265,29 @@ export type WikiPreview = {
   proposedMarkdown: string;
 };
 
+export type WikiUploadPreview = WikiPreview & {
+  exists: boolean;
+  title: string;
+  slRefs: string[];
+  warnings: string[];
+};
+
+export type HelpTocItem = {
+  id: string;
+  level: 2 | 3 | 4;
+  title: string;
+};
+
+export type HelpHandbook = {
+  id: "system-handbook";
+  title: string;
+  sourcePath: string;
+  updatedAt: string;
+  etag: string;
+  toc: HelpTocItem[];
+  markdown: string;
+};
+
 export type JoinCandidate = {
   conn: string;
   schema: string;
@@ -225,6 +324,36 @@ export type Role = {
   sourceCount: number;
   invalid: boolean;
   warnings: string[];
+  usageCount?: number;
+  users?: Array<{ id: string; name: string; enabled: boolean; tokenCount: number }>;
+};
+
+export type RoleUserReference = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  tokenCount: number;
+};
+
+export type RoleSelector =
+  | { connection?: string; schema: string; names: string[] }
+  | { connection?: string; schema: string; prefix: string };
+
+export type RoleAllowConfig = {
+  connections?: string[];
+  tableSelectors?: RoleSelector[];
+  tools?: string[];
+};
+
+export type RoleDetail = Role & {
+  version?: string;
+  usageCount: number;
+  users: RoleUserReference[];
+  role: {
+    description?: string;
+    allow: RoleAllowConfig;
+  };
+  effectivePermissions?: EffectivePermissionsPreview;
 };
 
 export type EffectivePermissionsPreview = {
@@ -447,12 +576,17 @@ export type EvalRun = {
   passCount: number;
   failCount: number;
   passRate?: number;
+  suiteId?: string;
+  suiteHash?: string;
+  runnerMetadata?: unknown;
+  importSource?: string;
+  hashStatus?: EvalResultHashStatus;
 };
 
 export type EvalRunWithResults = EvalRun & {
   results: Array<{
     caseId: string;
-    status: "PASS" | "FAIL";
+    status: "PASS" | "FAIL" | "SKIPPED" | "ERROR";
     drift?: string;
     exitCode?: number;
     durationMs?: number;
@@ -497,6 +631,146 @@ export type EvalRunCompare = {
   };
 };
 
+// ─── Eval Suite canonical (M43) ───────────────────────────────────────────────
+// Lucy-recognized canonical Eval YAML protocol. See
+// `webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md` §5.
+
+export const EVAL_SUITE_SCHEMA_VERSION = 1 as const;
+export const EVAL_SUITE_KIND = "lucy_eval_suite" as const;
+export const EVAL_RESULT_VERSION = 1 as const;
+
+export type EvalSuiteSnapshot = {
+  mode: "live_readonly" | "snapshot";
+  /** YYYY-MM-DD */
+  snapshot_date: string;
+};
+
+export type EvalRunnerHints = {
+  default_mcp_endpoint?: string;
+  supported_runners: string[];
+};
+
+export type ToolAssertion = {
+  type: "required_tool" | "forbidden_tool" | "required_tool_input_regex" | "forbidden_tool_input_regex";
+  /** Tool name or regex against tool input. Use `|` to separate multiple tools. */
+  value: string;
+  reason: string;
+};
+
+export type ContextAssertion = {
+  inherit_measures?: string[];
+  inherit_filters?: string[];
+  inherit_dimensions?: string[];
+  inherit_time_grain?: string;
+  sql_assertions?: SqlAssertion[];
+  tool_assertions?: ToolAssertion[];
+};
+
+export type EvalSuiteCaseTurn = {
+  user: string;
+  expected_measures?: string[];
+  result_assertions?: ResultAssertion[];
+  context_assertions?: ContextAssertion;
+};
+
+export type EvalSuiteCase = {
+  id: string;
+  case_type: "single_turn" | "multi_turn";
+  question?: string;
+  turns?: EvalSuiteCaseTurn[];
+  expected_source: "semantic_layer" | "raw_sql_fallback" | "manual_debug_only";
+  expected_measures?: string[];
+  model_id?: string;
+  skill_version?: string;
+  semantic_version?: string;
+  sql_assertions?: SqlAssertion[];
+  tool_assertions?: ToolAssertion[];
+  result_assertions?: ResultAssertion[];
+  context_assertions?: ContextAssertion;
+  snapshot_date?: string;
+  linked_quiz_questions?: string[];
+  coverage?: string;
+  notes?: string;
+};
+
+export type EvalSuite = {
+  lucy_eval_schema_version: 1;
+  kind: "lucy_eval_suite";
+  /** Globally stable ID, matches `[a-z0-9][a-z0-9_-]*`. */
+  suite_id: string;
+  domain: string;
+  title: string;
+  snapshot?: EvalSuiteSnapshot;
+  runner_hints?: EvalRunnerHints;
+  cases: EvalSuiteCase[];
+  /** Computed (sha256 over canonical JSON). Empty before first hash. */
+  suite_hash?: string;
+};
+
+// ─── Eval Result JSON (M43) ──────────────────────────────────────────────────
+// Optional archive of locally-run evaluation results. See spec §6.
+
+export type EvalResultStatus = "PASS" | "FAIL" | "SKIPPED" | "ERROR";
+
+export type EvalResultCase = {
+  case_id: string;
+  status: EvalResultStatus;
+  duration_ms?: number;
+  sql?: string;
+  actual?: Record<string, unknown>;
+  expected?: Record<string, unknown>;
+  failures?: string[];
+  final_text?: string;
+  error_message?: string;
+};
+
+export type EvalResultRunner = {
+  kind: string;
+  version?: string;
+  model?: string;
+  host?: string;
+};
+
+export type EvalResultImport = {
+  lucy_eval_result_version: 1;
+  suite_id: string;
+  /** sha256:hex */
+  suite_hash: string;
+  domain: string;
+  runner: EvalResultRunner;
+  /** ISO 8601 */
+  started_at: string;
+  /** ISO 8601 */
+  finished_at: string;
+  results: EvalResultCase[];
+};
+
+export type EvalResultHashStatus = "matched" | "mismatch" | "suite_missing";
+
+export type EvalSuiteImportDiff = {
+  suiteId?: string;
+  suiteHash?: string;
+  added: Array<{ id: string }>;
+  modified: Array<{ id: string; reason?: string }>;
+  removed: Array<{ id: string }>;
+  conflicts: Array<{ id?: string; code: string; path: string; message: string }>;
+};
+
+export type EvalResultImportPreview = {
+  runId?: number;
+  domain?: string;
+  totalCases?: number;
+  passCount?: number;
+  failCount?: number;
+  skippedCount?: number;
+  errorCount?: number;
+  suiteHashMatched?: boolean;
+  hashStatus?: EvalResultHashStatus;
+  unknownCaseIds: string[];
+  unknownSuiteId?: boolean;
+  warnings: string[];
+};
+
 export type EvalDriftDistribution = {
   items: Array<{
     drift: string;
@@ -523,4 +797,336 @@ export type MonitorConfig = {
     passRateRed: number;
     consecutiveFailThreshold: number;
   }>;
+};
+
+// ─── Catalog Reload (M14) ──────────────────────────────────────────────────────
+// Static YAML-only catalog reload. No CLI subprocesses; no LLM dependency.
+// The deprecated `/api/connections/:connId/ingest` alias route still
+// exists for compatibility, but UI pages must use CatalogReloadRun instead of
+// the M13 IngestRun shape.
+
+export type CatalogReloadStatus = "success" | "failed";
+
+export type CatalogReloadWarning = {
+  code:
+    | "SCHEMA_MANIFEST_MISSING"
+    | "SCHEMA_MANIFEST_EMPTY"
+    | "ENABLED_TABLE_NOT_SCANNED"
+    | "MANIFEST_PARSE_FAILED";
+  connectionId: string;
+  schema?: string;
+  table?: string;
+  filePath?: string;
+  message: string;
+};
+
+export type CatalogReloadRun = {
+  id: string;
+  status: CatalogReloadStatus;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  requestedConnectionId?: string;
+  requestedSchema?: string;
+  connections: number;
+  connectionIds: string[];
+  configuredSchemas: number;
+  manifestSchemas: number;
+  tables: number;
+  enabledTables: number;
+  warnings: CatalogReloadWarning[];
+  source: "static-yaml";
+  deprecatedIngestAlias?: boolean;
+};
+
+export type CatalogReloadsResponse = {
+  runs: CatalogReloadRun[];
+  last: CatalogReloadRun | null;
+  lastByConnection: Record<string, CatalogReloadRun>;
+};
+
+// ─── M17 Catalog Asset Upload (controlled YAML manifest) ───────────────────
+// Self-service schema manifest upload that the analyst can run from the WebUI
+// instead of handing the file to ops. The backend pins the target path to
+// `semantic-layer/<connection>/_schema/<schema>.yaml`; the client never picks
+// the file location. Records are stored in a bounded sidecar; YAML content
+// itself is never written into the sidecar.
+
+export type CatalogAssetKind = "schema_manifest";
+export type LegacyCatalogAssetType = "schemaManifest";
+export type CatalogAssetType = LegacyCatalogAssetType;
+
+export type CatalogAssetWarningCode =
+  | "EMPTY_MANIFEST"
+  | "TARGET_EXISTS"
+  | "TABLE_SCHEMA_MISMATCH"
+  | "UNKNOWN_MANIFEST_SHAPE";
+
+export type CatalogAssetWarning = {
+  code: CatalogAssetWarningCode;
+  message: string;
+  table?: string;
+};
+
+export type CatalogAssetErrorCode =
+  | "UNKNOWN_CONNECTION"
+  | "SCHEMA_NOT_CONFIGURED"
+  | "ASSET_KIND_REQUIRED"
+  | "ASSET_KIND_UNSUPPORTED"
+  | "ASSET_KIND_ROUTE_MISMATCH"
+  | "INVALID_ASSET_TYPE"
+  | "INVALID_FILENAME"
+  | "FILE_TOO_LARGE"
+  | "YAML_PARSE_FAILED"
+  | "INVALID_MANIFEST"
+  | "SCHEMA_MANIFEST_EXPECTED"
+  | "SEMANTIC_OVERLAY_EXPECTED"
+  | "OVERLAY_FIELD_IN_MANIFEST"
+  | "MANIFEST_SHAPE_IN_OVERLAY"
+  | "PATH_NOT_ALLOWED";
+
+export type CatalogAssetError = {
+  code: CatalogAssetErrorCode;
+  message: string;
+};
+
+export type CatalogAssetValidateRequest = {
+  connectionId: string;
+  schema: string;
+  assetKind?: CatalogAssetKind;
+  assetType?: LegacyCatalogAssetType;
+  filename: string;
+  content: string;
+};
+
+export type CatalogAssetValidateResponse = {
+  valid: boolean;
+  connectionId: string;
+  schema: string;
+  assetKind: CatalogAssetKind;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  exists: boolean;
+  originalFilename: string;
+  sizeBytes: number;
+  sha256: string;
+  tables: number;
+  tableNames: string[];
+  warnings: CatalogAssetWarning[];
+  errors: CatalogAssetError[];
+};
+
+export type CatalogAssetUploadRequest = CatalogAssetValidateRequest & {
+  confirmOverwrite?: boolean;
+};
+
+export type CatalogAssetUploadRecord = {
+  id: string;
+  createdAt: string;
+  connectionId: string;
+  schema: string;
+  assetKind: CatalogAssetKind;
+  assetType: CatalogAssetType;
+  targetPath: string;
+  originalFilename: string;
+  sizeBytes: number;
+  sha256: string;
+  tables: number;
+  overwritten: boolean;
+  warnings: CatalogAssetWarning[];
+  reloadRunId?: string;
+};
+
+export type CatalogAssetUploadResponse = {
+  uploaded: true;
+  record: CatalogAssetUploadRecord;
+  validation: CatalogAssetValidateResponse;
+  reload: CatalogReloadRun;
+};
+
+export type CatalogAssetUploadsResponse = {
+  records: CatalogAssetUploadRecord[];
+  lastBySchema: Record<string, CatalogAssetUploadRecord>;
+};
+
+// ─── M19 Semantic Asset Self-Service Publish And Export ────────────────────
+// Analyst-driven upload of multi-file semantic asset packages: schema
+// manifests (`semantic-layer/<conn>/_schema/<schema>.yaml`) and semantic
+// source overlays (`semantic-layer/<conn>/<source>.yaml`). The backend
+// computes every target path, refuses paths from the client, and the
+// publish pipeline never shells out before a staging-validate gate passes.
+
+export type SemanticAssetKind = "schemaManifest" | "semanticSource" | "wiki" | "eval";
+
+export type SemanticAssetWarningCode =
+  | "TARGET_EXISTS"
+  | "EMPTY_MANIFEST"
+  | "TABLE_SCHEMA_MISMATCH"
+  | "UNKNOWN_MANIFEST_SHAPE"
+  | "PUBLISH_LOCKED";
+
+export type SemanticAssetErrorCode =
+  | "UNKNOWN_CONNECTION"
+  | "SCHEMA_NOT_CONFIGURED"
+  | "DUPLICATE_FILENAME"
+  | "INVALID_FILENAME"
+  | "FILE_TOO_LARGE"
+  | "PACKAGE_PARSE_FAILED"
+  | "YAML_PARSE_FAILED"
+  | "INVALID_MANIFEST"
+  | "UNSAFE_SOURCE_NAME"
+  | "OVERLAY_MISSING_TABLE"
+  | "UNKNOWN_SHAPE"
+  | "PATH_NOT_ALLOWED"
+  | "VALIDATION_SNAPSHOT_NOT_FOUND"
+  | "VALIDATION_GATE_FAILED"
+  | "PUBLISH_IN_PROGRESS";
+
+export type SemanticAssetWarning = {
+  code: SemanticAssetWarningCode;
+  message: string;
+  filePath?: string;
+};
+
+export type SemanticAssetError = {
+  code: SemanticAssetErrorCode;
+  message: string;
+  filePath?: string;
+  line?: number;
+  column?: number;
+};
+
+export type SemanticAssetFilePreview = {
+  originalFilename: string;
+  kind: SemanticAssetKind;
+  targetPath: string;
+  exists: boolean;
+  sizeBytes: number;
+  sha256: string;
+  connectionId?: string;
+  schema?: string;
+  sourceName?: string;
+  physicalTable?: string;
+  warnings: SemanticAssetWarning[];
+};
+
+export type SemanticAssetChangedSource = {
+  connectionId: string;
+  sourceName: string;
+};
+
+export type SemanticAssetValidateRequest = {
+  files: Array<{ filename: string; content: string }>;
+  packages?: Array<{ filename: string; contentBase64: string }>;
+  defaultConnectionId?: string;
+  defaultSchema?: string;
+};
+
+export type SemanticAssetValidateResponse = {
+  valid: boolean;
+  validationId: string;
+  files: SemanticAssetFilePreview[];
+  changedSources: SemanticAssetChangedSource[];
+  diff: string;
+  warnings: SemanticAssetWarning[];
+  errors: SemanticAssetError[];
+};
+
+export type SemanticAssetReleaseStatus =
+  | "blocked"
+  | "promote_failed"
+  | "reindexing"
+  | "published"
+  | "reindex_failed";
+
+export type SemanticAssetReleaseFile = {
+  targetPath: string;
+  kind: SemanticAssetKind;
+  sha256: string;
+  overwritten: boolean;
+};
+
+export type SemanticAssetValidationRow = {
+  connectionId: string;
+  sourceName: string;
+  ok: boolean;
+  exitCode: number;
+  stdout?: string;
+  stderr?: string;
+  issues: Array<{ message: string; filePath?: string; line?: number; column?: number }>;
+};
+
+export type SemanticAssetReindexRecord = {
+  ok: boolean;
+  exitCode: number;
+  stdout?: string;
+  stderr?: string;
+};
+
+export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex";
+
+export type SemanticAssetReleaseRecord = {
+  id: string;
+  createdAt: string;
+  actor: string;
+  status: SemanticAssetReleaseStatus;
+  trigger?: SemanticAssetReleaseTrigger;
+  connectionIds: string[];
+  files: SemanticAssetReleaseFile[];
+  changedSources: SemanticAssetChangedSource[];
+  diff?: string;
+  validation: {
+    ok: boolean;
+    results: SemanticAssetValidationRow[];
+  };
+  reindex?: SemanticAssetReindexRecord;
+};
+
+export type SemanticAssetReleasesResponse = {
+  records: SemanticAssetReleaseRecord[];
+};
+
+export type SemanticAssetReleaseStatusResponse = {
+  release: SemanticAssetReleaseRecord;
+};
+
+export type SemanticAssetPublishRequest = {
+  validationId: string;
+  confirmOverwrite?: boolean;
+};
+
+export type SemanticAssetPublishResponse = {
+  accepted: boolean;
+  release: SemanticAssetReleaseRecord;
+};
+
+export type SemanticAssetManualReindexResponse = {
+  id?: string;
+  force: boolean;
+  startedAt: string;
+  finishedAt: string;
+  reindex: SemanticAssetReindexRecord;
+};
+
+export type SemanticAssetExportRequest = {
+  scope?: { connectionId?: string; schema?: string };
+  includeWiki?: boolean;
+  includeEvals?: boolean;
+  includeSkills?: boolean;
+  includeSanitizedKtxYaml?: boolean;
+};
+
+export type SemanticAssetExcludedFile = {
+  path: string;
+  reason: string;
+};
+
+export type SemanticAssetExportResponse = {
+  exportId: string;
+  filename: string;
+  sizeBytes: number;
+  sha256: string;
+  downloadUrl: string;
+  includedFiles: string[];
+  excludedFiles: SemanticAssetExcludedFile[];
 };

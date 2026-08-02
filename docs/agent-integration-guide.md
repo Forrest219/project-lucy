@@ -12,17 +12,22 @@
 
 Agents consume Lucy as a governed MCP runtime. Lucy compiles customer data context into semantic, knowledge, query, quality, and access assets, then exposes only the tools allowed for the agent's token/role.
 
-Default Docker customer MCP endpoint:
+> 🔑 **M18 起，Agent 实际配置的 endpoint 统一从 Lucy WebUI 复制。** 部署方通过 `LUCY_PUBLIC_MCP_URL` 把对外可访问的 MCP URL 注入到运行实例（`GET /api/project.mcpEndpoint.url`），WebUI 的 `/onboarding`、`/connections`、`/admin/agents`、Token 首秀页面会展示并允许复制这个值。前端不再根据浏览器 host、容器端口或 `localhost` 推断 endpoint。
+
+客户部署里 Agent 实际配置的 URL：
 
 ```text
-http://<host>:7879/mcp
+<LUCY_PUBLIC_MCP_URL>      # 例如 https://lucy.example.com/mcp
 ```
 
-For local demo smoke:
+本地开发与 Docker demo 仍可使用容器内监听地址作为示例，但**不能**作为生产环境给 Agent 的接入点：
 
 ```text
-http://127.0.0.1:57881/mcp
+http://127.0.0.1:7879/mcp        # 本地开发 / 容器内 listen
+http://127.0.0.1:57881/mcp       # Docker demo 烟测端口（仅烟测）
 ```
+
+> `LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 只控制容器内/主机内的 MCP Proxy 监听地址。客户/Agent 真正访问的 URL 必须由 `LUCY_PUBLIC_MCP_URL` 单独指定，两者**不能**互相替代。
 
 ## 2. Authentication
 
@@ -45,7 +50,7 @@ Token rules:
 {
   "mcpServers": {
     "lucy": {
-      "url": "http://<host>:7879/mcp",
+      "url": "<LUCY_PUBLIC_MCP_URL>",
       "headers": {
         "Authorization": "Bearer <LUCY_AGENT_TOKEN>"
       }
@@ -53,6 +58,8 @@ Token rules:
   }
 }
 ```
+
+`<LUCY_PUBLIC_MCP_URL>` 替换为部署方在 `LUCY_PUBLIC_MCP_URL` 里设置并由 WebUI 展示的值。`/onboarding`、`/admin/agents`、`/admin/agents/:userId/tokens/new` 页面都提供「一键复制 JSON / Codex TOML」按钮，复制内容**永远**读取后端 runtime 字段，不会拼凑 `localhost` / `127.0.0.1` / 浏览器 host。
 
 For the headless customer delivery, generate or provision this config from deployment records and the agent platform secret store. WebUI onboarding is an optional repository UI surface, not the standard customer integration path.
 

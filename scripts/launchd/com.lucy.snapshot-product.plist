@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lucy WebUI 定时截图库 — launchd plist 模板（reviewer 审查用）
+
+  关联文档：
+    - docs/webui-snapshot-product.md §7（调度接口契约）
+    - docs/webui-snapshot-product.md §11（验收口径 #10）
+
+  落位：scripts/launchd/com.lucy.snapshot-product.plist
+  加载：仅在用户显式执行 `bash scripts/install-snapshot-product-launchd.sh --bootstrap`
+        时由安装脚本替换路径占位符后写到 ~/Library/LaunchAgents/ 并 launchctl bootstrap。
+  默认安装行为：仅生成 plist，不注册（spec §验收 10 强制要求"不要擅自 bootstrap"）。
+
+  路径占位符（安装脚本会替换）：
+    __LABEL__      launchd label（默认 com.lucy.snapshot-product）
+    __ROOT__       仓库根绝对路径（cd "$(dirname "$0")/../.." && pwd）
+    __BASE_URL__   LUCY_SNAPSHOT_BASE_URL（默认 http://127.0.0.1:5174）
+    __OUTPUT_DIR__ LUCY_SNAPSHOT_OUTPUT_DIR（默认 var/screenshots）
+    __HOUR__       LUCY_SNAPSHOT_LAUNCHD_HOUR（默认 2）
+    __MINUTE__     LUCY_SNAPSHOT_LAUNCHD_MINUTE（默认 10）
+    __NODE_BIN__   LUCY_SNAPSHOT_NODE_BIN（默认 /usr/bin/env node）
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>__LABEL__</string>
+
+  <!-- 启动时机：每天 __HOUR__:__MINUTE__ 触发一次，RunAtLoad=false（不随系统启动立刻跑） -->
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>__HOUR__</integer>
+    <key>Minute</key>
+    <integer>__MINUTE__</integer>
+  </dict>
+
+  <!-- 工作目录 = 仓库根，脚本里走相对路径 var/screenshots/ var/logs/ -->
+  <key>WorkingDirectory</key>
+  <string>__ROOT__</string>
+
+  <!-- 进程环境：与 spec §7.2 对齐 -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>LUCY_SNAPSHOT_BASE_URL</key>
+    <string>__BASE_URL__</string>
+    <key>LUCY_SNAPSHOT_OUTPUT_DIR</key>
+    <string>__OUTPUT_DIR__</string>
+    <key>LUCY_SNAPSHOT_TIMEOUT_MS</key>
+    <string>30000</string>
+    <!-- PATH 让 launchd 进程能找到 node；保留一份兜底 -->
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <!-- 主流程：先 --healthcheck 探活，200 才进入主截图；任一失败 launchd 视为本次 exit 非 0 -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>__NODE_BIN__ webui/scripts/snapshot-product.mjs --healthcheck &amp;&amp; __NODE_BIN__ webui/scripts/snapshot-product.mjs</string>
+  </array>
+
+  <!-- 日志落 var/logs/，路径已 .gitignore -->
+  <key>StandardOutPath</key>
+  <string>__ROOT__/var/logs/snapshot-product.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__ROOT__/var/logs/snapshot-product.err.log</string>
+
+  <!-- 失败后 5 分钟重试 1 次；不无限重试（spec §8 失败不重试，由下次调度覆盖） -->
+  <key>ThrottleInterval</key>
+  <integer>300</integer>
+</dict>
+</plist>

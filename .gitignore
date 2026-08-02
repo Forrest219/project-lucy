@@ -25,6 +25,10 @@ temp/
 dev-inbox/
 inbox/
 release/
+var/screenshots/
+var/logs/
+output/
+tmp/
 
 # Build / dependency outputs (webui ships its own .gitignore, this is the root fallback)
 node_modules/

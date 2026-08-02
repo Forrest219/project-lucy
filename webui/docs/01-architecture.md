@@ -112,6 +112,7 @@ GET /api/diff → git diff（限定 semantic-layer/、wiki/、.ktx-ui/）或会�
 | ADR-08 | 服务端状态 TanStack Query，表单 RHF+zod，不引入 Redux | 轻量、契合「编辑器」形态 |
 | ADR-09 | API 统一 **显式错误 envelope**，前端 client **必须**检查 `error` 字段后才用 `data` | 直接呼应历史教训：MCP 错误响应被吞导致假数据，见 [memory] |
 | ADR-10 | 新增语义字段分层写入：`grain/measures/segments` 写独立 overlay，`role/visibility/tags` 暂不写 | 实测 ktx 只在 `semantic-layer/<conn>/<source>.yaml` overlay 中消费 `grain/measures/segments`；`visibility` 会被拒，已有列不能用 overlay 覆盖 `role` |
+| ADR-11 | 新增 schema 走 webui 端点，但不接管新建连接；写 `ktx.yaml` 用 yaml Document 就地补丁，只追加 `connections.<connId>.schemas` 数组项，不动 host / password / credentials / llm / scan / ingest / agent / storage / setup 等其它字段；写入前必须先 `ktx connection test <connId>` 通过 | 守 `design-db-connection.md §八` 安全边界；复用 M3.4 的 `ALLOW_FILES = ["ktx.yaml"]` 通道；不破坏用户已配的 `scan.relationships` / `ingest.embeddings` / `agent.run_research` 等复杂段；详见 `docs/design-schema-onboarding.md` |
 
 > ADR-09 背景：曾出现「`_mcp_list_datasources` 未检查 error 字段导致『暂无数据源』反复出现」的 bug。本架构把「错误不可被吞」作为前后端契约的硬约束。
 
