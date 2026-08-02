@@ -90,8 +90,12 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M31-table-whitelist-catalog-reload-layout-stability.md](wo-M31-table-whitelist-catalog-reload-layout-stability.md) | M31 | 表白名单刷新反馈与布局稳定性：Toast 成功反馈、Schema 内缺失 Manifest 诊断、工具栏和行内操作降噪 |
 | [wo-M37-lucy-webui-positioning-control-plane.md](wo-M37-lucy-webui-positioning-control-plane.md) | M37 | Lucy WebUI 品牌定位升级到 Data Agent Ops Control Plane：品牌区副标题、术语标准 v0.2、过期设计 spec 备注与测试断言 |
 | [wo-M39-system-overview-enterprise-ops-polish.md](wo-M39-system-overview-enterprise-ops-polish.md) | M39 | 系统概览企业级运维控制台 polish：`/overview` 主入口、顶栏上下文、待处理事项治理、Metric-first 快照与 MCP 配置 Drawer |
+| [wo-M42-business-wiki-workbench-productization.md](wo-M42-business-wiki-workbench-productization.md) | M42 | 业务 Wiki 工作台产品化改版：顶栏收敛、语义实体降噪、专注编辑、Markdown 工具栏与模板选择 |
+| [wo-M43-eval-yaml-exchange-and-result-archive.md](wo-M43-eval-yaml-exchange-and-result-archive.md) | M43 | 质量评测 Eval YAML 上传 / 下载、本地运行指引与可选结果归档 |
 | [wo-M44-connection-overview-visual-simplification.md](wo-M44-connection-overview-visual-simplification.md) | M44 | 连接概览视觉收敛修复：移除工作目录、去双层方框、刷新状态右移、Schema 表新增启用表数与术语降噪 |
 | [wo-M45-table-whitelist-productization-followup.md](wo-M45-table-whitelist-productization-followup.md) | M45 | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 |
+| [wo-M46-catalog-and-table-semantic-workbench-productization.md](wo-M46-catalog-and-table-semantic-workbench-productization.md) | M46 | 表目录与表语义资产工作台产品化：`/catalog`、Connection 筛选、单表导出 / 导入 YAML 主路径与变更摘要 |
+| [wo-M47-business-wiki-md-library-operations.md](wo-M47-business-wiki-md-library-operations.md) | M47 | 业务 Wiki Markdown 文档库化：默认首页、目录瘦身、下载 / 上传 Markdown、上传覆盖与在线编辑降级 |
 
 ## 6. 如何把工单喂给 codex
 

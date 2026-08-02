@@ -35,7 +35,11 @@
 | [40-lucy-webui-positioning-control-plane.md](40-lucy-webui-positioning-control-plane.md) | Lucy WebUI 品牌定位升级到 Data Agent Ops Control Plane：品牌区副标题、术语标准 v0.2、过期设计 spec 备注与测试断言 | 产品 / 前端 / 文档 |
 | [41-system-overview-enterprise-ops-polish-spec.md](41-system-overview-enterprise-ops-polish-spec.md) | 系统概览企业级运维控制台 polish：canonical `/overview`、顶栏上下文、待处理事项治理、Metric-first 快照与 MCP 配置 Drawer | 产品 / UX / 前端 / Accessibility |
 | [44-connection-overview-productization-spec.md](44-connection-overview-productization-spec.md) | 连接概览产品化改版 v0.2：移除冗余上下文、收敛卡片容器、刷新状态右移、Schema 表新增启用表数与术语降噪 | 产品 / UX / 前端 / Accessibility |
+| [45-business-wiki-workbench-productization-spec.md](45-business-wiki-workbench-productization-spec.md) | 业务 Wiki 工作台产品化改版：顶栏收敛、语义实体降噪、专注编辑、Markdown 工具栏与模板选择 | 产品 / UX / 前端 / Accessibility |
+| [46-eval-yaml-exchange-and-result-archive-spec.md](46-eval-yaml-exchange-and-result-archive-spec.md) | 质量评测 YAML 交换与可选结果归档：上传 / 下载 Eval YAML、本地 runner 运行、Result JSON 可选归档与 suite hash 防错配 | 产品 / UX / API / 数据契约 |
 | [47-table-whitelist-productization-followup-spec.md](47-table-whitelist-productization-followup-spec.md) | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 | 产品 / UX / API / 前端 |
+| [48-catalog-and-table-semantic-workbench-productization-spec.md](48-catalog-and-table-semantic-workbench-productization-spec.md) | 表目录与表语义资产工作台产品化：`/catalog` canonical、Connection 筛选、表名降噪、导出/导入 YAML 主路径与变更摘要 | 产品 / UX / API / 前端 |
+| [49-business-wiki-md-library-operations-spec.md](49-business-wiki-md-library-operations-spec.md) | 业务 Wiki Markdown 文档库化：默认首页、目录瘦身、下载 / 上传 Markdown、上传覆盖与在线编辑降级 | 产品 / UX / API / 前端 |
 
 ## 与原 README 的关键校正
 
