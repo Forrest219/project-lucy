@@ -10,6 +10,10 @@ const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const FENCE_RE = /^```/;
 
 const SECTION_ALIASES: Array<[RegExp, string]> = [
+  [/常见问题速查/, "faq-quick-reference"],
+  [/面向开发者/, "faq-developer"],
+  [/面向管理员/, "faq-admin"],
+  [/面向接入协作者|面向接入 Agent 的协作者|接入 Agent 的协作者/, "faq-agent-integration"],
   [/系统概述与架构拓扑/, "system-overview"],
   [/快速上手/, "quick-start"],
   [/部署向导与上线检查/, "deployment-checklist"],
@@ -49,7 +53,8 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/MCP 返回 401/, "mcp-401"],
   [/KTX upstream 不可用/, "ktx-upstream-unavailable"],
   [/安全边界速查/, "security-boundaries"],
-  [/审阅|校验/, "review-validate"]
+  [/审阅|校验/, "review-validate"],
+  [/WebUI 入口速查/, "webui-entry-map"]
 ];
 
 const DATABASE_OPS_HEADING_TITLES = new Set([

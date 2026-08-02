@@ -61,6 +61,7 @@ describe("Help handbook", () => {
   it("parses H1-H3 headings into a stable TOC", () => {
     const toc = parseHelpToc([
       "# Project Lucy 系统使用与运维手册",
+      "## 0. 常见问题速查",
       "## 1. 系统概述与架构拓扑",
       "### 1.1 Lucy 是什么",
       "## 4. Agent / 客户端接入指南",
@@ -73,6 +74,7 @@ describe("Help handbook", () => {
     ].join("\n"));
 
     expect(toc).toEqual([
+      { id: "faq-quick-reference", level: 2, title: "0. 常见问题速查" },
       { id: "system-overview", level: 2, title: "1. 系统概述与架构拓扑" },
       { id: expect.any(String), level: 3, title: "1.1 Lucy 是什么" },
       { id: "mcp-integration", level: 2, title: "4. Agent / 客户端接入指南" },
@@ -141,6 +143,115 @@ describe("Help handbook", () => {
     expect(toc).toEqual([
       { id: "database-connections", level: 3, title: "3.2 数据库接入" }
     ]);
+  });
+
+  it("maps §0 sub-sections to stable alias ids", () => {
+    const toc = parseHelpToc([
+      "## 0. 常见问题速查",
+      "",
+      "本节是按用户问题组织的快速入口。",
+      "",
+      "### 0.1 面向开发者",
+      "",
+      "| Q | A |",
+      "|---|---|",
+      "| foo | bar |",
+      "",
+      "### 0.2 面向管理员",
+      "",
+      "### 0.3 面向接入协作者"
+    ].join("\n"));
+
+    const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
+    expect(byTitle["0. 常见问题速查"]).toBe("faq-quick-reference");
+    expect(byTitle["0.1 面向开发者"]).toBe("faq-developer");
+    expect(byTitle["0.2 面向管理员"]).toBe("faq-admin");
+    expect(byTitle["0.3 面向接入协作者"]).toBe("faq-agent-integration");
+  });
+
+  it("maps §1.5 WebUI Entry Map to the webui-entry-map alias id", () => {
+    const toc = parseHelpToc([
+      "## 1. 系统概述与架构拓扑",
+      "",
+      "### 1.1 Lucy 是什么",
+      "",
+      "### 1.4 目录与事实源地图",
+      "",
+      "### 1.5 WebUI 入口速查（5+1 侧栏地图）",
+      "",
+      "| 分组 | 二级菜单 | 路径 | 一句话用途 |",
+      "| --- | --- | --- | --- |",
+      "| 系统概览 | 系统概览 | `/overview` | 顶部入口 |"
+    ].join("\n"));
+
+    const entry = toc.find((t) => t.id === "webui-entry-map");
+    expect(entry).toBeDefined();
+    expect(entry?.level).toBe(3);
+    expect(entry?.title).toBe("1.5 WebUI 入口速查（5+1 侧栏地图）");
+  });
+
+  it("does not regress the §0 / §3 / §6 anchor set when §1.5 is added", () => {
+    const baseline = parseHelpToc([
+      "## 0. 常见问题速查",
+      "",
+      "### 0.1 面向开发者",
+      "",
+      "### 0.2 面向管理员",
+      "",
+      "### 0.3 面向接入协作者",
+      "",
+      "## 3. 功能模块操作指南",
+      "",
+      "### 3.1 部署向导与上线检查",
+      "",
+      "## 6. FAQ 与排障指南",
+      "",
+      "### 6.1 为什么提示\"未发现本地 manifest\"？"
+    ].join("\n"));
+    const baselineIds = new Set(baseline.map((t) => t.id));
+
+    const extended = parseHelpToc([
+      "## 0. 常见问题速查",
+      "",
+      "### 0.1 面向开发者",
+      "",
+      "### 0.2 面向管理员",
+      "",
+      "### 0.3 面向接入协作者",
+      "",
+      "## 1. 系统概述与架构拓扑",
+      "",
+      "### 1.1 Lucy 是什么",
+      "",
+      "### 1.5 WebUI 入口速查（5+1 侧栏地图）",
+      "",
+      "## 3. 功能模块操作指南",
+      "",
+      "### 3.1 部署向导与上线检查",
+      "",
+      "## 6. FAQ 与排障指南",
+      "",
+      "### 6.1 为什么提示\"未发现本地 manifest\"？"
+    ].join("\n"));
+    const extendedIds = new Set(extended.map((t) => t.id));
+
+    for (const id of baselineIds) {
+      expect(extendedIds.has(id), `expected anchor "${id}" to remain after §1.5 added`).toBe(true);
+    }
+    expect(extendedIds.has("webui-entry-map")).toBe(true);
+  });
+
+  it("also routes the legacy §0.3 alias variants to faq-agent-integration", () => {
+    // 防止标题回退到旧文案时 alias 失效；regex 必须覆盖三种写法。
+    const toc = parseHelpToc([
+      "### 0.3 面向接入 Agent 的协作者"
+    ].join("\n"));
+    expect(toc[0]?.id).toBe("faq-agent-integration");
+
+    const toc2 = parseHelpToc([
+      "### 0.3 接入 Agent 的协作者"
+    ].join("\n"));
+    expect(toc2[0]?.id).toBe("faq-agent-integration");
   });
 
   it("reads only the bundled docs/SYSTEM_HANDBOOK.md and returns the API envelope", async () => {
@@ -344,6 +455,26 @@ describe("Help handbook", () => {
           title: "新增数据库连接（运维 Runbook）"
         },
         { id: "database-connection-acl-sync", level: 4, title: "Agent 可见性与 ACL 同步" }
+      ])
+    );
+  });
+
+  it("the bundled handbook exposes a user-facing FAQ quick reference", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toContain("## 0. 常见问题速查");
+    expect(handbook.markdown).toContain("我在哪里新建数据库连接？");
+    expect(handbook.markdown).toContain("`YAML` 改完后为什么 `Agent` 仍然搜不到新口径？");
+    expect(handbook.markdown).toContain("`Agent` 返回 `Access denied` 时先查哪里？");
+    expect(handbook.markdown).toContain("`expires_at` 到期后 `token` 会自动失效吗？");
+    expect(handbook.markdown).toContain("[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查)");
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        { id: "faq-quick-reference", level: 2, title: "0. 常见问题速查" }
       ])
     );
   });

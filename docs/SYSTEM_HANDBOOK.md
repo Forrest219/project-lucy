@@ -9,7 +9,9 @@
 
 ## 目录
 
+- [0. 常见问题速查](#0-常见问题速查)
 - [1. 系统概述与架构拓扑](#1-系统概述与架构拓扑)
+  - [1.5 WebUI 入口速查（5+1 侧栏地图）](#15-webui-入口速查5+1-侧栏地图)
 - [2. 快速上手](#2-快速上手)
 - [3. 功能模块操作指南](#3-功能模块操作指南)
   - [3.1 部署向导与上线检查](#31-部署向导与上线检查)
@@ -22,6 +24,40 @@
 - [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)
 - [5. 配置与环境变量速查](#5-配置与环境变量速查)
 - [6. FAQ 与排障指南](#6-faq-与排障指南)
+
+## 0. 常见问题速查
+
+本节是按用户问题组织的快速入口。每条答案给下一步判断；完整操作以正文章节为准。
+常见问题按三种角色分组：开发者 / 管理员 / 接入协作者。
+第 6 章 FAQ 与排障指南 是配套的故障排查 deep dive。
+
+### 0.1 面向开发者
+
+| 问题 | 快速答案 | 详见 |
+| --- | --- | --- |
+| 我在哪里新建数据库连接？ | `WebUI` 不新建物理连接；先在 `ktx.yaml` 和 secret 文件声明连接，再回 `WebUI` 管理已声明连接。 | [3.2 数据库接入](#32-数据库接入)、[WebUI 与 ktx.yaml 的职责边界](#webui-与-ktxyaml-的职责边界) |
+| 数据库密码应该放在哪里？ | 用 `file:`、`env:` 或 `Docker` secrets；不要把明文密码写进 `ktx.yaml`、文档、`commit message` 或聊天记录。 | [连接形态与配置字段](#连接形态与配置字段)、[5.2 ktx.yaml](#52-ktxyaml) |
+| 点了刷新本地目录，刷新后的表在哪里看？ | `/connections` 看 reload 状态，`/connections/whitelist` 看可纳入启用表范围的表，`WebUI` 首页 `/` 看已进入语义建模的表。 | [刷新本地目录](#刷新本地目录) |
+| 为什么提示“未发现本地 manifest”？ | `ktx.yaml` 声明了 `Schema` 或启用表范围，但本地 `semantic-layer/<conn>/_schema/<schema>.yaml` 缺失或未包含目标表。 | [6.1 为什么提示“未发现本地 manifest”？](#61-为什么提示未发现本地-manifest) |
+| `YAML` 改完后为什么 `Agent` 仍然搜不到新口径？ | `WebUI` 读文件即可看到；`KTX` / `MCP` 检索需要 `ktx admin reindex`，并且还要用 `sl read` 确认 `overlay` 已合并到目标 `source`。 | [6.3 配置文件改动后什么时候生效？](#63-配置文件改动后什么时候生效)、[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查) |
+| 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |
+| 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |
+| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
+
+### 0.2 面向管理员
+
+| 问题 | 快速答案 | 详见 |
+| --- | --- | --- |
+| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |
+| `expires_at` 到期后 `token` 会自动失效吗？ | 不会。`expires_at` 当前只是 `metadata`；要下线 `token` 必须在 `Admin` 撤销或调用删除 `token` `API`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
+| 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |
+
+### 0.3 面向接入协作者
+
+| 问题 | 快速答案 | 详见 |
+| --- | --- | --- |
+| `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |
+| 本地开发应该访问哪个端口？ | 页面端口以启动日志为准；常见开发入口是 `Vite 5173`，`API 5174`，`Lucy MCP Proxy 7879`。`Docker` / demo 宿主端口可能是 `55176` 等映射端口。 | [2.2 本地启动](#22-本地启动)、[4.1 接入地址](#41-接入地址) |
 
 ## 1. 系统概述与架构拓扑
 
@@ -105,6 +141,32 @@ KTX CLI / MCP daemon
 | `.ktx-ui/audit.sqlite`（或 `LUCY_AUDIT_DB`） | MCP 访问审计、撤销 token、权限快照、问题簇 | 系统生成 |
 | `.ktx-ui/catalog-reloads.json` | 最近静态 Catalog reload 记录 | 系统生成 |
 | `.ktx-ui/eval/runs.sqlite`（或 `LUCY_EVAL_DB`） | Eval run 历史 | 系统生成 |
+
+### 1.5 WebUI 入口速查（5+1 侧栏地图）
+
+本节是侧栏可见入口的镜像视图。
+事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（v0.2 起由 `webui/src/app/navigation.ts` 导出）。
+`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档（含旧路径），不与代码并列称为权威源。
+架构调整时，请先改 `webui/src/app/navigation.ts`，再同步 §1.5 表格，最后开 follow-up 工单修 06 spec §3 / §4。
+
+| 分组 | 二级菜单 | 路径 | 一句话用途 |
+| --- | --- | --- | --- |
+| 系统概览 | 系统概览 | `/overview` | 聚合 Lucy `MCP`、`KTX` `Runtime`、语义资产与 `Agent` 接入的当前健康状态 |
+| 数据接入 | 连接概览 | `/connections` | 查看每个连接的 `Schema`、`YAML` 资产与本地目录刷新状态 |
+| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 维护进入语义层的表范围，保存后写入 `ktx.yaml` 的 `enabled_tables` 字段 |
+| 语义建模 | 语义资产 | `/catalog` | 维护当前 `KTX` 项目的结构化 semantic-layer `YAML` 模型，按搜索 / 连接 / `Schema` / 语义状态定位对象 |
+| 语义建模 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明和分析 Playbook 的 Markdown 文档 |
+| 语义发布 | 发布工作台 | `/publish/workbench` | 查看并发布当前待生效的语义资产；发布后自动重建 `KTX` 索引 |
+| 语义发布 | 发布记录 | `/publish/history` | 查看历史发布批次、Reindex 执行结果及当前版本快照 |
+| 质量评测 | 评测用例 | `/eval/cases` | 管理各 domain 的 `Eval` case 定义（`YAML` 源文件） |
+| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行历史与单次运行的详情 |
+| 质量评测 | 趋势监控 | `/eval/monitor` | 查看 `Eval` 质量趋势、失败集中度与 drift 分布 |
+| 访问治理 | `Agent` 实例 | `/admin/agents` | 配置每个 `Agent` 实例能用哪些 `MCP` 工具和访问哪些表 |
+| 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |
+| 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |
+| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |
+
+> 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
 
 ## 2. 快速上手
 
