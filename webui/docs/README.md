@@ -40,6 +40,7 @@
 | [47-table-whitelist-productization-followup-spec.md](47-table-whitelist-productization-followup-spec.md) | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 | 产品 / UX / API / 前端 |
 | [48-catalog-and-table-semantic-workbench-productization-spec.md](48-catalog-and-table-semantic-workbench-productization-spec.md) | 表目录与表语义资产工作台产品化：`/catalog` canonical、Connection 筛选、表名降噪、导出/导入 YAML 主路径与变更摘要 | 产品 / UX / API / 前端 |
 | [49-business-wiki-md-library-operations-spec.md](49-business-wiki-md-library-operations-spec.md) | 业务 Wiki Markdown 文档库化：默认首页、目录瘦身、下载 / 上传 Markdown、上传覆盖与在线编辑降级 | 产品 / UX / API / 前端 |
+| [60-help-qa-section-spec.md](60-help-qa-section-spec.md) | Help Center 常见问题快速解答章节：开发者 / 管理员 / 接入 Agent 协作者三场景 Q&A + 正文深链，不引入搜索、不暴露 MCP | 产品 / UX / 前端 / 文档 |
 
 ## 与原 README 的关键校正
 
