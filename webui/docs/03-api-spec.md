@@ -31,6 +31,10 @@ GET  /api/sources/:conn/:schema/:table
 PUT  /api/sources/:conn/:schema/:table         # body.dryRun 控制预览/落盘
 POST /api/sources/:conn/:schema/:table/validate
 POST /api/sources/:conn/:schema/:table/import
+GET  /api/sources/:conn/:schema/:table/versions
+GET  /api/sources/:conn/:schema/:table/versions/:versionId
+POST /api/sources/:conn/:schema/:table/versions/:versionId/restore/preview
+POST /api/sources/:conn/:schema/:table/versions/:versionId/restore
 
 GET  /api/wiki
 GET  /api/wiki/:key
@@ -38,6 +42,15 @@ GET  /api/wiki/:key/raw
 PUT  /api/wiki/:key
 POST /api/wiki/upload/preview
 POST /api/wiki/upload/commit
+GET  /api/wiki/directories
+POST /api/wiki/directories
+DELETE /api/wiki/directories/:path
+POST /api/wiki/:key/move/preview
+POST /api/wiki/:key/move
+GET  /api/wiki/:key/versions
+GET  /api/wiki/:key/versions/:versionId
+POST /api/wiki/:key/versions/:versionId/restore/preview
+POST /api/wiki/:key/versions/:versionId/restore
 
 GET  /api/diff
 POST /api/validate-changed
@@ -58,6 +71,7 @@ GET  /api/catalog/reloads
 POST /api/catalog/assets/validate
 POST /api/catalog/assets/upload
 GET  /api/catalog/assets/uploads
+GET  /api/catalog/assets/schema-manifest
 
 GET    /api/eval/domains
 GET    /api/eval/domains/:domain
@@ -237,6 +251,37 @@ POST /mcp                                      # MCP proxy, port 7879
 
 CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 
+### Table YAML 版本记录与恢复（M54）
+
+`PUT /api/sources/:conn/:schema/:table` 和 `POST /api/sources/:conn/:schema/:table/import` 在 `dryRun:false` 落盘后，会先把写完后的 YAML 快照追加到 `semantic-layer/.lucy-history/`，再返回新版快照摘要。保留最近 5 个版本，按 `versionId` 倒序，最新写入的版本即 cover current state。
+
+`GET /api/sources/:conn/:schema/:table/versions` 返回最近 5 个版本的摘要列表：
+
+```jsonc
+{ "ok": true, "data": {
+  "key": "mysql-aliyun/dataforai/superstore_orders",
+  "retentionLimit": 5,
+  "versions": [
+    { "versionId": "20260803T...-abcd1234", "key": "...", "createdAt": "2026-08-03T...",
+      "operation": "save", "contentHash": "sha256:...",
+      "affectedFiles": ["semantic-layer/mysql-aliyun/_schema/dataforai.yaml"] }
+  ]
+}}
+```
+
+`operation` 取值：
+- `save`：来自 `PUT .../sources/...`，可附 `restoredFromVersionId` 表示由恢复动作产生。
+- `import`：来自 `POST .../sources/.../import`，可附 `sourceFileName`（上传文件名）。
+- `restore`：来自 `POST .../versions/:versionId/restore`，必附 `restoredFromVersionId`。
+
+`GET /api/sources/:conn/:schema/:table/versions/:versionId` 返回该版本的 `rawYaml` 全量文本和与当前默认 YAML 的 diff（`diffFromCurrent`）。
+
+`POST /api/sources/:conn/:schema/:table/versions/:versionId/restore/preview` 预览恢复效果（diff vs. 当前），不落盘。
+
+`POST /api/sources/:conn/:schema/:table/versions/:versionId/restore` 把指定版本作为新的 save 写入：返回 `key` / `restoredFromVersionId` / `rawYaml` / `diff`，并把这次写入本身登记进历史（`operation:"restore"`, `restoredFromVersionId` 指向被恢复的那个版本）。
+
+错误码：`VERSION_NOT_FOUND` `SOURCE_NOT_FOUND` `INVALID_VERSION`。
+
 ### `GET /api/wiki` / `GET /api/wiki/:key` / `PUT /api/wiki/:key`
 - `key` 为相对 `wiki/` 的路径（如 `global/revenue.md`），服务端经 `fs-safe` 校验。
 - frontmatter 字段：`summary` `tags` `sl_refs` `refs` `usage_mode` + 正文 markdown。
@@ -259,6 +304,38 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 ```
 
 错误码：`BAD_REQUEST` `FORBIDDEN_PATH` `WIKI_NOT_FOUND`。
+
+### Wiki 目录治理与版本记录（M51 / M53 / M56）
+
+业务 Wiki 顶层目录是一等资源：空目录持久化在 `wiki/.lucy-directories.json`，删除 / 重建不走目录是否存在 md 文件的副作用判断。
+
+`GET /api/wiki/directories` 返回当前租户业务 Wiki 的目录树与每条目录的元数据（创建时间、文档数、是否为空）。
+
+`POST /api/wiki/directories` 创建顶层目录。请求：
+
+```jsonc
+{ "path": "global/finance", "mode": "create" }
+```
+
+`mode` 取值：`create`（不存在则创建，存在返回 `409 WIKI_DIRECTORY_EXISTS`）、`create_or_get`（不存在则创建，存在则直接返回已有的目录）。
+
+`DELETE /api/wiki/directories/:path` 删除目录。目录非空（仍残留文档） → `409 WIKI_DIRECTORY_NOT_EMPTY`；目录不存在 → `404 WIKI_DIRECTORY_NOT_FOUND`。
+
+`POST /api/wiki/:key/move/preview` 预览把 `key` 对应文档移动到 `targetPath`（相对 `wiki/` 的新路径），返回 diff。
+
+`POST /api/wiki/:key/move` 实际移动文档；目录变更同步写入 `wiki/.lucy-directories.json`。目标路径已被占用 → `409 WIKI_DOCUMENT_EXISTS`；路径非法 → `400 BAD_REQUEST`。
+
+Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个版本，存放在 `wiki/.lucy-history/`。
+
+`GET /api/wiki/:key/versions` 返回最近 5 个版本摘要（`operation` 取 `save | upload | restore`）。
+
+`GET /api/wiki/:key/versions/:versionId` 返回该版本 `rawMarkdown` 与 `diffFromCurrent`。
+
+`POST /api/wiki/:key/versions/:versionId/restore/preview` 预览恢复，不落盘。
+
+`POST /api/wiki/:key/versions/:versionId/restore` 把指定版本作为新 save 写入，返回 `key` / `restoredFromVersionId` / `rawMarkdown` / `diff`，并把这次写入本身登记进历史（`operation:"restore"`, `restoredFromVersionId` 指向被恢复的那个版本）。
+
+错误码：`WIKI_DOCUMENT_NOT_FOUND` `WIKI_VERSION_NOT_FOUND` `WIKI_DIRECTORY_EXISTS` `WIKI_DIRECTORY_NOT_EMPTY` `WIKI_DIRECTORY_NOT_FOUND` `WIKI_DOCUMENT_EXISTS` `FORBIDDEN_PATH` `BAD_REQUEST`。
 
 ### `GET /api/diff`
 返回白名单目录（`semantic-layer/`、`wiki/`、`.ktx-ui/`）下的 `git diff`（name-status + 可选 patch）。非 git 仓库时回退会话写入记录。
@@ -323,6 +400,8 @@ dryRun 响应：
 `POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。
 
 `GET /api/catalog/assets/uploads` 返回 Schema Manifest 上传审计记录。
+
+`GET /api/catalog/assets/schema-manifest` 返回当前 connection + schema 的 Schema Manifest 内容（用于资产工作台读取物理表结构）。`conn` / `schema` 走 query string；目标路径服务端按 `semantic-layer/<conn>/_schema/<schema>.yaml` 解析，不接受客户端任意路径。Manifest 缺失 → `404 SCHEMA_MANIFEST_NOT_FOUND`。
 
 ### 语义资产发布与导出
 
