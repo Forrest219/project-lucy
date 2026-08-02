@@ -81,72 +81,68 @@ function navLinkClass(isActive: boolean) {
 export function AppFrame() {
   const location = useLocation();
   const isHelpRoute = location.pathname === "/help";
-  const isWikiRoute = location.pathname === "/wiki";
   const appShellClass = [
     "pl-app-shell",
-    isHelpRoute ? "pl-app-shell--help" : "",
-    isWikiRoute ? "pl-app-shell--wiki" : ""
+    isHelpRoute ? "pl-app-shell--help" : ""
   ].filter(Boolean).join(" ");
 
   return (
     <div className={appShellClass}>
-      {isWikiRoute ? null : (
-        <aside className="pl-sidebar">
-          <div className="pl-brand-block">
-            <strong>Lucy WebUI</strong>
-            {/* v1.9.x 收口：移除英文 Subtitle（与中文 tagline 重复），仅保留一行干净中文。 */}
-            <span
-              className="pl-brand-tagline notranslate"
-              translate="no"
-              title="Data Agent 运维控制台"
-            >
-              Data Agent 运维控制台
-            </span>
-          </div>
+      <aside className="pl-sidebar">
+        <div className="pl-brand-block">
+          <strong>Lucy WebUI</strong>
+          {/* v1.9.x 收口：移除英文 Subtitle（与中文 tagline 重复），仅保留一行干净中文。 */}
+          <span
+            className="pl-brand-tagline notranslate"
+            translate="no"
+            title="Data Agent 运维控制台"
+          >
+            Data Agent 运维控制台
+          </span>
+        </div>
 
-          <nav className="pl-nav" aria-label="主导航">
-            <section className="pl-nav-section pl-nav-section--top" key="top">
+        <nav className="pl-nav" aria-label="主导航">
+          <section className="pl-nav-section pl-nav-section--top" key="top">
+            <div className="grid gap-1">
+              <Link
+                aria-current={topLevelEntry.active(location.pathname) ? "page" : undefined}
+                className={navLinkClass(topLevelEntry.active(location.pathname))}
+                to={topLevelEntry.to}
+              >
+                {topLevelEntry.label}
+              </Link>
+            </div>
+          </section>
+          {navGroups.map((group) => (
+            <section className="pl-nav-section" key={group.title}>
+              <h2 className="pl-nav-section-title">{group.title}</h2>
               <div className="grid gap-1">
-                <Link
-                  aria-current={topLevelEntry.active(location.pathname) ? "page" : undefined}
-                  className={navLinkClass(topLevelEntry.active(location.pathname))}
-                  to={topLevelEntry.to}
-                >
-                  {topLevelEntry.label}
-                </Link>
+                {group.items.map((item) => {
+                  const active = item.active(location.pathname);
+                  return (
+                    <Link
+                      aria-current={active ? "page" : undefined}
+                      className={navLinkClass(active)}
+                      key={item.to}
+                      to={item.to}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
               </div>
             </section>
-            {navGroups.map((group) => (
-              <section className="pl-nav-section" key={group.title}>
-                <h2 className="pl-nav-section-title">{group.title}</h2>
-                <div className="grid gap-1">
-                  {group.items.map((item) => {
-                    const active = item.active(location.pathname);
-                    return (
-                      <Link
-                        aria-current={active ? "page" : undefined}
-                        className={navLinkClass(active)}
-                        key={item.to}
-                        to={item.to}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
-          </nav>
-          <div className="pl-sidebar-footer" data-testid="sidebar-footer">
-            <div className="pl-sidebar-utility" data-testid="sidebar-utility">
-              <HelpButton className="pl-sidebar-help-link">
-                <span aria-hidden="true">?</span>
-                <span>系统手册</span>
-              </HelpButton>
-            </div>
+          ))}
+        </nav>
+        <div className="pl-sidebar-footer" data-testid="sidebar-footer">
+          <div className="pl-sidebar-utility" data-testid="sidebar-utility">
+            <HelpButton className="pl-sidebar-help-link">
+              <span aria-hidden="true">?</span>
+              <span>系统手册</span>
+            </HelpButton>
           </div>
-        </aside>
-      )}
+        </div>
+      </aside>
 
       <main className="pl-workspace">
         <div className="pl-workspace-body">

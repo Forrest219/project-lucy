@@ -134,8 +134,8 @@ describe("AppFrame shell", () => {
     ["/overview", "Onboarding", "系统概览"],
     ["/connections", "ConnectionOverview", "连接概览"],
     ["/connections/enabled-tables", "TableWhitelist", "启用表范围"],
-    ["/", "Catalog", "表目录"],
-    ["/catalog", "Catalog", "表目录"],
+    ["/", "Catalog", "语义资产"],
+    ["/catalog", "Catalog", "语义资产"],
     ["/publish/workbench", "PublishWorkbench", "发布工作台"],
     ["/publish/history", "PublishHistory", "发布记录"],
     ["/eval/cases", "CaseList", "评测用例"],
@@ -158,14 +158,14 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: "启用表范围" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("uses a dedicated Wiki shell without the global navigation", () => {
+  it("keeps global navigation visible on the Wiki route", () => {
     renderAt("/wiki");
 
     expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor");
-    expect(document.querySelector(".pl-app-shell")).toHaveClass("pl-app-shell--wiki");
-    expect(document.querySelector(".pl-sidebar")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "业务 Wiki" })).not.toBeInTheDocument();
+    expect(document.querySelector(".pl-app-shell")).not.toHaveClass("pl-app-shell--wiki");
+    expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "语义资产" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "业务 Wiki" })).toHaveAttribute("aria-current", "page");
   });
 
   it("keeps /connections/test as a compat alias route with no sidebar entry", () => {
@@ -209,10 +209,10 @@ describe("AppFrame shell", () => {
     expect(lastOnboardingLocation?.hash).toBe("#section-1");
   });
 
-  it("redirects / to the canonical /catalog route and marks 表目录 active", () => {
+  it("redirects / to the canonical /catalog route and marks 语义资产 active", () => {
     renderAt("/");
     expect(screen.getByTestId("route-page")).toHaveTextContent("Catalog");
-    const catalogLink = screen.getByRole("link", { name: "表目录" });
+    const catalogLink = screen.getByRole("link", { name: "语义资产" });
     expect(catalogLink).toHaveAttribute("href", "/catalog");
     expect(catalogLink).toHaveAttribute("aria-current", "page");
   });
@@ -225,7 +225,7 @@ describe("AppFrame shell", () => {
       search: "?tab=diff",
       hash: "#preview"
     });
-    expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
   });
 
   it("exposes each 5+1 navigation group heading exactly once", () => {
@@ -340,14 +340,14 @@ describe("AppFrame shell", () => {
     expect(document.querySelector(".pl-app-shell")).toHaveClass("pl-app-shell--help");
   });
 
-  it("marks source and join pages as table catalog navigation", () => {
+  it("marks source and join pages as semantic asset navigation", () => {
     renderAt("/sources/mysql-aliyun/dataforai/superstore_orders");
-    expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
 
     cleanup();
     renderAt("/catalog/mysql-aliyun/dataforai/superstore_orders");
-    expect(screen.getByRole("link", { name: "表目录" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
   });
 

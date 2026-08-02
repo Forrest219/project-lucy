@@ -99,8 +99,6 @@
 @layer components {
   /* shell + 主布局 */
   .pl-app-shell { @apply grid min-h-screen grid-cols-[216px_minmax(0,1fr)] bg-bg-base text-fg-body; }
-  .pl-app-shell--wiki { grid-template-columns: minmax(0, 1fr); }
-  .pl-app-shell--wiki .pl-workspace-body { @apply px-6 py-5; }
   .pl-sidebar { @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r border-border-default bg-bg-surface px-3 py-4; }
   .pl-nav { @apply grid min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pb-3; }
   .pl-nav-section { @apply mb-3; }
@@ -933,7 +931,9 @@
   .pl-field-card-header {
     @apply flex flex-wrap items-center justify-between gap-2;
   }
-  .pl-field-card-name strong { @apply font-mono text-base text-fg-default; }
+  .pl-field-card-select { @apply inline-flex min-w-0 items-center gap-2; }
+  .pl-field-card-select input { @apply size-4 shrink-0 accent-primary; }
+  .pl-field-card-select strong { @apply min-w-0 truncate font-mono text-base text-fg-default; }
   .pl-field-badges { @apply flex flex-wrap items-center gap-1.5; }
   .pl-meta-badge {
     @apply inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] font-medium;
@@ -982,10 +982,11 @@
   .pl-candidate-join-note { @apply text-xs text-fg-muted; }
   .pl-candidate-join-actions { @apply flex flex-wrap items-center gap-2 md:justify-end; }
   .pl-workbench-disclosure { @apply rounded-md border border-border-default bg-bg-surface p-3; }
-  .pl-workbench-disclosure[open] { @apply grid gap-3; }
-  .pl-workbench-disclosure-summary { @apply flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-fg-default; }
-  .pl-workbench-disclosure-summary::-webkit-details-marker { display: none; }
+  .pl-workbench-disclosure--open { @apply grid gap-3; }
+  .pl-workbench-disclosure-summary { @apply flex w-full cursor-pointer list-none items-center justify-between gap-3 rounded-sm text-left text-sm font-semibold text-fg-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   .pl-workbench-disclosure-summary small { @apply text-xs font-normal text-fg-muted; }
+  .pl-disclosure-title { @apply inline-flex min-w-0 items-center gap-1.5; }
+  .pl-disclosure-chevron { @apply inline-flex w-4 shrink-0 justify-center text-xs text-fg-muted; }
   .pl-inline-grid { @apply grid gap-2; }
   .pl-measure-grid { @apply grid gap-3 md:grid-cols-4; }
   .pl-segment-grid { @apply grid gap-3 md:grid-cols-3; }
@@ -994,54 +995,68 @@
   .pl-editor-layout { @apply grid grid-cols-[240px_minmax(0,1fr)] gap-6; }
   .pl-editor-three-panel { @apply grid gap-4; }
   .pl-table-workbench { @apply grid min-h-[calc(100vh-128px)] grid-cols-[minmax(520px,1fr)_360px] gap-4; }
-  .pl-object-tree { @apply rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-table-editor-context { @apply inline-flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-fg-default; }
+  .pl-table-editor-context > span { @apply inline-flex min-w-0 items-center gap-1 text-fg-muted; }
+  .pl-table-editor-context .notranslate { @apply truncate text-fg-default; }
+  .pl-table-header-actions { @apply flex flex-wrap items-center justify-end gap-2; }
   .pl-inspector { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto rounded-md border border-border-default bg-bg-surface p-3; }
   .pl-table-editor-main { @apply min-w-0; }
-  .pl-table-editor-header { @apply mb-4 flex flex-wrap items-start justify-between gap-4; }
   .pl-table-editor-form { @apply grid gap-4; }
-  .pl-object-tree-group { @apply mt-4 grid gap-2; }
-  .pl-object-tree--secondary { @apply bg-bg-subtle; }
   .pl-secondary-disclosure { @apply rounded-md border border-border-default bg-bg-surface p-2; }
-  .pl-secondary-disclosure[open] { @apply grid gap-2; }
-  .pl-secondary-disclosure-summary { @apply flex cursor-pointer list-none items-center justify-between gap-2 px-1 text-sm font-semibold text-fg-default; }
-  .pl-secondary-disclosure-summary::-webkit-details-marker { display: none; }
+  .pl-secondary-disclosure--open { @apply grid gap-2; }
+  .pl-secondary-disclosure-summary { @apply flex w-full cursor-pointer list-none items-center justify-between gap-2 rounded-sm px-1 text-left text-sm font-semibold text-fg-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   .pl-secondary-disclosure-summary small { @apply min-w-0 truncate text-xs font-normal text-fg-muted; }
-  .pl-object-tree-title { @apply px-2 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-object-tree-item { @apply flex min-h-9 items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-fg-default; }
-  .pl-object-tree-item:hover { @apply bg-bg-muted; }
-  .pl-object-tree-item--active { @apply bg-bg-muted font-semibold text-primary; }
-  .pl-object-tree-item small { @apply shrink-0 text-xs font-normal text-fg-muted; }
-  .pl-manual-semantic-workspace { @apply grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]; }
+  .pl-semantic-content { @apply grid gap-3; }
+  .pl-semantic-content-header { @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-3; }
+  .pl-semantic-tabs { @apply flex flex-wrap gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
+  .pl-semantic-tab {
+    @apply inline-flex min-h-9 items-center gap-2 rounded-sm px-3 py-1.5 text-sm text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+  }
+  .pl-semantic-tab:hover { @apply bg-bg-surface text-fg-default; }
+  .pl-semantic-tab--active { @apply bg-bg-surface font-semibold text-fg-default shadow-sm; }
+  .pl-semantic-tab small { @apply rounded-pill border border-border-default bg-bg-base px-2 py-0.5 text-xs font-normal text-fg-muted; }
+  .pl-manual-semantic-workspace { @apply grid gap-3; }
   .pl-manual-semantic-panel { @apply min-w-0; }
   .pl-field-search { @apply grid min-w-56 gap-1.5 text-sm; }
   .pl-field-search > span { @apply text-xs font-medium text-fg-muted; }
   .pl-inspector { @apply grid content-start gap-3; }
   .pl-inspector-section { @apply grid gap-3; }
+  .pl-inspector-title-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
-  .pl-segmented-control-item { @apply rounded-sm px-2 py-1.5 text-sm text-fg-muted; }
+  .pl-segmented-control-item { @apply rounded-sm px-2 py-1.5 text-sm text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   .pl-segmented-control-item--active { @apply bg-bg-surface text-fg-default shadow-sm; }
   .pl-inspector-header { @apply grid gap-2; }
   .pl-inspector-badges { @apply flex flex-wrap items-center gap-2; }
   .pl-inspector-badge { @apply inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-medium; }
   .pl-inspector-badge--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
+  .pl-inspector-badge--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-inspector-badge--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-inspector-badge--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
-  .pl-asset-exchange { @apply grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(280px,0.75fr)]; }
-  .pl-asset-exchange-copy { @apply grid content-start gap-2; }
-  .pl-asset-exchange-facts { @apply grid gap-2 text-sm; }
-  .pl-asset-exchange-facts div { @apply grid gap-1 rounded-md border border-border-default bg-bg-base px-3 py-2; }
-  .pl-asset-exchange-facts dt { @apply text-xs font-medium text-fg-muted; }
-  .pl-asset-exchange-facts dd { @apply min-w-0 truncate text-fg-default; }
   .pl-paste-yaml-box { @apply mt-2 grid gap-2; }
   .pl-paste-yaml-box .pl-btn { @apply justify-self-start; }
+  .pl-change-review { @apply content-start; }
+  .pl-change-review-tabs { @apply grid gap-2; }
+  .pl-review-facts { @apply grid gap-2 text-sm sm:grid-cols-2; }
+  .pl-review-facts div { @apply grid min-w-0 gap-1 rounded-md border border-border-default bg-bg-base px-3 py-2; }
+  .pl-review-facts dt { @apply text-xs font-medium text-fg-muted; }
+  .pl-review-facts dd { @apply min-w-0 truncate text-fg-default; }
+  .pl-field-batch-toolbar { @apply mb-3 grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
+  .pl-field-filter-modes { @apply flex flex-wrap gap-1; }
+  .pl-field-filter-mode { @apply rounded-sm border border-transparent px-2.5 py-1.5 text-sm text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
+  .pl-field-filter-mode:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-field-filter-mode--active { @apply border-border-default bg-bg-surface font-semibold text-fg-default; }
+  .pl-field-batch-actions { @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted; }
   .pl-change-summary { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-change-summary-header { @apply flex items-center justify-between gap-3 text-sm; }
   .pl-change-summary-header strong { @apply font-semibold text-fg-default; }
   .pl-change-summary-header span { @apply text-xs text-fg-muted; }
   .pl-change-summary-list { @apply grid gap-2 list-none p-0; }
-  .pl-change-summary-list li { @apply flex items-center justify-between gap-3 rounded-sm bg-bg-surface px-2 py-1.5 text-sm; }
-  .pl-change-summary-list span { @apply text-fg-default; }
-  .pl-change-summary-list strong { @apply whitespace-nowrap text-xs font-medium text-fg-muted; }
+  .pl-change-summary-list > li { @apply grid gap-1.5 rounded-sm bg-bg-surface px-2 py-1.5 text-sm; }
+  .pl-change-summary-row-head { @apply flex items-center justify-between gap-3; }
+  .pl-change-summary-row-head span { @apply text-fg-default; }
+  .pl-change-summary-row-head strong { @apply whitespace-nowrap text-xs font-medium text-fg-muted; }
+  .pl-change-summary-detail-list { @apply grid gap-1 list-none p-0; }
+  .pl-change-summary-detail-list li { @apply min-w-0 truncate rounded-sm bg-bg-base px-2 py-1 text-xs text-fg-muted; }
   .pl-change-summary-files { @apply grid gap-1 text-xs text-fg-muted; }
   .pl-change-summary-files ul { @apply grid gap-1 list-none p-0; }
   .pl-change-summary-files li { @apply min-w-0 truncate rounded-sm bg-bg-surface px-2 py-1 font-mono text-fg-default; }
@@ -1049,6 +1064,27 @@
   .pl-validation-summary > div { @apply flex items-center justify-between gap-3 rounded-md border border-border-default bg-bg-base px-3 py-2; }
   .pl-validation-summary span { @apply text-sm text-fg-muted; }
   .pl-validation-summary strong { @apply text-sm; }
+  .pl-version-panel-backdrop { @apply fixed inset-0 z-50 flex justify-end bg-fg-default/30; }
+  .pl-version-panel { @apply flex h-full w-full max-w-3xl flex-col gap-4 overflow-auto border-l border-border-default bg-bg-surface p-4 shadow-lg; }
+  .pl-version-panel-header { @apply flex items-start justify-between gap-3 border-b border-border-default pb-3; }
+  .pl-version-panel-header > div { @apply grid gap-1; }
+  .pl-version-panel-header span { @apply text-sm text-fg-muted; }
+  .pl-version-panel-body { @apply grid min-h-0 gap-4 md:grid-cols-[240px_minmax(0,1fr)]; }
+  .pl-version-list { @apply grid content-start gap-2; }
+  .pl-version-list-item { @apply grid gap-1 rounded-md border border-border-default bg-bg-base p-3 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
+  .pl-version-list-item:hover,
+  .pl-version-list-item--active { @apply border-primary bg-primary/10; }
+  .pl-version-list-item span { @apply flex min-w-0 items-center justify-between gap-2; }
+  .pl-version-list-item strong { @apply font-semibold text-fg-default; }
+  .pl-version-list-item small { @apply text-xs text-fg-muted; }
+  .pl-version-list-item code { @apply text-xs text-fg-muted; }
+  .pl-version-detail { @apply grid min-w-0 content-start gap-3; }
+  .pl-version-detail-summary { @apply grid gap-2 md:grid-cols-3; }
+  .pl-version-detail-summary > div { @apply grid gap-1 rounded-md border border-border-default bg-bg-base px-3 py-2; }
+  .pl-version-detail-summary span { @apply text-xs font-medium text-fg-muted; }
+  .pl-version-detail-summary strong,
+  .pl-version-detail-summary code { @apply min-w-0 truncate text-sm text-fg-default; }
+  .pl-version-detail-actions { @apply flex justify-end; }
   .pl-monitor-controls { @apply flex flex-wrap items-end gap-3; }
   .pl-monitor-controls label { @apply grid min-w-40 gap-1.5 text-sm; }
   .pl-monitor-controls label > span { @apply text-xs font-medium text-fg-muted; }
@@ -1289,10 +1325,15 @@
   .pl-chip--unknown { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-chip--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
 
-  /* Wiki sidebar: compact, with explicit new-document CTA. */
+  /* Wiki sidebar: compact, with explicit directory/document actions. */
   .pl-wiki-sidebar { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto; }
   .pl-wiki-sidebar-header { @apply flex items-center justify-between gap-2; }
   .pl-wiki-sidebar-title { @apply text-base font-semibold; }
+  .pl-wiki-sidebar-actions { @apply flex items-center gap-1; }
+  .pl-wiki-sidebar-action {
+    @apply inline-flex size-7 shrink-0 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-fg-muted;
+  }
+  .pl-wiki-sidebar-action:hover { @apply border-border-strong bg-bg-muted text-fg-default; }
   .pl-wiki-new-button { @apply px-2 py-1 text-xs; }
   .pl-wiki-filter { @apply text-xs; }
   .pl-wiki-context-hint { @apply rounded-md border border-border-default bg-bg-base p-2 text-xs; }
@@ -1312,6 +1353,7 @@
     grid-template-columns: 240px minmax(0, 1fr);
   }
   .pl-wiki-body { @apply grid gap-4; }
+  .pl-wiki-body--library { @apply content-start; }
   .pl-wiki-left { @apply min-w-0; }
   .pl-wiki-editor-panel { @apply grid gap-3 p-4; }
   .pl-wiki-editor-header { @apply flex flex-wrap items-center justify-between gap-2; }
@@ -1338,9 +1380,9 @@
   .pl-wiki-inspector-section { @apply min-h-[300px] grid gap-2; }
 
   /* Library home: the neutral /wiki entrypoint before a document is selected. */
-  .pl-wiki-library-home { @apply grid gap-4; }
+  .pl-wiki-library-home { @apply grid content-start gap-3 self-start; }
   .pl-wiki-library-hero {
-    @apply flex flex-wrap items-start justify-between gap-4 rounded-md border border-border-default bg-bg-surface p-4;
+    @apply flex flex-wrap items-start justify-between gap-4 rounded-md border border-border-default bg-bg-surface px-4 py-3;
   }
   .pl-wiki-library-copy { @apply grid max-w-2xl gap-1; }
   .pl-wiki-library-kicker { @apply text-xs font-semibold uppercase text-fg-muted; }
@@ -1348,13 +1390,14 @@
   .pl-wiki-library-description { @apply text-sm text-fg-muted; }
   .pl-wiki-library-actions { @apply flex flex-wrap items-center gap-2; }
   .pl-wiki-library-empty { @apply grid gap-3 rounded-md border border-border-default bg-bg-subtle p-4 text-sm text-fg-muted; }
-  .pl-wiki-library-groups { @apply grid gap-3; }
+  .pl-wiki-library-groups { @apply grid gap-2; }
   .pl-wiki-library-group { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3; }
   .pl-wiki-library-group-header { @apply flex items-center gap-2; }
   .pl-wiki-library-folder-icon { @apply text-xs text-fg-muted; }
   .pl-wiki-library-group-title { @apply text-sm font-semibold text-fg-default; }
   .pl-wiki-library-count { @apply ml-auto rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
   .pl-wiki-library-list { @apply grid list-none gap-1 p-0 m-0 sm:grid-cols-2; }
+  .pl-wiki-library-children { @apply grid gap-2 pl-4; }
   .pl-wiki-library-item { @apply min-w-0; }
   .pl-wiki-library-item-button {
     @apply grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-sm px-2 py-2 text-left hover:bg-bg-muted;
@@ -1481,21 +1524,72 @@
     @apply mt-2 max-h-[280px] overflow-auto rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs;
   }
   .pl-wiki-preflight-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+  .pl-wiki-version-content {
+    width: min(1180px, 94vw);
+  }
+  .pl-wiki-version-layout {
+    @apply grid gap-3;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
+  }
+  .pl-wiki-version-list {
+    @apply content-start;
+  }
+  .pl-wiki-version-item {
+    @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-3;
+  }
+  .pl-wiki-version-item--active {
+    @apply border-border-strong bg-bg-muted;
+  }
+  .pl-wiki-version-item-main {
+    @apply grid gap-1 text-xs text-fg-muted;
+  }
+  .pl-wiki-version-item-main strong {
+    @apply text-sm text-fg-default;
+  }
+  .pl-wiki-version-item-main code,
+  .pl-wiki-version-meta code {
+    @apply break-all rounded bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-muted;
+  }
+  .pl-wiki-version-item-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-version-detail {
+    @apply content-start;
+  }
+  .pl-wiki-version-detail .pl-markdown-preview {
+    @apply max-h-[320px] overflow-auto rounded-md border border-border-default bg-bg-base p-3;
+  }
+  .pl-wiki-version-meta {
+    @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted;
+  }
+  .pl-wiki-version-subtitle {
+    @apply mb-2 text-xs font-semibold text-fg-muted;
+  }
+  @media (max-width: 900px) {
+    .pl-wiki-version-layout {
+      grid-template-columns: 1fr;
+    }
+  }
 
   /* Wiki tree (sidebar): search + directory groups + title-first rows. */
   .pl-wiki-tree { @apply grid gap-2; }
   .pl-wiki-tree-search { @apply text-sm; }
   .pl-wiki-tree-list { @apply list-none p-0 m-0 grid gap-2; }
   .pl-wiki-tree-group { @apply grid gap-1; }
+  .pl-wiki-tree-group-row { @apply flex min-w-0 items-center gap-1; }
   .pl-wiki-tree-group-toggle {
-    @apply flex items-center gap-1 rounded-sm px-1 py-1 text-xs font-semibold text-fg-muted;
+    @apply flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 py-1 text-xs font-semibold text-fg-muted;
   }
   .pl-wiki-tree-group-toggle:hover { @apply text-fg-default; }
+  .pl-wiki-tree-group-label { @apply min-w-0 truncate; }
   .pl-wiki-tree-group-caret { @apply text-[10px] text-fg-muted; }
   .pl-wiki-tree-group-count {
-    @apply ml-auto inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-fg-muted;
+    @apply ml-auto shrink-0 inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-fg-muted;
   }
-  .pl-wiki-tree-pages { @apply list-none p-0 m-0 grid gap-0.5 pl-3; }
+  .pl-wiki-tree-group-menu { @apply shrink-0; }
+  .pl-wiki-tree-group-menu .pl-row-more-trigger { @apply size-6 border-0 bg-transparent; }
+  .pl-wiki-tree-group-menu .pl-row-more-icon { @apply size-3.5; }
+  .pl-wiki-tree-pages { @apply list-none p-0 m-0 grid gap-0.5; }
   .pl-wiki-tree-page { @apply grid; }
   .pl-wiki-tree-page-button {
     @apply grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 rounded-sm px-2 py-1.5 text-left text-sm text-fg-body;
@@ -1639,6 +1733,14 @@
   .pl-wiki-upload-warnings {
     @apply grid gap-1 rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
   }
+  .pl-wiki-new-document-content {
+    @apply fixed left-1/2 top-1/2 z-50 grid max-h-[85vh] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-border-default bg-bg-elevated p-5 shadow-lg;
+  }
+  .pl-wiki-new-document-form { @apply grid gap-3; }
+  .pl-wiki-new-document-target {
+    @apply grid gap-1 rounded-md border border-border-default bg-bg-subtle px-3 py-2 text-sm text-fg-body;
+  }
+  .pl-wiki-new-document-target code { @apply break-all font-mono text-xs text-fg-muted; }
   .pl-notice-inline { @apply text-sm text-fg-muted; }
 
   /* Markdown preview typography. Small enough to keep a workbench
@@ -1791,8 +1893,12 @@
   }
 
   .pl-inspector {
-    position: static;
+    position: sticky;
+    bottom: 0;
     grid-column: 1 / -1;
+    top: auto;
+    z-index: 20;
+    max-height: 45vh;
     height: auto;
   }
 
