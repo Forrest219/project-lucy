@@ -126,6 +126,36 @@ npm run dev      # Vite 前端（3000 端口）
 npm run server   # Fastify API（3001 端口）
 ```
 
+**桌面端定时截图库（snapshot-product）**
+
+spec 见 `docs/webui-snapshot-product.md`。截图脚本是只读工具，不改任何业务文件，输出落到 `var/screenshots/` 与 `var/logs/`（已在 `.gitignore`）。
+
+```bash
+# 一次性跑（需 docker 5174 端口在跑）
+node webui/scripts/snapshot-product.mjs
+
+# 健康检查（launchd 调度器探针）
+node webui/scripts/snapshot-product.mjs --healthcheck
+# 期望 stdout：OK: http://127.0.0.1:5174/overview returns 200，退出码 0
+
+# 可选配置：动态路由 fixture（/connections/:id 等需要）
+cat > webui/scripts/snapshot-product.fixtures.json <<'JSON'
+{
+  "/connections/:id": [{"id": "demo-1"}],
+  "/catalog/:conn/:schema/:table": [{"conn": "demo", "schema": "public", "table": "orders"}]
+}
+JSON
+
+# 安装 launchd 调度（默认只生成 plist，不自动 bootstrap；--bootstrap 显式注册）
+bash scripts/install-snapshot-product-launchd.sh              # 写 ~/Library/LaunchAgents/com.lucy.snapshot-product.plist
+bash scripts/install-snapshot-product-launchd.sh --bootstrap   # 用户显式要求时才跑：launchctl bootstrap
+bash scripts/install-snapshot-product-launchd.sh --uninstall   # 卸载
+
+# plist 模板本身可被 reviewer 审查：scripts/launchd/com.lucy.snapshot-product.plist
+```
+
+环境变量（覆盖默认）：`LUCY_SNAPSHOT_BASE_URL`、`LUCY_SNAPSHOT_OUTPUT_DIR`、`LUCY_SNAPSHOT_TIMEOUT_MS`、`LUCY_SNAPSHOT_DRY_RUN=1`、`LUCY_SNAPSHOT_LAUNCHD_HOUR`、`LUCY_SNAPSHOT_LAUNCHD_MINUTE`、`LUCY_SNAPSHOT_LAUNCHD_LABEL`、`LUCY_SNAPSHOT_NODE_BIN`。
+
 **后续操作**：
 
 ```bash
