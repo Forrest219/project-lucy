@@ -34,7 +34,10 @@ POST /api/sources/:conn/:schema/:table/import
 
 GET  /api/wiki
 GET  /api/wiki/:key
+GET  /api/wiki/:key/raw
 PUT  /api/wiki/:key
+POST /api/wiki/upload/preview
+POST /api/wiki/upload/commit
 
 GET  /api/diff
 POST /api/validate-changed
@@ -63,6 +66,9 @@ GET    /api/eval/cases/:domain/:caseId
 POST   /api/eval/cases/:domain
 PUT    /api/eval/cases/:domain/:caseId
 DELETE /api/eval/cases/:domain/:caseId
+POST   /api/eval/suites/import
+GET    /api/eval/suites/:domain/download
+POST   /api/eval/results/import
 POST   /api/eval/runs
 GET    /api/eval/runs
 GET    /api/eval/runs/:runId
@@ -88,6 +94,7 @@ GET    /api/semantic-assets/releases
 GET    /api/semantic-assets/releases/:id/status
 POST   /api/semantic-assets/export
 GET    /api/semantic-assets/exports/:exportId/download
+POST   /api/semantic-assets/reindex
 
 GET    /api/admin/agents
 POST   /api/admin/agents
@@ -225,6 +232,24 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 - frontmatter 字段：`summary` `tags` `sl_refs` `refs` `usage_mode` + 正文 markdown。
 - `PUT` 同样支持 `dryRun` 预览 diff。
 
+`GET /api/wiki/:key/raw` 以 `text/markdown; charset=utf-8` 返回原始 Markdown，并带 `Content-Disposition` 下载文件名，供业务 Wiki 编辑器下载当前页面。
+
+`POST /api/wiki/upload/preview` 预览 Markdown 上传，不落盘；`POST /api/wiki/upload/commit` 在预览通过后写入目标 Wiki 页面并登记本次写入记录。
+
+请求：
+
+```jsonc
+{ "key": "global/revenue.md", "markdown": "# Revenue", "mode": "create" }
+```
+
+响应：
+
+```jsonc
+{ "ok": true, "data": { "key": "global/revenue.md", "filePath": "wiki/global/revenue.md", "diff": "...", "frontmatter": {}, "content": "# Revenue" }}
+```
+
+错误码：`BAD_REQUEST` `FORBIDDEN_PATH` `WIKI_NOT_FOUND`。
+
 ### `GET /api/diff`
 返回白名单目录（`semantic-layer/`、`wiki/`、`.ktx-ui/`）下的 `git diff`（name-status + 可选 patch）。非 git 仓库时回退会话写入记录。
 
@@ -297,11 +322,43 @@ dryRun 响应：
 
 `POST /api/semantic-assets/export` 生成语义资产导出任务；`GET /api/semantic-assets/exports/:exportId/download` 下载指定导出产物。
 
+`POST /api/semantic-assets/reindex` 手动触发 semantic-layer 索引重建，并把结果写入发布历史，供发布工作台和历史页展示。
+
+请求：
+
+```jsonc
+{ "force": false }
+```
+
+响应：
+
+```jsonc
+{ "ok": true, "data": { "force": false, "reindex": { "ok": true, "exitCode": 0, "stdout": "...", "stderr": "" }, "release": { "id": "manual-reindex-..." } }}
+```
+
+若 `.ktx-ui/semantic-publish.lock` 存在，返回 `409 REINDEX_IN_PROGRESS`。
+
 ### Eval / 质量评测
 
 `GET /api/eval/domains` 返回 domain 列表与最近运行摘要；`GET /api/eval/domains/:domain` 返回单个 domain。
 
 `GET /api/eval/cases/:domain` / `GET /api/eval/cases/:domain/:caseId` 读取 eval case。`POST /api/eval/cases/:domain` 新增 case；`PUT /api/eval/cases/:domain/:caseId` 更新 case，默认 dryRun；`DELETE` 删除 case。
+
+`POST /api/eval/suites/import` 导入 Eval Suite YAML，默认 `dryRun:true`；`GET /api/eval/suites/:domain/download` 以 YAML 附件下载当前 domain 的 canonical suite，并在响应头返回 suite id/hash 与 runner command；`POST /api/eval/results/import` 导入离线 Result JSON，默认 `dryRun:true`，可选归档本地变体。
+
+Suite 导入请求：
+
+```jsonc
+{ "filename": "kx_financial-eval-suite.yaml", "content": "metadata:\n  domain: kx_financial\n", "dryRun": true }
+```
+
+Result 导入请求：
+
+```jsonc
+{ "content": "{ \"run_id\": \"...\" }", "dryRun": true, "archiveLocalVariant": false }
+```
+
+常见错误码：`VALIDATION_FAILED` `RESULT_VALIDATION_FAILED` `BAD_REQUEST`。
 
 `POST /api/eval/runs` 创建运行：
 
