@@ -40,7 +40,22 @@
 | [47-table-whitelist-productization-followup-spec.md](47-table-whitelist-productization-followup-spec.md) | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 | 产品 / UX / API / 前端 |
 | [48-catalog-and-table-semantic-workbench-productization-spec.md](48-catalog-and-table-semantic-workbench-productization-spec.md) | 表目录与表语义资产工作台产品化：`/catalog` canonical、Connection 筛选、表名降噪、导出/导入 YAML 主路径与变更摘要 | 产品 / UX / API / 前端 |
 | [49-business-wiki-md-library-operations-spec.md](49-business-wiki-md-library-operations-spec.md) | 业务 Wiki Markdown 文档库化：默认首页、目录瘦身、下载 / 上传 Markdown、上传覆盖与在线编辑降级 | 产品 / UX / API / 前端 |
+| [50-table-semantic-workbench-ui-ux-hardening-spec.md](50-table-semantic-workbench-ui-ux-hardening-spec.md) | 表语义资产工作台 UI/UX hardening：键盘焦点、候选关联按钮上下文、File Input 隐藏、状态常驻、真折叠控件、字段批量操作与 `/catalog` 细节打磨 | 产品 / UX / Accessibility / 前端 |
+| [51-table-semantic-workbench-ia-separation-spec.md](51-table-semantic-workbench-ia-separation-spec.md) | 表语义资产工作台 IA separation：当前表左上锚点、语义内容与维护手段分离、Claude Code / Codex 辅助维护默认可见、删除待处理建议 | 产品 / UX / IA / 前端 |
+| [52-business-wiki-directory-tree-and-density-spec.md](52-business-wiki-directory-tree-and-density-spec.md) | 业务 Wiki 目录树与密度修复：多级目录可发现、目录计数单位、目录级新建入口与默认首页留白收敛 | 产品 / UX / IA / 前端 |
+| [53-business-wiki-empty-directory-resource-spec.md](53-business-wiki-empty-directory-resource-spec.md) | 业务 Wiki 空目录一等资源：空目录持久化、新建目录 / 新建文档拆分、目录 metadata API 与 `0 篇` 展示 | 产品 / UX / API / 前端 |
+| [54-table-semantic-workbench-command-density-refactor-spec.md](54-table-semantic-workbench-command-density-refactor-spec.md) | 表语义资产工作台命令减噪与结果优先重构：Header 收敛、命令唯一性、辅助维护降级、Inspector 纯反馈化与 Double Sidebar 移除 | 产品 / UX / IA / Accessibility / 前端 |
+| [55-business-wiki-version-history-restore-spec.md](55-business-wiki-version-history-restore-spec.md) | 业务 Wiki 版本记录与恢复：最近 5 版 Markdown 快照、历史预览、恢复预检与指定版本恢复 | 产品 / UX / API / 数据契约 / 前端 |
+| [56-table-semantic-workbench-online-editing-actionbar-version-history-spec.md](56-table-semantic-workbench-online-editing-actionbar-version-history-spec.md) | 表语义工作台在线编辑优先、统一动作区与 YAML 版本记录：Header 主体化、连接/Schema 显性上下文、导入导出中立化、保存状态弱化与最近 5 版恢复 | 产品 / UX / IA / API / 数据契约 / 前端 |
+| [57-agent-admin-usage-observability-and-role-discoverability-spec.md](57-agent-admin-usage-observability-and-role-discoverability-spec.md) | Agent Admin 使用观测与 role 可发现性：活跃 Token、近 7 天调用/拒绝、role 链接、MCP 工具限制解释与 demo 文案清理 | 产品 / UX / IA / 数据契约 / 前端 |
+| [58-business-wiki-directory-document-governance-spec.md](58-business-wiki-directory-document-governance-spec.md) | 业务 Wiki 目录与文档治理：顶层目录、目录删除、文档移动、下载作用域与上传覆盖预检清晰化 | 产品 / UX / IA / API / 数据契约 / 前端 |
+| [59-role-admin-ops-ux-clarification-spec.md](59-role-admin-ops-ux-clarification-spec.md) | Role Admin 运维心智澄清：正式 Role 优先、参考模板降噪、待修复与已停用语义分离、中文状态与复制动作收敛 | 产品 / UX / IA / Terminology / 前端 |
 | [60-help-qa-section-spec.md](60-help-qa-section-spec.md) | Help Center 常见问题快速解答章节：开发者 / 管理员 / 接入 Agent 协作者三场景 Q&A + 正文深链，不引入搜索、不暴露 MCP | 产品 / UX / 前端 / 文档 |
+| [62-trace-evidence-kernel-spec.md](62-trace-evidence-kernel-spec.md) | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、后续 Publish Gate / Eval / Copilot 共用数据契约 | 架构 / 后端 / 安全 |
+| [63-static-lint-reindex-diagnosis-spec.md](63-static-lint-reindex-diagnosis-spec.md) | Static Lint 与 Reindex 诊断：semantic-layer 风险规则、patch draft、impact diff、trace evidence | 产品 / 后端 / 语义工具 |
+| [64-tiered-publish-gate-spec.md](64-tiered-publish-gate-spec.md) | 分级 Publish Gate：P0 / P1 / P2 gate、override evidence、release decision | 产品 / API / 发布治理 |
+| [65-safe-log-to-eval-spec.md](65-safe-log-to-eval-spec.md) | Safe Log-to-Eval：Candidate Pool、Reviewer Evidence、promotion、redaction、negative case library | 产品 / API / Eval |
+| [66-fde-copilot-candidate-spec.md](66-fde-copilot-candidate-spec.md) | FDE Copilot Candidate：候选补全、证据引用、冲突提示、unverified candidate 隔离区 | 产品 / UX / 语义工具 |
 
 ## 与原 README 的关键校正
 

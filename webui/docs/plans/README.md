@@ -96,6 +96,21 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M45-table-whitelist-productization-followup.md](wo-M45-table-whitelist-productization-followup.md) | M45 | 启用表范围产品化二轮修复：Header 降噪、工具区重组、状态文案、最小 YAML diff 与保存后刷新闭环 |
 | [wo-M46-catalog-and-table-semantic-workbench-productization.md](wo-M46-catalog-and-table-semantic-workbench-productization.md) | M46 | 表目录与表语义资产工作台产品化：`/catalog`、Connection 筛选、单表导出 / 导入 YAML 主路径与变更摘要 |
 | [wo-M47-business-wiki-md-library-operations.md](wo-M47-business-wiki-md-library-operations.md) | M47 | 业务 Wiki Markdown 文档库化：默认首页、目录瘦身、下载 / 上传 Markdown、上传覆盖与在线编辑降级 |
+| [wo-M48-table-semantic-workbench-ui-ux-hardening.md](wo-M48-table-semantic-workbench-ui-ux-hardening.md) | M48 | 表语义资产工作台 UI/UX hardening：键盘焦点、候选关联按钮上下文、File Input 隐藏、状态常驻、真折叠控件、字段批量操作与 `/catalog` 细节打磨 |
+| [wo-M49-table-semantic-workbench-ia-separation.md](wo-M49-table-semantic-workbench-ia-separation.md) | M49 | 表语义资产工作台 IA separation：当前语义资产左上锚点、语义内容与维护手段分离、Claude Code / Codex 辅助维护默认可见、删除待处理建议 |
+| [wo-M50-business-wiki-directory-tree-and-density.md](wo-M50-business-wiki-directory-tree-and-density.md) | M50 | 业务 Wiki 目录树与密度修复：多级目录可发现、目录计数单位、目录级新建入口与默认首页留白收敛 |
+| [wo-M51-business-wiki-empty-directory-resource.md](wo-M51-business-wiki-empty-directory-resource.md) | M51 | 业务 Wiki 空目录一等资源：空目录持久化、新建目录 / 新建文档拆分、目录 metadata API 与 `0 篇` 展示 |
+| [wo-M52-table-semantic-workbench-command-density-refactor.md](wo-M52-table-semantic-workbench-command-density-refactor.md) | M52 | 表语义资产工作台命令减噪与结果优先重构：Header 收敛、命令唯一性、辅助维护降级、Inspector 纯反馈化与 Double Sidebar 移除 |
+| [wo-M53-business-wiki-version-history-restore.md](wo-M53-business-wiki-version-history-restore.md) | M53 | 业务 Wiki 版本记录与恢复：最近 5 版 Markdown 快照、历史预览、恢复预检与指定版本恢复 |
+| [wo-M54-table-semantic-workbench-online-editing-actionbar-version-history.md](wo-M54-table-semantic-workbench-online-editing-actionbar-version-history.md) | M54 | 表语义工作台在线编辑优先、统一动作区与 YAML 版本记录 |
+| [wo-M55-agent-admin-usage-observability-and-role-discoverability.md](wo-M55-agent-admin-usage-observability-and-role-discoverability.md) | M55 | Agent Admin 使用观测与 role 可发现性：活跃 Token、近 7 天调用/拒绝、role 链接与 MCP 工具限制解释 |
+| [wo-M56-business-wiki-directory-document-governance.md](wo-M56-business-wiki-directory-document-governance.md) | M56 | 业务 Wiki 目录与文档治理：顶层目录、目录删除、文档移动、下载作用域与上传覆盖预检清晰化 |
+| [wo-M57-role-admin-ops-ux-clarification.md](wo-M57-role-admin-ops-ux-clarification.md) | M57 | Role Admin 运维心智澄清：正式 Role 优先、参考模板降噪、待修复与已停用语义分离 |
+| [wo-202608-01-trace-evidence-kernel.md](wo-202608-01-trace-evidence-kernel.md) | 202608-01 | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、自检脚本 |
+| [wo-202608-02-static-lint-reindex-diagnosis.md](wo-202608-02-static-lint-reindex-diagnosis.md) | 202608-02 | Static Lint 与 Reindex 诊断：semantic-layer 风险规则、patch draft、impact diff |
+| [wo-202608-03-tiered-publish-gate.md](wo-202608-03-tiered-publish-gate.md) | 202608-03 | 分级 Publish Gate：P0 / P1 / P2 gate、override evidence、release decision |
+| [wo-202608-04-safe-log-to-eval.md](wo-202608-04-safe-log-to-eval.md) | 202608-04 | Safe Log-to-Eval：Candidate Pool、Reviewer Evidence、promotion、redaction |
+| [wo-202608-05-fde-copilot-candidate.md](wo-202608-05-fde-copilot-candidate.md) | 202608-05 | FDE Copilot Candidate：候选补全、证据引用、冲突提示、unverified candidate 隔离区 |
 
 ## 6. 如何把工单喂给 codex
 
