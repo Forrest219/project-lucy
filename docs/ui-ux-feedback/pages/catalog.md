@@ -323,6 +323,8 @@ The table semantic asset workbench does not show `待处理建议（N）`, candi
 ### Notes
 Fixed by M49 in `webui/src/pages/TableEditor.tsx`: candidate suggestion rendering and the table-page `/api/joins/candidates` query were removed. Shared join candidate API / sidecar utilities remain for compatibility. Verified in browser on 2026-08-02 after Docker rebuild: `待处理建议`, candidate heading, and candidate row actions are absent; `语义内容 -> 关联` still exposes the formal `打开关联关系` entry.
 
+2026-08-04 部分修正（Spec 73 / `UX-CATALOG-026`）：**首屏仍禁止**「待处理建议」banner（本条核心噪声约束继续有效）。候选关联回到 `关联` tab 内联维护，并强制标注「字段名启发式，非强语义推断」；正式关系与候选操作不再依赖独立 `/joins` 页面。`/joins/:conn/:schema/:table` 仅保留兼容重定向到 `/catalog/...?tab=joins`。
+
 ## UX-CATALOG-012: 语义结果和维护手段混在一起
 
 Status: Verified
@@ -642,3 +644,209 @@ Catalog 表格 `<thead>` `<th>` 是 `font-semibold text-fg-muted`，与 body 链
 
 ### Notes
 2026-08-04 由 M64 浏览器复核发现并登记，等候选 wave（M66 候选）排期。建议修复文件：`webui/src/pages/Catalog.tsx`（`<thead>` 加 `sticky top-0 z-10 bg-bg-surface`）+ `webui/src/app/app.css`（`.pl-catalog-table thead th { @apply border-b border-fg-muted/30 bg-bg-surface; }`）+ `webui/src/__tests__/catalog.test.tsx`（新增 describe 块断言 thead 含 sticky / 底边框 className）。
+
+## UX-CATALOG-021: 单表页 `校验` 按钮样式弱于 `导入/导出`，用途未在 UI 中说明
+
+Status: Fixed
+Route: /catalog/demo-mysql/dataforai/superstore_orders
+Area: Table semantic asset workbench header actions
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+右上角 `导入 YAML`、`导出 YAML`、`校验`、`保存` 四个按钮设计风格不统一：`保存` 最高频用 `primary`（黑底白字）可以认同，但 `校验` 为什么和 `导入`/`导出` 不一致？`校验` 的用途是什么？
+
+### Evidence
+- Screenshot: `../assets/catalog/UX-CATALOG-021.png`
+- 代码定位：`webui/src/pages/TableEditor.tsx:1504-1515`。`导入 YAML`、`导出 YAML` 均为 `className="pl-btn pl-btn--secondary"`；`校验` 为 `className="pl-btn pl-btn--ghost"`；`保存` 为 `className="pl-btn pl-btn--primary"`。
+- 样式定义：`webui/src/app/app.css:638-640`：`--secondary` 有 `border border-border-default`，`--ghost` **无边框**（`text-fg-default hover:bg-bg-muted`）。因此肉眼上 `校验` 比 `导入`/`导出` 视觉权重更弱、更不像同一个 action group 的并列动作。
+- 浏览器复核（2026-08-04）：四个按钮中 `导入 YAML`/`导出 YAML`/`校验` 均为白底文字，但 `校验` 缺少边框，和另外两个并列动作视觉不统一；`保存` 黑底白字最显眼。
+- 用途核查：`handleValidateCurrent`（`TableEditor.tsx:1392-1405`）会先对当前表单或已导入 YAML 生成 dry-run 预览，再调用 `POST /api/sources/:conn/:schema/:table/validate` 触发后端 `validate` 校验（语义 YAML 结构/语法/未知 Key 等静态检查），结果写入右侧 `变更审阅 -> 校验` tab 并弹 toast。浏览器点击复核：点击后右侧面板自动切到 `校验` tab，显示 `Validate 未通过` / `Exit Code: 1` 等信息，但**页面上没有任何文案说明"校验"是做什么检查、和"保存"的关系**（例如：保存前是否会自动校验、校验失败是否会阻止保存）。
+
+### Expected
+按 `webui/docs/design-system/10-components-button.md` §2/§3 的语义规则：
+- `导入 YAML`、`导出 YAML`、`校验` 是同一 action group 内的并列维护动作（都不是"唯一推荐下一步"），三者应统一为 `secondary`（同边框、同尺寸）；`保存` 保留唯一的 `primary`。
+- `校验` 按钮需要可发现的用途说明：建议加 `title`/`aria-describedby` tooltip，文案说明"对当前草稿运行语义 YAML 结构与规则校验，不写入文件；保存前会自动执行同等校验"（以实际后端行为为准），避免用户误以为它和"保存"功能重复或无关。
+- 如果产品决策认为"校验"使用频率低于"导入/导出"，也应通过尺寸或分组位置表达优先级差异，而不是用不同的边框语义（`ghost` vs `secondary`）表达，避免语义被误读为"不同类动作"。
+
+### Browser Check
+1. Open `/catalog/demo-mysql/dataforai/superstore_orders`.
+2. 用 CDP 读取 `导入 YAML`/`导出 YAML`/`校验` 三个按钮的 computed border，确认三者一致。
+3. Hover/focus `校验` 按钮，确认出现说明其用途的 tooltip 或可访问文案。
+4. 点击 `校验`，确认右侧 `变更审阅` 面板反馈与文案能让用户理解"这是静态校验，不等于保存"。
+
+### Notes
+本条目为核查记录，尚未修复，等待纳入实现排期。
+
+2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。
+
+## UX-CATALOG-022: `基础语义` 表描述只回写/展示 Human，未提示存在 AI 建议且未展示 AI 描述内容
+
+Status: Fixed
+Route: /catalog/demo-mysql/dataforai/superstore_orders
+Area: Table semantic asset workbench, overview tab
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+`基础语义` 卡片中，表描述看 YAML 文件对应的是 `human`，但没有看到相应的提示，也没有显示 YAML 中 `ai` 部分。需评估是故意设计还是 bug。
+
+### Evidence
+- Screenshot: `../assets/catalog/UX-CATALOG-022-023.png`
+- 代码定位：`formFromSource`（`webui/src/pages/TableEditor.tsx:78-89`）表描述初始值固定取 `source.model.descriptions.human ?? ""`；`overview` tab 渲染（`TableEditor.tsx:1581-1595`）只有一个 `<label><span>表描述</span><textarea .../></label>`，没有任何文案说明这是 human 字段，也没有渲染 `source.model.descriptions.ai`。
+- 对比：同一文件的字段级 `FieldCard`（`TableEditor.tsx:393-488`）明确按"物理注释 (DB)"/"AI 建议描述"/"人工描述 (Human)" 三段分桶展示，且有"采纳 AI 描述"按钮——这正是截图中 `row_id` 字段卡片的设计。表级表描述完全没有复用这套模式。
+- 浏览器复核（2026-08-04）：`表描述` 是一个空白 textarea，无提示文字，也无法看到 AI 建议的表级描述。
+- 结论：**不是故意设计，是遗漏**——字段级已经建立"DB / AI / Human 三段式"的清晰心智，表级描述却退化为单一文本框，是同一页面内的模式不一致，会让用户误以为"表描述"框里编辑的就是全部描述来源，也无法感知是否存在可采纳的 AI 建议。
+
+### Expected
+表级 `表描述` 复用字段级 `FieldCard` 的三段式描述模式（或其轻量版）：
+- 明确标注当前编辑框是"人工描述 (Human)"，说明保存后写入 `descriptions.human`。
+- 如果 `source.model.descriptions.ai` 存在，展示只读的"AI 建议描述"区块，并提供"采纳 AI 描述"按钮（复用 `adoptAiDescription` 同类逻辑）。
+- 如果 `source.model.descriptions.db`（物理注释）存在，同样展示，保持与字段卡片一致的信息层级。
+
+### Browser Check
+1. Open `/catalog/demo-mysql/dataforai/superstore_orders`，停留在 `基础语义` tab。
+2. Verify `表描述` 区域展示三个来源分区：物理注释 (DB) / AI 建议描述 / 人工描述 (Human)，与字段卡片视觉语言一致。
+3. 若该表 `descriptions.ai` 有值，verify 出现"采纳 AI 描述"按钮，点击后人工描述文本框被填充为 AI 文本。
+4. 若 `descriptions.ai` 为空，verify 显示"无 AI 建议"占位徽章（与字段卡片行为一致）。
+
+### Notes
+本条目为核查记录，尚未修复，等待纳入实现排期。
+
+2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。
+
+## UX-CATALOG-023: `行粒度` 使用自由文本输入，应从当前表字段中选择
+
+Status: Fixed
+Route: /catalog/demo-mysql/dataforai/superstore_orders
+Area: Table semantic asset workbench, overview tab
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+`基础语义` 卡片，行粒度应该是从当前表字段中选择，而非人工输入。
+
+### Evidence
+- Screenshot: `../assets/catalog/UX-CATALOG-022-023.png`
+- 代码定位：`webui/src/pages/TableEditor.tsx:1587-1593`：`<input className="pl-input" placeholder="customer_id, signup_date" value={form.grain} .../>`，是纯文本输入框，用逗号分隔多个字段名，靠用户手打字段名。
+- `patchFromForm`（`TableEditor.tsx:91-96`）把这个自由文本按逗号 split 后直接写入 `patch.grain` 数组，**没有任何校验这些名字是否真实存在于 `source.model.columns` 中**——用户可能拼错字段名或输入已删除的历史字段名，保存后语义层会静默写入一个无效的 grain。
+- 浏览器复核（2026-08-04）：`行粒度` 输入框当前值为 `row_id`（纯文本），placeholder 为 `customer_id, signup_date`，确认是自由文本、非下拉/多选。
+
+### Expected
+`行粒度` 改为从当前表字段列表中多选，而不是自由输入：
+- UI 形式：多选下拉（combobox + 已选 chips），选项来源为当前表的 `source.model.columns`（可优先把 `pk` 字段排在候选前列）。
+- 保留对已保存但字段已被删除的历史 grain 值的兜底展示（例如标红或标注"字段已不存在"），避免静默丢失用户既有配置的可见性。
+- 保存时 `patch.grain` 只包含来自真实字段名的值，杜绝手打拼错导致的无效语义。
+
+### Browser Check
+1. Open `/catalog/demo-mysql/dataforai/superstore_orders`，停留在 `基础语义` tab。
+2. Verify `行粒度` 不再是纯文本框，而是可从当前表字段列表中选择/取消选择的多选控件。
+3. 尝试选择两个字段，verify 保存后 `semantic-layer/.../superstore_orders.yaml` 的 `grain` 数组精确等于所选字段名。
+4. 若可行，验证输入框不再允许输入任意不存在于字段列表的文本。
+
+### Notes
+本条目为核查记录，尚未修复，等待纳入实现排期。
+
+2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。
+
+## UX-CATALOG-024: `字段` 卡片纵向堆叠冗余，长列表滚动负担重，选择 checkbox 意义不明显
+
+Status: Fixed
+Route: /catalog/demo-mysql/dataforai/superstore_orders
+Area: Table semantic asset workbench, columns tab
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+`字段` 卡片中，当前每个字段的卡片设计排列过于冗余，导致要下拉很长才看得到，请重新优化布局，参考数据库常见的表格形式，不挑战用户的使用习惯，但又增强了语义扩展能力。比如 `row_id` 前的选择按钮没有看出意义。
+
+### Evidence
+- Screenshot: `../assets/catalog/UX-CATALOG-024.png`
+- 代码定位：`FieldCard`（`webui/src/pages/TableEditor.tsx:393-488`）每个字段渲染成一个 `<article>` 卡片，纵向堆叠三个 `pl-description-bucket`（物理注释 / AI 建议描述 / 人工描述），每个 bucket 都占独立整行，人工描述还是一个 `rows={3}` 的 textarea。
+- 浏览器复核（2026-08-04）：该表约 30 个字段，`row_id` 单个卡片约占视口高度的 1/3，需要多次大幅滚动才能看完全部字段；卡片左上角的 checkbox 未选中态视觉很小、不显眼。
+- checkbox 用途核查：`onSelectedChange`（`TableEditor.tsx:396,406,1680`）配合 `pl-field-batch-toolbar`（`TableEditor.tsx:1634-1665`）实现"全选筛选结果 / 清空选择 / 批量采纳 AI 描述"（`batchAdoptAiForSelectedFields`，`TableEditor.tsx:1294-1321`）——**checkbox 确实有明确用途（批量采纳 AI 描述），但 UI 上没有任何提示告诉用户"勾选是为了批量操作"**，导致用户以第一眼看不出意义。
+
+### Expected
+- 布局改为数据库常见的**表格形式**（贴合 `webui/docs/design-system/11-components-data-grid.md`）：一行一个字段，列为 `选择 | 字段名 (+ PK/类型/Not Null 徽章) | 物理注释 (DB) | AI 建议描述 (+ 采纳按钮) | 人工描述 (Human)`；人工描述列可用单行输入 + 点击展开为多行编辑（或行内可展开 disclosure），而不是默认给每个字段留 3 行 textarea 空间。
+- 选择列固定窄列（参照数据网格规范 `48~64px`），保留现有"全选筛选结果 / 清空选择 / 批量采纳 AI 描述"批量操作语义，但在筛选/批量工具条上补充简短说明（例如小字"勾选后可批量采纳 AI 描述"），或在 checkbox 的 `aria-label`/tooltip 中说明用途，弥补"没看出意义"的问题。
+- 保留现有"语义扩展能力"（AI/Human/DB 三段展示、PK/类型/Not Null 徽章、搜索、筛选模式），只改变呈现密度，不减少信息维度。
+- 长列表下建议表头 sticky（类比 `UX-CATALOG-020`），保证滚动中仍能对照列名。
+
+### Browser Check
+1. Open `/catalog/demo-mysql/dataforai/superstore_orders`，切到 `字段` tab。
+2. Verify 30 个字段以表格行形式展示，同屏可见字段数量明显多于当前卡片布局（例如同一视口至少可见 8~10 行）。
+3. Verify 选择列 checkbox 附近或工具条上有可发现的用途说明。
+4. Verify 现有筛选模式、搜索、批量采纳 AI 描述、单字段"采纳 AI 描述"功能均保留可用。
+5. Verify 人工描述仍可编辑多行文本（可通过展开/聚焦触发多行态）。
+
+### Notes
+本条目为核查记录，尚未修复，等待纳入实现排期。改造建议同时新增 `webui/src/__tests__/table-editor.test.tsx` 断言：字段列表根节点使用表格语义（`role="table"` 或 `<table>` + `pl-data-grid` 基类），选择列 checkbox 具备可发现的用途说明。
+
+2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。
+
+## UX-CATALOG-025: `指标`/`分群` 卡片提示文案只讲写入路径，缺少"为什么要维护"的业务价值说明
+
+Status: Fixed
+Route: /catalog/demo-mysql/dataforai/superstore_orders
+Area: Table semantic asset workbench, measures/segments tabs
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+`指标` 卡片中，"修改将写入 semantic-layer/<conn>/<table>.yaml 的指标段，与基础表定义分离" 是有业务含义的，但还缺少"为什么需要维护指标、指标对语义有何业务价值"的描述。同理，分群、关联也需要。
+
+### Evidence
+- Screenshot: `../assets/catalog/UX-CATALOG-025-measures.png`, `../assets/catalog/UX-CATALOG-025-segments.png`
+- 代码定位：`webui/src/pages/TableEditor.tsx:1603`（指标 tab）：`<p ...>修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>`；`TableEditor.tsx:1617`（分群 tab）文案结构完全相同，只换了"指标段"为"分群段"。
+- 浏览器复核（2026-08-04）：两个 tab 的提示语确认只说明"写入哪个文件的哪个段"，未回答"为什么要在这张表上定义指标/分群""定义后谁会用到、用在什么场景"。
+- `关联` tab（`TableEditor.tsx:1690-1711`）提示语是"正式关联关系仍在关联关系页面维护，这里只展示当前表上下文"，同样只讲机制、不讲价值——与 Feedback 第 6 点一并核查（见 `UX-CATALOG-026`）。
+
+### Expected
+`指标`/`分群`（以及 `关联` 的说明文案，如果 `UX-CATALOG-026` 决定保留独立入口）在现有"写入路径"说明之外，补充一句业务价值说明，例如（措辞以产品口径最终确认为准）：
+- 指标：说明"指标"是可复用的聚合口径（如 GMV、订单量），定义后可被数据问答、BI 报表等下游消费复用，避免每次分析重复手写口径。
+- 分群：说明"分群"是可复用的筛选条件（如高价值客户、异常订单），定义后同样可被下游复用，保证跨场景口径一致。
+- 文案应遵循 `webui/docs/design-system/00-principles.md` 等既有规范中"避免把实现细节当业务说明"的要求（参考 `UX-CATALOG-015` 的反面教训：不要把研发 spec 说明写成大段文字），用一到两句短句表达价值，而不是段落级设计说明。
+
+### Browser Check
+1. Open `/catalog/demo-mysql/dataforai/superstore_orders`，切到 `指标` tab。
+2. Verify 提示文案除写入路径外，包含一句指标业务价值说明。
+3. 切到 `分群` tab，verify 同样包含分群业务价值说明。
+4. Verify 新增文案通过术语 lint（`npm run lint:terminology`），且不超过 1~2 句短句长度。
+
+### Notes
+本条目为核查记录，尚未修复，等待纳入实现排期。
+
+2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。
+
+## UX-CATALOG-026: `关联` 维护是独立跳转页面，与当前表编辑上下文割裂
+
+Status: Fixed
+Route: /catalog/demo-mysql/dataforai/superstore_orders, /joins/demo-mysql/dataforai/superstore_orders
+Area: Table semantic asset workbench, joins tab, JoinEditor page
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+`关联` 的配置是独立的页面，建议合并到一起，不要通过"打开关联关系"跳转。
+
+### Evidence
+- Screenshot: `../assets/catalog/UX-CATALOG-026.png`
+- 代码定位：`webui/src/pages/TableEditor.tsx:1689-1711`（`joins` tab）只读展示 `source.model.joins`（已确认关系），并提供 `<Link to={`/joins/${conn}/${schema}/${table}`}>打开关联关系</Link>`（`TableEditor.tsx:1693-1698`）跳到独立路由。
+- 独立页面：`webui/src/pages/JoinEditor.tsx`（路由注册于 `webui/src/app/App.tsx:375`）额外拉取 `/api/joins/candidates`（候选关联，来自字段名启发式 + `.ktx-ui` sidecar），提供"已确认关系"、"候选关系"两个区块，以及"保留为候选/标记为不采用/确认写入语义层"三个操作。
+- 浏览器复核（2026-08-04）：点击"打开关联关系"后 URL 从 `/catalog/...` 变为 `/joins/...`，是完全独立的页面（不同 Header、不同面包屑），维护完成后需要用户再手动返回 `/catalog/...` 才能继续编辑其他语义内容，割裂了单表编辑的连续心智。
+- 需注意的历史背景：`UX-CATALOG-011`（同一文档 2026-08-02 记录）曾把"候选关联建议"从表页整体移除，理由是"候选关系机制只是字段名启发式，容易误导用户以为是强语义推断"，当时的处理方式正是把候选关联维护整体收进独立的 `/joins` 页面，而不是删除功能。本条反馈与 `UX-CATALOG-011` 的解决方向直接冲突，需要产品侧重新权衡。
+
+### Expected
+两种可行方向，需产品决策后二选一（不建议在无决策的情况下直接改代码）：
+1. **合并方向（贴合本条反馈）**：把 `JoinEditor` 的"已确认关系"、"候选关系"两个区块内嵌进 `TableEditor` 的 `关联` tab，移除独立路由跳转；候选关系的"启发式/非强语义"性质通过 tab 内的说明文案表达（呼应 `UX-CATALOG-011` 的顾虑），而不是通过物理隔离到另一个页面来回避风险。
+2. **保留独立入口但降低割裂感**：如果保留独立页面有其他架构原因（例如候选关联候选池是跨表维度而非单表维度、未来要在多个表之间比较候选关联），则至少在 `JoinEditor` 页面加回"返回表编辑"式的强绑定导航，且明确说明"为什么关联要单独维护"（同 `UX-CATALOG-025` 的业务价值说明要求），并在 `关联` tab 增加候选关系数量提示，而不是让用户点开才发现"当前表还没有正式关联关系"。
+
+无论选择哪个方向，都需要先解决与 `UX-CATALOG-011` 的历史决策冲突，避免来回反复。
+
+### Browser Check
+（决策后按选定方向补充；若选合并方向，验证点包括：`关联` tab 内可直接查看候选关系并执行"保留为候选/标记为不采用/确认写入语义层"，且不再跳转到 `/joins/...`。）
+
+### Notes
+本条目为核查记录，尚未修复；与 `UX-CATALOG-011` 存在方向性冲突，建议先由产品侧确认候选关联的最终 IA 归属，再排入实现。
+
+2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。

@@ -62,6 +62,8 @@
 | [68-sidebar-brand-navigation-followup-spec.md](68-sidebar-brand-navigation-followup-spec.md) | Sidebar Brand Navigation Follow-up：修复 M60 后的 Logo 返回、命令面板默认态、菜单字体体系和品牌名对齐问题 | 产品 / UX / Visual QA |
 | [70-command-palette-result-context-spec.md](70-command-palette-result-context-spec.md) | Command Palette Result Context：将全局命令面板结果从导航列表升级为带 breadcrumb、说明、命中高亮和排序解释的页面搜索结果 | 产品 / UX / Search / Frontend |
 | [71-catalog-and-business-wiki-visual-clarity-spec.md](71-catalog-and-business-wiki-visual-clarity-spec.md) | Catalog and Business Wiki Visual Clarity：降低 Catalog 表名字重、精简 Wiki 首页、移除目录小三角、重构上传 Markdown 预检层级 | 产品 / UX / IA / Frontend |
+| [73-table-semantic-workbench-density-and-joins-inline-spec.md](73-table-semantic-workbench-density-and-joins-inline-spec.md) | Table Semantic Workbench Density and Joins Inline：按钮语义、表描述三段式、行粒度多选、字段表密度、指标/分群价值文案、关联内联 | 产品 / UX / IA / Frontend |
+| [74-wiki-workbench-secondary-feedback-fixes-spec.md](74-wiki-workbench-secondary-feedback-fixes-spec.md) | Wiki Workbench Secondary Feedback Fixes：目录树层级引导线与内容模型、新建文档跳转新建目录、正文标题去重、移动到目录弹窗精简、版本记录表格化与懒加载 | 产品 / UX / Frontend |
 
 | [76-role-admin-list-clarity-followup-spec.md](76-role-admin-list-clarity-followup-spec.md) | Role Admin List Clarity Follow-up：待修复 KPI 口径、Header/状态条降噪、Role 主语术语、卡片字段标签、基于此新建、配置最近写入 | 产品 / UX / IA / Terminology / 前端 / 后端 |
 

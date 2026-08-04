@@ -350,7 +350,14 @@ describe("TableEditor", () => {
 
     const headerActions = await screen.findByTestId("page-header-actions");
     expect(screen.queryByTestId("table-editor-command-bar")).not.toBeInTheDocument();
-    expect(within(headerActions).getByRole("button", { name: "校验" })).toBeInTheDocument();
+    const validateButton = within(headerActions).getByRole("button", { name: "校验" });
+    expect(validateButton).toBeInTheDocument();
+    expect(validateButton.className).toContain("pl-btn--secondary");
+    expect(validateButton.className).not.toContain("pl-btn--ghost");
+    expect(validateButton).toHaveAttribute(
+      "title",
+      "对当前草稿运行语义 YAML 结构与规则校验，不写入文件；保存前可先校验发现问题。"
+    );
     expect(within(headerActions).getByRole("button", { name: "保存" })).toBeInTheDocument();
     expect(screen.getAllByText("导出 YAML")).toHaveLength(1);
     expect(screen.getAllByText("导入 YAML")).toHaveLength(1);
@@ -429,6 +436,13 @@ describe("TableEditor", () => {
     expect(tableTextarea).toBeInTheDocument();
     // AI table description should not silently fill the human textarea.
     expect(screen.queryByDisplayValue("AI-suggested table description")).not.toBeInTheDocument();
+    const buckets = screen.getByTestId("table-description-buckets");
+    expect(buckets).toHaveTextContent("人工描述 (Human)");
+    expect(buckets).toHaveTextContent("AI 建议描述");
+    expect(buckets).toHaveTextContent("AI-suggested table description");
+    expect(within(buckets).getByRole("button", { name: "覆盖为 AI 描述" })).toBeInTheDocument();
+    expect(screen.getByTestId("grain-picker")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("customer_id, signup_date")).not.toBeInTheDocument();
   });
 
   it("shows object-level change summary and raw YAML Diff in the sticky review", async () => {
@@ -567,7 +581,7 @@ describe("TableEditor", () => {
     // Wait for the columns section to actually render before asserting on
     // its cards (the grain field on the overview tab also contains the
     // column name "order_key" so we cannot use it as a readiness signal).
-    await screen.findByText(/每张卡片展示 PK/);
+    await screen.findByTestId("field-editor-table");
 
     expect(screen.getByText("order_key")).toBeInTheDocument();
     // Metadata badges
@@ -592,7 +606,7 @@ describe("TableEditor", () => {
 
     await openManualSemanticEditor();
     fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
-    await screen.findByText(/每张卡片展示 PK/);
+    await screen.findByTestId("field-editor-table");
 
     // The first Adopt button belongs to order_key (the first card with AI
     // and an empty human description).
@@ -727,7 +741,7 @@ describe("TableEditor", () => {
     expect(screen.getAllByText("Overlay").length).toBeGreaterThan(0);
   });
 
-  it("removes prominent candidate suggestions from the table workbench", async () => {
+  it("removes prominent candidate suggestions from the table workbench first viewport", async () => {
     const fetchMock = stubEditorFetch({
       candidates: [
         {
@@ -754,22 +768,67 @@ describe("TableEditor", () => {
     expect(screen.queryByRole("button", { name: "确认写入 rows 关联" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "保留 rows 为候选关联" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "标记 rows 关联不采用" })).not.toBeInTheDocument();
+    // Candidates are loaded only when the joins tab is opened.
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/api/joins/candidates"))).toBe(false);
   });
 
-  it("keeps formal join maintenance available under semantic content", async () => {
-    stubEditorFetch();
+  it("inlines join maintenance under the joins tab without leaving the table editor", async () => {
+    const fetchMock = stubEditorFetch({
+      candidates: [
+        {
+          conn: "mysql-aliyun",
+          schema: "dataforai",
+          fromTable: "superstore_orders",
+          join: {
+            to: "rows",
+            on: "superstore_orders.row_id = rows.row_id",
+            relationship: "many_to_one",
+            source: "candidate"
+          },
+          confidence: "candidate",
+          note: "字段名匹配"
+        }
+      ]
+    });
     renderEditor();
 
     await openManualSemanticEditor();
     fireEvent.click(screen.getByRole("tab", { name: /^关联/ }));
 
-    expect(await screen.findByText("正式关联关系仍在关联关系页面维护，这里只展示当前表上下文。")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "打开关联关系" })).toHaveAttribute(
-      "href",
-      "/joins/mysql-aliyun/dataforai/superstore_orders"
+    const panel = await screen.findByTestId("joins-inline-panel");
+    expect(panel).toHaveTextContent("支撑跨表问答与分析");
+    expect(panel).toHaveTextContent("字段名启发式");
+    expect(screen.queryByRole("link", { name: "打开关联关系" })).not.toBeInTheDocument();
+    expect(panel).toHaveTextContent("当前表还没有正式关联关系。");
+    expect(await within(panel).findByText("rows")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "确认写入语义层" })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/api/joins/candidates"))).toBe(true);
+  });
+
+  it("shows business-value copy for measures and segments", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    await openManualSemanticEditor();
+    fireEvent.click(screen.getByRole("tab", { name: /^指标/ }));
+    expect(await screen.findByText(/可复用的聚合口径/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /^分群/ }));
+    expect(await screen.findByText(/可复用的筛选条件/)).toBeInTheDocument();
+  });
+
+  it("renders fields as a data grid with batch-select affordance", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    await openManualSemanticEditor();
+    fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
+    const table = await screen.findByTestId("field-editor-table");
+    expect(table.className).toContain("pl-data-grid");
+    expect(screen.getByText("勾选后可批量采纳 AI 描述")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /选择字段 order_key/ })).toHaveAttribute(
+      "title",
+      "勾选后可批量采纳 AI 描述"
     );
-    expect(screen.getByText("当前表还没有正式关联关系。")).toBeInTheDocument();
   });
 
   it("Cmd+S triggers DryRun and switches to Diff tab, never saves", async () => {
@@ -779,7 +838,7 @@ describe("TableEditor", () => {
     await openManualSemanticEditor();
     // Switch to columns section first so the form has something to dry-run
     fireEvent.click(screen.getByRole("tab", { name: /^字段/ }));
-    await screen.findByText(/每张卡片展示 PK/);
+    await screen.findByTestId("field-editor-table");
     expect(screen.getByText("order_key")).toBeInTheDocument();
 
     // Find the form root to focus inside

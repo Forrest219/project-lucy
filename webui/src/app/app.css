@@ -1869,24 +1869,32 @@
   .pl-wiki-version-list {
     @apply content-start;
   }
-  .pl-wiki-version-item {
-    @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-3;
+  /* UX-WIKI-025: 历史版本 as a plain semantic table (时间 / 操作类型 / 版本 / 操作)
+     instead of a card list, so the record reads like a clear log. */
+  .pl-wiki-version-table {
+    @apply w-full border-collapse text-xs;
   }
-  .pl-wiki-version-item--active {
-    @apply border-border-strong bg-bg-muted;
+  .pl-wiki-version-table th {
+    @apply border-b border-border-default px-2 py-1.5 text-left font-medium text-fg-muted;
   }
-  .pl-wiki-version-item-main {
-    @apply grid gap-1 text-xs text-fg-muted;
+  .pl-wiki-version-table td {
+    @apply border-b border-border-default px-2 py-1.5 align-top text-fg-body;
   }
-  .pl-wiki-version-item-main strong {
-    @apply text-sm text-fg-default;
+  .pl-wiki-version-row--active {
+    @apply bg-bg-muted;
   }
-  .pl-wiki-version-item-main code,
+  .pl-wiki-version-row-note {
+    @apply mt-0.5 block text-[11px] text-fg-muted;
+  }
+  .pl-wiki-version-row-note code,
   .pl-wiki-version-meta code {
     @apply break-all rounded bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-muted;
   }
-  .pl-wiki-version-item-actions {
-    @apply flex flex-wrap items-center gap-2;
+  .pl-wiki-version-row td code {
+    @apply break-all rounded bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-muted;
+  }
+  .pl-wiki-version-row-actions {
+    @apply flex flex-wrap items-center gap-2 whitespace-nowrap;
   }
   .pl-wiki-version-detail {
     @apply content-start;
@@ -1925,7 +1933,11 @@
   .pl-wiki-tree-group-menu { @apply shrink-0; }
   .pl-wiki-tree-group-menu .pl-row-more-trigger { @apply size-6 border-0 bg-transparent; }
   .pl-wiki-tree-group-menu .pl-row-more-icon { @apply size-3.5; }
-  .pl-wiki-tree-pages { @apply list-none p-0 m-0 grid gap-0.5; }
+  /* UX-WIKI-019: nested directory/document lists get a left guide line
+     so multi-level hierarchy is visually legible without a triangle glyph. */
+  .pl-wiki-tree-pages {
+    @apply list-none p-0 m-0 ml-2 grid gap-0.5 border-l border-border-default/60 pl-1;
+  }
   .pl-wiki-tree-page { @apply grid; }
   .pl-wiki-tree-page-button {
     @apply grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 rounded-sm px-2 py-1.5 text-left text-sm text-fg-body;
@@ -2069,6 +2081,8 @@
   .pl-wiki-upload-warnings {
     @apply grid gap-1 rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
   }
+  /* UX-WIKI-021: jump hint from 新建文档 to the dedicated 新建目录 dialog. */
+  .pl-wiki-new-document-directory-hint { @apply text-xs text-fg-muted; }
   .pl-wiki-new-document-content {
     @apply fixed left-1/2 top-1/2 z-50 grid max-h-[85vh] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-border-default bg-bg-elevated p-5 shadow-lg;
   }

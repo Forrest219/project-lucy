@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import clsx from "clsx";
 import { DiffViewer } from "../components/DiffViewer";
@@ -14,6 +14,8 @@ import { queryKeys } from "../lib/queryKeys";
 import { toast } from "sonner";
 import type {
   Join,
+  JoinCandidate,
+  JoinCandidatesResponse,
   SourceDetail,
   SourcePreview,
   SourceSaveResponse,
@@ -24,7 +26,10 @@ import type {
   TableYamlVersionSummary,
   ValidationResult
 } from "../lib/types";
-import { RELATIONSHIP_LABELS } from "./semantic/join-utils";
+import { RELATIONSHIP_LABELS, tableJoinCandidates } from "./semantic/join-utils";
+
+const VALIDATE_BUTTON_TITLE =
+  "对当前草稿运行语义 YAML 结构与规则校验，不写入文件；保存前可先校验发现问题。";
 
 const editorSchema = z.object({
   tableDescription: z.string(),
@@ -56,6 +61,14 @@ type EditorForm = z.infer<typeof editorSchema>;
 type EditorSection = "overview" | "columns" | "measures" | "segments" | "joins";
 type FieldFilterMode = "all" | "missingHuman" | "hasAi" | "pkOrRequired";
 type InspectorTab = "diff" | "yaml" | "validate";
+
+const SECTION_FROM_TAB: Record<string, EditorSection> = {
+  overview: "overview",
+  columns: "columns",
+  measures: "measures",
+  segments: "segments",
+  joins: "joins"
+};
 type ChangeSummaryRow = {
   section: string;
   added: number;
@@ -89,11 +102,14 @@ function formFromSource(source: SourceDetail): EditorForm {
 }
 
 function patchFromForm(form: EditorForm, source?: SourceDetail): TablePatch {
+  const knownColumns = new Set(source?.model.columns.map((column) => column.name) ?? []);
+  const grainValues = form.grain
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((name) => knownColumns.size === 0 || knownColumns.has(name));
   const patch: TablePatch = {
-    grain: form.grain
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean),
+    grain: grainValues,
     measures: form.measures
       .filter((measure) => measure.name.trim() && measure.expr.trim())
       .map((measure) => ({
@@ -265,14 +281,23 @@ function buildChangeSummary({
       ]
     });
   }
-  if (form.grain !== (source.model.grain?.join(", ") ?? "")) {
+  const knownColumns = new Set(source.model.columns.map((column) => column.name));
+  const nextGrain = form.grain
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((name) => knownColumns.has(name));
+  const currentGrain = (source.model.grain ?? []).filter((name) => knownColumns.has(name));
+  const nextGrainLabel = nextGrain.join(", ");
+  const currentGrainLabel = currentGrain.join(", ");
+  if (nextGrainLabel !== currentGrainLabel) {
     rows.push({
       section: "行粒度",
-      added: source.model.grain?.length ? 0 : 1,
-      modified: source.model.grain?.length ? 1 : 0,
-      removed: form.grain.trim() ? 0 : 1,
+      added: currentGrain.length ? 0 : 1,
+      modified: currentGrain.length ? 1 : 0,
+      removed: nextGrain.length ? 0 : 1,
       details: [
-        `行粒度：${displaySemanticValue(source.model.grain?.join(", "))} -> ${displaySemanticValue(form.grain)}`
+        `行粒度：${displaySemanticValue(currentGrainLabel)} -> ${displaySemanticValue(nextGrainLabel)}`
       ]
     });
   }
@@ -390,7 +415,162 @@ function WorkbenchDisclosure({
   );
 }
 
-function FieldCard({
+function parseGrainValues(grain: string): string[] {
+  return grain
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function GrainPicker({
+  columns,
+  value,
+  onChange
+}: {
+  columns: SourceDetail["model"]["columns"];
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const selected = parseGrainValues(value);
+  const columnNames = useMemo(() => {
+    const sorted = [...columns].sort((left, right) => {
+      if (Boolean(left.pk) !== Boolean(right.pk)) {
+        return left.pk ? -1 : 1;
+      }
+      return left.name.localeCompare(right.name);
+    });
+    return sorted.map((column) => column.name);
+  }, [columns]);
+  const known = new Set(columnNames);
+  const missing = selected.filter((name) => !known.has(name));
+
+  function toggle(name: string) {
+    const next = selected.includes(name)
+      ? selected.filter((item) => item !== name)
+      : [...selected, name];
+    onChange(next.join(", "));
+  }
+
+  function remove(name: string) {
+    onChange(selected.filter((item) => item !== name).join(", "));
+  }
+
+  return (
+    <div className="pl-grain-picker" data-testid="grain-picker">
+      <div className="pl-grain-chips" aria-label="已选行粒度字段">
+        {selected.length === 0 ? (
+          <span className="pl-description-muted">尚未选择字段</span>
+        ) : (
+          selected.map((name) => {
+            const orphan = !known.has(name);
+            return (
+              <button
+                className={clsx("pl-grain-chip", orphan && "pl-grain-chip--missing")}
+                key={name}
+                onClick={() => remove(name)}
+                title={orphan ? "字段已不存在，点击移除" : `移除 ${name}`}
+                type="button"
+              >
+                <span className="notranslate" translate="no">
+                  {name}
+                </span>
+                {orphan ? <small>字段已不存在</small> : null}
+                <span aria-hidden="true">×</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+      <div className="pl-grain-options" role="group" aria-label="从当前表字段选择行粒度">
+        {columnNames.map((name) => (
+          <label className="pl-grain-option" key={name}>
+            <input
+              checked={selected.includes(name)}
+              onChange={() => toggle(name)}
+              type="checkbox"
+            />
+            <span className="notranslate" translate="no">
+              {name}
+            </span>
+            {columns.find((column) => column.name === name)?.pk ? (
+              <FieldMetaBadge tone="pk">PK</FieldMetaBadge>
+            ) : null}
+          </label>
+        ))}
+      </div>
+      {missing.length > 0 ? (
+        <p className="pl-notice mb-0">有 {missing.length} 个历史行粒度字段已不在当前表中，保存前请移除。</p>
+      ) : null}
+    </div>
+  );
+}
+
+function TableDescriptionEditor({
+  source,
+  description,
+  onDescriptionChange,
+  onAdoptAi
+}: {
+  source: SourceDetail;
+  description: string;
+  onDescriptionChange: (next: string) => void;
+  onAdoptAi: () => void;
+}) {
+  const ai = source.model.descriptions.ai ?? "";
+  const db = source.model.descriptions.db ?? "";
+  const hasHuman = description.trim().length > 0;
+  const hasAi = ai.length > 0;
+  const hasDb = db.trim().length > 0;
+
+  return (
+    <div className="pl-description-buckets" data-testid="table-description-buckets">
+      <div className="pl-description-bucket">
+        <span className="pl-description-label">物理注释 (DB)</span>
+        {hasDb ? (
+          <p className="pl-description-text" title={db}>
+            {db}
+          </p>
+        ) : (
+          <p className="pl-description-muted">暂无物理注释</p>
+        )}
+      </div>
+      <div className="pl-description-bucket">
+        <div className="pl-description-bucket-header">
+          <span className="pl-description-label">AI 建议描述</span>
+          {hasAi ? (
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost pl-btn--sm"
+              onClick={onAdoptAi}
+            >
+              {hasHuman ? "覆盖为 AI 描述" : "采纳 AI 描述"}
+            </button>
+          ) : (
+            <FieldMetaBadge tone="muted">无 AI 建议</FieldMetaBadge>
+          )}
+        </div>
+        {hasAi ? (
+          <p className="pl-description-text" title={ai}>
+            {ai}
+          </p>
+        ) : null}
+      </div>
+      <div className="pl-description-bucket">
+        <span className="pl-description-label">人工描述 (Human)</span>
+        <textarea
+          aria-label="表人工描述"
+          rows={4}
+          className="pl-textarea"
+          value={description}
+          onChange={(event) => onDescriptionChange(event.target.value)}
+          placeholder="人工编辑的表描述，仅在用户主动保存后写入 descriptions.human"
+        />
+      </div>
+    </div>
+  );
+}
+
+function FieldRow({
   sourceColumn,
   description,
   selected,
@@ -411,68 +591,66 @@ function FieldCard({
   const hasHuman = human.trim().length > 0;
   const hasAi = ai.length > 0;
   const hasDb = db.trim().length > 0;
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <article className="pl-field-card" data-column={sourceColumn.name}>
-      <div className="pl-field-card-header">
-        <label className="pl-field-card-select">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={(event) => onSelectedChange(event.target.checked)}
-            aria-label={`选择字段 ${sourceColumn.name}`}
-          />
-          <strong className="notranslate" translate="no">{sourceColumn.name}</strong>
-        </label>
-        <div className="pl-field-badges">
-          {sourceColumn.pk ? <FieldMetaBadge tone="pk">PK</FieldMetaBadge> : null}
-          <FieldMetaBadge tone="muted">{sourceColumn.type}</FieldMetaBadge>
-          {sourceColumn.nullable === false ? (
-            <FieldMetaBadge tone="success">Not Null</FieldMetaBadge>
-          ) : null}
-          {sourceColumn.nullable === true ? (
-            <FieldMetaBadge tone="warning">nullable</FieldMetaBadge>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="pl-description-buckets">
-        <div className="pl-description-bucket">
-          <span className="pl-description-label">物理注释 (DB)</span>
-          {hasDb ? (
-            <p className="pl-description-text" title={db}>
-              {db}
-            </p>
-          ) : (
-            <p className="pl-description-muted">暂无物理注释</p>
-          )}
-        </div>
-
-        <div className="pl-description-bucket">
-          <div className="pl-description-bucket-header">
-            <span className="pl-description-label">AI 建议描述</span>
-            {hasAi ? (
-              <button
-                type="button"
-                className="pl-btn pl-btn--ghost"
-                aria-label={`${hasHuman ? "覆盖为 AI 描述" : "采纳 AI 描述"}：${sourceColumn.name}`}
-                onClick={onAdoptAi}
-              >
-                {hasHuman ? "覆盖为 AI 描述" : "采纳 AI 描述"}
-              </button>
-            ) : (
-              <FieldMetaBadge tone="muted">无 AI 建议</FieldMetaBadge>
-            )}
+    <tr className="pl-field-row" data-column={sourceColumn.name}>
+      <td className="pl-field-col-select">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(event) => onSelectedChange(event.target.checked)}
+          aria-label={`选择字段 ${sourceColumn.name}（用于批量采纳 AI 描述）`}
+          title="勾选后可批量采纳 AI 描述"
+        />
+      </td>
+      <td className="pl-field-col-name">
+        <div className="pl-field-name-cell">
+          <strong className="notranslate" translate="no">
+            {sourceColumn.name}
+          </strong>
+          <div className="pl-field-badges">
+            {sourceColumn.pk ? <FieldMetaBadge tone="pk">PK</FieldMetaBadge> : null}
+            <FieldMetaBadge tone="muted">{sourceColumn.type}</FieldMetaBadge>
+            {sourceColumn.nullable === false ? (
+              <FieldMetaBadge tone="success">Not Null</FieldMetaBadge>
+            ) : null}
+            {sourceColumn.nullable === true ? (
+              <FieldMetaBadge tone="warning">nullable</FieldMetaBadge>
+            ) : null}
           </div>
-          {hasAi ? (
+        </div>
+      </td>
+      <td className="pl-field-col-db">
+        {hasDb ? (
+          <p className="pl-description-text" title={db}>
+            {db}
+          </p>
+        ) : (
+          <span className="pl-description-muted">—</span>
+        )}
+      </td>
+      <td className="pl-field-col-ai">
+        {hasAi ? (
+          <div className="pl-field-ai-cell">
             <p className="pl-description-text" title={ai}>
               {ai}
             </p>
-          ) : null}
-        </div>
-
-        <div className="pl-description-bucket">
-          <span className="pl-description-label">人工描述 (Human)</span>
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost pl-btn--sm"
+              aria-label={`${hasHuman ? "覆盖为 AI 描述" : "采纳 AI 描述"}：${sourceColumn.name}`}
+              onClick={onAdoptAi}
+            >
+              {hasHuman ? "覆盖为 AI 描述" : "采纳 AI 描述"}
+            </button>
+          </div>
+        ) : (
+          <span className="pl-description-muted">无 AI 建议</span>
+        )}
+      </td>
+      <td className="pl-field-col-human">
+        {expanded ? (
           <textarea
             aria-label={`${sourceColumn.name} 人工描述`}
             rows={3}
@@ -481,9 +659,26 @@ function FieldCard({
             onChange={(event) => onDescriptionChange(event.target.value)}
             placeholder="人工编辑的描述，仅在用户主动保存后写入 descriptions.human"
           />
-        </div>
-      </div>
-    </article>
+        ) : (
+          <div className="pl-field-human-compact">
+            <input
+              aria-label={`${sourceColumn.name} 人工描述`}
+              className="pl-input"
+              value={description}
+              onChange={(event) => onDescriptionChange(event.target.value)}
+              placeholder="人工描述"
+            />
+            <button
+              className="pl-btn pl-btn--ghost pl-btn--sm"
+              onClick={() => setExpanded(true)}
+              type="button"
+            >
+              展开
+            </button>
+          </div>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -972,10 +1167,13 @@ function VersionHistoryPanel({
 export function TableEditor() {
   const navigate = useNavigate();
   const params = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const conn = params.conn ?? "";
   const schema = params.schema ?? "";
   const table = params.table ?? "";
   const sourceUrl = `/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`;
+  const initialTab = SECTION_FROM_TAB[searchParams.get("tab") ?? ""] ?? "overview";
   const sourceQuery = useQuery({
     queryKey: queryKeys.source(conn, schema, table),
     queryFn: () => apiGet<SourceDetail>(sourceUrl),
@@ -984,7 +1182,7 @@ export function TableEditor() {
 
   const source = sourceQuery.data;
   const [form, setForm] = useState<EditorForm>(EMPTY_FORM);
-  const [activeSection, setActiveSection] = useState<EditorSection>("overview");
+  const [activeSection, setActiveSection] = useState<EditorSection>(initialTab);
   const [fieldSearch, setFieldSearch] = useState("");
   const [fieldFilterMode, setFieldFilterMode] = useState<FieldFilterMode>("all");
   const [selectedFieldNames, setSelectedFieldNames] = useState<Set<string>>(() => new Set());
@@ -1013,6 +1211,38 @@ export function TableEditor() {
     queryKey: queryKeys.sourceVersion(conn, schema, table, selectedVersionId ?? ""),
     queryFn: () => apiGet<TableYamlVersionDetail>(`${sourceUrl}/versions/${encodeURIComponent(selectedVersionId ?? "")}`),
     enabled: Boolean(source && isVersionPanelOpen && selectedVersionId)
+  });
+  const candidatesQuery = useQuery({
+    queryKey: queryKeys.joinCandidates,
+    queryFn: () => apiGet<JoinCandidatesResponse>("/api/joins/candidates"),
+    enabled: Boolean(source && activeSection === "joins")
+  });
+  const writeCandidates = useMutation({
+    mutationFn: (next: JoinCandidate[]) => apiPut<JoinCandidatesResponse>("/api/joins/candidates", { candidates: next }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.joinCandidates });
+      toast.success("候选已保存");
+    },
+    onError: (error) => {
+      toast.error(`保存候选失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  });
+  const confirmJoin = useMutation({
+    mutationFn: (join: Join) =>
+      apiPut(`/api/sources/${encodeURIComponent(conn)}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, {
+        dryRun: false,
+        patch: {
+          joins: [...(source?.model.joins ?? []), { ...join, source: "formal" }]
+        }
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.source(conn, schema, table) });
+      toast.success("已写入语义层");
+      navigate("/review");
+    },
+    onError: (error) => {
+      toast.error(`确认失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
   });
 
   const saveMutation = useMutation({
@@ -1045,6 +1275,14 @@ export function TableEditor() {
       toast.error(message);
     }
   });
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const nextSection = tab ? SECTION_FROM_TAB[tab] : "overview";
+    if (nextSection && nextSection !== activeSection) {
+      setActiveSection(nextSection);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps -- sync URL tab into local section; ignore activeSection to avoid loops
 
   useEffect(() => {
     if (!isVersionPanelOpen || selectedVersionId) {
@@ -1254,6 +1492,44 @@ export function TableEditor() {
         column.name === columnName ? { ...column, description: ai } : column
       )
     }));
+  }
+
+  function adoptTableAiDescription() {
+    const ai = source?.model.descriptions.ai;
+    if (!ai) {
+      return;
+    }
+    setForm((current) => ({ ...current, tableDescription: ai }));
+  }
+
+  function changeSection(section: EditorSection) {
+    setActiveSection(section);
+    const next = new URLSearchParams(searchParams);
+    if (section === "overview") {
+      next.delete("tab");
+    } else {
+      next.set("tab", section);
+    }
+    setSearchParams(next, { replace: true });
+  }
+
+  function upsertCandidate(candidate: JoinCandidate) {
+    if (!candidatesQuery.isSuccess) {
+      toast.error("候选列表尚未加载完成，请稍后再试");
+      return;
+    }
+    const allCandidates = candidatesQuery.data?.candidates ?? [];
+    const remaining = allCandidates.filter(
+      (item) =>
+        !(
+          item.conn === candidate.conn &&
+          item.schema === candidate.schema &&
+          item.fromTable === candidate.fromTable &&
+          item.join.to === candidate.join.to &&
+          item.join.on === candidate.join.on
+        )
+    );
+    writeCandidates.mutate([...remaining, candidate]);
   }
 
   function updateColumnDescription(columnName: string, next: string) {
@@ -1477,6 +1753,14 @@ export function TableEditor() {
     : [];
   const unknownKeys = source?.model.unknownKeys?.length ?? 0;
   const hasDraftChanges = Boolean(preview?.diff || importedYaml);
+  const joinCandidates = useMemo(
+    () =>
+      tableJoinCandidates({
+        source,
+        sidecarCandidates: candidatesQuery.data?.candidates ?? []
+      }),
+    [candidatesQuery.data?.candidates, source]
+  );
 
   return (
     <div className="pl-page-stack">
@@ -1507,7 +1791,12 @@ export function TableEditor() {
               <button className="pl-btn pl-btn--secondary" type="button" onClick={handleExportYaml}>
                 导出 YAML
               </button>
-              <button className="pl-btn pl-btn--ghost" type="button" onClick={handleValidateCurrent}>
+              <button
+                className="pl-btn pl-btn--secondary"
+                type="button"
+                onClick={handleValidateCurrent}
+                title={VALIDATE_BUTTON_TITLE}
+              >
                 校验
               </button>
               <button className="pl-btn pl-btn--primary" disabled={saveMutation.isPending} form="table-editor-form" type="submit">
@@ -1535,9 +1824,9 @@ export function TableEditor() {
                     testId: "table-editor-more-review"
                   },
                   {
-                    kind: "link",
+                    kind: "action",
                     label: "关联关系",
-                    href: `/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`,
+                    onSelect: () => changeSection("joins"),
                     testId: "table-editor-more-joins"
                   }
                 ]}
@@ -1572,7 +1861,7 @@ export function TableEditor() {
                   <p className="pl-panel-title mb-0">在线编辑</p>
                   <SemanticTabs
                     activeSection={activeSection}
-                    onSectionChange={setActiveSection}
+                    onSectionChange={changeSection}
                     source={source}
                   />
                 </div>
@@ -1580,17 +1869,26 @@ export function TableEditor() {
                   <div className="pl-manual-semantic-panel">
                     {activeSection === "overview" ? (
                       <section className="pl-panel">
-                        <label className="pl-field-label">
+                        <div className="pl-field-label">
                           <span>表描述</span>
-                          <textarea rows={4} className="pl-textarea" value={form.tableDescription} onChange={(event) => setForm({ ...form, tableDescription: event.target.value })} />
-                        </label>
-                        <label className="pl-field-label">
+                          <TableDescriptionEditor
+                            source={source}
+                            description={form.tableDescription}
+                            onDescriptionChange={(next) => setForm({ ...form, tableDescription: next })}
+                            onAdoptAi={adoptTableAiDescription}
+                          />
+                        </div>
+                        <div className="pl-field-label">
                           <span className="pl-field-label-with-overlay">
                             行粒度
                             <OverlayBadge source={source} />
                           </span>
-                          <input className="pl-input" placeholder="customer_id, signup_date" value={form.grain} onChange={(event) => setForm({ ...form, grain: event.target.value })} />
-                        </label>
+                          <GrainPicker
+                            columns={source.model.columns}
+                            value={form.grain}
+                            onChange={(next) => setForm({ ...form, grain: next })}
+                          />
+                        </div>
                       </section>
                     ) : null}
 
@@ -1600,7 +1898,13 @@ export function TableEditor() {
                           <p className="pl-panel-title mb-0">指标</p>
                           <OverlayBadge source={source} />
                         </div>
-                        <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的指标段，与基础表定义分离。</p>
+                        <p className="pl-notice mb-3">
+                          指标是可复用的聚合口径，定义后可供数据问答与报表复用，避免每次分析重复手写。修改将写入{" "}
+                          <span className="notranslate" translate="no">
+                            semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml
+                          </span>{" "}
+                          的指标段，与基础表定义分离。
+                        </p>
                         <MeasureForm
                           measures={form.measures}
                           onChange={(measures) => setForm({ ...form, measures })}
@@ -1614,7 +1918,13 @@ export function TableEditor() {
                           <p className="pl-panel-title mb-0">分群</p>
                           <OverlayBadge source={source} />
                         </div>
-                        <p className="pl-notice mb-3 notranslate" translate="no">修改将写入 semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml 的分群段，与基础表定义分离。</p>
+                        <p className="pl-notice mb-3">
+                          分群是可复用的筛选条件，定义后可保证跨场景口径一致。修改将写入{" "}
+                          <span className="notranslate" translate="no">
+                            semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml
+                          </span>{" "}
+                          的分群段，与基础表定义分离。
+                        </p>
                         <SegmentForm
                           segments={form.segments}
                           onChange={(segments) => setForm({ ...form, segments })}
@@ -1625,7 +1935,9 @@ export function TableEditor() {
                     {activeSection === "columns" ? (
                       <section className="pl-panel">
                         <div className="flex items-center justify-between gap-3 mb-2">
-                          <p className="pl-notice mb-0">每张卡片展示 PK/类型/可空性与 AI 建议。Human 文本框初始仅载入 descriptions.human，点击「采纳 AI 描述」才会把 AI 文本写进 Human。</p>
+                          <p className="pl-notice mb-0">
+                            表格展示 PK/类型/可空性与 AI 建议。Human 初始仅载入 descriptions.human，点击「采纳 AI 描述」才会把 AI 文本写进 Human。勾选字段后可批量采纳 AI 描述。
+                          </p>
                           <label className="pl-field-search shrink-0">
                             <span className="sr-only">搜索字段</span>
                             <input className="pl-input" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="搜索字段" />
@@ -1652,6 +1964,7 @@ export function TableEditor() {
                             <span data-testid="field-batch-selection-count">
                               已选 {selectedVisibleFieldCount} / 可见 {filteredColumns.length}
                             </span>
+                            <span className="pl-field-batch-hint">勾选后可批量采纳 AI 描述</span>
                             <button className="pl-btn pl-btn--ghost pl-btn--sm" onClick={selectVisibleFields} type="button">
                               全选筛选结果
                             </button>
@@ -1663,49 +1976,138 @@ export function TableEditor() {
                             </button>
                           </div>
                         </div>
-                        <div className="pl-field-editor-list">
-                          {filteredColumns.map((column) => {
-                            const sourceColumn = columnsByName.get(column.name);
-                            if (!sourceColumn) {
-                              return null;
-                            }
-                            return (
-                              <FieldCard
-                                key={column.name}
-                                sourceColumn={sourceColumn}
-                                description={column.description}
-                                selected={selectedFieldNames.has(column.name)}
-                                onDescriptionChange={(next) => updateColumnDescription(column.name, next)}
-                                onAdoptAi={() => adoptAiDescription(column.name)}
-                                onSelectedChange={(checked) => setFieldSelected(column.name, checked)}
-                              />
-                            );
-                          })}
+                        <div className="pl-field-table-wrap">
+                          <table className="pl-data-grid pl-field-table" data-testid="field-editor-table">
+                            <thead>
+                              <tr>
+                                <th scope="col" className="pl-field-col-select">
+                                  <span className="sr-only">选择（批量采纳）</span>
+                                </th>
+                                <th scope="col">字段名</th>
+                                <th scope="col">物理注释 (DB)</th>
+                                <th scope="col">AI 建议描述</th>
+                                <th scope="col">人工描述 (Human)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredColumns.map((column) => {
+                                const sourceColumn = columnsByName.get(column.name);
+                                if (!sourceColumn) {
+                                  return null;
+                                }
+                                return (
+                                  <FieldRow
+                                    key={column.name}
+                                    sourceColumn={sourceColumn}
+                                    description={column.description}
+                                    selected={selectedFieldNames.has(column.name)}
+                                    onDescriptionChange={(next) => updateColumnDescription(column.name, next)}
+                                    onAdoptAi={() => adoptAiDescription(column.name)}
+                                    onSelectedChange={(checked) => setFieldSelected(column.name, checked)}
+                                  />
+                                );
+                              })}
+                            </tbody>
+                          </table>
                           {filteredColumns.length === 0 ? <p className="pl-notice">没有匹配字段。</p> : null}
                         </div>
                       </section>
                     ) : null}
 
                     {activeSection === "joins" ? (
-                      <section className="pl-panel">
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <p className="pl-notice mb-0">正式关联关系仍在关联关系页面维护，这里只展示当前表上下文。</p>
-                          <Link
-                            className="pl-btn pl-btn--secondary shrink-0"
-                            to={`/joins/${encodeURIComponent(source.model.conn)}/${encodeURIComponent(source.model.schema)}/${encodeURIComponent(source.model.table)}`}
-                          >
-                            打开关联关系
-                          </Link>
+                      <section className="pl-panel" data-testid="joins-inline-panel">
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="pl-panel-title mb-0">关联</p>
+                          <OverlayBadge source={source} />
                         </div>
-                        <div className="pl-relation-list">
-                          {(source.model.joins ?? []).map((join) => (
-                            <div className="pl-relation-row" key={`${join.to}-${join.on}`}>
-                              <strong>{join.to}</strong>
-                              <span>{RELATIONSHIP_LABELS[join.relationship]}</span>
-                              <code>{join.on}</code>
+                        <p className="pl-notice mb-3">
+                          关联声明表间连接方式，支撑跨表问答与分析。正式关系写入 overlay；候选关系先保存在 sidecar。候选来自字段名启发式，不是强语义推断。
+                        </p>
+
+                        <div className="grid gap-4">
+                          <section>
+                            <p className="pl-panel-title">已确认关系</p>
+                            <div className="pl-relation-list">
+                              {(source.model.joins ?? []).map((join) => (
+                                <div className="pl-relation-row" key={`${join.to}-${join.on}`}>
+                                  <strong className="notranslate" translate="no">
+                                    {join.to}
+                                  </strong>
+                                  <span>{RELATIONSHIP_LABELS[join.relationship]}</span>
+                                  <code className="notranslate" translate="no">
+                                    {join.on}
+                                  </code>
+                                </div>
+                              ))}
+                              {(source.model.joins ?? []).length === 0 ? (
+                                <p className="pl-notice">当前表还没有正式关联关系。</p>
+                              ) : null}
                             </div>
-                          ))}
-                          {(source.model.joins ?? []).length === 0 ? <p className="pl-notice">当前表还没有正式关联关系。</p> : null}
+                          </section>
+
+                          <section>
+                            <p className="pl-panel-title">候选关系</p>
+                            <p className="pl-notice mb-2">
+                              以下候选由字段名启发式生成或来自 sidecar，仅供人工确认，不代表已验证的业务关联。
+                            </p>
+                            <div className="grid gap-2">
+                              {joinCandidates.map((candidate) => (
+                                <div
+                                  className="pl-join-row"
+                                  key={`${candidate.join.to}-${candidate.join.on}-${candidate.note ?? ""}`}
+                                >
+                                  <strong className="notranslate" translate="no">
+                                    {candidate.join.to}
+                                  </strong>
+                                  <span className="notranslate" translate="no">
+                                    {candidate.join.on}
+                                  </span>
+                                  <span>{RELATIONSHIP_LABELS[candidate.join.relationship]}</span>
+                                  <div className="flex items-center gap-2 justify-end flex-wrap">
+                                    <button
+                                      type="button"
+                                      className="pl-btn pl-btn--ghost pl-btn--sm"
+                                      disabled={!candidatesQuery.isSuccess || writeCandidates.isPending}
+                                      onClick={() =>
+                                        upsertCandidate({
+                                          ...candidate,
+                                          confidence: "candidate",
+                                          join: { ...candidate.join, source: "candidate" }
+                                        })
+                                      }
+                                    >
+                                      保留为候选
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="pl-btn pl-btn--ghost pl-btn--sm"
+                                      disabled={!candidatesQuery.isSuccess || writeCandidates.isPending}
+                                      onClick={() =>
+                                        upsertCandidate({
+                                          ...candidate,
+                                          confidence: "rejected",
+                                          join: { ...candidate.join, source: "candidate" }
+                                        })
+                                      }
+                                    >
+                                      标记为不采用
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="pl-btn pl-btn--primary pl-btn--sm"
+                                      onClick={() => confirmJoin.mutate(candidate.join)}
+                                      disabled={confirmJoin.isPending}
+                                    >
+                                      确认写入语义层
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              {joinCandidates.length === 0 ? (
+                                <p className="pl-notice">暂无候选关联关系。</p>
+                              ) : null}
+                            </div>
+                          </section>
                         </div>
                       </section>
                     ) : null}
