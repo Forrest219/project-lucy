@@ -106,11 +106,24 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M55-agent-admin-usage-observability-and-role-discoverability.md](wo-M55-agent-admin-usage-observability-and-role-discoverability.md) | M55 | Agent Admin 使用观测与 role 可发现性：活跃 Token、近 7 天调用/拒绝、role 链接与 MCP 工具限制解释 |
 | [wo-M56-business-wiki-directory-document-governance.md](wo-M56-business-wiki-directory-document-governance.md) | M56 | 业务 Wiki 目录与文档治理：顶层目录、目录删除、文档移动、下载作用域与上传覆盖预检清晰化 |
 | [wo-M57-role-admin-ops-ux-clarification.md](wo-M57-role-admin-ops-ux-clarification.md) | M57 | Role Admin 运维心智澄清：正式 Role 优先、参考模板降噪、待修复与已停用语义分离 |
+| [wo-M60-sidebar-brand-navigation-polish.md](wo-M60-sidebar-brand-navigation-polish.md) | M60 | 侧栏品牌与导航体验升级：品牌区、折叠菜单、active 状态和命令面板入口 |
+| [wo-M61-sidebar-brand-navigation-followup.md](wo-M61-sidebar-brand-navigation-followup.md) | M61 | 侧栏品牌与导航二轮修正：Logo 返回、命令面板默认态、菜单字体体系和品牌名对齐 |
+| [wo-M63-command-palette-result-context.md](wo-M63-command-palette-result-context.md) | M63 | 命令面板结果上下文升级：breadcrumb、页面说明、命中高亮与稳定排序 |
+| [wo-M64-catalog-and-business-wiki-visual-clarity.md](wo-M64-catalog-and-business-wiki-visual-clarity.md) | M64 | Catalog 与业务 Wiki 视觉层级修复：表名字重、Wiki 首页精简、小三角移除与上传预检层级 |
 | [wo-202608-01-trace-evidence-kernel.md](wo-202608-01-trace-evidence-kernel.md) | 202608-01 | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、自检脚本 |
-| [wo-202608-02-static-lint-reindex-diagnosis.md](wo-202608-02-static-lint-reindex-diagnosis.md) | 202608-02 | Static Lint 与 Reindex 诊断：semantic-layer 风险规则、patch draft、impact diff |
-| [wo-202608-03-tiered-publish-gate.md](wo-202608-03-tiered-publish-gate.md) | 202608-03 | 分级 Publish Gate：P0 / P1 / P2 gate、override evidence、release decision |
-| [wo-202608-04-safe-log-to-eval.md](wo-202608-04-safe-log-to-eval.md) | 202608-04 | Safe Log-to-Eval：Candidate Pool、Reviewer Evidence、promotion、redaction |
-| [wo-202608-05-fde-copilot-candidate.md](wo-202608-05-fde-copilot-candidate.md) | 202608-05 | FDE Copilot Candidate：候选补全、证据引用、冲突提示、unverified candidate 隔离区 |
+| [wo-202608-GOV-02-admin-governance-observability-dashboard.md](wo-202608-GOV-02-admin-governance-observability-dashboard.md) | 202608-GOV-02 | Admin Governance Observability Dashboard：**仅补** `/api/admin/governance/*` 聚合 API + Dashboard UI + 测试；不要重做 Trace Detail / Risk Review / Release Package |
+| [wo-202608-02-static-lint-reindex-diagnosis.md](wo-202608-02-static-lint-reindex-diagnosis.md) | Deferred | Static Lint 与 Reindex 诊断：不属于 202608 Governance & Observability 主线 |
+| [wo-202608-03-tiered-publish-gate.md](wo-202608-03-tiered-publish-gate.md) | 202608-GOV-03 | Tiered Access Governance Gate：Agent / Role / Token / access policy 分级门禁 |
+| [wo-202608-04-safe-log-to-eval.md](wo-202608-04-safe-log-to-eval.md) | 202608-GOV-04 | Safe Log-to-Security-Eval：**P1 Active 缺口**，当前无实现文件，需新建 candidate pool / reviewer / promotion preview + 根目录 verifier |
+| [wo-202608-05-fde-copilot-candidate.md](wo-202608-05-fde-copilot-candidate.md) | Deferred | FDE Copilot Candidate：不属于 202608 Governance & Observability 主线 |
+
+### 202608 Governance & Observability — 并行启动建议
+
+- **GOV-02** 与 **GOV-04** 两份工单的文件边界互不重叠，可以并行启动两个 minimax：
+  - GOV-02 只动 `webui/server/admin/governance-observability.ts` + `webui/src/pages/admin/**`；先交 server 五个聚合 API，再交 Dashboard UI。
+  - GOV-04 只动 `webui/server/eval/security-candidates.ts` + `webui/src/pages/eval/**`；先交 candidate pool / reviewer / promotion preview，再交轻量 UI。
+- 两个任务都**不做浏览器验证**，只跑各自工单内的 Vitest + 根目录 verifier + `lint:terminology` / `lint:ia-boundary`。
+- 总控细节（v0.6、并行边界、文件 ownership、Verification Matrix）见 `docs/lucy-202608-upgrade-execution-control.md`。
 
 ## 6. 如何把工单喂给 codex
 

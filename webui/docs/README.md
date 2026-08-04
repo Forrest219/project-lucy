@@ -51,11 +51,16 @@
 | [58-business-wiki-directory-document-governance-spec.md](58-business-wiki-directory-document-governance-spec.md) | 业务 Wiki 目录与文档治理：顶层目录、目录删除、文档移动、下载作用域与上传覆盖预检清晰化 | 产品 / UX / IA / API / 数据契约 / 前端 |
 | [59-role-admin-ops-ux-clarification-spec.md](59-role-admin-ops-ux-clarification-spec.md) | Role Admin 运维心智澄清：正式 Role 优先、参考模板降噪、待修复与已停用语义分离、中文状态与复制动作收敛 | 产品 / UX / IA / Terminology / 前端 |
 | [60-help-qa-section-spec.md](60-help-qa-section-spec.md) | Help Center 常见问题快速解答章节：开发者 / 管理员 / 接入 Agent 协作者三场景 Q&A + 正文深链，不引入搜索、不暴露 MCP | 产品 / UX / 前端 / 文档 |
-| [62-trace-evidence-kernel-spec.md](62-trace-evidence-kernel-spec.md) | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、后续 Publish Gate / Eval / Copilot 共用数据契约 | 架构 / 后端 / 安全 |
-| [63-static-lint-reindex-diagnosis-spec.md](63-static-lint-reindex-diagnosis-spec.md) | Static Lint 与 Reindex 诊断：semantic-layer 风险规则、patch draft、impact diff、trace evidence | 产品 / 后端 / 语义工具 |
-| [64-tiered-publish-gate-spec.md](64-tiered-publish-gate-spec.md) | 分级 Publish Gate：P0 / P1 / P2 gate、override evidence、release decision | 产品 / API / 发布治理 |
-| [65-safe-log-to-eval-spec.md](65-safe-log-to-eval-spec.md) | Safe Log-to-Eval：Candidate Pool、Reviewer Evidence、promotion、redaction、negative case library | 产品 / API / Eval |
-| [66-fde-copilot-candidate-spec.md](66-fde-copilot-candidate-spec.md) | FDE Copilot Candidate：候选补全、证据引用、冲突提示、unverified candidate 隔离区 | 产品 / UX / 语义工具 |
+| [62-trace-evidence-kernel-spec.md](62-trace-evidence-kernel-spec.md) | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、ACL policy decision trace、Admin / Gate / Security Eval 共用数据契约 | 架构 / 后端 / 安全 |
+| [63-static-lint-reindex-diagnosis-spec.md](63-static-lint-reindex-diagnosis-spec.md) | Deferred：Static Lint 与 Reindex 诊断，保留为后续 semantic delivery tooling 资料 | 产品 / 后端 / 语义工具 |
+| [64-tiered-publish-gate-spec.md](64-tiered-publish-gate-spec.md) | Tiered Access Governance Gate：Agent / Role / Token / access policy 分级门禁、override evidence | 产品 / API / 访问治理 |
+| [65-safe-log-to-eval-spec.md](65-safe-log-to-eval-spec.md) | Safe Log-to-Security-Eval：权限 / 安全负样本 Candidate Pool、Reviewer Evidence、P0 security Eval promotion | 产品 / API / Eval / 安全 |
+| [66-fde-copilot-candidate-spec.md](66-fde-copilot-candidate-spec.md) | Deferred：FDE Copilot Candidate，保留为后续 FDE productivity 资料 | 产品 / UX / 语义工具 |
+| [69-admin-governance-observability-spec.md](69-admin-governance-observability-spec.md) | Admin Governance Observability：Audit Trace read model、Agent / Role / Token dashboard、risk review candidates、release readiness evidence package | 产品 / API / UX / 安全 |
+| [67-sidebar-brand-navigation-polish-spec.md](67-sidebar-brand-navigation-polish-spec.md) | Sidebar Brand Navigation Polish：参考 Kaelio ktx Docs 的品牌区、折叠菜单、active 状态和命令入口，升级 Lucy 左侧导航体验 | 产品 / UX / Navigation / Brand |
+| [68-sidebar-brand-navigation-followup-spec.md](68-sidebar-brand-navigation-followup-spec.md) | Sidebar Brand Navigation Follow-up：修复 M60 后的 Logo 返回、命令面板默认态、菜单字体体系和品牌名对齐问题 | 产品 / UX / Visual QA |
+| [70-command-palette-result-context-spec.md](70-command-palette-result-context-spec.md) | Command Palette Result Context：将全局命令面板结果从导航列表升级为带 breadcrumb、说明、命中高亮和排序解释的页面搜索结果 | 产品 / UX / Search / Frontend |
+| [71-catalog-and-business-wiki-visual-clarity-spec.md](71-catalog-and-business-wiki-visual-clarity-spec.md) | Catalog and Business Wiki Visual Clarity：降低 Catalog 表名字重、精简 Wiki 首页、移除目录小三角、重构上传 Markdown 预检层级 | 产品 / UX / IA / Frontend |
 
 ## 与原 README 的关键校正
 
