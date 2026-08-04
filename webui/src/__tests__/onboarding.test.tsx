@@ -428,15 +428,12 @@ describe("Onboarding", () => {
     expect(screen.queryByText(/自动刷新/)).not.toBeInTheDocument();
   });
 
-  it("renders a 上次更新 badge in the description row, paired with the refresh button", async () => {
+  it("renders a 上次更新 badge in the header actions row, paired with the refresh button", async () => {
     renderPage();
     const badge = await screen.findByTestId("onboarding-last-updated");
-    // UX-OVERVIEW-004: badge lives in the PageHeader description row, not
-    // in the actions row, so widening the button no longer squeezes the
-    // description's wrap points at <1280px viewports.
-    const descriptionRow = await screen.findByTestId("onboarding-last-updated-row");
-    expect(descriptionRow).toContainElement(badge);
-    expect(screen.getByTestId("onboarding-refresh-controls")).not.toContainElement(badge);
+    // The timestamp badge and refresh CTA should share one row in the
+    // PageHeader actions area to avoid visual misalignment.
+    expect(screen.getByTestId("onboarding-refresh-controls")).toContainElement(badge);
     expect(screen.queryByTestId("onboarding-env-badge")).toBeNull();
     // Once the page settles, the label must move off the "未知" sentinel.
     await waitFor(() => {

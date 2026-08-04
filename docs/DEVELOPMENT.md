@@ -87,6 +87,18 @@ New terms:
 - Code Review 必须检查术语一致性、禁用词和浏览器翻译防御。
 - WebUI 变更提交前运行 `cd webui && npm run lint:terminology`；根目录也可运行 `npm run lint:terminology`。
 
+## WebUI 设计规范（Design System）
+
+Lucy WebUI 的设计规范事实源在
+[`webui/docs/design-system/README.md`](../webui/docs/design-system/README.md)。
+
+强约束如下：
+
+- 涉及 UI 视觉或交互的改动，必须先对照对应章节（Foundations / Components / Patterns / Governance）。
+- 新增视觉模式（如新按钮分层、新网格策略、新颜色语义）必须先补规范再落代码。
+- PR / 交付说明必须包含 `Design System Compliance` 小节，至少写明“引用章节 + 本次遵循点”。
+- 若需求超出已定义章节，先在 `webui/docs/design-system/99-governance.md` 记录临时决策，再在后续迭代升级为正式规范。
+
 ## Onboarding（首次拉取本仓库）
 
 1. `cp ktx.yaml.example ktx.yaml`（如已存在 `ktx.yaml` 则跳过；当前 `ktx.yaml` 仍 tracked，新机器可以直接用）

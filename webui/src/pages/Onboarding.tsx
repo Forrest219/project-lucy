@@ -749,27 +749,9 @@ export function Onboarding() {
       <PageHeader
         title="系统概览"
         description={
-          <div
-            className="flex flex-wrap items-baseline gap-x-3 gap-y-1"
-            data-testid="onboarding-last-updated-row"
-          >
-            <span className="flex-1 min-w-0">
-              查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。聚合首页待办，判断 data agent 是否处于可交付状态。
-            </span>
-            {/*
-              Visual badge (UX-OVERVIEW-004): lives in the description row so
-              widening the button on the right doesn't squeeze wrap points
-              below 1280px. aria-hidden because the per-second ticker would
-              otherwise spam screen readers — see UX-OVERVIEW-003.
-            */}
-            <span
-              className={badgeClasses}
-              data-testid="onboarding-last-updated"
-              data-state={badgeState}
-              aria-hidden="true"
-            >
-              上次更新：{lastUpdatedLabel}
-              {failureLabel ? ` · ${failureLabel}` : ""}
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span>
+              查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。
             </span>
             {/*
               A11y announce channel (UX-OVERVIEW-003): writes only when status
@@ -792,6 +774,15 @@ export function Onboarding() {
             className="flex items-center gap-3"
             data-testid="onboarding-refresh-controls"
           >
+            <span
+              className={badgeClasses}
+              data-testid="onboarding-last-updated"
+              data-state={badgeState}
+              aria-hidden="true"
+            >
+              上次更新：{lastUpdatedLabel}
+              {failureLabel ? ` · ${failureLabel}` : ""}
+            </span>
             <button
               type="button"
               className="pl-btn pl-btn--secondary text-sm"
@@ -968,7 +959,7 @@ export function Onboarding() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="pl-btn pl-btn--primary pl-btn--xs notranslate"
+              className="pl-btn pl-btn--secondary pl-btn--xs notranslate"
               translate="no"
               onClick={copyConfig}
               disabled={!canCopyMcp}

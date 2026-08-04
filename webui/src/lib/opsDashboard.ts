@@ -160,7 +160,7 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
       ? {
           id: "catalog-pending",
           title: `${formatCount(safePendingCatalog)} 个 Catalog 对象待处理`,
-          description: `Catalog 同步发现 ${formatCount(safePendingCatalog)} 个对象处于 partial 状态`,
+          description: `Catalog 同步发现 ${formatCount(safePendingCatalog)} 个对象同步不完整（部分字段或元数据缺失）`,
           severity: "warning",
           actionText: "查看连接",
           actionUrl: "/connections"

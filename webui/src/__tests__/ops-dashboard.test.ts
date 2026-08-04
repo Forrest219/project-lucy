@@ -234,7 +234,7 @@ describe("opsDashboard view model", () => {
       "semantic-gap": {
         text: "当前语义覆盖 4/16，仍有 12 张表缺少可用语义"
       },
-      "catalog-pending": { text: "Catalog 同步发现 5 个对象处于 partial 状态" },
+      "catalog-pending": { text: "Catalog 同步发现 5 个对象同步不完整（部分字段或元数据缺失）" },
       "publish-pending": { text: "当前有 3 个语义变更尚未发布" },
       "eval-gap": { text: "尚未检测到近 30 天评测运行记录" },
       "acl-deny": { text: "访问日志记录到 2 次 ACL 拒绝" }

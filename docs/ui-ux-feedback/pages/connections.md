@@ -640,3 +640,4 @@ Reported: 2026-08-04
 
 ### Notes
 2026-08-04 已将 `webui/src/pages/connections/ConnectionOverview.tsx` 中 `CatalogReloadButton` 的 `variant` 从 `primary` 改为 `secondary`，并同步更新 `webui/src/__tests__/connection-overview.test.tsx` 对应断言（M29/M44 用例）。
+2026-08-04 Docker 重建后浏览器复核（`http://127.0.0.1:55176/connections`）未通过：`+ 添加 Schema` 仍为 `pl-btn--secondary`，`刷新本地目录` 仍为 `pl-btn--primary`。CDP 读取 class 分别为 `pl-btn pl-btn--secondary notranslate` 与 `pl-btn pl-btn--primary notranslate`，运行时截图文件：`/var/folders/tv/2lzs4s3n4g5cj6r0g0yx08cr0000gq/T/cursor/screenshots/page-2026-08-04T08-54-21-163Z.png`。状态保持 `Fixed`，待确认部署产物与源码版本同步后再复核。

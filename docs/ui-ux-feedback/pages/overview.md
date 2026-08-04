@@ -153,10 +153,11 @@ Reported: 2026-08-04
 3. Verify the button and badge remain on the same row at ≥ 1280px; the badge may wrap to a new line at < 1280px if needed.
 
 ### Notes
-- Fix（采纳 Notes 推荐 A）：`webui/src/pages/Onboarding.tsx` 把 `上次更新` 徽标从 PageHeader `actions` 槽移到 `description` 内部右侧；description 包成一个 `<div className="flex flex-wrap items-baseline gap-x-3 gap-y-1" data-testid="onboarding-last-updated-row">`，左侧 `<span className="flex-1 min-w-0">` 承载原描述文字，右侧挂徽标；actions 槽仅保留 button。`flex-wrap` + `gap-y-1` 保证 1024px 以下窄视口徽标自然换到下一行，不挤压 description。MacBook Pro 14" 默认视口（1512×982，等效 1280×800 @ 125% scale）下 description 维持 2 行，与 UX-002 baseline 等同。
-- Files touched: `webui/src/pages/Onboarding.tsx`（PageHeader `description` 重排；actions 只剩 button），`webui/src/__tests__/onboarding.test.tsx`（老的 "in actions row" 断言翻转为 "in description row, not in actions row"）。
-- Tests: `webui/src/__tests__/onboarding.test.tsx` 34/34 passed（含 UX-OVERVIEW-003/004/005 共 3 条新断言 / 改动断言）。
-- Browser verification pending docker rebuild（host 源码已修，`docker compose up --build` 后在 1280px 视口复核 description 行数 ≤ 2 即可升至 `Verified`）。
+- 2026-08-04 follow-up（响应用户“上次更新 / 刷新首页数据错位”反馈）：把 `上次更新` 徽标收回到 PageHeader `actions` 槽，与 `刷新首页数据` 按钮同组同排，恢复“动作-反馈邻接”关系并修正错位。
+- 同轮删除了 header 低价值长句（`聚合首页待办，判断 data agent 是否处于可交付状态。`），减少 description 挤压风险，降低行高回归概率。
+- Files touched: `webui/src/pages/Onboarding.tsx`（徽标从 description 回收至 `onboarding-refresh-controls`；description 文案收敛），`webui/src/__tests__/onboarding.test.tsx`（断言更新为“badge in actions row”）。
+- Tests: `cd webui && node_modules/.bin/vitest run src/__tests__/ops-dashboard.test.ts src/__tests__/onboarding.test.tsx --maxWorkers=1` 通过（2 files, 53 tests）。
+- Browser verification attempted on 2026-08-04 after user-reported docker rebuild, but not passed：`http://127.0.0.1:55176/overview` 仍显示旧页面（`聚合首页待办，判断 data agent 是否处于可交付状态。` 仍存在，且待处理项仍是 `partial` 文案），说明运行实例未加载本轮源码改动；本条状态维持 `Fixed`。证据截图：`../assets/overview/UX-OVERVIEW-009-010-verify-blocked-20260804.png`。
 
 ## UX-OVERVIEW-005: 刷新失败时徽标静默，用户不知道"为什么没更新"
 
@@ -318,3 +319,68 @@ Reported: 2026-08-04
 ### Notes
 - 2026-08-04 已将 `webui/src/pages/Onboarding.tsx` 中 `复制 MCP 配置` 按钮样式从 `pl-btn--primary` 调整为 `pl-btn--secondary`，保持与 `查看配置` 同级。
 - 本条与 `UX-CONNECTIONS-023` 属于同一 cross-cutting 主题：`button hierarchy consistency`。
+- 2026-08-04 Docker 重建后浏览器复核（`http://127.0.0.1:55176/overview`）未通过：`复制 MCP 配置` 仍为 `pl-btn pl-btn--primary pl-btn--xs notranslate`，`查看配置` 为 `pl-btn pl-btn--secondary pl-btn--xs`。运行时截图文件：`/var/folders/tv/2lzs4s3n4g5cj6r0g0yx08cr0000gq/T/cursor/screenshots/page-2026-08-04T08-54-37-979Z.png`。状态保持 `Fixed`，待确认部署产物与源码版本同步后再复核。
+
+## UX-OVERVIEW-009: 页头说明句包含低价值内部叙事，用户收益不清晰
+
+Status: Fixed
+Route: /overview
+Area: PageHeader description / 顶部说明文案
+Severity: P3
+Reported: 2026-08-04
+
+### Feedback
+页头说明句中“聚合首页待办，判断 data agent 是否处于可交付状态。”更像内部实现叙事，不直接回答用户“我在这里能做什么”，对一线使用者价值有限。
+
+### Evidence
+- Browser check 2026-08-04 (`http://127.0.0.1:55176/overview`): 该句与核心说明并列显示，语义偏内部化，且增加了 header 文案长度。
+- Re-check 2026-08-04 (`http://127.0.0.1:55176/overview`): 复核时该句仍可见，见截图 `../assets/overview/UX-OVERVIEW-009-010-verify-blocked-20260804.png`。
+
+### Expected
+- 页头文案只保留“当前页面能力 + 用户动作价值”信息。
+- 避免 `data agent`、`可交付状态` 等内部流程术语直接暴露在首页主说明句。
+
+### Browser Check
+1. Open `http://127.0.0.1:55176/overview`.
+2. Locate the page header description.
+3. Verify no sentence contains `data agent` or “可交付状态”内部叙事。
+4. Verify description focuses on用户可执行目标（查看健康状态、进入处理页面）。
+
+### Notes
+- Fix: `webui/src/pages/Onboarding.tsx` 已删除该低价值句，仅保留“查看 Lucy MCP/KTX Runtime/语义资产/Agent 接入当前健康状态”的主说明。
+- Tests: `cd webui && node_modules/.bin/vitest run src/__tests__/ops-dashboard.test.ts src/__tests__/onboarding.test.tsx --maxWorkers=1` 通过。
+- Cross-cutting theme: `header microcopy value density`。
+- Browser verification attempted on 2026-08-04 未通过：运行中的 `:55176` 页面仍渲染旧句，推断部署实例未包含当前源码；状态保持 `Fixed`，待部署实例刷新后复核。
+
+## UX-OVERVIEW-010: 待处理事项使用 `partial` 内部状态词，用户难以理解
+
+Status: Fixed
+Route: /overview
+Area: 待处理事项 / Catalog 待处理描述
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+“Catalog 同步发现 N 个对象处于 partial 状态”直接暴露内部状态枚举值，普通用户无法快速理解“partial 具体缺了什么、该怎么处理”。
+
+### Evidence
+- Browser check 2026-08-04 (`http://127.0.0.1:55176/overview`): 待处理事项卡片出现 `partial` 原词，缺少中文解释。
+- Re-check 2026-08-04 (`http://127.0.0.1:55176/overview`): 复核时仍显示 `Catalog 同步发现 2 个对象处于 partial 状态`，见截图 `../assets/overview/UX-OVERVIEW-009-010-verify-blocked-20260804.png`。
+
+### Expected
+- 待处理事项文案应直接表达用户可理解状态与影响，如“同步不完整（部分字段或元数据缺失）”。
+- 保留入口动作（查看连接）形成“问题 + 下一步”闭环。
+
+### Browser Check
+1. Open `http://127.0.0.1:55176/overview`.
+2. Locate the `待处理事项` section and the Catalog item.
+3. Verify description does not contain raw `partial` term.
+4. Verify copy explains impact in Chinese (e.g. 同步不完整/字段或元数据缺失).
+
+### Notes
+- Fix:
+  - `webui/src/lib/opsDashboard.ts` 将描述从 `Catalog 同步发现 N 个对象处于 partial 状态` 改为 `Catalog 同步发现 N 个对象同步不完整（部分字段或元数据缺失）`。
+  - `webui/src/__tests__/ops-dashboard.test.ts` 同步更新文案断言。
+- Tests: `cd webui && node_modules/.bin/vitest run src/__tests__/ops-dashboard.test.ts src/__tests__/onboarding.test.tsx --maxWorkers=1` 通过。
+- Cross-cutting theme: `internal-term translation`。
+- Browser verification attempted on 2026-08-04 未通过：运行中的 `:55176` 页面仍是旧 `partial` 文案，说明部署实例未加载本轮改动；状态保持 `Fixed`。

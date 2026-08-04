@@ -47,6 +47,9 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-04 | Connections `/connections`, Overview `/overview` | 用户确认 docker 已重建后执行并列按钮复核：`UX-CONNECTIONS-023` 与 `UX-OVERVIEW-008` 均未通过。`/connections` 中刷新动作仍为 `pl-btn--primary`；`/overview` 中 `复制 MCP 配置` 仍为 `pl-btn--primary`，与 host 源码统一 `secondary` 不一致。已在对应条目 Notes 补充 CDP class 证据；两条状态保持 `Fixed`，待部署产物与源码版本同步后再复核。 |
+| 2026-08-04 | Catalog `/catalog/:conn/:schema/:table` | Spec 73 / wo-202608-06 落地 `UX-CATALOG-021`–`026`（状态 `Fixed`，本轮不做浏览器验证）：`校验` 统一 `secondary` + tooltip；表描述 DB/AI/Human 三段式；行粒度字段多选；字段改为 `pl-data-grid` 表密度；指标/分群补业务价值文案；关联内联进 tab 并修正 `UX-CATALOG-011`（首屏仍禁 banner，候选仅在关联 tab）。非浏览器验证：`table-editor.test.tsx` 28/28、`lint:terminology`、`build`。 |
+| 2026-08-04 | Catalog `/catalog/:conn/:schema/:table` | 浏览器 + 代码双重核查单表编辑页 6 项新反馈，追加 `UX-CATALOG-021` 至 `UX-CATALOG-026`（均确认属实）：按钮语义不一致、表描述缺 AI、行粒度自由输入、字段卡片冗余、价值文案缺失、关联独立跳转；截图归档 `assets/catalog/`。 |
 | 2026-08-04 | Agent Admin `/admin/roles` | Spec 76 / `wo-202608-08` 落地：`UX-ADMIN-AGENTS-009`～`015` → `Fixed`（本轮不做浏览器验证）。待修复/使用中/未引用 KPI+筛选强制 `source=yaml`；Header/状态条降噪；卡片字段标签；`基于此新建`；`configUpdatedAt` 复用 `readAccessYaml` 单次 mtime（Asia/Shanghai）；MetricCard `button`+a11y。验证：`role-list`/`role-detail`/`admin-roles` 61 passed、`lint:terminology`、`build`。 |
 | 2026-08-04 | Agent Admin `/admin/roles` | 浏览器核查确认 7 条二轮反馈属实，追加 `UX-ADMIN-AGENTS-009`～`015`（状态 `Open`）：待修复 KPI 与默认列表脱节（实为模板 invalid）、Header 模板句冗余、Agent 主语 KPI/状态条冗余、卡片缺字段标签、badge 连读歧义、复制表意弱、缺配置时间。落盘 Spec 76 + `wo-202608-08`（修订 Spec 59 §7.1–7.5）。 |
 | 2026-08-04 | Connections `/connections`, Overview `/overview` | 浏览器核查确认两处并列动作存在主次混用：`UX-CONNECTIONS-023`（`+ 添加 Schema` vs `刷新本地目录`）与 `UX-OVERVIEW-008`（`复制 MCP 配置` vs `查看配置`）。按同组同级原则修复为统一 `secondary`：`ConnectionOverview.tsx` 将 `CatalogReloadButton` `variant: primary -> secondary`，`Onboarding.tsx` 将 `复制 MCP 配置` `pl-btn--primary -> pl-btn--secondary`；同步更新 `connection-overview.test.tsx` 断言。两条状态更新为 `Fixed`，待下一轮浏览器复核升 `Verified`。 |
@@ -97,6 +100,10 @@ docs/ui-ux-feedback/
 | `chip nesting`（chip 容器不得套 chip） | UX-OVERVIEW-001 | Verified | 已在 README 规则集中 |
 | `aria-live noise`（每秒 ticker 不得走 aria-live） | UX-OVERVIEW-003 | Open | 待排期 |
 | `button hierarchy consistency`（同组并列动作不得主次混用） | UX-CONNECTIONS-023、UX-OVERVIEW-008 | 2 Fixed | 本次修复，待浏览器复核 |
+| `button semantic consistency (secondary vs ghost)`（同一 action group 不得混用 `secondary`/`ghost` 造成误导性弱化） | UX-CATALOG-021 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |
+| `long-list density (card vs table row)`（长列表用重卡片堆叠代替表格行，滚动负担高） | UX-CATALOG-024 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |
+| `microcopy value density (写入路径 vs 业务价值)`（提示文案只讲实现机制、不讲为什么要维护） | UX-CATALOG-025 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |
+| `single-table editing IA fragmentation`（单表编辑内容跳转到独立页面维护） | UX-CATALOG-026 | Fixed | Spec 73；与 UX-CATALOG-011 已按「禁首屏 banner、允许关联 tab 内联」修正 |
 | `test / source drift`（测试 fixture 与 source 脱钩） | UX-GLOBAL-SHELL-008 | Open | 跨工单清理 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
