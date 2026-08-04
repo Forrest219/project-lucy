@@ -216,7 +216,7 @@ describe("ConnectionOverview", () => {
     expect(screen.getAllByTestId("connection-metric")).toHaveLength(4);
     expect(screen.getByText("数据连接")).toBeInTheDocument();
     expect(screen.getByText("缺 Manifest 的 Schema")).toBeInTheDocument();
-    expect(screen.getByText("本地表目录")).toBeInTheDocument();
+    expect(screen.getByText("服务器目录已发现表")).toBeInTheDocument();
     expect(screen.getByText("未启用表")).toBeInTheDocument();
     expect(screen.queryByText("启用的表")).not.toBeInTheDocument();
     expect(screen.queryByText("语义层对象")).not.toBeInTheDocument();
@@ -237,7 +237,7 @@ describe("ConnectionOverview", () => {
     // The row-level "上传 Manifest" link is the only upload affordance.
     expect(screen.queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "刷新本地目录" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "同步配置变更" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     expect(screen.queryByText("运行连通测试")).not.toBeInTheDocument();
     expect(screen.queryByText("MCP endpoint")).not.toBeInTheDocument();
@@ -247,7 +247,7 @@ describe("ConnectionOverview", () => {
     stubOverviewFetch();
     renderOverview();
 
-    for (const label of ["数据连接", "缺 Manifest 的 Schema", "本地表目录", "未启用表"]) {
+    for (const label of ["数据连接", "缺 Manifest 的 Schema", "服务器目录已发现表", "未启用表"]) {
       expect(
         await screen.findByRole("button", { name: `${label} 说明` })
       ).toBeInTheDocument();
@@ -283,9 +283,9 @@ describe("ConnectionOverview", () => {
     expect(metricByType("connections")).toHaveTextContent("2 个 Schema");
     expect(metricByType("missingManifestSchemas")).toHaveTextContent("缺 Manifest 的 Schema");
     expect(metricByType("missingManifestSchemas")).toHaveTextContent("1");
-    expect(metricByType("missingManifestSchemas")).toHaveTextContent("配置 2 个 Schema / 有 Manifest 1 个");
+    expect(metricByType("missingManifestSchemas")).toHaveTextContent("2 个 Schema 中 1 个已有 Manifest");
     expect(metricByType("missingManifestSchemas")).toHaveClass("pl-metric-card--warning");
-    expect(metricByType("localCatalogTables")).toHaveTextContent("本地表目录");
+    expect(metricByType("localCatalogTables")).toHaveTextContent("服务器目录已发现表");
     expect(metricByType("localCatalogTables")).toHaveTextContent("2");
     expect(metricByType("localCatalogTables")).toHaveTextContent("来自 1 个 Schema Manifest");
     expect(metricByType("unenabledTables")).toHaveTextContent("未启用表");
@@ -370,8 +370,8 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByText("关联 Schema 资产列表")).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Schema" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Manifest 状态" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "本地表数" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "启用表数" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "已发现表数" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "已启用表数" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       await screen.findByTestId("schema-asset-status-mysql-aliyun-dataforai")
@@ -388,7 +388,7 @@ describe("ConnectionOverview", () => {
       "pl-row-action-link"
     );
     expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).toHaveTextContent(
-      "维护启用范围"
+      "维护启用表范围"
     );
     expect(screen.getByTestId("schema-whitelist-mysql-aliyun-dataforai")).not.toHaveClass(
       "pl-btn",
@@ -457,7 +457,7 @@ describe("ConnectionOverview", () => {
       (within(drawer).getByTestId("catalog-asset-manifest-content") as HTMLTextAreaElement).value
     ).toContain("dataforai.superstore_orders");
     expect(within(drawer).queryByTestId("catalog-asset-manifest-whitelist")).not.toBeInTheDocument();
-    expect(within(drawer).queryByRole("link", { name: "维护启用范围" })).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole("link", { name: "维护启用表范围" })).not.toBeInTheDocument();
 
     vi.spyOn(document.body, "appendChild").mockImplementation((node: Node) => {
       if (node instanceof HTMLAnchorElement) {
@@ -624,7 +624,7 @@ describe("ConnectionOverview", () => {
 
     expect(await screen.findByText("暂无连接配置，请在 ktx.yaml 中添加 connections。")).toBeInTheDocument();
     expect(screen.getByText("数据连接")).toBeInTheDocument();
-    expect(screen.getByText("本地表目录")).toBeInTheDocument();
+    expect(screen.getByText("服务器目录已发现表")).toBeInTheDocument();
   });
 
   it("shows project API errors", async () => {
@@ -640,7 +640,7 @@ describe("ConnectionOverview", () => {
 
     const header = await screen.findByTestId("page-header");
     expect(header.querySelector(".pl-page-header-badges")).toBeNull();
-    expect(header).toHaveTextContent("维护每个连接的 Schema、YAML 资产与本地目录刷新状态。");
+    expect(header).toHaveTextContent("维护每个连接的 Schema、YAML 资产与配置同步状态。");
     expect(within(header).queryByText("工作目录：")).not.toBeInTheDocument();
     expect(within(header).queryByText("/tmp/project-lucy")).not.toBeInTheDocument();
     expect(within(header).queryByText("KTX 不可用")).not.toBeInTheDocument();
@@ -662,8 +662,8 @@ describe("ConnectionOverview", () => {
     ).not.toBeInTheDocument();
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     const kv = within(card).getByTestId("connection-kv-mysql-aliyun");
-    expect(within(kv).getByText("Host")).toBeInTheDocument();
-    expect(within(kv).getByText("Database")).toBeInTheDocument();
+    expect(within(kv).getByText("Host：")).toBeInTheDocument();
+    expect(within(kv).getByText("Database：")).toBeInTheDocument();
     // M44: ktx.yaml and credential source no longer surface per card.
     expect(within(card).queryByText("配置文件")).not.toBeInTheDocument();
     expect(within(card).queryByText("凭据来源")).not.toBeInTheDocument();
@@ -672,12 +672,12 @@ describe("ConnectionOverview", () => {
     expect(within(card).queryByText("凭据：file")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "同步配置变更" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "重新加载资产" })).not.toBeInTheDocument();
   });
 
-  it("renders the connection-level 刷新本地目录 action and no CLI ingest wording", async () => {
+  it("renders the connection-level 同步配置变更 action and no CLI ingest wording", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -694,10 +694,10 @@ describe("ConnectionOverview", () => {
 
     expect(
       await screen.findByTestId("catalog-reload-mysql-aliyun")
-    ).toHaveTextContent("刷新本地目录");
+    ).toHaveTextContent("同步配置变更");
     expect(screen.getByTestId("catalog-reload-mysql-aliyun")).toHaveAttribute(
       "title",
-      "重新读取 ktx.yaml 与 semantic-layer YAML 文件，不会连接数据库，也不会执行 ingest。"
+      "上传或修改配置文件后，点击同步配置变更以读取最新资产；不会连接数据库，也不会执行 ingest。"
     );
     expect(screen.queryByText(/触发 Ingest/)).not.toBeInTheDocument();
     expect(screen.queryByText(/重新扫描/)).not.toBeInTheDocument();
@@ -775,7 +775,7 @@ describe("ConnectionOverview", () => {
     // M44: success state lives in the header-right refresh timestamp only;
     // the body no longer renders `本地目录已刷新 ... 已完成 ... 4 张表`.
     const headerTimestamp = within(card).getByTestId("connection-last-reload-mysql-aliyun");
-    expect(headerTimestamp).toHaveTextContent("本地目录刷新：");
+    expect(headerTimestamp).toHaveTextContent("配置同步：");
     expect(headerTimestamp).toHaveTextContent("2026-07-29 10:30");
     expect(headerTimestamp).toHaveAttribute(
       "title",
@@ -790,7 +790,7 @@ describe("ConnectionOverview", () => {
     expect(within(card).queryByText("已完成")).not.toBeInTheDocument();
     expect(within(card).queryByText("4 张表")).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalog-last-run")).not.toBeInTheDocument();
-    expect(within(card).queryByText("尚未读取本地 YAML")).not.toBeInTheDocument();
+    expect(within(card).queryByText("尚未读取最新本地 YAML")).not.toBeInTheDocument();
   });
 
   it("M24: renders card-local reload status, Schema context, and inline missing Manifest diagnostics", async () => {
@@ -869,19 +869,19 @@ describe("ConnectionOverview", () => {
 
     const card = await screen.findByTestId("connection-card-demo-mysql");
     const kv = within(card).getByTestId("connection-kv-demo-mysql");
-    expect(within(kv).getByText("Host")).toBeInTheDocument();
-    expect(within(kv).getByText("Database")).toBeInTheDocument();
+    expect(within(kv).getByText("Host：")).toBeInTheDocument();
+    expect(within(kv).getByText("Database：")).toBeInTheDocument();
     expect(within(card).queryByText("配置文件")).not.toBeInTheDocument();
     expect(within(card).queryByText("凭据来源")).not.toBeInTheDocument();
     expect(card).not.toHaveTextContent("配置：ktx.yaml");
     expect(card).not.toHaveTextContent("配置来源：ktx.yaml。凭据不在 WebUI 中编辑。");
     // M44: success status now lives in the header-right refresh timestamp;
     // the body no longer renders `pl-catalog-reload-status` while a Banner
-    // would otherwise be hidden. Healthy status surfaces as `本地目录刷新：<ts>`.
+    // would otherwise be hidden. Healthy status surfaces as `配置同步：<ts>`.
     const headerTimestamp = within(card).getByTestId("connection-last-reload-demo-mysql");
-    expect(headerTimestamp).toHaveTextContent("本地目录刷新：");
+    expect(headerTimestamp).toHaveTextContent("配置同步：");
     expect(within(card).queryByTestId("catalog-reload-status-demo-mysql")).not.toBeInTheDocument();
-    expect(within(card).getByTestId("catalog-reload-demo-mysql")).toHaveTextContent("刷新本地目录");
+    expect(within(card).getByTestId("catalog-reload-demo-mysql")).toHaveTextContent("同步配置变更");
 
     const table = within(card).getByTestId("schema-asset-table-demo-mysql");
     expect(within(card).queryByText("关联 Schema 资产列表")).not.toBeInTheDocument();
@@ -911,7 +911,7 @@ describe("ConnectionOverview", () => {
     expect(recheckButton).toHaveClass("pl-btn", "pl-btn--secondary", "pl-btn--sm");
     expect(recheckButton).toHaveTextContent("重新检查");
     expect(warning).toHaveTextContent("missing_manifest");
-    expect(warning).toHaveTextContent("刷新本地目录只读取本地 YAML，不会连接数据库。");
+    expect(warning).toHaveTextContent("同步配置变更只读取本地 YAML，不会连接数据库。");
     expect(screen.queryByText("有提示")).not.toBeInTheDocument();
   });
 
@@ -931,11 +931,11 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
-    expect(banner).toHaveTextContent("本地目录未刷新：尚未读取本地 YAML 资产配置。");
+    expect(banner).toHaveTextContent("尚未同步配置变更：上传或修改配置文件后，请同步以读取最新资产。");
     // M44: when a Banner is shown, the body no longer renders the legacy
     // `本地目录未刷新 · 尚未读取本地 YAML` muted status row.
     expect(within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun")).toHaveTextContent(
-      "立即刷新"
+      "立即同步"
     );
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     expect(within(card).queryByTestId("catalog-reload-status-mysql-aliyun")).not.toBeInTheDocument();
@@ -943,7 +943,7 @@ describe("ConnectionOverview", () => {
     expect(within(card).queryByTestId("connection-last-reload-mysql-aliyun")).not.toBeInTheDocument();
   });
 
-  it("M44: surfaces an amber refresh warning banner with 立即刷新 for never-run connections", async () => {
+  it("M44: surfaces an amber refresh warning banner with 立即同步 for never-run connections", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -959,10 +959,10 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
-    expect(banner).toHaveTextContent("本地目录未刷新：尚未读取本地 YAML 资产配置。");
+    expect(banner).toHaveTextContent("尚未同步配置变更：上传或修改配置文件后，请同步以读取最新资产。");
     expect(banner).toHaveClass("pl-connection-refresh-warning");
     const refreshAction = within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun");
-    expect(refreshAction).toHaveTextContent("立即刷新");
+    expect(refreshAction).toHaveTextContent("立即同步");
     expect(refreshAction.textContent ?? "").not.toMatch(/[↗→]/);
     expect(refreshAction).toHaveClass("pl-btn--ghost");
     expect(refreshAction).not.toHaveClass("pl-btn--primary");
@@ -988,7 +988,7 @@ describe("ConnectionOverview", () => {
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     expect(within(card).queryByTestId("connection-refresh-warning-mysql-aliyun")).not.toBeInTheDocument();
     expect(within(card).getByTestId("catalog-reload-status-mysql-aliyun")).toHaveTextContent(
-      "正在读取本地目录状态..."
+      "正在读取配置同步状态..."
     );
     expect(screen.queryByText("Catalog 状态")).not.toBeInTheDocument();
   });
@@ -1011,7 +1011,7 @@ describe("ConnectionOverview", () => {
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     expect(within(card).queryByTestId("connection-refresh-warning-mysql-aliyun")).not.toBeInTheDocument();
     expect(within(card).getByTestId("catalog-reload-status-mysql-aliyun")).toHaveTextContent(
-      "本地目录状态加载失败"
+      "配置同步状态加载失败"
     );
     expect(screen.queryByText("Catalog 状态")).not.toBeInTheDocument();
   });
@@ -1121,7 +1121,7 @@ describe("ConnectionOverview", () => {
 
 	    const status = await within(card).findByTestId("catalog-reload-status-mysql-aliyun");
 	    expect(status).toHaveAttribute("role", "alert");
-	    expect(status).toHaveTextContent("本地目录刷新失败");
+	    expect(status).toHaveTextContent("配置同步失败");
 	    expect(status).toHaveTextContent("local YAML scan failed");
 	  });
 
@@ -1173,18 +1173,18 @@ describe("ConnectionOverview", () => {
 
     const footerActions = within(card).getByTestId("connection-card-schema-actions-mysql-aliyun");
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toBeInTheDocument();
-    expect(within(footerActions).getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+    expect(within(footerActions).getByRole("button", { name: "同步配置变更" })).toBeInTheDocument();
     expect(
       within(footerActions).getAllByRole("button").map((button) => button.textContent?.trim())
-    ).toEqual(["+ 添加 Schema", "刷新本地目录"]);
+    ).toEqual(["+ 添加 Schema", "同步配置变更"]);
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toHaveClass("pl-btn--secondary");
-    const refreshButton = within(footerActions).getByRole("button", { name: "刷新本地目录" });
+    const refreshButton = within(footerActions).getByRole("button", { name: "同步配置变更" });
     expect(refreshButton).toHaveClass("pl-btn--secondary");
     expect(within(footerActions).queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     // Peer actions in the footer should stay at the same secondary hierarchy.
-    expect(within(footerActions).queryByRole("button", { name: "刷新本地目录" })).not.toHaveClass("pl-btn--primary");
+    expect(within(footerActions).queryByRole("button", { name: "同步配置变更" })).not.toHaveClass("pl-btn--primary");
     expect(within(card).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "上传语义包" })
@@ -1411,8 +1411,8 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(table.className).toContain("pl-data-table");
     expect(table.className).toContain("pl-schema-asset-table");
 
-    const localHead = within(table).getByRole("columnheader", { name: "本地表数" });
-    const enabledHead = within(table).getByRole("columnheader", { name: "启用表数" });
+    const localHead = within(table).getByRole("columnheader", { name: "已发现表数" });
+    const enabledHead = within(table).getByRole("columnheader", { name: "已启用表数" });
     expect(localHead.className).toContain("pl-schema-asset-table-num-head");
     expect(enabledHead.className).toContain("pl-schema-asset-table-num-head");
 
@@ -1427,13 +1427,22 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     const tableRule = css.match(/\.pl-schema-asset-table td\s*\{[^}]*\}/);
     expect(tableRule).not.toBeNull();
     expect(tableRule![0]).toMatch(/py-2/);
+    expect(tableRule![0]).toMatch(/text-xs/);
+    expect(tableRule![0]).toMatch(/font-medium/);
     expect(tableRule![0]).toMatch(/text-fg-default/);
     expect(tableRule![0]).not.toMatch(/py-1\.5|leading-5|text-fg-body/);
 
     const codeRule = css.match(/\.pl-schema-asset-table code\s*\{[^}]*\}/);
     expect(codeRule).not.toBeNull();
     expect(codeRule![0]).toMatch(/text-xs/);
+    expect(codeRule![0]).toMatch(/font-medium/);
+    expect(codeRule![0]).toMatch(/text-fg-default/);
     expect(codeRule![0]).not.toMatch(/text-sm/);
+
+    const numRule = css.match(/\.pl-schema-asset-table-num\s*\{[^}]*\}/);
+    expect(numRule).not.toBeNull();
+    expect(numRule![0]).toMatch(/font-normal/);
+    expect(numRule![0]).toMatch(/text-fg-body/);
 
     const actionColRule = css.match(/\.pl-schema-asset-col-action\s*\{[^}]*\}/);
     expect(actionColRule).not.toBeNull();

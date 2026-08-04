@@ -47,7 +47,7 @@ function engineKey(engine?: string): "mysql" | "postgres" | "doris" | "starrocks
 }
 
 function catalogReloadTimestampTitle(iso: string): string {
-  return `本地目录刷新时间：${iso}。读取本地 YAML / Schema Manifest 后生成的 Catalog 快照时间，不会连接数据库。`;
+  return `配置同步时间：${iso}。上传或修改 Schema Manifest 后，可用“同步配置变更”让页面读取最新 YAML 资产，不会连接数据库。`;
 }
 
 function formatLocalTime(iso: string): string {
@@ -144,7 +144,7 @@ function catalogRunState(
 ): CatalogRunState {
   if (isLoading) {
     return {
-      label: "正在刷新本地目录...",
+      label: "正在同步配置变更...",
       detail: "",
       tone: "muted",
       badgeLabel: "刷新中",
@@ -154,7 +154,7 @@ function catalogRunState(
   }
   if (error) {
     return {
-      label: "本地目录刷新失败",
+      label: "配置同步失败",
       detail: error.message,
       tone: "danger",
       badgeLabel: "失败",
@@ -164,7 +164,7 @@ function catalogRunState(
   }
   if (isHistoryLoading) {
     return {
-      label: "正在读取本地目录状态...",
+      label: "正在读取配置同步状态...",
       detail: "",
       tone: "muted",
       badgeLabel: "加载中",
@@ -174,7 +174,7 @@ function catalogRunState(
   }
   if (historyError) {
     return {
-      label: "本地目录状态加载失败",
+      label: "配置同步状态加载失败",
       detail: historyError.message,
       tone: "danger",
       badgeLabel: "失败",
@@ -184,8 +184,8 @@ function catalogRunState(
   }
   if (!run) {
     return {
-      label: "本地目录未刷新",
-      detail: "尚未读取本地 YAML",
+      label: "尚未同步配置变更",
+      detail: "尚未读取最新本地 YAML",
       tone: "muted",
       badgeLabel: "未刷新",
       tableCount: 0,
@@ -194,7 +194,7 @@ function catalogRunState(
   }
   if (run.status === "failed") {
     return {
-      label: "本地目录刷新失败",
+      label: "配置同步失败",
       detail: formatLocalTime(run.startedAt),
       tone: "danger",
       badgeLabel: "失败",
@@ -203,7 +203,7 @@ function catalogRunState(
     };
   }
   return {
-    label: "本地目录已刷新",
+    label: "配置已同步",
     detail: formatLocalTime(run.startedAt),
     tone: run.warnings.length > 0 ? "warning" : "success",
     badgeLabel: "已完成",
@@ -327,6 +327,9 @@ export function ConnectionOverview() {
   const schemaCount = connections.reduce((sum, conn) => sum + conn.schemas.length, 0);
   const configuredSchemas = configuredSchemaRefs(connections);
   const localManifestSchemas = localManifestSchemaRefs(semanticTables, sourcesQuery.data?.manifestSchemas);
+  const configuredManifestSchemaCount = [...configuredSchemas].filter((schemaRef) =>
+    localManifestSchemas.has(schemaRef)
+  ).length;
   const missingManifestSchemaCount = [...configuredSchemas].filter((schemaRef) => !localManifestSchemas.has(schemaRef)).length;
   const enabledLocalCount = enabledLocalTableCount(connections, semanticTables);
   const unenabledLocalTableCount = semanticTables.length - enabledLocalCount;
@@ -409,7 +412,7 @@ export function ConnectionOverview() {
       <PageHeader
         title="连接概览"
         description={
-          <span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与本地目录刷新状态。</span>
+          <span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与配置同步状态。</span>
         }
       />
 
@@ -422,13 +425,13 @@ export function ConnectionOverview() {
         <MetricCard
           type="missingManifestSchemas"
           value={missingManifestSchemaCount}
-          subValue={`配置 ${configuredSchemas.size} 个 Schema / 有 Manifest ${localManifestSchemas.size} 个`}
+          subValue={`${configuredSchemas.size} 个 Schema 中 ${configuredManifestSchemaCount} 个已有 Manifest`}
           tone={missingManifestSchemaCount > 0 ? "warning" : undefined}
         />
         <MetricCard
           type="localCatalogTables"
           value={semanticTables.length}
-          subValue={`来自 ${localManifestSchemas.size} 个 Schema Manifest`}
+          subValue={`来自 ${configuredManifestSchemaCount} 个 Schema Manifest`}
         />
         <MetricCard
           type="unenabledTables"
@@ -525,7 +528,7 @@ export function ConnectionOverview() {
                         title={headerTimestampIso ? catalogReloadTimestampTitle(headerTimestampIso) : undefined}
                         translate="no"
                       >
-                        <span>本地目录刷新：</span>
+                        <span>配置同步：</span>
                         <time className="notranslate" translate="no" dir="ltr">{headerTimestamp}</time>
                         {lastRun?.status === "failed" ? <span> · 失败</span> : null}
                       </span>
@@ -533,9 +536,11 @@ export function ConnectionOverview() {
                   </div>
                   <dl className="pl-connection-kv-grid pl-connection-kv-grid--compact" data-testid={`connection-kv-${conn.id}`}>
                     <div className="pl-connection-kv">
-                      <dt className="notranslate" translate="no">Host</dt>
-                      <dd>
+                      <dt className="notranslate" translate="no">
                         <Server className="pl-connection-kv-icon" aria-hidden="true" strokeWidth={1.8} />
+                        <span>Host：</span>
+                      </dt>
+                      <dd>
                         <code
                           className="pl-connection-kv-host notranslate"
                           translate="no"
@@ -547,9 +552,11 @@ export function ConnectionOverview() {
                       </dd>
                     </div>
                     <div className="pl-connection-kv">
-                      <dt className="notranslate" translate="no">Database</dt>
-                      <dd>
+                      <dt className="notranslate" translate="no">
                         <Database className="pl-connection-kv-icon" aria-hidden="true" strokeWidth={1.8} />
+                        <span>Database：</span>
+                      </dt>
+                      <dd>
                         <code
                           className="notranslate"
                           translate="no"
@@ -571,12 +578,14 @@ export function ConnectionOverview() {
                       translate="no"
                     >
                       <p className="pl-connection-refresh-warning-text">
-                        <span>本地目录未刷新：</span>
-                        <span>尚未读取本地 YAML 资产配置。</span>
+                        <span>尚未同步配置变更：</span>
+                        <span>上传或修改配置文件后，请同步以读取最新资产。</span>
                       </p>
                       <CatalogReloadButton
                         connectionId={conn.id}
-                        label="立即刷新"
+                        label="立即同步"
+                        pendingLabel="同步中..."
+                        title="上传或修改配置文件后，点击立即同步让页面读取最新资产；不会连接数据库，也不会执行 ingest。"
                         variant="ghost"
                         size="sm"
                         testId={`connection-refresh-warning-action-${conn.id}`}
@@ -604,8 +613,8 @@ export function ConnectionOverview() {
                         <tr>
                           <th className="notranslate" translate="no">Schema</th>
                           <th className="notranslate" translate="no">Manifest 状态</th>
-                          <th className="pl-schema-asset-table-num-head">本地表数</th>
-                          <th className="pl-schema-asset-table-num-head">启用表数</th>
+                          <th className="pl-schema-asset-table-num-head">已发现表数</th>
+                          <th className="pl-schema-asset-table-num-head">已启用表数</th>
                           <th>操作</th>
                         </tr>
                       </thead>
@@ -690,7 +699,7 @@ export function ConnectionOverview() {
                                         </button>
                                         <button
                                           type="button"
-                                          className="pl-row-action-link pl-row-action-link--muted"
+                                          className="pl-row-action-link"
                                           disabled={downloadingManifestKey === rowManifestKey}
                                           onClick={() => void downloadManifest(conn.id, schema)}
                                           data-testid={`download-manifest-${conn.id}-${schema}`}
@@ -715,11 +724,11 @@ export function ConnectionOverview() {
                                           重新上传
                                         </button>
                                         <Link
-                                          className="pl-row-action-link pl-row-action-link--muted"
+                                          className="pl-row-action-link"
                                           to={`/connections/enabled-tables?connection=${encodeURIComponent(conn.id)}&schema=${encodeURIComponent(schema)}`}
                                           data-testid={`schema-whitelist-${conn.id}-${schema}`}
                                         >
-                                          维护启用范围
+                                          维护启用表范围
                                         </Link>
                                       </>
                                     ) : (
@@ -814,7 +823,7 @@ export function ConnectionOverview() {
                                           </div>
                                           <div>
                                             <dt>刷新范围</dt>
-                                            <dd>刷新本地目录只读取本地 YAML，不会连接数据库。</dd>
+                                            <dd>同步配置变更只读取本地 YAML，不会连接数据库。</dd>
                                           </div>
                                         </dl>
                                       ) : null}
@@ -856,9 +865,11 @@ export function ConnectionOverview() {
                     </button>
                     <CatalogReloadButton
                       connectionId={conn.id}
-                      label="刷新本地目录"
+                      label="同步配置变更"
+                      pendingLabel="同步中..."
                       variant="secondary"
                       testId={`catalog-reload-${conn.id}`}
+                      title="上传或修改配置文件后，点击同步配置变更以读取最新资产；不会连接数据库，也不会执行 ingest。"
                       showCompletionLabel={false}
                       showInlineResult={false}
                       onReloadStart={() => handleReloadStart(conn.id)}

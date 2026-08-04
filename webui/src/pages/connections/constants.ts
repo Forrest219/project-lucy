@@ -17,8 +17,8 @@ export const METRIC_METADATA = {
     hint: "统计已配置但还没有本地 Manifest 的 Schema，可在下方 Schema 行查看。"
   },
   localCatalogTables: {
-    title: "本地表目录",
-    hint: "统计本地 Schema Manifest 中已经读到的表，可对应下方本地表数。"
+    title: "服务器目录已发现表",
+    hint: "统计服务器目录中 Schema Manifest 已读到的表，可对应下方已发现表数。"
   },
   unenabledTables: {
     title: "未启用表",
