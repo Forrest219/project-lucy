@@ -553,3 +553,92 @@ Long-page editing must keep change review close to the user:
 
 ### Notes
 Fixed in `webui/src/pages/TableEditor.tsx`, `webui/src/app/app.css`, and `webui/src/__tests__/table-editor.test.tsx`; tests cover object-level field summary and the sticky review surface. Verified in browser on 2026-08-02 after Docker rebuild: changing `row_id` Human to `这是一个段测试` updates `变更审阅` with `字段 row_id · 人工描述：空 -> 这是一个段测试`, shows default `YAML Diff`, and the review rail remains visible after scrolling to the long-page bottom.
+
+## UX-CATALOG-018: 语义资产分组标题强制大写 Connection / Schema 标识符
+
+Status: Verified
+Route: `/catalog`
+Area: Semantic asset table group headers
+Severity: P2
+Reported: 2026-08-03
+
+### Feedback
+`/catalog` 的分组标题把 Connection ID 和 Schema 名视觉上转成全大写，例如 `DEMO-MYSQL` / `DATAFORAI`，与表名链接、维护语义 aria-label、URL 和 `/connections` 页面中的源字符串大小写不一致。
+
+### Evidence
+- Browser check 2026-08-03 after Docker rebuild: `/catalog` group row shows `连接：demo-mysql · Schema：dataforai（共 3 张表）`; no `DEMO-MYSQL` / `DATAFORAI` uppercase fragments are visible; row links preserve `/catalog/demo-mysql/dataforai/...` and carry `translate="no"` / `notranslate`.
+- Cross-page companion: [`UX-CONNECTIONS-022`](connections.md#ux-connections-022-启用表范围分组标题强制大写-connection--schema-标识符).
+
+### Expected
+语义资产页所有用户可见的 Connection ID / Schema 名都必须保留仓库源字符串大小写，不得通过 JavaScript 或 CSS 强制 upper / lower / capitalize。分组标题、链接文案、aria-label 和 URL 风格应一致，且数据库对象名节点必须带 `translate="no"` 和 `notranslate`。
+
+### Browser Check
+1. Open `/catalog`.
+2. Verify the group heading shows `连接：demo-mysql · Schema：dataforai（共 3 张表）`.
+3. Verify the page does not visually show `DEMO-MYSQL` or `DATAFORAI`.
+4. Verify table links preserve `/catalog/demo-mysql/dataforai/...`.
+5. Verify group heading and object links have `translate="no"` and `notranslate`.
+
+### Notes
+2026-08-03 M62 source state removes `toUpperCase()` from `Catalog.tsx`. Browser verification passed against the rebuilt Docker for `/catalog`; the remaining focused missing-Manifest casing issue is tracked under `UX-CONNECTIONS-022`. 2026-08-03 二次 Docker `--no-cache` 重建后复核：`UX-CONNECTIONS-022` 升级为 `Verified`，全链路（`/connections` 卡面、`/connections/enabled-tables` 默认 / 缺失 Manifest 诊断 / Schema 下拉、`/catalog` 分组标题）保持仓库源字符串大小写；本条保持 `Verified` 不再变更。
+
+## UX-CATALOG-019: 表名列链接字重过粗与结构列对比产生视觉断层
+
+Status: Verified
+Route: /catalog
+Area: Catalog table row body
+Severity: P2
+Reported: 2026-08-03
+
+### Feedback
+表名 link 列使用 `font-weight: 500`，与同行的结构列（12px / muted / 400）、更新时间列、Agent 引用列拉开明显视觉层级，让用户感觉表名是"标题"，结构列变成"副文字"，整体表格信息密度失衡。
+
+### Evidence
+- 2026-08-03 browser check at `http://127.0.0.1:55176/catalog`：`superstore_orders`、`superstore_people` link 文字明显比 `字段 8 / 关联 1 / 指标 9` 结构列、`3 个` Agent 引用、`2026-07-01 10:30` 更新时间更粗。
+- `webui/src/app/app.css:677` 命中 `.pl-catalog-table-name-link { @apply text-sm font-medium ... }`。
+
+### Expected
+表名 link 与同行正文（结构、Agent 引用、更新时间）保持同一信息等级，hover / focus 仍可被识别为 link；表头 `font-semibold` 继续作为列名层级保留。
+
+### Browser Check
+1. Open `/catalog`.
+2. Verify `superstore_orders` / `superstore_people` link 视觉权重与结构列、Agent 引用、更新时间列相同（不再显著更粗）。
+3. Verify hover 时仍出现下划线 / focus ring。
+4. Verify link 仍含 `translate="no"` 与 `notranslate` 翻译防御。
+
+### Notes
+Fixed by M64 in `webui/src/app/app.css`（`.pl-catalog-table-name-link` 改为 `font-normal`）和 `webui/src/__tests__/catalog.test.tsx`（新增 `Catalog table-name visual weight (M64)` describe block，断言 `.pl-catalog-table-name-link` 不再含 `font-medium` / `font-semibold` / `font-bold`，同时验证 `thead th` 仍保留 `font-semibold` 列名层级）。Non-browser 验证通过：`npm test -- src/__tests__/catalog.test.tsx`（16/16）、`npm run lint:terminology`、`npm run build`、`git diff --check`。
+
+Browser verification passed on 2026-08-04 after Docker rebuild at `http://127.0.0.1:55176/catalog`. inspect observed: `superstore_orders` / `superstore_people` / `superstore_returns` links all rendered at identical `rect height=20` and identical column widths (`x=309, width=173`), no horizontal overflow; source `Catalog.tsx:241` keeps `className="pl-catalog-table-name-link notranslate"` + `translate="no"` and `app.css:683` rule reads `@apply text-sm font-normal text-fg-default no-underline hover:underline`（`font-medium` 字面已移除）; table headers still marked as `font-semibold` 列名层级.
+
+## UX-CATALOG-020: Catalog table thead 与 body 对比偏弱，长滚动后失去列名参照
+
+Status: Open
+Route: /catalog
+Area: Catalog table header / sticky behavior
+Severity: P3
+Reported: 2026-08-04
+
+### Feedback
+Catalog 表格 `<thead>` `<th>` 是 `font-semibold text-fg-muted`，与 body 链接 / 文本主要靠 font-weight 区分。当表格行数变多（如未来 `dataforai` schema 超过 20 张表）向下滚动后，`<thead>` 离开 viewport，用户只能凭记忆对照列名。当前列名密集（表名 / 结构 / Agent 引用 / 语义更新时间 / 操作），列含义不止一个英文 token（如 `字段 30 / 关联 0 / 指标 4`），记忆负担偏高。
+
+### Evidence
+- 2026-08-04 browser check at `http://127.0.0.1:55176/catalog`：当前 demo 数据仅 3 张表，body 不滚动；但 M64 把表名链接字重收敛后视觉信号只剩 thead 的 font-semibold + muted color，差异有限。
+- `webui/src/pages/Catalog.tsx` 命中 `<thead>` 与 `<th>`，未配置 sticky 行为。
+- 与 README 跨页面主题索引中 `font-weight consistency` 主题相关——M64 收敛后需要新视觉锚点补偿 thead 角色。
+
+### Expected
+- `<thead>` 在表格区域滚动时保持 sticky top（仅在表格容器自身可滚动时；不是全局 window scroll）。
+- `<thead>` 与 body 之间加底边框（`border-b border-fg-muted/30` 或类似），与 M64 收敛后的 font 差异叠加形成 thead 视觉锚点。
+- 滚动时 thead 不遮挡操作列 / 第一行的 hover 状态；如有冲突优先 thead 透明度而非取消 sticky。
+- 不动表格列定义顺序与字段内容，只补 thead 视觉与 sticky。
+
+### Browser Check
+1. Open `/catalog` 并将表格扩展到 ≥20 行（fixture 注入或 zoom）。
+2. 向下滚动表格区域超过一屏。
+3. Verify `<thead>` 仍可见且列名清晰。
+4. Verify thead 与 body 之间有明显视觉分隔（边框或颜色对比）。
+5. Verify thead 不遮挡第一行的 hover 反馈。
+
+### Notes
+2026-08-04 由 M64 浏览器复核发现并登记，等候选 wave（M66 候选）排期。建议修复文件：`webui/src/pages/Catalog.tsx`（`<thead>` 加 `sticky top-0 z-10 bg-bg-surface`）+ `webui/src/app/app.css`（`.pl-catalog-table thead th { @apply border-b border-fg-muted/30 bg-bg-surface; }`）+ `webui/src/__tests__/catalog.test.tsx`（新增 describe 块断言 thead 含 sticky / 底边框 className）。

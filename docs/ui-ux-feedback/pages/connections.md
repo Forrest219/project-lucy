@@ -583,3 +583,32 @@ Reported: 2026-08-02
 ### Notes
 2026-08-02 已在代码中将启用表范围和语义资产表格统一到 `pl-data-grid`，并将启用表范围列名 `动作` 改为 `操作`。本条为 Connections 台账交叉引用；详细证据与修复记录见 `UX-CATALOG-008`。修复当轮按用户约束未做浏览器复核，浏览器复核在 Docker 重建后补做。
 2026-08-02 Docker 重建后浏览器复核通过：`/connections/enabled-tables` 与 `/catalog` 均使用共享 `pl-data-grid`，最后一列表头均为 `操作`，表头 letter spacing / padding 与行分隔线一致，action 相对表头左缩进均为 `12px`，且无横向溢出。
+
+## UX-CONNECTIONS-022: 启用表范围分组标题强制大写 Connection / Schema 标识符
+
+Status: Verified
+Route: `/connections/enabled-tables`
+Area: Enabled table scope group headers / missing Manifest diagnostics
+Severity: P2
+Reported: 2026-08-03
+
+### Feedback
+`/connections/enabled-tables` 的分组标题把 Connection ID 和 Schema 名视觉上转成全大写，例如 `DEMO-MYSQL` / `DATAFORAI`，与 `/connections` 页面、筛选下拉选项、链接 URL 和 Catalog 页面中的源字符串大小写不一致。
+
+### Evidence
+- Browser check 2026-08-03 before final CSS fix: 默认表格分组已显示 `连接：demo-mysql · Schema：dataforai（共 3 张表）`，但筛选到缺失 Manifest 的 `openclaw_db` 后，诊断分组视觉文本仍为 `连接：DEMO-MYSQL · SCHEMA：OPENCLAW_DB`。
+- Browser check 2026-08-03 after Docker `--no-cache` rebuild: 默认表格分组 `连接：demo-mysql · Schema：dataforai（共 3 张表）`；Schema 筛选下拉选项保持 `demo-mysql` / `starrocks-r1` / `dataforai` / `openclaw_db` / `demo_finance` / `meta` / `sandbox` / `ai`；选 `openclaw_db` 后缺失 Manifest 诊断块 heading 为 `连接：demo-mysql · Schema：openclaw_db`、`缺少 Manifest：openclaw_db`、路径 `semantic-layer/demo-mysql/_schema/openclaw_db.yaml`，全程原始大小写，无 `DEMO-MYSQL` / `OPENCLAW_DB` / `SCHEMA` 视觉片段。`/catalog` 与 `/connections` 卡面也对齐原始大小写。
+
+### Expected
+启用表范围页所有用户可见的 Connection ID / Schema 名都必须保留仓库源字符串大小写，不得通过 JavaScript 或 CSS 强制 upper / lower / capitalize。涉及数据库对象名的分组标题必须带 `translate="no"` 和 `notranslate`。
+
+### Browser Check
+1. Open `/connections/enabled-tables`.
+2. Verify the default table group shows `连接：demo-mysql · Schema：dataforai（共 3 张表）`.
+3. Verify the page does not visually show `DEMO-MYSQL` or `DATAFORAI`.
+4. Select Schema `openclaw_db`.
+5. Verify the focused missing-Manifest heading shows `连接：demo-mysql · Schema：openclaw_db`, not `DEMO-MYSQL` / `OPENCLAW_DB`.
+6. Verify the group heading node has `translate="no"` and `notranslate`.
+
+### Notes
+2026-08-03 M62 source state removes `toUpperCase()` from `TableWhitelist.tsx` group headings and removes `uppercase` from `.pl-table-group-heading` in `app.css`. Non-browser validation passed: `npm run lint:terminology`, `npm test -- src/__tests__/catalog.test.tsx src/__tests__/table-whitelist.test.tsx`, `npm run build`. 容器镜像 `project-lucy:demo` 在第二次 `docker compose build --no-cache lucy` 后重跑 `up -d`，容器内 `/app/webui/dist/assets/` 由 `index-D-SnpNw3.js` 变为 `index-C5kBxIMU.js`，浏览器复核 `/connections/enabled-tables` 默认分组、`openclaw_db` 缺失 Manifest 诊断分组、Schema 下拉、`/catalog` 分组标题、`/connections` 卡面均通过，状态升至 `Verified`。跨页 companion `UX-CATALOG-018` 在 README 的最近维护记录里同步登记。
