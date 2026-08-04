@@ -11,54 +11,91 @@ type SourceFilter = "formal" | "in-use" | "needs-repair" | "unused" | "templates
 
 const FILTER_OPTIONS: Array<{ value: SourceFilter; label: string }> = [
   { value: "formal", label: "全部正式 Role" },
-  { value: "in-use", label: "正在服务 Agent" },
+  { value: "in-use", label: "使用中" },
   { value: "needs-repair", label: "待修复" },
-  { value: "unused", label: "未被 Agent 使用" },
+  { value: "unused", label: "未引用" },
   { value: "templates", label: "参考模板" }
 ];
+
+const METRIC_FILTERS: Array<{
+  label: string;
+  filter: SourceFilter;
+  hint: string;
+  tone?: "danger";
+  valueKey: keyof RoleSummary;
+}> = [
+  { label: "正式 Role", filter: "formal", hint: "写入 access.yaml", valueKey: "formalCount" },
+  { label: "使用中", filter: "in-use", hint: "至少 1 个 Agent 引用", valueKey: "inUseCount" },
+  {
+    label: "待修复",
+    filter: "needs-repair",
+    hint: "正式 Role 权限解析失败",
+    tone: "danger",
+    valueKey: "needsRepairCount"
+  },
+  { label: "未引用", filter: "unused", hint: "正式 Role 暂无 Agent 引用", valueKey: "unusedFormalCount" }
+];
+
+function formatConfigUpdatedAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")} ${value("hour")}:${value("minute")}`;
+}
 
 function MetricCard({
   label,
   value,
   hint,
-  tone
+  tone,
+  pressed,
+  onSelect
 }: {
   label: string;
   value: string | number;
   hint: string;
   tone?: "danger";
+  pressed: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <div
-      className={`pl-metric-card${tone ? ` pl-metric-card--${tone}` : ""}`}
+    <button
+      type="button"
+      className={`pl-metric-card pl-metric-card--button${tone ? ` pl-metric-card--${tone}` : ""}`}
       data-testid={`role-metric-${label}`}
+      aria-label={`筛选：${label}`}
+      aria-pressed={pressed}
+      onClick={onSelect}
     >
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
-    </div>
+    </button>
   );
 }
 
-// ─── Role status terminology helpers (M57) ────────────────────────────────────
+// ─── Role status terminology helpers (M57 / Spec 76) ──────────────────────────
 //
 // 这些 helper 把 API 暴露的英文/技术字段映射为产品级中文术语，保证列表页里
 // 不会出现裸「template / invalid / in use」，也不会把 invalid 误译为
 // 「已停用」或「禁用」。要新增状态时必须走这里，禁止在 JSX 里直接写字面量。
-
-export function roleSourceLabel(role: Pick<Role, "source">): { label: string; tone: "neutral" | "done" } {
-  if (role.source === "template") {
-    return { label: "参考模板", tone: "neutral" };
-  }
-  return { label: "正式 Role", tone: "done" };
-}
 
 export function roleStatusBadges(role: Role): Array<{ key: string; label: string; tone: string; testId?: string }> {
   const badges: Array<{ key: string; label: string; tone: string; testId?: string }> = [];
   if (role.source === "template") {
     badges.push({ key: "source-template", label: "参考模板", tone: "neutral" });
   } else {
-    badges.push({ key: "source-yaml", label: "正式 Role", tone: "done" });
+    badges.push({ key: "source-yaml", label: "正式", tone: "done" });
   }
   if (role.invalid) {
     badges.push({
@@ -68,10 +105,10 @@ export function roleStatusBadges(role: Role): Array<{ key: string; label: string
       testId: `role-status-${role.id}-invalid`
     });
   }
-  if ((role.usageCount ?? 0) > 0) {
+  if (role.source === "yaml" && (role.usageCount ?? 0) > 0) {
     badges.push({
       key: "in-use",
-      label: "正在服务 Agent",
+      label: "使用中",
       tone: "included",
       testId: `role-status-${role.id}-in-use`
     });
@@ -108,14 +145,18 @@ export function summarizeRoles(roles: Role[]): RoleSummary {
   let unusedFormalCount = 0;
   let templateCount = 0;
   for (const role of roles) {
-    const inUse = (role.usageCount ?? 0) > 0;
-    if (inUse) inUseCount += 1;
-    if (role.invalid) needsRepairCount += 1;
     if (role.source === "template") {
       templateCount += 1;
-    } else {
-      formalCount += 1;
-      if (!inUse && !role.invalid) unusedFormalCount += 1;
+      continue;
+    }
+    // Formal (yaml) only — Spec 76 hard rule
+    formalCount += 1;
+    const inUse = (role.usageCount ?? 0) > 0;
+    if (inUse) inUseCount += 1;
+    if (role.invalid) {
+      needsRepairCount += 1;
+    } else if (!inUse) {
+      unusedFormalCount += 1;
     }
   }
   return { formalCount, inUseCount, needsRepairCount, unusedFormalCount, templateCount };
@@ -140,6 +181,7 @@ function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
   const inUse = (role.usageCount ?? 0) > 0;
   const tools = role.tools ?? [];
   const badges = roleStatusBadges(role);
+  const connections = role.connections?.length ?? 0;
 
   return (
     <div
@@ -164,9 +206,17 @@ function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
               </span>
             ))}
           </div>
-          {role.description && <p className="text-sm text-fg-muted">{role.description}</p>}
+          {role.description && (
+            <p className="text-sm text-fg-muted">
+              <span className="text-fg-muted">描述：</span>
+              {role.description}
+            </p>
+          )}
           <div className="text-sm text-fg-muted">
-            {role.sourceCount} 个 source · {role.connections?.length ?? 0} 个 connection ·{" "}
+            <span>数据范围：</span>
+            {role.sourceCount} 个 source · {connections} 个 connection
+          </div>
+          <div className="text-sm text-fg-muted">
             <span
               className="notranslate"
               translate="no"
@@ -192,10 +242,14 @@ function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
               {role.warnings!.map((w, idx) => {
                 const { diagnosis, technical } = roleWarningDiagnosis(w);
                 return (
-                  <li key={idx} className="text-danger">
+                  <li key={idx} className="grid gap-0.5 text-danger">
                     <span data-testid={`role-warning-diagnosis-${role.id}-${idx}`}>{diagnosis}</span>
-                    <span className="ml-2 inline-flex items-center gap-1 text-fg-muted">
-                      <span aria-hidden>·</span>
+                    {isTemplate && (
+                      <span className="text-fg-muted" data-testid={`role-warning-template-note-${role.id}-${idx}`}>
+                        该条目是参考模板；当前环境可能缺少对应连接或表，不代表已落盘正式 Role 故障。
+                      </span>
+                    )}
+                    <span className="inline-flex flex-wrap items-center gap-1 text-fg-muted">
                       <span>技术详情：</span>
                       <code
                         className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]"
@@ -210,14 +264,27 @@ function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
               })}
             </ul>
           )}
-          <div className="text-sm">
-            <span className="text-fg-muted">
-              {role.usageCount ?? 0} 位 <span className="notranslate" translate="no">Agent</span> 引用
+          <div className="text-sm text-fg-muted">
+            <span>
+              引用 <span className="notranslate" translate="no">Agent</span>：{role.usageCount ?? 0} 个
             </span>
             {inUse && (role.users?.length ?? 0) > 0 && (
-              <span className="text-fg-muted"> · {role.users!.map((u) => u.id).join(", ")}</span>
+              <span>
+                {" "}
+                ·{" "}
+                <span className="notranslate" translate="no">
+                  {role.users!.map((u) => u.id).join(", ")}
+                </span>
+              </span>
             )}
           </div>
+          {isTemplate ? (
+            <div className="text-sm text-fg-muted">内置参考模板</div>
+          ) : role.configUpdatedAt ? (
+            <div className="text-sm text-fg-muted">
+              配置最近写入：{formatConfigUpdatedAt(role.configUpdatedAt)}
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           {isTemplate ? (
@@ -240,8 +307,10 @@ function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
               <Link
                 to={`/admin/roles/${encodeURIComponent(role.id)}?mode=copy`}
                 className="pl-btn pl-btn--ghost text-sm"
+                aria-label={`基于 ${role.id} 新建 Role`}
+                title="基于此 Role 创建新的正式 Role"
               >
-                复制
+                基于此新建
               </Link>
               <button
                 type="button"
@@ -282,9 +351,9 @@ export function RoleList() {
       }
       switch (sourceFilter) {
         case "in-use":
-          return (role.usageCount ?? 0) > 0;
+          return role.source === "yaml" && (role.usageCount ?? 0) > 0;
         case "needs-repair":
-          return role.invalid;
+          return role.source === "yaml" && role.invalid;
         case "unused":
           return role.source === "yaml" && !role.invalid && (role.usageCount ?? 0) === 0;
         case "templates":
@@ -295,6 +364,8 @@ export function RoleList() {
       }
     });
   }, [roles, search, sourceFilter]);
+
+  const filterLabel = FILTER_OPTIONS.find((opt) => opt.value === sourceFilter)?.label ?? sourceFilter;
 
   if (isLoading) return <div className="pl-notice">加载中…</div>;
   if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
@@ -311,8 +382,7 @@ export function RoleList() {
           <>
             管理 <span className="notranslate" translate="no">Agent</span> 可访问的数据源和{" "}
             <span className="notranslate" translate="no">MCP</span> 工具边界。正式 Role 写入{" "}
-            <span className="notranslate" translate="no">access.yaml</span>
-            ；参考模板仅用于低频创建辅助。
+            <span className="notranslate" translate="no">access.yaml</span>。
           </>
         }
         actions={
@@ -323,27 +393,17 @@ export function RoleList() {
       />
 
       <div className="pl-metric-grid">
-        <MetricCard
-          label="正式 Role"
-          value={summary.formalCount}
-          hint="写入 access.yaml"
-        />
-        <MetricCard
-          label="正在服务 Agent"
-          value={summary.inUseCount}
-          hint="至少 1 个 Agent 引用"
-        />
-        <MetricCard
-          label="待修复"
-          value={summary.needsRepairCount}
-          hint="权限解析失败，需处理后再分配"
-          tone="danger"
-        />
-        <MetricCard
-          label="未被 Agent 使用"
-          value={summary.unusedFormalCount}
-          hint="正式 Role 中未被引用"
-        />
+        {METRIC_FILTERS.map((metric) => (
+          <MetricCard
+            key={metric.label}
+            label={metric.label}
+            value={summary[metric.valueKey]}
+            hint={metric.hint}
+            tone={metric.tone}
+            pressed={sourceFilter === metric.filter}
+            onSelect={() => setSourceFilter(metric.filter)}
+          />
+        ))}
       </div>
 
       <div className="pl-admin-filterbar">
@@ -368,21 +428,14 @@ export function RoleList() {
         </select>
       </div>
 
-      <div
-        className="flex flex-wrap items-center gap-2 text-xs text-fg-muted"
-        data-testid="role-status-strip"
-      >
-        <span>
-          当前：{summary.formalCount} 个正式 Role · {summary.inUseCount} 个正在服务{" "}
-          <span className="notranslate" translate="no">Agent</span>
-        </span>
-        <span className="inline-flex items-center gap-1 pl-status-badge pl-status-validation_failed">
-          {summary.needsRepairCount} 个待修复
-        </span>
-        <span className="inline-flex items-center gap-1 pl-status-badge pl-status-partial">
-          {summary.templateCount} 个参考模板
-        </span>
-      </div>
+      {sourceFilter !== "formal" && (
+        <div className="text-xs text-fg-muted" data-testid="role-current-filter">
+          当前筛选：{filterLabel}（{filtered.length}）
+          {sourceFilter === "needs-repair" && filtered.length === 0 && !search.trim()
+            ? " · 没有正式 Role 待修复"
+            : null}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="pl-notice">
@@ -396,6 +449,8 @@ export function RoleList() {
                 新建第一个 Role
               </Link>
             </div>
+          ) : sourceFilter === "needs-repair" && !search.trim() ? (
+            "没有正式 Role 待修复"
           ) : (
             "没有匹配的 role"
           )}

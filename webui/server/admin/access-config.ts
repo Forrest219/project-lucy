@@ -57,6 +57,8 @@ export interface AccessFile {
   config: YamlAccessConfig;
   raw: string;
   version: string;
+  /** access.yaml mtime from the single stat inside readAccessYaml */
+  mtimeMs: number;
 }
 
 function computeVersion(raw: string, mtimeMs: number): string {
@@ -70,7 +72,7 @@ export async function readAccessYaml(projectRoot: string): Promise<AccessFile> {
   const s = await stat(filePath);
   const config = parse(raw) as YamlAccessConfig;
   if (!config.users) config.users = [];
-  return { config, raw, version: computeVersion(raw, s.mtimeMs) };
+  return { config, raw, version: computeVersion(raw, s.mtimeMs), mtimeMs: s.mtimeMs };
 }
 
 export async function readAccessYamlVersion(projectRoot: string): Promise<{ raw: string; version: string }> {

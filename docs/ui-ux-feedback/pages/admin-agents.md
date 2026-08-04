@@ -277,3 +277,194 @@ Reported: 2026-08-02
 
 ### Notes
 2026-08-02 M57 已将参考模板降级为低频创建辅助，并更新 Lucy R1 模板描述和详情 CTA。Docker 重建后浏览器复核通过：列表页不再出现 `复制为 YAML Role`，详情页显示 `基于此模板创建 Role`，说明包含 `access.yaml` 与 `YAML diff`。
+
+## UX-ADMIN-AGENTS-009: 「待修复」KPI 与默认列表脱节，数字来自参考模板
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role list metrics, needs-repair filter
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+四个 KPI 中「待修复」看不出修什么；默认页看不到待修复对象。
+
+### Evidence
+- 浏览器核查 `http://127.0.0.1:55176/admin/roles`：默认筛选「全部正式 Role」，列表仅 `demo_readonly`；KPI「待修复」= 4。
+- 切筛选「待修复」后出现 4 张卡，全部带 `参考模板` + `待修复`（`lucy_r1_exact_readonly` / `kx_readonly` / `superstore_readonly` / `dev_superstore`）。
+- `GET /api/admin/roles`：正式 Role `demo_readonly` 的 `invalid=false`；4 个 invalid 均为 `source=template`。
+
+### Expected
+- KPI「待修复」只统计正式 Role（`source=yaml && invalid`）。
+- 「待修复」筛选与 KPI 对齐，默认不把模板解析失败算作正式运维故障。
+- Metric 可点击切换筛选；模板 invalid 在「参考模板」筛选中通过 badge + 诊断可见。
+
+### Browser Check
+1. Open `/admin/roles` with only template invalid roles.
+2. Verify KPI「待修复」= 0 while formal list shows healthy roles.
+3. Switch to「参考模板」and verify invalid templates still show `待修复` diagnosis.
+4. Click KPI「待修复」and verify filter aligns with formal-only repair set.
+
+### Notes
+Mapped to Spec 76 / `wo-202608-08`. Revises Spec 59 §7.2 needs-repair counting.
+2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。
+
+## UX-ADMIN-AGENTS-010: Header 参考模板说明在默认页冗余
+
+Status: Fixed
+Route: `/admin/roles`
+Area: PageHeader description
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+「参考模板仅用于低频创建辅助」冗余；默认页看不到角色模板。
+
+### Evidence
+- Header description 含该从句；默认列表无模板卡片；模板仅出现在筛选「参考模板」。
+
+### Expected
+Header 只说明正式 Role 职责与 `access.yaml`；模板说明下沉到模板筛选空态或新建次级入口。
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify header description does not mention「参考模板仅用于低频创建辅助」.
+3. Switch to「参考模板」and verify template context still discoverable.
+
+### Notes
+Mapped to Spec 76 / `wo-202608-08`. Revises Spec 59 §7.1.
+2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。
+
+## UX-ADMIN-AGENTS-011: KPI/筛选主语偏 Agent，状态条重复冗余
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Metrics, filters, status strip
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+「正在服务 Agent / 未被 Agent 使用」串台到 Agent；状态条「当前：1 个正式 Role · … · 4 个待修复 · 6 个参考模板」冗余且不适合当前页。
+
+### Evidence
+- KPI/filter 使用 Agent 主语文案；`role-status-strip` 复读 KPI 并展示参考模板总数。
+
+### Expected
+- 主术语改为 Role 主语：`使用中` / `未引用`。
+- 删除默认状态条；筛选非默认时最多显示「当前筛选」弱提示。
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify metrics/filters use `使用中` / `未引用`.
+3. Verify default page has no status strip repeating KPI + template count.
+4. Verify visible primary labels no longer use `正在服务 Agent` / `未被 Agent 使用`.
+
+### Notes
+Mapped to Spec 76 / `wo-202608-08`. Revises Spec 59 §7.2–7.4. Do not use `已启用` without lifecycle field.
+2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。
+
+## UX-ADMIN-AGENTS-012: Role 卡片缺少标题-内容字段标签
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role card content structure
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+`demo_readonly` 卡片只有内容没有字段标题，全靠用户猜。
+
+### Evidence
+- Card shows bare description, bare tool chips, source/connection counts without labels like `描述` / `数据范围`.
+
+### Expected
+Card fields labeled: `描述`、`数据范围`、`允许的 MCP 工具`、`引用 Agent`（及本轮时间字段）。
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Locate `demo_readonly`.
+3. Verify each content block has a visible field label.
+
+### Notes
+Mapped to Spec 76 / `wo-202608-08`.
+2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。
+
+## UX-ADMIN-AGENTS-013: 「正式 Role」「正在服务 Agent」badge 连读歧义
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role card badges
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+「正式 Role 正在服务 Agent」读不出义务含义，像一句复合义务。
+
+### Evidence
+- Two adjacent badges `正式 Role` + `正在服务 Agent` after role id.
+
+### Expected
+Short non-compound badges such as `正式` + `使用中`; Agent relationship expressed in `引用 Agent` field, not as a second obligation phrase.
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Locate `demo_readonly`.
+3. Verify badges are not readable as one obligation sentence.
+4. Verify usage relationship appears under `引用 Agent` or equivalent labeled field.
+
+### Notes
+Mapped to Spec 76 / `wo-202608-08`.
+2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。
+
+## UX-ADMIN-AGENTS-014: 「复制」按钮表意不足
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role card actions
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+「复制」猜测是复制角色配置，但表意不够明显。
+
+### Evidence
+- Formal role card action link text is bare `复制` to `?mode=copy`.
+
+### Expected
+List action label `基于此新建` with accessible name explaining create-new-formal-role-from-this; keep `?mode=copy` route.
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify formal role actions include `基于此新建`, not bare `复制`.
+3. Click it and verify still opens copy/create flow.
+
+### Notes
+Mapped to Spec 76 / `wo-202608-08`. Distinct from template detail CTA `基于此模板创建 Role`.
+2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。
+
+## UX-ADMIN-AGENTS-015: Role 列表缺少配置时间元数据
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role card metadata, roles API
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+角色很重要的创建日期、最后修改日期都没有看到。
+
+### Evidence
+- UI cards have no dates; `GET /api/admin/roles` returns no `createdAt` / `updatedAt`.
+
+### Expected
+- This round: expose `configUpdatedAt` from `access.yaml` mtime; formal cards show `配置最近写入`.
+- Do not fabricate per-role created date without schema support; templates show `内置参考模板`.
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify formal role card shows `配置最近写入` with a formatted timestamp.
+3. Switch to templates and verify no fake created date.
+
+### Notes
+Mapped to Spec 76 / `wo-202608-08`. Per-role `createdAt` remains Non-goal until `access.yaml` schema changes.
+2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。

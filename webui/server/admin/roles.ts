@@ -355,7 +355,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
   // GET /api/admin/roles — list with usageCount and users
   app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const { config } = await readAccessYaml(projectRoot);
+    const { config, mtimeMs } = await readAccessYaml(projectRoot);
+    const configUpdatedAt = new Date(mtimeMs).toISOString();
     const includeTemplates = request.query.includeTemplates !== "false";
 
     const yamlEntries: ResolvedRole[] = Object.entries(config.roles ?? {})
@@ -381,7 +382,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
           ...summary,
           sourceCount: resolved.ok ? resolved.permissions.sources.length : 0,
           invalid: !resolved.ok,
-          warnings: resolved.ok ? [] : [resolved.reason]
+          warnings: resolved.ok ? [] : [resolved.reason],
+          configUpdatedAt: entry.source === "yaml" ? configUpdatedAt : null
         };
       })
     );
@@ -392,7 +394,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
   // GET /api/admin/roles/:roleId — single role detail
   app.get<{ Params: { roleId: string } }>("/api/admin/roles/:roleId", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
-    const { config, version } = await readAccessYaml(projectRoot);
+    const { config, version, mtimeMs } = await readAccessYaml(projectRoot);
     const resolved = findRole(config, request.params.roleId);
     if (!resolved) {
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `Role '${request.params.roleId}' not found` } });
@@ -410,6 +412,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         sourceCount: preview.ok ? preview.permissions.sources.length : 0,
         invalid: !preview.ok,
         warnings: preview.ok ? [] : [preview.reason],
+        configUpdatedAt: resolved.source === "yaml" ? new Date(mtimeMs).toISOString() : null,
         role: {
           description: resolved.role.description,
           allow: resolved.role.allow ?? {}

@@ -118,6 +118,8 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-04-safe-log-to-eval.md](wo-202608-04-safe-log-to-eval.md) | 202608-GOV-04 | Safe Log-to-Security-Eval：**P1 Active 缺口**，当前无实现文件，需新建 candidate pool / reviewer / promotion preview + 根目录 verifier |
 | [wo-202608-05-fde-copilot-candidate.md](wo-202608-05-fde-copilot-candidate.md) | Deferred | FDE Copilot Candidate：不属于 202608 Governance & Observability 主线 |
 
+| [wo-202608-08-role-admin-list-clarity-followup.md](wo-202608-08-role-admin-list-clarity-followup.md) | 202608-08 | Role Admin 列表清晰度二轮：待修复 KPI 只计正式 Role、Header/状态条降噪、使用中/未引用、卡片字段标签、基于此新建、configUpdatedAt |
+
 ### 202608 Governance & Observability — 并行启动建议
 
 - **GOV-02** 与 **GOV-04** 两份工单的文件边界互不重叠，可以并行启动两个 minimax：

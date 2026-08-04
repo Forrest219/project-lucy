@@ -224,6 +224,33 @@ describe("GET /api/admin/roles", () => {
     await app.close();
   });
 
+  it("attaches configUpdatedAt from access.yaml mtime only on yaml roles", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(IN_USE_ACCESS_YAML);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/roles").expect(200);
+    const roles = res.body.data.roles as Array<{
+      id: string;
+      source: string;
+      configUpdatedAt: string | null;
+    }>;
+    const yamlRoles = roles.filter((role) => role.source === "yaml");
+    const templateRoles = roles.filter((role) => role.source === "template");
+    expect(yamlRoles.length).toBeGreaterThan(0);
+    expect(templateRoles.length).toBeGreaterThan(0);
+    for (const role of yamlRoles) {
+      expect(typeof role.configUpdatedAt).toBe("string");
+      expect(role.configUpdatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
+    const shared = yamlRoles[0].configUpdatedAt;
+    expect(yamlRoles.every((role) => role.configUpdatedAt === shared)).toBe(true);
+    expect(templateRoles.every((role) => role.configUpdatedAt == null)).toBe(true);
+    await app.close();
+  });
+
   it("hides templates when includeTemplates=false", async () => {
     const app = buildServer();
     await app.ready();

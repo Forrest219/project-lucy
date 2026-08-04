@@ -483,6 +483,8 @@ export type Role = {
   warnings: string[];
   usageCount?: number;
   users?: Array<{ id: string; name: string; enabled: boolean; tokenCount: number }>;
+  /** ISO-8601 from access.yaml mtime; null for reference templates */
+  configUpdatedAt?: string | null;
 };
 
 export type RoleUserReference = {

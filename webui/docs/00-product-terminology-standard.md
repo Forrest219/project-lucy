@@ -155,6 +155,12 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Evaluation | 质量评测 | 评测 | 质量评价混用 | 数据问答或语义质量评测 |
 | Evaluation Case | 评测用例 | 评测集 | Case 管理、案例管理 | 数据问答 / 语义质量评测的单条样例 |
 | Role Permission | 角色权限 | Role、RBAC 角色 | 角色配置、角色模板 | access.yaml 中的 role 模板 |
+| Persisted Role | 正式 Role | 已落盘 Role、正式（badge 短标签） | YAML role（作为主标签）、已启用（无 enabled 字段时） | `source=yaml`，写入 access.yaml |
+| Reference Role Template | 参考模板 | 内置参考模板 | Template（裸露）、模板角色（暗示可直接运行） | 系统预置只读参考配置，低频辅助创建 |
+| In Use Role | 使用中 | 被 Agent 引用 | 正在服务 Agent（主标签）、in use、已启用 | 正式 Role 且至少 1 个 Agent 引用 |
+| Unused Role | 未引用 | 暂无 Agent 引用 | 未被 Agent 使用（主标签）、空闲（暗示可删） | 正式 Role 且无 Agent 引用 |
+| Needs Repair Role | 待修复 | 权限解析失败 | Invalid、禁用、已停用 | 正式 Role 无法解析为有效权限边界 |
+| Config Last Written | 配置最近写入 | access.yaml 最近修改 | 创建日期（在无字段时伪造） | 来自 access.yaml mtime（Asia/Shanghai 展示） |
 | Data Heatmap | 数据热力 | 表级访问热力 | 数据源热力、源热力 | 从访问审计派生的表级访问与拒绝分布；UI 收敛为访问日志内的 heatmap Tab（`/admin/audit?tab=heatmap`），原独立路由 `/admin/audit-sources` 保留为兼容重定向（M35） |
 | Config Audit | 配置审计 | 配置变更审计 | 配置变更（仅限主导航/PageHeader 标题） | 访问配置写入的审计记录 |
 | Review | 审阅 | 变更审阅 | 审核混用 | 人工审阅、PR-like review |

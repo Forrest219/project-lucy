@@ -556,6 +556,16 @@
   .pl-metric-grid { @apply grid gap-3 md:grid-cols-2 xl:grid-cols-4; }
   .pl-metric-grid--three { @apply md:grid-cols-3 xl:grid-cols-3; }
   .pl-metric-card { @apply grid gap-1 rounded-lg border border-border-default bg-bg-subtle p-3 shadow-card; }
+  .pl-metric-card--button {
+    @apply w-full cursor-pointer text-left;
+    appearance: none;
+    background-image: none;
+    font: inherit;
+    color: inherit;
+  }
+  .pl-metric-card--button:focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-accent;
+  }
   .pl-muted-block { @apply rounded-lg border border-border-default bg-bg-subtle shadow-card; }
   /* M39 polish: do NOT force `text-transform: uppercase` on every
      `.pl-metric-card span`. Snapshot cards in the ops dashboard mix
