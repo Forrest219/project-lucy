@@ -820,3 +820,138 @@ describe("POST /api/admin/agents with role templates", () => {
     await app.close();
   });
 });
+
+describe("Access Governance Gate — Role endpoints", () => {
+  it("POST dryRun includes gate decision for a non-sensitive Role", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: true,
+        roleId: "scratch_role",
+        role: {
+          description: "scratch",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
+            tools: ["sl_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.gate).toBeDefined();
+    expect(res.body.data.gate.targetKind).toBe("role");
+    expect(res.body.data.gate.tierSummary.P0.count).toBe(0);
+    await app.close();
+  });
+
+  it("PATCH into KX source triggers P0 override_required", async () => {
+    // Add the KX table to the schema so the resolver can find it.
+    const schemaPath = path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml");
+    await writeFile(
+      schemaPath,
+      `tables:\n  kx_fact_financial_amount:\n    table: dataforai.kx_fact_financial_amount\n  superstore_orders:\n    table: dataforai.superstore_orders\n`,
+      "utf8"
+    );
+
+    // Create a non-sensitive role first.
+    const app = buildServer();
+    await app.ready();
+    const create = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "promote_target",
+        role: {
+          description: "starter",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
+            tools: ["sl_query"]
+          }
+        }
+      })
+      .expect(200);
+
+    // DryRun PATCH that adds a KX source.
+    const dryRun = await request(app.server)
+      .patch(`/api/admin/roles/promote_target`)
+      .send({
+        dryRun: true,
+        version: create.body.data.version,
+        patch: {
+          description: "patched",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] },
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["kx_fact_financial_amount"] }
+            ],
+            tools: ["sl_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(dryRun.body.data.gate.decision).toBe("override_required");
+    expect(dryRun.body.data.gate.tierSummary.P0.reasons[0]).toMatch(/kx_fact_financial_amount/);
+    await app.close();
+  });
+
+  it("PATCH with valid two-approver override succeeds", async () => {
+    const schemaPath = path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml");
+    await writeFile(
+      schemaPath,
+      `tables:\n  kx_fact_financial_amount:\n    table: dataforai.kx_fact_financial_amount\n  superstore_orders:\n    table: dataforai.superstore_orders\n`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const create = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "promote_target_2",
+        role: {
+          description: "starter",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
+            tools: ["sl_query"]
+          }
+        }
+      })
+      .expect(200);
+
+    const res = await request(app.server)
+      .patch(`/api/admin/roles/promote_target_2`)
+      .send({
+        dryRun: false,
+        version: create.body.data.version,
+        override: {
+          reason: "rollback plan documented",
+          approvers: [
+            { actorKind: "admin", actorId: "local-admin-1", identityProvider: "deployment-local" },
+            { actorKind: "admin", actorId: "local-admin-2", identityProvider: "deployment-local" }
+          ],
+          expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+          rollbackPlan: "Revert via git"
+        },
+        patch: {
+          description: "patched",
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] },
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["kx_fact_financial_amount"] }
+            ],
+            tools: ["sl_query"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    expect(res.body.data.gate.decision).toBe("override_required");
+    await app.close();
+  });
+});
