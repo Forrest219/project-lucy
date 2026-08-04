@@ -73,6 +73,7 @@ export function CatalogAssetValidationPanel({
     : validation.warnings.length > 0
       ? "warnings"
       : "valid";
+  const targetPathInWarning = validation.warnings.some((w) => w.code === "TARGET_EXISTS");
 
   return (
     <div
@@ -81,10 +82,12 @@ export function CatalogAssetValidationPanel({
       data-state={state}
       aria-live="polite"
     >
-      <p className="pl-upload-target-path" data-testid="catalog-asset-target-path">
-        <span className="text-xs text-fg-muted">目标路径</span>
-        <code>{validation.targetPath}</code>
-      </p>
+      {targetPathInWarning ? null : (
+        <p className="pl-upload-target-path" data-testid="catalog-asset-target-path">
+          <span className="text-xs text-fg-muted">目标路径</span>
+          <code>{validation.targetPath}</code>
+        </p>
+      )}
       <p className="text-sm" data-testid="catalog-asset-validation-summary">
         将写入 <strong>{validation.tables}</strong> 张表（{validation.tableNames.join(", ") || "—"}），
         大小 {validation.sizeBytes} 字节。

@@ -153,7 +153,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connectionId) });
       }
       onUploaded?.(data);
-      toast.success("YAML 已上传并刷新本地目录");
+      toast.success("YAML 已上传并同步配置变更");
     },
     onError: (err) => {
       const validationFromResponse = validationFromError(err);
@@ -255,7 +255,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
               {title}
             </h2>
             <p className="pl-notice">
-              受控上传 <code className="notranslate" translate="no">Schema Manifest</code>；系统计算目标路径并校验文件，成功后刷新本地目录。
+              覆盖现有 <code className="notranslate" translate="no">Schema Manifest</code>，上传并校验成功后同步配置变更。
             </p>
           </div>
           <button
@@ -410,7 +410,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
                 onClick={handleSubmit}
                 data-testid="catalog-asset-upload-submit"
               >
-                {uploadMutation.isPending ? "上传中..." : "上传并刷新本地目录"}
+                {uploadMutation.isPending ? "上传中..." : "上传并同步配置变更"}
               </button>
             </div>
           </section>
@@ -425,7 +425,7 @@ export function CatalogAssetUploadDrawer(props: CatalogAssetUploadDrawerProps) {
             </p>
             <p className="text-sm">
               解析到 <strong>{uploadMutation.data.record.tables}</strong> 张表，
-              并已刷新本地目录。
+              并已同步配置变更。
             </p>
             <p className="text-xs text-fg-muted" data-testid="catalog-asset-upload-target-display">
               目标文件：<code>{uploadMutation.data.record.targetPath}</code>

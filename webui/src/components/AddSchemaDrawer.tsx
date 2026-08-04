@@ -252,7 +252,8 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               <CatalogReloadButton
                 connectionId={connection.id}
                 schema={trimmed}
-                label="刷新本地目录"
+                label="同步配置变更"
+                pendingLabel="正在同步配置变更..."
                 variant="secondary"
                 testId="add-schema-reload-catalog"
               />

@@ -12,6 +12,8 @@ export type CatalogReloadButtonProps = {
   testId?: string;
   showCompletionLabel?: boolean;
   showInlineResult?: boolean;
+  title?: string;
+  pendingLabel?: string;
   onReloadStart?: () => void;
   onReloadComplete?: (run: CatalogReloadRun) => void;
   onReloadError?: (error: Error) => void;
@@ -47,6 +49,8 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
     testId,
     showCompletionLabel = true,
     showInlineResult = true,
+    title,
+    pendingLabel,
     onReloadStart,
     onReloadComplete,
     onReloadError
@@ -59,7 +63,7 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
 
   const baseLabel = label ?? defaultLabel();
   const buttonText = reload.isPending
-    ? "刷新本地目录中..."
+    ? pendingLabel ?? "刷新本地目录中..."
     : showCompletionLabel && reload.lastRun
       ? `完成 ✓ · ${reload.lastRun.tables} 张表`
       : baseLabel;
@@ -86,7 +90,7 @@ export function CatalogReloadButton(props: CatalogReloadButtonProps) {
         onClick={handleClick}
         disabled={reload.isPending}
         data-testid={testId ?? "catalog-reload"}
-        title="重新读取 ktx.yaml 与 semantic-layer YAML 文件，不会连接数据库，也不会执行 ingest。"
+        title={title ?? "重新读取 ktx.yaml 与 semantic-layer YAML 文件，不会连接数据库，也不会执行 ingest。"}
         translate="no"
         data-connection={connectionId ?? undefined}
         data-schema={schema ?? undefined}

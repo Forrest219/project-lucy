@@ -2,7 +2,6 @@
 
 /* 原值层：私有，主题切换或租户覆盖时改这一层 */
 :root {
-  --layout-min-readable-width: 1200px;
   --token-color-bg-base: #ffffff;
   --token-color-bg-surface: #ffffff;
   --token-color-bg-elevated: #ffffff;
@@ -105,24 +104,12 @@
 }
 
 @layer components {
-  /* Desktop-only baseline: once viewport gets narrower than the minimum
-     readable desktop width, keep the desktop layout width and let the
-     outer container scroll horizontally instead of compressing content. */
-  .pl-app-root {
-    min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    background: var(--color-bg-base);
-  }
   /* shell + 主布局 */
   /* M60 Sidebar Brand Navigation Polish: widen sidebar from 216px → 248px so
      the brand mark, search entry and chinese group titles have breathing
      room. The shell grid keeps `[sidebar main]` so PageHeader + body
      layouts are not touched. */
-  .pl-app-shell {
-    @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] bg-bg-base text-fg-body;
-    min-width: var(--layout-min-readable-width);
-  }
+  .pl-app-shell { @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] bg-bg-base text-fg-body; }
   .pl-sidebar { @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r border-border-default bg-bg-surface px-3 py-4; }
   /* M-Next sidebar scrollbar: 让 .pl-nav 在分组全展开、内容超过 viewport
    * 而 nav 可滚动时,滚动条本身始终可见,避免用户把"nav 可滚"误读为
@@ -752,7 +739,7 @@
   .pl-connection-card-header { @apply grid gap-3 border-b border-border-default bg-bg-subtle px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start; }
   .pl-connection-card-title { @apply flex min-w-0 items-center gap-3; }
   .pl-connection-card-title strong { @apply text-base font-semibold leading-5 text-fg-default; }
-  .pl-connection-title-copy { @apply grid min-w-0 gap-0.5; }
+  .pl-connection-title-copy { @apply flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5; }
   .pl-connection-engine-icon {
     @apply flex h-9 w-9 flex-none items-center justify-center rounded-md border border-border-default bg-bg-surface text-fg-muted;
   }
@@ -786,20 +773,20 @@
   }
   .pl-connection-kv-grid--compact { @apply gap-y-1.5; }
   .pl-connection-kv {
-    @apply grid min-w-0 gap-0.5 px-3;
+    @apply flex min-w-0 items-baseline gap-1.5 px-3;
   }
   @media (min-width: 640px) {
     .pl-connection-kv-grid {
-      grid-template-columns: 20% 18% 14% 14% 34%;
+      grid-template-columns: 20% 20% 18% 18% 24%;
     }
     .pl-connection-kv-grid .pl-connection-kv:first-child { grid-column: 1 / 2; }
     .pl-connection-kv-grid .pl-connection-kv:nth-child(2) { grid-column: 2 / 5; }
   }
   .pl-connection-kv dt {
-    @apply text-[12px] font-normal text-fg-muted;
+    @apply flex flex-none items-center gap-1 whitespace-nowrap text-[12px] font-normal text-fg-muted;
   }
   .pl-connection-kv dd {
-    @apply flex min-w-0 items-baseline gap-1 text-xs text-fg-default;
+    @apply flex min-w-0 items-baseline text-xs text-fg-default;
   }
   .pl-connection-kv-icon { @apply h-3.5 w-3.5 flex-none self-center text-fg-muted; }
   .pl-connection-kv dd code {
@@ -833,20 +820,19 @@
   .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
   .pl-schema-asset-table { @apply w-full border-collapse text-sm; table-layout: fixed; }
   .pl-schema-asset-table th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
-  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-default; }
-  .pl-schema-asset-table code { @apply font-mono text-xs text-fg-default; }
-  /* M44: stable column widths so Schema / Manifest 状态 / 本地表数 /
-     启用表数 / 操作 line up across all connection cards. */
-  .pl-schema-asset-col-schema { width: 24%; }
-  .pl-schema-asset-col-status { width: 18%; }
-  .pl-schema-asset-col-local-count { width: 14%; }
-  .pl-schema-asset-col-enabled-count { width: 14%; }
+  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-1.5 align-middle text-xs font-medium leading-4 text-fg-default; }
+  .pl-schema-asset-table code { @apply font-mono text-xs font-medium text-fg-default; }
+  /* M72: Schema 20% | Manifest 20% | 已发现表数 18% | 已启用表数 18% | 操作 24% */
+  .pl-schema-asset-col-schema { width: 20%; }
+  .pl-schema-asset-col-status { width: 20%; }
+  .pl-schema-asset-col-local-count { width: 18%; }
+  .pl-schema-asset-col-enabled-count { width: 18%; }
   .pl-schema-asset-col-action { width: 24%; }
-  .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-right; }
-  .pl-schema-asset-table-num { @apply text-right tabular-nums whitespace-nowrap; }
+  .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-left; }
+  .pl-schema-asset-table-num { @apply text-left font-normal tabular-nums whitespace-nowrap text-fg-body; }
   .pl-schema-asset-table-action { @apply whitespace-normal text-left; }
-  .pl-schema-asset-actions { @apply flex flex-wrap items-center justify-start gap-x-4 gap-y-1; }
-  .pl-schema-asset-table .pl-row-action-link { @apply font-normal text-primary; }
+  .pl-schema-asset-actions { @apply flex flex-nowrap items-center justify-start gap-3 overflow-hidden; }
+  .pl-schema-asset-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
   .pl-schema-asset-table button.pl-row-action-link:disabled { @apply cursor-wait opacity-60; }
   .pl-schema-asset-table .pl-row-action-link--muted { @apply text-fg-muted; }
   .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }

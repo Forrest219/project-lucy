@@ -422,7 +422,7 @@ describe("AddSchemaDrawer", () => {
       screen.getByText(/已添加 Schema：finance_mart/)
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "刷新本地目录" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "同步配置变更" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /ingest/i })).not.toBeInTheDocument();
 
     // No request to /ingest at any point.
