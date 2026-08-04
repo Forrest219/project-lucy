@@ -23,9 +23,9 @@
 | `ceo-one-report-lucy-data-model-notes.md` | CEO 一眼报 MVP 源表/SQL 到 Lucy 专用服务层表的建模理解和 DDL 索取清单 |
 | `lucy-r1-controlled-data-service-plan.md` | Lucy R1 受控数据服务层底座方案与实施计划 |
 | `lucy-r1-release-runbook.md` | Lucy R1 发布检查、Doris/Hermes 证据、排障和回滚手册 |
-| `lucy-202608-reliable-delivery-upgrade-spec.md` | Lucy 202608 可靠性交付系统升级蓝图：Trace / Evidence Kernel、静态防御、分级 Publish Gate、Safe Log-to-Eval、FDE Copilot 候选建议与 Dynamic RLS POC |
+| `lucy-202608-reliable-delivery-upgrade-spec.md` | Lucy 202608 Enterprise Governance & Observability 升级蓝图：访问治理 Trace / Evidence、ACL policy decision trace、Admin 可观测、Security Eval、风险复核与发布证据包 |
 | `lucy-202608-upgrade-execution-control.md` | Lucy 202608 升级执行总控：spec / plan / task 状态、并行波次、minimax handoff、验证矩阵 |
-| `lucy-202608-dynamic-rls-poc-spec.md` | Lucy 202608 Dynamic RLS / CLS POC 安全规格 |
+| `lucy-202608-access-governance-gap-analysis.md` | Lucy 202608 Governance & Observability 差距分析：对齐 `/admin` 现状、权限 / Agent 管理边界、已实现能力与企业级 data agent 平台缺口 |
 | `starrocks-r1-support-plan.md` | StarRocks R1 P1 gated support 边界、证据路径与发布限制 |
 | `design-agent-permissions.md` | Module 1 Agent 权限管控详细设计 |
 | `design-db-connection.md` | 数据库接入模块技术设计 |
@@ -94,4 +94,5 @@
 | 文档 | 用途 |
 |---|---|
 | `plans/README.md` | 仓库级 plan 索引 |
-| `plans/wo-202608-06-dynamic-rls-poc.md` | Dynamic RLS / CLS POC 执行工单 |
+| `plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md` | Lucy Enterprise Governance & Observability 三层实施计划，不包含 Dynamic RLS / CLS POC |
+| `plans/wo-202608-06-governance-review-release-evidence.md` | 202608-GOV-06 MiniMax Code 交付提示词：风险复核候选项与发布证据包 |

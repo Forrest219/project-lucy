@@ -2,7 +2,7 @@
 
 > **For Minimax:** Use this plan as the execution entry. Do not implement any product code in this task.
 
-**Goal:** Move the frozen Lucy 202608 spec / plan / task documents into a clean isolated branch without disturbing the current `main` working tree.
+**Goal:** Move the frozen Lucy 202608 Governance & Observability spec / plan / task documents into a clean isolated branch without disturbing the current `main` working tree.
 
 **Architecture:** Use a dedicated git worktree created from `origin/main`, then apply a patch containing only the 202608 documentation artifacts. The current `/Users/zhangxingchen/Projects/project-lucy` working tree may be dirty, so do not switch branches in place and do not stage unrelated files from it.
 
@@ -32,13 +32,13 @@ Hard constraints:
 Target branch:
 
 ```text
-codex/202608-reliable-delivery-specs
+codex/202608-governance-observability-specs
 ```
 
 Target worktree:
 
 ```text
-/Users/zhangxingchen/Projects/project-lucy-202608-specs
+/Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
 ```
 
 ## 2. File Allowlist
@@ -48,15 +48,17 @@ The patch for this task must include only these files or directories:
 ```text
 docs/lucy-202608-reliable-delivery-upgrade-spec.md
 docs/lucy-202608-upgrade-execution-control.md
-docs/lucy-202608-dynamic-rls-poc-spec.md
+docs/lucy-202608-access-governance-gap-analysis.md
+docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md
 docs/plans/README.md
 docs/plans/wo-202608-00-spec-branch-isolation.md
-docs/plans/wo-202608-06-dynamic-rls-poc.md
+docs/plans/wo-202608-06-governance-review-release-evidence.md
 webui/docs/62-trace-evidence-kernel-spec.md
 webui/docs/63-static-lint-reindex-diagnosis-spec.md
 webui/docs/64-tiered-publish-gate-spec.md
 webui/docs/65-safe-log-to-eval-spec.md
 webui/docs/66-fde-copilot-candidate-spec.md
+webui/docs/69-admin-governance-observability-spec.md
 webui/docs/plans/wo-202608-01-trace-evidence-kernel.md
 webui/docs/plans/wo-202608-02-static-lint-reindex-diagnosis.md
 webui/docs/plans/wo-202608-03-tiered-publish-gate.md
@@ -109,15 +111,17 @@ cd /Users/zhangxingchen/Projects/project-lucy
 git diff -- docs/README.md docs/project-overview.md webui/docs/README.md webui/docs/plans/README.md > /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null docs/lucy-202608-reliable-delivery-upgrade-spec.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null docs/lucy-202608-upgrade-execution-control.md >> /tmp/lucy-202608-specs.patch
-git diff --no-index /dev/null docs/lucy-202608-dynamic-rls-poc-spec.md >> /tmp/lucy-202608-specs.patch
+git diff --no-index /dev/null docs/lucy-202608-access-governance-gap-analysis.md >> /tmp/lucy-202608-specs.patch
+git diff --no-index /dev/null docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null docs/plans/README.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null docs/plans/wo-202608-00-spec-branch-isolation.md >> /tmp/lucy-202608-specs.patch
-git diff --no-index /dev/null docs/plans/wo-202608-06-dynamic-rls-poc.md >> /tmp/lucy-202608-specs.patch
+git diff --no-index /dev/null docs/plans/wo-202608-06-governance-review-release-evidence.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/62-trace-evidence-kernel-spec.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/63-static-lint-reindex-diagnosis-spec.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/64-tiered-publish-gate-spec.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/65-safe-log-to-eval-spec.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/66-fde-copilot-candidate-spec.md >> /tmp/lucy-202608-specs.patch
+git diff --no-index /dev/null webui/docs/69-admin-governance-observability-spec.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/plans/wo-202608-01-trace-evidence-kernel.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/plans/wo-202608-02-static-lint-reindex-diagnosis.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null webui/docs/plans/wo-202608-03-tiered-publish-gate.md >> /tmp/lucy-202608-specs.patch
@@ -153,22 +157,22 @@ Run:
 ```bash
 cd /Users/zhangxingchen/Projects
 git -C project-lucy fetch origin
-git -C project-lucy worktree add project-lucy-202608-specs origin/main -b codex/202608-reliable-delivery-specs
+git -C project-lucy worktree add project-lucy-202608-governance-specs origin/main -b codex/202608-governance-observability-specs
 ```
 
 Expected:
 
-- `/Users/zhangxingchen/Projects/project-lucy-202608-specs` exists.
-- New worktree is on `codex/202608-reliable-delivery-specs`.
+- `/Users/zhangxingchen/Projects/project-lucy-202608-governance-specs` exists.
+- New worktree is on `codex/202608-governance-observability-specs`.
 
-If the branch already exists, stop and ask the coordinator whether to reuse it or create a suffix branch such as `codex/202608-reliable-delivery-specs-v2`.
+If the branch already exists, stop and ask the coordinator whether to reuse it or create a suffix branch such as `codex/202608-governance-observability-specs-v2`.
 
 ### Task 5: Apply Patch In Clean Worktree
 
 Run:
 
 ```bash
-cd /Users/zhangxingchen/Projects/project-lucy-202608-specs
+cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
 git apply /tmp/lucy-202608-specs.patch
 ```
 
@@ -184,7 +188,7 @@ If patch application fails, do not hand-edit product files. Report the failed hu
 Run:
 
 ```bash
-cd /Users/zhangxingchen/Projects/project-lucy-202608-specs
+cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
 git status --short
 git diff --name-only
 ```
@@ -194,7 +198,7 @@ Expected changed paths are only the allowlist paths in section 2.
 Also run:
 
 ```bash
-git diff --name-only | grep -Ev '^(docs/lucy-202608-|docs/plans/|webui/docs/(README.md|plans/README.md|plans/wo-202608-|6[2-6]-)|docs/README.md|docs/project-overview.md)$' || true
+git diff --name-only | grep -Ev '^(docs/lucy-202608-|docs/plans/|webui/docs/(README.md|plans/README.md|plans/wo-202608-|6[2-6]-|69-admin-governance-observability-spec.md)|docs/README.md|docs/project-overview.md)$' || true
 ```
 
 Expected:
@@ -206,7 +210,7 @@ Expected:
 Run:
 
 ```bash
-cd /Users/zhangxingchen/Projects/project-lucy-202608-specs
+cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
 npm run lint:terminology
 npm run lint:spec
 ```
@@ -222,16 +226,16 @@ Expected:
 Run:
 
 ```bash
-cd /Users/zhangxingchen/Projects/project-lucy-202608-specs
-rg -n "Execution Waves|202608-06|busyTimeout|:memory:|Test Runner Boundaries|Work Order|high-entropy|P0 security candidate|Browser check: not required" docs/lucy-202608-upgrade-execution-control.md webui/docs/62-trace-evidence-kernel-spec.md webui/docs/65-safe-log-to-eval-spec.md webui/docs/plans/wo-202608-*.md docs/plans/wo-202608-06-dynamic-rls-poc.md
+cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
+rg -n "Governance & Observability|202608-GOV|busyTimeout|:memory:|Test Runner Boundaries|Work Order|high-entropy|P0 security candidate|Browser check: not required|Deferred" docs/lucy-202608-upgrade-execution-control.md webui/docs/62-trace-evidence-kernel-spec.md webui/docs/64-tiered-publish-gate-spec.md webui/docs/65-safe-log-to-eval-spec.md webui/docs/69-admin-governance-observability-spec.md webui/docs/plans/wo-202608-*.md
 ```
 
 Expected evidence:
 
-- `202608-06` is in Wave B and parallel with `202608-02` / `202608-03`.
+- Active work is named `202608-GOV-*`; old `202608-02` and `202608-05` are marked Deferred.
 - `busyTimeout` and temp DB isolation are present.
 - Test runner boundaries are present.
-- Safe Log-to-Eval distinguishes high-entropy credentials from semantic words.
+- Safe Log-to-Security-Eval distinguishes high-entropy credentials from semantic words.
 - Every Work Order says browser check is not required.
 
 ### Task 9: Stage Docs-only Changes
@@ -239,18 +243,20 @@ Expected evidence:
 Run:
 
 ```bash
-cd /Users/zhangxingchen/Projects/project-lucy-202608-specs
+cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
 git add docs/lucy-202608-reliable-delivery-upgrade-spec.md \
   docs/lucy-202608-upgrade-execution-control.md \
-  docs/lucy-202608-dynamic-rls-poc-spec.md \
+  docs/lucy-202608-access-governance-gap-analysis.md \
+  docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md \
   docs/plans/README.md \
   docs/plans/wo-202608-00-spec-branch-isolation.md \
-  docs/plans/wo-202608-06-dynamic-rls-poc.md \
+  docs/plans/wo-202608-06-governance-review-release-evidence.md \
   webui/docs/62-trace-evidence-kernel-spec.md \
   webui/docs/63-static-lint-reindex-diagnosis-spec.md \
   webui/docs/64-tiered-publish-gate-spec.md \
   webui/docs/65-safe-log-to-eval-spec.md \
   webui/docs/66-fde-copilot-candidate-spec.md \
+  webui/docs/69-admin-governance-observability-spec.md \
   webui/docs/plans/wo-202608-01-trace-evidence-kernel.md \
   webui/docs/plans/wo-202608-02-static-lint-reindex-diagnosis.md \
   webui/docs/plans/wo-202608-03-tiered-publish-gate.md \
@@ -272,8 +278,8 @@ Expected:
 Run:
 
 ```bash
-cd /Users/zhangxingchen/Projects/project-lucy-202608-specs
-git commit -m "docs(202608): split reliable delivery specs and work orders"
+cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
+git commit -m "docs(202608): scope governance observability specs and plans"
 ```
 
 Expected:
@@ -286,7 +292,7 @@ Expected:
 Run:
 
 ```bash
-cd /Users/zhangxingchen/Projects/project-lucy-202608-specs
+cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
 git status --short
 git show --stat --oneline --no-renames HEAD
 ```
@@ -299,7 +305,7 @@ Expected:
 ## 4. Do Not Do
 
 - Do not implement `Trace / Evidence Kernel`.
-- Do not implement Dynamic RLS POC.
+- Do not implement dynamic isolation or tenant-isolation POC work.
 - Do not edit `webui/server/**` or `webui/src/**`.
 - Do not run browser checks.
 - Do not resolve unrelated global lint failures.
@@ -310,16 +316,16 @@ Expected:
 After the spec branch commit exists, future development branches should fork from:
 
 ```text
-codex/202608-reliable-delivery-specs
+codex/202608-governance-observability-specs
 ```
 
 Suggested follow-up branches:
 
 - `codex/202608-trace-evidence-kernel`
-- `codex/202608-static-lint`
-- `codex/202608-publish-gate`
-- `codex/202608-safe-log-to-eval`
-- `codex/202608-fde-copilot`
+- `codex/202608-admin-audit-trace-read-model`
+- `codex/202608-access-governance-gate`
+- `codex/202608-safe-log-to-security-eval`
+- `codex/202608-admin-governance-observability`
 - `codex/202608-dynamic-rls-poc`
 
 Minimax should execute one Work Order per branch.
