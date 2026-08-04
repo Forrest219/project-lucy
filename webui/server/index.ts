@@ -76,7 +76,11 @@ import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
+import { registerRiskReviewRoutes } from "./admin/risk-review.js";
+import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
+import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerCaseRoutes } from "./eval/cases.js";
+import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
 import { registerSuiteImportRoutes } from "./eval/suite-import.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
@@ -1271,11 +1275,15 @@ export function buildServer() {
   registerTokenRoutes(app);
   registerAuditRoutes(app);
   registerMcpToolsRoutes(app);
+  registerGovernanceObservabilityRoutes(app);
   registerCaseRoutes(app);
+  registerSecurityCandidateRoutes(app);
   registerSuiteImportRoutes(app);
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
   registerR1ObservabilityRoutes(app);
+  registerRiskReviewRoutes(app);
+  registerReleaseReadinessRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith("/api/")) {

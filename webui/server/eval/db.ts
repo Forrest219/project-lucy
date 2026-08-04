@@ -55,6 +55,43 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_run_domain_started ON eval_run(domain, started_at);
   CREATE INDEX IF NOT EXISTS idx_run_case_status    ON eval_run_case(case_id, status);
+
+  CREATE TABLE IF NOT EXISTS security_eval_candidate (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    source_trace_id TEXT,
+    source_access_log_id INTEGER,
+    normalized_event TEXT NOT NULL,
+    event_hash TEXT NOT NULL,
+    decision_reason TEXT NOT NULL,
+    tool TEXT,
+    user_id TEXT,
+    token_hash_prefix TEXT,
+    role_ids_json TEXT NOT NULL DEFAULT '[]',
+    table_refs_json TEXT NOT NULL DEFAULT '[]',
+    risk_tier TEXT NOT NULL,
+    status TEXT NOT NULL,
+    redaction_status TEXT NOT NULL,
+    evidence_json TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS security_eval_candidate_review (
+    id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL,
+    reviewer_actor_json TEXT NOT NULL,
+    permission_boundary_confirmed INTEGER NOT NULL,
+    expected_denial_confirmed INTEGER NOT NULL,
+    business_context_confirmed INTEGER NOT NULL,
+    decision TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(candidate_id) REFERENCES security_eval_candidate(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sec_candidate_status ON security_eval_candidate(status, updated_at);
+  CREATE INDEX IF NOT EXISTS idx_sec_candidate_hash ON security_eval_candidate(event_hash);
+  CREATE INDEX IF NOT EXISTS idx_sec_review_candidate ON security_eval_candidate_review(candidate_id, created_at);
 `;
 
 function ensureEvalRunColumns(instance: Database.Database): void {

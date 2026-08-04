@@ -6,10 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 
 const revokedRows: Array<{ token_hash: string; revoked_at: string; reason: string }> = [];
+const traceWriteFailure = vi.hoisted(() => ({ enabled: false }));
 
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
     prepare: vi.fn((sql: string) => {
+      if (traceWriteFailure.enabled && sql.includes("INSERT INTO trace_events")) {
+        throw new Error("trace write unavailable");
+      }
       if (sql.includes("INSERT OR REPLACE INTO revoked_tokens")) {
         return {
           run: vi.fn((hash: string, revokedAt: string, reason: string) => {
@@ -61,6 +65,7 @@ beforeEach(async () => {
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
   revokedRows.length = 0;
+  traceWriteFailure.enabled = false;
 });
 
 afterEach(async () => {
@@ -155,6 +160,78 @@ describe("DELETE /api/admin/agents/:userId/tokens/:label", () => {
       .delete("/api/admin/agents/zhangsan/tokens/not-a-label")
       .expect(404);
     expect(res.body.error.code).toBe("TOKEN_NOT_FOUND");
+    await app.close();
+  });
+});
+
+describe("Access Governance Gate — Token endpoints", () => {
+  it("POST token dryRun returns gate decision without generating or writing token", async () => {
+    const app = buildServer();
+    await app.ready();
+    const beforeYaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ dryRun: true, label: "preview-only" })
+      .expect(200);
+
+    expect(res.body.data.dryRun).toBe(true);
+    expect(res.body.data.gate).toBeDefined();
+    expect(res.body.data.gate.targetKind).toBe("token");
+    expect(res.body.data.proposed).toMatchObject({ userId: "zhangsan", label: "preview-only" });
+    expect(res.body.data.token).toBeUndefined();
+
+    const afterYaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(afterYaml).toBe(beforeYaml);
+    expect(afterYaml).not.toContain("preview-only");
+    await app.close();
+  });
+
+  it("POST token create returns gate decision in payload", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "new-laptop" })
+      .expect(200);
+    expect(res.body.data.gate).toBeDefined();
+    expect(res.body.data.gate.targetKind).toBe("token");
+    expect(res.body.data.gate.targetId).toContain("zhangsan:new-laptop");
+    await app.close();
+  });
+
+  it("POST token create logs trace failures without blocking the durable write", async () => {
+    traceWriteFailure.enabled = true;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "trace-failure-still-writes" })
+      .expect(200);
+
+    expect(res.body.data.gate).toBeDefined();
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("trace-failure-still-writes");
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[lucy-admin] failed to write access governance gate trace",
+      expect.objectContaining({
+        targetKind: "token",
+        targetId: "zhangsan:trace-failure-still-writes",
+        error: "trace write unavailable"
+      })
+    );
+    errorSpy.mockRestore();
+    await app.close();
+  });
+
+  it("DELETE token returns gate decision in payload", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .delete("/api/admin/agents/zhangsan/tokens/hermes-laptop")
+      .expect(200);
+    expect(res.body.data.gate).toBeDefined();
+    expect(res.body.data.gate.targetKind).toBe("token");
     await app.close();
   });
 });

@@ -7,6 +7,14 @@ import { safeWrite } from "../fs-safe.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb, recordConfigChange } from "./audit.js";
 import type { YamlAccessConfig } from "./agents.js";
+import {
+  evaluateAccessGovernanceGate,
+  evaluateGovernanceOverride,
+  recordAccessGovernanceGateEvent,
+  type AccessGovernanceApprover,
+  type AccessGovernanceGateDecision,
+  type AccessGovernanceOverrideRequest
+} from "../access-governance-gate.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -14,14 +22,69 @@ function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
 
+function defaultActor(): AccessGovernanceApprover {
+  return { actorKind: "admin", actorId: "local-admin" };
+}
+
+async function writeGateTrace(
+  decision: AccessGovernanceGateDecision,
+  override: { ok: boolean } | undefined,
+  overrideRequest: AccessGovernanceOverrideRequest | undefined,
+  actor: AccessGovernanceApprover
+): Promise<void> {
+  try {
+    const db = await getAuditDb();
+    recordAccessGovernanceGateEvent({
+      database: db,
+      decision,
+      overrideEvaluation: override ? { ok: override.ok } : undefined,
+      overrideRequest,
+      actor
+    });
+  } catch (error) {
+    // Hot store failure is non-fatal, but the missing Trace / Evidence chain
+    // must be visible to operators.
+    console.error("[lucy-admin] failed to write access governance gate trace", {
+      targetKind: decision.targetKind,
+      targetId: decision.targetId ?? null,
+      traceId: decision.traceId,
+      decision: decision.decision,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+/**
+ * Read the recent access_log call count for an Agent. Used to escalate
+ * Token creation to P1 review when the Agent is high-traffic. Returns 0
+ * when the audit db is unavailable (e.g. unit tests with a mocked
+ * `getAuditDb`); the gate then classifies the Token as P0/P2 only based on
+ * its own inputs.
+ */
+async function agentCallsLast7d(userId: string): Promise<number> {
+  try {
+    const db = await getAuditDb();
+    const row = db
+      .prepare(
+        `SELECT COUNT(*) AS cnt FROM access_log
+         WHERE user_id = ? AND ts >= datetime('now','-7 days')`
+      )
+      .get(userId) as { cnt: number | null } | undefined;
+    return row?.cnt ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function registerTokenRoutes(app: FastifyInstance) {
   // POST /api/admin/agents/:userId/tokens
   app.post<{
     Params: { userId: string };
-    Body: { label: string; expires_at?: string | null };
+    Body: { dryRun?: boolean; label: string; expires_at?: string | null; override?: AccessGovernanceOverrideRequest };
   }>("/api/admin/agents/:userId/tokens", async (request, reply) => {
     const { userId } = request.params;
     const { label, expires_at } = request.body ?? {};
+    const dryRun = request.body?.dryRun === true;
 
     if (!label || typeof label !== "string" || label.trim().length === 0) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "label is required" } });
@@ -41,6 +104,63 @@ export function registerTokenRoutes(app: FastifyInstance) {
     const user = config.users[userIndex];
     if (user.tokens.some((t) => t.label === label)) {
       return reply.status(409).send({ ok: false, error: { code: "TOKEN_LABEL_TAKEN", message: `Token label '${label}' already exists for this agent` } });
+    }
+
+    // Access Governance Gate — Token create escalates to P1 when the
+    // owning Agent is high-traffic. We feed the gate an empty `newValue`
+    // so the rules that look at sources / roles stay neutral; the high-
+    // traffic P1 trigger is the only signal we expect here.
+    const callsLast7d = await agentCallsLast7d(userId);
+    const gate = evaluateAccessGovernanceGate({
+      targetKind: "token",
+      targetId: `${userId}:${label}`,
+      newValue: { userId, label, hashPrefix: null },
+      highTrafficCalls7d: callsLast7d
+    });
+
+    if (dryRun) {
+      return {
+        ok: true,
+        data: {
+          dryRun: true,
+          gate,
+          proposed: {
+            userId,
+            label,
+            expires_at: expires_at ?? null
+          }
+        }
+      };
+    }
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this token create",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
     // Generate token — plaintext never written anywhere except the HTTP response
@@ -76,7 +196,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
         hash: tokenHash,
         label,
         created,
-        expires_at: expires_at ?? null
+        expires_at: expires_at ?? null,
+        gate
       }
     };
   });
@@ -84,6 +205,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
   // DELETE /api/admin/agents/:userId/tokens/:label
   app.delete<{
     Params: { userId: string; label: string };
+    Body?: { override?: AccessGovernanceOverrideRequest };
   }>("/api/admin/agents/:userId/tokens/:label", async (request, reply) => {
     const { userId, label } = request.params;
     const projectRoot = await resolveProjectRoot();
@@ -101,6 +223,43 @@ export function registerTokenRoutes(app: FastifyInstance) {
     const token = user.tokens.find((t) => t.label === label);
     if (!token) {
       return reply.status(404).send({ ok: false, error: { code: "TOKEN_NOT_FOUND", message: `Token '${label}' not found` } });
+    }
+
+    // Access Governance Gate — Token revoke is a P2 cleanup. We still
+    // classify so the trace / evidence chain captures the decision.
+    const gate = evaluateAccessGovernanceGate({
+      targetKind: "token",
+      targetId: `${userId}:${label}`
+    });
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this token revoke",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
     const revokedAt = new Date().toISOString();
@@ -125,6 +284,6 @@ export function registerTokenRoutes(app: FastifyInstance) {
     });
     await safeWrite(projectRoot, ACCESS_YAML_REL, content);
 
-    return { ok: true, data: { written: true, revokedAt } };
+    return { ok: true, data: { written: true, revokedAt, gate } };
   });
 }

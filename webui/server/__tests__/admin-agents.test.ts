@@ -13,6 +13,15 @@ const auditRows = vi.hoisted(() => [] as Array<{
   outcome: string;
 }>);
 
+const KX_TEMPLATE_NAMES = [
+  "kx_dim_company",
+  "kx_dim_financial_item",
+  "kx_fact_financial_amount",
+  "kx_vw_balance_sheet_detail",
+  "kx_vw_cash_flow_statement_detail",
+  "kx_vw_income_statement_detail"
+];
+
 // Mock audit db so tests don't need a real sqlite
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
@@ -404,6 +413,189 @@ describe("DELETE /api/admin/agents/:userId", () => {
     expect(res.body.ok).toBe(true);
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).not.toContain("zhangsan");
+    await app.close();
+  });
+});
+
+describe("Access Governance Gate — Agent endpoints", () => {
+  const KX_FACT = "dataforai.kx_fact_financial_amount";
+  const SENSITIVE_PROJECT_YAML = `roles:
+  risk_officer:
+    description: Sensitive finance role
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - kx_fact_financial_amount
+      tools:
+        - sl_query
+  analyst:
+    description: Analyst role
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+      tools:
+        - sl_query
+users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    tokens: []
+    role: analyst
+defaults:
+  deny_tools:
+    - sql_execution
+`;
+
+  async function makeSensitiveProject() {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(SENSITIVE_PROJECT_YAML);
+    // Add the KX table to the schema so resolveEffectivePermissionsForAdmin
+    // finds it.
+    const schemaPath = path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml");
+    await writeFile(
+      schemaPath,
+      [
+        "tables:",
+        ...KX_TEMPLATE_NAMES.map((name) => `  ${name}:\n    table: dataforai.${name}`),
+        "  superstore_orders:",
+        "    table: dataforai.superstore_orders",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+  }
+
+  it("dryRun returns gate decision with tier summary", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: true, agent: { id: "newagent", name: "新用户", role: "analyst" } })
+      .expect(200);
+    expect(res.body.data.gate).toBeDefined();
+    expect(res.body.data.gate.targetKind).toBe("agent");
+    // Creating a new agent bound to a non-sensitive role is a P1 warning
+    // (permission expansion into a non-sensitive source). Not a P0 block.
+    expect(["allow", "warn"]).toContain(res.body.data.gate.decision);
+    expect(res.body.data.gate.tierSummary.P0.count).toBe(0);
+    expect(res.body.data.gate.tierSummary.P0.reasons).toEqual([]);
+    await app.close();
+  });
+
+  it("P0 permission expansion to sensitive KX source is blocked unless override is provided", async () => {
+    await makeSensitiveProject();
+    const app = buildServer();
+    await app.ready();
+    // Without override
+    const blocked = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: false, agent: { id: "finance_bot", name: "财务机器人", role: "risk_officer" } })
+      .expect(409);
+    expect(blocked.body.error.code).toBe("GOVERNANCE_GATE_OVERRIDE_REQUIRED");
+    expect(blocked.body.error.detail.gate.decision).toBe("override_required");
+    expect(blocked.body.error.detail.gate.tierSummary.P0.count).toBeGreaterThan(0);
+
+    // With a single approver
+    const singleApprover = await request(app.server)
+      .post("/api/admin/agents")
+      .send({
+        dryRun: false,
+        agent: { id: "finance_bot", name: "财务机器人", role: "risk_officer" },
+        override: {
+          reason: "hotfix",
+          approvers: [{ actorKind: "admin", actorId: "local-admin-1", identityProvider: "deployment-local" }],
+          expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+          rollbackPlan: "Revert via git"
+        }
+      })
+      .expect(409);
+    expect(singleApprover.body.error.code).toBe("GOVERNANCE_GATE_OVERRIDE_REQUIRED");
+    expect(singleApprover.body.error.detail.override.code).toBe("OVERRIDE_APPROVERS_INSUFFICIENT");
+
+    // With two distinct approvers
+    const ok = await request(app.server)
+      .post("/api/admin/agents")
+      .send({
+        dryRun: false,
+        agent: { id: "finance_bot", name: "财务机器人", role: "risk_officer" },
+        override: {
+          reason: "incident rollback",
+          approvers: [
+            { actorKind: "admin", actorId: "local-admin-1", identityProvider: "deployment-local" },
+            { actorKind: "admin", actorId: "local-admin-2", identityProvider: "deployment-local" }
+          ],
+          expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+          rollbackPlan: "Revert via git"
+        }
+      })
+      .expect(200);
+    expect(ok.body.ok).toBe(true);
+    expect(ok.body.data.gate.decision).toBe("override_required");
+    expect(ok.body.data.written).toBe(true);
+    await app.close();
+  });
+
+  it("P0 permission expansion through built-in KX template is blocked in Agent create and patch dryRun", async () => {
+    await makeSensitiveProject();
+    const app = buildServer();
+    await app.ready();
+
+    const createPreview = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: true, agent: { id: "kx_bot", name: "KX Bot", role: "kx_readonly" } })
+      .expect(200);
+    expect(createPreview.body.data.gate.decision).toBe("override_required");
+    expect(createPreview.body.data.gate.tierSummary.P0.count).toBeGreaterThan(0);
+    expect(createPreview.body.data.gate.evidenceRefs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "sensitive_source", ref: KX_FACT })
+    ]));
+
+    const patchPreview = await request(app.server)
+      .patch("/api/admin/agents/zhangsan")
+      .send({ dryRun: true, patch: { role: "kx_readonly" } })
+      .expect(200);
+    expect(patchPreview.body.data.gate.decision).toBe("override_required");
+    expect(patchPreview.body.data.gate.tierSummary.P0.count).toBeGreaterThan(0);
+    expect(patchPreview.body.data.gate.evidenceRefs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "sensitive_source", ref: KX_FACT })
+    ]));
+
+    await app.close();
+  });
+
+  it("PATCH dryRun surfaces gate decision", async () => {
+    await makeSensitiveProject();
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .patch("/api/admin/agents/zhangsan")
+      .send({ dryRun: true, patch: { role: "risk_officer" } })
+      .expect(200);
+    expect(res.body.data.gate).toBeDefined();
+    expect(res.body.data.gate.decision).toBe("override_required");
+    await app.close();
+  });
+
+  it("DELETE includes gate block when prior sensitive sources are removed by an override-required scenario", async () => {
+    // Deletion is normally allow; we just assert the gate field is present
+    // so the front-end has a stable shape.
+    await makeSensitiveProject();
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .delete("/api/admin/agents/zhangsan")
+      .expect(200);
+    expect(res.body.data.gate).toBeDefined();
     await app.close();
   });
 });

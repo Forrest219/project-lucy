@@ -8,6 +8,14 @@ import { resolveProjectRoot } from "../project.js";
 import { getAuditDb, recordConfigChange } from "./audit.js";
 import { previewRolePermissionsForAdmin, resolveEffectivePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
+import {
+  evaluateAccessGovernanceGate,
+  evaluateGovernanceOverride,
+  recordAccessGovernanceGateEvent,
+  type AccessGovernanceApprover,
+  type AccessGovernanceGateDecision,
+  type AccessGovernanceOverrideRequest
+} from "../access-governance-gate.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -248,6 +256,108 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
 }
 
 /**
+ * Resolved source names for a given Agent record, used to feed the
+ * Access Governance Gate. Returns `[]` when the role can't be resolved
+ * (the caller treats this as "no permission expansion" — the durable
+ * write path will fail anyway with `INVALID_ROLE` upstream).
+ *
+ * For *candidate* users that don't yet exist in `access.yaml` (Agent
+ * create / patch with a new template role), callers can pass role overrides
+ * from the proposed YAML so Gate classification sees the same Role body that
+ * the durable write will persist.
+ */
+async function resolveAgentSources(
+  user: { id: string; role?: string; allow?: unknown },
+  roleOverrides: Record<string, YamlRole> | undefined
+): Promise<{
+  sources: string[];
+  snapshotHash: string | null;
+}> {
+  // Legacy `allow` fallback: don't go through the resolver.
+  if (user.allow && !user.role) {
+    const allow = user.allow as { tables?: string[] };
+    const sources = Array.isArray(allow.tables) ? allow.tables : [];
+    return { sources, snapshotHash: null };
+  }
+  if (!user.role) {
+    return { sources: [], snapshotHash: null };
+  }
+  const previewRole = roleOverrides?.[user.role];
+  const preview = await previewRolePermissionsForAdmin(user.role, previewRole ? { role: previewRole } : {});
+  if (!preview.ok) return { sources: [], snapshotHash: null };
+  return {
+    sources: preview.permissions.sources.map((source) => source.table),
+    snapshotHash: preview.permissions.snapshotHash
+  };
+}
+
+interface BuildAgentGateInputArgs {
+  targetKind: "agent" | "token";
+  targetId?: string | null;
+  oldUser: { id: string; role?: string; allow?: unknown };
+  newUser: { id: string; role?: string; allow?: unknown };
+  oldRoleOverrides?: Record<string, YamlRole>;
+  newRoleOverrides?: Record<string, YamlRole>;
+  /** Optional recent call count for high-traffic classification. */
+  callsLast7d?: number;
+  /** Tools added by the change (used for raw-query path P0 rule). */
+  addedTools?: string[];
+}
+
+async function buildAgentGateInput(args: BuildAgentGateInputArgs) {
+  const [before, after] = await Promise.all([
+    resolveAgentSources(args.oldUser, args.oldRoleOverrides),
+    resolveAgentSources(args.newUser, args.newRoleOverrides)
+  ]);
+  return {
+    targetKind: args.targetKind,
+    targetId: args.targetId ?? null,
+    oldValue: args.oldUser,
+    newValue: args.newUser,
+    oldSources: before.sources,
+    newSources: after.sources,
+    oldSnapshotHash: before.snapshotHash,
+    newSnapshotHash: after.snapshotHash,
+    addedTools: args.addedTools ?? [],
+    highTrafficCalls7d: args.callsLast7d ?? 0
+  };
+}
+
+async function writeGateTrace(
+  decision: AccessGovernanceGateDecision,
+  override: { ok: boolean } | undefined,
+  overrideRequest: AccessGovernanceOverrideRequest | undefined,
+  actor: AccessGovernanceApprover
+): Promise<void> {
+  try {
+    const db = await getAuditDb();
+    recordAccessGovernanceGateEvent({
+      database: db,
+      decision,
+      overrideEvaluation: override ? { ok: override.ok } : undefined,
+      overrideRequest,
+      actor
+    });
+  } catch (error) {
+    // Hot store failure must never break MCP / admin traffic, but it must be
+    // visible because a governance write without evidence is an audit gap.
+    console.error("[lucy-admin] failed to write access governance gate trace", {
+      targetKind: decision.targetKind,
+      targetId: decision.targetId ?? null,
+      traceId: decision.traceId,
+      decision: decision.decision,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+function defaultActor(): AccessGovernanceApprover {
+  // local-admin is the deployment-local identity, never an enterprise
+  // personal identity (per `webui/docs/64-tiered-publish-gate-spec.md` §7).
+  return { actorKind: "admin", actorId: "local-admin" };
+}
+
+/**
  * Build a denormalized summary of agent counts and recent usage so the
  * front-end can render aggregate metrics without re-aggregating per row.
  * `activeTokenCountLast7d` deliberately uses the per-agent max:
@@ -372,7 +482,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
 
   // POST /api/admin/agents
   app.post<{
-    Body: { dryRun?: boolean; agent: { id: string; name: string; note?: string; role?: string; allow?: unknown } };
+    Body: {
+      dryRun?: boolean;
+      override?: AccessGovernanceOverrideRequest;
+      agent: { id: string; name: string; note?: string; role?: string; allow?: unknown }
+    };
   }>("/api/admin/agents", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const agentInput = request.body?.agent;
@@ -421,8 +535,48 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
+    // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
+    const gateInput = await buildAgentGateInput({
+      targetKind: "agent",
+      targetId: newUser.id,
+      oldUser: { id: newUser.id, role: undefined, allow: undefined },
+      newUser,
+      newRoleOverrides: newConfig.roles
+    });
+    const gate = evaluateAccessGovernanceGate(gateInput);
+
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml } };
+      return { ok: true, data: { diff, proposedYaml, gate } };
+    }
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this Agent create",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
     await recordConfigChange({
@@ -434,7 +588,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       diff
     });
     await writeAccessYaml(projectRoot, newConfig);
-    return { ok: true, data: { written: true, agent: await userToAgentWithPermissions(newUser) } };
+    return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(newUser) } };
   });
 
   // GET /api/admin/agents/:userId
@@ -467,7 +621,12 @@ export function registerAgentRoutes(app: FastifyInstance) {
   // PATCH /api/admin/agents/:userId
   app.patch<{
     Params: { userId: string };
-    Body: { dryRun?: boolean; version?: string; patch: { name?: string; note?: string; enabled?: boolean; role?: string; allow?: unknown; tokens?: unknown; id?: unknown } };
+    Body: {
+      dryRun?: boolean;
+      version?: string;
+      override?: AccessGovernanceOverrideRequest;
+      patch: { name?: string; note?: string; enabled?: boolean; role?: string; allow?: unknown; tokens?: unknown; id?: unknown };
+    };
   }>("/api/admin/agents/:userId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
@@ -482,6 +641,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
 
     const config = parse(raw) as YamlAccessConfig;
     if (!config.users) config.users = [];
+    const existingRoles = config.roles;
     const userIndex = config.users.findIndex((u) => u.id === request.params.userId);
     if (userIndex === -1) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
@@ -535,8 +695,51 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
+    // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
+    const stats = await getStats(existingUser.id, existingUser.tokens.length);
+    const gateInput = await buildAgentGateInput({
+      targetKind: "agent",
+      targetId: updatedUser.id,
+      oldUser: existingUser,
+      newUser: updatedUser,
+      oldRoleOverrides: existingRoles,
+      newRoleOverrides: newConfig.roles,
+      callsLast7d: stats.callsLast7d
+    });
+    const gate = evaluateAccessGovernanceGate(gateInput);
+
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml } };
+      return { ok: true, data: { diff, proposedYaml, gate } };
+    }
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this Agent patch",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
     await recordConfigChange({
@@ -548,16 +751,61 @@ export function registerAgentRoutes(app: FastifyInstance) {
       diff
     });
     await writeAccessYaml(projectRoot, newConfig);
-    return { ok: true, data: { written: true, agent: await userToAgentWithPermissions(updatedUser) } };
+    return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(updatedUser) } };
   });
 
   // DELETE /api/admin/agents/:userId
-  app.delete<{ Params: { userId: string } }>("/api/admin/agents/:userId", async (request, reply) => {
+  app.delete<{
+    Params: { userId: string };
+    Body?: { override?: AccessGovernanceOverrideRequest };
+  }>("/api/admin/agents/:userId", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const { config } = await readAccessYaml(projectRoot);
     const user = config.users.find((u) => u.id === request.params.userId);
     if (!user) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
+    }
+
+    // Access Governance Gate — Agent deletion. Removing a high-traffic Agent
+    // or a Role-binding is a P2 cleanup that should be evidence-recorded.
+    const stats = await getStats(user.id, user.tokens.length);
+    const gateInput = await buildAgentGateInput({
+      targetKind: "agent",
+      targetId: user.id,
+      oldUser: user,
+      newUser: { id: user.id, role: undefined, allow: undefined },
+      callsLast7d: stats.callsLast7d
+    });
+    const gate = evaluateAccessGovernanceGate(gateInput);
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this Agent delete",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
     // Revoke all tokens in sqlite — must succeed before yaml is updated
@@ -578,6 +826,6 @@ export function registerAgentRoutes(app: FastifyInstance) {
       newSummary: { userIds: newConfig.users.map((item) => item.id) }
     });
     await writeAccessYaml(projectRoot, newConfig);
-    return { ok: true, data: { written: true } };
+    return { ok: true, data: { written: true, gate } };
   });
 }

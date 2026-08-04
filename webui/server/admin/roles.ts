@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
-import { recordConfigChange } from "./audit.js";
+import { recordConfigChange, getAuditDb } from "./audit.js";
 import { previewRolePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
 import {
@@ -13,6 +13,14 @@ import {
   type YamlAccessConfig,
   type YamlRole
 } from "./access-config.js";
+import {
+  evaluateAccessGovernanceGate,
+  evaluateGovernanceOverride,
+  recordAccessGovernanceGateEvent,
+  type AccessGovernanceApprover,
+  type AccessGovernanceGateDecision,
+  type AccessGovernanceOverrideRequest
+} from "../access-governance-gate.js";
 
 type RoleSource = "yaml" | "template";
 
@@ -52,6 +60,119 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
     sources: permissions.sources,
     legacyAllow: permissions.legacyAllow
   };
+}
+
+/**
+ * Resolved source names for a candidate role. Used to feed the
+ * Access Governance Gate; returns `[]` when the role cannot be resolved
+ * (caller will already have surfaced a 400 upstream).
+ */
+async function resolveRoleSources(roleId: string, role?: YamlRole): Promise<{
+  sources: string[];
+  snapshotHash: string | null;
+  tools: string[];
+  denyTools: string[];
+  sensitiveTablePrefixes: string[];
+}> {
+  const resolved = await previewRolePermissionsForAdmin(roleId, role ? { role } : {});
+  if (!resolved.ok) return { sources: [], snapshotHash: null, tools: [], denyTools: [], sensitiveTablePrefixes: [] };
+  return {
+    sources: resolved.permissions.sources.map((source) => source.table),
+    snapshotHash: resolved.permissions.snapshotHash,
+    tools: resolved.permissions.tools,
+    denyTools: [],
+    sensitiveTablePrefixes: []
+  };
+}
+
+interface BuildRoleGateInputArgs {
+  targetKind: "role" | "access_defaults";
+  targetId: string;
+  oldRole?: YamlRole;
+  newRole: YamlRole;
+  oldAccessDefaults?: YamlAccessConfig["defaults"];
+  newAccessDefaults?: YamlAccessConfig["defaults"];
+  oldSources?: string[];
+  newSources?: string[];
+  oldSnapshotHash?: string | null;
+  newSnapshotHash?: string | null;
+}
+
+async function buildRoleGateInput(args: BuildRoleGateInputArgs) {
+  let oldSources = args.oldSources;
+  let newSources = args.newSources;
+  let oldHash = args.oldSnapshotHash ?? null;
+  let newHash = args.newSnapshotHash ?? null;
+  let oldDeny: string[] | undefined;
+  let newDeny: string[] | undefined;
+  let oldPrefixes: string[] | undefined;
+  let newPrefixes: string[] | undefined;
+  if (oldSources === undefined && args.oldRole) {
+    const before = await resolveRoleSources(args.targetId, args.oldRole);
+    oldSources = before.sources;
+    oldHash = before.snapshotHash;
+  }
+  if (newSources === undefined) {
+    const after = await resolveRoleSources(args.targetId, args.newRole);
+    newSources = after.sources;
+    newHash = after.snapshotHash;
+  }
+  const oldTools = args.oldRole?.allow?.tools ?? [];
+  const newTools = args.newRole.allow?.tools ?? [];
+  const addedTools = newTools.filter((tool) => !oldTools.includes(tool));
+  if (args.oldAccessDefaults && args.newAccessDefaults) {
+    oldDeny = args.oldAccessDefaults.deny_tools ?? [];
+    newDeny = args.newAccessDefaults.deny_tools ?? [];
+    oldPrefixes = args.oldAccessDefaults.sensitive_table_prefixes ?? [];
+    newPrefixes = args.newAccessDefaults.sensitive_table_prefixes ?? [];
+  }
+  return {
+    targetKind: args.targetKind,
+    targetId: args.targetId,
+    oldValue: args.oldRole,
+    newValue: args.newRole,
+    oldSources,
+    newSources,
+    oldSnapshotHash: oldHash,
+    newSnapshotHash: newHash,
+    addedTools,
+    oldDenyTools: oldDeny,
+    newDenyTools: newDeny,
+    oldSensitiveTablePrefixes: oldPrefixes,
+    newSensitiveTablePrefixes: newPrefixes
+  };
+}
+
+function defaultActor(): AccessGovernanceApprover {
+  return { actorKind: "admin", actorId: "local-admin" };
+}
+
+async function writeGateTrace(
+  decision: AccessGovernanceGateDecision,
+  override: { ok: boolean } | undefined,
+  overrideRequest: AccessGovernanceOverrideRequest | undefined,
+  actor: AccessGovernanceApprover
+): Promise<void> {
+  try {
+    const db = await getAuditDb();
+    recordAccessGovernanceGateEvent({
+      database: db,
+      decision,
+      overrideEvaluation: override ? { ok: override.ok } : undefined,
+      overrideRequest,
+      actor
+    });
+  } catch (error) {
+    // Hot store failure is non-fatal, but the missing Trace / Evidence chain
+    // must be visible to operators.
+    console.error("[lucy-admin] failed to write access governance gate trace", {
+      targetKind: decision.targetKind,
+      targetId: decision.targetId ?? null,
+      traceId: decision.traceId,
+      decision: decision.decision,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
 }
 
 function buildRoleSummary(config: YamlAccessConfig, resolved: ResolvedRole) {
@@ -326,7 +447,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
 
   // POST /api/admin/roles — create role (dryRun-first)
   app.post<{
-    Body: { dryRun?: boolean; roleId?: string; role?: unknown };
+    Body: { dryRun?: boolean; override?: AccessGovernanceOverrideRequest; roleId?: string; role?: unknown };
   }>("/api/admin/roles", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const { roleId, role } = request.body ?? {};
@@ -356,9 +477,50 @@ export function registerRoleRoutes(app: FastifyInstance) {
     // re-stringify via the same stringify used by write
     const proposedYaml = await import("yaml").then(({ stringify }) => stringify(newConfig, { lineWidth: 0 }));
     const diff = makeDiff(raw, proposedYaml);
+
+    // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
+    const gateInput = await buildRoleGateInput({
+      targetKind: "role",
+      targetId: roleId,
+      oldRole: undefined,
+      newRole: shape.value
+    });
+    const gate = evaluateAccessGovernanceGate(gateInput);
+
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml } };
+      return { ok: true, data: { diff, proposedYaml, gate } };
     }
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this role create",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+    }
+
     await recordConfigChange({
       filePath: ACCESS_YAML_REL,
       changeType: "role_create",
@@ -380,6 +542,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       data: {
         written: true,
         version: detail.version,
+        gate,
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
@@ -398,7 +561,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
   // PATCH /api/admin/roles/:roleId — edit yaml role
   app.patch<{
     Params: { roleId: string };
-    Body: { dryRun?: boolean; version?: string; patch?: { description?: unknown; allow?: unknown } };
+    Body: {
+      dryRun?: boolean;
+      version?: string;
+      override?: AccessGovernanceOverrideRequest;
+      patch?: { description?: unknown; allow?: unknown };
+    };
   }>("/api/admin/roles/:roleId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
@@ -448,9 +616,50 @@ export function registerRoleRoutes(app: FastifyInstance) {
     };
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
+
+    // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
+    const gateInput = await buildRoleGateInput({
+      targetKind: "role",
+      targetId: request.params.roleId,
+      oldRole: existing,
+      newRole: shape.value
+    });
+    const gate = evaluateAccessGovernanceGate(gateInput);
+
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, version: currentVersion } };
+      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate } };
     }
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this role patch",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+    }
+
     await recordConfigChange({
       filePath: ACCESS_YAML_REL,
       changeType: "role_patch",
@@ -461,11 +670,14 @@ export function registerRoleRoutes(app: FastifyInstance) {
     });
     await writeAccessYaml(projectRoot, newConfig);
     const detail = await readAccessYaml(projectRoot);
-    return { ok: true, data: { written: true, version: detail.version } };
+    return { ok: true, data: { written: true, version: detail.version, gate } };
   });
 
   // DELETE /api/admin/roles/:roleId — delete yaml role, blocked if in use
-  app.delete<{ Params: { roleId: string }; Body?: { dryRun?: boolean; version?: string } }>(
+  app.delete<{
+    Params: { roleId: string };
+    Body?: { dryRun?: boolean; version?: string; override?: AccessGovernanceOverrideRequest };
+  }>(
     "/api/admin/roles/:roleId",
     async (request, reply) => {
       const dryRun = request.body?.dryRun !== false;
@@ -493,6 +705,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
           }
         });
       }
+      const existingRole = config.roles[request.params.roleId];
       const newConfig: YamlAccessConfig = {
         ...config,
         roles: Object.fromEntries(
@@ -501,9 +714,51 @@ export function registerRoleRoutes(app: FastifyInstance) {
       };
       const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
       const diff = makeDiff(raw, proposedYaml);
+
+      // Access Governance Gate — Role deletion: an empty `allow` placeholder
+      // is fed to the gate so it does not classify deletion as widening.
+      const gateInput = await buildRoleGateInput({
+        targetKind: "role",
+        targetId: request.params.roleId,
+        oldRole: existingRole,
+        newRole: { description: existingRole.description }
+      });
+      const gate = evaluateAccessGovernanceGate(gateInput);
+
       if (dryRun) {
-        return { ok: true, data: { diff, proposedYaml, version } };
+        return { ok: true, data: { diff, proposedYaml, version, gate } };
       }
+
+      if (gate.decision === "block") {
+        await writeGateTrace(gate, undefined, undefined, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_BLOCKED",
+            message: "Access Governance Gate blocked this role delete",
+            detail: { gate }
+          }
+        });
+      }
+
+      if (gate.decision === "override_required") {
+        const override = evaluateGovernanceOverride(request.body?.override, gate);
+        if (!override.ok) {
+          await writeGateTrace(gate, override, request.body?.override, defaultActor());
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+              message: `Override required: ${override.reason ?? "missing override fields"}`,
+              detail: { gate, override }
+            }
+          });
+        }
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+      } else {
+        await writeGateTrace(gate, undefined, undefined, defaultActor());
+      }
+
       await recordConfigChange({
         filePath: ACCESS_YAML_REL,
         changeType: "role_delete",
@@ -513,14 +768,20 @@ export function registerRoleRoutes(app: FastifyInstance) {
         diff
       });
       await writeAccessYaml(projectRoot, newConfig);
-      return { ok: true, data: { written: true, version: (await readAccessYaml(projectRoot)).version } };
+      return { ok: true, data: { written: true, version: (await readAccessYaml(projectRoot)).version, gate } };
     }
   );
 
   // POST /api/admin/roles/:roleId/copy — copy yaml or template role into a new yaml role
   app.post<{
     Params: { roleId: string };
-    Body: { dryRun?: boolean; newRoleId?: string; description?: string; role?: unknown };
+    Body: {
+      dryRun?: boolean;
+      override?: AccessGovernanceOverrideRequest;
+      newRoleId?: string;
+      description?: string;
+      role?: unknown;
+    };
   }>("/api/admin/roles/:roleId/copy", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const { newRoleId, description, role } = request.body ?? {};
@@ -556,9 +817,52 @@ export function registerRoleRoutes(app: FastifyInstance) {
     };
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
+
+    // Access Governance Gate — copy is treated as a Role create with the
+    // source role used as `oldRole` baseline so widening into sensitive
+    // sources is still detected.
+    const gateInput = await buildRoleGateInput({
+      targetKind: "role",
+      targetId: newRoleId,
+      oldRole: source.role,
+      newRole: shape.value
+    });
+    const gate = evaluateAccessGovernanceGate(gateInput);
+
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml } };
+      return { ok: true, data: { diff, proposedYaml, gate } };
     }
+
+    if (gate.decision === "block") {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      return reply.status(409).send({
+        ok: false,
+        error: {
+          code: "GOVERNANCE_GATE_BLOCKED",
+          message: "Access Governance Gate blocked this role copy",
+          detail: { gate }
+        }
+      });
+    }
+
+    if (gate.decision === "override_required") {
+      const override = evaluateGovernanceOverride(request.body?.override, gate);
+      if (!override.ok) {
+        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+            message: `Override required: ${override.reason ?? "missing override fields"}`,
+            detail: { gate, override }
+          }
+        });
+      }
+      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+    } else {
+      await writeGateTrace(gate, undefined, undefined, defaultActor());
+    }
+
     await recordConfigChange({
       filePath: ACCESS_YAML_REL,
       changeType: "role_create",
@@ -580,6 +884,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       data: {
         written: true,
         version: detail.version,
+        gate,
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
