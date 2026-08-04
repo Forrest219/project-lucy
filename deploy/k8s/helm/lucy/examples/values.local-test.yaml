@@ -1,12 +1,40 @@
-# Local-test values for the Lucy Helm chart.
+# values.local-test.yaml — KIND-ONLY, NOT FOR PRODUCTION.
 #
-# This file is safe to commit: it contains no real customer database DSN,
-# password, token, or one-time Lucy credential. Copy it to values.customer.yaml
-# and replace the image, public URL, storage class, and Secret references.
+# Scope: drives `helm lint`, `helm template` and a local kind cluster smoke
+# test. This file MUST NOT be used to install Lucy on a customer production
+# K8s cluster.
+#
+# What it does for kind:
+#   * Sets `image.repository: project-lucy` to the locally-built image tag
+#     that you `docker tag` / `kind load docker-image` after a local `docker
+#     buildx build --platform linux/amd64 ...`.
+#   * Uses `image.pullPolicy: Never` so kind never tries to pull from a
+#     remote registry. If you switch to `IfNotPresent` and the image is not
+#     preloaded into the cluster, kind will try to pull from Docker Hub and
+#     fail with `ImagePullBackOff` (or pull the wrong architecture if you
+#     are on an arm64 Mac and your cluster is amd64).
+#   * Sets `env.LUCY_ALLOW_PLACEHOLDER_KTX: "1"` so the demo CHANGE-ME
+#     ktx.yaml seed is allowed. Production must set this to "" / 0.
+#
+# What you MUST change for any non-kind install:
+#   * `image.repository` → your customer registry (e.g.
+#     `registry.example.com/data-team/project-lucy`).
+#   * `image.tag` → a tag that your registry actually contains for the
+#     architecture of your K8s nodes. Use `docker manifest inspect <repo>:<tag>`
+#     to confirm `linux/amd64` is in the manifest list.
+#   * `image.pullPolicy` → `IfNotPresent` (or `Always` for short-lived tags).
+#   * `env.LUCY_PUBLIC_MCP_URL` → the externally reachable MCP URL.
+#   * `env.LUCY_ALLOW_PLACEHOLDER_KTX` → "" or unset (production must not run
+#     with a CHANGE-ME ktx.yaml).
+#   * `extraSecretData` → "" (production must wire `existingSecret` to an
+#     externally-managed Secret).
 
 image:
   repository: project-lucy
+  # The tag you `docker tag` + `kind load docker-image` after a local build.
   tag: "0.16.0"
+  # `Never` forces the local cache. If you forget to `kind load docker-image`
+  # the pod will sit in `ImagePullBackOff`.
   pullPolicy: Never
 
 replicaCount: 1
@@ -28,16 +56,55 @@ persistence:
   existingClaim: ""
 
 env:
+  # Required even for local-test so the rendered manifest exposes a
+  # meaningful LUCY_PUBLIC_MCP_URL. Agents must NEVER be configured with
+  # this placeholder URL.
   LUCY_PUBLIC_MCP_URL: "http://lucy.localtest.example.com/mcp"
+  # LOCAL-TEST ONLY. Production must remove this so the seed CHANGE-ME
+  # ktx.yaml fails closed at startup.
   LUCY_ALLOW_PLACEHOLDER_KTX: "1"
   KTX_PROJECT_ROOT: /data/lucy
   POSTHOG_DISABLED: "1"
 
-# Local-test only. Production should set existingSecret to an externally
-# managed Secret and keep extraSecretData empty.
+# Local-test only. Production should set `existingSecret` to an externally
+# managed Secret and keep `extraSecretData` empty.
 existingSecret: ""
 extraSecretData:
+  # Demo secret used to satisfy the file-shape check; the literal string
+  # `change-me` is base64-encoded by the chart into Secret.data. Real
+  # deployments must NOT use this file as-is.
   demo-password: change-me
+
+# Relaxed probes — first-time image pull + KTX runtime install + reindex can
+# take a few minutes on a cold local cluster.
+startupProbe:
+  exec:
+    command:
+      - /app/scripts/docker-healthcheck.sh
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 15
+  failureThreshold: 60
+  successThreshold: 1
+
+readinessProbe:
+  exec:
+    command:
+      - /app/scripts/docker-healthcheck.sh
+  periodSeconds: 15
+  timeoutSeconds: 10
+  failureThreshold: 3
+  successThreshold: 1
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: webui
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
 
 resources:
   requests:

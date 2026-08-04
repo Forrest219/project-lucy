@@ -17,6 +17,12 @@ on:
         description: "Optional Docker/image tag used by release-package"
         required: false
 
+# release-package pushes a multi-arch manifest list to the container registry.
+# Other jobs only build & smoke; they do not need write access.
+permissions:
+  contents: read
+  packages: write
+
 env:
   KTX_VERSION: ${{ inputs.ktx_version || '0.13.0' }}
   LUCY_EXPECTED_KTX_VERSION: ${{ inputs.ktx_version || '0.13.0' }}
@@ -169,12 +175,37 @@ jobs:
           TAG="${{ inputs.release_tag }}"
           if [ -z "$TAG" ]; then TAG="${GITHUB_REF_NAME:-manual-${GITHUB_SHA::7}}"; fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-      - name: Build tagged image
-        run: docker build --build-arg "KTX_VERSION=$KTX_VERSION" -t "project-lucy:${{ steps.release.outputs.tag }}" -t "project-lucy:${GITHUB_SHA}" .
+      - name: Set up QEMU (for cross-platform builds)
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+      # Multi-arch manifest list. Customer default is x86_64 (AMD); linux/amd64
+      # is therefore the primary platform. linux/arm64 is included so that
+      # Apple Silicon / AWS Graviton developers can `docker pull` the same tag
+      # without rebuilding locally.
+      - name: Build & push multi-arch image
+        env:
+          REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
+          IMAGE_NAMESPACE: ${{ vars.LUCY_IMAGE_NAMESPACE || 'kaelio' }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.release.outputs.tag }}"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy:${TAG}"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg "KTX_VERSION=${KTX_VERSION}" \
+            --tag "${IMAGE}" \
+            --tag "${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy:${GITHUB_SHA}" \
+            --metadata-file /tmp/buildx-metadata.json \
+            --push .
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
       - name: Write release notes
         env:
           LUCY_RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          LUCY_DOCKER_IMAGE: project-lucy:${{ steps.release.outputs.tag }}
+          LUCY_DOCKER_IMAGE: ${{ steps.release.outputs.image }}
+          LUCY_PLATFORMS: linux/amd64,linux/arm64
         run: npm run release:artifacts -- --tag "${{ steps.release.outputs.tag }}"
       - uses: actions/upload-artifact@v4
         with:

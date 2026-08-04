@@ -11,6 +11,9 @@ spec:
   {{- if not .Values.persistence.enabled }}
   {{- fail "Lucy Helm chart requires persistence.enabled=true so /data/lucy is backed by a PVC" }}
   {{- end }}
+  {{- if hasPrefix "REPLACE-ME" .Values.image.repository }}
+  {{- fail (printf "Lucy Helm chart requires image.repository to point at your customer registry (e.g. registry.example.com/data-team/project-lucy). The placeholder %q must be replaced before installing on any cluster." .Values.image.repository) }}
+  {{- end }}
   # Single-replica only. HA is intentionally not supported yet.
   replicas: {{ .Values.replicaCount }}
   # Recreate is REQUIRED while we mount an RWO PVC at /data/lucy.

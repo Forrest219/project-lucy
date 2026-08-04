@@ -15,9 +15,28 @@
 # -------------------------------------------------------------------
 # Image
 # -------------------------------------------------------------------
+# IMPORTANT — image.repository / image.tag MUST be overridden before any
+# non-local install. The default value `project-lucy` is only valid for
+# `kind` / `docker compose` local development where the image is loaded
+# from the local Docker cache. On a real customer K8s cluster the literal
+# default will fail to pull because there is no public `project-lucy:0.16.0`
+# on Docker Hub.
+#
+# Default platforms shipped from CI:
+#   linux/amd64  (primary; x86_64 customer hardware)
+#   linux/arm64  (secondary; Apple Silicon / AWS Graviton developers)
+#
+# Before installing on a customer cluster, set:
+#   image:
+#     repository: REPLACE-ME-registry.example.com/data-team/project-lucy
+#     tag: <registry tag that contains linux/amd64>
+#     pullPolicy: IfNotPresent   (or Always for short-lived tags)
+#
+# If you forget to override the repository and the value still starts with
+# the placeholder prefix `REPLACE-ME-`, the chart will refuse to render.
 image:
-  # Customer should override `repository` to point at their own registry mirror
-  # (e.g. `registry.example.com/data-team/project-lucy`).
+  # DEFAULT: bare tag — only valid for kind / docker compose local dev.
+  # Production must override to a customer registry path.
   repository: project-lucy
   tag: "0.16.0"
   pullPolicy: IfNotPresent

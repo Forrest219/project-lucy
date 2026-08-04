@@ -32,19 +32,78 @@ Lucy exposes:
 
 ## 2. Build And Push Image
 
-```bash
-docker build -t registry.example.com/data-team/project-lucy:0.16.0 \
-  --build-arg KTX_VERSION=0.16.0 .
+> ⚠ Architecture matters. Lucy release images are published as a multi-arch
+> manifest list containing both `linux/amd64` (primary; x86_64 customer
+> hardware) and `linux/arm64` (secondary; Apple Silicon / AWS Graviton
+> developers). If you build on an `arm64` Mac and forget to set
+> `--platform linux/amd64`, you will push an `arm64`-only image and your
+> customer AMD nodes will pull with `ImagePullBackOff` or fail at exec.
 
-docker push registry.example.com/data-team/project-lucy:0.16.0
+Check the architecture of your **build host** and your **target K8s nodes**:
+
+```bash
+# Build host
+uname -m
+
+# Target K8s nodes
+kubectl get nodes -o wide
+# The `OS-IMAGE` / kernel columns hint at the CPU; for binary confirmation:
+kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.architecture}'
+# Returns e.g. ["amd64"] or ["arm64"] or ["amd64" "arm64"] (heterogeneous).
 ```
 
-For kind or k3d local verification:
+### 2.1 Production build (recommended)
+
+Use `docker buildx` with explicit `--platform linux/amd64` so the published
+tag always contains the customer architecture:
+
+```bash
+docker buildx build \
+  --platform linux/amd64 \
+  --build-arg KTX_VERSION=0.16.0 \
+  -t registry.example.com/data-team/project-lucy:0.16.0 \
+  --push .
+```
+
+If your cluster also serves `arm64` workloads, add the second platform and
+push a multi-arch manifest list in one command:
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --build-arg KTX_VERSION=0.16.0 \
+  -t registry.example.com/data-team/project-lucy:0.16.0 \
+  --push .
+```
+
+After pushing, verify the manifest list really contains `linux/amd64`:
+
+```bash
+docker manifest inspect registry.example.com/data-team/project-lucy:0.16.0
+# Look for `manifests[].platform.architecture == "amd64"`.
+```
+
+### 2.2 Local kind / k3d verification (optional)
+
+For local verification on a kind cluster running on the same architecture as
+your build host, you can use the simpler `docker build` form:
 
 ```bash
 docker build -t project-lucy:0.16.0 --build-arg KTX_VERSION=0.16.0 .
 kind load docker-image project-lucy:0.16.0 --name <kind-cluster>
 ```
+
+> If your build host is `arm64` (Apple Silicon) and your kind cluster
+> happens to be `amd64` (or you want to mirror production), pass
+> `--platform linux/amd64` to `docker buildx build` even for local kind
+> verification:
+>
+> ```bash
+> docker buildx build --platform linux/amd64 \
+>   -t project-lucy:0.16.0 --build-arg KTX_VERSION=0.16.0 \
+>   --load .
+> kind load docker-image project-lucy:0.16.0 --name <kind-cluster>
+> ```
 
 ## 3. Prepare Customer Values
 
@@ -73,6 +132,13 @@ env:
 existingSecret: "lucy-db-secrets"
 extraSecretData: {}
 ```
+
+> ⚠ The chart refuses to render when `image.repository` starts with
+> `REPLACE-ME-`. Use the example `values.local-test.yaml` only for kind /
+> docker compose local dev (it deliberately leaves `repository: project-lucy`
+> for `kind load docker-image`); for any real cluster install, override
+> `image.repository` to a customer registry path that contains
+> `linux/amd64`.
 
 `LUCY_PUBLIC_MCP_URL` is the URL copied into agent configuration. Do not use
 `127.0.0.1`, Pod IPs, or cluster-local service names for production agents.

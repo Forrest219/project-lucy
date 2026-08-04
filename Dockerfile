@@ -1,6 +1,25 @@
-FROM node:22-bookworm-slim
+# syntax=docker/dockerfile:1.7
+#
+# Multi-arch build contract.
+#
+# The release workflow (`.github/workflows/lucy-release.yml`) builds this image
+# with `docker buildx` for both `linux/amd64` and `linux/arm64`. The customer's
+# default hardware is x86_64 (AMD) — `linux/amd64` is therefore the primary
+# platform. `linux/arm64` is published alongside for Apple Silicon / AWS Graviton
+# developers who use the same chart in dev.
+#
+# We pin `BUILDPLATFORM` on `FROM` so that the build itself always runs on the
+# buildx native architecture (avoids QEMU emulation for the bulk `apt-get` /
+# `npm ci` steps), then use `TARGETARCH` / `TARGETOS` only when an architecture-
+# specific step is needed. Today the runtime is pure JavaScript and has no
+# native KTX binaries, so `TARGETARCH` is exposed for future native deps.
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim
 
 ARG KTX_VERSION=0.16.0
+# TARGETARCH is exposed so future architecture-specific steps (e.g. fetching a
+# KTX binary release) can branch on it without changing the rest of the file.
+ARG TARGETARCH=amd64
 
 ENV NODE_ENV=production \
     LUCY_BUNDLED_KTX_VERSION=${KTX_VERSION} \
