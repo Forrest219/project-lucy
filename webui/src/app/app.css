@@ -22,6 +22,9 @@
   --token-color-primary-fg: #ffffff;
   --token-color-accent: #3c83f6;
   --token-color-brand: #ff5a3d;
+  --token-color-brand-soft: #fff0ec;
+  --token-color-nav-active-bg: #fff0ec;
+  --token-color-nav-active-marker: #ff5a3d;
   --token-color-danger: #ef4444;
   --token-color-warning: #ff8f1f;
   --token-color-warning-soft: #fff7ed;
@@ -82,6 +85,10 @@
   --radius-pill: var(--token-radius-pill);
   --shadow-card: var(--token-shadow-card);
 
+  --color-brand-soft: var(--token-color-brand-soft);
+  --color-nav-active-bg: var(--token-color-nav-active-bg);
+  --color-nav-active-marker: var(--token-color-nav-active-marker);
+
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "PingFang SC",
     "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas,
@@ -98,29 +105,255 @@
 
 @layer components {
   /* shell + 主布局 */
-  .pl-app-shell { @apply grid min-h-screen grid-cols-[216px_minmax(0,1fr)] bg-bg-base text-fg-body; }
+  /* M60 Sidebar Brand Navigation Polish: widen sidebar from 216px → 248px so
+     the brand mark, search entry and chinese group titles have breathing
+     room. The shell grid keeps `[sidebar main]` so PageHeader + body
+     layouts are not touched. */
+  .pl-app-shell { @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] bg-bg-base text-fg-body; }
   .pl-sidebar { @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r border-border-default bg-bg-surface px-3 py-4; }
-  .pl-nav { @apply grid min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pb-3; }
+  /* M-Next sidebar scrollbar: 让 .pl-nav 在分组全展开、内容超过 viewport
+   * 而 nav 可滚动时,滚动条本身始终可见,避免用户把"nav 可滚"误读为
+   * "内容被截断/footer 遮挡" (UX-OVERVIEW-007)。
+   * scrollbar-width / scrollbar-color 覆盖 Firefox + 现代 Chromium;
+   * ::-webkit-scrollbar 兜底 Chrome / Safari。thumb 用 border-default,
+   * hover 时升级到 fg-muted,与现有 sidebar 配色节奏保持一致。
+   * track 透明,避免在 px-3 容器内出现额外的"第二条边"。 */
+  .pl-nav { @apply grid min-h-0 flex-1 content-start gap-2 overflow-x-hidden overflow-y-auto pb-3; scrollbar-width: thin; scrollbar-color: var(--color-border-default) transparent; }
+  .pl-nav::-webkit-scrollbar { width: 6px; height: 6px; }
+  .pl-nav::-webkit-scrollbar-track { background: transparent; }
+  .pl-nav::-webkit-scrollbar-thumb { background-color: var(--color-border-default); border-radius: var(--token-radius-pill); }
+  .pl-nav:hover::-webkit-scrollbar-thumb { background-color: var(--color-fg-muted); }
   .pl-nav-section { @apply mb-3; }
   .pl-nav-section--top { @apply border-b border-border-default pb-3; }
-  .pl-nav-section-title { @apply mb-1 px-4 py-[7px] text-sm font-semibold text-fg-strong; }
-  .pl-nav-link { @apply flex min-h-10 items-center gap-2 rounded-xl px-3 py-0 pl-7 text-sm font-normal text-fg-body no-underline transition-colors; }
+  /* M60: group title is now a button (collapsible). Inherit font weight
+     from the previous heading variant but strip default <h2> margins and
+     make sure focus rings render in line with the button itself.
+     M61: drop `uppercase tracking-wider` (it never belonged to Chinese
+     titles) and align the font size with the second-level items so the
+     sidebar reads as a single 14px rhythm; hierarchy now comes from
+     color, hover bg, and indentation, not from size jumps. */
+  .pl-nav-section-title-button {
+    @apply mb-0.5 flex w-full items-center gap-1.5 rounded-md px-3 py-[7px] text-left text-sm font-semibold text-fg-muted transition-colors;
+  }
+  .pl-nav-section-title-button:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-nav-section-title-button:focus-visible {
+    @apply outline-none ring-2 ring-primary;
+  }
+  /* M60: chevron rotates to express the open / closed state of a group.
+     M61: size now matches the second-level items (16px) so the rhythm
+     stays consistent. */
+  .pl-nav-section-chevron {
+    @apply ml-auto text-fg-subtle transition-transform;
+  }
+  .pl-nav-section-chevron[data-open="true"] {
+    transform: rotate(90deg);
+  }
+  /* UX-GLOBAL-SHELL-006: children sit on an inset rail so the parent /
+     child relationship is visible through geometry, not only weight. The
+     child text starts about 18px to the right of group title text on the
+     248px sidebar. */
+  .pl-nav-group-items {
+    @apply grid gap-0.5 pl-4;
+  }
+  /* M60: nav link gets a left brand marker reserved for the active state.
+     M61: text-sm (14px) matches the group title above so the sidebar
+     rhythm is uniform; the active marker + slight indent still convey
+     "this is the focused row". */
+  .pl-nav-link { @apply relative flex min-h-9 items-center gap-2 rounded-md py-0 pl-4 pr-3 text-sm font-normal text-fg-body no-underline transition-colors; }
+  .pl-nav-link--child {
+    @apply pl-3 pr-2;
+  }
   .pl-nav-link:hover { @apply bg-bg-muted text-fg-default; }
-  .pl-nav-link--active { @apply bg-bg-selected text-fg-body font-medium; }
-  .pl-brand-block { @apply mb-6 grid gap-0.5 px-4; }
-  .pl-brand-block strong { @apply text-base font-semibold; }
+  /* M61: active link keeps the soft brand background + 3px brand marker
+     on the leading edge (spec §4.3). font weight 500 keeps the label
+     readable without fighting the marker. */
+  .pl-nav-link--active {
+    @apply bg-nav-active-bg font-medium text-fg-default;
+  }
+  .pl-nav-link--active::before {
+    content: "";
+    position: absolute;
+    left: -3px;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--token-color-nav-active-marker, var(--token-color-brand));
+  }
+  .pl-nav-link:focus-visible {
+    @apply outline-none ring-2 ring-primary;
+  }
+  /* M60: brand block now leads with a logo mark + wordmark; the tagline
+     stays a single, non-translating line so the wider sidebar can carry it
+     without ellipsis.
+     M61: brand block is a clickable link to /overview. `display: grid` is
+     reset to keep it inline-flex safe, focus-visible ring mirrors the rest
+     of the sidebar, and the text column gets a fixed width so the two
+     brand lines stay visually aligned regardless of the logo glyph. */
+  .pl-brand-block {
+    @apply mb-4 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-3 py-1.5 no-underline transition-colors;
+  }
+  .pl-brand-block:hover {
+    @apply bg-bg-muted;
+  }
+  .pl-brand-block:focus-visible {
+    @apply outline-none ring-2 ring-primary;
+  }
+  .pl-brand-mark {
+    @apply flex h-9 w-9 items-center justify-center rounded-md bg-nav-active-bg text-base font-semibold text-brand;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  /* M61: fixed text column width makes `Lucy WebUI` and the Chinese tagline
+     share the same right edge. 152px leaves room for the 36px mark + 8px
+     gap inside the padded 248px sidebar without squeezing the grid. */
+  .pl-brand-text {
+    @apply grid min-w-0 gap-0.5;
+    width: 152px;
+  }
+  .pl-brand-title {
+    @apply text-[14px] font-semibold leading-none text-fg-default;
+    /* Slight positive tracking tightens the wordmark with the Chinese
+       tagline so both lines end on roughly the same pixel. */
+    letter-spacing: 0.01em;
+  }
   .pl-brand-block .pl-brand-tagline {
     display: block;
     font-size: 0.72rem;
-    color: #64748b;
+    color: var(--token-color-fg-muted, #6b7280);
     margin-top: 1px;
-    /* v1.9.x 收口：240px 侧栏宽度下不截断、不折行。 */
+    /* 248px sidebar: tagline now fits without ellipsis. */
     white-space: nowrap;
-    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .pl-sidebar-footer { @apply relative z-10 mt-4 grid shrink-0 gap-2 border-t border-border-default bg-bg-surface px-4 pt-4; }
+  /* M60: search / command entry sits under the brand block and exposes the
+     ⌘ K shortcut on the right.
+     M65: switch default background to transparent so the trigger sits flush
+     with the sidebar surface instead of reading as a floating card. Hover and
+     focus remain the affordance surface (muted bg + stronger border), and
+     focus keeps the primary ring for keyboard a11y. Token names reuse the
+     existing `--color-border-default` / `--color-border-strong` / `bg-bg-muted`
+     trio; no new custom variables introduced. */
+  .pl-sidebar-search {
+    @apply mb-3 px-3;
+  }
+  .pl-sidebar-search-button {
+    @apply flex w-full items-center gap-2 rounded-md border border-border-default bg-transparent px-2.5 py-1.5 text-left text-xs text-fg-muted transition-colors;
+  }
+  .pl-sidebar-search-button:hover { @apply border-border-strong bg-bg-muted text-fg-default; }
+  .pl-sidebar-search-button:focus-visible {
+    @apply border-border-strong bg-bg-muted text-fg-default outline-none ring-2 ring-primary;
+  }
+  .pl-sidebar-search-shortcut {
+    @apply ml-auto inline-flex items-center gap-1 rounded-sm border border-border-default bg-bg-muted px-1.5 py-0.5 font-mono text-[10px] text-fg-muted;
+  }
+  /* M61: command palette — search-style dialog with a quiet default state.
+     Overlay is soft (no full blackout) and lightly blurred so the workspace
+     stays visible behind. Content is wider and more rounded than M60 to
+     mirror the system search box shown in the design reference. */
+  .pl-command-palette-overlay {
+    @apply fixed inset-0 z-50 bg-black/20 backdrop-blur-sm;
+  }
+  .pl-command-palette-content {
+    @apply fixed left-1/2 top-[12%] z-50 grid w-[min(760px,calc(100vw-32px))] -translate-x-1/2 gap-2 rounded-2xl border border-border-default bg-bg-elevated p-2 shadow-card;
+  }
+  /* M61: input row carries the search glyph on the left and the ESC
+     keycap on the right; the input itself is borderless so the row
+     reads as a single search surface rather than a form field. */
+  .pl-command-palette-search {
+    @apply flex items-center gap-2 rounded-xl border border-border-default bg-bg-surface px-3 py-2.5;
+  }
+  .pl-command-palette-input {
+    @apply w-full border-0 bg-transparent text-[14px] text-fg-default outline-none;
+    /* Keep the focus halo inside the search row only — no second ring. */
+    box-shadow: none;
+  }
+  .pl-command-palette-input::placeholder {
+    @apply text-fg-muted;
+  }
+  .pl-command-palette-input:focus-visible {
+    @apply outline-none;
+  }
+  .pl-command-palette-esc-keycap {
+    @apply inline-flex h-6 items-center rounded-md border border-border-default bg-bg-muted px-1.5 font-mono text-[10px] font-medium tracking-wider text-fg-muted;
+  }
+  .pl-command-palette-list {
+    @apply grid max-h-[55vh] gap-1 overflow-y-auto px-1 pb-1;
+  }
+  .pl-command-palette-hint {
+    @apply rounded-md px-3 py-6 text-center text-sm text-fg-muted;
+  }
+  .pl-command-palette-group-title {
+    @apply px-3 pt-2 pb-1 text-[11px] font-medium text-fg-muted;
+  }
+  /* M70 command palette result context: page-search-result layout.
+     Each result is a small card with breadcrumb / title / description.
+     The active background now covers the whole row (not just the label),
+     and the input + result regions read as one continuous search surface.
+     The pre-M70 two-line layout (`grid-cols-[minmax(0,1fr)_auto]` +
+     right-side group meta span) is replaced below; the legacy
+     `.pl-command-palette-item-meta` selector was removed entirely because
+     the route hint is now a single shared muted monospace span rather than
+     a per-item group label. */
+  .pl-command-palette-item[data-active="true"] {
+    @apply bg-bg-selected;
+  }
+  .pl-command-palette-empty {
+    @apply grid gap-1 rounded-md px-3 py-6 text-center text-sm text-fg-muted;
+  }
+  /* M70 command palette result context: page-search-result layout.
+     Each result is a small card with breadcrumb / title / description.
+     The active background now covers the whole row (not just the label),
+     and the input + result regions read as one continuous search surface. */
+  .pl-command-palette-list {
+    /* Subtle separator between the input row and the results region. The
+       top border sits on the list itself so the rounded-xl search row
+       above stays a single visual element. */
+    @apply border-t border-border-default pt-1;
+    gap: 2px;
+  }
+  .pl-command-palette-item {
+    /* Three-line layout: breadcrumb / title row (label + route hint) /
+       description. The label is still the dominant line; breadcrumb and
+       description sit above and below it. Active state fills the whole row. */
+    @apply grid w-full grid-cols-1 items-start gap-0.5 rounded-md px-3 py-2 text-left transition-colors;
+    min-height: 72px;
+  }
+  .pl-command-palette-breadcrumb {
+    @apply flex flex-wrap items-center gap-1 text-[11px] leading-tight text-fg-muted;
+  }
+  .pl-command-palette-breadcrumb-sep {
+    @apply text-fg-muted/70;
+  }
+  .pl-command-palette-breadcrumb-crumb {
+    @apply inline-flex items-center;
+  }
+  .pl-command-palette-title-row {
+    @apply flex min-w-0 items-center justify-between gap-3;
+  }
+  .pl-command-palette-item-label {
+    @apply truncate text-[14px] font-semibold leading-tight text-fg-default;
+  }
+  .pl-command-palette-route-hint {
+    @apply shrink-0 font-mono text-[11px] leading-tight text-fg-muted;
+  }
+  .pl-command-palette-item-description {
+    @apply truncate text-[12px] leading-snug text-fg-muted;
+  }
+  /* M70: highlight uses brand text color + medium weight so the match is
+     obvious without disrupting row height or pulling focus with a heavy
+     background block. */
+  .pl-command-palette-highlight {
+    @apply rounded-sm bg-transparent px-0.5 font-semibold text-fg-default;
+    /* Slight underline so the hit reads as "this substring matched".
+       No background fill — the goal is to call out, not to paint. */
+    box-shadow: inset 0 -1px 0 0 currentColor;
+  }
+  .pl-command-palette-empty-suggestion {
+    @apply text-[12px] text-fg-muted/80;
+  }
+  .pl-sidebar-footer { @apply relative z-10 mt-4 grid shrink-0 gap-2 border-t border-border-default bg-bg-surface px-3 pt-4; }
   .pl-sidebar-utility { @apply grid gap-1; }
   .pl-sidebar-help-link {
     @apply flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium text-fg-body no-underline transition-colors;
@@ -458,7 +691,7 @@
   .pl-data-grid tbody tr:hover { @apply bg-bg-muted; }
   .pl-catalog-table { min-width: 0; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
-  .pl-catalog-table-name-link { @apply text-sm font-medium text-fg-default no-underline hover:underline; }
+  .pl-catalog-table-name-link { @apply text-sm font-normal text-fg-default no-underline hover:underline; }
   .pl-catalog-table-structure { @apply whitespace-nowrap text-xs text-fg-muted; }
   .pl-catalog-table-agents { @apply text-sm text-fg-default tabular-nums; }
   .pl-catalog-table-updated { @apply whitespace-nowrap text-xs text-fg-default tabular-nums; }
@@ -825,7 +1058,7 @@
   .pl-table-group { @apply grid gap-2; }
   /* Heading element inside the group section (kept for backward-compat with
      diagnostic blocks like the missing-Manifest card). */
-  .pl-table-group-heading { @apply text-xs font-semibold tracking-wider text-fg-muted uppercase; }
+  .pl-table-group-heading { @apply text-xs font-semibold tracking-wider text-fg-muted; }
   /* Lightweight group header row inside the unified <table>; sits at the top
      of each <tbody> with a subdued background and no top border. */
   .pl-table-group-row {
@@ -1236,6 +1469,36 @@
   .pl-audit-detail { @apply border-b border-border-default bg-bg-muted; }
   .pl-audit-detail-grid { @apply grid gap-2 text-xs; }
   .pl-audit-detail-grid code { @apply break-all rounded bg-bg-base px-2 py-1 font-mono; }
+  .pl-trace-detail-overlay { @apply fixed inset-0 z-40 bg-fg-default/40 backdrop-blur-sm; }
+  .pl-trace-detail-content {
+    @apply fixed right-0 top-0 z-50 grid h-full w-[min(640px,90vw)] gap-4 overflow-auto border-l border-border-default bg-bg-surface p-5 shadow-card;
+  }
+  .pl-trace-detail-header { @apply grid gap-2; }
+  .pl-trace-detail-title { @apply break-all text-base font-semibold text-fg-default font-mono; }
+  .pl-trace-detail-subtitle { @apply text-xs text-fg-muted; }
+  .pl-trace-detail-close { @apply justify-self-end; }
+  .pl-trace-detail-section { @apply grid gap-2 border-t border-border-default pt-3; }
+  .pl-trace-detail-section-title { @apply text-xs font-semibold uppercase tracking-wide text-fg-muted; }
+  .pl-trace-detail-span { @apply grid gap-2 rounded-md border border-border-default bg-bg-base p-3 text-xs; }
+  .pl-trace-detail-span-root { @apply rounded-md border border-accent/40 bg-accent/5 p-3 text-xs; }
+  .pl-trace-detail-span-header { @apply flex flex-wrap items-center gap-2; }
+  .pl-trace-detail-span-type { @apply font-mono font-semibold; }
+  .pl-trace-detail-policy { @apply grid gap-1 rounded border border-border-default bg-bg-muted p-2; }
+  .pl-trace-detail-policy-allowed { @apply font-semibold text-success; }
+  .pl-trace-detail-policy-denied { @apply font-semibold text-danger; }
+  .pl-trace-detail-policy-row { @apply grid grid-cols-[80px_1fr] gap-2; }
+  .pl-trace-detail-policy-key { @apply text-fg-muted; }
+  .pl-trace-detail-policy-value { @apply break-all font-mono; }
+  .pl-trace-detail-meta-grid { @apply grid grid-cols-[minmax(80px,max-content)_1fr] gap-x-2 gap-y-1; }
+  .pl-trace-detail-meta-key { @apply text-fg-muted; }
+  .pl-trace-detail-meta-value { @apply break-all font-mono; }
+  .pl-trace-detail-meta-redacted { @apply inline-flex items-center rounded bg-warning/10 px-1.5 py-0.5 font-mono text-warning; }
+  .pl-trace-detail-hash { @apply inline-flex items-center gap-1 rounded bg-bg-muted px-1.5 py-0.5 font-mono; }
+  .pl-trace-detail-evidence-group { @apply grid gap-1; }
+  .pl-trace-detail-evidence-row { @apply grid grid-cols-[minmax(120px,max-content)_minmax(80px,max-content)_1fr] gap-2 rounded bg-bg-muted px-2 py-1 text-xs; }
+  .pl-trace-detail-evidence-kind { @apply font-mono font-medium; }
+  .pl-trace-detail-evidence-relation { @apply text-fg-muted; }
+  .pl-trace-detail-evidence-ref { @apply break-all font-mono; }
 
   /* 关联关系 */
   .pl-join-row { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3 md:grid-cols-[1fr_2fr_auto_auto]; }
@@ -1328,7 +1591,7 @@
   /* Wiki sidebar: compact, with explicit directory/document actions. */
   .pl-wiki-sidebar { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto; }
   .pl-wiki-sidebar-header { @apply flex items-center justify-between gap-2; }
-  .pl-wiki-sidebar-title { @apply text-base font-semibold; }
+  .pl-wiki-sidebar-title { @apply text-base font-medium; }
   .pl-wiki-sidebar-actions { @apply flex items-center gap-1; }
   .pl-wiki-sidebar-action {
     @apply inline-flex size-7 shrink-0 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-fg-muted;
@@ -1381,33 +1644,47 @@
 
   /* Library home: the neutral /wiki entrypoint before a document is selected. */
   .pl-wiki-library-home { @apply grid content-start gap-3 self-start; }
-  .pl-wiki-library-hero {
-    @apply flex flex-wrap items-start justify-between gap-4 rounded-md border border-border-default bg-bg-surface px-4 py-3;
+  .pl-wiki-library-summary {
+    @apply text-sm text-fg-muted;
   }
-  .pl-wiki-library-copy { @apply grid max-w-2xl gap-1; }
-  .pl-wiki-library-kicker { @apply text-xs font-semibold uppercase text-fg-muted; }
-  .pl-wiki-library-title { @apply text-lg font-semibold text-fg-default; }
-  .pl-wiki-library-description { @apply text-sm text-fg-muted; }
-  .pl-wiki-library-actions { @apply flex flex-wrap items-center gap-2; }
-  .pl-wiki-library-empty { @apply grid gap-3 rounded-md border border-border-default bg-bg-subtle p-4 text-sm text-fg-muted; }
-  .pl-wiki-library-groups { @apply grid gap-2; }
-  .pl-wiki-library-group { @apply grid gap-2 rounded-md border border-border-default bg-bg-surface p-3; }
-  .pl-wiki-library-group-header { @apply flex items-center gap-2; }
-  .pl-wiki-library-folder-icon { @apply text-xs text-fg-muted; }
-  .pl-wiki-library-group-title { @apply text-sm font-semibold text-fg-default; }
-  .pl-wiki-library-count { @apply ml-auto rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
-  .pl-wiki-library-list { @apply grid list-none gap-1 p-0 m-0 sm:grid-cols-2; }
-  .pl-wiki-library-children { @apply grid gap-2 pl-4; }
-  .pl-wiki-library-item { @apply min-w-0; }
-  .pl-wiki-library-item-button {
-    @apply grid w-full grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-sm px-2 py-2 text-left hover:bg-bg-muted;
+  .pl-wiki-library-summary strong { @apply font-medium text-fg-default; }
+  .pl-wiki-library-documents {
+    @apply grid list-none gap-1.5 p-0 m-0;
+  }
+  .pl-wiki-library-document { @apply min-w-0; }
+  .pl-wiki-library-document-button {
+    @apply grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border border-transparent bg-bg-surface px-2 py-1.5 text-left transition hover:border-border-default hover:bg-bg-muted;
   }
   .pl-wiki-library-md-icon {
-    @apply inline-flex items-center rounded-sm border border-border-default bg-bg-muted px-1.5 py-0.5 font-mono text-[10px] text-fg-muted;
+    @apply inline-flex h-5 items-center rounded-sm border border-border-default bg-bg-muted px-1.5 font-mono text-[10px] uppercase text-fg-muted;
   }
-  .pl-wiki-library-item-main { @apply grid min-w-0 gap-0.5; }
-  .pl-wiki-library-item-title { @apply truncate text-sm font-medium text-fg-default; }
-  .pl-wiki-library-item-path { @apply truncate font-mono text-xs text-fg-muted; }
+  .pl-wiki-library-document-main { @apply grid min-w-0 gap-0.5; }
+  .pl-wiki-library-document-title { @apply truncate text-sm font-medium text-fg-default; }
+  .pl-wiki-library-document-path {
+    @apply truncate font-mono text-xs text-fg-muted;
+  }
+  /* Legacy rules kept for any external reference that still queries the old
+     library-group test ids; they no longer participate in rendering. */
+  .pl-wiki-library-hero { display: none; }
+  .pl-wiki-library-copy { display: none; }
+  .pl-wiki-library-kicker { display: none; }
+  .pl-wiki-library-title { display: none; }
+  .pl-wiki-library-description { display: none; }
+  .pl-wiki-library-actions { display: none; }
+  .pl-wiki-library-empty { @apply grid gap-3 rounded-md border border-border-default bg-bg-subtle p-4 text-sm text-fg-muted; }
+  .pl-wiki-library-groups { display: none; }
+  .pl-wiki-library-group { display: none; }
+  .pl-wiki-library-group-header { display: none; }
+  .pl-wiki-library-folder-icon { display: none; }
+  .pl-wiki-library-group-title { display: none; }
+  .pl-wiki-library-count { display: none; }
+  .pl-wiki-library-list { display: none; }
+  .pl-wiki-library-children { display: none; }
+  .pl-wiki-library-item { display: none; }
+  .pl-wiki-library-item-button { display: none; }
+  .pl-wiki-library-item-main { display: none; }
+  .pl-wiki-library-item-title { display: none; }
+  .pl-wiki-library-item-path { display: none; }
 
   /* Read Mode: compact business document surface. */
   .pl-wiki-read-view { @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
@@ -1524,6 +1801,37 @@
     @apply mt-2 max-h-[280px] overflow-auto rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs;
   }
   .pl-wiki-preflight-actions { @apply flex flex-wrap items-center justify-end gap-2; }
+
+  /* M64: scoped summary / target rules for the upload preflight.
+     Rules carry the dedicated `pl-wiki-upload-*` prefix so save / move /
+     restore prefights using `.pl-wiki-preflight-*` stay untouched. */
+  .pl-wiki-preflight-target-list { @apply m-0 p-0; }
+  .pl-wiki-preflight-target-row { @apply grid items-baseline gap-x-3 gap-y-1; }
+  .pl-wiki-preflight-summary-list {
+    @apply grid list-none gap-1.5 p-0 m-0;
+  }
+  .pl-wiki-preflight-summary-row {
+    @apply grid items-baseline gap-x-3 gap-y-1;
+    grid-template-columns: minmax(96px, 128px) minmax(0, 1fr);
+  }
+  .pl-wiki-preflight-summary-label { @apply text-xs font-normal text-fg-muted; }
+  .pl-wiki-preflight-summary-value { @apply min-w-0 break-words text-sm text-fg-body; }
+  .pl-wiki-preflight-summary-value strong { @apply font-medium text-fg-default; }
+  .pl-wiki-preflight-summary-value--refs {
+    @apply flex flex-wrap items-center gap-1;
+  }
+  .pl-wiki-upload-target-path {
+    @apply inline-block max-w-full break-all rounded bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-default;
+  }
+  .pl-wiki-preflight-target-status {
+    @apply inline-flex w-fit items-center rounded-pill border px-2 py-0.5 text-xs font-medium;
+  }
+  .pl-wiki-preflight-target-status--create {
+    @apply border-success-strong bg-success-soft text-success-strong;
+  }
+  .pl-wiki-preflight-target-status--replace {
+    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  }
   .pl-wiki-version-content {
     width: min(1180px, 94vw);
   }
@@ -1578,11 +1886,12 @@
   .pl-wiki-tree-group { @apply grid gap-1; }
   .pl-wiki-tree-group-row { @apply flex min-w-0 items-center gap-1; }
   .pl-wiki-tree-group-toggle {
-    @apply flex min-w-0 flex-1 items-center gap-1 rounded-sm px-1 py-1 text-xs font-semibold text-fg-muted;
+    @apply flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded-sm px-1 py-1 text-xs font-medium text-fg-muted;
   }
   .pl-wiki-tree-group-toggle:hover { @apply text-fg-default; }
   .pl-wiki-tree-group-label { @apply min-w-0 truncate; }
-  .pl-wiki-tree-group-caret { @apply text-[10px] text-fg-muted; }
+  /* M64: triangle glyph removed; keep caret rule stubbed for any external selector. */
+  .pl-wiki-tree-group-caret { display: none; }
   .pl-wiki-tree-group-count {
     @apply ml-auto shrink-0 inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-1.5 py-0.5 text-[10px] font-medium text-fg-muted;
   }
@@ -1596,7 +1905,7 @@
   }
   .pl-wiki-tree-page-button:hover { @apply bg-bg-muted; }
   .pl-wiki-tree-page--active .pl-wiki-tree-page-button {
-    @apply bg-bg-selected text-fg-default font-semibold;
+    @apply bg-bg-selected text-fg-default font-medium;
   }
   .pl-wiki-tree-page-ext {
     @apply inline-flex items-center justify-center rounded-sm border border-border-default bg-bg-muted px-1.5 font-mono text-[10px] uppercase text-fg-muted;
@@ -1880,8 +2189,22 @@
   .pl-snapshot-card-label { @apply text-xs font-semibold tracking-wider text-fg-muted; }
   .pl-snapshot-card-value { @apply text-base font-semibold text-fg-default; }
   .pl-mcp-actions { @apply grid gap-3; }
+  /* M39 polish v2: "Endpoint" 之前是 span 上的灰底 pill（M39 把 label
+   * 包成 tag 用），但视觉上只有 label 被覆盖，"：" 与 URL 落在白底
+   * 上看起来像两块。这里把整段统一为同一个灰底块，让用户一眼把
+   * "Endpoint: http://..." 当成一个完整信息条读；同时去掉 span 自
+   * 身的边框/底色，避免在容器内再次叠加产生双层效果。
+   *
+   * 列向 gap 收敛为 0，让 label 与冒号紧贴；冒号 span 自带 mr-1 (4px)
+   * 撑出 ":" 与 URL 之间的自然间距，最终视觉为 "Endpoint: url"。 */
+  .pl-onboarding-facts--endpoint {
+    @apply gap-x-0 rounded-md border border-border-default bg-bg-muted px-2 py-0.5;
+  }
   .pl-onboarding-facts--endpoint span {
-    @apply rounded-md;
+    @apply rounded-none border-transparent bg-transparent px-0 py-0;
+  }
+  .pl-onboarding-facts--endpoint span[aria-hidden="true"] {
+    @apply mr-1;
   }
   .pl-code-snippet--drawer { @apply max-h-72 overflow-auto rounded-md border border-border-default bg-bg-base p-3; }
   .pl-code-snippet--drawer code { @apply whitespace-pre-wrap break-all text-xs leading-relaxed; }

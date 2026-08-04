@@ -114,6 +114,8 @@ export function WikiTree({
     const isCollapsed = search.trim() ? false : collapsed[node.path] ?? false;
     const key = node.path || "__root__";
     const label = node.name || "根目录";
+    const toggleLabel = isCollapsed ? `展开 ${label} 目录` : `收起 ${label} 目录`;
+    const toggleAriaLabel = `${label} ${node.documentCount} 篇，${isCollapsed ? "展开目录" : "收起目录"}`;
     return (
       <li
         className="pl-wiki-tree-group"
@@ -127,13 +129,14 @@ export function WikiTree({
           style={{ paddingLeft: `${Math.max(level, 0) * 12}px` }}
         >
           <button
+            aria-expanded={!isCollapsed}
+            aria-label={toggleAriaLabel}
             className="pl-wiki-tree-group-toggle"
+            data-testid="wiki-tree-group-toggle"
             onClick={() => toggleDirectory(node.path)}
+            title={toggleLabel}
             type="button"
           >
-            <span className="pl-wiki-tree-group-caret" aria-hidden>
-              {isCollapsed ? "▶" : "▼"}
-            </span>
             <span className="pl-wiki-tree-group-label notranslate" translate="no">
               {label}
             </span>

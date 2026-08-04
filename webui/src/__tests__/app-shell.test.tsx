@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
 import { PageHeader } from "../components/PageHeader";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
@@ -125,8 +125,15 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  window.localStorage.clear();
   lastOnboardingLocation = null;
   lastTableEditorLocation = null;
+});
+
+beforeEach(() => {
+  // M60: each test starts from a clean collapsible-state localStorage so a
+  // stray value from a previous test never leaks into the auto-expand logic.
+  window.localStorage.clear();
 });
 
 describe("AppFrame shell", () => {
@@ -229,10 +236,17 @@ describe("AppFrame shell", () => {
   });
 
   it("exposes each 5+1 navigation group heading exactly once", () => {
+    // M60 Sidebar Brand Navigation Polish: group titles are now collapsible
+    // <button>s with `aria-expanded`, not <h2>s. There must still be one
+    // titled button per group so the sidebar reads as 5 sections.
     renderAt("/overview");
     const groupTitles = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理"];
     for (const title of groupTitles) {
-      expect(screen.getAllByRole("heading", { name: title })).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: title })).toHaveLength(1);
+    }
+    // Guard against the heading flavor silently coming back.
+    for (const title of groupTitles) {
+      expect(screen.queryByRole("heading", { name: title })).not.toBeInTheDocument();
     }
   });
 
@@ -246,13 +260,42 @@ describe("AppFrame shell", () => {
   });
 
   it("labels the system overview entry as the runtime control plane", () => {
+    // M61: brand block is now a Link to /overview with copy
+    // `Lucy WebUI` + `Data Agent 运维控制台`. Bare `Lucy` (the M60 wordmark)
+    // and the legacy `Lucy WebUI` Product-Placement rewrite must not
+    // silently come back, and the KTX brand must stay banned.
     renderAt("/overview");
     expect(screen.getByText("Lucy WebUI")).toBeInTheDocument();
+    expect(screen.getByText("Data Agent 运维控制台")).toBeInTheDocument();
     expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运行状态" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "系统概览" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByText("部署向导")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "上线检查" })).not.toBeInTheDocument();
+  });
+
+  it("makes the brand block a clickable link back to /overview", () => {
+    // M61 Brand Link: clicking the logo/title anywhere on the brand block
+    // must navigate back to /overview. The accessible name is the explicit
+    // `返回系统概览` so screen-reader users get a single, meaningful label
+    // regardless of the logo mark glyph.
+    renderAt("/connections");
+    const brandLink = screen.getByRole("link", { name: "返回系统概览" });
+    expect(brandLink).toHaveAttribute("href", "/overview");
+    // The visible brand copy must live INSIDE this same link so a single
+    // click on either the mark or the wordmark navigates.
+    const brandBlock = screen.getByTestId("sidebar-brand");
+    expect(brandBlock).toBe(brandLink);
+    expect(within(brandLink).getByText("Lucy WebUI")).toBeInTheDocument();
+    expect(within(brandLink).getByText("Data Agent 运维控制台")).toBeInTheDocument();
+  });
+
+  it("does not expose the decorative logo glyph in the brand link's accessible name", () => {
+    // M61: aria-label is the single source of truth for the brand link so
+    // screen readers don't read `L · Lucy WebUI Data Agent 运维控制台`.
+    renderAt("/overview");
+    const brandLink = screen.getByRole("link", { name: "返回系统概览" });
+    expect(brandLink).not.toHaveAccessibleName(/^L\s/);
   });
 
   it("renders only the Chinese brand tagline (no English duplicate) in the brand block", () => {
@@ -273,13 +316,17 @@ describe("AppFrame shell", () => {
   it("renders the M34 5+1 lifecycle sidebar shape with renamed second-level items", () => {
     renderAt("/");
 
+    // M60: group titles are buttons, not headings.
     const groups = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理"];
     for (const group of groups) {
-      expect(screen.getByRole("heading", { name: group })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: group })).toBeInTheDocument();
     }
 
     const overviewLink = screen.getByRole("link", { name: "系统概览" });
     expect(overviewLink).toBeInTheDocument();
+    // 系统概览 is a sibling link inside the top section, not wrapped by a
+    // nav-section-title element (that class only exists for the group
+    // button variant now).
     expect(overviewLink.closest(".pl-nav-section")?.querySelector(".pl-nav-section-title")).toBeNull();
 
     for (const title of ["运行状态", "语义层维护", "业务文档", "数据库接入"]) {
@@ -385,5 +432,95 @@ describe("AppFrame shell", () => {
     expect(screen.queryByRole("link", { name: "添加架构" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "上传报价包" })).not.toBeInTheDocument();
     assertNoForbiddenTerms(document.body);
+  });
+
+  describe("M60 sidebar brand + navigation polish", () => {
+    it("renders the sidebar search / command entry with the ⌘ K shortcut hint", () => {
+      renderAt("/overview");
+      const trigger = screen.getByTestId("sidebar-search-trigger");
+      expect(trigger).toHaveAttribute("aria-label", expect.stringContaining("命令面板"));
+      expect(trigger).toHaveTextContent("搜索页面和导航入口");
+      expect(trigger).toHaveTextContent("⌘ K");
+    });
+
+    it("auto-expands the sidebar group that owns the current route", () => {
+      renderAt("/admin/agents");
+      const group = screen.getByTestId("nav-group-governance");
+      expect(group).toHaveAttribute("data-open", "true");
+      expect(screen.getByRole("button", { name: "访问治理" })).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("link", { name: "Agent 实例" })).toBeVisible();
+    });
+
+    it("hides a group's children when the user collapses it and restores them on toggle", () => {
+      renderAt("/overview");
+      const toggle = screen.getByTestId("nav-group-toggle-publish");
+      const group = screen.getByTestId("nav-group-publish");
+
+      // Starts open because no route belongs to the publish group.
+      expect(group).toHaveAttribute("data-open", "true");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+      fireEvent.click(toggle);
+      expect(group).toHaveAttribute("data-open", "false");
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.getByTestId("nav-group-items-publish")).not.toBeVisible();
+
+      fireEvent.click(toggle);
+      expect(group).toHaveAttribute("data-open", "true");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("link", { name: "发布工作台" })).toBeVisible();
+    });
+
+    it("persists collapsed group state across mounts in a versioned localStorage key", () => {
+      renderAt("/overview");
+      fireEvent.click(screen.getByTestId("nav-group-toggle-publish"));
+      expect(window.localStorage.getItem("lucy.sidebar.collapsedGroups.v1")).toContain("publish");
+
+      cleanup();
+
+      // Re-mount on an unrelated route — the publish group must remain
+      // collapsed because the user previously chose to hide it.
+      renderAt("/connections");
+      expect(screen.getByTestId("nav-group-publish")).toHaveAttribute("data-open", "false");
+    });
+
+    it("re-expands a collapsed group when the user navigates to a route inside it", () => {
+      renderAt("/overview");
+      fireEvent.click(screen.getByTestId("nav-group-toggle-evaluation"));
+      expect(screen.getByTestId("nav-group-evaluation")).toHaveAttribute("data-open", "false");
+
+      cleanup();
+      renderAt("/eval/cases");
+      const evaluationGroup = screen.getByTestId("nav-group-evaluation");
+      expect(evaluationGroup).toHaveAttribute("data-open", "true");
+      expect(screen.getByRole("link", { name: "评测用例" })).toBeVisible();
+    });
+
+    it("keeps the active nav-link styling hook even after the brand polish", () => {
+      renderAt("/connections");
+      const link = screen.getByRole("link", { name: "连接概览" });
+      expect(link).toHaveClass("pl-nav-link", "pl-nav-link--active");
+      expect(link).toHaveAttribute("aria-current", "page");
+    });
+
+    it("keeps second-level navigation on a dedicated inset rail", () => {
+      renderAt("/connections");
+      const groupItems = screen.getByTestId("nav-group-items-connections");
+      const childLink = screen.getByRole("link", { name: "连接概览" });
+      const topLink = screen.getByRole("link", { name: "系统概览" });
+
+      expect(groupItems).toHaveClass("pl-nav-group-items");
+      expect(childLink).toHaveClass("pl-nav-link", "pl-nav-link--child", "pl-nav-link--active");
+      expect(topLink).toHaveClass("pl-nav-link");
+      expect(topLink).not.toHaveClass("pl-nav-link--child");
+    });
+
+    it("does not break the 系统手册 footer entry after the sidebar rewrite", () => {
+      renderAt("/overview");
+      const footer = screen.getByTestId("sidebar-footer");
+      const helpLink = within(footer).getByRole("link", { name: "打开系统手册" });
+      expect(helpLink).toHaveAttribute("href", "/help");
+      expect(helpLink).toHaveTextContent("系统手册");
+    });
   });
 });

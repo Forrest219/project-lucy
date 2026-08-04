@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Catalog } from "../pages/Catalog";
@@ -243,5 +244,65 @@ describe("Catalog density (M- Catalog table refactor)", () => {
 
     const failed = await screen.findByTestId("catalog-row-failed_table");
     expect(within(failed).getByText("校验失败").className).toContain("pl-status-validation_failed");
+  });
+});
+
+describe("Catalog table-name visual weight (M64)", () => {
+  it("renders the table-name link with normal text weight and translation defenses", async () => {
+    renderCatalog([
+      makeSummary({ table: "superstore_orders" }),
+      makeSummary({ table: "superstore_people" })
+    ]);
+
+    const ordersLink = await screen.findByTestId("catalog-row-edit-superstore_orders");
+    const peopleLink = await screen.findByTestId("catalog-row-edit-superstore_people");
+
+    for (const link of [ordersLink, peopleLink]) {
+      expect(link.className).toContain("pl-catalog-table-name-link");
+      expect(link).toHaveAttribute("translate", "no");
+      expect(link.className).toContain("notranslate");
+    }
+  });
+
+  it("downgrades the table-name link rule so it does not visually out-rank the structure column (M64)", () => {
+    // jsdom 不解析 @apply，因此只能读 CSS 源直接断言规则权重
+    const css = readFileSync("src/app/app.css", "utf8");
+    const linkRule = css.match(/\.pl-catalog-table-name-link\s*\{[^}]*\}/);
+    expect(linkRule).not.toBeNull();
+    // M64：表名 link 不再使用 font-medium / font-semibold，与正文同等级
+    expect(linkRule![0]).not.toMatch(/font-medium|font-semibold|font-bold/);
+    // 但必须保留 text-sm 与 hover underline
+    expect(linkRule![0]).toMatch(/text-sm/);
+    expect(linkRule![0]).toMatch(/hover:underline|no-underline/);
+
+    // 结构列继续走 muted 字体，不应被提到 medium
+    const structureRule = css.match(/\.pl-catalog-table-structure\s*\{[^}]*\}/);
+    expect(structureRule).not.toBeNull();
+    expect(structureRule![0]).not.toMatch(/font-medium|font-semibold/);
+
+    // thead 仍保留 font-semibold 作为列名层级（spec §5.2 允许）
+    expect(css).toMatch(/\.pl-data-grid thead th[\s\S]*?font-semibold/);
+  });
+});
+
+describe("Catalog connection & schema identifier casing (M62)", () => {
+  it("renders the connection/schema group heading with the original case from fixtures", async () => {
+    renderCatalog([makeSummary()]);
+
+    await screen.findByTestId("catalog-table");
+    const heading = screen.getByText("连接：mysql-aliyun · Schema：dataforai（共 1 张表）");
+    expect(heading).toBeInTheDocument();
+    expect(screen.queryByText(/MYSQL-ALIYUN/)).toBeNull();
+    expect(screen.queryByText(/DATAFORAI/)).toBeNull();
+  });
+
+  it("wraps the connection/schema group heading with notranslate defenses", async () => {
+    renderCatalog([makeSummary()]);
+
+    const headingText = await screen.findByText("连接：mysql-aliyun · Schema：dataforai（共 1 张表）");
+    const host = headingText.closest("[translate]");
+    expect(host).not.toBeNull();
+    expect(host!.getAttribute("translate")).toBe("no");
+    expect(host!.className).toContain("notranslate");
   });
 });

@@ -29,7 +29,7 @@ function agentReferenceLabel(count: number): string {
 }
 
 function groupLabel(conn: string, schema: string, count: number): string {
-  return `连接：${conn.toUpperCase()} · Schema：${schema.toUpperCase()}（共 ${count} 张表）`;
+  return `连接：${conn} · Schema：${schema}（共 ${count} 张表）`;
 }
 
 function slRefWikiHref(table: SourceSummary): string {

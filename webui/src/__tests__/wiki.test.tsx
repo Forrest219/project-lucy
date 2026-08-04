@@ -1230,13 +1230,18 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
 
     expect(screen.getByTestId("wiki-new-button")).toBeInTheDocument();
     expect(screen.getByTestId("wiki-upload-button")).toBeInTheDocument();
-    expect(await screen.findByTestId("wiki-library-home")).toHaveTextContent("Markdown 文档库");
+    // M64：hero 大标题文案移除，"Markdown 文档库" 退化为 aria-label
+    const home = await screen.findByTestId("wiki-library-home");
+    expect(home).toHaveAttribute("aria-label", "Markdown 文档库");
+    expect(home).toHaveTextContent("当前收录");
     expect(screen.getAllByRole("button", { name: "上传 Markdown" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "新建文档" })).toHaveLength(1);
     expect(screen.getByTestId("wiki-body")).toHaveClass("pl-wiki-body--library");
-    await waitFor(() => {
-      expect(screen.getByTestId("wiki-library-groups")).toHaveTextContent("1 篇");
-    });
+    // M64：右侧改为 Markdown 文档列表
+    const documents = await screen.findByTestId("wiki-library-documents");
+    expect(within(documents).getAllByTestId("wiki-library-document").length).toBeGreaterThan(0);
+    expect(home).toHaveTextContent("篇");
+    expect(screen.queryByTestId("wiki-library-groups")).not.toBeInTheDocument();
     expect(screen.queryByTestId("wiki-read-title")).not.toBeInTheDocument();
     expect(screen.getByTestId("wiki-layout")).not.toHaveAttribute("data-key");
   });
@@ -1250,8 +1255,10 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
       expect(within(tree).getByRole("button", { name: /ops\s*0\s*篇/ })).toBeInTheDocument();
     });
     expect(within(tree).getByRole("button", { name: /playbooks\s*0\s*篇/ })).toBeInTheDocument();
-    expect(await screen.findByTestId("wiki-library-groups")).toHaveTextContent("ops");
-    expect(screen.getByTestId("wiki-library-groups")).toHaveTextContent("0 篇");
+    // M64：右侧文档列表只展示 Markdown 文档；空目录只出现在左侧 tree
+    const documents = await screen.findByTestId("wiki-library-documents");
+    expect(documents).toBeInTheDocument();
+    expect(documents).not.toHaveTextContent("ops");
 
     fireEvent.change(within(tree).getByTestId("wiki-tree-search"), {
       target: { value: "playbooks" }
@@ -1784,5 +1791,107 @@ describe("Catalog table-level Wiki action", () => {
       "href",
       "/wiki?sl_ref=mysql-aliyun%2Fdataforai%2Fsuperstore_orders"
     );
+  });
+});
+
+describe("Wiki home and tree visual clarity (M64)", () => {
+  it("collapses the /wiki home hero to the statistics summary and renders a Markdown document list (M64)", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki");
+
+    const home = await screen.findByTestId("wiki-library-home");
+    // spec §7.1：去掉 hero 大标题文案，但保留"Markdown 文档库"作为 aria-label
+    expect(home).not.toHaveTextContent("按目录管理业务口径文档");
+    // 统计摘要文案仍然存在
+    expect(home).toHaveTextContent("当前收录");
+    expect(home).toHaveTextContent("篇 Markdown 文档");
+    expect(home).toHaveTextContent("个目录中");
+
+    // spec §7.2 + plan §Phase 5：右侧改为 Markdown 文档列表
+    const documents = await screen.findByTestId("wiki-library-documents");
+    expect(documents).toBeInTheDocument();
+    // 旧 testid 不再渲染
+    expect(screen.queryByTestId("wiki-library-groups")).not.toBeInTheDocument();
+
+    // 每一篇 Markdown 文档应有可见标题 + 完整 Wiki 路径 metadata
+    const items = within(documents).getAllByTestId("wiki-library-document");
+    expect(items.length).toBeGreaterThan(0);
+    const firstItem = items[0];
+    expect(within(firstItem).getByTestId("wiki-library-document-title").textContent).toMatch(
+      /\S+/
+    );
+    const path = within(firstItem).getByTestId("wiki-library-document-path");
+    expect(path.textContent).toMatch(/^wiki\/.+/);
+    // 翻译防御
+    expect(path).toHaveAttribute("translate", "no");
+    expect(path.className).toContain("notranslate");
+  });
+
+  it("does not render triangle or chevron glyphs anywhere in the /wiki home or sidebar (M64)", async () => {
+    vi.stubGlobal("fetch", buildFetchMock(NESTED_WIKI_PAGES));
+    renderWiki("/wiki");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    // 等 fetch mock 完成的实际目录组渲染
+    await waitFor(() => {
+      expect(within(tree).getAllByTestId("wiki-tree-group").length).toBeGreaterThan(0);
+    });
+
+    const body = document.body;
+    const text = body.textContent ?? "";
+    for (const glyph of ["▼", "▶", "▾", "▸"]) {
+      expect(text).not.toContain(glyph);
+    }
+
+    // 目录 row 仍然有可访问展开状态
+    const group = within(tree).getAllByTestId("wiki-tree-group")[0];
+    expect(group).toHaveAttribute("aria-expanded");
+    // toggle 行仍然可点击，且可聚焦按钮本身也暴露展开状态与可读名称
+    const toggle = within(group).getByTestId("wiki-tree-group-toggle");
+    expect(toggle.tagName).toBe("BUTTON");
+    expect(toggle).toHaveAttribute("aria-expanded", group.getAttribute("aria-expanded"));
+    expect(toggle).toHaveAccessibleName(/.+\s+\d+\s+篇，(收起目录|展开目录)/);
+  });
+
+  it("separates 目标目录 / 目标 Wiki 路径 / status badge in the upload preflight (M64)", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-upload-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    const file = new File(
+      ["# Body\n"],
+      "smoke.md",
+      { type: "text/markdown" }
+    );
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    const target = within(dialog).getByTestId("wiki-upload-target");
+
+    // 1) 目标 section 仍能区分 目标目录 input + 目标 Wiki 路径 preview
+    expect(within(target).getByTestId("wiki-upload-directory-input")).toBeInTheDocument();
+    expect(within(target).getByTestId("wiki-upload-target-path")).toBeInTheDocument();
+    expect(within(target).getByTestId("wiki-upload-target-path").textContent).toContain("wiki/");
+
+    // 2) 新建 / 覆盖状态使用稳定 badge testid
+    expect(within(target).getByTestId("wiki-upload-target-status")).toBeInTheDocument();
+
+    // 3) 解析摘要里 label / value class contract
+    const summary = within(dialog).getByTestId("wiki-upload-summary");
+    const summaryRows = ["source", "target", "existing", "title", "refs"] as const;
+    for (const key of summaryRows) {
+      const row = within(summary).getByTestId(`wiki-upload-summary-${key}`);
+      const dt = row.querySelector("dt");
+      const dd = row.querySelector("dd");
+      expect(dt).not.toBeNull();
+      expect(dd).not.toBeNull();
+      expect(dt!.className).toContain("pl-wiki-preflight-summary-label");
+      expect(dd!.className).toContain("pl-wiki-preflight-summary-value");
+    }
+
+    // 4) 关联表纳入 summary row，旧的游离 <p> 已移除
+    const refsRow = within(summary).getByTestId("wiki-upload-summary-refs");
+    expect(refsRow).toHaveTextContent("关联表");
   });
 });

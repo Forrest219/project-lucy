@@ -620,7 +620,7 @@ export function TableWhitelist() {
                 <tr className="pl-table-group-row">
                   <td colSpan={5}>
                     <span className="notranslate" translate="no">
-                      连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
+                      连接：{conn.id} · Schema：{schema}
                     </span>
                     <span className="pl-table-group-row-count notranslate" translate="no">
                       （共 {rows.length} 张表）
@@ -695,7 +695,7 @@ export function TableWhitelist() {
             data-testid={`configured-schema-empty-${conn.id}-${schema}`}
           >
             <div className="pl-table-group-heading notranslate" translate="no">
-              连接：{conn.id.toUpperCase()} · Schema：{schema.toUpperCase()}
+              连接：{conn.id} · Schema：{schema}
             </div>
             <div
               className="pl-missing-manifest-diagnostic notranslate"

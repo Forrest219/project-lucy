@@ -174,7 +174,9 @@ describe("Onboarding", () => {
     // M41: top of the page must be free of the legacy badges.
     const header = screen.getByTestId("page-header");
     expect(within(header).queryByText(/环境:/)).not.toBeInTheDocument();
-    expect(within(header).queryByText(/上次更新/)).not.toBeInTheDocument();
+    // "上次更新" badge is intentionally present in the header actions row,
+    // paired with the refresh button — tests below pin this contract.
+    expect(within(header).queryByText(/上次更新/)).toBeInTheDocument();
     expect(within(header).queryByText(/KTX\s*(可用|不可用)/)).not.toBeInTheDocument();
     expect(within(header).queryByText(/语义完成/)).not.toBeInTheDocument();
     expect(within(header).queryByText(/自动刷新/)).not.toBeInTheDocument();
@@ -332,11 +334,13 @@ describe("Onboarding", () => {
     expect(await screen.findByRole("heading", { name: "系统概览" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运维驾驶舱" })).not.toBeInTheDocument();
     // M41: top of the page is intentionally clean — only the title, the
-    // description, and a single "刷新" button. The legacy env /
-    // last-updated / KTX / semantic badges are gone; tests below pin this.
+    // description, a single "刷新首页数据" button, and a "上次更新" badge
+    // sitting next to it. The legacy env / KTX / semantic badges are gone;
+    // tests below pin this.
     const header = screen.getByTestId("page-header");
     expect(within(header).queryByText(/环境:/)).not.toBeInTheDocument();
-    expect(within(header).queryByText(/上次更新/)).not.toBeInTheDocument();
+    // "上次更新" badge is intentionally in the header actions row.
+    expect(within(header).queryByText(/上次更新/)).toBeInTheDocument();
     expect(within(header).queryByText(/KTX\s*(可用|不可用)/)).not.toBeInTheDocument();
     expect(within(header).queryByText(/语义完成/)).not.toBeInTheDocument();
     expect(within(header).queryByText(/自动刷新/)).not.toBeInTheDocument();
@@ -346,7 +350,7 @@ describe("Onboarding", () => {
     expect(refreshButton).toBeInstanceOf(HTMLButtonElement);
     expect(refreshButton).not.toHaveAttribute("aria-haspopup");
     expect(refreshButton).not.toHaveTextContent("▾");
-    expect(["刷新", "刷新中..."]).toContain(refreshButton.textContent?.trim());
+    expect(["刷新首页数据", "刷新首页数据中..."]).toContain(refreshButton.textContent?.trim());
     // M41: ready / warning now renders a one-line summary instead of the
     // legacy 4-up strip.
     expect(await screen.findByTestId("ops-service-health-summary")).toBeInTheDocument();
@@ -379,7 +383,7 @@ describe("Onboarding", () => {
   it("shows 刷新中… while any core query is fetching and 刷新 when idle", async () => {
     renderPage();
     const refreshButton = await screen.findByTestId("onboarding-refresh-button");
-    expect(refreshButton.textContent?.trim()).toBe("刷新");
+    expect(refreshButton.textContent?.trim()).toBe("刷新首页数据");
 
     // Slow down the refetch so the in-flight label is observable in jsdom.
     const realFetch = globalThis.fetch;
@@ -395,19 +399,19 @@ describe("Onboarding", () => {
       return realFetch(input);
     }));
 
-    // Trigger a manual refresh. The label flips to "刷新中..." while at
+    // Trigger a manual refresh. The label flips to "刷新首页数据中..." while at
     // least one core query is in-flight.
     fireEvent.click(refreshButton);
     // Flush microtasks + one macrotask so React commits the in-flight state.
     await new Promise((resolve) => setTimeout(resolve, 10));
     const fetchingButton = screen.getByTestId("onboarding-refresh-button");
-    expect(fetchingButton.textContent?.trim()).toBe("刷新中...");
+    expect(fetchingButton.textContent?.trim()).toBe("刷新首页数据中...");
     expect(fetchingButton).toBeDisabled();
 
     // Release the slow refetch and verify the label returns to 刷新.
     resolveRefetch();
     await waitFor(() => {
-      expect(screen.getByTestId("onboarding-refresh-button").textContent?.trim()).toBe("刷新");
+      expect(screen.getByTestId("onboarding-refresh-button").textContent?.trim()).toBe("刷新首页数据");
     });
   });
 
@@ -424,12 +428,186 @@ describe("Onboarding", () => {
     expect(screen.queryByText(/自动刷新/)).not.toBeInTheDocument();
   });
 
-  it("does not show a lastUpdatedAt badge anywhere on the page", async () => {
+  it("renders a 上次更新 badge in the description row, paired with the refresh button", async () => {
     renderPage();
-    await screen.findByTestId("onboarding-refresh-button");
-    expect(document.querySelector('[data-testid="onboarding-last-updated"]')).toBeNull();
-    expect(document.querySelector('[data-testid="onboarding-env-badge"]')).toBeNull();
-    expect(screen.queryByText(/上次更新:/)).not.toBeInTheDocument();
+    const badge = await screen.findByTestId("onboarding-last-updated");
+    // UX-OVERVIEW-004: badge lives in the PageHeader description row, not
+    // in the actions row, so widening the button no longer squeezes the
+    // description's wrap points at <1280px viewports.
+    const descriptionRow = await screen.findByTestId("onboarding-last-updated-row");
+    expect(descriptionRow).toContainElement(badge);
+    expect(screen.getByTestId("onboarding-refresh-controls")).not.toContainElement(badge);
+    expect(screen.queryByTestId("onboarding-env-badge")).toBeNull();
+    // Once the page settles, the label must move off the "未知" sentinel.
+    await waitFor(() => {
+      expect(badge.textContent ?? "").not.toMatch(/未知/);
+    });
+    expect(badge.textContent ?? "").toMatch(/上次更新[：:]/);
+  });
+
+  it("decouples the visual ticker from the a11y announce channel", async () => {
+    // UX-OVERVIEW-003: the visual badge must NOT carry aria-live (otherwise
+    // screen readers would announce every second). The announce channel is
+    // a separate sr-only span that only writes on real state changes.
+    renderPage();
+    const badge = await screen.findByTestId("onboarding-last-updated");
+    expect(badge).toHaveAttribute("aria-hidden", "true");
+    expect(badge).not.toHaveAttribute("aria-live");
+
+    const announce = await screen.findByTestId("onboarding-last-updated-announce");
+    expect(announce).toHaveAttribute("aria-live", "polite");
+    expect(announce).toHaveAttribute("role", "status");
+    // Announce text is set on first successful mount; the channel should
+    // carry at least one non-empty value after the page settles.
+    await waitFor(() => {
+      expect(announce.textContent ?? "").not.toBe("");
+    });
+  });
+
+  it("updates the 上次更新 label after a successful manual refresh click", async () => {
+    // We need a real 5+s wall-clock window to escape the "刚刚" bucket, so
+    // give this single case a longer timeout than the global 5s default.
+    renderPage();
+    const badge = await screen.findByTestId("onboarding-last-updated");
+    await waitFor(() => {
+      expect(badge.textContent ?? "").not.toMatch(/未知/);
+    });
+    // Wait past the "刚刚" window (<5s) so the pre-click label is observably
+    // older than zero — that way a successful click must reset the label
+    // back into the fresh bucket, and we can assert the transition.
+    await new Promise((resolve) => setTimeout(resolve, 5_200));
+    const beforeLabel = badge.textContent ?? "";
+    expect(beforeLabel).not.toMatch(/^.*刚刚.*$/);
+
+    fireEvent.click(screen.getByTestId("onboarding-refresh-button"));
+    await waitFor(() => {
+      const current = badge.textContent ?? "";
+      // After a successful click the timestamp resets to "刚刚" (or any
+      // freshly-rendered relative/absolute label that isn't the stale one).
+      expect(current).not.toBe(beforeLabel);
+      expect(current).toMatch(/刚刚|秒前|分钟前|\d{2}:\d{2}:\d{2}/);
+    });
+  }, 15_000);
+
+  it("shows an inline failure indicator when a refresh fails, and clears it on success", async () => {
+    // UX-OVERVIEW-005: a refresh failure must surface inline so the user
+    // can tell the badge timestamp is stale, without relying on a
+    // transient toast. The badge keeps the last successful timestamp AND
+    // appends a failure suffix that escalates at >= 3 consecutive
+    // failures. A subsequent successful refresh clears everything.
+    //
+    // Strategy: hand-roll a fetch stub that fails the first three refresh
+    // clicks and then succeeds. The mount wave always hits the happy
+    // path so we don't trip Onboarding's "全页替换为错误页" branch and
+    // can observe the badge state machine — see the `phase` comment in
+    // the stub for the rationale.
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
+    // Phase model:
+    //   - "mount": the very first fetch wave (initial page load) must
+    //     succeed so we get past the `<p className="pl-error">` early-
+    //     return and into the badge-rendered tree. Mount always hits the
+    //     default happy-path stub regardless of the failure budget.
+    //   - "failing": once the user clicks refresh, the stub returns 500s
+    //     for every fetch inside that click wave. The 5 fetch calls in
+    //     each click are concurrent (Promise.allSettled), so we count by
+    //     click number rather than per-fetch.
+    //   - "ok": budget exhausted (after 3 failing clicks), stub returns
+    //     to happy path so the "clears on success" half of the assertion
+    //     has something to observe.
+    type Phase = "mount" | "failing" | "ok";
+    let phase: Phase = "mount";
+    let clickCount = 0;
+    const failingFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (phase === "failing" && clickCount <= 3) {
+        return new Response(JSON.stringify({ ok: false, error: "boom" }), { status: 500 });
+      }
+      return defaultStub(input);
+    });
+    vi.stubGlobal("fetch", failingFetch);
+    function defaultStub(input: RequestInfo | URL) {
+      const url = String(input);
+      if (url === "/api/project") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                root: "/tmp/lucy",
+                ktxAvailable: true,
+                connections: [
+                  {
+                    id: "mysql-demo",
+                    driver: "mysql",
+                    schemas: ["demo"],
+                    enabledTables: ["demo.orders"]
+                  }
+                ],
+                mcpEndpoint: {
+                  url: "https://lucy.example.com/mcp",
+                  status: "configured",
+                  source: "env",
+                  configured: true,
+                  diagnostics: []
+                }
+              }
+            })
+          )
+        );
+      }
+      if (url === "/api/sources") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: { tables: [readySource] } })));
+      }
+      if (url === "/api/diff") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: { files: [] } })));
+      }
+      if (url === "/api/admin/agents") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: { agents: [readyAgent] } })));
+      }
+      if (url === "/api/eval/runs?limit=1") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: { total: 1, runs: [{ id: 1 }] } })));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, data: {} })));
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Onboarding />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    // Mount must settle into the happy path before we start failing.
+    const badge = await screen.findByTestId("onboarding-last-updated");
+    const announce = await screen.findByTestId("onboarding-last-updated-announce");
+    await waitFor(() => {
+      expect(badge.textContent ?? "").not.toMatch(/未知/);
+    });
+    expect(badge.getAttribute("data-state")).toBe("ok");
+
+    // Switch into the failing regime and burn through three attempts.
+    phase = "failing";
+    for (let i = 0; i < 3; i += 1) {
+      clickCount += 1;
+      fireEvent.click(screen.getByTestId("onboarding-refresh-button"));
+      // Allow the Promise.allSettled chain to flush.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    await waitFor(() => {
+      expect(badge.getAttribute("data-state")).toBe("danger");
+      expect(badge.textContent ?? "").toMatch(/连续\s*3/);
+      expect(announce.textContent ?? "").toMatch(/刷新失败/);
+    });
+
+    // Fourth attempt: phase flips to "ok" once budget is gone → success.
+    phase = "ok";
+    fireEvent.click(screen.getByTestId("onboarding-refresh-button"));
+    await waitFor(() => {
+      expect(badge.getAttribute("data-state")).toBe("ok");
+      expect(badge.textContent ?? "").not.toMatch(/刷新失败/);
+      expect(announce.textContent ?? "").toMatch(/系统概览已刷新/);
+    });
   });
 
   it("excludes revoked and expired tokens from the 可用 Token count", async () => {
@@ -926,16 +1104,24 @@ describe("Onboarding", () => {
     // And there is no setInterval timer in the document — the cleanest way
     // to check is to confirm the auto-refresh testid never appears.
     expect(document.querySelector('[data-testid="onboarding-refresh-menu-auto"]')).toBeNull();
-    // No last-updated stamp element either.
-    expect(document.querySelector('[data-testid="onboarding-last-updated"]')).toBeNull();
+    // The 上次更新 badge is now present (intentional reversal of the prior
+    // "M41 removed last-updated" contract) and carries a freshly rendered
+    // relative label after the click — proving refreshStatus wrote to
+    // lastUpdatedAt and the ticker re-rendered.
+    const lastUpdated = await waitFor(() => {
+      const el = document.querySelector('[data-testid="onboarding-last-updated"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    await waitFor(() => {
+      expect(lastUpdated.textContent ?? "").toMatch(/刚刚|秒前|分钟前|\d{2}:\d{2}:\d{2}/);
+    });
 
     // Wait for the Promise.allSettled chain + the .then() callback to flush.
     await waitFor(() => {
       expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore);
     });
-    // The label is still a well-formed timestamp; if the clean cycle
-    // path skipped `setLastUpdatedAt` we'd see `上次更新: --`.
-    // M41: last-updated is gone — the toast carries refresh feedback instead.
+    // Toast still fires as the success-side feedback.
     expect(toastSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 });

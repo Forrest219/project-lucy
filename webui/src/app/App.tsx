@@ -1,5 +1,29 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import {
+  Boxes,
+  Cable,
+  ChartNoAxesCombined,
+  ChevronRight,
+  Database,
+  Gauge,
+  History,
+  LayoutDashboard,
+  Network,
+  Rocket,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  TableProperties,
+  Users,
+  ClipboardList,
+  Activity,
+  BookOpen,
+  KeyRound,
+  ScrollText,
+  type LucideIcon
+} from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Catalog } from "../pages/Catalog";
 import { JoinEditor } from "../pages/JoinEditor";
@@ -11,6 +35,7 @@ import { WikiEditor } from "../pages/WikiEditor";
 import { AgentList } from "../pages/admin/AgentList";
 import { AgentDetail } from "../pages/admin/AgentDetail";
 import { NewToken } from "../pages/admin/NewToken";
+import { GovernanceOverview } from "../pages/admin/GovernanceOverview";
 import { Audit } from "../pages/admin/Audit";
 import { ConfigAudit } from "../pages/admin/ConfigAudit";
 import { AuditSources } from "../pages/admin/AuditSources";
@@ -21,13 +46,15 @@ import { CaseEditor } from "../pages/eval/CaseEditor";
 import { RunList } from "../pages/eval/RunList";
 import { RunDetail } from "../pages/eval/RunDetail";
 import { Monitor } from "../pages/eval/Monitor";
+import { SecurityCandidates } from "../pages/eval/SecurityCandidates";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { TableWhitelist } from "../pages/connections/TableWhitelist";
 import { ConnectionTest } from "../pages/connections/ConnectionTest";
 import { HelpCenter } from "../pages/HelpCenter";
 import { HelpButton } from "../components/HelpButton";
 import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
-import { topLevelEntry, navGroups } from "./navigation";
+import { CommandPalette } from "../components/CommandPalette";
+import { findGroupIdForPathname, navGroups, topLevelEntry, type NavIconKey } from "./navigation";
 
 const queryClient = new QueryClient();
 
@@ -74,8 +101,66 @@ function TableWhitelistRedirect() {
   );
 }
 
-function navLinkClass(isActive: boolean) {
-  return `pl-nav-link${isActive ? " pl-nav-link--active" : ""}`;
+function navLinkClass(isActive: boolean, level: "top" | "child" = "top") {
+  return `pl-nav-link${level === "child" ? " pl-nav-link--child" : ""}${isActive ? " pl-nav-link--active" : ""}`;
+}
+
+// M60 Sidebar Brand Navigation Polish: visual icon registry. Kept in App.tsx
+// so navigation.ts stays a pure data module and doesn't drag React / lucide
+// into tests that only care about the IA shape.
+const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
+  overview: LayoutDashboard,
+  connections: Cable,
+  whitelist: TableProperties,
+  catalog: Boxes,
+  wiki: BookOpen,
+  publish: Rocket,
+  history: History,
+  evalCases: ClipboardList,
+  evalRuns: Activity,
+  monitor: ChartNoAxesCombined,
+  securityEval: ShieldAlert,
+  governanceOverview: Gauge,
+  agents: Users,
+  roles: KeyRound,
+  audit: ScrollText,
+  configAudit: ShieldCheck
+};
+
+const GROUP_ICONS: Record<string, LucideIcon> = {
+  connections: Database,
+  "semantic-modeling": Network,
+  publish: Rocket,
+  evaluation: ChartNoAxesCombined,
+  governance: ShieldCheck
+};
+
+const COLLAPSED_GROUPS_STORAGE_KEY = "lucy.sidebar.collapsedGroups.v1";
+
+function readCollapsedGroups(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_GROUPS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((value): value is string => typeof value === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollapsedGroups(ids: Set<string>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      COLLAPSED_GROUPS_STORAGE_KEY,
+      JSON.stringify(Array.from(ids))
+    );
+  } catch {
+    // localStorage may be disabled (private mode / quota) — silently no-op
+    // so the sidebar keeps working without persisting state.
+  }
 }
 
 export function AppFrame() {
@@ -86,53 +171,179 @@ export function AppFrame() {
     isHelpRoute ? "pl-app-shell--help" : ""
   ].filter(Boolean).join(" ");
 
+  // M60: collapsible group state. We seed the Set from localStorage so the
+  // user's last manual choice survives a reload, but we always force the
+  // active route's group to be open below via the derived `expanded` map.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  const activeGroupId = useMemo(
+    () => findGroupIdForPathname(location.pathname),
+    [location.pathname]
+  );
+
+  // Persist whenever the Set changes. We do not exclude `activeGroupId`
+  // here — if the user explicitly collapses the active group, the storage
+  // still records it; the next effect will re-expand the route's group
+  // without mutating storage so a refresh respects the user's prior
+  // intent on unrelated groups.
+  useEffect(() => {
+    writeCollapsedGroups(collapsedGroups);
+  }, [collapsedGroups]);
+
+  // Auto-expand the group that owns the current route. We mutate the Set
+  // through `setCollapsedGroups` so the derivation stays a single source
+  // of truth; an equality check prevents spurious re-renders.
+  useEffect(() => {
+    if (!activeGroupId) return;
+    setCollapsedGroups((prev) => {
+      if (!prev.has(activeGroupId)) return prev;
+      const next = new Set(prev);
+      next.delete(activeGroupId);
+      return next;
+    });
+  }, [activeGroupId]);
+
+  const toggleGroup = useCallback((groupId: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }, []);
+
+  // ⌘ K / Ctrl K opens the command palette. We listen on `window` so the
+  // shortcut works from any focus location (no input/textarea check — the
+  // palette has its own input where users expect ⌘ K to focus it).
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  const OverviewIcon = NAV_ICONS[topLevelEntry.iconKey];
+
   return (
     <div className={appShellClass}>
       <aside className="pl-sidebar">
-        <div className="pl-brand-block">
-          <strong>Lucy WebUI</strong>
-          {/* v1.9.x 收口：移除英文 Subtitle（与中文 tagline 重复），仅保留一行干净中文。 */}
-          <span
-            className="pl-brand-tagline notranslate"
-            translate="no"
-            title="Data Agent 运维控制台"
-          >
-            Data Agent 运维控制台
+        <Link
+          to="/overview"
+          className="pl-brand-block notranslate"
+          translate="no"
+          data-testid="sidebar-brand"
+          aria-label="返回系统概览"
+          title="返回系统概览"
+        >
+          <span className="pl-brand-mark" aria-hidden="true">
+            L
           </span>
+          <div className="pl-brand-text">
+            <strong className="pl-brand-title">Lucy WebUI</strong>
+            {/* v1.9.x 收口：移除英文 Subtitle（与中文 tagline 重复），仅保留一行干净中文。
+                M61: 副标题继续保留 notranslate / translate="no" 防止浏览器翻译插件
+                将 `Data Agent` 改写成 `数据 代理` / `代理 代理` 等机器直译。 */}
+            <span
+              className="pl-brand-tagline notranslate"
+              translate="no"
+            >
+              Data Agent 运维控制台
+            </span>
+          </div>
+        </Link>
+
+        <div className="pl-sidebar-search">
+          <button
+            type="button"
+            className="pl-sidebar-search-button notranslate"
+            translate="no"
+            data-testid="sidebar-search-trigger"
+            aria-label="打开命令面板，搜索页面和导航入口"
+            onClick={() => setCommandPaletteOpen(true)}
+          >
+            <Search aria-hidden="true" className="size-4" />
+            <span translate="no" className="notranslate">
+              搜索页面和导航入口
+            </span>
+            <span className="pl-sidebar-search-shortcut" aria-hidden="true">
+              ⌘ K
+            </span>
+          </button>
         </div>
 
         <nav className="pl-nav" aria-label="主导航">
           <section className="pl-nav-section pl-nav-section--top" key="top">
-            <div className="grid gap-1">
+            <div className="grid gap-0.5">
               <Link
                 aria-current={topLevelEntry.active(location.pathname) ? "page" : undefined}
                 className={navLinkClass(topLevelEntry.active(location.pathname))}
                 to={topLevelEntry.to}
+                data-testid={`nav-link-${topLevelEntry.id}`}
               >
-                {topLevelEntry.label}
+                <OverviewIcon aria-hidden="true" className="size-4" />
+                <span>{topLevelEntry.label}</span>
               </Link>
             </div>
           </section>
-          {navGroups.map((group) => (
-            <section className="pl-nav-section" key={group.title}>
-              <h2 className="pl-nav-section-title">{group.title}</h2>
-              <div className="grid gap-1">
-                {group.items.map((item) => {
-                  const active = item.active(location.pathname);
-                  return (
-                    <Link
-                      aria-current={active ? "page" : undefined}
-                      className={navLinkClass(active)}
-                      key={item.to}
-                      to={item.to}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+          {navGroups.map((group) => {
+            const isOpen = !collapsedGroups.has(group.id);
+            const GroupIcon = GROUP_ICONS[group.id];
+            return (
+              <section
+                className="pl-nav-section"
+                key={group.id}
+                data-testid={`nav-group-${group.id}`}
+                data-open={isOpen ? "true" : "false"}
+              >
+                <button
+                  type="button"
+                  className="pl-nav-section-title-button"
+                  aria-expanded={isOpen}
+                  aria-controls={`nav-group-${group.id}-items`}
+                  onClick={() => toggleGroup(group.id)}
+                  data-testid={`nav-group-toggle-${group.id}`}
+                >
+                  {GroupIcon ? (
+                    <GroupIcon aria-hidden="true" className="size-4" />
+                  ) : null}
+                  <span>{group.title}</span>
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="pl-nav-section-chevron size-4"
+                    data-open={isOpen ? "true" : "false"}
+                  />
+                </button>
+                <div
+                  className="pl-nav-group-items"
+                  hidden={!isOpen}
+                  id={`nav-group-${group.id}-items`}
+                  data-testid={`nav-group-items-${group.id}`}
+                >
+                  {group.items.map((item) => {
+                    const active = item.active(location.pathname);
+                    const ItemIcon = NAV_ICONS[item.iconKey];
+                    return (
+                      <Link
+                        aria-current={active ? "page" : undefined}
+                        className={navLinkClass(active, "child")}
+                        key={item.id}
+                        to={item.to}
+                        data-testid={`nav-link-${item.id}`}
+                      >
+                        <ItemIcon aria-hidden="true" className="size-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
         </nav>
         <div className="pl-sidebar-footer" data-testid="sidebar-footer">
           <div className="pl-sidebar-utility" data-testid="sidebar-utility">
@@ -162,6 +373,7 @@ export function AppFrame() {
             <Route path="/publish/history" element={<PublishHistory />} />
             <Route path="/review" element={<Navigate to="/publish/workbench" replace />} />
             <Route path="/wiki" element={<WikiEditor />} />
+            <Route path="/admin/governance" element={<GovernanceOverview />} />
             <Route path="/admin/agents" element={<AgentList />} />
             <Route path="/admin/agents/:userId" element={<AgentDetail />} />
             <Route path="/admin/agents/:userId/tokens/new" element={<NewToken />} />
@@ -178,6 +390,7 @@ export function AppFrame() {
             <Route path="/eval/runs" element={<RunList />} />
             <Route path="/eval/runs/:runId" element={<RunDetail />} />
             <Route path="/eval/monitor" element={<Monitor />} />
+            <Route path="/eval/security-candidates" element={<SecurityCandidates />} />
             <Route path="/help" element={<HelpCenter />} />
           </Routes>
         </div>
@@ -186,6 +399,11 @@ export function AppFrame() {
             `?object=table&conn=...&schema=...&table=...`). */}
         <ObjectDetailDrawer />
       </main>
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
     </div>
   );
 }

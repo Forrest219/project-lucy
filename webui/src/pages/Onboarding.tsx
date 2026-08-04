@@ -397,6 +397,30 @@ export function Onboarding() {
   // M39: Drawer open state. The main page never shows the raw JSON
   // config; the user must explicitly open the Drawer to inspect it.
   const [mcpDrawerOpen, setMcpDrawerOpen] = useState(false);
+  // lastUpdatedAt: timestamp the dashboard was last successfully refreshed.
+  // null = the user has not yet seen a successful refresh. The page-level
+  // "上次更新" badge next to the refresh button reads from this state so
+  // operators can decide at a glance whether to click again. Updated on:
+  //   1. first successful load of all five core queries (initial mount), and
+  //   2. every successful manual click of the refresh button.
+  // Refresh failures leave it untouched, so the displayed timestamp always
+  // reflects the freshest confirmed snapshot.
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  // consecutiveFailures: count of manual refresh attempts in a row that did
+  // not confirm. Cleared on the next success. Drives the badge escalation
+  // (text → danger colour + ! icon once the count crosses a threshold) so
+  // the user can decide whether to investigate.
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
+  // announceText: text written into a separate sr-only `<span role="status"
+  // aria-live="polite">`. Decoupled from the visual badge so a screen reader
+  // only hears status changes (mount, refresh success, threshold crossing)
+  // and never the per-second ticker — see UX-OVERVIEW-003.
+  const [announceText, setAnnounceText] = useState<string>("");
+  // now: ticker that re-renders the relative-time label once per second so
+  // "刚刚 / xx 秒前 / xx 分钟前" stays current without forcing the queries
+  // to refetch. The interval is paused (via conditional effect below) when
+  // we have no timestamp to render — avoids burning a timer for nothing.
+  const [now, setNow] = useState<Date>(() => new Date());
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
     queryFn: () => apiGet<ProjectInfo>("/api/project")
@@ -446,6 +470,80 @@ export function Onboarding() {
   const canCopyMcp = endpoint !== null;
   const loading = projectQuery.isLoading || sourcesQuery.isLoading || diffQuery.isLoading || agentsQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error ?? diffQuery.error ?? agentsQuery.error;
+
+  // Sync lastUpdatedAt on first successful load. We deliberately wait for
+  // ALL five core queries to settle so the timestamp always represents the
+  // snapshot the user is looking at. evalLastRunQuery is included so a
+  // missing/degraded eval endpoint doesn't leave the badge blank forever.
+  // The boolean guard makes this a one-shot: subsequent refetches update
+  // lastUpdatedAt via refreshStatus(), not via this effect.
+  useEffect(() => {
+    if (lastUpdatedAt !== null) return;
+    const allLoaded =
+      projectQuery.isSuccess &&
+      sourcesQuery.isSuccess &&
+      diffQuery.isSuccess &&
+      agentsQuery.isSuccess &&
+      evalLastRunQuery.isSuccess;
+    if (!allLoaded) return;
+    setLastUpdatedAt(new Date());
+    setAnnounceText("系统概览数据已就绪");
+    // Intentionally exclude lastUpdatedAt from deps — its current value is
+    // the very thing the guard checks. The five query success flags are the
+    // real trigger surface.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    projectQuery.isSuccess,
+    sourcesQuery.isSuccess,
+    diffQuery.isSuccess,
+    agentsQuery.isSuccess,
+    evalLastRunQuery.isSuccess
+  ]);
+
+  // Tick `now` once per second so the relative-time label stays honest. We
+  // only run the interval while we have a timestamp to display — no-op
+  // otherwise. Cleaned up on unmount.
+  useEffect(() => {
+    if (lastUpdatedAt === null) return;
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, [lastUpdatedAt]);
+
+  // Render the relative-vs-absolute label. Within 15 minutes we show
+  // "刚刚 / xx 秒前 / xx 分钟前" so the operator sees freshness at a glance.
+  // Past 15 minutes the absolute HH:MM:SS is more useful for cross-referencing
+  // with logs / audit timestamps. "未知" sentinel renders before any query
+  // has settled.
+  const lastUpdatedLabel = (() => {
+    if (!lastUpdatedAt) return "未知";
+    const diffMs = now.getTime() - lastUpdatedAt.getTime();
+    if (diffMs < 5_000) return "刚刚";
+    if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
+    if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(lastUpdatedAt.getHours())}:${pad(lastUpdatedAt.getMinutes())}:${pad(lastUpdatedAt.getSeconds())}`;
+  })();
+
+  // failureLabel: appended to the badge when the user has tried to refresh
+  // and failed at least once since the last confirmed snapshot. Returns "" if
+  // there is nothing to say (no failure, or no confirmed snapshot yet).
+  // UX-OVERVIEW-005: a failure must NOT change lastUpdatedAt, but the badge
+  // has to make the failure visible inline so the operator doesn't have to
+  // rely on a transient toast.
+  const failureLabel = (() => {
+    if (consecutiveFailures <= 0) return "";
+    if (consecutiveFailures >= 3) return "刷新失败，连续 3 次以上未更新";
+    if (consecutiveFailures === 1) return "刷新失败，重试中";
+    return `刷新失败，连续 ${consecutiveFailures} 次未更新`;
+  })();
+  const badgeState: "ok" | "warning" | "danger" =
+    consecutiveFailures >= 3 ? "danger" : consecutiveFailures >= 1 ? "warning" : "ok";
+  const badgeClasses =
+    badgeState === "danger"
+      ? "text-xs text-danger-strong whitespace-nowrap font-medium"
+      : badgeState === "warning"
+        ? "text-xs text-warning-strong whitespace-nowrap"
+        : "text-xs text-fg-muted whitespace-nowrap";
   const connectionReady = connections.length > 0 && projectQuery.data?.ktxAvailable === true;
   const tableScopeReady = enabledTables > 0;
   const semanticReady = sources.length > 0 && doneSources > 0;
@@ -586,6 +684,8 @@ export function Onboarding() {
     ]);
     const failed = settled.find((result) => result.status === "rejected");
     if (failed) {
+      setConsecutiveFailures((count) => count + 1);
+      setAnnounceText("系统概览刷新失败");
       toast.error("系统概览刷新失败");
       return;
     }
@@ -599,9 +699,15 @@ export function Onboarding() {
       return value?.error ? [value.error] : [];
     });
     if (queryErrors.length > 0) {
+      setConsecutiveFailures((count) => count + 1);
+      setAnnounceText("系统概览刷新失败");
       toast.error("系统概览刷新失败");
       return;
     }
+    setLastUpdatedAt(new Date());
+    setNow(new Date());
+    setConsecutiveFailures(0);
+    setAnnounceText("系统概览已刷新");
     toast.success("系统概览已刷新");
   }
 
@@ -619,7 +725,13 @@ export function Onboarding() {
     return <p className="pl-notice">正在加载系统概览...</p>;
   }
 
-  if (error) {
+  // UX-OVERVIEW-005: the legacy "替换整页" 错误分支 must NOT fire after
+  // a successful mount. Once we have a confirmed snapshot (lastUpdatedAt),
+  // a later refetch failure must keep the dashboard visible and let the
+  // badge surface the stale state inline — see `failureLabel` below.
+  // The branch still owns the very first load so a deployment with a
+  // broken upstream never pretends to render the dashboard.
+  if (error && lastUpdatedAt === null) {
     return <p className="pl-error">系统概览加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
   }
 
@@ -637,20 +749,59 @@ export function Onboarding() {
       <PageHeader
         title="系统概览"
         description={
-          <>
-            查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。聚合首页待办，判断 data agent 是否处于可交付状态。
-          </>
+          <div
+            className="flex flex-wrap items-baseline gap-x-3 gap-y-1"
+            data-testid="onboarding-last-updated-row"
+          >
+            <span className="flex-1 min-w-0">
+              查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。聚合首页待办，判断 data agent 是否处于可交付状态。
+            </span>
+            {/*
+              Visual badge (UX-OVERVIEW-004): lives in the description row so
+              widening the button on the right doesn't squeeze wrap points
+              below 1280px. aria-hidden because the per-second ticker would
+              otherwise spam screen readers — see UX-OVERVIEW-003.
+            */}
+            <span
+              className={badgeClasses}
+              data-testid="onboarding-last-updated"
+              data-state={badgeState}
+              aria-hidden="true"
+            >
+              上次更新：{lastUpdatedLabel}
+              {failureLabel ? ` · ${failureLabel}` : ""}
+            </span>
+            {/*
+              A11y announce channel (UX-OVERVIEW-003): writes only when status
+              actually changes (mount, refresh success/failure). sr-only so
+              the visual layout is unaffected, role=status + aria-live=polite
+              so SRs announce on text change.
+            */}
+            <span
+              className="sr-only"
+              role="status"
+              aria-live="polite"
+              data-testid="onboarding-last-updated-announce"
+            >
+              {announceText}
+            </span>
+          </div>
         }
         actions={
-          <button
-            type="button"
-            className="pl-btn pl-btn--secondary text-sm"
-            onClick={refreshStatus}
-            disabled={coreFetching}
-            data-testid="onboarding-refresh-button"
+          <div
+            className="flex items-center gap-3"
+            data-testid="onboarding-refresh-controls"
           >
-            {coreFetching ? "刷新中..." : "刷新"}
-          </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary text-sm"
+              onClick={refreshStatus}
+              disabled={coreFetching}
+              data-testid="onboarding-refresh-button"
+            >
+              {coreFetching ? "刷新首页数据中..." : "刷新首页数据"}
+            </button>
+          </div>
         }
       />
 
@@ -810,9 +961,9 @@ export function Onboarding() {
 
         <div className="pl-mcp-actions">
           <div className="pl-onboarding-facts pl-onboarding-facts--endpoint">
-            <span>
-              <span className="notranslate" translate="no">Endpoint</span>: <code className="notranslate break-all" translate="no">{endpoint ?? "—"}</code>
-            </span>
+            <span className="notranslate" translate="no">Endpoint</span>
+            <span aria-hidden="true">:</span>
+            <code className="notranslate break-all" translate="no">{endpoint ?? "—"}</code>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

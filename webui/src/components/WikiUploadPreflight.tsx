@@ -45,7 +45,7 @@ export function WikiUploadPreflight({
             className="pl-wiki-preflight-description"
             id="wiki-upload-preflight-description"
           >
-            确认目标路径、标题、关联表和 Diff 后再写入业务 Wiki。
+            确认目标目录、目标 Wiki 路径、标题、关联表和 Diff 后再写入业务 Wiki。
           </Dialog.Description>
 
           {isLoading ? (
@@ -81,36 +81,55 @@ export function WikiUploadPreflight({
                     </datalist>
                   </label>
                 ) : null}
-                <code className="pl-wiki-preflight-target notranslate" translate="no">
-                  {preview.filePath}
-                </code>
-                <p className="pl-notice">
-                  {preview.exists ? "将覆盖现有 Markdown 文档。" : "将新建 Markdown 文档。"}
-                </p>
+                <dl className="pl-wiki-preflight-summary-list pl-wiki-preflight-target-list">
+                  <div
+                    className="pl-wiki-preflight-summary-row pl-wiki-preflight-target-row"
+                    data-testid="wiki-upload-target-path"
+                  >
+                    <dt className="pl-wiki-preflight-summary-label">目标 Wiki 路径</dt>
+                    <dd className="pl-wiki-preflight-summary-value">
+                      <code className="pl-wiki-upload-target-path notranslate" translate="no">
+                        {preview.filePath}
+                      </code>
+                    </dd>
+                  </div>
+                </dl>
+                <span
+                  className={
+                    preview.exists
+                      ? "pl-wiki-preflight-target-status pl-wiki-preflight-target-status--replace"
+                      : "pl-wiki-preflight-target-status pl-wiki-preflight-target-status--create"
+                  }
+                  data-testid="wiki-upload-target-status"
+                >
+                  {preview.exists ? "将覆盖现有 Markdown 文档" : "将新建 Markdown 文档"}
+                </span>
               </section>
 
               <section className="pl-wiki-preflight-section" data-testid="wiki-upload-summary">
                 <h3 className="pl-wiki-preflight-section-title">解析摘要</h3>
                 <dl className="pl-wiki-preflight-summary-list">
                   <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-source">
-                    <dt>本地文件名</dt>
-                    <dd>
+                    <dt className="pl-wiki-preflight-summary-label">本地文件名</dt>
+                    <dd className="pl-wiki-preflight-summary-value">
                       <code className="notranslate" translate="no">
                         {preview.sourceFileName}
                       </code>
                     </dd>
                   </div>
                   <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-target">
-                    <dt>目标 Wiki 路径</dt>
-                    <dd>
+                    <dt className="pl-wiki-preflight-summary-label">目标 Wiki 路径</dt>
+                    <dd className="pl-wiki-preflight-summary-value">
                       <code className="notranslate" translate="no">
                         {preview.filePath}
                       </code>
                     </dd>
                   </div>
                   <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-existing">
-                    <dt>{mode === "replace" ? "当前被覆盖文档" : "目标位置"}</dt>
-                    <dd>
+                    <dt className="pl-wiki-preflight-summary-label">
+                      {mode === "replace" ? "当前被覆盖文档" : "目标位置"}
+                    </dt>
+                    <dd className="pl-wiki-preflight-summary-value">
                       {preview.exists ? (
                         preview.existingTitle ? (
                           <strong>{preview.existingTitle}</strong>
@@ -123,28 +142,30 @@ export function WikiUploadPreflight({
                     </dd>
                   </div>
                   <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-title">
-                    <dt>上传后标题</dt>
-                    <dd>
+                    <dt className="pl-wiki-preflight-summary-label">上传后标题</dt>
+                    <dd className="pl-wiki-preflight-summary-value">
                       <strong>{preview.targetTitle}</strong>
                     </dd>
                   </div>
+                  <div className="pl-wiki-preflight-summary-row" data-testid="wiki-upload-summary-refs">
+                    <dt className="pl-wiki-preflight-summary-label">关联表</dt>
+                    <dd className="pl-wiki-preflight-summary-value pl-wiki-preflight-summary-value--refs">
+                      {preview.slRefs.length > 0 ? (
+                        preview.slRefs.map((ref) => (
+                          <code
+                            className="pl-wiki-upload-ref notranslate"
+                            key={ref}
+                            translate="no"
+                          >
+                            {ref}
+                          </code>
+                        ))
+                      ) : (
+                        <span className="pl-notice-inline">未声明关联表</span>
+                      )}
+                    </dd>
+                  </div>
                 </dl>
-                <p>
-                  关联表：
-                  {preview.slRefs.length > 0 ? (
-                    preview.slRefs.map((ref) => (
-                      <code
-                        className="pl-wiki-upload-ref notranslate"
-                        key={ref}
-                        translate="no"
-                      >
-                        {ref}
-                      </code>
-                    ))
-                  ) : (
-                    <span className="pl-notice-inline">未声明关联表</span>
-                  )}
-                </p>
                 {preview.warnings.length > 0 ? (
                   <ul className="pl-wiki-upload-warnings" data-testid="wiki-upload-warnings">
                     {preview.warnings.map((warning) => (

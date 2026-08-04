@@ -240,7 +240,7 @@ describe("TableWhitelist", () => {
     expect(screen.getByRole("combobox", { name: "连接筛选" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Schema 筛选" })).toBeInTheDocument();
     expect(screen.getAllByText("已选 2/3 张表")[0]).toBeInTheDocument();
-    expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
+    expect(screen.getByText("连接：mysql-aliyun · Schema：dataforai")).toBeInTheDocument();
     expect(screen.getByText("superstore_orders")).toBeInTheDocument();
     expect(screen.getByText("8 个")).toBeInTheDocument();
     expect(screen.getByText("已启用，语义完成")).toBeInTheDocument();
@@ -291,7 +291,7 @@ describe("TableWhitelist", () => {
     expect(headers).toHaveLength(1);
 
     const groupRow = await screen.findByTestId("whitelist-group-mysql-aliyun-dataforai");
-    expect(within(groupRow).getByText(/连接：MYSQL-ALIYUN/)).toBeInTheDocument();
+    expect(within(groupRow).getByText(/连接：mysql-aliyun/)).toBeInTheDocument();
     expect(within(groupRow).getByText(/共 3 张表/)).toBeInTheDocument();
   });
 
@@ -356,8 +356,8 @@ describe("TableWhitelist", () => {
 
     await screen.findByRole("combobox", { name: "Schema 筛选" });
     await waitFor(() => {
-      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：ANALYTICS")).toBeInTheDocument();
-      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
+      expect(screen.getByText("连接：mysql-aliyun · Schema：analytics")).toBeInTheDocument();
+      expect(screen.getByText("连接：mysql-aliyun · Schema：dataforai")).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByRole("combobox", { name: "Schema 筛选" }), {
@@ -365,9 +365,9 @@ describe("TableWhitelist", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：ANALYTICS")).toBeInTheDocument();
+      expect(screen.getByText("连接：mysql-aliyun · Schema：analytics")).toBeInTheDocument();
     });
-    expect(screen.queryByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).not.toBeInTheDocument();
+    expect(screen.queryByText("连接：mysql-aliyun · Schema：dataforai")).not.toBeInTheDocument();
     expect(screen.getByText("revenue_daily")).toBeInTheDocument();
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
   });
@@ -399,11 +399,11 @@ describe("TableWhitelist", () => {
     await waitFor(() => {
       expect(screen.getAllByText("已选 0/0 张表")[0]).toBeInTheDocument();
     });
-    expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：OPENCLAW_DB")).toBeInTheDocument();
+    expect(screen.getByText("连接：mysql-aliyun · Schema：openclaw_db")).toBeInTheDocument();
     expect(screen.getByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")).toHaveTextContent(
       "openclaw_db 已在连接配置中启用，但本地 schema 文件不存在。"
     );
-    expect(screen.queryByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).not.toBeInTheDocument();
+    expect(screen.queryByText("连接：mysql-aliyun · Schema：dataforai")).not.toBeInTheDocument();
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
   });
 
@@ -441,9 +441,9 @@ describe("TableWhitelist", () => {
     fireEvent.change(connectionSelect, { target: { value: "analytics-pg" } });
 
     await waitFor(() => {
-      expect(screen.getByText("连接：ANALYTICS-PG · Schema：ANALYTICS")).toBeInTheDocument();
+      expect(screen.getByText("连接：analytics-pg · Schema：analytics")).toBeInTheDocument();
     });
-    expect(screen.queryByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).not.toBeInTheDocument();
+    expect(screen.queryByText("连接：mysql-aliyun · Schema：dataforai")).not.toBeInTheDocument();
     const schemaSelect = screen.getByRole("combobox", { name: "Schema 筛选" });
     expect(schemaSelect).toHaveValue("all");
     expect(within(schemaSelect).getByRole("option", { name: "analytics" })).toBeInTheDocument();
@@ -864,7 +864,7 @@ describe("TableWhitelist", () => {
 
     // Group heading follows the canonical Chinese format with colon-typed dots.
     await waitFor(() => {
-      expect(screen.getByText("连接：MYSQL-ALIYUN · Schema：DATAFORAI")).toBeInTheDocument();
+      expect(screen.getByText("连接：mysql-aliyun · Schema：dataforai")).toBeInTheDocument();
     });
 
     // Empty-schema copy uses Manifest terminology and stays compact until
