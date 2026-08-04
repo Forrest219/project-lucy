@@ -206,9 +206,18 @@
   }
   /* M61: fixed text column width makes `Lucy WebUI` and the Chinese tagline
      share the same right edge. 152px leaves room for the 36px mark + 8px
-     gap inside the padded 248px sidebar without squeezing the grid. */
-  .pl-brand-text {
-    @apply grid min-w-0 gap-0.5;
+     gap inside the padded 248px sidebar without squeezing the grid.
+     M65: switch to flex column with items-end so both lines right-align
+     against the same edge, and remove the ellipsis on the tagline so the
+     `Data Agent 运维控制台` text is never silently truncated. The Tailwind
+     layout utilities are spelled out as class tokens (not just @apply) so
+     the test layer can read them off the rendered className. */
+  .pl-brand-text.pl-brand-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 0;
+    gap: 0.125rem;
     width: 152px;
   }
   .pl-brand-title {
@@ -219,13 +228,14 @@
   }
   .pl-brand-block .pl-brand-tagline {
     display: block;
-    font-size: 0.72rem;
+    /* M65: bump tagline to 12px and let it size to content so the right
+       edge sits flush with the title inside the 152px column. */
+    width: max-content;
+    font-size: 0.75rem;
     color: var(--token-color-fg-muted, #6b7280);
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
     margin-top: 1px;
-    /* 248px sidebar: tagline now fits without ellipsis. */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   /* M60: search / command entry sits under the brand block and exposes the
      ⌘ K shortcut on the right.
@@ -799,19 +809,19 @@
   .pl-schema-row { @apply flex flex-wrap items-center justify-between gap-2 rounded-md border-0 bg-bg-subtle px-2 py-1; }
   .pl-schema-row code { @apply font-mono text-xs text-fg-default; }
   .pl-schema-asset-table { @apply w-full border-collapse text-sm; table-layout: fixed; }
-  .pl-schema-asset-table th { @apply border-b border-border-default px-3 py-2 text-left text-xs font-semibold text-fg-muted; }
-  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-1.5 align-middle leading-5 text-fg-body; }
-  .pl-schema-asset-table code { @apply font-mono text-sm text-fg-default; }
+  .pl-schema-asset-table th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
+  .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-default; }
+  .pl-schema-asset-table code { @apply font-mono text-xs text-fg-default; }
   /* M44: stable column widths so Schema / Manifest 状态 / 本地表数 /
      启用表数 / 操作 line up across all connection cards. */
-  .pl-schema-asset-col-schema { width: 20%; }
+  .pl-schema-asset-col-schema { width: 24%; }
   .pl-schema-asset-col-status { width: 18%; }
   .pl-schema-asset-col-local-count { width: 14%; }
   .pl-schema-asset-col-enabled-count { width: 14%; }
-  .pl-schema-asset-col-action { width: 34%; }
+  .pl-schema-asset-col-action { width: 24%; }
   .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-right; }
   .pl-schema-asset-table-num { @apply text-right tabular-nums whitespace-nowrap; }
-  .pl-schema-asset-table-action { @apply whitespace-normal; }
+  .pl-schema-asset-table-action { @apply whitespace-normal text-left; }
   .pl-schema-asset-actions { @apply flex flex-wrap items-center justify-start gap-x-4 gap-y-1; }
   .pl-schema-asset-table .pl-row-action-link { @apply font-normal text-primary; }
   .pl-schema-asset-table button.pl-row-action-link:disabled { @apply cursor-wait opacity-60; }
@@ -821,6 +831,14 @@
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
+  /* UX-CONNECTIONS-005: when local Manifest read 0 but enabled_tables is
+     non-empty, the row's local-count cell surfaces the dual-source origin
+     via `data-state="drift"`. The drift state visually differentiates the
+     cell (warning-toned) so the eye picks up the inconsistency before
+     the inline `· 来源：enabled_tables` text is even read. */
+  .pl-schema-asset-local-count { @apply inline-flex items-baseline gap-1; }
+  .pl-schema-asset-local-count[data-state="drift"] { @apply font-semibold text-warning-strong; }
+  .pl-schema-asset-source-drift-tag { @apply text-xs font-normal text-warning-strong; }
   .pl-catalog-reload-status { @apply flex min-w-0 flex-1 flex-wrap items-center gap-2 text-sm text-fg-muted; }
   .pl-catalog-reload-status-main { @apply font-medium text-fg-default; }
   .pl-catalog-reload-status--success { @apply text-fg-muted; }

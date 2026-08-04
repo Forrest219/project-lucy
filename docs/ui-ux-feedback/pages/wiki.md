@@ -557,7 +557,7 @@ M64 移除 `▶` / `▼` glyph 后，目录 toggle button 仅靠 `cursor-pointer
 
 ## UX-WIKI-018: Wiki 首页统计 "N 个目录" 与 sidebar 空目录视觉冲突
 
-Status: Open
+Status: Fixed
 Route: /wiki
 Area: Markdown library home IA
 Severity: P3
@@ -587,3 +587,5 @@ Reported: 2026-08-04
 
 ### Notes
 2026-08-04 由 M64 浏览器复核发现并登记，依赖产品口径决定。等候选 wave（待定）排期，不在 M65 / M66 强修复范围内。Demo fixture 的空目录来自 `webui/server/wiki.ts` 的 fixture 数据，本身不是 bug；bug 在 UI 口径而不是数据。
+2026-08-04 M65 修复：用户拍板口径 = "只统计 md 数据和一级目录数量，不用统计有无 md，两者指标都要客观"。`webui/src/components/WikiLibraryHome.tsx` 的 `countDirectories` 改为：仅遍历顶层节点；当 `node.path === ""`（root 合成节点）或 `node.documentCount === 0`（无 md 子树）时不计入。Summary 文案增加 fallback：当 directoryCount === 0 时显示 "当前收录 N 篇 Markdown 文档，全部位于根目录。" 而不是 "分布在 0 个目录中"。
+2026-08-04 vitest 覆盖：`src/__tests__/wiki.test.tsx` 新增 M65 describe，断言 NESTED_WIKI_PAGES（顶层 4 目录 5 篇）→ "4 个目录中"；根目录唯一 md → "全部位于根目录"；显式空目录（documentCount=0）不计入。等待 docker 重建后浏览器复核。

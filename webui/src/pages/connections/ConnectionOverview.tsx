@@ -592,7 +592,7 @@ export function ConnectionOverview() {
                   {conn.schemas.length === 0 ? (
                     <p className="text-sm text-fg-muted py-3 notranslate" translate="no">尚未配置 Schema。请先添加 Schema。</p>
                   ) : (
-                    <table className="pl-schema-asset-table" data-testid={`schema-asset-table-${conn.id}`}>
+                    <table className="pl-data-grid pl-data-table pl-schema-asset-table" data-testid={`schema-asset-table-${conn.id}`}>
                       <colgroup>
                         <col className="pl-schema-asset-col-schema" />
                         <col className="pl-schema-asset-col-status" />
@@ -617,6 +617,17 @@ export function ConnectionOverview() {
                           const expanded = key ? Boolean(expandedWarnings[key]) : false;
                           const manifestPath = warning ? missingManifestPath(conn.id, schema, warning) : "";
                           const rowManifestKey = warningKey(conn.id, schema);
+                          // UX-CONNECTIONS-005: when local Manifest read 0 but
+                          // enabled_tables configured N>0, surface a tooltip +
+                          // inline source explanation so the two counts stop
+                          // looking self-contradictory. The numbers are
+                          // source-backed: local table count comes from
+                          // /api/connections/<id>/tables (Schema Manifest);
+                          // enabled count comes from `enabled_tables` in
+                          // ktx.yaml.
+                          const explainSourceDrift =
+                            assetState.tableCount === 0 && enabledTableCount > 0;
+                          const sourceDriftHintId = `schema-source-drift-hint-${conn.id}-${schema}`;
                           return (
                             <Fragment key={schema}>
                               <tr
@@ -633,7 +644,31 @@ export function ConnectionOverview() {
                                     {assetState.label}
                                   </span>
                                 </td>
-                                <td className="pl-schema-asset-table-num">{assetState.tableCount} 张表</td>
+                                <td className="pl-schema-asset-table-num">
+                                  <span
+                                    className="pl-schema-asset-local-count"
+                                    data-state={explainSourceDrift ? "drift" : "ok"}
+                                    data-testid={`schema-local-count-${conn.id}-${schema}`}
+                                    title={
+                                      explainSourceDrift
+                                        ? `本地 Manifest 未读到表，但 enabled_tables 已配置 ${enabledTableCount} 张：两个数字来自不同数据源。`
+                                        : undefined
+                                    }
+                                    aria-describedby={
+                                      explainSourceDrift ? sourceDriftHintId : undefined
+                                    }
+                                  >
+                                    {assetState.tableCount} 张表
+                                    {explainSourceDrift ? (
+                                      <span
+                                        className="pl-schema-asset-source-drift-tag"
+                                        data-testid={`schema-source-drift-tag-${conn.id}-${schema}`}
+                                      >
+                                        {" · 来源：enabled_tables"}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </td>
                                 <td
                                   className="pl-schema-asset-table-num"
                                   data-testid={`schema-enabled-count-${conn.id}-${schema}`}
@@ -822,7 +857,7 @@ export function ConnectionOverview() {
                     <CatalogReloadButton
                       connectionId={conn.id}
                       label="刷新本地目录"
-                      variant="primary"
+                      variant="secondary"
                       testId={`catalog-reload-${conn.id}`}
                       showCompletionLabel={false}
                       showInlineResult={false}

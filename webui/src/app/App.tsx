@@ -243,14 +243,17 @@ export function AppFrame() {
           <span className="pl-brand-mark" aria-hidden="true">
             L
           </span>
-          <div className="pl-brand-text">
-            <strong className="pl-brand-title">Lucy WebUI</strong>
+          <div className="pl-brand-text flex min-w-0 flex-col items-end gap-0.5">
+            <strong className="pl-brand-title" data-testid="brand-title">
+              Lucy WebUI
+            </strong>
             {/* v1.9.x 收口：移除英文 Subtitle（与中文 tagline 重复），仅保留一行干净中文。
                 M61: 副标题继续保留 notranslate / translate="no" 防止浏览器翻译插件
                 将 `Data Agent` 改写成 `数据 代理` / `代理 代理` 等机器直译。 */}
             <span
               className="pl-brand-tagline notranslate"
               translate="no"
+              data-testid="brand-tagline"
             >
               Data Agent 运维控制台
             </span>

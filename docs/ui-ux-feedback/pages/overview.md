@@ -256,9 +256,9 @@ Reported: 2026-08-04
   - 「访问治理」`y=790` 整组落在 viewport 中段，但视觉上被父容器 `overflow: hidden` 裁切到不可读。
 
 ### Expected
-- 任意分组状态组合下，侧栏中段 nav 都能完整渲染或可滚动；不被 footer 遮挡。
-- 主流桌面视口（≥ 1440px）下，全部 5 个分组展开时不需要滚动也能看完；更窄视口下允许中间 nav 区域独立滚动（footer 仍固定在底部）。
-- 子菜单项的 icon 与文字完整渲染，无任何截断。
+- 任意分组状态组合下，侧栏 footer 贴底不变、中段 nav 独立可滚、滚动条始终可见（**M65 用户拍板 A 方案：接受滚动，不走默认折叠二级**）。
+- 主流桌面视口（≥ 1440px）下，5 个分组全展开时 nav 内容可能超出视口，**依赖中段 nav 独立滚动**；不再追求"全部 5 分组不滚动看完"。
+- 滚动时子菜单项的 icon 与文字完整渲染，无任何截断。
 - 滚动条本身始终可见，避免用户把"nav 可滚"误读为"内容被 footer 遮挡的截断"。
 
 ### Browser Check
@@ -290,3 +290,31 @@ Reported: 2026-08-04
   - CSS 编译产物验证：`curl /assets/index-CSVAjFf1.css` 含 `scrollbar-width: thin; scrollbar-color: var(--color-border-default) transparent;` + `::-webkit-scrollbar{width:6px;height:6px}` + `::-webkit-scrollbar-thumb{background-color:var(--color-border-default);border-radius:var(--token-radius-pill)}` + `::-webkit-scrollbar-thumb:hover{background-color:var(--color-fg-muted)}` 5 条规则。
   - 截图证据：../assets/overview/UX-OVERVIEW-007-verified.jpg（1920×1080 视口，scroll 容器位置已下沉 400px，下方 footer 「打开系统手册」与 nav 「运行历史」重叠已解除，5 分组全可见/可达）。
   - 局限：vision 工具本轮调用 abort，未做像素级渲染视觉确认；DOM + CSS 编译产物 + scroll effect 三项客观证据闭合，screenshot 仅作辅助记录。
+- 2026-08-04 M65 用户拍板：保留滚动契约（方向 A 落地），不再追求"≥ 1440px 不滚动看完"。`Expected` 与 README §跨页面治理规则 同步改写为"footer 贴底 + 中段 nav 独立可滚 + 滚动条始终可见"；`Status` 保持 `Verified`，无代码改动。
+
+## UX-OVERVIEW-008: MCP 接入区并列按钮视觉显著性不一致
+
+Status: Fixed
+Route: /overview
+Area: MCP 接入 / action group
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+`复制 MCP 配置` 与 `查看配置` 是同一组并列动作，但前者使用 `primary`、后者使用 `secondary`。该分组没有明确单一路径，主次混用会让用户误以为某个动作更“应该先点”。
+
+### Evidence
+- Browser check 2026-08-04 (`http://127.0.0.1:55176/overview`): `复制 MCP 配置` 为深底白字 `primary`，`查看配置` 为白底边框 `secondary`，同排显示时权重差异明显。
+
+### Expected
+`MCP 接入`操作组中的并列动作应保持同级视觉层级：`复制 MCP 配置` 与 `查看配置` 均为 `secondary`。只有存在唯一推荐主路径时才允许单个 `primary`。
+
+### Browser Check
+1. Open `http://127.0.0.1:55176/overview`.
+2. Locate the `MCP 接入` section.
+3. Verify both `复制 MCP 配置` and `查看配置` use `secondary` style.
+4. Verify this action group contains no `primary` button.
+
+### Notes
+- 2026-08-04 已将 `webui/src/pages/Onboarding.tsx` 中 `复制 MCP 配置` 按钮样式从 `pl-btn--primary` 调整为 `pl-btn--secondary`，保持与 `查看配置` 同级。
+- 本条与 `UX-CONNECTIONS-023` 属于同一 cross-cutting 主题：`button hierarchy consistency`。

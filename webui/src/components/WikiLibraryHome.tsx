@@ -30,7 +30,16 @@ export function WikiLibraryHome({
       data-testid="wiki-library-home"
     >
       <p className="pl-wiki-library-summary" data-testid="wiki-library-summary">
-        当前收录 <strong>{total}</strong> 篇 <span className="notranslate" translate="no">Markdown</span> 文档，分布在 <strong>{directoryCount}</strong> 个目录中。
+        {directoryCount === 0 ? (
+          <>
+            当前收录 <strong>{total}</strong> 篇 <span className="notranslate" translate="no">Markdown</span> 文档，全部位于根目录。
+          </>
+        ) : (
+          <>
+            当前收录 <strong>{total}</strong> 篇 <span className="notranslate" translate="no">Markdown</span>{" "}
+            文档，分布在 <strong>{directoryCount}</strong> 个目录中。
+          </>
+        )}
       </p>
 
       {pages.length === 0 ? (
@@ -86,8 +95,18 @@ export function WikiLibraryHome({
 }
 
 function countDirectories(nodes: WikiDirectoryNode[]): number {
+  // M65: only count top-level directories, and only those that actually
+  // contain (or recursively contain) Markdown documents. Empty subtrees
+  // were inflating the count in seed data and contradicted the
+  // user-facing summary.
+  //
+  // The synthetic root node (`path === ""`) represents pages that live at
+  // the wiki root rather than inside a named directory. We intentionally
+  // exclude it so the "N 个目录中" sentence stays consistent with the
+  // "全部位于根目录" fallback when no named directories exist.
   return nodes.reduce(
-    (sum, node) => sum + 1 + countDirectories(node.children),
+    (sum, node) =>
+      sum + (node.path === "" || node.documentCount === 0 ? 0 : 1),
     0
   );
 }

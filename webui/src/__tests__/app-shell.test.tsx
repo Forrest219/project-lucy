@@ -523,4 +523,35 @@ describe("AppFrame shell", () => {
       expect(helpLink).toHaveTextContent("系统手册");
     });
   });
+
+  describe("M65 brand block right-edge alignment", () => {
+    it("renders the brand title and tagline inside a single 152px flex column", () => {
+      // M65 Brand Alignment: the brand text container is now `flex flex-col
+      // items-end` (not `grid`) so `Lucy WebUI` and `Data Agent 运维控制台`
+      // share the right edge inside the same 152px column. The tagline must
+      // not silently truncate via `text-overflow: ellipsis` — its class
+      // should not carry the legacy single-line clamp markers.
+      renderAt("/overview");
+
+      const brandLink = screen.getByRole("link", { name: "返回系统概览" });
+      const brandText = brandLink.querySelector(".pl-brand-text");
+      expect(brandText).not.toBeNull();
+      expect(brandText).toHaveClass("pl-brand-text");
+      // jsdom only knows className tokens; we assert against the literal
+      // Tailwind tokens we expect, not the compiled CSS.
+      expect(brandText?.className ?? "").toContain("flex");
+      expect(brandText?.className ?? "").toContain("flex-col");
+      expect(brandText?.className ?? "").toContain("items-end");
+
+      const title = screen.getByTestId("brand-title");
+      const tagline = screen.getByTestId("brand-tagline");
+      expect(title).toHaveTextContent("Lucy WebUI");
+      expect(tagline).toHaveTextContent("Data Agent 运维控制台");
+
+      // The legacy ellipse clamps lived inline on `.pl-brand-block
+      // .pl-brand-tagline`; the M65 CSS dropped them, so the helper class
+      // list on the tagline span must NOT include `truncate`.
+      expect(tagline.className).not.toContain("truncate");
+    });
+  });
 });

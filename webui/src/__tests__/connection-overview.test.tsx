@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionInfo } from "../lib/types";
@@ -1163,7 +1164,7 @@ describe("ConnectionOverview", () => {
     expect(dbNode.closest("[translate='no']")).not.toBeNull();
   });
 
-  it("M29/M44: footer hosts exactly one Primary (刷新本地目录) and the row keeps 上传 Manifest", async () => {
+  it("M29/M44: footer keeps peer secondary actions and the row keeps 上传 Manifest", async () => {
     stubOverviewFetch();
     renderOverview();
 
@@ -1178,16 +1179,12 @@ describe("ConnectionOverview", () => {
     ).toEqual(["+ 添加 Schema", "刷新本地目录"]);
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toHaveClass("pl-btn--secondary");
     const refreshButton = within(footerActions).getByRole("button", { name: "刷新本地目录" });
-    expect(refreshButton).toHaveClass("pl-btn--primary");
+    expect(refreshButton).toHaveClass("pl-btn--secondary");
     expect(within(footerActions).queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
-    // Each card exposes at most one Primary across footer + banner.
-    const primaryButtons = within(card).getAllByRole("button", { hidden: true }).filter((button) =>
-      button.className.includes("pl-btn--primary")
-    );
-    expect(primaryButtons).toHaveLength(1);
-    expect(primaryButtons[0]).toHaveTextContent("刷新本地目录");
+    // Peer actions in the footer should stay at the same secondary hierarchy.
+    expect(within(footerActions).queryByRole("button", { name: "刷新本地目录" })).not.toHaveClass("pl-btn--primary");
     expect(within(card).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "上传语义包" })
@@ -1327,5 +1324,119 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByText("财政部舱单")).not.toBeInTheDocument();
     expect(screen.queryByText("模式清单")).not.toBeInTheDocument();
     assertNoForbiddenTerms(document.body);
+  });
+});
+
+describe("ConnectionOverview schema-row source drift explanation (UX-CONNECTIONS-005)", () => {
+  // UX-CONNECTIONS-005: when a schema has zero local Manifest tables but
+  // enabled_tables lists >0 entries for that schema, surface the data-source
+  // discrepancy via (a) a `data-state="drift"` hook on the local-count cell
+  // for CSS styling, (b) a `title` tooltip explaining the dual-source origin,
+  // (c) an inline drift tag so the explanation is visible without hover, and
+  // (d) `aria-describedby` for screen-reader access.
+
+  it("marks the local-count cell as `data-state=\"drift\"` and renders an inline source-drift tag", async () => {
+    stubOverviewFetch({
+      // Connection declares a `demo_finance` schema with two enabled tables,
+      // but `/api/sources` returns no rows for it — i.e. local Manifest read
+      // returned zero for this schema. This is the canonical "drift" case.
+      connections: [
+        {
+          id: "starrocks-r1",
+          driver: "mysql",
+          schemas: ["demo_finance"],
+          enabledTables: ["demo_finance.ceo_metric_snapshot", "demo_finance.fct_revenue"]
+        }
+      ],
+      tables: []
+    });
+
+    renderOverview();
+
+    const localCount = await screen.findByTestId("schema-local-count-starrocks-r1-demo_finance");
+    expect(localCount).toHaveAttribute("data-state", "drift");
+    expect(localCount).toHaveTextContent("0 张表");
+    expect(localCount).toHaveAttribute(
+      "title",
+      expect.stringContaining("enabled_tables 已配置")
+    );
+    expect(localCount).toHaveAttribute(
+      "aria-describedby",
+      "schema-source-drift-hint-starrocks-r1-demo_finance"
+    );
+
+    const driftTag = screen.getByTestId("schema-source-drift-tag-starrocks-r1-demo_finance");
+    expect(driftTag).toHaveTextContent("· 来源：enabled_tables");
+    expect(driftTag).toHaveClass("pl-schema-asset-source-drift-tag");
+
+    // Enabled-count cell must still report the real number, not collapse to 0.
+    const enabledCount = screen.getByTestId("schema-enabled-count-starrocks-r1-demo_finance");
+    expect(enabledCount).toHaveTextContent("2 张表");
+  });
+
+  it("does NOT mark the local-count cell as drift when both sources agree", async () => {
+    stubOverviewFetch({
+      // Both sources agree: enabled_tables has one entry, and one local
+      // Manifest row exists for the same schema.
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders", "dataforai")]
+    });
+
+    renderOverview();
+
+    const localCount = await screen.findByTestId("schema-local-count-mysql-aliyun-dataforai");
+    expect(localCount).toHaveAttribute("data-state", "ok");
+    expect(localCount).not.toHaveAttribute("title");
+    expect(localCount).not.toHaveAttribute("aria-describedby");
+    expect(
+      screen.queryByTestId("schema-source-drift-tag-mysql-aliyun-dataforai")
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("ConnectionOverview grid visual consistency (M72)", () => {
+  it("uses the shared pl-data-grid contract for Schema asset tables", async () => {
+    stubOverviewFetch();
+    renderOverview();
+
+    const table = await screen.findByTestId("schema-asset-table-mysql-aliyun");
+    expect(table.className).toContain("pl-data-grid");
+    expect(table.className).toContain("pl-data-table");
+    expect(table.className).toContain("pl-schema-asset-table");
+
+    const localHead = within(table).getByRole("columnheader", { name: "本地表数" });
+    const enabledHead = within(table).getByRole("columnheader", { name: "启用表数" });
+    expect(localHead.className).toContain("pl-schema-asset-table-num-head");
+    expect(enabledHead.className).toContain("pl-schema-asset-table-num-head");
+
+    const localCell = await screen.findByTestId("schema-local-count-mysql-aliyun-dataforai");
+    const enabledCell = await screen.findByTestId("schema-enabled-count-mysql-aliyun-dataforai");
+    expect(localCell.className).toContain("pl-schema-asset-local-count");
+    expect(enabledCell.className).toContain("pl-schema-asset-table-num");
+  });
+
+  it("keeps schema asset table typography and action-column width aligned with shared grid tokens", () => {
+    const css = readFileSync("src/app/app.css", "utf8");
+    const tableRule = css.match(/\.pl-schema-asset-table td\s*\{[^}]*\}/);
+    expect(tableRule).not.toBeNull();
+    expect(tableRule![0]).toMatch(/py-2/);
+    expect(tableRule![0]).toMatch(/text-fg-default/);
+    expect(tableRule![0]).not.toMatch(/py-1\.5|leading-5|text-fg-body/);
+
+    const codeRule = css.match(/\.pl-schema-asset-table code\s*\{[^}]*\}/);
+    expect(codeRule).not.toBeNull();
+    expect(codeRule![0]).toMatch(/text-xs/);
+    expect(codeRule![0]).not.toMatch(/text-sm/);
+
+    const actionColRule = css.match(/\.pl-schema-asset-col-action\s*\{[^}]*\}/);
+    expect(actionColRule).not.toBeNull();
+    expect(actionColRule![0]).toMatch(/width:\s*24%/);
   });
 });

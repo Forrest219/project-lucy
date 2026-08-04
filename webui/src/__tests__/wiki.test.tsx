@@ -1802,9 +1802,12 @@ describe("Wiki home and tree visual clarity (M64)", () => {
     const home = await screen.findByTestId("wiki-library-home");
     // spec §7.1：去掉 hero 大标题文案，但保留"Markdown 文档库"作为 aria-label
     expect(home).not.toHaveTextContent("按目录管理业务口径文档");
-    // 统计摘要文案仍然存在
-    expect(home).toHaveTextContent("当前收录");
-    expect(home).toHaveTextContent("篇 Markdown 文档");
+    // 统计摘要文案仍然存在。React Query 在第一次 render 时仍是 loading 状态，
+    // summary 此时显示「0 篇 Markdown 文档，全部位于根目录」；我们要等到列表
+    // 拉回来之后再断言「个目录中」。`waitFor` 会反复重试直到数据落到 DOM。
+    await waitFor(() => {
+      expect(home).toHaveTextContent("3 篇 Markdown 文档");
+    });
     expect(home).toHaveTextContent("个目录中");
 
     // spec §7.2 + plan §Phase 5：右侧改为 Markdown 文档列表
@@ -1893,5 +1896,64 @@ describe("Wiki home and tree visual clarity (M64)", () => {
     // 4) 关联表纳入 summary row，旧的游离 <p> 已移除
     const refsRow = within(summary).getByTestId("wiki-upload-summary-refs");
     expect(refsRow).toHaveTextContent("关联表");
+  });
+});
+
+describe("Wiki home directory count (M65)", () => {
+  // M65：summary 只统计顶层目录 + 含 md 的目录。
+  // 旧实现递归统计所有节点，ops/playbooks 等嵌套目录会被错误计入；
+  // 没有任何 md 的目录（含空目录）也不应再被计入。
+
+  it("counts only top-level directories that contain Markdown documents", async () => {
+    vi.stubGlobal("fetch", buildFetchMock(NESTED_WIKI_PAGES));
+    renderWiki("/wiki");
+
+    const summary = await screen.findByTestId("wiki-library-summary");
+    await waitFor(() => {
+      expect(summary).toHaveTextContent("5 篇 Markdown 文档");
+    });
+    // NESTED_WIKI_PAGES = global/, poc/, kx/, ops/playbooks/, ops/runbooks/
+    // 顶层目录 4 个：global / poc / kx / ops。ops/playbooks 与 ops/runbooks
+    // 是嵌套目录，不再独立计入。
+    expect(summary).toHaveTextContent("4 个目录中");
+    expect(summary).not.toHaveTextContent("全部位于根目录");
+  });
+
+  it("collapses the summary copy to `全部位于根目录` when no directories have content", async () => {
+    // 一篇根目录 md（key 不含 `/`），没有其它目录 → directoryCount = 0
+    const rootOnly = [
+      {
+        key: "welcome.md",
+        summary: "Welcome",
+        tags: [],
+        slRefs: []
+      }
+    ];
+    vi.stubGlobal("fetch", buildFetchMock(rootOnly, SOURCES, []));
+    renderWiki("/wiki");
+
+    const summary = await screen.findByTestId("wiki-library-summary");
+    await waitFor(() => {
+      expect(summary).toHaveTextContent("1 篇 Markdown 文档");
+    });
+    expect(summary).toHaveTextContent("全部位于根目录");
+    expect(summary).not.toHaveTextContent("个目录中");
+  });
+
+  it("skips explicit empty directories so they don't inflate the count", async () => {
+    // 一篇真实 md 在 `global/`，另声明一个空目录 `archive`。
+    // 旧实现会把 archive 也算 1，新实现应忽略。
+    const directories: WikiDirectorySummary[] = [
+      { path: "global", name: "global", documentCount: 1, explicit: true, empty: false },
+      { path: "archive", name: "archive", documentCount: 0, explicit: true, empty: true }
+    ];
+    vi.stubGlobal("fetch", buildFetchMock(WIKI_PAGES, SOURCES, directories));
+    renderWiki("/wiki");
+
+    const summary = await screen.findByTestId("wiki-library-summary");
+    await waitFor(() => {
+      expect(summary).toHaveTextContent("3 篇 Markdown 文档");
+    });
+    expect(summary).toHaveTextContent("3 个目录中");
   });
 });

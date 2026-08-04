@@ -106,7 +106,7 @@ Reported: 2026-08-03
 
 ## UX-GLOBAL-SHELL-004: 品牌命名与两行视觉长度需要真实对齐
 
-Status: Open
+Status: Fixed
 Route: all WebUI routes
 Area: Sidebar brand / wordmark
 Severity: P2
@@ -136,6 +136,8 @@ Reported: 2026-08-03
 
 ### Notes
 2026-08-03 M61 已修复命名、可点击区域和容器宽度；Docker 重建后浏览器复核显示：`Lucy WebUI` and `Data Agent 运维控制台` both render without overflow, but actual text widths are still not aligned (`Lucy WebUI` about `81.63px`, tagline about `121.64px`). Keep `Open` until the visual length requirement is explicitly resolved or re-scoped.
+2026-08-04 M65 修复：用户要求 "请修复"。`webui/src/app/app.css` 的 `.pl-brand-text` 从 `grid min-w-0 gap-0.5; width: 152px` 改为 `flex flex-col items-end gap-0.5; width: 152px`，让 `Lucy WebUI` 与 `Data Agent 运维控制台` 共享 152px 容器内的同一条右边缘；`.pl-brand-block .pl-brand-tagline` 移除 `white-space:nowrap; overflow:hidden; text-overflow:ellipsis` 避免隐形截断，改为 `width: max-content; font-size: 0.75rem; letter-spacing: 0.02em; font-variant-numeric: tabular-nums`。`webui/src/app/App.tsx` 给 title / tagline 加上 `data-testid="brand-title"` / `data-testid="brand-tagline"` 便于浏览器复核定位。
+2026-08-04 vitest 覆盖：`src/__tests__/app-shell.test.tsx` 新增 M65 describe 断言 brand-text className 含 `flex` / `flex-col` / `items-end`；tagline span 不再带 `truncate` 类名。等待 docker 重建后浏览器复核（脚本式复核：取 `.pl-brand-title` / `.pl-brand-tagline` 的 getBoundingClientRect().right，应当相等或在 ≤2px 容差内）。
 
 ## UX-GLOBAL-SHELL-005: 折叠菜单焦点环视觉权重偏高
 

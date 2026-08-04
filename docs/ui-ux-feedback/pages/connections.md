@@ -119,7 +119,7 @@ Schema 名称、状态、统计数值和行内操作应在同一行高内视觉�
 
 ## UX-CONNECTIONS-005: 本地表数为 0 但启用表数大于 0 的统计语义不清
 
-Status: Open
+Status: Fixed
 Route: `/connections`
 Area: StarRocks `demo_finance` and `meta` rows
 Severity: P2
@@ -144,6 +144,8 @@ StarRocks 出现矛盾统计：`demo_finance` 中本地表数是 `0`，但启用
 ### Notes
 2026-08-02 API 只读核查显示 `enabledTables` includes `demo_finance.ads_finance_revenue_day` and `meta.*`, while `/api/connections/starrocks-r1/tables` returns `[]`. This is source-backed but needs clearer UI semantics.
 2026-08-02 浏览器复核未通过：`demo_finance` and `meta` still show `本地表数 = 0 张表` with `启用表数 > 0 张表` without visible source-difference explanation in the table row.
+2026-08-04 M65 修复：`webui/src/pages/connections/ConnectionOverview.tsx` schema 行计算 `explainSourceDrift = assetState.tableCount === 0 && enabledTableCount > 0`，本地表数单元格 `<span class="pl-schema-asset-local-count" data-state="drift|ok">` 携带 title tooltip + aria-describedby，并追加内联 `<span class="pl-schema-asset-source-drift-tag"> · 来源：enabled_tables</span>` 让用户在 hover 之前就能看到来源差异；CSS 在 `webui/src/app/app.css` 中按 `data-state="drift"` 调整为 warning-toned 加粗。等待 docker 重建后浏览器复核。
+2026-08-04 vitest 覆盖：`src/__tests__/connection-overview.test.tsx` 新增 M65 describe，覆盖 drift / ok 双向断言（testid `schema-local-count-*` / `schema-source-drift-tag-*` / `aria-describedby` / `title`）。
 
 ## UX-CONNECTIONS-006: Schema 表格后两列视觉拥挤
 
@@ -612,3 +614,29 @@ Reported: 2026-08-03
 
 ### Notes
 2026-08-03 M62 source state removes `toUpperCase()` from `TableWhitelist.tsx` group headings and removes `uppercase` from `.pl-table-group-heading` in `app.css`. Non-browser validation passed: `npm run lint:terminology`, `npm test -- src/__tests__/catalog.test.tsx src/__tests__/table-whitelist.test.tsx`, `npm run build`. 容器镜像 `project-lucy:demo` 在第二次 `docker compose build --no-cache lucy` 后重跑 `up -d`，容器内 `/app/webui/dist/assets/` 由 `index-D-SnpNw3.js` 变为 `index-C5kBxIMU.js`，浏览器复核 `/connections/enabled-tables` 默认分组、`openclaw_db` 缺失 Manifest 诊断分组、Schema 下拉、`/catalog` 分组标题、`/connections` 卡面均通过，状态升至 `Verified`。跨页 companion `UX-CATALOG-018` 在 README 的最近维护记录里同步登记。
+
+## UX-CONNECTIONS-023: Connection 卡片底部并列动作视觉层级不一致
+
+Status: Fixed
+Route: `/connections`
+Area: Connection card footer / `+ 添加 Schema` and `刷新本地目录`
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+同一 Connection 卡片底部动作区内，`+ 添加 Schema` 使用次级样式，而 `刷新本地目录` 使用主按钮样式。两者是并列维护动作，不存在明确主次路径，视觉权重不一致会误导操作优先级。
+
+### Evidence
+- Browser check 2026-08-04 (`http://127.0.0.1:55176/connections`): `+ 添加 Schema` 为白底边框 `secondary`；`刷新本地目录` 为深底白字 `primary`，并排时显著性明显高于同组按钮。
+
+### Expected
+同组并列维护动作保持同级视觉层级：`+ 添加 Schema` 与 `刷新本地目录` 均为 `secondary`。仅当卡片内存在唯一推荐主路径时才允许单个 `primary`。
+
+### Browser Check
+1. Open `/connections`.
+2. Locate any Connection card footer action row.
+3. Verify `+ 添加 Schema` and `刷新本地目录` are both rendered as `secondary`.
+4. Verify there is no extra `primary` button in the same footer action group.
+
+### Notes
+2026-08-04 已将 `webui/src/pages/connections/ConnectionOverview.tsx` 中 `CatalogReloadButton` 的 `variant` 从 `primary` 改为 `secondary`，并同步更新 `webui/src/__tests__/connection-overview.test.tsx` 对应断言（M29/M44 用例）。
