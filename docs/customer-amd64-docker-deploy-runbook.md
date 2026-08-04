@@ -218,6 +218,7 @@ curl -sf -X POST http://localhost:7879/mcp \
 | `ktx cannot connect to db` | secret 文件不存在 / 权限错 / 路径错 | `ls -l customer-config/.ktx/secrets/` 检查；权限必须是 600 |
 | `permission denied` 在 MCP 调用 | Agent token 没建 / 已被吊销 | 走 `docs/lucy-admin-guide.md` 创建 Agent + Token |
 | `LUCY_PUBLIC_MCP_URL not set` 警告 | 没填 `.env` 里的 `LUCY_PUBLIC_MCP_URL` | 填上后 `docker compose up -d` |
+| 日志出现 `knowledge_pages.summary` NOT NULL 报错 | example wiki 内容与 KTX 0.16.0 schema 不完全匹配 | **如果客户 wiki 是自己写的、不带 frontmatter `summary:`** → 在每篇 markdown 顶部加 `summary: <一句话摘要>`；如果客户 wiki 已经有 `summary` → 检查 frontmatter 格式（key/value 之间是 `: ` 不是 `:`） |
 
 排障抓现场：
 
