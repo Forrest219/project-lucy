@@ -50,6 +50,10 @@ defaults:
     - dataforai.kx_
 `;
 
+function hoursAgoIso(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
 async function seedProject() {
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
   await mkdir(path.join(projectRoot, ".ktx-ui", "eval"), { recursive: true });
@@ -57,7 +61,8 @@ async function seedProject() {
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
 }
 
-async function insertAuditFixture() {
+async function insertAuditFixture(options?: { withSources?: boolean; extraTablesOnly?: boolean }) {
+  const withSources = options?.withSources !== false;
   const db = await getAuditDb();
   const insert = db.prepare(`
     INSERT INTO access_log
@@ -67,13 +72,21 @@ async function insertAuditFixture() {
     VALUES
       (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const deniedTs = hoursAgoIso(3);
+  const okTs = hoursAgoIso(2);
+  const deniedTables = options?.extraTablesOnly
+    ? []
+    : ["mysql.dataforai.kx_fact_financial_amount"];
+  const okTables = options?.extraTablesOnly
+    ? ["mysql.dataforai.fallback_only_table"]
+    : [];
   insert.run(
-    "2026-08-03T01:00:00.000Z",
+    deniedTs,
     "agent-a",
     "active-token",
-    "abc123def456",
+    "sha256:abc123def456",
     "lucy_query",
-    JSON.stringify(["mysql.dataforai.kx_fact_financial_amount"]),
+    JSON.stringify(deniedTables),
     "secret raw args should not leave backend",
     "select * from salary",
     "denied",
@@ -86,12 +99,12 @@ async function insertAuditFixture() {
     "table_forbidden"
   );
   insert.run(
-    "2026-08-03T02:00:00.000Z",
+    okTs,
     "agent-a",
     "active-token",
-    "abc123def456",
+    "sha256:abc123def456",
     "lucy_catalog",
-    JSON.stringify([]),
+    JSON.stringify(okTables),
     null,
     null,
     "ok",
@@ -103,29 +116,33 @@ async function insertAuditFixture() {
     "sha256:snapshot",
     null
   );
-  db.prepare(`
-    INSERT INTO access_log_sources
-      (access_log_id, ts, user_id, tool, connection_id, schema_name, source_name,
-       physical_table, extraction_method, confidence, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    1,
-    "2026-08-03T01:00:00.000Z",
-    "agent-a",
-    "lucy_query",
-    "mysql",
-    "dataforai",
-    "kx_fact_financial_amount",
-    "mysql.dataforai.kx_fact_financial_amount",
-    "acl",
-    "high",
-    "2026-08-03T01:00:00.000Z"
-  );
+
+  if (withSources) {
+    db.prepare(`
+      INSERT INTO access_log_sources
+        (access_log_id, ts, user_id, tool, connection_id, schema_name, source_name,
+         physical_table, extraction_method, confidence, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      1,
+      deniedTs,
+      "agent-a",
+      "lucy_query",
+      "mysql",
+      "dataforai",
+      "kx_fact_financial_amount",
+      "mysql.dataforai.kx_fact_financial_amount",
+      "acl",
+      "high",
+      deniedTs
+    );
+  }
+
   db.prepare(`
     INSERT INTO config_change_log
       (ts, actor, file_path, change_type, target_id, request_id)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run("2026-08-03T03:00:00.000Z", "local-admin", "webui/config/access.yaml", "update", "finance_readonly", "req-config");
+  `).run(hoursAgoIso(1), "local-admin", "webui/config/access.yaml", "update", "finance_readonly", "req-config");
 }
 
 beforeEach(async () => {
@@ -155,65 +172,118 @@ afterEach(async () => {
 });
 
 describe("admin governance observability", () => {
-  it("returns redacted overview aggregates without raw SQL or args", async () => {
+  it("returns usageOverview aggregates without raw SQL or args", async () => {
     const app = buildServer();
     await app.ready();
 
-    const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=720" });
+    const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);
 
+    expect(body.data.usageOverview).toMatchObject({
+      agentCount: 2,
+      activeAgentCount: 1,
+      agentActiveRate: 50,
+      configuredTokenCount: 2,
+      activeTokenCount: 1,
+      tokenActiveRate: 50,
+      calls: 2,
+      avgLatencyMs: 70
+    });
+    expect(body.data.popularTables).toEqual([
+      expect.objectContaining({
+        table: "mysql.dataforai.kx_fact_financial_amount",
+        calls: 1
+      })
+    ]);
+    // Compat cards remain available but are not the primary usage contract.
+    // p95 over [20, 120] => index ceil(2*0.95)-1 = 1 => 120 (not avg 70).
     expect(body.data.cards).toMatchObject({
       calls: 2,
       denied: 1,
       deniedRate: 50,
       activeTokenCount: 1,
+      p95LatencyMs: 120,
+      avgLatencyMs: 70,
       brokenRoleCount: 1,
       overBroadRoleCount: 1,
       configChangeCount: 1
     });
+    expect(body.data.cards.p95LatencyMs).not.toBe(body.data.cards.avgLatencyMs);
     expect(JSON.stringify(body)).not.toContain("select * from salary");
     expect(JSON.stringify(body)).not.toContain("secret raw args");
+    expect(JSON.stringify(body)).not.toMatch(/sha256:[a-f0-9]{64}/i);
 
     await app.close();
   });
 
-  it("surfaces agent, role, token, and denial boundaries", async () => {
+  it("falls back to access_log.tables when access_log_sources has no rows", async () => {
+    resetAuditDbForTests();
+    await rm(process.env.LUCY_AUDIT_DB!, { force: true });
+    await insertAuditFixture({ withSources: false, extraTablesOnly: true });
+
     const app = buildServer();
     await app.ready();
 
-    const agents = await app.inject({ method: "GET", url: "/api/admin/governance/agents?hours=720" });
+    const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.data.popularTables).toEqual([
+      expect.objectContaining({
+        table: "mysql.dataforai.fallback_only_table",
+        calls: 1
+      })
+    ]);
+    expect(body.data.popularTables.some((row: { table: string }) => row.table.includes("kx_fact_financial_amount"))).toBe(false);
+
+    await app.close();
+  });
+
+  it("surfaces agent usage stats with fixed 7d active tokens", async () => {
+    const app = buildServer();
+    await app.ready();
+
+    const agents = await app.inject({ method: "GET", url: "/api/admin/governance/agents?hours=24" });
     expect(agents.statusCode).toBe(200);
-    expect(JSON.parse(agents.payload).data.agents[0]).toMatchObject({
+    const agentBody = JSON.parse(agents.payload);
+    expect(agentBody.data.agents[0]).toMatchObject({
       id: "agent-a",
       calls: 2,
-      denied: 1,
-      deniedRate: 50,
+      avgLatencyMs: 70,
+      p95LatencyMs: 120,
       activeTokenCount: 1,
       configuredTokenCount: 1,
       topDeniedReason: "table_forbidden"
     });
+    expect(agentBody.data.agents[0].lastSeen).toBeTruthy();
+    expect(agentBody.data.agents.map((row: { id: string }) => row.id)).toEqual(["agent-a", "agent-b"]);
 
-    const roles = await app.inject({ method: "GET", url: "/api/admin/governance/roles?hours=720" });
+    const roles = await app.inject({ method: "GET", url: "/api/admin/governance/roles?hours=168" });
     expect(roles.statusCode).toBe(200);
     const rolesBody = JSON.parse(roles.payload);
+    expect(rolesBody.data.compatTruncation).toEqual({ auditRowsLimit: 5000 });
     expect(rolesBody.data.roles).toContainEqual(expect.objectContaining({ id: "broken_role", status: "broken" }));
     expect(rolesBody.data.roles).toContainEqual(expect.objectContaining({ id: "wildcard_role", status: "over_broad" }));
 
-    const tokens = await app.inject({ method: "GET", url: "/api/admin/governance/tokens?hours=720" });
+    const tokens = await app.inject({ method: "GET", url: "/api/admin/governance/tokens?hours=168" });
     expect(tokens.statusCode).toBe(200);
     const tokensBody = JSON.parse(tokens.payload);
     expect(tokensBody.data.tokens).toContainEqual(expect.objectContaining({
       agentId: "agent-a",
-      tokenHashPrefix: "abc123def456",
+      tokenHashPrefix: "sha256:abc123def456",
+      activeInLast7d: true,
+      configured: true,
       stale: false
     }));
     expect(tokensBody.data.tokens).toContainEqual(expect.objectContaining({
       agentId: "agent-b",
+      activeInLast7d: false,
+      configured: true,
       stale: true
     }));
+    expect(JSON.stringify(tokensBody)).not.toMatch(/sha256:[a-f0-9]{64}/i);
 
-    const denials = await app.inject({ method: "GET", url: "/api/admin/governance/denials?hours=720" });
+    const denials = await app.inject({ method: "GET", url: "/api/admin/governance/denials?hours=168" });
     expect(denials.statusCode).toBe(200);
     const denialsBody = JSON.parse(denials.payload);
     expect(denialsBody.data.reasonCounts).toContainEqual({ reason: "table_forbidden", count: 1 });
@@ -222,6 +292,50 @@ describe("admin governance observability", () => {
       count: 1
     }));
 
+    await app.close();
+  });
+
+  it("matches token activity for bare-hex historical prefixes", async () => {
+    resetAuditDbForTests();
+    await rm(process.env.LUCY_AUDIT_DB!, { force: true });
+    await seedProject();
+    const db = await getAuditDb();
+    db.prepare(`
+      INSERT INTO access_log
+        (ts, user_id, token_label, token_hash_prefix, tool, tables, args_summary,
+         query_preview, outcome, error_detail, duration_ms, request_id, trace_id,
+         role_ids, permission_snapshot_hash, decision_reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      hoursAgoIso(1),
+      "agent-a",
+      "active-token",
+      "abc123def456",
+      "lucy_query",
+      JSON.stringify([]),
+      null,
+      null,
+      "ok",
+      null,
+      30,
+      "req-bare-prefix",
+      "trace-bare-prefix",
+      JSON.stringify(["finance_readonly"]),
+      "sha256:snapshot",
+      null
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const tokens = await app.inject({ method: "GET", url: "/api/admin/governance/tokens?hours=168" });
+    expect(tokens.statusCode).toBe(200);
+    const tokensBody = JSON.parse(tokens.payload);
+    expect(tokensBody.data.tokens).toContainEqual(expect.objectContaining({
+      agentId: "agent-a",
+      tokenHashPrefix: "sha256:abc123def456",
+      activeInLast7d: true,
+      lastUsed: expect.any(String)
+    }));
     await app.close();
   });
 });

@@ -57,6 +57,7 @@
 | [65-safe-log-to-eval-spec.md](65-safe-log-to-eval-spec.md) | Safe Log-to-Security-Eval：权限 / 安全负样本 Candidate Pool、Reviewer Evidence、P0 security Eval promotion | 产品 / API / Eval / 安全 |
 | [66-fde-copilot-candidate-spec.md](66-fde-copilot-candidate-spec.md) | Deferred：FDE Copilot Candidate，保留为后续 FDE productivity 资料 | 产品 / UX / 语义工具 |
 | [69-admin-governance-observability-spec.md](69-admin-governance-observability-spec.md) | Admin Governance Observability：Audit Trace read model、Agent / Role / Token dashboard、risk review candidates、release readiness evidence package | 产品 / API / UX / 安全 |
+| [75-admin-governance-usage-overview-spec.md](75-admin-governance-usage-overview-spec.md) | `/admin/governance` usage-first 首屏：8 KPI、Agent/Token 使用、最受访问表；风险模块主屏下沉 | 产品 / API / UX |
 | [67-sidebar-brand-navigation-polish-spec.md](67-sidebar-brand-navigation-polish-spec.md) | Sidebar Brand Navigation Polish：参考 Kaelio ktx Docs 的品牌区、折叠菜单、active 状态和命令入口，升级 Lucy 左侧导航体验 | 产品 / UX / Navigation / Brand |
 | [68-sidebar-brand-navigation-followup-spec.md](68-sidebar-brand-navigation-followup-spec.md) | Sidebar Brand Navigation Follow-up：修复 M60 后的 Logo 返回、命令面板默认态、菜单字体体系和品牌名对齐问题 | 产品 / UX / Visual QA |
 | [70-command-palette-result-context-spec.md](70-command-palette-result-context-spec.md) | Command Palette Result Context：将全局命令面板结果从导航列表升级为带 breadcrumb、说明、命中高亮和排序解释的页面搜索结果 | 产品 / UX / Search / Frontend |

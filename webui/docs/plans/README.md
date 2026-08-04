@@ -112,6 +112,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M64-catalog-and-business-wiki-visual-clarity.md](wo-M64-catalog-and-business-wiki-visual-clarity.md) | M64 | Catalog 与业务 Wiki 视觉层级修复：表名字重、Wiki 首页精简、小三角移除与上传预检层级 |
 | [wo-202608-01-trace-evidence-kernel.md](wo-202608-01-trace-evidence-kernel.md) | 202608-01 | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、自检脚本 |
 | [wo-202608-GOV-02-admin-governance-observability-dashboard.md](wo-202608-GOV-02-admin-governance-observability-dashboard.md) | 202608-GOV-02 | Admin Governance Observability Dashboard：**仅补** `/api/admin/governance/*` 聚合 API + Dashboard UI + 测试；不要重做 Trace Detail / Risk Review / Release Package |
+| [wo-202608-GOV-02a-admin-governance-usage-overview-dashboard.md](wo-202608-GOV-02a-admin-governance-usage-overview-dashboard.md) | 202608-GOV-02a | 治理概览 usage-first：8 KPI + Agent/Token 使用 + 最受访问表；对齐 `pl-page-stack` 布局；风险列表主屏下沉 |
 | [wo-202608-02-static-lint-reindex-diagnosis.md](wo-202608-02-static-lint-reindex-diagnosis.md) | Deferred | Static Lint 与 Reindex 诊断：不属于 202608 Governance & Observability 主线 |
 | [wo-202608-03-tiered-publish-gate.md](wo-202608-03-tiered-publish-gate.md) | 202608-GOV-03 | Tiered Access Governance Gate：Agent / Role / Token / access policy 分级门禁 |
 | [wo-202608-04-safe-log-to-eval.md](wo-202608-04-safe-log-to-eval.md) | 202608-GOV-04 | Safe Log-to-Security-Eval：**P1 Active 缺口**，当前无实现文件，需新建 candidate pool / reviewer / promotion preview + 根目录 verifier |

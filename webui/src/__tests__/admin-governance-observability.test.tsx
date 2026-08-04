@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GovernanceOverview } from "../pages/admin/GovernanceOverview";
@@ -18,30 +18,38 @@ function renderPage() {
 }
 
 function stubFetch() {
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.startsWith("/api/admin/governance/overview")) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const hours = Number(new URL(url, "http://localhost").searchParams.get("hours") ?? "168");
+    if (url.includes("/api/admin/governance/overview")) {
       return new Response(JSON.stringify({
         ok: true,
         data: {
-          windowHours: 168,
+          windowHours: hours,
           localAdminNotice: "local-admin mode",
-          cards: {
-            calls: 3,
-            denied: 1,
-            deniedRate: 33.3,
-            p95LatencyMs: 120,
+          usageOverview: {
+            agentCount: 2,
+            activeAgentCount: 1,
+            agentActiveRate: 50,
+            configuredTokenCount: 2,
             activeTokenCount: 1,
-            staleTokenCount: 1,
-            highDenialAgentCount: 1,
-            brokenRoleCount: 1,
-            overBroadRoleCount: 1,
-            configChangeCount: 2
+            tokenActiveRate: 50,
+            calls: hours === 24 ? 1 : 3,
+            avgLatencyMs: hours === 24 ? 40 : 70
+          },
+          popularTables: [{
+            table: "mysql.dataforai.kx_fact_financial_amount",
+            calls: 2,
+            lastSeen: "2026-08-03T01:00:00.000Z"
+          }],
+          cards: {
+            calls: hours === 24 ? 1 : 3,
+            deniedRate: 33.3
           }
         }
       }));
     }
-    if (url.startsWith("/api/admin/governance/agents")) {
+    if (url.includes("/api/admin/governance/agents")) {
       return new Response(JSON.stringify({
         ok: true,
         data: {
@@ -50,37 +58,18 @@ function stubFetch() {
             name: "Agent A",
             enabled: true,
             roleId: "finance_readonly",
-            calls: 3,
-            denied: 1,
-            deniedRate: 33.3,
-            p95LatencyMs: 120,
+            calls: hours === 24 ? 1 : 3,
+            avgLatencyMs: hours === 24 ? 40 : 70,
             lastSeen: "2026-08-03T01:00:00.000Z",
             activeTokenCount: 1,
             configuredTokenCount: 2,
-            topDeniedReason: "table_forbidden",
             auditHref: "/admin/audit?user=agent-a",
             agentHref: "/admin/agents/agent-a"
           }]
         }
       }));
     }
-    if (url.startsWith("/api/admin/governance/roles")) {
-      return new Response(JSON.stringify({
-        ok: true,
-        data: {
-          roles: [{
-            id: "finance_readonly",
-            description: "Finance scoped role",
-            sourceCount: 1,
-            toolCount: 1,
-            usageCount: 2,
-            status: "sensitive",
-            flags: ["sensitive_scope"]
-          }]
-        }
-      }));
-    }
-    if (url.startsWith("/api/admin/governance/tokens")) {
+    if (url.includes("/api/admin/governance/tokens")) {
       return new Response(JSON.stringify({
         ok: true,
         data: {
@@ -89,24 +78,17 @@ function stubFetch() {
             label: "active-token",
             tokenHashPrefix: "abc123def456",
             lastUsed: "2026-08-03T01:00:00.000Z",
-            stale: false,
+            activeInLast7d: true,
+            configured: true,
             auditHref: "/admin/audit?user=agent-a"
           }]
         }
       }));
     }
-    if (url.startsWith("/api/admin/governance/denials")) {
-      return new Response(JSON.stringify({
-        ok: true,
-        data: {
-          reasonCounts: [{ reason: "table_forbidden", count: 1 }],
-          topTools: [{ tool: "lucy_query", count: 1 }],
-          topSources: []
-        }
-      }));
-    }
     return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
-  }));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }
 
 afterEach(() => {
@@ -116,16 +98,63 @@ afterEach(() => {
 });
 
 describe("GovernanceOverview", () => {
-  it("renders governance aggregates and sanitized drilldowns", async () => {
+  it("renders usage-first overview without risk modules", async () => {
     stubFetch();
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "治理概览" })).toBeInTheDocument();
-    expect((await screen.findAllByText("33.3%")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Agent A")).toBeInTheDocument();
-    expect(screen.getAllByText("finance_readonly").length).toBeGreaterThan(0);
-    expect(screen.getByText("table_forbidden")).toBeInTheDocument();
+    expect(await screen.findByText("Agent A")).toBeInTheDocument();
+
+    expect(screen.getByTestId("governance-usage-overview")).toHaveClass("pl-page-stack");
+    expect(screen.getByTestId("governance-usage-metrics")).toHaveClass("pl-metric-grid");
+    expect(screen.getByTestId("governance-usage-metrics")).not.toHaveClass("pl-metric-grid--three");
+    expect(screen.getByTestId("governance-agent-usage")).toHaveClass("pl-panel");
+    expect(screen.getByTestId("governance-token-usage")).toHaveClass("pl-panel");
+    expect(screen.getByTestId("governance-popular-tables")).toHaveClass("pl-panel");
+
+    expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("总数");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("最近活跃");
+    expect(screen.getByTestId("metric-agent-active-rate")).toHaveTextContent("活跃率");
+    expect(screen.getByTestId("metric-configured-token-count")).toHaveTextContent("配置");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃");
+    expect(screen.getByTestId("metric-token-active-rate")).toHaveTextContent("活跃率");
+    expect(screen.getByTestId("metric-calls")).toHaveTextContent("调用量");
+    expect(screen.getByTestId("metric-avg-latency")).toHaveTextContent("平均响应时长");
+    expect(within(screen.getByTestId("metric-configured-token-count")).getByText("Token")).toBeInTheDocument();
+
+    expect(screen.getByRole("heading", { name: "Agent 使用排行" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Token 使用摘要" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "最受访问表（Top 10）" })).toBeInTheDocument();
     expect(screen.getByText("active-token")).toBeInTheDocument();
+    expect(screen.getByText("mysql.dataforai.kx_fact_financial_amount")).toBeInTheDocument();
+
+    expect(screen.queryByText("Role 边界")).not.toBeInTheDocument();
+    expect(screen.queryByText("拒绝原因")).not.toBeInTheDocument();
+    expect(screen.queryByText("Agent 风险排行")).not.toBeInTheDocument();
+    expect(screen.queryByText("Token 巡检")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("governance-token-usage")).queryByText("Token 活跃率")).not.toBeInTheDocument();
     expect(screen.queryByText(/select \*/i)).not.toBeInTheDocument();
+  });
+
+  it("switches window and refreshes usage queries", async () => {
+    const fetchMock = stubFetch();
+    renderPage();
+
+    await screen.findByText("Agent A");
+    await waitFor(() => {
+      expect(within(screen.getByTestId("metric-calls")).getByText("3")).toBeInTheDocument();
+      expect(within(screen.getByTestId("metric-avg-latency")).getByText("70 ms")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("governance-window-24h"));
+
+    await waitFor(() => {
+      expect(within(screen.getByTestId("metric-calls")).getByText("1")).toBeInTheDocument();
+      expect(within(screen.getByTestId("metric-avg-latency")).getByText("40 ms")).toBeInTheDocument();
+    });
+    expect(fetchMock.mock.calls.some(([input]) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : String(input);
+      return url.includes("hours=24");
+    })).toBe(true);
   });
 });
