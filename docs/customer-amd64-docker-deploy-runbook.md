@@ -278,7 +278,7 @@ docker run --rm \
 
 1. 拿到下一个版本（例如 `customer-amd64-0.17.0`）的 image tar + SHA256SUMS。
 2. `docker load -i <新 tar>`；`project-lucy:<新 tag>` 会与旧 tag 并存。
-3. 修改 `docker-compose.yml`（如使用显式 `image:` 字段）或环境变量切到新 tag。
+3. 修改 `docker-compose.customer-amd64.yml` 的 `image:` 字段切到新 tag；或拷一份新的 override 文件。
 4. `docker compose up -d`；旧容器自动停止、新容器启动。
 5. 数据通过 `/data/lucy` volume 自动继承；如 volume 内 KTX bundled 版本变了，第一次启动会跑 reindex。
 
@@ -286,10 +286,18 @@ docker run --rm \
 
 ```bash
 # 停止并删除容器 + 网络（保留 volume）
-docker compose -f docker-compose.yml -f docker-compose.customer-config.yml down
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.customer-amd64.yml \
+  -f docker-compose.customer-config.yml \
+  down
 
 # 如需彻底清理（包括 volume）
-docker compose -f docker-compose.yml -f docker-compose.customer-config.yml down -v
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.customer-amd64.yml \
+  -f docker-compose.customer-config.yml \
+  down -v
 
 # 清理镜像（可选）
 docker rmi project-lucy:customer-amd64-0.16.0

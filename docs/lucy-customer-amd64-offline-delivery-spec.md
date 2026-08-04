@@ -86,6 +86,7 @@ docker save \
 customer-amd64-offline-package/
 ├── README.md                          # 1 页上手说明
 ├── docker-compose.yml                 # 直接来自仓库根
+├── docker-compose.customer-amd64.yml  # 本次新增：强制 image tag override
 ├── docker-compose.customer-config.yml # 直接来自仓库根（bind mount override）
 ├── .env.example                       # LUCY_PUBLIC_MCP_URL 等可调环境变量样例
 ├── image/
@@ -153,8 +154,15 @@ cat > customer-config/.ktx/secrets/customer-db-password <<< '实际的密码'
 chmod 600 customer-config/.ktx/secrets/customer-db-password
 
 # 启动
-docker compose -f docker-compose.yml -f docker-compose.customer-config.yml --env-file .env up -d
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.customer-amd64.yml \
+  -f docker-compose.customer-config.yml \
+  --env-file .env \
+  up -d
 ```
+
+`docker-compose.customer-amd64.yml` 是 image tag override——强制 `image: project-lucy:customer-amd64-0.16.0`，避免 compose 沿用 `docker-compose.yml` 里默认的 `image: project-lucy:local`（可能不是本次交付的 amd64 tag）。
 
 ### 4.3 健康检查
 

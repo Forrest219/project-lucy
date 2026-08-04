@@ -88,6 +88,8 @@ mkdir -p $PKG/customer-config
 
 cp docker-compose.yml              $PKG/
 cp docker-compose.customer-config.yml $PKG/
+# image tag override（强制指向 project-lucy:customer-amd64-0.16.0）
+# 见 inbox/customer-amd64-offline-package/docker-compose.customer-amd64.yml
 cp customer-config.example/README.md   $PKG/customer-config/
 cp customer-config.example/ktx.yaml    $PKG/customer-config/
 
