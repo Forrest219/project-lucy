@@ -1,6 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo } from "react";
-import { DiffViewer } from "./DiffViewer";
 import type { WikiMovePreview } from "../lib/types";
 
 export type WikiMoveDocumentDialogProps = {
@@ -22,10 +21,11 @@ export type WikiMoveDocumentDialogProps = {
 /**
  * M56 UX-WIKI-011: opt-in directory mover.
  *
- * Renders a combobox-style directory input, a live target preview
- * (re-fetched through `onTargetDirectoryChange`) and the DiffViewer so
- * the user can verify the document content stays intact. The server
- * never auto-confirms: the user must click `确认移动` themselves.
+ * Renders a combobox-style directory input and a live target preview
+ * (re-fetched through `onTargetDirectoryChange`). Moving a document
+ * only changes its path, not its content, so this dialog intentionally
+ * does not render a Diff (UX-WIKI-024). The server never auto-confirms:
+ * the user must click `确认移动` themselves.
  */
 export function WikiMoveDocumentDialog({
   open,
@@ -77,26 +77,24 @@ export function WikiMoveDocumentDialog({
 
           <section className="pl-wiki-preflight-section" data-testid="wiki-move-target">
             <h3 className="pl-wiki-preflight-section-title">目标目录</h3>
-            <label className="pl-wiki-upload-directory">
-              <span>目标目录</span>
-              <input
-                className="pl-input notranslate"
-                data-testid="wiki-move-target-directory-input"
-                disabled={isMoving}
-                list={directoryOptionsId}
-                onChange={(event) => onTargetDirectoryChange(event.target.value)}
-                placeholder="global"
-                translate="no"
-                value={targetDirectory}
-              />
-              <datalist id={directoryOptionsId}>
-                {sortedDirectories.map((directory) => (
-                  <option key={directory} value={directory}>
-                    {directory}
-                  </option>
-                ))}
-              </datalist>
-            </label>
+            <input
+              aria-label="目标目录"
+              className="pl-input notranslate"
+              data-testid="wiki-move-target-directory-input"
+              disabled={isMoving}
+              list={directoryOptionsId}
+              onChange={(event) => onTargetDirectoryChange(event.target.value)}
+              placeholder="global"
+              translate="no"
+              value={targetDirectory}
+            />
+            <datalist id={directoryOptionsId}>
+              {sortedDirectories.map((directory) => (
+                <option key={directory} value={directory}>
+                  {directory}
+                </option>
+              ))}
+            </datalist>
             <code
               className="pl-wiki-preflight-target notranslate"
               data-testid="wiki-move-target-key-preview"
@@ -124,15 +122,6 @@ export function WikiMoveDocumentDialog({
               ))}
             </ul>
           ) : null}
-
-          <section className="pl-wiki-preflight-section" data-testid="wiki-move-diff">
-            <h3 className="pl-wiki-preflight-section-title">文档内容</h3>
-            {isLoading ? (
-              <p className="pl-notice">正在加载目标路径预览...</p>
-            ) : (
-              <DiffViewer diff={preview?.diff ?? ""} />
-            )}
-          </section>
 
           <footer className="pl-wiki-preflight-actions">
             <button

@@ -96,55 +96,71 @@ export function WikiVersionHistoryDialog({
               ) : versions.length === 0 ? (
                 <p className="pl-notice">暂无历史版本。首次保存、上传或恢复后会生成记录。</p>
               ) : (
-                versions.map((version) => (
-                  <article
-                    className={clsx(
-                      "pl-wiki-version-item",
-                      selectedVersionId === version.versionId && "pl-wiki-version-item--active"
-                    )}
-                    data-testid={`wiki-version-item-${version.versionId}`}
-                    key={version.versionId}
-                  >
-                    <div className="pl-wiki-version-item-main">
-                      <strong>{OPERATION_LABELS[version.operation]}</strong>
-                      <time dateTime={version.createdAt}>{formatVersionTime(version.createdAt)}</time>
-                      <code className="notranslate" translate="no">{version.versionId}</code>
-                      {version.sourceFileName ? (
-                        <span>
-                          来源文件：
-                          <code className="notranslate" translate="no">{version.sourceFileName}</code>
-                        </span>
-                      ) : null}
-                      {version.restoredFromVersionId ? (
-                        <span>
-                          恢复来源：
-                          <code className="notranslate" translate="no">
-                            {version.restoredFromVersionId}
-                          </code>
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="pl-wiki-version-item-actions">
-                      <button
-                        className="pl-btn pl-btn--ghost"
-                        data-testid={`wiki-version-view-${version.versionId}`}
-                        onClick={() => onSelectVersion(version.versionId)}
-                        type="button"
+                <table className="pl-wiki-version-table" data-testid="wiki-version-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">时间</th>
+                      <th scope="col">操作类型</th>
+                      <th scope="col">版本</th>
+                      <th scope="col">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versions.map((version) => (
+                      <tr
+                        className={clsx(
+                          "pl-wiki-version-row",
+                          selectedVersionId === version.versionId && "pl-wiki-version-row--active"
+                        )}
+                        data-testid={`wiki-version-item-${version.versionId}`}
+                        key={version.versionId}
                       >
-                        查看
-                      </button>
-                      <button
-                        className="pl-btn pl-btn--secondary"
-                        data-testid={`wiki-version-restore-${version.versionId}`}
-                        disabled={restoreLoading}
-                        onClick={() => onRestore(version.versionId)}
-                        type="button"
-                      >
-                        恢复此版本
-                      </button>
-                    </div>
-                  </article>
-                ))
+                        <td>
+                          <time dateTime={version.createdAt}>{formatVersionTime(version.createdAt)}</time>
+                        </td>
+                        <td>
+                          {OPERATION_LABELS[version.operation]}
+                          {version.sourceFileName ? (
+                            <span className="pl-wiki-version-row-note">
+                              来源文件：
+                              <code className="notranslate" translate="no">{version.sourceFileName}</code>
+                            </span>
+                          ) : null}
+                          {version.restoredFromVersionId ? (
+                            <span className="pl-wiki-version-row-note">
+                              恢复来源：
+                              <code className="notranslate" translate="no">
+                                {version.restoredFromVersionId}
+                              </code>
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>
+                          <code className="notranslate" translate="no">{version.versionId}</code>
+                        </td>
+                        <td className="pl-wiki-version-row-actions">
+                          <button
+                            className="pl-btn pl-btn--ghost"
+                            data-testid={`wiki-version-view-${version.versionId}`}
+                            onClick={() => onSelectVersion(version.versionId)}
+                            type="button"
+                          >
+                            查看
+                          </button>
+                          <button
+                            className="pl-btn pl-btn--secondary"
+                            data-testid={`wiki-version-restore-${version.versionId}`}
+                            disabled={restoreLoading}
+                            onClick={() => onRestore(version.versionId)}
+                            type="button"
+                          >
+                            恢复此版本
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </section>
 

@@ -475,6 +475,29 @@ describe("MarkdownPreview", () => {
     expect(screen.getByText("bad")).toBeInTheDocument();
   });
 
+  it("drops a leading H1 that duplicates hideLeadingHeading (UX-WIKI-022)", () => {
+    const { container } = render(
+      <MarkdownPreview
+        hideLeadingHeading="Superstore guide"
+        markdown={"# Superstore guide\n\nDetailed notes here."}
+      />
+    );
+
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
+    expect(screen.getByText("Detailed notes here.")).toBeInTheDocument();
+  });
+
+  it("keeps a leading H1 that does not match hideLeadingHeading (UX-WIKI-022)", () => {
+    const { container } = render(
+      <MarkdownPreview
+        hideLeadingHeading="Superstore guide"
+        markdown={"# Heading One\n\nDetailed notes here."}
+      />
+    );
+
+    expect(container.querySelector("h1")?.textContent).toBe("Heading One");
+  });
+
   it("emits unique anchor ids for duplicate H2/H3 headings so TOC links never collide (P2-1)", () => {
     const { container } = render(
       <MarkdownPreview
@@ -608,6 +631,9 @@ describe("WikiEditor Read Mode default (P0)", () => {
     // No persistent Diff / Raw tabs in read mode
     expect(screen.queryByRole("tab", { name: "Diff" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Raw" })).not.toBeInTheDocument();
+    // UX-WIKI-022: the fixture body's first heading equals the page
+    // title ("Superstore guide"), so it must not be rendered twice.
+    expect(screen.getByTestId("wiki-read-body").querySelectorAll("h1")).toHaveLength(0);
   });
 
   it("renders title, tags and linked table badges without a visible file path", async () => {
@@ -763,6 +789,12 @@ describe("WikiEditor Read Mode default (P0)", () => {
     const css = readFileSync("src/app/app.css", "utf8");
     expect(css).toContain("grid-template-columns: 240px minmax(0, 1fr);");
     expect(css).toContain("@media (max-width: 768px)");
+  });
+
+  it("gives nested directory lists a left guide line for hierarchy (UX-WIKI-019)", () => {
+    const css = readFileSync("src/app/app.css", "utf8");
+    const rule = css.match(/\.pl-wiki-tree-pages\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toContain("border-l");
   });
 
   it("renders Markdown preview content via MarkdownPreview (no source textarea)", async () => {
@@ -946,6 +978,11 @@ describe("WikiEditor Edit Mode (P0)", () => {
     fireEvent.change(textarea, { target: { value: "# Unsaved\n\nDraft" } });
 
     const tree = within(screen.getByTestId("wiki-tree"));
+    // UX-WIKI-020: the tree no longer lists every document by default,
+    // so search for the target document before clicking it.
+    fireEvent.change(tree.getByTestId("wiki-tree-search"), {
+      target: { value: "Financial playbook" }
+    });
     fireEvent.click(tree.getByRole("button", { name: /Financial playbook/ }));
     expect(confirmSpy).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("wiki-layout")).toHaveAttribute(
@@ -1293,6 +1330,25 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
       "/wiki?key=kx%2Fmetrics-playbook.md"
     );
   });
+
+  it("jumps from 新建文档 to 新建目录 with the current target directory (UX-WIKI-021)", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki");
+
+    fireEvent.click(await screen.findByTestId("wiki-new-button"));
+    const documentDialog = await screen.findByTestId("wiki-new-document-dialog");
+    fireEvent.change(within(documentDialog).getByTestId("wiki-new-directory-input"), {
+      target: { value: "ops/playbooks" }
+    });
+
+    fireEvent.click(within(documentDialog).getByTestId("wiki-new-document-open-directory"));
+
+    expect(screen.queryByTestId("wiki-new-document-dialog")).not.toBeInTheDocument();
+    const directoryDialog = await screen.findByTestId("wiki-new-directory-dialog");
+    expect(within(directoryDialog).getByTestId("wiki-new-directory-parent-input")).toHaveValue(
+      "ops/playbooks"
+    );
+  });
 });
 
 describe("WikiEditor Markdown file operations (M47)", () => {
@@ -1418,6 +1474,20 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     });
     expect(dialog).toHaveTextContent("指标服务表设计草案.md");
 
+    // UX-WIKI-025: 历史版本 renders as a table with a clear header row.
+    const table = within(dialog).getByTestId("wiki-version-table");
+    expect(table.tagName).toBe("TABLE");
+    expect(table).toHaveTextContent("时间");
+    expect(table).toHaveTextContent("操作类型");
+    expect(table).toHaveTextContent("版本");
+    expect(table).toHaveTextContent("操作");
+
+    // UX-WIKI-025: 历史预览 stays lazy until the user clicks 查看 — no
+    // version is auto-selected when the dialog opens.
+    expect(screen.queryByTestId("wiki-version-markdown-preview")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("wiki-version-diff")).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent("选择一个历史版本查看 Markdown 预览和 Diff。");
+
     fireEvent.click(await screen.findByTestId("wiki-version-view-v-upload-replace"));
     await waitFor(() => {
       expect(screen.getByTestId("wiki-version-markdown-preview")).toHaveTextContent(
@@ -1462,7 +1532,17 @@ describe("WikiEditor Tree View (P1)", () => {
     expect(labels).toEqual(expect.arrayContaining(["global", "poc", "kx"]));
     expect(groups[0]).toHaveTextContent("1 篇");
 
-    // Each row shows the summary as the primary title
+    // UX-WIKI-020: by default the tree only shows directories + counts,
+    // no document rows.
+    expect(
+      within(tree).queryByRole("button", { name: /Superstore guide/ })
+    ).not.toBeInTheDocument();
+
+    // Searching reveals the matching document row with its summary as
+    // the primary title.
+    fireEvent.change(within(tree).getByTestId("wiki-tree-search"), {
+      target: { value: "Superstore" }
+    });
     const superstoreRow = within(tree).getByRole("button", { name: /Superstore guide/ });
     expect(superstoreRow.textContent).not.toContain("global/superstore-analysis-playbook.md");
     const title = superstoreRow.querySelector(".pl-wiki-tree-page-title")?.textContent;
@@ -1648,6 +1728,13 @@ describe("WikiEditor directory and document governance (M56)", () => {
       );
     });
 
+    // UX-WIKI-023: "目标目录" appears exactly once (the section title),
+    // not duplicated as a separate field label.
+    expect(within(dialog).getAllByText("目标目录")).toHaveLength(1);
+    // UX-WIKI-024: moving a document does not need a content Diff.
+    expect(within(dialog).queryByTestId("wiki-move-diff")).not.toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent("文档内容");
+
     // Pick a new target directory.
     const targetInput = within(dialog).getByTestId("wiki-move-target-directory-input");
     fireEvent.change(targetInput, { target: { value: "ops/playbooks" } });
@@ -1733,9 +1820,10 @@ describe("WikiEditor directory and document governance (M56)", () => {
     expect(within(tree).getByRole("button", { name: /Financial playbook/ })).toBeInTheDocument();
     expect(within(tree).queryByRole("button", { name: /POC active/ })).not.toBeInTheDocument();
 
-    // Reset search
+    // Reset search: UX-WIKI-020 hides document rows again once the
+    // search term is cleared and no document is active.
     fireEvent.change(search, { target: { value: "" } });
-    expect(within(tree).getByRole("button", { name: /POC active/ })).toBeInTheDocument();
+    expect(within(tree).queryByRole("button", { name: /POC active/ })).not.toBeInTheDocument();
   });
 });
 

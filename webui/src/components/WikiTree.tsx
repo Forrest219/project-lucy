@@ -183,7 +183,14 @@ export function WikiTree({
         {!isCollapsed ? (
           <ul className="pl-wiki-tree-pages">
             {node.children.map((child) => renderDirectory(child, level + 1))}
-            {node.pages.map((page) => renderPage(page, level + 1))}
+            {/* UX-WIKI-020: the tree shows directories + counts by default;
+                document rows only appear while the user is actively
+                searching, or for the currently open document (so the
+                tree keeps showing "where am I"). A directory and its
+                Markdown documents are otherwise never mixed by default. */}
+            {node.pages
+              .filter((page) => search.trim() || page.isActive)
+              .map((page) => renderPage(page, level + 1))}
           </ul>
         ) : null}
       </li>

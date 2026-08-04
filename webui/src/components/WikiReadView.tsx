@@ -112,7 +112,7 @@ export function WikiReadView({
       >
         <div className="pl-wiki-read-body" data-testid="wiki-read-body">
           {trimmed ? (
-            <MarkdownPreview markdown={content} />
+            <MarkdownPreview hideLeadingHeading={title} markdown={content} />
           ) : (
             <section
               aria-label="空草稿引导"

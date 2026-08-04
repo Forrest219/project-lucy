@@ -262,12 +262,9 @@ export function WikiEditor() {
       Boolean(selectedVersionId)
   });
 
-  useEffect(() => {
-    if (!versionHistoryOpen || selectedVersionId || !versionsQuery.data?.versions.length) {
-      return;
-    }
-    setSelectedVersionId(versionsQuery.data.versions[0].versionId);
-  }, [selectedVersionId, versionHistoryOpen, versionsQuery.data]);
+  // UX-WIKI-025: do not auto-select the newest version when 版本记录
+  // opens. `openVersionHistory` already resets `selectedVersionId` to
+  // `null`, so 历史预览 stays lazy until the user clicks 查看.
 
   // Apply page detail to local state when the user has not edited
   // anything since the last reset. We never clobber unsaved edits.
@@ -1307,6 +1304,11 @@ export function WikiEditor() {
           setNewDocumentError(null);
         }}
         onConfirm={startNewWiki}
+        onOpenNewDirectory={(currentDirectory) => {
+          setNewDocumentOpen(false);
+          setNewDocumentError(null);
+          openNewDirectoryDialog(currentDirectory);
+        }}
         open={newDocumentOpen}
       />
 

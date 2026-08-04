@@ -356,14 +356,27 @@ function renderBlocks(blocks: Block[]): string {
 
 type Props = {
   markdown: string;
+  /** UX-WIKI-022: when the caller already renders this exact text as a
+   *  page-level title (e.g. `WikiReadView`'s `<h1>`), drop a matching
+   *  leading H1 from the body so the title isn't rendered twice. Only
+   *  the very first block is checked — no fuzzy or whole-document
+   *  de-duplication. */
+  hideLeadingHeading?: string;
 };
 
 /**
  * Render Markdown to a small escaped HTML whitelist, then inject the
  * generated string. Scripts / iframes / style tags are never produced.
  */
-export function MarkdownPreview({ markdown }: Props) {
-  const html = renderBlocks(parseBlocks(markdown));
+export function MarkdownPreview({ markdown, hideLeadingHeading }: Props) {
+  const blocks = parseBlocks(markdown);
+  const leading = blocks[0];
+  const shouldHideLeading =
+    Boolean(hideLeadingHeading?.trim()) &&
+    leading?.kind === "heading" &&
+    leading.level === 1 &&
+    leading.text.trim() === hideLeadingHeading?.trim();
+  const html = renderBlocks(shouldHideLeading ? blocks.slice(1) : blocks);
   return (
     <div
       className="pl-markdown-preview"

@@ -9,6 +9,10 @@ export type WikiNewDocumentDialogProps = {
   error: string | null;
   onCancel: () => void;
   onConfirm: (input: { directory: string; fileName: string }) => void;
+  /** UX-WIKI-021: this dialog only ever creates a document. When the
+   *  user actually wants an empty directory, hand off to the dedicated
+   *  `新建目录` dialog instead of implying this form can do it. */
+  onOpenNewDirectory?: (currentDirectory: string) => void;
 };
 
 export function WikiNewDocumentDialog({
@@ -18,7 +22,8 @@ export function WikiNewDocumentDialog({
   defaultFileName,
   error,
   onCancel,
-  onConfirm
+  onConfirm,
+  onOpenNewDirectory
 }: WikiNewDocumentDialogProps) {
   const [directory, setDirectory] = useState(defaultDirectory);
   const [fileName, setFileName] = useState(defaultFileName);
@@ -54,6 +59,20 @@ export function WikiNewDocumentDialog({
           >
             选择已有目录，或输入新的子目录路径。
           </Dialog.Description>
+
+          {onOpenNewDirectory ? (
+            <p className="pl-wiki-new-document-directory-hint">
+              需要新建一个空目录？{" "}
+              <button
+                className="pl-inline-link"
+                data-testid="wiki-new-document-open-directory"
+                onClick={() => onOpenNewDirectory(directory)}
+                type="button"
+              >
+                新建目录
+              </button>
+            </p>
+          ) : null}
 
           <div className="pl-wiki-new-document-form">
             <label className="pl-field-label">

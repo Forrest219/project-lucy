@@ -589,3 +589,224 @@ Reported: 2026-08-04
 2026-08-04 由 M64 浏览器复核发现并登记，依赖产品口径决定。等候选 wave（待定）排期，不在 M65 / M66 强修复范围内。Demo fixture 的空目录来自 `webui/server/wiki.ts` 的 fixture 数据，本身不是 bug；bug 在 UI 口径而不是数据。
 2026-08-04 M65 修复：用户拍板口径 = "只统计 md 数据和一级目录数量，不用统计有无 md，两者指标都要客观"。`webui/src/components/WikiLibraryHome.tsx` 的 `countDirectories` 改为：仅遍历顶层节点；当 `node.path === ""`（root 合成节点）或 `node.documentCount === 0`（无 md 子树）时不计入。Summary 文案增加 fallback：当 directoryCount === 0 时显示 "当前收录 N 篇 Markdown 文档，全部位于根目录。" 而不是 "分布在 0 个目录中"。
 2026-08-04 vitest 覆盖：`src/__tests__/wiki.test.tsx` 新增 M65 describe，断言 NESTED_WIKI_PAGES（顶层 4 目录 5 篇）→ "4 个目录中"；根目录唯一 md → "全部位于根目录"；显式空目录（documentCount=0）不计入。等待 docker 重建后浏览器复核。
+
+## UX-WIKI-019: 目录层级视觉设计缺失
+
+Status: Fixed
+Route: /wiki
+Area: Wiki sidebar directory tree
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+
+`目录` 区域缺少网格等视觉设计，多级目录只靠 `paddingLeft` 缩进区分层级，看不出 1、2、3 级目录之间的父子关系。
+
+### Evidence
+
+- 用户浏览器截图反馈；`webui/src/components/WikiTree.tsx` 的 `renderDirectory` / `renderPage` 仅用 `style={{ paddingLeft: level * 12 }}` 表达层级，没有连接线或阶梯背景。
+
+### Expected
+
+嵌套目录列表应有可辨识的层级视觉线索（连接线 / 阶梯背景等），不使用三角 / chevron glyph。
+
+### Browser Check
+
+1. Open `/wiki`。
+2. 展开一个含子目录的目录节点。
+3. Verify 子目录/文档相对父目录有清晰的层级引导线或等价视觉线索。
+
+### Notes
+
+Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单，在 `webui/src/app/app.css` 给嵌套 `.pl-wiki-tree-pages` 增加左侧引导线（`border-l` + 缩进），顶层 `.pl-wiki-tree-list` 不受影响。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（新增断言直接读取 `app.css` 源文本确认 `border-l` 规则存在）。本轮按约束不做浏览器验证。
+
+## UX-WIKI-020: 目录树默认与 Markdown 文档混排
+
+Status: Fixed
+Route: /wiki
+Area: Wiki sidebar directory tree
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+
+用户理解目录区域应该只呈现目录结构和文档数量，但当前目录树把具体 Markdown 文档行和目录节点混排在同一棵树里。
+
+### Evidence
+
+- 用户明确反馈："我理解目录区域只呈现目录，及包含的 md 数量，不体现 md，现在混在了一起"。
+- `webui/src/components/WikiTree.tsx` 的 `renderDirectory` 无条件渲染 `node.children`（子目录）和 `node.pages`（文档）到同一个 `<ul>`。
+
+### Expected
+
+目录树默认只展示目录节点（名称 + `N 篇` 计数），不展示具体文档行；用户在搜索框输入内容时，命中的文档行才在其所属目录下临时展示，用于"搜索直达"。当前打开的文档作为例外始终可见（保持"我在哪"的上下文）。
+
+### Browser Check
+
+1. Open `/wiki`（未选中任何文档）。
+2. Verify 目录树只显示目录名 + `N 篇`，没有任何具体 Markdown 文档行。
+3. 在搜索框输入某文档标题关键字，verify 命中的文档行出现在对应目录下。
+4. 清空搜索框，verify 文档行再次消失（除非该文档当前被打开）。
+5. 打开某个具体文档，verify 该文档所在的行仍然可见并标记为当前选中。
+
+### Notes
+
+Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单，在 `webui/src/components/WikiTree.tsx` 的 `renderDirectory` 里把 `node.pages` 的渲染条件改为 `search.trim() || page.isActive`，即默认隐藏文档行，仅搜索命中或当前打开的文档才渲染。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（更新/新增多个断言覆盖默认隐藏、搜索显示、清空后隐藏、当前文档例外可见）。本轮按约束不做浏览器验证。
+
+## UX-WIKI-021: 新建文档弹窗文案暗示可新建目录
+
+Status: Fixed
+Route: /wiki
+Area: Wiki new document dialog
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+
+`新建文档` 弹窗文案"选择已有目录，或输入新的子目录路径"暗示该弹窗可以新建空目录，但实际这个弹窗只能新建文档，容易让用户误以为有 bug。
+
+### Evidence
+
+- 用户反馈该文案与实际能力不符。
+- `webui/src/components/WikiNewDocumentDialog.tsx` 只有一个"创建草稿"出口，没有独立的"新建空目录"路径。
+
+### Expected
+
+在既有文案旁新增一个跳转入口（"新建目录"），点击后关闭 `新建文档` 弹窗并打开已有的 `新建目录` 弹窗，携带当前输入的目标目录作为默认父级。
+
+### Browser Check
+
+1. Open `/wiki`，点击 `新建文档`。
+2. 在目标目录输入某路径，例如 `ops/playbooks`。
+3. 点击文案旁的 `新建目录` 跳转入口。
+4. Verify `新建文档` 弹窗关闭、`新建目录` 弹窗打开，且父级目录默认值为 `ops/playbooks`。
+
+### Notes
+
+Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单（选项 b），在 `webui/src/components/WikiNewDocumentDialog.tsx` 新增 `onOpenNewDirectory` prop 和跳转入口，`webui/src/pages/WikiEditor.tsx` 关闭 `新建文档` 弹窗并调用已有的 `openNewDirectoryDialog`。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（新增测试覆盖跳转与父级目录默认值）。本轮按约束不做浏览器验证。
+
+## UX-WIKI-022: Markdown 正文首个标题与页面标题重复渲染
+
+Status: Fixed
+Route: /wiki
+Area: Wiki read view / MarkdownPreview
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+
+打开 `Demo Superstore.md` 等文档后，正文渲染出现标题重复和异常留白；用户描述为"正文出现了正中间，没有自上而下渲染"。
+
+### Evidence
+
+- 浏览器核查确认根因是：页面级标题（`wikiTitleFromContent` 计算结果）和 Markdown 正文自身的首个 `# ` 标题内容相同，被渲染了两次，叠加相关 CSS 造成异常留白。
+- `webui/src/components/WikiReadView.tsx` 渲染 `<h1 class="pl-wiki-read-title">` 后，紧接着完整渲染 `<MarkdownPreview markdown={content} />`，正文里同样的 `# ...` 标题被 `MarkdownPreview` 再渲染一次。
+
+### Expected
+
+`MarkdownPreview` 渲染正文时，如果第一个 Block 是 H1 且文本与传入的页面标题完全一致，跳过渲染该 H1，避免重复。其它调用方（如版本记录历史预览）不受影响，继续完整渲染。
+
+### Browser Check
+
+1. Open `/wiki?key=global/demo-superstore.md`（或任意首个标题与页面标题相同的文档）。
+2. Verify 正文区域不再重复渲染与页面标题相同的 H1，也没有异常大段留白。
+3. Open `版本记录` 的历史预览，verify 历史版本 Markdown 仍完整渲染，包括其中的 H1。
+
+### Notes
+
+Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单，在 `webui/src/components/MarkdownPreview.tsx` 新增 `hideLeadingHeading` prop（仅剥离第一个完全匹配的 H1 block），`webui/src/components/WikiReadView.tsx` 调用时传入 `hideLeadingHeading={title}`；`WikiVersionHistoryDialog.tsx` 等其它调用点不传该 prop，行为不变。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（新增 `MarkdownPreview` 去重单测的正例/反例，以及 `WikiReadView` 默认 fixture 的集成断言）。本轮按约束不做浏览器验证。
+
+## UX-WIKI-023: 移动到目录弹窗"目标目录"文案重复
+
+Status: Fixed
+Route: /wiki
+Area: Wiki move document dialog
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+
+点击"移动到目录"后，弹窗内"目标目录"文案出现两次（section 标题 + 输入框 label），显得冗余。
+
+### Evidence
+
+- 用户截图反馈重复文案。
+- `webui/src/components/WikiMoveDocumentDialog.tsx` 同时渲染 `<h3>目标目录</h3>` 和 `<label><span>目标目录</span>...</label>`。
+
+### Expected
+
+"目标目录"文案在弹窗中只出现一次；输入框通过 `aria-label` 保留可访问名称。
+
+### Browser Check
+
+1. Open `/wiki?key=global/demo-superstore.md`，点击 `移动到目录`。
+2. Verify 弹窗内"目标目录"文案只出现一次。
+
+### Notes
+
+Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单，在 `webui/src/components/WikiMoveDocumentDialog.tsx` 移除重复的可见 `<span>目标目录</span>`，给 `<input>` 补 `aria-label="目标目录"`。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（断言 `getAllByText("目标目录")` 长度为 1）。本轮按约束不做浏览器验证。
+
+## UX-WIKI-024: 移动到目录弹窗默认展示不必要的 Diff
+
+Status: Fixed
+Route: /wiki
+Area: Wiki move document dialog
+Severity: P2
+Reported: 2026-08-04
+
+### Feedback
+
+"移动到目录"弹窗默认展示"文档内容"区域（完整 Diff），用户认为移动操作不改变内容，不需要看 Diff。
+
+### Evidence
+
+- 用户反馈明确表示"移动不需要看 diff"。
+- `webui/src/components/WikiMoveDocumentDialog.tsx` 渲染 `<section data-testid="wiki-move-diff"><h3>文档内容</h3><DiffViewer .../></section>`，默认展开。
+
+### Expected
+
+移动预检不再渲染"文档内容"/ Diff 区域；预检只保留当前路径、目标目录、目标路径预览、冲突提示和确认/取消动作。
+
+### Browser Check
+
+1. Open `/wiki?key=global/demo-superstore.md`，点击 `移动到目录`。
+2. Verify 弹窗内不再出现"文档内容"标题或 Diff 内容。
+
+### Notes
+
+Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单，在 `webui/src/components/WikiMoveDocumentDialog.tsx` 整段移除 `wiki-move-diff` section 和 `DiffViewer` 引用；后端 `move/preview` 响应仍可以返回 `diff` 字段，不受影响，只是前端不再渲染。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（断言 `wiki-move-diff` 不存在，弹窗不含"文档内容"文本）。本轮按约束不做浏览器验证。
+
+## UX-WIKI-025: 版本记录应表格化，历史预览应懒加载
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history dialog
+Severity: P1
+Reported: 2026-08-04
+
+### Feedback
+
+"版本记录"弹窗左侧应是清晰的表格记录历史版本信息（时间、操作类型、预览链接、Diff、恢复此版本等），当前是卡片列表；右侧"历史预览"默认渲染最新版本内容，属于冗余，应改为点击后才生成。
+
+### Evidence
+
+- 用户反馈明确的表格字段期望。
+- `webui/src/components/WikiVersionHistoryDialog.tsx` 原用 `<article class="pl-wiki-version-item">` 卡片列表渲染历史版本，非语义表格。
+- `webui/src/pages/WikiEditor.tsx` 有一个 `useEffect`，在 `版本记录` 弹窗打开且版本列表加载完成后自动把 `selectedVersionId` 设为列表第一项，导致弹窗一打开就默认渲染最新版本的 Markdown 预览和 Diff。
+
+### Expected
+
+- 左侧"历史版本"改为语义化 `<table>`，列至少包含：时间、操作类型、版本、操作（查看 / 恢复此版本）。
+- 右侧"历史预览"默认不加载任何历史版本内容，只有点击某一行的"查看"后才请求并渲染该版本的 Markdown 预览和 Diff。
+
+### Browser Check
+
+1. Open `/wiki?key=global/demo-superstore.md`，点击 `版本记录`。
+2. Verify 左侧"历史版本"是一个 `<table>`，表头包含"时间""操作类型""版本""操作"。
+3. Verify 弹窗刚打开时，右侧"历史预览"显示"选择一个历史版本查看 Markdown 预览和 Diff。"占位文案，没有自动加载任何版本内容。
+4. 点击某一行的"查看"，verify 该版本的 Markdown 预览和 Diff 正确渲染。
+5. 点击"恢复此版本"，verify 既有的恢复预检流程不受影响。
+
+### Notes
+
+Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单：`webui/src/components/WikiVersionHistoryDialog.tsx` 把历史版本列表改为 `<table data-testid="wiki-version-table">`（`<tr data-testid="wiki-version-item-*">` 保留原有 `data-testid` 契约）；`webui/src/pages/WikiEditor.tsx` 删除自动选中第一个版本的 `useEffect`（`openVersionHistory` 原本就会把 `selectedVersionId` 重置为 `null`，天然形成懒加载）。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（新增断言覆盖表格结构和默认懒加载，保留既有的点击查看 / 恢复流程断言）。本轮按约束不做浏览器验证。
