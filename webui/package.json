@@ -26,7 +26,9 @@
     "pree2e:release": "npm run e2e:selector-contract && npm run e2e:fixture",
     "e2e:report": "playwright show-report playwright-report",
     "e2e:selector-contract": "node scripts/check-selector-contract.mjs",
-    "pretest:e2e": "npm run e2e:selector-contract"
+    "pretest:e2e": "npm run e2e:selector-contract",
+    "verify:gate": "tsx ../scripts/verify-202608-access-governance-gate.mjs",
+    "verify:test": "tsx --test ../scripts/verify-202608-access-governance-gate.test.mjs"
   },
   "keywords": [],
   "author": "",

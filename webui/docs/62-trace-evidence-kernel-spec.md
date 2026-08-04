@@ -4,16 +4,16 @@
 |---|---|
 | 文档名称 | Trace / Evidence Kernel API Spec |
 | 文档类型 | Architecture / API / Data Contract Spec |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-08-03；v0.2 更新 2026-08-03（补充 SQLite 并发与测试数据库隔离要求） |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-08-03；v0.2 更新 2026-08-03（补充 SQLite 并发与测试数据库隔离要求）；v0.3 更新 2026-08-03（补充 retention、auto_vacuum 与热库数据黑白名单）；v0.4 更新 2026-08-03（对齐 202608 Governance & Observability 主线） |
 | 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
 | 关联工单 | `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md` |
-| 适用范围 | append-only trace / evidence event store、MCP Proxy 基础写入、后续 Publish Gate / Eval / Copilot 共用数据契约 |
+| 适用范围 | append-only trace / evidence event store、MCP Proxy 基础写入、ACL policy decision trace、Admin Audit Trace read model、Access Governance Gate 与 Security Eval 共用数据契约 |
 
 ## 1. Background
 
-Lucy 已有 `access_log`、`access_log_sources`、`conversation_turns`、`inferred_turns` 等审计与问题追踪能力，但 202608 需要把这些能力收敛成统一 `Trace / Evidence Kernel`。本 spec 不废弃既有审计表，而是新增一套 append-only event contract，让 MCP Proxy、semantic publish、Eval、FDE Copilot 和 Dynamic RLS POC 都能写入同一语义。
+Lucy 已有 `access_log`、`access_log_sources`、`conversation_turns`、`inferred_turns` 等审计与问题追踪能力，但 202608 Governance & Observability 主线需要把这些能力收敛成统一 `Trace / Evidence Kernel`。本 spec 不废弃既有审计表，而是新增一套 append-only event contract，让 MCP Proxy、Access Governance Gate、Security Eval、Admin Observability 和 Release Readiness Evidence Package 能写入或引用同一语义。
 
 ## 2. Goals
 
@@ -112,12 +112,46 @@ export type LucySpanType =
 
 MVP 使用现有 `.ktx-ui/audit.sqlite`，开启 WAL。不得新建第二套审计数据库。若未来迁移到独立 event store，迁移必须保持 event append-only 语义。
 
+Default retention parameters:
+
+| Parameter | Default | Meaning |
+|---|---:|---|
+| `retention_days` | `365` | 默认热库保留天数 |
+| `max_rows` | `500000` | 热库事件行安全上限，包含 `trace_events` + `evidence_events` |
+| `max_bytes` | `1073741824` | 热库 SQLite 文件安全上限，约 1GB |
+
+Retention rule:
+
+- 默认保留 365 天。
+- `max_rows`、`max_bytes` 任一先到即触发归档 / purge / incremental vacuum。
+- Purge 必须先按时间和容量选择候选事件，再保留 reviewer / override evidence 的可追溯摘要。
+- Purge 不能删除仍被 active release、formal Eval Case 或 reviewer decision 引用的 evidence，除非已有归档证明。
+
 SQLite 并发约束：
 
-- `webui/server/trace/evidence.ts` 打开 SQLite 连接时必须设置 `busyTimeout: 5000` 或提供等效 retry 逻辑。
+- `webui/server/trace/evidence.ts` 打开 SQLite 连接时必须设置 `busyTimeout: 5000`；可额外提供 retry 逻辑，但 retry 不能替代 `busyTimeout`。
 - Trace / Evidence 写入 helper 必须能在短暂 writer lock 下重试或等待，不应立刻把 `SQLITE_BUSY` 暴露给调用者。
 - 测试和自检脚本必须使用 `:memory:` 或独立 temp SQLite 文件，禁止写真实 `.ktx-ui/audit.sqlite`。
 - 并行 subagent 执行时，不得共享同一个 test DB path。
+
+SQLite vacuum 约束：
+
+- 新建 DB 必须在建表前设置 `PRAGMA auto_vacuum = INCREMENTAL`。
+- 已存在 DB 必须检测当前 `auto_vacuum` 模式；若不是 `INCREMENTAL`，记录 warning，不得自动对生产库执行可能长时间运行的 full `VACUUM`。
+- Purge 后允许调用 `PRAGMA incremental_vacuum(N)` 回收空间。
+- 自检脚本必须覆盖新建 DB 的 `auto_vacuum = INCREMENTAL` 设置。
+
+Hot store data boundary:
+
+| Allowed in SQLite hot store | Forbidden in SQLite hot store |
+|---|---|
+| Trace Envelope | 物理结果集明细 |
+| Evidence Ref | 原始 SQL AST |
+| Policy Decision | 未脱敏 Token / secret |
+| Artifact Hashes | 完整原始问题 |
+| Reviewer / Override signatures | 数据库凭据 |
+| redacted metadata | 客户行级样本 |
+| SQL AST hash / normalized summary / redacted structural metadata | SQL AST 原文 |
 
 ## 6. API And Helper Surface
 
@@ -164,6 +198,9 @@ Failure to write trace must not break MCP request handling, but must be logged s
 - Trace lookup by `traceId` returns ordered events and evidence refs.
 - Existing `access_log` behavior remains compatible.
 - Concurrent test execution does not touch the production audit SQLite file.
+- Default retention parameters are exposed through code constants or config with `365 / 500000 / 1073741824` defaults.
+- New temp DB self-validation proves `PRAGMA auto_vacuum = INCREMENTAL`.
+- Hot store blacklisted payloads are rejected or hashed before write.
 
 ## 10. Self-validation Script
 
@@ -180,8 +217,11 @@ The script must:
 3. Insert two events with same `traceId` and assert two rows exist.
 4. Insert `access_policy` and `result_snapshot_hash` evidence refs.
 5. Assert no column exists for raw token or raw result payload.
-6. Assert `busyTimeout` or retry behavior is configured.
+6. Assert `busyTimeout: 5000` is configured.
 7. Assert the script does not create or modify `.ktx-ui/audit.sqlite`.
+8. Assert `retention_days = 365`, `max_rows = 500000`, and `max_bytes = 1073741824`.
+9. Assert new DB setup uses `PRAGMA auto_vacuum = INCREMENTAL`.
+10. Assert raw SQL AST, raw token, raw result row, and full question payload are rejected or absent.
 
 ## 11. Terminology Compliance
 

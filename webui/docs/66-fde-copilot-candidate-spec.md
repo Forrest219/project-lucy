@@ -6,12 +6,15 @@
 | 文档类型 | Product / UX / Semantic Tooling Spec |
 | 版本 | v0.1 |
 | 撰写日期 | 2026-08-03 |
+| 202608 状态 | Deferred；不属于 202608 Governance & Observability 主线 |
 | 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
 | 关联工单 | `webui/docs/plans/wo-202608-05-fde-copilot-candidate.md` |
 | 适用范围 | FDE Copilot 候选补全、证据引用、冲突提示、unverified candidate 隔离区 |
 
 ## 1. Background
+
+本 spec 保留为后续 FDE productivity 资料。202608 当前迭代优先提升平台可观测性、日志能力、权限管理与 Agent 管理可信闭环，不执行本 spec，也不应把关联 Work Order 交给 minimax。
 
 FDE Copilot 的价值不是自动落库，而是降低人工发现候选维度、measure、join 和冲突的成本。202608 MVP 必须 deterministic-first，真实 LLM 调用不是上线前提。
 

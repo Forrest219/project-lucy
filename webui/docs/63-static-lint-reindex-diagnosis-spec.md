@@ -6,12 +6,15 @@
 | 文档类型 | Product / API / Semantic Tooling Spec |
 | 版本 | v0.1 |
 | 撰写日期 | 2026-08-03 |
+| 202608 状态 | Deferred；不属于 202608 Governance & Observability 主线 |
 | 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
 | 关联工单 | `webui/docs/plans/wo-202608-02-static-lint-reindex-diagnosis.md` |
 | 适用范围 | semantic-layer static lint、Reindex failure diagnosis、patch draft、impact diff |
 
 ## 1. Background
+
+本 spec 保留为后续 semantic delivery tooling 资料。202608 当前迭代只做 Enterprise Governance & Observability，不执行本 spec，也不应把关联 Work Order 交给 minimax。
 
 Lucy 202608 要把 YAML / semantic-layer 风险拦截在发布前。现有 `semantic-assets` 已有 validate / publish / reindex 能力，本 spec 在其上增加静态 lint 与 Reindex 诊断，不改变 manifest / overlay 写入规则。
 

@@ -4,6 +4,16 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns } from "../proxy/audit.js";
+import {
+  ensureTraceEvidenceSchema,
+  listTraceEvents,
+  prepareTraceDatabase,
+  type ListTraceEventsFilter,
+  type LucySpanStatus,
+  type LucySpanType,
+  type TraceEventRow,
+  type EvidenceEventRow
+} from "../trace/evidence.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
@@ -39,7 +49,8 @@ const ACCESS_LOG_COLUMNS = [
   ["response_bytes", "INTEGER"],
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
-  ["response_truncated", "INTEGER"]
+  ["response_truncated", "INTEGER"],
+  ["trace_id", "TEXT"]
 ] as const;
 const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
@@ -96,7 +107,7 @@ export async function getAuditDb(): Promise<Database.Database> {
   mkdirSync(dir, { recursive: true });
   const dbPath = process.env.LUCY_AUDIT_DB ?? path.join(dir, "audit.sqlite");
   db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
+  prepareTraceDatabase(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS access_log (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +134,7 @@ export async function getAuditDb(): Promise<Database.Database> {
       response_column_count INTEGER,
       response_truncated INTEGER,
       request_id   TEXT    NOT NULL,
+      trace_id     TEXT,
       role_ids     TEXT,
       permission_snapshot_hash TEXT,
       effective_tables_count INTEGER,
@@ -219,7 +231,18 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
   `);
+  // 202608-01 Trace / Evidence Kernel — append-only event store for MCP trace,
+  // policy decisions, and reviewer evidence refs. Schema is idempotent so
+  // first-touch and existing databases both end up with the same shape.
+  ensureTraceEvidenceSchema(db);
   return db;
+}
+
+export function resetAuditDbForTests(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
 }
 
 export async function recordConfigChange(input: {
@@ -279,6 +302,7 @@ interface QueryRow {
   response_column_count: number | null;
   response_truncated: number | null;
   request_id: string;
+  trace_id: string | null;
   role_ids: string | null;
   permission_snapshot_hash: string | null;
   effective_tables_count: number | null;
@@ -622,6 +646,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       responseColumnCount: row.response_column_count ?? undefined,
       responseTruncated: row.response_truncated === null ? undefined : row.response_truncated === 1,
       requestId: row.request_id,
+      traceId: row.trace_id ?? undefined,
       roleIds: row.role_ids ? (JSON.parse(row.role_ids) as string[]) : undefined,
       permissionSnapshotHash: row.permission_snapshot_hash ?? undefined,
       effectiveTablesCount: row.effective_tables_count ?? undefined,
@@ -716,6 +741,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       "response_column_count",
       "response_truncated",
       "request_id",
+      "trace_id",
       "role_ids",
       "permission_snapshot_hash",
       "effective_tables_count",
@@ -749,6 +775,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
           row.response_column_count ?? "",
           row.response_truncated === null ? "" : row.response_truncated,
           csvCell(row.request_id),
+          csvCell(row.trace_id),
           csvCell(row.role_ids),
           csvCell(row.permission_snapshot_hash),
           row.effective_tables_count ?? "",
@@ -954,4 +981,75 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const result = await purgeExpiredConversationTurns({ retentionDays: body.retentionDays, dryRun: body.dryRun });
     return { ok: true, data: result };
   });
+
+  // ─── 202608-01 Trace / Evidence Kernel — read-only admin API ────────────
+  // The kernel is append-only; this surface is intentionally minimal so it
+  // doesn't accidentally become a write path. It only exposes ordered spans
+  // and evidence refs for a single trace / turn, with sensitive fields
+  // already redacted by `sanitizeMetadata` at write time.
+  app.get<{
+    Querystring: { traceId?: string; turnId?: string; spanType?: string; status?: string; limit?: string };
+  }>("/api/admin/trace/events", async (request, reply) => {
+    const q = request.query;
+    if (!q.traceId && !q.turnId) {
+      reply.code(400);
+      return { ok: false, error: "traceId or turnId is required" };
+    }
+    const filter: ListTraceEventsFilter = {};
+    if (q.traceId) filter.traceId = q.traceId;
+    if (q.turnId) filter.turnId = q.turnId;
+    if (q.spanType) filter.spanType = q.spanType as LucySpanType;
+    if (q.status) filter.status = q.status as LucySpanStatus;
+    if (q.limit) {
+      const parsed = Number.parseInt(q.limit, 10);
+      if (Number.isFinite(parsed) && parsed > 0) filter.limit = parsed;
+    }
+    const database = await getAuditDb();
+    const { events, evidence } = listTraceEvents(database, filter);
+    return {
+      ok: true,
+      data: {
+        events: events.map(serializeTraceEvent),
+        evidence: evidence.map(serializeEvidenceEvent)
+      }
+    };
+  });
+}
+
+function serializeTraceEvent(row: TraceEventRow) {
+  return {
+    id: row.id,
+    traceId: row.traceId,
+    spanId: row.spanId,
+    parentSpanId: row.parentSpanId ?? undefined,
+    spanType: row.spanType,
+    actorKind: row.actorKind,
+    actorId: row.actorId ?? undefined,
+    status: row.status,
+    startedAt: row.startedAt,
+    endedAt: row.endedAt ?? undefined,
+    sessionId: row.sessionId ?? undefined,
+    turnId: row.turnId ?? undefined,
+    requestId: row.requestId ?? undefined,
+    policyDecision: row.policyDecision ?? undefined,
+    artifactHashes: row.artifactHashes,
+    metadata: row.metadata,
+    createdAt: row.createdAt
+  };
+}
+
+function serializeEvidenceEvent(row: EvidenceEventRow) {
+  return {
+    id: row.id,
+    traceEventId: row.traceEventId ?? undefined,
+    traceId: row.traceId,
+    evidenceKind: row.evidenceKind,
+    evidenceRef: row.evidenceRef,
+    evidenceVersion: row.evidenceVersion ?? undefined,
+    evidenceHash: row.evidenceHash ?? undefined,
+    relation: row.relation,
+    reviewer: row.reviewer ?? undefined,
+    metadata: row.metadata,
+    createdAt: row.createdAt
+  };
 }

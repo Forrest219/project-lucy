@@ -71,9 +71,11 @@ describe("proxy audit log", () => {
       const columns = migratedDb.prepare("PRAGMA table_info(access_log)").all() as Array<{ name: string }>;
       expect(columns.map((column) => column.name)).toContain("lucy_session_id");
       expect(columns.map((column) => column.name)).toContain("response_bytes");
-      const row = migratedDb.prepare("SELECT lucy_session_id, response_bytes FROM access_log WHERE request_id = ?").get("legacy-migration") as { lucy_session_id: string; response_bytes: number };
+      expect(columns.map((column) => column.name)).toContain("trace_id");
+      const row = migratedDb.prepare("SELECT lucy_session_id, response_bytes, trace_id FROM access_log WHERE request_id = ?").get("legacy-migration") as { lucy_session_id: string; response_bytes: number; trace_id: string | null };
       expect(row.lucy_session_id).toBe("session-legacy");
       expect(row.response_bytes).toBe(12);
+      expect(row.trace_id).toBeNull();
     } finally {
       migratedDb.close();
     }
@@ -102,6 +104,29 @@ describe("proxy audit log", () => {
       expect(row.error_detail).toContain("<truncated sha256:");
       expect(row.token_label).toBe("hermes-laptop");
       expect(row.token_hash_prefix).toBe("sha256:abc123def");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("persists traceId separately from requestId", async () => {
+    const { writeLog } = await import("../proxy/audit");
+
+    await writeLog({
+      ts: new Date().toISOString(),
+      userId: "trace-link-test",
+      tool: "sl_query",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "json-rpc-1",
+      traceId: "trace_platform_unique_1"
+    });
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const row = db.prepare("SELECT request_id, trace_id FROM access_log WHERE request_id = ?").get("json-rpc-1") as { request_id: string; trace_id: string };
+      expect(row.request_id).toBe("json-rpc-1");
+      expect(row.trace_id).toBe("trace_platform_unique_1");
     } finally {
       db.close();
     }

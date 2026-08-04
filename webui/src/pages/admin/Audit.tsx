@@ -1,10 +1,439 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type { AuditLogEntry, AuditResponse, AuditSourcesResponse } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+
+// 202608-01 — Trace / Evidence Kernel read model
+type LucySpanTypeView =
+  | "reindex"
+  | "mcp_initialize"
+  | "mcp_tools_list"
+  | "mcp_tools_call"
+  | "policy_decision"
+  | "ktx_retrieval"
+  | "sql_plan"
+  | "sql_execute"
+  | "eval_run"
+  | "publish_gate"
+  | "copilot_candidate";
+
+type LucySpanStatusView = "ok" | "error" | "denied" | "running";
+
+interface PolicyDecisionView {
+  allowed: boolean;
+  reason?: string;
+  toolName?: string;
+  permissionSnapshotHash?: string;
+  matchedRule?: string;
+  source?: "access_policy" | "rate_limit" | "tool_exposure" | "wiki_acl" | "other";
+}
+
+interface TraceEventView {
+  id: number;
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  spanType: LucySpanTypeView;
+  actorKind: string;
+  actorId?: string;
+  status: LucySpanStatusView;
+  startedAt: string;
+  endedAt?: string;
+  sessionId?: string;
+  turnId?: string;
+  requestId?: string;
+  policyDecision?: PolicyDecisionView;
+  artifactHashes: string[];
+  metadata: Record<string, unknown>;
+}
+
+interface TraceEvidenceView {
+  id: number;
+  traceEventId?: number;
+  traceId: string;
+  evidenceKind: string;
+  evidenceRef: string;
+  evidenceVersion?: string;
+  evidenceHash?: string;
+  relation: "observed" | "used" | "denied_by" | "superseded" | "reviewer_override" | "promoted";
+  metadata: Record<string, unknown>;
+}
+
+interface TraceResponse {
+  ok: boolean;
+  data?: { events: TraceEventView[]; evidence: TraceEvidenceView[] };
+}
+
+const STATUS_LABEL: Record<LucySpanStatusView, string> = {
+  ok: "成功",
+  error: "错误",
+  denied: "拒绝",
+  running: "进行中"
+};
+
+const RELATION_LABEL: Record<TraceEvidenceView["relation"], string> = {
+  observed: "观测到",
+  used: "被使用",
+  denied_by: "被拒绝依据",
+  superseded: "已替代",
+  reviewer_override: "审核覆盖",
+  promoted: "已晋升"
+};
+
+/**
+ * Detect a metadata value that has already been redacted at write time by
+ * the trace/evidence kernel. The kernel writes the literal string
+ * "[REDACTED]" for sensitive keys (e.g. password, secret) and for value-side
+ * patterns (e.g. "password=…", "Bearer …"). The viewer uses this to render
+ * a tooltip on redacted entries so admins know the field was scrubbed,
+ * without ever re-reading or re-displaying the underlying value.
+ */
+function isRedactedMarker(value: unknown): value is string {
+  return typeof value === "string" && value === "[REDACTED]";
+}
+
+function isRedactedMetaKey(key: string): boolean {
+  return (
+    /(password|passwd|pwd|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i.test(key) ||
+    // Raw payload keys are also redacted in metadata, matching the
+    // evidence_events.kind blacklist (raw_sql_ast | raw_token |
+    // raw_result_row | full_question_payload) — keeping the surface
+    // consistent so the kernel's "never store raw payloads" rule
+    // also applies to span metadata.
+    /^(raw_sql_ast|raw_token|raw_result_row|full_question_payload)$/i.test(key) ||
+    // Token-like keys: redact any field whose name contains "token"
+    // except the well-known semantic fields ("token_usage", "tokenCount",
+    // "tokenLabel") which the kernel guarantees do not carry secrets.
+    (/\btoken\b/i.test(key) &&
+      !/token_(usage|count|label)|tokenusage|tokencount|tokenlabel/i.test(key))
+  );
+}
+
+function formatPolicySource(source: PolicyDecisionView["source"]): string {
+  if (!source) return "—";
+  switch (source) {
+    case "access_policy":
+      return "访问策略";
+    case "rate_limit":
+      return "限流";
+    case "tool_exposure":
+      return "工具暴露控制";
+    case "wiki_acl":
+      return "Wiki ACL";
+    case "other":
+      return "其他";
+    default:
+      return source;
+  }
+}
+
+function orderSpansByTopology(events: TraceEventView[]): TraceEventView[] {
+  // Order: root spans first (parentSpanId == null) sorted by startedAt,
+  // then descendants by startedAt. Within a sibling group preserve
+  // startedAt order so the timeline reads top-to-bottom.
+  const byId = new Map<string, TraceEventView>();
+  for (const ev of events) byId.set(ev.spanId, ev);
+  const sorted = [...events].sort((a, b) => (a.startedAt ?? "").localeCompare(b.startedAt ?? ""));
+  const childrenOf = new Map<string | null, TraceEventView[]>();
+  for (const ev of sorted) {
+    const key = ev.parentSpanId && byId.has(ev.parentSpanId) ? ev.parentSpanId : null;
+    const list = childrenOf.get(key) ?? [];
+    list.push(ev);
+    childrenOf.set(key, list);
+  }
+  const ordered: TraceEventView[] = [];
+  const visit = (parentKey: string | null) => {
+    const list = childrenOf.get(parentKey) ?? [];
+    for (const ev of list) {
+      ordered.push(ev);
+      visit(ev.spanId);
+    }
+  };
+  visit(null);
+  return ordered;
+}
+
+function groupEvidenceByKind(evidence: TraceEvidenceView[]): Array<[string, TraceEvidenceView[]]> {
+  const grouped = new Map<string, TraceEvidenceView[]>();
+  for (const ev of evidence) {
+    const list = grouped.get(ev.evidenceKind) ?? [];
+    list.push(ev);
+    grouped.set(ev.evidenceKind, list);
+  }
+  // Sort: largest group first, then alpha
+  return Array.from(grouped.entries()).sort((a, b) => {
+    if (b[1].length !== a[1].length) return b[1].length - a[1].length;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
+function MetaEntryRow({ entryKey, value }: { entryKey: string; value: unknown }) {
+  return (
+    <>
+      <span className="pl-trace-detail-meta-key">{entryKey}</span>
+      <MetaValue value={value} keyName={entryKey} />
+    </>
+  );
+}
+
+function MetaValue({ value, keyName }: { value: unknown; keyName: string }) {
+  if (isRedactedMarker(value) || isRedactedMetaKey(keyName)) {
+    return (
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <span className="pl-trace-detail-meta-redacted" data-testid={`trace-meta-redacted-${keyName}`}>
+            [REDACTED]
+          </span>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            className="rounded bg-fg-default px-2 py-1 text-xs text-bg-base shadow-card"
+            sideOffset={4}
+            data-testid={`trace-meta-redacted-tooltip-${keyName}`}
+          >
+            敏感字段已在写入 trace 时脱敏,无法在此查看原值。
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    );
+  }
+  if (value === null || value === undefined) {
+    return <span className="pl-trace-detail-meta-value text-fg-muted">—</span>;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return <span className="pl-trace-detail-meta-value">{String(value)}</span>;
+  }
+  return (
+    <code className="pl-trace-detail-meta-value break-all rounded bg-bg-muted px-1.5 py-0.5 text-[11px]">
+      {JSON.stringify(value)}
+    </code>
+  );
+}
+
+function PolicyBlock({ policy }: { policy: PolicyDecisionView }) {
+  const allowedClass = policy.allowed
+    ? "pl-trace-detail-policy-allowed"
+    : "pl-trace-detail-policy-denied";
+  return (
+    <div className="pl-trace-detail-policy" data-testid="trace-span-policy">
+      <div className={allowedClass} data-testid="trace-span-policy-allowed">
+        {policy.allowed ? "✓ 允许" : "✗ 拒绝"}
+      </div>
+      {policy.source ? (
+        <div className="pl-trace-detail-policy-row">
+          <span className="pl-trace-detail-policy-key">来源</span>
+          <span className="pl-trace-detail-policy-value" data-testid="trace-span-policy-source">
+            {formatPolicySource(policy.source)}
+          </span>
+        </div>
+      ) : null}
+      {policy.matchedRule ? (
+        <div className="pl-trace-detail-policy-row">
+          <span className="pl-trace-detail-policy-key">规则</span>
+          <span className="pl-trace-detail-policy-value">{policy.matchedRule}</span>
+        </div>
+      ) : null}
+      {policy.reason ? (
+        <div className="pl-trace-detail-policy-row">
+          <span className="pl-trace-detail-policy-key">原因</span>
+          <span className="pl-trace-detail-policy-value">{policy.reason}</span>
+        </div>
+      ) : null}
+      {policy.toolName ? (
+        <div className="pl-trace-detail-policy-row">
+          <span className="pl-trace-detail-policy-key">工具</span>
+          <span className="pl-trace-detail-policy-value">{policy.toolName}</span>
+        </div>
+      ) : null}
+      {policy.permissionSnapshotHash ? (
+        <div className="pl-trace-detail-policy-row">
+          <span className="pl-trace-detail-policy-key">快照</span>
+          <span className="pl-trace-detail-policy-value">{policy.permissionSnapshotHash}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SpanBlock({ event, isRoot }: { event: TraceEventView; isRoot: boolean }) {
+  const statusClass =
+    event.status === "ok"
+      ? "pl-status-done"
+      : event.status === "denied"
+        ? "pl-status-partial"
+        : event.status === "error"
+          ? "pl-status-validation_failed"
+          : "pl-status-pending";
+  const artifactHashes = event.artifactHashes ?? [];
+  const metaEntries = Object.entries(event.metadata ?? {});
+  return (
+    <div
+      className={isRoot ? "pl-trace-detail-span-root" : "pl-trace-detail-span"}
+      data-testid={`trace-span-${event.spanId}`}
+      data-span-type={event.spanType}
+      data-span-status={event.status}
+    >
+      <div className="pl-trace-detail-span-header">
+        <span className="pl-trace-detail-span-type">{event.spanType}</span>
+        <span className={`pl-status-badge ${statusClass}`}>{STATUS_LABEL[event.status]}</span>
+        <span className="text-fg-muted font-mono">{event.spanId}</span>
+        {event.actorId ? <span className="text-fg-muted">· {event.actorKind} {event.actorId}</span> : null}
+        <span className="ml-auto text-fg-muted">
+          {event.startedAt ? new Date(event.startedAt).toLocaleString("zh-CN") : "—"}
+          {event.endedAt ? ` → ${new Date(event.endedAt).toLocaleTimeString("zh-CN")}` : ""}
+        </span>
+      </div>
+      {event.policyDecision ? <PolicyBlock policy={event.policyDecision} /> : null}
+      {artifactHashes.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1" data-testid="trace-span-artifacts">
+          <span className="text-fg-muted">Artifact:</span>
+          {artifactHashes.map((hash) => (
+            <span key={hash} className="pl-trace-detail-hash" title={hash}>
+              {hash.slice(0, 16)}…
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {metaEntries.length > 0 ? (
+        <div className="pl-trace-detail-meta-grid">
+          {metaEntries.map(([key, value]) => (
+            <MetaEntryRow key={key} entryKey={key} value={value} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Read-only trace inspector. Renders the kernel view model in a right-side
+ * Drawer; never raw args, raw SQL AST, or full question payload. P0-CLOSE-01
+ * upgrades the inline disclosure to a Drawer so admins can explain a single
+ * access decision (allowed/denied) from the audit page alone, without
+ * falling back to the API. Pairs with /api/admin/trace/events.
+ */
+export function TraceLink({ traceId }: { traceId: string }) {
+  const [open, setOpen] = useState(false);
+  const query = useQuery({
+    queryKey: ["admin", "trace", "events", traceId],
+    queryFn: () => apiGet<TraceResponse>(`/api/admin/trace/events?traceId=${encodeURIComponent(traceId)}`),
+    enabled: open && Boolean(traceId)
+  });
+
+  const orderedSpans = useMemo(
+    () => (query.data?.data ? orderSpansByTopology(query.data.data.events) : []),
+    [query.data]
+  );
+  const evidenceGroups = useMemo(
+    () => (query.data?.data ? groupEvidenceByKind(query.data.data.evidence) : []),
+    [query.data]
+  );
+  const totalSpans = query.data?.data?.events.length ?? 0;
+  const totalEvidence = query.data?.data?.evidence.length ?? 0;
+
+  return (
+    <span className="ml-2">
+      <Dialog.Root onOpenChange={setOpen} open={open}>
+        <Dialog.Trigger asChild>
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost text-xs"
+            data-testid={`audit-trace-link-${traceId}`}
+          >
+            查看 Trace
+          </button>
+        </Dialog.Trigger>
+        <Dialog.Portal>
+          <Dialog.Overlay className="pl-trace-detail-overlay" />
+          <Dialog.Content
+            className="pl-trace-detail-content"
+            aria-describedby={`trace-detail-${traceId}-desc`}
+            data-testid={`audit-trace-drawer-${traceId}`}
+          >
+            <header className="pl-trace-detail-header">
+              <Dialog.Title className="pl-trace-detail-title" data-testid="trace-detail-title">
+                {traceId}
+              </Dialog.Title>
+              <Dialog.Description
+                id={`trace-detail-${traceId}-desc`}
+                className="pl-trace-detail-subtitle"
+              >
+                只读视图 · {totalSpans} spans · {totalEvidence} evidence
+              </Dialog.Description>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost pl-trace-detail-close text-xs"
+                  data-testid="trace-detail-close"
+                  aria-label="关闭 Trace 详情"
+                >
+                  关闭
+                </button>
+              </Dialog.Close>
+            </header>
+
+            {query.isLoading ? (
+              <div className="pl-notice" data-testid="trace-detail-loading">加载中…</div>
+            ) : null}
+            {query.error ? (
+              <div className="pl-notice pl-status-validation_failed" data-testid="trace-detail-error">
+                Trace 加载失败:{(query.error as Error).message}
+              </div>
+            ) : null}
+            {query.data?.data ? (
+              <>
+                {orderedSpans.length === 0 ? (
+                  <div className="pl-notice" data-testid="trace-detail-empty">该 trace 暂无 span 记录。</div>
+                ) : (
+                  <section className="pl-trace-detail-section" data-testid="trace-detail-spans">
+                    <h3 className="pl-trace-detail-section-title">Ordered Spans</h3>
+                    {orderedSpans.map((event) => (
+                      <SpanBlock
+                        key={event.spanId}
+                        event={event}
+                        isRoot={!event.parentSpanId}
+                      />
+                    ))}
+                  </section>
+                )}
+                {evidenceGroups.length > 0 ? (
+                  <section className="pl-trace-detail-section" data-testid="trace-detail-evidence">
+                    <h3 className="pl-trace-detail-section-title">Evidence Refs</h3>
+                    {evidenceGroups.map(([kind, list]) => (
+                      <div key={kind} className="pl-trace-detail-evidence-group">
+                        <h4 className="text-xs font-semibold text-fg-muted">{kind} · {list.length}</h4>
+                        {list.map((ev) => (
+                          <div
+                            key={ev.id}
+                            className="pl-trace-detail-evidence-row"
+                            data-testid={`trace-evidence-${ev.id}`}
+                          >
+                            <span className="pl-trace-detail-evidence-kind">{ev.evidenceKind}</span>
+                            <span className="pl-trace-detail-evidence-relation">
+                              {RELATION_LABEL[ev.relation] ?? ev.relation}
+                            </span>
+                            <span className="pl-trace-detail-evidence-ref" title={ev.evidenceRef}>
+                              {ev.evidenceRef}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </section>
+                ) : null}
+              </>
+            ) : null}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </span>
+  );
+}
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
@@ -211,6 +640,7 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
               <div>
                 <span className="font-medium">请求 ID：</span>
                 <span className="ml-2 text-fg-muted font-mono">{entry.requestId}</span>
+                {entry.traceId ? <TraceLink traceId={entry.traceId} /> : null}
               </div>
               {entry.decisionReason && (
                 <div>

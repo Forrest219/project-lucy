@@ -26,7 +26,7 @@
 1. 新建 `server/trace/evidence.ts`。
 2. 在现有 audit SQLite 中 idempotent 创建 `trace_events` 和 `evidence_events`。
 3. 增加 `writeTraceEvent`、`writeEvidenceEvents`、`listTraceEvents`、`hashArtifact`。
-4. SQLite 连接必须设置 `busyTimeout: 5000` 或等效 retry 逻辑。
+4. SQLite 连接必须设置 `busyTimeout: 5000`；可额外 retry，但 retry 不能替代 `busyTimeout`。
 5. 在 `server/proxy/mcp-proxy.ts` 的 `tools/call` 路径写 trace event。
 6. denied / error 路径必须记录 policy decision metadata。
 7. 新增 read-only trace API 如 `GET /api/trace/events`，仅用于验证与后续 UI。
@@ -38,12 +38,28 @@
 ## Implementation Notes
 
 - 复用 `server/proxy/audit.ts` 的 SQLite 连接思路，保持 WAL。
+- 新建 DB 建表前必须设置 `PRAGMA auto_vacuum = INCREMENTAL`。
+- 已存在 DB 若不是 `auto_vacuum = INCREMENTAL`，只记录 warning，不自动对生产库跑 full `VACUUM`。
+- 默认 retention 参数：`retention_days = 365`、`max_rows = 500000`、`max_bytes = 1073741824`。
+- 达到 365 天、50 万条或 1GB 任一上限时，后续 purge / archive 逻辑应触发 incremental vacuum；本单至少落常量、配置面和自检。
 - event rows 不允许 update；修正只能写新 evidence relation。
 - trace 写入失败不得中断 MCP 请求，但测试中要覆盖错误被记录。
 - `metadata_json` 必须限长和脱敏，不要放 token 明文、完整 SQL 或完整 result rows。
 - 若需要导出 DB helper，保持现有 `writeLog()` 行为兼容。
 - 所有测试与自检脚本必须使用 `:memory:` 或独立 temp SQLite 文件，禁止写真实 `.ktx-ui/audit.sqlite`。
 - 并行 subagent 可能同时跑测试，不能依赖固定 test DB path。
+
+SQLite hot store data boundary:
+
+| Allowed | Forbidden |
+|---|---|
+| Trace Envelope | 物理结果集明细 |
+| Evidence Ref | 原始 SQL AST |
+| Policy Decision | 未脱敏 Token / secret |
+| Artifact Hashes | 完整原始问题 |
+| Reviewer / Override signatures | 数据库凭据 |
+| redacted metadata | 客户行级样本 |
+| SQL AST hash / normalized summary / redacted structural metadata | SQL AST 原文 |
 
 ## Acceptance Criteria
 
@@ -52,7 +68,10 @@
 - denied MCP call 可查到 `policy_decision`。
 - 现有 audit tests 仍通过。
 - 自检脚本能在临时 DB 上独立跑通。
-- 自检脚本证明 `busyTimeout` 或 retry 已配置。
+- 自检脚本证明 `busyTimeout: 5000` 已配置。
+- 自检脚本证明默认 retention 参数为 `365 / 500000 / 1073741824`。
+- 自检脚本证明新建 DB 使用 `PRAGMA auto_vacuum = INCREMENTAL`。
+- 自检脚本证明黑名单 payload 不会进入 SQLite hot store。
 
 ## Verification
 
@@ -77,6 +96,9 @@ Browser check: not required.
 
 - [ ] No event overwrite path.
 - [ ] No token plaintext or raw result payload in trace tables.
+- [ ] No raw SQL AST, full original question, database credential, or customer row sample in trace tables.
+- [ ] Default retention constants are `365 / 500000 / 1073741824`.
+- [ ] `auto_vacuum = INCREMENTAL` is configured for new DBs and existing DB mismatch only warns.
 - [ ] MCP behavior remains compatible if trace write fails.
 - [ ] Existing audit table contract remains compatible.
 - [ ] Tests and verifier do not touch real `.ktx-ui/audit.sqlite`.

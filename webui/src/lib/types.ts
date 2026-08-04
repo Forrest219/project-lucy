@@ -624,6 +624,7 @@ export type AuditLogEntry = {
   responseColumnCount?: number;
   responseTruncated?: boolean;
   requestId: string | number;
+  traceId?: string;
   roleIds?: string[];
   permissionSnapshotHash?: string;
   effectiveTablesCount?: number;

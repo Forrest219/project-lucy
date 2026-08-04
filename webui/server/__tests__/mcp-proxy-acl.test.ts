@@ -9,7 +9,8 @@ const testState = vi.hoisted(() => ({
   projectRoot: "",
   writeLogMock: vi.fn(() => Promise.resolve()),
   writeAccessLogSourcesMock: vi.fn(() => Promise.resolve()),
-  isTokenRevokedMock: vi.fn(() => false)
+  isTokenRevokedMock: vi.fn(() => false),
+  recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
 }));
 
 vi.mock("../project.js", () => ({
@@ -21,6 +22,18 @@ vi.mock("../proxy/audit.js", () => ({
   writeLog: testState.writeLogMock,
   writeAccessLogSources: testState.writeAccessLogSourcesMock
 }));
+
+vi.mock("../admin/audit.js", () => ({
+  getAuditDb: vi.fn(() => Promise.resolve({ name: "<test>" }))
+}));
+
+vi.mock("../trace/evidence.js", async () => {
+  const actual = await vi.importActual<typeof import("../trace/evidence.js")>("../trace/evidence.js");
+  return {
+    ...actual,
+    recordMcpToolsCall: testState.recordMcpToolsCallMock
+  };
+});
 
 const TOKEN = "proxy-acl-token";
 
@@ -98,6 +111,8 @@ beforeEach(async () => {
   testState.writeAccessLogSourcesMock.mockClear();
   testState.isTokenRevokedMock.mockReset();
   testState.isTokenRevokedMock.mockReturnValue(false);
+  testState.recordMcpToolsCallMock.mockClear();
+  testState.recordMcpToolsCallMock.mockReturnValue({ callEventId: 1, policyEventId: 2 });
   projectRoot = await makeProject();
   testState.projectRoot = projectRoot;
 });

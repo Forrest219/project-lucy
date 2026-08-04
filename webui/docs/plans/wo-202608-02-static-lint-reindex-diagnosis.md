@@ -1,5 +1,7 @@
 # 202608-02 Static Lint And Reindex Diagnosis Work Order
 
+> Status: Deferred. Do not execute as part of the 202608 Governance & Observability iteration unless the product owner explicitly reopens semantic delivery tooling.
+
 ## Minimax Prompt
 
 请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 中实现 202608-02 Static Lint And Reindex Diagnosis。

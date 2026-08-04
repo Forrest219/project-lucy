@@ -1,5 +1,7 @@
 # 202608-05 FDE Copilot Candidate Work Order
 
+> Status: Deferred. Do not execute as part of the 202608 Governance & Observability iteration. FDE work remains manual + Codex for now.
+
 ## Minimax Prompt
 
 请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 中实现 202608-05 FDE Copilot Candidate。

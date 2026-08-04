@@ -131,7 +131,11 @@ GET    /api/admin/audit/export
 GET    /api/admin/audit/turns
 GET    /api/admin/audit/turns/:turnId
 POST   /api/admin/audit/conversation-turns/purge
+GET    /api/admin/trace/events
 GET    /api/admin/mcp-tools
+GET    /api/admin/governance/risk-review
+POST   /api/admin/governance/risk-review/:id/review
+GET    /api/admin/governance/release-readiness-package
 
 POST /mcp                                      # MCP proxy, port 7879
 ```
@@ -723,6 +727,33 @@ Query：
 
 ```jsonc
 { "retentionDays": 30, "dryRun": true }
+```
+
+`GET /api/admin/trace/events` 查询 Trace / Evidence Kernel 的只读事件流。必须传 `traceId` 或 `turnId`；可选 `spanType`、`status`、`limit`。响应只返回已脱敏 metadata、policy decision、artifact hashes 与 evidence refs，不返回物理结果集明细、原始 SQL AST、未脱敏 Token/secret 或完整原始问题。
+
+响应：
+
+```jsonc
+{ "ok": true, "data": {
+  "events": [{
+    "id": 1,
+    "traceId": "trace_8b9d...",
+    "spanId": "mcp_tools_call:lucy_query:trace_8b9d...",
+    "spanType": "mcp_tools_call",
+    "actorKind": "agent",
+    "status": "ok",
+    "startedAt": "2026-08-03T10:00:00.000Z",
+    "requestId": "1",
+    "metadata": { "tool_name": "lucy_query" }
+  }],
+  "evidence": [{
+    "id": 1,
+    "traceId": "trace_8b9d...",
+    "evidenceKind": "access_policy",
+    "evidenceRef": "lucy_query",
+    "relation": "used"
+  }]
+}}
 ```
 
 `GET /api/admin/mcp-tools` 返回当前已知 MCP tool 列表，并标记全局 deny 状态。

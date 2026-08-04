@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
+import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 
 export interface AccessLogEntry {
@@ -25,6 +26,7 @@ export interface AccessLogEntry {
   errorDetail?: string;
   durationMs: number;
   requestId: string | number;
+  traceId?: string;
   responseBytes?: number;
   responseRowCount?: number;
   responseColumnCount?: number;
@@ -67,7 +69,8 @@ const ACCESS_LOG_COLUMNS = [
   ["response_bytes", "INTEGER"],
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
-  ["response_truncated", "INTEGER"]
+  ["response_truncated", "INTEGER"],
+  ["trace_id", "TEXT"]
 ] as const;
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
@@ -83,7 +86,7 @@ async function getDb(): Promise<Database.Database> {
   mkdirSync(dir, { recursive: true });
   const dbPath = process.env.LUCY_AUDIT_DB ?? path.join(dir, "audit.sqlite");
   db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
+  prepareTraceDatabase(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS access_log (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +113,7 @@ async function getDb(): Promise<Database.Database> {
       response_column_count INTEGER,
       response_truncated INTEGER,
       request_id   TEXT    NOT NULL,
+      trace_id     TEXT,
       role_ids     TEXT,
       permission_snapshot_hash TEXT,
       effective_tables_count INTEGER,
@@ -232,9 +236,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
     `);
   }
   const result = insertStmt.run({
@@ -261,6 +265,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     responseColumnCount: entry.responseColumnCount ?? null,
     responseTruncated: entry.responseTruncated === undefined ? null : (entry.responseTruncated ? 1 : 0),
     requestId: String(entry.requestId),
+    traceId: entry.traceId ?? null,
     roleIds: entry.roleIds ? JSON.stringify(entry.roleIds) : null,
     permissionSnapshotHash: entry.permissionSnapshotHash ?? entry.permissionSnapshot?.hash ?? null,
     effectiveTablesCount: entry.effectiveTablesCount ?? null,

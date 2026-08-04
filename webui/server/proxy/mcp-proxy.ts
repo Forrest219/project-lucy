@@ -7,6 +7,12 @@ import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredCon
 import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { resolveProjectRoot } from "../project.js";
+import {
+  recordMcpToolsCall,
+  type PolicyDecisionMetadata,
+  type LucySpanStatus
+} from "../trace/evidence.js";
+import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -177,6 +183,120 @@ function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[
     })
     .catch((err) => {
       console.error("[lucy-proxy] failed to write audit log", err);
+    });
+}
+
+/**
+ * 202608-01 Trace / Evidence Kernel — best-effort write of `mcp_tools_call`
+ * + `policy_decision` events. Errors are swallowed so the MCP request keeps
+ * flowing; the verifier counts dropped writes separately. We do NOT touch
+ * sensitive metadata: only the snapshot hash, the tool name, and a redacted
+ * summary are stored.
+ */
+function recordMcpTrace(input: {
+  traceId: string;
+  spanId: string;
+  identity: Identity;
+  toolName: string;
+  status: LucySpanStatus;
+  startedAt: string;
+  endedAt: string;
+  policyDecision: PolicyDecisionMetadata;
+  turnId?: string | null;
+  sessionId?: string | null;
+  requestId?: string | null;
+  argsSummary?: Record<string, unknown>;
+}): void {
+  getAdminAuditDb()
+    .then((db) => {
+      try {
+        recordMcpToolsCall(db, {
+          traceId: input.traceId,
+          spanId: input.spanId,
+          actorId: input.identity.userId,
+          toolName: input.toolName,
+          startedAt: input.startedAt,
+          endedAt: input.endedAt,
+          status: input.status,
+          sessionId: input.sessionId ?? null,
+          turnId: input.turnId ?? null,
+          requestId: input.requestId ?? null,
+          policyDecision: input.policyDecision,
+          metadata: input.argsSummary
+        });
+      } catch (err) {
+        console.error("[lucy-proxy] recordMcpToolsCall threw", err);
+      }
+    })
+    .catch((err) => {
+      console.error("[lucy-proxy] failed to write trace event", err);
+    });
+}
+
+async function buildTracePolicyDecision(
+  identity: Identity,
+  toolName: string,
+  allowed: boolean,
+  reason: string | undefined,
+  matchedRule: string | undefined
+): Promise<PolicyDecisionMetadata> {
+  const snapshot = await permissionSnapshot(identity).catch(() => undefined);
+  return {
+    allowed,
+    reason,
+    toolName,
+    matchedRule,
+    source: "access_policy",
+    permissionSnapshotHash: snapshot?.hash
+  };
+}
+
+function normalizedTraceRequestId(requestId: string | number): string | null {
+  return requestId === "" ? null : String(requestId);
+}
+
+function toolTraceSpanId(toolName: string, traceId: string): string {
+  return `mcp_tools_call:${toolName}:${traceId}`;
+}
+
+function recordMcpTraceForTool(input: {
+  traceId: string;
+  identity: Identity;
+  toolName: string;
+  status: LucySpanStatus;
+  startedAt: string;
+  endedAt?: string;
+  turnId?: string | null;
+  sessionId?: string | null;
+  requestId: string | number;
+  argsSummary?: Record<string, unknown>;
+  allowed: boolean;
+  reason?: string;
+  matchedRule?: string;
+  policySource?: PolicyDecisionMetadata["source"];
+}): void {
+  buildTracePolicyDecision(input.identity, input.toolName, input.allowed, input.reason, input.matchedRule)
+    .then((policyDecision) => {
+      recordMcpTrace({
+        traceId: input.traceId,
+        spanId: toolTraceSpanId(input.toolName, input.traceId),
+        identity: input.identity,
+        toolName: input.toolName,
+        status: input.status,
+        startedAt: input.startedAt,
+        endedAt: input.endedAt ?? new Date().toISOString(),
+        turnId: input.turnId ?? null,
+        sessionId: input.sessionId ?? null,
+        requestId: normalizedTraceRequestId(input.requestId),
+        argsSummary: input.argsSummary,
+        policyDecision: {
+          ...policyDecision,
+          source: input.policySource ?? policyDecision.source
+        }
+      });
+    })
+    .catch((err) => {
+      console.error("[lucy-proxy] failed to build trace policy decision", err);
     });
 }
 
@@ -1385,7 +1505,8 @@ async function writeLucySemanticResponse(
   requestMeta: Partial<Parameters<typeof writeLog>[0]>,
   argsSummary: Record<string, unknown> | undefined,
   queryMeta: Partial<Parameters<typeof writeLog>[0]>,
-  queryTables: string[]
+  queryTables: string[],
+  traceId: string
 ): Promise<void> {
   const chunks: Buffer[] = [];
   for await (const chunk of upstream as AsyncIterable<Buffer>) {
@@ -1457,9 +1578,23 @@ async function writeLucySemanticResponse(
     durationMs: Date.now() - start,
     ...responseAuditMeta(Buffer.from(body), headers["content-type"]),
     requestId,
+    traceId,
     ...requestMeta,
     ...(await auditMeta(identity, outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error")),
   }, outcome === "ok" ? sourceRefs : undefined);
+  recordMcpTraceForTool({
+    traceId,
+    identity,
+    toolName,
+    status: outcome,
+    startedAt: new Date(start).toISOString(),
+    turnId: requestMeta.lucyTurnId ?? null,
+    sessionId: requestMeta.lucySessionId ?? null,
+    requestId,
+    argsSummary,
+    allowed: true,
+    reason: outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error"
+  });
 }
 
 function toolsListErrorResponse(requestId: string | number, detail: string): Record<string, unknown> {
@@ -1632,6 +1767,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
   const body = await readBody(req);
   const start = Date.now();
+  const traceId = `trace_${randomUUID()}`;
 
   let rpcMethod: string | undefined;
   let toolName: string | undefined;
@@ -1678,6 +1814,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     // non-JSON body; proxy as-is
   }
 
+  const recordRequestAudit = (entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]) => {
+    recordAudit(rpcMethod === "tools/call" ? { ...entry, traceId } : entry, sources);
+  };
+
   // Near-neighbor turn correlation (spec §8.2): if the client didn't send an explicit
   // x-lucy-turn-id header, fall back to the most recent lucy_begin_question report for
   // this identity within the attach window. lucy_begin_question itself is the start of a
@@ -1694,7 +1834,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${invalidArgumentsReason}`, { isError: true });
     res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
     res.end(responseBody);
-    recordAudit({
+    recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
@@ -1709,6 +1849,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, invalidArgumentsReason)),
+    });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName: toolName ?? "tools/call",
+      status: "error",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary,
+      allowed: false,
+      reason: invalidArgumentsReason,
+      policySource: "other"
     });
     return;
   }
@@ -1729,7 +1883,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -1744,6 +1898,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         ...meta,
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "denied",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason: errorMsg,
+        matchedRule: decision.reason
       });
       return;
     }
@@ -1762,7 +1930,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -1776,6 +1944,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         ...requestMeta,
         ...(await auditMeta(identity, "allowed")),
       });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "ok",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: true,
+        reason: "allowed",
+        matchedRule: decision.reason
+      });
       return;
     }
     if (toolName === "lucy_explain_query" || toolName === "lucy_freshness") {
@@ -1786,7 +1968,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -1804,6 +1986,19 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         ...requestMeta,
         ...(await auditMeta(identity, "allowed")),
       }, sourceRefs);
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "ok",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: true,
+        reason: "allowed"
+      });
       return;
     }
     if (toolName === "wiki_read") {
@@ -1817,7 +2012,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         : jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "wiki_forbidden"}`, { isError: true });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -1832,6 +2027,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         ...requestMeta,
         ...(await auditMeta(identity, allowed ? "allowed" : (decision.reason ?? "wiki_forbidden"))),
       });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: allowed ? "ok" : "denied",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary: rawKey ? { key: canonicalWikiKey(rawKey) ?? "<invalid>" } : argsSummary,
+        allowed,
+        reason: allowed ? "allowed" : (decision.reason ?? "wiki_forbidden"),
+        policySource: "wiki_acl"
+      });
       return;
     }
     if (toolName === "lucy_begin_question") {
@@ -1845,7 +2054,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         });
         res.writeHead(200, { "content-type": "application/json" });
         res.end(responseBody);
-        recordAudit({
+        recordRequestAudit({
           ts: new Date().toISOString(),
           userId: identity.userId,
           client: identity.client,
@@ -1858,6 +2067,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
           requestId,
           ...requestMeta,
           ...(await auditMeta(identity, "allowed")),
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "error",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: "missing_intent_summary",
+          policySource: "other"
         });
         return;
       }
@@ -1891,7 +2114,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         });
         res.writeHead(200, { "content-type": "application/json" });
         res.end(responseBody);
-        recordAudit({
+        recordRequestAudit({
           ts: new Date().toISOString(),
           userId: identity.userId,
           client: identity.client,
@@ -1904,6 +2127,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
           requestId,
           ...requestMeta,
           ...(await auditMeta(identity, "allowed")),
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "error",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: "conversation_turn_write_failed",
+          policySource: "other"
         });
         return;
       }
@@ -1930,7 +2167,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -1943,6 +2180,19 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         ...requestMeta,
         lucyTurnId: turnId,
         ...(await auditMeta(identity, "allowed")),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "ok",
+        startedAt: new Date(start).toISOString(),
+        turnId,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: true,
+        reason: "allowed"
       });
       return;
     }
@@ -1973,7 +2223,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
       const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
       const tables = [...new Set([...structuredTables, ...queryTables])];
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -1989,6 +2239,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         ...requestMeta,
         ...(await auditMeta(identity, reason)),
       }, sourceRefs);
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "denied",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason,
+        policySource: "rate_limit"
+      });
       return;
     }
     releaseOnResponseEnd(res, slot.release);
@@ -2012,7 +2276,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -2032,7 +2296,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -2058,7 +2322,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }, null, 2), { isError: !query });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -2072,6 +2336,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         ...(await auditMeta(identity, query ? "local_wiki_search_fallback" : "wiki_query_missing")),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: query ? "ok" : "error",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary: query ? { query, limit } : argsSummary,
+        allowed: Boolean(query),
+        reason: query ? "local_wiki_search_fallback" : "wiki_query_missing",
+        policySource: "wiki_acl"
       });
       return;
     }
@@ -2089,7 +2367,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
       const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
       const tables = [...new Set([...structuredTables, ...queryTables])];
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
@@ -2105,6 +2383,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         ...requestMeta,
         ...(await auditMeta(identity, reason)),
       }, sourceRefs);
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName: toolName ?? "tools/call",
+        status: "error",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: true,
+        reason,
+        policySource: "other"
+      });
       return;
     }
     throw err;
@@ -2112,7 +2404,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
   if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
     const initResult = await writeInitializeResponse(identity, upstream, res, requestId);
-    recordAudit({
+    recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
@@ -2130,7 +2422,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
   if (rpcMethod === "tools/list") {
     const toolsList = await writeToolsListResponse(identity, upstream, res, requestId);
-    recordAudit({
+    recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
@@ -2201,7 +2493,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     headers["content-length"] = responseBytes;
     res.writeHead(upstream.statusCode ?? 200, headers);
     res.end(body);
-    recordAudit({
+    recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
@@ -2216,11 +2508,25 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       ...requestMeta,
       ...(await auditMeta(identity, filterFailed ? "wiki_search_filter_failed" : filteredCount > 0 ? `wiki_filtered:${filteredCount}` : "allowed")),
     });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName,
+      status: filterFailed ? "error" : "ok",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary,
+      allowed: !filterFailed,
+      reason: filterFailed ?? (filteredCount > 0 ? `wiki_filtered:${filteredCount}` : "allowed"),
+      policySource: "wiki_acl"
+    });
     return;
   }
 
   if (rpcMethod === "tools/call" && (toolName === "lucy_query" || toolName === "lucy_read_source")) {
-    await writeLucySemanticResponse(identity, upstream, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables);
+    await writeLucySemanticResponse(identity, upstream, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables, traceId);
     return;
   }
 
@@ -2281,7 +2587,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
     }
 
-    recordAudit({
+    recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
@@ -2297,10 +2603,23 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       ...requestMeta,
       ...(await auditMeta(identity, outcome === "ok" ? "allowed" : "upstream_error")),
     }, outcome === "ok" ? sourceRefs : undefined);
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName: toolName ?? "tools/call",
+      status: outcome,
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary,
+      allowed: true,
+      reason: outcome === "ok" ? "allowed" : "upstream_error"
+    });
   } else {
     pipeResponse(upstream, res);
     if (rpcMethod) {
-      recordAudit({
+      recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,

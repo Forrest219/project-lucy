@@ -1,57 +1,57 @@
-# 202608-03 Tiered Publish Gate Work Order
+# 202608-GOV-03 Tiered Access Governance Gate Work Order
 
 ## Minimax Prompt
 
-请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 中实现 202608-03 Tiered Publish Gate。
+请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 中实现 202608-GOV-03 Tiered Access Governance Gate。
 
 必须先阅读：
 
 - `../docs/DEVELOPMENT.md`
 - `../docs/lucy-202608-upgrade-execution-control.md`
 - `docs/00-product-terminology-standard.md`
-- `docs/23-semantic-asset-publish-export-spec.md`
-- `docs/46-eval-yaml-exchange-and-result-archive-spec.md`
+- `docs/07-mcp-auth-proxy-spec.md`
+- `docs/14-agent-admin-enterprise-delivery-spec.md`
+- `docs/15-role-admin-spec.md`
 - `docs/64-tiered-publish-gate-spec.md`
-- `server/semantic-assets.ts`
-- `server/eval/cases.ts`
-- `server/eval/suite-schema.ts`
-- `src/components/semantic-assets/SemanticAssetPublishDrawer.tsx`
-- `src/__tests__/semantic-asset-publish.test.tsx`
-- `server/__tests__/api.semantic-assets.publish.test.ts`
+- `server/admin/agents.ts`
+- `server/admin/roles.ts`
+- `server/admin/tokens.ts`
+- `server/proxy/acl.ts`
+- `server/admin/audit.ts`
 
-目标：在 semantic asset publish 中增加 P0 / P1 / P2 分级 gate 和 emergency override evidence。不要用单一总通过率处理所有风险。
+目标：为 Agent / Role / Token / `access.yaml` governance changes 增加 P0 / P1 / P2 分级门禁和 override evidence。不要实现通用 semantic publish gate。
 
 ## Scope
 
-1. 新建 `server/publish-gate.ts`。
-2. 扩展 Eval Case 读取模型，支持 `risk_tier` / `risk_tags`，保持旧 case 兼容。
-3. 实现 static declaration first、dynamic promotion second。
-4. 扩展 semantic validate / publish response，返回 `PublishGateResult`。
-5. P0 fail blocks publish。
-6. P1 threshold 默认 90%。
-7. P2 warning 不阻断。
-8. Emergency override API / helper 要求双 approver、reason、expiresAt、rollbackPlan。
-9. Override 写 Trace / Evidence event，并生成 follow-up case metadata。
-10. 新增测试：
-    - `server/__tests__/publish-gate.test.ts`
-    - 更新 publish API / UI tests。
-11. 新增自检脚本：`../scripts/verify-202608-publish-gate.mjs`。
+1. 新建 `server/access-governance-gate.ts`。
+2. Agent / Role / Token dryRun response 增加 gate decision。
+3. P0 覆盖 permission expansion、global deny weakening、sensitive source exposure、raw query path exposure。
+4. P1 覆盖非敏感 Role widening、高流量 Agent Token 创建、高 deny Role 变更。
+5. P2 覆盖 stale Token、unused Role、低风险 cleanup warning。
+6. Durable write 前必须检查 gate pass 或 valid emergency override。
+7. Override 要求两个 approver、reason、expiresAt、rollbackPlan。
+8. Gate decision / override 写 Trace / Evidence event。
+9. 新增测试：
+   - `server/__tests__/access-governance-gate.test.ts`
+   - 回归 `admin-agents` / `admin-roles` / `admin-tokens`。
+10. 新增自检脚本：`../scripts/verify-202608-access-governance-gate.mjs`。
 
 ## Implementation Notes
 
 - 关键词只能作为 signal，不能单独提升 P0。
-- 动态提升要结合 `access.yaml` deny 标签、semantic-layer tags、source classification、measure risk metadata。
-- 不要让前端自行计算 gate decision；前端只展示后端结果。
-- UI 复用现有 publish drawer、validation panel、diff panel。
-- Override 在单管理员部署中仍需两个 approver 字段；是否允许同一 actor 由 spec 后续决定，MVP 默认不允许。
+- Gate truth lives in backend, not frontend.
+- Do not change MCP Proxy ACL final allow / deny behavior.
+- Do not write `.ktx/secrets/**`.
+- Tests must use temp SQLite via `LUCY_AUDIT_DB`, not real `.ktx-ui/audit.sqlite`.
 
 ## Acceptance Criteria
 
-- P0 failed -> publish blocked。
-- P1 89% under 90% -> publish blocked。
-- P2 only failed -> publish warning, not block。
-- Override missing second approver -> rejected。
-- Valid override writes evidence event。
+- Sensitive Role widening -> P0 block.
+- Global deny weakening -> P0 block.
+- Stale Token -> P2 warning, not block.
+- Single approver override -> rejected.
+- Valid two-approver override -> accepted and writes evidence.
+- Existing Admin dryRun / diff behavior remains compatible.
 
 ## Verification
 
@@ -59,14 +59,14 @@ WebUI Vitest:
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy/webui
-npm test -- server/__tests__/publish-gate.test.ts server/__tests__/api.semantic-assets.publish.test.ts src/__tests__/semantic-asset-publish.test.tsx
+npm test -- server/__tests__/access-governance-gate.test.ts server/__tests__/admin-agents.test.ts server/__tests__/admin-roles.test.ts server/__tests__/admin-tokens.test.ts
 ```
 
 Root verifier:
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy
-node scripts/verify-202608-publish-gate.mjs
+node scripts/verify-202608-access-governance-gate.mjs
 npm run lint:terminology
 ```
 
@@ -74,7 +74,8 @@ Browser check: not required.
 
 ## Code Review Checklist
 
-- [ ] P0 cannot be bypassed without override evidence.
-- [ ] P1 / P2 are not collapsed into one score.
-- [ ] Frontend display is not a second source of gate truth.
+- [ ] Gate cannot be bypassed on durable P0 governance writes.
+- [ ] Frontend does not compute final gate decision.
 - [ ] Override event is append-only.
+- [ ] No semantic publish / Static Lint implementation sneaks into this work order.
+
