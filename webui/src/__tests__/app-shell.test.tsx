@@ -400,6 +400,7 @@ describe("AppFrame shell", () => {
 
   it("exposes density shell classes and active nav styling hook", () => {
     renderAt("/connections");
+    expect(document.querySelector(".pl-app-root")).toBeInTheDocument();
     expect(document.querySelector(".pl-app-shell")).toBeInTheDocument();
     expect(document.querySelector(".pl-app-shell")).not.toHaveClass("pl-app-shell--help");
     expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();

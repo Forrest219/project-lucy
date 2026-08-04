@@ -230,8 +230,9 @@ export function AppFrame() {
   const OverviewIcon = NAV_ICONS[topLevelEntry.iconKey];
 
   return (
-    <div className={appShellClass}>
-      <aside className="pl-sidebar">
+    <div className="pl-app-root">
+      <div className={appShellClass}>
+        <aside className="pl-sidebar">
         <Link
           to="/overview"
           className="pl-brand-block notranslate"
@@ -356,11 +357,11 @@ export function AppFrame() {
             </HelpButton>
           </div>
         </div>
-      </aside>
+        </aside>
 
-      <main className="pl-workspace">
-        <div className="pl-workspace-body">
-          <Routes>
+        <main className="pl-workspace">
+          <div className="pl-workspace-body">
+            <Routes>
             <Route path="/overview" element={<Onboarding />} />
             <Route path="/onboarding" element={<OnboardingRedirect />} />
             <Route path="/connections" element={<ConnectionOverview />} />
@@ -395,18 +396,19 @@ export function AppFrame() {
             <Route path="/eval/monitor" element={<Monitor />} />
             <Route path="/eval/security-candidates" element={<SecurityCandidates />} />
             <Route path="/help" element={<HelpCenter />} />
-          </Routes>
-        </div>
-        {/* M36: ObjectDetailDrawer is mounted once at the AppFrame level so any
+            </Routes>
+          </div>
+          {/* M36: ObjectDetailDrawer is mounted once at the AppFrame level so any
             page can open it by updating URL query parameters (e.g.
             `?object=table&conn=...&schema=...&table=...`). */}
-        <ObjectDetailDrawer />
-      </main>
+          <ObjectDetailDrawer />
+        </main>
 
-      <CommandPalette
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-      />
+        <CommandPalette
+          open={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+        />
+      </div>
     </div>
   );
 }

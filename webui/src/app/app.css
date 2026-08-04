@@ -2,6 +2,7 @@
 
 /* 原值层：私有，主题切换或租户覆盖时改这一层 */
 :root {
+  --layout-min-readable-width: 1200px;
   --token-color-bg-base: #ffffff;
   --token-color-bg-surface: #ffffff;
   --token-color-bg-elevated: #ffffff;
@@ -104,12 +105,24 @@
 }
 
 @layer components {
+  /* Desktop-only baseline: once viewport gets narrower than the minimum
+     readable desktop width, keep the desktop layout width and let the
+     outer container scroll horizontally instead of compressing content. */
+  .pl-app-root {
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--color-bg-base);
+  }
   /* shell + 主布局 */
   /* M60 Sidebar Brand Navigation Polish: widen sidebar from 216px → 248px so
      the brand mark, search entry and chinese group titles have breathing
      room. The shell grid keeps `[sidebar main]` so PageHeader + body
      layouts are not touched. */
-  .pl-app-shell { @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] bg-bg-base text-fg-body; }
+  .pl-app-shell {
+    @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] bg-bg-base text-fg-body;
+    min-width: var(--layout-min-readable-width);
+  }
   .pl-sidebar { @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r border-border-default bg-bg-surface px-3 py-4; }
   /* M-Next sidebar scrollbar: 让 .pl-nav 在分组全展开、内容超过 viewport
    * 而 nav 可滚动时,滚动条本身始终可见,避免用户把"nav 可滚"误读为
