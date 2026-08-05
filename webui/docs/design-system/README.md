@@ -20,8 +20,9 @@
 - `01-foundations-color.md`：颜色语义与状态映射
 - `02-foundations-grid-spacing.md`：网格、间距与断点
 - `03-foundations-typography.md`：字体层级与可读性规范
-- `10-components-button.md`：按钮组件规范（首批完整落盘）
+- `10-components-button.md`：按钮组件规范（v1.1：选中分离、Header 预算、`pl-icon-btn`；见 Spec 101）
 - `11-components-data-grid.md`：数据网格规范（字体、对齐、列宽、密度、测试契约）
+- `12-components-metric-card.md`：列表页 KPI Metric Card（Connections 基准、必有 ⓘ；见 Spec 103）
 - `20-patterns-page-layout.md`：页面布局模式骨架（列表页/概览页/配置页）
 - `30-pr-compliance-template.md`：PR 的 Design System Compliance 模板
 - `99-governance.md`：规范变更流程与执行要求

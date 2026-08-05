@@ -30,6 +30,7 @@
 - 主任务内容必须稳定落在 Primary Workspace，不得被次要操作挤占首屏。
 - 主操作区不承载低价值信息；低价值状态应放入 summary 或 description。
 - 二级区域默认可折叠或弱化，不与主任务争抢层级。
+- Summary Region 若使用顶部 KPI 指标卡，必须遵循 `12-components-metric-card.md` / Spec 103（Connections 基准、每卡 ⓘ）；网格列数允许 3 / 4 / 2×4，但卡内模板不得漂移。`/overview` 带 icon+CTA 的 Ops Metric Row 见 Spec 102，不在此模板内。
 
 ## 3. 列表/工作台页模式
 

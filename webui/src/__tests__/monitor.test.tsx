@@ -102,6 +102,11 @@ describe("Monitor", () => {
     expect(screen.getByText("最新通过率")).toBeInTheDocument();
     expect(await screen.findByText("75%")).toBeInTheDocument();
     expect(screen.getByText("红线状态")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-latest-pass-rate")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-fail-cases")).toBeInTheDocument();
+    const failCard = screen.getByTestId("metric-help-fail-cases").closest(".pl-metric-card");
+    expect(failCard?.className).not.toMatch(/pl-metric-card--success/);
+    expect(failCard?.className).not.toMatch(/pl-metric-card--default/);
     expect(screen.getByText("sql_changed")).toBeInTheDocument();
     expect(screen.getByText("case_sales")).toBeInTheDocument();
   });

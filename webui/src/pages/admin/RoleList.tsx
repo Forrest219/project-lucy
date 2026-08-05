@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
 import type { Role } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { MetricCard } from "../../components/MetricCard";
 
 type RolesResponse = { roles: Role[] };
 
@@ -19,18 +20,43 @@ const FILTER_OPTIONS: Array<{ value: SourceFilter; label: string }> = [
 
 const METRIC_ITEMS: Array<{
   label: string;
+  help: string;
   hint: string;
   valueKey: keyof RoleSummary;
   testId: string;
+  helpId: string;
 }> = [
-  { label: "Role 总数", hint: "access.yaml 中的正式 Role", valueKey: "formalCount", testId: "metric-role-count" },
-  { label: "使用中", hint: "至少 1 个 Agent 引用", valueKey: "inUseCount", testId: "metric-in-use" },
-  { label: "未引用", hint: "正式 Role 暂无 Agent 绑定", valueKey: "unusedFormalCount", testId: "metric-unused" },
+  {
+    label: "Role 总数",
+    help: "统计正式 Role（写入 access 配置、非参考模板）的数量。",
+    hint: "正式 Role（不含参考模板）",
+    valueKey: "formalCount",
+    testId: "metric-role-count",
+    helpId: "role-count"
+  },
+  {
+    label: "使用中",
+    help: "至少被 1 个 Agent 引用的正式 Role 数量。",
+    hint: "至少 1 个 Agent 引用",
+    valueKey: "inUseCount",
+    testId: "metric-in-use",
+    helpId: "in-use"
+  },
+  {
+    label: "未引用",
+    help: "正式 Role 中尚未绑定任何 Agent 的数量。",
+    hint: "正式 Role 暂无 Agent 绑定",
+    valueKey: "unusedFormalCount",
+    testId: "metric-unused",
+    helpId: "unused"
+  },
   {
     label: "解析异常",
+    help: "正式 Role 权限解析失败的数量；请用筛选「待修复」查看，不在此卡点击筛选。",
     hint: "正式 Role 权限解析失败",
     valueKey: "needsRepairCount",
-    testId: "metric-invalid"
+    testId: "metric-invalid",
+    helpId: "invalid"
   }
 ];
 
@@ -49,26 +75,6 @@ function formatConfigUpdatedAt(iso: string): string {
   }).formatToParts(date);
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
   return `${value("year")}-${value("month")}-${value("day")} ${value("hour")}:${value("minute")}`;
-}
-
-function MetricCard({
-  label,
-  value,
-  hint,
-  testId
-}: {
-  label: string;
-  value: string | number;
-  hint: string;
-  testId: string;
-}) {
-  return (
-    <div className="pl-metric-card" data-testid={testId}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{hint}</small>
-    </div>
-  );
 }
 
 // ─── Role status terminology helpers (M57 / Spec 76) ──────────────────────────
@@ -425,7 +431,9 @@ export function RoleList() {
             key={metric.label}
             label={metric.label}
             value={summary[metric.valueKey]}
-            hint={metric.hint}
+            help={metric.help}
+            subValue={metric.hint}
+            helpId={metric.helpId}
             testId={metric.testId}
           />
         ))}

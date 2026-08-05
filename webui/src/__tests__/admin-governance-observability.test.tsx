@@ -141,6 +141,10 @@ describe("GovernanceOverview", () => {
     expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
     expect(screen.getByTestId("metric-p95-latency")).toHaveTextContent("多数请求耗时");
     expect(within(screen.getByTestId("metric-configured-token-count")).getByText("Token")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-agent-count")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-p95-latency")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-agent-count")).toHaveClass("pl-metric-card--with-help");
+    expect(screen.getByTestId("metric-active-agent-count").querySelectorAll(":scope > small")).toHaveLength(1);
 
     expect(screen.queryByTestId("metric-agent-active-rate")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-token-active-rate")).not.toBeInTheDocument();

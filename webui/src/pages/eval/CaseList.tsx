@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ApiError, apiGet, apiDelete, apiPost } from "../../lib/apiClient";
 import type { EvalDomainInfo, EvalCase, EvalRun, EvalRunWithResults } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { MetricCard } from "../../components/MetricCard";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
 type CasesResponse = { cases: EvalCase[] };
@@ -202,7 +203,7 @@ export function CaseList() {
 
   if (domains.length === 0) {
     return (
-      <div className="grid gap-6">
+      <div className="pl-page-stack">
         <PageHeader
           title="评测用例"
           description="管理各 domain 的 eval case 定义（YAML 源文件）。"
@@ -213,17 +214,14 @@ export function CaseList() {
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="pl-page-stack">
       <PageHeader
         title="评测用例"
         description="管理各 domain 的 eval case 定义（YAML 源文件）。"
         badges={
-          <>
-            <span>{cases.length} 个 case</span>
-            <span data-testid="case-list-coverage">
-              {latestRun ? `最近一次 Run #${latestRun.id} 通过率 ${Math.round((latestRun.passRate ?? 0) * 100)}%` : "尚未运行"}
-            </span>
-          </>
+          <span data-testid="case-list-coverage">
+            {latestRun ? `最近一次 Run #${latestRun.id} 通过率 ${Math.round((latestRun.passRate ?? 0) * 100)}%` : "尚未运行"}
+          </span>
         }
         actions={
           <div className="relative flex gap-2">
@@ -383,31 +381,35 @@ export function CaseList() {
         className="pl-metric-grid pl-metric-grid--three"
         data-testid="case-list-coverage-card"
       >
-        <div className="pl-metric-card">
-          <span>Case 总数</span>
-          <strong>{cases.length}</strong>
-          <small>{activeDomain} domain</small>
-        </div>
-        <div className="pl-metric-card">
-          <span>最近 Run 通过率</span>
-          <strong>
-            {latestRun ? `${Math.round((latestRun.passRate ?? 0) * 100)}%` : "—"}
-          </strong>
-          <small>
-            {latestRun
+        <MetricCard
+          label="Case 总数"
+          value={cases.length}
+          help="当前选中 domain 下已配置的评测用例数量。"
+          subValue={<span className="notranslate" translate="no">{activeDomain} domain</span>}
+          helpId="case-total"
+        />
+        <MetricCard
+          label="最近 Run 通过率"
+          value={latestRun ? `${Math.round((latestRun.passRate ?? 0) * 100)}%` : "—"}
+          help="该 domain 最近一次评测运行的通过用例占比。"
+          subValue={
+            latestRun
               ? `${latestRun.passCount}/${latestRun.totalCases}`
-              : "运行后才会出现"}
-          </small>
-        </div>
-        <div className="pl-metric-card">
-          <span>最近 Run 失败数</span>
-          <strong>{latestRun?.failCount ?? 0}</strong>
-          <small>
-            {latestRun
+              : "运行后才会出现"
+          }
+          helpId="latest-pass-rate"
+        />
+        <MetricCard
+          label="最近 Run 失败数"
+          value={latestRun?.failCount ?? 0}
+          help="该 domain 最近一次评测运行中失败的用例数。"
+          subValue={
+            latestRun
               ? `Run #${latestRun.id} · ${new Date(latestRun.startedAt).toLocaleString("zh-CN")}`
-              : "等待首次运行"}
-          </small>
-        </div>
+              : "等待首次运行"
+          }
+          helpId="latest-fail-count"
+        />
       </div>
 
       {/* Domain tabs */}

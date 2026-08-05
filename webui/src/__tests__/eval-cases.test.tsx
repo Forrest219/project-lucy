@@ -104,6 +104,9 @@ describe("CaseList M43 Eval YAML exchange", () => {
     renderCaseList();
 
     expect(await screen.findByRole("button", { name: /下载\s*Eval YAML/ })).toBeInTheDocument();
+    expect(screen.getByTestId("case-list-coverage-card")).toHaveClass("pl-metric-grid--three");
+    expect(screen.getByTestId("metric-help-case-total")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-latest-pass-rate")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /评测套件/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /上传\s*Eval YAML/ })).not.toBeInTheDocument();
 
@@ -218,6 +221,7 @@ describe("RunList M43 server runtime downgrade", () => {
     renderRunList();
 
     expect(await screen.findByRole("heading", { name: "运行历史" })).toBeInTheDocument();
+    expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "服务器运行" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /触发新 Run/ })).not.toBeInTheDocument();
   });

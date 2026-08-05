@@ -352,14 +352,27 @@ describe("AgentList", () => {
     renderAgentList();
     await screen.findByRole("heading", { name: "Agent" });
 
-    // 顶部 4 个指标对齐使用概况命名（Spec 88）
+    // 顶部 4 个指标：存量 → 活跃覆盖 → 调用强度（Spec 98）
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
-    expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
-    expect(screen.getByTestId("metric-calls")).toHaveTextContent("10");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
     expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃 Token");
     expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
+    expect(screen.getByTestId("metric-calls")).toHaveTextContent("10");
+
+    const metricOrder = [
+      ...document.querySelectorAll("[data-testid='agent-metric-grid'] > [data-testid^='metric-']")
+    ].map((el) => el.getAttribute("data-testid"));
+    expect(metricOrder).toEqual([
+      "metric-agent-count",
+      "metric-active-agent-count",
+      "metric-active-token-count",
+      "metric-calls"
+    ]);
+    expect(screen.getByTestId("metric-help-agent-count")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-calls")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-agent-count")).toHaveClass("pl-metric-card--with-help");
 
     // 拒绝指标不再出现在 KPI 区
     expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
@@ -444,7 +457,7 @@ describe("AgentList", () => {
     expect(screen.getByRole("combobox", { name: "近 7 天活跃" })).toBeInTheDocument();
     expect(screen.queryByLabelText("按配置Token数筛选")).not.toBeInTheDocument();
     expect(screen.getByTestId("agent-list-result-count")).toHaveTextContent("1 条结果");
-    expect(screen.getByRole("columnheader", { name: "显示名" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
   });
 
   it("uses backend summary when present and falls back to client-side aggregate when absent", async () => {
@@ -589,10 +602,28 @@ describe("AgentList", () => {
     renderAgentList();
     await screen.findByTestId("agent-row-demo_agent");
     expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "当前状态" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "配置最后变更时间" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "创建日期" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "近 7 天拒绝" })).not.toBeInTheDocument();
+
+    const headers = [...document.querySelectorAll("[data-testid='agent-list-table'] thead th")].map(
+      (th) => th.textContent?.replace(/\s+/g, " ").trim()
+    );
+    expect(headers).toEqual([
+      "序号",
+      "显示名/用户 ID",
+      "角色",
+      "当前状态",
+      "配置 Token",
+      "近 7 天活跃 Token",
+      "近 7 天调用量",
+      "创建日期",
+      "配置最后变更时间",
+      "最近访问时间",
+      "操作"
+    ]);
   });
 });
 

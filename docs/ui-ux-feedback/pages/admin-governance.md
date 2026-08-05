@@ -532,3 +532,25 @@ PageHeader actions 在时间窗口切换**左侧**展示「统计时间：刚刚
 
 ### Notes
 Spec 87 / `wo-202608-19` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-022: 使用概况 KPI 缺 ⓘ 且副文双 small 风险
+
+Status: Fixed
+Route: `/admin/usage`
+Area: 2×4 metric grid
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+八卡无 ⓘ；本地 MetricCard 允许 subline+hint 双 small，与 Connections 单副文不一致。
+
+### Expected
+共享 MetricCard；每卡 ⓘ；单一 `small` 副文；保留 2×4 网格。
+
+### Browser Check
+1. Open `/admin/usage`.
+2. Verify eight cards each have ⓘ.
+3. Verify each card has at most one subline.
+
+### Notes
+Spec 103 / `wo-202608-36` 已落地（本轮不做浏览器验证，结束后只做 code review）。

@@ -1001,3 +1001,123 @@ Fixed: 2026-08-05（Spec 95 / `wo-202608-28`；本轮不做 browser 验证）
 
 ### Notes
 `AgentDetail.tsx`：`directSaveMutation` + `confirmSave` Modal。主题：`low-risk one-step save`.
+
+## UX-ADMIN-AGENTS-037: KPI 调用量夹在存量与活跃之间，叙事打断
+
+Status: Fixed
+Route: `/admin/agents`
+Area: KPI metric grid order
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 98 / `wo-202608-31`；本轮不做浏览器验证）
+
+### Feedback
+当前 KPI 为「Agent 总数 → 近 7 天调用量 → 近 7 天活跃 Agent → 近 7 天活跃 Token」；调用量打断「存量 → 活跃覆盖」阅读路径，应放到最后。
+
+### Evidence
+- 2026-08-05 浏览器核查 `http://127.0.0.1:55176/admin/agents`：四卡顺序为总数 / 调用量 / 活跃 Agent / 活跃 Token。
+
+### Expected
+KPI 顺序：`Agent 总数` → `近 7 天活跃 Agent` → `近 7 天活跃 Token` → `近 7 天调用量`。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify metric cards left-to-right: 总数 → 活跃 Agent → 活跃 Token → 调用量.
+
+### Notes
+修订 Spec 93 KPI **顺序**（内容不变）。主题：`kpi stock-then-adoption-then-volume`.
+
+## UX-ADMIN-AGENTS-038: 表指标与时间列未按配置/使用/生命周期分组
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Agent list table column order
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 98 / `wo-202608-31`；本轮不做浏览器验证）
+
+### Feedback
+表列当前为「调用量 → 活跃 Token → 最近访问 → 配置 Token → 配置最后变更 → 创建日期」；配置与活跃 Token 不相邻，时间列未按生命周期。
+
+### Evidence
+- 2026-08-05 浏览器核查确认表头顺序与反馈一致。
+
+### Expected
+指标/时间列顺序：`配置 Token` → `近 7 天活跃 Token` → `近 7 天调用量` → `创建日期` → `配置最后变更时间` → `最近访问时间`。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify header order of the six columns matches Expected.
+
+### Notes
+修订 Spec 93 §5 **顺序**。主题：`ops table column grouping`.
+
+## UX-ADMIN-AGENTS-039: 主列头「显示名」与双行单元格（显示名+用户 ID）不对齐
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Agent list identity column header
+Severity: P3
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 98 / `wo-202608-31`；本轮不做浏览器验证）
+
+### Feedback
+表头为「显示名」，单元格主行显示名、次行用户 ID；搜索已是「搜索显示名或用户 ID」。列名应反映双行内容。
+
+### Evidence
+- CDP：`nameCellText` = `Demo Agent\ndemo_agent`；表头为「显示名」。
+
+### Expected
+列表主列头改为 `显示名/用户 ID`；详情可编辑字段仍称「显示名」。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify column header `显示名/用户 ID`.
+3. Verify cell still shows display name + user id on two lines.
+
+### Notes
+修订 Spec 95 列表主列文案。主题：`agent identity terminology`（延伸）。
+
+## UX-ADMIN-AGENTS-040: Agent 列表 KPI 缺 ⓘ，偏离 Connections 基准
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Top metric grid
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+四卡裸标题、无 ⓘ，卡高与 Connections 不一致。
+
+### Expected
+共享 MetricCard：标题行 + ⓘ + 主值 + 副文；KPI 顺序与口径不变。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify four KPI cards each expose ⓘ.
+3. Verify order remains 总数 → 活跃 Agent → 活跃 Token → 调用量.
+
+### Notes
+Spec 103 / `wo-202608-36` 已落地（本轮不做浏览器验证，结束后只做 code review）。
+
+## UX-ADMIN-AGENTS-041: Role 列表 KPI 缺 ⓘ，偏离 Connections 基准
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Top metric grid
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+四卡裸标题、无 ⓘ；解析异常零值不得 danger（既有约束保留）。
+
+### Expected
+共享 MetricCard + ⓘ；静态不可点击；零值无 danger 壳。
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify four KPI cards each expose ⓘ.
+3. Verify 解析异常=0 is not danger-toned.
+
+### Notes
+Spec 103 / `wo-202608-36` 已落地（本轮不做浏览器验证，结束后只做 code review）。

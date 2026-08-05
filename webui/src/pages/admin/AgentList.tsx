@@ -6,6 +6,7 @@ import { apiGet, apiPost } from "../../lib/apiClient";
 import type { Agent, AgentsResponseSummary, CreateAgentBody, Role } from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
+import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 
 type AgentsResponse = {
@@ -142,15 +143,6 @@ export function summarizeAgents(
   };
 }
 
-function MetricCard({ label, value, hint, testId }: { label: React.ReactNode; value: string | number; hint: React.ReactNode; testId?: string }) {
-  return (
-    <div className="pl-metric-card" data-testid={testId}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{hint}</small>
-    </div>
-  );
-}
 
 function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
   const { label, title } = formatLastSeen(lastSeen);
@@ -461,20 +453,20 @@ export function AgentList() {
       <div className="pl-metric-grid" data-testid="agent-metric-grid">
         <MetricCard
           label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
+          labelText="Agent 总数"
           value={agents.length}
-          hint="已配置实例（含未启用）"
+          help="统计 access 配置中已声明的全部 Agent 实例，含未启用。"
+          subValue="已配置实例（含未启用）"
+          helpId="agent-count"
           testId="metric-agent-count"
         />
         <MetricCard
-          label="近 7 天调用量"
-          value={callsLast7dTotal}
-          hint={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
-          testId="metric-calls"
-        />
-        <MetricCard
           label={<span>近 7 天活跃 <span className="notranslate" translate="no">Agent</span></span>}
+          labelText="近 7 天活跃 Agent"
           value={activeAgentCountLast7d}
-          hint="近 7 天有访问记录"
+          help="近 7 天访问日志中至少出现过一次的去重 Agent 数。"
+          subValue="近 7 天有访问记录"
+          helpId="active-agent-count"
           testId="metric-active-agent-count"
         />
         <MetricCard
@@ -483,9 +475,20 @@ export function AgentList() {
               近 7 天活跃 <span className="notranslate" translate="no">Token</span>
             </span>
           }
+          labelText="近 7 天活跃 Token"
           value={activeTokenTotal}
-          hint="访问日志中去重 token"
+          help="近 7 天访问日志中出现过的去重 Token 数，不代表配置 Token 总数。"
+          subValue="访问日志中去重 token"
+          helpId="active-token-count"
           testId="metric-active-token-count"
+        />
+        <MetricCard
+          label="近 7 天调用量"
+          value={callsLast7dTotal}
+          help="近 7 天经 MCP Proxy 记录的调用次数合计。"
+          subValue={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
+          helpId="calls"
+          testId="metric-calls"
         />
       </div>
 
@@ -576,19 +579,19 @@ export function AgentList() {
               <thead>
                 <tr>
                   <th scope="col">序号</th>
-                  <th scope="col">显示名</th>
+                  <th scope="col">显示名/用户 ID</th>
                   <th scope="col">角色</th>
                   <th scope="col">当前状态</th>
-                  <th scope="col">近 7 天调用量</th>
-                  <th scope="col">
-                    近 7 天活跃 <span className="notranslate" translate="no">Token</span>
-                  </th>
-                  <th scope="col">最近访问时间</th>
                   <th scope="col">
                     配置 <span className="notranslate" translate="no">Token</span>
                   </th>
-                  <th scope="col">配置最后变更时间</th>
+                  <th scope="col">
+                    近 7 天活跃 <span className="notranslate" translate="no">Token</span>
+                  </th>
+                  <th scope="col">近 7 天调用量</th>
                   <th scope="col">创建日期</th>
+                  <th scope="col">配置最后变更时间</th>
+                  <th scope="col">最近访问时间</th>
                   <th scope="col">操作</th>
                 </tr>
               </thead>
@@ -636,11 +639,8 @@ export function AgentList() {
                           {agent.enabled ? "启用" : "禁用"}
                         </span>
                       </td>
-                      <td
-                        className="pl-agent-list-table-num"
-                        data-testid={`agent-calls-7d-${agent.id}`}
-                      >
-                        {callsLast7d}
+                      <td className="pl-agent-list-table-num notranslate" translate="no">
+                        {configuredTokens}
                       </td>
                       <td
                         className="pl-agent-list-table-num notranslate"
@@ -649,14 +649,17 @@ export function AgentList() {
                       >
                         {activeTokens}
                       </td>
+                      <td
+                        className="pl-agent-list-table-num"
+                        data-testid={`agent-calls-7d-${agent.id}`}
+                      >
+                        {callsLast7d}
+                      </td>
+                      <td>{formatDateTimeCell(agent.createdAt)}</td>
+                      <td>{formatDateTimeCell(agent.configUpdatedAt)}</td>
                       <td>
                         <LastSeen lastSeen={agent.stats?.lastSeen} />
                       </td>
-                      <td className="pl-agent-list-table-num notranslate" translate="no">
-                        {configuredTokens}
-                      </td>
-                      <td>{formatDateTimeCell(agent.configUpdatedAt)}</td>
-                      <td>{formatDateTimeCell(agent.createdAt)}</td>
                       <td>
                         <div className="pl-agent-list-row-actions">
                           <Link

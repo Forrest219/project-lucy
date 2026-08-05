@@ -181,6 +181,9 @@ describe("RoleList", () => {
 
     expect(screen.queryByRole("button", { name: /筛选：/ })).not.toBeInTheDocument();
     expect(screen.getByTestId("metric-invalid").className).not.toMatch(/pl-metric-card--danger/);
+    expect(screen.getByTestId("metric-help-role-count")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-invalid")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-role-count")).toHaveClass("pl-metric-card--with-help");
   });
 
   it("does not render the legacy status strip and drops template helper from header", async () => {

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { apiGet, apiPut } from "../../lib/apiClient";
 import type { EvalDomainInfo, EvalDriftDistribution, EvalTrendPoint, MonitorConfig } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { MetricCard, type MetricCardTone } from "../../components/MetricCard";
 import { EVAL_MONITOR_EMPTY_ACTIONS } from "../../lib/opsDashboard";
 
 type DomainsResponse = { domains: EvalDomainInfo[] };
@@ -156,16 +157,6 @@ function pct(value: number | undefined) {
   return typeof value === "number" ? `${Math.round(value * 100)}%` : "-";
 }
 
-function MetricCard({ label, value, hint, tone = "default" }: { label: string; value: string | number; hint: string; tone?: "default" | "warning" | "danger" | "success" }) {
-  return (
-    <div className={`pl-metric-card pl-metric-card--${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{hint}</small>
-    </div>
-  );
-}
-
 function clampNumber(rawValue: string, min: number, max: number): number | null {
   const parsed = Number.parseInt(rawValue, 10);
   if (!Number.isFinite(parsed)) {
@@ -276,8 +267,13 @@ export function Monitor() {
   const lastPoint = points[points.length - 1];
   const showAlert = lastPoint && lastPoint.passRate < thresholds.red;
   const showWarning = lastPoint && !showAlert && lastPoint.passRate < thresholds.yellow;
-  const statusTone = showAlert ? "danger" : showWarning ? "warning" : lastPoint ? "success" : "default";
+  const statusTone: MetricCardTone | undefined = showAlert
+    ? "danger"
+    : showWarning
+      ? "warning"
+      : undefined;
   const statusText = showAlert ? "红线" : showWarning ? "黄线" : lastPoint ? "正常" : "无数据";
+  const failTone: MetricCardTone | undefined = topFails.length > 0 ? "warning" : undefined;
 
   return (
     <div className="pl-page-stack">
@@ -325,10 +321,37 @@ export function Monitor() {
       />
 
       <div className="pl-metric-grid">
-        <MetricCard label="最新通过率" value={pct(lastPoint?.passRate)} hint={lastPoint?.date ?? "暂无趋势数据"} tone={statusTone} />
-        <MetricCard label="最近运行" value={lastPoint?.totalRuns ?? 0} hint={`近 ${days} 天最后统计点`} />
-        <MetricCard label="失败 case" value={topFails.length} hint={topFails.length > 0 ? "见 Top failures" : "暂无失败集中项"} tone={topFails.length > 0 ? "warning" : "success"} />
-        <MetricCard label="红线状态" value={statusText} hint={`红线 ${pct(thresholds.red)} / 黄线 ${pct(thresholds.yellow)}`} tone={statusTone} />
+        <MetricCard
+          label="最新通过率"
+          value={pct(lastPoint?.passRate)}
+          help="所选时间窗内最后一个统计点的评测通过率。"
+          subValue={lastPoint?.date ?? "暂无趋势数据"}
+          tone={statusTone}
+          helpId="latest-pass-rate"
+        />
+        <MetricCard
+          label="最近运行"
+          value={lastPoint?.totalRuns ?? 0}
+          help="最后一个统计点所覆盖的运行次数。"
+          subValue={`近 ${days} 天最后统计点`}
+          helpId="latest-runs"
+        />
+        <MetricCard
+          label="失败 case"
+          value={topFails.length}
+          help="时间窗内失败次数靠前的用例集中项数量；详见下方 Top failures。"
+          subValue={topFails.length > 0 ? "见 Top failures" : "暂无失败集中项"}
+          tone={failTone}
+          helpId="fail-cases"
+        />
+        <MetricCard
+          label="红线状态"
+          value={statusText}
+          help="用最新通过率对照黄线 / 红线阈值，判断是否跌破质量红线。"
+          subValue={`红线 ${pct(thresholds.red)} / 黄线 ${pct(thresholds.yellow)}`}
+          tone={statusTone}
+          helpId="redline-status"
+        />
       </div>
 
       <div className="pl-monitor-grid">

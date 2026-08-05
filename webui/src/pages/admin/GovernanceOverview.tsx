@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
 import { PageHeader } from "../../components/PageHeader";
+import { MetricCard } from "../../components/MetricCard";
 
 type UsageOverview = {
   agentCount: number;
@@ -62,29 +63,6 @@ type TokenRow = {
 type WindowHours = 24 | 168;
 
 const RANK_LIMIT = 10;
-
-function MetricCard({
-  label,
-  value,
-  subline,
-  hint,
-  testId
-}: {
-  label: ReactNode;
-  value: string | number;
-  subline?: ReactNode;
-  hint?: ReactNode;
-  testId?: string;
-}) {
-  return (
-    <div className="pl-metric-card" data-testid={testId}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {subline ? <small>{subline}</small> : null}
-      {hint ? <small>{hint}</small> : null}
-    </div>
-  );
-}
 
 function formatRate(value: number): string {
   return `${value}%`;
@@ -313,50 +291,72 @@ export function GovernanceOverview() {
       <div className="pl-metric-grid" data-testid="governance-usage-metrics">
         <MetricCard
           label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
+          labelText="Agent 总数"
           value={usage?.agentCount ?? 0}
-          hint="已配置实例（含未启用）"
+          help="统计已配置的全部 Agent 实例，含未启用。"
+          subValue="已配置实例（含未启用）"
+          helpId="agent-count"
           testId="metric-agent-count"
         />
         <MetricCard
           label={<span>{windowText}活跃 <span className="notranslate" translate="no">Agent</span></span>}
+          labelText={`${windowText}活跃 Agent`}
           value={usage?.activeAgentCount ?? 0}
-          subline={<span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span>}
+          help={`当前时间窗（${windowText}）内访问日志出现过的去重 Agent 数。`}
+          subValue={<span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span>}
+          helpId="active-agent-count"
           testId="metric-active-agent-count"
         />
         <MetricCard
           label={<span>配置 <span className="notranslate" translate="no">Token</span></span>}
+          labelText="配置 Token"
           value={usage?.configuredTokenCount ?? 0}
-          hint="已下发凭证（含未启用 Agent）"
+          help="已下发给 Agent 的凭证数量，含未启用 Agent 的 Token。"
+          subValue="已下发凭证（含未启用 Agent）"
+          helpId="configured-token-count"
           testId="metric-configured-token-count"
         />
         <MetricCard
           label={<span>{windowText}活跃 <span className="notranslate" translate="no">Token</span></span>}
+          labelText={`${windowText}活跃 Token`}
           value={usage?.activeTokenCount ?? 0}
-          subline={<span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span>}
+          help={`当前时间窗（${windowText}）内访问日志出现过的去重 Token 数。`}
+          subValue={<span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span>}
+          helpId="active-token-count"
           testId="metric-active-token-count"
         />
         <MetricCard
           label="授权表"
           value={usage?.configuredTableCount ?? 0}
-          hint={authorizedTableHint}
+          help="角色权限中已明确授权的表数量；前缀授权会扩大可达范围。"
+          subValue={authorizedTableHint}
+          helpId="configured-table-count"
           testId="metric-configured-table-count"
         />
         <MetricCard
           label={<span>{windowText}活跃表</span>}
+          labelText={`${windowText}活跃表`}
           value={usage?.activeTableCount ?? 0}
-          subline={<span>活跃率 {activeTableRate}</span>}
+          help={`当前时间窗（${windowText}）内被访问过的去重表数（配置授权与访问日志并集口径）。`}
+          subValue={<span>活跃率 {activeTableRate}</span>}
+          helpId="active-table-count"
           testId="metric-active-table-count"
         />
         <MetricCard
           label={<span>{windowText}调用量</span>}
+          labelText={`${windowText}调用量`}
           value={usage?.calls ?? 0}
-          hint={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
+          help={`当前时间窗（${windowText}）内经 MCP Proxy 记录的调用次数。`}
+          subValue={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
+          helpId="calls"
           testId="metric-calls"
         />
         <MetricCard
           label="多数请求耗时"
           value={p95Value}
-          hint={p95Hint}
+          help="当前时间窗内 95% 的请求完成耗时上限（P95），用于感知尾部延迟。"
+          subValue={p95Hint}
+          helpId="p95-latency"
           testId="metric-p95-latency"
         />
       </div>
