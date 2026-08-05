@@ -17,10 +17,15 @@
   - [3.1 部署向导与上线检查](#31-部署向导与上线检查)
   - [3.2 数据库接入](#32-数据库接入)
   - [3.3 语义层维护](#33-语义层维护)
+    - [为什么要编写语义 YAML](#为什么要编写语义-yaml)
+    - [推荐编写工作流](#推荐编写工作流)
+    - [grain、join 与 fanout](#grainjoin-与-fanout)
+    - [KTX 官方延伸阅读](#ktx-官方延伸阅读)
   - [3.4 业务文档 Wiki](#34-业务文档-wiki)
   - [3.5 访问治理 Admin](#35-访问治理-admin)
   - [3.6 质量评测 Eval](#36-质量评测-eval)
   - [3.7 YAML 文件规范与交付验收](#37-yaml-文件规范与交付验收)
+    - [3.7.0 overlay 字段速查（编写辅导）](#370-overlay-字段速查编写辅导)
 - [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)
 - [5. 配置与环境变量速查](#5-配置与环境变量速查)
 - [6. FAQ 与排障指南](#6-faq-与排障指南)
@@ -684,7 +689,134 @@ ktx sl read superstore_orders --connection-id mysql-aliyun
 ktx --project-dir <PROJECT_ROOT> admin reindex
 ```
 
-说明：编辑 YAML 后，MCP/KTX 检索通常读本地 SQLite 索引；需要让 Agent 搜到新口径时，执行 `ktx admin reindex`。
+说明：编辑 YAML 后，`MCP` / `KTX` 检索通常读本地 SQLite 索引；需要让 Agent 搜到新口径时，执行 `ktx admin reindex`。
+
+#### 为什么要编写语义 YAML
+
+语义层 `YAML` 不是普通配置文件，而是团队与 `Agent` 共同遵守的**可执行分析契约**：
+
+| 概念 | 含义 | 在 Lucy 中的落点 |
+| --- | --- | --- |
+| 上下文即代码 | `semantic-layer/` 与 `wiki/` 以 Git 可审阅的文件存在，可 diff、可合并 | `WebUI` 保存走 dryRun diff；`/review` 查看变更 |
+| 可执行语义 | `Agent` 使用已批准的 `measures`、`joins`、`segments`，而不是每次从零拼 `SQL` | `lucy_query` / `sl_query` 编译语义查询 |
+| 扫描起草、人工精修 | `KTX` ingest 生成 manifest 初稿；业务口径由人在 overlay 与 Wiki 中补齐 | manifest 在 `_schema/`；`grain` / `measures` 等在 overlay |
+
+你编写的每一块语义，最终都会进入编译器：声明 `grain` 与 `join relationship` 错误，会导致 measure 重复计数或查询被拒；只写 `description` 而不写清口径边界，`Agent` 仍可能搜不到或选错 measure。
+
+overlay 各块在运行时的用途：
+
+| `YAML` 块 | `Agent` 运行时用途 |
+| --- | --- |
+| `grain` | 定义行粒度，防止聚合时重复计数 |
+| `measures` | 预定义指标，可直接在语义查询中引用 |
+| `segments` | 可复用的筛选片段 |
+| `joins` + `relationship` | 编译器选择 join 路径与安全方向 |
+| Wiki + `sl_refs` | 口径说明、同义词、例外规则（编译时不读，但 `Agent` 检索时会读） |
+
+#### 推荐编写工作流
+
+大多数语义改动按以下顺序进行（先小改、先验证、再发布）：
+
+1. **发现已有上下文**
+
+   ```bash
+   ktx sl --json
+   ktx sl "<业务关键词>" --json
+   ktx wiki "<口径关键词>" --json --limit 10
+   ```
+
+2. **改最小相关文件**——已有 manifest source 补指标走 overlay `semantic-layer/<conn>/<source>.yaml`；口径说明走 `wiki/`。不要一次 diff 里混多个 unrelated 概念。
+
+3. **校验 overlay**
+
+   ```bash
+   ktx sl validate <source> --connection-id <conn>
+   ```
+
+4. **编译代表性查询**（在执行前先看生成 `SQL`）
+
+   ```bash
+   ktx sl query \
+     --connection-id <conn> \
+     --measure <source>.<measure> \
+     --dimension <source>.<time_column> \
+     --format sql
+   ```
+
+5. **确认可发现性**——用用户可能问的业务措辞再搜一次；必要时补 Wiki `summary` / `tags` 与 measure `description`。
+
+6. **发布与索引**——`WebUI` 发布工作台发布语义资产，或执行 `ktx admin reindex`；用 `sl read` 确认 overlay 已合并。
+
+修复已有口径时，额外建议：
+
+```bash
+git diff -- semantic-layer wiki
+ktx sl validate <source> --connection-id <conn>
+ktx sl query --connection-id <conn> --measure <source>.<measure> --format sql
+```
+
+#### grain、join 与 fanout
+
+`KTX` 语义层是编译器：`Agent` 声明要什么 measure / dimension / filter；编译器根据 `YAML` 中的 join 图与 `grain` 生成 `SQL`。因此 **grain 与 relationship 不是可选装饰**，而是防重复计数的硬约束。
+
+| `relationship` | 规划影响 | 典型用法 |
+| --- | --- | --- |
+| `many_to_one` | 向维度方向扩展行数时通常安全 | 订单 → 客户、订单 → 商品 |
+| `one_to_many` | 会放大行数，易触发 fanout | 订单 → 订单明细 |
+| `one_to_one` | 键匹配时双向通常安全 | 用户 ↔ 用户档案 |
+
+**fanout（扇出）**：两张事实表通过同一维度 join 时，若先 join 再聚合，一侧事实表的每一行会被另一侧匹配行数放大，measure 会静默翻倍。编译器检测到多 source 的 raw measure 时，会改为「各事实表先按自身 grain 预聚合，再回连维度」——overlay 里缺少正确 `grain` / `relationship` 时，编译结果会与手写 `SQL` 直觉不一致。
+
+```yaml
+# ❌ 风险：订单与退款都贡献 measure，但未声明 grain / relationship
+measures:
+  - name: revenue
+    expr: sum(amount)
+
+# ✅ 更好：显式 grain；join 写清 relationship
+grain:
+  - order_id
+joins:
+  - to: customers
+    on: orders.customer_id = customers.customer_id
+    relationship: many_to_one
+measures:
+  - name: revenue
+    expr: sum(case when status != 'refunded' then amount end)
+    description: 已完成订单的销售额，不含已退款订单。
+```
+
+好 measure 的写法：
+
+- 名称贴近业务用语，但避免同义词堆砌；同义词放 Wiki `tags`。
+- `description` 写清包含 / 排除边界（例如「不含退款」「按完成日而非下单日」）。
+- 需要行级过滤时用 measure 级 `filter`，不要把本该属于 segment 的逻辑散落到多个 measure。
+
+#### overlay 常见字段速查
+
+overlay 在 manifest 之上增量声明业务语义。完整字段表见 [3.7.0 overlay 字段速查（编写辅导）](#370-overlay-字段速查编写辅导) 与 [KTX Writing Context](https://docs.kaelio.com/ktx/docs/guides/writing-context)。
+
+| 组件 | 常用字段 | 说明 |
+| --- | --- | --- |
+| 列 | `visibility: public / internal / hidden` | `hidden` 列不参与 `Agent` 列表 |
+| measure | `filter` | 仅作用于该 measure 的 `SQL` 谓词 |
+| join | `alias` | 重复 join 同一目标时区分别名 |
+| 派生列 | `columns[].expr` | 必须有 `expr`；不要与 manifest 物理列重名 |
+
+Lucy 与上游 `KTX` 文档的一个关键差异：人工描述写入 `descriptions.human`（不是 `descriptions.user`）；物理列用复数 `descriptions:`，measure / segment 用单数 `description:`。
+
+#### KTX 官方延伸阅读
+
+本节只链外部权威文档，避免与 `KTX` 官方文档双维护。架构与字段细节以官方为准；Lucy 特有的 manifest / overlay 边界仍以本节与 [3.7 YAML 文件规范与交付验收](#37-yaml-文件规范与交付验收) 为准。
+
+| 主题 | 建议阅读 | 官方 URL |
+| --- | --- | --- |
+| 产品定位与双面向架构 | Introduction | https://docs.kaelio.com/ktx/docs/getting-started/introduction |
+| 首次安装与 ingest | Quickstart | https://docs.kaelio.com/ktx/docs/getting-started/quickstart |
+| 语义 source 与 Wiki 编写 | Writing Context | https://docs.kaelio.com/ktx/docs/guides/writing-context |
+| 编译器、join 图与 fanout | Semantic Layer Internals | https://docs.kaelio.com/ktx/docs/concepts/semantic-layer-internals |
+| `ktx.yaml` 项目配置 | ktx.yaml reference | https://docs.kaelio.com/ktx/docs/configuration/ktx-yaml |
+| `ktx sl` / `validate` / `query` | CLI Reference | https://docs.kaelio.com/ktx/docs/cli-reference |
 
 ### 3.4 业务文档 Wiki
 
@@ -919,6 +1051,53 @@ POST /api/eval/runs
 ### 3.7 YAML 文件规范与交付验收
 
 本节为人工配置人员、运维人员、Claude Code / Codex 等 Agent 检查者提供统一可执行的 YAML 交付 runbook。事故教训：分析师上传的语义 YAML 文件结构不符合 KTX/Lucy 的 manifest / overlay 合并模型，会让 MCP 侧无法提供正确问答。**`reindex` 成功、单个 `sl validate` 成功都不能单独作为交付成功依据。**
+
+编写动机、推荐工作流、grain / fanout 说明见 [为什么要编写语义 YAML](#为什么要编写语义-yaml)、[推荐编写工作流](#推荐编写工作流)、[grain、join 与 fanout](#grainjoin-与-fanout)；本节聚焦**交付分型与验收**。
+
+#### 3.7.0 overlay 字段速查（编写辅导）
+
+overlay 完整形态见 [KTX Writing Context](https://docs.kaelio.com/ktx/docs/guides/writing-context)。下表是 Lucy 客户交付中最常用的 overlay 字段；**默认 augmentation overlay 不写 `table:`**。
+
+| 字段 / 组件 | 必填 | 说明 |
+| --- | --- | --- |
+| `name` | 是 | 必须等于 manifest source name（文件名亦应一致） |
+| `grain` | 是 | 唯一标识一行业务的列列表 |
+| `measures[].name` | 是 | 业务指标名 |
+| `measures[].expr` | 是 | 在 source grain 上的聚合表达式 |
+| `measures[].filter` | 否 | 仅作用于该 measure 的行级谓词 |
+| `measures[].description` | 强烈建议 | 单数 `description:`；写清口径边界 |
+| `segments[].name` / `expr` | 否 | 可复用筛选；`expr` 为 `SQL` 谓词 |
+| `joins[].to` / `on` / `relationship` | 否 | `relationship` 取 `many_to_one` / `one_to_many` / `one_to_one` |
+| `joins[].alias` | 否 | 同一目标多次 join 时的查询别名 |
+| `columns[].expr` | 派生列时必填 | 派生列定义；勿与 manifest 物理列重名 |
+| `columns[].visibility` | 否 | `public` / `internal` / `hidden` |
+
+Lucy 与上游 `KTX` 文档的差异（交付时勿混用）：
+
+| 主题 | 上游 `KTX` 常见写法 | Lucy overlay / manifest |
+| --- | --- | --- |
+| 人工描述桶 | `descriptions.user` | `descriptions.human`（manifest 物理列） |
+| 物理列描述 | `descriptions:`（复数） | 同左；禁止单数 `description:` |
+| measure 描述 | `description:`（单数） | 同左 |
+| overlay 默认形态 | 可独立 `table:` + `sql:` source | 已有 manifest 时默认**无** `table:` |
+| Wiki `sl_refs` | 常为 source name 列表 | Lucy 用 `conn/schema/table` 路径 |
+
+最小 overlay 示例（augmentation，非 new source）：
+
+```yaml
+name: <manifest_source_name>
+grain:
+  - <grain_column>
+measures:
+  - name: net_revenue
+    expr: sum(amount - refund_amount)
+    filter: status = 'completed'
+    description: 已完成订单净收入，已扣退款，不含取消单。
+segments:
+  - name: high_value_orders
+    expr: amount > 100
+    description: 单笔金额超过 100 的订单。
+```
 
 #### 3.7.1 YAML 类型总览
 
