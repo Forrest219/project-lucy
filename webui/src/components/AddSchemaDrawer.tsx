@@ -1,12 +1,17 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiPost } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { DiffViewer } from "./DiffViewer";
 import { CatalogAssetUploadButton, CatalogReloadButton } from "./catalog";
 import { schemaFieldHelper, schemaFieldLabel, validateSchemaName } from "../lib/schemas";
-import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo } from "../lib/types";
+import type {
+  AddSchemaPreview,
+  AddSchemaResult,
+  ConnectionInfo,
+  LiveSchemasResponse
+} from "../lib/types";
 
 type Step = "input" | "preview" | "submitting" | "success" | "fatal";
 
@@ -17,6 +22,7 @@ export type AddSchemaDrawerProps = {
 };
 
 const STEP_LABELS = ["输入 Schema", "测试连接", "确认并完成"];
+const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
 
 export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerProps) {
   const queryClient = useQueryClient();
@@ -25,10 +31,29 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
   const [schema, setSchema] = useState("");
   const [schemaTouched, setSchemaTouched] = useState(false);
   const [previewAttempted, setPreviewAttempted] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
   const [step, setStep] = useState<Step>("input");
   const [preview, setPreview] = useState<AddSchemaPreview | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const liveQuery = useQuery({
+    queryKey: queryKeys.connectionLiveSchemas(connection.id),
+    queryFn: () =>
+      apiGet<LiveSchemasResponse>(
+        `/api/connections/${encodeURIComponent(connection.id)}/live-schemas`
+      ),
+    staleTime: LIVE_SCHEMAS_STALE_MS,
+    retry: false,
+    enabled: open
+  });
+
+  const configured = useMemo(() => new Set(connection.schemas), [connection.schemas]);
+  const candidates = useMemo(() => {
+    if (!liveQuery.data || liveQuery.data.status !== "ok") return [];
+    return liveQuery.data.schemas.filter((item) => !configured.has(item.schema));
+  }, [liveQuery.data, configured]);
+
+  const canSelect = candidates.length > 0 && !manualEntry;
   const trimmed = schema.trim();
   const issue = useMemo(() => validateSchemaName(trimmed), [trimmed]);
   const canPreview = trimmed.length > 0 && !issue;
@@ -63,6 +88,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connection.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.connectionLiveSchemas(connection.id) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
       toast.success(`已添加 Schema: ${trimmed}`);
     },
@@ -75,6 +101,7 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
     setSchema("");
     setSchemaTouched(false);
     setPreviewAttempted(false);
+    setManualEntry(false);
     setStep("input");
     setPreview(null);
     setSubmitError(null);
@@ -142,24 +169,92 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         {step === "input" && (
           <section className="pl-drawer-body notranslate" aria-label="输入 Schema 名" translate="no">
             <label className="grid gap-1.5 text-sm">
-              <span>{fieldLabel}</span>
-              <input
-                className="pl-input"
-                placeholder="例如 finance_mart"
-                value={schema}
-                onChange={(e) => setSchema(e.target.value)}
-                onBlur={() => setSchemaTouched(true)}
-                aria-invalid={showSchemaIssue ? true : undefined}
-                data-testid="add-schema-input"
-              />
+              <span>{canSelect ? "选择 Schema" : fieldLabel}</span>
+              {canSelect ? (
+                <select
+                  className="pl-input"
+                  value={schema}
+                  onChange={(e) => {
+                    setSchema(e.target.value);
+                    setSchemaTouched(true);
+                  }}
+                  onBlur={() => setSchemaTouched(true)}
+                  aria-invalid={showSchemaIssue ? true : undefined}
+                  data-testid="add-schema-select"
+                >
+                  <option value="" className="notranslate" translate="no">请选择 Schema</option>
+                  {candidates.map((item) => (
+                    <option key={item.schema} value={item.schema} className="notranslate" translate="no">
+                      {item.schema}（{item.tableCount} 张表）
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="pl-input"
+                  placeholder="例如 finance_mart"
+                  value={schema}
+                  onChange={(e) => setSchema(e.target.value)}
+                  onBlur={() => setSchemaTouched(true)}
+                  aria-invalid={showSchemaIssue ? true : undefined}
+                  data-testid="add-schema-input"
+                />
+              )}
               {showSchemaIssue && issue && (
                 <span className="text-xs text-danger" data-testid="add-schema-input-error">
                   {issue.message}
                 </span>
               )}
-              <span className="text-xs text-fg-muted">
-                须以字母或下划线开头，仅含字母、数字、下划线，最多 63 字符。
-              </span>
+              {liveQuery.isLoading ? (
+                <span className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-live-loading">
+                  正在加载库内 Schema 列表…
+                </span>
+              ) : null}
+              {liveQuery.isError || liveQuery.data?.status === "error" ? (
+                <span className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-live-fallback">
+                  无法加载库内 Schema 列表
+                  {liveQuery.data?.reason ? `：${liveQuery.data.reason}` : ""}。请手动输入。
+                </span>
+              ) : null}
+              {liveQuery.data?.status === "ok" && candidates.length === 0 && !liveQuery.isLoading ? (
+                <span className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-live-empty">
+                  库内可见 Schema 均已配置，或当前无可选项。请手动输入。
+                </span>
+              ) : null}
+              {canSelect ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost justify-self-start px-0 notranslate"
+                  translate="no"
+                  onClick={() => {
+                    setManualEntry(true);
+                    setSchema("");
+                    setSchemaTouched(false);
+                  }}
+                  data-testid="add-schema-manual-toggle"
+                >
+                  手动输入 Schema 名称
+                </button>
+              ) : candidates.length > 0 && manualEntry ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost justify-self-start px-0 notranslate"
+                  translate="no"
+                  onClick={() => {
+                    setManualEntry(false);
+                    setSchema("");
+                    setSchemaTouched(false);
+                  }}
+                  data-testid="add-schema-select-toggle"
+                >
+                  从库内目录选择
+                </button>
+              ) : null}
+              {!canSelect ? (
+                <span className="text-xs text-fg-muted">
+                  须以字母或下划线开头，仅含字母、数字、下划线，最多 63 字符。
+                </span>
+              ) : null}
               <span className="text-xs text-fg-muted">{fieldHelper}</span>
             </label>
             <div className="pl-drawer-footer">
@@ -242,8 +337,8 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
               <code>{trimmed}</code> 已添加到 <code>{connection.id}</code>。
             </p>
             <p className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-static-loading-hint">
-              WebUI 不会自动扫描物理数据库。若你已有该 Schema 的 <code className="notranslate" translate="no">semantic-layer</code>{" "}
-              Manifest YAML，可以现在上传；否则稍后由离线流程生成后上传，或在清单页直接编辑白名单。
+              添加 Schema 不会自动生成 Manifest。若你已有该 Schema 的 <code className="notranslate" translate="no">semantic-layer</code>{" "}
+              Manifest YAML，可以现在上传；否则稍后由离线流程生成后上传。
             </p>
             <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>

@@ -770,6 +770,9 @@
   .pl-config-audit-table tbody td.pl-audit-table-num {
     @apply whitespace-nowrap font-normal tabular-nums text-fg-body;
   }
+  .pl-audit-id-copy {
+    @apply inline max-w-[14rem] truncate rounded-sm px-0.5 text-left hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+  }
   /* Spec 88: agent admin list table — light pl-data-grid conformance. */
   .pl-agent-list-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-agent-list-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
@@ -801,6 +804,7 @@
   .pl-usage-rank-empty { @apply m-0 py-4 text-center text-sm text-fg-muted; }
   .pl-catalog-table { min-width: 0; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
+  .pl-catalog-table-name-cell { @apply flex flex-wrap items-center gap-2; }
   .pl-catalog-table-name-link { @apply text-sm font-normal text-fg-default no-underline hover:underline; }
   .pl-catalog-table-structure { @apply whitespace-nowrap text-xs text-fg-muted; }
   .pl-catalog-table-agents { @apply text-sm text-fg-default tabular-nums; }
@@ -840,6 +844,27 @@
   .pl-connection-engine-icon-svg { @apply h-5 w-5; }
   .pl-connection-card-badges { @apply hidden; }
   .pl-connection-card-meta { @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted md:col-start-2 md:row-start-1 md:justify-self-end md:justify-end; }
+  /* Spec 108: compact connectivity health on card header right. */
+  .pl-connection-health {
+    @apply inline-flex max-w-full flex-wrap items-baseline gap-x-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-xs font-medium text-fg-muted transition-colors;
+  }
+  .pl-connection-health:hover {
+    @apply border-border-default bg-bg-surface text-fg-default;
+  }
+  .pl-connection-health:focus-visible {
+    @apply outline outline-2 outline-offset-1 outline-primary;
+  }
+  .pl-connection-health--success { @apply text-success-strong; }
+  .pl-connection-health--warning { @apply text-warning-strong; }
+  .pl-connection-health--danger { @apply text-danger-strong; }
+  .pl-connection-health--muted { @apply text-fg-muted; }
+  .pl-connection-health-latency,
+  .pl-connection-health-time { @apply font-normal text-fg-muted; }
+  .pl-connection-health--success .pl-connection-health-latency,
+  .pl-connection-health--warning .pl-connection-health-latency,
+  .pl-connection-health--danger .pl-connection-health-latency {
+    @apply text-inherit opacity-90;
+  }
   .pl-connection-meta-tag { @apply inline-flex items-center text-xs font-medium text-fg-muted; }
   .pl-connection-meta-tag--warning { @apply text-fg-muted; }
   /* M44: downgraded to a quiet text reminder; no pill border / background. */
@@ -908,12 +933,13 @@
   .pl-schema-asset-table th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
   .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-1.5 align-middle text-xs font-medium leading-4 text-fg-default; }
   .pl-schema-asset-table code { @apply font-mono text-xs font-medium text-fg-default; }
-  /* M72: Schema 20% | Manifest 20% | 已发现表数 18% | 已启用表数 18% | 操作 24% */
-  .pl-schema-asset-col-schema { width: 20%; }
-  .pl-schema-asset-col-status { width: 20%; }
-  .pl-schema-asset-col-local-count { width: 18%; }
-  .pl-schema-asset-col-enabled-count { width: 18%; }
-  .pl-schema-asset-col-action { width: 24%; }
+  /* Spec 107: Schema | Manifest | 库内表数 | 已发现 | 已启用 | 操作 */
+  .pl-schema-asset-col-schema { width: 16%; }
+  .pl-schema-asset-col-status { width: 16%; }
+  .pl-schema-asset-col-live-count { width: 14%; }
+  .pl-schema-asset-col-local-count { width: 14%; }
+  .pl-schema-asset-col-enabled-count { width: 14%; }
+  .pl-schema-asset-col-action { width: 26%; }
   .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-left; }
   .pl-schema-asset-table-num { @apply text-left font-normal tabular-nums whitespace-nowrap text-fg-body; }
   .pl-schema-asset-table-action { @apply whitespace-normal text-left; }
@@ -2462,6 +2488,33 @@
   }
   .pl-code-snippet--drawer { @apply max-h-72 overflow-auto rounded-md border border-border-default bg-bg-base p-3; }
   .pl-code-snippet--drawer code { @apply whitespace-pre-wrap break-all text-xs leading-relaxed; }
+}
+
+/*
+ * lg+: 质量快照 / 访问风险左右三卡逐行对齐。
+ * 语义覆盖率含 progress，高度常大于右侧同行；用 subgrid 共享行轨，
+ * 避免左侧把第 2/3 行整体顶偏。窄屏单列时不启用。
+ * 注意：面板不要写 gap:0，否则会覆盖父级 row-gap，卡与卡贴死。
+ */
+@media (min-width: 1024px) {
+  .pl-ops-grid {
+    grid-template-rows: auto repeat(3, auto);
+    column-gap: 1rem;
+    row-gap: 0.5rem;
+  }
+  .pl-ops-grid > .pl-panel {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 4;
+  }
+  .pl-ops-grid > .pl-panel > .pl-section-heading {
+    margin-bottom: 0;
+    padding-bottom: 0.25rem;
+  }
+  .pl-ops-grid > .pl-panel > .pl-snapshot-list,
+  .pl-ops-grid > .pl-panel > .pl-risk-list {
+    display: contents;
+  }
 }
 
 @media (max-width: 1280px) {

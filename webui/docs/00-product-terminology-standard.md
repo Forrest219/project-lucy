@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -131,6 +131,14 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 |---|---|---|---|---|
 | Connection | 连接 | 数据库连接 | 链接、联接 | 数据库连接配置对象 |
 | Connection Test | 连通测试 | 按钮可用“测试连接” | 替代测试 | 验证凭据、网络、驱动配置是否可用 |
+| Connection Health Summary | 连通健康 | 健康摘要 | 数据库健康度（作主标签）、DB Health | `/connections` 卡右侧摘要（Spec 108） |
+| Connectivity Probe | 连通探测 | 进页探测 | 心跳、Ping（作主标签） | 打开连接概览时自动 `connection test` |
+| Response Latency | 响应延时 | ms 延迟（tooltip） | RTT（作主标签） | 连通测试耗时；卡摘要与诊断面板同词 |
+| Connectivity OK | 通 | 正常（诊断面板 banner） | — | `status=ok` 且 &lt;200ms；卡摘要优先「通」 |
+| Connectivity Slow | 偏慢 | — | 慢 | 200–1000ms |
+| Connectivity Attention | 需关注 | — | 很慢 | &gt;1000ms |
+| Connectivity Down | 不通 | 失败（次级） | — | `status=error` 或探测请求失败 |
+| Probing | 探测中… | — | 测试中…（卡摘要禁用） | 卡摘要异步态；Drawer 内可保留「测试中...」 |
 | Schema | Schema | 数据库 Schema | 架构、模式 | 数据库 Schema，UI 默认保留英文 |
 | Manifest | Manifest | Schema Manifest | 舱单、财政部舱单、清单、模式清单 | 描述 Schema / 表资产的 YAML manifest |
 | Catalog | Catalog | 本地目录、本地 Catalog | 表目录混用 | WebUI 从本地 YAML 读取出的资产目录 |
@@ -146,6 +154,8 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Semantic Layer | 语义层 | semantic-layer | 语义图层 | 表、指标、维度、业务语义定义层 |
 | Semantic Modeling | 语义建模 | 语义模型 | 语义层维护 + 业务文档作为两个分组 | 涵盖结构化语义（YAML Overlay）与非结构化业务文档（Markdown Wiki） |
 | Semantic Asset | 语义资产 | 表语义资产、结构化 YAML 模型 | 表目录（主导航 / PageHeader 禁用） | 语义建模下的结构化 YAML 模型维护入口 |
+| Semantic Coverage | 语义覆盖 | 完成度（作 overview 主标签） | 分母 = 已启用 ∩ Manifest（`SourceSummary.enabled`）；不含未启用 Manifest 表（Spec 104） |
+| Enabled Scope Filter | 启用范围 | 白名单筛选 | Catalog 工具栏：已启用 / 全部 / 未启用 |
 | Metric | 指标 | Metric | 度量混用 | 可聚合的业务数值定义 |
 | Dimension | 维度 | Dimension | 维数 | 分析分组或切片字段 |
 | Measure | 度量 | Measure | 指标混用 | 语义模型内的聚合表达式；当面向业务用户时优先叫“指标” |
@@ -234,6 +244,13 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Upload Schema Manifest | 上传 Schema Manifest | 上传 Manifest | 上传该 Schema 的 YAML、裸用“上传 YAML” | 写入 `semantic-layer/<connection>/_schema/<schema>.yaml`；主入口位于 `/connections` |
 | Schema Manifest Repair Link | 去连接概览上传 Manifest | 打开连接概览 | 当前页独立上传 YAML | 启用表范围缺失 Manifest 诊断只跳转，不在当前页上传 |
 | Refresh Local Catalog | 刷新本地目录 | 重新加载资产 | 重新读取本地 YAML 资产 |
+| Live Table Count | 库内表数 | 物理表数（主导航）、远端表数、DB 表数 | 物理库账号可见 BASE TABLE 数量；与 Manifest / 启用计数严格区分 |
+| Discovered Table Count | 已发现表数 | 本地表数（作主标签时易混） | Schema Manifest 内表数 |
+| Enabled Table Count | 已启用表数 | 白名单表数 | `ktx.yaml` `enabled_tables` |
+| Live Catalog | 库内目录 | 物理扫描（作主标签） | Owner 按需只读目录查询结果 |
+| Refresh Live Catalog | 重新拉取库内目录 | 刷新本地目录（易混） | 仅 bypass TTL 重查物理库 |
+| Select Schema | 选择 Schema | 选择架构、选择模式 | Add Schema 下拉候选 |
+| Enter Schema Manually | 手动输入 Schema 名称 | 手动输入架构 | 候选不可用或自定义时 |
 
 ### 4.2 语义建模
 
@@ -241,6 +258,10 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 |---|---|---|---|
 | Table Catalog | 语义资产 | 表目录（历史别名，仅兼容旧文档 / 深链语义） | 表格目录、表目录（主导航 / PageHeader 禁用） | 已入库语义层结构化 YAML 对象列表 |
 | Business Wiki | 业务 Wiki | Wiki 文档（仅兼容期） | 业务解释和口径文档 |
+| Rename Wiki Directory | 重命名目录 | 重命名 folder、改名 folder | 同父级下修改 Wiki 目录路径最后一段（Spec 109） |
+| Directory Rename Preflight | 重命名预检 | 覆盖预检混用 | 重命名前展示源/目标路径与影响摘要 |
+| Source Wiki Directory | 当前目录路径 | 源目录（仅预检补充） | 改名前 `wiki/<path>/` |
+| Target Wiki Directory | 目标目录路径 | 新目录（仅预检补充） | 改名后 `wiki/<path>/` |
 | Business Annotation | 业务注释 | 查看注释可接受 | 面向业务的表 / 字段解释 |
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |
@@ -268,6 +289,8 @@ Connection (连接)
 数据接入负责让 Connection、Schema、启用表范围和 Schema Manifest 进入 Lucy，并保持本地 Catalog 可读。
 语义建模负责维护已进入 Lucy 的表的业务语义，包括字段说明、grain、指标、分群和 Join。
 语义资产交付负责资产包级导入、导出、Validate Gate 与发布。
+
+运维口径（Spec 104）：`/overview`「语义覆盖 / 待补语义」与 `/catalog` 默认列表只统计 **已启用 ∩ Manifest**；Manifest 中未启用的表可经 Catalog「启用范围 = 全部」查看，但不进入待办分母。
 
 | 能力 | 数据接入 | 语义建模 | 语义资产交付 |
 |---|---|---|---|
@@ -371,24 +394,28 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
-| Turn Inquiry Tab | 问询记录 | — | 问题簇、turn（裸露） | 默认 Tab `?tab=turns`；L1 Agent × 问询列表 |
-| Call Log Tab | 调用流水 | — | 明细（旧 Tab 名）、access_log | 取证 Tab `?tab=calls`；含 CSV 导出 |
+| Turn Inquiry Tab | 问询记录 | — | 问题簇、turn（裸露） | 默认视图 `?view=turns`（可省略）；兼容旧 `?tab=turns` |
+| Call Log Tab | 调用流水 | — | 明细（旧 Tab 名）、access_log | 取证视图 `?view=calls`；含 CSV 导出；兼容旧 `?tab=calls` |
 | Turn / Question cluster | 问询 | 问询摘要 | 问题簇 | 列表行对象；Drawer 标题 |
+| Turn ID | 问询 ID | — | turn id（裸露作主标签）、问题簇 ID | L1 身份列；可复制；关联调用流水 |
+| Audit Event ID | 事件 ID | — | access_log id（裸露作主标签） | 调用流水 L1 身份列；`access_log.id` |
+| Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
 | Turn span | 问询时长 | — | turn span | 开始至结束 wall-clock |
 | Slow call | 慢于多数请求 | 慢调用 | 慢查询 | 相对 P95 参照 |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；**列表页不再展示整句参照文案**（Spec 94） |
-| Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词） | 选项：`全部 / 用户原始问询 / 系统推断问询` |
+| Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词） | 选项：`全部 / 用户原始问询 / 系统推断问询`；**仅问询记录 Tab** |
+| Call origin filter | 调用来源 | — | 全部来源（作选项文案）、来源类型（挪用到调用流水） | 调用流水筛选项：`全部 / MCP 调试台受控试调 / Agent 接入调用`；`callSource=playground\|agent`；`playground` 对应 `lucy_platform=mcp-playground` 并自动包含协议调用 |
 | Tool call count | 工具调用数 | — | 调用数 | L1 列表列 |
 | Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table |
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、裁决原因码。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 
@@ -396,7 +423,9 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 |---|---|---|---|---|
 | MCP Playground | MCP Playground | MCP 调试台 | API 操场、Playground（单独作 H1）、协议沙箱 | `/admin/mcp-playground`；侧栏与 PageHeader |
 | ACL Decision Preview | ACL Decision Preview | ACL 裁决预览 | 权限模拟、DryRun（单独作主标签） | 默认主模式；不转发上游 |
-| Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 白名单工具 + 确认；Token 不落盘 |
+| Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 白名单工具 + 确认；Token 不落盘；落库 `lucy_platform=mcp-playground` |
+| Call origin · playground | Call origin (playground) | MCP 调试台受控试调 | Playground 调用（裸词）、调试流量 | 访问日志 `callSource=playground` 筛选项与行内 badge「受控试调」 |
+| Call origin · agent | Call origin (agent) | Agent 接入调用 | 用户真实调用（作唯一主标签时易误解 dry-run） | 访问日志 `callSource=agent`：排除 `lucy_platform=mcp-playground` |
 | Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 与访问日志列对齐；主行中文 |
 | Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
 | Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | DryRun 结果只读摘要 |

@@ -1,14 +1,6 @@
 import { useState } from "react";
+import { latencyTone } from "../../lib/connectionHealth";
 import type { ConnectionInfo, ConnectionTestResult } from "../../lib/types";
-
-type LatencyTone = "muted" | "success" | "warning" | "danger";
-
-function latencyTone(latencyMs: number | undefined): { label: string; tone: LatencyTone } {
-  if (latencyMs === undefined) return { label: "未返回", tone: "muted" };
-  if (latencyMs < 200) return { label: "正常", tone: "success" };
-  if (latencyMs <= 1000) return { label: "偏慢", tone: "warning" };
-  return { label: "需关注", tone: "danger" };
-}
 
 function protocolLabel(protocol: ConnectionInfo["wireProtocol"]): string {
   if (protocol === "mysql") return "MySQL Wire";

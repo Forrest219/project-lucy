@@ -14,6 +14,9 @@ export const queryKeys = {
   joinCandidates: ["joins", "candidates"] as const,
   connections: ["connections"] as const,
   connectionTables: (connId: string) => ["connections", connId, "tables"] as const,
+  connectionLiveSchemas: (connId: string) => ["connections", connId, "live-schemas"] as const,
+  /** Spec 108: per-connection connectivity probe (`POST .../test`). */
+  connectionHealth: (connId: string) => ["connections", connId, "health"] as const,
   // M13 Ingest sidecar (`.ktx-ui/ingest-runs.json`) — kept for the deprecated
   // `/api/connections/:connId/ingest` alias. New UI surfaces should not use it.
   ingestRuns: ["connections", "ingest-runs"] as const,

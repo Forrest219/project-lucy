@@ -641,3 +641,163 @@ Reported: 2026-08-04
 ### Notes
 2026-08-04 已将 `webui/src/pages/connections/ConnectionOverview.tsx` 中 `CatalogReloadButton` 的 `variant` 从 `primary` 改为 `secondary`，并同步更新 `webui/src/__tests__/connection-overview.test.tsx` 对应断言（M29/M44 用例）。
 2026-08-04 Docker 重建后浏览器复核（`http://127.0.0.1:55176/connections`）未通过：`+ 添加 Schema` 仍为 `pl-btn--secondary`，`刷新本地目录` 仍为 `pl-btn--primary`。CDP 读取 class 分别为 `pl-btn pl-btn--secondary notranslate` 与 `pl-btn pl-btn--primary notranslate`，运行时截图文件：`/var/folders/tv/2lzs4s3n4g5cj6r0g0yx08cr0000gq/T/cursor/screenshots/page-2026-08-04T08-54-21-163Z.png`。状态保持 `Fixed`，待确认部署产物与源码版本同步后再复核。
+
+## UX-CONNECTIONS-024: 刷新本地目录应降为 icon-btn 工具动作
+
+Status: Pending
+Route: `/connections`
+Area: Connection card footer / CatalogReloadButton
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+在 UX-CONNECTIONS-023 将刷新与添加 Schema 同级 secondary 之后，对照 Attu「主创建文案 + 刷新图标」节奏，刷新仍占完整文案按钮，卡片动作区密度偏高。
+
+### Expected
+`刷新本地目录` → `pl-icon-btn` + `aria-label`/tooltip；`+ 添加 Schema` 保持 `secondary` 文案（可 leading `+`）。同组无双 primary。主题：`icon-button affordance`、`header action budget`。
+
+### Browser Check
+1. Open `/connections`.
+2. Verify refresh control is icon-only with accessible name 刷新本地目录.
+3. Verify `+ 添加 Schema` remains a secondary text button.
+4. Verify no dual primary in the footer action group.
+
+### Notes
+Spec 101 / `wo-202608-34` Phase 3（Draft，待实现）。继承 UX-CONNECTIONS-023 的同级约束，进一步图标化工具动作。
+
+## UX-CONNECTIONS-025: List KPI 以本页为基准并共享 MetricCard
+
+Status: Fixed
+Route: `/connections`
+Area: Top metric grid / shared MetricCard
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+跨页 KPI 卡标题层级、ⓘ、高度不一致；应对齐 Connections 模板并抽出共享组件。
+
+### Expected
+本页继续作为 List KPI 基准：标题行 + ⓘ + 主值 + 副文；实现迁入共享 `MetricCard`，help 文案保留。
+
+### Browser Check
+1. Open `/connections`.
+2. Verify each of 4 KPI cards has ⓘ help and `pl-metric-card--with-help`.
+3. Verify warning tone on missing Manifest still only colors the value (neutral shell).
+
+### Notes
+Spec 103 / `wo-202608-36` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`list-page kpi metric-card`。
+
+## UX-CONNECTIONS-028: 连接卡右侧缺少连通健康摘要（状态 + ms）
+
+Status: Fixed
+Route: `/connections`
+Area: Connection card header / right-side connectivity health
+Severity: P1
+Reported: 2026-08-06
+
+### Feedback
+系统健康度缺数据库连通性与延迟 ms；连接概览卡右侧应展示紧凑连通健康摘要，便于一眼判断通不通、多慢。
+
+### Expected
+每张连接卡 Header 右侧显示可点击「连通健康」摘要：`通|偏慢|需关注|不通` + `N ms` + 探测时间；点击打开连通测试 Drawer；不在 footer 恢复大号「测试连接」按钮。
+
+### Browser Check
+1. Open `/connections`.
+2. For each Connection card, locate header-right health control (`connection-health-<id>`).
+3. Verify status + ms appear after probe settles.
+4. Click summary → Drawer opens with matching latency.
+5. Confirm footer has no primary-style 「测试连接」 button.
+
+### Notes
+Spec 108 / `wo-202608-41` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`connection-card connectivity health`。
+
+## UX-CONNECTIONS-029: 打开连接概览应自动探测各连接一次
+
+Status: Fixed
+Route: `/connections`
+Area: Mount-time connectivity probe
+Severity: P1
+Reported: 2026-08-06
+
+### Feedback
+运维希望每次打开 `/connections` 自动对每个数据库连接执行一次连通探测，而不是只依赖手动诊断页。
+
+### Expected
+`project` 就绪后并行 `POST /api/connections/:id/test`；摘要区先「探测中…」再填结果；单连接失败不影响其它卡与 Schema 表。
+
+### Browser Check
+1. Open `/connections` with ≥2 connections.
+2. Confirm each card briefly shows probing then a settled health state.
+3. Force one connection failure (or mock) and verify the other card still shows healthy / schema table.
+
+### Notes
+Spec 108 / `wo-202608-41`；与 Spec 107 库内目录探测并行、文案分离。
+
+## UX-CONNECTIONS-030: 卡摘要与连通测试 Drawer 结果必须同源
+
+Status: Fixed
+Route: `/connections`
+Area: ConnectionTestDrawer + card health shared cache
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+卡上健康状态与 Drawer 诊断若各跑各的，运维会看到互相矛盾的延迟与成败。
+
+### Expected
+同一 React Query key；打开 Drawer 展示当前探测结果；「重新测试连接」refetch 后卡摘要同步更新。
+
+### Browser Check
+1. Open `/connections`, wait for health summary.
+2. Open Drawer from summary; verify latency matches card.
+3. Click 「重新测试连接」; after settle, card summary matches Drawer.
+
+### Notes
+Spec 108 / `wo-202608-41`。
+
+## UX-CONNECTIONS-026: Schema 表缺少库内（物理库）表数量
+
+Status: Fixed
+Route: `/connections`
+Area: Connection card schema asset table
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+需要知道 Schema（如 `openclaw_db`）在数据库中实际有多少张表；现有「已发现表数」只反映本地 Manifest，与物理库无关。
+
+### Expected
+Schema 表新增 **库内表数** 列（物理库 BASE TABLE 计数），与「已发现表数」「已启用表数」严格区分。进页按连接懒加载；短 TTL；单连接失败不影响其它连接。提供「重新拉取库内目录」bypass 缓存。
+
+### Browser Check
+1. Open `/connections`.
+2. Verify column header `库内表数` appears between Manifest 状态 and 已发现表数.
+3. Verify a configured schema with live data shows `N 张表` from DB, not Manifest.
+4. Fail one connection (or mock error) and verify other connections still show live counts / local columns.
+5. Click `重新拉取库内目录` and verify it is distinct from `同步配置变更`.
+
+### Notes
+Spec 107 / `wo-202608-40` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`live catalog vs local inventory`。API：`GET /api/connections/:connId/live-schemas`。
+
+## UX-CONNECTIONS-027: 添加 Schema 只能手填、不可从库内选择
+
+Status: Fixed
+Route: `/connections`
+Area: AddSchemaDrawer
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+添加 Schema 弹窗只能填写名称，无法从账号可见的库内 Schema 列表选择，易拼错且不可发现。
+
+### Expected
+打开抽屉后复用 live-schemas：有候选时以下拉选择（展示表数量），排除已配置项；提供「手动输入 Schema 名称」兜底；加载失败时默认手输并说明原因。
+
+### Browser Check
+1. Open `/connections` → `+ 添加 Schema`.
+2. Verify select lists live candidates not already configured (e.g. `openclaw_db（9 张表）`).
+3. Verify manual toggle restores text input.
+4. With live API error, verify fallback to manual input messaging.
+
+### Notes
+Spec 107 / `wo-202608-40` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`live catalog vs local inventory`。

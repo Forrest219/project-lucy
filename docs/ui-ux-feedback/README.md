@@ -40,6 +40,7 @@ docs/ui-ux-feedback/
 | Catalog / Semantic Asset | `/catalog`, `/catalog/:conn/:schema/:table` | [`pages/catalog.md`](pages/catalog.md) |
 | Connections | `/connections`, `/connections/enabled-tables` | [`pages/connections.md`](pages/connections.md) |
 | Business Wiki | `/wiki` | [`pages/wiki.md`](pages/wiki.md) |
+| Publish Workbench | `/publish/workbench` | [`pages/publish-workbench.md`](pages/publish-workbench.md) |
 | Publish History | `/publish/history` | [`pages/publish-history.md`](pages/publish-history.md) |
 | Quality Eval | `/eval/cases`, `/eval/runs`, `/eval/security-candidates` | [`pages/eval.md`](pages/eval.md) |
 | Config Audit | `/admin/config-audit` | [`pages/admin-config-audit.md`](pages/admin-config-audit.md) |
@@ -55,7 +56,15 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-06 | Publish Workbench `/publish/workbench` | 浏览器确认用户反馈属实，新建 `pages/publish-workbench.md`：`UX-PUBLISH-WORKBENCH-001`～`003`（Open）。流程不可发现、三栏角色不清（中栏裸路径 + `状态：W`）、Header 6 钮过密（含多余「表目录」）。截图 `assets/publish-workbench/UX-PUBLISH-WORKBENCH-001-003.png`。跨页面主题新增 `publish flow discoverability`、`publish workbench three-panel ia`、`header action density`。本轮只登记，不开 Spec/不改代码。 |
+| 2026-08-06 | Connections `/connections` 连通健康 | Spec 108 / `wo-202608-41` 落地：`UX-CONNECTIONS-028`～`030` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。卡右侧连通健康摘要（通/偏慢/需关注/不通 + ms）；进页并行 `connection test`；与 Drawer 同源。跨页面主题新增 `connection-card connectivity health`。验证：`connection-overview`、`connection-test`、`lint:terminology`、`build`。 |
+| 2026-08-06 | Connections `/connections` live catalog | Spec 107 / `wo-202608-40` 落地：`UX-CONNECTIONS-026`～`027` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。Owner 按需只读库内目录；Schema 表新增「库内表数」；Add Schema 可选 + 手输兜底；进页按连接懒加载 + 10min TTL；修订 Spec 21 边界。跨页面主题新增 `live catalog vs local inventory`。验证：`live-catalog.test.ts`、`connection-overview.test.tsx`、`add-schema-drawer.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-06 | Admin Audit `/admin/audit` | Spec 106 / `wo-202608-39` 落地：`UX-ADMIN-AUDIT-020`～`025` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。身份列（问询 ID / 事件 ID）、序号统一、Header 导出同构、共享筛选、`view`/`range` URL；深链生产者更新。跨页面主题新增 `audit identity join keys`、`url semantic presets`、`tab header action parity`。验证：`admin-audit-turns`、`audit`、`ops-dashboard`、`onboarding`、`mcp-playground-acl-preview`、`lint:terminology`、`build`。 |
+| 2026-08-06 | Business Wiki `/wiki` 目录重命名实现 | Spec 109 / `wo-202608-42` 落地：`UX-WIKI-044` → `Fixed`。目录 `...` 增加「重命名目录」；preview/commit API；同父级前缀改写文档与空目录 metadata；`?dir=` / key 跟随。本轮不做浏览器验证。验证：`server/__tests__/wiki.test.ts`、`src/__tests__/wiki.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-06 | Business Wiki `/wiki` 目录重命名 Spec | 用户要求单独开「目录重命名」：落盘 Spec 109 + `wo-202608-42`（Draft）。`UX-WIKI-044` 仍 `Open`，Notes 指向 Spec 109；Spec 58 / 105 Non-Goal 交叉引用已更新。本轮只开 Spec，不实现。 |
 | 2026-08-06 | Business Wiki `/wiki` Explorer IA | Spec 105 / `wo-202608-38` 落地：`UX-WIKI-041`～`043` → `Fixed`；`UX-WIKI-044`（目录重命名）→ `Open`（本轮不做浏览器验证，结束后只做 code review）。`?dir=` 选中驱动右栏；Attu 式空态；中栏面板视觉 + 目录 `text-sm`；修订默认首页为先选目录。跨页面主题新增 `explorer panel selection ia`。验证：`wiki.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Overview `/overview` + Catalog `/catalog` | Spec 104 / `wo-202608-37` 落地：`UX-OVERVIEW-019`、`UX-CATALOG-028` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。语义覆盖 / 待补语义分母改为已启用 ∩ Manifest；`SourceSummary.enabled`；Catalog 默认 `scope=enabled`；未启用行降权 CTA。跨页面主题新增 `enabled-scope semantic coverage`。验证：相关 vitest、`lint:terminology`、`build`。 |
+| 2026-08-05 | List KPI 横切（connections / eval / usage / agents / roles） | Spec 103 / `wo-202608-36` 落地：`UX-CONNECTIONS-025`、`UX-EVAL-005`～`006`、`UX-ADMIN-GOV-022`、`UX-ADMIN-AGENTS-040`～`041` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。以 Connections 为 List KPI 基准；每卡 ⓘ；共享 `MetricCard`；允许 3/4/8 网格；Monitor 去整卡 success / `--default`。Design System 新增 `12-components-metric-card.md`。跨页面主题 `list-page kpi metric-card`。验证：相关 vitest、`lint:terminology`、`build`。 |
 | 2026-08-05 | Overview `/overview` 质量/访问 Metric Row | Spec 102 / `wo-202608-35` 落地：`UX-OVERVIEW-016`～`018` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。六卡统一 `OpsMetricRow`：标题左上、主值左下、CTA 右中；Token 补 icon；语义 CTA → catalog incomplete。澄清 Spec 100 §8.2 CTA 落位。跨页面主题新增 `ops metric-row symmetry`。验证：`onboarding.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Spec 99+100 工单落地 | Spec 99 / `wo-202608-32`：`UX-ADMIN-MCP-PLAYGROUND-001`、`UX-ADMIN-AUDIT-018` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。MCP 调试台 ACL 预览 + `tools/list` smoke、裁决双行、Audit/Agent/Overview 入口。Spec 100 / `wo-202608-33`：`UX-OVERVIEW-011`～`014` → `Fixed`。Canonical Registry、Catalog `completion=incomplete`、危险/摘要 CTA、Attu 式指标卡 icon、回写 refetch。验证：相关 vitest、`lint:terminology`、`build`。 |
 | 2026-08-05 | Spec/Plan 落盘（无代码） | Spec 99 / `wo-202608-32`：MCP 调试台 + 裁决可读化（台账 `admin-mcp-playground.md`、`UX-ADMIN-AUDIT-018` Pending）。Spec 100 / `wo-202608-33`：overview 深链闭环（`UX-OVERVIEW-011`～`013` Pending）。术语标准新增 §4.8。 |
@@ -127,6 +136,11 @@ docs/ui-ux-feedback/
 
 | Theme | 影响 ledger | Status 分布 | Spec / Plan |
 |---|---|---|---|
+| `publish flow discoverability`（发布工作台须可视化「审阅→校验→发布」主路径与 gate 原因） | UX-PUBLISH-WORKBENCH-001 | 1 Open | 待 Spec |
+| `publish workbench three-panel ia`（左选文件 / 中变更详情 / 右发布门禁；禁裸路径作栏标题、禁内部 status 码） | UX-PUBLISH-WORKBENCH-002 | 1 Open | 待 Spec |
+| `header action density`（PageHeader 动作须分层，主组不宜 ≥5 平权并列） | UX-PUBLISH-WORKBENCH-003 | 1 Open | 待 Spec |
+| `enabled-scope semantic coverage`（运维语义覆盖 / Catalog 默认列表须对齐 `enabled_tables`） | UX-OVERVIEW-019、UX-CATALOG-028 | 2 Fixed | Spec 104 / wo-202608-37，待浏览器复核 |
+| `connection-card connectivity health`（连接卡右侧连通健康：进页探测 + ms + Drawer 同源） | UX-CONNECTIONS-028～030 | 3 Fixed | Spec 108 / wo-202608-41，待浏览器复核 |
 | `font-weight consistency`（链接 / toggle / sidebar 不应升级到 heading 级粗体） | UX-CATALOG-019、UX-WIKI-014 | 2 Verified | [wo-M64](../../webui/docs/plans/wo-M64-catalog-and-business-wiki-visual-clarity.md) |
 | `chevron affordance`（可点 row 不得用装饰三角字符） | UX-WIKI-014（WikiTree 去三角）、UX-WIKI-017（去三角后需补 chevron svg） | 1 Verified + 1 Open | wo-M64 / 待 M65 |
 | `hover discoverability`（去掉视觉 affordance 后必须补 cursor/hover bg/focus ring） | UX-WIKI-014、UX-WIKI-017 | 1 Verified + 1 Open | wo-M64 / 待 M65 |
@@ -161,7 +175,12 @@ docs/ui-ux-feedback/
 | `decision-reason dual-line`（裁决原因主行中文 + 次行机器码；禁止仅裸码） | UX-ADMIN-AUDIT-018、UX-ADMIN-MCP-PLAYGROUND-001 | 2 Fixed | Spec 99 / wo-202608-32，待浏览器复核 |
 | `canonical health deeplink`（健康/待办 CTA 只生产 Registry URL；消费端同 PR） | UX-OVERVIEW-011～014 | 4 Fixed | Spec 100 / wo-202608-33，待浏览器复核 |
 | `ops metric-row symmetry`（运维快照卡：标题左上、主值左下、CTA 右中对齐待办） | UX-OVERVIEW-016～018 | 3 Fixed | Spec 102 / wo-202608-35，待浏览器复核 |
-| `explorer panel selection ia`（资源浏览器：中栏可选、右栏跟随、面板分割；勿四栏） | UX-WIKI-041～043（044 重命名延期 Open） | 3 Fixed + 1 Open | Spec 105 / wo-202608-38，待浏览器复核 |
+| `list-page kpi metric-card`（列表 KPI：Connections 基准、每卡 ⓘ、允许 3/4/8 网格） | UX-CONNECTIONS-025、UX-EVAL-005～006、UX-ADMIN-GOV-022、UX-ADMIN-AGENTS-040～041 | 6 Fixed | Spec 103 / wo-202608-36，待浏览器复核 |
+| `explorer panel selection ia`（资源浏览器：中栏可选、右栏跟随、面板分割；勿四栏） | UX-WIKI-041～044 | 4 Fixed | Spec 105 / wo-202608-38；重命名 Spec 109 / wo-202608-42 |
+| `live catalog vs local inventory`（库内表数 ≠ 已发现 ≠ 已启用；Owner 按需只读连库） | UX-CONNECTIONS-026～027 | 2 Fixed | Spec 107 / wo-202608-40，待浏览器复核 |
+| `audit identity join keys`（审计/日志主表须暴露可复制关联 Key） | UX-ADMIN-AUDIT-023 | 1 Fixed | Spec 106 / wo-202608-39，待浏览器复核 |
+| `url semantic presets`（时间窗/视图用产品语义 query，禁暴露实现数字如 hours=168） | UX-ADMIN-AUDIT-025 | 1 Fixed | Spec 106 / wo-202608-39，待浏览器复核 |
+| `tab header action parity`（同页 Tab 切换不得增减 Header 主操作槽位） | UX-ADMIN-AUDIT-020 | 1 Fixed | Spec 106 / wo-202608-39，待浏览器复核 |
 | `low-risk one-step save`（低风险配置编辑一步落盘，diff 仅作审计/高风险确认） | UX-ADMIN-AGENTS-036 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
 | `audit filter-table alignment`（筛选字段须与表头对齐，并含时间窗） | UX-ADMIN-CONFIG-AUDIT-006 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
 | `ops table density (pl-data-grid)`（治理/审计列表须轻量 `pl-data-grid` 12px） | UX-ADMIN-CONFIG-AUDIT-003 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
@@ -220,7 +239,14 @@ docs/ui-ux-feedback/
 - 发布 / 审计类历史表必须优先展示业务变更范围（连接、变更源）与规模（文件数、语义源数）；纯运维触发信息不得挤掉主列。手动索引重建且无资产变更时，须用明确空态文案，不得留白。
 - 「导出当前语义资产包」类动作若导出的是当前工作区而非历史批次，只能放在 Header（或页级辅助区）；禁止在历史行内用「下载快照」等文案冒充该批次存档。按 releaseId 的历史包下载未交付前，不得放假按钮。
 - 运维驾驶舱并排快照卡（如质量快照 / 访问风险）必须共用同一 Metric Row 骨架：标题左上、主值左下并拉开间距、CTA 右侧垂直居中对齐「待处理事项」；禁止同栏内混用「主值右上 / CTA 左下 / Token 特例」多套模板（主题 `ops metric-row symmetry`；样板见 Spec 102）。
+- 列表/概览页顶部 KPI 指标卡必须以 `/connections` 为基准线：标题行（12px muted）+ 必有 ⓘ（口径 tooltip）+ 主值 + 单一副文；使用共享 `MetricCard` / `--with-help` 保持卡高一致。允许网格数量差异（3 / 4 / 2×4），禁止 5–7 残缺行。warning 只染主值；成功健康态默认不整卡染色；禁止未定义 tone 修饰符。`/overview` Ops Metric Row（icon+CTA）不在此模板（主题 `list-page kpi metric-card`；样板见 Spec 103）。
+- 运维「语义覆盖 / 待补语义」与语义资产默认列表必须以 `enabled_tables` 为分母（已启用 ∩ Manifest）；不得把未启用 Manifest 表算进待办。Catalog 可切换查看全量，但未启用行不得主推「维护语义」（主题 `enabled-scope semantic coverage`；样板见 Spec 104）。
+- 连接概览 Schema 计数必须三分：`库内表数`（物理库）、`已发现表数`（Manifest）、`已启用表数`（`enabled_tables`）；禁止合并或互用文案。「重新拉取库内目录」会连库；「同步配置变更 / 刷新本地目录」不连库（主题 `live catalog vs local inventory`；样板见 Spec 107）。
+- 连接卡 Header 右侧须展示连通健康摘要（通/偏慢/需关注/不通 + ms）；进页并行探测一次且不挡首屏；与连通测试 Drawer 共用结果源；禁止在 footer 恢复大号「测试连接」按钮（主题 `connection-card connectivity health`；样板见 Spec 108）。
 - 带全局侧栏的资源工作台（如 Business Wiki）应对齐 Explorer 三栏心智：全局导航 | 可选中资源树（实体面板 + 竖分割）| 主内容跟随选中态；禁止再拆第四栏列表+预览。目录/集合选中须写入可分享 URL；无选中时右栏给明确空态，不得 silently 倾倒全库列表。目录重命名等破坏性路径改写须独立 Spec，不得在本模式里加假按钮（主题 `explorer panel selection ia`；样板见 Spec 105）。
+- 访问日志 / 审计类主表必须把可关联身份 Key（问询 ID、事件 ID 等）作为一等列展示并可复制，不得只藏在 testid、展开区或对象详情深链里（主题 `audit identity join keys`；样板见 Spec 106）。
+- 面向用户的时间窗 / 视图 query 须使用产品语义（如 `range=7d`、`view=calls`），禁止新写入暴露实现数字（如 `hours=168`）；旧参可读一版兼容（主题 `url semantic presets`；样板见 Spec 106）。
+- 同一列表页内 Tab 切换不得增减 PageHeader 主操作槽位（如导出按钮忽隐忽现）；Tab 特有动作应保持槽位占位或下沉到表格工具条（主题 `tab header action parity`；样板见 Spec 106）。
 
 ## 工作流
 

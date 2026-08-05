@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddSchemaDrawer } from "../components/AddSchemaDrawer";
 import type { ConnectionInfo } from "../lib/types";
@@ -459,4 +459,43 @@ describe("AddSchemaDrawer", () => {
     expect(screen.queryByText(/Schema 或 database 名/)).not.toBeInTheDocument();
     expect(screen.getByText(/MySQL 中通常对应 database 名/)).toBeInTheDocument();
   });
+
+  it("Spec 107: prefers selecting a live Schema candidate over typing", async () => {
+    stubFetch({
+      "GET /api/connections/mysql-aliyun/live-schemas": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              status: "ok",
+              connectionId: "mysql-aliyun",
+              schemas: [
+                { schema: "dataforai", tableCount: 28 },
+                { schema: "openclaw_db", tableCount: 9 },
+                { schema: "finance_mart", tableCount: 3 }
+              ],
+              fetchedAt: "2026-08-06T00:00:00.000Z",
+              cached: false,
+              wireProtocol: "mysql"
+            }
+          })
+        )
+    });
+    renderDrawer(makeConn());
+
+    const select = await screen.findByTestId("add-schema-select");
+    expect(select).toBeInTheDocument();
+    expect(screen.queryByTestId("add-schema-input")).not.toBeInTheDocument();
+    expect(screen.getByText("选择 Schema")).toBeInTheDocument();
+    expect(within(select).getByRole("option", { name: "openclaw_db（9 张表）" })).toBeInTheDocument();
+    expect(within(select).queryByRole("option", { name: /dataforai/ })).not.toBeInTheDocument();
+
+    fireEvent.change(select, { target: { value: "openclaw_db" } });
+    expect(screen.getByTestId("add-schema-preview-btn")).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("add-schema-manual-toggle"));
+    expect(screen.getByTestId("add-schema-input")).toBeInTheDocument();
+    expect(screen.getByTestId("add-schema-select-toggle")).toBeInTheDocument();
+  });
 });
+

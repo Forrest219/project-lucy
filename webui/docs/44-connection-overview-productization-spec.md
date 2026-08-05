@@ -52,7 +52,7 @@
 ## 3. 非目标
 
 - 不新增或删除 Connection、Schema、本地 Catalog API。
-- 不在本次改版中增加新的“测试连接”入口；既有兼容路由保持不变。
+- 不在本次改版中增加 footer 大号「测试连接」文案按钮；既有兼容路由保持不变。**修订（Spec 108）：** 允许连接卡 Header 右侧「连通健康」摘要作为诊断入口（进页探测 + 点击打开 Drawer），不恢复 footer 并列主按钮。
 - 不改变 Schema Manifest 上传 Drawer、校验、目标路径计算或提交协议。
 - 不修改 `/connections/whitelist` 页面布局或当前未提交工作。
 - 不调整 Engine、只读状态的业务判定规则。

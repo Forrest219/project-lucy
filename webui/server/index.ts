@@ -8,6 +8,10 @@ import { buildProxy } from "./proxy/mcp-proxy.js";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
+import {
+  listLiveSchemas,
+  LiveCatalogConnectionNotFoundError
+} from "./live-catalog";
 import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
@@ -819,6 +823,27 @@ export function buildServer() {
       }
     }
     return { ok: true, data: { tables: tables.sort() } };
+  });
+
+  app.get<{
+    Params: { connId: string };
+    Querystring: { refresh?: string };
+  }>("/api/connections/:connId/live-schemas", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const refresh =
+      request.query?.refresh === "1" ||
+      request.query?.refresh === "true" ||
+      request.query?.refresh === "yes";
+    try {
+      const data = await listLiveSchemas(projectRoot, connId, { refresh });
+      return { ok: true, data };
+    } catch (err) {
+      if (err instanceof LiveCatalogConnectionNotFoundError) {
+        throw enabledTableError(err.code, err.message);
+      }
+      throw err;
+    }
   });
 
   app.put<{

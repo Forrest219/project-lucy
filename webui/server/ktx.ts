@@ -193,3 +193,70 @@ export async function reindexProject(
     );
   });
 }
+
+export type SqlResult = {
+  ok: boolean;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  latencyMs: number;
+  command: string;
+  args: string[];
+  /** Parsed `--json` payload when present; otherwise null. */
+  json: unknown | null;
+};
+
+function extractJsonPayload(stdout: string): unknown | null {
+  const trimmed = stdout.trim();
+  if (!trimmed) return null;
+  // ktx may print daemon startup lines before the JSON object.
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start < 0 || end < start) return null;
+  try {
+    return JSON.parse(trimmed.slice(start, end + 1)) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+export async function runSql(
+  projectRoot: string,
+  connId: string,
+  sql: string,
+  options: { maxRows?: number; timeoutMs?: number; execFileImpl?: ExecFileImpl } = {}
+): Promise<SqlResult> {
+  const execFileImpl = options.execFileImpl ?? execFile;
+  const maxRows = options.maxRows ?? 1000;
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  const args = ["sql", "-c", connId, "--json", "--max-rows", String(maxRows), sql];
+  const command = `ktx ${args.join(" ")}`;
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    execFileImpl(
+      "ktx",
+      args,
+      { cwd: projectRoot, timeout: timeoutMs, env: { ...process.env, POSTHOG_DISABLED: process.env.POSTHOG_DISABLED ?? "1" } },
+      (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
+        const latencyMs = Date.now() - start;
+        const out = stdout.toString();
+        const err = stderr.toString();
+        if (error?.code === "ENOENT") {
+          reject(new KtxCliError("ktx CLI was not found in PATH"));
+          return;
+        }
+        const exitCode = !error ? 0 : typeof error.code === "number" ? error.code : 1;
+        resolve({
+          ok: !error,
+          exitCode,
+          stdout: out,
+          stderr: err,
+          latencyMs,
+          command,
+          args,
+          json: extractJsonPayload(out)
+        });
+      }
+    );
+  });
+}

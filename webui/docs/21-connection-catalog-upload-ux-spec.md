@@ -11,6 +11,8 @@
 | 事实源 | `ktx.yaml`、`semantic-layer/<connection>/_schema/<schema>.yaml`、`semantic-layer/<connection>/<table>.yaml`、`.ktx-ui/**` sidecar |
 | 关联文档 | `webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/16-ingest-first-class-ux-spec.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/DEVELOPMENT.md` |
 
+> **交叉引用（Spec 107）**：本规格默认「刷新本地目录 / Manifest 路径不连物理库」仍然成立。Owner 在 `/connections` 经 `GET /api/connections/:connId/live-schemas` 的**按需只读库内目录**（库内表数、添加 Schema 候选）是受控例外，详见 [`107-connection-live-catalog-discovery-spec.md`](107-connection-live-catalog-discovery-spec.md)。
+
 ## 1. 决策摘要
 
 M14 将数据库接入模块从动态 CLI `ktx ingest` 调整为静态 Catalog Loading，解决了无 LLM / 无 embedding 环境下核心数据管道被 enrichment 阻断的问题。但新的操作模型仍有一个交付缺口：

@@ -146,7 +146,13 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-32-mcp-playground-acl-decision-visibility.md](wo-202608-32-mcp-playground-acl-decision-visibility.md) | 202608-32 | Spec 99 v1.1：MCP 调试台 + 裁决双行 + `tools/list` smoke 必达（Implemented） |
 | [wo-202608-33-overview-health-action-deeplink-loop.md](wo-202608-33-overview-health-action-deeplink-loop.md) | 202608-33 | Spec 100 v1.2：Registry / Catalog 原子交付 / 回写 refetch / 指标卡 icon（Implemented） |
 | [wo-202608-35-overview-quality-risk-metric-row-unification.md](wo-202608-35-overview-quality-risk-metric-row-unification.md) | 202608-35 | Spec 102：overview 质量/访问 Metric Row 统一（Implemented） |
+| [wo-202608-36-list-page-kpi-metric-card-unification.md](wo-202608-36-list-page-kpi-metric-card-unification.md) | 202608-36 | Spec 103：列表页 KPI Connections 基准 + 每卡 ⓘ + 共享组件（Implemented） |
+| [wo-202608-37-enabled-scope-semantic-coverage-alignment.md](wo-202608-37-enabled-scope-semantic-coverage-alignment.md) | 202608-37 | Spec 104：语义覆盖 / Catalog 默认对齐 `enabled_tables`（Implemented） |
 | [wo-202608-38-wiki-directory-selection-explorer-ia.md](wo-202608-38-wiki-directory-selection-explorer-ia.md) | 202608-38 | Spec 105：`/wiki` 目录选中 Explorer IA + 面板视觉（Implemented） |
+| [wo-202608-39-admin-audit-identity-filters-and-url.md](wo-202608-39-admin-audit-identity-filters-and-url.md) | 202608-39 | Spec 106：访问日志身份列 / 共享筛选 / `view`·`range` URL（Implemented） |
+| [wo-202608-40-connection-live-catalog-discovery.md](wo-202608-40-connection-live-catalog-discovery.md) | 202608-40 | Spec 107：连接库内目录发现 — 库内表数 + Add Schema 可选（Implemented） |
+| [wo-202608-41-connection-card-connectivity-health-summary.md](wo-202608-41-connection-card-connectivity-health-summary.md) | 202608-41 | Spec 108：连接卡右侧连通健康摘要 + 进页探测（Implemented） |
+| [wo-202608-42-wiki-directory-rename.md](wo-202608-42-wiki-directory-rename.md) | 202608-42 | Spec 109：`/wiki` 目录重命名（Implemented） |
 
 ### 202608 Governance & Observability — 并行启动建议
 

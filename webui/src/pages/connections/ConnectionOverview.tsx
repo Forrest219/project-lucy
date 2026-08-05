@@ -1,11 +1,16 @@
 import { Fragment } from "react";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
-import { apiGet } from "../../lib/apiClient";
+import { apiGet, apiPost } from "../../lib/apiClient";
+import {
+  connectionHealthDrawerResult,
+  connectionHealthStatusLabel,
+  formatProbeClock
+} from "../../lib/connectionHealth";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   CatalogReloadsResponse,
@@ -13,6 +18,8 @@ import type {
   CatalogReloadWarning,
   CatalogSchemaManifestReadResponse,
   ConnectionInfo,
+  ConnectionTestResult,
+  LiveSchemasResponse,
   ProjectInfo,
   SourceSummary,
   SourcesResponse
@@ -25,8 +32,12 @@ import {
   CatalogReloadButton,
   triggerCatalogManifestDownload
 } from "../../components/catalog";
+import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
+
+/** Spec 107: client staleTime aligned with server TTL. */
+const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
 
 function engineLabel(engine?: string) {
   const normalized = engine?.toLowerCase();
@@ -308,7 +319,43 @@ function shouldShowCatalogRunStatus(
   return Boolean(isReloading || hasReloadError || isHistoryLoading || hasHistoryError || lastRun?.status === "failed");
 }
 
+function liveTableCountCell(
+  schema: string,
+  live: LiveSchemasResponse | undefined,
+  isLoading: boolean,
+  isFetching: boolean,
+  queryFailed: boolean
+): { text: string; title?: string; state: "loading" | "ok" | "missing" | "error" } {
+  if (isLoading || (isFetching && !live)) {
+    return { text: "加载中", state: "loading" };
+  }
+  if (queryFailed || !live) {
+    return {
+      text: "不可用",
+      title: "无法加载库内目录",
+      state: "error"
+    };
+  }
+  if (live.status === "error") {
+    return {
+      text: "不可用",
+      title: live.reason || "无法查询库内目录",
+      state: "error"
+    };
+  }
+  const row = live.schemas.find((item) => item.schema === schema);
+  if (!row) {
+    return {
+      text: "—",
+      title: "当前账号可见目录中未找到该 Schema",
+      state: "missing"
+    };
+  }
+  return { text: `${row.tableCount} 张表`, state: "ok" };
+}
+
 export function ConnectionOverview() {
+  const queryClient = useQueryClient();
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
     queryFn: () => apiGet<ProjectInfo>("/api/project")
@@ -323,6 +370,40 @@ export function ConnectionOverview() {
   });
 
   const connections = projectQuery.data?.connections ?? [];
+  const liveSchemaQueries = useQueries({
+    queries: connections.map((conn) => ({
+      queryKey: queryKeys.connectionLiveSchemas(conn.id),
+      queryFn: () =>
+        apiGet<LiveSchemasResponse>(
+          `/api/connections/${encodeURIComponent(conn.id)}/live-schemas`
+        ),
+      staleTime: LIVE_SCHEMAS_STALE_MS,
+      retry: false,
+      enabled: Boolean(projectQuery.data)
+    }))
+  });
+  const liveByConnectionId = new Map(
+    connections.map((conn, index) => [conn.id, liveSchemaQueries[index]] as const)
+  );
+  // Spec 108: parallel connectivity probe on every page entry (staleTime 0).
+  // gcTime 0 drops cache on leave so remount cannot show a stale「通」.
+  const healthQueries = useQueries({
+    queries: connections.map((conn) => ({
+      queryKey: queryKeys.connectionHealth(conn.id),
+      queryFn: () =>
+        apiPost<ConnectionTestResult>(
+          `/api/connections/${encodeURIComponent(conn.id)}/test`,
+          {}
+        ),
+      staleTime: 0,
+      gcTime: 0,
+      retry: false,
+      enabled: Boolean(projectQuery.data)
+    }))
+  });
+  const healthByConnectionId = new Map(
+    connections.map((conn, index) => [conn.id, healthQueries[index]] as const)
+  );
   const semanticTables = sourcesQuery.data?.tables ?? [];
   const schemaCount = connections.reduce((sum, conn) => sum + conn.schemas.length, 0);
   const configuredSchemas = configuredSchemaRefs(connections);
@@ -347,6 +428,9 @@ export function ConnectionOverview() {
   const [manifestViewTarget, setManifestViewTarget] = useState<ManifestViewTarget | null>(null);
   const [manifestUploadTarget, setManifestUploadTarget] = useState<ManifestUploadTarget | null>(null);
   const [downloadingManifestKey, setDownloadingManifestKey] = useState<string | null>(null);
+  const [refreshingLiveByConnection, setRefreshingLiveByConnection] = useState<Record<string, boolean>>({});
+  const [testDrawerConnId, setTestDrawerConnId] = useState<string | null>(null);
+  const [testLogsExpanded, setTestLogsExpanded] = useState(false);
 
   function handleReloadStart(connectionId: string) {
     setReloadingConnections((current) => ({ ...current, [connectionId]: true }));
@@ -456,6 +540,8 @@ export function ConnectionOverview() {
               catalogReloadHistoryLoading,
               catalogReloadHistoryError
             );
+            const liveQuery = liveByConnectionId.get(conn.id);
+            const liveData = liveQuery?.data;
             const schemaRows = conn.schemas.map((schema) => {
               const enabledTableCountForSchema = conn.enabledTables.filter((entry) =>
                 entry.startsWith(`${schema}.`)
@@ -463,7 +549,14 @@ export function ConnectionOverview() {
               return {
                 schema,
                 assetState: schemaAssetState(conn.id, schema, semanticTables, lastRun),
-                enabledTableCount: enabledTableCountForSchema
+                enabledTableCount: enabledTableCountForSchema,
+                liveCount: liveTableCountCell(
+                  schema,
+                  liveData,
+                  Boolean(liveQuery?.isLoading),
+                  Boolean(liveQuery?.isFetching),
+                  Boolean(liveQuery?.isError)
+                )
               };
             });
             const missingManifestWarnings = (lastRun?.warnings ?? []).filter(
@@ -511,6 +604,71 @@ export function ConnectionOverview() {
                     </span>
                   </div>
                   <div className="pl-connection-card-meta notranslate" translate="no">
+                    {(() => {
+                      const healthQuery = healthByConnectionId.get(conn.id);
+                      const healthResult = healthQuery?.data;
+                      const queryFailed = Boolean(healthQuery?.isError);
+                      const healthPending =
+                        Boolean(healthQuery?.isFetching) && !healthResult && !queryFailed;
+                      // Prefer query error over stale ok cache after a failed refetch.
+                      const healthFailed =
+                        queryFailed || healthResult?.status === "error";
+                      const statusTone = healthPending
+                        ? { label: "探测中…", tone: "muted" as const }
+                        : healthFailed
+                          ? connectionHealthStatusLabel(
+                              "error",
+                              healthResult?.status === "error" ? healthResult.latencyMs : undefined
+                            )
+                          : connectionHealthStatusLabel("ok", healthResult?.latencyMs);
+                      const displayLatencyMs =
+                        !healthPending &&
+                        healthResult?.latencyMs !== undefined &&
+                        (!queryFailed || healthResult.status === "error")
+                          ? healthResult.latencyMs
+                          : undefined;
+                      const probeClock =
+                        healthQuery?.dataUpdatedAt &&
+                        healthResult &&
+                        (!queryFailed || healthResult.status === "error")
+                          ? formatProbeClock(healthQuery.dataUpdatedAt)
+                          : "";
+                      const ariaStatus = healthPending
+                        ? "探测中"
+                        : `${statusTone.label}${
+                            displayLatencyMs !== undefined ? ` ${displayLatencyMs} 毫秒` : ""
+                          }`;
+                      return (
+                        <button
+                          type="button"
+                          className={`pl-connection-health pl-connection-health--${statusTone.tone}`}
+                          data-testid={`connection-health-${conn.id}`}
+                          data-tone={statusTone.tone}
+                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}`}
+                          title="查看连通诊断；进页会自动探测一次"
+                          onClick={() => {
+                            setTestDrawerConnId(conn.id);
+                            setTestLogsExpanded(false);
+                          }}
+                        >
+                          <span className="pl-connection-health-status">{statusTone.label}</span>
+                          {displayLatencyMs !== undefined ? (
+                            <span className="pl-connection-health-latency tabular-nums notranslate" translate="no">
+                              · {displayLatencyMs} ms
+                            </span>
+                          ) : null}
+                          {probeClock ? (
+                            <time
+                              className="pl-connection-health-time notranslate"
+                              translate="no"
+                              dateTime={new Date(healthQuery!.dataUpdatedAt).toISOString()}
+                            >
+                              · {probeClock}
+                            </time>
+                          ) : null}
+                        </button>
+                      );
+                    })()}
                     {readOnly.tone === "risk" ? (
                       <span
                         className={`pl-connection-readonly-status pl-connection-readonly-status--${readOnly.tone}`}
@@ -605,7 +763,8 @@ export function ConnectionOverview() {
                       <colgroup>
                         <col className="pl-schema-asset-col-schema" />
                         <col className="pl-schema-asset-col-status" />
-                          <col className="pl-schema-asset-col-local-count" />
+                        <col className="pl-schema-asset-col-live-count" />
+                        <col className="pl-schema-asset-col-local-count" />
                         <col className="pl-schema-asset-col-enabled-count" />
                         <col className="pl-schema-asset-col-action" />
                       </colgroup>
@@ -613,13 +772,20 @@ export function ConnectionOverview() {
                         <tr>
                           <th className="notranslate" translate="no">Schema</th>
                           <th className="notranslate" translate="no">Manifest 状态</th>
-                          <th className="pl-schema-asset-table-num-head">已发现表数</th>
-                          <th className="pl-schema-asset-table-num-head">已启用表数</th>
+                          <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="物理库中当前账号可见的 BASE TABLE 数量">
+                            库内表数
+                          </th>
+                          <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="本地 Schema Manifest 中的表数量">
+                            已发现表数
+                          </th>
+                          <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="ktx.yaml enabled_tables 中该 Schema 的表数量">
+                            已启用表数
+                          </th>
                           <th>操作</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {schemaRows.map(({ schema, assetState, enabledTableCount }) => {
+                        {schemaRows.map(({ schema, assetState, enabledTableCount, liveCount }) => {
                           const hasReadableManifest = schemaHasReadableManifest(assetState);
                           const warning = missingManifestWarningsBySchema.get(schema);
                           const key = warning ? warningKey(conn.id, schema) : "";
@@ -651,6 +817,17 @@ export function ConnectionOverview() {
                                     translate="no"
                                   >
                                     {assetState.label}
+                                  </span>
+                                </td>
+                                <td className="pl-schema-asset-table-num">
+                                  <span
+                                    className="pl-schema-asset-live-count notranslate"
+                                    data-state={liveCount.state}
+                                    data-testid={`schema-live-count-${conn.id}-${schema}`}
+                                    title={liveCount.title}
+                                    translate="no"
+                                  >
+                                    {liveCount.text}
                                   </span>
                                 </td>
                                 <td className="pl-schema-asset-table-num">
@@ -761,7 +938,7 @@ export function ConnectionOverview() {
                                   data-testid={`catalog-reload-warning-${conn.id}-${schema}`}
                                   translate="no"
                                 >
-                                  <td colSpan={5}>
+                                  <td colSpan={6}>
                                     <div className="pl-schema-warning-subrow-content">
                                       <div className="pl-catalog-reload-warning-main">
                                         <div className="pl-catalog-reload-warning-copy">
@@ -863,6 +1040,35 @@ export function ConnectionOverview() {
                     >
                       + 添加 Schema
                     </button>
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--ghost notranslate"
+                      disabled={Boolean(liveQuery?.isFetching || refreshingLiveByConnection[conn.id])}
+                      onClick={() => {
+                        void (async () => {
+                          setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: true }));
+                          try {
+                            const data = await apiGet<LiveSchemasResponse>(
+                              `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?refresh=1`
+                            );
+                            queryClient.setQueryData(queryKeys.connectionLiveSchemas(conn.id), data);
+                          } catch (err) {
+                            toast.error(
+                              err instanceof Error ? err.message : "重新拉取库内目录失败"
+                            );
+                          } finally {
+                            setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: false }));
+                          }
+                        })();
+                      }}
+                      data-testid={`refresh-live-catalog-${conn.id}`}
+                      title="重新查询物理库中的 Schema / 表数量；与「同步配置变更」不同，会连接数据库。"
+                      translate="no"
+                    >
+                      {liveQuery?.isFetching || refreshingLiveByConnection[conn.id]
+                        ? "拉取库内目录..."
+                        : "重新拉取库内目录"}
+                    </button>
                     <CatalogReloadButton
                       connectionId={conn.id}
                       label="同步配置变更"
@@ -910,6 +1116,32 @@ export function ConnectionOverview() {
           initialFilename={manifestUploadTarget.initialFilename}
         />
       ) : null}
+      {(() => {
+        const drawerConn = testDrawerConnId
+          ? connections.find((c) => c.id === testDrawerConnId)
+          : undefined;
+        if (!drawerConn || !testDrawerConnId) return null;
+        const healthQuery = healthByConnectionId.get(testDrawerConnId);
+        return (
+          <ConnectionTestDrawer
+            connection={drawerConn}
+            open
+            result={connectionHealthDrawerResult(
+              testDrawerConnId,
+              healthQuery?.data,
+              Boolean(healthQuery?.isError),
+              healthQuery?.error
+            )}
+            isPending={Boolean(healthQuery?.isFetching)}
+            logsExpanded={testLogsExpanded}
+            onClose={() => setTestDrawerConnId(null)}
+            onRunTest={() => {
+              void healthQuery?.refetch();
+            }}
+            onToggleLogs={() => setTestLogsExpanded((v) => !v)}
+          />
+        );
+      })()}
     </div>
   );
 }
