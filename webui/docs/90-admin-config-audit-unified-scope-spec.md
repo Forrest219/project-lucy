@@ -167,6 +167,8 @@ ON config_change_log(idempotency_key);
 - 详情展示 `operation`、`actor_type`、`source`；
 - 导出 CSV 与表格字段一致。
 
+> **澄清（Spec 97）：** 「与表格字段一致」指主表可见 7 列及中文业务 label，非全量 DB 列 dump；详见 `97-admin-config-audit-header-export-parity-spec.md`。
+
 ## 9. 资产覆盖矩阵（主审计通道）
 
 | asset_kind | 路径模式 | change_type 示例 |

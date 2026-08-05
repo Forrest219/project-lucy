@@ -140,6 +140,9 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-26-agent-admin-stability-adoption-kpi-and-filters.md](wo-202608-26-agent-admin-stability-adoption-kpi-and-filters.md) | 202608-26 | `/admin/agents` 稳定性/使用率优先：KPI 改活跃与调用、明细字段重排、关键维度筛选器 |
 | [wo-202608-27-admin-audit-clarity-and-drawer-ux.md](wo-202608-27-admin-audit-clarity-and-drawer-ux.md) | 202608-27 | `/admin/audit` 筛选/列名/Agent 展示、删列表 P95 句、Drawer 分区与连接字段 |
 | [wo-202608-28-agent-admin-naming-filters-and-save-flow.md](wo-202608-28-agent-admin-naming-filters-and-save-flow.md) | 202608-28 | Agent 显示名/用户 ID 统一、筛选 label、低风险一步保存、角色 diff 确认 Modal |
+| [wo-202608-29-admin-config-audit-table-filter-polish.md](wo-202608-29-admin-config-audit-table-filter-polish.md) | 202608-29 | `/admin/config-audit` 固定 20 行、`pl-data-grid`、中文业务字段、时间筛选与快捷窗口 |
+| [wo-202608-30-admin-config-audit-header-export-parity.md](wo-202608-30-admin-config-audit-header-export-parity.md) | 202608-30 | `/admin/config-audit` 删页头「访问日志」；CSV 与主表对齐；文件名精确到秒 |
+| [wo-202608-31-agent-admin-kpi-column-order-and-identity-header.md](wo-202608-31-agent-admin-kpi-column-order-and-identity-header.md) | 202608-31 | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 |
 
 ### 202608 Governance & Observability — 并行启动建议
 

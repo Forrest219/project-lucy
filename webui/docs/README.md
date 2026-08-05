@@ -85,6 +85,9 @@
 | [93-agent-admin-stability-adoption-kpi-and-filters-spec.md](93-agent-admin-stability-adoption-kpi-and-filters-spec.md) | `/admin/agents` 稳定性/使用率导向：KPI 改活跃与调用、表格字段重排、关键维度筛选器对齐 catalog | 产品 / UX / Frontend / 后端 |
 | [94-admin-audit-clarity-and-drawer-ux-spec.md](94-admin-audit-clarity-and-drawer-ux-spec.md) | `/admin/audit` 问询筛选/列名/Agent 展示、删列表 P95 句、Drawer 分区与连接字段 | 产品 / UX / Frontend / API |
 | [95-agent-admin-naming-filters-and-save-flow-spec.md](95-agent-admin-naming-filters-and-save-flow-spec.md) | `/admin/agents` 显示名/用户 ID 统一、筛选 label、低风险一步保存、角色变更 diff 确认 | 产品 / UX / Frontend |
+| [96-admin-config-audit-table-filter-polish-spec.md](96-admin-config-audit-table-filter-polish-spec.md) | `/admin/config-audit` 固定 20 行、`pl-data-grid`、中文业务字段、时间筛选与快捷窗口 | 产品 / UX / Frontend / API |
+| [97-admin-config-audit-header-export-parity-spec.md](97-admin-config-audit-header-export-parity-spec.md) | `/admin/config-audit` 删页头「访问日志」；CSV 与主表 7 列中文对齐；文件名精确到秒 | 产品 / UX / Frontend / API |
+| [98-agent-admin-kpi-column-order-and-identity-header-spec.md](98-agent-admin-kpi-column-order-and-identity-header-spec.md) | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

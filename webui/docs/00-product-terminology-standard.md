@@ -171,6 +171,10 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Config Last Written | 配置最近写入 | access.yaml 最近修改 | 创建日期（在无字段时伪造） | 来自 access.yaml mtime（Asia/Shanghai 展示） |
 | Data Heatmap | 数据热力 | 表级访问热力 | 数据源热力、源热力 | 表级访问与拒绝分布 API（`/api/admin/audit/sources`）仍保留；Spec 89 已从 `/admin/audit` 移除 heatmap Tab；原 `/admin/audit-sources` 重定向到 `/admin/audit` |
 | Config Audit | 配置审计 | 配置变更审计 | 配置变更（仅限主导航/PageHeader 标题） | 访问配置写入的审计记录 |
+| Config Audit Actor | 操作者 | 本机管理员（local-admin 展示） | Actor、local-admin（作为唯一可见列头/单元格） | Spec 96：表头用「操作者」；单管理员模式下单元格展示「本机管理员」 |
+| Config Audit Change Type | 变更类型 | 配置变更类型 | 类型（过宽）、changeType（裸露） | Spec 96 表头与筛选 |
+| Config Audit Asset Kind | 资产域 | 配置资产域 | assetKind、资产类型（与 Semantic Asset Kind 混淆） | Spec 90/96：governance/semantic/wiki/eval/publish |
+| Config Audit CSV Export | 导出 CSV（与主表一致） | 配置审计导出 | 英文原始列 dump、仅到日的文件名 | Spec 97：列头/单元格与主表 7 列中文一致；文件名 `config-audit-YYYYMMDD-HHmmss.csv` |
 | Review | 审阅 | 变更审阅 | 审核混用 | 人工审阅、PR-like review |
 | Approval | 审批 | 批准 | 审阅混用 | 需要明确批准 / 驳回的流程 |
 | Audit | 审计 | 审计日志 | 审阅 | 操作追踪、合规记录 |
@@ -325,8 +329,9 @@ Connection (连接)
 |---|---|---|---|---|
 | Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板 | 主路由 `/admin/usage` |
 | Agent Admin Page Title | Agent | — | Agent 实例（弃用主标签） | `/admin/agents` 侧栏与 H1 |
-| Agent Display Name | 显示名 | Agent 名称 | 列表主列用 Agent | 人读名称；列表主列、详情可编辑 |
+| Agent Display Name | 显示名 | Agent 名称 | 列表主列用 Agent | 人读名称；详情可编辑、新建表单 |
 | Agent User ID | 用户 ID | 用户 id | Agent 标识（与显示名混用） | 技术标识；搜索、详情只读 |
+| Agent List Identity Column | 显示名/用户 ID | — | 列表主列仅写「显示名」而单元格含用户 ID | `/admin/agents` 列表主列头；双行：主行显示名、次行用户 ID（Spec 98） |
 | Agent List Search | 搜索显示名或用户 ID | 搜索 Agent 名称 / 用户 ID | Agent 名称 | 列表搜索 placeholder |
 | Configured Agent Count | Agent 总数 | 已配置实例 | access.yaml 中的实例（主 hint） | 不随窗口变；含 `enabled: false` |
 | Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题** |

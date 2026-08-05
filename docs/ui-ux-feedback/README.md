@@ -54,9 +54,12 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Agent Admin `/admin/agents` | Spec 98 / `wo-202608-31` 落地：`UX-ADMIN-AGENTS-037`～`039` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。KPI 顺序改为总数→活跃 Agent→活跃 Token→调用量；表列改为配置 Token→活跃 Token→调用量→创建→配置变更→最近访问；主列头「显示名/用户 ID」。跨页面主题新增 `kpi stock-then-adoption-then-volume`、`ops table column grouping`；延伸 `agent identity terminology`。验证：`agent-list.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Config Audit `/admin/config-audit` | Spec 97 / `wo-202608-30` 落地：`UX-ADMIN-CONFIG-AUDIT-007`～`008` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。删页头「访问日志」；CSV 与主表 7 列中文对齐；文件名精确到秒。跨页面主题新增 `header sibling nav redundancy`、`export-table field parity`、`export filename second precision`。验证：`admin-config-audit.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Config Audit `/admin/config-audit` | Spec 96 / `wo-202608-29` 落地：`UX-ADMIN-CONFIG-AUDIT-002`～`006` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。固定每页 20 行；`pl-data-grid`；中文业务列头与枚举；删 actorNotice；时间筛选 since/until + 快捷窗口 + 变更类型动态选项。验证：`admin-config-audit.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Admin Audit `/admin/audit` | Spec 94 / `wo-202608-27` 落地：`UX-ADMIN-AUDIT-011`～`017` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。筛选改「Agent 名称或 ID」；来源筛选项业务化；删列表 P95 参照句；列改「工具调用数 / 涉及数据表」+ 序号；Agent 列 `名称 (id)`；Drawer 卡片分区 + 调用明细含「数据库连接」；头部关闭按钮对齐。验证：`admin-audit-turns.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Agent Admin `/admin/agents`, `/admin/agents/:id` | Spec 95 / `wo-202608-28` 落地：`UX-ADMIN-AGENTS-034`～`036` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。统一显示名/用户 ID 术语；筛选器 catalog 式 label + 删配置 Token 分层 + 结果计数；详情低风险一步保存、角色变更 Modal 确认 diff。验证：`agent-list.test.tsx`、`agent-detail.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Agent Admin `/admin/agents` | Spec 93 / `wo-202608-26` 落地：`UX-ADMIN-AGENTS-031`～`033` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。KPI 从拒绝导向切换为稳定性/使用率导向（总数、调用量、活跃 Agent、活跃 Token）；明细表新增 `创建日期`、`配置最后变更时间` 并按运维价值重排；筛选条升级为 `搜索 + 状态 + 角色 + 近 7 天活跃`（Token 分层已由 Spec 95 移除）。验证：`agent-list.test.tsx`、`lint:terminology`、`build`。 |
-| 2026-08-05 | Admin Audit `/admin/audit` | Spec 94 / `wo-202608-27` 落地：`UX-ADMIN-AUDIT-011`～`017` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。筛选改「Agent 名称或 ID」；来源筛选项业务化；删列表 P95 参照句；列改「工具调用数 / 涉及数据表」+ 序号；Agent 列 `名称 (id)`；Drawer 卡片分区 + 调用明细含「数据库连接」；头部关闭按钮对齐。验证：`admin-audit-turns.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Help Center `/help` | Spec 92 / `wo-202608-25` 落地：`UX-HELP-001`～`003` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`HelpCenter` 页头改为统一 `PageHeader`；breadcrumbs 收敛为单项「系统帮助」；右上动作改「返回系统概览」并指向 `/overview`。验证：`help-center.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Help Center `/help` | 纳入本轮统一性检查：新增 `pages/help.md` 条目 `UX-HELP-001`～`003`（状态 `Open`，本轮不做浏览器验证）。结论：无“共 N 条”计数冗余，但存在页头实现路径不统一（手写 header）、面包屑末项与 H1 重复、返回动作语义与落点不一致。 |
 | 2026-08-05 | List pages cross-cutting | Spec 91 / `wo-202608-24` 落地：`UX-PUBLISH-HISTORY-006`～`007`、`UX-EVAL-001`～`003`、`UX-ADMIN-CONFIG-AUDIT-001`、`UX-CATALOG-027` → `Fixed`；`UX-HELP-001` → `Open`（本轮不做浏览器验证）。删 PageHeader 纯计数 badges；发布记录 H1 对齐侧栏；配置审计导出改 secondary；评测模块 `pl-page-stack`；安全候选去 breadcrumbs + `pl-btn`；表编辑补 backAction；`/help` 纳入检查范围并登记长期跟踪。新建 `pages/eval.md`、`pages/admin-config-audit.md`、`pages/help.md`；跨页面主题新增 `list-page header count badge`。验证：`publish-history`、`admin-config-audit`、`eval-cases`、`security-eval-candidates`、`table-editor` tests、`lint:terminology`、`build`。 |
@@ -145,10 +148,17 @@ docs/ui-ux-feedback/
 | `audit source terminology`（访问日志来源筛选须业务化，推断须 tooltip / disclaimer） | UX-ADMIN-AUDIT-014 | 1 Fixed | Spec 94 / wo-202608-27，待浏览器复核 |
 | `audit drawer wayfinding`（问询 Drawer 须序号 + 连接 + 分区卡片） | UX-ADMIN-AUDIT-016、UX-ADMIN-AUDIT-017 | 2 Fixed | Spec 94 / wo-202608-27，待浏览器复核 |
 | `ops adoption-first KPI`（新系统阶段先看稳定可用与使用率，不让拒绝指标挤占首排 KPI） | UX-ADMIN-AGENTS-031 | 1 Fixed | Spec 93 / wo-202608-26，待浏览器复核 |
+| `kpi stock-then-adoption-then-volume`（KPI：存量 → 活跃覆盖 → 调用强度） | UX-ADMIN-AGENTS-037 | 1 Fixed | Spec 98 / wo-202608-31，待浏览器复核 |
 | `ops lifecycle metadata visibility`（长列表需显式展示对象创建时间与配置最近变更时间） | UX-ADMIN-AGENTS-032 | 1 Fixed | Spec 93 / wo-202608-26，待浏览器复核 |
+| `ops table column grouping`（配置 Token / 活跃 Token / 调用 / 生命周期时间相邻分组） | UX-ADMIN-AGENTS-038 | 1 Fixed | Spec 98 / wo-202608-31，待浏览器复核 |
 | `list multi-dimensional filters`（列表页至少提供状态 + 活跃 + 规模等关键维度筛选） | UX-ADMIN-AGENTS-033、UX-ADMIN-AGENTS-035 | 2 Fixed | Spec 93 / 95，待浏览器复核 |
-| `agent identity terminology`（显示名 vs 用户 ID 不得混用 Agent 作主列名） | UX-ADMIN-AGENTS-034 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
+| `agent identity terminology`（显示名 vs 用户 ID；列表主列头须覆盖双行内容） | UX-ADMIN-AGENTS-034、UX-ADMIN-AGENTS-039 | 2 Fixed | Spec 95 / 98，待浏览器复核 |
 | `low-risk one-step save`（低风险配置编辑一步落盘，diff 仅作审计/高风险确认） | UX-ADMIN-AGENTS-036 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
+| `audit filter-table alignment`（筛选字段须与表头对齐，并含时间窗） | UX-ADMIN-CONFIG-AUDIT-006 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
+| `ops table density (pl-data-grid)`（治理/审计列表须轻量 `pl-data-grid` 12px） | UX-ADMIN-CONFIG-AUDIT-003 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
+| `header sibling nav redundancy`（PageHeader 不得重复侧栏已有的兄弟页入口） | UX-ADMIN-CONFIG-AUDIT-007 | 1 Fixed | Spec 97 / wo-202608-30，待浏览器复核 |
+| `export-table field parity`（列表导出须与主表列头/业务文案一致，禁止原始字段 dump） | UX-ADMIN-CONFIG-AUDIT-008 | 1 Fixed | Spec 97 / wo-202608-30，待浏览器复核 |
+| `export filename second precision`（审计类 CSV 文件名须含到秒的时间戳） | UX-ADMIN-CONFIG-AUDIT-008 | 1 Fixed | Spec 97 / wo-202608-30，待浏览器复核 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 
@@ -156,6 +166,9 @@ docs/ui-ux-feedback/
 
 - Header 只承载对象身份、位置上下文和关键状态；不得放低价值统计 chips 或页面功能说明。
 - 列表/历史页的「共 N 条」「N 个 case」等纯计数只能出现在表格空态、表尾或分页区，不得出现在 PageHeader `badges`（主题 `list-page header count badge`；样板见 Spec 88 Agent 列表、Spec 91）。
+- PageHeader `actions` 不得重复侧栏已有的兄弟页导航入口（主题 `header sibling nav redundancy`；样板见 Spec 97 配置审计删「访问日志」）。
+- 列表页「导出 CSV」默认须与主表可见列头及业务文案一致，禁止把英文原始字段 / 详情 dump 作为默认导出（主题 `export-table field parity`；样板见 Spec 97）。
+- 审计类 CSV 的 `Content-Disposition` 文件名须含到秒的时间戳（`YYYYMMDD-HHmmss`），避免同日多次导出覆盖混淆（主题 `export filename second precision`；样板见 Spec 97）。
 - 数据库对象标识符（Connection ID、Schema 名、表名、列名、路径、URL）必须保留仓库源字符串大小写；不得通过 JavaScript `.toUpperCase()` / `.toLowerCase()` 或 CSS `text-transform: uppercase` / `capitalize` / `lowercase` 强制改写。涉及数据库对象名的分组标题、链接文案、aria-label 都必须带 `translate="no"` 与 `notranslate`。测试必须直接断言渲染文本为仓库源字符串大小写，并保留反向断言（`queryByText(/UPPERCASE/)` 为空）。后端数据库标识符约定优先于 UI 渲染约定。
 - 高密度数据表格里的对象链接默认保持正文级字重；可点击性优先通过颜色、hover underline、focus ring、图标或动作列表达，不靠把链接升成标题级粗体。表头、分组标题和真正的对象详情 H1 才使用更高字重建立层级。
 - 同一视口内，同一个全局命令只能有一个主触发点；不得依赖 aria label 来补救可见命令重复。
