@@ -47,6 +47,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Ledger governance / Overview `/overview` | 补齐 Overview 文案与布局反馈遗漏的长期机制：1) 跨页面主题新增 `internal-term translation`（挂 `UX-OVERVIEW-010`）与 `header microcopy value density`（挂 `UX-OVERVIEW-009`）；2) 改写 PageHeader 规则为「状态反馈与触发动作默认同组同排」，纠正旧「优先把时间戳放到 description」指引与 `UX-OVERVIEW-004` 现实现冲突；3) 登记 2026-08-04 docker 重建后浏览器复核未通过事实（运行实例仍渲染旧文案，`004/009/010` 保持 `Fixed`，证据 `assets/overview/UX-OVERVIEW-009-010-verify-blocked-20260804.png`）。页面条目与代码修复此前已在 `427ab38`。 |
 | 2026-08-04 | Agent Admin `/admin/roles`, `/admin/roles/new` | Spec 77 / `wo-202608-09` 落地：`UX-ADMIN-AGENTS-016`～`021` → `Fixed`（本轮不做浏览器验证）。Wave A：新建/编辑中文标签、picker+TagInput 受控回退、表范围匹配模式；Wave B：`sourceNames` 列表字段 + 连接/工具/表能力筛选。验证：`role-detail`/`role-list`/`admin-roles` Vitest、`lint:terminology`、`build`。 |
 | 2026-08-04 | Connections `/connections`, Overview `/overview` | 用户确认 docker 已重建后执行并列按钮复核：`UX-CONNECTIONS-023` 与 `UX-OVERVIEW-008` 均未通过。`/connections` 中刷新动作仍为 `pl-btn--primary`；`/overview` 中 `复制 MCP 配置` 仍为 `pl-btn--primary`，与 host 源码统一 `secondary` 不一致。已在对应条目 Notes 补充 CDP class 证据；两条状态保持 `Fixed`，待部署产物与源码版本同步后再复核。 |
 | 2026-08-04 | Catalog `/catalog/:conn/:schema/:table` | Spec 73 / wo-202608-06 落地 `UX-CATALOG-021`–`026`（状态 `Fixed`，本轮不做浏览器验证）：`校验` 统一 `secondary` + tooltip；表描述 DB/AI/Human 三段式；行粒度字段多选；字段改为 `pl-data-grid` 表密度；指标/分群补业务价值文案；关联内联进 tab 并修正 `UX-CATALOG-011`（首屏仍禁 banner，候选仅在关联 tab）。非浏览器验证：`table-editor.test.tsx` 28/28、`lint:terminology`、`build`。 |
@@ -101,6 +102,8 @@ docs/ui-ux-feedback/
 | `chip nesting`（chip 容器不得套 chip） | UX-OVERVIEW-001 | Verified | 已在 README 规则集中 |
 | `aria-live noise`（每秒 ticker 不得走 aria-live） | UX-OVERVIEW-003 | Open | 待排期 |
 | `button hierarchy consistency`（同组并列动作不得主次混用） | UX-CONNECTIONS-023、UX-OVERVIEW-008 | 2 Fixed | 本次修复，待浏览器复核 |
+| `internal-term translation`（内部状态术语不得裸露给用户） | UX-OVERVIEW-010 | 1 Fixed | 代码已修（`427ab38`），待浏览器复核 |
+| `header microcopy value density`（页头说明必须表达用户价值，不讲内部实现叙事） | UX-OVERVIEW-009 | 1 Fixed | 代码已修（`427ab38`），待浏览器复核 |
 | `button semantic consistency (secondary vs ghost)`（同一 action group 不得混用 `secondary`/`ghost` 造成误导性弱化） | UX-CATALOG-021 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |
 | `long-list density (card vs table row)`（长列表用重卡片堆叠代替表格行，滚动负担高） | UX-CATALOG-024 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |
 | `microcopy value density (写入路径 vs 业务价值)`（提示文案只讲实现机制、不讲为什么要维护） | UX-CATALOG-025 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |
@@ -145,8 +148,9 @@ docs/ui-ux-feedback/
 - 全局侧栏在所有分组同时展开时，footer 必须固定贴底、中段 nav 必须独立可滚、滚动条始终可见：父容器（`.pl-sidebar`）固定 `h-screen overflow-hidden` + 中间 `<nav>` 必须 `flex-1 min-h-0 overflow-y-auto` + 显式 webkit 滚动条规则（`::-webkit-scrollbar { width: 6px }` + thumb 颜色 + hover 加深）；底部 footer（`.pl-sidebar-footer`）必须 `shrink-0` 固定贴底。**说明（M65 用户拍板 A 方案）**：1920×1080 视口下 5 个分组全展开时，中段 nav 内容超过视口高度，**依赖用户主动滚动查看底部分组**；不通过默认折叠二级菜单来"塞进视口"。否则分组数量增加或子菜单展开后，footer 会被滚动后的 nav 遮挡或被错认为"被裁断"。浏览器验收时需在 1920×1080 视口下展开所有 5 个分组，先确认 footer 贴底，再向下滚动 nav 验证 5 分组子菜单项全部可达、滚动条始终可见。
 - 全局侧栏 nav 的滚动条必须对用户**视觉可见**——不能依赖 macOS / Linux overlay scrollbar 默认行为（仅在主动滚动时短暂出现），否则用户会把"nav 可滚"误读为"内容被截断 / footer 遮挡"。`.pl-nav` 必须显式声明 `scrollbar-width: thin` + `scrollbar-color: var(--color-border-default) transparent`，并对 webkit 浏览器（Chrome / Safari / 新 Edge）加 `::-webkit-scrollbar { width: 6px }` + `::-webkit-scrollbar-track { background: transparent }` + `::-webkit-scrollbar-thumb { background-color: var(--color-border-default); border-radius: pill }` + hover 时升级到 `var(--color-fg-muted)`；track 透明避免在 `px-3` 容器内出现"第二条边"。thumb 颜色与现有 sidebar 配色节奏（`border-default` / `fg-muted`）保持一致，避免引入新色阶。
 - `aria-live` 区域只承载"通知"，不得承载"状态指针"；任何每秒 / 每分钟自动重渲染的状态徽标（最后更新时间、最后同步时间、活跃计数 ticker）必须把"视觉更新"与"屏幕阅读器 announce"解耦——视觉用普通元素（`aria-hidden` 或无 live 属性），announce 走独立 `<span role="status" aria-live="polite">` 仅在状态真正变化时写入。否则依赖 a11y 工具的运维用户会被每秒一次的播报噪音淹没。
-- 顶部 PageHeader actions 槽增加新元素（如按钮文案扩展、新增 badge）时，必须评估 ≥1280px 主流视口下 description 换行点的回归；按钮文案扩展超过约 50% 宽度（54px → 110px 量级）应优先考虑把次要信息（时间戳、辅助徽标）放到 description 行而非 actions 行，避免挤压主体内容首屏高度。
+- 顶部 PageHeader 的状态反馈元素（如“上次更新”）与其触发动作（如“刷新首页数据”）默认应同组同排放在 actions 槽，保持“动作-反馈”邻接关系，避免跨区造成错位或语义割裂；仅当窄视口出现拥挤时，才允许在同组内换行或降级展示样式。任何新增元素仍需评估 ≥1280px 主流视口下 description 换行回归。该规则纠正早期“把时间戳优先挪到 description”的指引，与 `UX-OVERVIEW-004` 现实现一致。
 - 同一 action group 内的并列维护动作必须同级呈现：默认全部使用 `secondary`，不得把某个并列动作升为 `primary` 造成误导性显著性。只有存在唯一推荐主路径（用户下一步成功率最高且可证）时，才允许单个 `primary`，且同组最多一个。
+- 用户可见文案不得直接暴露内部状态枚举（如 `partial` / `done` / `stale` / `invalid`）；须改写为中文、可理解的影响描述，并尽量给出下一步动作入口。页头 description 只保留“页面能力 + 用户动作价值”，不得写内部实现叙事（如 data agent 可交付状态判断）。
 
 ## 工作流
 
