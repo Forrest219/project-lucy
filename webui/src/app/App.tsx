@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
   Boxes,
-  Bot,
   Cable,
   ChartNoAxesCombined,
   ChevronRight,
@@ -12,12 +11,13 @@ import {
   Gauge,
   History,
   LayoutDashboard,
+  Network,
   Rocket,
   Search,
-  Share2,
   ShieldAlert,
   ShieldCheck,
   TableProperties,
+  Users,
   ClipboardList,
   Activity,
   BookOpen,
