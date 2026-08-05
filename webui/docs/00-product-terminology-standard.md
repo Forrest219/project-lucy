@@ -367,12 +367,16 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
 | Turn span | 问询时长 | — | turn span | 开始至结束 wall-clock |
 | Slow call | 慢于多数请求 | 慢调用 | 慢查询 | 相对 P95 参照 |
-| Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；参照线文案含窗口 |
+| Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；**列表页不再展示整句参照文案**（Spec 94） |
+| Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词） | 选项：`全部 / 用户原始问询 / 系统推断问询` |
+| Tool call count | 工具调用数 | — | 调用数 | L1 列表列 |
+| Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table |
+| Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id。
 
-详见 Spec 89。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名。
 
 ## 5. 新术语登记流程
 

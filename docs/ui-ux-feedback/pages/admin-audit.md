@@ -207,3 +207,147 @@ N/A（文档索引）。
 
 ### Notes
 Spec 89 / `wo-202608-22` 台账机制更新一并 Fixed。
+
+## UX-ADMIN-AUDIT-011: 筛选框提示 Agent ID 不合理
+
+Status: Fixed
+Route: `/admin/audit?tab=turns`
+Area: Filter bar
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+筛选 placeholder 为 `Agent ID`，用户只记得名称；表格也以名称为主。
+
+### Expected
+placeholder 改为 `Agent 名称或 ID`，支持名称或 id 模糊筛选。
+
+### Browser Check
+1. Open `/admin/audit` turns tab.
+2. Confirm filter placeholder is「Agent 名称或 ID」.
+
+### Notes
+Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-AUDIT-012: Agent 列缺少 ID 次级展示
+
+Status: Fixed
+Route: `/admin/audit?tab=turns`
+Area: Turn list Agent column
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+表格 Agent 列仅显示 id，应同时展示名称与 id（括号次级）。
+
+### Expected
+`{name} ({id})`；无独立名称时回退 id。
+
+### Browser Check
+1. Confirm Agent column shows name and parenthesized id when agents API has distinct name.
+
+### Notes
+Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证）。
+
+## UX-ADMIN-AUDIT-013: 列表页 P95 参照句冗余
+
+Status: Fixed
+Route: `/admin/audit?tab=turns`
+Area: Latency reference microcopy
+Severity: P3
+Reported: 2026-08-05
+
+### Feedback
+「使用概况 · 近 7 天：多数请求耗时…」与 `/admin/usage` 重复，列表信息密度低。
+
+### Expected
+删除列表页整句参照文案；慢调用 badge 保留。
+
+### Browser Check
+1. Confirm no `audit-latency-reference` block on turns tab.
+
+### Notes
+Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证）。
+
+## UX-ADMIN-AUDIT-014: 来源筛选术语难理解
+
+Status: Fixed
+Route: `/admin/audit?tab=turns`
+Area: Source filter
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+`全部来源 / 推断` 缺少业务语义；`推断问询` 含义不直观。
+
+### Expected
+筛选项：`全部 / 用户原始问询 / 系统推断问询`；`title` tooltip 解释推断来源。
+
+### Browser Check
+1. Open source filter options and confirm business labels.
+2. Hover/select shows tooltip about inferred summary.
+
+### Notes
+Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证）。
+
+## UX-ADMIN-AUDIT-015: 列表列名偏实现视角
+
+Status: Fixed
+Route: `/admin/audit?tab=turns`
+Area: Turn list columns
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+`调用数`、`工具 / 表` 应改为业务可读列名；列表应聚焦数据表而非工具。
+
+### Expected
+`工具调用数`、`涉及数据表`（仅 physical table）。
+
+### Browser Check
+1. Confirm updated column headers and table-only cell content.
+
+### Notes
+Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证）。
+
+## UX-ADMIN-AUDIT-016: 明细缺序号与数据库连接
+
+Status: Fixed
+Route: `/admin/audit?turnId=…`
+Area: Turn drawer call table
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+Drawer 调用明细难以定位行与连接；缺序号、数据库连接字段。
+
+### Expected
+调用明细表含 `序号`、`数据库连接`；API 返回 `accessLogs[].connectionId`。
+
+### Browser Check
+1. Open turn drawer.
+2. Confirm index column and connection id per row.
+
+### Notes
+Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证）。
+
+## UX-ADMIN-AUDIT-017: Drawer 布局混乱、关闭按钮错位
+
+Status: Fixed
+Route: `/admin/audit?turnId=…`
+Area: Turn drawer chrome
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+详情抽屉分区弱；`关闭` 与标题区脱节。
+
+### Expected
+`pl-trace-detail-header--toolbar` 同行布局；`pl-card` 分区（摘要 / 调用明细 / 触达表汇总）。
+
+### Browser Check
+1. Open turn drawer.
+2. Confirm close button aligns with title row; sections visually separated.
+
+### Notes
+Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证）。

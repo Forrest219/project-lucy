@@ -1196,16 +1196,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const database = await getAuditDb();
     const p95Ms = queryP95LatencyMs(database, windowHours);
 
-    const mapAccessLogRow = (row: {
-      id: number;
-      ts: string;
-      tool: string;
-      outcome: string;
-      decision_reason: string | null;
-      duration_ms: number;
-      trace_id: string | null;
-      tables: string | null;
-    }) => ({
+    const mapAccessLogRow = (
+      row: {
+        id: number;
+        ts: string;
+        tool: string;
+        outcome: string;
+        decision_reason: string | null;
+        duration_ms: number;
+        trace_id: string | null;
+        tables: string | null;
+      },
+      connectionByLogId: Map<number, string>
+    ) => ({
       id: row.id,
       ts: row.ts,
       tool: row.tool,
@@ -1214,8 +1217,23 @@ export function registerAuditRoutes(app: FastifyInstance) {
       durationMs: row.duration_ms,
       isSlowCall: p95Ms > 0 && row.duration_ms > p95Ms,
       traceId: row.trace_id ?? undefined,
-      tables: row.tables ? (JSON.parse(row.tables) as string[]) : undefined
+      tables: row.tables ? (JSON.parse(row.tables) as string[]) : undefined,
+      connectionId: connectionByLogId.get(row.id)
     });
+
+    const connectionByLogId = (ids: number[]): Map<number, string> => {
+      const map = new Map<number, string>();
+      if (ids.length === 0) return map;
+      const rows = database.prepare(`
+        SELECT access_log_id, connection_id FROM access_log_sources
+        WHERE access_log_id IN (${ids.map(() => "?").join(",")}) AND connection_id IS NOT NULL
+        GROUP BY access_log_id
+      `).all(...ids) as Array<{ access_log_id: number; connection_id: string }>;
+      for (const row of rows) {
+        if (!map.has(row.access_log_id)) map.set(row.access_log_id, row.connection_id);
+      }
+      return map;
+    };
 
     if (turnId.startsWith("inf_")) {
       const row = database.prepare(`SELECT * FROM inferred_turns WHERE inferred_turn_id = ?`).get(turnId) as Record<string, unknown> | undefined;
@@ -1240,6 +1258,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
             tables: string | null;
           }>
         : [];
+      const connMap = connectionByLogId(accessLogIds);
       return {
         ok: true,
         data: {
@@ -1255,7 +1274,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
           sources: JSON.parse(row.source_summary as string),
           questionSummary: row.question_summary,
           evidence: JSON.parse(row.evidence_json as string),
-          accessLogs: accessLogs.map(mapAccessLogRow),
+          accessLogs: accessLogs.map((logRow) => mapAccessLogRow(logRow, connMap)),
           referenceLatency: { windowHours, p95Ms }
         }
       };
@@ -1284,6 +1303,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const sources = accessLogIds.length > 0
       ? database.prepare(`SELECT DISTINCT connection_id, schema_name, source_name, physical_table FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})`).all(...accessLogIds)
       : [];
+    const connMap = connectionByLogId(accessLogIds);
     return {
       ok: true,
       data: {
@@ -1294,7 +1314,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         questionPreview: row.question_preview,
         questionSource: row.question_source,
         createdAt: row.created_at,
-        accessLogs: accessLogs.map(mapAccessLogRow),
+        accessLogs: accessLogs.map((logRow) => mapAccessLogRow(logRow, connMap)),
         sources,
         referenceLatency: { windowHours, p95Ms }
       }

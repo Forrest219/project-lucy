@@ -54,6 +54,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Admin Audit `/admin/audit` | Spec 94 / `wo-202608-27` 落地：`UX-ADMIN-AUDIT-011`～`017` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。筛选改「Agent 名称或 ID」；来源筛选项业务化；删列表 P95 参照句；列改「工具调用数 / 涉及数据表」+ 序号；Agent 列 `名称 (id)`；Drawer 卡片分区 + 调用明细含「数据库连接」；头部关闭按钮对齐。验证：`admin-audit-turns.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Help Center `/help` | Spec 92 / `wo-202608-25` 落地：`UX-HELP-001`～`003` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`HelpCenter` 页头改为统一 `PageHeader`；breadcrumbs 收敛为单项「系统帮助」；右上动作改「返回系统概览」并指向 `/overview`。验证：`help-center.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Help Center `/help` | 纳入本轮统一性检查：新增 `pages/help.md` 条目 `UX-HELP-001`～`003`（状态 `Open`，本轮不做浏览器验证）。结论：无“共 N 条”计数冗余，但存在页头实现路径不统一（手写 header）、面包屑末项与 H1 重复、返回动作语义与落点不一致。 |
 | 2026-08-05 | List pages cross-cutting | Spec 91 / `wo-202608-24` 落地：`UX-PUBLISH-HISTORY-006`～`007`、`UX-EVAL-001`～`003`、`UX-ADMIN-CONFIG-AUDIT-001`、`UX-CATALOG-027` → `Fixed`；`UX-HELP-001` → `Open`（本轮不做浏览器验证）。删 PageHeader 纯计数 badges；发布记录 H1 对齐侧栏；配置审计导出改 secondary；评测模块 `pl-page-stack`；安全候选去 breadcrumbs + `pl-btn`；表编辑补 backAction；`/help` 纳入检查范围并登记长期跟踪。新建 `pages/eval.md`、`pages/admin-config-audit.md`、`pages/help.md`；跨页面主题新增 `list-page header count badge`。验证：`publish-history`、`admin-config-audit`、`eval-cases`、`security-eval-candidates`、`table-editor` tests、`lint:terminology`、`build`。 |
@@ -139,6 +140,8 @@ docs/ui-ux-feedback/
 | `history table business density`（发布/审计类历史表须展示变更范围与规模，导出不得冒充批次快照） | UX-PUBLISH-HISTORY-001～005 | 5 Fixed | Spec 85 / wo-202608-17，待浏览器复核 |
 | `export entry clarity`（当前工作区资产包导出仅 Header；禁止行内伪历史下载） | UX-PUBLISH-HISTORY-003 | 1 Fixed | Spec 85 / wo-202608-17，待浏览器复核 |
 | `list-page header count badge`（列表/历史页纯计数不得进 PageHeader badges） | UX-PUBLISH-HISTORY-006、UX-EVAL-001、UX-ADMIN-CONFIG-AUDIT-001 | 3 Fixed | Spec 91 / wo-202608-24，待浏览器复核 |
+| `audit source terminology`（访问日志来源筛选须业务化，推断须 tooltip / disclaimer） | UX-ADMIN-AUDIT-014 | 1 Fixed | Spec 94 / wo-202608-27，待浏览器复核 |
+| `audit drawer wayfinding`（问询 Drawer 须序号 + 连接 + 分区卡片） | UX-ADMIN-AUDIT-016、UX-ADMIN-AUDIT-017 | 2 Fixed | Spec 94 / wo-202608-27，待浏览器复核 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 

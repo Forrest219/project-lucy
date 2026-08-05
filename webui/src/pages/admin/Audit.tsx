@@ -6,6 +6,7 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type {
+  Agent,
   AuditLogEntry,
   AuditResponse,
   AuditTurnDetailResponse,
@@ -464,10 +465,6 @@ function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
   return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
-function windowLabel(hours: WindowHours): string {
-  return hours === 24 ? "近 24 小时" : "近 7 天";
-}
-
 function parseWindowHours(raw: string | null): WindowHours {
   return raw === "24" ? 24 : 168;
 }
@@ -477,6 +474,38 @@ function sinceIsoFromHours(hours: WindowHours): string {
   d.setHours(d.getHours() - hours);
   return d.toISOString();
 }
+
+function formatAgentLabel(agentId: string, nameById: Map<string, string>): string {
+  const name = nameById.get(agentId);
+  if (!name || name === agentId) return agentId;
+  return `${name} (${agentId})`;
+}
+
+/** Resolve filter text to a single agent id when name/id uniquely matches. */
+function resolveAgentFilterParam(input: string, agents: Agent[]): string {
+  const needle = input.trim().toLowerCase();
+  if (!needle) return "";
+  const exactId = agents.find((agent) => agent.id.toLowerCase() === needle);
+  if (exactId) return exactId.id;
+  const exactName = agents.find((agent) => agent.name.toLowerCase() === needle);
+  if (exactName) return exactName.id;
+  const partial = agents.filter(
+    (agent) => agent.id.toLowerCase().includes(needle) || agent.name.toLowerCase().includes(needle)
+  );
+  if (partial.length === 1) return partial[0].id;
+  return input.trim();
+}
+
+function formatTablesCell(sources: AuditTurnEntry["sources"], max = 2): string {
+  const tables = sources.map((s) => s.physicalTable).filter(Boolean);
+  if (tables.length === 0) return "—";
+  const shown = tables.slice(0, max);
+  const suffix = tables.length > max ? "…" : "";
+  return `${shown.join(", ")}${suffix}`;
+}
+
+const TURN_SOURCE_FILTER_TITLE =
+  "来源类型：用户原始问询为客户端上报；系统推断问询由工具调用参数自动生成摘要，不等同于用户原文。";
 
 function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
   if (source === "reported") {
@@ -493,12 +522,14 @@ function TurnDetailDrawer({
   turnId,
   hours,
   open,
-  onOpenChange
+  onOpenChange,
+  agentNameById
 }: {
   turnId: string | null;
   hours: WindowHours;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  agentNameById: Map<string, string>;
 }) {
   const query = useQuery({
     queryKey: ["admin", "audit", "turn", turnId, hours],
@@ -506,25 +537,26 @@ function TurnDetailDrawer({
     enabled: open && Boolean(turnId)
   });
   const detail = query.data;
-  const p95Ms = detail?.referenceLatency?.p95Ms ?? 0;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="pl-trace-detail-overlay" />
         <Dialog.Content className="pl-trace-detail-content" data-testid="audit-turn-drawer">
-          <header className="pl-trace-detail-header">
-            <Dialog.Title className="pl-trace-detail-title">问询详情</Dialog.Title>
-            <Dialog.Description className="pl-trace-detail-subtitle">
-              {detail?.userId ? (
-                <>
-                  <span className="notranslate" translate="no">{detail.userId}</span>
-                  {detail.source ? <> · <TurnSourceBadge source={detail.source} /></> : null}
-                </>
-              ) : "加载中…"}
-            </Dialog.Description>
+          <header className="pl-trace-detail-header pl-trace-detail-header--toolbar">
+            <div>
+              <Dialog.Title className="pl-trace-detail-title">问询详情</Dialog.Title>
+              <Dialog.Description className="pl-trace-detail-subtitle">
+                {detail?.userId ? (
+                  <>
+                    <span className="notranslate" translate="no">{formatAgentLabel(detail.userId, agentNameById)}</span>
+                    {detail.source ? <> · <TurnSourceBadge source={detail.source} /></> : null}
+                  </>
+                ) : "加载中…"}
+              </Dialog.Description>
+            </div>
             <Dialog.Close asChild>
-              <button type="button" className="pl-btn pl-btn--ghost pl-trace-detail-close text-xs" aria-label="关闭问询详情">
+              <button type="button" className="pl-btn pl-btn--ghost pl-trace-detail-close text-xs" aria-label="关闭问询详情" data-testid="audit-turn-drawer-close">
                 关闭
               </button>
             </Dialog.Close>
@@ -538,32 +570,28 @@ function TurnDetailDrawer({
           {detail ? (
             <>
               {detail.source === "inferred" ? (
-                <p className="text-xs text-fg-muted mb-3">
+                <section className="pl-card text-xs text-fg-muted" data-testid="audit-turn-inferred-disclaimer">
                   推断问题摘要基于工具调用参数自动生成，不等同于用户原文。
-                </p>
-              ) : null}
-              {(detail.questionSummary || detail.questionPreview) ? (
-                <div className="mb-3 text-sm">
-                  <span className="font-medium">问询摘要：</span>
-                  <span className="text-fg-muted">{detail.questionPreview ?? detail.questionSummary}</span>
-                </div>
-              ) : null}
-              {p95Ms > 0 ? (
-                <p className="text-xs text-fg-muted mb-3">
-                  多数请求耗时参照：<span className="tabular-nums notranslate" translate="no">{p95Ms} ms</span>
-                  <span className="notranslate" translate="no">（P95）</span>
-                </p>
+                </section>
               ) : null}
 
-              <section className="pl-trace-detail-section">
-                <h3 className="pl-trace-detail-section-title">工具调用</h3>
+              {(detail.questionSummary || detail.questionPreview) ? (
+                <section className="pl-card grid gap-2" data-testid="audit-turn-summary-card">
+                  <h3 className="text-sm font-semibold text-fg-default">问询摘要</h3>
+                  <p className="text-sm text-fg-muted">{detail.questionPreview ?? detail.questionSummary}</p>
+                </section>
+              ) : null}
+
+              <section className="pl-card grid gap-3" data-testid="audit-turn-calls-card">
+                <h3 className="text-sm font-semibold text-fg-default">调用明细</h3>
                 <div className="overflow-x-auto">
-                  <table className="pl-audit-table w-full text-sm">
+                  <table className="pl-audit-table pl-data-grid w-full text-sm" data-testid="audit-turn-calls-table">
                     <thead>
                       <tr className="border-b border-border-default text-left text-xs text-fg-muted">
+                        <th className="px-3 py-2 w-12">序号</th>
                         <th className="px-3 py-2">时间</th>
-                        <th className="px-3 py-2">工具</th>
-                        <th className="px-3 py-2">表</th>
+                        <th className="px-3 py-2">数据库连接</th>
+                        <th className="px-3 py-2">涉及数据表</th>
                         <th className="px-3 py-2">状态</th>
                         <th className="px-3 py-2">耗时</th>
                         <th className="px-3 py-2">操作</th>
@@ -571,13 +599,14 @@ function TurnDetailDrawer({
                     </thead>
                     <tbody>
                       {detail.accessLogs.length === 0 ? (
-                        <tr><td colSpan={6} className="px-3 py-4 text-center text-fg-muted">暂无调用记录</td></tr>
+                        <tr><td colSpan={7} className="px-3 py-4 text-center text-fg-muted">暂无调用记录</td></tr>
                       ) : (
-                        detail.accessLogs.map((log) => (
+                        detail.accessLogs.map((log, index) => (
                           <tr key={log.id}>
+                            <td className="px-3 py-2 text-xs tabular-nums text-fg-muted">{index + 1}</td>
                             <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(log.ts).toLocaleString("zh-CN")}</td>
-                            <td className="px-3 py-2 font-mono text-sm notranslate" translate="no">{log.tool}</td>
-                            <td className="px-3 py-2 text-xs text-fg-muted">{log.tables?.join(", ") ?? "—"}</td>
+                            <td className="px-3 py-2 text-xs notranslate" translate="no">{log.connectionId ?? "—"}</td>
+                            <td className="px-3 py-2 text-xs text-fg-muted notranslate" translate="no">{log.tables?.join(", ") ?? "—"}</td>
                             <td className="px-3 py-2">
                               <span className={`pl-status-badge ${log.outcome === "ok" ? "pl-status-done" : log.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed"}`}>
                                 {OUTCOME_LABELS[log.outcome as keyof typeof OUTCOME_LABELS] ?? log.outcome}
@@ -599,12 +628,16 @@ function TurnDetailDrawer({
               </section>
 
               {Array.isArray(detail.sources) && detail.sources.length > 0 ? (
-                <section className="pl-trace-detail-section">
-                  <h3 className="pl-trace-detail-section-title">触达表汇总</h3>
+                <section className="pl-card grid gap-2" data-testid="audit-turn-tables-card">
+                  <h3 className="text-sm font-semibold text-fg-default">触达表汇总</h3>
                   <ul className="text-sm text-fg-muted grid gap-1">
-                    {(detail.sources as Array<{ physical_table?: string; physicalTable?: string }>).map((source, index) => (
-                      <li key={index} className="font-mono notranslate" translate="no">
-                        {source.physicalTable ?? source.physical_table ?? "—"}
+                    {(detail.sources as Array<{ connectionId?: string; physical_table?: string; physicalTable?: string }>).map((source, index) => (
+                      <li key={index} className="notranslate" translate="no">
+                        {source.connectionId ? (
+                          <span className="text-fg-default">{source.connectionId}</span>
+                        ) : null}
+                        {source.connectionId ? " · " : null}
+                        <span className="font-mono">{source.physicalTable ?? source.physical_table ?? "—"}</span>
                       </li>
                     ))}
                   </ul>
@@ -914,8 +947,24 @@ export function Audit() {
     setSearchParams(next);
   }
 
+  const agentsQuery = useQuery({
+    queryKey: ["admin", "agents", "names"],
+    queryFn: () => apiGet<{ agents: Agent[] }>("/api/admin/agents"),
+    staleTime: 60_000
+  });
+
+  const agentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const agent of agentsQuery.data?.agents ?? []) {
+      map.set(agent.id, agent.name);
+    }
+    return map;
+  }, [agentsQuery.data]);
+
+  const resolvedUserFilter = resolveAgentFilterParam(user, agentsQuery.data?.agents ?? []);
+
   const turnsQueryStr = buildQuery({
-    user: user || undefined,
+    user: resolvedUserFilter || undefined,
     source: turnSource === "inferred" || turnSource === "reported" ? turnSource : "all",
     hours,
     limit: PAGE_SIZE,
@@ -955,14 +1004,26 @@ export function Audit() {
   const p95Ms = referenceLatency?.p95Ms ?? 0;
 
   const filteredTurnEntries = useMemo(() => {
-    if (!turnSearch.trim()) return turnEntries;
+    let rows = turnEntries;
+    const agentNeedle = user.trim().toLowerCase();
+    if (agentNeedle && resolvedUserFilter === user.trim()) {
+      // Unresolved / multi-match: keep rows whose id or display name contains needle.
+      rows = rows.filter((entry) => {
+        const name = agentNameById.get(entry.userId) ?? "";
+        return (
+          entry.userId.toLowerCase().includes(agentNeedle) ||
+          name.toLowerCase().includes(agentNeedle)
+        );
+      });
+    }
+    if (!turnSearch.trim()) return rows;
     const needle = turnSearch.trim().toLowerCase();
-    return turnEntries.filter((entry) => {
+    return rows.filter((entry) => {
       const haystack = [
         entry.userId,
+        agentNameById.get(entry.userId),
         entry.questionSummary,
         entry.questionPreview,
-        entry.tools.join(" "),
         entry.sources.map((s) => s.physicalTable).join(" ")
       ]
         .filter(Boolean)
@@ -970,7 +1031,7 @@ export function Audit() {
         .toLowerCase();
       return haystack.includes(needle);
     });
-  }, [turnEntries, turnSearch]);
+  }, [turnEntries, turnSearch, user, resolvedUserFilter, agentNameById]);
 
   const callEntries = (callsQuery.data?.entries ?? []).filter((entry) => {
     if (!slowOnly || p95Ms <= 0) return true;
@@ -1056,20 +1117,27 @@ export function Audit() {
       {tab === "turns" ? (
         <div className="pl-admin-filterbar">
           <input
-            className="pl-input w-36 notranslate"
+            className="pl-input w-44 notranslate"
             translate="no"
-            placeholder="Agent ID"
+            placeholder="Agent 名称或 ID"
+            aria-label="按 Agent 名称或 ID 筛选"
             value={user}
             onChange={(e) => updateParam("user", e.target.value)}
           />
-          <select className="pl-input w-32" value={turnSource} onChange={(e) => updateParam("turnSource", e.target.value)}>
-            <option value="">全部来源</option>
-            <option value="reported">已上报</option>
-            <option value="inferred">推断</option>
+          <select
+            className="pl-input w-40"
+            value={turnSource}
+            title={TURN_SOURCE_FILTER_TITLE}
+            aria-label="来源类型"
+            onChange={(e) => updateParam("turnSource", e.target.value)}
+          >
+            <option value="">全部</option>
+            <option value="reported">用户原始问询</option>
+            <option value="inferred">系统推断问询</option>
           </select>
           <input
             className="pl-input flex-1 min-w-[12rem]"
-            placeholder="搜索摘要 / 工具 / 表名"
+            placeholder="搜索摘要 / 表名"
             value={turnSearch}
             onChange={(e) => updateParam("turnSearch", e.target.value)}
           />
@@ -1102,14 +1170,6 @@ export function Audit() {
         </div>
       )}
 
-      {tab === "turns" && referenceLatency && p95Ms > 0 ? (
-        <p className="text-sm text-fg-muted" data-testid="audit-latency-reference">
-          使用概况 · {windowLabel(hours)}：多数请求耗时{" "}
-          <span className="tabular-nums notranslate" translate="no">{p95Ms} ms</span>
-          {" "}· 本页 {referenceLatency.slowCallsInFilter} 次慢于此值
-        </p>
-      ) : null}
-
       {tab === "turns" && (turnsQuery.isLoading ? (
         <div className="pl-notice">加载中…</div>
       ) : turnsQuery.error ? (
@@ -1123,13 +1183,14 @@ export function Audit() {
             <table className="pl-audit-table pl-data-grid w-full text-sm" data-testid="audit-turns-table">
               <thead>
                 <tr className="border-b border-border-default text-left text-xs text-fg-muted">
+                  <th className="px-3 py-2 w-12">序号</th>
                   <th className="px-3 py-2">开始时间</th>
                   <th className="px-3 py-2">结束时间</th>
                   <th className="px-3 py-2">问询时长</th>
                   <th className="px-3 py-2"><span className="notranslate" translate="no">Agent</span></th>
                   <th className="px-3 py-2">问询摘要</th>
-                  <th className="px-3 py-2">调用数</th>
-                  <th className="px-3 py-2">工具 / 表</th>
+                  <th className="px-3 py-2">工具调用数</th>
+                  <th className="px-3 py-2">涉及数据表</th>
                   <th className="px-3 py-2">耗时</th>
                   <th className="px-3 py-2">结果</th>
                   <th className="px-3 py-2">来源</th>
@@ -1137,9 +1198,9 @@ export function Audit() {
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={10} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={11} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
-                  filteredTurnEntries.map((entry) => {
+                  filteredTurnEntries.map((entry, index) => {
                     const denied = entry.outcomeSummary?.denied ?? 0;
                     const errors = entry.outcomeSummary?.error ?? 0;
                     return (
@@ -1149,6 +1210,7 @@ export function Audit() {
                         data-testid={`audit-turn-row-${entry.id}`}
                         onClick={() => openTurnDrawer(entry.id)}
                       >
+                        <td className="px-3 py-2 text-xs tabular-nums text-fg-muted">{page * PAGE_SIZE + index + 1}</td>
                         <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.startedAt).toLocaleString("zh-CN")}</td>
                         <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.endedAt).toLocaleString("zh-CN")}</td>
                         <td className="px-3 py-2 text-xs">
@@ -1157,13 +1219,10 @@ export function Audit() {
                             <div className="text-fg-muted">执行 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</div>
                           ) : null}
                         </td>
-                        <td className="px-3 py-2 text-sm notranslate" translate="no">{entry.userId}</td>
+                        <td className="px-3 py-2 text-sm notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
                         <td className="px-3 py-2 text-sm">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
                         <td className="px-3 py-2 tabular-nums">{entry.businessCallCount}</td>
-                        <td className="px-3 py-2 text-xs text-fg-muted">
-                          <div>{entry.tools.slice(0, 3).join(", ")}{entry.tools.length > 3 ? "…" : ""}</div>
-                          <div>{entry.sources.slice(0, 2).map((s) => s.physicalTable).join(", ")}{entry.sources.length > 2 ? "…" : ""}</div>
-                        </td>
+                        <td className="px-3 py-2 text-xs text-fg-muted notranslate" translate="no">{formatTablesCell(entry.sources)}</td>
                         <td className="px-3 py-2 text-xs">
                           {(entry.slowCallCount ?? 0) > 0 ? (
                             <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 次慢调用</span>
@@ -1240,6 +1299,7 @@ export function Audit() {
         hours={hours}
         open={turnDrawerOpen}
         onOpenChange={setTurnDrawerOpen}
+        agentNameById={agentNameById}
       />
     </div>
   );

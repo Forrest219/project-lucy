@@ -28,11 +28,23 @@ afterEach(() => {
 });
 
 describe("Admin / Audit turns tab (Spec 89)", () => {
-  it("defaults to turns tab with split time columns and latency reference", async () => {
+  it("defaults to turns tab with split time columns and updated labels (Spec 94)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                agents: [{ id: "demo_agent", name: "Demo Agent", enabled: true, tokenCount: 1 }],
+                version: 1,
+                summary: {}
+              }
+            })
+          );
+        }
         if (url.includes("/api/admin/audit/turns")) {
           return new Response(
             JSON.stringify({
@@ -51,7 +63,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                     questionSummary: "推断：查询 superstore",
                     confidence: "medium",
                     tools: ["sl_query"],
-                    sources: [{ physicalTable: "dataforai.superstore_orders" }],
+                    sources: [{ connectionId: "demo-mysql", physicalTable: "dataforai.superstore_orders" }],
                     turnSpanMs: 16000,
                     totalCallDurationMs: 8200,
                     maxCallDurationMs: 5000,
@@ -74,7 +86,11 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(await screen.findByTestId("audit-turns-table")).toBeInTheDocument();
     expect(screen.getByText("开始时间")).toBeInTheDocument();
     expect(screen.getByText("结束时间")).toBeInTheDocument();
-    expect(await screen.findByTestId("audit-latency-reference")).toHaveTextContent("多数请求耗时");
+    expect(screen.getByText("工具调用数")).toBeInTheDocument();
+    expect(screen.getByText("涉及数据表")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Agent 名称或 ID")).toBeInTheDocument();
+    expect(screen.queryByTestId("audit-latency-reference")).not.toBeInTheDocument();
+    expect(screen.getByText("Demo Agent (demo_agent)")).toBeInTheDocument();
     expect(screen.getByText("含 1 次慢调用")).toBeInTheDocument();
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
   });
@@ -137,11 +153,23 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-pagination-summary")).toHaveTextContent("慢调用筛选：仅统计当前页");
   });
 
-  it("opens turn drawer when clicking a turn row", async () => {
+  it("opens turn drawer with indexed call rows and connection column (Spec 94)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                agents: [{ id: "demo_agent", name: "Demo Agent", enabled: true, tokenCount: 1 }],
+                version: 1,
+                summary: {}
+              }
+            })
+          );
+        }
         if (url.includes("/api/admin/audit/turns/inf_test_1")) {
           return new Response(
             JSON.stringify({
@@ -159,7 +187,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                     outcome: "ok",
                     durationMs: 5000,
                     isSlowCall: true,
-                    tables: ["dataforai.superstore_orders"]
+                    tables: ["dataforai.superstore_orders"],
+                    connectionId: "demo-mysql"
                   }
                 ],
                 referenceLatency: { windowHours: 168, p95Ms: 120 }
@@ -202,7 +231,10 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     renderAudit();
     fireEvent.click(await screen.findByTestId("audit-turn-row-inf_test_1"));
     expect(await screen.findByTestId("audit-turn-drawer")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-turn-drawer-close")).toBeInTheDocument();
     await waitFor(() => {
+      expect(screen.getByText("数据库连接")).toBeInTheDocument();
+      expect(screen.getByText("demo-mysql")).toBeInTheDocument();
       expect(screen.getByText("慢于多数请求")).toBeInTheDocument();
     });
   });

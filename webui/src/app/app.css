@@ -1606,6 +1606,9 @@
     @apply fixed right-0 top-0 z-50 grid h-full w-[min(640px,90vw)] gap-4 overflow-auto border-l border-border-default bg-bg-surface p-5 shadow-card;
   }
   .pl-trace-detail-header { @apply grid gap-2; }
+  .pl-trace-detail-header--toolbar { @apply flex items-start justify-between gap-3; }
+  .pl-trace-detail-header--toolbar > div:first-child { @apply min-w-0 flex-1 grid gap-1; }
+  .pl-trace-detail-header--toolbar .pl-trace-detail-close { @apply shrink-0 justify-self-auto; }
   .pl-trace-detail-title { @apply break-all text-base font-semibold text-fg-default font-mono; }
   .pl-trace-detail-subtitle { @apply text-xs text-fg-muted; }
   .pl-trace-detail-close { @apply justify-self-end; }

@@ -320,17 +320,33 @@ describe("GET /api/admin/audit/turns", () => {
   });
 
   it("returns turn detail for both inferred and reported ids, and 404s for unknown ids", async () => {
-    const { writeLog, writeConversationTurn } = await import("../proxy/audit");
+    const { writeLog, writeConversationTurn, writeAccessLogSources } = await import("../proxy/audit");
     const now = Date.now();
     const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
-    await writeLog({ ts: at(0), userId: "turns-detail-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-detail-1" });
+    const inferredLogId = await writeLog({ ts: at(0), userId: "turns-detail-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-detail-1" });
+    await writeAccessLogSources(inferredLogId, at(0), "turns-detail-user", "sl_read_source", [{
+      connectionId: "demo-mysql",
+      schemaName: "dataforai",
+      sourceName: "superstore_orders",
+      physicalTable: "dataforai.superstore_orders",
+      extractionMethod: "args_source_name",
+      confidence: "high"
+    }]);
     // Separate user for the reported-turn case, so its access_log rows don't bleed into the
     // inferred-cluster assertion above (clustering is purely time-based per user).
     await writeConversationTurn({ turnId: "lucy_turns_detail_1", userId: "turns-detail-reported-user", questionSummary: "detail test", questionSource: "reported_tool" });
     // The report call itself also lands in access_log with lucy_turn_id set to its own turn id
     // (mirrors mcp-proxy.ts) — the detail view's accessLogs must exclude it, same as the list view.
     await writeLog({ ts: at(5_000), userId: "turns-detail-reported-user", tool: "lucy_begin_question", outcome: "ok", durationMs: 1, requestId: "turns-detail-report-call", lucyTurnId: "lucy_turns_detail_1" });
-    await writeLog({ ts: at(10_000), userId: "turns-detail-reported-user", tool: "sl_query", tables: ["dataforai.superstore_returns"], outcome: "ok", durationMs: 1, requestId: "turns-detail-linked", lucyTurnId: "lucy_turns_detail_1" });
+    const linkedLogId = await writeLog({ ts: at(10_000), userId: "turns-detail-reported-user", tool: "sl_query", tables: ["dataforai.superstore_returns"], outcome: "ok", durationMs: 1, requestId: "turns-detail-linked", lucyTurnId: "lucy_turns_detail_1" });
+    await writeAccessLogSources(linkedLogId, at(10_000), "turns-detail-reported-user", "sl_query", [{
+      connectionId: "demo-mysql",
+      schemaName: "dataforai",
+      sourceName: "superstore_returns",
+      physicalTable: "dataforai.superstore_returns",
+      extractionMethod: "args_source_name",
+      confidence: "high"
+    }]);
 
     const { buildServer } = await import("../index");
     const app = buildServer();
@@ -343,11 +359,13 @@ describe("GET /api/admin/audit/turns", () => {
       const inferredDetail = await request(app.server).get(`/api/admin/audit/turns/${inferredId}`).expect(200);
       expect(inferredDetail.body.data).toMatchObject({ id: inferredId, source: "inferred", userId: "turns-detail-user" });
       expect(inferredDetail.body.data.accessLogs).toHaveLength(1);
+      expect(inferredDetail.body.data.accessLogs[0].connectionId).toBe("demo-mysql");
 
       const reportedDetail = await request(app.server).get("/api/admin/audit/turns/lucy_turns_detail_1").expect(200);
       expect(reportedDetail.body.data).toMatchObject({ id: "lucy_turns_detail_1", source: "reported", userId: "turns-detail-reported-user", questionSummary: "detail test" });
       expect(reportedDetail.body.data.accessLogs).toHaveLength(1);
       expect(reportedDetail.body.data.accessLogs[0].tool).toBe("sl_query");
+      expect(reportedDetail.body.data.accessLogs[0].connectionId).toBe("demo-mysql");
 
       await request(app.server).get("/api/admin/audit/turns/inf_does_not_exist").expect(404);
       await request(app.server).get("/api/admin/audit/turns/lucy_does_not_exist").expect(404);

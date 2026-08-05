@@ -742,6 +742,7 @@ export type AuditTurnCallLog = {
   isSlowCall: boolean;
   traceId?: string;
   tables?: string[];
+  connectionId?: string;
 };
 
 export type AuditTurnDetailResponse = {
