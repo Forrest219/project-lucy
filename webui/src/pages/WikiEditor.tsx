@@ -1126,7 +1126,7 @@ export function WikiEditor() {
                     版本记录
                   </button>
                   <button
-                    className="pl-btn pl-btn--primary"
+                    className="pl-btn pl-btn--ghost"
                     data-testid="wiki-upload-replace-button"
                     onClick={() => openUpload("replace")}
                     type="button"
@@ -1134,7 +1134,7 @@ export function WikiEditor() {
                     上传覆盖
                   </button>
                   <button
-                    className="pl-btn pl-btn--ghost"
+                    className="pl-btn pl-btn--primary"
                     data-testid="wiki-edit-button"
                     onClick={switchToEdit}
                     type="button"

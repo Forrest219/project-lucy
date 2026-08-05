@@ -47,6 +47,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Business Wiki `/wiki` 阅读态 | Spec 81 / `wo-202608-13` 落地：`UX-WIKI-036`～`037` → `Fixed`（本轮不做浏览器验证）。阅读区 `content-start` 防 grid 拉伸；`编辑` 为末位唯一 primary，`上传覆盖` 降为 ghost。同步跨页面主题 `css grid track stretch` 与治理规则。 |
 | 2026-08-05 | Admin Governance `/admin/governance` | Spec 82 / `wo-202608-14` 落地：`UX-ADMIN-GOV-009` → `Fixed`（本轮不做浏览器验证）。三表轻量收敛 `pl-data-grid` + `pl-usage-overview-table`（12px 密度、数量 `tabular-nums`、弱 `pl-row-action-link`）；不搬 connections colgroup。验证：`admin-governance-observability.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Business Wiki `/wiki` 版本记录 | Spec 80 / `wo-202608-12` 落地：`UX-WIKI-031`～`035` → `Fixed`（本轮不做浏览器验证）。列表优先全宽表；变更说明业务化；当前行无查看/恢复；查看进全宽详情；截图 `assets/wiki/UX-WIKI-031-035-*`。验证：`wiki.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Business Wiki `/wiki` 编辑态 | Spec 79 / `wo-202608-11` 落地：`UX-WIKI-026`～`030` → `Fixed`（本轮不做浏览器验证）。dirty 驱动状态并入操作行；修复渲染预览 grid 拉伸；三列标题同基线；移除 Markdown 工具栏；「保存并发布」→「保存预检」。 |
@@ -106,7 +107,7 @@ docs/ui-ux-feedback/
 | `thead sticky / visual anchor`（长表格 thead 失去参照） | UX-CATALOG-020 | Open | 待 M66 |
 | `chip nesting`（chip 容器不得套 chip） | UX-OVERVIEW-001 | Verified | 已在 README 规则集中 |
 | `aria-live noise`（每秒 ticker 不得走 aria-live） | UX-OVERVIEW-003 | Open | 待排期 |
-| `button hierarchy consistency`（同组并列动作不得主次混用） | UX-CONNECTIONS-023、UX-OVERVIEW-008 | 2 Fixed | 本次修复，待浏览器复核 |
+| `button hierarchy consistency`（同组并列动作不得主次混用；唯一主路径 primary 须在组首或组末且与 Spec 主动作一致） | UX-CONNECTIONS-023、UX-OVERVIEW-008、UX-WIKI-037 | 2 Fixed + 1 Fixed | Spec 81 / wo-202608-13；Connections/Overview 待浏览器复核 |
 | `internal-term translation`（内部状态术语不得裸露给用户） | UX-OVERVIEW-010 | 1 Fixed | 代码已修（`427ab38`），待浏览器复核 |
 | `header microcopy value density`（页头说明必须表达用户价值，不讲内部实现叙事） | UX-OVERVIEW-009 | 1 Fixed | 代码已修（`427ab38`），待浏览器复核 |
 | `button semantic consistency (secondary vs ghost)`（同一 action group 不得混用 `secondary`/`ghost` 造成误导性弱化） | UX-CATALOG-021 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |
@@ -155,7 +156,8 @@ docs/ui-ux-feedback/
 - 全局侧栏 nav 的滚动条必须对用户**视觉可见**——不能依赖 macOS / Linux overlay scrollbar 默认行为（仅在主动滚动时短暂出现），否则用户会把"nav 可滚"误读为"内容被截断 / footer 遮挡"。`.pl-nav` 必须显式声明 `scrollbar-width: thin` + `scrollbar-color: var(--color-border-default) transparent`，并对 webkit 浏览器（Chrome / Safari / 新 Edge）加 `::-webkit-scrollbar { width: 6px }` + `::-webkit-scrollbar-track { background: transparent }` + `::-webkit-scrollbar-thumb { background-color: var(--color-border-default); border-radius: pill }` + hover 时升级到 `var(--color-fg-muted)`；track 透明避免在 `px-3` 容器内出现"第二条边"。thumb 颜色与现有 sidebar 配色节奏（`border-default` / `fg-muted`）保持一致，避免引入新色阶。
 - `aria-live` 区域只承载"通知"，不得承载"状态指针"；任何每秒 / 每分钟自动重渲染的状态徽标（最后更新时间、最后同步时间、活跃计数 ticker）必须把"视觉更新"与"屏幕阅读器 announce"解耦——视觉用普通元素（`aria-hidden` 或无 live 属性），announce 走独立 `<span role="status" aria-live="polite">` 仅在状态真正变化时写入。否则依赖 a11y 工具的运维用户会被每秒一次的播报噪音淹没。
 - 顶部 PageHeader 的状态反馈元素（如“上次更新”）与其触发动作（如“刷新首页数据”）默认应同组同排放在 actions 槽，保持“动作-反馈”邻接关系，避免跨区造成错位或语义割裂；仅当窄视口出现拥挤时，才允许在同组内换行或降级展示样式。任何新增元素仍需评估 ≥1280px 主流视口下 description 换行回归。该规则纠正早期“把时间戳优先挪到 description”的指引，与 `UX-OVERVIEW-004` 现实现一致。
-- 同一 action group 内的并列维护动作必须同级呈现：默认全部使用 `secondary`，不得把某个并列动作升为 `primary` 造成误导性显著性。只有存在唯一推荐主路径（用户下一步成功率最高且可证）时，才允许单个 `primary`，且同组最多一个。
+- 同一 action group 内的并列维护动作必须同级呈现：默认全部使用 `secondary`，不得把某个并列动作升为 `primary` 造成误导性显著性。只有存在唯一推荐主路径（用户下一步成功率最高且可证）时，才允许单个 `primary`，且同组最多一个；该 primary 应位于组首或组末，并与页面 Spec 声明的主动作一致（Wiki 阅读态为 `编辑`，见 `UX-WIKI-037`）。
+- 可拉伸的 CSS Grid 内容面板（阅读卡片、预览面板、空态容器、库首页等）必须显式 `content-start` / `align-content: start`（或把标题外提到 `auto` 行），禁止依赖默认 `align-content: normal` 在父级被拉高时均分 auto 行，导致标题/正文垂直居中或大块留白。同类已见 `UX-WIKI-006` / `027` / `036`（主题 `css grid track stretch`）。
 - 用户可见文案不得直接暴露内部状态枚举（如 `partial` / `done` / `stale` / `invalid`）；须改写为中文、可理解的影响描述，并尽量给出下一步动作入口。页头 description 只保留“页面能力 + 用户动作价值”，不得写内部实现叙事（如 data agent 可交付状态判断）。
 
 ## 工作流

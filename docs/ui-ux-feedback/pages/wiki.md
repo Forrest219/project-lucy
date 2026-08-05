@@ -1110,3 +1110,63 @@ Reported: 2026-08-05
 ### Notes
 
 Fixed by Spec 80。本轮不做浏览器验证。URL deep-link 为后续候选项。
+
+## UX-WIKI-036: 阅读态标题与正文被 grid 拉伸到面板中部
+
+Status: Fixed
+Route: /wiki
+Area: Wiki read view layout
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+
+打开已加载文档（如 `global/demo-superstore.md`）后，标题与正文没有从卡片左上角起排；正文出现在面板正中间，中间有大块空白。
+
+### Evidence
+
+- 2026-08-05 浏览器核查：`.pl-wiki-read-view` 的 `gridTemplateRows ≈ 438px / 484px`；标题区高度约 438px，正文 top≈594。
+- 同类根因：`UX-WIKI-006`（文档库）、`UX-WIKI-027`（编辑预览）。主题：`css grid track stretch`。
+
+### Expected
+
+阅读卡片使用 `content-start`，标题紧贴左上，正文紧随标题，无大块垂直留白。
+
+### Browser Check
+
+1. Open `/wiki?key=global/demo-superstore.md`（或任意短正文文档）。
+2. Verify 标题与正文自卡片顶部起排，中间无大块空白。
+
+### Notes
+
+Fixed by Spec 81 / `wo-202608-13`：`.pl-wiki-read-view` / `.pl-wiki-read-layout` 增加 `content-start`。Non-browser 验证见工单。本轮不做浏览器验证。
+
+## UX-WIKI-037: 阅读态 Header primary 错位（上传覆盖高亮在倒数第 2）
+
+Status: Fixed
+Route: /wiki
+Area: Wiki read header actions
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+五个按钮顺序为：下载 → 移动 → 版本 → **上传覆盖（黑底 primary）** → 编辑。主高亮落在倒数第 2，不符合「主操作在首或末」惯例；亦违反 Spec 36「阅读态 primary = 编辑」。
+
+### Evidence
+
+- 2026-08-05 CDP：`wiki-upload-replace-button` 带 `pl-btn--primary`，`wiki-edit-button` 为 ghost。
+- 主题：`button hierarchy consistency`。
+
+### Expected
+
+顺序保持：下载 / 移动 / 版本 / 上传覆盖 / **编辑**；唯一 primary 为末位「编辑」；「上传覆盖」为 ghost。
+
+### Browser Check
+
+1. Open 已加载文档阅读态。
+2. Verify 仅「编辑」为 primary 且位于最右；「上传覆盖」为 ghost。
+
+### Notes
+
+Fixed by Spec 81 / `wo-202608-13`：对调 primary/ghost。本轮不做浏览器验证。

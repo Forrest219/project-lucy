@@ -71,6 +71,7 @@
 | [77-role-admin-create-edit-usability-spec.md](77-role-admin-create-edit-usability-spec.md) | Role Admin Create/Edit Usability：新建标题去重、角色标识/说明、连接/工具/表范围 picker+受控回退、names/prefix 中文化、列表能力筛选与 `sourceNames` | 产品 / UX / IA / Terminology / 前端 / 后端 |
 | [79-wiki-edit-workbench-layout-and-save-status-spec.md](79-wiki-edit-workbench-layout-and-save-status-spec.md) | Wiki 编辑态：保存状态 dirty 驱动、渲染预览布局、三列标题对齐、移除工具栏、保存预检文案 | 产品 / UX / Frontend |
 | [80-wiki-version-history-list-first-ux-spec.md](80-wiki-version-history-list-first-ux-spec.md) | Wiki 版本记录列表优先：全宽业务化表格、当前行收敛、查看进入全宽详情（修订 Spec 55 §8.2–8.3 / Spec 74 §9） | 产品 / UX / Frontend |
+| [81-wiki-read-layout-and-header-action-hierarchy-spec.md](81-wiki-read-layout-and-header-action-hierarchy-spec.md) | Wiki 阅读态：正文防 grid 拉伸；Header 唯一 primary 归还给「编辑」 | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

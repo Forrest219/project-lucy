@@ -636,6 +636,41 @@ describe("WikiEditor Read Mode default (P0)", () => {
     expect(screen.getByTestId("wiki-read-body").querySelectorAll("h1")).toHaveLength(0);
   });
 
+  it("makes 编辑 the sole primary header action and keeps governance actions ghost (UX-WIKI-037)", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    expect(await screen.findByTestId("wiki-edit-button")).toBeInTheDocument();
+    const actions = screen.getByTestId("wiki-header-actions");
+    const buttons = within(actions).getAllByRole("button");
+    expect(buttons.map((button) => button.getAttribute("data-testid"))).toEqual([
+      "wiki-download-button",
+      "wiki-move-button",
+      "wiki-version-button",
+      "wiki-upload-replace-button",
+      "wiki-edit-button"
+    ]);
+    expect(screen.getByTestId("wiki-edit-button").className).toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("wiki-upload-replace-button").className).not.toMatch(
+      /pl-btn--primary/
+    );
+    expect(screen.getByTestId("wiki-upload-replace-button").className).toMatch(/pl-btn--ghost/);
+    for (const testId of [
+      "wiki-download-button",
+      "wiki-move-button",
+      "wiki-version-button"
+    ]) {
+      expect(screen.getByTestId(testId).className).toMatch(/pl-btn--ghost/);
+      expect(screen.getByTestId(testId).className).not.toMatch(/pl-btn--primary/);
+    }
+  });
+
+  it("keeps the read view from stretching title and body tracks (UX-WIKI-036)", () => {
+    const css = readFileSync("src/app/app.css", "utf8");
+    expect(css).toMatch(/\.pl-wiki-read-view\s*\{[^}]*content-start/s);
+    expect(css).toMatch(/\.pl-wiki-read-layout\s*\{[^}]*content-start/s);
+  });
+
   it("renders title, tags and linked table badges without a visible file path", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");

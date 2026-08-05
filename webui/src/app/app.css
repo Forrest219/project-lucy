@@ -1787,8 +1787,10 @@
   .pl-wiki-library-item-title { display: none; }
   .pl-wiki-library-item-path { display: none; }
 
-  /* Read Mode: compact business document surface. */
-  .pl-wiki-read-view { @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
+  /* Read Mode: compact business document surface.
+     content-start prevents UX-WIKI-006/027-class stretch that
+     vertically spaced the title away from the body (UX-WIKI-036). */
+  .pl-wiki-read-view { @apply grid content-start gap-3 rounded-md border border-border-default bg-bg-surface p-4; }
   .pl-wiki-read-header { @apply grid gap-2; }
   .pl-wiki-read-title { @apply text-2xl font-semibold leading-tight text-fg-default; }
   .pl-wiki-read-key { @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted; }
@@ -1806,7 +1808,7 @@
   .pl-wiki-read-ref--unknown .pl-wiki-read-ref-text { @apply border-warning-strong bg-warning-soft text-warning-strong; }
 
   .pl-wiki-read-layout {
-    @apply grid gap-6;
+    @apply grid content-start gap-6;
     grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
   }
   .pl-wiki-read-layout--no-toc { grid-template-columns: minmax(0, 1fr); }
