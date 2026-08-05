@@ -155,7 +155,6 @@ export function WikiVersionHistoryDialog({
               className="pl-wiki-preflight-section pl-wiki-version-list"
               data-testid="wiki-version-list"
             >
-              <h3 className="pl-wiki-preflight-section-title">历史版本</h3>
               {isLoading ? (
                 <p className="pl-notice">正在加载版本记录...</p>
               ) : versions.length === 0 ? (

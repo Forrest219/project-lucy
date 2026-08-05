@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Wiki Version History List-First UX Spec |
 | 文档类型 | Spec |
-| 版本 | v1.2 |
+| 版本 | v1.3 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Auto |
 | 委托人 | zhangxingchen |
@@ -95,6 +95,7 @@ This feature follows `webui/docs/00-product-terminology-standard.md` and Spec 55
 - 移除 `.pl-wiki-version-layout` 双栏 grid；弹窗内容区默认只有全宽表格。
 - 弹窗宽度可维持现有 `min(1180px, 94vw)` 或略收，但不得再把列表压到半宽。
 - `.pl-wiki-version-row-actions` 必须 `flex-nowrap`，保证「查看」「恢复此版本」左右排列。
+- 列表态不再渲染小节标题「历史版本」：Dialog Title「版本记录」已表达身份，避免与单栏列表重复；`<section>` 保留 `aria-label="版本列表"`。
 
 ### 6.2 版本列与「当前」契约
 
@@ -161,3 +162,4 @@ This feature follows `webui/docs/00-product-terminology-standard.md` and Spec 55
 | v1.0 | 2026-08-05 | 初版：列表优先、业务化列、当前行收敛、全宽详情 |
 | v1.1 | 2026-08-05 | 审阅补充：`versions[0]` 当前契约、未知 operation 兜底与边界用例写入 §9.3；After 截图挂浏览器复核 |
 | v1.2 | 2026-08-05 | Spec 83：当前行操作列留空；表格基线改为 `pl-data-grid`（见 §6.3） |
+| v1.3 | 2026-08-05 | 列表态去掉冗余小节标题「历史版本」，仅保留 Dialog Title「版本记录」 |

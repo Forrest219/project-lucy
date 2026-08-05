@@ -1534,6 +1534,9 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     expect(table).toHaveTextContent("新建文档");
     expect(table).toHaveTextContent("修订 2（当前）");
     expect(table).toHaveTextContent("修订 1");
+    // List-pane section title removed — Dialog title「版本记录」is enough.
+    expect(dialog.querySelector(".pl-wiki-preflight-section-title")).toBeNull();
+    expect(within(dialog).queryByRole("heading", { name: "历史版本" })).not.toBeInTheDocument();
 
     // Newest snapshot is current: no view/restore and no redundant 当前 hint.
     expect(screen.queryByTestId("wiki-version-view-v-upload-replace")).not.toBeInTheDocument();
