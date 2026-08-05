@@ -14,7 +14,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, lstat, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { parseDocument, stringify as stringifyYaml } from "yaml";
+import { parseDocument, stringify as stringifyYaml, Scalar } from "yaml";
 import { isMap, isSeq, isScalar, type Document, type Node } from "yaml";
 
 const MAX_EXPORT_FILES = 200;
@@ -240,7 +240,7 @@ function makeScalar(value: string, original: Node | null | undefined): Node {
   // Keep the scalar type closest to the original (e.g. number → quoted string)
   // so the sanitized output reads naturally.
   void original;
-  return new (require("yaml").Scalar)(value);
+  return new Scalar(value);
 }
 
 function sanitizeKtxYaml(text: string): string {

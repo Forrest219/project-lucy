@@ -726,6 +726,23 @@
   .pl-publish-history-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-publish-history-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-publish-history-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
+  /* Spec 85: publish history — light pl-data-grid conformance (business scope + scale). */
+  .pl-publish-history-table tbody td { @apply text-xs font-medium leading-4; }
+  .pl-publish-history-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
+  .pl-publish-history-scope { @apply grid gap-0.5; }
+  .pl-publish-history-scope-primary { @apply text-xs font-medium text-fg-default; }
+  .pl-publish-history-scope-secondary { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-scope-more { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-scope-empty { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-time { @apply grid gap-0.5; }
+  .pl-publish-history-time-status { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
+  .pl-publish-history-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
+  .pl-publish-history-status { @apply inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-semibold; }
+  .pl-publish-history-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-publish-history-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-publish-history-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-publish-history-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
   /* Spec 82: usage overview dashboard tables — light pl-data-grid conformance (12px body, no workbench colgroup). */
   .pl-usage-overview-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-usage-overview-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }

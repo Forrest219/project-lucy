@@ -251,13 +251,15 @@ Example:
 
 ### 7.3 History Data Contract
 
+> **修订（Spec 85，2026-08-05）：** 发布记录表须展示序号、变更范围与规模；`POST /api/semantic-assets/export` 仅作为 Header「导出当前语义资产包 (.zip)」辅助动作，**不得**作为每行「该批次快照」入口。表格视觉与列契约见 `85-publish-history-business-columns-and-export-clarity-spec.md`。
+
 Use existing release APIs where possible:
 
 | API | Usage |
 |---|---|
 | `GET /api/semantic-assets/releases` | List release records |
 | `GET /api/semantic-assets/releases/:id/status` | Poll active release status |
-| `POST /api/semantic-assets/export` | Export current full snapshot in v0.1 |
+| `POST /api/semantic-assets/export` | Export **current** full asset package in v0.1（Header only；not per-row historical download） |
 
 If manual `强制重建索引` is triggered without a publish batch, it must create a lightweight history record or sidecar entry so `发布记录` can show the reindex result.
 

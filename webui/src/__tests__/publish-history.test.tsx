@@ -50,6 +50,7 @@ function makeFailedReindexRecord(): SemanticAssetReleaseRecord {
     createdAt: "2026-07-31T04:10:00.000Z",
     trigger: "webui_manual_reindex",
     status: "reindex_failed",
+    connectionIds: [],
     files: [],
     changedSources: [],
     diff: undefined,
@@ -131,14 +132,34 @@ describe("PublishHistory", () => {
 
   it("renders the audit table with the WebUI publish and manual reindex rows", async () => {
     renderHistory();
+    const table = await screen.findByTestId("publish-history-table");
+    expect(table).toHaveClass("pl-data-grid");
+    expect(screen.getByRole("columnheader", { name: "#" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "变更范围" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "规模" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "动作/快照" })).not.toBeInTheDocument();
+
     expect(await screen.findByText("WebUI 发布")).toBeInTheDocument();
     expect(screen.getByText("WebUI 强制重建索引")).toBeInTheDocument();
     expect(screen.getByText("成功")).toBeInTheDocument();
     expect(screen.getByText("失败")).toBeInTheDocument();
-    // Spec: 查看 Diff / 下载当前快照 / 查看错误 appear as row actions.
+
+    const serials = screen.getAllByTestId("publish-history-serial");
+    expect(serials[0]).toHaveTextContent("1");
+    expect(serials[1]).toHaveTextContent("2");
+
+    expect(screen.getByText("customer-db")).toBeInTheDocument();
+    expect(screen.getByText("international_country_metrics")).toBeInTheDocument();
+    expect(screen.getByText(/文件 1 · 语义源 1/)).toBeInTheDocument();
+    expect(screen.getByText("全库索引重建（无资产变更）")).toBeInTheDocument();
+
     expect(screen.getByRole("button", { name: "查看 Diff" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "下载当前快照" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "查看错误" })).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: "下载当前快照" })).toHaveLength(0);
+    expect(
+      screen.getByRole("button", { name: "导出当前语义资产包 (.zip)" })
+    ).toBeInTheDocument();
   });
 
   it("expands the diff panel when 查看 Diff is clicked", async () => {
