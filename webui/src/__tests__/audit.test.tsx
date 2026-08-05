@@ -111,4 +111,64 @@ describe("Audit", () => {
     expect(document.body).not.toHaveTextContent("password=leaked");
     expect(document.body).not.toHaveTextContent("stack trace line");
   });
+
+  it("exposes 调用来源 filter and requests callSource=playground with protocol calls", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [] } }));
+      }
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+            }
+          })
+        );
+      }
+      if (url.startsWith("/api/admin/audit")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 1,
+              summary: { businessCalls: 0, protocolCalls: 1, deniedCalls: 0, dataBearingCalls: 0 },
+              entries: [
+                {
+                  id: 9,
+                  ts: "2026-06-20T00:00:00.000Z",
+                  userId: "zhangsan",
+                  lucyPlatform: "mcp-playground",
+                  tool: "tools/list",
+                  outcome: "ok",
+                  durationMs: 4,
+                  requestId: "pg-1",
+                  decisionReason: "allowed"
+                }
+              ]
+            }
+          })
+        );
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAudit();
+    fireEvent.click(await screen.findByRole("tab", { name: "调用流水" }));
+    const sourceFilter = await screen.findByTestId("audit-call-source-filter");
+    fireEvent.change(sourceFilter, { target: { value: "playground" } });
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.map((c) => String(c[0])).find((u) => u.includes("callSource=playground"));
+      expect(call).toBeTruthy();
+      expect(call).toContain("includeProtocol=true");
+    });
+    expect(await screen.findByTestId("audit-call-source-playground-9")).toHaveTextContent("受控试调");
+    expect(screen.getByRole("columnheader", { name: "调用来源" })).toBeInTheDocument();
+  });
 });

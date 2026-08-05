@@ -239,6 +239,7 @@ export function McpPlayground() {
             <p className="pl-notice text-sm">
               受控试调仅允许 <span className="notranslate" translate="no">tools/list</span>；
               <span className="notranslate" translate="no">Token</span> 仅保存在本次会话，不会落盘。
+              请求会写入访问日志，并标记为受控试调。
             </p>
             <label className="grid gap-1.5 text-sm">
               <span className="notranslate" translate="no">Bearer Token</span>

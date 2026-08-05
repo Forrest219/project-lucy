@@ -15,6 +15,7 @@ import {
 } from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns } from "../proxy/audit.js";
+import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
 import {
   ensureTraceEvidenceSchema,
   listTraceEvents,
@@ -65,6 +66,79 @@ const ACCESS_LOG_COLUMNS = [
 ] as const;
 const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+
+type AccessLogFilterQuery = {
+  user?: string;
+  tool?: string;
+  outcome?: string;
+  since?: string;
+  until?: string;
+  tableSearch?: string;
+  sessionId?: string;
+  turnId?: string;
+  /** Spec 106: fuzzy match on access_log.id (CAST AS TEXT). */
+  eventId?: string;
+  /** Spec 106: shared key box — matches event id OR lucy_turn_id. */
+  key?: string;
+  platform?: string;
+  callSource?: string;
+  includeProtocol?: string;
+};
+
+function buildAccessLogFilter(q: AccessLogFilterQuery): {
+  conditions: string[];
+  baseConditions: string[];
+  params: Record<string, string | null>;
+  includeProtocol: boolean;
+} {
+  const params: Record<string, string | null> = {
+    user: q.user ?? null,
+    tool: q.tool ?? null,
+    outcome: q.outcome ?? null,
+    since: q.since ?? null,
+    until: q.until ?? null,
+    tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
+    sessionId: q.sessionId ?? null,
+    turnId: q.turnId ? `%${q.turnId}%` : null,
+    eventId: q.eventId ? `%${q.eventId}%` : null,
+    key: q.key ? `%${q.key}%` : null,
+    platform: q.platform ?? null,
+    playgroundPlatform: MCP_PLAYGROUND_PLATFORM
+  };
+
+  const baseConditions: string[] = [];
+  if (params.user) baseConditions.push("user_id = @user");
+  if (params.tool) baseConditions.push("tool = @tool");
+  if (params.outcome) baseConditions.push("outcome = @outcome");
+  if (params.since) baseConditions.push("ts >= @since");
+  if (params.until) baseConditions.push("ts <= @until");
+  if (params.tableSearch) baseConditions.push("tables LIKE @tableSearch");
+  if (params.sessionId) baseConditions.push("lucy_session_id = @sessionId");
+  if (params.key) {
+    baseConditions.push("(CAST(id AS TEXT) LIKE @key OR IFNULL(lucy_turn_id, '') LIKE @key)");
+  } else {
+    if (params.turnId) baseConditions.push("lucy_turn_id LIKE @turnId");
+    if (params.eventId) baseConditions.push("CAST(id AS TEXT) LIKE @eventId");
+  }
+
+  const callSource = q.callSource?.trim() ?? "";
+  if (callSource === "playground") {
+    params.platform = MCP_PLAYGROUND_PLATFORM;
+    baseConditions.push("lucy_platform = @platform");
+  } else if (callSource === "agent") {
+    baseConditions.push("(lucy_platform IS NULL OR lucy_platform != @playgroundPlatform)");
+    if (params.platform) baseConditions.push("lucy_platform = @platform");
+  } else if (params.platform) {
+    baseConditions.push("lucy_platform = @platform");
+  }
+
+  const includeProtocol = q.includeProtocol === "true" || callSource === "playground";
+  const conditions = [...baseConditions];
+  if (!includeProtocol) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+
+  return { conditions, baseConditions, params, includeProtocol };
+}
+
 // lucy_begin_question is the report call that *starts* a reported turn, not a linked business call.
 const NON_LINKED_CALL_TOOL_LIST = [...PROTOCOL_TOOLS, "lucy_begin_question"].map((tool) => `'${tool}'`).join(", ");
 const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
@@ -792,17 +866,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
   // GET /api/admin/audit
   app.get<{
-    Querystring: {
-      user?: string;
-      tool?: string;
-      outcome?: string;
-      since?: string;
-      until?: string;
-      tableSearch?: string;
-      sessionId?: string;
-      turnId?: string;
-      platform?: string;
-      includeProtocol?: string;
+    Querystring: AccessLogFilterQuery & {
       limit?: string;
       offset?: string;
     };
@@ -812,33 +876,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const offset = parseInt(q.offset ?? "0", 10) || 0;
 
     const database = await getAuditDb();
-
-    const baseConditions: string[] = [];
-    const params: Record<string, string | null> = {
-      user: q.user ?? null,
-      tool: q.tool ?? null,
-      outcome: q.outcome ?? null,
-      since: q.since ?? null,
-      until: q.until ?? null,
-      tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
-      sessionId: q.sessionId ?? null,
-      turnId: q.turnId ?? null,
-      platform: q.platform ?? null
-    };
-
-    if (params.user) baseConditions.push("user_id = @user");
-    if (params.tool) baseConditions.push("tool = @tool");
-    if (params.outcome) baseConditions.push("outcome = @outcome");
-    if (params.since) baseConditions.push("ts >= @since");
-    if (params.until) baseConditions.push("ts <= @until");
-    if (params.tableSearch) baseConditions.push("tables LIKE @tableSearch");
-    if (params.sessionId) baseConditions.push("lucy_session_id = @sessionId");
-    if (params.turnId) baseConditions.push("lucy_turn_id = @turnId");
-    if (params.platform) baseConditions.push("lucy_platform = @platform");
-
-    const includeProtocol = q.includeProtocol === "true";
-    const conditions = [...baseConditions];
-    if (!includeProtocol) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+    const { conditions, baseConditions, params } = buildAccessLogFilter(q);
     const baseWhere = baseConditions.length > 0 ? `WHERE ${baseConditions.join(" AND ")}` : "";
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
@@ -904,45 +942,11 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
   // GET /api/admin/audit/export
   app.get<{
-    Querystring: {
-      user?: string;
-      tool?: string;
-      outcome?: string;
-      since?: string;
-      until?: string;
-      tableSearch?: string;
-      sessionId?: string;
-      turnId?: string;
-      platform?: string;
-      includeProtocol?: string;
-    };
+    Querystring: AccessLogFilterQuery;
   }>("/api/admin/audit/export", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
-
-    const conditions: string[] = [];
-    const params: Record<string, string | null> = {
-      user: q.user ?? null,
-      tool: q.tool ?? null,
-      outcome: q.outcome ?? null,
-      since: q.since ?? null,
-      until: q.until ?? null,
-      tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
-      sessionId: q.sessionId ?? null,
-      turnId: q.turnId ?? null,
-      platform: q.platform ?? null
-    };
-
-    if (params.user) conditions.push("user_id = @user");
-    if (params.tool) conditions.push("tool = @tool");
-    if (params.outcome) conditions.push("outcome = @outcome");
-    if (params.since) conditions.push("ts >= @since");
-    if (params.until) conditions.push("ts <= @until");
-    if (params.tableSearch) conditions.push("tables LIKE @tableSearch");
-    if (params.sessionId) conditions.push("lucy_session_id = @sessionId");
-    if (params.turnId) conditions.push("lucy_turn_id = @turnId");
-    if (params.platform) conditions.push("lucy_platform = @platform");
-    if (q.includeProtocol !== "true") conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+    const { conditions, params } = buildAccessLogFilter(q);
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const rows = database
@@ -1031,6 +1035,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
       since?: string;
       until?: string;
       source?: string;
+      turnId?: string;
+      tableSearch?: string;
+      outcome?: string;
+      q?: string;
       lookbackHours?: string;
       hours?: string;
       limit?: string;
@@ -1043,6 +1051,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const offset = parseInt(q.offset ?? "0", 10) || 0;
     const windowHours = parseWindowHours(q.hours);
     const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : windowHours;
+    const turnIdNeedle = (q.turnId ?? "").trim().toLowerCase();
+    const tableNeedle = (q.tableSearch ?? "").trim().toLowerCase();
+    const summaryNeedle = (q.q ?? "").trim().toLowerCase();
+    const outcomeFilter = q.outcome === "ok" || q.outcome === "error" || q.outcome === "denied" ? q.outcome : "";
 
     const database = await getAuditDb();
     const p95Ms = queryP95LatencyMs(database, windowHours);
@@ -1153,8 +1165,34 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
 
     entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
-    const total = entries.length;
-    const paged = entries.slice(offset, offset + limit);
+
+    const filtered = entries.filter((entry) => {
+      if (turnIdNeedle && !entry.id.toLowerCase().includes(turnIdNeedle)) return false;
+      if (tableNeedle) {
+        const hay = entry.sources.map((s) => s.physicalTable).join(" ").toLowerCase();
+        if (!hay.includes(tableNeedle)) return false;
+      }
+      if (summaryNeedle) {
+        const hay = [entry.questionSummary, entry.questionPreview, entry.userId, entry.sources.map((s) => s.physicalTable).join(" ")]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(summaryNeedle)) return false;
+      }
+      if (outcomeFilter === "ok") {
+        const denied = entry.outcomeSummary?.denied ?? 0;
+        const errors = entry.outcomeSummary?.error ?? 0;
+        if (denied > 0 || errors > 0) return false;
+      } else if (outcomeFilter === "denied") {
+        if ((entry.outcomeSummary?.denied ?? 0) <= 0) return false;
+      } else if (outcomeFilter === "error") {
+        if ((entry.outcomeSummary?.error ?? 0) <= 0) return false;
+      }
+      return true;
+    });
+
+    const total = filtered.length;
+    const paged = filtered.slice(offset, offset + limit);
     const slowCallsInFilter = countSlowCallsForFilter(database, q.since ?? sinceDefault, p95Ms, q.user ?? null);
     const totalCallsRow = database
       .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ts >= ?`)

@@ -464,6 +464,7 @@ function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "ar
 }
 type AuditTab = "turns" | "calls";
 type WindowHours = 24 | 168;
+type RangePreset = "24h" | "7d";
 
 function formatDurationMs(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
@@ -483,8 +484,24 @@ function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
   return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
-function parseWindowHours(raw: string | null): WindowHours {
-  return raw === "24" ? 24 : 168;
+/** Spec 106: prefer `range=24h|7d`; accept legacy `hours=24|168`. */
+function parseRangePreset(searchParams: URLSearchParams): RangePreset {
+  const range = searchParams.get("range");
+  if (range === "24h" || range === "7d") return range;
+  const hours = searchParams.get("hours");
+  return hours === "24" ? "24h" : "7d";
+}
+
+function rangeToHours(range: RangePreset): WindowHours {
+  return range === "24h" ? 24 : 168;
+}
+
+/** Spec 106: prefer `view=turns|calls`; accept legacy `tab=`. */
+function parseAuditView(searchParams: URLSearchParams): AuditTab {
+  const view = searchParams.get("view");
+  if (view === "calls" || view === "turns") return view;
+  const tab = searchParams.get("tab");
+  return tab === "calls" ? "calls" : "turns";
 }
 
 function sinceIsoFromHours(hours: WindowHours): string {
@@ -512,6 +529,25 @@ function resolveAgentFilterParam(input: string, agents: Agent[]): string {
   );
   if (partial.length === 1) return partial[0].id;
   return input.trim();
+}
+
+function CopyableId({ value, testId, label }: { value: string; testId: string; label: string }) {
+  return (
+    <button
+      type="button"
+      className="pl-audit-id-copy notranslate font-mono text-xs text-fg-body"
+      translate="no"
+      title={`复制${label}`}
+      aria-label={`复制${label} ${value}`}
+      data-testid={testId}
+      onClick={(event) => {
+        event.stopPropagation();
+        void navigator.clipboard?.writeText(value);
+      }}
+    >
+      {value}
+    </button>
+  );
 }
 
 function formatTablesCell(sources: AuditTurnEntry["sources"], max = 2): string {
@@ -606,7 +642,7 @@ function TurnDetailDrawer({
                   <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-turn-calls-table">
                     <thead>
                       <tr>
-                        <th className="w-12">序号</th>
+                        <th className="w-14 whitespace-nowrap">序号</th>
                         <th>时间</th>
                         <th>数据库连接</th>
                         <th>涉及数据表</th>
@@ -676,8 +712,30 @@ function TurnDetailDrawer({
  * and see what they were investigating, but URL params still drive the
  * shareable surface.
  */
-const AUDIT_FILTER_STORAGE_KEY = "lucy:webui:audit:filters:v2";
-const FILTER_PERSIST_FIELDS = ["tab", "hours", "user", "tool", "outcome", "tableSearch", "sessionId", "turnId", "platform", "turnSource"] as const;
+const AUDIT_FILTER_STORAGE_KEY = "lucy:webui:audit:filters:v3";
+const FILTER_PERSIST_FIELDS = [
+  "view",
+  "range",
+  "user",
+  "tool",
+  "outcome",
+  "tableSearch",
+  "key",
+  "sessionId",
+  "turnId",
+  "platform",
+  "turnSource",
+  "callSource"
+] as const;
+/** Reserved lucy_platform value for MCP 调试台受控试调 (must match server MCP_PLAYGROUND_PLATFORM). */
+const MCP_PLAYGROUND_PLATFORM = "mcp-playground";
+
+function formatCallOriginLabel(platform: string | undefined): { kind: "playground" | "agent"; label: string } {
+  if (platform === MCP_PLAYGROUND_PLATFORM) {
+    return { kind: "playground", label: "受控试调" };
+  }
+  return { kind: "agent", label: "Agent 接入调用" };
+}
 type FilterSnapshot = Partial<Record<(typeof FILTER_PERSIST_FIELDS)[number], string>>;
 
 function readFilterSnapshot(): FilterSnapshot {
@@ -732,17 +790,50 @@ function redactErrorDetail(detail: string) {
   return firstLine.replace(SENSITIVE_PAIR, "$1=[REDACTED]");
 }
 
-function EntryRow({ entry }: { entry: AuditLogEntry }) {
+function EntryRow({
+  entry,
+  index,
+  agentNameById,
+  onOpenTurn
+}: {
+  entry: AuditLogEntry;
+  index: number;
+  agentNameById: Map<string, string>;
+  onOpenTurn: (turnId: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const outcomeClass =
     entry.outcome === "ok" ? "pl-status-done" : entry.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed";
   const redactedArgs = entry.argsSummary ? redactValue(entry.argsSummary) : null;
+  const callOrigin = formatCallOriginLabel(entry.lucyPlatform);
 
   return (
     <>
       <tr className="pl-audit-row" onClick={() => setExpanded(!expanded)}>
+        <td className="pl-audit-table-num">{index}</td>
+        <td className="pl-audit-table-mono whitespace-nowrap">
+          <CopyableId value={String(entry.id)} testId={`audit-event-id-${entry.id}`} label="事件 ID" />
+        </td>
+        <td className="pl-audit-table-mono whitespace-nowrap">
+          {entry.lucyTurnId ? (
+            <button
+              type="button"
+              className="pl-inline-link notranslate font-mono text-xs"
+              translate="no"
+              data-testid={`audit-call-turn-id-${entry.id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenTurn(entry.lucyTurnId!);
+              }}
+            >
+              {entry.lucyTurnId}
+            </button>
+          ) : (
+            <span className="text-fg-muted">—</span>
+          )}
+        </td>
         <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.ts)}</td>
-        <td>{entry.userId}</td>
+        <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
         <td className="pl-audit-table-mono">{entry.tool}</td>
         <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
         <td className="pl-audit-table-muted">
@@ -761,6 +852,17 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
         </td>
         <td>
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
+        </td>
+        <td>
+          {callOrigin.kind === "playground" ? (
+            <span className="pl-status-badge pl-status-partial" data-testid={`audit-call-source-playground-${entry.id}`}>
+              {callOrigin.label}
+            </span>
+          ) : (
+            <span className="text-fg-muted notranslate" translate="no" data-testid={`audit-call-source-agent-${entry.id}`}>
+              {callOrigin.label}
+            </span>
+          )}
         </td>
         <td className="pl-audit-table-muted">
           <div className="flex flex-wrap items-center gap-2">
@@ -781,7 +883,7 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
-          <td colSpan={7} className="px-3 py-3 text-xs">
+          <td colSpan={11} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-grid">
               <div>
                 <span className="font-medium">关联 <span className="notranslate" translate="no">Agent</span>：</span>
@@ -871,7 +973,16 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
                 <div>
                   <span className="font-medium">关联会话：</span>
                   <span className="ml-2 text-fg-muted">
-                    {entry.lucyPlatform ? `${entry.lucyPlatform} · ` : ""}
+                    {entry.lucyPlatform ? (
+                      <>
+                        <span className={entry.lucyPlatform === MCP_PLAYGROUND_PLATFORM ? undefined : "notranslate"} translate={entry.lucyPlatform === MCP_PLAYGROUND_PLATFORM ? undefined : "no"}>
+                          {entry.lucyPlatform === MCP_PLAYGROUND_PLATFORM
+                            ? formatCallOriginLabel(entry.lucyPlatform).label
+                            : entry.lucyPlatform}
+                        </span>
+                        {" · "}
+                      </>
+                    ) : null}
                     {entry.lucySessionId ? <span className="font-mono">{entry.lucySessionId}</span> : "—"}
                     {entry.lucyTurnId ? <span className="font-mono"> / {entry.lucyTurnId}</span> : ""}
                   </span>
@@ -914,21 +1025,23 @@ export function Audit() {
   const [selectedTurnId, setSelectedTurnId] = useState<string | null>(searchParams.get("turnId"));
   const [turnDrawerOpen, setTurnDrawerOpen] = useState(Boolean(searchParams.get("turnId")));
   const [now, setNow] = useState(() => new Date());
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
-  const turnIdFilter = searchParams.get("turnIdFilter") ?? "";
+  const keySearch = searchParams.get("key") ?? searchParams.get("turnIdFilter") ?? "";
   const platform = searchParams.get("platform") ?? "";
+  const callSource = searchParams.get("callSource") ?? "";
   const turnSource = searchParams.get("turnSource") ?? "";
   const turnSearch = searchParams.get("turnSearch") ?? "";
-  const includeProtocol = searchParams.get("includeProtocol") === "true";
+  const includeProtocol = searchParams.get("includeProtocol") === "true" || callSource === "playground";
   const slowOnly = searchParams.get("slowOnly") === "1";
-  const tabParam = searchParams.get("tab");
-  const tab: AuditTab = tabParam === "calls" ? "calls" : "turns";
-  const hours = parseWindowHours(searchParams.get("hours"));
+  const tab = parseAuditView(searchParams);
+  const range = parseRangePreset(searchParams);
+  const hours = rangeToHours(range);
 
   useEffect(() => {
     if (hasHydratedFromStorage) return;
@@ -946,6 +1059,11 @@ export function Audit() {
       const value = snapshot[field];
       if (value) next.set(field, value);
     }
+    // Migrate legacy snapshot keys
+    const legacy = snapshot as Record<string, string>;
+    if (legacy.tab && !next.get("view")) next.set("view", legacy.tab);
+    if (legacy.hours === "24") next.set("range", "24h");
+    else if (legacy.hours === "168") next.set("range", "7d");
     setSearchParams(next, { replace: true });
     setHasHydratedFromStorage(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -969,6 +1087,10 @@ export function Audit() {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
+    // Drop legacy aliases when writing canonical keys
+    if (key === "view") next.delete("tab");
+    if (key === "range") next.delete("hours");
+    if (key === "key") next.delete("turnIdFilter");
     setSearchParams(next);
     setPage(0);
     if ((FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) {
@@ -979,8 +1101,23 @@ export function Audit() {
     }
   }
 
-  function setHours(nextHours: WindowHours) {
-    updateParam("hours", String(nextHours));
+  function setCallSource(nextSource: string) {
+    const next = new URLSearchParams(searchParams);
+    if (nextSource) next.set("callSource", nextSource);
+    else next.delete("callSource");
+    if (nextSource === "playground") next.set("includeProtocol", "true");
+    else next.delete("includeProtocol");
+    setSearchParams(next);
+    setPage(0);
+    const snapshot = readFilterSnapshot();
+    if (nextSource) snapshot.callSource = nextSource;
+    else delete snapshot.callSource;
+    writeFilterSnapshot(snapshot);
+  }
+
+  function setRange(nextRange: RangePreset) {
+    setUntil("");
+    updateParam("range", nextRange);
   }
 
   function openTurnDrawer(turnId: string) {
@@ -989,6 +1126,16 @@ export function Audit() {
     const next = new URLSearchParams(searchParams);
     next.set("turnId", turnId);
     setSearchParams(next);
+  }
+
+  function handleTurnDrawerOpenChange(open: boolean) {
+    setTurnDrawerOpen(open);
+    if (!open) {
+      setSelectedTurnId(null);
+      const next = new URLSearchParams(searchParams);
+      next.delete("turnId");
+      setSearchParams(next, { replace: true });
+    }
   }
 
   const agentsQuery = useQuery({
@@ -1011,6 +1158,12 @@ export function Audit() {
     user: resolvedUserFilter || undefined,
     source: turnSource === "inferred" || turnSource === "reported" ? turnSource : "all",
     hours,
+    since: since || undefined,
+    until: until || undefined,
+    tableSearch: tableSearch || undefined,
+    turnId: keySearch || undefined,
+    outcome: outcome || undefined,
+    q: turnSearch || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
   });
@@ -1022,15 +1175,16 @@ export function Audit() {
   });
 
   const callsQueryStr = buildQuery({
-    user: user || undefined,
+    user: resolvedUserFilter || user || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
     since: since || undefined,
     until: until || undefined,
     tableSearch: tableSearch || undefined,
     sessionId: sessionId || undefined,
-    turnId: turnIdFilter || undefined,
+    key: keySearch || undefined,
     platform: platform || undefined,
+    callSource: callSource || undefined,
     includeProtocol,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
@@ -1051,7 +1205,6 @@ export function Audit() {
     let rows = turnEntries;
     const agentNeedle = user.trim().toLowerCase();
     if (agentNeedle && resolvedUserFilter === user.trim()) {
-      // Unresolved / multi-match: keep rows whose id or display name contains needle.
       rows = rows.filter((entry) => {
         const name = agentNameById.get(entry.userId) ?? "";
         return (
@@ -1060,22 +1213,8 @@ export function Audit() {
         );
       });
     }
-    if (!turnSearch.trim()) return rows;
-    const needle = turnSearch.trim().toLowerCase();
-    return rows.filter((entry) => {
-      const haystack = [
-        entry.userId,
-        agentNameById.get(entry.userId),
-        entry.questionSummary,
-        entry.questionPreview,
-        entry.sources.map((s) => s.physicalTable).join(" ")
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(needle);
-    });
-  }, [turnEntries, turnSearch, user, resolvedUserFilter, agentNameById]);
+    return rows;
+  }, [turnEntries, user, resolvedUserFilter, agentNameById]);
 
   const callEntries = (callsQuery.data?.entries ?? []).filter((entry) => {
     if (!slowOnly || p95Ms <= 0) return true;
@@ -1089,22 +1228,25 @@ export function Audit() {
   const statsTimeLabel = formatStatsTimeLabel(statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null, now);
 
   const exportUrl = `/api/admin/audit/export${buildQuery({
-    user: user || undefined,
+    user: resolvedUserFilter || user || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
     since: since || undefined,
     until: until || undefined,
     tableSearch: tableSearch || undefined,
     sessionId: sessionId || undefined,
-    turnId: turnIdFilter || undefined,
+    key: keySearch || undefined,
     platform: platform || undefined,
+    callSource: callSource || undefined,
     includeProtocol
   })}`;
 
   const tabLink = (nextTab: AuditTab) => {
     const next = new URLSearchParams(searchParams);
-    if (nextTab === "turns") next.delete("tab");
-    else next.set("tab", nextTab);
+    next.delete("tab");
+    if (nextTab === "turns") next.delete("view");
+    else next.set("view", nextTab);
+    if (!next.get("range") && !next.get("hours")) next.set("range", range);
     const qs = next.toString();
     return qs ? `/admin/audit?${qs}` : "/admin/audit";
   };
@@ -1127,24 +1269,28 @@ export function Audit() {
             >
               <button
                 type="button"
-                className={hours === 24 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
-                onClick={() => setHours(24)}
+                className={range === "24h" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                onClick={() => setRange("24h")}
               >
                 24 小时
               </button>
               <button
                 type="button"
-                className={hours === 168 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
-                onClick={() => setHours(168)}
+                className={range === "7d" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                onClick={() => setRange("7d")}
               >
                 7 天
               </button>
             </div>
-            {tab === "calls" ? (
-              <a href={exportUrl} download className="pl-btn pl-btn--primary text-sm" data-testid="audit-export-csv">
-                导出 CSV
-              </a>
-            ) : null}
+            <a
+              href={exportUrl}
+              download
+              className="pl-btn pl-btn--primary text-sm"
+              data-testid="audit-export-csv"
+              title="导出当前筛选下的调用流水 CSV"
+            >
+              导出 CSV
+            </a>
           </div>
         }
       />
@@ -1183,51 +1329,129 @@ export function Audit() {
         </Link>
       </div>
 
-      {tab === "turns" ? (
-        <div className="pl-admin-filterbar">
+      <div className="pl-admin-filterbar" data-testid="audit-shared-filters">
+        <input
+          className="pl-input w-44 notranslate"
+          translate="no"
+          placeholder="Agent 名称或 ID"
+          aria-label="按 Agent 名称或 ID 筛选"
+          value={user}
+          onChange={(e) => updateParam("user", e.target.value)}
+        />
+        <input
+          className="pl-input w-44"
+          type="datetime-local"
+          aria-label="开始时间"
+          value={since}
+          onChange={(e) => {
+            setSince(e.target.value);
+            setPage(0);
+          }}
+        />
+        <span className="text-fg-muted self-center">—</span>
+        <input
+          className="pl-input w-44"
+          type="datetime-local"
+          aria-label="结束时间"
+          value={until}
+          onChange={(e) => {
+            setUntil(e.target.value);
+            setPage(0);
+          }}
+        />
+        <input
+          className="pl-input w-40 notranslate"
+          translate="no"
+          placeholder="表名"
+          aria-label="按表名筛选"
+          value={tableSearch}
+          onChange={(e) => updateParam("tableSearch", e.target.value)}
+        />
+        <select
+          className="pl-input w-28"
+          aria-label="结果状态"
+          value={outcome}
+          onChange={(e) => updateParam("outcome", e.target.value)}
+        >
+          <option value="">全部状态</option>
+          <option value="ok">成功</option>
+          <option value="error">错误</option>
+          <option value="denied">拒绝</option>
+        </select>
+        <input
+          className="pl-input w-44 notranslate"
+          translate="no"
+          placeholder={tab === "turns" ? "问询 ID" : "事件 ID / 问询 ID"}
+          aria-label="按 Key 模糊搜索"
+          data-testid="audit-key-search"
+          value={keySearch}
+          onChange={(e) => updateParam("key", e.target.value)}
+        />
+        {tab === "turns" ? (
+          <>
+            <select
+              className="pl-input w-40"
+              value={turnSource}
+              title={TURN_SOURCE_FILTER_TITLE}
+              aria-label="来源类型"
+              onChange={(e) => updateParam("turnSource", e.target.value)}
+            >
+              <option value="">全部</option>
+              <option value="reported">用户原始问询</option>
+              <option value="inferred">系统推断问询</option>
+            </select>
+            <input
+              className="pl-input flex-1 min-w-[12rem]"
+              placeholder="搜索摘要"
+              value={turnSearch}
+              onChange={(e) => updateParam("turnSearch", e.target.value)}
+            />
+          </>
+        ) : (
+          <>
+            <select
+              className="pl-input w-44"
+              value={callSource}
+              aria-label="调用来源"
+              data-testid="audit-call-source-filter"
+              onChange={(e) => setCallSource(e.target.value)}
+            >
+              <option value="">全部</option>
+              <option value="playground" className="notranslate" translate="no">
+                MCP 调试台受控试调
+              </option>
+              <option value="agent" className="notranslate" translate="no">
+                Agent 接入调用
+              </option>
+            </select>
+            <input
+              className="pl-input w-36 notranslate"
+              translate="no"
+              placeholder="工具名"
+              value={tool}
+              onChange={(e) => updateParam("tool", e.target.value)}
+            />
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-sm"
+              data-testid="audit-advanced-filters-toggle"
+              onClick={() => setAdvancedOpen((v) => !v)}
+            >
+              {advancedOpen ? "收起高级" : "高级筛选"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {tab === "calls" && advancedOpen ? (
+        <div className="pl-admin-filterbar" data-testid="audit-advanced-filters">
           <input
-            className="pl-input w-44 notranslate"
+            className="pl-input w-40 notranslate"
             translate="no"
-            placeholder="Agent 名称或 ID"
-            aria-label="按 Agent 名称或 ID 筛选"
-            value={user}
-            onChange={(e) => updateParam("user", e.target.value)}
+            placeholder="Session ID"
+            value={sessionId}
+            onChange={(e) => updateParam("sessionId", e.target.value)}
           />
-          <select
-            className="pl-input w-40"
-            value={turnSource}
-            title={TURN_SOURCE_FILTER_TITLE}
-            aria-label="来源类型"
-            onChange={(e) => updateParam("turnSource", e.target.value)}
-          >
-            <option value="">全部</option>
-            <option value="reported">用户原始问询</option>
-            <option value="inferred">系统推断问询</option>
-          </select>
-          <input
-            className="pl-input flex-1 min-w-[12rem]"
-            placeholder="搜索摘要 / 表名"
-            value={turnSearch}
-            onChange={(e) => updateParam("turnSearch", e.target.value)}
-          />
-        </div>
-      ) : (
-        <div className="pl-admin-filterbar">
-          <input className="pl-input w-36" placeholder="用户 ID" value={user} onChange={(e) => updateParam("user", e.target.value)} />
-          <input className="pl-input w-36" placeholder="工具名" value={tool} onChange={(e) => updateParam("tool", e.target.value)} />
-          <select className="pl-input w-28" value={outcome} onChange={(e) => updateParam("outcome", e.target.value)}>
-            <option value="">全部状态</option>
-            <option value="ok">成功</option>
-            <option value="error">错误</option>
-            <option value="denied">拒绝</option>
-          </select>
-          <input className="pl-input w-44" type="datetime-local" value={since} onChange={(e) => { setSince(e.target.value); setPage(0); }} />
-          <span className="text-fg-muted self-center">—</span>
-          <input className="pl-input w-44" type="datetime-local" value={until} onChange={(e) => { setUntil(e.target.value); setPage(0); }} />
-          <input className="pl-input w-40" placeholder="搜索表名" value={tableSearch} onChange={(e) => updateParam("tableSearch", e.target.value)} />
-          <input className="pl-input w-40" placeholder="Session ID" value={sessionId} onChange={(e) => updateParam("sessionId", e.target.value)} />
-          <input className="pl-input w-36" placeholder="Turn ID" value={turnIdFilter} onChange={(e) => updateParam("turnIdFilter", e.target.value)} />
-          <input className="pl-input w-32" placeholder="平台" value={platform} onChange={(e) => updateParam("platform", e.target.value)} />
           <label className="flex items-center gap-2 text-sm text-fg-muted">
             <input type="checkbox" checked={includeProtocol} onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")} />
             显示协议调用
@@ -1237,7 +1461,7 @@ export function Audit() {
             仅慢于多数请求
           </label>
         </div>
-      )}
+      ) : null}
 
       {tab === "turns" && (turnsQuery.isLoading ? (
         <div className="pl-notice">加载中…</div>
@@ -1252,7 +1476,8 @@ export function Audit() {
             <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-turns-table">
               <thead>
                 <tr>
-                  <th className="w-12">序号</th>
+                  <th className="w-14 whitespace-nowrap">序号</th>
+                  <th className="whitespace-nowrap">问询 ID</th>
                   <th>开始时间</th>
                   <th>结束时间</th>
                   <th>问询时长</th>
@@ -1267,7 +1492,7 @@ export function Audit() {
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={11} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
                     const denied = entry.outcomeSummary?.denied ?? 0;
@@ -1280,6 +1505,9 @@ export function Audit() {
                         onClick={() => openTurnDrawer(entry.id)}
                       >
                         <td className="pl-audit-table-num">{page * PAGE_SIZE + index + 1}</td>
+                        <td className="pl-audit-table-mono whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
+                        </td>
                         <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.startedAt)}</td>
                         <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.endedAt)}</td>
                         <td>
@@ -1330,20 +1558,32 @@ export function Audit() {
             <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-calls-table">
               <thead>
                 <tr>
+                  <th className="w-14 whitespace-nowrap">序号</th>
+                  <th className="whitespace-nowrap">事件 ID</th>
+                  <th className="whitespace-nowrap">问询 ID</th>
                   <th>时间</th>
-                  <th>用户</th>
+                  <th><span className="notranslate" translate="no">Agent</span></th>
                   <th>工具</th>
                   <th>表</th>
                   <th>裁决原因</th>
                   <th>状态</th>
+                  <th>调用来源</th>
                   <th>耗时</th>
                 </tr>
               </thead>
               <tbody>
                 {callEntries.length === 0 ? (
-                  <tr><td colSpan={7} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  <tr><td colSpan={11} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
-                  callEntries.map((entry) => <EntryRow key={entry.id} entry={entry} />)
+                  callEntries.map((entry, index) => (
+                    <EntryRow
+                      key={entry.id}
+                      entry={entry}
+                      index={page * PAGE_SIZE + index + 1}
+                      agentNameById={agentNameById}
+                      onOpenTurn={openTurnDrawer}
+                    />
+                  ))
                 )}
               </tbody>
             </table>
@@ -1367,7 +1607,7 @@ export function Audit() {
         turnId={selectedTurnId}
         hours={hours}
         open={turnDrawerOpen}
-        onOpenChange={setTurnDrawerOpen}
+        onOpenChange={handleTurnDrawerOpenChange}
         agentNameById={agentNameById}
       />
     </div>

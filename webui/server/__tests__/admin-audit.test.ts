@@ -173,6 +173,64 @@ describe("GET /api/admin/audit", () => {
     }
   });
 
+  it("filters callSource=playground (auto includeProtocol) vs callSource=agent", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    await writeLog({
+      ts: "2026-06-21T10:00:00.000Z",
+      userId: "zhangsan",
+      tool: "tools/list",
+      lucyPlatform: "mcp-playground",
+      outcome: "ok",
+      durationMs: 5,
+      requestId: "playground-1",
+      decisionReason: "allowed"
+    });
+    await writeLog({
+      ts: "2026-06-21T10:01:00.000Z",
+      userId: "zhangsan",
+      tool: "lucy_query",
+      lucyPlatform: "telegram",
+      outcome: "ok",
+      durationMs: 20,
+      requestId: "agent-1",
+      decisionReason: "allowed"
+    });
+    await writeLog({
+      ts: "2026-06-21T10:02:00.000Z",
+      userId: "zhangsan",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 18,
+      requestId: "agent-2",
+      decisionReason: "allowed"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const defaultList = await request(app.server).get("/api/admin/audit?limit=20").expect(200);
+      expect(defaultList.body.data.entries.map((e: { requestId: string }) => e.requestId)).not.toContain("playground-1");
+
+      const playground = await request(app.server).get("/api/admin/audit?callSource=playground&limit=20").expect(200);
+      expect(playground.body.data.total).toBe(1);
+      expect(playground.body.data.entries[0].requestId).toBe("playground-1");
+      expect(playground.body.data.entries[0].lucyPlatform).toBe("mcp-playground");
+
+      const agentOnly = await request(app.server).get("/api/admin/audit?callSource=agent&limit=20").expect(200);
+      const agentIds = agentOnly.body.data.entries.map((e: { requestId: string }) => e.requestId);
+      expect(agentIds).toContain("agent-1");
+      expect(agentIds).toContain("agent-2");
+      expect(agentIds).not.toContain("playground-1");
+
+      const exportPlayground = await request(app.server).get("/api/admin/audit/export?callSource=playground").expect(200);
+      expect(exportPlayground.text).toContain("playground-1");
+      expect(exportPlayground.text).not.toContain("agent-1");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("lists config changes with single-admin actor notice", async () => {
     const { recordConfigChange } = await import("../admin/audit");
     await recordConfigChange({

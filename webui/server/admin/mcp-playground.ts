@@ -6,6 +6,8 @@ import { resolveProjectRoot } from "../project.js";
 import { decisionReasonDetail, decisionReasonLabel } from "./decision-reason-labels.js";
 
 const TABLE_SAMPLE_LIMIT = 12;
+/** Reserved `x-lucy-platform` / `lucy_platform` value for MCP 调试台受控试调. */
+export const MCP_PLAYGROUND_PLATFORM = "mcp-playground";
 let liveSmokeInFlight = false;
 
 function playgroundIdentity(agentId: string): Identity {
@@ -17,11 +19,11 @@ function playgroundIdentity(agentId: string): Identity {
 }
 
 function auditDeniedHref(agentId: string): string {
-  return `/admin/audit?tab=calls&outcome=denied&hours=168&user=${encodeURIComponent(agentId)}`;
+  return `/admin/audit?view=calls&range=7d&outcome=denied&user=${encodeURIComponent(agentId)}`;
 }
 
 function auditCallsHref(agentId: string): string {
-  return `/admin/audit?tab=calls&hours=168&user=${encodeURIComponent(agentId)}`;
+  return `/admin/audit?view=calls&range=7d&user=${encodeURIComponent(agentId)}&callSource=playground`;
 }
 
 export function registerMcpPlaygroundRoutes(app: FastifyInstance) {
@@ -186,7 +188,9 @@ export function registerMcpPlaygroundRoutes(app: FastifyInstance) {
         headers: {
           "content-type": "application/json",
           accept: "application/json, text/event-stream",
-          authorization: `Bearer ${bearerToken}`
+          authorization: `Bearer ${bearerToken}`,
+          // Attribution only — identity still comes from Bearer Token; Proxy copies into lucy_platform.
+          "x-lucy-platform": MCP_PLAYGROUND_PLATFORM
         },
         body: JSON.stringify(body),
         signal: controller.signal

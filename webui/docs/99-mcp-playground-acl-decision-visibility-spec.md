@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | MCP Playground and ACL Decision Visibility Spec |
 | 文档类型 | Spec |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -21,7 +21,7 @@
 | 上游 Spec | Spec 07；Spec 09；Spec 14/15；Spec 39；Spec 89/94；Spec 100（共享深链登记表） |
 | 状态 | Implemented |
 | 日期 | 2026-08-05 |
-| 范围 | ACL DryRun；裁决原因双行展示契约；Audit/Agent 深链；**必达** `tools/list` 最小 live smoke；导航与术语 |
+| 范围 | ACL DryRun；裁决原因双行展示契约；Audit/Agent 深链；**必达** `tools/list` 最小 live smoke；导航与术语；受控试调调用来源标记与访问日志筛选 |
 
 ### Changelog
 
@@ -29,6 +29,7 @@
 |---|---|
 | v1.0 | 初稿：自 Attu Playground 评估收敛为 Lucy MCP 调试台 P0 |
 | v1.1 | 交叉审阅补齐：与 Spec 100 共享 Deep Link Registry；裁决原因双行 UI/类型硬契约；`tools/list` 最小 live smoke 升为必达；明确 Audit 现况为单行待改造 |
+| v1.2 | 受控试调写入 `x-lucy-platform: mcp-playground`；访问日志调用流水增加「调用来源」筛选（`callSource=playground\|agent`）；深链带 `callSource=playground` 并自动含协议调用 |
 
 ## 0. 与 Spec 100 的组合关系（非重复）
 
@@ -184,6 +185,14 @@ type DecisionReasonViewModel = {
 ### 7.2 Token 与确认
 
 会话粘贴 Token；确认 Modal；`POST /api/admin/mcp-playground/live-smoke`；只打本机 MCP endpoint；不回显完整 Token；成功给出 audit 深链（Registry 形态）。
+
+### 7.3 访问日志归因
+
+- live-smoke 请求必须带 `x-lucy-platform: mcp-playground`（Proxy 已有 `correlationMeta` 落库为 `lucy_platform`）。
+- ACL DryRun **不**写访问日志。
+- 访问日志调用流水筛选项「调用来源」：`callSource=playground`（仅受控试调，自动 `includeProtocol`） / `callSource=agent`（排除 `mcp-playground`） / 空（全部）。
+- 成功深链：`/admin/audit?view=calls&range=7d&user=<agentId>&callSource=playground`。
+- 行内「调用来源」列与 badge 主术语「受控试调」。本头仅作归因，不参与 ACL。
 
 ## 8. 安全护栏
 

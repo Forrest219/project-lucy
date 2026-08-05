@@ -30,3 +30,22 @@ Reported: 2026-08-05
 - Plan: `webui/docs/plans/wo-202608-32-mcp-playground-acl-decision-visibility.md`
 - Fix（2026-08-05）: `registerMcpPlaygroundRoutes`（acl-preview + tools/list live-smoke）、`DecisionReasonCell`、侧栏/路由/Agent 详情入口、Audit「在调试台复现」。本轮不做浏览器验证，状态保持 `Fixed`。
 - Tests: `mcp-playground.test.tsx`、`decision-reason-cell.test.tsx`、`mcp-playground-acl-preview.test.ts`、`navigation.test.ts`、`app-shell.test.tsx`。
+
+## UX-ADMIN-MCP-PLAYGROUND-002: 受控试调写入访问日志后无法区分来源
+
+Status: Fixed
+Route: /admin/mcp-playground
+Area: 受控试调归因 / 访问日志深链
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+用户不清楚权限预览与受控试调是否记日志；试调与真实 Agent 调用混在访问日志中。
+
+### Expected
+- DryRun 不写日志；受控试调写日志并标记 `mcp-playground`。
+- 试调成功深链打开调用流水并预筛「MCP 调试台受控试调」。
+
+### Notes
+- Spec 99 v1.2 §7.3。
+- Fix（2026-08-05）: `x-lucy-platform: mcp-playground` + `auditHref` 带 `callSource=playground`。

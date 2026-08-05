@@ -276,6 +276,10 @@ describe("POST /api/admin/mcp-playground/live-smoke", () => {
     expect(new URL(calledUrl).hostname).toBe("127.0.0.1");
     const headers = calledInit.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer super-secret-token");
+    expect(headers["x-lucy-platform"]).toBe("mcp-playground");
+    expect(res.body.data.auditHref).toContain("callSource=playground");
+    expect(res.body.data.auditHref).toContain("view=calls");
+    expect(res.body.data.auditHref).toContain("range=7d");
     await app.close();
   });
 
