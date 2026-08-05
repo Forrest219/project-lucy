@@ -55,6 +55,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Overview `/overview` 质量/访问 Metric Row | Spec 102 / `wo-202608-35` 落地：`UX-OVERVIEW-016`～`018` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。六卡统一 `OpsMetricRow`：标题左上、主值左下、CTA 右中；Token 补 icon；语义 CTA → catalog incomplete。澄清 Spec 100 §8.2 CTA 落位。跨页面主题新增 `ops metric-row symmetry`。验证：`onboarding.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Spec 99+100 工单落地 | Spec 99 / `wo-202608-32`：`UX-ADMIN-MCP-PLAYGROUND-001`、`UX-ADMIN-AUDIT-018` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。MCP 调试台 ACL 预览 + `tools/list` smoke、裁决双行、Audit/Agent/Overview 入口。Spec 100 / `wo-202608-33`：`UX-OVERVIEW-011`～`014` → `Fixed`。Canonical Registry、Catalog `completion=incomplete`、危险/摘要 CTA、Attu 式指标卡 icon、回写 refetch。验证：相关 vitest、`lint:terminology`、`build`。 |
 | 2026-08-05 | Spec/Plan 落盘（无代码） | Spec 99 / `wo-202608-32`：MCP 调试台 + 裁决可读化（台账 `admin-mcp-playground.md`、`UX-ADMIN-AUDIT-018` Pending）。Spec 100 / `wo-202608-33`：overview 深链闭环（`UX-OVERVIEW-011`～`013` Pending）。术语标准新增 §4.8。 |
 | 2026-08-05 | Agent Admin `/admin/agents` | Spec 98 / `wo-202608-31` 落地：`UX-ADMIN-AGENTS-037`～`039` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。KPI 顺序改为总数→活跃 Agent→活跃 Token→调用量；表列改为配置 Token→活跃 Token→调用量→创建→配置变更→最近访问；主列头「显示名/用户 ID」。跨页面主题新增 `kpi stock-then-adoption-then-volume`、`ops table column grouping`；延伸 `agent identity terminology`。验证：`agent-list.test.tsx`、`lint:terminology`、`build`。 |
@@ -158,6 +159,7 @@ docs/ui-ux-feedback/
 | `agent identity terminology`（显示名 vs 用户 ID；列表主列头须覆盖双行内容） | UX-ADMIN-AGENTS-034、UX-ADMIN-AGENTS-039 | 2 Fixed | Spec 95 / 98，待浏览器复核 |
 | `decision-reason dual-line`（裁决原因主行中文 + 次行机器码；禁止仅裸码） | UX-ADMIN-AUDIT-018、UX-ADMIN-MCP-PLAYGROUND-001 | 2 Fixed | Spec 99 / wo-202608-32，待浏览器复核 |
 | `canonical health deeplink`（健康/待办 CTA 只生产 Registry URL；消费端同 PR） | UX-OVERVIEW-011～014 | 4 Fixed | Spec 100 / wo-202608-33，待浏览器复核 |
+| `ops metric-row symmetry`（运维快照卡：标题左上、主值左下、CTA 右中对齐待办） | UX-OVERVIEW-016～018 | 3 Fixed | Spec 102 / wo-202608-35，待浏览器复核 |
 | `low-risk one-step save`（低风险配置编辑一步落盘，diff 仅作审计/高风险确认） | UX-ADMIN-AGENTS-036 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
 | `audit filter-table alignment`（筛选字段须与表头对齐，并含时间窗） | UX-ADMIN-CONFIG-AUDIT-006 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
 | `ops table density (pl-data-grid)`（治理/审计列表须轻量 `pl-data-grid` 12px） | UX-ADMIN-CONFIG-AUDIT-003 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
@@ -215,6 +217,7 @@ docs/ui-ux-feedback/
 - 用户可见文案不得直接暴露内部状态枚举（如 `partial` / `done` / `stale` / `invalid`）；须改写为中文、可理解的影响描述，并尽量给出下一步动作入口。页头 description 只保留“页面能力 + 用户动作价值”，不得写内部实现叙事（如 data agent 可交付状态判断）。
 - 发布 / 审计类历史表必须优先展示业务变更范围（连接、变更源）与规模（文件数、语义源数）；纯运维触发信息不得挤掉主列。手动索引重建且无资产变更时，须用明确空态文案，不得留白。
 - 「导出当前语义资产包」类动作若导出的是当前工作区而非历史批次，只能放在 Header（或页级辅助区）；禁止在历史行内用「下载快照」等文案冒充该批次存档。按 releaseId 的历史包下载未交付前，不得放假按钮。
+- 运维驾驶舱并排快照卡（如质量快照 / 访问风险）必须共用同一 Metric Row 骨架：标题左上、主值左下并拉开间距、CTA 右侧垂直居中对齐「待处理事项」；禁止同栏内混用「主值右上 / CTA 左下 / Token 特例」多套模板（主题 `ops metric-row symmetry`；样板见 Spec 102）。
 
 ## 工作流
 

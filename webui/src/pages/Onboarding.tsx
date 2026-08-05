@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Activity,
+  KeyRound,
   Layers,
   ShieldAlert,
   Upload,
@@ -363,10 +364,63 @@ function ActionRequiredRow({ item }: { item: ActionRequiredItem }) {
 }
 
 /**
+ * Spec 102: shared metric row for 质量快照 / 访问风险.
+ * Title top-left, primary value bottom-left, CTA right-center (对齐待处理事项).
+ */
+function OpsMetricRow({
+  icon,
+  title,
+  value,
+  hint,
+  extra,
+  cta,
+  tone = "default",
+  testId
+}: {
+  icon: ReactNode;
+  title: ReactNode;
+  value: ReactNode;
+  hint?: ReactNode;
+  extra?: ReactNode;
+  cta?: { to: string; label: ReactNode; className?: string; translateNo?: boolean };
+  tone?: "default" | "warning" | "danger";
+  testId?: string;
+}) {
+  return (
+    <div
+      className="pl-ops-metric-row pl-metric-card pl-metric-card--with-icon"
+      data-tone={tone}
+      data-testid={testId}
+    >
+      <div className="pl-ops-metric-row-body">
+        <div className="pl-metric-card-title">
+          {icon}
+          <span>{title}</span>
+        </div>
+        <div className="pl-ops-metric-row-value">
+          <strong className="pl-ops-metric-row-strong">{value}</strong>
+          {extra}
+          {hint != null ? <div className="text-xs text-fg-muted">{hint}</div> : null}
+        </div>
+      </div>
+      {cta ? (
+        <Link
+          to={cta.to}
+          className={["pl-ops-metric-row-cta", "pl-card-cta", cta.className].filter(Boolean).join(" ")}
+          {...(cta.translateNo ? { translate: "no" as const } : {})}
+        >
+          {cta.label}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Metric-first semantic-coverage card. M39 spec 41 §8 requires a standalone
  * percent + progressbar with `role="progressbar"` and aria-valuenow /
  * aria-valuemin / aria-valuemax, plus a text label so screen-reader users
- * do not rely on colour or bar length alone.
+ * do not rely on colour or bar length alone. Spec 102 wraps it in OpsMetricRow.
  */
 function SemanticCoverageCard({
   done,
@@ -378,15 +432,16 @@ function SemanticCoverageCard({
   const percentValue = percent(done, total);
   const gap = pendingSemanticCount({ done, total });
   return (
-    <div className="pl-snapshot-item pl-snapshot-item--semantic pl-metric-card pl-metric-card--with-icon">
-      <div className="pl-metric-card-title">
-        <Layers className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-semantic" />
-        <span>语义覆盖率</span>
-      </div>
-      <div className="min-w-0">
-        <strong>
-          <span className="notranslate" translate="no" data-testid="ops-semantic-percent">{percentValue}%</span>
-        </strong>
+    <OpsMetricRow
+      testId="ops-metric-semantic"
+      icon={<Layers className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-semantic" />}
+      title="语义覆盖率"
+      value={
+        <span className="notranslate" translate="no" data-testid="ops-semantic-percent">
+          {percentValue}%
+        </span>
+      }
+      extra={
         <div
           className="pl-progress"
           role="progressbar"
@@ -401,11 +456,18 @@ function SemanticCoverageCard({
             style={{ width: `${percentValue}%` }}
           />
         </div>
-        <div className="text-xs text-fg-muted">
-          <span className="notranslate" translate="no">{done}</span>/<span className="notranslate" translate="no">{total}</span> 语义完成，<span className="notranslate" translate="no">{gap}</span> 张表待补
-        </div>
-      </div>
-    </div>
+      }
+      hint={
+        <>
+          <span className="notranslate" translate="no">{done}</span>/<span className="notranslate" translate="no">{total}</span> 语义完成，
+          <span className="notranslate" translate="no">{gap}</span> 张表待补
+        </>
+      }
+      cta={{
+        to: DEEP_LINKS.catalogIncomplete,
+        label: "查看语义资产 ↗"
+      }}
+    />
   );
 }
 
@@ -888,50 +950,32 @@ export function Onboarding() {
           </div>
           <div className="pl-snapshot-list">
             <SemanticCoverageCard done={doneSources} total={sources.length} />
-            <div className="pl-snapshot-item pl-metric-card pl-metric-card--with-icon">
-              <div className="pl-metric-card-title">
-                <Upload className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-publish" />
-                <span>待发布变更</span>
-              </div>
-              <div>
-                <strong>
-                  <span className="notranslate" translate="no">{changedFiles.length}</span>
-                </strong>
-                <div className="text-xs text-fg-muted">
-                  {validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
-                </div>
-              </div>
-              <Link
-                to={DEEP_LINKS.publishWorkbench}
-                className="pl-card-cta"
-              >
-                打开发布工作台 ↗
-              </Link>
-            </div>
-            <div className="pl-snapshot-item pl-metric-card pl-metric-card--with-icon">
-              <div className="pl-metric-card-title">
-                <Activity className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-eval" />
-                <span>评测数据</span>
-              </div>
-              <div>
-                <strong>
-                  <span className="notranslate" translate="no">{evalLastRunQuery.isSuccess ? (evalLastRunQuery.data?.runs.length ?? 0) : "—"}</span>
-                </strong>
-                <div className="text-xs text-fg-muted">
-                  {evalLastRunQuery.isSuccess
-                    ? (evalLastRunQuery.data?.runs.length ?? 0) > 0
-                      ? "近 30 天已有评测记录"
-                      : "近 30 天无评测数据"
-                    : "评测状态待刷新"}
-                </div>
-              </div>
-              <Link
-                to={DEEP_LINKS.evalMonitor}
-                className="pl-card-cta"
-              >
-                查看趋势监控 ↗
-              </Link>
-            </div>
+            <OpsMetricRow
+              testId="ops-metric-publish"
+              icon={<Upload className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-publish" />}
+              title="待发布变更"
+              value={<span className="notranslate" translate="no">{changedFiles.length}</span>}
+              hint={validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
+              cta={{ to: DEEP_LINKS.publishWorkbench, label: "打开发布工作台 ↗" }}
+            />
+            <OpsMetricRow
+              testId="ops-metric-eval"
+              icon={<Activity className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-eval" />}
+              title="评测数据"
+              value={
+                <span className="notranslate" translate="no">
+                  {evalLastRunQuery.isSuccess ? (evalLastRunQuery.data?.runs.length ?? 0) : "—"}
+                </span>
+              }
+              hint={
+                evalLastRunQuery.isSuccess
+                  ? (evalLastRunQuery.data?.runs.length ?? 0) > 0
+                    ? "近 30 天已有评测记录"
+                    : "近 30 天无评测数据"
+                  : "评测状态待刷新"
+              }
+              cta={{ to: DEEP_LINKS.evalMonitor, label: "查看趋势监控 ↗" }}
+            />
           </div>
         </section>
 
@@ -943,63 +987,70 @@ export function Onboarding() {
             </div>
           </div>
           <div className="pl-risk-list">
-            <div
-              className="pl-risk-item pl-metric-card pl-metric-card--with-icon"
-              data-tone={enabledAgents.length === 0 ? "danger" : "default"}
-            >
-              <div className="pl-metric-card-title">
-                <Users className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-agents" />
-                <span>
+            <OpsMetricRow
+              testId="ops-metric-agents"
+              tone={enabledAgents.length === 0 ? "danger" : "default"}
+              icon={<Users className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-agents" />}
+              title={
+                <>
                   <span className="notranslate" translate="no">Agent</span> 启用与禁用
-                </span>
-              </div>
-              <div>
-                <strong>
-                  <span className="notranslate" translate="no">{enabledAgents.length}</span> / <span className="notranslate" translate="no">{agents.length}</span>
-                </strong>
-                <div className="text-xs text-fg-muted">
-                  启用 / 总数
-                </div>
-              </div>
-              <Link to={DEEP_LINKS.agents} className="pl-card-cta notranslate" translate="no">
-                查看 <span className="notranslate" translate="no">Agent</span> 管理 ↗
-              </Link>
-            </div>
-            <div
-              className="pl-risk-item pl-metric-card pl-metric-card--with-icon"
-              data-tone={aclDenied7d > 0 ? "danger" : "default"}
-            >
-              <div className="pl-metric-card-title">
-                <ShieldAlert className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-acl" />
-                <span>近 7 天 ACL 拒绝</span>
-              </div>
-              <div>
-                <strong>
-                  <span className="notranslate" translate="no">{aclDenied7d}</span>
-                </strong>
-                <div className="text-xs text-fg-muted">次拒绝</div>
-              </div>
-              <Link
-                to={DEEP_LINKS.auditDenied}
-                className="pl-card-cta"
-              >
-                查看访问日志 ↗
-              </Link>
-            </div>
-            <div
-              className="pl-risk-item"
-              data-tone={availableTokenCountValue === 0 && agents.length > 0 ? "warning" : "default"}
-            >
-              <div>
-                <strong>可用 <span className="notranslate" translate="no">Token</span></strong>
-                <div className="text-xs text-fg-muted">
-                  <span className="notranslate" translate="no">{availableTokenCountValue}</span> 个可用 <span className="notranslate" translate="no">Token</span>
-                </div>
-              </div>
-              <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
-                管理 <span className="notranslate" translate="no">Token</span> ↗
-              </Link>
-            </div>
+                </>
+              }
+              value={
+                <>
+                  <span className="notranslate" translate="no">{enabledAgents.length}</span>
+                  {" / "}
+                  <span className="notranslate" translate="no">{agents.length}</span>
+                </>
+              }
+              hint="启用 / 总数"
+              cta={{
+                to: DEEP_LINKS.agents,
+                label: (
+                  <>
+                    查看 <span className="notranslate" translate="no">Agent</span> 管理 ↗
+                  </>
+                ),
+                className: "notranslate",
+                translateNo: true
+              }}
+            />
+            <OpsMetricRow
+              testId="ops-metric-acl"
+              tone={aclDenied7d > 0 ? "danger" : "default"}
+              icon={<ShieldAlert className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-acl" />}
+              title="近 7 天 ACL 拒绝"
+              value={<span className="notranslate" translate="no">{aclDenied7d}</span>}
+              hint="次拒绝"
+              cta={{ to: DEEP_LINKS.auditDenied, label: "查看访问日志 ↗" }}
+            />
+            <OpsMetricRow
+              testId="ops-metric-tokens"
+              tone={availableTokenCountValue === 0 && agents.length > 0 ? "warning" : "default"}
+              icon={<KeyRound className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-token" />}
+              title={
+                <>
+                  可用 <span className="notranslate" translate="no">Token</span>
+                </>
+              }
+              value={<span className="notranslate" translate="no">{availableTokenCountValue}</span>}
+              hint={
+                <>
+                  <span className="notranslate" translate="no">{availableTokenCountValue}</span> 个可用{" "}
+                  <span className="notranslate" translate="no">Token</span>
+                </>
+              }
+              cta={{
+                to: DEEP_LINKS.agents,
+                label: (
+                  <>
+                    管理 <span className="notranslate" translate="no">Token</span> ↗
+                  </>
+                ),
+                className: "notranslate",
+                translateNo: true
+              }}
+            />
           </div>
         </section>
       </div>

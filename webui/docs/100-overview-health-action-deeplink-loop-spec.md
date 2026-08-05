@@ -247,6 +247,8 @@ UI：标题 → 描述 → `影响：…` / `证据来源：…` 弱样式 → C
 
 禁止：emoji icon、紫渐变/glow/重阴影、装饰性新指标、换皮恢复四卡健康条。
 
+> **澄清（Spec 102）：** CTA 落位修订为**右侧垂直居中**（对齐「待处理事项」），不再要求卡底左对齐。详见 `102-overview-quality-risk-metric-row-unification-spec.md`。
+
 ### 8.3 Lucy 落位
 
 | 区域 | icon 语义 | 主值 |

@@ -476,6 +476,7 @@ Reported: 2026-08-05
 ### Notes
 - Spec 100 v1.1 §8；Plan `wo-202608-33` Phase 4。
 - Fix（2026-08-05）: `.pl-metric-card--with-icon` + lucide outline icons。本轮不做浏览器验证，状态保持 `Fixed`。
+- Spec 102 进一步统一六卡行骨架与 CTA 右中（见 `UX-OVERVIEW-016`～`018`），不回退 icon 要求。
 
 ## UX-OVERVIEW-015: 刷新首页数据占满文案 secondary，工具感偏重
 
@@ -499,3 +500,75 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 101 / `wo-202608-34` Phase 3（Draft，待实现）。不改变 MCP 区并列 secondary 策略（UX-OVERVIEW-008）。
+
+## UX-OVERVIEW-016: 质量快照与访问风险指标卡布局不对称
+
+Status: Fixed
+Route: /overview
+Area: 质量快照 / 访问风险
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+「质量快照」与「访问风险」两栏虽并排，内部卡片模板不统一：语义覆盖率为单列 progress；待发布/评测/Agent/ACL 主值在右上、CTA 在左下；「可用 Token」无 icon 且 CTA 又在右侧。视觉节奏与信息层级不一致。
+
+### Evidence
+- 浏览器核查（2026-08-05，`http://127.0.0.1:55176/overview`）：六卡 DOM/CSS 测量确认三套模板并存。
+
+### Expected
+六卡共用同一 Ops Metric Row 骨架（Spec 102）：标题左上、主值左下、CTA 右中；Token 补齐 icon；语义保留 progress。
+
+### Browser Check
+1. Open `/overview`.
+2. In 质量快照 and 访问风险，confirm six rows share the same structure (icon + title, value below, CTA right-center).
+3. Confirm Token row has an outline icon like the others.
+4. Confirm semantic row still shows progressbar with accessible attributes.
+
+### Notes
+- Spec: `webui/docs/102-overview-quality-risk-metric-row-unification-spec.md`
+- Plan: `webui/docs/plans/wo-202608-35-overview-quality-risk-metric-row-unification.md`
+- Fix（2026-08-05）: `OpsMetricRow` + `.pl-ops-metric-row`；Token 使用 `KeyRound`。本轮不做浏览器验证，状态保持 `Fixed`。主题：`ops metric-row symmetry`。
+
+## UX-OVERVIEW-017: 快照区超链接未对齐待处理事项（右侧居中）
+
+Status: Fixed
+Route: /overview
+Area: 质量快照 / 访问风险 CTA
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+「待处理事项」CTA 统一在行右侧垂直居中；质量/访问多数 CTA 在左下，「管理 Token」单独在右中，跳转 affordance 不一致。
+
+### Expected
+所有快照/风险卡 CTA 使用 `pl-ops-metric-row-cta`，右侧垂直居中，视觉对齐待处理事项的 `pl-action-required-item-cta`。
+
+### Browser Check
+1. Open `/overview`.
+2. Compare a 待处理事项 CTA with 打开发布工作台 / 查看 Agent 管理 / 管理 Token.
+3. Verify CTAs sit on the right, vertically centered in the metric row.
+
+### Notes
+同 Spec 102 / wo-202608-35。语义卡新增「查看语义资产 ↗」→ `/catalog?completion=incomplete`。本轮不做浏览器验证，状态保持 `Fixed`。
+
+## UX-OVERVIEW-018: 指标卡主值应在标题左下方并拉开间距
+
+Status: Fixed
+Route: /overview
+Area: 质量快照 / 访问风险 主值层级
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+期望每区标题在左上、数值在左下，并留出垂直间距形成扫读层级；现状多数卡主值贴在右上，左下被 CTA 占用。
+
+### Expected
+主值在 `.pl-ops-metric-row-body` 内位于标题下方；标题↔主值 `gap` ≥ 8px；主值 `text-xl tabular-nums`。
+
+### Browser Check
+1. Open `/overview`.
+2. For 待发布变更 / Agent / Token 等，confirm primary number is under the title on the left, not in the right column.
+3. Confirm CTA remains on the right (does not sit under the title).
+
+### Notes
+同 Spec 102 / wo-202608-35。本轮不做浏览器验证，状态保持 `Fixed`。

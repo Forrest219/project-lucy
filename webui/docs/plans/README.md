@@ -145,6 +145,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-31-agent-admin-kpi-column-order-and-identity-header.md](wo-202608-31-agent-admin-kpi-column-order-and-identity-header.md) | 202608-31 | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 |
 | [wo-202608-32-mcp-playground-acl-decision-visibility.md](wo-202608-32-mcp-playground-acl-decision-visibility.md) | 202608-32 | Spec 99 v1.1：MCP 调试台 + 裁决双行 + `tools/list` smoke 必达（Implemented） |
 | [wo-202608-33-overview-health-action-deeplink-loop.md](wo-202608-33-overview-health-action-deeplink-loop.md) | 202608-33 | Spec 100 v1.2：Registry / Catalog 原子交付 / 回写 refetch / 指标卡 icon（Implemented） |
+| [wo-202608-35-overview-quality-risk-metric-row-unification.md](wo-202608-35-overview-quality-risk-metric-row-unification.md) | 202608-35 | Spec 102：overview 质量/访问 Metric Row 统一（Implemented） |
 
 ### 202608 Governance & Observability — 并行启动建议
 

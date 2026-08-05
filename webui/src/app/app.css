@@ -347,11 +347,20 @@
   .pl-command-palette-item-label {
     @apply truncate text-[14px] font-semibold leading-tight text-fg-default;
   }
+  .pl-command-palette-title-meta {
+    @apply flex shrink-0 items-center gap-2;
+  }
   .pl-command-palette-route-hint {
     @apply shrink-0 font-mono text-[11px] leading-tight text-fg-muted;
   }
+  .pl-command-palette-enter-hint {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-border-default bg-bg-muted px-1 font-mono text-[11px] font-medium leading-none text-fg-muted;
+  }
   .pl-command-palette-item-description {
     @apply truncate text-[12px] leading-snug text-fg-muted;
+  }
+  .pl-command-palette-footer {
+    @apply border-t border-border-default px-3 py-1.5 text-[11px] text-fg-muted;
   }
   /* M70: highlight uses brand text color + medium weight so the match is
      obvious without disrupting row height or pulling focus with a heavy
@@ -2379,6 +2388,18 @@
   .pl-action-required-empty { @apply rounded-md border border-success-strong bg-success-soft p-3 text-sm text-success-strong; }
   .pl-env-badge { @apply inline-flex items-center rounded-pill border border-warning-strong bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning-strong; }
   .pl-risk-list { @apply grid gap-2; }
+  /* Spec 102: unified quality/risk metric row (title left-top, value left-bottom, CTA right-center). */
+  .pl-ops-metric-row {
+    @apply grid min-h-[6rem] items-center gap-x-4 gap-y-2 rounded-md border border-border-default bg-bg-subtle p-3;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .pl-ops-metric-row[data-tone="warning"] { @apply border-warning-strong bg-warning-soft; }
+  .pl-ops-metric-row[data-tone="danger"] { @apply border-danger-strong bg-danger-soft; }
+  .pl-ops-metric-row-body { @apply grid min-w-0 gap-2; }
+  .pl-ops-metric-row-value { @apply grid min-w-0 gap-1; }
+  .pl-ops-metric-row-strong { @apply text-xl font-semibold tabular-nums text-fg-default; }
+  .pl-ops-metric-row-cta { @apply shrink-0 justify-self-end self-center; }
+  .pl-ops-metric-row .pl-progress { @apply my-1 w-full max-w-none; }
   .pl-risk-item {
     @apply grid min-h-[5.625rem] items-center gap-3 rounded-md border border-border-default bg-bg-subtle p-3;
     grid-template-columns: minmax(0, 1fr) auto;

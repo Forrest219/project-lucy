@@ -779,6 +779,41 @@ describe("Onboarding", () => {
     expect(progress?.getAttribute("aria-label") ?? snapshot.textContent ?? "").toMatch(/语义/);
   });
 
+  it("unifies quality and access metric rows with right-center CTAs (Spec 102)", async () => {
+    renderPage({
+      sources: [
+        readySource,
+        { ...readySource, table: "customers", completion: "done" },
+        { ...readySource, table: "products", completion: "not_started" }
+      ]
+    });
+
+    const quality = await screen.findByTestId("ops-quality-snapshot");
+    const risk = screen.getByTestId("ops-access-risk");
+
+    expect(quality.querySelectorAll(".pl-ops-metric-row")).toHaveLength(3);
+    expect(risk.querySelectorAll(".pl-ops-metric-row")).toHaveLength(3);
+
+    const semantic = screen.getByTestId("ops-metric-semantic");
+    const semanticCta = semantic.querySelector("a.pl-ops-metric-row-cta");
+    expect(semanticCta).toHaveAttribute("href", "/catalog?completion=incomplete");
+    expect(semanticCta?.textContent ?? "").toMatch(/查看语义资产/);
+    expect(semantic.querySelector(".pl-ops-metric-row-cta")).toBeTruthy();
+    expect(semantic.querySelector(".pl-ops-metric-row-body .pl-ops-metric-row-strong")).toBeTruthy();
+
+    const publishCta = screen.getByTestId("ops-metric-publish").querySelector("a.pl-ops-metric-row-cta");
+    expect(publishCta).toHaveAttribute("href", "/publish/workbench");
+
+    const aclCta = screen.getByTestId("ops-metric-acl").querySelector("a.pl-ops-metric-row-cta");
+    expect(aclCta).toHaveAttribute("href", "/admin/audit?tab=calls&outcome=denied&hours=168");
+
+    const tokenRow = screen.getByTestId("ops-metric-tokens");
+    expect(tokenRow.querySelector('[data-testid="ops-metric-icon-token"]')).toBeInTheDocument();
+    expect(tokenRow.querySelector("a.pl-ops-metric-row-cta")).toHaveAttribute("href", "/admin/agents");
+    expect(tokenRow.textContent ?? "").toContain("可用");
+    expect(tokenRow.textContent ?? "").toContain("Token");
+  });
+
   it("does not render the raw MCP config JSON code block by default", async () => {
     renderPage();
     // Wait for the page to settle so we are inspecting the steady state,

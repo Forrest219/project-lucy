@@ -90,6 +90,7 @@
 | [98-agent-admin-kpi-column-order-and-identity-header-spec.md](98-agent-admin-kpi-column-order-and-identity-header-spec.md) | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 | 产品 / UX / Frontend |
 | [99-mcp-playground-acl-decision-visibility-spec.md](99-mcp-playground-acl-decision-visibility-spec.md) | MCP 调试台：ACL 裁决预览、裁决原因双行可读化、必达 `tools/list` smoke（Implemented v1.1） | 产品 / API / UX / 安全 / Frontend |
 | [100-overview-health-action-deeplink-loop-spec.md](100-overview-health-action-deeplink-loop-spec.md) | `/overview` 深链 Registry 闭环；Catalog query 原子交付；回写 refetch；Attu 指标卡 icon（Implemented v1.2） | 产品 / UX / Frontend |
+| [102-overview-quality-risk-metric-row-unification-spec.md](102-overview-quality-risk-metric-row-unification-spec.md) | `/overview` 质量快照 / 访问风险六卡 Metric Row 统一；CTA 右中（Implemented v1.0） | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 
