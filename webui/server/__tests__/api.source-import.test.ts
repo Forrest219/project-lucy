@@ -130,4 +130,33 @@ describe("source YAML import API", () => {
     await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"), "utf8")).resolves.toContain("grain:");
     await app.close();
   });
+
+  it("does not wipe schema columns when importing overlay-only YAML", async () => {
+    const overlayOnly = `name: superstore_orders
+table: dataforai.superstore_orders
+grain:
+  - id
+measures:
+  - name: order_count
+    expr: count(*)
+    description: Count of orders.
+`;
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: true, yaml: overlayOnly })
+      .expect(200);
+
+    const schemaFiles = response.body.data.files.filter(
+      (file: { filePath: string }) => file.filePath === schemaRelPath
+    );
+    expect(schemaFiles).toHaveLength(0);
+    expect(response.body.data.files.some((file: { filePath: string }) => file.filePath.includes("superstore_orders.yaml"))).toBe(
+      true
+    );
+    await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toBe(schemaYaml);
+    await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toContain("columns:");
+    await app.close();
+  });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import clsx from "clsx";
@@ -902,6 +902,14 @@ function ImportYamlDrawer({
           </button>
         </header>
         <section className="pl-drawer-body" aria-label="导入 YAML 内容">
+          <p
+            className="pl-notice text-xs mb-3 notranslate"
+            translate="no"
+            data-testid="table-editor-import-guidance"
+          >
+            本页可导入当前表的 Schema Manifest 表片段（含字段）或表级 semantic overlay（指标 / 分群 / 行粒度）。
+            完整 Schema Manifest 与多表 overlay 请到发布工作台使用「上传语义资产」。
+          </p>
           <button className="pl-btn pl-btn--secondary" onClick={onOpenFile} type="button">
             选择 YAML 文件
           </button>
@@ -911,7 +919,7 @@ function ImportYamlDrawer({
               className="pl-textarea notranslate"
               data-testid="paste-yaml-textarea"
               onChange={(event) => onPastedYamlChange(event.target.value)}
-              placeholder="粘贴完善后的当前表 YAML"
+              placeholder="粘贴 Schema Manifest 表片段（含字段）或表级 overlay（指标/分群/行粒度）"
               rows={12}
               translate="no"
               value={pastedYaml}
@@ -1814,7 +1822,12 @@ export function TableEditor() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-title={source ? <span className="notranslate" translate="no">{source.model.table}</span> : "语义维护"}
+        backAction={
+          <Link to="/catalog" className="pl-page-header-back">
+            ‹ 返回语义资产
+          </Link>
+        }
+        title={source ? <span className="notranslate" translate="no">{source.model.table}</span> : "语义维护"}
         description={
           source ? (
             <span className="pl-table-editor-context" data-testid="table-editor-header-context">

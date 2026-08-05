@@ -8,6 +8,7 @@ import { auditedWriteFile } from "./admin/config-audit-write.js";
 import type { AuthoredText, Column, Join, ManifestSchemaSummary, Measure, Segment, SourceSummary, TableModel, TablePatch } from "./model";
 import { previewOverlayUpdate } from "./overlay";
 import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
+import { readConnections } from "./project";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -407,6 +408,17 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
   const pending: Pending[] = [];
   const authorizedInputs: AuthorizedCountInput[] = [];
 
+  let enabledByConnection = new Map<string, Set<string>>();
+  try {
+    const connections = await readConnections(projectRoot);
+    enabledByConnection = new Map(
+      connections.map((conn) => [conn.id, new Set(conn.enabledTables)])
+    );
+  } catch {
+    // Missing / unreadable ktx.yaml: treat every Manifest table as not enabled.
+    enabledByConnection = new Map();
+  }
+
   for (const file of await listSchemaFiles(projectRoot)) {
     const { doc } = await readYamlDocument(projectRoot, file.relPath);
     const root = valueAsRecord(doc.toJSON());
@@ -446,11 +458,15 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
       entry.overlay
     );
 
+    const qualifiedName = model.qualifiedName ?? `${entry.file.schema}.${entry.table}`;
+    const enabled =
+      enabledByConnection.get(entry.file.conn)?.has(qualifiedName) ?? false;
+
     return {
       conn: entry.file.conn,
       schema: entry.file.schema,
       table: entry.table,
-      qualifiedName: model.qualifiedName,
+      qualifiedName,
       filePath: entry.file.relPath,
       columnCount: model.columns.length,
       columnNames: model.columns.map((column) => column.name),
@@ -461,6 +477,7 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
       wikiRefCount: 0,
       completion: computeCompletion(model),
       mtime: manifestMtime.toISOString(),
+      enabled,
       authorizedAgentCount: authorizedCounts.get(sourceKey(entry.file.conn, entry.file.schema, entry.table)) ?? 0,
       semanticUpdatedAt,
       semanticUpdatedAtSource
@@ -663,6 +680,16 @@ function importedTableValue(importedYaml: string, table: string): unknown {
   throw new YamlParseError("Imported YAML must be a table YAML snippet or a schema YAML with tables");
 }
 
+const SCHEMA_IMPORT_KEYS = ["table", "descriptions", "columns", "joins"] as const;
+
+function hasMeaningfulSchemaImport(imported: Record<string, unknown>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(imported, "columns") ||
+    Object.prototype.hasOwnProperty.call(imported, "descriptions") ||
+    Object.prototype.hasOwnProperty.call(imported, "joins")
+  );
+}
+
 export async function previewSourceYamlImport(
   projectRoot: string,
   conn: string,
@@ -673,23 +700,51 @@ export async function previewSourceYamlImport(
   assertSafeSegment(table, "table");
   const relPath = schemaRelPath(conn, schema);
   const { doc, text } = await readYamlDocument(projectRoot, relPath);
-  if (!valueAsRecord(valueAsRecord(doc.toJSON()).tables)[table]) {
+  const existingTables = valueAsRecord(valueAsRecord(doc.toJSON()).tables);
+  const existingTable = valueAsRecord(existingTables[table]);
+  if (!existingTables[table]) {
     throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
   }
 
   const importedValue = valueAsRecord(importedTableValue(yaml, table));
-  const schemaValue = { ...importedValue };
-  delete schemaValue.grain;
-  delete schemaValue.measures;
-  delete schemaValue.segments;
-  doc.setIn(["tables", table], doc.createNode(schemaValue));
-  const proposedYaml = serialize(doc);
-  const diff = previewDiff(text, proposedYaml, relPath);
-  const overlayPreview = await previewOverlayUpdate(projectRoot, conn, table, {
-    grain: stringArray(importedValue.grain) ?? [],
-    measures: compact((Array.isArray(importedValue.measures) ? importedValue.measures : []).map(normalizeMeasure)),
-    segments: compact((Array.isArray(importedValue.segments) ? importedValue.segments : []).map(normalizeSegment))
-  });
+  // Spec 114: never replace the whole schema table node with overlay leftovers
+  // ({ name, table } after stripping grain/measures/segments). Only merge when
+  // the import carries meaningful Schema Manifest fields.
+  let proposedYaml = text;
+  let diff = "";
+  if (hasMeaningfulSchemaImport(importedValue)) {
+    const schemaPatch: Record<string, unknown> = {};
+    for (const key of SCHEMA_IMPORT_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(importedValue, key)) {
+        schemaPatch[key] = importedValue[key];
+      }
+    }
+    const merged: Record<string, unknown> = { ...existingTable, ...schemaPatch };
+    delete merged.name;
+    delete merged.grain;
+    delete merged.measures;
+    delete merged.segments;
+    doc.setIn(["tables", table], doc.createNode(merged));
+    proposedYaml = serialize(doc);
+    diff = previewDiff(text, proposedYaml, relPath);
+  }
+
+  const hasOverlayImport =
+    Object.prototype.hasOwnProperty.call(importedValue, "grain") ||
+    Object.prototype.hasOwnProperty.call(importedValue, "measures") ||
+    Object.prototype.hasOwnProperty.call(importedValue, "segments");
+
+  const overlayPreview = hasOverlayImport
+    ? await previewOverlayUpdate(projectRoot, conn, table, {
+        grain: stringArray(importedValue.grain) ?? [],
+        measures: compact(
+          (Array.isArray(importedValue.measures) ? importedValue.measures : []).map(normalizeMeasure)
+        ),
+        segments: compact(
+          (Array.isArray(importedValue.segments) ? importedValue.segments : []).map(normalizeSegment)
+        )
+      })
+    : null;
   const files = [];
   if (diff) {
     files.push({

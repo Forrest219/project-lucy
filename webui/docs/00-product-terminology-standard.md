@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -161,9 +161,12 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Measure | 度量 | Measure | 指标混用 | 语义模型内的聚合表达式；当面向业务用户时优先叫“指标” |
 | Segment | 分群 | Segment | 片段 | 可复用过滤条件 |
 | Join | 关联 | Join | 加入、连接表 | 表之间的 join 关系 |
-| Semantic Validate | 校验 | 结构校验 | 裸 Validate 作主标签/主徽章（如「Validate 未通过」） | 表工作台 Header「校验」与变更审阅状态；针对已保存语义层（Spec 110） |
-| Validation Issue | 校验问题 | 问题详情 | 仅 Exit Code / 仅 FAIL 作为失败主信息 | `ValidationResult.issues[].message` 可读列表（Spec 110） |
-| Validation Technical Detail | 技术详情 | 原始输出 | 默认主屏展示 Exit Code | 折叠：退出码、stderr、stdout（Spec 110） |
+| Semantic Validate | 校验 | 结构校验 | 裸 Validate 作主标签/主徽章（如「Validate 未通过」） | 表工作台 Header「校验」与变更审阅状态；针对已保存语义层（Spec 110）；发布工作台校验摘要同用（Spec 115） |
+| Validation Issue | 校验问题 | 问题详情 | 仅 Exit Code / 仅 FAIL 作为失败主信息 | `ValidationResult.issues[].message` 可读列表（Spec 110 / 115） |
+| Validation Technical Detail | 技术详情 | 原始输出 | 默认主屏展示 Exit Code | 折叠：退出码、stderr、stdout（Spec 110 / 115） |
+| Table YAML Import | 导入 YAML | 导入表 YAML | 裸「上传 YAML」作表页抽屉主标题 | 表语义工作台单表导入（Spec 114） |
+| Schema Manifest Table Snippet | Schema Manifest 表片段 | 含字段的表 YAML | 把 overlay 叫 Manifest | 含 `columns`/`descriptions`/`joins` 的导入内容 |
+| Semantic Overlay (table editor) | 表级 semantic overlay | overlay（指标/分群/行粒度） | 暗示导入会改字段列表 | 仅 grain/measures/segments（Spec 114） |
 | Business Wiki | 业务 Wiki | Wiki 文档 | 维基文档可用于导航 | 业务解释和口径文档 |
 | Evaluation | 质量评测 | 评测 | 质量评价混用 | 数据问答或语义质量评测 |
 | Evaluation Case | 评测用例 | 评测集 | Case 管理、案例管理 | 数据问答 / 语义质量评测的单条样例 |
@@ -324,7 +327,7 @@ Connection (连接)
 - `/connections/whitelist` 只展示缺失 Manifest 诊断与 `去连接概览上传 Manifest` / `打开连接概览` 跳转，不提供独立上传入口。
 - Table 级 YAML（semantic overlay）上传入口位于语义层维护的 `表目录` 或表详情业务语义区域。
 
-### 4.3 审阅与审核
+### 4.3 审阅与审核 / 语义发布
 
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
@@ -332,6 +335,13 @@ Connection (连接)
 | Approval Flow | 审批流程 | 审阅流程混用 | 需要批准 / 驳回的流程 |
 | Reviewer | 审阅人 | 审核员混用 | 执行 review 的角色 |
 | Approver | 审批人 | 审阅人混用 | 执行 approval 的角色 |
+| Publish Gate Panel | 发布门禁 | 变更影响范围（作右栏唯一标题）、Validate Gate（作栏标题） | `/publish/workbench` 右栏审阅区（Spec 112） |
+| Change Detail | 变更详情 | 裸文件路径作栏主标题 | 工作台中栏角色标题；路径为副信息 |
+| File Change Status | 已修改 / 新增 / 已删除 / 已重命名 / 已变更 | 状态：W、M、A（裸内部码） | 待发布文件业务态 |
+| Schema Manifest Impact | Schema Manifest 变更 | 把 `_schema` basename 当作「表」 | 发布门禁影响区分栏 |
+| Table Overlay Impact | 表语义变更 | — | overlay 影响表列表 |
+| Publish Flow Steps | 审阅变更 → 校验 → 发布并重建索引 | 自拟过长流水线文案 | 门禁轻量步骤指示 |
+| Advanced Publish Actions | 高级 | — | 强制重建索引 / 有待发布时的上传与边界检查 |
 
 审阅与审批的流程分工必须与第 3.1 节一致：
 

@@ -851,6 +851,50 @@ Reported: 2026-08-04
 
 2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。
 
+## UX-CATALOG-027: 表语义编辑缺返回语义资产入口
+
+Status: Fixed
+Route: `/catalog/:conn/:schema/:table`
+Area: PageHeader backAction
+Severity: P3
+Reported: 2026-08-05
+
+### Feedback
+二级编辑页无 `backAction`，用户只能依赖侧栏返回表目录，与 Agent/Role/Eval 详情页不一致。
+
+### Expected
+PageHeader 增加 `‹ 返回语义资产` → `/catalog`。
+
+### Browser Check
+1. Open any table editor route.
+2. Verify back link to `/catalog` above H1.
+
+### Notes
+Spec 91 / `wo-202608-24` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-CATALOG-028: 语义资产默认列出未启用 Manifest 表且一律「维护语义」
+
+Status: Fixed
+Route: /catalog
+Area: 启用范围筛选 / 行操作
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+启用表范围只勾选 1 张表，语义资产仍显示 3 条结果且三行主操作均为「维护语义 ↗」，与启用范围无关联，造成「需要维护 3 张表」的误解。
+
+### Expected
+默认只展示已启用表；可切换「全部 / 未启用」。未启用行显示「未启用」徽章，主 CTA 为「去启用表范围 ↗」。PageHeader 说明默认范围。
+
+### Browser Check
+1. With 1/3 enabled, open `/catalog`（无 `scope` query）。
+2. Verify 仅 1 条结果，且为已启用表；有「维护语义 ↗」。
+3. Switch 启用范围 to「全部」；verify 未启用行有「未启用」与「去启用表范围 ↗」。
+4. Open `/catalog?completion=incomplete`；verify 未启用的 partial 表不出现在默认已启用范围内。
+
+### Notes
+Spec 104 / `wo-202608-37` 已落地（本轮不做浏览器验证，待复核后升 Verified）。跨页 companion：`UX-OVERVIEW-019`。
+
 ## UX-CATALOG-029: 校验失败只显示 Exit Code，不展示 issues 原因
 
 Status: Fixed
@@ -875,4 +919,27 @@ Reported: 2026-08-06
 5. Expand「技术详情」；verify 可见退出码与原始输出。
 
 ### Notes
-Spec 110 / `wo-202608-43` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。跨页面主题：`validation failure disclosure`。现场根因之一为 AppleDouble `._*.yaml`（P1 环境清理 / P2 ktx 忽略为后续非目标）。
+Spec 110 / `wo-202608-43` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。跨页面主题：`validation failure disclosure`。现场根因之一为 AppleDouble `._*.yaml`：P1 清理 / 发布工作台披露 / 上传拒收由 Spec 115 / `wo-202608-48` 承接（`UX-PUBLISH-WORKBENCH-004`）。
+
+## UX-CATALOG-030: 表编辑器导入 overlay 冲掉 Schema Manifest 字段
+
+Status: Fixed
+Route: `/catalog/:conn/:schema/:table`
+Severity: P1
+Reported: 2026-08-06
+
+### Feedback
+在表页「导入 YAML」粘贴/选择仅含 `grain`/`measures`/`segments` 的 semantic overlay（如 `ai_intl_ad_daily.yaml`）后，Schema Manifest 表条目被整段替换为 `{name,table}`，既有 `columns` 消失；UI 显示「字段 0」且行粒度字段全部「字段已不存在」。用户感知为导入报错/导入损坏。
+
+### Expected
+1. Overlay-only 导入只更新 overlay，不得修改/清空 Schema Manifest columns。
+2. 含字段的 Schema Manifest 表片段导入与现有表条目 merge。
+3. 抽屉说明：完整多文件包走发布工作台「上传语义资产」。
+
+### Browser Check
+1. Open `/catalog/demo-mysql/chatbi/ai_intl_ad_daily` with columns present.
+2. Import overlay-only YAML；verify 字段数不变；指标/分群可更新。
+3. Open 导入抽屉；verify 可见发布工作台引导文案。
+
+### Notes
+Spec 114 / `wo-202608-47` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。跨页面主题新增 `overlay-safe table yaml import`。

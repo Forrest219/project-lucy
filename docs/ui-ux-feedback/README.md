@@ -56,7 +56,9 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-06 | Catalog 表导入 + Publish Workbench 校验/junk | Spec 114 / `wo-202608-47`：`UX-CATALOG-030` → `Fixed`（overlay-safe 导入，不冲掉 columns）。Spec 115 / `wo-202608-48`：`UX-PUBLISH-WORKBENCH-004` → `Fixed`（工作台 issues 披露 + `._*` scrub + 上传拒收）。本轮不做浏览器验证，结束后只做 code review。延伸 `validation failure disclosure`；新增 `overlay-safe table yaml import`、`semantic-layer junk scrub`。验证：`api.source-import`、`semantic-layer-junk`、`api.semantic-assets`、`table-editor`、`review`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish History `/publish/history` | Spec 113 / `wo-202608-46` 落地：`UX-PUBLISH-HISTORY-008`～`010` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`#`→序号；筛选栏+分页；Header「导出 CSV」明细（移除语义资产包 ZIP）；`releases` 支持筛选/`total` + `export.csv`。修订 Spec 35/85/91。跨页面主题延伸 `export-table field parity`、新增 `list-page filter-pagination parity`。验证：`publish-history.test.tsx`、`api.semantic-assets.reindex.test.ts`、`lint:terminology`、`build`。 |
+| 2026-08-06 | Publish Workbench `/publish/workbench` | Spec 112 / `wo-202608-45` 落地：`UX-PUBLISH-WORKBENCH-001`～`003` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。发布门禁 + 步骤指示；三栏角色；Header 收口（删表目录）；Schema/表影响分流；进页自动校验。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Catalog `/catalog/:conn/:schema/:table` 校验披露 | Spec 110 / `wo-202608-43` 落地：`UX-CATALOG-029` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。校验失败展示 `issues` 列表；Toast 带首因；Exit Code 入「技术详情」；中文主术语；澄清已保存语义层范围。跨页面主题新增 `validation failure disclosure`。验证：`table-editor`、`validation-utils`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish Workbench `/publish/workbench` | 浏览器确认用户反馈属实，新建 `pages/publish-workbench.md`：`UX-PUBLISH-WORKBENCH-001`～`003`（Open）。流程不可发现、三栏角色不清（中栏裸路径 + `状态：W`）、Header 6 钮过密（含多余「表目录」）。截图 `assets/publish-workbench/UX-PUBLISH-WORKBENCH-001-003.png`。跨页面主题新增 `publish flow discoverability`、`publish workbench three-panel ia`、`header action density`。本轮只登记，不开 Spec/不改代码。 |
 | 2026-08-06 | Connections `/connections` 连通健康 | Spec 108 / `wo-202608-41` 落地：`UX-CONNECTIONS-028`～`030` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。卡右侧连通健康摘要（通/偏慢/需关注/不通 + ms）；进页并行 `connection test`；与 Drawer 同源。跨页面主题新增 `connection-card connectivity health`。验证：`connection-overview`、`connection-test`、`lint:terminology`、`build`。 |
@@ -138,10 +140,12 @@ docs/ui-ux-feedback/
 
 | Theme | 影响 ledger | Status 分布 | Spec / Plan |
 |---|---|---|---|
-| `validation failure disclosure`（校验/门禁失败须展示可读 issues，禁止仅 Exit Code） | UX-CATALOG-029 | 1 Fixed | Spec 110 / wo-202608-43，待浏览器复核 |
-| `publish flow discoverability`（发布工作台须可视化「审阅→校验→发布」主路径与 gate 原因） | UX-PUBLISH-WORKBENCH-001 | 1 Open | 待 Spec |
-| `publish workbench three-panel ia`（左选文件 / 中变更详情 / 右发布门禁；禁裸路径作栏标题、禁内部 status 码） | UX-PUBLISH-WORKBENCH-002 | 1 Open | 待 Spec |
-| `header action density`（PageHeader 动作须分层，主组不宜 ≥5 平权并列） | UX-PUBLISH-WORKBENCH-003 | 1 Open | 待 Spec |
+| `validation failure disclosure`（校验/门禁失败须展示可读 issues，禁止仅 Exit Code） | UX-CATALOG-029、UX-PUBLISH-WORKBENCH-004 | 2 Fixed | Spec 110 / wo-43；Spec 115 / wo-48 延伸至发布工作台；待浏览器复核 |
+| `overlay-safe table yaml import`（表页导入不得冲掉 Schema Manifest 字段） | UX-CATALOG-030 | 1 Fixed | Spec 114 / wo-202608-47 |
+| `semantic-layer junk scrub`（校验前清理 `._*` / `.DS_Store`；上传拒收） | UX-PUBLISH-WORKBENCH-004 | 1 Fixed | Spec 115 / wo-202608-48 |
+| `publish flow discoverability`（发布工作台须可视化「审阅→校验→发布」主路径与 gate 原因） | UX-PUBLISH-WORKBENCH-001 | 1 Fixed | Spec 112 / wo-202608-45，待浏览器复核 |
+| `publish workbench three-panel ia`（左选文件 / 中变更详情 / 右发布门禁；禁裸路径作栏标题、禁内部 status 码） | UX-PUBLISH-WORKBENCH-002 | 1 Fixed | Spec 112 / wo-202608-45，待浏览器复核 |
+| `header action density`（PageHeader 动作须分层，主组不宜 ≥5 平权并列） | UX-PUBLISH-WORKBENCH-003 | 1 Fixed | Spec 112 / wo-202608-45，待浏览器复核 |
 | `enabled-scope semantic coverage`（运维语义覆盖 / Catalog 默认列表须对齐 `enabled_tables`） | UX-OVERVIEW-019、UX-CATALOG-028 | 2 Fixed | Spec 104 / wo-202608-37，待浏览器复核 |
 | `connection-card connectivity health`（连接卡右侧连通健康：进页探测 + ms + Drawer 同源） | UX-CONNECTIONS-028～030 | 3 Fixed | Spec 108 / wo-202608-41，待浏览器复核 |
 | `font-weight consistency`（链接 / toggle / sidebar 不应升级到 heading 级粗体） | UX-CATALOG-019、UX-WIKI-014 | 2 Verified | [wo-M64](../../webui/docs/plans/wo-M64-catalog-and-business-wiki-visual-clarity.md) |
@@ -253,6 +257,7 @@ docs/ui-ux-feedback/
 - 访问日志 / 审计类主表必须把可关联身份 Key（问询 ID、事件 ID 等）作为一等列展示并可复制，不得只藏在 testid、展开区或对象详情深链里（主题 `audit identity join keys`；样板见 Spec 106）。
 - 面向用户的时间窗 / 视图 query 须使用产品语义（如 `range=7d`、`view=calls`），禁止新写入暴露实现数字（如 `hours=168`）；旧参可读一版兼容（主题 `url semantic presets`；样板见 Spec 106）。
 - 同一列表页内 Tab 切换不得增减 PageHeader 主操作槽位（如导出按钮忽隐忽现）；Tab 特有动作应保持槽位占位或下沉到表格工具条（主题 `tab header action parity`；样板见 Spec 106）。
+- 发布工作台须把「审阅 → 校验 → 发布并重建索引」做成可读主路径：右栏用「发布门禁」承载步骤、影响分流与下一步说明；中栏标题用「变更详情」而非裸路径；Header 按空态/有变更切换 ≤3 主动作并禁止「表目录」；Schema Manifest 不得计入「影响表」（主题 `publish flow discoverability` / `publish workbench three-panel ia` / `header action density`；样板见 Spec 112）。
 
 ## 工作流
 

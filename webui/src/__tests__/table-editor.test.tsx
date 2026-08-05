@@ -357,6 +357,9 @@ describe("TableEditor", () => {
     fireEvent.click(within(headerActions).getByRole("button", { name: "导入 YAML" }));
     const drawer = await screen.findByTestId("table-editor-import-drawer");
     expect(within(drawer).getByRole("button", { name: "选择 YAML 文件" })).toBeInTheDocument();
+    expect(within(drawer).getByTestId("table-editor-import-guidance")).toHaveTextContent(
+      "发布工作台"
+    );
     expect(screen.queryByRole("button", { name: /Choose File/i })).not.toBeInTheDocument();
     const input = await screen.findByTestId("table-editor-import-input");
     expect(input).toHaveAttribute("aria-hidden", "true");

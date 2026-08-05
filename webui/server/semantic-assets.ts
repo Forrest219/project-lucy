@@ -46,6 +46,7 @@ import { ForbiddenPathError } from "./fs-safe";
 import { reindexProject, validateSource, type Issue, type ValidationResult } from "./ktx";
 import { reloadCatalog } from "./catalog-reload";
 import { recordConfigChange } from "./admin/audit.js";
+import { isSemanticLayerJunkName } from "./semantic-layer-junk";
 
 // ─── Public types (mirror of `webui/src/lib/types.ts`) ─────────────────────
 
@@ -305,6 +306,8 @@ function isSafeSegment(value: string): boolean {
 function isValidFilename(name: string): boolean {
   if (!name || name.includes("/") || name.includes("\\")) return false;
   if (name === "." || name === "..") return false;
+  // Spec 115: reject AppleDouble / Finder junk masquerading as YAML.
+  if (name.startsWith("._") || name === ".DS_Store") return false;
   if (!hasYamlExtension(name)) return false;
   return /^[A-Za-z0-9._-]+$/.test(name);
 }
@@ -318,11 +321,22 @@ function normalizePackageEntryPath(raw: string): string | null {
   return normalized;
 }
 
-function packageEntryFilename(raw: string): string | null {
+function packageEntryBasename(raw: string): string | null {
   const normalized = normalizePackageEntryPath(raw);
   if (!normalized) return null;
-  const filename = path.posix.basename(normalized);
+  return path.posix.basename(normalized);
+}
+
+function packageEntryFilename(raw: string): string | null {
+  const filename = packageEntryBasename(raw);
+  if (!filename) return null;
   return isValidFilename(filename) ? filename : null;
+}
+
+/** Spec 115: skip AppleDouble / .DS_Store inside zip/tar instead of failing the package. */
+function shouldSkipPackageJunkEntry(raw: string): boolean {
+  const filename = packageEntryBasename(raw);
+  return filename !== null && isSemanticLayerJunkName(filename);
 }
 
 function connectionIdFromFilename(filename: string, fallback?: string): string | null {
@@ -632,6 +646,7 @@ function extractZipYamlFiles(
       throw new Error(`${filename} 包内包含 symlink：${rawName}`);
     }
     if (rawName.endsWith("/")) continue;
+    if (shouldSkipPackageJunkEntry(rawName)) continue;
     const entryName = packageEntryFilename(rawName);
     if (!entryName) {
       throw new Error(`${filename} 包内路径不安全或不是 YAML：${rawName}`);
@@ -693,6 +708,10 @@ function extractTarGzYamlFiles(
       throw new Error(`${filename} 包内包含 symlink：${rawPath}`);
     }
     if (typeflag === 0 || typeflag === 48) {
+      if (shouldSkipPackageJunkEntry(rawPath)) {
+        cursor += padded;
+        continue;
+      }
       const entryName = packageEntryFilename(rawPath);
       if (!entryName) {
         throw new Error(`${filename} 包内路径不安全或不是 YAML：${rawPath}`);

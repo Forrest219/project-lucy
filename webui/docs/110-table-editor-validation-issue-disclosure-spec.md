@@ -55,7 +55,7 @@
 | 删除容器 / 仓库中的 `._*` / `.DS_Store` | P1 环境卫生，另开运维动作 |
 | 修改 `ktx sl validate` 忽略 junk 文件 | P2 工具链；不在本 WebUI 工单 |
 | 改为校验未保存草稿 YAML | 需新 API / dry-run validate；本轮只披露现有契约 |
-| 发布工作台校验行展示 issues | 可后置；主题可共用，本单只改表编辑器 |
+| 发布工作台校验行展示 issues | ~~可后置~~ → **Spec 115 / wo-202608-48 已承接** |
 | 本轮浏览器验证 | 用户明确约束 |
 
 ## 4. Terminology Compliance

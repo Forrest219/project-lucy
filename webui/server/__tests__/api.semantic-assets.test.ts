@@ -286,6 +286,35 @@ describe("POST /api/semantic-assets/validate", () => {
     await app.close();
   });
 
+  it("skips AppleDouble junk inside zip packages without failing the package (Spec 115)", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    const zip = buildStoredZip([
+      { name: "semantic-layer/customer-db/_schema/chatbi.yaml", data: MANIFEST_YAML },
+      { name: "semantic-layer/customer-db/_schema/._chatbi.yaml", data: "not-an-object" },
+      { name: "semantic-layer/customer-db/international_country_metrics.yaml", data: OVERLAY_YAML }
+    ]);
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const res = await request(app.server)
+      .post("/api/semantic-assets/validate")
+      .send({
+        files: [],
+        packages: [{ filename: "semantic-assets.zip", contentBase64: zip.toString("base64") }]
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(true);
+    expect((res.body.data.errors as unknown[]).length).toBe(0);
+    expect((res.body.data.files as Array<{ targetPath: string }>).map((f) => f.targetPath)).toEqual([
+      "semantic-layer/customer-db/_schema/chatbi.yaml",
+      "semantic-layer/customer-db/international_country_metrics.yaml"
+    ]);
+    await app.close();
+  });
+
   it("flags UNKNOWN_CONNECTION when the connection id is not in ktx.yaml", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
@@ -459,6 +488,26 @@ describe("POST /api/semantic-assets/validate", () => {
     expect(res.body.data.valid).toBe(true);
     const warnCodes = (res.body.data.warnings as Array<{ code: string }>).map((w) => w.code);
     expect(warnCodes).toContain("TARGET_EXISTS");
+    await app.close();
+  });
+
+  it("rejects AppleDouble junk filenames (Spec 115)", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/semantic-assets/validate")
+      .send({
+        defaultConnectionId: "customer-db",
+        files: [{ filename: "._dataforai.yaml", content: OVERLAY_YAML }]
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(false);
+    const codes = (res.body.data.errors as Array<{ code: string }>).map((e) => e.code);
+    expect(codes).toContain("INVALID_FILENAME");
     await app.close();
   });
 });

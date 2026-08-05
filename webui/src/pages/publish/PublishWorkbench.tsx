@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
@@ -13,45 +13,138 @@ import type {
   SemanticAssetManualReindexResponse,
   SourcesResponse,
   SourceSummary,
-  ValidateChangedResponse
+  ValidateChangedResponse,
+  ValidationResult
 } from "../../lib/types";
 import {
   SemanticAssetExportButton,
   SemanticAssetPublishDrawer
 } from "../../components/semantic-assets";
+import {
+  formatValidationFailureToast,
+  isNoiseValidationLine,
+  listValidationIssueMessages,
+  primaryValidationIssue
+} from "../semantic/validation-utils";
 
 function tableNameFromPath(filePath: string) {
   return filePath.split("/").pop()?.replace(/\.ya?ml$/, "") ?? filePath;
 }
 
+function WorkbenchValidationRow({
+  conn,
+  schema,
+  table,
+  validation
+}: {
+  conn: string;
+  schema: string;
+  table: string;
+  validation: ValidationResult;
+}) {
+  const issueMessages = listValidationIssueMessages(validation).filter(
+    (message) => !isNoiseValidationLine(message)
+  );
+  return (
+    <div
+      className={clsx(
+        "pl-validation-row",
+        validation.ok ? "pl-validation-row--ok" : "pl-validation-row--failed"
+      )}
+      data-testid={`workbench-validation-row-${table}`}
+    >
+      <div className="grid gap-1">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <strong className="notranslate" translate="no">
+            {conn}/{schema}/{table}
+          </strong>
+          <span>{validation.ok ? "通过" : "未通过"}</span>
+        </div>
+        {!validation.ok && issueMessages.length > 0 ? (
+          <div data-testid="workbench-validation-issues">
+            <p className="text-xs font-medium mb-1">校验问题</p>
+            <ul className="pl-validation-issues list-none p-0 m-0 grid gap-1">
+              {issueMessages.map((message) => (
+                <li key={message} className="text-xs notranslate" translate="no">
+                  {message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {!validation.ok ? (
+          <details className="text-xs" data-testid="workbench-validation-tech-details">
+            <summary>技术详情</summary>
+            <p className="mt-1">退出码 {validation.exitCode}</p>
+            {(validation.stderr || validation.stdout) && (
+              <pre className="pl-yaml-preview mt-1 notranslate" translate="no">
+                {`${validation.stderr}\n${validation.stdout}`.trim()}
+              </pre>
+            )}
+          </details>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export type ClassifiedSemanticChange =
+  | { kind: "schema-manifest"; conn: string; schema: string; filePath: string }
+  | { kind: "table-overlay"; conn: string; table: string; filePath: string }
+  | { kind: "other"; filePath: string };
+
+const SCHEMA_MANIFEST_PATH =
+  /^semantic-layer\/([^/]+)\/_schema\/([^/]+)\.ya?ml$/i;
+const TABLE_OVERLAY_PATH = /^semantic-layer\/([^/]+)\/([^/]+)\.ya?ml$/i;
+
+export function classifyChangedSemanticFile(filePath: string): ClassifiedSemanticChange {
+  const schemaMatch = filePath.match(SCHEMA_MANIFEST_PATH);
+  if (schemaMatch) {
+    return {
+      kind: "schema-manifest",
+      conn: schemaMatch[1],
+      schema: schemaMatch[2],
+      filePath
+    };
+  }
+  const tableMatch = filePath.match(TABLE_OVERLAY_PATH);
+  if (tableMatch && tableMatch[2] !== "_schema") {
+    return {
+      kind: "table-overlay",
+      conn: tableMatch[1],
+      table: tableMatch[2],
+      filePath
+    };
+  }
+  return { kind: "other", filePath };
+}
+
+export function classifyChangedSemanticFiles(filePaths: string[]): ClassifiedSemanticChange[] {
+  return filePaths.map(classifyChangedSemanticFile);
+}
+
 /**
- * M36: extract table-domain hints from a changed file path so we can show
- * the user which eval domain(s) are likely affected by the change.
- *
- * The path layout is `semantic-layer/<conn>/<file>.yaml` for table-level
- * overlays and `semantic-layer/<conn>/_schema/<schema>.yaml` for schema
- * manifests. We cannot reverse-engineer the schema from the file path so
- * we key the impact on the connection (e.g. `mysql-aliyun`).
+ * Table-level overlays only. Schema Manifest paths must not appear as table names.
  */
-function impactedTableNames(filePaths: string[]): string[] {
+export function impactedTableNames(filePaths: string[]): string[] {
   const seen = new Set<string>();
-  for (const filePath of filePaths) {
-    const tableName = tableNameFromPath(filePath);
-    if (tableName.endsWith(".yaml") || tableName.endsWith(".yml")) continue;
-    if (tableName.startsWith("_")) continue;
-    if (tableName.includes("/")) continue;
-    seen.add(tableName);
+  for (const classified of classifyChangedSemanticFiles(filePaths)) {
+    if (classified.kind === "table-overlay") {
+      seen.add(classified.table);
+    }
   }
   return [...seen].sort();
 }
 
-/**
- * M36 review follow-up: reverse-resolve a table name to the first matching
- * `conn/schema/table` tuple from the live sources. If the same table name
- * exists under multiple connections (rare, but possible) we deliberately
- * take the first hit to keep the impact panel bounded; the deep-link still
- * lands on a real drawer instead of the "未找到该表" error state.
- */
+export function fileChangeStatusLabel(status: string): string {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "w" || normalized === "m" || normalized === "modified") return "已修改";
+  if (normalized === "a" || normalized === "added") return "新增";
+  if (normalized === "d" || normalized === "deleted") return "已删除";
+  if (normalized === "r" || normalized === "renamed") return "已重命名";
+  return "已变更";
+}
+
 function findSourceForTable(
   sources: SourceSummary[],
   tableName: string
@@ -100,8 +193,8 @@ export function boundaryChecklistForChangedFiles(files: string[]): string[] {
 
 type PublishGate =
   | { state: "empty" }
-  | { state: "pending" } // 有 pending files 但还没有 validate / 空 results / 校验未通过
-  | { state: "ready" }; // pending > 0 且 validate gate 通过
+  | { state: "pending" }
+  | { state: "ready" };
 
 function derivePublishGate(
   pendingFiles: number,
@@ -109,18 +202,32 @@ function derivePublishGate(
 ): PublishGate {
   if (pendingFiles === 0) return { state: "empty" };
   if (!validate) return { state: "pending" };
-  // Empty results is a real fail-closed case: `/api/diff` may include files
-  // (e.g. wiki edits) that `/api/validate-changed` does not cover. Treat the
-  // absence of validation rows the same as a failed gate so the workbench
-  // never lights up the publish CTA on unvalidated files.
   if (validate.results.length === 0) return { state: "pending" };
   if (validate.results.some((row) => !row.validation.ok)) return { state: "pending" };
   return { state: "ready" };
 }
 
+function gateNextStepCopy(gate: PublishGate, failedCount: number, hasValidate: boolean): string {
+  if (gate.state === "empty") {
+    return "暂无待发布变更。可上传语义资产，或在 CLI / Git 更新后强制重建索引。";
+  }
+  if (!hasValidate) {
+    return "下一步：校验变更。";
+  }
+  if (failedCount > 0) {
+    return `${failedCount} 张表校验未通过，发布已被阻断。`;
+  }
+  if (gate.state === "pending") {
+    return "当前变更无可校验对象或校验未通过，发布已阻断。";
+  }
+  return "校验已通过，可使用顶部「发布并重建索引」。";
+}
+
 export function PublishWorkbench() {
   const [selected, setSelected] = useState<string | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const autoValidatedSignature = useRef<string | null>(null);
+
   const diffQuery = useQuery({
     queryKey: queryKeys.diff,
     queryFn: () => apiGet<ChangedFilesResponse>("/api/diff")
@@ -130,9 +237,23 @@ export function PublishWorkbench() {
     onSuccess: (data) => {
       const failed = data.results.filter((item) => !item.validation.ok).length;
       if (failed === 0) {
-        toast.success(`校验通过：${data.results.length} 张表全部 OK`);
+        if (data.results.length === 0) {
+          toast.message("校验完成：本次无可校验的表变更");
+        } else {
+          toast.success(`校验通过：${data.results.length} 张表全部通过`);
+        }
       } else {
-        toast.error(`校验失败：${failed} / ${data.results.length} 张表未通过`);
+        const firstFailed = data.results.find((item) => !item.validation.ok);
+        const primary = firstFailed ? primaryValidationIssue(firstFailed.validation) : null;
+        if (primary) {
+          const detail = formatValidationFailureToast(firstFailed!.validation).replace(
+            /^校验未通过：?/,
+            ""
+          );
+          toast.error(`校验未通过（${failed}/${data.results.length}）：${detail}`);
+        } else {
+          toast.error(`校验未通过：${failed} / ${data.results.length} 张表未通过`);
+        }
       }
     },
     onError: (error) => {
@@ -152,26 +273,32 @@ export function PublishWorkbench() {
       toast.error(`KTX 索引重建失败：${error instanceof Error ? error.message : "未知错误"}`);
     }
   });
-  // M36 review follow-up: pull sources so we can reverse-resolve
-  // `conn/schema/table` for each impacted table name and produce a real
-  // drawer link instead of a `_/_/<table>` placeholder.
   const sourcesQuery = useQuery({
     queryKey: queryKeys.sources,
     queryFn: () => apiGet<SourcesResponse>("/api/sources")
   });
 
   const files = diffQuery.data?.files ?? [];
+  const fileSignature = files.map((file) => file.filePath).join("\n");
+  const hasPendingFiles = files.length > 0;
   const boundaryChecklist = boundaryChecklistForChangedFiles(files.map((file) => file.filePath));
   const active = files.find((file) => file.filePath === (selected ?? files[0]?.filePath));
   const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
   const publishGate = derivePublishGate(files.length, validateMutation.data);
   const publishCtaDisabled = publishGate.state !== "ready";
-  const impactedTables = useMemo(() => impactedTableNames(files.map((file) => file.filePath)), [files]);
-  // For each impacted table name, find the first matching `conn/schema/table`
-  // tuple from `/api/sources`. If the lookup fails (table not yet in the
-  // catalog, sources query errored, etc.) we degrade gracefully and only
-  // render the table name without a link — the previous behaviour silently
-  // opened a "未找到该表" drawer which misled users.
+  const classified = useMemo(
+    () => classifyChangedSemanticFiles(files.map((file) => file.filePath)),
+    [files]
+  );
+  const schemaManifests = classified.filter(
+    (item): item is Extract<ClassifiedSemanticChange, { kind: "schema-manifest" }> =>
+      item.kind === "schema-manifest"
+  );
+  const impactedTables = useMemo(
+    () => impactedTableNames(files.map((file) => file.filePath)),
+    [files]
+  );
+  const otherChanges = classified.filter((item) => item.kind === "other");
   const impactedTableRefs = useMemo(() => {
     const sources = sourcesQuery.data?.tables ?? [];
     return impactedTables.map((tableName) => ({
@@ -184,6 +311,28 @@ export function PublishWorkbench() {
   const reindexFinished = reindexSucceeded && publishGate.state !== "ready";
   const reindexFailed = reindexMutation.data ? !reindexMutation.data.reindex.ok : false;
   const showPostPublishPrompt = reindexSucceeded && files.length > 0 && !publishCtaDisabled;
+
+  const runValidate = validateMutation.mutate;
+  const validatePending = validateMutation.isPending;
+
+  useEffect(() => {
+    if (!hasPendingFiles) {
+      autoValidatedSignature.current = null;
+      return;
+    }
+    if (diffQuery.isLoading || diffQuery.error || validatePending) return;
+    if (autoValidatedSignature.current === fileSignature) return;
+    autoValidatedSignature.current = fileSignature;
+    runValidate();
+  }, [
+    hasPendingFiles,
+    fileSignature,
+    diffQuery.isLoading,
+    diffQuery.error,
+    validatePending,
+    runValidate
+  ]);
+
   function validationForFile(filePath: string) {
     const tableName = tableNameFromPath(filePath);
     return validateMutation.data?.results.find((item) => item.table === tableName)?.validation;
@@ -194,11 +343,49 @@ export function PublishWorkbench() {
       ? "处理中…"
       : "发布并重建索引";
 
+  const nextStepCopy = gateNextStepCopy(
+    publishGate,
+    failedCount,
+    Boolean(validateMutation.data)
+  );
+
+  const stepReviewDone = hasPendingFiles;
+  const stepValidateDone = publishGate.state === "ready";
+  const stepValidateActive = hasPendingFiles && publishGate.state === "pending";
+  const stepPublishActive = publishGate.state === "ready";
+
+  function renderForceReindexButton(testId = "workbench-reindex") {
+    return (
+      <button
+        type="button"
+        className="pl-btn pl-btn--secondary"
+        onClick={() => reindexMutation.mutate()}
+        disabled={reindexMutation.isPending}
+        data-testid={testId}
+      >
+        {reindexMutation.isPending ? "重建中…" : "强制重建索引"}
+      </button>
+    );
+  }
+
+  function renderUploadButton(testId = "workbench-upload-semantic-asset") {
+    return (
+      <button
+        type="button"
+        className="pl-btn pl-btn--secondary"
+        onClick={() => setPublishOpen(true)}
+        data-testid={testId}
+      >
+        上传语义资产
+      </button>
+    );
+  }
+
   return (
     <div className="pl-page-stack">
       <PageHeader
         title="发布工作台"
-        description="查看并发布当前待生效的语义资产，系统将在发布后自动重建 KTX 索引。"
+        description="审阅待生效语义资产，校验通过后一键发布并重建索引。"
         badges={
           <>
             <span data-testid="workbench-pending-count">
@@ -210,57 +397,48 @@ export function PublishWorkbench() {
               <span>
                 {failedCount > 0
                   ? `校验失败 ${failedCount} 张`
-                  : `校验通过 ${validateMutation.data.results.length} 张`}
+                  : validateMutation.data.results.length === 0
+                    ? "无可校验表"
+                    : `校验通过 ${validateMutation.data.results.length} 张`}
               </span>
             ) : null}
           </>
         }
         actions={
           <>
-            <button
-              type="button"
-              className="pl-btn pl-btn--secondary"
-              onClick={() => validateMutation.mutate()}
-              disabled={validateMutation.isPending}
-              data-testid="workbench-validate"
-            >
-              {validateMutation.isPending ? "校验中…" : "校验变更"}
-            </button>
-            <button
-              type="button"
-              className="pl-btn pl-btn--secondary"
-              onClick={() => reindexMutation.mutate()}
-              disabled={reindexMutation.isPending}
-              data-testid="workbench-reindex"
-            >
-              {reindexMutation.isPending ? "重建中…" : "强制重建索引"}
-            </button>
-            <button
-              type="button"
-              className="pl-btn pl-btn--secondary"
-              onClick={() => setPublishOpen(true)}
-              data-testid="workbench-upload-semantic-asset"
-            >
-              上传语义资产
-            </button>
-            <button
-              type="button"
-              className={clsx(
-                "pl-btn",
-                publishGate.state === "ready" ? "pl-btn--primary" : "pl-btn--secondary",
-                publishGate.state === "ready" && "pl-btn--cta"
-              )}
-              onClick={() => setPublishOpen(true)}
-              disabled={publishCtaDisabled}
-              data-testid="workbench-publish-and-reindex"
-              data-gate={publishGate.state}
-              aria-disabled={publishCtaDisabled}
-            >
-              {publishCtaLabel}
-            </button>
-            <Link className="pl-btn pl-btn--ghost" to="/">
-              表目录
-            </Link>
+            {hasPendingFiles ? (
+              <>
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--secondary"
+                  onClick={() => validateMutation.mutate()}
+                  disabled={validateMutation.isPending}
+                  data-testid="workbench-validate"
+                >
+                  {validateMutation.isPending ? "校验中…" : "校验变更"}
+                </button>
+                <button
+                  type="button"
+                  className={clsx(
+                    "pl-btn",
+                    publishGate.state === "ready" ? "pl-btn--primary" : "pl-btn--secondary",
+                    publishGate.state === "ready" && "pl-btn--cta"
+                  )}
+                  onClick={() => setPublishOpen(true)}
+                  disabled={publishCtaDisabled}
+                  data-testid="workbench-publish-and-reindex"
+                  data-gate={publishGate.state}
+                  aria-disabled={publishCtaDisabled}
+                >
+                  {publishCtaLabel}
+                </button>
+              </>
+            ) : (
+              <>
+                {renderUploadButton()}
+                {renderForceReindexButton()}
+              </>
+            )}
             <SemanticAssetExportButton
               label="导出当前快照 (.zip)"
               variant="ghost"
@@ -299,8 +477,10 @@ export function PublishWorkbench() {
                 type="button"
                 onClick={() => setSelected(file.filePath)}
               >
-                <span>{file.status}</span>
-                <span className="truncate">{file.filePath}</span>
+                <span>{fileChangeStatusLabel(file.status)}</span>
+                <span className="truncate notranslate" translate="no">
+                  {file.filePath}
+                </span>
                 {validationForFile(file.filePath)?.ok === false ? (
                   <small>校验失败</small>
                 ) : null}
@@ -311,10 +491,19 @@ export function PublishWorkbench() {
 
         <section className="pl-review-main">
           <div className="pl-review-main-header">
-            <p className="pl-panel-title mb-1">{active?.filePath ?? "变更详情"}</p>
-            <p className="pl-notice">
-              {active ? `状态：${active.status}` : "请选择左侧文件查看 diff。"}
-            </p>
+            <p className="pl-panel-title mb-1">变更详情</p>
+            {active ? (
+              <>
+                <p className="pl-notice notranslate truncate" translate="no">
+                  {active.filePath}
+                </p>
+                <p className="pl-notice" data-testid="workbench-file-status">
+                  {fileChangeStatusLabel(active.status)}
+                </p>
+              </>
+            ) : (
+              <p className="pl-notice">请选择左侧文件查看 diff。</p>
+            )}
           </div>
           <DiffViewer diff={active?.diff || "该文件暂无可展示的补丁内容。"} />
         </section>
@@ -333,155 +522,231 @@ export function PublishWorkbench() {
                     : "pending"
             }
           >
-            <p className="pl-panel-title">变更影响范围</p>
-            {files.length === 0 ? (
-              <p className="pl-notice">暂无待发布变更。</p>
-            ) : impactedTables.length === 0 ? (
-              <p className="pl-notice">影响范围待校验</p>
-            ) : (
+            <p className="pl-panel-title">发布门禁</p>
+
+            <ol
+              className="flex flex-wrap items-center gap-1 text-xs text-fg-muted"
+              data-testid="publish-flow-steps"
+              aria-label="发布步骤"
+            >
+              <li className={clsx(stepReviewDone && "text-fg-default font-medium")}>审阅变更</li>
+              <li aria-hidden="true">→</li>
+              <li
+                className={clsx(
+                  (stepValidateActive || stepValidateDone) && "text-fg-default font-medium"
+                )}
+              >
+                校验
+              </li>
+              <li aria-hidden="true">→</li>
+              <li className={clsx(stepPublishActive && "text-fg-default font-medium")}>
+                发布并重建索引
+              </li>
+            </ol>
+
+            <p className="text-sm" data-testid="publish-gate-next-step">
+              {nextStepCopy}
+            </p>
+
+            {files.length === 0 ? null : (
               <div className="grid gap-2">
-                <div className="text-xs text-fg-muted">
-                  共影响 {impactedTables.length} 张表
-                </div>
-                <ul className="grid gap-1.5 text-sm" data-testid="publish-change-impact-list">
-                  {impactedTableRefs.map(({ tableName, source }) => (
-                    <li key={tableName} className="flex items-center justify-between gap-2">
-                      {source ? (
-                        <Link
-                          to={buildObjectDetailSearch({
-                            kind: "table",
-                            conn: source.conn,
-                            schema: source.schema,
-                            table: source.table
-                          })}
-                          className="pl-inline-link notranslate"
-                          translate="no"
-                          data-testid={`publish-impact-table-${tableName}`}
-                        >
-                          {tableName}
-                        </Link>
-                      ) : (
-                        <span
-                          className="text-fg-default notranslate"
-                          translate="no"
-                          data-testid={`publish-impact-table-${tableName}`}
-                        >
-                          {tableName}
-                        </span>
-                      )}
-                      <span className="text-xs text-fg-muted">
-                        {source ? `${source.conn}/${source.schema}` : "未在 Catalog 中"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                {schemaManifests.length > 0 ? (
+                  <div className="grid gap-1.5">
+                    <div className="text-xs text-fg-muted">
+                      <span className="notranslate" translate="no">
+                        Schema Manifest
+                      </span>{" "}
+                      变更 · {schemaManifests.length}
+                    </div>
+                    <ul className="grid gap-1 text-sm" data-testid="publish-impact-schema-list">
+                      {schemaManifests.map((item) => (
+                        <li key={item.filePath} className="flex items-center justify-between gap-2">
+                          <span className="notranslate" translate="no">
+                            {item.conn}/{item.schema}
+                          </span>
+                          <span className="text-xs text-fg-muted notranslate" translate="no">
+                            Schema Manifest
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {impactedTables.length > 0 ? (
+                  <div className="grid gap-1.5">
+                    <div className="text-xs text-fg-muted">
+                      表语义变更 · 共影响 {impactedTables.length} 张表
+                    </div>
+                    <ul className="grid gap-1.5 text-sm" data-testid="publish-change-impact-list">
+                      {impactedTableRefs.map(({ tableName, source }) => (
+                        <li key={tableName} className="flex items-center justify-between gap-2">
+                          {source ? (
+                            <Link
+                              to={buildObjectDetailSearch({
+                                kind: "table",
+                                conn: source.conn,
+                                schema: source.schema,
+                                table: source.table
+                              })}
+                              className="pl-inline-link notranslate"
+                              translate="no"
+                              data-testid={`publish-impact-table-${tableName}`}
+                            >
+                              {tableName}
+                            </Link>
+                          ) : (
+                            <span
+                              className="text-fg-default notranslate"
+                              translate="no"
+                              data-testid={`publish-impact-table-${tableName}`}
+                            >
+                              {tableName}
+                            </span>
+                          )}
+                          <span className="text-xs text-fg-muted">
+                            {source ? `${source.conn}/${source.schema}` : "未在 Catalog 中"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : schemaManifests.length === 0 && otherChanges.length === 0 ? (
+                  <p className="pl-notice text-xs">暂无表级语义变更。</p>
+                ) : null}
+
+                {otherChanges.length > 0 ? (
+                  <p className="text-xs text-fg-muted" data-testid="publish-impact-other-count">
+                    其它变更 {otherChanges.length} 项（不计入表影响）
+                  </p>
+                ) : null}
+
                 {failedCount > 0 ? (
                   <p className="pl-error text-xs" data-testid="publish-change-impact-blocked">
                     {failedCount} 张表校验未通过，发布已被阻断。
                   </p>
                 ) : null}
-                {!validateMutation.data ? (
-                  <p className="pl-notice text-xs">点击「校验变更」以确认影响范围。</p>
-                ) : null}
               </div>
             )}
           </section>
 
-          {boundaryChecklist.length > 0 ? (
-            <section
-              className="grid gap-3 notranslate"
-              translate="no"
-              data-testid="review-boundary-checklist"
-            >
-              <p className="pl-panel-title">边界检查</p>
-              <ul className="pl-boundary-checklist">
-                {boundaryChecklist.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           <section className="grid gap-3">
-            <p className="pl-panel-title">校验变更</p>
-            {validateMutation.data ? (
+            <p className="pl-panel-title">校验摘要</p>
+            {validateMutation.isPending && !validateMutation.data ? (
+              <p className="pl-notice">正在校验变更…</p>
+            ) : validateMutation.data ? (
               <div className="grid gap-2">
                 <div
                   className={
                     failedCount > 0
                       ? "pl-validation-banner pl-validation-banner--danger"
-                      : "pl-validation-banner pl-validation-banner--success"
+                      : validateMutation.data.results.length === 0
+                        ? "pl-validation-banner"
+                        : "pl-validation-banner pl-validation-banner--success"
                   }
                 >
                   {failedCount > 0
                     ? `${failedCount} 张表未通过`
-                    : `${validateMutation.data.results.length} 张表全部通过`}
+                    : validateMutation.data.results.length === 0
+                      ? "无可校验的表变更"
+                      : `${validateMutation.data.results.length} 张表全部通过`}
                 </div>
                 {validateMutation.data.results.map((item) => (
-                  <div
-                    className={clsx(
-                      "pl-validation-row",
-                      item.validation.ok
-                        ? "pl-validation-row--ok"
-                        : "pl-validation-row--failed"
-                    )}
+                  <WorkbenchValidationRow
                     key={`${item.conn}/${item.schema}/${item.table}`}
-                  >
-                    <div>
-                      <strong>{item.conn}/{item.schema}/{item.table}</strong>
-                      <span>退出码 {item.validation.exitCode}</span>
-                    </div>
-                    <span>{item.validation.ok ? "OK" : "FAIL"}</span>
-                  </div>
+                    conn={item.conn}
+                    schema={item.schema}
+                    table={item.table}
+                    validation={item.validation}
+                  />
                 ))}
               </div>
             ) : (
-              <p className="pl-notice">对本次服务会话中保存过的表运行校验。</p>
+              <p className="pl-notice">校验结果将显示在这里。</p>
             )}
           </section>
 
-          <section className="grid gap-3">
-            <p className="pl-panel-title"><span className="notranslate" translate="no">KTX</span> 索引</p>
-            {reindexMutation.data ? (
-              <div
-                className={
-                  reindexMutation.data.reindex.ok
-                    ? "pl-validation-banner pl-validation-banner--success"
-                    : "pl-validation-banner pl-validation-banner--danger"
-                }
-                data-testid="workbench-reindex-result"
-              >
-                {reindexMutation.data.reindex.ok
-                  ? `reindex 完成，退出码 ${reindexMutation.data.reindex.exitCode}`
-                  : `reindex 失败，退出码 ${reindexMutation.data.reindex.exitCode}`}
-              </div>
-            ) : reindexMutation.error ? (
-              <div
-                className="pl-validation-banner pl-validation-banner--danger"
-                data-testid="workbench-reindex-error"
-              >
-                {reindexMutation.error instanceof Error
-                  ? reindexMutation.error.message
-                  : "reindex 失败"}
-              </div>
-            ) : (
-              <p className="pl-notice">让 <span className="notranslate" translate="no">Agent</span> / <span className="notranslate" translate="no">MCP</span> 检索读取最新语义资产。</p>
-            )}
-          </section>
+          <details className="grid gap-2" data-testid="publish-advanced-actions">
+            <summary className="pl-panel-title cursor-pointer">高级</summary>
+            <div className="grid gap-3 pt-1">
+              {hasPendingFiles ? (
+                <div className="flex flex-wrap gap-2">
+                  {renderUploadButton("workbench-upload-semantic-asset")}
+                  {renderForceReindexButton("workbench-reindex")}
+                </div>
+              ) : null}
 
-          <section className="grid gap-3">
-            <p className="pl-panel-title">建议命令</p>
-            <pre className="pl-yaml-preview">git diff{"\n"}git status --short</pre>
-          </section>
+              {boundaryChecklist.length > 0 ? (
+                <section
+                  className="grid gap-2 notranslate"
+                  translate="no"
+                  data-testid="review-boundary-checklist"
+                >
+                  <p className="text-xs text-fg-muted">边界检查</p>
+                  <ul className="pl-boundary-checklist">
+                    {boundaryChecklist.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              <section className="grid gap-2">
+                <p className="text-xs text-fg-muted">
+                  <span className="notranslate" translate="no">
+                    KTX
+                  </span>{" "}
+                  索引
+                </p>
+                {reindexMutation.data ? (
+                  <div
+                    className={
+                      reindexMutation.data.reindex.ok
+                        ? "pl-validation-banner pl-validation-banner--success"
+                        : "pl-validation-banner pl-validation-banner--danger"
+                    }
+                    data-testid="workbench-reindex-result"
+                  >
+                    {reindexMutation.data.reindex.ok
+                      ? `reindex 完成，退出码 ${reindexMutation.data.reindex.exitCode}`
+                      : `reindex 失败，退出码 ${reindexMutation.data.reindex.exitCode}`}
+                  </div>
+                ) : reindexMutation.error ? (
+                  <div
+                    className="pl-validation-banner pl-validation-banner--danger"
+                    data-testid="workbench-reindex-error"
+                  >
+                    {reindexMutation.error instanceof Error
+                      ? reindexMutation.error.message
+                      : "reindex 失败"}
+                  </div>
+                ) : (
+                  <p className="pl-notice text-xs">
+                    发布成功后系统会自动重建索引；此处仅用于 CLI / Git 改动后的兜底重建。
+                  </p>
+                )}
+              </section>
+            </div>
+          </details>
 
           {showPostPublishPrompt ? (
-            <section
-              className="grid gap-3"
-              data-testid="publish-post-eval-prompt"
-            >
-              <p className="pl-panel-title">下一步 · 触发相关 Domain 的评测 <span className="notranslate" translate="no">Run</span></p>
+            <section className="grid gap-3" data-testid="publish-post-eval-prompt">
+              <p className="pl-panel-title">
+                下一步 · 触发相关 Domain 的评测{" "}
+                <span className="notranslate" translate="no">
+                  Run
+                </span>
+              </p>
               <p className="text-xs text-fg-muted">
-                发布已完成 <span className="notranslate" translate="no">KTX</span> 索引重建。建议立即触发相关 domain 的 <span className="notranslate" translate="no">eval run</span>，确认语义变更没有引入回归。
+                发布已完成{" "}
+                <span className="notranslate" translate="no">
+                  KTX
+                </span>{" "}
+                索引重建。建议立即触发相关 domain 的{" "}
+                <span className="notranslate" translate="no">
+                  eval run
+                </span>
+                ，确认语义变更没有引入回归。
               </p>
               <div className="flex flex-wrap gap-2">
                 {postPublishEvalDomains.map((domain) => (
@@ -503,7 +768,10 @@ export function PublishWorkbench() {
             <section className="grid gap-3" data-testid="publish-post-eval-blocked">
               <p className="pl-panel-title">下一步</p>
               <p className="text-xs text-fg-muted">
-                <span className="notranslate" translate="no">KTX</span> 索引重建失败，请先解决索引问题后再触发 eval。
+                <span className="notranslate" translate="no">
+                  KTX
+                </span>{" "}
+                索引重建失败，请先解决索引问题后再触发 eval。
               </p>
             </section>
           ) : null}
@@ -512,7 +780,11 @@ export function PublishWorkbench() {
             <section className="grid gap-3">
               <p className="pl-panel-title">下一步</p>
               <p className="text-xs text-fg-muted">
-                没有待发布变更，<span className="notranslate" translate="no">KTX</span> 索引已生效。
+                没有待发布变更，
+                <span className="notranslate" translate="no">
+                  KTX
+                </span>{" "}
+                索引已生效。
               </p>
             </section>
           ) : null}

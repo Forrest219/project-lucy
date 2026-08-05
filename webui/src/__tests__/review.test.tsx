@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PublishWorkbench,
-  boundaryChecklistForChangedFiles
+  boundaryChecklistForChangedFiles,
+  classifyChangedSemanticFile,
+  fileChangeStatusLabel,
+  impactedTableNames
 } from "../pages/publish/PublishWorkbench";
 
 function renderWorkbench() {
@@ -29,7 +32,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("PublishWorkbench", () => {
+describe("PublishWorkbench helpers", () => {
   it("maps changed files to boundary checklist prompts", () => {
     expect(
       boundaryChecklistForChangedFiles([
@@ -46,7 +49,28 @@ describe("PublishWorkbench", () => {
     ]);
   });
 
-  it("renders the publish workbench header and core actions", async () => {
+  it("classifies schema manifests separately from table overlays", () => {
+    expect(classifyChangedSemanticFile("semantic-layer/demo-mysql/_schema/dataforai.yaml")).toEqual({
+      kind: "schema-manifest",
+      conn: "demo-mysql",
+      schema: "dataforai",
+      filePath: "semantic-layer/demo-mysql/_schema/dataforai.yaml"
+    });
+    expect(impactedTableNames([
+      "semantic-layer/demo-mysql/_schema/dataforai.yaml",
+      "semantic-layer/demo-mysql/superstore_orders.yaml"
+    ])).toEqual(["superstore_orders"]);
+  });
+
+  it("maps internal file status codes to business labels", () => {
+    expect(fileChangeStatusLabel("W")).toBe("已修改");
+    expect(fileChangeStatusLabel("modified")).toBe("已修改");
+    expect(fileChangeStatusLabel("A")).toBe("新增");
+  });
+});
+
+describe("PublishWorkbench", () => {
+  it("renders empty-state header actions without 表目录", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -66,23 +90,18 @@ describe("PublishWorkbench", () => {
       screen.getByRole("heading", { name: "发布工作台" })
     ).toBeInTheDocument();
     expect(
-      screen.getByText("查看并发布当前待生效的语义资产", { exact: false })
+      screen.getByText("审阅待生效语义资产，校验通过后一键发布并重建索引。")
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "校验变更" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "强制重建索引" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上传语义资产" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "强制重建索引" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "导出当前快照 (.zip)" })).toBeInTheDocument();
-    // With zero pending files the main publish CTA must be present but
-    // disabled, never rendered as an enabled highlighted CTA.
-    const publishCta = screen.queryByRole("button", { name: "发布并重建索引" });
-    if (publishCta) {
-      expect(publishCta).toBeDisabled();
-    }
+    expect(screen.queryByRole("button", { name: "校验变更" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
     expect(screen.queryByText("变更审阅与校验")).not.toBeInTheDocument();
-    expect(screen.queryByText("Validate changed")).not.toBeInTheDocument();
+    expect(screen.getByText("发布门禁")).toBeInTheDocument();
   });
 
-  it("switches changed files and shows validate results", async () => {
+  it("switches changed files and auto-validates pending files", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -113,6 +132,9 @@ describe("PublishWorkbench", () => {
             })
           );
         }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
         return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
       })
     );
@@ -120,12 +142,82 @@ describe("PublishWorkbench", () => {
     renderWorkbench();
 
     expect(await screen.findByText(/\+ orders diff/)).toBeInTheDocument();
+    expect(screen.getByText("变更详情")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-file-status")).toHaveTextContent("已修改");
     fireEvent.click(screen.getByRole("button", { name: /customers.yaml/ }));
     expect(screen.getByText(/\+ customers diff/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "校验变更" }));
     expect(await screen.findByText("1 张表未通过")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("FAIL")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("未通过")).toBeInTheDocument());
+    expect(screen.queryByText("FAIL")).not.toBeInTheDocument();
+  });
+
+  it("shows validation issues in the workbench summary when validate fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  {
+                    filePath: "semantic-layer/demo-mysql/ai_intl_ad_daily.yaml",
+                    status: "modified",
+                    diff: "+ overlay"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  {
+                    conn: "demo-mysql",
+                    schema: "chatbi",
+                    table: "ai_intl_ad_daily",
+                    validation: {
+                      ok: false,
+                      exitCode: 1,
+                      stdout: "",
+                      stderr:
+                        "Project: /data/lucy\nsemantic-layer/demo-mysql/_schema/._dataforai.yaml: Semantic-layer source YAML must contain an object\n",
+                      issues: [
+                        { message: "Project: /data/lucy" },
+                        {
+                          message:
+                            "semantic-layer/demo-mysql/_schema/._dataforai.yaml: Semantic-layer source YAML must contain an object"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), {
+          status: 404
+        });
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByTestId("workbench-validation-issues")).toHaveTextContent(
+      "._dataforai.yaml: Semantic-layer source YAML must contain an object"
+    );
+    expect(screen.queryByText("Project: /data/lucy")).not.toBeInTheDocument();
+    expect(screen.getByTestId("workbench-validation-tech-details")).toBeInTheDocument();
   });
 
   it("keeps the force-reindex action visible and labeled 强制重建索引 even when there are no changed files", async () => {
@@ -177,10 +269,10 @@ describe("PublishWorkbench", () => {
     expect(calls).toEqual(["/api/semantic-assets/reindex"]);
   });
 
-  it("opens the semantic asset publish drawer when 上传语义资产 is clicked", async () => {
+  it("opens the semantic asset publish drawer from advanced upload when pending files exist", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url === "/api/diff") {
           return new Response(
@@ -198,13 +290,36 @@ describe("PublishWorkbench", () => {
             })
           );
         }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  {
+                    conn: "mysql-aliyun",
+                    schema: "dataforai",
+                    table: "superstore_orders",
+                    validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
         return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
       })
     );
 
     renderWorkbench();
 
-    const uploadButton = await screen.findByTestId("workbench-upload-semantic-asset");
+    expect(await screen.findByText(/\+ orders diff/)).toBeInTheDocument();
+    const advanced = screen.getByTestId("publish-advanced-actions");
+    fireEvent.click(within(advanced).getByText("高级"));
+    const uploadButton = await within(advanced).findByTestId("workbench-upload-semantic-asset");
     fireEvent.click(uploadButton);
     expect(await screen.findByTestId("semantic-asset-publish-drawer")).toBeInTheDocument();
   });
@@ -216,10 +331,6 @@ describe("PublishWorkbench", () => {
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url === "/api/diff") {
-          // Files outside the changedSources scope (e.g. a wiki page or
-          // .ktx-ui sidecar) show up in `/api/diff` but are not validated by
-          // `/api/validate-changed`. The publish CTA must stay disabled in
-          // that case so the workbench never claims a clean validate gate.
           return new Response(
             JSON.stringify({
               ok: true,
@@ -241,6 +352,9 @@ describe("PublishWorkbench", () => {
             JSON.stringify({ ok: true, data: { results: [] } })
           );
         }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
         return new Response(
           JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
           { status: 404 }
@@ -250,25 +364,18 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    // Wait for the diff to populate and inspect the initial gate.
     const publishCta = await screen.findByTestId("workbench-publish-and-reindex");
+    await waitFor(() => expect(validateCalls).toBeGreaterThan(0));
     await waitFor(() =>
       expect(publishCta).toHaveAttribute("data-gate", "pending")
     );
     expect(publishCta).toBeDisabled();
-    // After clicking the workbench's own `校验变更` button, the validate
-    // endpoint still returns an empty results array (wiki files aren't
-    // covered) so the gate must remain `pending` and the CTA must stay
-    // disabled. This is the fail-closed case described in M32 P2 #1.
-    fireEvent.click(screen.getByRole("button", { name: "校验变更" }));
-    await waitFor(() => expect(validateCalls).toBeGreaterThan(0));
-    expect(
-      screen.getByTestId("workbench-publish-and-reindex")
-    ).toHaveAttribute("data-gate", "pending");
-    expect(screen.getByTestId("workbench-publish-and-reindex")).toBeDisabled();
+    expect(screen.getByTestId("publish-gate-next-step")).toHaveTextContent(/发布已阻断/);
+    expect(screen.queryByText("建议命令")).not.toBeInTheDocument();
+    expect(screen.queryByText("git diff")).not.toBeInTheDocument();
   });
 
-  it("highlights the publish-and-reindex CTA only when pending files exist and validate gate passes", async () => {
+  it("auto-validates and highlights publish CTA when validate gate passes", async () => {
     let validateCalls = 0;
     vi.stubGlobal(
       "fetch",
@@ -308,31 +415,28 @@ describe("PublishWorkbench", () => {
             })
           );
         }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
         return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
       })
     );
 
     renderWorkbench();
 
-    // Wait for /api/diff to populate so the gate enters `pending` instead of `empty`.
     const publishCta = await screen.findByTestId("workbench-publish-and-reindex");
-    await waitFor(() =>
-      expect(publishCta).toHaveAttribute("data-gate", "pending")
-    );
-    expect(publishCta).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("button", { name: "校验变更" }));
     await waitFor(() => expect(validateCalls).toBeGreaterThan(0));
     await waitFor(() =>
       expect(screen.getByTestId("workbench-publish-and-reindex")).toHaveAttribute("data-gate", "ready")
     );
-    expect(screen.getByTestId("workbench-publish-and-reindex")).not.toBeDisabled();
+    expect(publishCta).not.toBeDisabled();
+    expect(screen.getByTestId("publish-gate-next-step")).toHaveTextContent(/校验已通过/);
   });
 
-  it("shows boundary checklist prompts for changed implementation files", async () => {
+  it("shows boundary checklist prompts for changed implementation files under advanced", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url === "/api/diff") {
           return new Response(
@@ -360,6 +464,12 @@ describe("PublishWorkbench", () => {
             })
           );
         }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(JSON.stringify({ ok: true, data: { results: [] } }));
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
         return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
       })
     );
@@ -374,10 +484,93 @@ describe("PublishWorkbench", () => {
     expect(checklist).toHaveTextContent("检查语义建模是否只处理业务语义和 overlay。");
   });
 
+  it("renders schema manifest impact separately and does not treat it as a table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  {
+                    filePath: "semantic-layer/demo-mysql/_schema/dataforai.yaml",
+                    status: "W",
+                    diff: ""
+                  },
+                  {
+                    filePath: "semantic-layer/demo-mysql/superstore_orders.yaml",
+                    status: "W",
+                    diff: "+ overlay"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  {
+                    conn: "demo-mysql",
+                    schema: "dataforai",
+                    table: "superstore_orders",
+                    validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                tables: [
+                  {
+                    conn: "demo-mysql",
+                    schema: "dataforai",
+                    table: "superstore_orders",
+                    filePath: "semantic-layer/demo-mysql/_schema/dataforai.yaml",
+                    columnCount: 1,
+                    columnNames: [],
+                    hasTableDesc: true,
+                    hasGrain: true,
+                    measureCount: 0,
+                    joinCount: 0,
+                    wikiRefCount: 0,
+                    completion: "done",
+                    mtime: "2026-07-30T00:00:00.000Z"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByTestId("publish-impact-schema-list")).toHaveTextContent(
+      "demo-mysql/dataforai"
+    );
+    expect(screen.getByTestId("publish-impact-table-superstore_orders")).toBeInTheDocument();
+    expect(screen.queryByTestId("publish-impact-table-dataforai")).not.toBeInTheDocument();
+    expect(screen.queryByText("状态：W")).not.toBeInTheDocument();
+  });
+
   it("renders real conn/schema in the change-impact drawer link when sources are loaded", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url === "/api/diff") {
           return new Response(
@@ -386,6 +579,23 @@ describe("PublishWorkbench", () => {
               data: {
                 files: [
                   { filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml", status: "modified", diff: "+ diff" }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  {
+                    conn: "mysql-aliyun",
+                    schema: "dataforai",
+                    table: "superstore_orders",
+                    validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+                  }
                 ]
               }
             })
@@ -432,14 +642,9 @@ describe("PublishWorkbench", () => {
   });
 
   it("renders impacted table as plain text when sources lookup misses", async () => {
-    // /api/diff mentions a table that does not exist in the sources
-    // endpoint. M36 review follow-up: the impact panel must NOT use a
-    // `_/_/<table>` placeholder that silently opens the "未找到该表"
-    // drawer; instead it renders the table name as plain text and labels
-    // it "未在 Catalog 中".
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url === "/api/diff") {
           return new Response(
@@ -453,6 +658,9 @@ describe("PublishWorkbench", () => {
             })
           );
         }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(JSON.stringify({ ok: true, data: { results: [] } }));
+        }
         if (url === "/api/sources") {
           return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
         }
@@ -465,9 +673,48 @@ describe("PublishWorkbench", () => {
     const label = await screen.findByTestId("publish-impact-table-ghost_table");
     expect(label.tagName).toBe("SPAN");
     expect(label).toHaveTextContent("ghost_table");
-    // Make sure no <a> exists with the legacy placeholder href.
     expect(
       document.querySelector('a[href*="conn=_"][href*="schema=_"]')
     ).not.toBeInTheDocument();
+  });
+
+  it("uses pending-state header with validate and publish, without 表目录", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  {
+                    filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                    status: "modified",
+                    diff: "+ diff"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(JSON.stringify({ ok: true, data: { results: [] } }));
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByTestId("workbench-validate")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-publish-and-reindex")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-export-snapshot")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("publish-flow-steps")).toHaveTextContent("审阅变更");
   });
 });

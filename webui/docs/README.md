@@ -98,9 +98,12 @@
 | [107-connection-live-catalog-discovery-spec.md](107-connection-live-catalog-discovery-spec.md) | `/connections` Owner 按需只读库内目录：库内表数列、Add Schema 可选、live-schemas API（Implemented v1.0；修订 Spec 21 边界） | 产品 / UX / API / Frontend |
 | [108-connection-card-connectivity-health-summary-spec.md](108-connection-card-connectivity-health-summary-spec.md) | `/connections` 连接卡右侧连通健康摘要：进页并行探测、延迟 ms、Drawer 同源（Implemented v1.0；修订 Spec 44 入口） | 产品 / UX / Frontend |
 | [109-wiki-directory-rename-spec.md](109-wiki-directory-rename-spec.md) | `/wiki` 目录重命名：同父级改名、前缀批量改写、预检/提交 API（Implemented v1.1；承接 UX-WIKI-044） | 产品 / UX / IA / API / Frontend |
+| [112-publish-workbench-flow-and-gate-ia-spec.md](112-publish-workbench-flow-and-gate-ia-spec.md) | `/publish/workbench` 发布流程可视、三栏角色、Header 收口、发布门禁（Implemented v1.0；修订 Spec 35 §6.1–6.3） | 产品 / UX / IA / Frontend |
 | [110-table-editor-validation-issue-disclosure-spec.md](110-table-editor-validation-issue-disclosure-spec.md) | 表编辑器「校验」失败披露 `issues`：可读问题列表、Toast 首因、弱化 Exit Code（Implemented v1.0；`UX-CATALOG-029`） | 产品 / UX / Frontend |
 | [113-publish-history-filters-pagination-and-csv-export-spec.md](113-publish-history-filters-pagination-and-csv-export-spec.md) | `/publish/history` 序号/筛选/分页；Header 导出明细 CSV（取代 ZIP）（Implemented v1.0） | 产品 / UX / API / Frontend |
-| [111-help-center-search-and-connection-kpi-glossary-spec.md](111-help-center-search-and-connection-kpi-glossary-spec.md) | `/help` 手册关键词搜索 + 连接概览「已发现表数」等 KPI 术语写入手册并可搜索命中（Implemented v1.0） | 产品 / UX / Frontend / Docs |
+| [114-table-editor-overlay-safe-yaml-import-spec.md](114-table-editor-overlay-safe-yaml-import-spec.md) | 表编辑器导入 overlay 不得冲掉 Schema Manifest 字段；抽屉引导发布工作台（Implemented v1.0；`UX-CATALOG-030`） | 产品 / UX / API / Frontend |
+| [115-publish-workbench-validation-disclosure-and-junk-scrub-spec.md](115-publish-workbench-validation-disclosure-and-junk-scrub-spec.md) | 发布工作台校验 issues 披露；`._*` scrub；上传拒收 junk（Implemented v1.0；`UX-PUBLISH-WORKBENCH-004`） | 产品 / UX / API / Frontend |
+| [111-help-center-search-and-connection-kpi-glossary-spec.md](111-help-center-search-and-connection-kpi-glossary-spec.md) | `/help` 手册关键词搜索 + 连接概览「已发现表数」等 KPI 术语写入手册并可搜索命中（Planned → Implemented） | 产品 / UX / Frontend / Docs |
 
 ## 与原 README 的关键校正
 

@@ -1,4 +1,5 @@
 import { execFile, type ExecFileException } from "node:child_process";
+import { scrubSemanticLayerJunk } from "./semantic-layer-junk";
 
 export type Issue = {
   message: string;
@@ -131,6 +132,9 @@ export async function validateSource(
   table: string,
   execFileImpl: ExecFileImpl = execFile
 ): Promise<ValidationResult> {
+  // Spec 115: remove AppleDouble / .DS_Store before ktx walks semantic-layer.
+  await scrubSemanticLayerJunk(projectRoot);
+
   return new Promise((resolve, reject) => {
     execFileImpl(
       "ktx",
