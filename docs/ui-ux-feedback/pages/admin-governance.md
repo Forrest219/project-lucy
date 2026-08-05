@@ -201,3 +201,31 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 78 / `wo-202608-10` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-009: 使用概况表格未遵从共享 Data Grid 基线
+
+Status: Fixed
+Route: `/admin/governance`
+Area: Agent 使用排行 / Token 使用摘要 / 最受访问表
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+本页三张表与 `/connections` 及 Data Grid 规范不一致：手写 `min-w-full divide-y text-sm` 基线，表头/正文约 14px，缺 `pl-data-grid`。
+
+### Evidence
+- 浏览器 + 源码：三表 class 为 `min-w-full divide-y divide-border-default text-sm`；computed th/td ≈ 14px/700 与 14px/400。
+- `/connections` Schema 资产表：`pl-data-grid pl-data-table pl-schema-asset-table`，约 12px 密度。
+- 定位评估：本页为 dashboard 使用概况，需轻量遵从共享网格基线，不必搬 connections 工作台全套列模板。
+
+### Expected
+三表使用 `pl-data-grid` + `pl-usage-overview-table`；12px 正文密度；数量列 `tabular-nums` 次级层级；「查看日志」弱强调 `pl-row-action-link`；不引入 schema-asset colgroup。
+
+### Browser Check
+1. Open `/admin/governance`.
+2. Confirm Agent / Token / 热门表三张 `table` 均含 class `pl-data-grid`.
+3. Confirm no table still uses `min-w-full divide-y … text-sm` as the baseline.
+4. Confirm「查看日志」使用行内弱链样式（非过亮页级主按钮强调）。
+
+### Notes
+Spec 82 / `wo-202608-14` 已落地（本轮不做浏览器验证，待复核后升 Verified）。

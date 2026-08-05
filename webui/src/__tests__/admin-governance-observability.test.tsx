@@ -142,6 +142,20 @@ describe("GovernanceOverview", () => {
     expect(screen.getByText("active-token")).toBeInTheDocument();
     expect(screen.getByText("mysql.dataforai.kx_fact_financial_amount")).toBeInTheDocument();
 
+    // Spec 82: light pl-data-grid conformance for the three usage tables.
+    for (const testId of [
+      "governance-agent-table",
+      "governance-token-table",
+      "governance-popular-tables-table"
+    ] as const) {
+      const table = screen.getByTestId(testId);
+      expect(table).toHaveClass("pl-data-grid");
+      expect(table).toHaveClass("pl-usage-overview-table");
+      expect(table.className).not.toMatch(/min-w-full/);
+      expect(table.className).not.toMatch(/divide-y/);
+    }
+    expect(screen.getByRole("link", { name: "查看日志" })).toHaveClass("pl-row-action-link");
+
     expect(screen.queryByText("Role 边界")).not.toBeInTheDocument();
     expect(screen.queryByText("拒绝原因")).not.toBeInTheDocument();
     expect(screen.queryByText("Agent 风险排行")).not.toBeInTheDocument();

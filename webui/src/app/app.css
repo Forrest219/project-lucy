@@ -709,6 +709,13 @@
   .pl-data-grid thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
   .pl-data-grid tbody td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-default; }
   .pl-data-grid tbody tr:hover { @apply bg-bg-muted; }
+  /* Spec 82: usage overview dashboard tables — light pl-data-grid conformance (12px body, no workbench colgroup). */
+  .pl-usage-overview-table tbody td { @apply text-xs font-medium leading-4; }
+  .pl-usage-overview-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
+  .pl-usage-overview-table-name { @apply grid gap-0.5; }
+  .pl-usage-overview-table-name-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
+  .pl-usage-overview-table-meta { @apply text-xs font-normal text-fg-muted; }
+  .pl-usage-overview-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
   .pl-catalog-table { min-width: 0; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
   .pl-catalog-table-name-link { @apply text-sm font-normal text-fg-default no-underline hover:underline; }

@@ -59,6 +59,7 @@
 | [69-admin-governance-observability-spec.md](69-admin-governance-observability-spec.md) | Admin Governance Observability：Audit Trace read model、Agent / Role / Token dashboard、risk review candidates、release readiness evidence package | 产品 / API / UX / 安全 |
 | [75-admin-governance-usage-overview-spec.md](75-admin-governance-usage-overview-spec.md) | `/admin/governance` usage-first 首屏：8 KPI、Agent/Token 使用、最受访问表；风险模块主屏下沉（§4–§6、§9 已被 Spec 78 局部修订） | 产品 / API / UX |
 | [78-admin-usage-overview-ux-refinement-spec.md](78-admin-usage-overview-ux-refinement-spec.md) | `/admin/governance` 命名改「使用概况」、顶栏去冗余、窗口全局化（活跃/表/P95 跟随 hours）、KPI 合并为 2×4、表统计两源并集 | 产品 / API / UX |
+| [82-admin-usage-overview-table-grid-light-conformance-spec.md](82-admin-usage-overview-table-grid-light-conformance-spec.md) | `/admin/governance` 三表轻量遵从 `pl-data-grid`（12px 密度、数量次级、弱操作链）；不做 connections 工作台 colgroup | 产品 / UX / Design System / Frontend |
 | [67-sidebar-brand-navigation-polish-spec.md](67-sidebar-brand-navigation-polish-spec.md) | Sidebar Brand Navigation Polish：参考 Kaelio ktx Docs 的品牌区、折叠菜单、active 状态和命令入口，升级 Lucy 左侧导航体验 | 产品 / UX / Navigation / Brand |
 | [68-sidebar-brand-navigation-followup-spec.md](68-sidebar-brand-navigation-followup-spec.md) | Sidebar Brand Navigation Follow-up：修复 M60 后的 Logo 返回、命令面板默认态、菜单字体体系和品牌名对齐问题 | 产品 / UX / Visual QA |
 | [70-command-palette-result-context-spec.md](70-command-palette-result-context-spec.md) | Command Palette Result Context：将全局命令面板结果从导航列表升级为带 breadcrumb、说明、命中高亮和排序解释的页面搜索结果 | 产品 / UX / Search / Frontend |

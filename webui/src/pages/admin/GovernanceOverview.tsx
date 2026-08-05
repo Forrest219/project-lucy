@@ -241,41 +241,54 @@ export function GovernanceOverview() {
             </p>
           </div>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border-default">
-          <table className="min-w-full divide-y divide-border-default text-sm">
-            <thead className="bg-bg-subtle text-left text-fg-muted">
+        <div className="overflow-x-auto">
+          <table
+            className="pl-data-grid pl-data-table pl-usage-overview-table"
+            data-testid="governance-agent-table"
+          >
+            <thead>
               <tr>
-                <th className="px-3 py-2 notranslate" translate="no">Agent</th>
-                <th className="px-3 py-2">最近访问</th>
-                <th className="px-3 py-2">近窗口调用</th>
-                <th className="px-3 py-2">平均响应时长</th>
-                <th className="px-3 py-2 notranslate" translate="no">活跃 Token</th>
-                <th className="px-3 py-2 notranslate" translate="no">配置 Token</th>
-                <th className="px-3 py-2">审计</th>
+                <th className="notranslate" translate="no">Agent</th>
+                <th>最近访问</th>
+                <th>近窗口调用</th>
+                <th>平均响应时长</th>
+                <th className="notranslate" translate="no">活跃 Token</th>
+                <th className="notranslate" translate="no">配置 Token</th>
+                <th>审计</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-default bg-bg-surface">
+            <tbody>
               {agents.map((agent) => (
                 <tr key={agent.id}>
-                  <td className="px-3 py-2">
-                    <Link className="text-accent hover:underline notranslate" translate="no" to={agent.agentHref}>
-                      {agent.name || agent.id}
-                    </Link>
-                    <div className="text-xs text-fg-muted notranslate" translate="no">{agent.id}</div>
+                  <td>
+                    <div className="pl-usage-overview-table-name">
+                      <Link
+                        className="pl-usage-overview-table-name-link notranslate"
+                        translate="no"
+                        to={agent.agentHref}
+                      >
+                        {agent.name || agent.id}
+                      </Link>
+                      <span className="pl-usage-overview-table-meta notranslate" translate="no">
+                        {agent.id}
+                      </span>
+                    </div>
                   </td>
-                  <td className="px-3 py-2">{formatTime(agent.lastSeen)}</td>
-                  <td className="px-3 py-2">{agent.calls}</td>
-                  <td className="px-3 py-2">{agent.avgLatencyMs} ms</td>
-                  <td className="px-3 py-2">{agent.activeTokenCount}</td>
-                  <td className="px-3 py-2">{agent.configuredTokenCount}</td>
-                  <td className="px-3 py-2">
-                    <Link className="text-accent hover:underline" to={agent.auditHref}>查看日志</Link>
+                  <td>{formatTime(agent.lastSeen)}</td>
+                  <td className="pl-usage-overview-table-num">{agent.calls}</td>
+                  <td className="pl-usage-overview-table-num">{agent.avgLatencyMs} ms</td>
+                  <td className="pl-usage-overview-table-num">{agent.activeTokenCount}</td>
+                  <td className="pl-usage-overview-table-num">{agent.configuredTokenCount}</td>
+                  <td>
+                    <Link className="pl-row-action-link" to={agent.auditHref}>
+                      查看日志
+                    </Link>
                   </td>
                 </tr>
               ))}
               {agents.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-fg-muted" colSpan={7}>
+                  <td className="py-6 text-center text-fg-muted" colSpan={7}>
                     暂无 <span className="notranslate" translate="no">Agent</span> 数据
                   </td>
                 </tr>
@@ -292,36 +305,41 @@ export function GovernanceOverview() {
             <p className="pl-notice">按最近访问排序；不重复展示顶部 KPI。</p>
           </div>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border-default">
-          <table className="min-w-full divide-y divide-border-default text-sm">
-            <thead className="bg-bg-subtle text-left text-fg-muted">
+        <div className="overflow-x-auto">
+          <table
+            className="pl-data-grid pl-data-table pl-usage-overview-table"
+            data-testid="governance-token-table"
+          >
+            <thead>
               <tr>
-                <th className="px-3 py-2 notranslate" translate="no">Token</th>
-                <th className="px-3 py-2 notranslate" translate="no">Agent</th>
-                <th className="px-3 py-2">最近访问</th>
-                <th className="px-3 py-2">窗口内活跃</th>
+                <th className="notranslate" translate="no">Token</th>
+                <th className="notranslate" translate="no">Agent</th>
+                <th>最近访问</th>
+                <th>窗口内活跃</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-default bg-bg-surface">
+            <tbody>
               {tokens.map((token) => (
                 <tr key={`${token.agentId}-${token.label}-${token.tokenHashPrefix ?? "none"}`}>
-                  <td className="px-3 py-2">
-                    <span className="font-medium notranslate" translate="no">{token.label}</span>
-                    <div className="text-xs text-fg-muted notranslate" translate="no">
-                      {token.tokenHashPrefix ?? "unknown"}
+                  <td>
+                    <div className="pl-usage-overview-table-name">
+                      <span className="notranslate" translate="no">{token.label}</span>
+                      <span className="pl-usage-overview-table-meta notranslate" translate="no">
+                        {token.tokenHashPrefix ?? "unknown"}
+                      </span>
                     </div>
                   </td>
-                  <td className="px-3 py-2">
+                  <td>
                     <Link
-                      className="text-accent hover:underline notranslate"
+                      className="pl-usage-overview-table-name-link notranslate"
                       translate="no"
                       to={`/admin/agents/${encodeURIComponent(token.agentId)}`}
                     >
                       {token.agentId}
                     </Link>
                   </td>
-                  <td className="px-3 py-2">{formatTime(token.lastUsed)}</td>
-                  <td className="px-3 py-2">
+                  <td>{formatTime(token.lastUsed)}</td>
+                  <td>
                     <span className={`pl-status-badge ${token.activeInWindow ? "pl-status-done" : "pl-status-partial"}`}>
                       {token.activeInWindow ? "活跃" : "未活跃"}
                     </span>
@@ -330,7 +348,7 @@ export function GovernanceOverview() {
               ))}
               {tokens.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-fg-muted" colSpan={4}>
+                  <td className="py-6 text-center text-fg-muted" colSpan={4}>
                     暂无 <span className="notranslate" translate="no">Token</span> 配置
                   </td>
                 </tr>
@@ -350,26 +368,29 @@ export function GovernanceOverview() {
             </p>
           </div>
         </div>
-        <div className="overflow-x-auto rounded-md border border-border-default">
-          <table className="min-w-full divide-y divide-border-default text-sm">
-            <thead className="bg-bg-subtle text-left text-fg-muted">
+        <div className="overflow-x-auto">
+          <table
+            className="pl-data-grid pl-data-table pl-usage-overview-table"
+            data-testid="governance-popular-tables-table"
+          >
+            <thead>
               <tr>
-                <th className="px-3 py-2">表名</th>
-                <th className="px-3 py-2">调用次数</th>
-                <th className="px-3 py-2">最近访问</th>
+                <th>表名</th>
+                <th>调用次数</th>
+                <th>最近访问</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-default bg-bg-surface">
+            <tbody>
               {popularTables.map((row) => (
                 <tr key={row.table}>
-                  <td className="px-3 py-2 notranslate" translate="no">{row.table}</td>
-                  <td className="px-3 py-2">{row.calls}</td>
-                  <td className="px-3 py-2">{formatTime(row.lastSeen)}</td>
+                  <td className="notranslate" translate="no">{row.table}</td>
+                  <td className="pl-usage-overview-table-num">{row.calls}</td>
+                  <td>{formatTime(row.lastSeen)}</td>
                 </tr>
               ))}
               {popularTables.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-fg-muted" colSpan={3}>
+                  <td className="py-6 text-center text-fg-muted" colSpan={3}>
                     暂无表访问数据（{windowText}）
                   </td>
                 </tr>
