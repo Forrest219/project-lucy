@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
@@ -94,6 +94,17 @@ function windowLabel(hours: WindowHours): string {
   return hours === 24 ? "近 24 小时" : "近 7 天";
 }
 
+/** Relative/absolute label aligned with `/overview` freshness badge. */
+function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
+  if (!statsAt) return "未知";
+  const diffMs = now.getTime() - statsAt.getTime();
+  if (diffMs < 5_000) return "刚刚";
+  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
+  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
+}
+
 function RankingBarList({
   rows,
   emptyLabel,
@@ -135,19 +146,43 @@ function RankingBarList({
 
 export function GovernanceOverview() {
   const [hours, setHours] = useState<WindowHours>(168);
+  const [now, setNow] = useState(() => new Date());
 
-  const { data: overview } = useQuery({
+  const overviewQuery = useQuery({
     queryKey: ["admin", "governance", "overview", hours],
     queryFn: () => apiGet<OverviewResponse>(`/api/admin/governance/overview?hours=${hours}`)
   });
-  const { data: agentsData } = useQuery({
+  const agentsQuery = useQuery({
     queryKey: ["admin", "governance", "agents", hours],
     queryFn: () => apiGet<{ agents: AgentRow[] }>(`/api/admin/governance/agents?hours=${hours}`)
   });
-  const { data: tokensData } = useQuery({
+  const tokensQuery = useQuery({
     queryKey: ["admin", "governance", "tokens", hours],
     queryFn: () => apiGet<{ tokens: TokenRow[] }>(`/api/admin/governance/tokens?hours=${hours}`)
   });
+
+  const overview = overviewQuery.data;
+  const agentsData = agentsQuery.data;
+  const tokensData = tokensQuery.data;
+
+  const statsReady =
+    overviewQuery.isSuccess && agentsQuery.isSuccess && tokensQuery.isSuccess;
+  const statsUpdatedAtMs = statsReady
+    ? Math.max(
+        overviewQuery.dataUpdatedAt,
+        agentsQuery.dataUpdatedAt,
+        tokensQuery.dataUpdatedAt
+      )
+    : 0;
+  const statsAt = statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null;
+
+  useEffect(() => {
+    if (statsUpdatedAtMs <= 0) return;
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, [statsUpdatedAtMs]);
+
+  const statsTimeLabel = formatStatsTimeLabel(statsAt, now);
 
   const usage = overview?.usageOverview;
   const popularTables = overview?.popularTables ?? [];
@@ -235,30 +270,42 @@ export function GovernanceOverview() {
         }
         actions={
           <div
-            className="pl-segmented-control pl-segmented-control--cols-2"
-            role="tablist"
-            aria-label="时间窗口"
+            className="flex items-center gap-3"
+            data-testid="governance-stats-time-controls"
           >
-            <button
-              type="button"
-              role="tab"
-              className={hours === 24 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
-              aria-selected={hours === 24}
-              data-testid="governance-window-24h"
-              onClick={() => setHours(24)}
+            <span
+              className="text-xs text-fg-muted whitespace-nowrap"
+              data-testid="governance-stats-time"
+              aria-hidden="true"
             >
-              24 小时
-            </button>
-            <button
-              type="button"
-              role="tab"
-              className={hours === 168 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
-              aria-selected={hours === 168}
-              data-testid="governance-window-7d"
-              onClick={() => setHours(168)}
+              统计时间：{statsTimeLabel}
+            </span>
+            <div
+              className="pl-segmented-control pl-segmented-control--cols-2"
+              role="tablist"
+              aria-label="时间窗口"
             >
-              7 天
-            </button>
+              <button
+                type="button"
+                role="tab"
+                className={hours === 24 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                aria-selected={hours === 24}
+                data-testid="governance-window-24h"
+                onClick={() => setHours(24)}
+              >
+                24 小时
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={hours === 168 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                aria-selected={hours === 168}
+                data-testid="governance-window-7d"
+                onClick={() => setHours(168)}
+              >
+                7 天
+              </button>
+            </div>
           </div>
         }
       />

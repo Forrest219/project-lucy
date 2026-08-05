@@ -505,3 +505,30 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 86 / `wo-202608-18` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-021: 使用概况缺少统计时间戳
+
+Status: Fixed
+Route: `/admin/usage`
+Area: PageHeader actions
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+KPI / 排行是请求时点对滚动窗口的快照，但页头只有 24h/7d 切换，无法判断数据新鲜度；建议对齐系统概览增加时间戳。
+
+### Evidence
+- 浏览器核查 `/admin/usage`：无「上次更新」「统计时间」。
+- `/overview` 有「上次更新：刚刚 / N 秒前」+ 刷新按钮。
+- 数据本身有 DB/`access_log` 支撑，非前台假数。
+
+### Expected
+PageHeader actions 在时间窗口切换**左侧**展示「统计时间：刚刚 / N 秒前 / N 分钟前 / HH:MM:SS」；布局 `flex items-center gap-3` 对齐 overview；本轮不加刷新按钮。
+
+### Browser Check
+1. Confirm「统计时间：…」appears left of 24h/7d control.
+2. Confirm label updates after successful load / window switch.
+3. Confirm relative-time rules match overview.
+
+### Notes
+Spec 87 / `wo-202608-19` 已落地（本轮不做浏览器验证，待复核后升 Verified）。

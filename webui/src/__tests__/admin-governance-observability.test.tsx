@@ -174,6 +174,15 @@ describe("GovernanceOverview", () => {
     expect(screen.queryByRole("link", { name: "查看日志" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "管理角色" })).not.toBeInTheDocument();
 
+    const controls = screen.getByTestId("governance-stats-time-controls");
+    expect(controls).toHaveClass("flex", "items-center", "gap-3");
+    const statsTime = screen.getByTestId("governance-stats-time");
+    expect(statsTime).toHaveTextContent(/^统计时间：/);
+    expect(statsTime).toHaveAttribute("aria-hidden", "true");
+    expect(within(controls).getByTestId("governance-stats-time").compareDocumentPosition(
+      within(controls).getByRole("tablist", { name: "时间窗口" })
+    )).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
     const windowGroup = screen.getByRole("tablist", { name: "时间窗口" });
     expect(windowGroup).toHaveClass("pl-segmented-control");
     expect(windowGroup).toHaveClass("pl-segmented-control--cols-2");
