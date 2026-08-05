@@ -98,6 +98,7 @@
 | [107-connection-live-catalog-discovery-spec.md](107-connection-live-catalog-discovery-spec.md) | `/connections` Owner 按需只读库内目录：库内表数列、Add Schema 可选、live-schemas API（Implemented v1.0；修订 Spec 21 边界） | 产品 / UX / API / Frontend |
 | [108-connection-card-connectivity-health-summary-spec.md](108-connection-card-connectivity-health-summary-spec.md) | `/connections` 连接卡右侧连通健康摘要：进页并行探测、延迟 ms、Drawer 同源（Implemented v1.0；修订 Spec 44 入口） | 产品 / UX / Frontend |
 | [109-wiki-directory-rename-spec.md](109-wiki-directory-rename-spec.md) | `/wiki` 目录重命名：同父级改名、前缀批量改写、预检/提交 API（Implemented v1.1；承接 UX-WIKI-044） | 产品 / UX / IA / API / Frontend |
+| [110-table-editor-validation-issue-disclosure-spec.md](110-table-editor-validation-issue-disclosure-spec.md) | 表编辑器「校验」失败披露 `issues`：可读问题列表、Toast 首因、弱化 Exit Code（Implemented v1.0；`UX-CATALOG-029`） | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

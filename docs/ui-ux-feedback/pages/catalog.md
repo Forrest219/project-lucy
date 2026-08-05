@@ -850,3 +850,29 @@ Reported: 2026-08-04
 本条目为核查记录，尚未修复；与 `UX-CATALOG-011` 存在方向性冲突，建议先由产品侧确认候选关联的最终 IA 归属，再排入实现。
 
 2026-08-04 Spec 73 / wo-202608-06 已落地 host 源码修复（`TableEditor.tsx`、`JoinEditor.tsx`、`app.css`、`table-editor.test.tsx`）。非浏览器验证通过：`npm test -- src/__tests__/table-editor.test.tsx`、`npm run lint:terminology`、`npm run build`、`git diff --check`。本轮按用户约束不做浏览器验证，待后续复核升 `Verified`。
+
+## UX-CATALOG-029: 校验失败只显示 Exit Code，不展示 issues 原因
+
+Status: Fixed
+Route: `/catalog/:conn/:schema/:table`
+Severity: P1
+Reported: 2026-08-06
+
+### Feedback
+点击 Header「校验」后，右侧「变更审阅 → 校验」仅显示「Validate 状态 / 未通过」与「Exit Code: 1」，Toast 也只说「Validate 未通过」。用户无法知道错在何处。API 实际已返回 `issues`（本例为 `._dataforai.yaml: Semantic-layer source YAML must contain an object`），前端未渲染。
+
+### Expected
+1. 校验未通过时展示「校验问题」列表（优先 `issues`，过滤 `Project:` 噪声）。
+2. Toast：`校验未通过：{首条实质问题}`。
+3. Exit Code / stderr 放入「技术详情」折叠，不得作为默认主信息。
+4. 主术语中文化；说明校验对象为已保存语义层（非未保存草稿）。
+
+### Browser Check
+1. Open `/catalog/demo-mysql/dataforai/superstore_orders`（或任意表）。
+2. Click Header「校验」with a failing validate response（或现场 `._*` 污染环境）。
+3. Verify 右侧「校验」Tab 可见具体文件路径/错误句；无默认主行「Exit Code」。
+4. Verify Toast 含首条实质问题；徽章为「校验未通过」而非裸「Validate …」。
+5. Expand「技术详情」；verify 可见退出码与原始输出。
+
+### Notes
+Spec 110 / `wo-202608-43` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。跨页面主题：`validation failure disclosure`。现场根因之一为 AppleDouble `._*.yaml`（P1 环境清理 / P2 ktx 忽略为后续非目标）。

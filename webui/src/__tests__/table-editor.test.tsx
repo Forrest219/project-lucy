@@ -98,9 +98,21 @@ type FetchHandlers = {
   failSave?: boolean;
   failPreview?: boolean;
   candidates?: unknown;
+  validateResult?: {
+    ok: boolean;
+    exitCode: number;
+    stdout?: string;
+    stderr?: string;
+    issues?: Array<{ message: string }>;
+  };
 };
 
-function stubEditorFetch({ failSave = false, failPreview = false, candidates }: FetchHandlers = {}) {
+function stubEditorFetch({
+  failSave = false,
+  failPreview = false,
+  candidates,
+  validateResult
+}: FetchHandlers = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/sources") {
@@ -269,10 +281,17 @@ function stubEditorFetch({ failSave = false, failPreview = false, candidates }: 
       );
     }
     if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/validate" && init?.method === "POST") {
+      const payload = validateResult ?? { ok: true, exitCode: 0, stdout: "ok", stderr: "", issues: [] };
       return new Response(
         JSON.stringify({
           ok: true,
-          data: { ok: true, exitCode: 0, stdout: "ok", stderr: "", issues: [] }
+          data: {
+            ok: payload.ok,
+            exitCode: payload.exitCode,
+            stdout: payload.stdout ?? "",
+            stderr: payload.stderr ?? "",
+            issues: payload.issues ?? []
+          }
         })
       );
     }
@@ -356,7 +375,7 @@ describe("TableEditor", () => {
     expect(validateButton.className).not.toContain("pl-btn--ghost");
     expect(validateButton).toHaveAttribute(
       "title",
-      "对当前草稿运行语义 YAML 结构与规则校验，不写入文件；保存前可先校验发现问题。"
+      "校验已保存到磁盘的语义层文件结构与规则，不写入；未保存草稿不纳入本次校验。保存前可先发现问题。"
     );
     expect(within(headerActions).getByRole("button", { name: "保存" })).toBeInTheDocument();
     expect(screen.getAllByText("导出 YAML")).toHaveLength(1);
@@ -417,6 +436,7 @@ describe("TableEditor", () => {
     renderEditor();
 
     expect(await screen.findByRole("heading", { name: "superstore_orders" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "‹ 返回语义资产" })).toHaveAttribute("href", "/catalog");
     const context = screen.getByTestId("table-editor-header-context");
     expect(context).toHaveTextContent("连接：mysql-aliyun");
     expect(context).toHaveTextContent("Schema：dataforai");
@@ -534,7 +554,39 @@ describe("TableEditor", () => {
         expect.objectContaining({ method: "POST" })
       );
     });
-    expect(await screen.findByTestId("table-editor-validation-result")).toHaveTextContent("通过");
+    const result = await screen.findByTestId("table-editor-validation-result");
+    expect(result).toHaveTextContent("校验状态");
+    expect(result).toHaveTextContent("通过");
+    expect(result).not.toHaveTextContent("Exit Code");
+    expect(toastMock.success).toHaveBeenCalledWith("校验通过");
+  });
+
+  it("surfaces validation issues instead of only an exit code when validate fails", async () => {
+    const issue =
+      "semantic-layer/demo-mysql/_schema/._dataforai.yaml: Semantic-layer source YAML must contain an object";
+    stubEditorFetch({
+      validateResult: {
+        ok: false,
+        exitCode: 1,
+        stdout: "",
+        stderr: `Project: /data/lucy\n${issue}\n`,
+        issues: [{ message: "Project: /data/lucy" }, { message: issue }]
+      }
+    });
+    renderEditor();
+
+    const headerActions = await screen.findByTestId("page-header-actions");
+    fireEvent.click(within(headerActions).getByRole("button", { name: "校验" }));
+
+    const result = await screen.findByTestId("table-editor-validation-result");
+    expect(result).toHaveTextContent("未通过");
+    expect(screen.getByTestId("table-editor-validation-issues")).toHaveTextContent(issue);
+    expect(screen.getByTestId("table-editor-validation-issues")).not.toHaveTextContent("Project: /data/lucy");
+    expect(result).not.toHaveTextContent("Exit Code");
+    expect(within(result).getByText("技术详情")).toBeInTheDocument();
+    expect(toastMock.error).toHaveBeenCalledWith(`校验未通过：${issue}`);
+    expect(screen.getByTestId("table-editor-change-review")).toHaveTextContent("校验未通过");
+    expect(screen.getByTestId("table-editor-change-review")).not.toHaveTextContent("Validate");
   });
 
   it("clears stale validation after a new import preview", async () => {

@@ -56,6 +56,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-06 | Catalog `/catalog/:conn/:schema/:table` 校验披露 | Spec 110 / `wo-202608-43` 落地：`UX-CATALOG-029` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。校验失败展示 `issues` 列表；Toast 带首因；Exit Code 入「技术详情」；中文主术语；澄清已保存语义层范围。跨页面主题新增 `validation failure disclosure`。验证：`table-editor`、`validation-utils`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish Workbench `/publish/workbench` | 浏览器确认用户反馈属实，新建 `pages/publish-workbench.md`：`UX-PUBLISH-WORKBENCH-001`～`003`（Open）。流程不可发现、三栏角色不清（中栏裸路径 + `状态：W`）、Header 6 钮过密（含多余「表目录」）。截图 `assets/publish-workbench/UX-PUBLISH-WORKBENCH-001-003.png`。跨页面主题新增 `publish flow discoverability`、`publish workbench three-panel ia`、`header action density`。本轮只登记，不开 Spec/不改代码。 |
 | 2026-08-06 | Connections `/connections` 连通健康 | Spec 108 / `wo-202608-41` 落地：`UX-CONNECTIONS-028`～`030` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。卡右侧连通健康摘要（通/偏慢/需关注/不通 + ms）；进页并行 `connection test`；与 Drawer 同源。跨页面主题新增 `connection-card connectivity health`。验证：`connection-overview`、`connection-test`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Connections `/connections` live catalog | Spec 107 / `wo-202608-40` 落地：`UX-CONNECTIONS-026`～`027` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。Owner 按需只读库内目录；Schema 表新增「库内表数」；Add Schema 可选 + 手输兜底；进页按连接懒加载 + 10min TTL；修订 Spec 21 边界。跨页面主题新增 `live catalog vs local inventory`。验证：`live-catalog.test.ts`、`connection-overview.test.tsx`、`add-schema-drawer.test.tsx`、`lint:terminology`、`build`。 |
@@ -136,6 +137,7 @@ docs/ui-ux-feedback/
 
 | Theme | 影响 ledger | Status 分布 | Spec / Plan |
 |---|---|---|---|
+| `validation failure disclosure`（校验/门禁失败须展示可读 issues，禁止仅 Exit Code） | UX-CATALOG-029 | 1 Fixed | Spec 110 / wo-202608-43，待浏览器复核 |
 | `publish flow discoverability`（发布工作台须可视化「审阅→校验→发布」主路径与 gate 原因） | UX-PUBLISH-WORKBENCH-001 | 1 Open | 待 Spec |
 | `publish workbench three-panel ia`（左选文件 / 中变更详情 / 右发布门禁；禁裸路径作栏标题、禁内部 status 码） | UX-PUBLISH-WORKBENCH-002 | 1 Open | 待 Spec |
 | `header action density`（PageHeader 动作须分层，主组不宜 ≥5 平权并列） | UX-PUBLISH-WORKBENCH-003 | 1 Open | 待 Spec |
@@ -211,6 +213,7 @@ docs/ui-ux-feedback/
 - 当“状态”和“详情”对用户都像提醒时，应合并为一个审阅反馈区；状态是摘要，详情 / Diff 是证据，不应拆成两个相邻心智模型。
 - 长页面编辑的变更审阅必须对象级表达，不得只显示 `修改 1` 这类计数；可识别对象时应展示字段 / 指标 / 分群名称及关键 old -> new 值。
 - Raw Diff / YAML Diff 如果是用户识别变更的最直接证据，不得默认藏在 `高级` 折叠里；可用 tabs 降级 YAML / 校验等次要视图，但核心 Diff 应默认可见。
+- 校验 / 门禁失败必须披露可读原因（`issues` 或等价消息）；禁止只展示 Exit Code / OK·FAIL。退出码与原始 stderr/stdout 可放入「技术详情」折叠（主题 `validation failure disclosure`；样板见 Spec 110）。
 - 生产 UI 不展示研发 spec 式说明文案；必要帮助使用短 label、tooltip、帮助入口或文档链接承载。
 - 全局侧栏之外，页面主体内不得再引入视觉上等价的第二侧栏；局部导航优先使用 tabs、segmented controls 或紧凑切换器。
 - 当全局侧栏或页面侧栏已经承载目录树 / 层级导航时，页面主体首页不得再复刻同一棵树；主体应展示当前任务最有价值的资源列表、摘要或工作区内容，层级关系作为路径 metadata、筛选器或轻量 breadcrumb 表达。

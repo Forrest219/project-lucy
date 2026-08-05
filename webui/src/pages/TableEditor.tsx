@@ -27,9 +27,14 @@ import type {
   ValidationResult
 } from "../lib/types";
 import { RELATIONSHIP_LABELS, tableJoinCandidates } from "./semantic/join-utils";
+import {
+  formatValidationFailureToast,
+  isNoiseValidationLine,
+  listValidationIssueMessages
+} from "./semantic/validation-utils";
 
 const VALIDATE_BUTTON_TITLE =
-  "对当前草稿运行语义 YAML 结构与规则校验，不写入文件；保存前可先校验发现问题。";
+  "校验已保存到磁盘的语义层文件结构与规则，不写入；未保存草稿不纳入本次校验。保存前可先发现问题。";
 
 const editorSchema = z.object({
   tableDescription: z.string(),
@@ -693,6 +698,52 @@ type SaveStatusBadges = {
   validationError: string | null;
 };
 
+function ValidationResultPanel({ validation }: { validation: ValidationResult }) {
+  const issueMessages = listValidationIssueMessages(validation);
+  const visibleIssues = issueMessages.filter((message) => !isNoiseValidationLine(message));
+  const issuesToShow = visibleIssues.length > 0 ? visibleIssues : issueMessages;
+  const hasTechnicalOutput = Boolean(validation.stderr.trim() || validation.stdout.trim());
+
+  return (
+    <div className="grid gap-2" data-testid="table-editor-validation-result">
+      <div className="pl-validation-summary">
+        <div>
+          <span>校验状态</span>
+          <strong>{validation.ok ? "通过" : "未通过"}</strong>
+        </div>
+      </div>
+      {!validation.ok && issuesToShow.length > 0 ? (
+        <div className="pl-validation-issues" data-testid="table-editor-validation-issues">
+          <p className="pl-panel-title mb-2">校验问题</p>
+          <ul>
+            {issuesToShow.map((message) => (
+              <li key={message} className="notranslate" translate="no">
+                {message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {!validation.ok ? (
+        <details className="pl-validation-tech-details">
+          <summary>技术详情</summary>
+          <div className="pl-validation-summary mt-2">
+            <div>
+              <span>退出码</span>
+              <strong>{validation.exitCode}</strong>
+            </div>
+          </div>
+          {hasTechnicalOutput ? (
+            <pre className="pl-yaml-preview mt-2 notranslate" translate="no">
+              {[validation.stderr.trim(), validation.stdout.trim()].filter(Boolean).join("\n")}
+            </pre>
+          ) : null}
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 function ChangeReview({
   activeTab,
   changeSummary,
@@ -803,22 +854,16 @@ function ChangeReview({
       {activeTab === "validate" ? (
         <section className="pl-inspector-section" role="tabpanel">
           <p className="pl-panel-title">保存与校验</p>
+          <p className="pl-notice">
+            校验针对已保存到磁盘的语义层文件，不写入；未保存草稿不纳入本次校验。
+          </p>
           {previewError ? null : (
             <p className="pl-notice">
               预览包含 {fileCount} 个文件，未知 YAML Key {unknownKeys} 个。
             </p>
           )}
           {validation ? (
-            <div className="pl-validation-summary" data-testid="table-editor-validation-result">
-              <div>
-                <span>Validate 状态</span>
-                <strong>{validation.ok ? "通过" : "未通过"}</strong>
-              </div>
-              <div>
-                <span>Exit Code</span>
-                <strong>{validation.exitCode}</strong>
-              </div>
-            </div>
+            <ValidationResultPanel validation={validation} />
           ) : null}
         </section>
       ) : null}
@@ -1032,11 +1077,11 @@ function SaveStatusBadges({
       ) : null}
       {validation ? (
         <span className={clsx("pl-inspector-badge", validation.ok ? "pl-inspector-badge--success" : "pl-inspector-badge--danger")}>
-          Validate {validation.ok ? "通过" : "未通过"}
+          {validation.ok ? "校验通过" : "校验未通过"}
         </span>
       ) : null}
       {validationError ? (
-        <span className="pl-inspector-badge pl-inspector-badge--danger">Validate 失败</span>
+        <span className="pl-inspector-badge pl-inspector-badge--danger">校验失败</span>
       ) : null}
     </div>
   );
@@ -1355,9 +1400,9 @@ export function TableEditor() {
     [conn, schema, source, table]
   );
 
-  const runValidate = useCallback(async (): Promise<boolean> => {
+  const runValidate = useCallback(async (): Promise<ValidationResult | null> => {
     if (!source) {
-      return false;
+      return null;
     }
     try {
       const data = await apiPost<ValidationResult>(
@@ -1366,11 +1411,11 @@ export function TableEditor() {
       );
       setValidation(data);
       setValidationError(null);
-      return data.ok;
+      return data;
     } catch (caught: unknown) {
       setValidation(null);
-      setValidationError(caught instanceof Error ? caught.message : "Validate 失败");
-      return false;
+      setValidationError(caught instanceof Error ? caught.message : "校验失败");
+      return null;
     }
   }, [conn, schema, source, table]);
 
@@ -1670,13 +1715,17 @@ export function TableEditor() {
       ? runImportPreview(importedYaml)
       : runPreview(form);
     void Promise.resolve(action).then(async (previewOk) => {
-      const validateOk = await runValidate();
+      const validationResult = await runValidate();
       setInspectorTab("validate");
-      if (previewOk && validateOk) {
-        toast.success("Validate 通过");
-      } else {
-        toast.error("Validate 未通过");
+      if (previewOk && validationResult?.ok) {
+        toast.success("校验通过");
+        return;
       }
+      if (validationResult && !validationResult.ok) {
+        toast.error(formatValidationFailureToast(validationResult));
+        return;
+      }
+      toast.error("校验未通过");
     });
   }
 
@@ -1765,7 +1814,7 @@ export function TableEditor() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title={source ? <span className="notranslate" translate="no">{source.model.table}</span> : "语义维护"}
+title={source ? <span className="notranslate" translate="no">{source.model.table}</span> : "语义维护"}
         description={
           source ? (
             <span className="pl-table-editor-context" data-testid="table-editor-header-context">

@@ -161,6 +161,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Measure | 度量 | Measure | 指标混用 | 语义模型内的聚合表达式；当面向业务用户时优先叫“指标” |
 | Segment | 分群 | Segment | 片段 | 可复用过滤条件 |
 | Join | 关联 | Join | 加入、连接表 | 表之间的 join 关系 |
+| Semantic Validate | 校验 | 结构校验 | 裸 Validate 作主标签/主徽章（如「Validate 未通过」） | 表工作台 Header「校验」与变更审阅状态；针对已保存语义层（Spec 110） |
+| Validation Issue | 校验问题 | 问题详情 | 仅 Exit Code / 仅 FAIL 作为失败主信息 | `ValidationResult.issues[].message` 可读列表（Spec 110） |
+| Validation Technical Detail | 技术详情 | 原始输出 | 默认主屏展示 Exit Code | 折叠：退出码、stderr、stdout（Spec 110） |
 | Business Wiki | 业务 Wiki | Wiki 文档 | 维基文档可用于导航 | 业务解释和口径文档 |
 | Evaluation | 质量评测 | 评测 | 质量评价混用 | 数据问答或语义质量评测 |
 | Evaluation Case | 评测用例 | 评测集 | Case 管理、案例管理 | 数据问答 / 语义质量评测的单条样例 |

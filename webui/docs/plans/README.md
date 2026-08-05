@@ -153,6 +153,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-40-connection-live-catalog-discovery.md](wo-202608-40-connection-live-catalog-discovery.md) | 202608-40 | Spec 107：连接库内目录发现 — 库内表数 + Add Schema 可选（Implemented） |
 | [wo-202608-41-connection-card-connectivity-health-summary.md](wo-202608-41-connection-card-connectivity-health-summary.md) | 202608-41 | Spec 108：连接卡右侧连通健康摘要 + 进页探测（Implemented） |
 | [wo-202608-42-wiki-directory-rename.md](wo-202608-42-wiki-directory-rename.md) | 202608-42 | Spec 109：`/wiki` 目录重命名（Implemented） |
+| [wo-202608-43-table-editor-validation-issue-disclosure.md](wo-202608-43-table-editor-validation-issue-disclosure.md) | 202608-43 | Spec 110：表编辑器校验失败披露 issues（Implemented） |
 
 ### 202608 Governance & Observability — 并行启动建议
 
