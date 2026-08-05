@@ -261,12 +261,12 @@ describe("AppFrame shell", () => {
 
   it("labels the system overview entry as the runtime control plane", () => {
     // M61: brand block is now a Link to /overview with copy
-    // `Lucy WebUI` + `Data Agent 运维控制台`. Bare `Lucy` (the M60 wordmark)
-    // and the legacy `Lucy WebUI` Product-Placement rewrite must not
-    // silently come back, and the KTX brand must stay banned.
+    // `Lucy WebUI` + `Data Agent MCP`. Bare `Lucy` (the M60 wordmark)
+    // and the legacy long Chinese caption must not silently come back,
+    // and the KTX brand must stay banned.
     renderAt("/overview");
-    expect(screen.getByTestId("brand-title")).toHaveTextContent("LucyWebUI");
-    expect(screen.getByText("Data Agent 运维控制台")).toBeInTheDocument();
+    expect(screen.getByTestId("brand-title")).toHaveTextContent("Lucy WebUI");
+    expect(screen.getByText("Data Agent MCP")).toBeInTheDocument();
     expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运行状态" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "系统概览" })).toHaveAttribute("aria-current", "page");
@@ -286,25 +286,24 @@ describe("AppFrame shell", () => {
     // click on either the mark or the wordmark navigates.
     const brandBlock = screen.getByTestId("sidebar-brand");
     expect(brandBlock).toBe(brandLink);
-    expect(within(brandLink).getByTestId("brand-title")).toHaveTextContent("LucyWebUI");
-    expect(within(brandLink).getByText("Data Agent 运维控制台")).toBeInTheDocument();
+    expect(within(brandLink).getByTestId("brand-title")).toHaveTextContent("Lucy WebUI");
+    expect(within(brandLink).getByText("Data Agent MCP")).toBeInTheDocument();
   });
 
   it("does not expose the decorative logo glyph in the brand link's accessible name", () => {
     // M61: aria-label is the single source of truth for the brand link so
-    // screen readers don't read `L · Lucy WebUI Data Agent 运维控制台`.
+    // screen readers don't read `L · Lucy WebUI Data Agent MCP`.
     renderAt("/overview");
     const brandLink = screen.getByRole("link", { name: "返回系统概览" });
     expect(brandLink).not.toHaveAccessibleName(/^L\s/);
   });
 
-  it("renders only the Chinese brand tagline (no English duplicate) in the brand block", () => {
-    // v1.9.x 收口：英文 Subtitle 'Data Agent Ops Control Plane' 已移除，避免与
-    // 中文 tagline 重复；240px 侧栏宽度下保证不截断、不折行。
+  it("renders the shortened brand tagline without legacy captions", () => {
+    // Brand caption is `Data Agent MCP` (width-matched to 16px Lucy WebUI).
+    // Legacy Chinese / English duplicates must stay gone.
     renderAt("/overview");
-    expect(
-      screen.getByText("Data Agent 运维控制台"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Data Agent MCP")).toBeInTheDocument();
+    expect(screen.queryByText("Data Agent 运维控制台")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Data Agent Ops Control Plane"),
     ).not.toBeInTheDocument();
@@ -531,9 +530,9 @@ describe("AppFrame shell", () => {
   });
 
   describe("M66 brand block left/right alignment", () => {
-    it("renders the brand title and tagline in a grid column sized to the tagline", () => {
-      // M66 Brand Alignment: a single grid column sizes to the tagline;
-      // the title uses `justify-between` so L aligns with D and I with 台.
+    it("keeps Lucy WebUI as one wordmark sized against Data Agent MCP", () => {
+      // Title stays a single string (no Lucy / WebUI split). Caption is the
+      // shorter `Data Agent MCP` so natural widths match under 16px title.
       renderAt("/overview");
 
       const brandLink = screen.getByRole("link", { name: "返回系统概览" });
@@ -543,14 +542,10 @@ describe("AppFrame shell", () => {
 
       const title = screen.getByTestId("brand-title");
       const tagline = screen.getByTestId("brand-tagline");
-      expect(title).toHaveTextContent("LucyWebUI");
-      expect(within(title).getByText("Lucy")).toBeInTheDocument();
-      expect(within(title).getByText("WebUI")).toBeInTheDocument();
-      expect(tagline).toHaveTextContent("Data Agent 运维控制台");
+      expect(title).toHaveTextContent("Lucy WebUI");
+      expect(title.querySelectorAll("span")).toHaveLength(0);
+      expect(tagline).toHaveTextContent("Data Agent MCP");
       expect(title).toHaveClass("pl-brand-title");
-
-      // The legacy ellipse clamps lived inline on `.pl-brand-block
-      // .pl-brand-tagline`; they must not come back.
       expect(tagline.className).not.toContain("truncate");
     });
   });

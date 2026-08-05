@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
   Boxes,
+  Bot,
   Cable,
   ChartNoAxesCombined,
   ChevronRight,
@@ -11,13 +12,12 @@ import {
   Gauge,
   History,
   LayoutDashboard,
-  Network,
   Rocket,
   Search,
+  Share2,
   ShieldAlert,
   ShieldCheck,
   TableProperties,
-  Users,
   ClipboardList,
   Activity,
   BookOpen,
@@ -247,18 +247,18 @@ export function AppFrame() {
           </span>
           <div className="pl-brand-text">
             <strong className="pl-brand-title" data-testid="brand-title">
-              <span>Lucy</span>
-              <span>WebUI</span>
+              Lucy WebUI
             </strong>
-            {/* v1.9.x 收口：移除英文 Subtitle（与中文 tagline 重复），仅保留一行干净中文。
-                M61: 副标题继续保留 notranslate / translate="no" 防止浏览器翻译插件
-                将 `Data Agent` 改写成 `数据 代理` / `代理 代理` 等机器直译。 */}
+            {/* Brand caption shortened to `Data Agent MCP` so the natural
+                width matches the 16px `Lucy WebUI` wordmark without splitting
+                the title into spaced-apart tokens. Keep notranslate so
+                browsers don't rewrite `Data Agent` / `MCP`. */}
             <span
               className="pl-brand-tagline notranslate"
               translate="no"
               data-testid="brand-tagline"
             >
-              Data Agent 运维控制台
+              Data Agent MCP
             </span>
           </div>
         </Link>

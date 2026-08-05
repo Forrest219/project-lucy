@@ -186,12 +186,12 @@
   /* M60: brand block now leads with a logo mark + wordmark; the tagline
      stays a single, non-translating line so the wider sidebar can carry it
      without ellipsis.
-     M61: brand block is a clickable link to /overview. `display: grid` is
-     reset to keep it inline-flex safe, focus-visible ring mirrors the rest
-     of the sidebar, and the text column gets a fixed width so the two
-     brand lines stay visually aligned regardless of the logo glyph. */
+     M61: brand block is a clickable link to /overview.
+     Brand mb pushes the search trigger down so its top edge lines up with
+     the PageHeader border-b under title+description (workspace p-8 + 24 +
+     6 + 20 + 12 ≈ 94px). Keep this in sync if PageHeader rhythm changes. */
   .pl-brand-block {
-    @apply mb-4 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-3 py-1.5 no-underline transition-colors;
+    @apply mb-[30px] grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-3 py-1.5 no-underline transition-colors;
   }
   .pl-brand-block:hover {
     @apply bg-bg-muted;
@@ -204,10 +204,9 @@
     line-height: 1;
     letter-spacing: -0.02em;
   }
-  /* M61: brand text column sits beside the 36px mark inside the padded
-     sidebar grid. M66 sizes the column to the tagline via a single grid
-     track so both lines share one width; the title then distributes
-     `Lucy` / `WebUI` to the same left/right edges as `Data Agent` / `台`. */
+  /* Single-column brand text: tagline `Data Agent MCP` sizes the track;
+     16px `Lucy WebUI` uses mild letter-spacing so both lines share the
+     same left/right edges without splitting the wordmark. */
   .pl-brand-text.pl-brand-text {
     display: grid;
     width: max-content;
@@ -216,16 +215,18 @@
   .pl-brand-title,
   .pl-brand-block .pl-brand-tagline {
     grid-column: 1;
+    white-space: nowrap;
   }
   .pl-brand-title {
-    @apply flex w-full items-baseline justify-between text-[14px] font-semibold leading-none text-fg-default;
+    @apply text-[16px] font-semibold leading-none text-fg-default;
+    letter-spacing: 0.03em;
   }
   .pl-brand-block .pl-brand-tagline {
     display: block;
     width: max-content;
     font-size: 0.75rem;
     color: var(--token-color-fg-muted, #6b7280);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     font-variant-numeric: tabular-nums;
     margin-top: 1px;
   }
