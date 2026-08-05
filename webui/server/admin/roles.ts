@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
-import { recordConfigChange, getAuditDb } from "./audit.js";
+import { getAuditDb } from "./audit.js";
 import { previewRolePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
 import {
@@ -545,15 +545,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await writeAccessYaml(projectRoot, newConfig, {
+      enabled: true,
       changeType: "role_create",
       targetId: roleId,
       oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
       newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: shape.value.description },
-      diff
+      diff,
+      requestId: request.id,
+      source: "admin_roles_api"
     });
-    await writeAccessYaml(projectRoot, newConfig);
     const detail = await readAccessYaml(projectRoot);
     const finalResolved = findRole(detail.config, roleId);
     if (!finalResolved) {
@@ -685,15 +686,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await writeAccessYaml(projectRoot, newConfig, {
+      enabled: true,
       changeType: "role_patch",
       targetId: request.params.roleId,
       oldSummary: { description: existing.description, allow: existing.allow },
       newSummary: { description: shape.value.description, allow: shape.value.allow },
-      diff
+      diff,
+      requestId: request.id,
+      source: "admin_roles_api"
     });
-    await writeAccessYaml(projectRoot, newConfig);
     const detail = await readAccessYaml(projectRoot);
     return { ok: true, data: { written: true, version: detail.version, gate } };
   });
@@ -784,15 +786,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor());
       }
 
-      await recordConfigChange({
-        filePath: ACCESS_YAML_REL,
+      await writeAccessYaml(projectRoot, newConfig, {
+        enabled: true,
         changeType: "role_delete",
         targetId: request.params.roleId,
         oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
         newSummary: { roleIds: Object.keys(newConfig.roles ?? {}) },
-        diff
+        diff,
+        requestId: request.id,
+        source: "admin_roles_api"
       });
-      await writeAccessYaml(projectRoot, newConfig);
       return { ok: true, data: { written: true, version: (await readAccessYaml(projectRoot)).version, gate } };
     }
   );
@@ -888,15 +891,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await writeAccessYaml(projectRoot, newConfig, {
+      enabled: true,
       changeType: "role_create",
       targetId: newRoleId,
       oldSummary: { roleIds: Object.keys(config.roles ?? {}), sourceRoleId: request.params.roleId },
       newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), sourceRoleId: request.params.roleId },
-      diff
+      diff,
+      requestId: request.id,
+      source: "admin_roles_api"
     });
-    await writeAccessYaml(projectRoot, newConfig);
     const detail = await readAccessYaml(projectRoot);
     const finalResolved = findRole(detail.config, newRoleId);
     if (!finalResolved) {

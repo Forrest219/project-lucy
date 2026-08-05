@@ -6,6 +6,7 @@ import { previewDiff } from "../diff.js";
 import { assertReadable, safeWrite } from "../fs-safe.js";
 import { resolveProjectRoot } from "../project.js";
 import { getEvalDb } from "./db.js";
+import { auditedWriteFile } from "../admin/config-audit-write.js";
 import type { EvalResultCase, EvalResultImport, EvalSuite, EvalSuiteCase } from "../../src/lib/types.js";
 import {
   EVAL_SUITE_KIND,
@@ -300,7 +301,15 @@ export async function importEvalSuite(
   const diff = previewDiff(existing, proposedYaml, relPath);
 
   if (input.dryRun === false) {
-    await safeWrite(projectRoot, relPath, proposedYaml);
+    await auditedWriteFile(projectRoot, relPath, proposedYaml, {
+      enabled: true,
+      changeType: "eval_suite_import",
+      assetKind: "eval",
+      actorType: "ui_admin",
+      source: "eval_suite_import_api",
+      targetId: suite.suite_id,
+      diff
+    });
   }
 
   return {

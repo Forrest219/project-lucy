@@ -4,6 +4,7 @@ import { Document, isMap, parse, parseDocument, Scalar, YAMLMap, YAMLSeq, type P
 import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
+import { auditedWriteFile } from "./admin/config-audit-write.js";
 import type { AuthoredText, Column, Join, ManifestSchemaSummary, Measure, Segment, SourceSummary, TableModel, TablePatch } from "./model";
 import { previewOverlayUpdate } from "./overlay";
 import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
@@ -631,7 +632,16 @@ export async function writeSourcePatch(
 ): Promise<SourcePreview> {
   const preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
   for (const file of preview.files) {
-    await safeWrite(projectRoot, file.filePath, file.proposedYaml);
+    await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+      enabled: true,
+      changeType: "semantic_table_save",
+      assetKind: "semantic",
+      actorType: "ui_admin",
+      source: "semantic_layer_patch_api",
+      targetId: `${conn}:${schema}:${table}`,
+      diff: file.diff,
+      operation: "save"
+    });
   }
   return preview;
 }
@@ -714,7 +724,16 @@ export async function writeSourceYamlImport(
 ): Promise<SourcePreview> {
   const preview = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
   for (const file of preview.files) {
-    await safeWrite(projectRoot, file.filePath, file.proposedYaml);
+    await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+      enabled: true,
+      changeType: "semantic_table_import",
+      assetKind: "semantic",
+      actorType: "ui_admin",
+      source: "semantic_layer_import_api",
+      targetId: `${conn}:${schema}:${table}`,
+      diff: file.diff,
+      operation: "import"
+    });
   }
   return preview;
 }

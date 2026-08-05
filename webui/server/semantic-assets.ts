@@ -45,6 +45,7 @@ import { assertSafeTarget } from "./catalog-assets";
 import { ForbiddenPathError } from "./fs-safe";
 import { reindexProject, validateSource, type Issue, type ValidationResult } from "./ktx";
 import { reloadCatalog } from "./catalog-reload";
+import { recordConfigChange } from "./admin/audit.js";
 
 // ─── Public types (mirror of `webui/src/lib/types.ts`) ─────────────────────
 
@@ -1759,6 +1760,25 @@ export async function publishSemanticAssets(
     validation: { ok: true, results: gate.results }
   };
   await appendReleaseRecord(projectRoot, reindexingRecord);
+  await recordConfigChange({
+    filePath: "semantic-layer/",
+    changeType: "semantic_publish",
+    assetKind: "publish",
+    actor: actor,
+    actorType: "ui_admin",
+    source: "publish_workbench_api",
+    targetId: releaseId,
+    operation: "publish",
+    requestId: request.validationId,
+    oldSummary: { releaseId, changedSources: snapshot.changedSources.length },
+    newSummary: {
+      releaseId,
+      fileCount: releaseFiles.length,
+      connections: reindexingRecord.connectionIds,
+      validateOk: gate.ok
+    },
+    diff: snapshot.diff
+  });
 
   // Snapshot is consumed; clean it up.
   await deleteSnapshot(projectRoot, request.validationId);

@@ -75,6 +75,7 @@ import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
+import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
@@ -850,15 +851,18 @@ export function buildServer() {
       return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables } };
     }
 
-    const auditId = await recordConfigChange({
-      filePath: "ktx.yaml",
+    const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
+      enabled: true,
       changeType: "enabled_tables_update",
+      assetKind: "governance",
+      actorType: "ui_admin",
+      source: "connections_enabled_tables_api",
       targetId: connId,
       oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
       newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
-      diff
+      diff,
+      requestId: request.id
     });
-    await safeWrite(projectRoot, "ktx.yaml", proposedYaml);
     return { ok: true, data: { written: true, auditId, oldEnabledTables, newEnabledTables } };
   });
 

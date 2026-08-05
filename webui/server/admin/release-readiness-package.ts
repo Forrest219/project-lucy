@@ -81,6 +81,7 @@ export interface ConfigChangeSummaryBlock {
   totalChanges: number;
   byChangeType: Record<string, number>;
   byFilePath: Record<string, number>;
+  byAssetKind: Record<string, number>;
   lastChangeAt: string | null;
   unavailableReason?: string;
 }
@@ -495,6 +496,7 @@ async function buildConfigChangeSummary(
       totalChanges: 0,
       byChangeType: {},
       byFilePath: {},
+      byAssetKind: {},
       lastChangeAt: null,
       unavailableReason: input.unavailableReason
     };
@@ -507,6 +509,7 @@ async function buildConfigChangeSummary(
       totalChanges: 0,
       byChangeType: {},
       byFilePath: {},
+      byAssetKind: {},
       lastChangeAt: null,
       unavailableReason: error instanceof Error ? error.message : "config_change_log unavailable"
     };
@@ -529,6 +532,12 @@ async function buildConfigChangeSummary(
          GROUP BY file_path ORDER BY cnt DESC LIMIT 16`
       )
       .all(...params) as Array<{ file_path: string; cnt: number }>;
+    const byAsset = db
+      .prepare(
+        `SELECT asset_kind, COUNT(*) AS cnt FROM config_change_log ${where}
+         GROUP BY asset_kind ORDER BY cnt DESC LIMIT 16`
+      )
+      .all(...params) as Array<{ asset_kind: string | null; cnt: number }>;
     const last = db
       .prepare(`SELECT MAX(ts) AS last_ts FROM config_change_log ${where}`)
       .get(...params) as { last_ts: string | null };
@@ -537,11 +546,14 @@ async function buildConfigChangeSummary(
     for (const row of byType) byChangeType[row.change_type] = row.cnt;
     const byFilePath: Record<string, number> = {};
     for (const row of byFile) byFilePath[row.file_path] = row.cnt;
+    const byAssetKind: Record<string, number> = {};
+    for (const row of byAsset) byAssetKind[row.asset_kind ?? "governance"] = row.cnt;
 
     return {
       totalChanges: total.cnt ?? 0,
       byChangeType,
       byFilePath,
+      byAssetKind,
       lastChangeAt: last.last_ts ?? null
     };
   } catch (error) {
@@ -549,6 +561,7 @@ async function buildConfigChangeSummary(
       totalChanges: 0,
       byChangeType: {},
       byFilePath: {},
+      byAssetKind: {},
       lastChangeAt: null,
       unavailableReason: error instanceof Error ? error.message : "config_change_log query failed"
     };

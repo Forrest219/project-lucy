@@ -3,9 +3,9 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { stringify, parse } from "yaml";
 import type { FastifyInstance } from "fastify";
-import { safeWrite } from "../fs-safe.js";
+import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
-import { getAuditDb, recordConfigChange } from "./audit.js";
+import { getAuditDb } from "./audit.js";
 import type { YamlAccessConfig } from "./agents.js";
 import {
   evaluateAccessGovernanceGate,
@@ -180,14 +180,17 @@ export function registerTokenRoutes(app: FastifyInstance) {
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
     const content = stringify(newConfig, { lineWidth: 0 });
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+      enabled: true,
       changeType: "token_create",
+      assetKind: "governance",
+      actorType: "ui_admin",
+      source: "admin_tokens_api",
       targetId: userId,
       oldSummary: { tokenCount: user.tokens.length },
-      newSummary: { tokenCount: updatedUser.tokens.length, label, hashPrefix: tokenHash.slice(0, 19), expires_at: expires_at ?? null }
+      newSummary: { tokenCount: updatedUser.tokens.length, label, hashPrefix: tokenHash.slice(0, 19), expires_at: expires_at ?? null },
+      requestId: request.id
     });
-    await safeWrite(projectRoot, ACCESS_YAML_REL, content);
 
     return {
       ok: true,
@@ -275,14 +278,17 @@ export function registerTokenRoutes(app: FastifyInstance) {
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
     const content = stringify(newConfig, { lineWidth: 0 });
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+      enabled: true,
       changeType: "token_revoke",
+      assetKind: "governance",
+      actorType: "ui_admin",
+      source: "admin_tokens_api",
       targetId: userId,
       oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
-      newSummary: { tokenCount: updatedUser.tokens.length, label }
+      newSummary: { tokenCount: updatedUser.tokens.length, label },
+      requestId: request.id
     });
-    await safeWrite(projectRoot, ACCESS_YAML_REL, content);
 
     return { ok: true, data: { written: true, revokedAt, gate } };
   });

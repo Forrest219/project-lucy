@@ -12,6 +12,7 @@ import {
   safeRemoveDirectory,
   safeWrite
 } from "./fs-safe";
+import { auditedWriteFile } from "./admin/config-audit-write.js";
 
 export type WikiFrontmatter = {
   summary?: string;
@@ -888,7 +889,16 @@ export async function writeWiki(projectRoot: string, key: string, input: WikiWri
   const existed = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
   const preview = await previewWikiWrite(projectRoot, key, input);
-  await safeWrite(projectRoot, preview.filePath, preview.proposedMarkdown);
+  await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
+    enabled: true,
+    changeType: existed ? "wiki_edit_save" : "wiki_create",
+    assetKind: "wiki",
+    actorType: "ui_admin",
+    source: "wiki_api",
+    targetId: normalized,
+    operation: existed ? "edit_save" : "create",
+    diff: preview.diff
+  });
   if (existed) {
     await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
   }
@@ -973,7 +983,16 @@ export async function commitWikiUpload(projectRoot: string, input: WikiUploadInp
   const existed = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
   const preview = await previewWikiUpload(projectRoot, input);
-  await safeWrite(projectRoot, preview.filePath, preview.proposedMarkdown);
+  await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
+    enabled: true,
+    changeType: existed ? "wiki_upload_replace" : "wiki_upload_create",
+    assetKind: "wiki",
+    actorType: "ui_admin",
+    source: "wiki_api",
+    targetId: normalized,
+    operation: existed ? "upload_replace" : "upload_create",
+    diff: preview.diff
+  });
   if (existed) {
     await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
   }
@@ -1063,7 +1082,16 @@ export async function restoreWikiVersion(
 ): Promise<WikiVersionRestoreResult> {
   const detail = await readWikiVersion(projectRoot, key, versionId);
   const filePath = relPathForKey(detail.key);
-  await safeWrite(projectRoot, filePath, detail.rawMarkdown);
+  await auditedWriteFile(projectRoot, filePath, detail.rawMarkdown, {
+    enabled: true,
+    changeType: "wiki_restore",
+    assetKind: "wiki",
+    actorType: "ui_admin",
+    source: "wiki_api",
+    targetId: detail.key,
+    operation: "restore",
+    diff: detail.diffFromCurrent
+  });
   const restored = await createWikiVersionSnapshot(projectRoot, detail.key, detail.rawMarkdown, {
     operation: "restore",
     restoredFromVersionId: detail.versionId,
@@ -1193,7 +1221,16 @@ export async function moveWiki(
 
   const oldText = await readExisting(projectRoot, normalizedSource);
   await assertWikiSourceWritable(projectRoot, normalizedSource);
-  await safeWrite(projectRoot, targetRelPath, oldText);
+  await auditedWriteFile(projectRoot, targetRelPath, oldText, {
+    enabled: true,
+    changeType: "wiki_move",
+    assetKind: "wiki",
+    actorType: "ui_admin",
+    source: "wiki_api",
+    targetId: targetKey,
+    operation: "move",
+    diff: previewDiff("", oldText, targetRelPath)
+  });
   await safeRemove(projectRoot, sourceRelPath);
 
   // Carry the version history forward so the new key inherits the

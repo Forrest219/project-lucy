@@ -147,6 +147,20 @@ async function configChangeCount(hours: number): Promise<number> {
   }
 }
 
+async function configChangeByAssetKind(hours: number): Promise<Record<string, number>> {
+  try {
+    const db = await getAuditDb();
+    const rows = db.prepare(
+      "SELECT asset_kind, COUNT(*) AS count FROM config_change_log WHERE ts >= ? GROUP BY asset_kind"
+    ).all(sinceIso(hours)) as Array<{ asset_kind: string | null; count: number }>;
+    const grouped: Record<string, number> = {};
+    for (const row of rows) grouped[row.asset_kind ?? "governance"] = row.count;
+    return grouped;
+  } catch {
+    return {};
+  }
+}
+
 async function queryCallStats(hours: number): Promise<{ calls: number; avgLatencyMs: number; denied: number; errors: number }> {
   try {
     const db = await getAuditDb();
@@ -704,6 +718,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       activeTableCount,
       popularTablesResult,
       changes,
+      configChangeByAssetKindMap,
       highDenialAgentCount
     ] = await Promise.all([
       readAccessConfig(),
@@ -714,6 +729,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       queryActiveTableCount(hours),
       queryPopularTables(hours),
       configChangeCount(hours),
+      configChangeByAssetKind(hours),
       queryHighDenialAgentCount(hours)
     ]);
     const { rows: popularTables, tableStatsSource } = popularTablesResult;
@@ -748,6 +764,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
         usageOverview,
         popularTables,
         tableStatsSource,
+        configChangesByAssetKind: configChangeByAssetKindMap,
         // Compatibility payload for older clients / GOV-02 tests. UI must not drive from cards.
         cards: {
           calls: callStats.calls,
@@ -763,6 +780,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
           brokenRoleCount: roles.filter((role) => role.status === "broken").length,
           overBroadRoleCount: roles.filter((role) => role.status === "over_broad").length,
           configChangeCount: changes,
+          configChangesByAssetKind: configChangeByAssetKindMap,
           avgLatencyMs: callStats.avgLatencyMs,
           agentCount,
           activeAgentCount,

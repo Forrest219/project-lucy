@@ -3,9 +3,9 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { stringify, parse } from "yaml";
 import type { FastifyInstance } from "fastify";
-import { safeWrite } from "../fs-safe.js";
+import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
-import { getAuditDb, recordConfigChange } from "./audit.js";
+import { getAuditDb } from "./audit.js";
 import { previewRolePermissionsForAdmin, resolveEffectivePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
 import {
@@ -76,7 +76,20 @@ async function readAccessYaml(projectRoot: string): Promise<{ config: YamlAccess
   return { config, raw, version };
 }
 
-async function writeAccessYaml(projectRoot: string, config: YamlAccessConfig): Promise<void> {
+async function writeAccessYaml(
+  projectRoot: string,
+  config: YamlAccessConfig,
+  audit?: {
+    enabled: boolean;
+    changeType: string;
+    targetId?: string;
+    oldSummary?: unknown;
+    newSummary?: unknown;
+    diff?: string;
+    requestId?: string;
+    source?: string;
+  }
+): Promise<{ auditId?: number }> {
   // Strip derived last_used before writing
   const toWrite: YamlAccessConfig = {
     ...config,
@@ -89,7 +102,18 @@ async function writeAccessYaml(projectRoot: string, config: YamlAccessConfig): P
     }))
   };
   const content = stringify(toWrite, { lineWidth: 0 });
-  await safeWrite(projectRoot, ACCESS_YAML_REL, content);
+  return auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
+    enabled: true,
+    changeType: audit.changeType,
+    assetKind: "governance",
+    actorType: "ui_admin",
+    source: audit.source ?? "admin_agents_api",
+    targetId: audit.targetId,
+    oldSummary: audit.oldSummary,
+    newSummary: audit.newSummary,
+    diff: audit.diff,
+    requestId: audit.requestId
+  } : undefined);
 }
 
 function computeVersion(raw: string, mtimeMs: number): string {
@@ -579,15 +603,15 @@ export function registerAgentRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await writeAccessYaml(projectRoot, newConfig, {
+      enabled: true,
       changeType: "agent_create",
       targetId: newUser.id,
       oldSummary: { userIds: config.users.map((user) => user.id) },
       newSummary: { userIds: newConfig.users.map((user) => user.id), role: newUser.role },
-      diff
+      diff,
+      requestId: request.id
     });
-    await writeAccessYaml(projectRoot, newConfig);
     return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(newUser) } };
   });
 
@@ -742,15 +766,15 @@ export function registerAgentRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await writeAccessYaml(projectRoot, newConfig, {
+      enabled: true,
       changeType: "agent_patch",
       targetId: updatedUser.id,
       oldSummary: { enabled: existingUser.enabled !== false, role: existingUser.role, hasLegacyAllow: Boolean(existingUser.allow) },
       newSummary: { enabled: updatedUser.enabled !== false, role: updatedUser.role, hasLegacyAllow: Boolean(updatedUser.allow) },
-      diff
+      diff,
+      requestId: request.id
     });
-    await writeAccessYaml(projectRoot, newConfig);
     return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(updatedUser) } };
   });
 
@@ -818,14 +842,14 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     const newConfig: YamlAccessConfig = { ...config, users: config.users.filter((u) => u.id !== request.params.userId) };
-    await recordConfigChange({
-      filePath: ACCESS_YAML_REL,
+    await writeAccessYaml(projectRoot, newConfig, {
+      enabled: true,
       changeType: "agent_delete",
       targetId: user.id,
       oldSummary: { userIds: config.users.map((item) => item.id), tokenCount: user.tokens.length },
-      newSummary: { userIds: newConfig.users.map((item) => item.id) }
+      newSummary: { userIds: newConfig.users.map((item) => item.id) },
+      requestId: request.id
     });
-    await writeAccessYaml(projectRoot, newConfig);
     return { ok: true, data: { written: true, gate } };
   });
 }

@@ -4,9 +4,9 @@ import path from "node:path";
 import { parseDocument, stringify } from "yaml";
 import type { FastifyInstance } from "fastify";
 import { previewDiff } from "../diff.js";
-import { safeWrite } from "../fs-safe.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "../admin/audit.js";
+import { auditedWriteFile } from "../admin/config-audit-write.js";
 import { getEvalDb } from "./db.js";
 import {
   hashArtifact,
@@ -451,7 +451,15 @@ export function registerSecurityCandidateRoutes(app: FastifyInstance): void {
     }
     const preview = await buildPromotionPreview(candidate);
     const projectRoot = await resolveProjectRoot();
-    await safeWrite(projectRoot, CANDIDATE_REL_PATH, preview.proposedYaml);
+    await auditedWriteFile(projectRoot, CANDIDATE_REL_PATH, preview.proposedYaml, {
+      enabled: true,
+      changeType: "eval_security_candidate_promote",
+      assetKind: "eval",
+      actorType: "ui_admin",
+      source: "security_candidates_api",
+      targetId: candidate.id,
+      diff: preview.diff
+    });
     const evalDb = await getEvalDb();
     evalDb.prepare("UPDATE security_eval_candidate SET status = ?, updated_at = ? WHERE id = ?")
       .run("promoted", new Date().toISOString(), candidate.id);

@@ -6,6 +6,7 @@ import { previewDiff } from "../diff.js";
 import { resolveProjectRoot } from "../project.js";
 import type { FastifyInstance } from "fastify";
 import { getEvalDb } from "./db.js";
+import { auditedWriteFile } from "../admin/config-audit-write.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -263,7 +264,15 @@ export async function addCase(
   if (dryRun) {
     return { diff, proposedYaml };
   }
-  await safeWrite(projectRoot, relPath, proposedYaml);
+  await auditedWriteFile(projectRoot, relPath, proposedYaml, {
+    enabled: true,
+    changeType: "eval_case_save",
+    assetKind: "eval",
+    actorType: "ui_admin",
+    source: "eval_cases_api",
+    targetId: `${domain}:${caseData.id}`,
+    diff
+  });
   return { written: true };
 }
 
@@ -286,14 +295,29 @@ export async function updateCase(
   if (dryRun) {
     return { diff, proposedYaml };
   }
-  await safeWrite(projectRoot, relPath, proposedYaml);
+  await auditedWriteFile(projectRoot, relPath, proposedYaml, {
+    enabled: true,
+    changeType: "eval_case_save",
+    assetKind: "eval",
+    actorType: "ui_admin",
+    source: "eval_cases_api",
+    targetId: `${domain}:${caseId}`,
+    diff
+  });
   return { written: true };
 }
 
 export async function deleteCase(projectRoot: string, domain: string, caseId: string): Promise<void> {
   const { doc, relPath } = await readCasesDoc(projectRoot, domain);
   deleteCaseInDoc(doc, caseId);
-  await safeWrite(projectRoot, relPath, doc.toString({ lineWidth: 0 }));
+  await auditedWriteFile(projectRoot, relPath, doc.toString({ lineWidth: 0 }), {
+    enabled: true,
+    changeType: "eval_case_save",
+    assetKind: "eval",
+    actorType: "ui_admin",
+    source: "eval_cases_api",
+    targetId: `${domain}:${caseId}`
+  });
 }
 
 // ─── route registration ──────────────────────────────────────────────────────
