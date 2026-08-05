@@ -466,6 +466,27 @@ export function pageMatchesSearch(
   );
 }
 
+/**
+ * Pages whose key lives under `directory/` (recursive). Matches the
+ * tree's documentCount prefix semantics for Spec 105 explorer IA.
+ */
+export function pagesUnderDirectory<TPage extends { key: string }>(
+  pages: TPage[],
+  directory: string
+): TPage[] {
+  const dir = directory.trim().replace(/^\/+|\/+$/g, "");
+  if (!dir) return [];
+  const prefix = `${dir}/`;
+  return pages.filter((page) => page.key.startsWith(prefix));
+}
+
+/** Parent directory of a wiki page key; empty string when key has no slash. */
+export function directoryOfWikiKey(key: string): string {
+  const trimmed = key.trim().replace(/^\/+|\/+$/g, "");
+  if (!trimmed.includes("/")) return "";
+  return trimmed.split("/").slice(0, -1).join("/");
+}
+
 export type WikiValidationLevel = "error" | "warning" | "info";
 
 export type WikiValidationFinding = {

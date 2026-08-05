@@ -1775,8 +1775,10 @@
   .pl-chip--unknown { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-chip--muted { @apply border-border-default bg-bg-muted text-fg-muted; }
 
-  /* Wiki sidebar: compact, with explicit directory/document actions. */
-  .pl-wiki-sidebar { @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto; }
+  /* Wiki sidebar: Attu-style explorer panel (Spec 105). */
+  .pl-wiki-sidebar {
+    @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto rounded-md border border-border-default bg-bg-subtle p-3;
+  }
   .pl-wiki-sidebar-header { @apply flex items-center justify-between gap-2; }
   .pl-wiki-sidebar-title { @apply text-base font-medium; }
   .pl-wiki-sidebar-actions { @apply flex items-center gap-1; }
@@ -1797,10 +1799,12 @@
      modal instead. */
   .pl-wiki-layout--read,
   .pl-wiki-layout--edit {
-    /* Inherit the editor-layout 240px sidebar grid. Re-declared here
-       so the workbench layout never accidentally flips to single
-       column at desktop widths. */
-    grid-template-columns: 240px minmax(0, 1fr);
+    /* Spec 105: slightly wider explorer panel; gap kept for breathing room
+       while `.pl-wiki-main` adds a left border for Attu-style zoning. */
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+  .pl-wiki-main {
+    @apply min-w-0 border-l border-border-default pl-6;
   }
   .pl-wiki-body { @apply grid gap-4; }
   .pl-wiki-body--library { @apply content-start; }
@@ -1829,12 +1833,24 @@
   .pl-wiki-inspector-tab--active { @apply bg-bg-muted font-medium text-fg-default; }
   .pl-wiki-inspector-section { @apply min-h-[300px] grid gap-2; }
 
-  /* Library home: the neutral /wiki entrypoint before a document is selected. */
+  /* Library home: Spec 105 explorer — select prompt or scoped document list. */
   .pl-wiki-library-home { @apply grid content-start gap-3 self-start; }
+  .pl-wiki-library-select-prompt {
+    @apply grid content-start justify-items-start gap-2 rounded-md border border-dashed border-border-default bg-bg-subtle px-4 py-10 text-sm text-fg-muted;
+  }
+  .pl-wiki-library-select-prompt-title {
+    @apply m-0 text-base font-medium text-fg-default;
+  }
+  .pl-wiki-library-select-prompt-hint {
+    @apply m-0 max-w-md text-sm text-fg-muted;
+  }
   .pl-wiki-library-summary {
     @apply text-sm text-fg-muted;
   }
   .pl-wiki-library-summary strong { @apply font-medium text-fg-default; }
+  .pl-wiki-library-summary code {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs text-fg-default;
+  }
   .pl-wiki-library-documents {
     @apply grid list-none gap-1.5 p-0 m-0;
   }
@@ -2094,16 +2110,20 @@
     @apply mb-2 mt-4 text-xs font-semibold text-fg-muted;
   }
 
-  /* Wiki tree (sidebar): search + directory groups + title-first rows. */
+  /* Wiki tree (sidebar): search + directory groups + title-first rows.
+     Spec 105: directory labels are primary nav (text-sm), not muted xs. */
   .pl-wiki-tree { @apply grid gap-2; }
   .pl-wiki-tree-search { @apply text-sm; }
-  .pl-wiki-tree-list { @apply list-none p-0 m-0 grid gap-2; }
-  .pl-wiki-tree-group { @apply grid gap-1; }
+  .pl-wiki-tree-list { @apply list-none p-0 m-0 grid gap-1; }
+  .pl-wiki-tree-group { @apply grid gap-0.5; }
   .pl-wiki-tree-group-row { @apply flex min-w-0 items-center gap-1; }
   .pl-wiki-tree-group-toggle {
-    @apply flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded-sm px-1 py-1 text-xs font-medium text-fg-muted;
+    @apply flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded-sm px-1.5 py-1.5 text-sm font-medium text-fg-default;
   }
-  .pl-wiki-tree-group-toggle:hover { @apply text-fg-default; }
+  .pl-wiki-tree-group-toggle:hover { @apply bg-bg-muted; }
+  .pl-wiki-tree-group--active .pl-wiki-tree-group-toggle {
+    @apply bg-bg-selected font-semibold text-fg-default;
+  }
   .pl-wiki-tree-group-label { @apply min-w-0 truncate; }
   /* M64: triangle glyph removed; keep caret rule stubbed for any external selector. */
   .pl-wiki-tree-group-caret { display: none; }
@@ -2116,7 +2136,7 @@
   /* UX-WIKI-019: nested directory/document lists get a left guide line
      so multi-level hierarchy is visually legible without a triangle glyph. */
   .pl-wiki-tree-pages {
-    @apply list-none p-0 m-0 ml-2 grid gap-0.5 border-l border-border-default/60 pl-1;
+    @apply list-none p-0 m-0 ml-2 grid gap-0.5 border-l border-border-default pl-1.5;
   }
   .pl-wiki-tree-page { @apply grid; }
   .pl-wiki-tree-page-button {

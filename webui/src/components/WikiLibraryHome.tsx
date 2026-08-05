@@ -1,54 +1,75 @@
-import { buildWikiDirectoryTree, wikiTitleFromKey } from "../lib/wiki";
-import type { WikiDirectoryNode } from "../lib/wiki";
+import { pagesUnderDirectory, wikiTitleFromKey } from "../lib/wiki";
 import type { WikiDirectorySummary, WikiSummary } from "../lib/types";
 
 export type WikiLibraryHomeProps = {
   pages: WikiSummary[];
   directories?: WikiDirectorySummary[];
+  /** Spec 105: when set, list only documents under this directory prefix. */
+  selectedDirectory?: string | null;
   onSelect: (key: string) => void;
 };
 
 /**
- * Renders the neutral /wiki library home: a compact statistics summary
- * plus a flat Markdown document list. The previous directory-tree
- * recap was removed (M64) because it duplicated the left sidebar and
- * pushed the documents out of the first viewport.
+ * Right-panel Markdown list for the Business Wiki explorer.
+ *
+ * Spec 105 (Attu-aligned): without a selected directory, show a select
+ * prompt instead of a flat whole-library dump. With a directory, filter
+ * to that prefix. The sidebar tree remains the only directory hierarchy.
  */
 export function WikiLibraryHome({
-  directories = [],
   pages,
+  selectedDirectory = null,
   onSelect
 }: WikiLibraryHomeProps) {
-  const directoryTree = buildWikiDirectoryTree({ pages, directories });
-  const total = pages.length;
-  const directoryCount = countDirectories(directoryTree);
+  const directory = selectedDirectory?.trim() || "";
+  const scopedPages = directory ? pagesUnderDirectory(pages, directory) : [];
+
+  if (!directory) {
+    return (
+      <section
+        aria-label="Markdown 文档库"
+        className="pl-wiki-library-home"
+        data-testid="wiki-library-home"
+      >
+        <div
+          className="pl-wiki-library-select-prompt"
+          data-testid="wiki-library-select-prompt"
+        >
+          <p className="pl-wiki-library-select-prompt-title">从左侧选择目录或文档</p>
+          <p className="pl-wiki-library-select-prompt-hint">
+            选择 Wiki 目录后，将在此列出该目录下的 <span className="notranslate" translate="no">Markdown</span> 文档。
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
       aria-label="Markdown 文档库"
       className="pl-wiki-library-home"
+      data-directory={directory}
       data-testid="wiki-library-home"
     >
       <p className="pl-wiki-library-summary" data-testid="wiki-library-summary">
-        {directoryCount === 0 ? (
-          <>
-            当前收录 <strong>{total}</strong> 篇 <span className="notranslate" translate="no">Markdown</span> 文档，全部位于根目录。
-          </>
-        ) : (
-          <>
-            当前收录 <strong>{total}</strong> 篇 <span className="notranslate" translate="no">Markdown</span>{" "}
-            文档，分布在 <strong>{directoryCount}</strong> 个目录中。
-          </>
-        )}
+        当前目录{" "}
+        <code className="notranslate" translate="no">
+          wiki/{directory}
+        </code>
+        {" · "}
+        <strong>{scopedPages.length}</strong> 篇
       </p>
 
-      {pages.length === 0 ? (
-        <div className="pl-wiki-library-empty" data-testid="wiki-library-empty">
-          <p>还没有 Wiki 文档。</p>
+      {scopedPages.length === 0 ? (
+        <div
+          className="pl-wiki-library-empty"
+          data-testid="wiki-library-directory-empty"
+        >
+          <p>此目录还没有 Markdown 文档。</p>
         </div>
       ) : (
         <ul className="pl-wiki-library-documents" data-testid="wiki-library-documents">
-          {pages.map((page) => {
+          {scopedPages.map((page) => {
             const title = page.summary?.trim() || wikiTitleFromKey(page.key);
             return (
               <li
@@ -91,22 +112,5 @@ export function WikiLibraryHome({
         </ul>
       )}
     </section>
-  );
-}
-
-function countDirectories(nodes: WikiDirectoryNode[]): number {
-  // M65: only count top-level directories, and only those that actually
-  // contain (or recursively contain) Markdown documents. Empty subtrees
-  // were inflating the count in seed data and contradicted the
-  // user-facing summary.
-  //
-  // The synthetic root node (`path === ""`) represents pages that live at
-  // the wiki root rather than inside a named directory. We intentionally
-  // exclude it so the "N 个目录中" sentence stays consistent with the
-  // "全部位于根目录" fallback when no named directories exist.
-  return nodes.reduce(
-    (sum, node) =>
-      sum + (node.path === "" || node.documentCount === 0 ? 0 : 1),
-    0
   );
 }

@@ -52,6 +52,7 @@ const SOURCES = [
     joinCount: 0,
     wikiRefCount: 1,
     completion: "done",
+    enabled: true,
     mtime: "2026-07-27T00:00:00.000Z"
   },
   {
@@ -67,6 +68,7 @@ const SOURCES = [
     joinCount: 0,
     wikiRefCount: 1,
     completion: "done",
+    enabled: true,
     mtime: "2026-07-27T00:00:00.000Z"
   }
 ];
@@ -822,8 +824,18 @@ describe("WikiEditor Read Mode default (P0)", () => {
     // the stylesheet directly to pin the desktop rule that caused the
     // first-viewport regression.
     const css = readFileSync("src/app/app.css", "utf8");
-    expect(css).toContain("grid-template-columns: 240px minmax(0, 1fr);");
+    expect(css).toContain("grid-template-columns: 260px minmax(0, 1fr);");
     expect(css).toContain("@media (max-width: 768px)");
+  });
+
+  it("gives the wiki sidebar an explorer panel border and directory text-sm (Spec 105)", () => {
+    const css = readFileSync("src/app/app.css", "utf8");
+    const sidebar = css.match(/\.pl-wiki-sidebar\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(sidebar).toContain("border");
+    expect(sidebar).toContain("bg-bg-subtle");
+    const toggle = css.match(/\.pl-wiki-tree-group-toggle\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(toggle).toContain("text-sm");
+    expect(css).toMatch(/\.pl-wiki-main\s*\{[^}]*border-l/);
   });
 
   it("gives nested directory lists a left guide line for hierarchy (UX-WIKI-019)", () => {
@@ -1307,26 +1319,57 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
     });
   });
 
-  it("renders the neutral Markdown library home when the key is empty", async () => {
+  it("renders the Attu-style select prompt when no directory is selected (Spec 105)", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki");
 
     expect(screen.getByTestId("wiki-new-button")).toBeInTheDocument();
     expect(screen.getByTestId("wiki-upload-button")).toBeInTheDocument();
-    // M64：hero 大标题文案移除，"Markdown 文档库" 退化为 aria-label
     const home = await screen.findByTestId("wiki-library-home");
     expect(home).toHaveAttribute("aria-label", "Markdown 文档库");
-    expect(home).toHaveTextContent("当前收录");
+    expect(await screen.findByTestId("wiki-library-select-prompt")).toHaveTextContent(
+      "从左侧选择目录或文档"
+    );
+    expect(screen.queryByTestId("wiki-library-documents")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("wiki-library-summary")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "上传 Markdown" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "新建文档" })).toHaveLength(1);
     expect(screen.getByTestId("wiki-body")).toHaveClass("pl-wiki-body--library");
-    // M64：右侧改为 Markdown 文档列表
-    const documents = await screen.findByTestId("wiki-library-documents");
-    expect(within(documents).getAllByTestId("wiki-library-document").length).toBeGreaterThan(0);
-    expect(home).toHaveTextContent("篇");
     expect(screen.queryByTestId("wiki-library-groups")).not.toBeInTheDocument();
     expect(screen.queryByTestId("wiki-read-title")).not.toBeInTheDocument();
     expect(screen.getByTestId("wiki-layout")).not.toHaveAttribute("data-key");
+  });
+
+  it("scopes the right panel to documents under the selected directory (Spec 105)", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    await waitFor(() => {
+      expect(within(tree).getByRole("button", { name: /global\s*1\s*篇/ })).toBeInTheDocument();
+    });
+    fireEvent.click(within(tree).getByRole("button", { name: /global\s*1\s*篇/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/wiki?dir=global");
+    });
+    const summary = await screen.findByTestId("wiki-library-summary");
+    expect(summary).toHaveTextContent("wiki/global");
+    expect(summary).toHaveTextContent("1 篇");
+    const documents = screen.getByTestId("wiki-library-documents");
+    expect(within(documents).getAllByTestId("wiki-library-document")).toHaveLength(1);
+    expect(documents).toHaveTextContent("Superstore guide");
+    expect(documents).not.toHaveTextContent("Financial playbook");
+  });
+
+  it("shows an empty directory state when the selected directory has no Markdown (Spec 105)", async () => {
+    vi.stubGlobal("fetch", buildFetchMock(WIKI_PAGES, SOURCES, EMPTY_WIKI_DIRECTORIES));
+    renderWiki("/wiki?dir=ops");
+
+    expect(await screen.findByTestId("wiki-library-directory-empty")).toHaveTextContent(
+      "此目录还没有 Markdown 文档"
+    );
+    expect(screen.queryByTestId("wiki-library-documents")).not.toBeInTheDocument();
   });
 
   it("renders empty directories from the API as independent resources", async () => {
@@ -1338,10 +1381,9 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
       expect(within(tree).getByRole("button", { name: /ops\s*0\s*篇/ })).toBeInTheDocument();
     });
     expect(within(tree).getByRole("button", { name: /playbooks\s*0\s*篇/ })).toBeInTheDocument();
-    // M64：右侧文档列表只展示 Markdown 文档；空目录只出现在左侧 tree
-    const documents = await screen.findByTestId("wiki-library-documents");
-    expect(documents).toBeInTheDocument();
-    expect(documents).not.toHaveTextContent("ops");
+    // Spec 105：未选中目录时右栏是选择提示；空目录只出现在左侧 tree
+    expect(await screen.findByTestId("wiki-library-select-prompt")).toBeInTheDocument();
+    expect(screen.queryByTestId("wiki-library-documents")).not.toBeInTheDocument();
 
     fireEvent.change(within(tree).getByTestId("wiki-tree-search"), {
       target: { value: "playbooks" }
@@ -1957,29 +1999,23 @@ describe("Catalog table-level Wiki action", () => {
   });
 });
 
-describe("Wiki home and tree visual clarity (M64)", () => {
-  it("collapses the /wiki home hero to the statistics summary and renders a Markdown document list (M64)", async () => {
+describe("Wiki home and tree visual clarity (M64 / Spec 105)", () => {
+  it("shows select prompt on /wiki and a scoped Markdown list after directory selection (Spec 105)", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki");
 
     const home = await screen.findByTestId("wiki-library-home");
-    // spec §7.1：去掉 hero 大标题文案，但保留"Markdown 文档库"作为 aria-label
     expect(home).not.toHaveTextContent("按目录管理业务口径文档");
-    // 统计摘要文案仍然存在。React Query 在第一次 render 时仍是 loading 状态，
-    // summary 此时显示「0 篇 Markdown 文档，全部位于根目录」；我们要等到列表
-    // 拉回来之后再断言「个目录中」。`waitFor` 会反复重试直到数据落到 DOM。
-    await waitFor(() => {
-      expect(home).toHaveTextContent("3 篇 Markdown 文档");
-    });
-    expect(home).toHaveTextContent("个目录中");
-
-    // spec §7.2 + plan §Phase 5：右侧改为 Markdown 文档列表
-    const documents = await screen.findByTestId("wiki-library-documents");
-    expect(documents).toBeInTheDocument();
-    // 旧 testid 不再渲染
+    expect(await screen.findByTestId("wiki-library-select-prompt")).toBeInTheDocument();
     expect(screen.queryByTestId("wiki-library-groups")).not.toBeInTheDocument();
 
-    // 每一篇 Markdown 文档应有可见标题 + 完整 Wiki 路径 metadata
+    const tree = await screen.findByTestId("wiki-tree");
+    await waitFor(() => {
+      expect(within(tree).getByRole("button", { name: /global\s*1\s*篇/ })).toBeInTheDocument();
+    });
+    fireEvent.click(within(tree).getByRole("button", { name: /global\s*1\s*篇/ }));
+
+    const documents = await screen.findByTestId("wiki-library-documents");
     const items = within(documents).getAllByTestId("wiki-library-document");
     expect(items.length).toBeGreaterThan(0);
     const firstItem = items[0];
@@ -1988,7 +2024,6 @@ describe("Wiki home and tree visual clarity (M64)", () => {
     );
     const path = within(firstItem).getByTestId("wiki-library-document-path");
     expect(path.textContent).toMatch(/^wiki\/.+/);
-    // 翻译防御
     expect(path).toHaveAttribute("translate", "no");
     expect(path.className).toContain("notranslate");
   });
@@ -2012,11 +2047,11 @@ describe("Wiki home and tree visual clarity (M64)", () => {
     // 目录 row 仍然有可访问展开状态
     const group = within(tree).getAllByTestId("wiki-tree-group")[0];
     expect(group).toHaveAttribute("aria-expanded");
-    // toggle 行仍然可点击，且可聚焦按钮本身也暴露展开状态与可读名称
+    // Spec 105：未选中时 accessible name 为「选择目录」
     const toggle = within(group).getByTestId("wiki-tree-group-toggle");
     expect(toggle.tagName).toBe("BUTTON");
     expect(toggle).toHaveAttribute("aria-expanded", group.getAttribute("aria-expanded"));
-    expect(toggle).toHaveAccessibleName(/.+\s+\d+\s+篇，(收起目录|展开目录)/);
+    expect(toggle).toHaveAccessibleName(/.+\s+\d+\s+篇，(收起目录|展开目录|选择目录)/);
   });
 
   it("separates 目标目录 / 目标 Wiki 路径 / status badge in the upload preflight (M64)", async () => {
@@ -2062,61 +2097,64 @@ describe("Wiki home and tree visual clarity (M64)", () => {
   });
 });
 
-describe("Wiki home directory count (M65)", () => {
-  // M65：summary 只统计顶层目录 + 含 md 的目录。
-  // 旧实现递归统计所有节点，ops/playbooks 等嵌套目录会被错误计入；
-  // 没有任何 md 的目录（含空目录）也不应再被计入。
-
-  it("counts only top-level directories that contain Markdown documents", async () => {
+describe("Wiki directory-scoped library (Spec 105)", () => {
+  it("lists recursive descendants under the selected directory prefix", async () => {
     vi.stubGlobal("fetch", buildFetchMock(NESTED_WIKI_PAGES));
-    renderWiki("/wiki");
+    renderWiki("/wiki?dir=ops");
 
     const summary = await screen.findByTestId("wiki-library-summary");
     await waitFor(() => {
-      expect(summary).toHaveTextContent("5 篇 Markdown 文档");
+      expect(summary).toHaveTextContent("wiki/ops");
+      expect(summary).toHaveTextContent("2 篇");
     });
-    // NESTED_WIKI_PAGES = global/, poc/, kx/, ops/playbooks/, ops/runbooks/
-    // 顶层目录 4 个：global / poc / kx / ops。ops/playbooks 与 ops/runbooks
-    // 是嵌套目录，不再独立计入。
-    expect(summary).toHaveTextContent("4 个目录中");
-    expect(summary).not.toHaveTextContent("全部位于根目录");
+    const documents = screen.getByTestId("wiki-library-documents");
+    expect(documents).toHaveTextContent("Month end close");
+    expect(documents).toHaveTextContent("Incident response");
+    expect(documents).not.toHaveTextContent("Superstore guide");
   });
 
-  it("collapses the summary copy to `全部位于根目录` when no directories have content", async () => {
-    // 一篇根目录 md（key 不含 `/`），没有其它目录 → directoryCount = 0
-    const rootOnly = [
-      {
-        key: "welcome.md",
-        summary: "Welcome",
-        tags: [],
-        slRefs: []
-      }
-    ];
-    vi.stubGlobal("fetch", buildFetchMock(rootOnly, SOURCES, []));
-    renderWiki("/wiki");
+  it("marks the selected directory active in the tree", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?dir=global");
 
-    const summary = await screen.findByTestId("wiki-library-summary");
+    const tree = await screen.findByTestId("wiki-tree");
     await waitFor(() => {
-      expect(summary).toHaveTextContent("1 篇 Markdown 文档");
+      const active = within(tree)
+        .getAllByTestId("wiki-tree-group")
+        .find((el) => el.getAttribute("data-selected") === "true");
+      expect(active).toBeTruthy();
+      expect(active).toHaveTextContent("global");
     });
-    expect(summary).toHaveTextContent("全部位于根目录");
-    expect(summary).not.toHaveTextContent("个目录中");
   });
 
-  it("skips explicit empty directories so they don't inflate the count", async () => {
-    // 一篇真实 md 在 `global/`，另声明一个空目录 `archive`。
-    // 旧实现会把 archive 也算 1，新实现应忽略。
-    const directories: WikiDirectorySummary[] = [
-      { path: "global", name: "global", documentCount: 1, explicit: true, empty: false },
-      { path: "archive", name: "archive", documentCount: 0, explicit: true, empty: true }
-    ];
-    vi.stubGlobal("fetch", buildFetchMock(WIKI_PAGES, SOURCES, directories));
-    renderWiki("/wiki");
+  it("opens a document from the scoped list and clears dir from the URL", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?dir=global");
 
-    const summary = await screen.findByTestId("wiki-library-summary");
+    fireEvent.click(
+      await screen.findByTestId("wiki-library-document-button-global/superstore-analysis-playbook.md")
+    );
     await waitFor(() => {
-      expect(summary).toHaveTextContent("3 篇 Markdown 文档");
+      expect(screen.getByTestId("current-location")).toHaveTextContent(
+        "/wiki?key=global%2Fsuperstore-analysis-playbook.md"
+      );
     });
-    expect(summary).toHaveTextContent("3 个目录中");
+    expect(screen.getByTestId("current-location")).not.toHaveTextContent("dir=");
+  });
+
+  it("returns to the directory library when clicking the parent directory from a document", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    await waitFor(() => {
+      expect(within(tree).getByRole("button", { name: /global\s*1\s*篇/ })).toBeInTheDocument();
+    });
+    fireEvent.click(within(tree).getByRole("button", { name: /global\s*1\s*篇，选择目录/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location")).toHaveTextContent("/wiki?dir=global");
+    });
+    expect(await screen.findByTestId("wiki-library-documents")).toBeInTheDocument();
   });
 });

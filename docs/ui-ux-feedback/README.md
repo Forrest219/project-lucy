@@ -55,6 +55,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-06 | Business Wiki `/wiki` Explorer IA | Spec 105 / `wo-202608-38` 落地：`UX-WIKI-041`～`043` → `Fixed`；`UX-WIKI-044`（目录重命名）→ `Open`（本轮不做浏览器验证，结束后只做 code review）。`?dir=` 选中驱动右栏；Attu 式空态；中栏面板视觉 + 目录 `text-sm`；修订默认首页为先选目录。跨页面主题新增 `explorer panel selection ia`。验证：`wiki.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Overview `/overview` 质量/访问 Metric Row | Spec 102 / `wo-202608-35` 落地：`UX-OVERVIEW-016`～`018` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。六卡统一 `OpsMetricRow`：标题左上、主值左下、CTA 右中；Token 补 icon；语义 CTA → catalog incomplete。澄清 Spec 100 §8.2 CTA 落位。跨页面主题新增 `ops metric-row symmetry`。验证：`onboarding.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Spec 99+100 工单落地 | Spec 99 / `wo-202608-32`：`UX-ADMIN-MCP-PLAYGROUND-001`、`UX-ADMIN-AUDIT-018` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。MCP 调试台 ACL 预览 + `tools/list` smoke、裁决双行、Audit/Agent/Overview 入口。Spec 100 / `wo-202608-33`：`UX-OVERVIEW-011`～`014` → `Fixed`。Canonical Registry、Catalog `completion=incomplete`、危险/摘要 CTA、Attu 式指标卡 icon、回写 refetch。验证：相关 vitest、`lint:terminology`、`build`。 |
 | 2026-08-05 | Spec/Plan 落盘（无代码） | Spec 99 / `wo-202608-32`：MCP 调试台 + 裁决可读化（台账 `admin-mcp-playground.md`、`UX-ADMIN-AUDIT-018` Pending）。Spec 100 / `wo-202608-33`：overview 深链闭环（`UX-OVERVIEW-011`～`013` Pending）。术语标准新增 §4.8。 |
@@ -160,6 +161,7 @@ docs/ui-ux-feedback/
 | `decision-reason dual-line`（裁决原因主行中文 + 次行机器码；禁止仅裸码） | UX-ADMIN-AUDIT-018、UX-ADMIN-MCP-PLAYGROUND-001 | 2 Fixed | Spec 99 / wo-202608-32，待浏览器复核 |
 | `canonical health deeplink`（健康/待办 CTA 只生产 Registry URL；消费端同 PR） | UX-OVERVIEW-011～014 | 4 Fixed | Spec 100 / wo-202608-33，待浏览器复核 |
 | `ops metric-row symmetry`（运维快照卡：标题左上、主值左下、CTA 右中对齐待办） | UX-OVERVIEW-016～018 | 3 Fixed | Spec 102 / wo-202608-35，待浏览器复核 |
+| `explorer panel selection ia`（资源浏览器：中栏可选、右栏跟随、面板分割；勿四栏） | UX-WIKI-041～043（044 重命名延期 Open） | 3 Fixed + 1 Open | Spec 105 / wo-202608-38，待浏览器复核 |
 | `low-risk one-step save`（低风险配置编辑一步落盘，diff 仅作审计/高风险确认） | UX-ADMIN-AGENTS-036 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
 | `audit filter-table alignment`（筛选字段须与表头对齐，并含时间窗） | UX-ADMIN-CONFIG-AUDIT-006 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
 | `ops table density (pl-data-grid)`（治理/审计列表须轻量 `pl-data-grid` 12px） | UX-ADMIN-CONFIG-AUDIT-003 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
@@ -218,6 +220,7 @@ docs/ui-ux-feedback/
 - 发布 / 审计类历史表必须优先展示业务变更范围（连接、变更源）与规模（文件数、语义源数）；纯运维触发信息不得挤掉主列。手动索引重建且无资产变更时，须用明确空态文案，不得留白。
 - 「导出当前语义资产包」类动作若导出的是当前工作区而非历史批次，只能放在 Header（或页级辅助区）；禁止在历史行内用「下载快照」等文案冒充该批次存档。按 releaseId 的历史包下载未交付前，不得放假按钮。
 - 运维驾驶舱并排快照卡（如质量快照 / 访问风险）必须共用同一 Metric Row 骨架：标题左上、主值左下并拉开间距、CTA 右侧垂直居中对齐「待处理事项」；禁止同栏内混用「主值右上 / CTA 左下 / Token 特例」多套模板（主题 `ops metric-row symmetry`；样板见 Spec 102）。
+- 带全局侧栏的资源工作台（如 Business Wiki）应对齐 Explorer 三栏心智：全局导航 | 可选中资源树（实体面板 + 竖分割）| 主内容跟随选中态；禁止再拆第四栏列表+预览。目录/集合选中须写入可分享 URL；无选中时右栏给明确空态，不得 silently 倾倒全库列表。目录重命名等破坏性路径改写须独立 Spec，不得在本模式里加假按钮（主题 `explorer panel selection ia`；样板见 Spec 105）。
 
 ## 工作流
 

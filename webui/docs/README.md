@@ -91,6 +91,7 @@
 | [99-mcp-playground-acl-decision-visibility-spec.md](99-mcp-playground-acl-decision-visibility-spec.md) | MCP 调试台：ACL 裁决预览、裁决原因双行可读化、必达 `tools/list` smoke（Implemented v1.1） | 产品 / API / UX / 安全 / Frontend |
 | [100-overview-health-action-deeplink-loop-spec.md](100-overview-health-action-deeplink-loop-spec.md) | `/overview` 深链 Registry 闭环；Catalog query 原子交付；回写 refetch；Attu 指标卡 icon（Implemented v1.2） | 产品 / UX / Frontend |
 | [102-overview-quality-risk-metric-row-unification-spec.md](102-overview-quality-risk-metric-row-unification-spec.md) | `/overview` 质量快照 / 访问风险六卡 Metric Row 统一；CTA 右中（Implemented v1.0） | 产品 / UX / Frontend |
+| [105-wiki-directory-selection-explorer-ia-spec.md](105-wiki-directory-selection-explorer-ia-spec.md) | `/wiki` Attu 式目录选中驱动右栏、中栏面板视觉、空态；重命名延期（Implemented v1.0） | 产品 / UX / IA / Frontend |
 
 ## 与原 README 的关键校正
 

@@ -1260,3 +1260,123 @@ Reported: 2026-08-05
 ### Notes
 
 Fixed by Spec 81 / `wo-202608-13`：对调 primary/ghost。本轮不做浏览器验证。
+
+## UX-WIKI-041: 点击目录不能驱动右栏文档列表
+
+Status: Fixed
+Route: /wiki
+Area: Wiki explorer directory selection
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+
+目录树只能展开/收起，右栏始终是全库扁平列表（或空库提示），无法像 Attu Explorer 那样「选中目录 → 右栏只看该目录文档」。
+
+### Evidence
+
+- 2026-08-05 浏览器核查：`WikiTree` 目录行无 selection；`WikiLibraryHome` 渲染全部 `pages`。
+- 主题：`explorer panel selection ia`。
+
+### Expected
+
+点击目录写入 `?dir=`；右栏仅列出该前缀下 Markdown；打开文档用 `?key=`。
+
+### Browser Check
+
+1. Open `/wiki` → 见选择提示。
+2. Click `global` → URL 含 `dir=global`，右栏仅 global 下文档。
+3. Click 文档 → URL 含 `key=`，进入阅读态。
+4. 本轮不做浏览器验证；待复核。
+
+### Notes
+
+Fixed by Spec 105 / `wo-202608-38`。Non-browser：`wiki.test.tsx`、`lint:terminology`、`build`。
+
+## UX-WIKI-042: 目录区与 MD 区缺少面板分割
+
+Status: Fixed
+Route: /wiki
+Area: Wiki workbench layout zoning
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+中栏目录与右栏 MD 同白底，仅靠空白间距，没有 Attu 式竖分割 / 浅底面板。
+
+### Evidence
+
+- 2026-08-05 CDP：sidebar/main `backgroundColor` 透明、`border` 0、`boxShadow` none。
+
+### Expected
+
+中栏实体化（浅底 + border）；主区与中栏有清晰竖分割。
+
+### Browser Check
+
+1. Open `/wiki`，确认中栏有浅底边框、主区左边框分割。
+2. 本轮不做浏览器验证；待复核。
+
+### Notes
+
+Fixed by Spec 105：`.pl-wiki-sidebar` / `.pl-wiki-main` CSS。主题：`explorer panel selection ia`。
+
+## UX-WIKI-043: 目录树层级字号过弱
+
+Status: Fixed
+Route: /wiki
+Area: WikiTree typography
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+`global` 及子目录统一 `12px` muted，不像主导航目录。
+
+### Evidence
+
+- 2026-08-05 CDP：`.pl-wiki-tree-group-toggle` `fontSize: 12px`、`color: rgb(107,114,128)`。
+
+### Expected
+
+目录标签至少 `text-sm` + 默认前景色；选中行高亮。
+
+### Browser Check
+
+1. Open `/wiki`，确认目录行字号/字重明显高于旧 muted xs。
+2. 选中目录有 active 背景。
+3. 本轮不做浏览器验证；待复核。
+
+### Notes
+
+Fixed by Spec 105：toggle `text-sm` + `--active`。主题：`explorer panel selection ia`。
+
+## UX-WIKI-044: 缺少编辑/重命名目录名称入口
+
+Status: Open
+Route: /wiki
+Area: Wiki directory rename
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+目录 `...` 菜单只有新建子目录 / 新建文档 / 删除目录，没有重命名目录。
+
+### Evidence
+
+- 2026-08-05 菜单三项确认；Spec 58 / M51 / M56 将目录重命名列为非目标；无 rename API。
+
+### Expected
+
+独立 Spec 提供重命名目录（含路径下文档/空目录资源迁移与冲突预检）；菜单入口放在目录 `...`（Attu 资源旁操作模式）。
+
+### Browser Check
+
+1. Open 目录操作菜单 → 确认无「重命名目录」（本轮预期仍无）。
+2. 未来实现后改为 Fixed / Verified。
+
+### Notes
+
+Spec 105 明确 Non-Goal；延期。不要加假按钮。

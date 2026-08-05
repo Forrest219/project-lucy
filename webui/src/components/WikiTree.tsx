@@ -13,7 +13,17 @@ export type WikiTreeProps = {
   pages: WikiSummary[];
   directories?: WikiDirectorySummary[];
   activeKey: string;
+  /** Currently selected directory path (Spec 105 explorer IA). */
+  selectedDirectory?: string;
+  /**
+   * When true, the right panel is already the directory library for
+   * `selectedDirectory`. A second click then only toggles expand/collapse.
+   * When false (document open), clicking the highlighted parent directory
+   * navigates back to that directory's library view.
+   */
+  directoryPanelActive?: boolean;
   onSelect: (key: string) => void;
+  onSelectDirectory?: (directory: string) => void;
   onCreateDocument?: (directory: string) => void;
   onCreateDirectory?: (parentDirectory: string) => void;
   /** Triggered when the user picks `删除目录` from a directory row menu.
@@ -38,12 +48,19 @@ type EnrichedPage = WikiSummary & {
  * tags and `sl_refs` so the search bar in the page header and the tree stay
  * in sync. The UI labels use user-facing "关联表" wording even though
  * the underlying metadata field remains `sl_refs`.
+ *
+ * Spec 105: directory rows are selectable scopes that drive the right
+ * panel via `onSelectDirectory`. Clicking an already-selected directory
+ * only toggles expand/collapse.
  */
 export function WikiTree({
   pages,
   directories = [],
   activeKey,
+  selectedDirectory = "",
+  directoryPanelActive = false,
   onSelect,
+  onSelectDirectory,
   onCreateDocument,
   onCreateDirectory,
   onDeleteDirectory,
@@ -72,6 +89,19 @@ export function WikiTree({
     }));
   }
 
+  function handleDirectoryActivate(path: string) {
+    const isSelected = selectedDirectory === path;
+    if (isSelected && directoryPanelActive) {
+      toggleDirectory(path);
+      return;
+    }
+    setCollapsed((current) => ({
+      ...current,
+      [path]: false
+    }));
+    onSelectDirectory?.(path);
+  }
+
   function renderPage(page: EnrichedPage, level: number) {
     const extension = page.key.split(".").pop() ?? "";
     return (
@@ -88,7 +118,7 @@ export function WikiTree({
           aria-current={page.isActive ? "page" : undefined}
           className="pl-wiki-tree-page-button"
           onClick={() => onSelect(page.key)}
-          style={{ paddingLeft: `${Math.max(level, 0) * 12 + 8}px` }}
+          style={{ paddingLeft: `${Math.max(level, 0) * 16 + 8}px` }}
           type="button"
         >
           <span
@@ -112,28 +142,45 @@ export function WikiTree({
 
   function renderDirectory(node: WikiDirectoryNode<EnrichedPage>, level: number) {
     const isCollapsed = search.trim() ? false : collapsed[node.path] ?? false;
+    const isSelected = Boolean(selectedDirectory) && selectedDirectory === node.path;
     const key = node.path || "__root__";
     const label = node.name || "根目录";
-    const toggleLabel = isCollapsed ? `展开 ${label} 目录` : `收起 ${label} 目录`;
-    const toggleAriaLabel = `${label} ${node.documentCount} 篇，${isCollapsed ? "展开目录" : "收起目录"}`;
+    const toggleLabel = isSelected && directoryPanelActive
+      ? isCollapsed
+        ? `展开 ${label} 目录`
+        : `收起 ${label} 目录`
+      : `选择 ${label} 目录`;
+    const toggleAriaLabel = `${label} ${node.documentCount} 篇，${
+      isSelected && directoryPanelActive
+        ? isCollapsed
+          ? "展开目录"
+          : "收起目录"
+        : "选择目录"
+    }`;
     return (
       <li
-        className="pl-wiki-tree-group"
+        className={clsx(
+          "pl-wiki-tree-group",
+          isSelected && "pl-wiki-tree-group--active"
+        )}
+        data-selected={isSelected || undefined}
         data-testid="wiki-tree-group"
         key={key}
         role="treeitem"
         aria-expanded={!isCollapsed}
+        aria-selected={isSelected}
       >
         <div
           className="pl-wiki-tree-group-row"
-          style={{ paddingLeft: `${Math.max(level, 0) * 12}px` }}
+          style={{ paddingLeft: `${Math.max(level, 0) * 16}px` }}
         >
           <button
+            aria-current={isSelected ? "true" : undefined}
             aria-expanded={!isCollapsed}
             aria-label={toggleAriaLabel}
             className="pl-wiki-tree-group-toggle"
             data-testid="wiki-tree-group-toggle"
-            onClick={() => toggleDirectory(node.path)}
+            onClick={() => handleDirectoryActivate(node.path)}
             title={toggleLabel}
             type="button"
           >

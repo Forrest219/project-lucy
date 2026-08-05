@@ -25,7 +25,11 @@ import {
   findWikiBySlRef,
   nextNewNoteKey
 } from "../lib/slRef";
-import { buildSavePreflightState, wikiDraftVersion } from "../lib/wiki";
+import {
+  buildSavePreflightState,
+  directoryOfWikiKey,
+  wikiDraftVersion
+} from "../lib/wiki";
 import type {
   SourcesResponse,
   WikiFrontmatter,
@@ -54,7 +58,8 @@ type WikiUploadMode = "create" | "replace";
  * source of truth:
  *   - `?key=...`     -> loaded (or draft if no matching page)
  *   - `?sl_ref=...`  -> matched page (loaded) or new draft
- *   - neither        -> library home
+ *   - `?dir=...`     -> library scoped to that directory (Spec 105)
+ *   - neither        -> library select prompt
  */
 function resolveKey(
   keyParam: string,
@@ -74,6 +79,15 @@ function resolveKey(
   return { key: "", mode: "library" };
 }
 
+function normalizeDirParam(raw: string | null): string {
+  if (!raw) return "";
+  return decodeURIComponent(raw)
+    .trim()
+    .replaceAll("\\", "/")
+    .replaceAll(/\/+/g, "/")
+    .replace(/^\/+|\/+$/g, "");
+}
+
 export function WikiEditor() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -81,6 +95,7 @@ export function WikiEditor() {
   const slRef = slRefRaw ? decodeURIComponent(slRefRaw) : null;
   const keyParamRaw = searchParams.get("key") ?? "";
   const keyParam = keyParamRaw ? decodeURIComponent(keyParamRaw) : "";
+  const dirParam = normalizeDirParam(searchParams.get("dir"));
   const listQuery = useQuery({
     queryKey: queryKeys.wiki,
     queryFn: () => apiGet<WikiListResponse>("/api/wiki")
@@ -110,6 +125,14 @@ export function WikiEditor() {
   );
   const key = resolved.key;
   const mode = resolved.mode;
+
+  /** Spec 105: tree selection highlight — URL dir, else parent of open doc. */
+  const selectedDirectory = useMemo(() => {
+    if (mode !== "library" && key) {
+      return directoryOfWikiKey(key) || dirParam;
+    }
+    return dirParam;
+  }, [dirParam, key, mode]);
 
   // Local buffer for the frontmatter / body the user is editing.
   // The dirty flag tells us to skip applying loaded-page content
@@ -614,12 +637,32 @@ export function WikiEditor() {
     setSearchParams(next, { replace: true });
   }
 
+  function navigateToDirectory(directory: string) {
+    const nextDir = normalizeDirParam(directory);
+    if (!nextDir) {
+      return;
+    }
+    if (
+      !confirmDiscardUnsaved(
+        "当前编辑未保存。切换目录会放弃未保存内容，是否继续？"
+      )
+    ) {
+      return;
+    }
+    markClean();
+    sourceRef.current = `${nextDir}::directory`;
+    setSearchParams({ dir: nextDir }, { replace: true });
+  }
+
   const currentDirectory = useMemo(() => {
+    if (selectedDirectory) {
+      return selectedDirectory;
+    }
     if (!key || !key.includes("/")) {
       return "global";
     }
     return key.split("/").slice(0, -1).join("/") || "global";
-  }, [key]);
+  }, [key, selectedDirectory]);
 
   const uploadDirectories = useMemo(() => {
     const directories = new Set<string>(["global"]);
@@ -1241,11 +1284,14 @@ export function WikiEditor() {
           <WikiTree
             activeKey={key}
             directories={serverDirectories}
+            directoryPanelActive={mode === "library" && Boolean(selectedDirectory)}
             onCreateDirectory={openNewDirectoryDialog}
             onCreateDocument={openNewDocumentDialog}
             onDeleteDirectory={openDeleteDirectoryDialog}
             onSelect={navigateTo}
+            onSelectDirectory={navigateToDirectory}
             pages={pages}
+            selectedDirectory={selectedDirectory}
           />
         </aside>
 
@@ -1262,6 +1308,7 @@ export function WikiEditor() {
                 directories={serverDirectories}
                 onSelect={navigateTo}
                 pages={pages}
+                selectedDirectory={selectedDirectory || null}
               />
             ) : uiMode === "read" ? (
               <WikiReadView
