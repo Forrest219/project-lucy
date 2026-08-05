@@ -465,6 +465,8 @@ export type Agent = {
   note?: string;
   enabled: boolean;
   role?: string;
+  createdAt?: string;
+  configUpdatedAt?: string;
   tokens: TokenSummary[];
   allow?: { tables: string[] | ["*"]; tools: string[] | ["*"]; connections?: string[] };
   effectivePermissions?: EffectivePermissionsPreview;
@@ -573,6 +575,7 @@ export type AgentStats = {
 export type AgentsResponseSummary = {
   agentCount: number;
   enabledAgentCount: number;
+  activeAgentCountLast7d?: number;
   configuredTokenCount: number;
   activeTokenCountLast7d: number;
   callsLast7d: number;

@@ -866,3 +866,138 @@ Fixed: 2026-08-05（Spec 89 / `wo-202608-21`；本轮不做浏览器验证）
 
 ### Notes
 `RoleDetail.tsx` Tab 拆分与重命名。验证：`role-detail.test.tsx`。
+
+## UX-ADMIN-AGENTS-031: KPI 偏拒绝告警，不符合新系统稳定性/使用率优先
+
+Status: Fixed
+Route: `/admin/agents`
+Area: KPI metric grid
+Severity: P1
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 93 / `wo-202608-26`；本轮不做浏览器验证）
+
+### Feedback
+新起步系统阶段应先关注稳定性和使用率、活跃率；拒绝指标不应占据首排 KPI。
+
+### Expected
+KPI 调整为：`Agent 总数`、`近 7 天调用量`、`近 7 天活跃 Agent`、`近 7 天活跃 Token`；拒绝指标不在列表页首排展示。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify KPI contains `近 7 天活跃 Agent`.
+3. Verify KPI does not include `近 7 天拒绝`.
+
+### Notes
+后端 summary 新增 `activeAgentCountLast7d`；前端 `AgentList.tsx` 同步 fallback 计算。主题：`ops adoption-first KPI`.
+
+## UX-ADMIN-AGENTS-032: 明细字段缺少配置生命周期信息，顺序不利于运维判断
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Agent list table columns
+Severity: P1
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 93 / `wo-202608-26`；本轮不做浏览器验证）
+
+### Feedback
+明细表需要覆盖创建日期、配置最后变更时间，并按业务价值/相似性重排字段顺序。
+
+### Expected
+表头按以下顺序展示：`序号`、`Agent 名称`、`角色`、`当前状态`、`近 7 天访问次数`、`近 7 天活跃的 token 数`、`最近访问时间`、`配置 Token 数`、`配置最后变更时间`、`创建日期`、`操作`。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify headers include `序号`、`当前状态`、`配置最后变更时间`、`创建日期`.
+3. Verify `近 7 天拒绝` column is removed.
+
+### Notes
+`agents.ts` 通过 `config_change_log` 聚合返回 `createdAt` 与 `configUpdatedAt`。主题：`ops lifecycle metadata visibility`.
+
+## UX-ADMIN-AGENTS-033: 筛选器维度不足，无法快速定位活跃和配置风险对象
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Filter bar
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 93 / `wo-202608-26`；本轮不做浏览器验证）
+
+### Feedback
+当前仅有搜索 + 启用状态，缺少角色、活跃度、Token 规模等关键维度筛选。
+
+### Expected
+筛选条结构参考 `/catalog`：搜索 + 多维下拉；新增 `全部角色/未绑定角色/具体角色`、`近 7 天活跃`、`配置 Token 分层` 筛选。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify filter bar has dropdowns for role, recent-7d activity, token-band.
+3. Apply filters and verify rows update accordingly.
+
+### Notes
+`AgentList.tsx` 新增多维筛选状态与组合过滤逻辑；`agent-list.test.tsx` 新增筛选用例。主题：`list multi-dimensional filters`.
+
+## UX-ADMIN-AGENTS-034: 列表/详情/搜索对 Agent 字段命名不一致
+
+Status: Fixed
+Route: `/admin/agents`, `/admin/agents/:userId`
+Area: Terminology — display name vs user id
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 95 / `wo-202608-28`；本轮不做浏览器验证）
+
+### Feedback
+列表列 `Agent`、搜索 `Agent 名称 / 用户 ID`、详情 `用户 ID` + `显示名`、H1 混用 `(demo_agent)`，同一对象多套主标签。
+
+### Expected
+列表主列 `显示名`；搜索 `搜索显示名或用户 ID`；详情 H1 仅显示名；用户 ID 保留基本信息区。
+
+### Browser Check
+1. Open `/admin/agents` — column `显示名`, placeholder `搜索显示名或用户 ID`.
+2. Open agent detail — H1 is display name only; user ID in basic info.
+
+### Notes
+术语 §4.5 登记 Agent Display Name / User ID / List Search。主题：`agent identity terminology`.
+
+## UX-ADMIN-AGENTS-035: 筛选器缺字段标题且配置 Token 分层无意义
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Filter bar labels
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 95 / `wo-202608-28`；本轮不做浏览器验证）
+
+### Feedback
+四个下拉无 label；第一个仅显示「全部」；配置 Token 分层在 demo 环境区分度低。
+
+### Expected
+catalog 式 `label + 控件`：`搜索`、`当前状态`、`角色`、`近 7 天活跃`；删除 Token 分层；`N 条结果`。
+
+### Browser Check
+1. Verify labeled filters and `agent-list-result-count`.
+2. Verify no configured-token band filter.
+
+### Notes
+`AgentList.tsx` 改用 `pl-whitelist-toolbar` 结构。主题：`list multi-dimensional filters`.
+
+## UX-ADMIN-AGENTS-036: 低风险编辑保存步骤过多
+
+Status: Fixed
+Route: `/admin/agents/:userId`
+Area: Save flow — sticky bar and diff tab
+Severity: P1
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 95 / `wo-202608-28`；本轮不做 browser 验证）
+
+### Feedback
+改启用状态需「预览并保存」→ 变更预览 Tab → 再点「保存」，步骤过重。
+
+### Expected
+浮条主按钮 `保存`；低风险（显示名/备注/启用）一步落盘；角色变更 Modal 确认 diff；`查看变更 diff` 次级入口。
+
+### Browser Check
+1. Toggle enabled → click `保存` once → written without second confirm click.
+2. Change role → `保存` → modal with diff → `确认保存`.
+
+### Notes
+`AgentDetail.tsx`：`directSaveMutation` + `confirmSave` Modal。主题：`low-risk one-step save`.

@@ -118,12 +118,14 @@ export function summarizeAgents(
   now: Date = new Date()
 ): AgentsResponseSummary {
   let enabledAgentCount = 0;
+  let activeAgentCountLast7d = 0;
   let configuredTokens = 0;
   let activeTokenCountLast7d = 0;
   let callsLast7d = 0;
   let deniedLast7d = 0;
   for (const agent of agents) {
     if (agent.enabled) enabledAgentCount += 1;
+    if ((agent.stats?.callsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
     configuredTokens += configuredTokenCount(agent);
     activeTokenCountLast7d += activeTokenCount(agent, now);
     callsLast7d += agent.stats?.callsLast7d ?? 0;
@@ -132,6 +134,7 @@ export function summarizeAgents(
   return {
     agentCount: agents.length,
     enabledAgentCount,
+    activeAgentCountLast7d,
     configuredTokenCount: configuredTokens,
     activeTokenCountLast7d,
     callsLast7d,
@@ -159,6 +162,19 @@ function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
       {label}
     </span>
   );
+}
+
+function formatDateTimeCell(value?: string): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function RoleSummaryCard({ role }: { role: Role | undefined }) {
@@ -384,6 +400,8 @@ export function AgentList() {
   const [showNew, setShowNew] = useState(false);
   const [search, setSearch] = useState("");
   const [filterEnabled, setFilterEnabled] = useState<"all" | "enabled" | "disabled">("all");
+  const [filterRole, setFilterRole] = useState<"all" | "unbound" | string>("all");
+  const [filterActivity, setFilterActivity] = useState<"all" | "active" | "inactive">("all");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "agents"],
@@ -396,16 +414,31 @@ export function AgentList() {
 
   const agents = data?.agents ?? [];
   const summary = data?.summary ?? summarizeAgents(agents);
+  const activeAgentCountLast7d = summary.activeAgentCountLast7d ?? agents.filter((agent) => (agent.stats?.callsLast7d ?? 0) > 0).length;
   const activeTokenTotal = summary.activeTokenCountLast7d;
   const callsLast7dTotal = summary.callsLast7d;
-  const deniedLast7dTotal = summary.deniedLast7d;
+  const roleOptions = Array.from(
+    new Set(agents.map((agent) => agent.role).filter((role): role is string => Boolean(role)))
+  ).sort((a, b) => a.localeCompare(b, "zh-CN"));
   const filtered = agents.filter((a) => {
-    const matchSearch = !search || a.id.includes(search) || a.name.includes(search);
+    const normalizedSearch = search.trim().toLowerCase();
+    const matchSearch =
+      !normalizedSearch ||
+      a.id.toLowerCase().includes(normalizedSearch) ||
+      a.name.toLowerCase().includes(normalizedSearch);
     const matchEnabled =
       filterEnabled === "all" ||
       (filterEnabled === "enabled" && a.enabled) ||
       (filterEnabled === "disabled" && !a.enabled);
-    return matchSearch && matchEnabled;
+    const matchRole =
+      filterRole === "all" ||
+      (filterRole === "unbound" ? !a.role : a.role === filterRole);
+    const callsLast7d = a.stats?.callsLast7d ?? 0;
+    const matchActivity =
+      filterActivity === "all" ||
+      (filterActivity === "active" && callsLast7d > 0) ||
+      (filterActivity === "inactive" && callsLast7d === 0);
+    return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
   if (isLoading) return <div className="pl-notice">加载中…</div>;
@@ -433,6 +466,18 @@ export function AgentList() {
           testId="metric-agent-count"
         />
         <MetricCard
+          label="近 7 天调用量"
+          value={callsLast7dTotal}
+          hint={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
+          testId="metric-calls"
+        />
+        <MetricCard
+          label={<span>近 7 天活跃 <span className="notranslate" translate="no">Agent</span></span>}
+          value={activeAgentCountLast7d}
+          hint="近 7 天有访问记录"
+          testId="metric-active-agent-count"
+        />
+        <MetricCard
           label={
             <span>
               近 7 天活跃 <span className="notranslate" translate="no">Token</span>
@@ -442,37 +487,72 @@ export function AgentList() {
           hint="访问日志中去重 token"
           testId="metric-active-token-count"
         />
-        <MetricCard
-          label="近 7 天调用量"
-          value={callsLast7dTotal}
-          hint={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
-          testId="metric-calls"
-        />
-        <MetricCard
-          label="近 7 天拒绝"
-          value={deniedLast7dTotal}
-          hint="access_log outcome=denied"
-          testId="metric-denied-last-7d"
-        />
       </div>
 
-      <div className="pl-admin-filterbar">
-        <input
-          className="pl-input flex-1"
-          placeholder="按用户 id / 名称搜索"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          className="pl-input w-32"
-          value={filterEnabled}
-          onChange={(e) => setFilterEnabled(e.target.value as "all" | "enabled" | "disabled")}
-        >
-          <option value="all">全部</option>
-          <option value="enabled">已启用</option>
-          <option value="disabled">已禁用</option>
-        </select>
-      </div>
+      <section className="pl-panel">
+        <div className="pl-whitelist-toolbar" role="toolbar" aria-label="列表筛选">
+          <div className="pl-whitelist-filter-area">
+            <label className="grid gap-1.5 text-sm pl-whitelist-search">
+              <span>搜索</span>
+              <input
+                className="pl-input pl-whitelist-search-input"
+                placeholder="搜索显示名或用户 ID"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="搜索显示名或用户 ID"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span>当前状态</span>
+              <select
+                className="pl-input pl-catalog-filter-select"
+                value={filterEnabled}
+                onChange={(e) => setFilterEnabled(e.target.value as "all" | "enabled" | "disabled")}
+                aria-label="当前状态"
+              >
+                <option value="all">全部状态</option>
+                <option value="enabled">已启用</option>
+                <option value="disabled">已禁用</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span>角色</span>
+              <select
+                className="pl-input pl-catalog-filter-select"
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                aria-label="角色"
+              >
+                <option value="all">全部角色</option>
+                <option value="unbound">未绑定角色</option>
+                {roleOptions.map((role) => (
+                  <option key={role} value={role} className="notranslate" translate="no">
+                    {role}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span>近 7 天活跃</span>
+              <select
+                className="pl-input pl-catalog-filter-select"
+                value={filterActivity}
+                onChange={(e) => setFilterActivity(e.target.value as "all" | "active" | "inactive")}
+                aria-label="近 7 天活跃"
+              >
+                <option value="all">全部</option>
+                <option value="active">有访问</option>
+                <option value="inactive">无访问</option>
+              </select>
+            </label>
+          </div>
+          <div className="pl-whitelist-toolbar-actions">
+            <span className="pl-catalog-result-count" data-testid="agent-list-result-count">
+              {filtered.length} 条结果
+            </span>
+          </div>
+        </div>
+      </section>
 
       {filtered.length === 0 ? (
         <div className="pl-notice">
@@ -495,43 +575,39 @@ export function AgentList() {
             >
               <thead>
                 <tr>
-                  <th scope="col">
-                    <span className="notranslate" translate="no">Agent</span>
-                  </th>
+                  <th scope="col">序号</th>
+                  <th scope="col">显示名</th>
                   <th scope="col">角色</th>
-                  <th scope="col">最近访问</th>
+                  <th scope="col">当前状态</th>
                   <th scope="col">近 7 天调用量</th>
                   <th scope="col">
                     近 7 天活跃 <span className="notranslate" translate="no">Token</span>
                   </th>
+                  <th scope="col">最近访问时间</th>
                   <th scope="col">
                     配置 <span className="notranslate" translate="no">Token</span>
                   </th>
-                  <th scope="col">近 7 天拒绝</th>
+                  <th scope="col">配置最后变更时间</th>
+                  <th scope="col">创建日期</th>
                   <th scope="col">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((agent) => {
+                {filtered.map((agent, index) => {
                   const legacyWildcard =
                     agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
                   const callsLast7d = agent.stats?.callsLast7d ?? 0;
-                  const deniedLast7d = agent.stats?.deniedLast7d ?? 0;
                   const activeTokens = activeTokenCount(agent);
                   const configuredTokens = configuredTokenCount(agent);
 
                   return (
                     <tr key={agent.id} data-testid={`agent-row-${agent.id}`}>
+                      <td className="pl-agent-list-table-num" data-testid={`agent-row-index-${agent.id}`}>{index + 1}</td>
                       <td>
                         <div className="pl-agent-list-table-name">
                           <span className="font-medium">{agent.name}</span>
                           <span className="pl-agent-list-table-meta notranslate" translate="no">
                             {agent.id}
-                          </span>
-                          <span
-                            className={`pl-status-badge ${agent.enabled ? "pl-status-done" : "pl-status-not_started"}`}
-                          >
-                            {agent.enabled ? "启用" : "禁用"}
                           </span>
                         </div>
                       </td>
@@ -554,7 +630,11 @@ export function AgentList() {
                         )}
                       </td>
                       <td>
-                        <LastSeen lastSeen={agent.stats?.lastSeen} />
+                        <span
+                          className={`pl-status-badge ${agent.enabled ? "pl-status-done" : "pl-status-not_started"}`}
+                        >
+                          {agent.enabled ? "启用" : "禁用"}
+                        </span>
                       </td>
                       <td
                         className="pl-agent-list-table-num"
@@ -569,15 +649,14 @@ export function AgentList() {
                       >
                         {activeTokens}
                       </td>
+                      <td>
+                        <LastSeen lastSeen={agent.stats?.lastSeen} />
+                      </td>
                       <td className="pl-agent-list-table-num notranslate" translate="no">
                         {configuredTokens}
                       </td>
-                      <td
-                        className={`pl-agent-list-table-num ${deniedLast7d > 0 ? "text-warning-strong" : ""}`}
-                        data-testid={`agent-denied-7d-${agent.id}`}
-                      >
-                        {deniedLast7d}
-                      </td>
+                      <td>{formatDateTimeCell(agent.configUpdatedAt)}</td>
+                      <td>{formatDateTimeCell(agent.createdAt)}</td>
                       <td>
                         <div className="pl-agent-list-row-actions">
                           <Link

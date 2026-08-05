@@ -78,7 +78,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubAgentEndpoints() {
+function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
+  const roles = [
+    {
+      id: "analyst",
+      description: "Analyst role",
+      source: "yaml",
+      tools: ["lucy_query"],
+      connections: ["mysql-aliyun"],
+      sourceNames: ["superstore_orders"],
+      sourceCount: 2,
+      invalid: false,
+      warnings: []
+    },
+    ...extraRoles
+  ];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/admin/agents/zhangsan" && !init) {
@@ -101,9 +115,9 @@ function stubAgentEndpoints() {
             written: true,
             agent: {
               id: "zhangsan",
-              name: "张三编辑",
-              enabled: true,
-              role: "analyst",
+              name: body.patch?.name ?? "张三编辑",
+              enabled: body.patch?.enabled ?? true,
+              role: body.patch?.role ?? "analyst",
               tokens: [],
               allow: { tables: [], tools: [] }
             }
@@ -112,26 +126,7 @@ function stubAgentEndpoints() {
       );
     }
     if (url === "/api/admin/roles") {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          data: {
-            roles: [
-              {
-                id: "analyst",
-                description: "Analyst role",
-                source: "yaml",
-                tools: ["lucy_query"],
-                connections: ["mysql-aliyun"],
-                sourceNames: ["superstore_orders"],
-                sourceCount: 2,
-                invalid: false,
-                warnings: []
-              }
-            ]
-          }
-        })
-      );
+      return new Response(JSON.stringify({ ok: true, data: { roles } }));
     }
     return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
   });
@@ -140,66 +135,73 @@ function stubAgentEndpoints() {
 }
 
 describe("AgentDetail", () => {
-  it("requires dry-run diff preview before saving edits", async () => {
+  it("low-risk edits save in one step with dryRun then write", async () => {
     const fetchMock = stubAgentEndpoints();
 
     renderAgentDetail();
 
     expect(await screen.findByDisplayValue("张三")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Token" }));
-    expect(await screen.findByText("hermes-laptop")).toBeInTheDocument();
-    expect(document.body).toHaveTextContent("最近使用：");
-    expect(document.body).toHaveTextContent("sl_query");
-    expect(document.body).toHaveTextContent("ok");
-    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
-    expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
-
-    fireEvent.change(await screen.findByDisplayValue("张三"), { target: { value: "张三编辑" } });
-    fireEvent.click(screen.getByRole("button", { name: "预览并保存" }));
-
-    expect(await screen.findByText(/\+ name: 张三编辑/)).toBeInTheDocument();
-    await waitFor(() => {
-      const dryRunCall = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === true);
-      expect(dryRunCall).toBeTruthy();
-    });
-
+    fireEvent.change(screen.getByDisplayValue("张三"), { target: { value: "张三编辑" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
     await waitFor(() => {
-      const saveCall = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false);
+      const dryRunCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === true
+      );
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
+      );
+      expect(dryRunCall).toBeTruthy();
       expect(saveCall).toBeTruthy();
+    });
+    expect(screen.queryByRole("button", { name: "预览并保存" })).not.toBeInTheDocument();
+  });
+
+  it("role change opens confirm modal before writing", async () => {
+    const fetchMock = stubAgentEndpoints([
+      {
+        id: "ops_readonly",
+        description: "Ops",
+        source: "yaml",
+        tools: ["lucy_query"],
+        connections: ["mysql-aliyun"],
+        sourceNames: ["superstore_orders"],
+        sourceCount: 1,
+        invalid: false,
+        warnings: []
+      }
+    ]);
+    renderAgentDetail();
+    const roleSelect = await screen.findByDisplayValue("analyst");
+    fireEvent.change(roleSelect, { target: { value: "ops_readonly" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const modal = await screen.findByTestId("agent-save-confirm-modal");
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText(/\+ name: 张三编辑/)).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole("button", { name: "确认保存" }));
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
+      );
+      expect(saveCall).toBeTruthy();
+      expect(JSON.parse(String(saveCall?.[1]?.body)).patch.role).toBe("ops_readonly");
     });
   });
 
-  it("saves the exact patch that produced the displayed diff", async () => {
-    const fetchMock = stubAgentEndpoints();
+  it("clears stale diff preview when edits change after viewing diff", async () => {
+    stubAgentEndpoints();
     renderAgentDetail();
     fireEvent.change(await screen.findByDisplayValue("张三"), { target: { value: "预览名" } });
-    fireEvent.click(screen.getByRole("button", { name: "预览并保存" }));
+    fireEvent.click(screen.getByRole("button", { name: "查看变更 diff" }));
     expect(await screen.findByText(/\+ name: 张三编辑/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
     fireEvent.change(screen.getByDisplayValue("预览名"), { target: { value: "预览后又改名" } });
-
     fireEvent.click(screen.getByRole("button", { name: "变更预览" }));
     expect(screen.queryByText(/\+ name: 张三编辑/)).not.toBeInTheDocument();
-    expect(screen.getByText(/点「预览并保存」生成 diff/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
-    fireEvent.click(screen.getByRole("button", { name: "预览并保存" }));
-    expect(await screen.findByText(/\+ name: 张三编辑/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "保存" }));
-
-    await waitFor(() => {
-      const saveCall = fetchMock.mock.calls.find((call) => {
-        const init = call[1] as RequestInit | undefined;
-        if (init?.method !== "PATCH") return false;
-        const body = JSON.parse(String(init.body));
-        return body.dryRun === false;
-      });
-      expect(saveCall).toBeTruthy();
-      const body = JSON.parse(String(saveCall?.[1]?.body));
-      expect(body.patch.name).toBe("预览后又改名");
-    });
+    expect(screen.getByText(/可点「查看变更 diff」审阅/)).toBeInTheDocument();
   });
 
   it("does not show sticky save bar before any edits", async () => {
@@ -218,7 +220,8 @@ describe("AgentDetail", () => {
     const bar = await screen.findByTestId("sticky-save-bar");
     expect(bar).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "放弃修改" })).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "预览并保存" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "保存" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "查看变更 diff" })).toBeInTheDocument();
   });
 
   it("放弃修改 restores original values and clears dirty state", async () => {
@@ -236,7 +239,7 @@ describe("AgentDetail", () => {
     expect(screen.getByDisplayValue("张三")).toBeInTheDocument();
   });
 
-  it("Cmd+S / Ctrl+S triggers preview when there are dirty edits", async () => {
+  it("Cmd+S / Ctrl+S triggers save when there are dirty edits", async () => {
     const fetchMock = stubAgentEndpoints();
     renderAgentDetail();
     const nameInput = await screen.findByDisplayValue("张三");
@@ -246,10 +249,10 @@ describe("AgentDetail", () => {
     fireEvent.keyDown(window, { key: "s", ctrlKey: true });
 
     await waitFor(() => {
-      const dryRunCall = fetchMock.mock.calls.find(
-        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === true
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
       );
-      expect(dryRunCall).toBeTruthy();
+      expect(saveCall).toBeTruthy();
     });
   });
 
@@ -365,14 +368,7 @@ describe("AgentDetail", () => {
     stubAgentEndpoints();
     renderAgentDetail();
     await screen.findByDisplayValue("张三");
-    // activeTokensLast7d 由 stub 默认传 1；render 后能在基本信息 tab 的 stat 区域找到
     expect(document.body).toHaveTextContent("1");
-    // 该页面不展示 7d denied
     expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
   });
 });
-
-function withinBar(_node: HTMLElement) {
-  // simple helper removed: use Testing Library's `within` instead.
-  return null as never;
-}

@@ -54,6 +54,8 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Agent Admin `/admin/agents`, `/admin/agents/:id` | Spec 95 / `wo-202608-28` 落地：`UX-ADMIN-AGENTS-034`～`036` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。统一显示名/用户 ID 术语；筛选器 catalog 式 label + 删配置 Token 分层 + 结果计数；详情低风险一步保存、角色变更 Modal 确认 diff。验证：`agent-list.test.tsx`、`agent-detail.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Agent Admin `/admin/agents` | Spec 93 / `wo-202608-26` 落地：`UX-ADMIN-AGENTS-031`～`033` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。KPI 从拒绝导向切换为稳定性/使用率导向（总数、调用量、活跃 Agent、活跃 Token）；明细表新增 `创建日期`、`配置最后变更时间` 并按运维价值重排；筛选条升级为 `搜索 + 状态 + 角色 + 近 7 天活跃`（Token 分层已由 Spec 95 移除）。验证：`agent-list.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Admin Audit `/admin/audit` | Spec 94 / `wo-202608-27` 落地：`UX-ADMIN-AUDIT-011`～`017` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。筛选改「Agent 名称或 ID」；来源筛选项业务化；删列表 P95 参照句；列改「工具调用数 / 涉及数据表」+ 序号；Agent 列 `名称 (id)`；Drawer 卡片分区 + 调用明细含「数据库连接」；头部关闭按钮对齐。验证：`admin-audit-turns.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Help Center `/help` | Spec 92 / `wo-202608-25` 落地：`UX-HELP-001`～`003` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`HelpCenter` 页头改为统一 `PageHeader`；breadcrumbs 收敛为单项「系统帮助」；右上动作改「返回系统概览」并指向 `/overview`。验证：`help-center.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Help Center `/help` | 纳入本轮统一性检查：新增 `pages/help.md` 条目 `UX-HELP-001`～`003`（状态 `Open`，本轮不做浏览器验证）。结论：无“共 N 条”计数冗余，但存在页头实现路径不统一（手写 header）、面包屑末项与 H1 重复、返回动作语义与落点不一致。 |
@@ -142,6 +144,11 @@ docs/ui-ux-feedback/
 | `list-page header count badge`（列表/历史页纯计数不得进 PageHeader badges） | UX-PUBLISH-HISTORY-006、UX-EVAL-001、UX-ADMIN-CONFIG-AUDIT-001 | 3 Fixed | Spec 91 / wo-202608-24，待浏览器复核 |
 | `audit source terminology`（访问日志来源筛选须业务化，推断须 tooltip / disclaimer） | UX-ADMIN-AUDIT-014 | 1 Fixed | Spec 94 / wo-202608-27，待浏览器复核 |
 | `audit drawer wayfinding`（问询 Drawer 须序号 + 连接 + 分区卡片） | UX-ADMIN-AUDIT-016、UX-ADMIN-AUDIT-017 | 2 Fixed | Spec 94 / wo-202608-27，待浏览器复核 |
+| `ops adoption-first KPI`（新系统阶段先看稳定可用与使用率，不让拒绝指标挤占首排 KPI） | UX-ADMIN-AGENTS-031 | 1 Fixed | Spec 93 / wo-202608-26，待浏览器复核 |
+| `ops lifecycle metadata visibility`（长列表需显式展示对象创建时间与配置最近变更时间） | UX-ADMIN-AGENTS-032 | 1 Fixed | Spec 93 / wo-202608-26，待浏览器复核 |
+| `list multi-dimensional filters`（列表页至少提供状态 + 活跃 + 规模等关键维度筛选） | UX-ADMIN-AGENTS-033、UX-ADMIN-AGENTS-035 | 2 Fixed | Spec 93 / 95，待浏览器复核 |
+| `agent identity terminology`（显示名 vs 用户 ID 不得混用 Agent 作主列名） | UX-ADMIN-AGENTS-034 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
+| `low-risk one-step save`（低风险配置编辑一步落盘，diff 仅作审计/高风险确认） | UX-ADMIN-AGENTS-036 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 

@@ -325,6 +325,9 @@ Connection (连接)
 |---|---|---|---|---|
 | Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板 | 主路由 `/admin/usage` |
 | Agent Admin Page Title | Agent | — | Agent 实例（弃用主标签） | `/admin/agents` 侧栏与 H1 |
+| Agent Display Name | 显示名 | Agent 名称 | 列表主列用 Agent | 人读名称；列表主列、详情可编辑 |
+| Agent User ID | 用户 ID | 用户 id | Agent 标识（与显示名混用） | 技术标识；搜索、详情只读 |
+| Agent List Search | 搜索显示名或用户 ID | 搜索 Agent 名称 / 用户 ID | Agent 名称 | 列表搜索 placeholder |
 | Configured Agent Count | Agent 总数 | 已配置实例 | access.yaml 中的实例（主 hint） | 不随窗口变；含 `enabled: false` |
 | Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题** |
 | Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入活跃 Agent 卡副行，不独立成卡 |

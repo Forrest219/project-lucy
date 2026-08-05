@@ -123,14 +123,14 @@ function stubAgentsEndpoints(
 
 describe("AgentList", () => {
   it("renders 未访问 for agents that have never been seen", async () => {
-    stubAgentsEndpoints([makeAgent({ id: "no1", name: "无访问", stats: { callsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
+    stubAgentsEndpoints([makeAgent({ id: "no1", name: "冷账号", stats: { callsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
 
     renderAgentList();
     expect(await screen.findByRole("heading", { name: "Agent" })).toBeInTheDocument();
     // M40: 一级根页面不再渲染面包屑
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText("无访问")).toBeInTheDocument();
+      expect(screen.getByText("冷账号")).toBeInTheDocument();
     });
     expect(screen.getByText("未访问")).toBeInTheDocument();
   });
@@ -260,8 +260,8 @@ describe("AgentList", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
-    fireEvent.change(await screen.findByLabelText(/用户 ID/), { target: { value: "newagent1" } });
-    fireEvent.change(screen.getByLabelText(/显示名/), { target: { value: "新人" } });
+    fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
+    fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
     fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
 
     await waitFor(() => {
@@ -281,8 +281,8 @@ describe("AgentList", () => {
     renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
-    fireEvent.change(await screen.findByLabelText(/用户 ID/), { target: { value: "newagent1" } });
-    fireEvent.change(screen.getByLabelText(/显示名/), { target: { value: "新人" } });
+    fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
+    fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
     fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
     expect(await screen.findByText(/\+ id: newagent1/)).toBeInTheDocument();
 
@@ -315,7 +315,7 @@ describe("AgentList", () => {
     expect(link.getAttribute("href")).toBe("/admin/roles");
   });
 
-  it("renders usage-aware top metrics instead of 7d denied", async () => {
+  it("renders stability-and-adoption top metrics", async () => {
     stubAgentsEndpoints(
       [
         makeAgent({
@@ -354,15 +354,16 @@ describe("AgentList", () => {
 
     // 顶部 4 个指标对齐使用概况命名（Spec 88）
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃 Token");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
     expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
     expect(screen.getByTestId("metric-calls")).toHaveTextContent("10");
-    expect(screen.getByTestId("metric-denied-last-7d")).toHaveTextContent("近 7 天拒绝");
-    expect(screen.getByTestId("metric-denied-last-7d")).toHaveTextContent("0");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃 Token");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
 
-    // 旧的 7d denied 文案必须彻底消失
+    // 拒绝指标不再出现在 KPI 区
     expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
+    expect(document.body).not.toHaveTextContent("近 7 天拒绝");
     expect(document.body).not.toHaveTextContent(/^\s*Token 数\s*$/);
 
     // PageHeader 不再展示 count badges（由 KPI 网格承载）
@@ -399,6 +400,51 @@ describe("AgentList", () => {
 
     // 不再展示完整 Tool scope 行
     expect(screen.queryByTestId("agent-scope-tool-demo_agent")).not.toBeInTheDocument();
+  });
+
+  it("supports role and activity filters in filter bar", async () => {
+    stubAgentsEndpoints([
+      makeAgent({
+        id: "active_agent",
+        name: "活跃 Agent",
+        role: "demo_readonly",
+        stats: { callsLast7d: 5, deniedLast7d: 0, activeTokensLast7d: 1, configuredTokens: 1, topTables: [] }
+      }),
+      makeAgent({
+        id: "idle_agent",
+        name: "空闲 Agent",
+        role: "ops_readonly",
+        stats: { callsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 0, configuredTokens: 1, topTables: [] }
+      })
+    ]);
+
+    renderAgentList();
+    await screen.findByTestId("agent-row-active_agent");
+    expect(screen.getByTestId("agent-row-idle_agent")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "角色" }), { target: { value: "demo_readonly" } });
+    expect(screen.getByTestId("agent-row-active_agent")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-row-idle_agent")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "角色" }), { target: { value: "all" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), { target: { value: "inactive" } });
+    expect(screen.getByTestId("agent-row-idle_agent")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-row-active_agent")).not.toBeInTheDocument();
+  });
+
+  it("filter bar has labeled dimensions and result count without token-band filter", async () => {
+    stubAgentsEndpoints([
+      makeAgent({ id: "demo_agent", name: "Demo Agent", role: "demo_readonly" })
+    ]);
+    renderAgentList();
+    await screen.findByTestId("agent-list-table");
+    expect(screen.getByLabelText("搜索显示名或用户 ID")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "当前状态" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "角色" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "近 7 天活跃" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("按配置Token数筛选")).not.toBeInTheDocument();
+    expect(screen.getByTestId("agent-list-result-count")).toHaveTextContent("1 条结果");
+    expect(screen.getByRole("columnheader", { name: "显示名" })).toBeInTheDocument();
   });
 
   it("uses backend summary when present and falls back to client-side aggregate when absent", async () => {
@@ -525,7 +571,7 @@ describe("AgentList", () => {
     });
   });
 
-  it("warns when an agent has recent denials without changing the layout", async () => {
+  it("renders prioritized table columns for ops value", async () => {
     stubAgentsEndpoints([
       makeAgent({
         id: "demo_agent",
@@ -541,9 +587,12 @@ describe("AgentList", () => {
     ]);
 
     renderAgentList();
-    const deniedCell = await screen.findByTestId("agent-denied-7d-demo_agent");
-    expect(deniedCell).toHaveTextContent("3");
-    expect(deniedCell.className).toContain("text-warning-strong");
+    await screen.findByTestId("agent-row-demo_agent");
+    expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "当前状态" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "配置最后变更时间" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "创建日期" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "近 7 天拒绝" })).not.toBeInTheDocument();
   });
 });
 
@@ -610,6 +659,7 @@ describe("agentList helpers", () => {
     expect(summary).toEqual({
       agentCount: 2,
       enabledAgentCount: 1,
+      activeAgentCountLast7d: 2,
       configuredTokenCount: 1,
       activeTokenCountLast7d: 1,
       callsLast7d: 8,

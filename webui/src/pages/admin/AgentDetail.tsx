@@ -83,6 +83,7 @@ export function AgentDetail() {
   const [editEnabled, setEditEnabled] = useState<boolean | null>(null);
   const [editRole, setEditRole] = useState<string | null>(null);
   const [diffPreview, setDiffPreview] = useState<DiffPreview | null>(null);
+  const [confirmSave, setConfirmSave] = useState<DiffPreview | null>(null);
 
   const agent = data?.agent;
   const version = data?.version;
@@ -94,6 +95,10 @@ export function AgentDetail() {
     if (editEnabled !== null) patch.enabled = editEnabled;
     if (editRole !== null) patch.role = editRole;
     return patch;
+  }
+
+  function patchChangesRole(patch: AgentPatch, currentAgent: Agent): boolean {
+    return patch.role !== undefined && patch.role !== currentAgent.role;
   }
 
   function clearStaleDiffPreview() {
@@ -140,12 +145,42 @@ export function AgentDetail() {
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
       setDiffPreview(null);
+      setConfirmSave(null);
       setActiveTab("info");
       setEditName(null);
       setEditNote(null);
       setEditEnabled(null);
       setEditRole(null);
     },
+    onError: (err: Error) => toast.error(err.message)
+  });
+
+  const directSaveMutation = useMutation({
+    mutationFn: async (patch: AgentPatch) => {
+      if (!version) throw new Error("配置版本未知，请刷新后重试");
+      await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
+      return apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch });
+    },
+    onSuccess: () => {
+      toast.success("已保存");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+      setDiffPreview(null);
+      setConfirmSave(null);
+      setEditName(null);
+      setEditNote(null);
+      setEditEnabled(null);
+      setEditRole(null);
+    },
+    onError: (err: Error) => toast.error(err.message)
+  });
+
+  const confirmPreviewMutation = useMutation({
+    mutationFn: async (patch: AgentPatch) => {
+      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
+      return { ...data, patch };
+    },
+    onSuccess: (data) => setConfirmSave(data),
     onError: (err: Error) => toast.error(err.message)
   });
 
@@ -184,14 +219,28 @@ export function AgentDetail() {
     setEditEnabled(null);
     setEditRole(null);
     setDiffPreview(null);
+    setConfirmSave(null);
+  }
+
+  function handleSave() {
+    if (!agent) return;
+    const patch = buildPatch();
+    if (patchChangesRole(patch, agent)) {
+      confirmPreviewMutation.mutate(patch);
+    } else {
+      directSaveMutation.mutate(patch);
+    }
+  }
+
+  function handleViewDiff() {
+    previewMutation.mutate(buildPatch());
   }
 
   useEffect(() => {
     setActiveTab(tabFromSearch(location.search));
   }, [location.search]);
 
-  // Cmd+S / Ctrl+S keyboard shortcut to trigger dry-run preview from the
-  // basic info tab. We never bypass dryRun; this only opens the Diff tab.
+  // Cmd+S / Ctrl+S mirrors the sticky-bar save action (low-risk one-step or role confirm).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -199,7 +248,7 @@ export function AgentDetail() {
       if (!agent) return;
       if (editName === null && editNote === null && editEnabled === null && editRole === null) return;
       e.preventDefault();
-      previewMutation.mutate(buildPatch());
+      handleSave();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -226,17 +275,13 @@ export function AgentDetail() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title={
-          <>
-            {agent.name} <span className="text-fg-muted font-normal text-base">({agent.id})</span>
-          </>
-        }
+        title={agent.name}
         backAction={
           <Link to="/admin/agents" className="pl-page-header-back">
             ‹ 返回 Agent
           </Link>
         }
-        description="编辑前先生成变更预览，确认后写入访问配置。Cmd+S / Ctrl+S 触发预览。"
+        description="编辑显示名、备注或启用状态后可一步保存；变更角色需确认变更 diff。Cmd+S / Ctrl+S 保存。"
         badges={
           <>
             <span>{agent.enabled ? "已启用" : "已禁用"}</span>
@@ -530,7 +575,7 @@ export function AgentDetail() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-fg-muted">在其他标签页编辑后，点「预览并保存」生成 diff。</p>
+              <p className="text-sm text-fg-muted">在其他标签页编辑后，可点「查看变更 diff」审阅，或保存角色变更时在确认框中查看 diff。</p>
             )}
           </div>
         )}
@@ -555,13 +600,49 @@ export function AgentDetail() {
             </button>
             <button
               type="button"
-              className="pl-btn pl-btn--primary"
-              onClick={() => previewMutation.mutate(buildPatch())}
+              className="pl-btn pl-btn--ghost"
+              onClick={handleViewDiff}
               disabled={previewMutation.isPending}
-              aria-label="预览并保存"
+              aria-label="查看变更 diff"
             >
-              {previewMutation.isPending ? "生成中…" : "预览并保存"}
+              {previewMutation.isPending ? "生成中…" : "查看变更 diff"}
             </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary"
+              onClick={handleSave}
+              disabled={directSaveMutation.isPending || confirmPreviewMutation.isPending}
+              aria-label="保存"
+            >
+              {directSaveMutation.isPending || confirmPreviewMutation.isPending ? "保存中…" : "保存"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmSave && (
+        <div className="pl-modal-backdrop" data-testid="agent-save-confirm-modal">
+          <div className="pl-modal-panel max-w-2xl">
+            <h2 className="text-lg font-semibold mb-2">确认角色变更</h2>
+            <p className="text-sm text-fg-muted mb-4 notranslate" translate="no">以下改动将写入 access.yaml，确认后才会落盘。</p>
+            <DiffViewer diff={confirmSave.diff} />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost"
+                onClick={() => setConfirmSave(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="pl-btn pl-btn--primary"
+                onClick={() => saveMutation.mutate(confirmSave.patch)}
+                disabled={saveMutation.isPending}
+              >
+                {saveMutation.isPending ? "保存中…" : "确认保存"}
+              </button>
+            </div>
           </div>
         </div>
       )}

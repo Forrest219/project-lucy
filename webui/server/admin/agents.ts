@@ -135,6 +135,11 @@ export interface AgentStatsSummary {
   topTables: Array<{ table: string; calls: number }>;
 }
 
+interface AgentConfigTimeline {
+  createdAt?: string;
+  configUpdatedAt?: string;
+}
+
 async function getStats(userId: string, configuredTokenCount: number): Promise<AgentStatsSummary> {
   try {
     const db = await getAuditDb();
@@ -241,7 +246,8 @@ async function getLastUsedMap(
 function userToAgent(
   user: YamlUser,
   stats?: Awaited<ReturnType<typeof getStats>>,
-  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>
+  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>,
+  timeline?: AgentConfigTimeline
 ) {
   return {
     id: user.id,
@@ -263,8 +269,48 @@ function userToAgent(
       tools: user.allow?.tools ?? [],
       connections: user.allow?.connections ?? []
     } : undefined,
+    createdAt: timeline?.createdAt,
+    configUpdatedAt: timeline?.configUpdatedAt,
     stats
   };
+}
+
+async function getAgentConfigTimelineMap(userIds: string[]): Promise<Map<string, AgentConfigTimeline>> {
+  const result = new Map<string, AgentConfigTimeline>();
+  if (userIds.length === 0) return result;
+  try {
+    const db = await getAuditDb();
+    const placeholders = userIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare(
+        `SELECT
+           target_id,
+           MIN(CASE WHEN change_type = 'agent_create' THEN ts END) AS created_at,
+           MAX(CASE
+               WHEN change_type IN ('agent_create', 'agent_patch', 'token_create', 'token_revoke')
+               THEN ts
+               ELSE NULL
+             END) AS config_updated_at
+         FROM config_change_log
+         WHERE target_id IN (${placeholders})
+         GROUP BY target_id`
+      )
+      .all(...userIds) as Array<{
+      target_id: string | null;
+      created_at: string | null;
+      config_updated_at: string | null;
+    }>;
+    for (const row of rows) {
+      if (!row.target_id) continue;
+      result.set(row.target_id, {
+        createdAt: row.created_at ?? undefined,
+        configUpdatedAt: row.config_updated_at ?? undefined
+      });
+    }
+  } catch {
+    return result;
+  }
+  return result;
 }
 
 function effectivePermissionsToPreview(permissions: EffectivePermissions) {
@@ -397,18 +443,21 @@ function buildAgentsSummary(
 ): {
   agentCount: number;
   enabledAgentCount: number;
+  activeAgentCountLast7d: number;
   configuredTokenCount: number;
   activeTokenCountLast7d: number;
   callsLast7d: number;
   deniedLast7d: number;
 } {
   let enabledAgentCount = 0;
+  let activeAgentCountLast7d = 0;
   let configuredTokenCount = 0;
   let activeTokenCountLast7d = 0;
   let callsLast7d = 0;
   let deniedLast7d = 0;
   for (const agent of agents) {
     if (agent.enabled) enabledAgentCount += 1;
+    if ((agent.stats?.callsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
     configuredTokenCount += agent.tokens.length;
     activeTokenCountLast7d += agent.stats?.activeTokensLast7d ?? 0;
     callsLast7d += agent.stats?.callsLast7d ?? 0;
@@ -417,6 +466,7 @@ function buildAgentsSummary(
   return {
     agentCount: agents.length,
     enabledAgentCount,
+    activeAgentCountLast7d,
     configuredTokenCount,
     activeTokenCountLast7d,
     callsLast7d,
@@ -427,9 +477,10 @@ function buildAgentsSummary(
 async function userToAgentWithPermissions(
   user: YamlUser,
   stats?: Awaited<ReturnType<typeof getStats>>,
-  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>
+  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>,
+  timeline?: AgentConfigTimeline
 ) {
-  const agent = userToAgent(user, stats, tokenUsage);
+  const agent = userToAgent(user, stats, tokenUsage, timeline);
   const resolved = await resolveEffectivePermissionsForAdmin(user.id);
   return {
     ...agent,
@@ -491,11 +542,15 @@ export function registerAgentRoutes(app: FastifyInstance) {
   app.get("/api/admin/agents", async () => {
     const projectRoot = await resolveProjectRoot();
     const { config, version } = await readAccessYaml(projectRoot);
-    const tokenUsage = await getLastUsedMap(config.users.map((user) => user.id));
+    const userIds = config.users.map((user) => user.id);
+    const [tokenUsage, timelineMap] = await Promise.all([
+      getLastUsedMap(userIds),
+      getAgentConfigTimelineMap(userIds)
+    ]);
     const agents = await Promise.all(
       config.users.map(async (user) => {
         const stats = await getStats(user.id, user.tokens.length);
-        return userToAgentWithPermissions(user, stats, tokenUsage.get(user.id));
+        return userToAgentWithPermissions(user, stats, tokenUsage.get(user.id), timelineMap.get(user.id));
       })
     );
     const summary = buildAgentsSummary(agents);
@@ -624,8 +679,14 @@ export function registerAgentRoutes(app: FastifyInstance) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
     }
     const stats = await getStats(user.id, user.tokens.length);
-    const tokenUsage = await getLastUsedMap([user.id]);
-    return { ok: true, data: { agent: await userToAgentWithPermissions(user, stats, tokenUsage.get(user.id)), version } };
+    const [tokenUsage, timelineMap] = await Promise.all([
+      getLastUsedMap([user.id]),
+      getAgentConfigTimelineMap([user.id])
+    ]);
+    return {
+      ok: true,
+      data: { agent: await userToAgentWithPermissions(user, stats, tokenUsage.get(user.id), timelineMap.get(user.id)), version }
+    };
   });
 
   // GET /api/admin/agents/:userId/effective-permissions

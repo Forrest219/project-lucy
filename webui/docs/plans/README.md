@@ -137,7 +137,9 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-23-admin-config-audit-unified-scope.md](wo-202608-23-admin-config-audit-unified-scope.md) | 202608-23 | 配置审计范围一视同仁：`safeWrite` 统一写审计、语义/Wiki/评测/发布、`asset_kind` 筛选与深链 |
 | [wo-202608-24-list-page-header-consistency.md](wo-202608-24-list-page-header-consistency.md) | 202608-24 | 列表/历史页 PageHeader 收敛：删纯计数 badges、标题对齐、评测容器、表编辑 backAction |
 | [wo-202608-25-help-center-header-consistency.md](wo-202608-25-help-center-header-consistency.md) | 202608-25 | `/help` 页头一致性：统一 `PageHeader`、去重 breadcrumb 末项、返回动作语义对齐 |
+| [wo-202608-26-agent-admin-stability-adoption-kpi-and-filters.md](wo-202608-26-agent-admin-stability-adoption-kpi-and-filters.md) | 202608-26 | `/admin/agents` 稳定性/使用率优先：KPI 改活跃与调用、明细字段重排、关键维度筛选器 |
 | [wo-202608-27-admin-audit-clarity-and-drawer-ux.md](wo-202608-27-admin-audit-clarity-and-drawer-ux.md) | 202608-27 | `/admin/audit` 筛选/列名/Agent 展示、删列表 P95 句、Drawer 分区与连接字段 |
+| [wo-202608-28-agent-admin-naming-filters-and-save-flow.md](wo-202608-28-agent-admin-naming-filters-and-save-flow.md) | 202608-28 | Agent 显示名/用户 ID 统一、筛选 label、低风险一步保存、角色 diff 确认 Modal |
 
 ### 202608 Governance & Observability — 并行启动建议
 
