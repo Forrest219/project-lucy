@@ -793,6 +793,11 @@ describe("Onboarding", () => {
 
     expect(quality.querySelectorAll(".pl-ops-metric-row")).toHaveLength(3);
     expect(risk.querySelectorAll(".pl-ops-metric-row")).toHaveLength(3);
+    // 左右列表仍挂在 panel 下；lg+ 用 display:contents + subgrid 做行对齐，DOM 结构不变。
+    expect(quality.querySelector(".pl-snapshot-list")).toBeTruthy();
+    expect(risk.querySelector(".pl-risk-list")).toBeTruthy();
+    expect(quality.parentElement).toHaveClass("pl-ops-grid");
+    expect(risk.parentElement).toHaveClass("pl-ops-grid");
 
     const semantic = screen.getByTestId("ops-metric-semantic");
     const semanticCta = semantic.querySelector("a.pl-ops-metric-row-cta");
