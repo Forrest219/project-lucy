@@ -74,18 +74,19 @@ function configTargetLink(entry: ConfigAuditEntry): string | null {
   return null;
 }
 
-function ChangeRow({ entry }: { entry: ConfigAuditEntry }) {
+function ChangeRow({ entry, index }: { entry: ConfigAuditEntry; index: number }) {
   const [expanded, setExpanded] = useState(false);
   const targetLink = configTargetLink(entry);
   return (
     <>
       <tr className="pl-audit-row" onClick={() => setExpanded(!expanded)}>
-        <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.ts)}</td>
+        <td className="whitespace-nowrap tabular-nums">{index}</td>
+        <td className="whitespace-nowrap">{formatConfigAuditTs(entry.ts)}</td>
         <td>{actorLabel(entry.actor)}</td>
-        <td className="pl-audit-table-muted">{sourceLabel(entry.source)}</td>
+        <td>{sourceLabel(entry.source)}</td>
         <td>{assetKindLabel(entry.assetKind)}</td>
         <td>{changeTypeLabel(entry.changeType)}</td>
-        <td className="pl-audit-table-mono">
+        <td className="font-mono">
           {targetLink ? (
             <Link
               to={targetLink}
@@ -99,11 +100,11 @@ function ChangeRow({ entry }: { entry: ConfigAuditEntry }) {
             entry.targetId ?? "—"
           )}
         </td>
-        <td className="pl-audit-table-mono pl-audit-table-muted">{entry.filePath}</td>
+        <td className="font-mono">{entry.filePath}</td>
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
-          <td colSpan={7} className="px-3 py-3 text-xs">
+          <td colSpan={8} className="px-3 py-3 text-xs">
             <div className="grid gap-3">
               <div className="pl-audit-detail-grid">
                 <div><span className="font-medium">请求 ID：</span><span className="ml-2 text-fg-muted font-mono">{entry.requestId ?? "—"}</span></div>
@@ -312,6 +313,7 @@ export function ConfigAudit() {
             <table className="pl-data-grid pl-data-table pl-config-audit-table pl-audit-table w-full" data-testid="config-audit-table">
               <thead>
                 <tr>
+                  <th className="w-12 whitespace-nowrap">序号</th>
                   <th>时间</th>
                   <th>操作者</th>
                   <th>来源</th>
@@ -323,9 +325,11 @@ export function ConfigAudit() {
               </thead>
               <tbody>
                 {(data?.entries ?? []).length === 0 ? (
-                  <tr><td colSpan={7} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  <tr><td colSpan={8} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
-                  data?.entries.map((entry) => <ChangeRow key={entry.id} entry={entry} />)
+                  data?.entries.map((entry, index) => (
+                    <ChangeRow key={entry.id} entry={entry} index={page * PAGE_SIZE + index + 1} />
+                  ))
                 )}
               </tbody>
             </table>
