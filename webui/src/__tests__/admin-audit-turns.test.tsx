@@ -83,7 +83,9 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
 
     expect(await screen.findByRole("tab", { name: "问询记录" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("tab", { name: "数据热力" })).not.toBeInTheDocument();
-    expect(await screen.findByTestId("audit-turns-table")).toBeInTheDocument();
+    const turnsTable = await screen.findByTestId("audit-turns-table");
+    expect(turnsTable).toHaveClass("pl-data-grid", "pl-audit-table");
+    expect(turnsTable.querySelector("td.pl-audit-table-muted")).not.toBeNull();
     expect(screen.getByText("开始时间")).toBeInTheDocument();
     expect(screen.getByText("结束时间")).toBeInTheDocument();
     expect(screen.getByText("工具调用数")).toBeInTheDocument();

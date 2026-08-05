@@ -202,11 +202,29 @@ describe("GET /api/admin/audit", () => {
       });
 
       const csvRes = await request(app.server).get("/api/admin/config-audit/export.csv?targetId=workhorse").expect(200);
-      expect(csvRes.headers["content-disposition"]).toMatch(/config-audit-\d{8}\.csv/);
+      expect(csvRes.headers["content-disposition"]).toMatch(/config-audit-\d{8}-\d{6}\.csv/);
       expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
-      expect(csvRes.text).toContain("change_type");
-      expect(csvRes.text).toContain("agent.patch");
-      expect(csvRes.text).toContain("workhorse");
+      const csvBody = csvRes.text.replace(/^\uFEFF/, "");
+      const [headerLine, firstRow] = csvBody.split("\n");
+      expect(headerLine).toBe("时间,操作者,来源,资产域,变更类型,目标,文件路径");
+      expect(headerLine).not.toContain("change_type");
+      expect(firstRow).toContain("本机管理员");
+      expect(firstRow).toContain("workhorse");
+      expect(firstRow).not.toContain("local-admin");
+      expect(csvBody).not.toContain("old_summary");
+      expect(csvBody).not.toContain("actor_type");
+
+      const futureSince = new Date(Date.now() + 60_000).toISOString();
+      const filtered = await request(app.server)
+        .get(`/api/admin/config-audit?targetId=workhorse&since=${encodeURIComponent(futureSince)}`)
+        .expect(200);
+      expect(filtered.body.data.total).toBe(0);
+
+      const pastUntil = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const untilFiltered = await request(app.server)
+        .get(`/api/admin/config-audit?targetId=workhorse&until=${encodeURIComponent(pastUntil)}`)
+        .expect(200);
+      expect(untilFiltered.body.data.total).toBe(0);
     } finally {
       await app.close();
     }

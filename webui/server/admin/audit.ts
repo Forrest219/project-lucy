@@ -3,6 +3,16 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
+import {
+  CONFIG_AUDIT_CSV_HEADERS,
+  actorLabel,
+  assetKindLabel,
+  changeTypeLabel,
+  formatConfigAuditExportFilenameStamp,
+  formatConfigAuditTs,
+  sourceLabel,
+  targetLabel
+} from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns } from "../proxy/audit.js";
 import {
@@ -534,6 +544,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       assetKind?: string;
       changeType?: string;
       source?: string;
+      since?: string;
+      until?: string;
       limit?: string;
       offset?: string;
     };
@@ -548,13 +560,17 @@ export function registerAuditRoutes(app: FastifyInstance) {
       filePath: q.filePath ? `%${q.filePath}%` : null,
       assetKind: q.assetKind ?? null,
       changeType: q.changeType ?? null,
-      source: q.source ?? null
+      source: q.source ?? null,
+      since: q.since ?? null,
+      until: q.until ?? null
     };
     if (params.targetId) conditions.push("target_id = @targetId");
     if (params.filePath) conditions.push("file_path LIKE @filePath");
     if (params.assetKind) conditions.push("asset_kind = @assetKind");
     if (params.changeType) conditions.push("change_type = @changeType");
     if (params.source) conditions.push("source = @source");
+    if (params.since) conditions.push("ts >= @since");
+    if (params.until) conditions.push("ts <= @until");
     conditions.push("write_status = 'committed'");
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const total = database.prepare(`SELECT COUNT(*) AS cnt FROM config_change_log ${where}`).get(params) as { cnt: number };
@@ -617,6 +633,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       assetKind?: string;
       changeType?: string;
       source?: string;
+      since?: string;
+      until?: string;
     };
   }>("/api/admin/config-audit/export.csv", async (request, reply) => {
     const q = request.query;
@@ -627,77 +645,45 @@ export function registerAuditRoutes(app: FastifyInstance) {
       filePath: q.filePath ? `%${q.filePath}%` : null,
       assetKind: q.assetKind ?? null,
       changeType: q.changeType ?? null,
-      source: q.source ?? null
+      source: q.source ?? null,
+      since: q.since ?? null,
+      until: q.until ?? null
     };
     if (params.targetId) conditions.push("target_id = @targetId");
     if (params.filePath) conditions.push("file_path LIKE @filePath");
     if (params.assetKind) conditions.push("asset_kind = @assetKind");
     if (params.changeType) conditions.push("change_type = @changeType");
     if (params.source) conditions.push("source = @source");
+    if (params.since) conditions.push("ts >= @since");
+    if (params.until) conditions.push("ts <= @until");
     conditions.push("write_status = 'committed'");
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const rows = database.prepare(`
-      SELECT id, ts, actor, actor_type, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, write_status
+      SELECT ts, actor, source, file_path, change_type, asset_kind, target_id
       FROM config_change_log ${where}
       ORDER BY ts DESC
     `).all(params) as Array<{
-      id: number;
       ts: string;
       actor: string;
-      actor_type: string;
       source: string | null;
-      session_id: string | null;
       file_path: string;
       change_type: string;
       asset_kind: ConfigAuditAssetKind;
-      operation: string | null;
       target_id: string | null;
-      old_summary: string | null;
-      new_summary: string | null;
-      diff: string | null;
-      request_id: string | null;
-      write_status: ConfigAuditWriteStatus;
     }>;
 
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const headers = [
-      "id",
-      "ts",
-      "actor",
-      "actor_type",
-      "source",
-      "session_id",
-      "file_path",
-      "asset_kind",
-      "change_type",
-      "operation",
-      "target_id",
-      "old_summary",
-      "new_summary",
-      "diff",
-      "request_id",
-      "write_status"
-    ];
+    const dateStr = formatConfigAuditExportFilenameStamp();
     const csvLines = [
-      headers.join(","),
+      CONFIG_AUDIT_CSV_HEADERS.join(","),
       ...rows.map((row) =>
         [
-          row.id,
-          csvCell(row.ts),
-          csvCell(row.actor),
-          csvCell(row.actor_type),
-          csvCell(row.source),
-          csvCell(row.session_id),
-          csvCell(row.file_path),
-          csvCell(row.asset_kind),
-          csvCell(row.change_type),
-          csvCell(row.operation),
-          csvCell(row.target_id),
-          csvCell(redactJsonString(row.old_summary)),
-          csvCell(redactJsonString(row.new_summary)),
-          csvCell(row.diff ? redactText(row.diff) : null),
-          csvCell(row.request_id),
-          csvCell(row.write_status)
+          csvCell(formatConfigAuditTs(row.ts)),
+          csvCell(actorLabel(row.actor)),
+          csvCell(sourceLabel(row.source)),
+          csvCell(assetKindLabel(row.asset_kind)),
+          csvCell(changeTypeLabel(row.change_type)),
+          csvCell(targetLabel(row.target_id)),
+          csvCell(row.file_path)
         ].join(",")
       )
     ];

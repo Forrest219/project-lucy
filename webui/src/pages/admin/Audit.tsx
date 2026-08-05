@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
+import { formatConfigAuditTs } from "../../lib/configAuditLabels";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type {
   Agent,
@@ -585,16 +586,16 @@ function TurnDetailDrawer({
               <section className="pl-card grid gap-3" data-testid="audit-turn-calls-card">
                 <h3 className="text-sm font-semibold text-fg-default">调用明细</h3>
                 <div className="overflow-x-auto">
-                  <table className="pl-audit-table pl-data-grid w-full text-sm" data-testid="audit-turn-calls-table">
+                  <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-turn-calls-table">
                     <thead>
-                      <tr className="border-b border-border-default text-left text-xs text-fg-muted">
-                        <th className="px-3 py-2 w-12">序号</th>
-                        <th className="px-3 py-2">时间</th>
-                        <th className="px-3 py-2">数据库连接</th>
-                        <th className="px-3 py-2">涉及数据表</th>
-                        <th className="px-3 py-2">状态</th>
-                        <th className="px-3 py-2">耗时</th>
-                        <th className="px-3 py-2">操作</th>
+                      <tr>
+                        <th className="w-12">序号</th>
+                        <th>时间</th>
+                        <th>数据库连接</th>
+                        <th>涉及数据表</th>
+                        <th>状态</th>
+                        <th>耗时</th>
+                        <th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -603,20 +604,20 @@ function TurnDetailDrawer({
                       ) : (
                         detail.accessLogs.map((log, index) => (
                           <tr key={log.id}>
-                            <td className="px-3 py-2 text-xs tabular-nums text-fg-muted">{index + 1}</td>
-                            <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(log.ts).toLocaleString("zh-CN")}</td>
-                            <td className="px-3 py-2 text-xs notranslate" translate="no">{log.connectionId ?? "—"}</td>
-                            <td className="px-3 py-2 text-xs text-fg-muted notranslate" translate="no">{log.tables?.join(", ") ?? "—"}</td>
-                            <td className="px-3 py-2">
+                            <td className="pl-audit-table-num">{index + 1}</td>
+                            <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(log.ts)}</td>
+                            <td className="notranslate" translate="no">{log.connectionId ?? "—"}</td>
+                            <td className="pl-audit-table-muted notranslate" translate="no">{log.tables?.join(", ") ?? "—"}</td>
+                            <td>
                               <span className={`pl-status-badge ${log.outcome === "ok" ? "pl-status-done" : log.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed"}`}>
                                 {OUTCOME_LABELS[log.outcome as keyof typeof OUTCOME_LABELS] ?? log.outcome}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-xs">
+                            <td>
                               <span className="tabular-nums">{log.durationMs} ms</span>
                               {log.isSlowCall ? <span className="ml-2 pl-status-badge pl-status-partial">慢于多数请求</span> : null}
                             </td>
-                            <td className="px-3 py-2 text-xs">
+                            <td>
                               {log.traceId ? <TraceLink traceId={log.traceId} /> : null}
                             </td>
                           </tr>
@@ -723,17 +724,17 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
   return (
     <>
       <tr className="pl-audit-row" onClick={() => setExpanded(!expanded)}>
-        <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.ts).toLocaleString("zh-CN")}</td>
-        <td className="px-3 py-2 text-sm">{entry.userId}</td>
-        <td className="px-3 py-2 text-sm font-mono">{entry.tool}</td>
-        <td className="px-3 py-2 text-xs text-fg-muted">{entry.tables?.join(", ")}</td>
-        <td className="px-3 py-2 text-xs text-fg-muted">{entry.decisionReason ?? "—"}</td>
-        <td className="px-3 py-2">
+        <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.ts)}</td>
+        <td>{entry.userId}</td>
+        <td className="pl-audit-table-mono">{entry.tool}</td>
+        <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
+        <td className="pl-audit-table-muted">{entry.decisionReason ?? "—"}</td>
+        <td>
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
-        <td className="px-3 py-2 text-xs text-fg-muted">
+        <td className="pl-audit-table-muted">
           <div className="flex flex-wrap items-center gap-2">
-            <span>{entry.durationMs}ms</span>
+            <span className="tabular-nums">{entry.durationMs}ms</span>
             <Link
               to={buildObjectDetailSearch({ kind: "auditEvent", eventId: entry.id })}
               state={{ initialAuditEntry: entry }}
@@ -1180,20 +1181,20 @@ export function Audit() {
             {turnTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, turnTotal)} / 共 ${turnTotal} 条`}
           </div>
           <div className="overflow-x-auto">
-            <table className="pl-audit-table pl-data-grid w-full text-sm" data-testid="audit-turns-table">
+            <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-turns-table">
               <thead>
-                <tr className="border-b border-border-default text-left text-xs text-fg-muted">
-                  <th className="px-3 py-2 w-12">序号</th>
-                  <th className="px-3 py-2">开始时间</th>
-                  <th className="px-3 py-2">结束时间</th>
-                  <th className="px-3 py-2">问询时长</th>
-                  <th className="px-3 py-2"><span className="notranslate" translate="no">Agent</span></th>
-                  <th className="px-3 py-2">问询摘要</th>
-                  <th className="px-3 py-2">工具调用数</th>
-                  <th className="px-3 py-2">涉及数据表</th>
-                  <th className="px-3 py-2">耗时</th>
-                  <th className="px-3 py-2">结果</th>
-                  <th className="px-3 py-2">来源</th>
+                <tr>
+                  <th className="w-12">序号</th>
+                  <th>开始时间</th>
+                  <th>结束时间</th>
+                  <th>问询时长</th>
+                  <th><span className="notranslate" translate="no">Agent</span></th>
+                  <th>问询摘要</th>
+                  <th>工具调用数</th>
+                  <th>涉及数据表</th>
+                  <th>耗时</th>
+                  <th>结果</th>
+                  <th>来源</th>
                 </tr>
               </thead>
               <tbody>
@@ -1210,32 +1211,32 @@ export function Audit() {
                         data-testid={`audit-turn-row-${entry.id}`}
                         onClick={() => openTurnDrawer(entry.id)}
                       >
-                        <td className="px-3 py-2 text-xs tabular-nums text-fg-muted">{page * PAGE_SIZE + index + 1}</td>
-                        <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.startedAt).toLocaleString("zh-CN")}</td>
-                        <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.endedAt).toLocaleString("zh-CN")}</td>
-                        <td className="px-3 py-2 text-xs">
+                        <td className="pl-audit-table-num">{page * PAGE_SIZE + index + 1}</td>
+                        <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.startedAt)}</td>
+                        <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.endedAt)}</td>
+                        <td>
                           <div>{formatDurationMs(entry.turnSpanMs ?? 0)}</div>
                           {(entry.totalCallDurationMs ?? 0) > 0 ? (
-                            <div className="text-fg-muted">执行 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</div>
+                            <div className="font-normal text-fg-muted">执行 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</div>
                           ) : null}
                         </td>
-                        <td className="px-3 py-2 text-sm notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
-                        <td className="px-3 py-2 text-sm">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
-                        <td className="px-3 py-2 tabular-nums">{entry.businessCallCount}</td>
-                        <td className="px-3 py-2 text-xs text-fg-muted notranslate" translate="no">{formatTablesCell(entry.sources)}</td>
-                        <td className="px-3 py-2 text-xs">
+                        <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
+                        <td>{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
+                        <td className="pl-audit-table-num">{entry.businessCallCount}</td>
+                        <td className="pl-audit-table-muted notranslate" translate="no">{formatTablesCell(entry.sources)}</td>
+                        <td>
                           {(entry.slowCallCount ?? 0) > 0 ? (
                             <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 次慢调用</span>
                           ) : (
                             <span className="text-fg-muted">—</span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-xs">
+                        <td>
                           {denied > 0 ? <span className="pl-status-badge pl-status-partial">{denied} 拒绝</span> : null}
                           {errors > 0 ? <span className="pl-status-badge pl-status-validation_failed">{errors} 错误</span> : null}
                           {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
                         </td>
-                        <td className="px-3 py-2"><TurnSourceBadge source={entry.source} /></td>
+                        <td><TurnSourceBadge source={entry.source} /></td>
                       </tr>
                     );
                   })
@@ -1258,16 +1259,16 @@ export function Audit() {
               : (callTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, callTotal)} / 共 ${callTotal} 条`)}
           </div>
           <div className="overflow-x-auto">
-            <table className="pl-audit-table w-full text-sm" data-testid="audit-calls-table">
+            <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-calls-table">
               <thead>
-                <tr className="border-b border-border-default text-left text-xs text-fg-muted">
-                  <th className="px-3 py-2">时间</th>
-                  <th className="px-3 py-2">用户</th>
-                  <th className="px-3 py-2">工具</th>
-                  <th className="px-3 py-2">表</th>
-                  <th className="px-3 py-2">裁决原因</th>
-                  <th className="px-3 py-2">状态</th>
-                  <th className="px-3 py-2">耗时</th>
+                <tr>
+                  <th>时间</th>
+                  <th>用户</th>
+                  <th>工具</th>
+                  <th>表</th>
+                  <th>裁决原因</th>
+                  <th>状态</th>
+                  <th>耗时</th>
                 </tr>
               </thead>
               <tbody>

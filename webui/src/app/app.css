@@ -725,6 +725,27 @@
   .pl-usage-overview-table-name-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
   .pl-usage-overview-table-meta { @apply text-xs font-normal text-fg-muted; }
   .pl-usage-overview-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
+  /* Spec 96 + access-log parity: ops audit grids share 12px density.
+     Cell helpers must beat `.pl-data-grid tbody td` / body density (0,1,2).
+     Define mono before muted so `mono + muted` keeps muted color. */
+  .pl-audit-table.pl-data-grid tbody td,
+  .pl-config-audit-table tbody td { @apply text-xs font-medium leading-4; }
+  .pl-audit-table.pl-data-grid tbody td.pl-audit-table-mono,
+  .pl-audit-table.pl-data-grid tbody td.pl-config-audit-table-mono,
+  .pl-config-audit-table tbody td.pl-audit-table-mono,
+  .pl-config-audit-table tbody td.pl-config-audit-table-mono {
+    @apply font-mono font-normal text-fg-body;
+  }
+  .pl-audit-table.pl-data-grid tbody td.pl-audit-table-muted,
+  .pl-audit-table.pl-data-grid tbody td.pl-config-audit-table-muted,
+  .pl-config-audit-table tbody td.pl-audit-table-muted,
+  .pl-config-audit-table tbody td.pl-config-audit-table-muted {
+    @apply font-normal text-fg-muted;
+  }
+  .pl-audit-table.pl-data-grid tbody td.pl-audit-table-num,
+  .pl-config-audit-table tbody td.pl-audit-table-num {
+    @apply whitespace-nowrap font-normal tabular-nums text-fg-body;
+  }
   /* Spec 88: agent admin list table — light pl-data-grid conformance. */
   .pl-agent-list-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-agent-list-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
