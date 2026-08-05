@@ -156,14 +156,16 @@ function stubSingleRole(detail: RoleDetailType) {
 }
 
 describe("RoleDetail", () => {
-  it("/admin/roles/new renders the create form and shows role id input", async () => {
+  it("/admin/roles/new renders identity tab and permissions tab without usage", async () => {
     vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
     expect(await screen.findByRole("heading", { name: "新建 Role" })).toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toMatch(/新建正式 Role/);
-    expect(document.body.textContent ?? "").toMatch(/配置/);
     expect(screen.getByLabelText(/^角色标识/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^说明/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "使用情况" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "生效边界" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     expect(screen.getByText("允许的连接")).toBeInTheDocument();
     expect(screen.getByTestId("role-tools-field")).toBeInTheDocument();
     expect(screen.getByText("可访问的表范围")).toBeInTheDocument();
@@ -202,6 +204,7 @@ describe("RoleDetail", () => {
 
     renderAt("/admin/roles/new");
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "new_role" } });
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /lucy_query/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /mysql-aliyun/ }));
 
@@ -234,6 +237,7 @@ describe("RoleDetail", () => {
       vi.fn(async () => new Response(JSON.stringify({ ok: false, error: { code: "DOWN", message: "down" } }), { status: 500 }))
     );
     renderAt("/admin/roles/new");
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     expect(await screen.findByTestId("role-connections-fallback-hint")).toBeInTheDocument();
     expect(screen.getByTestId("role-tools-fallback-hint")).toBeInTheDocument();
     const toolInput = within(screen.getByTestId("role-tools-field")).getByLabelText("添加标签");
@@ -245,6 +249,7 @@ describe("RoleDetail", () => {
   it("table range uses connection schemas and supports 指定表名 / 按前缀匹配", async () => {
     vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /mysql-aliyun/ }));
     fireEvent.click(screen.getByRole("button", { name: "+ 添加表范围" }));
     const range = await screen.findByTestId("role-table-range-1");
@@ -291,6 +296,7 @@ describe("RoleDetail", () => {
     // role id input should be empty
     const idInput = document.getElementById("role-id-input") as HTMLInputElement;
     expect(idInput.value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     // tools pre-filled from template
     expect(await screen.findByRole("checkbox", { name: /wiki_search/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /wiki_read/ })).toBeChecked();
@@ -355,6 +361,7 @@ describe("RoleDetail", () => {
     vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "wildcard_role" } });
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     const toolInput = within(await screen.findByTestId("role-tools-field")).getByLabelText("添加标签");
     fireEvent.change(toolInput, { target: { value: "*" } });
     fireEvent.keyDown(toolInput, { key: "Enter" });
@@ -365,15 +372,15 @@ describe("RoleDetail", () => {
   it("effective permissions tab renders tools and sources", async () => {
     stubSingleRole(makeYamlRole());
     renderAt("/admin/roles/analyst");
-    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
     expect(screen.getByText("lucy_query")).toBeInTheDocument();
     expect(screen.getByText(/dataforai/)).toBeInTheDocument();
   });
 
-  it("M55: 权限预览 explains that allowed MCP tools filter tools/list and intercept tools/call", async () => {
+  it("M55: 生效边界 explains that allowed MCP tools filter tools/list and intercept tools/call", async () => {
     stubSingleRole(makeYamlRole());
     renderAt("/admin/roles/analyst");
-    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
     const label = await screen.findByTestId("role-allowed-tools-label");
     // 标签需明确 runtime 影响，且不能丢失 tools/list、tools/call 提示
     expect(label.textContent ?? "").toContain("允许的 MCP 工具");
@@ -441,12 +448,12 @@ describe("RoleDetail", () => {
     });
 
     // Go back to config, edit again; the old diff is invalidated immediately.
-    fireEvent.click(screen.getByRole("button", { name: "基本配置" }));
+    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
     const desc2 = screen.getByDisplayValue("v1") as HTMLInputElement;
     fireEvent.change(desc2, { target: { value: "v2" } });
     fireEvent.click(screen.getByRole("button", { name: "变更预览" }));
     expect(screen.queryByTestId("role-diff")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "基本配置" }));
+    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
     fireEvent.click(screen.getByRole("button", { name: /预览并保存/ }));
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
@@ -502,7 +509,7 @@ describe("RoleDetail", () => {
       })
     );
     renderAt("/admin/roles/broken");
-    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
     expect(await screen.findByText("待修复")).toBeInTheDocument();
     expect(screen.getByText(/权限解析失败/)).toBeInTheDocument();
     const technical = screen.getByTestId("role-detail-warning-tech-0");

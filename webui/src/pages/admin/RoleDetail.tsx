@@ -15,7 +15,40 @@ import type {
 import { PageHeader } from "../../components/PageHeader";
 import { TagInput } from "../../components/TagInput";
 
-type Tab = "config" | "permissions" | "usage" | "diff";
+type Tab = "identity" | "permissions" | "effective" | "usage" | "diff";
+
+function visibleTabsForMode(
+  mode: "create" | "edit" | "copy" | "delete",
+  source: RoleDetailType["source"] | undefined
+): Array<{ key: Tab; label: string }> {
+  if (mode === "delete") {
+    return [
+      { key: "usage", label: "使用情况" },
+      { key: "diff", label: "变更预览" }
+    ];
+  }
+  if (mode === "create" || mode === "copy") {
+    return [
+      { key: "identity", label: "基本信息" },
+      { key: "permissions", label: "权限配置" },
+      { key: "diff", label: "变更预览" }
+    ];
+  }
+  if (mode === "edit" && source === "template") {
+    return [
+      { key: "identity", label: "基本信息" },
+      { key: "effective", label: "生效边界" },
+      { key: "usage", label: "使用情况" }
+    ];
+  }
+  return [
+    { key: "identity", label: "基本信息" },
+    { key: "permissions", label: "权限配置" },
+    { key: "effective", label: "生效边界" },
+    { key: "usage", label: "使用情况" },
+    { key: "diff", label: "变更预览" }
+  ];
+}
 
 type RoleFormState = {
   roleId: string;
@@ -217,7 +250,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   const detail = data ?? null;
 
   const [form, setForm] = useState<RoleFormState>(EMPTY_FORM);
-  const [activeTab, setActiveTab] = useState<Tab>("config");
+  const [activeTab, setActiveTab] = useState<Tab>("identity");
   const [diffPreview, setDiffPreview] = useState<PatchPreview | null>(null);
   const [createPreview, setCreatePreview] = useState<CreatePreview | CopyPreview | null>(null);
   const [deletePreview, setDeletePreview] = useState<DeletePreview | null>(null);
@@ -338,7 +371,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agent", roleId] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
-        setActiveTab("config");
+        setActiveTab("identity");
       }
     },
     onError: (err: Error) => toast.error(err.message)
@@ -478,6 +511,14 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     clearPreviews();
   }
 
+  const tabs = useMemo(() => visibleTabsForMode(mode, detail?.source), [mode, detail?.source]);
+
+  useEffect(() => {
+    if (!tabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab(tabs[0]?.key ?? "identity");
+    }
+  }, [tabs, activeTab]);
+
   if (mode === "edit" || mode === "copy" || mode === "delete") {
     if (isLoading) return <div className="pl-notice">加载中…</div>;
     if (error || !detail) {
@@ -496,13 +537,6 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   const showCreateDiff = mode === "create" || mode === "copy";
   const showPatchDiff = mode === "edit";
   const showDeleteDiff = mode === "delete";
-
-  const tabs: Array<{ key: Tab; label: string }> = [
-    { key: "config", label: "基本配置" },
-    { key: "permissions", label: "权限预览" },
-    { key: "usage", label: "使用情况" },
-    { key: "diff", label: "变更预览" }
-  ];
 
   return (
     <div className="pl-page-stack">
@@ -525,9 +559,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
           <>
             {mode === "create" && (
               <>
-                配置 <span className="notranslate" translate="no">Agent</span> 可访问的连接、表范围与{" "}
-                <span className="notranslate" translate="no">MCP</span> 工具。保存前须确认{" "}
-                <span className="notranslate" translate="no">access.yaml</span> 变更 diff。
+                填写角色标识与说明，并在「权限配置」中设置连接、表范围与{" "}
+                <span className="notranslate" translate="no">MCP</span> 工具。保存前须在「变更预览」中确认 diff。
               </>
             )}
             {mode === "edit" && detail?.source === "template" && (
@@ -537,8 +570,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
             )}
             {mode === "edit" && detail?.source !== "template" && (
               <>
-                编辑正式 Role 的访问边界。保存前须确认{" "}
-                <span className="notranslate" translate="no">access.yaml</span> 变更 diff。
+                编辑正式 Role 的访问边界。保存前须在「变更预览」中确认 diff。
               </>
             )}
             {mode === "copy" && (
@@ -598,7 +630,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       </div>
 
       <div className="pl-admin-tab-panel">
-        {activeTab === "config" && (
+        {activeTab === "identity" && (
           <div className="grid gap-4 max-w-2xl pb-32">
             <label className="grid gap-1" htmlFor="role-id-input">
               <span className="text-sm font-medium">角色标识</span>
@@ -637,7 +669,29 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 disabled={isReadOnlyTemplate}
               />
             </label>
+            {isReadOnlyTemplate && (
+              <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">
+                <p>这是参考模板，UI 上只读。</p>
+                <p className="mt-1 text-warning-strong">
+                  创建后会写入 <span className="notranslate" translate="no">access.yaml</span>
+                  ，成为可编辑、可分配给 <span className="notranslate" translate="no">Agent</span>{" "}
+                  的正式 Role。保存前必须确认{" "}
+                  <span className="notranslate" translate="no">YAML</span> diff。
+                </p>
+                <Link
+                  to={`/admin/roles/${encodeURIComponent(detail!.id)}?mode=copy`}
+                  className="pl-btn pl-btn--secondary text-xs ml-0 mt-2"
+                  aria-label={`基于参考模板 ${detail!.id} 创建 Role`}
+                >
+                  基于此模板创建 Role
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
+        {activeTab === "permissions" && (
+          <div className="grid gap-4 max-w-2xl pb-32">
             <div className="grid gap-2" data-testid="role-connections-field">
               <div className="text-sm font-medium">允许的连接</div>
               <p className="text-xs text-fg-muted">该 Role 可使用哪些数据库连接。</p>
@@ -987,31 +1041,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 </div>
               )}
             </div>
-            {isReadOnlyTemplate && (
-              <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">
-                <p>这是参考模板，UI 上只读。</p>
-                <p className="mt-1 text-warning-strong">
-                  创建后会写入 <span className="notranslate" translate="no">access.yaml</span>
-                  ，成为可编辑、可分配给 <span className="notranslate" translate="no">Agent</span>{" "}
-                  的正式 Role。保存前必须确认{" "}
-                  <span className="notranslate" translate="no">YAML</span> diff。
-                </p>
-                <Link
-                  to={`/admin/roles/${encodeURIComponent(detail!.id)}?mode=copy`}
-                  className="pl-btn pl-btn--secondary text-xs ml-0 mt-2"
-                  aria-label={`基于参考模板 ${detail!.id} 创建 Role`}
-                >
-                  基于此模板创建 Role
-                </Link>
-              </div>
-            )}
           </div>
         )}
 
-        {activeTab === "permissions" && (
+        {activeTab === "effective" && (
           <div className="grid gap-4 max-w-3xl pb-32">
             {!detail ? (
-              <p className="text-sm text-fg-muted">尚未保存。先在「基本配置」中填写并预览保存。</p>
+              <p className="text-sm text-fg-muted">尚未保存。保存后在此查看解析后的生效边界。</p>
             ) : detail.invalid ? (
               <div className="pl-card grid gap-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1136,20 +1172,20 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                   if (showDeleteDiff) setDeletePreview(null);
                   else if (showCreateDiff) setCreatePreview(null);
                   else setDiffPreview(null);
-                  setActiveTab("config");
+                  setActiveTab("identity");
                 }}
                 isPending={
                   createMutation.isPending || patchMutation.isPending || deleteMutation.isPending || copyMutation.isPending
                 }
               />
             ) : (
-              <p className="text-sm text-fg-muted">在「基本配置」编辑后，点「预览保存」生成 diff。</p>
+              <p className="text-sm text-fg-muted">在「基本信息」或「权限配置」编辑后，点「预览保存」生成 diff。</p>
             )}
           </div>
         )}
       </div>
 
-      {activeTab === "config" && dirty && !showDeleteDiff && !isReadOnlyTemplate && (
+      {(activeTab === "identity" || activeTab === "permissions") && dirty && !showDeleteDiff && !isReadOnlyTemplate && (
         <div
           data-testid="role-dirty-bar"
           className="pl-floating-action-bar"

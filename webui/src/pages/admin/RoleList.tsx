@@ -17,23 +17,21 @@ const FILTER_OPTIONS: Array<{ value: SourceFilter; label: string }> = [
   { value: "templates", label: "参考模板" }
 ];
 
-const METRIC_FILTERS: Array<{
+const METRIC_ITEMS: Array<{
   label: string;
-  filter: SourceFilter;
   hint: string;
-  tone?: "danger";
   valueKey: keyof RoleSummary;
+  testId: string;
 }> = [
-  { label: "正式 Role", filter: "formal", hint: "写入 access.yaml", valueKey: "formalCount" },
-  { label: "使用中", filter: "in-use", hint: "至少 1 个 Agent 引用", valueKey: "inUseCount" },
+  { label: "Role 总数", hint: "access.yaml 中的正式 Role", valueKey: "formalCount", testId: "metric-role-count" },
+  { label: "使用中", hint: "至少 1 个 Agent 引用", valueKey: "inUseCount", testId: "metric-in-use" },
+  { label: "未引用", hint: "正式 Role 暂无 Agent 绑定", valueKey: "unusedFormalCount", testId: "metric-unused" },
   {
-    label: "待修复",
-    filter: "needs-repair",
+    label: "解析异常",
     hint: "正式 Role 权限解析失败",
-    tone: "danger",
-    valueKey: "needsRepairCount"
-  },
-  { label: "未引用", filter: "unused", hint: "正式 Role 暂无 Agent 引用", valueKey: "unusedFormalCount" }
+    valueKey: "needsRepairCount",
+    testId: "metric-invalid"
+  }
 ];
 
 function formatConfigUpdatedAt(iso: string): string {
@@ -57,30 +55,19 @@ function MetricCard({
   label,
   value,
   hint,
-  tone,
-  pressed,
-  onSelect
+  testId
 }: {
   label: string;
   value: string | number;
   hint: string;
-  tone?: "danger";
-  pressed: boolean;
-  onSelect: () => void;
+  testId: string;
 }) {
   return (
-    <button
-      type="button"
-      className={`pl-metric-card pl-metric-card--button${tone ? ` pl-metric-card--${tone}` : ""}`}
-      data-testid={`role-metric-${label}`}
-      aria-label={`筛选：${label}`}
-      aria-pressed={pressed}
-      onClick={onSelect}
-    >
+    <div className="pl-metric-card" data-testid={testId}>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
-    </button>
+    </div>
   );
 }
 
@@ -422,9 +409,7 @@ export function RoleList() {
         title="角色权限"
         description={
           <>
-            管理 <span className="notranslate" translate="no">Agent</span> 可访问的数据源和{" "}
-            <span className="notranslate" translate="no">MCP</span> 工具边界。正式 Role 写入{" "}
-            <span className="notranslate" translate="no">access.yaml</span>。
+            管理每个 Role 的连接、表范围与 <span className="notranslate" translate="no">MCP</span> 工具授权。
           </>
         }
         actions={
@@ -434,19 +419,23 @@ export function RoleList() {
         }
       />
 
-      <div className="pl-metric-grid">
-        {METRIC_FILTERS.map((metric) => (
+      <div className="pl-metric-grid" data-testid="role-metric-grid">
+        {METRIC_ITEMS.map((metric) => (
           <MetricCard
             key={metric.label}
             label={metric.label}
             value={summary[metric.valueKey]}
             hint={metric.hint}
-            tone={metric.tone}
-            pressed={sourceFilter === metric.filter}
-            onSelect={() => setSourceFilter(metric.filter)}
+            testId={metric.testId}
           />
         ))}
       </div>
+
+      {summary.needsRepairCount > 0 ? (
+        <p className="text-xs text-fg-muted" data-testid="role-invalid-notice">
+          有 {summary.needsRepairCount} 个正式 Role 解析异常，可通过筛选「待修复」查看。
+        </p>
+      ) : null}
 
       <div className="pl-admin-filterbar flex flex-wrap gap-2">
         <input

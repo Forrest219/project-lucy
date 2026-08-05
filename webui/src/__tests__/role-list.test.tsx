@@ -150,7 +150,7 @@ describe("RoleList", () => {
     expect(within(templateCard).queryByText("使用中")).not.toBeInTheDocument();
   });
 
-  it("renders the four business-oriented default metrics with yaml-only 待修复/使用中", async () => {
+  it("renders static lifecycle metrics without clickable KPI filters", async () => {
     stubRoles([
       makeRole({
         id: "metrics_in_use",
@@ -172,21 +172,15 @@ describe("RoleList", () => {
     await waitFor(() => findCard("metrics_in_use"));
 
     expect(screen.queryByText(/YAML role/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^Template$/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^Invalid$/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("role-metric-grid")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-role-count")).toHaveTextContent("3");
+    expect(screen.getByTestId("metric-in-use")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-invalid")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-unused")).toHaveTextContent("1");
+    expect(screen.getByTestId("role-invalid-notice")).toHaveTextContent(/解析异常/);
 
-    expect(screen.getByTestId("role-metric-正式 Role")).toBeInTheDocument();
-    expect(screen.getByTestId("role-metric-使用中")).toBeInTheDocument();
-    expect(screen.getByTestId("role-metric-待修复")).toBeInTheDocument();
-    expect(screen.getByTestId("role-metric-未引用")).toBeInTheDocument();
-    // template usage / invalid must not inflate formal KPIs
-    expect(screen.getByTestId("role-metric-使用中")).toHaveTextContent("1");
-    expect(screen.getByTestId("role-metric-待修复")).toHaveTextContent("1");
-    expect(screen.getByTestId("role-metric-正式 Role")).toHaveTextContent("3");
-    expect(screen.getByTestId("role-metric-未引用")).toHaveTextContent("1");
-    expect(screen.queryByTestId("role-metric-参考模板")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("role-metric-正在服务 Agent")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("role-metric-未被 Agent 使用")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /筛选：/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId("metric-invalid").className).not.toMatch(/pl-metric-card--danger/);
   });
 
   it("does not render the legacy status strip and drops template helper from header", async () => {
@@ -322,38 +316,12 @@ describe("RoleList", () => {
     expect(findCardOrNull("broken_yaml")).toBeNull();
   });
 
-  it("metric cards are buttons that switch filter with aria-pressed", async () => {
-    stubRoles([
-      makeRole({
-        id: "metric_click_in_use",
-        usageCount: 1,
-        users: [{ id: "u1", name: "U1", enabled: true, tokenCount: 0 }]
-      }),
-      makeRole({ id: "metric_click_unused" }),
-      INVALID_TEMPLATE_ROLE
-    ]);
-    renderRoleList();
-    await waitFor(() => findCard("metric_click_in_use"));
-
-    const inUseMetric = screen.getByRole("button", { name: "筛选：使用中" });
-    expect(inUseMetric).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(inUseMetric);
-    expect(inUseMetric).toHaveAttribute("aria-pressed", "true");
-    expect(findCardOrNull("metric_click_in_use")).not.toBeNull();
-    expect(findCardOrNull("metric_click_unused")).toBeNull();
-
-    const repairMetric = screen.getByRole("button", { name: "筛选：待修复" });
-    fireEvent.click(repairMetric);
-    expect(repairMetric).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("role-current-filter").textContent).toMatch(/没有正式 Role 待修复/);
-    expect(findCardOrNull("lucy_r1_exact_readonly")).toBeNull();
-  });
-
-  it("shows 没有正式 Role 待修复 only when needs-repair has no formal invalid and search is empty", async () => {
+  it("shows 没有正式 Role 待修复 when needs-repair filter has no formal invalid roles", async () => {
     stubRoles([makeRole({ id: "healthy_only" }), INVALID_TEMPLATE_ROLE]);
     renderRoleList();
     await waitFor(() => findCard("healthy_only"));
-    fireEvent.click(screen.getByRole("button", { name: "筛选：待修复" }));
+    const filter = (await screen.findByLabelText("筛选角色范围")) as HTMLSelectElement;
+    fireEvent.change(filter, { target: { value: "needs-repair" } });
     expect(await screen.findByText("没有正式 Role 待修复")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText(/搜索/), { target: { value: "xyz" } });
