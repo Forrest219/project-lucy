@@ -814,7 +814,7 @@
   }
   .pl-connection-kv-grid--compact { @apply gap-y-1.5; }
   .pl-connection-kv {
-    @apply flex min-w-0 items-baseline gap-1.5 px-3;
+    @apply flex min-w-0 items-center gap-1.5 px-3;
   }
   @media (min-width: 640px) {
     .pl-connection-kv-grid {
@@ -827,20 +827,16 @@
     @apply flex flex-none items-center gap-1 whitespace-nowrap text-[12px] font-normal text-fg-muted;
   }
   .pl-connection-kv dd {
-    @apply flex min-w-0 items-baseline text-xs text-fg-default;
+    @apply flex min-w-0 flex-1 items-center text-xs text-fg-default;
   }
   .pl-connection-kv-icon { @apply h-3.5 w-3.5 flex-none self-center text-fg-muted; }
   .pl-connection-kv dd code {
-    @apply min-w-0 break-words font-mono text-xs text-fg-default;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    @apply block min-w-0 max-w-full truncate whitespace-nowrap font-mono text-xs text-fg-default;
   }
   /* Long Host values: explicit overflow rules so the row never overflows the
      card on narrow widths. Title still carries the full value. */
   .pl-connection-kv-host {
-    @apply block min-w-0 max-w-full font-mono text-xs text-fg-default;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    @apply block min-w-0 max-w-full truncate whitespace-nowrap font-mono text-xs text-fg-default;
   }
   /* M44: in-card amber banner for Connection 尚未读取本地目录.
      Lightweight fill + soft warning border; never uses danger red. */
