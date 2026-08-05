@@ -734,20 +734,24 @@
   .pl-agent-list-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
   .pl-agent-list-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
   .pl-usage-rank-grid { @apply grid gap-3 xl:grid-cols-3; }
+  /* Spec 86：固定 Top-10 槽位；行高随单行 Label|Value|Bar 布局（约 1.5rem） */
   .pl-usage-rank-body {
-    min-height: calc(10 * 2.25rem + 9 * 0.625rem);
-    max-height: calc(10 * 2.25rem + 9 * 0.625rem);
+    min-height: calc(10 * 1.5rem + 9 * 0.625rem);
+    max-height: calc(10 * 1.5rem + 9 * 0.625rem);
     @apply overflow-y-auto;
   }
   .pl-usage-rank-body:has(.pl-usage-rank-empty) {
     @apply flex items-center justify-center;
   }
   .pl-usage-rank-list { @apply m-0 grid list-none gap-2.5 p-0; }
-  .pl-usage-rank-row { @apply grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,auto)] items-center gap-x-2 gap-y-1; }
+  /* 单行：Label | Value | Bar（布局对齐排行参考图；颜色用 brand，不跟参考图紫/黑） */
+  .pl-usage-rank-row {
+    @apply grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,auto)_minmax(4rem,1.4fr)] items-center gap-x-3;
+  }
   .pl-usage-rank-label { @apply min-w-0 truncate text-xs font-medium text-fg-default; }
   .pl-usage-rank-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
-  .pl-usage-rank-track { @apply col-span-2 h-2 overflow-hidden rounded-sm bg-bg-muted; }
-  .pl-usage-rank-bar { @apply h-full rounded-sm bg-primary/70; }
+  .pl-usage-rank-track { @apply h-2.5 overflow-hidden rounded-full bg-brand-soft; }
+  .pl-usage-rank-bar { @apply h-full rounded-full bg-brand/75; }
   .pl-usage-rank-value { @apply justify-self-end text-xs font-normal tabular-nums text-fg-body; }
   .pl-usage-rank-empty { @apply m-0 py-4 text-center text-sm text-fg-muted; }
   .pl-catalog-table { min-width: 0; }
