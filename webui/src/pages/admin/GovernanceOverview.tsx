@@ -11,7 +11,11 @@ type UsageOverview = {
   configuredTokenCount: number;
   activeTokenCount: number;
   tokenActiveRate: number;
+  configuredTableCount: number;
+  activeTableCount: number;
+  hasOpenEndedTableScope: boolean;
   calls: number;
+  p95LatencyMs: number;
   avgLatencyMs: number;
 };
 
@@ -26,6 +30,7 @@ type OverviewResponse = {
   localAdminNotice?: string;
   usageOverview: UsageOverview;
   popularTables: PopularTable[];
+  tableStatsSource?: "access_log_sources" | "access_log.tables";
   cards?: Record<string, number | string>;
 };
 
@@ -48,7 +53,7 @@ type TokenRow = {
   label: string;
   tokenHashPrefix: string | null;
   lastUsed: string | null;
-  activeInLast7d: boolean;
+  activeInWindow: boolean;
   configured: boolean;
   auditHref: string;
 };
@@ -58,11 +63,13 @@ type WindowHours = 24 | 168;
 function MetricCard({
   label,
   value,
+  subline,
   hint,
   testId
 }: {
   label: ReactNode;
   value: string | number;
+  subline?: ReactNode;
   hint: ReactNode;
   testId?: string;
 }) {
@@ -70,6 +77,7 @@ function MetricCard({
     <div className="pl-metric-card" data-testid={testId}>
       <span>{label}</span>
       <strong>{value}</strong>
+      {subline ? <small>{subline}</small> : null}
       <small>{hint}</small>
     </div>
   );
@@ -87,7 +95,7 @@ function formatRate(value: number): string {
 }
 
 function windowLabel(hours: WindowHours): string {
-  return hours === 24 ? "24 小时" : "7 天";
+  return hours === 24 ? "近 24 小时" : "近 7 天";
 }
 
 export function GovernanceOverview() {
@@ -108,6 +116,7 @@ export function GovernanceOverview() {
 
   const usage = overview?.usageOverview;
   const popularTables = overview?.popularTables ?? [];
+  const tableStatsSource = overview?.tableStatsSource;
   const agents = useMemo(() => {
     const rows = [...(agentsData?.agents ?? [])];
     rows.sort((a, b) => {
@@ -122,18 +131,22 @@ export function GovernanceOverview() {
     return rows;
   }, [tokensData?.tokens]);
 
+  const windowText = windowLabel(hours);
+  const p95Value = (usage?.calls ?? 0) > 0 ? `${usage?.p95LatencyMs ?? 0} ms` : "—";
+  const p95Hint = (usage?.calls ?? 0) > 0 ? "95% 的访问低于此值" : "当前窗口无调用";
+  const activeTableRate = usage
+    ? usage.configuredTableCount > 0
+      ? formatRate(Math.round((usage.activeTableCount / usage.configuredTableCount) * 1000) / 10)
+      : formatRate(0)
+    : formatRate(0);
+
   return (
     <div className="pl-page-stack" data-testid="governance-usage-overview">
       <PageHeader
-        title="治理概览"
+        title="使用概况"
         description={
-          <>
-            查看 <span className="notranslate" translate="no">Agent</span> / <span className="notranslate" translate="no">Token</span> 使用与调用概况。
-          </>
-        }
-        badges={
-          <span className="pl-status-badge pl-status-partial" data-testid="governance-window-badge">
-            {windowLabel(hours)}窗口
+          <span>
+            查看 <span className="notranslate" translate="no">Agent</span> / <span className="notranslate" translate="no">Token</span> 与表的访问使用情况。
           </span>
         }
         actions={
@@ -161,61 +174,61 @@ export function GovernanceOverview() {
             <Link className="pl-btn pl-btn--secondary text-sm" to="/admin/roles">
               管理角色
             </Link>
-            <Link className="pl-btn pl-btn--secondary text-sm" to="/admin/audit">
-              访问日志
-            </Link>
           </div>
         }
       />
 
       <div className="pl-metric-grid" data-testid="governance-usage-metrics">
         <MetricCard
-          label={<><span className="notranslate" translate="no">Agent</span> 总数</>}
+          label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
           value={usage?.agentCount ?? 0}
-          hint={<><span className="notranslate" translate="no">access.yaml</span> 中的实例</>}
+          hint="已配置实例（含未启用）"
           testId="metric-agent-count"
         />
         <MetricCard
-          label={<>最近活跃 <span className="notranslate" translate="no">Agent</span></>}
+          label={<span>活跃 <span className="notranslate" translate="no">Agent</span></span>}
           value={usage?.activeAgentCount ?? 0}
-          hint="近 7 天有调用"
+          subline={<span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span>}
+          hint={<span>{windowText}有调用</span>}
           testId="metric-active-agent-count"
         />
         <MetricCard
-          label={<><span className="notranslate" translate="no">Agent</span> 活跃率</>}
-          value={formatRate(usage?.agentActiveRate ?? 0)}
-          hint={<>最近活跃 / 总 <span className="notranslate" translate="no">Agent</span></>}
-          testId="metric-agent-active-rate"
-        />
-        <MetricCard
-          label={<>配置 <span className="notranslate" translate="no">Token</span></>}
+          label={<span>配置 <span className="notranslate" translate="no">Token</span></span>}
           value={usage?.configuredTokenCount ?? 0}
-          hint={<><span className="notranslate" translate="no">access.yaml</span> 配置数</>}
+          hint="已下发凭证（含未启用 Agent）"
           testId="metric-configured-token-count"
         />
         <MetricCard
-          label={<>近 7 天活跃 <span className="notranslate" translate="no">Token</span></>}
+          label={<span>活跃 <span className="notranslate" translate="no">Token</span></span>}
           value={usage?.activeTokenCount ?? 0}
-          hint={<><span className="notranslate" translate="no">access_log</span> 去重 prefix</>}
+          subline={<span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span>}
+          hint={<span>{windowText}有使用</span>}
           testId="metric-active-token-count"
         />
         <MetricCard
-          label={<><span className="notranslate" translate="no">Token</span> 活跃率</>}
-          value={formatRate(usage?.tokenActiveRate ?? 0)}
-          hint="活跃 / 配置"
-          testId="metric-token-active-rate"
+          label="配置表"
+          value={usage?.configuredTableCount ?? 0}
+          hint={<span>角色已授权{usage?.hasOpenEndedTableScope ? "（含前缀授权）" : ""}</span>}
+          testId="metric-configured-table-count"
+        />
+        <MetricCard
+          label="活跃表"
+          value={usage?.activeTableCount ?? 0}
+          subline={<span>活跃率 {activeTableRate}</span>}
+          hint={<span>{windowText}有访问</span>}
+          testId="metric-active-table-count"
         />
         <MetricCard
           label="调用量"
           value={usage?.calls ?? 0}
-          hint={<>{windowLabel(hours)} <span className="notranslate" translate="no">MCP</span> 调用</>}
+          hint={<span>{windowText} <span className="notranslate" translate="no">MCP</span> 调用</span>}
           testId="metric-calls"
         />
         <MetricCard
-          label="平均响应时长"
-          value={`${usage?.avgLatencyMs ?? 0} ms`}
-          hint={<>{windowLabel(hours)} AVG(<span className="notranslate" translate="no">duration_ms</span>)</>}
-          testId="metric-avg-latency"
+          label={<span>响应上限（<span className="notranslate" translate="no">P95</span>）</span>}
+          value={p95Value}
+          hint={p95Hint}
+          testId="metric-p95-latency"
         />
       </div>
 
@@ -224,7 +237,7 @@ export function GovernanceOverview() {
           <div>
             <h2 className="pl-panel-title notranslate" translate="no">Agent 使用排行</h2>
             <p className="pl-notice">
-              按近窗口调用量排序；活跃 <span className="notranslate" translate="no">Token</span> 固定近 7 天口径。
+              按近窗口调用量排序；活跃 <span className="notranslate" translate="no">Token</span> 与顶部窗口一致。
             </p>
           </div>
         </div>
@@ -276,7 +289,7 @@ export function GovernanceOverview() {
         <div className="pl-section-heading">
           <div>
             <h2 className="pl-panel-title notranslate" translate="no">Token 使用摘要</h2>
-            <p className="pl-notice">按最近访问排序；活跃判定固定近 7 天，不重复展示顶部 KPI。</p>
+            <p className="pl-notice">按最近访问排序；不重复展示顶部 KPI。</p>
           </div>
         </div>
         <div className="overflow-x-auto rounded-md border border-border-default">
@@ -286,7 +299,7 @@ export function GovernanceOverview() {
                 <th className="px-3 py-2 notranslate" translate="no">Token</th>
                 <th className="px-3 py-2 notranslate" translate="no">Agent</th>
                 <th className="px-3 py-2">最近访问</th>
-                <th className="px-3 py-2">最近活跃</th>
+                <th className="px-3 py-2">窗口内活跃</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-default bg-bg-surface">
@@ -309,8 +322,8 @@ export function GovernanceOverview() {
                   </td>
                   <td className="px-3 py-2">{formatTime(token.lastUsed)}</td>
                   <td className="px-3 py-2">
-                    <span className={`pl-status-badge ${token.activeInLast7d ? "pl-status-done" : "pl-status-partial"}`}>
-                      {token.activeInLast7d ? "活跃" : "未活跃"}
+                    <span className={`pl-status-badge ${token.activeInWindow ? "pl-status-done" : "pl-status-partial"}`}>
+                      {token.activeInWindow ? "活跃" : "未活跃"}
                     </span>
                   </td>
                 </tr>
@@ -331,7 +344,10 @@ export function GovernanceOverview() {
         <div className="pl-section-heading">
           <div>
             <h2 className="pl-panel-title">最受访问表（Top 10）</h2>
-            <p className="pl-notice">近 7 天按调用次数排序；口径优先 <span className="notranslate" translate="no">access_log_sources</span>。</p>
+            <p className="pl-notice">
+              {windowText}按调用次数排序。
+              {tableStatsSource === "access_log_sources" ? "仅统计已结构化访问记录。" : ""}
+            </p>
           </div>
         </div>
         <div className="overflow-x-auto rounded-md border border-border-default">
@@ -354,7 +370,7 @@ export function GovernanceOverview() {
               {popularTables.length === 0 ? (
                 <tr>
                   <td className="px-3 py-6 text-center text-fg-muted" colSpan={3}>
-                    暂无表访问数据（近 7 天）
+                    暂无表访问数据（{windowText}）
                   </td>
                 </tr>
               ) : null}

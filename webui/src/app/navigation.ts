@@ -196,12 +196,12 @@ export const navGroups: Array<{
     items: [
       {
         id: "admin-governance",
-        label: "治理概览",
+        label: "使用概况",
         to: "/admin/governance",
         iconKey: "governanceOverview",
         active: (path) => path === "/admin/governance",
-        description: "按 Agent、Role、Token 和拒绝原因查看治理可观测指标。",
-        keywords: ["Governance", "Dashboard", "可观测"]
+        description: "查看 Agent、Token 和表的访问使用情况与调用量。",
+        keywords: ["Governance", "Dashboard", "使用概况"]
       },
       {
         id: "admin-agents",

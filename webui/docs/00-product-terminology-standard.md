@@ -317,7 +317,30 @@ Connection (连接)
 | Trend Monitoring | 趋势监控 | 趋势监管 | 质量指标随时间变化 |
 | Pass Rate | 通过率 | 成功率混用 | 评测通过比例 |
 
-### 4.5 系统与运维
+### 4.5 访问治理 / 使用概况
+
+`/admin/governance` 页面（侧栏项 `admin-governance`）术语来自 Spec 78（修订 Spec 75 §4）：
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板 | 页面标题与侧栏 `admin-governance` 项 |
+| Configured Agent Count | Agent 总数 | 已配置实例 | access.yaml 中的实例（主 hint） | 不随窗口变；含 `enabled: false` |
+| Active Agent | 活跃 Agent | 近 N 有调用 | 最近活跃 Agent（主标签）、活跃实例 | N = 当前窗口 |
+| Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入「活跃 Agent」卡副行，不独立成卡 |
+| Configured Token Count | 配置 Token | 已下发凭证 | access.yaml 配置数（主 hint） | 不随窗口变 |
+| Active Token | 活跃 Token | 近 N 有使用 | 近 7 天活跃 Token（写死）、活跃密钥 | N = 当前窗口 |
+| Token Active Rate | Token 活跃率 | 活跃 / 配置 | access_log 去重 prefix | 并入「活跃 Token」卡副行 |
+| Configured Table Count | 配置表 | 角色已授权表 | 白名单表、启用表（本页禁止混用） | 授权配置去重；不随窗口变 |
+| Active Table Count | 活跃表 | 近 N 有访问 | 热门表（与 Top 10 列表区分） | N = 当前窗口 |
+| Call Volume | 调用量 | 近 N MCP 调用 | 最近调用 | 跟随窗口 |
+| P95 Response Latency | 响应上限（P95） | 95% 的访问低于此值 | 平均响应时长（本页主 KPI）、AVG(duration_ms) | 跟随窗口；禁止用 avg 顶替 |
+| Top Used Tables | 最受访问表 | Top 10 | 热门对象 | 跟随窗口 |
+
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、表名 / physical table、token hash prefix、role id、Agent id。
+
+详见 `webui/docs/78-admin-usage-overview-ux-refinement-spec.md` §4。
+
+### 4.6 系统与运维
 
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|

@@ -34,7 +34,11 @@ function stubFetch() {
             configuredTokenCount: 2,
             activeTokenCount: 1,
             tokenActiveRate: 50,
+            configuredTableCount: 4,
+            activeTableCount: hours === 24 ? 1 : 2,
+            hasOpenEndedTableScope: false,
             calls: hours === 24 ? 1 : 3,
+            p95LatencyMs: hours === 24 ? 40 : 120,
             avgLatencyMs: hours === 24 ? 40 : 70
           },
           popularTables: [{
@@ -42,6 +46,7 @@ function stubFetch() {
             calls: 2,
             lastSeen: "2026-08-03T01:00:00.000Z"
           }],
+          tableStatsSource: "access_log_sources",
           cards: {
             calls: hours === 24 ? 1 : 3,
             deniedRate: 33.3
@@ -78,7 +83,7 @@ function stubFetch() {
             label: "active-token",
             tokenHashPrefix: "abc123def456",
             lastUsed: "2026-08-03T01:00:00.000Z",
-            activeInLast7d: true,
+            activeInWindow: true,
             configured: true,
             auditHref: "/admin/audit?user=agent-a"
           }]
@@ -98,11 +103,12 @@ afterEach(() => {
 });
 
 describe("GovernanceOverview", () => {
-  it("renders usage-first overview without risk modules", async () => {
+  it("renders usage-first overview without risk modules or governance-branded title", async () => {
     stubFetch();
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "治理概览" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "使用概况" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "治理概览" })).not.toBeInTheDocument();
     expect(await screen.findByText("Agent A")).toBeInTheDocument();
 
     expect(screen.getByTestId("governance-usage-overview")).toHaveClass("pl-page-stack");
@@ -113,14 +119,22 @@ describe("GovernanceOverview", () => {
     expect(screen.getByTestId("governance-popular-tables")).toHaveClass("pl-panel");
 
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("总数");
-    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("最近活跃");
-    expect(screen.getByTestId("metric-agent-active-rate")).toHaveTextContent("活跃率");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("活跃");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("50%");
     expect(screen.getByTestId("metric-configured-token-count")).toHaveTextContent("配置");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃");
-    expect(screen.getByTestId("metric-token-active-rate")).toHaveTextContent("活跃率");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("活跃");
+    expect(screen.getByTestId("metric-configured-table-count")).toHaveTextContent("配置表");
+    expect(screen.getByTestId("metric-active-table-count")).toHaveTextContent("活跃表");
     expect(screen.getByTestId("metric-calls")).toHaveTextContent("调用量");
-    expect(screen.getByTestId("metric-avg-latency")).toHaveTextContent("平均响应时长");
+    expect(screen.getByTestId("metric-p95-latency")).toHaveTextContent("响应上限");
     expect(within(screen.getByTestId("metric-configured-token-count")).getByText("Token")).toBeInTheDocument();
+
+    // No standalone active-rate cards; rate lives inside the active Agent/Token cards.
+    expect(screen.queryByTestId("metric-agent-active-rate")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-token-active-rate")).not.toBeInTheDocument();
+    // avg latency is no longer the primary KPI.
+    expect(screen.queryByTestId("metric-avg-latency")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("governance-usage-metrics")).queryByText("平均响应时长")).not.toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Agent 使用排行" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Token 使用摘要" })).toBeInTheDocument();
@@ -134,24 +148,36 @@ describe("GovernanceOverview", () => {
     expect(screen.queryByText("Token 巡检")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("governance-token-usage")).queryByText("Token 活跃率")).not.toBeInTheDocument();
     expect(screen.queryByText(/select \*/i)).not.toBeInTheDocument();
+
+    // Top bar no longer carries a redundant window badge or a second 访问日志 entry.
+    expect(screen.queryByTestId("governance-window-badge")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "访问日志" })).not.toBeInTheDocument();
+
+    // Hints must stay user-friendly; no raw implementation identifiers.
+    const bodyText = document.body.textContent ?? "";
+    expect(bodyText).not.toMatch(/access_log/);
+    expect(bodyText).not.toMatch(/AVG\(/);
+    expect(bodyText).not.toMatch(/去重 prefix/);
   });
 
-  it("switches window and refreshes usage queries", async () => {
+  it("switches window and refreshes usage queries, keeping window text in hints", async () => {
     const fetchMock = stubFetch();
     renderPage();
 
     await screen.findByText("Agent A");
     await waitFor(() => {
       expect(within(screen.getByTestId("metric-calls")).getByText("3")).toBeInTheDocument();
-      expect(within(screen.getByTestId("metric-avg-latency")).getByText("70 ms")).toBeInTheDocument();
+      expect(within(screen.getByTestId("metric-p95-latency")).getByText("120 ms")).toBeInTheDocument();
     });
+    expect(within(screen.getByTestId("metric-active-agent-count")).getByText(/近 7 天/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("governance-window-24h"));
 
     await waitFor(() => {
       expect(within(screen.getByTestId("metric-calls")).getByText("1")).toBeInTheDocument();
-      expect(within(screen.getByTestId("metric-avg-latency")).getByText("40 ms")).toBeInTheDocument();
+      expect(within(screen.getByTestId("metric-p95-latency")).getByText("40 ms")).toBeInTheDocument();
     });
+    expect(within(screen.getByTestId("metric-active-agent-count")).getByText(/近 24 小时/)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : String(input);
       return url.includes("hours=24");

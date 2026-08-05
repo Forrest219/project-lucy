@@ -266,7 +266,7 @@ Reported: 2026-08-04
 1. Open `http://127.0.0.1:55176/overview` in a 1920×1080 viewport.
 2. Verify all sidebar group titles render fully: 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理.
 3. Verify the `质量评测` group expanded sub-items (`评测用例` / `运行历史` / `趋势监控` / `安全候选`) all render with full text (not clipped to top 1/3).
-4. Verify `访问治理` group expanded sub-items (`治理概览` / `Agent 实例` / `角色权限` / `访问日志` / `配置审计`) all render.
+4. Verify `访问治理` group expanded sub-items (`使用概况` / `Agent 实例` / `角色权限` / `访问日志` / `配置审计`) all render.
 5. Verify the footer (`系统手册`) remains visible at the bottom of the sidebar without overlapping nav items.
 6. Resize to 1280px and 1024px: verify the middle nav can scroll if content exceeds viewport, and footer stays anchored.
 7. Verify a thin (6px) scrollbar is visible on the right edge of `.pl-nav` even when no scrolling is in progress; hovering on the nav should darken the thumb color (`fg-muted`).

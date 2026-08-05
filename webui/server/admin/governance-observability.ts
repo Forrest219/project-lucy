@@ -71,7 +71,6 @@ type TokenLastUsedRow = {
 
 const DEFAULT_HOURS = 168;
 const MAX_HOURS = 720;
-const ACTIVE_WINDOW_HOURS = 168;
 /**
  * Bound for legacy roles/denials paths that still materialize audit rows.
  * Usage KPIs, popularTables, agents usage fields, and overview cards must NOT
@@ -201,7 +200,7 @@ async function queryP95LatencyMs(hours: number): Promise<number> {
   }
 }
 
-async function queryActiveAgentCount(): Promise<number> {
+async function queryActiveAgentCount(hours: number): Promise<number> {
   try {
     const db = await getAuditDb();
     const row = db.prepare(`
@@ -210,14 +209,14 @@ async function queryActiveAgentCount(): Promise<number> {
       WHERE ts >= ?
         AND user_id IS NOT NULL
         AND user_id != ''
-    `).get(sinceIso(ACTIVE_WINDOW_HOURS)) as CountRow | undefined;
+    `).get(sinceIso(hours)) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
     return 0;
   }
 }
 
-async function queryActiveTokenCount(): Promise<number> {
+async function queryActiveTokenCount(hours: number): Promise<number> {
   try {
     const db = await getAuditDb();
     const row = db.prepare(`
@@ -225,7 +224,36 @@ async function queryActiveTokenCount(): Promise<number> {
       FROM access_log
       WHERE ts >= ?
         AND token_hash_prefix IS NOT NULL
-    `).get(sinceIso(ACTIVE_WINDOW_HOURS)) as CountRow | undefined;
+    `).get(sinceIso(hours)) as CountRow | undefined;
+    return row?.count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Two-source union (access_log_sources.physical_table ∪ access_log.tables JSON) to avoid undercounting when only one source has rows. */
+async function queryActiveTableCount(hours: number): Promise<number> {
+  try {
+    const db = await getAuditDb();
+    const since = sinceIso(hours);
+    const row = db.prepare(`
+      SELECT COUNT(*) AS count FROM (
+        SELECT physical_table AS t
+        FROM access_log_sources
+        WHERE ts >= ?
+          AND physical_table IS NOT NULL
+          AND physical_table != ''
+        UNION
+        SELECT j.value AS t
+        FROM access_log a, json_each(a.tables) j
+        WHERE a.ts >= ?
+          AND a.tables IS NOT NULL
+          AND a.tables != ''
+          AND a.tables != '[]'
+          AND typeof(j.value) = 'text'
+          AND j.value != ''
+      )
+    `).get(since, since) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
     return 0;
@@ -254,7 +282,7 @@ async function queryHighDenialAgentCount(hours: number): Promise<number> {
   }
 }
 
-async function queryPopularTablesFromSources(): Promise<PopularTableRow[]> {
+async function queryPopularTablesFromSources(hours: number): Promise<PopularTableRow[]> {
   try {
     const db = await getAuditDb();
     return db.prepare(`
@@ -269,13 +297,13 @@ async function queryPopularTablesFromSources(): Promise<PopularTableRow[]> {
       GROUP BY physical_table
       ORDER BY calls DESC, lastSeen DESC
       LIMIT ?
-    `).all(sinceIso(ACTIVE_WINDOW_HOURS), POPULAR_TABLES_LIMIT) as PopularTableRow[];
+    `).all(sinceIso(hours), POPULAR_TABLES_LIMIT) as PopularTableRow[];
   } catch {
     return [];
   }
 }
 
-async function queryPopularTablesFromAccessLogTables(): Promise<PopularTableRow[]> {
+async function queryPopularTablesFromAccessLogTables(hours: number): Promise<PopularTableRow[]> {
   try {
     const db = await getAuditDb();
     return db.prepare(`
@@ -293,16 +321,19 @@ async function queryPopularTablesFromAccessLogTables(): Promise<PopularTableRow[
       GROUP BY j.value
       ORDER BY calls DESC, lastSeen DESC
       LIMIT ?
-    `).all(sinceIso(ACTIVE_WINDOW_HOURS), POPULAR_TABLES_LIMIT) as PopularTableRow[];
+    `).all(sinceIso(hours), POPULAR_TABLES_LIMIT) as PopularTableRow[];
   } catch {
     return [];
   }
 }
 
-async function queryPopularTables(): Promise<PopularTableRow[]> {
-  const fromSources = await queryPopularTablesFromSources();
-  if (fromSources.length > 0) return fromSources;
-  return queryPopularTablesFromAccessLogTables();
+type TableStatsSource = "access_log_sources" | "access_log.tables";
+
+/** Mutually-exclusive primary path (sources preferred), but exposes which path was used. */
+async function queryPopularTables(hours: number): Promise<{ rows: PopularTableRow[]; tableStatsSource: TableStatsSource }> {
+  const fromSources = await queryPopularTablesFromSources(hours);
+  if (fromSources.length > 0) return { rows: fromSources, tableStatsSource: "access_log_sources" };
+  return { rows: await queryPopularTablesFromAccessLogTables(hours), tableStatsSource: "access_log.tables" };
 }
 
 async function queryAgentWindowStats(hours: number): Promise<Map<string, AgentWindowStats>> {
@@ -408,7 +439,7 @@ async function queryAgentTopDeniedReasons(hours: number): Promise<Map<string, st
   return result;
 }
 
-async function queryAgentActiveTokenCounts(): Promise<Map<string, number>> {
+async function queryAgentActiveTokenCounts(hours: number): Promise<Map<string, number>> {
   const result = new Map<string, number>();
   try {
     const db = await getAuditDb();
@@ -422,7 +453,7 @@ async function queryAgentActiveTokenCounts(): Promise<Map<string, number>> {
         AND user_id != ''
         AND token_hash_prefix IS NOT NULL
       GROUP BY user_id
-    `).all(sinceIso(ACTIVE_WINDOW_HOURS)) as AgentActiveTokenRow[];
+    `).all(sinceIso(hours)) as AgentActiveTokenRow[];
     for (const row of rows) {
       result.set(row.user_id, row.active_tokens);
     }
@@ -451,7 +482,7 @@ async function queryTokenLastUsedMap(): Promise<Map<string, string>> {
   return result;
 }
 
-async function queryActiveTokenPrefixesLast7d(): Promise<Set<string>> {
+async function queryActiveTokenPrefixes(hours: number): Promise<Set<string>> {
   const result = new Set<string>();
   try {
     const db = await getAuditDb();
@@ -460,7 +491,7 @@ async function queryActiveTokenPrefixesLast7d(): Promise<Set<string>> {
       FROM access_log
       WHERE ts >= ?
         AND token_hash_prefix IS NOT NULL
-    `).all(sinceIso(ACTIVE_WINDOW_HOURS)) as Array<{ token_hash_prefix: string }>;
+    `).all(sinceIso(hours)) as Array<{ token_hash_prefix: string }>;
     for (const row of rows) result.add(row.token_hash_prefix);
   } catch {
     // empty set
@@ -544,6 +575,46 @@ function selectorRefs(role: RoleConfig): string[] {
   return Array.isArray(legacyTables) ? legacyTables.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
+function considerConfiguredTableRef(
+  ref: string,
+  explicitTables: Set<string>,
+  markOpenEnded: () => void
+): void {
+  if (ref.includes("*")) {
+    markOpenEnded();
+    return;
+  }
+  explicitTables.add(ref);
+}
+
+/**
+ * Explicit table names union across all roles (dedup).
+ * `selectorRefs` prefers `tableSelectors` when that key is an array (even empty) and
+ * skips legacy `allow.tables` — so we always merge legacy tables when `tableSelectors`
+ * is present. Open-ended (prefix / `*`) refs flip a flag but don't inflate the count.
+ */
+function configuredTableStats(config: AccessConfig): { configuredTableCount: number; hasOpenEndedTableScope: boolean } {
+  const roles = Object.values(config.roles ?? {});
+  const explicitTables = new Set<string>();
+  let hasOpenEndedTableScope = false;
+  const markOpenEnded = () => {
+    hasOpenEndedTableScope = true;
+  };
+  for (const role of roles) {
+    for (const ref of selectorRefs(role)) {
+      considerConfiguredTableRef(ref, explicitTables, markOpenEnded);
+    }
+    // When tableSelectors is an array, selectorRefs never reads legacy allow.tables.
+    if (Array.isArray(role.allow?.tableSelectors) && Array.isArray(role.allow?.tables)) {
+      for (const entry of role.allow.tables) {
+        if (typeof entry !== "string") continue;
+        considerConfiguredTableRef(entry, explicitTables, markOpenEnded);
+      }
+    }
+  }
+  return { configuredTableCount: explicitTables.size, hasOpenEndedTableScope };
+}
+
 function hasWildcard(role: RoleConfig): boolean {
   const tools = role.allow?.tools;
   const tables = role.allow?.tables;
@@ -596,21 +667,33 @@ function governanceRoles(config: AccessConfig, rows: AuditRow[]) {
 export function registerGovernanceObservabilityRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { hours?: string } }>("/api/admin/governance/overview", async (request) => {
     const hours = boundedHours(request.query.hours ?? String(DEFAULT_HOURS));
-    const [config, callStats, p95LatencyMs, activeAgentCount, activeTokenCount, popularTables, changes, highDenialAgentCount] =
-      await Promise.all([
-        readAccessConfig(),
-        queryCallStats(hours),
-        queryP95LatencyMs(hours),
-        queryActiveAgentCount(),
-        queryActiveTokenCount(),
-        queryPopularTables(),
-        configChangeCount(hours),
-        queryHighDenialAgentCount(hours)
-      ]);
+    const [
+      config,
+      callStats,
+      p95LatencyMs,
+      activeAgentCount,
+      activeTokenCount,
+      activeTableCount,
+      popularTablesResult,
+      changes,
+      highDenialAgentCount
+    ] = await Promise.all([
+      readAccessConfig(),
+      queryCallStats(hours),
+      queryP95LatencyMs(hours),
+      queryActiveAgentCount(hours),
+      queryActiveTokenCount(hours),
+      queryActiveTableCount(hours),
+      queryPopularTables(hours),
+      configChangeCount(hours),
+      queryHighDenialAgentCount(hours)
+    ]);
+    const { rows: popularTables, tableStatsSource } = popularTablesResult;
 
     const agents = config.users ?? [];
     const agentCount = agents.length;
     const configuredTokens = configuredTokenCount(config);
+    const { configuredTableCount, hasOpenEndedTableScope } = configuredTableStats(config);
     // Status flags are config-derived; skip truncated audit rows for overview cards.
     const roles = governanceRoles(config, []);
 
@@ -621,7 +704,11 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       configuredTokenCount: configuredTokens,
       activeTokenCount,
       tokenActiveRate: pct(activeTokenCount, configuredTokens),
+      configuredTableCount,
+      activeTableCount,
+      hasOpenEndedTableScope,
       calls: callStats.calls,
+      p95LatencyMs,
       avgLatencyMs: callStats.avgLatencyMs
     };
 
@@ -632,6 +719,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
         localAdminNotice: "local-admin mode; reviewer_identity is token-hash based until SSO/OIDC is enabled",
         usageOverview,
         popularTables,
+        tableStatsSource,
         // Compatibility payload for older clients / GOV-02 tests. UI must not drive from cards.
         cards: {
           calls: callStats.calls,
@@ -663,7 +751,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
     const [config, windowStats, activeTokenCounts, p95ByUser, topDeniedByUser] = await Promise.all([
       readAccessConfig(),
       queryAgentWindowStats(hours),
-      queryAgentActiveTokenCounts(),
+      queryAgentActiveTokenCounts(hours),
       queryAgentP95LatencyMs(hours),
       queryAgentTopDeniedReasons(hours)
     ]);
@@ -721,21 +809,23 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
     const [config, lastUsedByPrefix, activePrefixes] = await Promise.all([
       readAccessConfig(),
       queryTokenLastUsedMap(),
-      queryActiveTokenPrefixesLast7d()
+      queryActiveTokenPrefixes(hours)
     ]);
 
     const tokens = (config.users ?? []).flatMap((user) => (user.tokens ?? []).map((token) => {
       const prefix = canonicalTokenPrefix(token.hash);
       const lastUsed = lookupLastUsed(lastUsedByPrefix, token.hash);
-      const activeInLast7d = isActivePrefix(activePrefixes, token.hash);
+      const activeInWindow = isActivePrefix(activePrefixes, token.hash);
       return {
         agentId: user.id ?? "",
         label: token.label ?? "unnamed-token",
         tokenHashPrefix: prefix,
         lastUsed,
-        activeInLast7d,
+        activeInWindow,
+        // Deprecated twin kept for one release; UI/tests must read activeInWindow.
+        activeInLast7d: activeInWindow,
         configured: true,
-        stale: !activeInLast7d,
+        stale: !activeInWindow,
         auditHref: `/admin/audit?user=${encodeURIComponent(user.id ?? "")}`
       };
     }))

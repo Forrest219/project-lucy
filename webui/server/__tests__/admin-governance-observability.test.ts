@@ -187,9 +187,14 @@ describe("admin governance observability", () => {
       configuredTokenCount: 2,
       activeTokenCount: 1,
       tokenActiveRate: 50,
+      configuredTableCount: 1,
+      activeTableCount: 1,
+      hasOpenEndedTableScope: true,
       calls: 2,
+      p95LatencyMs: 120,
       avgLatencyMs: 70
     });
+    expect(body.data.tableStatsSource).toBe("access_log_sources");
     expect(body.data.popularTables).toEqual([
       expect.objectContaining({
         table: "mysql.dataforai.kx_fact_financial_amount",
@@ -228,6 +233,7 @@ describe("admin governance observability", () => {
     const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);
+    expect(body.data.tableStatsSource).toBe("access_log.tables");
     expect(body.data.popularTables).toEqual([
       expect.objectContaining({
         table: "mysql.dataforai.fallback_only_table",
@@ -235,11 +241,99 @@ describe("admin governance observability", () => {
       })
     ]);
     expect(body.data.popularTables.some((row: { table: string }) => row.table.includes("kx_fact_financial_amount"))).toBe(false);
+    // Union still counts the fallback-only table even though it never appears in access_log_sources.
+    expect(body.data.usageOverview.activeTableCount).toBe(1);
 
     await app.close();
   });
 
-  it("surfaces agent usage stats with fixed 7d active tokens", async () => {
+  it("counts legacy allow.tables when tableSelectors is an empty array", async () => {
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      `roles:
+  hybrid_legacy:
+    description: Empty selectors with legacy tables
+    allow:
+      tableSelectors: []
+      tables: ["dataforai.legacy_orders", "*"]
+      tools: [lucy_query]
+users:
+  - id: agent-a
+    name: Agent A
+    role: hybrid_legacy
+    tokens: []
+`,
+      "utf8"
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.data.usageOverview.configuredTableCount).toBe(1);
+    expect(body.data.usageOverview.hasOpenEndedTableScope).toBe(true);
+    await app.close();
+  });
+
+  it("scopes active agent/token/table counts and popular tables to the requested window", async () => {
+    resetAuditDbForTests();
+    await rm(process.env.LUCY_AUDIT_DB!, { force: true });
+    await seedProject();
+    const db = await getAuditDb();
+    // A distinct agent/table pair whose only activity is 30h ago: inside the
+    // 7-day window but outside the 24-hour window.
+    db.prepare(`
+      INSERT INTO access_log
+        (ts, user_id, token_label, token_hash_prefix, tool, tables, args_summary,
+         query_preview, outcome, error_detail, duration_ms, request_id, trace_id,
+         role_ids, permission_snapshot_hash, decision_reason)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      hoursAgoIso(30),
+      "agent-b",
+      "stale-token",
+      "sha256:deadbeef9999",
+      "lucy_query",
+      JSON.stringify(["mysql.dataforai.older_window_table"]),
+      null,
+      null,
+      "ok",
+      null,
+      15,
+      "req-old-window",
+      "trace-old-window",
+      JSON.stringify(["wildcard_role"]),
+      "sha256:snapshot",
+      null
+    );
+    await insertAuditFixture();
+
+    const app = buildServer();
+    await app.ready();
+
+    const res24 = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=24" });
+    const res168 = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
+    const body24 = JSON.parse(res24.payload);
+    const body168 = JSON.parse(res168.payload);
+
+    // Configured counts must not move with the window.
+    expect(body24.data.usageOverview.agentCount).toBe(body168.data.usageOverview.agentCount);
+    expect(body24.data.usageOverview.configuredTokenCount).toBe(body168.data.usageOverview.configuredTokenCount);
+    expect(body24.data.usageOverview.configuredTableCount).toBe(body168.data.usageOverview.configuredTableCount);
+
+    // Active/usage counts must follow the requested window.
+    expect(body24.data.usageOverview.activeAgentCount).toBe(1);
+    expect(body168.data.usageOverview.activeAgentCount).toBe(2);
+    expect(body24.data.usageOverview.activeTokenCount).toBe(1);
+    expect(body168.data.usageOverview.activeTokenCount).toBe(2);
+    expect(body24.data.usageOverview.activeTableCount).toBe(1);
+    expect(body168.data.usageOverview.activeTableCount).toBe(2);
+
+    await app.close();
+  });
+
+  it("surfaces agent usage stats with window-scoped active tokens", async () => {
     const app = buildServer();
     await app.ready();
 
@@ -271,12 +365,15 @@ describe("admin governance observability", () => {
     expect(tokensBody.data.tokens).toContainEqual(expect.objectContaining({
       agentId: "agent-a",
       tokenHashPrefix: "sha256:abc123def456",
+      activeInWindow: true,
+      // Deprecated twin must mirror activeInWindow for one release.
       activeInLast7d: true,
       configured: true,
       stale: false
     }));
     expect(tokensBody.data.tokens).toContainEqual(expect.objectContaining({
       agentId: "agent-b",
+      activeInWindow: false,
       activeInLast7d: false,
       configured: true,
       stale: true
@@ -333,7 +430,7 @@ describe("admin governance observability", () => {
     expect(tokensBody.data.tokens).toContainEqual(expect.objectContaining({
       agentId: "agent-a",
       tokenHashPrefix: "sha256:abc123def456",
-      activeInLast7d: true,
+      activeInWindow: true,
       lastUsed: expect.any(String)
     }));
     await app.close();

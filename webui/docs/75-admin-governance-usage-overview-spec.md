@@ -13,6 +13,10 @@
 | Fact source | `http://127.0.0.1:55176/admin/governance`（历史核查）、`webui/server/admin/governance-observability.ts`、`webui/src/pages/admin/GovernanceOverview.tsx`、`webui/server/admin/audit.ts`（`access_log`/`access_log_sources` schema）、`webui/server/admin/agents.ts`（`access.yaml` 解析） |
 | Related standard | `webui/docs/00-product-terminology-standard.md` |
 
+> **局部修订（2026-08-05）：** 命名、窗口全局化、KPI 重组（活跃合并 / 配置表·活跃表 / P95）、文案去技术化由
+> [`78-admin-usage-overview-ux-refinement-spec.md`](./78-admin-usage-overview-ux-refinement-spec.md)
+> 与工单 `plans/wo-202608-10-admin-usage-overview-ux-refinement.md` 覆盖。实现与验收以 Spec 78 为准；本文 §4–§6、§9 中与 Spec 78 冲突的「活跃固定 7 天 / 平均响应时长为主 KPI / popularTables 固定 7 天 / 治理概览标题」条款视为被修订。
+
 ## 1. Background
 
 目前 `/admin/governance` 首屏仍围绕风险对象巡检（Agent 风险排行、Role 边界、拒绝原因、Token 巡检）展示，运营侧第一反应点是“今天在用什么、用得有多频、在查哪些表”。
