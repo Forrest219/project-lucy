@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
+import { PageHeader } from "../components/PageHeader";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
@@ -221,36 +222,24 @@ export function HelpCenter() {
 
   return (
     <div className="pl-help-page">
-      <header className="pl-page-header" data-testid="help-header">
-        <div className="pl-page-header-grid">
-          <div className="pl-page-header-cell pl-page-header-cell--breadcrumbs">
-            <ol className="pl-page-header-breadcrumbs">
-              <li className="pl-page-header-breadcrumb-item">系统帮助</li>
-              <li className="pl-page-header-breadcrumb-item">
-                <span className="pl-page-header-breadcrumb-sep">/</span>
-                <span>系统手册</span>
-              </li>
-            </ol>
-          </div>
-          <div className="pl-page-header-cell pl-page-header-cell--badges">
-            <div className="pl-page-header-badges" aria-label="系统手册元数据">
-              <span>
-                来源 <code className="notranslate" translate="no">{handbook.sourcePath}</code>
-              </span>
-              <span>更新时间 {formatUpdatedAt(handbook.updatedAt)}</span>
-            </div>
-          </div>
-          <div className="pl-page-header-cell pl-page-header-cell--title">
-            <h1 className="pl-page-header-title">系统手册</h1>
-            <p className="pl-page-header-description">{handbook.title}</p>
-          </div>
-          <div className="pl-page-header-cell pl-page-header-cell--actions">
-            <Link className="pl-btn pl-btn--secondary" to="/">
-              返回工作台
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        title="系统手册"
+        breadcrumbs={["系统帮助"]}
+        description={handbook.title}
+        badges={
+          <>
+            <span>
+              来源 <code className="notranslate" translate="no">{handbook.sourcePath}</code>
+            </span>
+            <span>更新时间 {formatUpdatedAt(handbook.updatedAt)}</span>
+          </>
+        }
+        actions={
+          <Link className="pl-btn pl-btn--secondary" to="/overview">
+            返回系统概览
+          </Link>
+        }
+      />
 
       <div className="pl-help-layout">
         <aside className="pl-help-toc" aria-label="系统手册目录">

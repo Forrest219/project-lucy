@@ -139,7 +139,9 @@ function renderHelp(path = "/help") {
               "| 质量评测 | 评测用例 | `/eval/cases` | 管理各 domain 的 `Eval` case 定义（`YAML` 源文件） |",
               "| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行历史与单次运行的详情 |",
               "| 质量评测 | 趋势监控 | `/eval/monitor` | 查看 `Eval` 质量趋势、失败集中度与 drift 分布 |",
-              "| 访问治理 | `Agent` 实例 | `/admin/agents` | 配置每个 `Agent` 实例能用哪些 `MCP` 工具和访问哪些表 |",
+              "| 质量评测 | 安全候选 | `/eval/security-candidates` | 从访问拒绝日志中沉淀权限与隔离类 Eval 候选，必须人工审定后才能入库 |",
+              "| 访问治理 | 使用概况 | `/admin/usage` | 查看 Agent、Token 和表的访问使用情况与调用量 |",
+              "| 访问治理 | Agent | `/admin/agents` | 配置每个 Agent 能用哪些 MCP 工具和访问哪些表 |",
               "| 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |",
               "| 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |",
               "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |",
@@ -433,10 +435,13 @@ describe("HelpCenter", () => {
   it("renders the handbook header metadata as separate chips with translation defense", async () => {
     renderHelp();
 
-    const header = await screen.findByTestId("help-header");
+    const header = await screen.findByTestId("page-header");
     expect(within(header).getByText("来源")).toBeInTheDocument();
     expect(within(header).getByText("docs/SYSTEM_HANDBOOK.md")).toHaveAttribute("translate", "no");
     expect(within(header).getByText(/更新时间/)).toBeInTheDocument();
+    expect(within(header).getByRole("link", { name: "返回系统概览" })).toHaveAttribute("href", "/overview");
+    expect(within(header).getByRole("navigation", { name: "面包屑" })).toHaveTextContent("系统帮助");
+    expect(within(header).queryByText(/\/\s*系统手册/)).not.toBeInTheDocument();
     // Source path and updated time must not be glued together without a separator.
     expect(header).not.toHaveTextContent("docs/SYSTEM_HANDBOOK.md2026");
   });
@@ -751,7 +756,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 14 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 16 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（5\+1 侧栏地图）/ })
@@ -770,7 +775,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(14);
+    expect(bodyRows.length).toBe(16);
 
     // Group column (1st cell of each body row) must match navGroups[*].title
     // for rows 2–14, plus topLevelEntry.label for row 1. Use the shared
@@ -783,7 +788,7 @@ describe("HelpCenter", () => {
       expect(tr.querySelector("td")?.textContent).toBe(expectedGroups[idx]);
     });
 
-    // Path column (3rd cell) must be wrapped in <code> for each of the 14
+    // Path column (3rd cell) must be wrapped in <code> for each of the 16
     // sidebar-visible entries — translation defense contract.
     const expectedPaths = [
       topLevelEntry.to,

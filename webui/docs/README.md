@@ -81,6 +81,7 @@
 | [89-admin-audit-turn-drilldown-spec.md](89-admin-audit-turn-drilldown-spec.md) | `/admin/audit` 问询记录 + 调用流水双 Tab、起止时间拆分、Drawer 明细、与使用概况 P95 交叉验证 | 产品 / UX / API / Frontend |
 | [90-admin-config-audit-unified-scope-spec.md](90-admin-config-audit-unified-scope-spec.md) | `/admin/config-audit` 写审计范围一视同仁：扩展至语义 YAML、业务 Wiki、评测、发布；`safeWrite` 统一管道、`asset_kind` 筛选 | 产品 / API / 后端 / 安全 / 前端 |
 | [91-list-page-header-consistency-spec.md](91-list-page-header-consistency-spec.md) | 列表/历史页 PageHeader 收敛：删纯计数 badges、发布记录标题对齐、评测容器统一、表编辑 backAction | 产品 / UX / Frontend |
+| [92-help-center-header-consistency-spec.md](92-help-center-header-consistency-spec.md) | `/help` 页头统一：复用 `PageHeader`、去重 breadcrumb 末项、返回动作语义对齐系统概览 | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

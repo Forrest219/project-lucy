@@ -54,6 +54,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Help Center `/help` | Spec 92 / `wo-202608-25` 落地：`UX-HELP-001`～`003` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`HelpCenter` 页头改为统一 `PageHeader`；breadcrumbs 收敛为单项「系统帮助」；右上动作改「返回系统概览」并指向 `/overview`。验证：`help-center.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Help Center `/help` | 纳入本轮统一性检查：新增 `pages/help.md` 条目 `UX-HELP-001`～`003`（状态 `Open`，本轮不做浏览器验证）。结论：无“共 N 条”计数冗余，但存在页头实现路径不统一（手写 header）、面包屑末项与 H1 重复、返回动作语义与落点不一致。 |
 | 2026-08-05 | List pages cross-cutting | Spec 91 / `wo-202608-24` 落地：`UX-PUBLISH-HISTORY-006`～`007`、`UX-EVAL-001`～`003`、`UX-ADMIN-CONFIG-AUDIT-001`、`UX-CATALOG-027` → `Fixed`；`UX-HELP-001` → `Open`（本轮不做浏览器验证）。删 PageHeader 纯计数 badges；发布记录 H1 对齐侧栏；配置审计导出改 secondary；评测模块 `pl-page-stack`；安全候选去 breadcrumbs + `pl-btn`；表编辑补 backAction；`/help` 纳入检查范围并登记长期跟踪。新建 `pages/eval.md`、`pages/admin-config-audit.md`、`pages/help.md`；跨页面主题新增 `list-page header count badge`。验证：`publish-history`、`admin-config-audit`、`eval-cases`、`security-eval-candidates`、`table-editor` tests、`lint:terminology`、`build`。 |
 | 2026-08-05 | Admin Audit `/admin/audit` | Spec 89 / `wo-202608-22` 落地：`UX-ADMIN-AUDIT-001`～`010` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。默认「问询记录」Tab + Drawer；删 heatmap / 四 KPI / count badge；起止时间与 P95 参照；导出 CSV 改 primary 且仅 calls Tab。同步 `06-navigation-ia.md`、术语 §4.7。验证：`admin-audit-turns.test.tsx`、`audit.test.tsx`、`audit-sources-redirect.test.tsx`、`server/__tests__/admin-audit.test.ts`、`lint:terminology`、`build`。 |

@@ -136,6 +136,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-22-admin-audit-turn-drilldown.md](wo-202608-22-admin-audit-turn-drilldown.md) | 202608-22 | `/admin/audit` 问询记录 + 调用流水双 Tab、起止时间、Drawer 明细、P95 交叉验证、删 heatmap / KPI badge |
 | [wo-202608-23-admin-config-audit-unified-scope.md](wo-202608-23-admin-config-audit-unified-scope.md) | 202608-23 | 配置审计范围一视同仁：`safeWrite` 统一写审计、语义/Wiki/评测/发布、`asset_kind` 筛选与深链 |
 | [wo-202608-24-list-page-header-consistency.md](wo-202608-24-list-page-header-consistency.md) | 202608-24 | 列表/历史页 PageHeader 收敛：删纯计数 badges、标题对齐、评测容器、表编辑 backAction |
+| [wo-202608-25-help-center-header-consistency.md](wo-202608-25-help-center-header-consistency.md) | 202608-25 | `/help` 页头一致性：统一 `PageHeader`、去重 breadcrumb 末项、返回动作语义对齐 |
 
 ### 202608 Governance & Observability — 并行启动建议
 
