@@ -133,7 +133,7 @@
      sidebar reads as a single 14px rhythm; hierarchy now comes from
      color, hover bg, and indentation, not from size jumps. */
   .pl-nav-section-title-button {
-    @apply mb-0.5 flex w-full items-center gap-1.5 rounded-md px-3 py-[7px] text-left text-sm font-semibold text-fg-muted transition-colors;
+    @apply mb-0.5 flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-left text-sm font-semibold text-fg-muted transition-colors;
   }
   .pl-nav-section-title-button:hover { @apply bg-bg-muted text-fg-default; }
   .pl-nav-section-title-button:focus-visible {
@@ -158,12 +158,21 @@
   /* M60: nav link gets a left brand marker reserved for the active state.
      M61: text-sm (14px) matches the group title above so the sidebar
      rhythm is uniform; the active marker + slight indent still convey
-     "this is the focused row". */
-  .pl-nav-link { @apply relative flex min-h-9 items-center gap-2 rounded-md py-0 pl-4 pr-3 text-sm font-normal text-fg-body no-underline transition-colors; }
+     "this is the focused row".
+     UX-SHELL: marker sits at left:0 (inside the row) so top-level items
+     are not clipped by `.pl-nav { overflow-x: hidden }`; icon–label gap
+     is 10px for breathing room. */
+  .pl-nav-link { @apply relative flex min-h-9 items-center gap-2.5 rounded-md py-0 pl-4 pr-3 text-sm font-normal text-fg-body no-underline transition-colors; }
   .pl-nav-link--child {
     @apply pl-3 pr-2;
   }
   .pl-nav-link:hover { @apply bg-bg-muted text-fg-default; }
+  /* Unified 1.5px stroke so dense glyphs (e.g. Share2) and sparse ones
+     (e.g. Bot) share the same visual weight. */
+  .pl-nav svg,
+  .pl-sidebar-help-link svg {
+    stroke-width: 1.5;
+  }
   /* M61: active link keeps the soft brand background + 3px brand marker
      on the leading edge (spec §4.3). font weight 500 keeps the label
      readable without fighting the marker. */
@@ -173,7 +182,7 @@
   .pl-nav-link--active::before {
     content: "";
     position: absolute;
-    left: -3px;
+    left: 0;
     top: 6px;
     bottom: 6px;
     width: 3px;
@@ -356,14 +365,16 @@
   .pl-command-palette-empty-suggestion {
     @apply text-[12px] text-fg-muted/80;
   }
-  .pl-sidebar-footer { @apply relative z-10 mt-4 grid shrink-0 gap-2 border-t border-border-default bg-bg-surface px-3 pt-4; }
-  .pl-sidebar-utility { @apply grid gap-1; }
+  .pl-sidebar-footer { @apply relative z-10 mt-4 shrink-0 border-t border-border-default bg-bg-surface px-3 pt-3; }
+  /* Help + version on one row: left CTA, right muted version — avoids the
+     version reading as a subtitle under 系统手册. */
+  .pl-sidebar-utility { @apply flex items-center justify-between gap-2; }
   .pl-sidebar-help-link {
-    @apply flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium text-fg-body no-underline transition-colors;
+    @apply flex min-h-9 min-w-0 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-fg-body no-underline transition-colors;
   }
   .pl-sidebar-help-link:hover { @apply bg-bg-muted text-fg-default; }
   .pl-sidebar-version {
-    @apply px-3 pb-1 text-xs text-fg-muted;
+    @apply shrink-0 px-1 text-xs text-fg-muted;
   }
   .pl-help-button {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
@@ -1586,8 +1597,11 @@
 
   /* Metric card with help (Connection Overview 5-card grid) */
   .pl-metric-card--with-help { @apply gap-2; }
+  .pl-metric-card--with-icon { @apply gap-2; }
   .pl-metric-card-title { @apply flex items-center justify-between gap-2 text-xs font-medium text-fg-muted; }
   .pl-metric-card-title > span:first-child { @apply truncate; }
+  .pl-metric-card-icon { @apply shrink-0 text-fg-muted; }
+  .pl-metric-card--with-icon .pl-metric-card-title { @apply justify-start; }
   .pl-icon-help { @apply inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-xs text-fg-muted transition-colors; }
   .pl-icon-help:hover { @apply bg-bg-muted text-fg-default; }
   .pl-icon-help:focus-visible { @apply outline-none ring-2 ring-primary; }

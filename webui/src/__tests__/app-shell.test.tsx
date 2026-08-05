@@ -54,6 +54,7 @@ vi.mock("../pages/admin/AgentDetail", () => ({ AgentDetail: () => <StubPage name
 vi.mock("../pages/admin/NewToken", () => ({ NewToken: () => <StubPage name="NewToken" /> }));
 vi.mock("../pages/admin/Audit", () => ({ Audit: () => <StubPage name="Audit" /> }));
 vi.mock("../pages/admin/AuditSources", () => ({ AuditSources: () => <StubPage name="AuditSources" /> }));
+vi.mock("../pages/admin/McpPlayground", () => ({ McpPlayground: () => <StubPage name="McpPlayground" /> }));
 vi.mock("../pages/admin/ConfigAudit", () => ({ ConfigAudit: () => <StubPage name="ConfigAudit" /> }));
 vi.mock("../pages/admin/RoleList", () => ({ RoleList: () => <StubPage name="RoleList" /> }));
 vi.mock("../pages/admin/RoleDetail", () => ({ RoleDetail: () => <StubPage name="RoleDetail" /> }));
@@ -151,6 +152,7 @@ describe("AppFrame shell", () => {
     ["/admin/agents", "AgentList", "Agent"],
     ["/admin/audit", "Audit", "访问日志"],
     ["/admin/audit?tab=turns", "Audit", "访问日志"],
+    ["/admin/mcp-playground", "McpPlayground", "MCP 调试台"],
     ["/admin/roles", "RoleList", "角色权限"],
     ["/admin/config-audit", "ConfigAudit", "配置审计"]
   ])("renders route %s and marks active navigation", (path, pageName, activeLink) => {
@@ -376,7 +378,7 @@ describe("AppFrame shell", () => {
     expect(sidebarHelp).toHaveTextContent("系统手册");
     expect(sidebarHelp.querySelector("svg")).not.toBeNull();
     expect(sidebarHelp).not.toHaveTextContent("?");
-    expect(within(sidebarFooter).getByTestId("sidebar-version")).toHaveTextContent("Lucy v0.16");
+    expect(within(sidebarFooter).getByTestId("sidebar-version")).toHaveTextContent("v0.16");
     expect(within(sidebarFooter).getAllByRole("link")).toHaveLength(1);
     expect(within(sidebarFooter).queryByRole("link", { name: "配置变更" })).not.toBeInTheDocument();
     expect(within(sidebarFooter).queryByRole("navigation")).not.toBeInTheDocument();
@@ -525,7 +527,9 @@ describe("AppFrame shell", () => {
       expect(helpLink).toHaveAttribute("href", "/help");
       expect(helpLink).toHaveTextContent("系统手册");
       expect(helpLink.querySelector("svg")).not.toBeNull();
-      expect(within(footer).getByTestId("sidebar-version")).toHaveTextContent("Lucy v0.16");
+      expect(within(footer).getByTestId("sidebar-version")).toHaveTextContent("v0.16");
+      expect(within(footer).getAllByRole("link")).toHaveLength(1);
+      expect(within(footer).getByTestId("sidebar-version").tagName).toBe("SPAN");
     });
   });
 

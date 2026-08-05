@@ -30,7 +30,7 @@ function makeSummary(overrides: Partial<SourceSummary> = {}): SourceSummary {
   };
 }
 
-function renderCatalog(tables: SourceSummary[]) {
+function renderCatalog(tables: SourceSummary[], entry = "/catalog") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
@@ -50,7 +50,7 @@ function renderCatalog(tables: SourceSummary[]) {
   );
 
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <QueryClientProvider client={client}>
         <Catalog />
       </QueryClientProvider>
@@ -304,5 +304,24 @@ describe("Catalog connection & schema identifier casing (M62)", () => {
     expect(host).not.toBeNull();
     expect(host!.getAttribute("translate")).toBe("no");
     expect(host!.className).toContain("notranslate");
+  });
+});
+
+describe("Catalog completion deep link (Spec 100)", () => {
+  it("filters to incomplete rows when URL has completion=incomplete", async () => {
+    renderCatalog(
+      [
+        makeSummary({ table: "done_table", completion: "done" }),
+        makeSummary({ table: "partial_table", completion: "partial" }),
+        makeSummary({ table: "not_started_table", completion: "not_started" })
+      ],
+      "/catalog?completion=incomplete"
+    );
+
+    await screen.findByTestId("catalog-table");
+    expect(screen.getByTestId("catalog-row-partial_table")).toBeInTheDocument();
+    expect(screen.getByTestId("catalog-row-not_started_table")).toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-row-done_table")).not.toBeInTheDocument();
+    expect(screen.getByTestId("catalog-result-count")).toHaveTextContent("2 条结果");
   });
 });

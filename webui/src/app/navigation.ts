@@ -51,6 +51,7 @@ export type NavIconKey =
   | "agents"
   | "roles"
   | "audit"
+  | "mcpPlayground"
   | "configAudit";
 
 export const topLevelEntry: NavItem = {
@@ -229,6 +230,15 @@ export const navGroups: Array<{
         active: (path) => path === "/admin/audit" || path.startsWith("/admin/audit/"),
         description: "查看 ACL 判定、访问审计和风险排查记录。",
         keywords: ["ACL", "审计", "日志"]
+      },
+      {
+        id: "admin-mcp-playground",
+        label: "MCP 调试台",
+        to: "/admin/mcp-playground",
+        iconKey: "mcpPlayground",
+        active: (path) => path === "/admin/mcp-playground" || path.startsWith("/admin/mcp-playground"),
+        description: "预览 Agent 的 MCP 工具 ACL 裁决，并可做受控试调。",
+        keywords: ["MCP", "Playground", "ACL", "调试"]
       },
       {
         id: "admin-config-audit",

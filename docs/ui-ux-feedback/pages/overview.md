@@ -384,3 +384,118 @@ Reported: 2026-08-04
 - Tests: `cd webui && node_modules/.bin/vitest run src/__tests__/ops-dashboard.test.ts src/__tests__/onboarding.test.tsx --maxWorkers=1` 通过。
 - Cross-cutting theme: `internal-term translation`。
 - Browser verification attempted on 2026-08-04 未通过：运行中的 `:55176` 页面仍是旧 `partial` 文案，说明部署实例未加载本轮改动；状态保持 `Fixed`。
+
+## UX-OVERVIEW-011: 语义缺口深链仍指向弃用 `/?status=partial`
+
+Status: Fixed
+Route: /overview
+Area: 待处理事项 / semantic-gap
+Severity: P0
+Reported: 2026-08-05
+
+### Feedback
+`opsDashboard.buildActionRequiredItems` 中语义缺口 CTA 仍为 `/?status=partial`。语义资产 canonical 路由已是 `/catalog`，且 Catalog 不消费 `status` query，导致「前往补全」无法落到已过滤列表。
+
+### Expected
+- CTA → `/catalog?completion=incomplete`。
+- Catalog 支持 `incomplete`（未完成 = 非 `done`），并从 URL 初始化筛选。
+
+### Browser Check
+1. Open `/overview` with semantic gap > 0.
+2. Click 前往补全；land on `/catalog?completion=incomplete` with filtered rows.
+3. Confirm filter control shows「未完成」。
+
+### Notes
+- Spec: `webui/docs/100-overview-health-action-deeplink-loop-spec.md`
+- Plan: `webui/docs/plans/wo-202608-33-overview-health-action-deeplink-loop.md`
+- Fix（2026-08-05）: `DEEP_LINKS.catalogIncomplete` + Catalog `completion=incomplete` URL 同步。本轮不做浏览器验证，状态保持 `Fixed`。
+
+## UX-OVERVIEW-012: 系统状态摘要 CTA 无上下文
+
+Status: Fixed
+Route: /overview
+Area: 系统状态摘要
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+Warning 摘要固定链到 `/admin/audit`（「控制台日志」），与语义缺口 / Agent 未启用等实际原因无关。
+
+### Expected
+按 Spec 100 §5.3：优先「查看未完成语义资产」或「查看 Agent」，最后才回退访问日志。
+
+### Browser Check
+1. With semantic gap > 0 and MCP/KTX ready, verify primary CTA targets catalog incomplete.
+2. With no semantic gap but disabled agents, verify CTA targets `/admin/agents`.
+
+### Notes
+同 Spec 100 / wo-202608-33。`warningSummaryCta()` 按 Registry 优先级产出。本轮不做浏览器验证，状态保持 `Fixed`。
+
+## UX-OVERVIEW-013: Danger 告警缺少修复动作
+
+Status: Fixed
+Route: /overview
+Area: 系统异常 alert
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+Lucy MCP / KTX Runtime 不可用时仅有文案，无「检查 MCP 接入 / 查看连接概览」等动作。
+
+### Expected
+Alert 内提供与失败组件匹配的修复链接；MCP 接入面板具备 `#overview-mcp` 锚点。
+
+### Browser Check
+1. Simulate or fixture mcpReady=false；verify alert exposes MCP repair action.
+2. ktxAvailable=false；verify connections link.
+
+### Notes
+同 Spec 100 / wo-202608-33。Danger 区含「检查 MCP 接入」「打开 MCP 调试台」「查看连接概览」。本轮不做浏览器验证，状态保持 `Fixed`。
+
+
+## UX-OVERVIEW-014: 质量/访问快照指标卡缺少 Attu 式小 icon
+
+Status: Fixed
+Route: /overview
+Area: 质量快照 / 访问风险 metric cards
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+对照 Attu Overview 顶栏指标卡（[02-overview.png](https://github.com/zilliztech/attu/blob/main/.github/images/v3/02-overview.png)），Lucy `/overview` 质量快照与访问风险缺少「小号线框 icon + 标签 + 大号主值」的扫读锚点；加上小 icon 后精致度与类别识别会明显更好。
+
+### Expected
+- 快照指标采用 Spec 100 §8：outline icon（约 16px）+ 弱标签 + 主值 + 可选次行。
+- 复用/扩展 `pl-metric-card`，不恢复旧四卡服务健康条；不引入 emoji icon。
+
+### Browser Check
+1. Open `/overview`.
+2. In 质量快照 and 访问风险，each metric shows a small outline icon with label and primary value.
+3. CTA deep links still work.
+
+### Notes
+- Spec 100 v1.1 §8；Plan `wo-202608-33` Phase 4。
+- Fix（2026-08-05）: `.pl-metric-card--with-icon` + lucide outline icons。本轮不做浏览器验证，状态保持 `Fixed`。
+
+## UX-OVERVIEW-015: 刷新首页数据占满文案 secondary，工具感偏重
+
+Status: Pending
+Route: `/overview`
+Area: PageHeader actions / refresh control
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+对照 Attu Overview / Backups 工具刷新为 icon-only，「刷新首页数据」完整文案 secondary 占用 Header 宽度，与「上次更新」徽标争挤（历史见 UX-OVERVIEW-004），工具动作应图标化。
+
+### Expected
+刷新改为 `pl-icon-btn` + `aria-label="刷新首页数据"` + tooltip；与「上次更新」徽标保持同组邻接。主题：`icon-button affordance`、`header action budget`。
+
+### Browser Check
+1. Open `/overview`.
+2. Verify refresh is an icon button with accessible name containing 刷新.
+3. Verify 「上次更新」 badge remains adjacent to the refresh control.
+4. Click refresh; loading state does not collapse/jitter layout badly.
+
+### Notes
+Spec 101 / `wo-202608-34` Phase 3（Draft，待实现）。不改变 MCP 区并列 secondary 策略（UX-OVERVIEW-008）。

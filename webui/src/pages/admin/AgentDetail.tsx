@@ -291,6 +291,14 @@ export function AgentDetail() {
         }
         actions={
           <>
+            <Link
+              to={`/admin/mcp-playground?agentId=${encodeURIComponent(agent.id)}&mode=dry-run`}
+              className="pl-btn pl-btn--secondary text-sm notranslate"
+              translate="no"
+              data-testid="agent-detail-mcp-playground"
+            >
+              在 MCP 调试台试调
+            </Link>
             <Link to={`/admin/config-audit?targetId=${encodeURIComponent(agent.id)}`} className="pl-btn pl-btn--secondary text-sm">
               变更历史
             </Link>

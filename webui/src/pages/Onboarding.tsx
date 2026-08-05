@@ -3,6 +3,13 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  Activity,
+  Layers,
+  ShieldAlert,
+  Upload,
+  Users
+} from "lucide-react";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import type { Agent, ChangedFilesResponse, McpEndpointInfo, ProjectInfo, SourcesResponse } from "../lib/types";
@@ -12,10 +19,12 @@ import {
   availableTokenCount,
   buildActionRequiredItems,
   buildServiceHealth,
+  DEEP_LINKS,
   NO_ACTION_REQUIRED_MESSAGE,
   pendingSemanticCount,
   summarizeServiceHealth,
   systemAlertText,
+  warningSummaryCta,
   type ActionRequiredItem,
   type Severity,
   type ServiceHealthItem,
@@ -136,6 +145,7 @@ function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
  * `Agent` / numeric counts in `notranslate` spans per terminology standard.
  */
 function ServiceHealthSummaryView({ summary }: { summary: ServiceHealthSummary }) {
+  const cta = warningSummaryCta(summary);
   return (
     <section
       className="pl-system-health-summary"
@@ -150,8 +160,8 @@ function ServiceHealthSummaryView({ summary }: { summary: ServiceHealthSummary }
         </strong>
         <p>核心接入链路可用，交付待办见下方处理事项。</p>
       </div>
-      <Link to="/admin/audit" className="pl-card-cta">
-        控制台日志 ↗
+      <Link to={cta.href} className="pl-card-cta notranslate" translate="no" data-testid="ops-service-health-summary-cta">
+        {cta.text} ↗
       </Link>
     </section>
   );
@@ -332,6 +342,11 @@ function ActionRequiredRow({ item }: { item: ActionRequiredItem }) {
           <div className="min-w-0">
             <span className="pl-action-required-item-heading">{item.title}</span>
             <p className="pl-action-required-item-description">{item.description}</p>
+            <p className="pl-action-required-item-meta text-xs text-fg-muted" data-testid={`${testId}-meta`}>
+              影响：{item.impact}
+              <span aria-hidden="true"> · </span>
+              证据来源：{item.evidence}
+            </p>
           </div>
         </div>
         <Link
@@ -363,10 +378,14 @@ function SemanticCoverageCard({
   const percentValue = percent(done, total);
   const gap = pendingSemanticCount({ done, total });
   return (
-    <div className="pl-snapshot-item pl-snapshot-item--semantic">
+    <div className="pl-snapshot-item pl-snapshot-item--semantic pl-metric-card pl-metric-card--with-icon">
+      <div className="pl-metric-card-title">
+        <Layers className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-semantic" />
+        <span>语义覆盖率</span>
+      </div>
       <div className="min-w-0">
         <strong>
-          语义覆盖率 <span className="notranslate" translate="no" data-testid="ops-semantic-percent">{percentValue}%</span>
+          <span className="notranslate" translate="no" data-testid="ops-semantic-percent">{percentValue}%</span>
         </strong>
         <div
           className="pl-progress"
@@ -423,19 +442,23 @@ export function Onboarding() {
   const [now, setNow] = useState<Date>(() => new Date());
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    queryFn: () => apiGet<ProjectInfo>("/api/project"),
+    refetchOnMount: "always"
   });
   const sourcesQuery = useQuery({
     queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    queryFn: () => apiGet<SourcesResponse>("/api/sources"),
+    refetchOnMount: "always"
   });
   const diffQuery = useQuery({
     queryKey: queryKeys.diff,
-    queryFn: () => apiGet<ChangedFilesResponse>("/api/diff")
+    queryFn: () => apiGet<ChangedFilesResponse>("/api/diff"),
+    refetchOnMount: "always"
   });
   const agentsQuery = useQuery({
     queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents"),
+    refetchOnMount: "always"
   });
   // M36 review follow-up: query the latest eval run so the "近 30 天无评测数据"
   // item is honest. We only fetch the head of the list (limit=1); the API
@@ -446,7 +469,8 @@ export function Onboarding() {
     queryKey: ["eval", "runs", "last"],
     queryFn: () => apiGet<{ total: number; runs: unknown[] }>("/api/eval/runs?limit=1"),
     retry: false,
-    staleTime: 60_000
+    staleTime: 60_000,
+    refetchOnMount: "always"
   });
 
   const connections = projectQuery.data?.connections ?? [];
@@ -804,9 +828,26 @@ export function Onboarding() {
         >
           <div className="flex items-center gap-3">
             <span className="pl-service-health-critical-dot" aria-hidden="true" />
-            <div>
+            <div className="min-w-0 flex-1">
               <strong>系统异常</strong>
               <p className="pl-notice notranslate" translate="no">{alertText}</p>
+              <div className="mt-3 flex flex-wrap gap-3" data-testid="ops-service-health-critical-actions">
+                {!mcpEndpointReady ? (
+                  <>
+                    <a href={DEEP_LINKS.overviewMcpAnchor} className="pl-card-cta notranslate" translate="no">
+                      检查 MCP 接入 ↗
+                    </a>
+                    <Link to={DEEP_LINKS.mcpPlayground} className="pl-card-cta notranslate" translate="no">
+                      打开 MCP 调试台 ↗
+                    </Link>
+                  </>
+                ) : null}
+                {!ktxAvailable ? (
+                  <Link to={DEEP_LINKS.connections} className="pl-card-cta">
+                    查看连接概览 ↗
+                  </Link>
+                ) : null}
+              </div>
             </div>
           </div>
         </section>
@@ -847,26 +888,34 @@ export function Onboarding() {
           </div>
           <div className="pl-snapshot-list">
             <SemanticCoverageCard done={doneSources} total={sources.length} />
-            <div className="pl-snapshot-item">
+            <div className="pl-snapshot-item pl-metric-card pl-metric-card--with-icon">
+              <div className="pl-metric-card-title">
+                <Upload className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-publish" />
+                <span>待发布变更</span>
+              </div>
               <div>
                 <strong>
-                  待发布变更 <span className="notranslate" translate="no">{changedFiles.length}</span>
+                  <span className="notranslate" translate="no">{changedFiles.length}</span>
                 </strong>
                 <div className="text-xs text-fg-muted">
                   {validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
                 </div>
               </div>
               <Link
-                to="/publish/workbench"
+                to={DEEP_LINKS.publishWorkbench}
                 className="pl-card-cta"
               >
                 打开发布工作台 ↗
               </Link>
             </div>
-            <div className="pl-snapshot-item">
+            <div className="pl-snapshot-item pl-metric-card pl-metric-card--with-icon">
+              <div className="pl-metric-card-title">
+                <Activity className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-eval" />
+                <span>评测数据</span>
+              </div>
               <div>
                 <strong>
-                  评测数据 <span className="notranslate" translate="no">{evalLastRunQuery.isSuccess ? (evalLastRunQuery.data?.runs.length ?? 0) : "—"}</span>
+                  <span className="notranslate" translate="no">{evalLastRunQuery.isSuccess ? (evalLastRunQuery.data?.runs.length ?? 0) : "—"}</span>
                 </strong>
                 <div className="text-xs text-fg-muted">
                   {evalLastRunQuery.isSuccess
@@ -877,7 +926,7 @@ export function Onboarding() {
                 </div>
               </div>
               <Link
-                to="/eval/monitor"
+                to={DEEP_LINKS.evalMonitor}
                 className="pl-card-cta"
               >
                 查看趋势监控 ↗
@@ -895,31 +944,43 @@ export function Onboarding() {
           </div>
           <div className="pl-risk-list">
             <div
-              className="pl-risk-item"
+              className="pl-risk-item pl-metric-card pl-metric-card--with-icon"
               data-tone={enabledAgents.length === 0 ? "danger" : "default"}
             >
+              <div className="pl-metric-card-title">
+                <Users className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-agents" />
+                <span>
+                  <span className="notranslate" translate="no">Agent</span> 启用与禁用
+                </span>
+              </div>
               <div>
-                <strong><span className="notranslate" translate="no">Agent</span> 启用与禁用</strong>
+                <strong>
+                  <span className="notranslate" translate="no">{enabledAgents.length}</span> / <span className="notranslate" translate="no">{agents.length}</span>
+                </strong>
                 <div className="text-xs text-fg-muted">
-                  <span className="notranslate" translate="no">{enabledAgents.length}</span> 启用 / <span className="notranslate" translate="no">{agents.length}</span> 总数
+                  启用 / 总数
                 </div>
               </div>
-              <Link to="/admin/agents" className="pl-card-cta notranslate" translate="no">
+              <Link to={DEEP_LINKS.agents} className="pl-card-cta notranslate" translate="no">
                 查看 <span className="notranslate" translate="no">Agent</span> 管理 ↗
               </Link>
             </div>
             <div
-              className="pl-risk-item"
+              className="pl-risk-item pl-metric-card pl-metric-card--with-icon"
               data-tone={aclDenied7d > 0 ? "danger" : "default"}
             >
+              <div className="pl-metric-card-title">
+                <ShieldAlert className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-acl" />
+                <span>近 7 天 ACL 拒绝</span>
+              </div>
               <div>
-                <strong>近 7 天 ACL 拒绝</strong>
-                <div className="text-xs text-fg-muted">
-                  <span className="notranslate" translate="no">{aclDenied7d}</span> 次拒绝
-                </div>
+                <strong>
+                  <span className="notranslate" translate="no">{aclDenied7d}</span>
+                </strong>
+                <div className="text-xs text-fg-muted">次拒绝</div>
               </div>
               <Link
-                to="/admin/audit?outcome=denied"
+                to={DEEP_LINKS.auditDenied}
                 className="pl-card-cta"
               >
                 查看访问日志 ↗
@@ -943,7 +1004,7 @@ export function Onboarding() {
         </section>
       </div>
 
-      <section className="pl-panel">
+      <section className="pl-panel" id="overview-mcp" data-testid="ops-mcp-access">
         <div className="pl-section-heading">
           <div>
             <h2 className="pl-panel-title mb-1"><span className="notranslate" translate="no">MCP</span> 接入</h2>
@@ -975,6 +1036,14 @@ export function Onboarding() {
             >
               查看配置
             </button>
+            <Link
+              to={DEEP_LINKS.mcpPlayground}
+              className="pl-btn pl-btn--secondary pl-btn--xs notranslate"
+              translate="no"
+              data-testid="overview-mcp-playground-link"
+            >
+              打开 MCP 调试台
+            </Link>
           </div>
           {endpointInfo?.status === "invalid" ? fallbackNotice(endpointInfo) : null}
         </div>

@@ -47,6 +47,7 @@ docs/ui-ux-feedback/
 | Agent Admin | `/admin/agents`, `/admin/roles` | [`pages/admin-agents.md`](pages/admin-agents.md) |
 | Admin Governance / Usage Overview | `/admin/usage`（旧 `/admin/governance` redirect） | [`pages/admin-governance.md`](pages/admin-governance.md) |
 | Admin Audit / Access Log | `/admin/audit` | [`pages/admin-audit.md`](pages/admin-audit.md) |
+| Admin MCP Playground | `/admin/mcp-playground` | [`pages/admin-mcp-playground.md`](pages/admin-mcp-playground.md) |
 | Global Shell | all WebUI routes, including `/overview` | [`pages/global-shell.md`](pages/global-shell.md) |
 | Overview | `/overview` | [`pages/overview.md`](pages/overview.md) |
 
@@ -54,6 +55,8 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Spec 99+100 工单落地 | Spec 99 / `wo-202608-32`：`UX-ADMIN-MCP-PLAYGROUND-001`、`UX-ADMIN-AUDIT-018` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。MCP 调试台 ACL 预览 + `tools/list` smoke、裁决双行、Audit/Agent/Overview 入口。Spec 100 / `wo-202608-33`：`UX-OVERVIEW-011`～`014` → `Fixed`。Canonical Registry、Catalog `completion=incomplete`、危险/摘要 CTA、Attu 式指标卡 icon、回写 refetch。验证：相关 vitest、`lint:terminology`、`build`。 |
+| 2026-08-05 | Spec/Plan 落盘（无代码） | Spec 99 / `wo-202608-32`：MCP 调试台 + 裁决可读化（台账 `admin-mcp-playground.md`、`UX-ADMIN-AUDIT-018` Pending）。Spec 100 / `wo-202608-33`：overview 深链闭环（`UX-OVERVIEW-011`～`013` Pending）。术语标准新增 §4.8。 |
 | 2026-08-05 | Agent Admin `/admin/agents` | Spec 98 / `wo-202608-31` 落地：`UX-ADMIN-AGENTS-037`～`039` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。KPI 顺序改为总数→活跃 Agent→活跃 Token→调用量；表列改为配置 Token→活跃 Token→调用量→创建→配置变更→最近访问；主列头「显示名/用户 ID」。跨页面主题新增 `kpi stock-then-adoption-then-volume`、`ops table column grouping`；延伸 `agent identity terminology`。验证：`agent-list.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Config Audit `/admin/config-audit` | Spec 97 / `wo-202608-30` 落地：`UX-ADMIN-CONFIG-AUDIT-007`～`008` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。删页头「访问日志」；CSV 与主表 7 列中文对齐；文件名精确到秒。跨页面主题新增 `header sibling nav redundancy`、`export-table field parity`、`export filename second precision`。验证：`admin-config-audit.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Config Audit `/admin/config-audit` | Spec 96 / `wo-202608-29` 落地：`UX-ADMIN-CONFIG-AUDIT-002`～`006` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。固定每页 20 行；`pl-data-grid`；中文业务列头与枚举；删 actorNotice；时间筛选 since/until + 快捷窗口 + 变更类型动态选项。验证：`admin-config-audit.test.tsx`、`admin-audit.test.ts`、`lint:terminology`、`build`。 |
@@ -153,6 +156,8 @@ docs/ui-ux-feedback/
 | `ops table column grouping`（配置 Token / 活跃 Token / 调用 / 生命周期时间相邻分组） | UX-ADMIN-AGENTS-038 | 1 Fixed | Spec 98 / wo-202608-31，待浏览器复核 |
 | `list multi-dimensional filters`（列表页至少提供状态 + 活跃 + 规模等关键维度筛选） | UX-ADMIN-AGENTS-033、UX-ADMIN-AGENTS-035 | 2 Fixed | Spec 93 / 95，待浏览器复核 |
 | `agent identity terminology`（显示名 vs 用户 ID；列表主列头须覆盖双行内容） | UX-ADMIN-AGENTS-034、UX-ADMIN-AGENTS-039 | 2 Fixed | Spec 95 / 98，待浏览器复核 |
+| `decision-reason dual-line`（裁决原因主行中文 + 次行机器码；禁止仅裸码） | UX-ADMIN-AUDIT-018、UX-ADMIN-MCP-PLAYGROUND-001 | 2 Fixed | Spec 99 / wo-202608-32，待浏览器复核 |
+| `canonical health deeplink`（健康/待办 CTA 只生产 Registry URL；消费端同 PR） | UX-OVERVIEW-011～014 | 4 Fixed | Spec 100 / wo-202608-33，待浏览器复核 |
 | `low-risk one-step save`（低风险配置编辑一步落盘，diff 仅作审计/高风险确认） | UX-ADMIN-AGENTS-036 | 1 Fixed | Spec 95 / wo-202608-28，待浏览器复核 |
 | `audit filter-table alignment`（筛选字段须与表头对齐，并含时间窗） | UX-ADMIN-CONFIG-AUDIT-006 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
 | `ops table density (pl-data-grid)`（治理/审计列表须轻量 `pl-data-grid` 12px） | UX-ADMIN-CONFIG-AUDIT-003 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |

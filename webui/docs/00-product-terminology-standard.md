@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名） |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -360,7 +360,10 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Runtime Status | 运行状态 | 运行时间状态 | 服务运行健康情况 |
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
-| Sidebar Group | 系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 | 5+1 主导航 | 运行状态、数据库接入、语义层维护、业务文档作为主导航分组 | Lucy WebUI 侧边栏固定 IA |
+| Sidebar Group | 系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 | 5+1 主导航混用其它分组名 | Lucy WebUI 侧边栏固定 IA |
+| Semantic Completion Incomplete | 未完成 | partial / not_started（作用户主文案）、status=partial | Catalog / overview 深链 value=`incomplete`（`!== done`）；见 Spec 100 |
+| Action Impact | 影响 | impact（裸露） | 待办行必填次级文案；Spec 100 |
+| Action Evidence | 证据来源 | evidence（裸露） | 待办行必填；Spec 100 |
 
 ### 4.7 访问日志 / Admin Audit
 
@@ -381,10 +384,26 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table |
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
+| Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、裁决原因码。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView。
+
+### 4.8 MCP 调试台 / ACL 裁决可见性
+
+| Canonical Term | Preferred EN | UI 主术语 | 禁止 / 弃用 | 说明 |
+|---|---|---|---|---|
+| MCP Playground | MCP Playground | MCP 调试台 | API 操场、Playground（单独作 H1）、协议沙箱 | `/admin/mcp-playground`；侧栏与 PageHeader |
+| ACL Decision Preview | ACL Decision Preview | ACL 裁决预览 | 权限模拟、DryRun（单独作主标签） | 默认主模式；不转发上游 |
+| Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 白名单工具 + 确认；Token 不落盘 |
+| Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 与访问日志列对齐；主行中文 |
+| Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
+| Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | DryRun 结果只读摘要 |
+
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、JSON-RPC method。
+
+详见 Spec 99。Catalog 语义筛选「未完成」(`incomplete`) 与 overview 深链见 Spec 100，不在本表重复造译名。
 
 ## 5. 新术语登记流程
 

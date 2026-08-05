@@ -135,6 +135,14 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
 }
 
 describe("AgentDetail", () => {
+  it("exposes MCP playground deep link with agentId", async () => {
+    stubAgentEndpoints();
+    renderAgentDetail();
+    const link = await screen.findByTestId("agent-detail-mcp-playground");
+    expect(link).toHaveAttribute("href", "/admin/mcp-playground?agentId=zhangsan&mode=dry-run");
+    expect(link).toHaveTextContent("在 MCP 调试台试调");
+  });
+
   it("low-risk edits save in one step with dryRun then write", async () => {
     const fetchMock = stubAgentEndpoints();
 

@@ -36,6 +36,19 @@ export const severityLabelBySeverity: Record<Severity, SeverityLabel> = {
   ready: "就绪"
 };
 
+/** Spec 100 Canonical Deep Link Registry — producers must use these URLs. */
+export const DEEP_LINKS = {
+  catalogIncomplete: "/catalog?completion=incomplete",
+  connections: "/connections",
+  publishWorkbench: "/publish/workbench",
+  evalMonitor: "/eval/monitor",
+  auditCalls: "/admin/audit?tab=calls&hours=168",
+  auditDenied: "/admin/audit?tab=calls&outcome=denied&hours=168",
+  agents: "/admin/agents",
+  mcpPlayground: "/admin/mcp-playground",
+  overviewMcpAnchor: "#overview-mcp"
+} as const;
+
 export type ActionRequiredItem = {
   /** Stable identifier so UI can key React lists without re-rendering. */
   id: string;
@@ -47,8 +60,12 @@ export type ActionRequiredItem = {
   severity: Exclude<Severity, "ready">;
   /** User-facing action label. */
   actionText: string;
-  /** Deep-link target for handling the item. */
+  /** Deep-link target for handling the item (Registry only). */
   actionUrl: string;
+  /** Impact one-liner (Spec 100 required). */
+  impact: string;
+  /** Evidence source label (Spec 100 required). */
+  evidence: string;
 };
 
 export type ServiceHealthKey =
@@ -153,7 +170,9 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           )}，仍有 ${formatCount(semanticGap)} 张表缺少可用语义`,
           severity: semanticSeverity,
           actionText: "前往补全",
-          actionUrl: "/?status=partial"
+          actionUrl: DEEP_LINKS.catalogIncomplete,
+          impact: "Agent 可能无法回答相关表问题",
+          evidence: "语义资产"
         }
       : null,
     safePendingCatalog > 0
@@ -163,7 +182,9 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           description: `Catalog 同步发现 ${formatCount(safePendingCatalog)} 个对象同步不完整（部分字段或元数据缺失）`,
           severity: "warning",
           actionText: "查看连接",
-          actionUrl: "/connections"
+          actionUrl: DEEP_LINKS.connections,
+          impact: "本地目录与启用表范围可能不一致",
+          evidence: "数据接入"
         }
       : null,
     safePendingPublish > 0
@@ -173,7 +194,9 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           description: `当前有 ${formatCount(safePendingPublish)} 个语义变更尚未发布`,
           severity: "warning",
           actionText: "打开发布工作台",
-          actionUrl: "/publish/workbench"
+          actionUrl: DEEP_LINKS.publishWorkbench,
+          impact: "变更尚未进入 KTX 索引",
+          evidence: "语义发布"
         }
       : null,
     // Only `safeEvalRuns === 0` (confirmed zero runs) surfaces the
@@ -186,7 +209,9 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           description: "尚未检测到近 30 天评测运行记录",
           severity: "info",
           actionText: "查看趋势监控",
-          actionUrl: "/eval/monitor"
+          actionUrl: DEEP_LINKS.evalMonitor,
+          impact: "缺少质量回归基线",
+          evidence: "质量评测"
         }
       : null,
     safeAclDenied > 0
@@ -196,7 +221,9 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           description: `访问日志记录到 ${formatCount(safeAclDenied)} 次 ACL 拒绝`,
           severity: "critical",
           actionText: "查看访问日志",
-          actionUrl: "/admin/audit?outcome=denied"
+          actionUrl: DEEP_LINKS.auditDenied,
+          impact: "Agent 调用被拒绝，交付受阻",
+          evidence: "访问日志"
         }
       : null
   ];
@@ -277,6 +304,17 @@ export function summarizeServiceHealth(
     semantic: { done: semantic.done, total: semantic.total, gap: semanticGap },
     agents: { enabled: agents.enabled, total: agents.total, gap: agentGap }
   };
+}
+
+/** Spec 100 §5.3 — single primary CTA for the warning health summary. */
+export function warningSummaryCta(summary: ServiceHealthSummary): { text: string; href: string } {
+  if (summary.semantic.gap > 0) {
+    return { text: "查看未完成语义资产", href: DEEP_LINKS.catalogIncomplete };
+  }
+  if (summary.agents.gap > 0) {
+    return { text: "查看 Agent", href: DEEP_LINKS.agents };
+  }
+  return { text: "查看访问日志", href: DEEP_LINKS.auditCalls };
 }
 
 /**

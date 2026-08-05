@@ -51,6 +51,7 @@ KTX WebUI
 - Agent
 - 角色权限
 - 访问日志
+- MCP 调试台
 - 配置审计
 ```
 
@@ -73,6 +74,7 @@ KTX WebUI
 | 访问治理 | Agent | `/admin/agents` | 管理 Agent、role 和 token |
 | 访问治理 | 角色权限 | `/admin/roles` | 管理每个 Role 的连接、表范围与 MCP 工具授权（Spec 89） |
 | 访问治理 | 访问日志 | `/admin/audit` | 按 Agent 问询与 MCP 调用流水审计；内含 `turns` / `calls` 两个 Tab（Spec 89；`?tab=` 切换） |
+| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调（Spec 99） |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看 WebUI 写配置的审计记录 |
 
 > 兼容入口：`/admin/audit-sources` 重定向到 `/admin/audit`，保留为外部链接兼容（M35 → Spec 89 移除 heatmap Tab）。
@@ -101,6 +103,7 @@ KTX WebUI
 | 角色权限 | `访问治理 / 角色权限` |
 | 访问日志（问询记录 tab） | `访问治理 / 访问日志` |
 | 访问日志（调用流水 tab） | `访问治理 / 访问日志` |
+| MCP 调试台 | `访问治理 / MCP 调试台` |
 | 配置审计 | `访问治理 / 配置审计` |
 
 ## 5. 页面标题与说明

@@ -15,6 +15,7 @@
 - [2. 快速上手](#2-快速上手)
 - [3. 功能模块操作指南](#3-功能模块操作指南)
   - [3.1 部署向导与上线检查](#31-部署向导与上线检查)
+    - [系统概览待处理事项](#系统概览待处理事项)
   - [3.2 数据库接入](#32-数据库接入)
   - [3.3 语义层维护](#33-语义层维护)
     - [为什么要编写语义 YAML](#为什么要编写语义-yaml)
@@ -48,6 +49,8 @@
 | 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |
 | 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |
 | 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
+| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：本地语义表总数减去 `completion` 为 `done` 的表；不是按字段条数。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |
+| 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录；`ACL` 看近 7 天 `denied` 汇总。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |
 
 ### 0.2 面向管理员
 
@@ -156,7 +159,7 @@ KTX CLI / MCP daemon
 
 | 分组 | 二级菜单 | 路径 | 一句话用途 |
 | --- | --- | --- | --- |
-| 系统概览 | 系统概览 | `/overview` | 聚合 Lucy `MCP`、`KTX` `Runtime`、语义资产与 `Agent` 接入的当前健康状态 |
+| 系统概览 | 系统概览 | `/overview` | 聚合 Lucy `MCP`、`KTX` `Runtime`、语义资产与 `Agent` 接入的当前健康状态；「待处理事项」统计口径见 [系统概览待处理事项](#系统概览待处理事项) |
 | 数据接入 | 连接概览 | `/connections` | 查看每个连接的 `Schema`、`YAML` 资产与本地目录刷新状态 |
 | 数据接入 | 启用表范围 | `/connections/enabled-tables` | 维护进入语义层的表范围，保存后写入 `ktx.yaml` 的 `enabled_tables` 字段 |
 | 语义建模 | 语义资产 | `/catalog` | 维护当前 `KTX` 项目的结构化 semantic-layer `YAML` 模型，按搜索 / 连接 / `Schema` / 语义状态定位对象 |
@@ -166,9 +169,12 @@ KTX CLI / MCP daemon
 | 质量评测 | 评测用例 | `/eval/cases` | 管理各 domain 的 `Eval` case 定义（`YAML` 源文件） |
 | 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行历史与单次运行的详情 |
 | 质量评测 | 趋势监控 | `/eval/monitor` | 查看 `Eval` 质量趋势、失败集中度与 drift 分布 |
-| 访问治理 | `Agent` 实例 | `/admin/agents` | 配置每个 `Agent` 实例能用哪些 `MCP` 工具和访问哪些表 |
+| 质量评测 | 安全候选 | `/eval/security-candidates` | 审阅安全评测候选与风险样本 |
+| 访问治理 | 使用概况 | `/admin/usage` | 查看 Agent、Token 和表的访问使用情况与调用量 |
+| 访问治理 | Agent | `/admin/agents` | 配置每个 `Agent` 实例能用哪些 `MCP` 工具和访问哪些表 |
 | 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |
 | 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |
+| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调 |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |
 
 > 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
@@ -278,6 +284,30 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | 5. 配置 Agent MCP | 存在启用 Agent，且至少 1 个可用 token；非全 legacy allow | `/admin/agents` |
 
 当 `Deployment readiness = 5/5` 时，WebUI 会给出 MCP 配置模板；未完成时会指出下一项阻塞原因。
+
+#### 系统概览待处理事项
+
+入口：`/overview`（兼容路由 `/onboarding`）。
+
+「待处理事项」是首页聚合的跨模块运维队列，由前端根据多个只读接口的计数本地拼装；**计数为 0 的项不展示**。上线检查 readiness 与本队列不是同一套规则。
+
+| 条目 | 计数来源 | 口径说明 |
+| --- | --- | --- |
+| N 张表待补语义 | `GET /api/sources` | `表总数 − completion 为 done 的表数`。按**表**计数，不是按字段或描述条数。 |
+| N 个 Catalog 对象待处理 | 同上 | **当前实现与「待补语义」使用同一公式**（`表总数 − done`）；文案写 Catalog 同步不完整，但数字并非独立 Catalog 同步指标。 |
+| 存在 N 个待发布文件 | `GET /api/diff` | 返回的可审阅变更文件数（`files.length`）。 |
+| 近 30 天无评测数据 | `GET /api/eval/runs?limit=1` | 仅在接口成功且确认 **0 条**评测运行记录时出现。探测实现是「是否已有至少 1 条 run」，**未按 30 天时间窗过滤**；加载中或接口失败时不展示该项。 |
+| 近 7 天存在 ACL 拒绝 | `GET /api/admin/agents` | 各 `Agent` 的 `stats.deniedLast7d` 求和；来自审计库近 7 天 `outcome=denied`。 |
+
+一张表何时算 `done`（`webui/server/completion.ts`）：
+
+1. 有表描述（`descriptions.human` 或 `descriptions.ai`）
+2. 有 `grain`
+3. 至少一列标记主键（`pk: true`）
+4. 全部非 `hidden` 列都有描述
+5. 至少一个 `measure`
+
+缺任一项则为 `partial` 或 `not_started`，都计入「待补语义」。补语义入口见 [3.3 语义层维护](#33-语义层维护)；发布入口见 `/publish/workbench`。
 
 ### 3.2 数据库接入
 
@@ -891,6 +921,7 @@ PUT /api/wiki/:key
 | Agent 实例 | `/admin/agents` | 创建/禁用 Agent、查看 token 与最近调用 |
 | Role 配置 | `/admin/roles` | 管理 role 权限模板和 YAML role |
 | 访问日志 | `/admin/audit` | 按用户、工具、source、trace、outcome 查询 |
+| MCP 调试台 | `/admin/mcp-playground` | ACL 裁决预览与受控 `tools/list` 试调 |
 | 数据源热力 | `/admin/audit-sources` | 查看 source/table 调用和拒绝分布 |
 | 配置变更 | `/admin/config-audit` | 查看 `access.yaml`、`ktx.yaml` 等配置变更 |
 

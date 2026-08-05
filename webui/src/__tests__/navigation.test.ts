@@ -57,22 +57,22 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 15 second-level items in total", () => {
+  it("navGroups contains 16 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(15);
+    expect(totalItems).toBe(16);
   });
 
-  it("flat sidebar entries match Handbook §1.5 rows 2–16 (15 entries)", () => {
-    // 顶部 1 + 5 组共 15 项二级菜单 = 16 个侧栏可见入口
+  it("flat sidebar entries match Handbook §1.5 rows 2–17 (16 entries)", () => {
+    // 顶部 1 + 5 组共 16 项二级菜单 = 17 个侧栏可见入口
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = [
       { group: topLevelEntry.label, id: topLevelEntry.id, label: topLevelEntry.label, to: topLevelEntry.to },
       ...navGroups.flatMap((g) =>
         g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
       )
     ];
-    expect(flat.length).toBe(16);
+    expect(flat.length).toBe(17);
 
-    // 顺序与 Handbook §1.5 表格自上而下严格一致（顶部 1 + 5 组 15 项）
+    // 顺序与 Handbook §1.5 表格自上而下严格一致（顶部 1 + 5 组 16 项）
     expect(flat).toEqual([
       { group: "系统概览", id: "overview", label: "系统概览", to: "/overview" },
       { group: "数据接入", id: "connections-overview", label: "连接概览", to: "/connections" },
@@ -89,6 +89,7 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
       { group: "访问治理", id: "admin-roles", label: "角色权限", to: "/admin/roles" },
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
+      { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" }
     ]);
   });
@@ -188,6 +189,7 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/admin/agents")).toBe("governance");
       expect(findGroupIdForPathname("/admin/roles")).toBe("governance");
       expect(findGroupIdForPathname("/admin/audit")).toBe("governance");
+      expect(findGroupIdForPathname("/admin/mcp-playground")).toBe("governance");
       expect(findGroupIdForPathname("/admin/config-audit")).toBe("governance");
     });
   });

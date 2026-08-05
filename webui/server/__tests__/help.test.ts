@@ -459,6 +459,116 @@ describe("Help handbook", () => {
     );
   });
 
+  it("maps deployment checklist sub-section to overview-action-required", () => {
+    const toc = parseHelpToc(
+      ["### 3.1 部署向导与上线检查", "", "#### 系统概览待处理事项", "", "### 3.2 数据库接入"].join(
+        "\n"
+      )
+    );
+
+    expect(toc).toEqual(
+      expect.arrayContaining([
+        { id: "deployment-checklist", level: 3, title: "3.1 部署向导与上线检查" },
+        { id: "overview-action-required", level: 4, title: "系统概览待处理事项" },
+        { id: "database-connections", level: 3, title: "3.2 数据库接入" }
+      ])
+    );
+  });
+
+  it("the bundled handbook documents overview action-required counting", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toContain("#### 系统概览待处理事项");
+    expect(handbook.markdown).toContain("N 张表待补语义");
+    expect(handbook.markdown).toContain("当前实现与「待补语义」使用同一公式");
+    expect(handbook.markdown).toContain("未按 30 天时间窗过滤");
+    expect(handbook.markdown).toContain(
+      "`/overview`「待处理事项」里「N 张表待补语义」怎么算？"
+    );
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        { id: "deployment-checklist", level: 3, title: "3.1 部署向导与上线检查" },
+        { id: "overview-action-required", level: 4, title: "系统概览待处理事项" }
+      ])
+    );
+  });
+
+  it("maps semantic authoring sub-sections to stable alias ids", () => {
+    const toc = parseHelpToc([
+      "### 3.3 语义层维护",
+      "",
+      "#### 为什么要编写语义 YAML",
+      "",
+      "#### 推荐编写工作流",
+      "",
+      "#### grain、join 与 fanout",
+      "",
+      "#### overlay 常见字段速查",
+      "",
+      "#### KTX 官方延伸阅读"
+    ].join("\n"));
+
+    const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
+    expect(byTitle["为什么要编写语义 YAML"]).toBe("semantic-yaml-why");
+    expect(byTitle["推荐编写工作流"]).toBe("semantic-authoring-workflow");
+    expect(byTitle["grain、join 与 fanout"]).toBe("semantic-grain-fanout");
+    expect(byTitle["overlay 常见字段速查"]).toBe("semantic-overlay-fields");
+    expect(byTitle["KTX 官方延伸阅读"]).toBe("ktx-further-reading");
+  });
+
+  it("maps §3.7.0 overlay field guide to yaml-overlay-field-guide", () => {
+    const toc = parseHelpToc([
+      "### 3.7 YAML 文件规范与交付验收",
+      "",
+      "#### 3.7.0 overlay 字段速查（编写辅导）",
+      "",
+      "#### 3.7.1 YAML 类型总览"
+    ].join("\n"));
+
+    expect(toc).toEqual(
+      expect.arrayContaining([
+        { id: "yaml-overlay-field-guide", level: 3, title: "3.7.0 overlay 字段速查（编写辅导）" },
+        { id: "yaml-type-overview", level: 3, title: "3.7.1 YAML 类型总览" }
+      ])
+    );
+  });
+
+  it("the bundled handbook documents semantic YAML authoring guidance", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toContain("#### 为什么要编写语义 YAML");
+    expect(handbook.markdown).toContain("#### 推荐编写工作流");
+    expect(handbook.markdown).toContain("#### grain、join 与 fanout");
+    expect(handbook.markdown).toContain("#### KTX 官方延伸阅读");
+    expect(handbook.markdown).toContain("#### 3.7.0 overlay 字段速查（编写辅导）");
+    expect(handbook.markdown).toContain("fanout");
+    expect(handbook.markdown).toContain("descriptions.human");
+    expect(handbook.markdown).toContain("https://docs.kaelio.com/ktx/docs/guides/writing-context");
+    expect(handbook.markdown).toContain(
+      "https://docs.kaelio.com/ktx/docs/concepts/semantic-layer-internals"
+    );
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        { id: "semantic-authoring-workflow", level: 4, title: "推荐编写工作流" },
+        { id: "semantic-grain-fanout", level: 4, title: "grain、join 与 fanout" },
+        { id: "ktx-further-reading", level: 4, title: "KTX 官方延伸阅读" },
+        {
+          id: "yaml-overlay-field-guide",
+          level: 3,
+          title: "3.7.0 overlay 字段速查（编写辅导）"
+        }
+      ])
+    );
+  });
+
   it("the bundled handbook exposes a user-facing FAQ quick reference", async () => {
     const realAppRoot = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
@@ -471,10 +581,15 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("`YAML` 改完后为什么 `Agent` 仍然搜不到新口径？");
     expect(handbook.markdown).toContain("`Agent` 返回 `Access denied` 时先查哪里？");
     expect(handbook.markdown).toContain("`expires_at` 到期后 `token` 会自动失效吗？");
+    expect(handbook.markdown).toContain(
+      "`/overview`「待处理事项」里「N 张表待补语义」怎么算？"
+    );
+    expect(handbook.markdown).toContain("[系统概览待处理事项](#系统概览待处理事项)");
     expect(handbook.markdown).toContain("[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查)");
     expect(handbook.toc).toEqual(
       expect.arrayContaining([
-        { id: "faq-quick-reference", level: 2, title: "0. 常见问题速查" }
+        { id: "faq-quick-reference", level: 2, title: "0. 常见问题速查" },
+        { id: "overview-action-required", level: 4, title: "系统概览待处理事项" }
       ])
     );
   });

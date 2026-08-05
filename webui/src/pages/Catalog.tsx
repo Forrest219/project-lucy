@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { SelectField } from "../components/SelectField";
 import { StatusBadge } from "../components/StatusBadge";
@@ -16,8 +16,23 @@ const STATUS_LABELS: Record<CompletionStatus, string> = {
   validation_failed: "校验失败"
 };
 
+type StatusFilter = CompletionStatus | "all" | "incomplete";
+
 function unique(values: string[]) {
   return Array.from(new Set(values)).sort();
+}
+
+function parseStatusParam(raw: string | null): StatusFilter {
+  if (!raw || raw === "all") return "all";
+  if (raw === "incomplete") return "incomplete";
+  if (raw in STATUS_LABELS) return raw as CompletionStatus;
+  return "all";
+}
+
+function matchesStatusFilter(completion: CompletionStatus, filter: StatusFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "incomplete") return completion !== "done";
+  return completion === filter;
 }
 
 function structureLabel(table: SourceSummary): string {
@@ -73,10 +88,34 @@ function catalogEmptyMessage(total: number): { title: string; detail: string } {
 }
 
 export function Catalog() {
-  const [connection, setConnection] = useState("all");
-  const [schema, setSchema] = useState("all");
-  const [status, setStatus] = useState<CompletionStatus | "all">("all");
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Spec 100 §7.1: URL is the single source of truth so deep links / Back work while mounted.
+  const connection = searchParams.get("connection") ?? "all";
+  const schema = searchParams.get("schema") ?? "all";
+  const status = parseStatusParam(searchParams.get("completion"));
+  const search = searchParams.get("q") ?? "";
+
+  function patchSearchParams(patch: {
+    connection?: string;
+    schema?: string;
+    completion?: StatusFilter;
+    q?: string;
+  }) {
+    const next = new URLSearchParams(searchParams);
+    const apply = (key: string, value: string | undefined, clearWhen: string) => {
+      if (value === undefined) return;
+      if (!value || value === clearWhen) next.delete(key);
+      else next.set(key, value);
+    };
+    apply("connection", patch.connection, "all");
+    apply("schema", patch.schema, "all");
+    apply("completion", patch.completion, "all");
+    apply("q", patch.q !== undefined ? patch.q.trim() : undefined, "");
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }
+
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.sources,
     queryFn: () => apiGet<SourcesResponse>("/api/sources")
@@ -107,6 +146,7 @@ export function Catalog() {
   const statusOptions = useMemo(
     () => [
       { value: "all", label: "全部状态" },
+      { value: "incomplete", label: "未完成" },
       ...(Object.entries(STATUS_LABELS) as [CompletionStatus, string][]).map(([value, label]) => ({ value, label }))
     ],
     []
@@ -114,8 +154,9 @@ export function Catalog() {
 
   useEffect(() => {
     if (schema !== "all" && !schemas.includes(schema)) {
-      setSchema("all");
+      patchSearchParams({ schema: "all" });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset invalid schema when options change
   }, [schema, schemas]);
 
   const filtered = useMemo(() => {
@@ -127,7 +168,7 @@ export function Catalog() {
       if (schema !== "all" && table.schema !== schema) {
         return false;
       }
-      if (status !== "all" && table.completion !== status) {
+      if (!matchesStatusFilter(table.completion, status)) {
         return false;
       }
       if (!needle) {
@@ -171,7 +212,13 @@ export function Catalog() {
           <div className="pl-whitelist-filter-area">
             <label className="grid gap-1.5 text-sm pl-whitelist-search">
               <span>搜索</span>
-              <input className="pl-input pl-whitelist-search-input notranslate" translate="no" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索表名或字段名..." />
+              <input
+                className="pl-input pl-whitelist-search-input notranslate"
+                translate="no"
+                value={search}
+                onChange={(event) => patchSearchParams({ q: event.target.value })}
+                placeholder="搜索表名或字段名..."
+              />
             </label>
             <label className="grid gap-1.5 text-sm">
               <span className="notranslate" translate="no">连接筛选</span>
@@ -180,18 +227,33 @@ export function Catalog() {
                 translate="no"
                 ariaLabel="连接筛选"
                 value={connection}
-                onValueChange={setConnection}
+                onValueChange={(value) => patchSearchParams({ connection: value, schema: "all" })}
                 options={connectionOptions}
                 placeholder="全部连接"
               />
             </label>
             <label className="grid gap-1.5 text-sm">
               <span className="notranslate" translate="no">Schema 筛选</span>
-              <SelectField className="notranslate pl-catalog-filter-select" translate="no" ariaLabel="Schema 筛选" value={schema} onValueChange={setSchema} options={schemaOptions} placeholder="全部 Schema" />
+              <SelectField
+                className="notranslate pl-catalog-filter-select"
+                translate="no"
+                ariaLabel="Schema 筛选"
+                value={schema}
+                onValueChange={(value) => patchSearchParams({ schema: value })}
+                options={schemaOptions}
+                placeholder="全部 Schema"
+              />
             </label>
             <label className="grid gap-1.5 text-sm">
               <span>语义状态</span>
-              <SelectField className="pl-catalog-filter-select" ariaLabel="语义状态" value={status} onValueChange={(v) => setStatus(v as CompletionStatus | "all")} options={statusOptions} placeholder="全部状态" />
+              <SelectField
+                className="pl-catalog-filter-select"
+                ariaLabel="语义状态"
+                value={status}
+                onValueChange={(v) => patchSearchParams({ completion: v as StatusFilter })}
+                options={statusOptions}
+                placeholder="全部状态"
+              />
             </label>
           </div>
           <div className="pl-whitelist-toolbar-actions">

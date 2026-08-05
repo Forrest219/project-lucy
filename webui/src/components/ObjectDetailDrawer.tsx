@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../lib/apiClient";
+import { DecisionReasonCell } from "./DecisionReasonCell";
 import {
   buildObjectDetailSearch,
   clearObjectDetailSearch,
@@ -366,7 +367,10 @@ function AuditEventDetailBody({
       <DetailRow label="用户" value={entry.userId} notranslate />
       <DetailRow label="工具" value={entry.tool} notranslate />
       <DetailRow label="状态" value={entry.outcome} />
-      <DetailRow label="裁决原因" value={entry.decisionReason ?? "—"} />
+      <div className="grid grid-cols-[120px_minmax(0,1fr)] items-baseline gap-3">
+        <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">裁决原因</span>
+        <DecisionReasonCell code={entry.decisionReason} />
+      </div>
       <DetailRow label="耗时" value={`${entry.durationMs}ms`} />
       <DetailRow label="关联表" value={entry.tables?.join(", ") ?? "—"} notranslate />
       <DetailRow label="请求 ID" value={String(entry.requestId)} notranslate />

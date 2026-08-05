@@ -15,6 +15,7 @@ import type {
   AuditTurnsResponse
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { DecisionReasonCell } from "../../components/DecisionReasonCell";
 
 // 202608-01 — Trace / Evidence Kernel read model
 type LucySpanTypeView =
@@ -445,6 +446,22 @@ export function TraceLink({ traceId }: { traceId: string }) {
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
+
+function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "argsSummary">): string {
+  const params = new URLSearchParams({
+    agentId: entry.userId,
+    tool: entry.tool,
+    mode: "dry-run"
+  });
+  if (entry.argsSummary && typeof entry.argsSummary === "object") {
+    try {
+      params.set("args", JSON.stringify(entry.argsSummary));
+    } catch {
+      // ignore non-serializable args
+    }
+  }
+  return `/admin/mcp-playground?${params.toString()}`;
+}
 type AuditTab = "turns" | "calls";
 type WindowHours = 24 | 168;
 
@@ -728,7 +745,20 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
         <td>{entry.userId}</td>
         <td className="pl-audit-table-mono">{entry.tool}</td>
         <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
-        <td className="pl-audit-table-muted">{entry.decisionReason ?? "—"}</td>
+        <td className="pl-audit-table-muted">
+          <DecisionReasonCell code={entry.decisionReason} />
+          {entry.outcome === "denied" ? (
+            <Link
+              to={playgroundReplayHref(entry)}
+              className="pl-inline-link notranslate mt-1 inline-block text-xs"
+              translate="no"
+              data-testid={`audit-replay-playground-${entry.id}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              在调试台复现
+            </Link>
+          ) : null}
+        </td>
         <td>
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
@@ -800,7 +830,20 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
               {entry.decisionReason && (
                 <div>
                   <span className="font-medium">裁决原因：</span>
-                  <span className="ml-2 text-fg-muted font-mono">{entry.decisionReason}</span>
+                  <div className="ml-2 inline-block align-top">
+                    <DecisionReasonCell code={entry.decisionReason} />
+                  </div>
+                </div>
+              )}
+              {entry.outcome === "denied" && (
+                <div>
+                  <Link
+                    to={playgroundReplayHref(entry)}
+                    className="pl-inline-link notranslate"
+                    translate="no"
+                  >
+                    在调试台复现
+                  </Link>
                 </div>
               )}
               {entry.roleIds && (

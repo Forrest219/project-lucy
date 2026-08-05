@@ -33,6 +33,7 @@ function renderHelp(path = "/help") {
               { id: "system-overview", level: 2, title: "1. 系统概述与架构拓扑" },
               { id: "quick-start", level: 2, title: "2. 快速上手" },
               { id: "deployment-checklist", level: 3, title: "3.1 部署向导与上线检查" },
+              { id: "overview-action-required", level: 4, title: "系统概览待处理事项" },
               { id: "database-connections", level: 3, title: "3.2 数据库接入" },
               {
                 id: "database-connection-boundary",
@@ -100,6 +101,8 @@ function renderHelp(path = "/help") {
               "| 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |",
               "| 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |",
               "| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |",
+              "| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：本地语义表总数减去 `completion` 为 `done` 的表；不是按字段条数。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |",
+              "| 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录；`ACL` 看近 7 天 `denied` 汇总。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |",
               "",
               "### 0.2 面向管理员",
               "",
@@ -144,6 +147,7 @@ function renderHelp(path = "/help") {
               "| 访问治理 | Agent | `/admin/agents` | 配置每个 Agent 能用哪些 MCP 工具和访问哪些表 |",
               "| 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |",
               "| 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |",
+              "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 tools/list 试调 |",
               "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |",
               "",
               "> 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。",
@@ -159,6 +163,10 @@ function renderHelp(path = "/help") {
               "| 步骤 | Ready 条件 | 检查方法 | 异常处理 |",
               "|---|---|---|---|",
               "| 1 | `ktx.yaml` 已存在 | 查看项目根目录 | 补齐配置 |",
+              "",
+              "#### 系统概览待处理事项",
+              "",
+              "「待处理事项」按表计数：总数减去 `completion` 为 `done` 的表。",
               "",
               "### 3.2 数据库接入",
               "",
@@ -756,7 +764,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 16 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 17 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（5\+1 侧栏地图）/ })
@@ -775,7 +783,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(16);
+    expect(bodyRows.length).toBe(17);
 
     // Group column (1st cell of each body row) must match navGroups[*].title
     // for rows 2–14, plus topLevelEntry.label for row 1. Use the shared
@@ -788,7 +796,7 @@ describe("HelpCenter", () => {
       expect(tr.querySelector("td")?.textContent).toBe(expectedGroups[idx]);
     });
 
-    // Path column (3rd cell) must be wrapped in <code> for each of the 16
+    // Path column (3rd cell) must be wrapped in <code> for each of the 17
     // sidebar-visible entries — translation defense contract.
     const expectedPaths = [
       topLevelEntry.to,

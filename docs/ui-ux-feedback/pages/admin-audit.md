@@ -351,3 +351,29 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 94 / `wo-202608-27` 已落地（本轮不做浏览器验证）。
+
+
+## UX-ADMIN-AUDIT-018: 裁决原因仅机器码、缺少修复深链
+
+Status: Fixed
+Route: /admin/audit?tab=calls
+Area: 调用流水裁决原因列 / Drawer
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+调用流水与 Drawer 展示原始 `decision_reason` 码（如 `tool_forbidden`），缺少中文主文案；denied 行无法一跳到 MCP 调试台或 Role 修复面。
+
+### Expected
+- 主行中文裁决原因 + 次行机器码（`notranslate`）。
+- denied 行提供「在调试台复现」等 remediation 深链（Spec 99）。
+
+### Browser Check
+1. Open calls tab with denied rows.
+2. Verify Chinese primary label and code secondary line.
+3. Follow remediation link to `/admin/mcp-playground` with context (after Spec 99 UI exists).
+
+### Notes
+- Spec: `webui/docs/99-mcp-playground-acl-decision-visibility-spec.md`
+- Plan: `webui/docs/plans/wo-202608-32-mcp-playground-acl-decision-visibility.md`
+- Fix（2026-08-05）: `DecisionReasonCell` 双行展示 + 「在调试台复现」深链。本轮不做浏览器验证，状态保持 `Fixed`。

@@ -88,6 +88,8 @@
 | [96-admin-config-audit-table-filter-polish-spec.md](96-admin-config-audit-table-filter-polish-spec.md) | `/admin/config-audit` 固定 20 行、`pl-data-grid`、中文业务字段、时间筛选与快捷窗口 | 产品 / UX / Frontend / API |
 | [97-admin-config-audit-header-export-parity-spec.md](97-admin-config-audit-header-export-parity-spec.md) | `/admin/config-audit` 删页头「访问日志」；CSV 与主表 7 列中文对齐；文件名精确到秒 | 产品 / UX / Frontend / API |
 | [98-agent-admin-kpi-column-order-and-identity-header-spec.md](98-agent-admin-kpi-column-order-and-identity-header-spec.md) | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 | 产品 / UX / Frontend |
+| [99-mcp-playground-acl-decision-visibility-spec.md](99-mcp-playground-acl-decision-visibility-spec.md) | MCP 调试台：ACL 裁决预览、裁决原因双行可读化、必达 `tools/list` smoke（Implemented v1.1） | 产品 / API / UX / 安全 / Frontend |
+| [100-overview-health-action-deeplink-loop-spec.md](100-overview-health-action-deeplink-loop-spec.md) | `/overview` 深链 Registry 闭环；Catalog query 原子交付；回写 refetch；Attu 指标卡 icon（Implemented v1.2） | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

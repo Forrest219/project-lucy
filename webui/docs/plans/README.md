@@ -143,6 +143,8 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-29-admin-config-audit-table-filter-polish.md](wo-202608-29-admin-config-audit-table-filter-polish.md) | 202608-29 | `/admin/config-audit` 固定 20 行、`pl-data-grid`、中文业务字段、时间筛选与快捷窗口 |
 | [wo-202608-30-admin-config-audit-header-export-parity.md](wo-202608-30-admin-config-audit-header-export-parity.md) | 202608-30 | `/admin/config-audit` 删页头「访问日志」；CSV 与主表对齐；文件名精确到秒 |
 | [wo-202608-31-agent-admin-kpi-column-order-and-identity-header.md](wo-202608-31-agent-admin-kpi-column-order-and-identity-header.md) | 202608-31 | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 |
+| [wo-202608-32-mcp-playground-acl-decision-visibility.md](wo-202608-32-mcp-playground-acl-decision-visibility.md) | 202608-32 | Spec 99 v1.1：MCP 调试台 + 裁决双行 + `tools/list` smoke 必达（Implemented） |
+| [wo-202608-33-overview-health-action-deeplink-loop.md](wo-202608-33-overview-health-action-deeplink-loop.md) | 202608-33 | Spec 100 v1.2：Registry / Catalog 原子交付 / 回写 refetch / 指标卡 icon（Implemented） |
 
 ### 202608 Governance & Observability — 并行启动建议
 

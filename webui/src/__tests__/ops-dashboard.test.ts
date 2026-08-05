@@ -93,7 +93,7 @@ describe("opsDashboard view model", () => {
     expect(severityOrder.ready).toBeLessThan(severityOrder.info);
   });
 
-  it("keeps action items fact-based and free of fabricated workflow metadata", () => {
+  it("keeps action items fact-based with required impact/evidence and Registry URLs", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 2, total: 16 },
       pendingCatalogItems: 4,
@@ -106,13 +106,18 @@ describe("opsDashboard view model", () => {
       expect(item.description).toBeTruthy();
       expect(item.actionText).toBeTruthy();
       expect(item.actionUrl).toBeTruthy();
+      expect(item.impact).toBeTruthy();
+      expect(item.evidence).toBeTruthy();
       expect("owner" in item).toBe(false);
-      expect("evidence" in item).toBe(false);
       expect("updatedAtLabel" in item).toBe(false);
-      expect("impact" in item).toBe(false);
+      expect(item.actionUrl.includes("status=partial")).toBe(false);
+      expect(item.actionUrl === "/?status=partial").toBe(false);
     }
+    const semantic = items.find((item) => item.id === "semantic-gap");
+    expect(semantic?.actionUrl).toBe("/catalog?completion=incomplete");
     const acl = items.find((item) => item.id === "acl-deny");
     expect(acl?.severity).toBe("critical");
+    expect(acl?.actionUrl).toBe("/admin/audit?tab=calls&outcome=denied&hours=168");
   });
 
   it("labels a large semantic gap as critical and a small gap as warning", () => {

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
   Boxes,
+  Bot,
   Cable,
   ChartNoAxesCombined,
   ChevronRight,
@@ -11,18 +12,18 @@ import {
   Gauge,
   History,
   LayoutDashboard,
-  Network,
   Rocket,
   Search,
+  Share2,
   ShieldAlert,
   ShieldCheck,
   TableProperties,
-  Users,
   ClipboardList,
   Activity,
   BookOpen,
   KeyRound,
   ScrollText,
+  Terminal,
   type LucideIcon
 } from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
@@ -38,6 +39,7 @@ import { AgentDetail } from "../pages/admin/AgentDetail";
 import { NewToken } from "../pages/admin/NewToken";
 import { GovernanceOverview } from "../pages/admin/GovernanceOverview";
 import { Audit } from "../pages/admin/Audit";
+import { McpPlayground } from "../pages/admin/McpPlayground";
 import { ConfigAudit } from "../pages/admin/ConfigAudit";
 import { AuditSources } from "../pages/admin/AuditSources";
 import { RoleList } from "../pages/admin/RoleList";
@@ -122,15 +124,16 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   monitor: ChartNoAxesCombined,
   securityEval: ShieldAlert,
   governanceOverview: Gauge,
-  agents: Users,
+  agents: Bot,
   roles: KeyRound,
   audit: ScrollText,
+  mcpPlayground: Terminal,
   configAudit: ShieldCheck
 };
 
 const GROUP_ICONS: Record<string, LucideIcon> = {
   connections: Database,
-  "semantic-modeling": Network,
+  "semantic-modeling": Share2,
   publish: Rocket,
   evaluation: ChartNoAxesCombined,
   governance: ShieldCheck
@@ -362,7 +365,7 @@ export function AppFrame() {
               translate="no"
               data-testid="sidebar-version"
             >
-              Lucy v0.16
+              v0.16
             </span>
           </div>
         </div>
@@ -396,6 +399,7 @@ export function AppFrame() {
             <Route path="/admin/roles/:roleId" element={<RoleDetail />} />
             <Route path="/admin/audit" element={<Audit />} />
             <Route path="/admin/audit-sources" element={<AuditSources />} />
+            <Route path="/admin/mcp-playground" element={<McpPlayground />} />
             <Route path="/admin/config-audit" element={<ConfigAudit />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />

@@ -77,6 +77,7 @@ import { registerTokenRoutes } from "./admin/tokens.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
+import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
@@ -1279,6 +1280,7 @@ export function buildServer() {
   registerTokenRoutes(app);
   registerAuditRoutes(app);
   registerMcpToolsRoutes(app);
+  registerMcpPlaygroundRoutes(app);
   registerGovernanceObservabilityRoutes(app);
   registerCaseRoutes(app);
   registerSecurityCandidateRoutes(app);

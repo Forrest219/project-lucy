@@ -17,6 +17,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/系统概述与架构拓扑/, "system-overview"],
   [/快速上手/, "quick-start"],
   [/部署向导与上线检查/, "deployment-checklist"],
+  [/系统概览待处理事项/, "overview-action-required"],
   [/数据库接入/, "database-connections"],
   [/WebUI 与 ktx\.yaml 的职责边界|职责边界|WebUI Boundary/i, "database-connection-boundary"],
   [/连接形态与配置字段|Connection Shape/i, "database-connection-shapes"],
@@ -70,6 +71,8 @@ const DATABASE_OPS_HEADING_TITLES = new Set([
   "新增数据库连接（运维 Runbook）",
   "Agent 可见性与 ACL 同步"
 ]);
+
+const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事项"]);
 
 const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
   "为什么要编写语义 YAML",
@@ -147,12 +150,18 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
     const yamlRunbookSubheading = rawLevel === 4 && /^3\.7\.\d+/.test(title);
     const cleanTitle = title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
     const databaseOpsSubheading = rawLevel === 4 && DATABASE_OPS_HEADING_TITLES.has(cleanTitle);
+    const deploymentChecklistSubheading =
+      rawLevel === 4 && DEPLOYMENT_CHECKLIST_HEADING_TITLES.has(cleanTitle);
     const semanticAuthoringSubheading =
       rawLevel === 4 && SEMANTIC_AUTHORING_HEADING_TITLES.has(cleanTitle);
     if (
       !match ||
       rawLevel < 2 ||
-      (rawLevel > 3 && !yamlRunbookSubheading && !databaseOpsSubheading && !semanticAuthoringSubheading)
+      (rawLevel > 3 &&
+        !yamlRunbookSubheading &&
+        !databaseOpsSubheading &&
+        !deploymentChecklistSubheading &&
+        !semanticAuthoringSubheading)
     )
       continue;
     // 3.7.x 子标题为兼容性保留 level 3；3.2.x 运维 Runbook 子标题按真实 level 4 输出。

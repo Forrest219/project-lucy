@@ -743,8 +743,10 @@ describe("Onboarding", () => {
       const itemText = item.textContent ?? "";
       expect(itemText).toMatch(/高风险|待处理|提醒/);
       expect(itemText).toMatch(/语义覆盖|Catalog 同步|语义变更|评测运行|访问日志/);
+      expect(itemText).toMatch(/影响：/);
+      expect(itemText).toMatch(/证据来源：/);
       expect(itemText).not.toMatch(/负责人|数据治理组|架构组|语义发布负责人|QA 团队|访问治理组/);
-      expect(itemText).not.toMatch(/更新时间|证据/);
+      expect(itemText).not.toMatch(/更新时间/);
       // Each row carries a lightweight link with the ↗ glyph so the user
       // gets a consistent visual affordance without button chrome.
       // v1.9.x 收口：CTA 链接样式从 pl-btn 改为蓝色文本链接。
