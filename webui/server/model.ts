@@ -174,3 +174,21 @@ export type ConnectionTestDetail = {
   detail?: string;
   reason?: string;
 };
+
+/** Spec 107: one schema row from live DB catalog discovery. */
+export type LiveSchemaSummary = {
+  schema: string;
+  tableCount: number;
+};
+
+/** Spec 107: GET /api/connections/:connId/live-schemas payload. */
+export type LiveSchemasResponse = {
+  status: "ok" | "error";
+  connectionId: string;
+  schemas: LiveSchemaSummary[];
+  fetchedAt: string;
+  cached: boolean;
+  latencyMs?: number;
+  reason?: string;
+  wireProtocol?: "mysql" | "postgres" | "unknown";
+};
