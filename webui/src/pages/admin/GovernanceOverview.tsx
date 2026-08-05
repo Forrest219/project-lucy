@@ -53,12 +53,15 @@ type TokenRow = {
   label: string;
   tokenHashPrefix: string | null;
   lastUsed: string | null;
+  calls: number;
   activeInWindow: boolean;
   configured: boolean;
   auditHref: string;
 };
 
 type WindowHours = 24 | 168;
+
+const RANK_LIMIT = 10;
 
 function MetricCard({
   label,
@@ -70,7 +73,7 @@ function MetricCard({
   label: ReactNode;
   value: string | number;
   subline?: ReactNode;
-  hint: ReactNode;
+  hint?: ReactNode;
   testId?: string;
 }) {
   return (
@@ -78,16 +81,9 @@ function MetricCard({
       <span>{label}</span>
       <strong>{value}</strong>
       {subline ? <small>{subline}</small> : null}
-      <small>{hint}</small>
+      {hint ? <small>{hint}</small> : null}
     </div>
   );
-}
-
-function formatTime(value: string | null): string {
-  if (!value) return "未访问";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "未访问";
-  return date.toLocaleString("zh-CN");
 }
 
 function formatRate(value: number): string {
@@ -96,6 +92,45 @@ function formatRate(value: number): string {
 
 function windowLabel(hours: WindowHours): string {
   return hours === 24 ? "近 24 小时" : "近 7 天";
+}
+
+function RankingBarList({
+  rows,
+  emptyLabel,
+  testId
+}: {
+  rows: Array<{ key: string; label: ReactNode; calls: number }>;
+  emptyLabel: ReactNode;
+  testId: string;
+}) {
+  const maxCalls = rows.reduce((max, row) => Math.max(max, row.calls), 0);
+  if (rows.length === 0 || maxCalls <= 0) {
+    return (
+      <div className="pl-usage-rank-body" data-testid={`${testId}-body`}>
+        <p className="pl-usage-rank-empty" data-testid={testId}>
+          {emptyLabel}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="pl-usage-rank-body" data-testid={`${testId}-body`}>
+      <ul className="pl-usage-rank-list" data-testid={testId}>
+        {rows.map((row) => {
+          const widthPct = Math.max(4, Math.round((row.calls / maxCalls) * 100));
+          return (
+            <li className="pl-usage-rank-row" key={row.key}>
+              <div className="pl-usage-rank-label">{row.label}</div>
+              <div className="pl-usage-rank-value tabular-nums">{row.calls}</div>
+              <div className="pl-usage-rank-track" aria-hidden="true">
+                <div className="pl-usage-rank-bar" style={{ width: `${widthPct}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 export function GovernanceOverview() {
@@ -116,29 +151,78 @@ export function GovernanceOverview() {
 
   const usage = overview?.usageOverview;
   const popularTables = overview?.popularTables ?? [];
-  const tableStatsSource = overview?.tableStatsSource;
   const agents = useMemo(() => {
     const rows = [...(agentsData?.agents ?? [])];
     rows.sort((a, b) => {
       if (b.calls !== a.calls) return b.calls - a.calls;
       return (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "");
     });
-    return rows;
+    return rows.filter((row) => row.calls > 0).slice(0, RANK_LIMIT);
   }, [agentsData?.agents]);
   const tokens = useMemo(() => {
     const rows = [...(tokensData?.tokens ?? [])];
-    rows.sort((a, b) => (b.lastUsed ?? "").localeCompare(a.lastUsed ?? ""));
-    return rows;
+    rows.sort((a, b) => {
+      if ((b.calls ?? 0) !== (a.calls ?? 0)) return (b.calls ?? 0) - (a.calls ?? 0);
+      return (b.lastUsed ?? "").localeCompare(a.lastUsed ?? "");
+    });
+    return rows.filter((row) => (row.calls ?? 0) > 0).slice(0, RANK_LIMIT);
   }, [tokensData?.tokens]);
+  const tables = useMemo(
+    () => popularTables.filter((row) => row.calls > 0).slice(0, RANK_LIMIT),
+    [popularTables]
+  );
 
   const windowText = windowLabel(hours);
   const p95Value = (usage?.calls ?? 0) > 0 ? `${usage?.p95LatencyMs ?? 0} ms` : "—";
-  const p95Hint = (usage?.calls ?? 0) > 0 ? "95% 的访问低于此值" : "当前窗口无调用";
+  const p95Hint = (usage?.calls ?? 0) > 0 ? (
+    <span>95% 的请求在此时间内完成（<span className="notranslate" translate="no">P95</span>）</span>
+  ) : (
+    "当前窗口无调用"
+  );
+  const authorizedTableHint = (
+    <span>角色权限中已明确授权的表{usage?.hasOpenEndedTableScope ? "（含前缀授权）" : ""}</span>
+  );
   const activeTableRate = usage
     ? usage.configuredTableCount > 0
       ? formatRate(Math.round((usage.activeTableCount / usage.configuredTableCount) * 1000) / 10)
       : formatRate(0)
     : formatRate(0);
+
+  const agentRankRows = agents.map((agent) => ({
+    key: agent.id,
+    calls: agent.calls,
+    label: (
+      <Link
+        className="pl-usage-rank-link notranslate"
+        translate="no"
+        to={agent.agentHref}
+      >
+        {agent.name || agent.id}
+      </Link>
+    )
+  }));
+  const tokenRankRows = tokens.map((token) => ({
+    key: `${token.agentId}-${token.label}-${token.tokenHashPrefix ?? "none"}`,
+    calls: token.calls ?? 0,
+    label: (
+      <Link
+        className="pl-usage-rank-link notranslate"
+        translate="no"
+        to={`/admin/agents/${encodeURIComponent(token.agentId)}`}
+      >
+        {token.label}
+      </Link>
+    )
+  }));
+  const tableRankRows = tables.map((row) => ({
+    key: row.table,
+    calls: row.calls,
+    label: (
+      <span className="notranslate" translate="no">
+        {row.table}
+      </span>
+    )
+  }));
 
   return (
     <div className="pl-page-stack" data-testid="governance-usage-overview">
@@ -150,30 +234,31 @@ export function GovernanceOverview() {
           </span>
         }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex overflow-hidden rounded-md border border-border-default" role="group" aria-label="时间窗口">
-              <button
-                type="button"
-                className={`pl-btn text-sm ${hours === 24 ? "pl-btn--primary" : "pl-btn--secondary"}`}
-                aria-pressed={hours === 24}
-                data-testid="governance-window-24h"
-                onClick={() => setHours(24)}
-              >
-                24 小时
-              </button>
-              <button
-                type="button"
-                className={`pl-btn text-sm ${hours === 168 ? "pl-btn--primary" : "pl-btn--secondary"}`}
-                aria-pressed={hours === 168}
-                data-testid="governance-window-7d"
-                onClick={() => setHours(168)}
-              >
-                7 天
-              </button>
-            </div>
-            <Link className="pl-btn pl-btn--secondary text-sm" to="/admin/roles">
-              管理角色
-            </Link>
+          <div
+            className="pl-segmented-control pl-segmented-control--cols-2"
+            role="tablist"
+            aria-label="时间窗口"
+          >
+            <button
+              type="button"
+              role="tab"
+              className={hours === 24 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+              aria-selected={hours === 24}
+              data-testid="governance-window-24h"
+              onClick={() => setHours(24)}
+            >
+              24 小时
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={hours === 168 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+              aria-selected={hours === 168}
+              data-testid="governance-window-7d"
+              onClick={() => setHours(168)}
+            >
+              7 天
+            </button>
           </div>
         }
       />
@@ -186,10 +271,9 @@ export function GovernanceOverview() {
           testId="metric-agent-count"
         />
         <MetricCard
-          label={<span>活跃 <span className="notranslate" translate="no">Agent</span></span>}
+          label={<span>{windowText}活跃 <span className="notranslate" translate="no">Agent</span></span>}
           value={usage?.activeAgentCount ?? 0}
           subline={<span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span>}
-          hint={<span>{windowText}有调用</span>}
           testId="metric-active-agent-count"
         />
         <MetricCard
@@ -199,206 +283,88 @@ export function GovernanceOverview() {
           testId="metric-configured-token-count"
         />
         <MetricCard
-          label={<span>活跃 <span className="notranslate" translate="no">Token</span></span>}
+          label={<span>{windowText}活跃 <span className="notranslate" translate="no">Token</span></span>}
           value={usage?.activeTokenCount ?? 0}
           subline={<span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span>}
-          hint={<span>{windowText}有使用</span>}
           testId="metric-active-token-count"
         />
         <MetricCard
-          label="配置表"
+          label="授权表"
           value={usage?.configuredTableCount ?? 0}
-          hint={<span>角色已授权{usage?.hasOpenEndedTableScope ? "（含前缀授权）" : ""}</span>}
+          hint={authorizedTableHint}
           testId="metric-configured-table-count"
         />
         <MetricCard
-          label="活跃表"
+          label={<span>{windowText}活跃表</span>}
           value={usage?.activeTableCount ?? 0}
           subline={<span>活跃率 {activeTableRate}</span>}
-          hint={<span>{windowText}有访问</span>}
           testId="metric-active-table-count"
         />
         <MetricCard
-          label="调用量"
+          label={<span>{windowText}调用量</span>}
           value={usage?.calls ?? 0}
-          hint={<span>{windowText} <span className="notranslate" translate="no">MCP</span> 调用</span>}
+          hint={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
           testId="metric-calls"
         />
         <MetricCard
-          label={<span>响应上限（<span className="notranslate" translate="no">P95</span>）</span>}
+          label="多数请求耗时"
           value={p95Value}
           hint={p95Hint}
           testId="metric-p95-latency"
         />
       </div>
 
-      <section className="pl-panel" data-testid="governance-agent-usage">
-        <div className="pl-section-heading">
-          <div>
-            <h2 className="pl-panel-title notranslate" translate="no">Agent 使用排行</h2>
-            <p className="pl-notice">
-              按近窗口调用量排序；活跃 <span className="notranslate" translate="no">Token</span> 与顶部窗口一致。
-            </p>
+      <div className="pl-usage-rank-grid" data-testid="governance-usage-rank-grid">
+        <section className="pl-panel" data-testid="governance-agent-usage">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title">
+                <span className="notranslate" translate="no">Agent</span> 调用排行 · {windowText}
+              </h2>
+              <p className="pl-notice">
+                看哪些 <span className="notranslate" translate="no">Agent</span> 调用最多，便于发现主力与闲置。
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table
-            className="pl-data-grid pl-data-table pl-usage-overview-table"
-            data-testid="governance-agent-table"
-          >
-            <thead>
-              <tr>
-                <th className="notranslate" translate="no">Agent</th>
-                <th>最近访问</th>
-                <th>近窗口调用</th>
-                <th>平均响应时长</th>
-                <th className="notranslate" translate="no">活跃 Token</th>
-                <th className="notranslate" translate="no">配置 Token</th>
-                <th>审计</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agents.map((agent) => (
-                <tr key={agent.id}>
-                  <td>
-                    <div className="pl-usage-overview-table-name">
-                      <Link
-                        className="pl-usage-overview-table-name-link notranslate"
-                        translate="no"
-                        to={agent.agentHref}
-                      >
-                        {agent.name || agent.id}
-                      </Link>
-                      <span className="pl-usage-overview-table-meta notranslate" translate="no">
-                        {agent.id}
-                      </span>
-                    </div>
-                  </td>
-                  <td>{formatTime(agent.lastSeen)}</td>
-                  <td className="pl-usage-overview-table-num">{agent.calls}</td>
-                  <td className="pl-usage-overview-table-num">{agent.avgLatencyMs} ms</td>
-                  <td className="pl-usage-overview-table-num">{agent.activeTokenCount}</td>
-                  <td className="pl-usage-overview-table-num">{agent.configuredTokenCount}</td>
-                  <td>
-                    <Link className="pl-row-action-link" to={agent.auditHref}>
-                      查看日志
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {agents.length === 0 ? (
-                <tr>
-                  <td className="py-6 text-center text-fg-muted" colSpan={7}>
-                    暂无 <span className="notranslate" translate="no">Agent</span> 数据
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <RankingBarList
+            rows={agentRankRows}
+            emptyLabel={<span>{windowText}暂无调用</span>}
+            testId="governance-agent-rank"
+          />
+        </section>
 
-      <section className="pl-panel" data-testid="governance-token-usage">
-        <div className="pl-section-heading">
-          <div>
-            <h2 className="pl-panel-title notranslate" translate="no">Token 使用摘要</h2>
-            <p className="pl-notice">按最近访问排序；不重复展示顶部 KPI。</p>
+        <section className="pl-panel" data-testid="governance-token-usage">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title">
+                <span className="notranslate" translate="no">Token</span> 调用排行 · {windowText}
+              </h2>
+              <p className="pl-notice">
+                看哪些 <span className="notranslate" translate="no">Token</span> 调用最多，便于回收闲置凭证。
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table
-            className="pl-data-grid pl-data-table pl-usage-overview-table"
-            data-testid="governance-token-table"
-          >
-            <thead>
-              <tr>
-                <th className="notranslate" translate="no">Token</th>
-                <th className="notranslate" translate="no">Agent</th>
-                <th>最近访问</th>
-                <th>窗口内活跃</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.map((token) => (
-                <tr key={`${token.agentId}-${token.label}-${token.tokenHashPrefix ?? "none"}`}>
-                  <td>
-                    <div className="pl-usage-overview-table-name">
-                      <span className="notranslate" translate="no">{token.label}</span>
-                      <span className="pl-usage-overview-table-meta notranslate" translate="no">
-                        {token.tokenHashPrefix ?? "unknown"}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <Link
-                      className="pl-usage-overview-table-name-link notranslate"
-                      translate="no"
-                      to={`/admin/agents/${encodeURIComponent(token.agentId)}`}
-                    >
-                      {token.agentId}
-                    </Link>
-                  </td>
-                  <td>{formatTime(token.lastUsed)}</td>
-                  <td>
-                    <span className={`pl-status-badge ${token.activeInWindow ? "pl-status-done" : "pl-status-partial"}`}>
-                      {token.activeInWindow ? "活跃" : "未活跃"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {tokens.length === 0 ? (
-                <tr>
-                  <td className="py-6 text-center text-fg-muted" colSpan={4}>
-                    暂无 <span className="notranslate" translate="no">Token</span> 配置
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <RankingBarList
+            rows={tokenRankRows}
+            emptyLabel={<span>{windowText}暂无调用</span>}
+            testId="governance-token-rank"
+          />
+        </section>
 
-      <section className="pl-panel" data-testid="governance-popular-tables">
-        <div className="pl-section-heading">
-          <div>
-            <h2 className="pl-panel-title">最受访问表（Top 10）</h2>
-            <p className="pl-notice">
-              {windowText}按调用次数排序。
-              {tableStatsSource === "access_log_sources" ? "仅统计已结构化访问记录。" : ""}
-            </p>
+        <section className="pl-panel" data-testid="governance-popular-tables">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title">表调用排行 · {windowText}</h2>
+              <p className="pl-notice">看哪些表被访问最多，便于评估授权与热度。</p>
+            </div>
           </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table
-            className="pl-data-grid pl-data-table pl-usage-overview-table"
-            data-testid="governance-popular-tables-table"
-          >
-            <thead>
-              <tr>
-                <th>表名</th>
-                <th>调用次数</th>
-                <th>最近访问</th>
-              </tr>
-            </thead>
-            <tbody>
-              {popularTables.map((row) => (
-                <tr key={row.table}>
-                  <td className="notranslate" translate="no">{row.table}</td>
-                  <td className="pl-usage-overview-table-num">{row.calls}</td>
-                  <td>{formatTime(row.lastSeen)}</td>
-                </tr>
-              ))}
-              {popularTables.length === 0 ? (
-                <tr>
-                  <td className="py-6 text-center text-fg-muted" colSpan={3}>
-                    暂无表访问数据（{windowText}）
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <RankingBarList
+            rows={tableRankRows}
+            emptyLabel={<span>{windowText}暂无调用</span>}
+            testId="governance-table-rank"
+          />
+        </section>
+      </div>
     </div>
   );
 }

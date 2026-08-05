@@ -39,7 +39,9 @@ docs/ui-ux-feedback/
 | Catalog / Semantic Asset | `/catalog`, `/catalog/:conn/:schema/:table` | [`pages/catalog.md`](pages/catalog.md) |
 | Connections | `/connections`, `/connections/enabled-tables` | [`pages/connections.md`](pages/connections.md) |
 | Business Wiki | `/wiki` | [`pages/wiki.md`](pages/wiki.md) |
+| Publish History | `/publish/history` | [`pages/publish-history.md`](pages/publish-history.md) |
 | Agent Admin | `/admin/agents`, `/admin/roles` | [`pages/admin-agents.md`](pages/admin-agents.md) |
+| Admin Governance / Usage Overview | `/admin/usage`（旧 `/admin/governance` redirect） | [`pages/admin-governance.md`](pages/admin-governance.md) |
 | Global Shell | all WebUI routes, including `/overview` | [`pages/global-shell.md`](pages/global-shell.md) |
 | Overview | `/overview` | [`pages/overview.md`](pages/overview.md) |
 
@@ -47,6 +49,9 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Admin Governance `/admin/usage` | Spec 86 / `wo-202608-18` 落地：`UX-ADMIN-GOV-017`～`020` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。主路由迁 `/admin/usage`（旧 path redirect）；排行 Top-10 槽位高度；「配置表」→「授权表」；「响应上限（P95）」→「多数请求耗时」。同步术语 §4.5、`06-navigation-ia.md`。验证：`admin-governance-observability.test.tsx`、`navigation.test.ts`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Publish History `/publish/history` | Spec 85 / `wo-202608-17` 落地：新建 `pages/publish-history.md`（`UX-PUBLISH-HISTORY-001`～`005`）→ `Fixed`（本轮不做浏览器验证，结束后只做 code review）。序号/变更范围/规模列；操作列去行内伪快照下载；Header「导出当前语义资产包 (.zip)」；export `require("yaml")` ESM 修复；`pl-data-grid` 轻量收敛。验证：`publish-history.test.tsx`、`api.semantic-asset-export.test.ts`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Admin Governance `/admin/governance` | Spec 84 / `wo-202608-16` 落地：`UX-ADMIN-GOV-010`～`016` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。KPI 窗口进标题；三块改为 1×3 调用排行条形图；Token API `calls`；顶栏 `pl-segmented-control`；删「管理角色」；页面索引补登记 `admin-governance.md`；术语 §4.5 同步。验证：`admin-governance-observability`（前后端）、`lint:terminology`、`build`。 |
 | 2026-08-05 | Admin Governance `/admin/governance` | Spec 82 / `wo-202608-14` 落地：`UX-ADMIN-GOV-009` → `Fixed`（本轮不做浏览器验证）。三表轻量收敛 `pl-data-grid` + `pl-usage-overview-table`（12px 密度、数量 `tabular-nums`、弱 `pl-row-action-link`）；不搬 connections colgroup。验证：`admin-governance-observability.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Business Wiki `/wiki` 阅读态 | Spec 81 / `wo-202608-13` 落地：`UX-WIKI-036`～`037` → `Fixed`（本轮不做浏览器验证）。阅读区 `content-start` 防 grid 拉伸；`编辑` 为末位唯一 primary，`上传覆盖` 降为 ghost。同步跨页面主题 `css grid track stretch` 与治理规则。 |
 | 2026-08-05 | Business Wiki `/wiki` 版本记录 | Spec 80 / `wo-202608-12` 落地：`UX-WIKI-031`～`035` → `Fixed`（本轮不做浏览器验证）。列表优先全宽表；变更说明业务化；当前行无查看/恢复；查看进全宽详情；截图 `assets/wiki/UX-WIKI-031-035-*`。验证：`wiki.test.tsx`、`lint:terminology`、`build`。 |
@@ -117,6 +122,8 @@ docs/ui-ux-feedback/
 | `test / source drift`（测试 fixture 与 source 脱钩） | UX-GLOBAL-SHELL-008 | Open | 跨工单清理 |
 | `version-history list-first`（版本列表优先，预览外置，当前行收敛） | UX-WIKI-031～035 | 5 Fixed | Spec 80 / wo-202608-12，待浏览器复核 |
 | `css grid track stretch`（父级拉高时 auto 行均分，须 `content-start`） | UX-WIKI-006、UX-WIKI-027、UX-WIKI-036 | 1 Verified + 2 Fixed | Spec 79 / 81；`006` 已 Verified |
+| `history table business density`（发布/审计类历史表须展示变更范围与规模，导出不得冒充批次快照） | UX-PUBLISH-HISTORY-001～005 | 5 Fixed | Spec 85 / wo-202608-17，待浏览器复核 |
+| `export entry clarity`（当前工作区资产包导出仅 Header；禁止行内伪历史下载） | UX-PUBLISH-HISTORY-003 | 1 Fixed | Spec 85 / wo-202608-17，待浏览器复核 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 
@@ -160,6 +167,8 @@ docs/ui-ux-feedback/
 - 同一 action group 内的并列维护动作必须同级呈现：默认全部使用 `secondary`，不得把某个并列动作升为 `primary` 造成误导性显著性。只有存在唯一推荐主路径（用户下一步成功率最高且可证）时，才允许单个 `primary`，且同组最多一个；该 primary 应位于组首或组末，并与页面 Spec 声明的主动作一致（Wiki 阅读态为 `编辑`，见 `UX-WIKI-037`）。
 - 可拉伸的 CSS Grid 内容面板（阅读卡片、预览面板、空态容器、库首页等）必须显式 `content-start` / `align-content: start`（或把标题外提到 `auto` 行），禁止依赖默认 `align-content: normal` 在父级被拉高时均分 auto 行，导致标题/正文垂直居中或大块留白。同类已见 `UX-WIKI-006` / `027` / `036`（主题 `css grid track stretch`）。
 - 用户可见文案不得直接暴露内部状态枚举（如 `partial` / `done` / `stale` / `invalid`）；须改写为中文、可理解的影响描述，并尽量给出下一步动作入口。页头 description 只保留“页面能力 + 用户动作价值”，不得写内部实现叙事（如 data agent 可交付状态判断）。
+- 发布 / 审计类历史表必须优先展示业务变更范围（连接、变更源）与规模（文件数、语义源数）；纯运维触发信息不得挤掉主列。手动索引重建且无资产变更时，须用明确空态文案，不得留白。
+- 「导出当前语义资产包」类动作若导出的是当前工作区而非历史批次，只能放在 Header（或页级辅助区）；禁止在历史行内用「下载快照」等文案冒充该批次存档。按 releaseId 的历史包下载未交付前，不得放假按钮。
 
 ## 工作流
 

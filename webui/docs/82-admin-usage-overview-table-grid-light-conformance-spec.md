@@ -1,15 +1,17 @@
 # Admin Usage Overview Table Grid Light Conformance Spec
 
+> **Supersession (2026-08-05):** Spec 84 将本页三块使用列表改为调用排行条形图，**废止**本节对 `/admin/governance` 三表 `pl-data-grid` 的现行实现契约。本文档保留为 Spec 82 交付史；新实现以 `84-admin-usage-overview-activity-rank-and-header-polish-spec.md` 为准。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Admin Usage Overview Table Grid Light Conformance Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
 | 基于材料 | 浏览器评估 `/admin/governance` 与 `/connections` 表格；定位判断「轻量遵从、不必工作台全套」；`webui/docs/design-system/11-components-data-grid.md`；`webui/docs/72-connections-catalog-grid-visual-consistency-spec.md`；`webui/docs/78-admin-usage-overview-ux-refinement-spec.md`；`GovernanceOverview.tsx` |
-| 适用范围 | 指导 `/admin/governance` 三张使用向表格收敛到共享 `pl-data-grid` 基线（轻量遵从）；不把连接工作台列模板原样搬入 |
+| 适用范围 | （历史）指导 `/admin/governance` 三张使用向表格收敛到共享 `pl-data-grid` 基线；现行 UI 见 Spec 84 |
 | 输出位置 | `webui/docs/82-admin-usage-overview-table-grid-light-conformance-spec.md` |
 
 | 字段 | 内容 |
@@ -28,6 +30,7 @@
 | 版本 | 变更 |
 |---|---|
 | v1.0 | 初稿：基于定位评估的轻量遵从范围 |
+| v1.1 | 标注被 Spec 84 废止现行三表实现契约；本文档保留为交付史 |
 
 ## 1. 背景
 

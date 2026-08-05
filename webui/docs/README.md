@@ -73,6 +73,9 @@
 | [80-wiki-version-history-list-first-ux-spec.md](80-wiki-version-history-list-first-ux-spec.md) | Wiki 版本记录列表优先：全宽业务化表格、当前行收敛、查看进入全宽详情（修订 Spec 55 §8.2–8.3 / Spec 74 §9） | 产品 / UX / Frontend |
 | [81-wiki-read-layout-and-header-action-hierarchy-spec.md](81-wiki-read-layout-and-header-action-hierarchy-spec.md) | Wiki 阅读态：正文防 grid 拉伸；Header 唯一 primary 归还给「编辑」 | 产品 / UX / Frontend |
 | [83-wiki-version-history-data-grid-alignment-spec.md](83-wiki-version-history-data-grid-alignment-spec.md) | Wiki 版本记录表接入 `pl-data-grid`、当前行操作列留空、操作按钮行内对齐 | 产品 / UX / Frontend |
+| [84-admin-usage-overview-activity-rank-and-header-polish-spec.md](84-admin-usage-overview-activity-rank-and-header-polish-spec.md) | `/admin/governance` 调用排行 1×3 条形图、KPI 窗口进标题、顶栏 segmented、删「管理角色」（修订 Spec 78/82 列表形态） | 产品 / API / UX / Frontend |
+| [86-admin-usage-overview-route-and-kpi-clarity-spec.md](86-admin-usage-overview-route-and-kpi-clarity-spec.md) | 使用概况迁 `/admin/usage`、排行 Top-10 槽位高度、授权表、多数请求耗时（修订 Spec 78/84 URL Non-Goal） | 产品 / UX / Frontend |
+| [85-publish-history-business-columns-and-export-clarity-spec.md](85-publish-history-business-columns-and-export-clarity-spec.md) | `/publish/history` 序号/变更范围/规模、操作列澄清、Header 导出语义资产包、export ESM 修复、`pl-data-grid` 轻量收敛（修订 Spec 35 §7） | 产品 / UX / Frontend / 后端 |
 
 ## 与原 README 的关键校正
 

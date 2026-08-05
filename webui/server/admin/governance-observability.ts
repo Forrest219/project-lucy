@@ -499,6 +499,26 @@ async function queryActiveTokenPrefixes(hours: number): Promise<Set<string>> {
   return result;
 }
 
+async function queryTokenCallCounts(hours: number): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  try {
+    const db = await getAuditDb();
+    const rows = db.prepare(`
+      SELECT token_hash_prefix, COUNT(*) AS calls
+      FROM access_log
+      WHERE ts >= ?
+        AND token_hash_prefix IS NOT NULL
+      GROUP BY token_hash_prefix
+    `).all(sinceIso(hours)) as Array<{ token_hash_prefix: string; calls: number }>;
+    for (const row of rows) {
+      result.set(row.token_hash_prefix, row.calls);
+    }
+  } catch {
+    // empty map
+  }
+  return result;
+}
+
 /**
  * Canonical display prefix (production writer: hash.slice(0, 19) including `sha256:`).
  * Also returns bare-hex variants so historical/manual rows without scheme still match.
@@ -527,6 +547,14 @@ function lookupLastUsed(lastUsedByPrefix: Map<string, string>, hash: string | un
     if (value && (!best || value > best)) best = value;
   }
   return best;
+}
+
+function lookupTokenCalls(callCountsByPrefix: Map<string, number>, hash: string | undefined): number {
+  let total = 0;
+  for (const candidate of tokenPrefixCandidates(hash)) {
+    total += callCountsByPrefix.get(candidate) ?? 0;
+  }
+  return total;
 }
 
 function isActivePrefix(activePrefixes: Set<string>, hash: string | undefined): boolean {
@@ -806,21 +834,24 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
 
   app.get<{ Querystring: { hours?: string } }>("/api/admin/governance/tokens", async (request) => {
     const hours = boundedHours(request.query.hours ?? String(DEFAULT_HOURS));
-    const [config, lastUsedByPrefix, activePrefixes] = await Promise.all([
+    const [config, lastUsedByPrefix, activePrefixes, callCountsByPrefix] = await Promise.all([
       readAccessConfig(),
       queryTokenLastUsedMap(),
-      queryActiveTokenPrefixes(hours)
+      queryActiveTokenPrefixes(hours),
+      queryTokenCallCounts(hours)
     ]);
 
     const tokens = (config.users ?? []).flatMap((user) => (user.tokens ?? []).map((token) => {
       const prefix = canonicalTokenPrefix(token.hash);
       const lastUsed = lookupLastUsed(lastUsedByPrefix, token.hash);
       const activeInWindow = isActivePrefix(activePrefixes, token.hash);
+      const calls = lookupTokenCalls(callCountsByPrefix, token.hash);
       return {
         agentId: user.id ?? "",
         label: token.label ?? "unnamed-token",
         tokenHashPrefix: prefix,
         lastUsed,
+        calls,
         activeInWindow,
         // Deprecated twin kept for one release; UI/tests must read activeInWindow.
         activeInLast7d: activeInWindow,
@@ -830,6 +861,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       };
     }))
       .sort((a, b) => {
+        if (b.calls !== a.calls) return b.calls - a.calls;
         const aUsed = a.lastUsed ?? "";
         const bUsed = b.lastUsed ?? "";
         return bUsed.localeCompare(aUsed);

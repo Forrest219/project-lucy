@@ -369,15 +369,20 @@ users:
       // Deprecated twin must mirror activeInWindow for one release.
       activeInLast7d: true,
       configured: true,
-      stale: false
+      stale: false,
+      calls: expect.any(Number)
     }));
+    expect(tokensBody.data.tokens.find((row: { agentId: string }) => row.agentId === "agent-a").calls).toBeGreaterThan(0);
     expect(tokensBody.data.tokens).toContainEqual(expect.objectContaining({
       agentId: "agent-b",
       activeInWindow: false,
       activeInLast7d: false,
       configured: true,
-      stale: true
+      stale: true,
+      calls: 0
     }));
+    const tokenCallOrder = tokensBody.data.tokens.map((row: { calls: number }) => row.calls);
+    expect(tokenCallOrder).toEqual([...tokenCallOrder].sort((a, b) => b - a));
     expect(JSON.stringify(tokensBody)).not.toMatch(/sha256:[a-f0-9]{64}/i);
 
     const denials = await app.inject({ method: "GET", url: "/api/admin/governance/denials?hours=168" });

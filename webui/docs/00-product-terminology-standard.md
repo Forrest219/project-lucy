@@ -319,26 +319,28 @@ Connection (连接)
 
 ### 4.5 访问治理 / 使用概况
 
-`/admin/governance` 页面（侧栏项 `admin-governance`）术语来自 Spec 78（修订 Spec 75 §4）：
+`/admin/usage` 页面（侧栏项 `admin-governance`；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签：
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
-| Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板 | 页面标题与侧栏 `admin-governance` 项 |
+| Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板 | 主路由 `/admin/usage` |
 | Configured Agent Count | Agent 总数 | 已配置实例 | access.yaml 中的实例（主 hint） | 不随窗口变；含 `enabled: false` |
-| Active Agent | 活跃 Agent | 近 N 有调用 | 最近活跃 Agent（主标签）、活跃实例 | N = 当前窗口 |
-| Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入「活跃 Agent」卡副行，不独立成卡 |
+| Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题** |
+| Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入活跃 Agent 卡副行，不独立成卡 |
 | Configured Token Count | 配置 Token | 已下发凭证 | access.yaml 配置数（主 hint） | 不随窗口变 |
-| Active Token | 活跃 Token | 近 N 有使用 | 近 7 天活跃 Token（写死）、活跃密钥 | N = 当前窗口 |
-| Token Active Rate | Token 活跃率 | 活跃 / 配置 | access_log 去重 prefix | 并入「活跃 Token」卡副行 |
-| Configured Table Count | 配置表 | 角色已授权表 | 白名单表、启用表（本页禁止混用） | 授权配置去重；不随窗口变 |
-| Active Table Count | 活跃表 | 近 N 有访问 | 热门表（与 Top 10 列表区分） | N = 当前窗口 |
-| Call Volume | 调用量 | 近 N MCP 调用 | 最近调用 | 跟随窗口 |
-| P95 Response Latency | 响应上限（P95） | 95% 的访问低于此值 | 平均响应时长（本页主 KPI）、AVG(duration_ms) | 跟随窗口；禁止用 avg 顶替 |
-| Top Used Tables | 最受访问表 | Top 10 | 热门对象 | 跟随窗口 |
+| Active Token | 近 N 活跃 Token | 活跃 Token（叙述） | 近 7 天活跃 Token（写死）；卡底藏窗口 | N 进标题 |
+| Token Active Rate | Token 活跃率 | 活跃 / 配置 | access_log 去重 prefix | 并入活跃 Token 卡副行 |
+| Authorized Table Count | 授权表 | 角色已授权表 | 配置表（本页主标签）、白名单表、启用表（本页禁止混用） | ACL 授权去重；≠ 启用表范围；不随窗口变 |
+| Active Table Count | 近 N 活跃表 | 活跃表（叙述） | 热门表（与排行区分）；卡底藏窗口 | N 进标题；活跃率分母=授权表 |
+| Call Volume | 近 N 调用量 | 调用量（叙述） | 最近调用 | 跟随窗口；hint 可留「MCP 调用」 |
+| Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签；平均响应时长、AVG(duration_ms) | hint：95% 的请求在此时间内完成 |
+| Agent Call Ranking | Agent 调用排行 · 近 N | Agent 使用排行 | 近窗口调用；实现向排序说明 | 条形图 Top 10；跟随窗口 |
+| Token Call Ranking | Token 调用排行 · 近 N | Token 使用摘要 | 不重复展示顶部 KPI | 按窗口 `calls` 降序 |
+| Table Call Ranking | 表调用排行 · 近 N | 最受访问表（Top 10） | 仅统计已结构化…（主副文案） | 条形图 Top 10 |
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、表名 / physical table、token hash prefix、role id、Agent id。
 
-详见 `webui/docs/78-admin-usage-overview-ux-refinement-spec.md` §4。
+详见 Spec 78 / 84 / 86。
 
 ### 4.6 系统与运维
 

@@ -197,9 +197,9 @@ export const navGroups: Array<{
       {
         id: "admin-governance",
         label: "使用概况",
-        to: "/admin/governance",
+        to: "/admin/usage",
         iconKey: "governanceOverview",
-        active: (path) => path === "/admin/governance",
+        active: (path) => path === "/admin/usage" || path === "/admin/governance",
         description: "查看 Agent、Token 和表的访问使用情况与调用量。",
         keywords: ["Governance", "Dashboard", "使用概况"]
       },

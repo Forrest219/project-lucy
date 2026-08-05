@@ -1,6 +1,6 @@
 # Admin Governance / Usage Overview Feedback
 
-本页记录 `/admin/governance`（使用概况）相关 UI/UX 反馈。后续浏览器核查应按条目 ID 定向执行 `Browser Check`。
+本页记录 `/admin/usage`（使用概况；旧 `/admin/governance` redirect）相关 UI/UX 反馈。后续浏览器核查应按条目 ID 定向执行 `Browser Check`。
 
 ## UX-ADMIN-GOV-001: 页面名称「治理概览」与内容不匹配
 
@@ -229,3 +229,279 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 82 / `wo-202608-14` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-010: 活跃 KPI 统计期间藏在卡底
+
+Status: Fixed
+Route: `/admin/governance`
+Area: KPI MetricCard titles
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+「近 7 天有调用 / 有使用 / 有访问 / MCP 调用」躲在卡底小字，标题只有「活跃 Agent」等，窗口不显性。
+
+### Evidence
+- 浏览器：活跃 Agent 标题无窗口；hint「近 7 天有调用」。
+- 代码：`MetricCard` label 固定「活跃 Agent」，hint=`{windowText}有调用`。
+
+### Expected
+活跃 Agent / Token / 表与调用量的**标题**含「近 24 小时」或「近 7 天」；卡底不再重复藏窗口句。
+
+### Browser Check
+1. Open `/admin/governance` with 7 天 selected.
+2. Confirm active KPI titles include「近 7 天」.
+3. Switch to 24 小时； titles include「近 24 小时」.
+
+### Notes
+Spec 84 / `wo-202608-16` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-011: 三块排行纵向堆叠，桌面应 1×3
+
+Status: Fixed
+Route: `/admin/governance`
+Area: Agent / Token / 表排行布局
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+三块全宽纵向堆叠，桌面宽度足够，应 1×3。
+
+### Evidence
+- 浏览器：三 `pl-panel` 纵向排列。
+
+### Expected
+桌面三列等宽排行区（`pl-usage-rank-grid`）。
+
+### Browser Check
+1. Open `/admin/governance` at ≥1280px width.
+2. Confirm Agent / Token / 表排行同排三列。
+
+### Notes
+Spec 84 / `wo-202608-16` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-012: 排行命名不统一且描述实现向
+
+Status: Fixed
+Route: `/admin/governance`
+Area: 排行区标题与副文案
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+「使用排行 / 使用摘要 / 最受访问表」不一致；副文案含「近窗口」「不重复展示顶部 KPI」「仅统计已结构化…」。
+
+### Evidence
+- 浏览器与 `GovernanceOverview.tsx` 标题/notice 文案。
+
+### Expected
+统一「{对象}调用排行 · 近 N」；副文案为用户价值句，并与 24h/7d 联动。
+
+### Browser Check
+1. Confirm three headings match「Agent/Token/表调用排行 · 近 …」.
+2. Switch window； heading window text updates.
+3. Confirm no「近窗口」「不重复展示顶部 KPI」in page body.
+
+### Notes
+Spec 84 / `wo-202608-16` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-013: 排行应条形图只体现调用次数
+
+Status: Fixed
+Route: `/admin/governance`
+Area: 排行可视化
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+多列表格字段冗余；应降序条形图，只关心次数；详情交给其他页。
+
+### Evidence
+- Agent 表含最近访问、平均响应、Token 数、审计；Token 按最近访问排序。
+
+### Expected
+水平条 + 名称 + 次数；Token 按窗口 `calls` 降序；无审计/最近访问等列。
+
+### Browser Check
+1. Confirm no `governance-agent-table` data grid for rankings.
+2. Confirm bar rows show name and call count only.
+3. Confirm Token order follows call volume when multiple tokens have calls.
+
+### Notes
+Spec 84 / `wo-202608-16` 已落地（本轮不做浏览器验证，待复核后升 Verified）。Spec 82 本页三表网格契约被本条目替代。
+
+## UX-ADMIN-GOV-014: 时间窗按钮贴边挤压且误用 primary
+
+Status: Fixed
+Route: `/admin/governance`
+Area: PageHeader 时间窗
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+「24 小时」「7 天」贴边拼接；选中用 `pl-btn--primary`，不符合按钮规范与既有 segmented 模式。
+
+### Evidence
+- 截图：两按钮无 gap、共享中缝；选中黑底。
+- 代码：`inline-flex overflow-hidden` + `pl-btn--primary/secondary`。
+- 对照：`/eval/monitor` 使用 `pl-segmented-control`。
+
+### Expected
+使用 `pl-segmented-control`（两档 `cols-2`）；选中 `--active`，不用 primary 主按钮语义。
+
+### Browser Check
+1. Confirm time window control has class `pl-segmented-control`.
+2. Confirm selected item uses segmented active style, not a lone primary CTA look jammed flush.
+
+### Notes
+Spec 84 / `wo-202608-16` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-015: 顶栏「管理角色」冗余
+
+Status: Fixed
+Route: `/admin/governance`
+Area: PageHeader actions
+Severity: P3
+Reported: 2026-08-05
+
+### Feedback
+顶栏「管理角色」与侧栏「角色权限」重复。
+
+### Evidence
+- PageHeader actions 含 Link to `/admin/roles`。
+
+### Expected
+删除顶栏「管理角色」；侧栏入口保留。
+
+### Browser Check
+1. Open `/admin/governance`.
+2. Confirm PageHeader has no「管理角色」control.
+3. Confirm sidebar still has「角色权限」.
+
+### Notes
+Spec 84 / `wo-202608-16` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-016: 页面索引未登记 Admin Governance 台账页
+
+Status: Fixed
+Route: `/admin/governance`
+Area: UI/UX ledger index
+Severity: P3
+Reported: 2026-08-05
+
+### Feedback
+`docs/ui-ux-feedback/README.md` 页面索引缺少 Admin Governance / 使用概况行，长期台账机制不完整。
+
+### Evidence
+- README「页面索引」表无 `pages/admin-governance.md`。
+
+### Expected
+页面索引登记 Admin Governance → `pages/admin-governance.md`。
+
+### Browser Check
+N/A（文档索引）。Verify README table includes the row.
+
+### Notes
+随 Spec 84 / `wo-202608-16` 台账机制更新一并 Fixed。
+
+## UX-ADMIN-GOV-017: URL 仍为 `/admin/governance`
+
+Status: Fixed
+Route: `/admin/usage`
+Area: Route / navigation path
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+用户可见已是「使用概况」，但 URL 后缀仍是 `governance`，强烈要求修正。
+
+### Evidence
+- 浏览器地址栏 `/admin/governance`。
+- `navigation.ts` / `App.tsx` 路由仍为该 path。
+
+### Expected
+主路由 `/admin/usage`；`/admin/governance` replace redirect 到新 path。
+
+### Browser Check
+1. Open `/admin/usage` → 使用概况。
+2. Open `/admin/governance` → URL 变为 `/admin/usage`.
+3. Sidebar「使用概况」在 `/admin/usage` 高亮。
+
+### Notes
+Spec 86 / `wo-202608-18` 已落地（本轮不做浏览器验证，待复核后升 Verified）。API 仍 `/api/admin/governance/*`。
+
+## UX-ADMIN-GOV-018: 调用排行 1 行时高度蜷缩
+
+Status: Fixed
+Route: `/admin/usage`
+Area: Agent / Token / 表调用排行
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+排行条形图效果好，但仅 1 行时高度蜷缩；需兼顾 1 行与多行（极端如 50 行）的均衡。
+
+### Evidence
+- 1×3 排行已落地；每列 1 条时内容区极矮、大片留白。
+
+### Expected
+按 Top 10 槽位定 `min-height`/`max-height`；空态居中；溢出滚动。
+
+### Browser Check
+1. With 1 ranking row, confirm rank body height ≈ 10-slot panel (not a thin strip).
+2. With empty rank, confirm empty state fills same body height.
+3. With 10 rows, confirm content fits without collapsing siblings unevenly.
+
+### Notes
+Spec 86 / `wo-202608-18` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-019: 「配置表」与连接页不一致且缺业务含义
+
+Status: Fixed
+Route: `/admin/usage`
+Area: KPI MetricCard
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+「配置表」不像业务用语，且易与连接页「启用表范围 / 已启用表数」混淆。
+
+### Evidence
+- 使用概况：配置表 / 角色已授权（ACL）。
+- 连接概览：启用表范围、已启用表数、维护启用表范围（`enabled_tables`）。
+
+### Expected
+主标签改为「授权表」；hint 标明角色权限授权口径；禁止与启用表混用。
+
+### Browser Check
+1. Confirm KPI title「授权表」, not「配置表」.
+2. Confirm hint mentions 角色权限 / 授权.
+3. Confirm no「启用表」as this card's primary label.
+
+### Notes
+Spec 86 / `wo-202608-18` 已落地（本轮不做浏览器验证，待复核后升 Verified）。
+
+## UX-ADMIN-GOV-020: 「响应上限（P95）」表意不清
+
+Status: Fixed
+Route: `/admin/usage`
+Area: KPI MetricCard
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+「响应上限（P95）」需猜测；业务人员不易理解。
+
+### Evidence
+- 主标签「响应上限（P95）」；hint「95% 的访问低于此值」。
+
+### Expected
+主标签「多数请求耗时」；hint「95% 的请求在此时间内完成」；P95 不作主标签。
+
+### Browser Check
+1. Confirm metric title「多数请求耗时」.
+2. Confirm hint communicates percentile latency in plain language.
+3. Confirm empty window still shows「—」/「当前窗口无调用」.
+
+### Notes
+Spec 86 / `wo-202608-18` 已落地（本轮不做浏览器验证，待复核后升 Verified）。

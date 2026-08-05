@@ -377,7 +377,8 @@ export function AppFrame() {
             <Route path="/publish/history" element={<PublishHistory />} />
             <Route path="/review" element={<Navigate to="/publish/workbench" replace />} />
             <Route path="/wiki" element={<WikiEditor />} />
-            <Route path="/admin/governance" element={<GovernanceOverview />} />
+            <Route path="/admin/usage" element={<GovernanceOverview />} />
+            <Route path="/admin/governance" element={<Navigate to="/admin/usage" replace />} />
             <Route path="/admin/agents" element={<AgentList />} />
             <Route path="/admin/agents/:userId" element={<AgentDetail />} />
             <Route path="/admin/agents/:userId/tokens/new" element={<NewToken />} />

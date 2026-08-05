@@ -69,7 +69,7 @@ KTX WebUI
 | 质量评测 | 评测用例 | `/eval/cases` | 维护业务 eval case |
 | 质量评测 | 运行历史 | `/eval/runs` | 查看 eval run 结果 |
 | 质量评测 | 趋势监控 | `/eval/monitor` | 查看 eval 趋势和阈值 |
-| 访问治理 | 使用概况 | `/admin/governance` | 查看 Agent、Token 和表的访问使用情况与调用量（Spec 78） |
+| 访问治理 | 使用概况 | `/admin/usage` | 查看 Agent、Token 和表的访问使用情况与调用量（Spec 86；旧 `/admin/governance` redirect） |
 | 访问治理 | Agent 实例 | `/admin/agents` | 管理 Agent、role 和 token |
 | 访问治理 | 角色权限 | `/admin/roles` | 管理 access.yaml 中的 role 模板与 RBAC 权限 |
 | 访问治理 | 访问日志 | `/admin/audit` | 查询 MCP proxy 访问日志；内含 `log` / `heatmap` 两个 Tab（`?tab=` 切换） |

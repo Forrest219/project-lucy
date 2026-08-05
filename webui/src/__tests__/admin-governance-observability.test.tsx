@@ -43,7 +43,7 @@ function stubFetch() {
           },
           popularTables: [{
             table: "mysql.dataforai.kx_fact_financial_amount",
-            calls: 2,
+            calls: hours === 24 ? 1 : 2,
             lastSeen: "2026-08-03T01:00:00.000Z"
           }],
           tableStatsSource: "access_log_sources",
@@ -78,15 +78,28 @@ function stubFetch() {
       return new Response(JSON.stringify({
         ok: true,
         data: {
-          tokens: [{
-            agentId: "agent-a",
-            label: "active-token",
-            tokenHashPrefix: "abc123def456",
-            lastUsed: "2026-08-03T01:00:00.000Z",
-            activeInWindow: true,
-            configured: true,
-            auditHref: "/admin/audit?user=agent-a"
-          }]
+          tokens: [
+            {
+              agentId: "agent-a",
+              label: "quiet-token",
+              tokenHashPrefix: "quietprefix12",
+              lastUsed: "2026-08-04T01:00:00.000Z",
+              calls: hours === 24 ? 0 : 1,
+              activeInWindow: hours !== 24,
+              configured: true,
+              auditHref: "/admin/audit?user=agent-a"
+            },
+            {
+              agentId: "agent-a",
+              label: "active-token",
+              tokenHashPrefix: "abc123def456",
+              lastUsed: "2026-08-03T01:00:00.000Z",
+              calls: hours === 24 ? 1 : 5,
+              activeInWindow: true,
+              configured: true,
+              auditHref: "/admin/audit?user=agent-a"
+            }
+          ]
         }
       }));
     }
@@ -103,7 +116,7 @@ afterEach(() => {
 });
 
 describe("GovernanceOverview", () => {
-  it("renders usage-first overview without risk modules or governance-branded title", async () => {
+  it("renders usage-first overview with windowed KPI titles and call rankings", async () => {
     stubFetch();
     renderPage();
 
@@ -113,68 +126,79 @@ describe("GovernanceOverview", () => {
 
     expect(screen.getByTestId("governance-usage-overview")).toHaveClass("pl-page-stack");
     expect(screen.getByTestId("governance-usage-metrics")).toHaveClass("pl-metric-grid");
-    expect(screen.getByTestId("governance-usage-metrics")).not.toHaveClass("pl-metric-grid--three");
+    expect(screen.getByTestId("governance-usage-rank-grid")).toHaveClass("pl-usage-rank-grid");
     expect(screen.getByTestId("governance-agent-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-token-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-popular-tables")).toHaveClass("pl-panel");
 
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("总数");
-    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("活跃");
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("50%");
     expect(screen.getByTestId("metric-configured-token-count")).toHaveTextContent("配置");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("活跃");
-    expect(screen.getByTestId("metric-configured-table-count")).toHaveTextContent("配置表");
-    expect(screen.getByTestId("metric-active-table-count")).toHaveTextContent("活跃表");
-    expect(screen.getByTestId("metric-calls")).toHaveTextContent("调用量");
-    expect(screen.getByTestId("metric-p95-latency")).toHaveTextContent("响应上限");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃");
+    expect(screen.getByTestId("metric-configured-table-count")).toHaveTextContent("授权表");
+    expect(screen.getByTestId("metric-active-table-count")).toHaveTextContent("近 7 天活跃表");
+    expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
+    expect(screen.getByTestId("metric-p95-latency")).toHaveTextContent("多数请求耗时");
     expect(within(screen.getByTestId("metric-configured-token-count")).getByText("Token")).toBeInTheDocument();
 
-    // No standalone active-rate cards; rate lives inside the active Agent/Token cards.
     expect(screen.queryByTestId("metric-agent-active-rate")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-token-active-rate")).not.toBeInTheDocument();
-    // avg latency is no longer the primary KPI.
     expect(screen.queryByTestId("metric-avg-latency")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("governance-usage-metrics")).queryByText("平均响应时长")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("metric-active-agent-count")).queryByText(/有调用/)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("governance-usage-metrics")).queryByText("配置表")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("governance-usage-metrics")).queryByText("响应上限")).not.toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "Agent 使用排行" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Token 使用摘要" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "最受访问表（Top 10）" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Agent 调用排行 · 近 7 天/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Token 调用排行 · 近 7 天/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /表调用排行 · 近 7 天/ })).toBeInTheDocument();
     expect(screen.getByText("active-token")).toBeInTheDocument();
+    expect(screen.getByText("quiet-token")).toBeInTheDocument();
     expect(screen.getByText("mysql.dataforai.kx_fact_financial_amount")).toBeInTheDocument();
 
-    // Spec 82: light pl-data-grid conformance for the three usage tables.
+    const tokenRank = screen.getByTestId("governance-token-rank");
+    const tokenLabels = within(tokenRank).getAllByRole("link").map((node) => node.textContent);
+    expect(tokenLabels[0]).toBe("active-token");
+    expect(tokenLabels[1]).toBe("quiet-token");
+
     for (const testId of [
-      "governance-agent-table",
-      "governance-token-table",
-      "governance-popular-tables-table"
+      "governance-agent-rank",
+      "governance-token-rank",
+      "governance-table-rank"
     ] as const) {
-      const table = screen.getByTestId(testId);
-      expect(table).toHaveClass("pl-data-grid");
-      expect(table).toHaveClass("pl-usage-overview-table");
-      expect(table.className).not.toMatch(/min-w-full/);
-      expect(table.className).not.toMatch(/divide-y/);
+      expect(screen.getByTestId(testId)).toHaveClass("pl-usage-rank-list");
+      expect(screen.getByTestId(`${testId}-body`)).toHaveClass("pl-usage-rank-body");
     }
-    expect(screen.getByRole("link", { name: "查看日志" })).toHaveClass("pl-row-action-link");
+    expect(screen.queryByTestId("governance-agent-table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "查看日志" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "管理角色" })).not.toBeInTheDocument();
+
+    const windowGroup = screen.getByRole("tablist", { name: "时间窗口" });
+    expect(windowGroup).toHaveClass("pl-segmented-control");
+    expect(windowGroup).toHaveClass("pl-segmented-control--cols-2");
+    expect(screen.getByTestId("governance-window-7d")).toHaveClass("pl-segmented-control-item--active");
+    expect(screen.getByTestId("governance-window-7d").className).not.toMatch(/pl-btn--primary/);
 
     expect(screen.queryByText("Role 边界")).not.toBeInTheDocument();
     expect(screen.queryByText("拒绝原因")).not.toBeInTheDocument();
     expect(screen.queryByText("Agent 风险排行")).not.toBeInTheDocument();
     expect(screen.queryByText("Token 巡检")).not.toBeInTheDocument();
-    expect(within(screen.getByTestId("governance-token-usage")).queryByText("Token 活跃率")).not.toBeInTheDocument();
+    expect(screen.queryByText(/近窗口/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/不重复展示顶部 KPI/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/仅统计已结构化/)).not.toBeInTheDocument();
     expect(screen.queryByText(/select \*/i)).not.toBeInTheDocument();
 
-    // Top bar no longer carries a redundant window badge or a second 访问日志 entry.
     expect(screen.queryByTestId("governance-window-badge")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "访问日志" })).not.toBeInTheDocument();
 
-    // Hints must stay user-friendly; no raw implementation identifiers.
     const bodyText = document.body.textContent ?? "";
     expect(bodyText).not.toMatch(/access_log/);
     expect(bodyText).not.toMatch(/AVG\(/);
     expect(bodyText).not.toMatch(/去重 prefix/);
   });
 
-  it("switches window and refreshes usage queries, keeping window text in hints", async () => {
+  it("switches window and refreshes usage queries, keeping window text in titles", async () => {
     const fetchMock = stubFetch();
     renderPage();
 
@@ -192,6 +216,7 @@ describe("GovernanceOverview", () => {
       expect(within(screen.getByTestId("metric-p95-latency")).getByText("40 ms")).toBeInTheDocument();
     });
     expect(within(screen.getByTestId("metric-active-agent-count")).getByText(/近 24 小时/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Agent 调用排行 · 近 24 小时/ })).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : String(input);
       return url.includes("hours=24");

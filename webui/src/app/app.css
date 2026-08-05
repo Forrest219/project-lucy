@@ -709,6 +709,23 @@
   .pl-data-grid thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
   .pl-data-grid tbody td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-default; }
   .pl-data-grid tbody tr:hover { @apply bg-bg-muted; }
+  /* Spec 85: publish history — light pl-data-grid conformance (business scope + scale). */
+  .pl-publish-history-table tbody td { @apply text-xs font-medium leading-4; }
+  .pl-publish-history-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
+  .pl-publish-history-scope { @apply grid gap-0.5; }
+  .pl-publish-history-scope-primary { @apply text-xs font-medium text-fg-default; }
+  .pl-publish-history-scope-secondary { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-scope-more { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-scope-empty { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-time { @apply grid gap-0.5; }
+  .pl-publish-history-time-status { @apply text-xs font-normal text-fg-muted; }
+  .pl-publish-history-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
+  .pl-publish-history-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
+  .pl-publish-history-status { @apply inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-semibold; }
+  .pl-publish-history-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
+  .pl-publish-history-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-publish-history-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
+  .pl-publish-history-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
   /* Spec 82: usage overview dashboard tables — light pl-data-grid conformance (12px body, no workbench colgroup). */
   .pl-usage-overview-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-usage-overview-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
@@ -716,6 +733,23 @@
   .pl-usage-overview-table-name-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
   .pl-usage-overview-table-meta { @apply text-xs font-normal text-fg-muted; }
   .pl-usage-overview-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
+  .pl-usage-rank-grid { @apply grid gap-3 xl:grid-cols-3; }
+  .pl-usage-rank-body {
+    min-height: calc(10 * 2.25rem + 9 * 0.625rem);
+    max-height: calc(10 * 2.25rem + 9 * 0.625rem);
+    @apply overflow-y-auto;
+  }
+  .pl-usage-rank-body:has(.pl-usage-rank-empty) {
+    @apply flex items-center justify-center;
+  }
+  .pl-usage-rank-list { @apply m-0 grid list-none gap-2.5 p-0; }
+  .pl-usage-rank-row { @apply grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,auto)] items-center gap-x-2 gap-y-1; }
+  .pl-usage-rank-label { @apply min-w-0 truncate text-xs font-medium text-fg-default; }
+  .pl-usage-rank-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
+  .pl-usage-rank-track { @apply col-span-2 h-2 overflow-hidden rounded-sm bg-bg-muted; }
+  .pl-usage-rank-bar { @apply h-full rounded-sm bg-primary/70; }
+  .pl-usage-rank-value { @apply justify-self-end text-xs font-normal tabular-nums text-fg-body; }
+  .pl-usage-rank-empty { @apply m-0 py-4 text-center text-sm text-fg-muted; }
   .pl-catalog-table { min-width: 0; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
   .pl-catalog-table-name-link { @apply text-sm font-normal text-fg-default no-underline hover:underline; }
@@ -1357,6 +1391,7 @@
   .pl-inspector-section { @apply grid gap-3; }
   .pl-inspector-title-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
+  .pl-segmented-control--cols-2 { @apply grid-cols-2; }
   .pl-segmented-control-item { @apply rounded-sm px-2 py-1.5 text-sm text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   .pl-segmented-control-item--active { @apply bg-bg-surface text-fg-default shadow-sm; }
   .pl-inspector-header { @apply grid gap-2; }

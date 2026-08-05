@@ -127,6 +127,9 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-13-wiki-read-layout-and-header-action-hierarchy.md](wo-202608-13-wiki-read-layout-and-header-action-hierarchy.md) | 202608-13 | Wiki 阅读态 layout + Header primary 层级 |
 | [wo-202608-14-admin-usage-overview-table-grid-light-conformance.md](wo-202608-14-admin-usage-overview-table-grid-light-conformance.md) | 202608-14 | Admin 使用概况三表轻量 `pl-data-grid` 收敛（12px 密度、数量次级、弱操作链；不做 connections colgroup） |
 | [wo-202608-15-wiki-version-history-data-grid-alignment.md](wo-202608-15-wiki-version-history-data-grid-alignment.md) | 202608-15 | Wiki 版本记录表 pl-data-grid 对齐与当前行操作列留空 |
+| [wo-202608-16-admin-usage-overview-activity-rank-and-header-polish.md](wo-202608-16-admin-usage-overview-activity-rank-and-header-polish.md) | 202608-16 | Admin 使用概况：调用排行 1×3 条形图、KPI 窗口进标题、Token `calls`、顶栏 segmented、删管理角色 |
+| [wo-202608-18-admin-usage-overview-route-and-kpi-clarity.md](wo-202608-18-admin-usage-overview-route-and-kpi-clarity.md) | 202608-18 | Admin 使用概况：迁 `/admin/usage`、排行槽位高度、授权表、多数请求耗时 |
+| [wo-202608-17-publish-history-business-columns-and-export-clarity.md](wo-202608-17-publish-history-business-columns-and-export-clarity.md) | 202608-17 | 发布记录：序号/变更范围/规模、操作列去伪快照下载、Header 导出语义资产包、export ESM 修复、`pl-data-grid` |
 
 ### 202608 Governance & Observability — 并行启动建议
 
