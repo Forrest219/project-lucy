@@ -1957,28 +1957,24 @@
     @apply border-warning-strong bg-warning-soft text-warning-strong;
   }
   .pl-wiki-version-content {
-    width: min(1180px, 94vw);
+    width: min(960px, 94vw);
   }
-  .pl-wiki-version-layout {
-    @apply grid gap-3;
-    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
-  }
+  /* UX-WIKI-031–035 / Spec 80: list-first full-width table; detail is a
+     separate full-width pane, not a side-by-side preview column. */
   .pl-wiki-version-list {
     @apply content-start;
   }
-  /* UX-WIKI-025: 历史版本 as a plain semantic table (时间 / 操作类型 / 版本 / 操作)
-     instead of a card list, so the record reads like a clear log. */
   .pl-wiki-version-table {
-    @apply w-full border-collapse text-xs;
+    @apply w-full border-collapse text-sm;
   }
   .pl-wiki-version-table th {
-    @apply border-b border-border-default px-2 py-1.5 text-left font-medium text-fg-muted;
+    @apply border-b border-border-default px-3 py-2 text-left font-medium text-fg-muted;
   }
   .pl-wiki-version-table td {
-    @apply border-b border-border-default px-2 py-1.5 align-top text-fg-body;
+    @apply border-b border-border-default px-3 py-2 align-middle text-fg-body;
   }
-  .pl-wiki-version-row--active {
-    @apply bg-bg-muted;
+  .pl-wiki-version-revision--current {
+    @apply text-fg-muted;
   }
   .pl-wiki-version-row-note {
     @apply mt-0.5 block text-[11px] text-fg-muted;
@@ -1991,24 +1987,26 @@
     @apply break-all rounded bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-muted;
   }
   .pl-wiki-version-row-actions {
-    @apply flex flex-wrap items-center gap-2 whitespace-nowrap;
+    @apply flex flex-nowrap items-center gap-2 whitespace-nowrap;
+  }
+  .pl-wiki-version-current-hint {
+    @apply text-xs text-fg-muted;
   }
   .pl-wiki-version-detail {
     @apply content-start;
   }
+  .pl-wiki-version-detail-toolbar {
+    @apply mb-3;
+  }
   .pl-wiki-version-detail .pl-markdown-preview {
-    @apply max-h-[320px] overflow-auto rounded-md border border-border-default bg-bg-base p-3;
+    @apply max-h-[480px] overflow-auto rounded-md border border-border-default bg-bg-base p-3;
+    max-height: min(60vh, 480px);
   }
   .pl-wiki-version-meta {
-    @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted;
+    @apply mb-3 flex flex-wrap items-center gap-2 text-xs text-fg-muted;
   }
   .pl-wiki-version-subtitle {
-    @apply mb-2 text-xs font-semibold text-fg-muted;
-  }
-  @media (max-width: 900px) {
-    .pl-wiki-version-layout {
-      grid-template-columns: 1fr;
-    }
+    @apply mb-2 mt-4 text-xs font-semibold text-fg-muted;
   }
 
   /* Wiki tree (sidebar): search + directory groups + title-first rows. */

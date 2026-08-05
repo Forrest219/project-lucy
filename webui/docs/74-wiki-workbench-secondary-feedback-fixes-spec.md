@@ -12,6 +12,8 @@
 | 适用范围 | 指导 `/wiki` 本轮 7 条反馈中 1、2、3、4、5、6、7 的修复实现与验收（6 保留为“移除 diff”而非折叠） |
 | 输出位置 | `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` |
 
+> **§9 修订（2026-08-05）**：版本记录「右侧历史预览」分栏由 [`80-wiki-version-history-list-first-ux-spec.md`](80-wiki-version-history-list-first-ux-spec.md) 进一步修订为列表优先 + 全宽详情。表格化与懒加载结论仍有效。
+
 | 字段 | 内容 |
 | --- | --- |
 | Spec 编号 | 74 |

@@ -1485,39 +1485,57 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     });
     expect(dialog).toHaveTextContent("指标服务表设计草案.md");
 
-    // UX-WIKI-025: 历史版本 renders as a table with a clear header row.
+    // UX-WIKI-031–035 / Spec 80: list-first table with business columns.
     const table = within(dialog).getByTestId("wiki-version-table");
     expect(table.tagName).toBe("TABLE");
-    expect(table).toHaveTextContent("时间");
-    expect(table).toHaveTextContent("操作类型");
     expect(table).toHaveTextContent("版本");
+    expect(table).toHaveTextContent("变更说明");
+    expect(table).toHaveTextContent("时间");
     expect(table).toHaveTextContent("操作");
+    expect(table).not.toHaveTextContent("操作类型");
+    expect(table).toHaveTextContent("上传覆盖");
+    expect(table).toHaveTextContent("新建文档");
+    expect(table).toHaveTextContent("修订 2（当前）");
+    expect(table).toHaveTextContent("修订 1");
 
-    // UX-WIKI-025: 历史预览 stays lazy until the user clicks 查看 — no
-    // version is auto-selected when the dialog opens.
+    // Newest snapshot is current: no view/restore affordances.
+    expect(screen.queryByTestId("wiki-version-view-v-upload-replace")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("wiki-version-restore-v-upload-replace")
+    ).not.toBeInTheDocument();
+
+    // No side-pane placeholder; detail stays lazy until 查看.
     expect(screen.queryByTestId("wiki-version-markdown-preview")).not.toBeInTheDocument();
     expect(screen.queryByTestId("wiki-version-diff")).not.toBeInTheDocument();
-    expect(dialog).toHaveTextContent("选择一个历史版本查看 Markdown 预览和 Diff。");
+    expect(dialog).not.toHaveTextContent("选择一个历史版本查看 Markdown 预览和 Diff。");
+    expect(screen.queryByTestId("wiki-version-detail")).not.toBeInTheDocument();
 
-    fireEvent.click(await screen.findByTestId("wiki-version-view-v-upload-replace"));
+    fireEvent.click(await screen.findByTestId("wiki-version-view-v-create"));
     await waitFor(() => {
       expect(screen.getByTestId("wiki-version-markdown-preview")).toHaveTextContent(
-        "历史版本内容"
+        "Initial body"
       );
     });
     expect(screen.getByTestId("wiki-version-diff")).toHaveTextContent("Detailed notes here");
+    expect(screen.getByTestId("wiki-version-detail-meta")).toHaveTextContent("新建文档");
 
-    fireEvent.click(screen.getByTestId("wiki-version-restore-v-upload-replace"));
+    fireEvent.click(screen.getByTestId("wiki-version-back-to-list"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("wiki-version-markdown-preview")).not.toBeInTheDocument();
+    });
+    expect(within(dialog).getByTestId("wiki-version-table")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("wiki-version-restore-v-create"));
     const restoreDialog = await screen.findByTestId("wiki-restore-preflight");
     await waitFor(() => {
       expect(restoreDialog).toHaveTextContent("指标服务表设计草案");
     });
-    expect(restoreDialog).toHaveTextContent("v-upload-replace");
+    expect(restoreDialog).toHaveTextContent("v-create");
 
     fireEvent.click(screen.getByTestId("wiki-restore-confirm"));
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/wiki/global%2Fsuperstore-analysis-playbook.md/versions/v-upload-replace/restore",
+        "/api/wiki/global%2Fsuperstore-analysis-playbook.md/versions/v-create/restore",
         expect.objectContaining({ method: "POST" })
       );
     });

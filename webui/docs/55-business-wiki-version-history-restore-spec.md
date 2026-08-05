@@ -11,6 +11,8 @@
 | 事实来源 | 2026-08-02 用户反馈、浏览器核查、`docs/ui-ux-feedback/pages/wiki.md` |
 | 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/49-business-wiki-md-library-operations-spec.md`、`webui/docs/53-business-wiki-empty-directory-resource-spec.md`、`docs/DEVELOPMENT.md` |
 
+> **UI 修订（2026-08-05）**：§8.2–8.3 弹窗列表与历史预览的前端呈现由 [`80-wiki-version-history-list-first-ux-spec.md`](80-wiki-version-history-list-first-ux-spec.md) 修订（列表优先、业务化列、当前行收敛、查看进全宽详情）。API / 快照存储 / 恢复预检契约仍以本文为准。
+
 ## 1. 背景
 
 2026-08-02 的 `/wiki` 浏览器核查确认：用户将本机 `Downloads/指标服务表设计草案.md`

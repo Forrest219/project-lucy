@@ -958,3 +958,155 @@ Reported: 2026-08-05
 ### Notes
 
 Fixed by Spec 79：文案收敛为「保存预检」，不引入 draft/publish。本轮不做浏览器验证。
+
+## UX-WIKI-031: 版本记录弹窗列表被侧栏预览挤窄、列名偏技术
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history dialog
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+
+「历史版本」才是核心，但时间 / 操作类型 / 版本 / 操作排列拥挤；字段名缺少业务含义，版本列暴露长 `versionId`。
+
+### Evidence
+
+- Screenshot: ../assets/wiki/UX-WIKI-031-035-before.png
+- Reference: ../assets/wiki/UX-WIKI-031-035-reference-tableau.png
+- Browser measure (2026-08-05): dialog 1180px；list ~437px；detail ~681px；操作列 ~142px。
+
+### Expected
+
+弹窗默认全宽历史版本表；列：`版本`（修订 N）、`变更说明`、`时间`、`操作`；主列不暴露原始 `versionId`。
+
+### Browser Check
+
+1. Open `/wiki?key=...` → `版本记录`。
+2. Verify 无常驻右侧「历史预览」空栏；表全宽。
+3. Verify 表头为版本 / 变更说明 / 时间 / 操作；版本列为「修订 N」。
+
+### Notes
+
+Fixed by Spec 80 / `wo-202608-12`。本轮不做浏览器验证；状态止于 `Fixed`。
+
+## UX-WIKI-032: 操作类型文案过于技术
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history dialog
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+「操作类型」值如「编辑保存」偏技术，缺少业务含义。
+
+### Evidence
+
+- Screenshot: ../assets/wiki/UX-WIKI-031-035-before.png
+- Code: `OPERATION_LABELS.edit_save = "编辑保存"`（修复前）。
+
+### Expected
+
+列名改为「变更说明」；`edit_save` →「在线编辑」，`move` →「移动到目录」，`create` →「新建文档」等（见 Spec 80 §5）。
+
+### Browser Check
+
+1. Open 版本记录，verify 变更说明为业务文案，无「编辑保存」主标签。
+
+### Notes
+
+Fixed by Spec 80。本轮不做浏览器验证。
+
+## UX-WIKI-033: 查看与恢复此版本被挤成上下布局
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history dialog actions
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+「操作」列「查看」「恢复此版本」因列宽不足纵向堆叠，应左右平级。
+
+### Evidence
+
+- Screenshot: ../assets/wiki/UX-WIKI-031-035-before.png
+- DOM：两按钮同 `left`、不同 `top`；`.pl-wiki-version-row-actions` 原为 `flex-wrap`。
+
+### Expected
+
+非当前行操作按钮 `flex-nowrap` 左右排列；列表全宽后操作列足够容纳。
+
+### Browser Check
+
+1. Open 版本记录（≥2 个历史版本）。
+2. Verify 非当前行「查看」「恢复此版本」左右平级。
+
+### Notes
+
+Fixed by Spec 80 CSS `flex-nowrap` + 去掉侧栏。本轮不做浏览器验证。
+
+## UX-WIKI-034: 当前版本仍提供查看与恢复
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history dialog current row
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+最新快照（如 `20260805T…`）即当前正文对应版本，仍出现在列表且带「查看」「恢复此版本」；查看后 Diff 为「暂无可预览的变更」。
+
+### Evidence
+
+- Browser check 2026-08-05：最新行可查看；Diff 空。
+
+### Expected
+
+最新行标记「修订 N（当前）」；操作列不提供查看 / 恢复（可显示静态「当前」）。
+
+### Browser Check
+
+1. Open 版本记录。
+2. Verify 第一行含「当前」且无查看 / 恢复按钮。
+3. Verify 更早行仍可查看 / 恢复。
+
+### Notes
+
+Fixed by Spec 80（`index === 0` 为当前）。本轮不做浏览器验证。
+
+## UX-WIKI-035: 历史预览侧栏默认占位且过小
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history dialog detail
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+
+「历史预览」建议默认取消；点「查看」后再看全文与 Diff。侧栏区域过小不利于阅读。
+
+### Evidence
+
+- Screenshot: ../assets/wiki/UX-WIKI-031-035-before.png
+- 未选中时右侧大块占位；选中后预览高度约 158px。
+
+### Expected
+
+默认无侧栏；点「查看」进入同弹窗全宽「版本详情」（Markdown + Diff），可「返回版本列表」。本轮不要求独立 URL。
+
+### Browser Check
+
+1. Open 版本记录 → 无侧栏占位。
+2. Click 非当前行「查看」→ 全宽详情含预览与 Diff。
+3. Click「返回版本列表」→ 回到表。
+
+### Notes
+
+Fixed by Spec 80。本轮不做浏览器验证。URL deep-link 为后续候选项。

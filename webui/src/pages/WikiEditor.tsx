@@ -272,9 +272,8 @@ export function WikiEditor() {
       Boolean(selectedVersionId)
   });
 
-  // UX-WIKI-025: do not auto-select the newest version when 版本记录
-  // opens. `openVersionHistory` already resets `selectedVersionId` to
-  // `null`, so 历史预览 stays lazy until the user clicks 查看.
+  // UX-WIKI-025 / Spec 80: do not auto-select the newest version when 版本记录
+  // opens. Detail stays lazy until the user clicks 查看 on a non-current row.
 
   // Apply page detail to local state when the user has not edited
   // anything since the last reset. We never clobber unsaved edits.
@@ -1341,7 +1340,7 @@ export function WikiEditor() {
         error={
           versionsQuery.error instanceof Error
             ? versionsQuery.error.message
-            : versionDetailQuery.error instanceof Error
+            : selectedVersionId && versionDetailQuery.error instanceof Error
               ? versionDetailQuery.error.message
               : null
         }

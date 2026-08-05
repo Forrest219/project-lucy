@@ -119,9 +119,11 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-05-fde-copilot-candidate.md](wo-202608-05-fde-copilot-candidate.md) | Deferred | FDE Copilot Candidate：不属于 202608 Governance & Observability 主线 |
 | [wo-202608-06-table-semantic-workbench-density-and-joins-inline.md](wo-202608-06-table-semantic-workbench-density-and-joins-inline.md) | 202608-06 | 单表语义工作台密度与关联内联：按钮 secondary 统一、表描述三段式、行粒度多选、字段表密度、价值文案、关联 tab 内联（修正 UX-CATALOG-011） |
 | [wo-202608-07-wiki-workbench-secondary-feedback-fixes.md](wo-202608-07-wiki-workbench-secondary-feedback-fixes.md) | 202608-07 | Wiki 工作台二轮反馈修复：目录树层级引导线 + 默认只展目录、新建文档跳转新建目录、正文标题去重、移动到目录弹窗精简、版本记录表格化与历史预览懒加载 |
-
 | [wo-202608-08-role-admin-list-clarity-followup.md](wo-202608-08-role-admin-list-clarity-followup.md) | 202608-08 | Role Admin 列表清晰度二轮：待修复 KPI 只计正式 Role、Header/状态条降噪、使用中/未引用、卡片字段标签、基于此新建、configUpdatedAt |
 | [wo-202608-09-role-admin-create-edit-usability.md](wo-202608-09-role-admin-create-edit-usability.md) | 202608-09 | Role Admin 新建/编辑可用性：Wave A 中文标签与 picker+受控回退；Wave B `sourceNames` + 连接/工具/表能力筛选 |
+| [wo-202608-10-admin-usage-overview-ux-refinement.md](wo-202608-10-admin-usage-overview-ux-refinement.md) | 202608-10 | Admin 使用概况 UX：命名、窗口全局化、KPI 2×4、表统计并集 |
+| [wo-202608-11-wiki-edit-workbench-layout-and-save-status.md](wo-202608-11-wiki-edit-workbench-layout-and-save-status.md) | 202608-11 | Wiki 编辑态布局与保存状态：dirty 状态、预览 grid、三列标题、去工具栏、保存预检文案 |
+| [wo-202608-12-wiki-version-history-list-first-ux.md](wo-202608-12-wiki-version-history-list-first-ux.md) | 202608-12 | Wiki 版本记录列表优先：全宽业务化表格、当前行收敛、查看进全宽详情 |
 
 ### 202608 Governance & Observability — 并行启动建议
 
