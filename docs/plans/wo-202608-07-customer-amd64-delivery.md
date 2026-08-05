@@ -22,21 +22,25 @@ docker context ls     # 确认使用哪个 docker endpoint
 ### Step 1 — 创建 buildx builder 并启动构建（后台）
 
 ```bash
-docker buildx create --use --name lucy-amd64 \
-  --driver docker-container --platform linux/amd64
+# 禁止 --use：避免把全局当前 builder 切到 lucy-amd64，污染本机 demo 重建
+docker buildx create --name lucy-amd64 \
+  --driver docker-container --platform linux/amd64 \
+  2>/dev/null || docker buildx inspect lucy-amd64 >/dev/null
 
 mkdir -p inbox/customer-amd64-build
 echo "$(git rev-parse HEAD)" > inbox/customer-amd64-build/git-head.txt
 echo "$(git rev-parse --short HEAD)" > inbox/customer-amd64-build/git-short.txt
 ```
 
-构建命令放到后台跑（预计 10–15 分钟）：
+构建命令放到后台跑（预计 10–15 分钟；须在 amd64 native 上跑，禁止 ARM 上 QEMU）：
 
 ```bash
 docker buildx build \
   --builder lucy-amd64 \
   --platform linux/amd64 \
   --build-arg "KTX_VERSION=0.16.0" \
+  --build-arg "TARGETPLATFORM=linux/amd64" \
+  --build-arg "TARGETARCH=amd64" \
   --tag "project-lucy:customer-amd64-0.16.0" \
   --tag "project-lucy:customer-amd64-dev-$(cat inbox/customer-amd64-build/git-short.txt)" \
   --load \
@@ -46,12 +50,21 @@ docker buildx build \
 
 后台跑期间可以并行起草 spec / plan / runbook / 邮件草稿（已提前完成规格骨架）。
 
+构建进程结束后**必须**恢复默认 builder：
+
+```bash
+docker buildx use default
+docker buildx ls   # 确认 default* 为当前
+```
+
 ### Step 2 — 构建结束后，校验 + 冒烟
 
 ```bash
 test "$(docker image inspect project-lucy:customer-amd64-0.16.0 \
   --format '{{.Os}}/{{.Architecture}}')" = "linux/amd64" \
   || { echo "FAIL: 镜像不是 linux/amd64"; exit 1; }
+
+bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
 
 docker image inspect project-lucy:customer-amd64-0.16.0 \
   --format '{{.Id}}' > inbox/customer-amd64-build/image-id.txt

@@ -8,13 +8,14 @@
 # platform. `linux/arm64` is published alongside for Apple Silicon / AWS Graviton
 # developers who use the same chart in dev.
 #
-# We pin `BUILDPLATFORM` on `FROM` so that the build itself always runs on the
-# buildx native architecture (avoids QEMU emulation for the bulk `apt-get` /
-# `npm ci` steps), then use `TARGETARCH` / `TARGETOS` only when an architecture-
-# specific step is needed. Today the runtime is pure JavaScript and has no
-# native KTX binaries, so `TARGETARCH` is exposed for future native deps.
-ARG BUILDPLATFORM
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim
+# FROM must use TARGETPLATFORM (not BUILDPLATFORM). Binding BUILDPLATFORM made
+# cross-builds label the image as amd64 while installing arm64 ELFs (or the
+# reverse) — confirmed on customer-amd64 offline packages. Cross-arch builds
+# rely on QEMU/buildx; customer amd64 packages must be built on amd64 native.
+# Plain docker build / compose do not always inject TARGETPLATFORM — callers
+# must pass it (compose files and demo/rebuild scripts do).
+ARG TARGETPLATFORM=linux/amd64
+FROM --platform=$TARGETPLATFORM node:22-bookworm-slim
 
 ARG KTX_VERSION=0.16.0
 # TARGETARCH is exposed so future architecture-specific steps (e.g. fetching a

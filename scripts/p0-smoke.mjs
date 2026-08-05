@@ -111,19 +111,36 @@ async function dockerSmoke() {
   defaultDockerConfig = process.env.DOCKER_CONFIG;
   const dockerWebPort = process.env.LUCY_DOCKER_SMOKE_WEB_PORT ?? "55175";
   const dockerProxyPort = process.env.LUCY_DOCKER_SMOKE_PROXY_PORT ?? "57880";
+  const hostArch = process.arch === "arm64" ? "arm64" : "amd64";
+  const targetPlatform = process.env.TARGETPLATFORM ?? `linux/${hostArch}`;
+  const targetArch = process.env.TARGETARCH ?? hostArch;
   const composeEnv = {
     LUCY_WEBUI_HOST_PORT: dockerWebPort,
     LUCY_PROXY_HOST_PORT: dockerProxyPort,
-    LUCY_ALLOW_PLACEHOLDER_KTX: "1"
+    LUCY_ALLOW_PLACEHOLDER_KTX: "1",
+    TARGETPLATFORM: targetPlatform,
+    TARGETARCH: targetArch,
+    KTX_VERSION: expectedKtxVersion,
+    LUCY_EXPECTED_KTX_VERSION: expectedKtxVersion
   };
-  let buildEnv = {};
+  let buildEnv = {
+    TARGETPLATFORM: targetPlatform,
+    TARGETARCH: targetArch
+  };
   if (!defaultDockerConfig) {
     tempDockerConfig = await mkdtemp(path.join(tmpdir(), "lucy-docker-config-"));
     console.log(`[p0-smoke] using temporary DOCKER_CONFIG=${tempDockerConfig}`);
-    buildEnv = { DOCKER_CONFIG: tempDockerConfig };
+    buildEnv = { ...buildEnv, DOCKER_CONFIG: tempDockerConfig };
   }
   await run("docker", ["info"], { capture: true });
-  await run("docker", ["build", "--build-arg", `KTX_VERSION=${expectedKtxVersion}`, "-t", "project-lucy:p0-smoke", "."], { env: buildEnv });
+  await run("docker", [
+    "build",
+    "--build-arg", `KTX_VERSION=${expectedKtxVersion}`,
+    "--build-arg", `TARGETPLATFORM=${targetPlatform}`,
+    "--build-arg", `TARGETARCH=${targetArch}`,
+    "-t", "project-lucy:p0-smoke",
+    "."
+  ], { env: buildEnv });
   await run("docker", ["compose", "-p", "lucy-p0-smoke", "up", "-d", "--build"], { env: composeEnv });
   try {
     const health = await waitFor(`http://127.0.0.1:${dockerWebPort}/api/health`, { timeoutMs: 120_000 });
@@ -139,6 +156,7 @@ async function dockerSmoke() {
     if (!version.stdout.includes(`@kaelio/ktx ${expectedKtxVersion}`)) {
       throw new Error(`docker ktx --version expected @kaelio/ktx ${expectedKtxVersion}, got ${version.stdout.trim()}`);
     }
+    await run("bash", ["scripts/assert-image-elf-arch.sh", "project-lucy:local", targetArch], { env: composeEnv });
     await run("docker", ["compose", "-p", "lucy-p0-smoke", "ps"], { env: composeEnv });
   } finally {
     await run("docker", ["compose", "-p", "lucy-p0-smoke", "down", "-v"], { capture: true, env: composeEnv }).catch((error) => {

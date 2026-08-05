@@ -4,6 +4,9 @@ services:
       context: .
       args:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
+        # Customer / production baseline is amd64. Override on arm64 hosts.
+        TARGETPLATFORM: "${TARGETPLATFORM:-linux/amd64}"
+        TARGETARCH: "${TARGETARCH:-amd64}"
     image: project-lucy:local
     environment:
       KTX_PROJECT_ROOT: /data/lucy

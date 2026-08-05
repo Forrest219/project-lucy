@@ -21,6 +21,13 @@ services:
       context: .
       args:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
+        # Dockerfile pins `--platform=$TARGETPLATFORM` (not BUILDPLATFORM) so image
+        # metadata and layer ELFs match. Plain compose does not always inject
+        # TARGETPLATFORM — defaults assume Apple Silicon. Prefer
+        # `npm run demo:rebuild`, which sets BUILDX_BUILDER=default and host arch.
+        # amd64 hosts: TARGETPLATFORM=linux/amd64 TARGETARCH=amd64, or use the script.
+        TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
+        TARGETARCH: "${TARGETARCH:-arm64}"
     image: project-lucy:demo
     environment:
       KTX_PROJECT_ROOT: /data/lucy

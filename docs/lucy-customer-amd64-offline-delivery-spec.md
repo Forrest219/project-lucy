@@ -49,25 +49,39 @@
 构建必须在 amd64 native 上完成，**禁止**用 QEMU 跨架构模拟（避免 npm ci / ktx install 出问题，且速度更快）。
 
 ```bash
-# 一次性创建 buildx builder
-docker buildx create --use --name lucy-amd64 --driver docker-container --platform linux/amd64
+# 一次性创建 buildx builder。禁止加 --use：
+# --use 会把全局当前 builder 切到 lucy-amd64，污染本机 arm64 的 demo 重建
+# （QEMU 跨架构，经常 >10 分钟像卡住）。客户包构建一律显式 --builder。
+docker buildx create --name lucy-amd64 \
+  --driver docker-container --platform linux/amd64 \
+  2>/dev/null || docker buildx inspect lucy-amd64 >/dev/null
 
-# 单架构构建并加载到本地 docker
+# 单架构构建并加载到本地 docker。
+# 必须显式传入 TARGETPLATFORM/TARGETARCH：Dockerfile 的 FROM 绑定 TARGETPLATFORM，
+# 仅靠 --platform 元数据不足以保证层内 ELF 与标签一致（见 WO-202608-08）。
 docker buildx build \
   --builder lucy-amd64 \
   --platform linux/amd64 \
   --build-arg "KTX_VERSION=0.16.0" \
+  --build-arg "TARGETPLATFORM=linux/amd64" \
+  --build-arg "TARGETARCH=amd64" \
   --tag "project-lucy:customer-amd64-0.16.0" \
   --load \
   --metadata-file release/customer-amd64-buildx-metadata.json \
   .
+
+# 构建结束后恢复 Engine 自带 default，避免后续 demo compose 误用 amd64 builder
+docker buildx use default
 ```
 
-构建完后做三层校验：
+构建完后做四层校验：
 
-1. **架构校验**：`docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}'` 必须输出 `linux/amd64`。
-2. **冒烟**：`npm run smoke:p0:docker` 必须全绿。
-3. **客户配置包冒烟**：`npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` 必须全绿。
+1. **元数据架构校验**：`docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}'` 必须输出 `linux/amd64`。
+2. **ELF 二进制门禁**（必做）：`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64` 必须通过。仅检查 metadata **不够**——历史上出现过「元数据 amd64、`/usr/local/bin/node` 实为 aarch64」的坏包。
+3. **冒烟**：`npm run smoke:p0:docker` 必须全绿。
+4. **客户配置包冒烟**：`npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` 必须全绿。
+
+> **作废声明**：2026-08-04 前后基于 `FROM --platform=$BUILDPLATFORM` 打出的 `project-lucy:customer-amd64-0.16.0` / `inbox/customer-amd64-offline-package` **不得交付客户**，须按本规格在 amd64 native 上重建。
 
 ### 2.3 镜像导出
 
@@ -193,13 +207,19 @@ curl -sf -X POST http://localhost:7879/mcp \
 ## 6. 验收 Gate（出包前必跑）
 
 ```bash
-# 1. 镜像构建
+# 1. 镜像构建（显式 --builder；不要 docker buildx use lucy-amd64）
 docker buildx build --builder lucy-amd64 --platform linux/amd64 \
   --build-arg "KTX_VERSION=0.16.0" \
+  --build-arg "TARGETPLATFORM=linux/amd64" \
+  --build-arg "TARGETARCH=amd64" \
   --tag "project-lucy:customer-amd64-0.16.0" --load .
+docker buildx use default
 
-# 2. 架构断言
+# 2. 元数据架构断言
 test "$(docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}')" = "linux/amd64"
+
+# 2b. ELF 二进制门禁（必做）
+bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
 
 # 3. 导出 image tar
 docker save -o release/project-lucy-customer-amd64-0.16.0-image.tar project-lucy:customer-amd64-0.16.0
@@ -221,6 +241,7 @@ docker compose -f docker-compose.yml -f docker-compose.customer-config.yml down
 
 - 规格本体：`docs/lucy-customer-amd64-offline-delivery-spec.md`
 - 配套 plan：`docs/plans/wo-202608-07-customer-amd64-delivery.md`
+- 架构修复规格：`docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`
 - 部署 runbook：`docs/customer-amd64-docker-deploy-runbook.md`
 - 邮件草稿：`inbox/customer-amd64-delivery-email-draft.md`
 - 交付包根目录：`inbox/customer-amd64-offline-package/`

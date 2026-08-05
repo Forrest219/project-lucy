@@ -22,6 +22,12 @@ services:
       context: .
       args:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
+        # Same TARGETPLATFORM contract as docker-compose.demo.yml. Prefer
+        # BUILDX_BUILDER=default when rebuilding so customer `lucy-amd64` cannot
+        # hijack this path. See docs/lucy-202608-05-demo-builder-arm-default-spec.md
+        # and docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md.
+        TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
+        TARGETARCH: "${TARGETARCH:-arm64}"
     image: project-lucy:postgres-demo
     environment:
       KTX_PROJECT_ROOT: /data/lucy

@@ -23,7 +23,7 @@
 | Demo DB | `mysql:8.4`, `postgres:16-alpine` | `docker-compose.demo.yml`, `docker-compose.postgres-demo.yml` |
 | Customer DB path | MySQL validated locally | `npm run smoke:p0:customer` |
 | Kubernetes / Helm deployment | Single-replica only; `Recreate` strategy; RWO PVC at `/data/lucy`; multi-arch manifest list `linux/amd64` (primary) + `linux/arm64` (secondary) | `deploy/k8s/helm/lucy/`, `docs/customer-k8s-deployer-quickstart.md`, `.github/workflows/lucy-release.yml` |
-| Image architecture baseline | `linux/amd64` primary; `linux/arm64` secondary | `Dockerfile` (`BUILDPLATFORM` + `TARGETARCH`), `.github/workflows/lucy-release.yml` (`buildx` + QEMU) |
+| Image architecture baseline | `linux/amd64` primary; `linux/arm64` secondary; metadata **and** layer ELF must match | `Dockerfile` (`TARGETPLATFORM` + `TARGETARCH`), `scripts/assert-image-elf-arch.sh`, `.github/workflows/lucy-release.yml` (`buildx` + QEMU) |
 | MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/deployment-docker.md`, `docs/customer-k8s-deployer-quickstart.md`, `npm run smoke:p0:demo` |
 | Release CI | GitHub Actions release gates; multi-arch manifest list push via `docker buildx` | `.github/workflows/lucy-release.yml`, `docs/release-ci.md` |
 

@@ -12,7 +12,7 @@ on:
       ktx_version:
         description: "Bundled @kaelio/ktx npm version to validate"
         required: false
-        default: "0.13.0"
+        default: "0.16.0"
       release_tag:
         description: "Optional Docker/image tag used by release-package"
         required: false
@@ -24,8 +24,8 @@ permissions:
   packages: write
 
 env:
-  KTX_VERSION: ${{ inputs.ktx_version || '0.13.0' }}
-  LUCY_EXPECTED_KTX_VERSION: ${{ inputs.ktx_version || '0.13.0' }}
+  KTX_VERSION: ${{ inputs.ktx_version || '0.16.0' }}
+  LUCY_EXPECTED_KTX_VERSION: ${{ inputs.ktx_version || '0.16.0' }}
 
 jobs:
   spec-and-webui:
@@ -142,7 +142,7 @@ jobs:
       - demo-e2e
       - postgres-demo-e2e
       - business-eval-catalog
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.ktx_version != '0.13.0' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.ktx_version != '0.16.0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -150,7 +150,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run compat:ktx-upgrade -- --baseline 0.13.0 --candidate "$KTX_VERSION"
+      - run: npm run compat:ktx-upgrade -- --baseline 0.16.0 --candidate "$KTX_VERSION"
 
   release-package:
     runs-on: ubuntu-latest
@@ -186,6 +186,7 @@ jobs:
       # Apple Silicon / AWS Graviton developers can `docker pull` the same tag
       # without rebuilding locally.
       - name: Build & push multi-arch image
+        id: build-push
         env:
           REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
           IMAGE_NAMESPACE: ${{ vars.LUCY_IMAGE_NAMESPACE || 'kaelio' }}
@@ -204,7 +205,7 @@ jobs:
       - name: Write release notes
         env:
           LUCY_RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          LUCY_DOCKER_IMAGE: ${{ steps.release.outputs.image }}
+          LUCY_DOCKER_IMAGE: ${{ steps.build-push.outputs.image }}
           LUCY_PLATFORMS: linux/amd64,linux/arm64
         run: npm run release:artifacts -- --tag "${{ steps.release.outputs.tag }}"
       - uses: actions/upload-artifact@v4

@@ -62,7 +62,8 @@ For manual compose runs, create the secret file before starting the stack:
 ```bash
 mkdir -p secrets
 printf '%s' '<postgres-password>' > secrets/postgres-password
-docker compose -f docker-compose.postgres-demo.yml up -d --build
+# Pin Engine default builder so a leftover lucy-amd64 selection cannot hijack the build.
+BUILDX_BUILDER=default docker compose -f docker-compose.postgres-demo.yml up -d --build
 ```
 
 To keep the secret outside the repository, point the compose file at another
@@ -70,6 +71,7 @@ directory:
 
 ```bash
 LUCY_POSTGRES_DEMO_SECRET_DIR=/path/to/demo-secrets \
+BUILDX_BUILDER=default \
 docker compose -f docker-compose.postgres-demo.yml up -d --build
 ```
 

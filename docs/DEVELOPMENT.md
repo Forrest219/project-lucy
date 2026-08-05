@@ -127,6 +127,15 @@ Lucy WebUI 的设计规范事实源在
 
 > **凭据/路径漂移防护**：`ktx.yaml.example` 由 M3.4 维护；当 `ktx.yaml` 中的 host/user/路径字段发生变化时，请同步更新 `.example`。
 
+### 本地 Docker demo 重建
+
+本机 demo 重建必须走 **host-native** 路径，禁止误用客户打包用的 `lucy-amd64` builder（ARM 上会变成 QEMU，经常 >10 分钟像卡住）。
+
+- 推荐：`npm run demo:rebuild`（或 `bash scripts/rebuild-demo-lucy.sh`；支持 `--no-cache`）。脚本固定 `BUILDX_BUILDER=default`，并按 `uname -m` 设置 `TARGETPLATFORM` / `TARGETARCH`，再跑 ELF 断言。
+- 等价手写：`BUILDX_BUILDER=default docker compose -f docker-compose.demo.yml up -d --build lucy`。
+- amd64 开发者覆盖：脚本已按 host 自动选择；若直接 compose，传 `TARGETPLATFORM=linux/amd64 TARGETARCH=amd64`。
+- 客户 amd64 离线包：只用 `docker buildx build --builder lucy-amd64 ...`，并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建时**不要** `--use`，结束后 `docker buildx use default`）；交付前必须 `bash scripts/assert-image-elf-arch.sh <image> amd64`。详见 `docs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
+
 ## 语义层（semantic-layer）分层
 
 `semantic-layer/<connection>/` 下的 yaml 看似两份重名文件，实际是 ktx 的
