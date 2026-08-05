@@ -1149,11 +1149,36 @@ export function Audit() {
         }
       />
 
-      <div className="flex items-center gap-2" role="tablist" aria-label="访问日志视图">
-        <Link to={tabLink("turns")} role="tab" aria-selected={tab === "turns"} className="pl-btn pl-btn--ghost text-sm">
+      <div
+        className="pl-segmented-control pl-segmented-control--cols-2 w-fit"
+        role="tablist"
+        aria-label="访问日志视图"
+        data-testid="audit-view-tabs"
+      >
+        <Link
+          to={tabLink("turns")}
+          role="tab"
+          aria-selected={tab === "turns"}
+          className={
+            tab === "turns"
+              ? "pl-segmented-control-item pl-segmented-control-item--active text-center no-underline"
+              : "pl-segmented-control-item text-center no-underline"
+          }
+          data-testid="audit-tab-turns"
+        >
           问询记录
         </Link>
-        <Link to={tabLink("calls")} role="tab" aria-selected={tab === "calls"} className="pl-btn pl-btn--ghost text-sm">
+        <Link
+          to={tabLink("calls")}
+          role="tab"
+          aria-selected={tab === "calls"}
+          className={
+            tab === "calls"
+              ? "pl-segmented-control-item pl-segmented-control-item--active text-center no-underline"
+              : "pl-segmented-control-item text-center no-underline"
+          }
+          data-testid="audit-tab-calls"
+        >
           调用流水
         </Link>
       </div>

@@ -81,7 +81,12 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
 
     renderAudit();
 
-    expect(await screen.findByRole("tab", { name: "问询记录" })).toHaveAttribute("aria-selected", "true");
+    const viewTabs = await screen.findByTestId("audit-view-tabs");
+    expect(viewTabs).toHaveClass("pl-segmented-control", "pl-segmented-control--cols-2");
+    expect(screen.getByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("audit-tab-turns")).toHaveClass("pl-segmented-control-item--active");
+    expect(screen.getByTestId("audit-tab-calls")).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByTestId("audit-tab-calls").className).not.toMatch(/pl-segmented-control-item--active/);
     expect(screen.queryByRole("tab", { name: "数据热力" })).not.toBeInTheDocument();
     const turnsTable = await screen.findByTestId("audit-turns-table");
     expect(turnsTable).toHaveClass("pl-data-grid", "pl-audit-table");
@@ -114,7 +119,9 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
 
     renderAudit("/admin/audit?tab=calls");
 
-    expect(await screen.findByRole("tab", { name: "调用流水" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByTestId("audit-tab-calls")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("audit-tab-calls")).toHaveClass("pl-segmented-control-item--active");
+    expect(screen.getByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "false");
     expect(screen.getByTestId("audit-export-csv")).toHaveClass("pl-btn--primary");
   });
 

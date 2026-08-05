@@ -81,10 +81,11 @@ describe("Audit", () => {
 
     expect(await screen.findByRole("heading", { name: "访问日志" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("tab", { name: "问询记录" })).toBeInTheDocument();
+    expect(await screen.findByTestId("audit-view-tabs")).toHaveClass("pl-segmented-control");
+    expect(screen.getByTestId("audit-tab-calls")).toHaveClass("pl-segmented-control-item--active");
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "调用流水" }));
+    fireEvent.click(screen.getByTestId("audit-tab-calls"));
     expect(await screen.findByText("tool_denied")).toBeInTheDocument();
     await waitFor(() => expect(String(fetchMock.mock.calls.find((call) => String(call[0]).startsWith("/api/admin/audit?"))?.[0] ?? "")).toContain("includeProtocol=false"));
 
