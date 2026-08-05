@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handbookPathForTests, parseHelpToc, readHelpHandbook } from "../help";
+import { handbookPathForTests, parseHelpToc, readHelpHandbook, searchHelpHandbook, searchHelpMarkdown, HelpQueryTooLongError } from "../help";
 
 let projectRoot: string | undefined;
 let appRoot: string | undefined;
@@ -113,6 +113,7 @@ describe("Help handbook", () => {
     const toc = parseHelpToc([
       "### 3.2 数据库接入",
       "#### 刷新本地目录",
+      "#### 连接概览指标说明",
       "#### WebUI 与 ktx.yaml 的职责边界",
       "#### 连接形态与配置字段",
       "#### 新增数据库连接（运维 Runbook）",
@@ -122,6 +123,7 @@ describe("Help handbook", () => {
     expect(toc).toEqual([
       { id: "database-connections", level: 3, title: "3.2 数据库接入" },
       { id: "catalog-reload", level: 4, title: "刷新本地目录" },
+      { id: "connection-overview-metrics", level: 4, title: "连接概览指标说明" },
       { id: "database-connection-boundary", level: 4, title: "WebUI 与 ktx.yaml 的职责边界" },
       { id: "database-connection-shapes", level: 4, title: "连接形态与配置字段" },
       {
@@ -584,13 +586,121 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain(
       "`/overview`「待处理事项」里「N 张表待补语义」怎么算？"
     );
+    expect(handbook.markdown).toContain("连接概览上的「已发现表数」是什么？");
+    expect(handbook.markdown).toContain("#### 连接概览指标说明");
+    expect(handbook.markdown).toContain("已发现表数 / 服务器目录已发现表");
     expect(handbook.markdown).toContain("[系统概览待处理事项](#系统概览待处理事项)");
     expect(handbook.markdown).toContain("[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查)");
     expect(handbook.toc).toEqual(
       expect.arrayContaining([
         { id: "faq-quick-reference", level: 2, title: "0. 常见问题速查" },
-        { id: "overview-action-required", level: 4, title: "系统概览待处理事项" }
+        { id: "overview-action-required", level: 4, title: "系统概览待处理事项" },
+        { id: "connection-overview-metrics", level: 4, title: "连接概览指标说明" }
       ])
     );
+  });
+});
+
+describe("Help search", () => {
+  it("returns empty items for blank query without error", () => {
+    expect(searchHelpMarkdown("# Title\n\n## Token 配置\n\nBearer token here.", "   ")).toEqual({
+      query: "",
+      items: []
+    });
+  });
+
+  it("throws ERR_HELP_QUERY_TOO_LONG when query exceeds 80 characters", () => {
+    const tooLong = "x".repeat(81);
+    expect(() => searchHelpMarkdown("# Title\n\n## Section\n\nbody", tooLong)).toThrow(
+      HelpQueryTooLongError
+    );
+    try {
+      searchHelpMarkdown("# Title\n\n## Section\n\nbody", tooLong);
+      expect.unreachable("expected HelpQueryTooLongError");
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: "ERR_HELP_QUERY_TOO_LONG",
+        statusCode: 400
+      });
+    }
+  });
+
+  it("ranks title hits first and returns plain-text snippets", () => {
+    const markdown = [
+      "# Project Lucy 系统使用与运维手册",
+      "",
+      "## 访问治理 Admin",
+      "",
+      "这里只是顺带提到 token 一次。",
+      "",
+      "## Bearer Token 发行",
+      "",
+      "Token 明文只在创建 token 的 HTTP 响应出现一次。"
+    ].join("\n");
+
+    const result = searchHelpMarkdown(markdown, "token");
+    expect(result.query).toBe("token");
+    expect(result.items.length).toBeGreaterThanOrEqual(1);
+    expect(result.items[0]?.sectionId).toBe("admin-tokens");
+    expect(result.items[0]?.snippet).toContain("Token");
+    expect(result.items[0]?.snippet).not.toMatch(/<[^>]+>/);
+  });
+
+  it("finds 已发现表数 in the bundled handbook under connection-overview-metrics", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const result = await searchHelpHandbook("已发现表数", { appRoot: realAppRoot });
+    expect(result.items.some((item) => item.sectionId === "connection-overview-metrics")).toBe(
+      true
+    );
+    const hit = result.items.find((item) => item.sectionId === "connection-overview-metrics");
+    expect(hit?.snippet).toContain("已发现表数");
+  });
+
+  it("serves GET /api/help/search with the designed envelope", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_APP_ROOT = realAppRoot;
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const empty = await request(app.server).get("/api/help/search").query({ q: "" }).expect(200);
+    expect(empty.body).toEqual({ ok: true, data: { query: "", items: [] } });
+
+    const found = await request(app.server)
+      .get("/api/help/search")
+      .query({ q: "已发现表数", limit: "5" })
+      .expect(200);
+    expect(found.body.ok).toBe(true);
+    expect(found.body.data.query).toBe("已发现表数");
+    expect(found.body.data.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sectionId: "connection-overview-metrics",
+          title: "连接概览指标说明"
+        })
+      ])
+    );
+
+    const tooLong = await request(app.server)
+      .get("/api/help/search")
+      .query({ q: "y".repeat(81) })
+      .expect(400);
+    expect(tooLong.body).toEqual({
+      ok: false,
+      error: {
+        code: "ERR_HELP_QUERY_TOO_LONG",
+        message: "Help search query exceeds 80 characters"
+      }
+    });
+
+    await app.close();
   });
 });

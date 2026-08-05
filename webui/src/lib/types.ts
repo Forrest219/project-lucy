@@ -488,6 +488,17 @@ export type HelpHandbook = {
   markdown: string;
 };
 
+export type HelpSearchItem = {
+  sectionId: string;
+  title: string;
+  snippet: string;
+};
+
+export type HelpSearchResult = {
+  query: string;
+  items: HelpSearchItem[];
+};
+
 export type JoinCandidate = {
   conn: string;
   schema: string;

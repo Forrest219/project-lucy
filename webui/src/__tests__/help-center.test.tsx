@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HelpCenter } from "../pages/HelpCenter";
@@ -55,6 +55,7 @@ function renderHelp(path = "/help") {
                 level: 4,
                 title: "Agent 可见性与 ACL 同步"
               },
+              { id: "connection-overview-metrics", level: 4, title: "连接概览指标说明" },
               { id: "semantic-layer", level: 3, title: "3.3 语义层维护" },
               { id: "admin-governance", level: 3, title: "3.5 访问治理 Admin" },
               { id: "eval", level: 3, title: "3.6 质量评测 Eval" },
@@ -101,7 +102,7 @@ function renderHelp(path = "/help") {
               "| 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |",
               "| 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |",
               "| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |",
-              "| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：本地语义表总数减去 `completion` 为 `done` 的表；不是按字段条数。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |",
+              "| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |",
               "| 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录；`ACL` 看近 7 天 `denied` 汇总。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |",
               "",
               "### 0.2 面向管理员",
@@ -192,6 +193,10 @@ function renderHelp(path = "/help") {
               "",
               "新增连接后必须同步 `webui/config/access.yaml` 的 role。",
               "",
+              "#### 连接概览指标说明",
+              "",
+              "「已发现表数」统计本地 Schema Manifest 已读到的表，不是远端物理库实时表数。",
+              "",
               "### 3.3 语义层维护",
               "",
               "维护 manifest / overlay、启用表范围与 reindex。",
@@ -277,6 +282,36 @@ function renderHelp(path = "/help") {
           }
         })
       );
+    }
+    if (url.startsWith("/api/help/search")) {
+      const parsed = new URL(url, "http://localhost");
+      const q = parsed.searchParams.get("q") ?? "";
+      if (!q.trim()) {
+        return new Response(JSON.stringify({ ok: true, data: { query: "", items: [] } }), {
+          status: 200
+        });
+      }
+      if (q.includes("已发现表数")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              query: q,
+              items: [
+                {
+                  sectionId: "connection-overview-metrics",
+                  title: "连接概览指标说明",
+                  snippet: "「已发现表数」统计本地 Schema Manifest 已读到的表…"
+                }
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, data: { query: q, items: [] } }), {
+        status: 200
+      });
     }
     return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: "not found" } }), { status: 404 });
   });
@@ -835,6 +870,36 @@ describe("HelpCenter", () => {
     const text = section?.textContent ?? "";
     expect(text).not.toMatch(
       /财政部舱单|舱单|替代测试|上传报价包|添加架构|目标架构|模式清单|重新加载资产/
+    );
+  });
+
+  it("renders a handbook search box and finds 已发现表数", async () => {
+    const { fetchMock } = renderHelp();
+    const input = await screen.findByLabelText("搜索系统手册");
+    expect(input).toBeInTheDocument();
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/help/handbook"));
+
+    fireEvent.change(input, { target: { value: "已发现表数" } });
+
+    expect(await screen.findByTestId("help-search-results")).toBeInTheDocument();
+    expect(await screen.findByText("连接概览指标说明")).toBeInTheDocument();
+    expect(screen.getByText(/统计本地 Schema Manifest 已读到的表/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/api\/help\/search\?q=/)
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: /连接概览指标说明/ }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("help-search-results")).not.toBeInTheDocument();
+    });
+    expect(document.getElementById("connection-overview-metrics")).toBeInTheDocument();
+  });
+
+  it("shows an empty search state when nothing matches", async () => {
+    renderHelp("/help?q=完全不存在的关键词xyz");
+    expect(await screen.findByTestId("help-search-empty")).toHaveTextContent(
+      "未找到与「完全不存在的关键词xyz」相关的手册内容。"
     );
   });
 });

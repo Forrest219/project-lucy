@@ -81,3 +81,21 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 92 / `wo-202608-25` 已落地：动作改为“返回系统概览”并跳转 `/overview`（本轮不做浏览器验证）。
+
+## UX-HELP-004: 系统手册缺少关键词搜索，连接 KPI 术语无处可查
+
+Status: Fixed
+Route: `/help`
+Area: Handbook search / connection KPI glossary
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+`/help` 仅有 TOC 跳转，无法按 UI 文案搜索。连接概览「已发现表数」等 KPI 术语不在手册字面中，用户不知道去哪里查。
+
+### Expected
+1. `/help` 支持手册内关键词搜索，结果跳转 `?section=`。
+2. 手册写明「已发现表数 / 已启用表数 / 服务器目录已发现表 / 未启用表」含义。
+
+### Notes
+Spec 111 / `wo-202608-44` 已落地：`GET /api/help/search` + HelpCenter 搜索 UI + 手册「连接概览指标说明」（本轮不做浏览器验证，仅 code review）。

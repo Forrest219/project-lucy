@@ -43,13 +43,14 @@
 | --- | --- | --- |
 | 我在哪里新建数据库连接？ | `WebUI` 不新建物理连接；先在 `ktx.yaml` 和 secret 文件声明连接，再回 `WebUI` 管理已声明连接。 | [3.2 数据库接入](#32-数据库接入)、[WebUI 与 ktx.yaml 的职责边界](#webui-与-ktxyaml-的职责边界) |
 | 数据库密码应该放在哪里？ | 用 `file:`、`env:` 或 `Docker` secrets；不要把明文密码写进 `ktx.yaml`、文档、`commit message` 或聊天记录。 | [连接形态与配置字段](#连接形态与配置字段)、[5.2 ktx.yaml](#52-ktxyaml) |
-| 点了刷新本地目录，刷新后的表在哪里看？ | `/connections` 看 reload 状态，`/connections/whitelist` 看可纳入启用表范围的表，`WebUI` 首页 `/` 看已进入语义建模的表。 | [刷新本地目录](#刷新本地目录) |
+| 点了刷新本地目录，刷新后的表在哪里看？ | `/connections` 看 reload 状态，`/connections/enabled-tables` 看可纳入启用表范围的表，`WebUI` 首页 `/` 看已进入语义建模的表。 | [刷新本地目录](#刷新本地目录) |
+| 连接概览上的「已发现表数」是什么？ | 统计本地 Schema Manifest 已读到的表，不是远端物理库实时表数；与「已启用表数」（`enabled_tables`）对照看。 | [连接概览指标说明](#连接概览指标说明) |
 | 为什么提示“未发现本地 manifest”？ | `ktx.yaml` 声明了 `Schema` 或启用表范围，但本地 `semantic-layer/<conn>/_schema/<schema>.yaml` 缺失或未包含目标表。 | [6.1 为什么提示“未发现本地 manifest”？](#61-为什么提示未发现本地-manifest) |
 | `YAML` 改完后为什么 `Agent` 仍然搜不到新口径？ | `WebUI` 读文件即可看到；`KTX` / `MCP` 检索需要 `ktx admin reindex`，并且还要用 `sl read` 确认 `overlay` 已合并到目标 `source`。 | [6.3 配置文件改动后什么时候生效？](#63-配置文件改动后什么时候生效)、[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查) |
 | 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |
 | 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |
 | 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
-| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：本地语义表总数减去 `completion` 为 `done` 的表；不是按字段条数。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |
+| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |
 | 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录；`ACL` 看近 7 天 `denied` 汇总。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |
 
 ### 0.2 面向管理员
@@ -293,8 +294,8 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 | 条目 | 计数来源 | 口径说明 |
 | --- | --- | --- |
-| N 张表待补语义 | `GET /api/sources` | `表总数 − completion 为 done 的表数`。按**表**计数，不是按字段或描述条数。 |
-| N 个 Catalog 对象待处理 | 同上 | **当前实现与「待补语义」使用同一公式**（`表总数 − done`）；文案写 Catalog 同步不完整，但数字并非独立 Catalog 同步指标。 |
+| N 张表待补语义 | `GET /api/sources`（`enabled === true`） | **已启用 ∩ `Manifest`** 中 `completion !== done` 的表数。按**表**计数；未启用 `Manifest` 表不计入。 |
+| N 个 Catalog 对象待处理 | 同上 | **当前实现与「待补语义」使用同一公式**（已启用集上的 `total − done`）；文案写 Catalog 同步不完整，但数字并非独立 Catalog 同步指标。 |
 | 存在 N 个待发布文件 | `GET /api/diff` | 返回的可审阅变更文件数（`files.length`）。 |
 | 近 30 天无评测数据 | `GET /api/eval/runs?limit=1` | 仅在接口成功且确认 **0 条**评测运行记录时出现。探测实现是「是否已有至少 1 条 run」，**未按 30 天时间窗过滤**；加载中或接口失败时不展示该项。 |
 | 近 7 天存在 ACL 拒绝 | `GET /api/admin/agents` | 各 `Agent` 的 `stats.deniedLast7d` 求和；来自审计库近 7 天 `outcome=denied`。 |
@@ -384,7 +385,7 @@ PUT /api/connections/:connId/enabled-tables
 刷新后的“本地目录”不是一个独立页面。它是 WebUI 从本地文件读出的资产视图，按查看目的分布在不同入口：
 
 - 看刷新是否成功：打开 `/connections`，在对应 connection 卡片内查看 `本地目录已刷新`、表数量、warning 数量和缺失 Manifest 诊断。
-- 看哪些表可被纳入白名单：打开 `/connections/whitelist`。这里展示的是本地 manifest 中已经存在、可写入 `ktx.yaml enabled_tables` 的表。
+- 看哪些表可被纳入启用表范围：打开 `/connections/enabled-tables`。这里展示的是本地 manifest 中已经存在、可写入 `ktx.yaml enabled_tables` 的表。
 - 看哪些表已经进入语义层维护：打开 WebUI 首页 `/`。这里展示的是已被系统读入并可维护描述、指标、分群、joins 的 semantic table。
 - 看底层 YAML 文件：在仓库中查看 `semantic-layer/<conn>/_schema/<schema>.yaml`（manifest）和 `semantic-layer/<conn>/<source>.yaml`（overlay）。
 - 看最近 reload 历史：调用 `GET /api/catalog/reloads`，或查看系统生成文件 `.ktx-ui/catalog-reloads.json`。当前 WebUI 暂无独立的“本地目录历史”页面。
@@ -393,7 +394,7 @@ PUT /api/connections/:connId/enabled-tables
 
 1. 在 `/connections` 点击 `刷新本地目录`，先看当前 connection 卡片是否出现成功状态和 warning。
 2. 如果提示缺失 Manifest，先补齐或上传 `semantic-layer/<conn>/_schema/<schema>.yaml`，再重新刷新。
-3. 如果刷新成功但表白名单中没有目标表，检查目标表是否已经存在于本地 manifest。
+3. 如果刷新成功但启用表范围中没有目标表，检查目标表是否已经存在于本地 manifest。
 4. 如果 WebUI 能看到 YAML 改动，但 Agent / MCP 搜索不到，运行 `ktx admin reindex` 重建 KTX 检索索引；Reload Catalog 只更新 WebUI 对本地 YAML 的读取状态，不等同于 KTX reindex。
 
 | API | 行为 |
@@ -410,6 +411,28 @@ PUT /api/connections/:connId/enabled-tables
 | `SCHEMA_MANIFEST_EMPTY` | manifest 存在但没有表 |
 | `ENABLED_TABLE_NOT_SCANNED` | `enabled_tables` 中的表未出现在本地 manifest |
 | `MANIFEST_PARSE_FAILED` | manifest YAML 解析失败 |
+
+#### 连接概览指标说明
+
+`/connections` 顶部 KPI 与 Schema 表列头描述的是同一组本地 Catalog 指标，不是远端物理库的实时扫描结果。
+
+深链地址：
+
+```text
+/help?section=connection-overview-metrics
+```
+
+| UI 文案 | 含义 | 来源 |
+| --- | --- | --- |
+| 已发现表数 / 服务器目录已发现表 | 本地 Schema Manifest 已读入 Catalog 的表数量 | `semantic-layer/<conn>/_schema/<schema>.yaml` |
+| 已启用表数 | 已纳入启用表范围、可进入语义层的表数量 | `ktx.yaml` 的 `enabled_tables` |
+| 未启用表 | 已发现但尚未写入 `enabled_tables` 的表；缺 Manifest 的未知表不计入 | 已发现 − 已启用 |
+
+对照与排障：
+
+- 「已发现表数」为 0、但「已启用表数」> 0：通常表示 `enabled_tables` 已配置，但本地 Schema Manifest 尚未读到这些表；先补 Manifest，再点 `刷新本地目录`。
+- 需要看物理库里实际有哪些表时，使用连接卡上的库内目录能力（若已启用），不要把「已发现表数」当成库内表数。
+- 维护启用范围请打开 `/connections/enabled-tables`。
 
 #### WebUI 与 ktx.yaml 的职责边界
 

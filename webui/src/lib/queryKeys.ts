@@ -8,6 +8,7 @@ export const queryKeys = {
     ["sources", conn, schema, table, "versions", versionId] as const,
   diff: ["diff"] as const,
   helpHandbook: ["help", "handbook"] as const,
+  helpSearch: (q: string) => ["help", "search", q] as const,
   wiki: ["wiki"] as const,
   wikiPage: (key: string) => ["wiki", key] as const,
   wikiVersions: (key: string) => ["wiki", "versions", key] as const,

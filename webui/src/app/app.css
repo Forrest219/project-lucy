@@ -405,6 +405,13 @@
   .pl-help-toc {
     @apply sticky top-6 max-h-[calc(100vh-48px)] overflow-auto rounded-lg border border-border-default bg-bg-surface p-3 shadow-card;
   }
+  .pl-help-search { @apply mb-3; }
+  .pl-help-search-input {
+    @apply h-[38px] w-full rounded-sm border border-border-default bg-bg-base px-3 text-sm text-fg-default outline-none;
+  }
+  .pl-help-search-input:focus {
+    @apply border-primary ring-2 ring-primary;
+  }
   .pl-help-toc-title { @apply mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-fg-muted; }
   .pl-help-toc-link {
     @apply relative block rounded-sm px-2 py-1.5 text-xs text-fg-body no-underline hover:bg-bg-muted;
@@ -430,6 +437,22 @@
   }
   .pl-help-section {
     @apply scroll-mt-24 border-b border-border-muted py-4 first:pt-0 last:border-b-0 last:pb-0;
+  }
+  .pl-help-search-results { @apply grid gap-3; }
+  .pl-help-search-results-header {
+    @apply flex flex-wrap items-center gap-3 rounded-lg border border-border-default bg-bg-surface px-4 py-3;
+  }
+  .pl-help-search-results-title { @apply m-0 text-base font-semibold text-fg-default; }
+  .pl-help-search-results-meta { @apply m-0 flex-1 text-sm text-fg-muted; }
+  .pl-help-search-result-list { @apply m-0 grid list-none gap-2 p-0; }
+  .pl-help-search-result-item { @apply m-0; }
+  .pl-help-search-result-link {
+    @apply grid gap-1 rounded-lg border border-border-default bg-bg-surface px-4 py-3 no-underline transition-colors hover:border-primary hover:bg-bg-muted;
+  }
+  .pl-help-search-result-title { @apply text-sm font-semibold text-fg-default; }
+  .pl-help-search-result-snippet { @apply text-xs leading-5 text-fg-muted; }
+  .pl-help-search-highlight {
+    @apply rounded-sm bg-bg-selected px-0.5 text-fg-default;
   }
   .pl-help-section .pl-markdown-preview { @apply gap-3; }
   .pl-help-section .pl-markdown-preview h1 { @apply text-lg; }

@@ -77,7 +77,7 @@ import {
   type WikiUploadInput,
   type WikiWriteInput
 } from "./wiki";
-import { readHelpHandbook } from "./help.js";
+import { readHelpHandbook, searchHelpHandbook } from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
@@ -800,6 +800,20 @@ export function buildServer() {
     return {
       ok: true,
       data: await readHelpHandbook()
+    };
+  });
+
+  app.get<{
+    Querystring: { q?: string; limit?: string };
+  }>("/api/help/search", async (request) => {
+    const rawLimit = request.query.limit;
+    const parsedLimit =
+      rawLimit === undefined || rawLimit === "" ? undefined : Number.parseInt(rawLimit, 10);
+    const limit =
+      parsedLimit !== undefined && Number.isFinite(parsedLimit) ? parsedLimit : undefined;
+    return {
+      ok: true,
+      data: await searchHelpHandbook(request.query.q ?? "", { limit })
     };
   });
 

@@ -25,6 +25,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/Agent 可见性与 ACL 同步|ACL 同步/i, "database-connection-acl-sync"],
   [/表白名单/, "table-whitelist"],
   [/刷新本地目录|静态 Catalog reload|Catalog Reload|Reload Catalog/i, "catalog-reload"],
+  [/连接概览指标说明/, "connection-overview-metrics"],
   [/语义层维护/, "semantic-layer"],
   [/为什么要编写语义 YAML|编写语义 YAML/, "semantic-yaml-why"],
   [/推荐编写工作流|语义编写工作流/, "semantic-authoring-workflow"],
@@ -67,10 +68,15 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
 const DATABASE_OPS_HEADING_TITLES = new Set([
   "WebUI 与 ktx.yaml 的职责边界",
   "刷新本地目录",
+  "连接概览指标说明",
   "连接形态与配置字段",
   "新增数据库连接（运维 Runbook）",
   "Agent 可见性与 ACL 同步"
 ]);
+
+const HELP_SEARCH_QUERY_MAX = 80;
+const HELP_SEARCH_DEFAULT_LIMIT = 20;
+const HELP_SEARCH_SNIPPET_RADIUS = 72;
 
 const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事项"]);
 
@@ -98,6 +104,17 @@ export type HelpHandbook = {
   markdown: string;
 };
 
+export type HelpSearchItem = {
+  sectionId: string;
+  title: string;
+  snippet: string;
+};
+
+export type HelpSearchResult = {
+  query: string;
+  items: HelpSearchItem[];
+};
+
 export class HelpDocNotFoundError extends Error {
   code = "ERR_HELP_DOC_NOT_FOUND";
   statusCode = 404;
@@ -105,6 +122,16 @@ export class HelpDocNotFoundError extends Error {
   constructor() {
     super(`${HANDBOOK_REL_PATH} was not found`);
     this.name = "HelpDocNotFoundError";
+  }
+}
+
+export class HelpQueryTooLongError extends Error {
+  code = "ERR_HELP_QUERY_TOO_LONG";
+  statusCode = 400;
+
+  constructor(maxLength = HELP_SEARCH_QUERY_MAX) {
+    super(`Help search query exceeds ${maxLength} characters`);
+    this.name = "HelpQueryTooLongError";
   }
 }
 
@@ -213,6 +240,159 @@ export async function readHelpHandbook(appRoot = resolveHelpAppRoot()): Promise<
     toc: parseHelpToc(markdown),
     markdown
   };
+}
+
+type HelpSectionSlice = {
+  item: HelpTocItem;
+  body: string;
+};
+
+function findHeadingOffsets(markdown: string): Array<{ index: number; title: string }> {
+  const matches: Array<{ index: number; title: string }> = [];
+  let offset = 0;
+  let inFence = false;
+  for (const line of markdown.split(/(\r?\n)/)) {
+    if (line === "\n" || line === "\r\n") {
+      offset += line.length;
+      continue;
+    }
+    const trimmed = line.trim();
+    if (FENCE_RE.test(trimmed)) {
+      inFence = !inFence;
+    } else if (!inFence) {
+      const heading = line.match(HEADING_RE);
+      if (heading && (heading[1]?.length ?? 0) >= 2) {
+        matches.push({
+          index: offset,
+          title: (heading[2] ?? "").trim()
+        });
+      }
+    }
+    offset += line.length;
+  }
+  return matches;
+}
+
+function splitHandbookSections(markdown: string, toc: HelpTocItem[]): HelpSectionSlice[] {
+  if (toc.length === 0) return [];
+  const headingOffsets = findHeadingOffsets(markdown);
+  const titleToIndex = new Map<string, number>();
+  for (const heading of headingOffsets) {
+    if (!titleToIndex.has(heading.title)) {
+      titleToIndex.set(heading.title, heading.index);
+    }
+  }
+
+  const slices: HelpSectionSlice[] = [];
+  for (let i = 0; i < toc.length; i += 1) {
+    const item = toc[i]!;
+    const start = titleToIndex.get(item.title);
+    if (start === undefined) continue;
+    let end = markdown.length;
+    for (let j = i + 1; j < toc.length; j += 1) {
+      const nextStart = titleToIndex.get(toc[j]!.title);
+      if (nextStart !== undefined && nextStart > start) {
+        end = nextStart;
+        break;
+      }
+    }
+    slices.push({
+      item,
+      body: markdown.slice(start, end)
+    });
+  }
+  return slices;
+}
+
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function countOccurrences(haystackLower: string, needleLower: string): number {
+  if (!needleLower) return 0;
+  let count = 0;
+  let cursor = 0;
+  while (cursor < haystackLower.length) {
+    const index = haystackLower.indexOf(needleLower, cursor);
+    if (index === -1) break;
+    count += 1;
+    cursor = index + needleLower.length;
+  }
+  return count;
+}
+
+function buildSnippet(body: string, query: string): string {
+  const collapsed = collapseWhitespace(body);
+  const lower = collapsed.toLowerCase();
+  const needle = query.toLowerCase();
+  const index = lower.indexOf(needle);
+  if (index === -1) {
+    return collapsed.slice(0, HELP_SEARCH_SNIPPET_RADIUS * 2);
+  }
+  const start = Math.max(0, index - HELP_SEARCH_SNIPPET_RADIUS);
+  const end = Math.min(collapsed.length, index + needle.length + HELP_SEARCH_SNIPPET_RADIUS);
+  const prefix = start > 0 ? "…" : "";
+  const suffix = end < collapsed.length ? "…" : "";
+  return `${prefix}${collapsed.slice(start, end)}${suffix}`;
+}
+
+export function searchHelpMarkdown(
+  markdown: string,
+  query: string,
+  options?: { limit?: number }
+): HelpSearchResult {
+  const trimmed = query.trim();
+  if (trimmed.length > HELP_SEARCH_QUERY_MAX) {
+    throw new HelpQueryTooLongError();
+  }
+  if (!trimmed) {
+    return { query: "", items: [] };
+  }
+
+  const limit = Math.max(1, Math.min(options?.limit ?? HELP_SEARCH_DEFAULT_LIMIT, 50));
+  const toc = parseHelpToc(markdown);
+  const needle = trimmed.toLowerCase();
+  const ranked: Array<HelpSearchItem & { titleHit: boolean; hits: number; firstIndex: number }> = [];
+
+  for (const slice of splitHandbookSections(markdown, toc)) {
+    const titleLower = slice.item.title.toLowerCase();
+    const bodyLower = slice.body.toLowerCase();
+    const titleHit = titleLower.includes(needle);
+    const bodyHits = countOccurrences(bodyLower, needle);
+    if (!titleHit && bodyHits === 0) continue;
+    ranked.push({
+      sectionId: slice.item.id,
+      title: slice.item.title,
+      snippet: buildSnippet(slice.body, trimmed),
+      titleHit,
+      hits: bodyHits + (titleHit ? 10 : 0),
+      firstIndex: titleHit ? -1 : bodyLower.indexOf(needle)
+    });
+  }
+
+  ranked.sort((a, b) => {
+    if (a.titleHit !== b.titleHit) return a.titleHit ? -1 : 1;
+    if (b.hits !== a.hits) return b.hits - a.hits;
+    if (a.firstIndex !== b.firstIndex) return a.firstIndex - b.firstIndex;
+    return a.sectionId.localeCompare(b.sectionId);
+  });
+
+  return {
+    query: trimmed,
+    items: ranked.slice(0, limit).map(({ sectionId, title, snippet }) => ({
+      sectionId,
+      title,
+      snippet
+    }))
+  };
+}
+
+export async function searchHelpHandbook(
+  query: string,
+  options?: { limit?: number; appRoot?: string }
+): Promise<HelpSearchResult> {
+  const handbook = await readHelpHandbook(options?.appRoot);
+  return searchHelpMarkdown(handbook.markdown, query, { limit: options?.limit });
 }
 
 export function handbookPathForTests(projectRoot: string): string {

@@ -1,11 +1,11 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
-import type { HelpHandbook, HelpTocItem } from "../lib/types";
+import type { HelpHandbook, HelpSearchResult, HelpTocItem } from "../lib/types";
 
 type HelpSection = {
   id: string;
@@ -162,8 +162,11 @@ function visibleHelpTocItems(toc: HelpTocItem[], activeSection: string): HelpToc
     .map(({ index: _index, ...item }) => item);
 }
 
-function sectionHref(id: string) {
-  return `/help?section=${encodeURIComponent(id)}`;
+function sectionHref(id: string, q?: string) {
+  const params = new URLSearchParams();
+  params.set("section", id);
+  if (q?.trim()) params.set("q", q.trim());
+  return `/help?${params.toString()}`;
 }
 
 function formatUpdatedAt(value: string) {
@@ -176,12 +179,54 @@ function displayTocTitle(title: string) {
   return title.replace(/^\d+(?:\.\d+)*\.?\s*/, "");
 }
 
+function highlightText(text: string, query: string): ReactNode {
+  const needle = query.trim();
+  if (!needle || !text) return text;
+  const lowerText = text.toLowerCase();
+  const lowerNeedle = needle.toLowerCase();
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let next = lowerText.indexOf(lowerNeedle, cursor);
+  let part = 0;
+  while (next !== -1) {
+    if (next > cursor) {
+      nodes.push(<span key={`t-${part++}`}>{text.slice(cursor, next)}</span>);
+    }
+    nodes.push(
+      <mark className="pl-help-search-highlight" key={`m-${part++}`}>
+        {text.slice(next, next + needle.length)}
+      </mark>
+    );
+    cursor = next + needle.length;
+    next = lowerText.indexOf(lowerNeedle, cursor);
+  }
+  if (cursor < text.length) {
+    nodes.push(<span key={`t-${part++}`}>{text.slice(cursor)}</span>);
+  }
+  return nodes;
+}
+
 export function HelpCenter() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const activeSection = searchParams.get("section") ?? "";
+  const queryFromUrl = searchParams.get("q") ?? "";
+  const [draftQuery, setDraftQuery] = useState(queryFromUrl);
+
+  useEffect(() => {
+    setDraftQuery(queryFromUrl);
+  }, [queryFromUrl]);
+
   const handbookQuery = useQuery({
     queryKey: queryKeys.helpHandbook,
     queryFn: () => apiGet<HelpHandbook>("/api/help/handbook")
+  });
+
+  const activeQuery = queryFromUrl.trim();
+  const searchQuery = useQuery({
+    queryKey: queryKeys.helpSearch(activeQuery),
+    queryFn: () =>
+      apiGet<HelpSearchResult>(`/api/help/search?q=${encodeURIComponent(activeQuery)}`),
+    enabled: activeQuery.length > 0
   });
 
   const sections = useMemo(
@@ -200,7 +245,7 @@ export function HelpCenter() {
   );
 
   useEffect(() => {
-    if (!activeSection || sections.length === 0) return;
+    if (!activeSection || sections.length === 0 || activeQuery) return;
     const frame = window.requestAnimationFrame(() => {
       document.getElementById(activeSection)?.scrollIntoView({
         behavior: "smooth",
@@ -208,7 +253,25 @@ export function HelpCenter() {
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeSection, sections.length]);
+  }, [activeSection, sections.length, activeQuery]);
+
+  function commitSearch(nextQuery: string) {
+    const trimmed = nextQuery.trim();
+    const next = new URLSearchParams(searchParams);
+    if (trimmed) {
+      next.set("q", trimmed);
+    } else {
+      next.delete("q");
+    }
+    setSearchParams(next, { replace: true });
+  }
+
+  function clearSearch() {
+    setDraftQuery("");
+    const next = new URLSearchParams(searchParams);
+    next.delete("q");
+    setSearchParams(next, { replace: true });
+  }
 
   if (handbookQuery.isLoading) {
     return <div className="pl-notice">系统手册加载中...</div>;
@@ -219,6 +282,8 @@ export function HelpCenter() {
   }
 
   const handbook = handbookQuery.data;
+  const searchItems = searchQuery.data?.items ?? [];
+  const showSearchResults = activeQuery.length > 0;
 
   return (
     <div className="pl-help-page">
@@ -243,6 +308,29 @@ export function HelpCenter() {
 
       <div className="pl-help-layout">
         <aside className="pl-help-toc" aria-label="系统手册目录">
+          <div className="pl-help-search">
+            <label className="sr-only" htmlFor="help-search-input">
+              搜索系统手册
+            </label>
+            <input
+              className="pl-help-search-input"
+              id="help-search-input"
+              placeholder="搜索手册内容…"
+              type="search"
+              value={draftQuery}
+              onChange={(event) => {
+                const value = event.target.value;
+                setDraftQuery(value);
+                commitSearch(value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  clearSearch();
+                }
+              }}
+            />
+          </div>
           <div className="pl-help-toc-title">目录</div>
           <nav className="grid gap-1">
             {visibleToc.map((item) => (
@@ -250,7 +338,7 @@ export function HelpCenter() {
                 aria-current={activeSection === item.id ? "location" : undefined}
                 className={`pl-help-toc-link pl-help-toc-link--level-${item.level}`}
                 key={item.id}
-                to={sectionHref(item.id)}
+                to={sectionHref(item.id, activeQuery || undefined)}
               >
                 {displayTocTitle(item.title)}
               </Link>
@@ -259,11 +347,57 @@ export function HelpCenter() {
         </aside>
 
         <article className="pl-help-content" data-testid="help-content">
-          {sections.map((section) => (
-            <section className="pl-help-section" id={section.id} key={section.id}>
-              <MarkdownPreview markdown={section.markdown} />
-            </section>
-          ))}
+          {showSearchResults ? (
+            <div className="pl-help-search-results" data-testid="help-search-results">
+              <div className="pl-help-search-results-header">
+                <h2 className="pl-help-search-results-title">搜索结果</h2>
+                <p className="pl-help-search-results-meta">
+                  关键词「{activeQuery}」
+                  {searchQuery.isFetching ? " · 搜索中…" : ` · ${searchItems.length} 条`}
+                </p>
+                <button className="pl-btn pl-btn--secondary pl-btn--sm" onClick={clearSearch} type="button">
+                  清除搜索
+                </button>
+              </div>
+              {searchQuery.isError ? (
+                <p className="pl-error">手册搜索失败。</p>
+              ) : null}
+              {!searchQuery.isFetching && !searchQuery.isError && searchItems.length === 0 ? (
+                <p className="pl-notice" data-testid="help-search-empty">
+                  未找到与「{activeQuery}」相关的手册内容。
+                </p>
+              ) : null}
+              <ul className="pl-help-search-result-list">
+                {searchItems.map((item) => (
+                  <li className="pl-help-search-result-item" key={`${item.sectionId}-${item.title}`}>
+                    <Link
+                      className="pl-help-search-result-link"
+                      to={sectionHref(item.sectionId)}
+                      onClick={() => {
+                        const next = new URLSearchParams();
+                        next.set("section", item.sectionId);
+                        setSearchParams(next, { replace: true });
+                        setDraftQuery("");
+                      }}
+                    >
+                      <span className="pl-help-search-result-title">
+                        {highlightText(displayTocTitle(item.title), activeQuery)}
+                      </span>
+                      <span className="pl-help-search-result-snippet">
+                        {highlightText(item.snippet, activeQuery)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            sections.map((section) => (
+              <section className="pl-help-section" id={section.id} key={section.id}>
+                <MarkdownPreview markdown={section.markdown} />
+              </section>
+            ))
+          )}
         </article>
       </div>
     </div>
