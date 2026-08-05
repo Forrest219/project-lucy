@@ -919,31 +919,42 @@ describe("WikiEditor Edit Mode (P0)", () => {
     expect(screen.queryByTestId("wiki-meta-toggle")).not.toBeInTheDocument();
     expect(screen.queryByTestId("wiki-focus-toggle")).not.toBeInTheDocument();
     expect(screen.getByTestId("wiki-back-to-read")).toHaveTextContent("取消");
-    expect(screen.getByTestId("wiki-save-preflight-button")).toHaveTextContent("保存并发布");
+    expect(screen.getByTestId("wiki-save-preflight-button")).toHaveTextContent("保存预检");
+    expect(screen.queryByText("保存并发布")).not.toBeInTheDocument();
+    // Clean loaded edit: no stale "已保存" pill in the actions row.
+    expect(screen.queryByTestId("wiki-status-pill")).not.toBeInTheDocument();
+    expect(screen.queryByText("已保存")).not.toBeInTheDocument();
   });
 
-  it("renders the Markdown toolbar above the textarea with insertion actions", async () => {
+  it("shows dirty status in the actions row and does not render a Markdown toolbar", async () => {
     vi.stubGlobal("fetch", buildFetchMock());
     renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
 
     fireEvent.click(await screen.findByTestId("wiki-edit-button"));
-    const toolbar = await screen.findByTestId("wiki-markdown-toolbar");
-    expect(toolbar).toHaveAttribute("role", "toolbar");
-    expect(screen.getByTestId("wiki-toolbar-bold")).toBeInTheDocument();
-    expect(screen.getByTestId("wiki-toolbar-codeblock")).toBeInTheDocument();
-    expect(screen.getByTestId("wiki-toolbar-table")).toBeInTheDocument();
-    expect(screen.getByTestId("wiki-toolbar-link")).toBeInTheDocument();
+    expect(await screen.findByTestId("wiki-edit-textarea")).toBeInTheDocument();
+    expect(screen.queryByTestId("wiki-markdown-toolbar")).not.toBeInTheDocument();
+    expect(screen.getByText(/粘贴本地 Markdown/)).toBeInTheDocument();
 
-    // Bold insertion wraps the current selection.
-    const textarea = (await screen.findByTestId("wiki-edit-textarea")) as HTMLTextAreaElement;
-    textarea.focus();
-    textarea.setSelectionRange(0, 0);
-    fireEvent.click(screen.getByTestId("wiki-toolbar-bold"));
-    await waitFor(() => {
-      expect((screen.getByTestId("wiki-edit-textarea") as HTMLTextAreaElement).value).toContain(
-        "**加粗文本**"
-      );
-    });
+    const textarea = screen.getByTestId("wiki-edit-textarea") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "# Unsaved\n\nDraft body" } });
+
+    const status = await screen.findByTestId("wiki-status-pill");
+    expect(status).toHaveTextContent("有未保存修改");
+    expect(status).toHaveAttribute("data-status", "dirty");
+  });
+
+  it("keeps edit panel titles on one grid row and prevents preview track stretch", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
+
+    expect(await screen.findByTestId("wiki-edit-source-header")).toBeInTheDocument();
+    expect(screen.getByTestId("wiki-edit-preview-header")).toBeInTheDocument();
+    const css = readFileSync("src/app/app.css", "utf8");
+    expect(css).toMatch(/\.pl-wiki-edit-source\s*\{[^}]*content-start/s);
+    expect(css).toMatch(/\.pl-wiki-edit-preview\s*\{[^}]*content-start/s);
+    expect(css).toMatch(/grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)/);
+    expect(css).not.toMatch(/\.pl-wiki-markdown-toolbar\s*\{/);
   });
 
   it("prompts before cancelling dirty edit mode and then restores the saved body", async () => {

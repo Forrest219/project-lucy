@@ -810,3 +810,151 @@ Reported: 2026-08-04
 ### Notes
 
 Fixed by `webui/docs/74-wiki-workbench-secondary-feedback-fixes-spec.md` 对应工单：`webui/src/components/WikiVersionHistoryDialog.tsx` 把历史版本列表改为 `<table data-testid="wiki-version-table">`（`<tr data-testid="wiki-version-item-*">` 保留原有 `data-testid` 契约）；`webui/src/pages/WikiEditor.tsx` 删除自动选中第一个版本的 `useEffect`（`openVersionHistory` 原本就会把 `selectedVersionId` 重置为 `null`，天然形成懒加载）。Non-browser 验证通过：`npm test -- src/__tests__/wiki.test.tsx`（新增断言覆盖表格结构和默认懒加载，保留既有的点击查看 / 恢复流程断言）。本轮按约束不做浏览器验证。
+
+## UX-WIKI-026: 编辑态「已保存」状态与设计风格脱节且不反映 dirty
+
+Status: Fixed
+Route: /wiki
+Area: Wiki edit header status
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+编辑态右上角「已保存」圆角胶囊信息有用，但与整体设计风格不统一；且修改正文后仍显示「已保存」（状态只跟 `mode`，不跟 dirty）。
+
+### Evidence
+
+- 2026-08-05 浏览器核查 `http://127.0.0.1:55176/wiki?key=global/test/demo-superstore.md` 编辑态：PageHeader badges 槽渲染 `.pl-wiki-header-status` pill（`border-radius: 9999px`），与下方「取消 / 保存并发布」脱节。
+- 修改 textarea 后 CDP 仍读到 `data-status="loaded"` / 文案「已保存」。
+- `WikiEditor.tsx` 原逻辑：`mode === "draft" ? "未保存草稿" : "已保存"`，`dirtyRef` 不驱动 UI。
+
+### Expected
+
+- 移除孤立右上胶囊。
+- 状态并入主操作行：dirty 显示「有未保存修改」；干净的已加载文档不显示状态；草稿显示「未保存草稿」。
+
+### Browser Check
+
+1. Open 文档，点击 `编辑`，未改内容时不应出现「已保存」。
+2. 修改正文后应出现「有未保存修改」，位于「取消」旁。
+3. 确认保存或取消后状态消失或回到阅读态。
+
+### Notes
+
+Fixed by Spec 79 / `wo-202608-11`：`isDirty` state + `markDirty`/`markClean`；状态移入 `wiki-header-actions`。Non-browser 验证见工单。本轮不做浏览器验证。
+
+## UX-WIKI-027: 渲染预览 grid 拉伸导致大面积留白
+
+Status: Fixed
+Route: /wiki
+Area: Wiki edit render preview
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+
+「渲染预览」区域布局混乱，内容不是自上而下排布；标题与正文之间有大块空白。
+
+### Evidence
+
+- 2026-08-05 CDP：`.pl-wiki-edit-preview` 的 `gridTemplateRows ≈ 394px / 506px`，header 高度约 400px；标题因 `items-center` 垂直居中。
+- 同类根因见已修的 `UX-WIKI-006`（文档库卡片被 grid 拉高）。
+
+### Expected
+
+预览标题置顶，正文紧随其后；禁止 auto 行被均分拉伸。
+
+### Browser Check
+
+1. Open 编辑态，verify「渲染预览」标题紧贴面板顶部，正文标题紧随其后，无大块空白。
+
+### Notes
+
+Fixed by Spec 79：编辑 grid 标题行外提 + `.pl-wiki-edit-preview { content-start }`。本轮不做浏览器验证。
+
+## UX-WIKI-028: 目录 / 正文 Markdown / 渲染预览 三标题水平错位
+
+Status: Fixed
+Route: /wiki
+Area: Wiki edit column headers
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+三个标题视觉上像平级，应在同一水平线，但竖直错位严重。
+
+### Evidence
+
+- 测量：`目录` top≈143、`正文 Markdown`≈195（Δ52）、`渲染预览`≈365（再 Δ170，含预览拉伸）。
+
+### Expected
+
+编辑态三标题 `getBoundingClientRect().top` 差值 ≤ 4px；预览长 hint 缩短以免折行破坏基线。
+
+### Browser Check
+
+1. Open 编辑态，verify 三标题视觉同基线。
+
+### Notes
+
+Fixed by Spec 79：共享标题 grid 行 + 编辑态侧栏标题字号/行高对齐。本轮不做浏览器验证。
+
+## UX-WIKI-029: Markdown 插入工具栏与粘贴优先心智冲突
+
+Status: Fixed
+Route: /wiki
+Area: Wiki edit Markdown source
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+「正文 Markdown」上方的 `B I </> { } H ▦ 🔗` 工具栏不需要；应鼓励本地 MD 工具编写后粘贴。
+
+### Evidence
+
+- 编辑态可见 `wiki-markdown-toolbar`；`WikiEditView` 渲染 `MarkdownToolbar`。
+
+### Expected
+
+移除工具栏；保留粘贴导向与 `⌘/Ctrl+S` 保存预检提示。
+
+### Browser Check
+
+1. Open 编辑态，verify 无插入工具栏；可见粘贴导向文案。
+
+### Notes
+
+Fixed by Spec 79：删除 `MarkdownToolbar.tsx` 与相关 CSS；hint 改为「粘贴本地 Markdown；⌘/Ctrl+S 打开保存预检」。本轮不做浏览器验证。
+
+## UX-WIKI-030: 「保存并发布」文案暗示不存在的发布阶段
+
+Status: Fixed
+Route: /wiki
+Area: Wiki edit save entry
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+用户询问保存与发布是否应分开以便先看 Diff 再发布。现状只有「保存并发布」→「保存预检」→「保存」；无服务端草稿 / 发布闸门，写入即生效。硬拆两阶段会引入假草稿。
+
+### Evidence
+
+- Header 主按钮「保存并发布」；预检确认按钮为「保存」；Diff 已在保存预检中。
+
+### Expected
+
+- 不拆分保存/发布产品动作。
+- 主按钮改为「保存预检」；description 去掉「保存并发布」措辞。
+
+### Browser Check
+
+1. Open 编辑态，verify 主按钮为「保存预检」，无「保存并发布」。
+2. 点击后仍打开保存预检（Diff / 校验 / 确认保存）。
+
+### Notes
+
+Fixed by Spec 79：文案收敛为「保存预检」，不引入 draft/publish。本轮不做浏览器验证。

@@ -1825,7 +1825,7 @@
   .pl-wiki-read-template-button span { @apply text-xs text-fg-muted; }
 
   /* Edit Mode: compact Meta Header + dual-pane editor + preview. */
-  .pl-wiki-edit-view { @apply grid gap-4; }
+  .pl-wiki-edit-view { @apply grid gap-3; }
   .pl-wiki-edit-meta {
     @apply grid gap-2 rounded-lg border border-border-default bg-bg-surface p-3 shadow-card;
   }
@@ -1842,22 +1842,52 @@
   .pl-wiki-edit-meta[open] > summary::before { transform: rotate(90deg); }
   .pl-wiki-edit-meta-hint { @apply text-xs font-normal text-fg-muted; }
   .pl-wiki-edit-meta-body { @apply pt-2; }
+  /* Title row (正文 / 渲染预览) + content row. content-start on panes
+     prevents the UX-WIKI-006-class stretch that vertically centered
+     "渲染预览" inside a tall auto track. */
   .pl-wiki-edit-grid {
-    @apply grid gap-4 rounded-lg border border-border-default bg-bg-surface p-4 shadow-card;
+    @apply grid gap-x-4 gap-y-2 rounded-lg border border-border-default bg-bg-surface p-4 pt-3 shadow-card;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     min-height: 60vh;
+    align-items: start;
   }
-  .pl-wiki-edit-source,
-  .pl-wiki-edit-preview { @apply grid gap-2 min-w-0; }
-  .pl-wiki-edit-source-header,
-  .pl-wiki-edit-preview-header { @apply flex flex-wrap items-center justify-between gap-2; }
+  .pl-wiki-edit-source-header {
+    grid-column: 1;
+    grid-row: 1;
+    @apply flex min-h-8 flex-wrap items-center justify-between gap-2;
+  }
+  .pl-wiki-edit-preview-header {
+    grid-column: 2;
+    grid-row: 1;
+    @apply flex min-h-8 flex-wrap items-center justify-between gap-2;
+  }
+  .pl-wiki-edit-source {
+    grid-column: 1;
+    grid-row: 2;
+    @apply grid min-h-0 min-w-0 content-start;
+  }
+  .pl-wiki-edit-preview {
+    grid-column: 2;
+    grid-row: 2;
+    @apply grid min-h-0 min-w-0 content-start gap-2 overflow-auto rounded-md border border-border-default bg-bg-subtle p-3;
+  }
   .pl-wiki-edit-source-title,
-  .pl-wiki-edit-preview-title { @apply text-sm font-semibold; }
+  .pl-wiki-edit-preview-title { @apply text-sm font-medium; }
   .pl-wiki-edit-source-hint,
   .pl-wiki-edit-preview-hint { @apply text-xs text-fg-muted; }
   .pl-wiki-edit-source-input { @apply min-h-[60vh] font-mono text-sm; }
-  .pl-wiki-edit-preview { @apply rounded-md border border-border-default bg-bg-subtle p-3; }
   .pl-wiki-edit-preview .pl-markdown-preview { @apply gap-2; }
+  /* Edit-mode: keep 目录 / 正文 Markdown / 渲染预览 on one baseline. */
+  .pl-wiki-layout--edit .pl-wiki-sidebar-header {
+    @apply min-h-8 items-center;
+  }
+  .pl-wiki-layout--edit .pl-wiki-sidebar-title {
+    @apply text-sm font-medium;
+  }
+  .pl-wiki-layout--edit .pl-wiki-main {
+    @apply gap-0;
+  }
 
   /* Save Preflight modal: target, validation, diff, raw, actions. */
   .pl-wiki-preflight-overlay {
@@ -2024,12 +2054,13 @@
     @apply col-span-2 truncate font-mono text-[10px] text-fg-muted;
   }
 
-  /* M42: Header converged. Status pill + focus toggle + copy hint. */
+  /* Spec 79: dirty/draft status lives in the actions row as plain text. */
   .pl-wiki-header-status {
-    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted;
+    @apply inline-flex items-center text-xs text-fg-muted;
   }
-  .pl-wiki-header-status[data-status="draft"] {
-    @apply border-warning-strong bg-warning-soft text-warning-strong;
+  .pl-wiki-header-status[data-status="draft"],
+  .pl-wiki-header-status[data-status="dirty"] {
+    @apply text-warning-strong;
   }
   .pl-wiki-header-focus--active {
     @apply border-accent/40 bg-accent/10 text-accent;
@@ -2061,18 +2092,18 @@
      Preview stack instead of fighting for 420px each. */
   .pl-wiki-layout--preview-tab .pl-wiki-edit-grid {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
   }
-
-  /* M42: Markdown toolbar sits directly above the textarea. */
-  .pl-wiki-markdown-toolbar {
-    @apply flex flex-wrap items-center gap-1 rounded-md border border-border-default bg-bg-subtle px-1.5 py-1 text-xs;
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-source-header,
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-preview-header,
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-source,
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-preview {
+    grid-column: 1;
   }
-  .pl-wiki-markdown-toolbar-button {
-    @apply rounded-sm px-2 py-0.5 font-mono text-xs text-fg-body;
-  }
-  .pl-wiki-markdown-toolbar-button:hover {
-    @apply bg-bg-muted text-fg-default;
-  }
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-source-header { grid-row: 1; }
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-source { grid-row: 2; }
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-preview-header { grid-row: 3; }
+  .pl-wiki-layout--preview-tab .pl-wiki-edit-preview { grid-row: 4; }
 
   /* M42: Tab toggle for the Markdown / Preview fallback. */
   .pl-wiki-edit-tab-toggle {

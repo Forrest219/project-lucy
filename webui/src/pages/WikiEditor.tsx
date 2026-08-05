@@ -154,6 +154,15 @@ export function WikiEditor() {
   const uploadPreviewRequestRef = useRef(0);
   const moveTargetDirectoryRef = useRef("");
   const dirtyRef = useRef(false);
+  const [isDirty, setIsDirty] = useState(false);
+  function markDirty() {
+    dirtyRef.current = true;
+    setIsDirty(true);
+  }
+  function markClean() {
+    dirtyRef.current = false;
+    setIsDirty(false);
+  }
   const sourceRef = useRef<string>(`${key}::${mode}::init`);
   const preserveBufferForKeyRef = useRef<string | null>(null);
   const lastResolvedKeyRef = useRef<string>(key);
@@ -231,6 +240,7 @@ export function WikiEditor() {
     setContent("");
     setPreview(null);
     dirtyRef.current = false;
+    setIsDirty(false);
     sourceRef.current = sourceKey;
   }, [key, mode, slRef]);
 
@@ -306,7 +316,7 @@ export function WikiEditor() {
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
-      dirtyRef.current = false;
+      markClean();
       sourceRef.current = `${key}::${mode}::saved`;
       toast.success("Wiki 已保存");
       setPreflightOpen(false);
@@ -334,7 +344,7 @@ export function WikiEditor() {
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(result.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(result.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
-      dirtyRef.current = false;
+      markClean();
       sourceRef.current = `${result.key}::uploaded`;
       setUiMode("read");
       setUploadOpen(false);
@@ -387,7 +397,7 @@ export function WikiEditor() {
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(result.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(result.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
-      dirtyRef.current = false;
+      markClean();
       sourceRef.current = `${result.key}::restored`;
       setUiMode("read");
       setRestorePreflightOpen(false);
@@ -483,7 +493,7 @@ export function WikiEditor() {
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(result.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(previousKey) });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
-      dirtyRef.current = false;
+      markClean();
       sourceRef.current = `${result.key}::moved`;
       setUiMode("read");
       setMoveOpen(false);
@@ -563,19 +573,19 @@ export function WikiEditor() {
   runDryRunRef.current = runDryRun;
 
   function updateFrontmatter(next: WikiFrontmatter) {
-    dirtyRef.current = true;
+    markDirty();
     frontmatterRef.current = next;
     setFrontmatter(next);
   }
 
   function updateContent(next: string) {
-    dirtyRef.current = true;
+    markDirty();
     contentRef.current = next;
     setContent(next);
   }
 
   function applyTemplate(templateContent: string) {
-    dirtyRef.current = true;
+    markDirty();
     contentRef.current = templateContent;
     setContent(templateContent);
     setUiMode("edit");
@@ -600,7 +610,7 @@ export function WikiEditor() {
     if (slRef) {
       next.sl_ref = slRef;
     }
-    dirtyRef.current = false;
+    markClean();
     sourceRef.current = `${nextKey}::navigated`;
     setSearchParams(next, { replace: true });
   }
@@ -811,7 +821,7 @@ export function WikiEditor() {
     setNewDocumentOpen(false);
     setNewDocumentError(null);
     setSearchParams(next, { replace: true });
-    dirtyRef.current = false;
+    markClean();
     sourceRef.current = `${draftKey}::navigated`;
     setUiMode("edit");
   }
@@ -883,7 +893,7 @@ export function WikiEditor() {
       setFrontmatter(slRef ? { sl_refs: [slRef] } : {});
       frontmatterRef.current = slRef ? { sl_refs: [slRef] } : {};
     }
-    dirtyRef.current = false;
+    markClean();
     setUiMode("read");
   }
 
@@ -1064,19 +1074,9 @@ export function WikiEditor() {
         description={
           uiMode === "read"
             ? "管理业务口径、指标说明和分析 Playbook 的 Markdown 文档。"
-            : "直接撰写 Markdown；保存并发布前会显示 Diff 与校验结果。"
+            : "粘贴或撰写 Markdown；保存前通过保存预检查看 Diff 与校验。"
         }
-        badges={
-          uiMode === "read" ? null : (
-            <span
-              className="pl-wiki-header-status"
-              data-testid="wiki-status-pill"
-              data-status={mode}
-            >
-              {mode === "draft" ? "未保存草稿" : "已保存"}
-            </span>
-          )
-        }
+        badges={null}
         actions={
           <div className="pl-wiki-header-actions" data-testid="wiki-header-actions">
             {uiMode === "read" ? (
@@ -1146,6 +1146,23 @@ export function WikiEditor() {
               ) : null
             ) : (
               <>
+                {isDirty ? (
+                  <span
+                    className="pl-wiki-header-status"
+                    data-testid="wiki-status-pill"
+                    data-status="dirty"
+                  >
+                    有未保存修改
+                  </span>
+                ) : mode === "draft" ? (
+                  <span
+                    className="pl-wiki-header-status"
+                    data-testid="wiki-status-pill"
+                    data-status="draft"
+                  >
+                    未保存草稿
+                  </span>
+                ) : null}
                 <button
                   className="pl-btn pl-btn--ghost"
                   data-testid="wiki-back-to-read"
@@ -1161,7 +1178,7 @@ export function WikiEditor() {
                   onClick={openSavePreflight}
                   type="button"
                 >
-                  保存并发布
+                  保存预检
                 </button>
               </>
             )}

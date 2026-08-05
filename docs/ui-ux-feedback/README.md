@@ -47,6 +47,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Business Wiki `/wiki` 编辑态 | Spec 79 / `wo-202608-11` 落地：`UX-WIKI-026`～`030` → `Fixed`（本轮不做浏览器验证）。dirty 驱动状态并入操作行；修复渲染预览 grid 拉伸；三列标题同基线；移除 Markdown 工具栏；「保存并发布」→「保存预检」。 |
 | 2026-08-05 | Ledger governance / Overview `/overview` | 补齐 Overview 文案与布局反馈遗漏的长期机制：1) 跨页面主题新增 `internal-term translation`（挂 `UX-OVERVIEW-010`）与 `header microcopy value density`（挂 `UX-OVERVIEW-009`）；2) 改写 PageHeader 规则为「状态反馈与触发动作默认同组同排」，纠正旧「优先把时间戳放到 description」指引与 `UX-OVERVIEW-004` 现实现冲突；3) 登记 2026-08-04 docker 重建后浏览器复核未通过事实（运行实例仍渲染旧文案，`004/009/010` 保持 `Fixed`，证据 `assets/overview/UX-OVERVIEW-009-010-verify-blocked-20260804.png`）。页面条目与代码修复此前已在 `427ab38`。 |
 | 2026-08-04 | Agent Admin `/admin/roles`, `/admin/roles/new` | Spec 77 / `wo-202608-09` 落地：`UX-ADMIN-AGENTS-016`～`021` → `Fixed`（本轮不做浏览器验证）。Wave A：新建/编辑中文标签、picker+TagInput 受控回退、表范围匹配模式；Wave B：`sourceNames` 列表字段 + 连接/工具/表能力筛选。验证：`role-detail`/`role-list`/`admin-roles` Vitest、`lint:terminology`、`build`。 |
 | 2026-08-04 | Connections `/connections`, Overview `/overview` | 用户确认 docker 已重建后执行并列按钮复核：`UX-CONNECTIONS-023` 与 `UX-OVERVIEW-008` 均未通过。`/connections` 中刷新动作仍为 `pl-btn--primary`；`/overview` 中 `复制 MCP 配置` 仍为 `pl-btn--primary`，与 host 源码统一 `secondary` 不一致。已在对应条目 Notes 补充 CDP class 证据；两条状态保持 `Fixed`，待部署产物与源码版本同步后再复核。 |

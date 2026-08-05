@@ -1,7 +1,6 @@
 import clsx from "clsx";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
-import { MarkdownToolbar } from "./MarkdownToolbar";
 import { extractTemplatePlaceholders } from "../lib/wiki";
 import type { WikiFrontmatter } from "../lib/types";
 
@@ -22,21 +21,16 @@ export type WikiEditViewProps = {
 /**
  * Focused edit surface for the Business Wiki workbench.
  *
- * The Markdown source and rendered preview dominate the working area.
- * Frontmatter (`文档信息`) has been moved into a header-level Drawer
- * so it no longer interrupts the input flow. A lightweight toolbar
- * sits directly above the textarea and supports bold / italic /
- * inline code / code block / heading / table / link insertion.
+ * Markdown source and rendered preview share one title row so the two
+ * panel labels stay on the same baseline. Users paste Markdown from a
+ * local editor; Diff / Raw stay in Save Preflight.
  */
 export function WikiEditView({
-  frontmatter,
   content,
-  onFrontmatterChange,
   onContentChange,
   previewTab = false,
   onPreviewTabChange
 }: WikiEditViewProps) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [activePane, setActivePane] = useState<"markdown" | "preview">(
     "markdown"
   );
@@ -70,27 +64,39 @@ export function WikiEditView({
         )}
         data-testid="wiki-edit-grid"
       >
+        <header
+          className="pl-wiki-edit-source-header"
+          data-testid="wiki-edit-source-header"
+        >
+          <p className="pl-wiki-edit-source-title">正文 Markdown</p>
+          <span className="pl-wiki-edit-source-hint">
+            粘贴本地 Markdown；
+            <span className="notranslate" translate="no">
+              ⌘/Ctrl+S
+            </span>{" "}
+            打开保存预检
+          </span>
+        </header>
+        <header
+          className="pl-wiki-edit-preview-header"
+          data-testid="wiki-edit-preview-header"
+          title="仅显示最终渲染结果；Diff / Raw 在保存预检中查看。"
+        >
+          <p className="pl-wiki-edit-preview-title">渲染预览</p>
+          <span className="pl-wiki-edit-preview-hint">
+            Diff / Raw 见保存预检
+          </span>
+        </header>
         <section
           aria-label="Markdown 源码"
           className="pl-wiki-edit-source"
           data-testid="wiki-edit-source"
         >
-          <header className="pl-wiki-edit-source-header">
-            <p className="pl-wiki-edit-source-title">正文 Markdown</p>
-            <span
-              className="pl-wiki-edit-source-hint notranslate"
-              translate="no"
-            >
-              ⌘/Ctrl + S 触发保存预检
-            </span>
-          </header>
-          <MarkdownToolbar onChange={onContentChange} textareaRef={textareaRef} />
           <textarea
             aria-label="Markdown 源码"
             className="pl-textarea pl-wiki-edit-source-input notranslate"
             data-testid="wiki-edit-textarea"
             onChange={(event) => onContentChange(event.target.value)}
-            ref={textareaRef}
             rows={22}
             translate="no"
             value={content}
@@ -101,16 +107,10 @@ export function WikiEditView({
           className="pl-wiki-edit-preview"
           data-testid="wiki-edit-preview"
         >
-          <header className="pl-wiki-edit-preview-header">
-            <p className="pl-wiki-edit-preview-title">渲染预览</p>
-            <span className="pl-wiki-edit-preview-hint">
-              仅显示最终渲染结果；Diff / Raw 在保存预检中查看。
-            </span>
-          </header>
           {content.trim() ? (
             <MarkdownPreview markdown={content} />
           ) : (
-            <p className="pl-notice">正文为空，先在左侧 Markdown 编辑器中写点内容吧。</p>
+            <p className="pl-notice">正文为空，先在左侧粘贴或撰写 Markdown。</p>
           )}
         </section>
       </div>
