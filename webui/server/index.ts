@@ -103,9 +103,15 @@ import {
   SemanticAssetValidationError,
   validateSemanticAssets,
   type SemanticAssetPublishRequest,
+  type SemanticAssetReleaseListQuery,
+  type SemanticAssetReleaseTrigger,
   type SemanticAssetValidateRequest
 } from "./semantic-assets.js";
 import { exportSemanticAssetPackage } from "./semantic-asset-export.js";
+import {
+  buildPublishHistoryCsvRows,
+  formatPublishHistoryExportFilenameStamp
+} from "../src/lib/publishHistoryLabels.js";
 
 type ErrorEnvelope = {
   ok: false;
@@ -1201,10 +1207,77 @@ export function buildServer() {
     }
   });
 
-  app.get("/api/semantic-assets/releases", async () => {
+  function parseReleaseListQuery(q: {
+    since?: string;
+    until?: string;
+    trigger?: string;
+    reindexStatus?: string;
+    actor?: string;
+    limit?: string;
+    offset?: string;
+  }): SemanticAssetReleaseListQuery {
+    const trigger =
+      q.trigger === "webui_publish" || q.trigger === "webui_manual_reindex"
+        ? (q.trigger as SemanticAssetReleaseTrigger)
+        : undefined;
+    const reindexStatus =
+      q.reindexStatus === "success" ||
+      q.reindexStatus === "failed" ||
+      q.reindexStatus === "running" ||
+      q.reindexStatus === "not_run"
+        ? q.reindexStatus
+        : undefined;
+    const limitRaw = q.limit != null && q.limit !== "" ? Number(q.limit) : undefined;
+    const offsetRaw = q.offset != null && q.offset !== "" ? Number(q.offset) : undefined;
+    return {
+      since: q.since || undefined,
+      until: q.until || undefined,
+      trigger,
+      reindexStatus,
+      actor: q.actor || undefined,
+      limit: limitRaw != null && Number.isFinite(limitRaw) ? limitRaw : undefined,
+      offset: offsetRaw != null && Number.isFinite(offsetRaw) ? offsetRaw : undefined
+    };
+  }
+
+  app.get<{
+    Querystring: {
+      since?: string;
+      until?: string;
+      trigger?: string;
+      reindexStatus?: string;
+      actor?: string;
+      limit?: string;
+      offset?: string;
+    };
+  }>("/api/semantic-assets/releases", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    return { ok: true, data: await readSemanticAssetReleases(projectRoot) };
+    const query = parseReleaseListQuery(request.query);
+    return { ok: true, data: await readSemanticAssetReleases(projectRoot, query) };
   });
+
+  app.get<{
+    Querystring: {
+      since?: string;
+      until?: string;
+      trigger?: string;
+      reindexStatus?: string;
+      actor?: string;
+    };
+  }>("/api/semantic-assets/releases/export.csv", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const query = parseReleaseListQuery(request.query);
+    // Export ignores pagination — full filtered set.
+    delete query.limit;
+    delete query.offset;
+    const { records } = await readSemanticAssetReleases(projectRoot, query);
+    const stamp = formatPublishHistoryExportFilenameStamp();
+    const filename = `publish-history-${stamp}.csv`;
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+    return reply.send(buildPublishHistoryCsvRows(records));
+  });
+
 
   app.get<{
     Params: { id: string };

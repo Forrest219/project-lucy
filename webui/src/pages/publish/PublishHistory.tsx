@@ -1,46 +1,27 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { apiGet } from "../../lib/apiClient";
+import {
+  PUBLISH_HISTORY_PAGE_SIZE,
+  coerceTrigger,
+  formatPublishHistoryTs,
+  isEmptyManualReindex,
+  reindexLabelFor,
+  statusLabelFor,
+  triggerLabelFor,
+  uniqueConnectionIds,
+  type ReindexLabel
+} from "../../lib/publishHistoryLabels";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   SemanticAssetReleaseRecord,
-  SemanticAssetReleaseStatus,
-  SemanticAssetReleaseTrigger,
   SemanticAssetReleasesResponse,
   SemanticAssetValidationRow
 } from "../../lib/types";
-import { SemanticAssetExportButton } from "../../components/semantic-assets";
-
-type TriggerLabel = "WebUI 发布" | "WebUI 强制重建索引" | "系统";
-type ReindexLabel = "成功" | "失败" | "进行中" | "未执行";
 
 const SCOPE_PREVIEW_LIMIT = 2;
-
-/**
- * Coerce a record's `trigger` field into the trigger enum expected by the
- * history page. The backend backfills missing values, but legacy fixtures or
- * optimistic records may still arrive without one, so the helper is lenient.
- */
-function coerceTrigger(
-  raw: SemanticAssetReleaseTrigger | undefined
-): SemanticAssetReleaseTrigger {
-  if (raw === "webui_manual_reindex" || raw === "webui_publish") return raw;
-  return "webui_publish";
-}
-
-function triggerLabelFor(record: SemanticAssetReleaseRecord): TriggerLabel {
-  const trigger = coerceTrigger(record.trigger);
-  if (trigger === "webui_manual_reindex") return "WebUI 强制重建索引";
-  if (trigger === "webui_publish") return "WebUI 发布";
-  return "系统";
-}
-
-function reindexLabelFor(record: SemanticAssetReleaseRecord): ReindexLabel {
-  if (record.status === "reindexing") return "进行中";
-  if (record.reindex) return record.reindex.ok ? "成功" : "失败";
-  return "未执行";
-}
 
 function reindexStatusClass(label: ReindexLabel): string {
   switch (label) {
@@ -56,48 +37,31 @@ function reindexStatusClass(label: ReindexLabel): string {
   }
 }
 
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
-    date.getHours()
-  )}:${pad(date.getMinutes())}`;
-}
-
-function statusLabelFor(record: SemanticAssetReleaseRecord): string {
-  switch (record.status as SemanticAssetReleaseStatus) {
-    case "blocked":
-      return "已阻断";
-    case "promote_failed":
-      return "落盘失败";
-    case "reindexing":
-      return "Reindex 中";
-    case "published":
-      return "已发布";
-    case "reindex_failed":
-      return "Reindex 失败";
-    default:
-      return record.status;
+function buildQuery(params: Record<string, string | number | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") q.set(key, String(value));
   }
+  return q.toString() ? `?${q.toString()}` : "";
 }
 
-function uniqueConnectionIds(record: SemanticAssetReleaseRecord): string[] {
-  const fromField = record.connectionIds ?? [];
-  const fromSources = (record.changedSources ?? []).map((s) => s.connectionId);
-  return Array.from(new Set([...fromField, ...fromSources].filter(Boolean)));
+function toDatetimeLocalValue(iso: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function hasAssetChanges(record: SemanticAssetReleaseRecord): boolean {
-  return (
-    uniqueConnectionIds(record).length > 0 ||
-    (record.changedSources?.length ?? 0) > 0 ||
-    (record.files?.length ?? 0) > 0
-  );
+function fromDatetimeLocalValue(local: string): string {
+  if (!local) return "";
+  const date = new Date(local);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString();
 }
 
-function isEmptyManualReindex(record: SemanticAssetReleaseRecord): boolean {
-  return coerceTrigger(record.trigger) === "webui_manual_reindex" && !hasAssetChanges(record);
+function sinceDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function previewList(items: string[], limit = SCOPE_PREVIEW_LIMIT): { shown: string[]; more: number } {
@@ -110,22 +74,11 @@ function previewList(items: string[], limit = SCOPE_PREVIEW_LIMIT): { shown: str
 
 type ErrorPanel = { title: string; body: string } | null;
 
-/**
- * Build the body shown in the row's expanded error panel.
- *
- * The audit page must surface every reason a publish batch stopped short of
- * `published`: reindex exit code, validation gate issues, overwrite
- * conflicts, and promote-time exceptions. Reindex stderr is the primary
- * source for reindex failures; validation issues are the primary source
- * for blocked / promote_failed records.
- */
 function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
   const reindex = record.reindex;
   const validation = record.validation;
   const validationIssues = collectValidationIssues(validation?.results ?? []);
 
-  // Reindex is the most actionable failure for the analyst — show stderr
-  // verbatim so they can grep the original KTX error.
   if (reindex && !reindex.ok) {
     const lines = [
       reindex.stderr?.trim() ? reindex.stderr.trim() : "(stderr 为空)",
@@ -138,7 +91,6 @@ function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
     };
   }
 
-  // Validation gate failure is the most common reason for `blocked`.
   if (record.status === "blocked") {
     const lines: string[] = [];
     if (validationIssues.length > 0) {
@@ -149,7 +101,6 @@ function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
         lines.push(`- [${loc}] ${issue.message}`);
       }
     } else if (reindex && reindex.ok === false) {
-      // Some blocked records carry a reindex error envelope as well.
       lines.push(reindex.stderr?.trim() || "(stderr 为空)");
     } else {
       lines.push("(未提供具体错误信息)");
@@ -160,10 +111,6 @@ function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
     };
   }
 
-  // Promote failed: the file system rejected the atomic write. The current
-  // release record doesn't capture the thrown error message, so we surface
-  // any validation issues and explicitly call out the missing promote log
-  // so the operator knows where to look (server stdout / stderr).
   if (record.status === "promote_failed") {
     const lines: string[] = [];
     if (validationIssues.length > 0) {
@@ -183,8 +130,6 @@ function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
     };
   }
 
-  // Validation ran and reported issues even though status is not blocked
-  // (e.g. legacy records that finished reindex despite partial failures).
   if (validation && !validation.ok && validationIssues.length > 0) {
     const lines = validationIssues.map(
       (issue) => `- [${issue.filePath ?? "(无定位)"}] ${issue.message}`
@@ -354,37 +299,164 @@ function ExpandedPanel({ title, body }: ExpandedPanelProps) {
 }
 
 export function PublishHistory() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [page, setPage] = useState(0);
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
 
+  const windowPreset = searchParams.get("window") ?? "";
+  const since = searchParams.get("since") ?? "";
+  const until = searchParams.get("until") ?? "";
+  const trigger = searchParams.get("trigger") ?? "";
+  const reindexStatus = searchParams.get("reindexStatus") ?? "";
+  const actor = searchParams.get("actor") ?? "";
+
+  function updateParam(key: string, value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setSearchParams(next);
+    setPage(0);
+  }
+
+  function applyWindowPreset(preset: string) {
+    const next = new URLSearchParams(searchParams);
+    if (!preset) {
+      next.delete("window");
+      next.delete("since");
+      next.delete("until");
+    } else {
+      const days = preset === "7d" ? 7 : 30;
+      next.set("window", preset);
+      next.set("since", sinceDaysAgo(days));
+      next.delete("until");
+    }
+    setSearchParams(next);
+    setPage(0);
+  }
+
+  function updateSinceLocal(local: string) {
+    const next = new URLSearchParams(searchParams);
+    const iso = fromDatetimeLocalValue(local);
+    if (iso) next.set("since", iso);
+    else next.delete("since");
+    next.delete("window");
+    setSearchParams(next);
+    setPage(0);
+  }
+
+  function updateUntilLocal(local: string) {
+    const next = new URLSearchParams(searchParams);
+    const iso = fromDatetimeLocalValue(local);
+    if (iso) next.set("until", iso);
+    else next.delete("until");
+    next.delete("window");
+    setSearchParams(next);
+    setPage(0);
+  }
+
+  const filterParams = useMemo(
+    () => ({
+      since: since || undefined,
+      until: until || undefined,
+      trigger: trigger || undefined,
+      reindexStatus: reindexStatus || undefined,
+      actor: actor || undefined
+    }),
+    [since, until, trigger, reindexStatus, actor]
+  );
+
+  const queryStr = buildQuery({
+    ...filterParams,
+    limit: PUBLISH_HISTORY_PAGE_SIZE,
+    offset: page * PUBLISH_HISTORY_PAGE_SIZE
+  });
+  const exportUrl = `/api/semantic-assets/releases/export.csv${buildQuery(filterParams)}`;
+
   const releasesQuery = useQuery({
-    queryKey: queryKeys.semanticAssetReleases,
-    queryFn: () => apiGet<SemanticAssetReleasesResponse>("/api/semantic-assets/releases")
+    queryKey: [...queryKeys.semanticAssetReleases, queryStr],
+    queryFn: () => apiGet<SemanticAssetReleasesResponse>(`/api/semantic-assets/releases${queryStr}`)
   });
 
-  const records = useMemo(
-    () => releasesQuery.data?.records ?? [],
-    [releasesQuery.data?.records]
-  );
+  const records = releasesQuery.data?.records ?? [];
+  const total = releasesQuery.data?.total ?? 0;
+  const totalPages = Math.ceil(total / PUBLISH_HISTORY_PAGE_SIZE) || 1;
 
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="发布历史与审计"
-        description="查看历史发布批次的变更范围与结果，并导出当前工作区语义资产包。"
-        badges={
-          releasesQuery.data ? (
-            <span data-testid="publish-history-count">共 {records.length} 条记录</span>
-          ) : null
-        }
+        title="发布记录"
+        description="查看历史发布批次的变更范围与结果。"
         actions={
-          <SemanticAssetExportButton
-            label="导出当前语义资产包 (.zip)"
-            variant="secondary"
-            testId="publish-history-export-snapshot-header"
-          />
+          <a href={exportUrl} className="pl-btn pl-btn--secondary text-sm" data-testid="publish-history-export-csv">
+            导出 CSV
+          </a>
         }
       />
+
+      <div className="pl-admin-filterbar" data-testid="publish-history-filterbar">
+        <select
+          className="pl-input w-32"
+          value={windowPreset}
+          onChange={(e) => applyWindowPreset(e.target.value)}
+          aria-label="时间窗口"
+          data-testid="publish-history-window"
+        >
+          <option value="">全部时间</option>
+          <option value="7d">近 7 天</option>
+          <option value="30d">近 30 天</option>
+        </select>
+        <input
+          className="pl-input w-44"
+          type="datetime-local"
+          value={toDatetimeLocalValue(since)}
+          onChange={(e) => updateSinceLocal(e.target.value)}
+          aria-label="开始时间"
+          data-testid="publish-history-since"
+        />
+        <span className="text-fg-muted self-center">—</span>
+        <input
+          className="pl-input w-44"
+          type="datetime-local"
+          value={toDatetimeLocalValue(until)}
+          onChange={(e) => updateUntilLocal(e.target.value)}
+          aria-label="结束时间"
+          data-testid="publish-history-until"
+        />
+        <select
+          className="pl-input w-44"
+          value={trigger}
+          onChange={(e) => updateParam("trigger", e.target.value)}
+          aria-label="触发方式"
+          data-testid="publish-history-trigger"
+        >
+          <option value="">全部触发方式</option>
+          <option value="webui_publish">WebUI 发布</option>
+          <option value="webui_manual_reindex">WebUI 强制重建索引</option>
+        </select>
+        <select
+          className="pl-input w-36"
+          value={reindexStatus}
+          onChange={(e) => updateParam("reindexStatus", e.target.value)}
+          aria-label="Reindex 状态"
+          data-testid="publish-history-reindex-filter"
+        >
+          <option value="">全部 Reindex 状态</option>
+          <option value="success">成功</option>
+          <option value="failed">失败</option>
+          <option value="running">进行中</option>
+          <option value="not_run">未执行</option>
+        </select>
+        <input
+          className="pl-input w-40 notranslate"
+          translate="no"
+          placeholder="操作人"
+          value={actor}
+          onChange={(e) => updateParam("actor", e.target.value)}
+          aria-label="操作人"
+          data-testid="publish-history-actor"
+        />
+      </div>
 
       <section
         className="rounded-md border border-border-default bg-bg-surface p-4"
@@ -400,117 +472,165 @@ export function PublishHistory() {
           </p>
         ) : null}
 
-        {records.length === 0 && !releasesQuery.isLoading ? (
-          <p className="pl-notice" data-testid="publish-history-empty">
-            暂无发布记录。在
-            <a className="pl-row-action-link ml-1 mr-1" href="/publish/workbench">
-              发布工作台
-            </a>
-            完成首次发布后，记录会显示在这里。
-          </p>
-        ) : null}
+        {!releasesQuery.isLoading && !releasesQuery.error ? (
+          <>
+            <div className="mb-3 text-sm text-fg-muted" data-testid="publish-history-page-range">
+              {total === 0
+                ? "共 0 条"
+                : `${page * PUBLISH_HISTORY_PAGE_SIZE + 1}–${Math.min(
+                    (page + 1) * PUBLISH_HISTORY_PAGE_SIZE,
+                    total
+                  )} / 共 ${total} 条`}
+            </div>
 
-        {records.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table
-              className="pl-data-grid pl-data-table pl-publish-history-table"
-              data-testid="publish-history-table"
-            >
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">发布时间</th>
-                  <th scope="col">触发方式</th>
-                  <th scope="col">操作人</th>
-                  <th scope="col">变更范围</th>
-                  <th scope="col">规模</th>
-                  <th scope="col">
-                    <span className="notranslate" translate="no">
-                      Reindex
-                    </span>{" "}
-                    状态
-                  </th>
-                  <th scope="col">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((record, index) => {
-                  const trigger = triggerLabelFor(record);
-                  const reindex = reindexLabelFor(record);
-                  const isDiffOpen = expandedDiffId === record.id;
-                  const isErrorOpen = expandedErrorId === record.id;
-                  const errorPanel = buildErrorPanel(record);
-                  const hasErrorPanel = errorPanel !== null;
-                  const serial = index + 1;
-                  return (
-                    <tr
-                      key={record.id}
-                      data-testid="publish-history-row"
-                      data-trigger={record.trigger ?? "unknown"}
-                      data-status={record.status}
-                      data-serial={serial}
-                    >
-                      <td className="pl-publish-history-table-num" data-testid="publish-history-serial">
-                        {serial}
-                      </td>
-                      <td>
-                        <div className="pl-publish-history-time">
-                          <span className="font-mono notranslate" translate="no">
-                            {formatTimestamp(record.createdAt)}
-                          </span>
-                          <span className="pl-publish-history-time-status">
-                            {record.status === "reindexing" ||
-                            record.status === "reindex_failed" ? (
-                              <span className="notranslate" translate="no">
-                                {statusLabelFor(record)}
-                              </span>
-                            ) : (
-                              statusLabelFor(record)
-                            )}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{trigger}</td>
-                      <td>
+            {total === 0 ? (
+              <p className="pl-notice" data-testid="publish-history-empty">
+                {since || until || trigger || reindexStatus || actor
+                  ? "当前筛选下暂无发布记录。"
+                  : (
+                    <>
+                      暂无发布记录。在
+                      <a className="pl-row-action-link ml-1 mr-1" href="/publish/workbench">
+                        发布工作台
+                      </a>
+                      完成首次发布后，记录会显示在这里。
+                    </>
+                  )}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table
+                  className="pl-data-grid pl-data-table pl-publish-history-table"
+                  data-testid="publish-history-table"
+                >
+                  <thead>
+                    <tr>
+                      <th scope="col" className="w-14 whitespace-nowrap">
+                        序号
+                      </th>
+                      <th scope="col">发布时间</th>
+                      <th scope="col">触发方式</th>
+                      <th scope="col">操作人</th>
+                      <th scope="col">变更范围</th>
+                      <th scope="col">规模</th>
+                      <th scope="col">
                         <span className="notranslate" translate="no">
-                          {record.actor || "unknown"}
-                        </span>
-                      </td>
-                      <td>
-                        <ChangeScopeCell record={record} />
-                      </td>
-                      <td>
-                        <ScaleCell record={record} />
-                      </td>
-                      <td>
-                        <span
-                          className={reindexStatusClass(reindex)}
-                          data-testid="publish-history-reindex-status"
-                          data-label={reindex}
-                        >
-                          {reindex}
-                        </span>
-                      </td>
-                      <td>
-                        <RowActions
-                          record={record}
-                          expandedDiff={isDiffOpen ? record.diff ?? "" : null}
-                          hasErrorPanel={hasErrorPanel}
-                          isErrorOpen={isErrorOpen}
-                          onToggleDiff={() =>
-                            setExpandedDiffId(isDiffOpen ? null : record.id)
-                          }
-                          onToggleError={() =>
-                            setExpandedErrorId(isErrorOpen ? null : record.id)
-                          }
-                        />
-                      </td>
+                          Reindex
+                        </span>{" "}
+                        状态
+                      </th>
+                      <th scope="col">操作</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {records.map((record, index) => {
+                      const triggerLabel = triggerLabelFor(record);
+                      const reindex = reindexLabelFor(record);
+                      const isDiffOpen = expandedDiffId === record.id;
+                      const isErrorOpen = expandedErrorId === record.id;
+                      const errorPanel = buildErrorPanel(record);
+                      const hasErrorPanel = errorPanel !== null;
+                      const serial = page * PUBLISH_HISTORY_PAGE_SIZE + index + 1;
+                      return (
+                        <tr
+                          key={record.id}
+                          data-testid="publish-history-row"
+                          data-trigger={coerceTrigger(record.trigger)}
+                          data-status={record.status}
+                          data-serial={serial}
+                        >
+                          <td
+                            className="pl-publish-history-table-num whitespace-nowrap"
+                            data-testid="publish-history-serial"
+                          >
+                            {serial}
+                          </td>
+                          <td>
+                            <div className="pl-publish-history-time">
+                              <span className="font-mono notranslate" translate="no">
+                                {formatPublishHistoryTs(record.createdAt)}
+                              </span>
+                              <span className="pl-publish-history-time-status">
+                                {record.status === "reindexing" ||
+                                record.status === "reindex_failed" ? (
+                                  <span className="notranslate" translate="no">
+                                    {statusLabelFor(record)}
+                                  </span>
+                                ) : (
+                                  statusLabelFor(record)
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{triggerLabel}</td>
+                          <td>
+                            <span className="notranslate" translate="no">
+                              {record.actor || "unknown"}
+                            </span>
+                          </td>
+                          <td>
+                            <ChangeScopeCell record={record} />
+                          </td>
+                          <td>
+                            <ScaleCell record={record} />
+                          </td>
+                          <td>
+                            <span
+                              className={reindexStatusClass(reindex)}
+                              data-testid="publish-history-reindex-status"
+                              data-label={reindex}
+                            >
+                              {reindex}
+                            </span>
+                          </td>
+                          <td>
+                            <RowActions
+                              record={record}
+                              expandedDiff={isDiffOpen ? record.diff ?? "" : null}
+                              hasErrorPanel={hasErrorPanel}
+                              isErrorOpen={isErrorOpen}
+                              onToggleDiff={() =>
+                                setExpandedDiffId(isDiffOpen ? null : record.id)
+                              }
+                              onToggleError={() =>
+                                setExpandedErrorId(isErrorOpen ? null : record.id)
+                              }
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {total > 0 ? (
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost text-sm"
+                  disabled={page === 0}
+                  onClick={() => setPage(page - 1)}
+                  data-testid="publish-history-prev"
+                >
+                  ‹ 上一页
+                </button>
+                <span className="text-sm text-fg-muted" data-testid="publish-history-page-index">
+                  {page + 1} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost text-sm"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage(page + 1)}
+                  data-testid="publish-history-next"
+                >
+                  下一页 ›
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : null}
 
         {records.map((record) => {

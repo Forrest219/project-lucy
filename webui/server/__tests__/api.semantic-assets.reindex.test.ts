@@ -146,6 +146,7 @@ describe("POST /api/semantic-assets/reindex", () => {
     expect(historyRes.body.data.records[0].id).toBe(reindexRes.body.data.id);
     expect(historyRes.body.data.records[0].files).toEqual([]);
     expect(historyRes.body.data.records[0].changedSources).toEqual([]);
+    expect(historyRes.body.data.total).toBe(1);
     await app.close();
   });
 
@@ -250,6 +251,79 @@ describe("POST /api/semantic-assets/reindex", () => {
       .expect(200);
     const ids = res.body.data.records.map((r: { id: string }) => r.id);
     expect(ids).toEqual(["rel_new", "rel_mid", "rel_old"]);
+    expect(res.body.data.total).toBe(3);
+    await app.close();
+  });
+
+  it("filters, paginates, and exports publish history CSV (Spec 113)", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    const { __test } = await import("../semantic-assets");
+    const base = {
+      actor: "local-admin",
+      connectionIds: [] as string[],
+      files: [] as [],
+      changedSources: [] as [],
+      validation: { ok: true, results: [] as [] }
+    };
+    await __test.appendReleaseRecord(projectRoot, {
+      ...base,
+      id: "rel_pub",
+      createdAt: "2026-07-31T05:00:00.000Z",
+      status: "published",
+      trigger: "webui_publish",
+      reindex: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+    });
+    await __test.appendReleaseRecord(projectRoot, {
+      ...base,
+      id: "idx_fail",
+      createdAt: "2026-07-31T04:00:00.000Z",
+      status: "reindex_failed",
+      trigger: "webui_manual_reindex",
+      reindex: { ok: false, exitCode: 1, stdout: "", stderr: "boom" }
+    });
+    await __test.appendReleaseRecord(projectRoot, {
+      ...base,
+      id: "rel_old_pub",
+      createdAt: "2026-06-01T00:00:00.000Z",
+      status: "published",
+      trigger: "webui_publish",
+      actor: "other-admin",
+      reindex: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const filtered = await request(app.server)
+      .get("/api/semantic-assets/releases")
+      .query({ trigger: "webui_publish", limit: 1, offset: 0 })
+      .expect(200);
+    expect(filtered.body.data.total).toBe(2);
+    expect(filtered.body.data.records).toHaveLength(1);
+    expect(filtered.body.data.records[0].id).toBe("rel_pub");
+
+    const reindexFailed = await request(app.server)
+      .get("/api/semantic-assets/releases")
+      .query({ reindexStatus: "failed" })
+      .expect(200);
+    expect(reindexFailed.body.data.total).toBe(1);
+    expect(reindexFailed.body.data.records[0].id).toBe("idx_fail");
+
+    const csvRes = await request(app.server)
+      .get("/api/semantic-assets/releases/export.csv")
+      .query({ trigger: "webui_manual_reindex" })
+      .expect(200);
+    expect(csvRes.headers["content-type"]).toMatch(/text\/csv/);
+    expect(csvRes.headers["content-disposition"]).toMatch(/publish-history-\d{8}-\d{6}\.csv/);
+    const csv = String(csvRes.text);
+    expect(csv.split("\n")[0]).toBe(
+      "序号,发布时间,发布状态,触发方式,操作人,变更范围,规模,Reindex 状态,发布 ID"
+    );
+    expect(csv).toContain("WebUI 强制重建索引");
+    expect(csv).toContain("idx_fail");
+    expect(csv).not.toContain("rel_pub");
+
     await app.close();
   });
 });

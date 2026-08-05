@@ -19,9 +19,11 @@
 | 关联页面 | `/publish/history` |
 | 关联台账 | `docs/ui-ux-feedback/pages/publish-history.md`（`UX-PUBLISH-HISTORY-001` ~ `005`） |
 | 上游 Spec | Spec 35（发布记录 IA）；`11-components-data-grid.md`；Spec 23（语义资产导出） |
-| 状态 | Implemented |
+| 状态 | Implemented（Header ZIP 导出由 Spec 113 修订为明细 CSV） |
 | 日期 | 2026-08-05 |
 | 范围 | 序号列、变更范围/规模列、操作列改名与行内去伪下载、Header 导出文案、export `require` ESM 修复、`pl-data-grid` 轻量收敛；不实现按 releaseId 历史包下载 |
+
+> **修订（Spec 113，2026-08-06）：** `/publish/history` Header 不再导出语义资产包 ZIP；改为「导出 CSV」明细表，并补筛选/分页。见 `113-publish-history-filters-pagination-and-csv-export-spec.md`。
 
 ## 1. 背景
 

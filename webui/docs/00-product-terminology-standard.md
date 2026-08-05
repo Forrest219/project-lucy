@@ -188,6 +188,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Config Audit Change Type | 变更类型 | 配置变更类型 | 类型（过宽）、changeType（裸露） | Spec 96 表头与筛选 |
 | Config Audit Asset Kind | 资产域 | 配置资产域 | assetKind、资产类型（与 Semantic Asset Kind 混淆） | Spec 90/96：governance/semantic/wiki/eval/publish |
 | Config Audit CSV Export | 导出 CSV（与主表一致） | 配置审计导出 | 英文原始列 dump、仅到日的文件名 | Spec 97：列头/单元格与主表 7 列中文一致；文件名 `config-audit-YYYYMMDD-HHmmss.csv` |
+| Publish History CSV Export | 导出 CSV（与主表一致） | 发布记录导出 | 导出当前语义资产包 (.zip)、下载当前快照 | Spec 113：明细 CSV；文件名 `publish-history-YYYYMMDD-HHmmss.csv`；ZIP 仅发布工作台 |
 | Review | 审阅 | 变更审阅 | 审核混用 | 人工审阅、PR-like review |
 | Approval | 审批 | 批准 | 审阅混用 | 需要明确批准 / 驳回的流程 |
 | Audit | 审计 | 审计日志 | 审阅 | 操作追踪、合规记录 |

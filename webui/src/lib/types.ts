@@ -1413,6 +1413,8 @@ export type SemanticAssetReleaseRecord = {
 
 export type SemanticAssetReleasesResponse = {
   records: SemanticAssetReleaseRecord[];
+  /** Total matching records before limit/offset (Spec 113). */
+  total: number;
 };
 
 export type SemanticAssetReleaseStatusResponse = {

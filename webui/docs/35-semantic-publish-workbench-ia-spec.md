@@ -11,6 +11,8 @@
 | 事实源 | 用户截图：当前 `/review` 页面；用户设计输入：一级菜单改为 `语义发布`，二级菜单仅保留 `发布工作台` 与 `发布记录` |
 | 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/06-navigation-ia.md`, `webui/docs/23-semantic-asset-publish-export-spec.md`, `webui/docs/24-yaml-delivery-runbook-spec.md`, `webui/docs/29-connection-semantic-boundary-automation-spec.md`, `docs/DEVELOPMENT.md` |
 
+> **修订（Spec 112，2026-08-06）：** `/publish/workbench` 的 PageHeader 动作密度、三栏角色标题与右栏「发布门禁」契约见 [`112-publish-workbench-flow-and-gate-ia-spec.md`](112-publish-workbench-flow-and-gate-ia-spec.md)。本 Spec §6.1–6.3 中「四按钮常驻同排 / 松散右栏状态块」以 Spec 112 为准；导航、「发布即索引」、Validate Gate fail-closed 与 `/review` 重定向不变。
+
 ## 1. 背景
 
 当前左侧导航存在一级模块 `审阅与校验`，二级菜单为 `变更审阅`。页面内部同时承载待发布文件 diff、`校验变更`、`重建 KTX 索引`、`上传语义资产`、导出全量资产包等动作。
@@ -251,15 +253,16 @@ Example:
 
 ### 7.3 History Data Contract
 
-> **修订（Spec 85，2026-08-05）：** 发布记录表须展示序号、变更范围与规模；`POST /api/semantic-assets/export` 仅作为 Header「导出当前语义资产包 (.zip)」辅助动作，**不得**作为每行「该批次快照」入口。表格视觉与列契约见 `85-publish-history-business-columns-and-export-clarity-spec.md`。
+> **修订（Spec 85，2026-08-05；Spec 113，2026-08-06）：** 发布记录表须展示序号、变更范围与规模；行内不得挂「该批次快照」下载。Header 导出由「当前语义资产包 ZIP」修订为**明细 CSV**（对齐配置审计）；`POST /api/semantic-assets/export` 仅保留在发布工作台。筛选/分页/CSV 契约见 `113-publish-history-filters-pagination-and-csv-export-spec.md`。
 
 Use existing release APIs where possible:
 
 | API | Usage |
 |---|---|
-| `GET /api/semantic-assets/releases` | List release records |
+| `GET /api/semantic-assets/releases` | List release records（支持筛选 / `limit` / `offset` / `total`） |
+| `GET /api/semantic-assets/releases/export.csv` | 导出当前筛选下的发布记录明细 CSV |
 | `GET /api/semantic-assets/releases/:id/status` | Poll active release status |
-| `POST /api/semantic-assets/export` | Export **current** full asset package in v0.1（Header only；not per-row historical download） |
+| `POST /api/semantic-assets/export` | 导出当前全量语义资产包（发布工作台；**不**挂在发布记录页） |
 
 If manual `强制重建索引` is triggered without a publish batch, it must create a lightweight history record or sidecar entry so `发布记录` can show the reindex result.
 

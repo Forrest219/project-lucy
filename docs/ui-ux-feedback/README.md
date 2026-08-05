@@ -56,6 +56,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-06 | Publish History `/publish/history` | Spec 113 / `wo-202608-46` 落地：`UX-PUBLISH-HISTORY-008`～`010` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`#`→序号；筛选栏+分页；Header「导出 CSV」明细（移除语义资产包 ZIP）；`releases` 支持筛选/`total` + `export.csv`。修订 Spec 35/85/91。跨页面主题延伸 `export-table field parity`、新增 `list-page filter-pagination parity`。验证：`publish-history.test.tsx`、`api.semantic-assets.reindex.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Catalog `/catalog/:conn/:schema/:table` 校验披露 | Spec 110 / `wo-202608-43` 落地：`UX-CATALOG-029` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。校验失败展示 `issues` 列表；Toast 带首因；Exit Code 入「技术详情」；中文主术语；澄清已保存语义层范围。跨页面主题新增 `validation failure disclosure`。验证：`table-editor`、`validation-utils`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish Workbench `/publish/workbench` | 浏览器确认用户反馈属实，新建 `pages/publish-workbench.md`：`UX-PUBLISH-WORKBENCH-001`～`003`（Open）。流程不可发现、三栏角色不清（中栏裸路径 + `状态：W`）、Header 6 钮过密（含多余「表目录」）。截图 `assets/publish-workbench/UX-PUBLISH-WORKBENCH-001-003.png`。跨页面主题新增 `publish flow discoverability`、`publish workbench three-panel ia`、`header action density`。本轮只登记，不开 Spec/不改代码。 |
 | 2026-08-06 | Connections `/connections` 连通健康 | Spec 108 / `wo-202608-41` 落地：`UX-CONNECTIONS-028`～`030` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。卡右侧连通健康摘要（通/偏慢/需关注/不通 + ms）；进页并行 `connection test`；与 Drawer 同源。跨页面主题新增 `connection-card connectivity health`。验证：`connection-overview`、`connection-test`、`lint:terminology`、`build`。 |
@@ -187,8 +188,9 @@ docs/ui-ux-feedback/
 | `audit filter-table alignment`（筛选字段须与表头对齐，并含时间窗） | UX-ADMIN-CONFIG-AUDIT-006 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
 | `ops table density (pl-data-grid)`（治理/审计列表须轻量 `pl-data-grid` 12px） | UX-ADMIN-CONFIG-AUDIT-003 | 1 Fixed | Spec 96 / wo-202608-29，待浏览器复核 |
 | `header sibling nav redundancy`（PageHeader 不得重复侧栏已有的兄弟页入口） | UX-ADMIN-CONFIG-AUDIT-007 | 1 Fixed | Spec 97 / wo-202608-30，待浏览器复核 |
-| `export-table field parity`（列表导出须与主表列头/业务文案一致，禁止原始字段 dump） | UX-ADMIN-CONFIG-AUDIT-008 | 1 Fixed | Spec 97 / wo-202608-30，待浏览器复核 |
-| `export filename second precision`（审计类 CSV 文件名须含到秒的时间戳） | UX-ADMIN-CONFIG-AUDIT-008 | 1 Fixed | Spec 97 / wo-202608-30，待浏览器复核 |
+| `export-table field parity`（列表导出须与主表列头/业务文案一致，禁止原始字段 dump） | UX-ADMIN-CONFIG-AUDIT-008、UX-PUBLISH-HISTORY-009～010 | 3 Fixed | Spec 97 / 113，待浏览器复核 |
+| `export filename second precision`（审计类 CSV 文件名须含到秒的时间戳） | UX-ADMIN-CONFIG-AUDIT-008、UX-PUBLISH-HISTORY-010 | 2 Fixed | Spec 97 / 113，待浏览器复核 |
+| `list-page filter-pagination parity`（运维列表须具备筛选栏 + 固定页大小分页 + 序号，样板配置审计） | UX-PUBLISH-HISTORY-008 | 1 Fixed | Spec 113 / wo-202608-46，待浏览器复核 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 
@@ -197,8 +199,9 @@ docs/ui-ux-feedback/
 - Header 只承载对象身份、位置上下文和关键状态；不得放低价值统计 chips 或页面功能说明。
 - 列表/历史页的「共 N 条」「N 个 case」等纯计数只能出现在表格空态、表尾或分页区，不得出现在 PageHeader `badges`（主题 `list-page header count badge`；样板见 Spec 88 Agent 列表、Spec 91）。
 - PageHeader `actions` 不得重复侧栏已有的兄弟页导航入口（主题 `header sibling nav redundancy`；样板见 Spec 97 配置审计删「访问日志」）。
-- 列表页「导出 CSV」默认须与主表可见列头及业务文案一致，禁止把英文原始字段 / 详情 dump 作为默认导出（主题 `export-table field parity`；样板见 Spec 97）。
-- 审计类 CSV 的 `Content-Disposition` 文件名须含到秒的时间戳（`YYYYMMDD-HHmmss`），避免同日多次导出覆盖混淆（主题 `export filename second precision`；样板见 Spec 97）。
+- 列表页「导出 CSV」默认须与主表可见列头及业务文案一致，禁止把英文原始字段 / 详情 dump 作为默认导出（主题 `export-table field parity`；样板见 Spec 97、Spec 113）。
+- 审计类 CSV 的 `Content-Disposition` 文件名须含到秒的时间戳（`YYYYMMDD-HHmmss`），避免同日多次导出覆盖混淆（主题 `export filename second precision`；样板见 Spec 97、Spec 113）。
+- 运维列表/历史页应对齐配置审计：筛选栏 + 固定页大小分页 +「序号」列 + 分页区计数（主题 `list-page filter-pagination parity`；样板见 Spec 96、Spec 113）。
 - 数据库对象标识符（Connection ID、Schema 名、表名、列名、路径、URL）必须保留仓库源字符串大小写；不得通过 JavaScript `.toUpperCase()` / `.toLowerCase()` 或 CSS `text-transform: uppercase` / `capitalize` / `lowercase` 强制改写。涉及数据库对象名的分组标题、链接文案、aria-label 都必须带 `translate="no"` 与 `notranslate`。测试必须直接断言渲染文本为仓库源字符串大小写，并保留反向断言（`queryByText(/UPPERCASE/)` 为空）。后端数据库标识符约定优先于 UI 渲染约定。
 - 高密度数据表格里的对象链接默认保持正文级字重；可点击性优先通过颜色、hover underline、focus ring、图标或动作列表达，不靠把链接升成标题级粗体。表头、分组标题和真正的对象详情 H1 才使用更高字重建立层级。
 - 同一视口内，同一个全局命令只能有一个主触发点；不得依赖 aria label 来补救可见命令重复。

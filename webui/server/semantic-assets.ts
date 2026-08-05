@@ -178,6 +178,18 @@ export type SemanticAssetReleaseRecord = {
 
 export type SemanticAssetReleasesResponse = {
   records: SemanticAssetReleaseRecord[];
+  /** Total matching records before limit/offset (Spec 113). */
+  total: number;
+};
+
+export type SemanticAssetReleaseListQuery = {
+  since?: string;
+  until?: string;
+  trigger?: SemanticAssetReleaseTrigger;
+  reindexStatus?: "success" | "failed" | "running" | "not_run";
+  actor?: string;
+  limit?: number;
+  offset?: number;
 };
 
 export type SemanticAssetReleaseStatusResponse = {
@@ -938,13 +950,50 @@ async function updateReleaseRecord(
   return updated;
 }
 
+function matchesReleaseQuery(
+  record: SemanticAssetReleaseRecord,
+  query: SemanticAssetReleaseListQuery | undefined
+): boolean {
+  if (!query) return true;
+  if (query.since && record.createdAt < query.since) return false;
+  if (query.until && record.createdAt > query.until) return false;
+  if (query.trigger) {
+    const trigger =
+      record.trigger === "webui_manual_reindex" || record.trigger === "webui_publish"
+        ? record.trigger
+        : "webui_publish";
+    if (trigger !== query.trigger) return false;
+  }
+  if (query.reindexStatus) {
+    let status: SemanticAssetReleaseListQuery["reindexStatus"];
+    if (record.status === "reindexing") status = "running";
+    else if (record.reindex) status = record.reindex.ok ? "success" : "failed";
+    else status = "not_run";
+    if (status !== query.reindexStatus) return false;
+  }
+  if (query.actor) {
+    const needle = query.actor.trim().toLowerCase();
+    if (!needle) return true;
+    const hay = (record.actor || "").toLowerCase();
+    if (!hay.includes(needle)) return false;
+  }
+  return true;
+}
+
 export async function readSemanticAssetReleases(
-  projectRoot: string
+  projectRoot: string,
+  query?: SemanticAssetReleaseListQuery
 ): Promise<SemanticAssetReleasesResponse> {
   const sidecar = await readSidecar(projectRoot);
   const records = sidecar.records.slice(-MAX_RELEASE_RECORDS);
   records.sort(sortRecordsByCreatedAtDesc);
-  return { records };
+  const filtered = records.filter((record) => matchesReleaseQuery(record, query));
+  const total = filtered.length;
+  const offset = query?.offset != null && Number.isFinite(query.offset) ? Math.max(0, query.offset) : 0;
+  const hasLimit = query?.limit != null && Number.isFinite(query.limit);
+  const limit = hasLimit ? Math.max(0, query!.limit!) : undefined;
+  const page = limit === undefined ? filtered : filtered.slice(offset, offset + limit);
+  return { records: page, total };
 }
 
 /**

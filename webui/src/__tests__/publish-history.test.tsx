@@ -63,13 +63,17 @@ function makeFailedReindexRecord(): SemanticAssetReleaseRecord {
   });
 }
 
-function renderHistory() {
+function isReleasesListUrl(url: string): boolean {
+  return url.startsWith("/api/semantic-assets/releases") && !url.includes("/export.csv") && !url.includes("/status");
+}
+
+function renderHistory(initialEntry = "/publish/history") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <PublishHistory />
       </MemoryRouter>
     </QueryClientProvider>
@@ -83,34 +87,15 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  // Publish history talks to GET /api/semantic-assets/releases; the export
-  // button triggers POST /api/semantic-assets/export. Tests that exercise
-  // the export click override these handlers as needed.
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/semantic-assets/releases") {
+      if (isReleasesListUrl(url)) {
         return new Response(
           JSON.stringify({
             ok: true,
-            data: { records: [makePublishRecord(), makeFailedReindexRecord()] }
-          })
-        );
-      }
-      if (url === "/api/semantic-assets/export" && init?.method === "POST") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            data: {
-              exportId: "exp_20260731_150500_003",
-              filename: "lucy-semantic-asset-exp_20260731_150500_003.zip",
-              sizeBytes: 1024,
-              sha256: "0".repeat(64),
-              downloadUrl: "/api/semantic-assets/exports/exp_20260731_150500_003/download",
-              includedFiles: ["semantic-layer/customer-db/international_country_metrics.yaml"],
-              excludedFiles: []
-            }
+            data: { records: [makePublishRecord(), makeFailedReindexRecord()], total: 2 }
           })
         );
       }
@@ -123,52 +108,92 @@ beforeEach(() => {
 });
 
 describe("PublishHistory", () => {
-  it("renders the publish history and audit page header", async () => {
+  it("renders the publish history page header with CSV export", async () => {
     renderHistory();
-    expect(
-      screen.getByRole("heading", { name: "发布历史与审计" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "发布记录" })).toBeInTheDocument();
+    expect(screen.queryByTestId("publish-history-count")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
+    const exportLink = screen.getByRole("link", { name: "导出 CSV" });
+    expect(exportLink).toHaveClass("pl-btn--secondary");
+    expect(exportLink).toHaveAttribute("href", expect.stringContaining("/api/semantic-assets/releases/export.csv"));
+    expect(screen.queryByRole("button", { name: /导出当前语义资产包/ })).not.toBeInTheDocument();
   });
 
-  it("renders the audit table with the WebUI publish and manual reindex rows", async () => {
+  it("renders filter bar, 序号 column, pagination, and business columns", async () => {
     renderHistory();
+    expect(await screen.findByTestId("publish-history-filterbar")).toBeInTheDocument();
     const table = await screen.findByTestId("publish-history-table");
     expect(table).toHaveClass("pl-data-grid");
-    expect(screen.getByRole("columnheader", { name: "#" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "#" })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "变更范围" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "规模" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "动作/快照" })).not.toBeInTheDocument();
-
-    expect(await screen.findByText("WebUI 发布")).toBeInTheDocument();
-    expect(screen.getByText("WebUI 强制重建索引")).toBeInTheDocument();
-    expect(screen.getByText("成功")).toBeInTheDocument();
-    expect(screen.getByText("失败")).toBeInTheDocument();
 
     const serials = screen.getAllByTestId("publish-history-serial");
     expect(serials[0]).toHaveTextContent("1");
     expect(serials[1]).toHaveTextContent("2");
 
-    expect(screen.getByText("customer-db")).toBeInTheDocument();
+    expect(screen.getByTestId("publish-history-page-range")).toHaveTextContent("1–2 / 共 2 条");
+    expect(screen.getByTestId("publish-history-page-index")).toHaveTextContent("1 / 1");
+
+    expect(await screen.findByText("customer-db")).toBeInTheDocument();
     expect(screen.getByText("international_country_metrics")).toBeInTheDocument();
     expect(screen.getByText(/文件 1 · 语义源 1/)).toBeInTheDocument();
     expect(screen.getByText("全库索引重建（无资产变更）")).toBeInTheDocument();
 
+    const rows = screen.getAllByTestId("publish-history-row");
+    expect(rows[0]).toHaveAttribute("data-trigger", "webui_publish");
+    expect(rows[1]).toHaveAttribute("data-trigger", "webui_manual_reindex");
+    expect(screen.getAllByText("成功").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("失败").length).toBeGreaterThan(0);
+
     expect(screen.getByRole("button", { name: "查看 Diff" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看错误" })).toBeInTheDocument();
     expect(screen.queryAllByRole("button", { name: "下载当前快照" })).toHaveLength(0);
-    expect(
-      screen.getByRole("button", { name: "导出当前语义资产包 (.zip)" })
-    ).toBeInTheDocument();
+  });
+
+  it("requests filtered releases when trigger filter changes", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (isReleasesListUrl(url)) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { records: [makePublishRecord()], total: 1 }
+          })
+        );
+      }
+      return new Response(
+        JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
+        { status: 404 }
+      );
+    });
+    vi.unstubAllGlobals();
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHistory();
+    await screen.findByTestId("publish-history-table");
+    fireEvent.change(screen.getByTestId("publish-history-trigger"), {
+      target: { value: "webui_publish" }
+    });
+
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes("trigger=webui_publish"))).toBe(true);
+    });
+
+    const exportLink = screen.getByRole("link", { name: "导出 CSV" });
+    expect(exportLink.getAttribute("href")).toContain("trigger=webui_publish");
   });
 
   it("expands the diff panel when 查看 Diff is clicked", async () => {
     renderHistory();
     const toggle = await screen.findByRole("button", { name: "查看 Diff" });
     fireEvent.click(toggle);
-    expect(
-      await screen.findByTestId("publish-history-expanded-panel")
-    ).toHaveTextContent("Index: international_country_metrics.yaml");
+    expect(await screen.findByTestId("publish-history-expanded-panel")).toHaveTextContent(
+      "Index: international_country_metrics.yaml"
+    );
     expect(screen.getByRole("button", { name: "收起 Diff" })).toBeInTheDocument();
   });
 
@@ -187,8 +212,8 @@ describe("PublishHistory", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/semantic-assets/releases") {
-          return new Response(JSON.stringify({ ok: true, data: { records: [] } }));
+        if (isReleasesListUrl(url)) {
+          return new Response(JSON.stringify({ ok: true, data: { records: [], total: 0 } }));
         }
         return new Response(
           JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
@@ -198,6 +223,7 @@ describe("PublishHistory", () => {
     );
     renderHistory();
     expect(await screen.findByTestId("publish-history-empty")).toBeInTheDocument();
+    expect(screen.getByTestId("publish-history-page-range")).toHaveTextContent("共 0 条");
   });
 
   it("treats records missing the trigger field as WebUI 发布 for backwards compatibility", async () => {
@@ -208,10 +234,8 @@ describe("PublishHistory", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/semantic-assets/releases") {
-          return new Response(
-            JSON.stringify({ ok: true, data: { records: [legacy] } })
-          );
+        if (isReleasesListUrl(url)) {
+          return new Response(JSON.stringify({ ok: true, data: { records: [legacy], total: 1 } }));
         }
         return new Response(
           JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
@@ -256,8 +280,8 @@ describe("PublishHistory", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/semantic-assets/releases") {
-          return new Response(JSON.stringify({ ok: true, data: { records: [blocked] } }));
+        if (isReleasesListUrl(url)) {
+          return new Response(JSON.stringify({ ok: true, data: { records: [blocked], total: 1 } }));
         }
         return new Response(
           JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
@@ -266,7 +290,6 @@ describe("PublishHistory", () => {
       })
     );
     renderHistory();
-    // Two buttons (the row toggle + the header one) — at least one exists.
     const toggle = await screen.findByRole("button", { name: "查看错误" });
     fireEvent.click(toggle);
     const panel = await screen.findByTestId("publish-history-expanded-panel");
@@ -301,8 +324,10 @@ describe("PublishHistory", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/semantic-assets/releases") {
-          return new Response(JSON.stringify({ ok: true, data: { records: [promoteFailed] } }));
+        if (isReleasesListUrl(url)) {
+          return new Response(
+            JSON.stringify({ ok: true, data: { records: [promoteFailed], total: 1 } })
+          );
         }
         return new Response(
           JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
@@ -324,8 +349,6 @@ describe("PublishHistory", () => {
       id: "rel_20260731_142000_partial",
       createdAt: "2026-07-31T06:20:00.000Z",
       trigger: "webui_publish",
-      // The status here is a legacy / non-canonical state; the audit page
-      // should still surface the validation failure so the row is auditable.
       status: "reindexing",
       reindex: { ok: true, exitCode: 0, stdout: "ok", stderr: "" },
       validation: {
@@ -345,8 +368,10 @@ describe("PublishHistory", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/semantic-assets/releases") {
-          return new Response(JSON.stringify({ ok: true, data: { records: [partialFailure] } }));
+        if (isReleasesListUrl(url)) {
+          return new Response(
+            JSON.stringify({ ok: true, data: { records: [partialFailure], total: 1 } })
+          );
         }
         return new Response(
           JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
@@ -374,10 +399,8 @@ describe("PublishHistory", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
-        if (url === "/api/semantic-assets/releases") {
-          return new Response(
-            JSON.stringify({ ok: true, data: { records: [inflight] } })
-          );
+        if (isReleasesListUrl(url)) {
+          return new Response(JSON.stringify({ ok: true, data: { records: [inflight], total: 1 } }));
         }
         return new Response(
           JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
@@ -403,9 +426,7 @@ describe("PublishHistory", () => {
     );
     renderHistory();
     await waitFor(() =>
-      expect(
-        screen.getByText("发布历史加载失败：无法连接历史 sidecar")
-      ).toBeInTheDocument()
+      expect(screen.getByText("发布历史加载失败：无法连接历史 sidecar")).toBeInTheDocument()
     );
   });
 });
