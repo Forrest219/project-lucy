@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, realpath, rm, rmdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const ALLOW = ["semantic-layer", "evals", "skills", "wiki", ".ktx-ui", "webui/config"];
@@ -185,6 +185,51 @@ export async function safeRemoveDirectory(projectRoot: string, relPath: string):
   // and `rmdir` already enforces the "empty" invariant we just
   // verified, so it is the safe primitive here.
   await rmdir(target);
+}
+
+/**
+ * Rename a directory under an allow-listed prefix (typically `wiki/`).
+ *
+ * Spec 109: used for same-parent Wiki directory rename. Refuses
+ * symlinks and refuses to overwrite an existing target.
+ */
+export async function safeRenameDirectory(
+  projectRoot: string,
+  sourceRelPath: string,
+  targetRelPath: string
+): Promise<void> {
+  const source = await resolveWritable(projectRoot, sourceRelPath);
+  const target = await resolveWritable(projectRoot, targetRelPath);
+
+  let sourceStat: Awaited<ReturnType<typeof lstat>>;
+  try {
+    sourceStat = await lstat(source);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new ForbiddenPathError(`Source directory ${sourceRelPath} does not exist`);
+    }
+    throw error;
+  }
+  if (sourceStat.isSymbolicLink()) {
+    throw new ForbiddenPathError(`Renaming symlinked directory ${sourceRelPath} is forbidden`);
+  }
+  if (!sourceStat.isDirectory()) {
+    throw new ForbiddenPathError(`Path ${sourceRelPath} is not a directory`);
+  }
+
+  try {
+    const targetStat = await lstat(target);
+    if (targetStat.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Target path ${targetRelPath} is a symlink`);
+    }
+    throw new ForbiddenPathError(`Target path ${targetRelPath} already exists`);
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  await mkdir(path.dirname(target), { recursive: true });
+  await rename(source, target);
 }
 
 export async function assertReadable(projectRoot: string, relPath: string): Promise<string> {

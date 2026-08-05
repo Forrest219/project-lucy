@@ -10,6 +10,7 @@ import {
   safeMkdir,
   safeRemove,
   safeRemoveDirectory,
+  safeRenameDirectory,
   safeWrite
 } from "./fs-safe";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
@@ -62,6 +63,31 @@ export type WikiDirectoryDeleteResult = {
   path: string;
   deleted: boolean;
   filePath: string;
+};
+
+export type WikiDirectoryRenameInput = {
+  sourcePath: string;
+  newName: string;
+};
+
+export type WikiDirectoryRenamePreview = {
+  sourcePath: string;
+  targetPath: string;
+  newName: string;
+  documentCount: number;
+  directoryCount: number;
+  documents: Array<{ sourceKey: string; targetKey: string }>;
+  directories: Array<{ sourcePath: string; targetPath: string }>;
+  conflicts: string[];
+  warnings: string[];
+};
+
+export type WikiDirectoryRenameResult = {
+  sourcePath: string;
+  targetPath: string;
+  renamedDocuments: number;
+  renamedDirectories: number;
+  writtenFiles: string[];
 };
 
 export type WikiWriteInput = {
@@ -851,6 +877,324 @@ export async function deleteWikiDirectory(
     path: normalizedPath,
     deleted: true,
     filePath: `${relPath}/`
+  };
+}
+
+function normalizeWikiDirectoryName(newName: string): string {
+  const trimmed = newName.trim();
+  if (
+    !trimmed ||
+    trimmed.includes("/") ||
+    trimmed.includes("\\") ||
+    trimmed === "." ||
+    trimmed === ".." ||
+    trimmed.startsWith(".")
+  ) {
+    throw new WikiDirectoryError("WIKI_DIRECTORY_INVALID", "目录名称不合法。");
+  }
+  return normalizeWikiDirectoryPath(trimmed);
+}
+
+function parentOfWikiDirectory(directoryPath: string): string {
+  const segments = directoryPath.split("/").filter(Boolean);
+  return segments.slice(0, -1).join("/");
+}
+
+function rewriteWikiPathPrefix(
+  value: string,
+  sourcePath: string,
+  targetPath: string
+): string {
+  if (value === sourcePath) {
+    return targetPath;
+  }
+  if (value.startsWith(`${sourcePath}/`)) {
+    return `${targetPath}${value.slice(sourcePath.length)}`;
+  }
+  return value;
+}
+
+function isUnderWikiDirectoryPrefix(value: string, prefix: string): boolean {
+  return value === prefix || value.startsWith(`${prefix}/`);
+}
+
+async function pathExistsUnderWiki(
+  projectRoot: string,
+  relativeUnderWiki: string
+): Promise<"missing" | "file" | "directory"> {
+  const relPath = path.posix.join("wiki", relativeUnderWiki);
+  try {
+    const info = await stat(await assertReadable(projectRoot, relPath));
+    return info.isDirectory() ? "directory" : "file";
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return "missing";
+    }
+    throw error;
+  }
+}
+
+/**
+ * Spec 109: preview same-parent directory rename (last path segment only).
+ */
+export async function previewWikiDirectoryRename(
+  projectRoot: string,
+  input: WikiDirectoryRenameInput
+): Promise<WikiDirectoryRenamePreview> {
+  const rawSource = input.sourcePath?.trim() ?? "";
+  if (!rawSource) {
+    throw new WikiDirectoryError(
+      "WIKI_DIRECTORY_RENAME_ROOT",
+      "根目录不可重命名。",
+      400
+    );
+  }
+
+  const sourcePath = normalizeWikiDirectoryPath(rawSource);
+  const newName = normalizeWikiDirectoryName(input.newName ?? "");
+  const parent = parentOfWikiDirectory(sourcePath);
+  const targetPath = parent ? `${parent}/${newName}` : newName;
+  const currentName = sourcePath.split("/").pop() ?? sourcePath;
+
+  if (targetPath === sourcePath || newName === currentName) {
+    throw new WikiDirectoryError(
+      "WIKI_DIRECTORY_INVALID",
+      "新目录名称与当前名称相同。",
+      400
+    );
+  }
+
+  const pages = await listWiki(projectRoot);
+  const listedDirectories = await listWikiDirectories(projectRoot);
+  const sourceExists =
+    listedDirectories.some((item) => isUnderWikiDirectoryPrefix(item.path, sourcePath)) ||
+    pages.some((page) => page.key.startsWith(`${sourcePath}/`)) ||
+    (await pathExistsUnderWiki(projectRoot, sourcePath)) === "directory";
+
+  if (!sourceExists) {
+    throw new WikiDirectoryError(
+      "WIKI_DIRECTORY_NOT_FOUND",
+      "目标目录不存在。",
+      404
+    );
+  }
+
+  const directoryMappings = listedDirectories
+    .filter((item) => isUnderWikiDirectoryPrefix(item.path, sourcePath))
+    .map((item) => ({
+      sourcePath: item.path,
+      targetPath: rewriteWikiPathPrefix(item.path, sourcePath, targetPath)
+    }))
+    .sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
+
+  if (!directoryMappings.some((item) => item.sourcePath === sourcePath)) {
+    directoryMappings.unshift({ sourcePath, targetPath });
+  }
+
+  const documentMappings = pages
+    .filter((page) => page.key.startsWith(`${sourcePath}/`))
+    .map((page) => ({
+      sourceKey: page.key,
+      targetKey: rewriteWikiPathPrefix(page.key, sourcePath, targetPath)
+    }))
+    .sort((a, b) => a.sourceKey.localeCompare(b.sourceKey));
+
+  const conflicts: string[] = [];
+  const warnings: string[] = [];
+  const sourceKeySet = new Set(documentMappings.map((item) => item.sourceKey));
+  const sourceDirSet = new Set(directoryMappings.map((item) => item.sourcePath));
+
+  const targetKind = await pathExistsUnderWiki(projectRoot, targetPath);
+  if (targetKind === "file") {
+    conflicts.push(`目标路径已被文件占用：wiki/${targetPath}`);
+  } else if (targetKind === "directory") {
+    conflicts.push(`目标目录已存在：wiki/${targetPath}/`);
+  }
+
+  for (const directory of listedDirectories) {
+    if (sourceDirSet.has(directory.path)) {
+      continue;
+    }
+    if (
+      directory.path === targetPath ||
+      directory.path.startsWith(`${targetPath}/`)
+    ) {
+      conflicts.push(`目标目录路径冲突：wiki/${directory.path}/`);
+    }
+  }
+
+  for (const mapping of documentMappings) {
+    if (sourceKeySet.has(mapping.targetKey)) {
+      continue;
+    }
+    if (await wikiExists(projectRoot, mapping.targetKey)) {
+      conflicts.push(`目标 Wiki 路径已存在：wiki/${mapping.targetKey}`);
+    }
+  }
+
+  return {
+    sourcePath,
+    targetPath,
+    newName,
+    documentCount: documentMappings.length,
+    directoryCount: directoryMappings.length,
+    documents: documentMappings,
+    directories: directoryMappings,
+    conflicts: Array.from(new Set(conflicts)),
+    warnings
+  };
+}
+
+/**
+ * Spec 109: commit same-parent directory rename.
+ *
+ * Physical tree is renamed first via {@link safeRenameDirectory}; then
+ * directory metadata and per-document version history keys are rewritten.
+ * Document history uses `operation: "move"` (Spec recommendation) with
+ * `previousKey` pointing at the pre-rename path.
+ */
+export async function renameWikiDirectory(
+  projectRoot: string,
+  input: WikiDirectoryRenameInput
+): Promise<WikiDirectoryRenameResult> {
+  const preview = await previewWikiDirectoryRename(projectRoot, input);
+  if (preview.conflicts.length > 0) {
+    throw new WikiDirectoryError(
+      "WIKI_DIRECTORY_CONFLICT",
+      preview.conflicts[0] ?? "目标路径冲突。",
+      409
+    );
+  }
+
+  const { sourcePath, targetPath, documents, directories } = preview;
+  const sourceRel = relPathForDirectory(sourcePath);
+  const targetRel = relPathForDirectory(targetPath);
+  const writtenFiles: string[] = [`${targetRel}/`];
+
+  // Capture history payloads before the filesystem rename moves content.
+  const historyCarries: Array<{
+    sourceKey: string;
+    targetKey: string;
+    markdown: string;
+  }> = [];
+  for (const mapping of documents) {
+    const markdown = await readExisting(projectRoot, mapping.sourceKey);
+    historyCarries.push({
+      sourceKey: mapping.sourceKey,
+      targetKey: mapping.targetKey,
+      markdown
+    });
+  }
+
+  try {
+    await safeRenameDirectory(projectRoot, sourceRel, targetRel);
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) {
+      if (error.message.includes("already exists")) {
+        throw new WikiDirectoryError(
+          "WIKI_DIRECTORY_CONFLICT",
+          `目标目录已存在：wiki/${targetPath}/`,
+          409
+        );
+      }
+      if (error.message.includes("does not exist")) {
+        throw new WikiDirectoryError(
+          "WIKI_DIRECTORY_NOT_FOUND",
+          "目标目录不存在。",
+          404
+        );
+      }
+    }
+    throw error;
+  }
+
+  const now = new Date().toISOString();
+  const metadata = await readWikiDirectoryMetadata(projectRoot);
+  const nextEntries = new Map<string, WikiDirectoryMetadataEntry>();
+  for (const entry of metadata.directories) {
+    if (isUnderWikiDirectoryPrefix(entry.path, sourcePath)) {
+      continue;
+    }
+    nextEntries.set(entry.path, entry);
+  }
+  for (const mapping of directories) {
+    const previous = metadata.directories.find((item) => item.path === mapping.sourcePath);
+    nextEntries.set(mapping.targetPath, {
+      path: mapping.targetPath,
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now
+    });
+  }
+  // Ensure ancestors of the renamed root remain explicit when needed.
+  for (const ancestor of directoryAncestors(targetPath)) {
+    if (!nextEntries.has(ancestor)) {
+      const previous = metadata.directories.find((item) => item.path === ancestor);
+      nextEntries.set(ancestor, {
+        path: ancestor,
+        createdAt: previous?.createdAt ?? now,
+        updatedAt: now
+      });
+    }
+  }
+  await writeWikiDirectoryMetadata(projectRoot, {
+    schemaVersion: 1,
+    directories: Array.from(nextEntries.values())
+  });
+  writtenFiles.push(WIKI_DIRECTORY_METADATA_PATH);
+
+  const index = await readWikiHistoryIndex(projectRoot);
+  for (const carry of historyCarries) {
+    const sourceDocument = index.documents[carry.sourceKey];
+    if (sourceDocument) {
+      const carriedVersions = sourceDocument.versions.map((version) => ({
+        ...version,
+        key: carry.targetKey,
+        snapshotPath: wikiVersionSnapshotPath(carry.targetKey, version.versionId)
+      }));
+      for (const version of sourceDocument.versions) {
+        const oldSnapshot = await assertReadable(projectRoot, version.snapshotPath);
+        const snapshotMarkdown = await readFile(oldSnapshot, "utf8");
+        const newSnapshotPath = wikiVersionSnapshotPath(carry.targetKey, version.versionId);
+        await safeWrite(projectRoot, newSnapshotPath, snapshotMarkdown);
+        await safeRemove(projectRoot, version.snapshotPath);
+      }
+      index.documents[carry.targetKey] = {
+        key: carry.targetKey,
+        createdAt: sourceDocument.createdAt,
+        updatedAt: now,
+        currentVersionId: sourceDocument.currentVersionId,
+        versions: carriedVersions
+      };
+      delete index.documents[carry.sourceKey];
+    }
+  }
+  if (historyCarries.length > 0) {
+    await writeWikiHistoryIndex(projectRoot, index);
+    writtenFiles.push(WIKI_HISTORY_INDEX_PATH);
+  }
+
+  for (const carry of historyCarries) {
+    const snapshot = await createWikiVersionSnapshot(projectRoot, carry.targetKey, carry.markdown, {
+      operation: "move",
+      previousKey: carry.sourceKey,
+      force: true
+    });
+    if (!snapshot) {
+      throw new WikiDirectoryError(
+        "WIKI_DIRECTORY_INVALID",
+        "未能写入重命名后的版本记录。",
+        500
+      );
+    }
+    writtenFiles.push(relPathForKey(carry.targetKey));
+  }
+
+  return {
+    sourcePath,
+    targetPath,
+    renamedDocuments: documents.length,
+    renamedDirectories: directories.length,
+    writtenFiles: Array.from(new Set(writtenFiles))
   };
 }
 

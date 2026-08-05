@@ -1354,7 +1354,7 @@ Fixed by Spec 105：toggle `text-sm` + `--active`。主题：`explorer panel sel
 
 ## UX-WIKI-044: 缺少编辑/重命名目录名称入口
 
-Status: Open
+Status: Fixed
 Route: /wiki
 Area: Wiki directory rename
 Severity: P2
@@ -1367,6 +1367,7 @@ Reported: 2026-08-05
 ### Evidence
 
 - 2026-08-05 菜单三项确认；Spec 58 / M51 / M56 将目录重命名列为非目标；无 rename API。
+- 2026-08-06 再次核实：`global` / `m56-msbye4tr-top` 等目录 `...` 仍无「重命名目录」；现场残留 `ux-wiki-007-msbpd1qu`、`m56-msbye4tr-top` 等测试目录名无法在 UI 内清理。
 
 ### Expected
 
@@ -1374,9 +1375,10 @@ Reported: 2026-08-05
 
 ### Browser Check
 
-1. Open 目录操作菜单 → 确认无「重命名目录」（本轮预期仍无）。
-2. 未来实现后改为 Fixed / Verified。
+1. Open 目录操作菜单 → 可见「重命名目录」。
+2. 同父级改名成功；`?dir=` / 文档 key 前缀跟随；冲突预检阻断。
+3. 本轮按约束不做浏览器验证；Vitest / lint / build 通过后升 Fixed，浏览器复核另议。
 
 ### Notes
 
-Spec 105 明确 Non-Goal；延期。不要加假按钮。
+Fixed by Spec 109 / `wo-202608-42`：`POST /api/wiki/directories/rename(/preview)`、`WikiRenameDirectoryDialog`、树菜单「重命名目录」。Non-browser 验证：`wiki.test.ts` / `wiki.test.tsx`、`lint:terminology`、`build`。

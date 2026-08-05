@@ -13,6 +13,7 @@ import { WikiNewDirectoryDialog } from "../components/WikiNewDirectoryDialog";
 import { WikiNewDocumentDialog } from "../components/WikiNewDocumentDialog";
 import { WikiReadView } from "../components/WikiReadView";
 import { WikiEditView } from "../components/WikiEditView";
+import { WikiRenameDirectoryDialog } from "../components/WikiRenameDirectoryDialog";
 import { WikiRestorePreflight } from "../components/WikiRestorePreflight";
 import { WikiSavePreflight } from "../components/WikiSavePreflight";
 import { WikiTree } from "../components/WikiTree";
@@ -44,6 +45,8 @@ import type {
   WikiVersionRestoreResult,
   WikiDirectoryCreateInput,
   WikiDirectoryCreateResult,
+  WikiDirectoryRenamePreview,
+  WikiDirectoryRenameResult,
   WikiDirectorySummary,
   WikiSummary,
   WikiUploadPreview
@@ -163,6 +166,12 @@ export function WikiEditor() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [deleteDirectoryPath, setDeleteDirectoryPath] = useState<string | null>(null);
   const [deleteDirectoryError, setDeleteDirectoryError] = useState<string | null>(null);
+  const [renameDirectoryPath, setRenameDirectoryPath] = useState<string | null>(null);
+  const [renameDirectoryName, setRenameDirectoryName] = useState("");
+  const [renameDirectoryPreview, setRenameDirectoryPreview] =
+    useState<WikiDirectoryRenamePreview | null>(null);
+  const [renameDirectoryError, setRenameDirectoryError] = useState<string | null>(null);
+  const [renameDirectoryLoading, setRenameDirectoryLoading] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveTargetDirectory, setMoveTargetDirectory] = useState("");
   const [movePreview, setMovePreview] = useState<WikiMovePreview | null>(null);
@@ -176,6 +185,8 @@ export function WikiEditor() {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadPreviewRequestRef = useRef(0);
   const moveTargetDirectoryRef = useRef("");
+  const renameDirectoryPathRef = useRef("");
+  const renameDirectoryNameRef = useRef("");
   const dirtyRef = useRef(false);
   const [isDirty, setIsDirty] = useState(false);
   function markDirty() {
@@ -463,6 +474,80 @@ export function WikiEditor() {
       const message =
         error instanceof Error ? error.message : "未知错误";
       setDeleteDirectoryError(message);
+    }
+  });
+
+  const renamePreviewMutation = useMutation({
+    mutationFn: (input: { sourcePath: string; newName: string }) =>
+      apiPost<WikiDirectoryRenamePreview>("/api/wiki/directories/rename/preview", input),
+    onMutate: (input) => {
+      renameDirectoryPathRef.current = input.sourcePath;
+      renameDirectoryNameRef.current = input.newName;
+      setRenameDirectoryLoading(true);
+      setRenameDirectoryError(null);
+    },
+    onSuccess: (result, input) => {
+      if (
+        renameDirectoryPathRef.current !== input.sourcePath ||
+        renameDirectoryNameRef.current !== input.newName
+      ) {
+        return;
+      }
+      setRenameDirectoryPreview(result);
+      setRenameDirectoryError(null);
+    },
+    onError: (error, input) => {
+      if (
+        renameDirectoryPathRef.current !== input.sourcePath ||
+        renameDirectoryNameRef.current !== input.newName
+      ) {
+        return;
+      }
+      setRenameDirectoryPreview(null);
+      setRenameDirectoryError(error instanceof Error ? error.message : "未知错误");
+    },
+    onSettled: (_data, _error, input) => {
+      if (
+        renameDirectoryPathRef.current !== input.sourcePath ||
+        renameDirectoryNameRef.current !== input.newName
+      ) {
+        return;
+      }
+      setRenameDirectoryLoading(false);
+    }
+  });
+
+  const renameDirectoryMutation = useMutation({
+    mutationFn: (input: { sourcePath: string; newName: string }) =>
+      apiPost<WikiDirectoryRenameResult>("/api/wiki/directories/rename", input),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      if (key && key.startsWith(`${result.sourcePath}/`)) {
+        const nextKey = `${result.targetPath}${key.slice(result.sourcePath.length)}`;
+        queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(key) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(nextKey) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(key) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(nextKey) });
+        markClean();
+        sourceRef.current = `${nextKey}::renamed`;
+        setSearchParams({ key: nextKey }, { replace: true });
+      } else if (
+        dirParam === result.sourcePath ||
+        dirParam.startsWith(`${result.sourcePath}/`)
+      ) {
+        const nextDir = `${result.targetPath}${dirParam.slice(result.sourcePath.length)}`;
+        markClean();
+        sourceRef.current = `${nextDir}::directory-renamed`;
+        setSearchParams({ dir: nextDir }, { replace: true });
+      }
+      setRenameDirectoryPath(null);
+      setRenameDirectoryName("");
+      setRenameDirectoryPreview(null);
+      setRenameDirectoryError(null);
+      toast.success("目录已重命名");
+    },
+    onError: (error) => {
+      setRenameDirectoryError(error instanceof Error ? error.message : "未知错误");
     }
   });
 
@@ -778,6 +863,67 @@ export function WikiEditor() {
       return;
     }
     deleteDirectoryMutation.mutate(deleteDirectoryPath);
+  }
+
+  function openRenameDirectoryDialog(directoryPath: string) {
+    if (
+      !confirmDiscardUnsaved(
+        "当前编辑未保存。重命名目录会放弃未保存内容，是否继续？"
+      )
+    ) {
+      return;
+    }
+    if (!directoryPath) {
+      toast.error("根目录不可重命名。");
+      return;
+    }
+    const currentName = directoryPath.split("/").filter(Boolean).at(-1) ?? "";
+    setRenameDirectoryPath(directoryPath);
+    setRenameDirectoryName(currentName);
+    setRenameDirectoryPreview(null);
+    setRenameDirectoryError(null);
+    renameDirectoryPathRef.current = directoryPath;
+    renameDirectoryNameRef.current = currentName;
+  }
+
+  function cancelRenameDirectory() {
+    setRenameDirectoryPath(null);
+    setRenameDirectoryName("");
+    setRenameDirectoryPreview(null);
+    setRenameDirectoryError(null);
+    setRenameDirectoryLoading(false);
+  }
+
+  function handleRenameDirectoryNameChange(value: string) {
+    if (!renameDirectoryPath) {
+      return;
+    }
+    setRenameDirectoryName(value);
+    renameDirectoryNameRef.current = value;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
+      setRenameDirectoryPreview(null);
+      setRenameDirectoryError(
+        trimmed.includes("/") || trimmed.includes("\\")
+          ? "目录名称必须是单个目录名。"
+          : null
+      );
+      return;
+    }
+    renamePreviewMutation.mutate({
+      sourcePath: renameDirectoryPath,
+      newName: trimmed
+    });
+  }
+
+  function confirmRenameDirectory() {
+    if (!renameDirectoryPath || !renameDirectoryName.trim()) {
+      return;
+    }
+    renameDirectoryMutation.mutate({
+      sourcePath: renameDirectoryPath,
+      newName: renameDirectoryName.trim()
+    });
   }
 
   function openMoveDialog() {
@@ -1288,6 +1434,7 @@ export function WikiEditor() {
             onCreateDirectory={openNewDirectoryDialog}
             onCreateDocument={openNewDocumentDialog}
             onDeleteDirectory={openDeleteDirectoryDialog}
+            onRenameDirectory={openRenameDirectoryDialog}
             onSelect={navigateTo}
             onSelectDirectory={navigateToDirectory}
             pages={pages}
@@ -1440,6 +1587,18 @@ export function WikiEditor() {
         isDeleting={deleteDirectoryMutation.isPending}
         onCancel={cancelDeleteDirectory}
         onConfirm={confirmDeleteDirectory}
+      />
+
+      <WikiRenameDirectoryDialog
+        error={renameDirectoryError}
+        isLoading={renameDirectoryLoading}
+        isRenaming={renameDirectoryMutation.isPending}
+        newName={renameDirectoryName}
+        onCancel={cancelRenameDirectory}
+        onConfirm={confirmRenameDirectory}
+        onNewNameChange={handleRenameDirectoryNameChange}
+        preview={renameDirectoryPreview}
+        sourcePath={renameDirectoryPath}
       />
 
       <WikiMoveDocumentDialog

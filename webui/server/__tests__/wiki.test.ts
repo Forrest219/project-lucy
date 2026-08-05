@@ -373,6 +373,143 @@ describe("wiki editor storage", () => {
     }
   });
 
+  it("renames an empty directory and rewrites metadata (Spec 109)", async () => {
+    const { previewWikiDirectoryRename, renameWikiDirectory } = await import("../wiki");
+    await createWikiDirectory(projectRoot, { path: "ops-empty" });
+
+    await expect(
+      previewWikiDirectoryRename(projectRoot, { sourcePath: "ops-empty", newName: "ops-empty" })
+    ).rejects.toMatchObject({ code: "WIKI_DIRECTORY_INVALID" });
+
+    await expect(
+      previewWikiDirectoryRename(projectRoot, { sourcePath: "", newName: "x" })
+    ).rejects.toMatchObject({ code: "WIKI_DIRECTORY_RENAME_ROOT" });
+
+    const preview = await previewWikiDirectoryRename(projectRoot, {
+      sourcePath: "ops-empty",
+      newName: "ops-renamed"
+    });
+    expect(preview).toMatchObject({
+      sourcePath: "ops-empty",
+      targetPath: "ops-renamed",
+      documentCount: 0,
+      directoryCount: 1,
+      conflicts: []
+    });
+
+    const result = await renameWikiDirectory(projectRoot, {
+      sourcePath: "ops-empty",
+      newName: "ops-renamed"
+    });
+    expect(result).toMatchObject({
+      sourcePath: "ops-empty",
+      targetPath: "ops-renamed",
+      renamedDocuments: 0,
+      renamedDirectories: 1
+    });
+    await expect(stat(path.join(projectRoot, "wiki", "ops-renamed"))).resolves.toMatchObject({
+      isDirectory: expect.any(Function)
+    });
+    await expect(stat(path.join(projectRoot, "wiki", "ops-empty"))).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    const directories = await listWikiDirectories(projectRoot);
+    expect(directories.map((item) => item.path)).toContain("ops-renamed");
+    expect(directories.map((item) => item.path)).not.toContain("ops-empty");
+  });
+
+  it("renames a directory tree with documents and carries version history (Spec 109)", async () => {
+    const { previewWikiDirectoryRename, renameWikiDirectory } = await import("../wiki");
+    await createWikiDirectory(projectRoot, { path: "team/drafts" });
+    await writeWiki(projectRoot, "team/drafts/note.md", {
+      frontmatter: { summary: "Draft note" },
+      content: "# Draft\n"
+    });
+    await createWikiVersionSnapshot(projectRoot, "team/drafts/note.md", "# Draft\n", {
+      operation: "create"
+    });
+
+    const preview = await previewWikiDirectoryRename(projectRoot, {
+      sourcePath: "team",
+      newName: "squad"
+    });
+    expect(preview.documentCount).toBe(1);
+    expect(preview.directoryCount).toBeGreaterThanOrEqual(2);
+    expect(preview.documents[0]).toEqual({
+      sourceKey: "team/drafts/note.md",
+      targetKey: "squad/drafts/note.md"
+    });
+
+    await createWikiDirectory(projectRoot, { path: "squad" });
+    const conflictPreview = await previewWikiDirectoryRename(projectRoot, {
+      sourcePath: "team",
+      newName: "squad"
+    });
+    expect(conflictPreview.conflicts.length).toBeGreaterThan(0);
+    await expect(
+      renameWikiDirectory(projectRoot, { sourcePath: "team", newName: "squad" })
+    ).rejects.toMatchObject({ code: "WIKI_DIRECTORY_CONFLICT" });
+
+    // Remove the conflicting empty target so rename can proceed.
+    const { deleteWikiDirectory } = await import("../wiki");
+    await deleteWikiDirectory(projectRoot, "squad");
+
+    const result = await renameWikiDirectory(projectRoot, {
+      sourcePath: "team",
+      newName: "squad"
+    });
+    expect(result.renamedDocuments).toBe(1);
+    await expect(
+      readFile(path.join(projectRoot, "wiki", "squad", "drafts", "note.md"), "utf8")
+    ).resolves.toContain("# Draft");
+    await expect(listWiki(projectRoot)).resolves.toEqual([
+      expect.objectContaining({ key: "squad/drafts/note.md", summary: "Draft note" })
+    ]);
+
+    const versions = await listWikiVersions(projectRoot, "squad/drafts/note.md");
+    expect(versions.versions.some((item) => item.operation === "move")).toBe(true);
+    expect(versions.versions.some((item) => item.previousKey === "team/drafts/note.md")).toBe(true);
+  });
+
+  it("exposes directory rename through the wiki API routes (Spec 109)", async () => {
+    await createWikiDirectory(projectRoot, { path: "api-rename" });
+    await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+    const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    const app = buildServer();
+    try {
+      const preview = await app.inject({
+        method: "POST",
+        url: "/api/wiki/directories/rename/preview",
+        payload: { sourcePath: "api-rename", newName: "api-renamed" }
+      });
+      expect(preview.statusCode).toBe(200);
+      expect(preview.json().data.targetPath).toBe("api-renamed");
+
+      const renamed = await app.inject({
+        method: "POST",
+        url: "/api/wiki/directories/rename",
+        payload: { sourcePath: "api-rename", newName: "api-renamed" }
+      });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json()).toMatchObject({
+        ok: true,
+        data: {
+          sourcePath: "api-rename",
+          targetPath: "api-renamed",
+          renamedDirectories: 1
+        }
+      });
+    } finally {
+      await app.close();
+      if (previousProjectRoot === undefined) {
+        delete process.env.KTX_PROJECT_ROOT;
+      } else {
+        process.env.KTX_PROJECT_ROOT = previousProjectRoot;
+      }
+    }
+  });
+
   it("creates version snapshots and keeps history files out of wiki pages", async () => {
     await createWikiVersionSnapshot(projectRoot, "global/history.md", "# V1\n", {
       operation: "create"

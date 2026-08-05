@@ -44,6 +44,8 @@ POST /api/wiki/upload/preview
 POST /api/wiki/upload/commit
 GET  /api/wiki/directories
 POST /api/wiki/directories
+POST /api/wiki/directories/rename/preview
+POST /api/wiki/directories/rename
 DELETE /api/wiki/directories/:path
 POST /api/wiki/:key/move/preview
 POST /api/wiki/:key/move
@@ -60,6 +62,7 @@ PUT  /api/joins/candidates
 
 GET  /api/connections
 GET  /api/connections/:connId/tables
+GET  /api/connections/:connId/live-schemas       # Owner on-demand read-only DB catalog (Spec 107)
 PUT  /api/connections/:connId/enabled-tables     # default dryRun
 POST /api/connections/:connId/schemas            # add schema metadata to existing connection
 POST /api/connections/:connId/test
@@ -187,6 +190,7 @@ POST /mcp                                      # MCP proxy, port 7879
     "columnCount": 8, "hasTableDesc": true, "hasGrain": false,
     "measureCount": 0, "joinCount": 2, "wikiRefCount": 0,
     "completion": "partial", "mtime": "2026-06-15T08:00:00Z",
+    "enabled": true,
     "authorizedAgentCount": 3,
     "semanticUpdatedAt": "2026-07-01T10:30:00Z",
     "semanticUpdatedAtSource": "overlay"
@@ -201,6 +205,7 @@ POST /mcp                                      # MCP proxy, port 7879
 
 - `mtime`：该表所在 Schema Manifest 文件的文件修改时间，保留兼容；不要在 UI 中直接命名为“最近更新”。
 - `qualifiedName`：Manifest 中声明的物理表名；连接概览用它与 `ktx.yaml enabled_tables` 对齐。
+- `enabled`：该表是否出现在对应 Connection 的 `enabled_tables`。语义覆盖 / Catalog 默认范围只统计 `enabled === true`（Spec 104）；本接口仍返回 Manifest 全量。
 - `manifestSchemas`：本地实际存在并可解析的 Schema Manifest 文件列表；用于连接概览按第一手文件事实统计 `缺 Manifest 的 Schema` 与 `本地表目录`。
 - `authorizedAgentCount`：启用 Agent 中，有效权限包含当前 Source 的 Agent 数量。禁用 Agent 不计入，只返回数量。
 - `semanticUpdatedAt`：该表语义资产更新时间，取 Schema Manifest 与表级 semantic overlay 文件修改时间中的较晚者；overlay 不存在时取 Schema Manifest。
@@ -325,6 +330,16 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 
 `DELETE /api/wiki/directories/:path` 删除目录。目录非空（仍残留文档） → `409 WIKI_DIRECTORY_NOT_EMPTY`；目录不存在 → `404 WIKI_DIRECTORY_NOT_FOUND`。
 
+`POST /api/wiki/directories/rename/preview` 预览同父级目录重命名（只改最后一段）。请求：
+
+```json
+{ "sourcePath": "m56-msbye4tr-top", "newName": "playbooks" }
+```
+
+返回源/目标路径、将改写的文档与子目录列表、`conflicts` / `warnings`。
+
+`POST /api/wiki/directories/rename` 提交重命名：物理目录树改名、前缀文档 key 与版本历史跟随、`wiki/.lucy-directories.json` 同步。目标冲突 → `409 WIKI_DIRECTORY_CONFLICT`；根桶 → `400 WIKI_DIRECTORY_RENAME_ROOT`；源不存在 → `404 WIKI_DIRECTORY_NOT_FOUND`。
+
 `POST /api/wiki/:key/move/preview` 预览把 `key` 对应文档移动到 `targetPath`（相对 `wiki/` 的新路径），返回 diff。
 
 `POST /api/wiki/:key/move` 实际移动文档；目录变更同步写入 `wiki/.lucy-directories.json`。目标路径已被占用 → `409 WIKI_DOCUMENT_EXISTS`；路径非法 → `400 BAD_REQUEST`。
@@ -355,6 +370,8 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 ### 数据库连接
 
 `GET /api/connections` 返回 `ConnectionInfo[]`，字段见 `04-data-model.md`。
+
+`GET /api/connections/:connId/live-schemas`（Spec 107）经 `ktx sql --json` 只读聚合账号可见 Schema 及 BASE TABLE 数量。Query `refresh=1` 跳过进程内 TTL（默认 10 分钟）。成功 / 连通失败均返回 HTTP 200 + `data.status`（与 connection test 同构，便于分连接 UI）；连接不存在返回 404。字段见 Spec 107 §6。
 
 `GET /api/connections/:connId/tables` 从 `semantic-layer/<connId>/_schema/*.yaml` 返回已扫描表名：
 

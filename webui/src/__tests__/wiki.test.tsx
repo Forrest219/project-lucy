@@ -280,6 +280,48 @@ function buildFetchMock(
         })
       );
     }
+    if (url === "/api/wiki/directories/rename/preview" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      const sourcePath = String(body.sourcePath ?? "");
+      const newName = String(body.newName ?? "").trim();
+      const parent = sourcePath.split("/").filter(Boolean).slice(0, -1).join("/");
+      const targetPath = parent ? `${parent}/${newName}` : newName;
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            sourcePath,
+            targetPath,
+            newName,
+            documentCount: 0,
+            directoryCount: 1,
+            documents: [],
+            directories: [{ sourcePath, targetPath }],
+            conflicts: [],
+            warnings: []
+          }
+        })
+      );
+    }
+    if (url === "/api/wiki/directories/rename" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body));
+      const sourcePath = String(body.sourcePath ?? "");
+      const newName = String(body.newName ?? "").trim();
+      const parent = sourcePath.split("/").filter(Boolean).slice(0, -1).join("/");
+      const targetPath = parent ? `${parent}/${newName}` : newName;
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            sourcePath,
+            targetPath,
+            renamedDocuments: 0,
+            renamedDirectories: 1,
+            writtenFiles: [`wiki/${targetPath}/`, "wiki/.lucy-directories.json"]
+          }
+        })
+      );
+    }
     const movePreviewMatch = url.match(/^\/api\/wiki\/(.+)\/move\/preview$/);
     if (movePreviewMatch && init?.method === "POST") {
       const sourceKey = decodeURIComponent(movePreviewMatch[1]);
@@ -1830,6 +1872,49 @@ describe("WikiEditor directory and document governance (M56)", () => {
     expect(deleteItem).toBeDisabled();
     expect(deleteItem).toHaveAttribute("aria-disabled", "true");
     expect(deleteItem.getAttribute("title") ?? "").toContain("请先移动或删除内容");
+  });
+
+  it("renames a directory through the WikiTree menu (UX-WIKI-044 / Spec 109)", async () => {
+    const fetchMock = buildFetchMock(WIKI_PAGES, SOURCES, EMPTY_WIKI_DIRECTORIES);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?dir=ops");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    fireEvent.click(await within(tree).findByRole("button", { name: "ops 目录操作" }));
+    const renameItem = await within(tree).findByTestId("wiki-tree-rename-directory-ops");
+    expect(renameItem).not.toBeDisabled();
+    fireEvent.click(renameItem);
+
+    const dialog = await screen.findByTestId("wiki-rename-directory-dialog");
+    expect(within(dialog).getByTestId("wiki-rename-directory-source")).toHaveTextContent(
+      "wiki/ops/"
+    );
+
+    const nameInput = within(dialog).getByTestId("wiki-rename-directory-name-input");
+    fireEvent.change(nameInput, { target: { value: "operations" } });
+
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-rename-directory-target")).toHaveTextContent(
+        "wiki/operations/"
+      );
+    });
+
+    fireEvent.click(within(dialog).getByTestId("wiki-rename-directory-confirm"));
+
+    await waitFor(() => {
+      const renameCall = fetchMock.mock.calls.find(
+        (call) => call[0] === "/api/wiki/directories/rename" && call[1]?.method === "POST"
+      );
+      expect(renameCall).toBeTruthy();
+      expect(JSON.parse(String(renameCall?.[1]?.body))).toEqual({
+        sourcePath: "ops",
+        newName: "operations"
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location").textContent).toContain("dir=operations");
+    });
   });
 
   it("moves the current document into another directory (UX-WIKI-011)", async () => {

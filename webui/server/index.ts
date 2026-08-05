@@ -61,15 +61,18 @@ import {
   listWikiDirectories,
   listWikiVersions,
   moveWiki,
+  previewWikiDirectoryRename,
   previewWikiMove,
   previewWikiUpload,
   previewWikiVersionRestore,
   previewWikiWrite,
   readWiki,
   readWikiVersion,
+  renameWikiDirectory,
   restoreWikiVersion,
   writeWiki,
   type WikiDirectoryCreateInput,
+  type WikiDirectoryRenameInput,
   type WikiMoveInput,
   type WikiUploadInput,
   type WikiWriteInput
@@ -613,6 +616,33 @@ export function buildServer() {
     const result = await createWikiDirectory(projectRoot, request.body);
     writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
     writtenFiles.push({ filePath: result.filePath });
+    return {
+      ok: true,
+      data: result
+    };
+  });
+
+  app.post<{
+    Body: WikiDirectoryRenameInput;
+  }>("/api/wiki/directories/rename/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await previewWikiDirectoryRename(projectRoot, request.body ?? { sourcePath: "", newName: "" })
+    };
+  });
+
+  app.post<{
+    Body: WikiDirectoryRenameInput;
+  }>("/api/wiki/directories/rename", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const result = await renameWikiDirectory(
+      projectRoot,
+      request.body ?? { sourcePath: "", newName: "" }
+    );
+    for (const filePath of result.writtenFiles) {
+      writtenFiles.push({ filePath });
+    }
     return {
       ok: true,
       data: result

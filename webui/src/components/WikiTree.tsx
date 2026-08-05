@@ -30,6 +30,8 @@ export type WikiTreeProps = {
    *  The Wiki editor wires this up to the DELETE route; the tree stays
    *  agnostic so other consumers can decide their own UX. */
   onDeleteDirectory?: (directory: string) => void;
+  /** Spec 109: triggered when the user picks `重命名目录`. */
+  onRenameDirectory?: (directory: string) => void;
   /** Optional seeded search term so the tree can mirror a header input. */
   initialSearch?: string;
 };
@@ -64,6 +66,7 @@ export function WikiTree({
   onCreateDocument,
   onCreateDirectory,
   onDeleteDirectory,
+  onRenameDirectory,
   initialSearch = ""
 }: WikiTreeProps) {
   const [search, setSearch] = useState(initialSearch);
@@ -189,7 +192,7 @@ export function WikiTree({
             </span>
             <span className="pl-wiki-tree-group-count">{node.documentCount} 篇</span>
           </button>
-          {onCreateDocument || onCreateDirectory || onDeleteDirectory ? (
+          {onCreateDocument || onCreateDirectory || onDeleteDirectory || onRenameDirectory ? (
             <div className="pl-wiki-tree-group-menu">
               <RowMoreMenu
                 ariaLabel={`${node.path || label} 目录操作`}
@@ -208,6 +211,18 @@ export function WikiTree({
                       label: "在此目录新建文档",
                       onSelect: () => onCreateDocument(node.path || "global"),
                       testId: `wiki-tree-create-document-${(node.path || "root").replace(/[^a-zA-Z0-9_-]/g, "-")}`
+                    }]
+                    : []),
+                  ...(onRenameDirectory
+                    ? [{
+                      kind: "action" as const,
+                      label: "重命名目录",
+                      onSelect: () => onRenameDirectory(node.path),
+                      disabled: !node.path,
+                      disabledReason: node.path
+                        ? undefined
+                        : "根目录不可重命名。",
+                      testId: `wiki-tree-rename-directory-${(node.path || "root").replace(/[^a-zA-Z0-9_-]/g, "-")}`
                     }]
                     : []),
                   ...(onDeleteDirectory

@@ -336,6 +336,31 @@ export type WikiDirectoryDeleteResult = {
   filePath: string;
 };
 
+export type WikiDirectoryRenameInput = {
+  sourcePath: string;
+  newName: string;
+};
+
+export type WikiDirectoryRenamePreview = {
+  sourcePath: string;
+  targetPath: string;
+  newName: string;
+  documentCount: number;
+  directoryCount: number;
+  documents: Array<{ sourceKey: string; targetKey: string }>;
+  directories: Array<{ sourcePath: string; targetPath: string }>;
+  conflicts: string[];
+  warnings: string[];
+};
+
+export type WikiDirectoryRenameResult = {
+  sourcePath: string;
+  targetPath: string;
+  renamedDocuments: number;
+  renamedDirectories: number;
+  writtenFiles: string[];
+};
+
 export type WikiMoveInput = {
   targetDirectory: string;
   overwrite?: boolean;
