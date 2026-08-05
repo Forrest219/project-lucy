@@ -75,7 +75,12 @@
 | [83-wiki-version-history-data-grid-alignment-spec.md](83-wiki-version-history-data-grid-alignment-spec.md) | Wiki 版本记录表接入 `pl-data-grid`、当前行操作列留空、操作按钮行内对齐 | 产品 / UX / Frontend |
 | [84-admin-usage-overview-activity-rank-and-header-polish-spec.md](84-admin-usage-overview-activity-rank-and-header-polish-spec.md) | `/admin/governance` 调用排行 1×3 条形图、KPI 窗口进标题、顶栏 segmented、删「管理角色」（修订 Spec 78/82 列表形态） | 产品 / API / UX / Frontend |
 | [86-admin-usage-overview-route-and-kpi-clarity-spec.md](86-admin-usage-overview-route-and-kpi-clarity-spec.md) | 使用概况迁 `/admin/usage`、排行 Top-10 槽位高度、授权表、多数请求耗时（修订 Spec 78/84 URL Non-Goal） | 产品 / UX / Frontend |
-| [85-publish-history-business-columns-and-export-clarity-spec.md](85-publish-history-business-columns-and-export-clarity-spec.md) | `/publish/history` 序号/变更范围/规模、操作列澄清、Header 导出语义资产包、export ESM 修复、`pl-data-grid` 轻量收敛（修订 Spec 35 §7） | 产品 / UX / Frontend / 后端 |
+| [87-admin-usage-overview-stats-time-spec.md](87-admin-usage-overview-stats-time-spec.md) | `/admin/usage` 顶栏「统计时间」徽标（在 24h/7d 左侧），布局对齐系统概览新鲜度 | 产品 / UX / Frontend |
+| [88-agent-admin-list-ia-terminology-and-table-grid-spec.md](88-agent-admin-list-ia-terminology-and-table-grid-spec.md) | `/admin/agents` 命名改 Agent、删 Header badges、KPI 对齐 usage、列表 `pl-data-grid` 表、去行内复制 MCP | 产品 / UX / Frontend |
+| [89-role-admin-list-and-detail-ia-spec.md](89-role-admin-list-and-detail-ia-spec.md) | `/admin/roles` 静态 KPI + 描述对齐访问治理；Role 详情 Tab 拆分基本信息 / 权限配置 / 生效边界 | 产品 / UX / Frontend |
+| [89-admin-audit-turn-drilldown-spec.md](89-admin-audit-turn-drilldown-spec.md) | `/admin/audit` 问询记录 + 调用流水双 Tab、起止时间拆分、Drawer 明细、与使用概况 P95 交叉验证 | 产品 / UX / API / Frontend |
+| [90-admin-config-audit-unified-scope-spec.md](90-admin-config-audit-unified-scope-spec.md) | `/admin/config-audit` 写审计范围一视同仁：扩展至语义 YAML、业务 Wiki、评测、发布；`safeWrite` 统一管道、`asset_kind` 筛选 | 产品 / API / 后端 / 安全 / 前端 |
+| [91-list-page-header-consistency-spec.md](91-list-page-header-consistency-spec.md) | 列表/历史页 PageHeader 收敛：删纯计数 badges、发布记录标题对齐、评测容器统一、表编辑 backAction | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

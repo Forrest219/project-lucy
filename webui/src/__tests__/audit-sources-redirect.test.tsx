@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { AuditSources } from "../pages/admin/AuditSources";
 
 describe("AuditSources shim (M35)", () => {
-  it("redirects to /admin/audit?tab=heatmap", () => {
+  it("redirects to /admin/audit", () => {
     render(
       <MemoryRouter initialEntries={["/admin/audit-sources"]}>
         <Routes>

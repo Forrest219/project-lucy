@@ -5,7 +5,13 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
-import type { AuditLogEntry, AuditResponse, AuditSourcesResponse } from "../../lib/types";
+import type {
+  AuditLogEntry,
+  AuditResponse,
+  AuditTurnDetailResponse,
+  AuditTurnEntry,
+  AuditTurnsResponse
+} from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 
 // 202608-01 — Trace / Evidence Kernel read model
@@ -437,6 +443,180 @@ export function TraceLink({ traceId }: { traceId: string }) {
 
 const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
 const PAGE_SIZE = 50;
+type AuditTab = "turns" | "calls";
+type WindowHours = 24 | 168;
+
+function formatDurationMs(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes} m ${seconds} s`;
+}
+
+function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
+  if (!statsAt) return "未知";
+  const diffMs = now.getTime() - statsAt.getTime();
+  if (diffMs < 5_000) return "刚刚";
+  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
+  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
+}
+
+function windowLabel(hours: WindowHours): string {
+  return hours === 24 ? "近 24 小时" : "近 7 天";
+}
+
+function parseWindowHours(raw: string | null): WindowHours {
+  return raw === "24" ? 24 : 168;
+}
+
+function sinceIsoFromHours(hours: WindowHours): string {
+  const d = new Date();
+  d.setHours(d.getHours() - hours);
+  return d.toISOString();
+}
+
+function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
+  if (source === "reported") {
+    return <span className="pl-status-badge pl-status-done">已上报问询</span>;
+  }
+  return (
+    <span className="pl-status-badge pl-status-partial" title="基于工具调用自动生成，不等同于用户原文">
+      推断问询
+    </span>
+  );
+}
+
+function TurnDetailDrawer({
+  turnId,
+  hours,
+  open,
+  onOpenChange
+}: {
+  turnId: string | null;
+  hours: WindowHours;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const query = useQuery({
+    queryKey: ["admin", "audit", "turn", turnId, hours],
+    queryFn: () => apiGet<AuditTurnDetailResponse>(`/api/admin/audit/turns/${encodeURIComponent(turnId ?? "")}?hours=${hours}`),
+    enabled: open && Boolean(turnId)
+  });
+  const detail = query.data;
+  const p95Ms = detail?.referenceLatency?.p95Ms ?? 0;
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="pl-trace-detail-overlay" />
+        <Dialog.Content className="pl-trace-detail-content" data-testid="audit-turn-drawer">
+          <header className="pl-trace-detail-header">
+            <Dialog.Title className="pl-trace-detail-title">问询详情</Dialog.Title>
+            <Dialog.Description className="pl-trace-detail-subtitle">
+              {detail?.userId ? (
+                <>
+                  <span className="notranslate" translate="no">{detail.userId}</span>
+                  {detail.source ? <> · <TurnSourceBadge source={detail.source} /></> : null}
+                </>
+              ) : "加载中…"}
+            </Dialog.Description>
+            <Dialog.Close asChild>
+              <button type="button" className="pl-btn pl-btn--ghost pl-trace-detail-close text-xs" aria-label="关闭问询详情">
+                关闭
+              </button>
+            </Dialog.Close>
+          </header>
+
+          {query.isLoading ? <div className="pl-notice">加载中…</div> : null}
+          {query.error ? (
+            <div className="pl-notice pl-status-validation_failed">{(query.error as Error).message}</div>
+          ) : null}
+
+          {detail ? (
+            <>
+              {detail.source === "inferred" ? (
+                <p className="text-xs text-fg-muted mb-3">
+                  推断问题摘要基于工具调用参数自动生成，不等同于用户原文。
+                </p>
+              ) : null}
+              {(detail.questionSummary || detail.questionPreview) ? (
+                <div className="mb-3 text-sm">
+                  <span className="font-medium">问询摘要：</span>
+                  <span className="text-fg-muted">{detail.questionPreview ?? detail.questionSummary}</span>
+                </div>
+              ) : null}
+              {p95Ms > 0 ? (
+                <p className="text-xs text-fg-muted mb-3">
+                  多数请求耗时参照：<span className="tabular-nums notranslate" translate="no">{p95Ms} ms</span>
+                  <span className="notranslate" translate="no">（P95）</span>
+                </p>
+              ) : null}
+
+              <section className="pl-trace-detail-section">
+                <h3 className="pl-trace-detail-section-title">工具调用</h3>
+                <div className="overflow-x-auto">
+                  <table className="pl-audit-table w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border-default text-left text-xs text-fg-muted">
+                        <th className="px-3 py-2">时间</th>
+                        <th className="px-3 py-2">工具</th>
+                        <th className="px-3 py-2">表</th>
+                        <th className="px-3 py-2">状态</th>
+                        <th className="px-3 py-2">耗时</th>
+                        <th className="px-3 py-2">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.accessLogs.length === 0 ? (
+                        <tr><td colSpan={6} className="px-3 py-4 text-center text-fg-muted">暂无调用记录</td></tr>
+                      ) : (
+                        detail.accessLogs.map((log) => (
+                          <tr key={log.id}>
+                            <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(log.ts).toLocaleString("zh-CN")}</td>
+                            <td className="px-3 py-2 font-mono text-sm notranslate" translate="no">{log.tool}</td>
+                            <td className="px-3 py-2 text-xs text-fg-muted">{log.tables?.join(", ") ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              <span className={`pl-status-badge ${log.outcome === "ok" ? "pl-status-done" : log.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed"}`}>
+                                {OUTCOME_LABELS[log.outcome as keyof typeof OUTCOME_LABELS] ?? log.outcome}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-xs">
+                              <span className="tabular-nums">{log.durationMs} ms</span>
+                              {log.isSlowCall ? <span className="ml-2 pl-status-badge pl-status-partial">慢于多数请求</span> : null}
+                            </td>
+                            <td className="px-3 py-2 text-xs">
+                              {log.traceId ? <TraceLink traceId={log.traceId} /> : null}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {Array.isArray(detail.sources) && detail.sources.length > 0 ? (
+                <section className="pl-trace-detail-section">
+                  <h3 className="pl-trace-detail-section-title">触达表汇总</h3>
+                  <ul className="text-sm text-fg-muted grid gap-1">
+                    {(detail.sources as Array<{ physical_table?: string; physicalTable?: string }>).map((source, index) => (
+                      <li key={index} className="font-mono notranslate" translate="no">
+                        {source.physicalTable ?? source.physical_table ?? "—"}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
 
 /**
  * localStorage key for the Audit page's last-used filter snapshot. We
@@ -445,8 +625,8 @@ const PAGE_SIZE = 50;
  * and see what they were investigating, but URL params still drive the
  * shareable surface.
  */
-const AUDIT_FILTER_STORAGE_KEY = "lucy:webui:audit:filters:v1";
-const FILTER_PERSIST_FIELDS = ["tab", "user", "tool", "outcome", "tableSearch", "sessionId", "turnId", "platform"] as const;
+const AUDIT_FILTER_STORAGE_KEY = "lucy:webui:audit:filters:v2";
+const FILTER_PERSIST_FIELDS = ["tab", "hours", "user", "tool", "outcome", "tableSearch", "sessionId", "turnId", "platform", "turnSource"] as const;
 type FilterSnapshot = Partial<Record<(typeof FILTER_PERSIST_FIELDS)[number], string>>;
 
 function readFilterSnapshot(): FilterSnapshot {
@@ -472,65 +652,6 @@ function writeFilterSnapshot(snapshot: FilterSnapshot) {
 }
 const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
 const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
-
-function HeatRow({ label, calls, denied, max }: { label: string; calls: number; denied?: number; max: number }) {
-  const width = max > 0 ? Math.max(4, Math.round((calls / max) * 100)) : 0;
-  return (
-    <div className="grid grid-cols-[minmax(180px,1fr)_minmax(160px,260px)_80px_80px] items-center gap-3 text-sm">
-      <span className="font-mono text-fg-muted truncate">{label}</span>
-      <div className="h-2 rounded-pill bg-bg-muted overflow-hidden">
-        <div className="h-full bg-accent" style={{ width: `${width}%` }} />
-      </div>
-      <span>{calls}</span>
-      <span className={denied ? "text-danger font-medium" : "text-fg-muted"}>{denied ?? 0}</span>
-    </div>
-  );
-}
-
-function HeatmapView() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["admin", "audit", "heatmap"],
-    queryFn: () => apiGet<AuditSourcesResponse>("/api/admin/audit/sources")
-  });
-  const maxCalls = Math.max(1, ...(data?.topTables ?? []).map((item) => item.calls));
-
-  if (isLoading) return <div className="pl-notice">加载中…</div>;
-  if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
-
-  return (
-    <>
-      <div className="pl-metric-grid">
-        <div className="pl-metric-card"><span>连接</span><strong>{data?.connections.length ?? 0}</strong><small>审计派生</small></div>
-        <div className="pl-metric-card"><span className="notranslate" translate="no">Schema</span><strong>{data?.schemas.length ?? 0}</strong><small>有访问记录</small></div>
-        <div className="pl-metric-card"><span>表</span><strong>{data?.topTables.length ?? 0}</strong><small>Top 50</small></div>
-        <div className="pl-metric-card"><span>拒绝表</span><strong>{data?.deniedTables.length ?? 0}</strong><small>有 denied</small></div>
-      </div>
-      <section className="pl-card grid gap-3">
-        <div className="flex items-center justify-between">
-          <p className="text-base font-semibold mb-0">Top Tables</p>
-          <span className="text-xs text-fg-muted">calls / denied</span>
-        </div>
-        {(data?.topTables ?? []).length === 0 ? (
-          <p className="text-sm text-fg-muted">暂无表级访问记录。</p>
-        ) : (
-          data?.topTables.map((item) => (
-            <HeatRow key={item.table} label={item.table} calls={item.calls} denied={item.denied} max={maxCalls} />
-          ))
-        )}
-      </section>
-      <section className="pl-card grid gap-3">
-        <p className="text-base font-semibold mb-0">Denied Tables</p>
-        {(data?.deniedTables ?? []).length === 0 ? (
-          <p className="text-sm text-fg-muted">暂无表级拒绝记录。</p>
-        ) : (
-          data?.deniedTables.map((item) => (
-            <HeatRow key={item.table} label={item.table} calls={item.calls} denied={item.denied} max={maxCalls} />
-          ))
-        )}
-      </section>
-    </>
-  );
-}
 
 function buildQuery(params: Record<string, string | undefined | number | boolean>): string {
   const q = new URLSearchParams();
@@ -713,20 +834,25 @@ export function Audit() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
   const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
+  const [selectedTurnId, setSelectedTurnId] = useState<string | null>(searchParams.get("turnId"));
+  const [turnDrawerOpen, setTurnDrawerOpen] = useState(Boolean(searchParams.get("turnId")));
+  const [now, setNow] = useState(() => new Date());
 
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
-  const turnId = searchParams.get("turnId") ?? "";
+  const turnIdFilter = searchParams.get("turnIdFilter") ?? "";
   const platform = searchParams.get("platform") ?? "";
+  const turnSource = searchParams.get("turnSource") ?? "";
+  const turnSearch = searchParams.get("turnSearch") ?? "";
   const includeProtocol = searchParams.get("includeProtocol") === "true";
-  const tab: "log" | "heatmap" = searchParams.get("tab") === "heatmap" ? "heatmap" : "log";
+  const slowOnly = searchParams.get("slowOnly") === "1";
+  const tabParam = searchParams.get("tab");
+  const tab: AuditTab = tabParam === "calls" ? "calls" : "turns";
+  const hours = parseWindowHours(searchParams.get("hours"));
 
-  // M36: hydrate the last-used tab + filter values from localStorage so the
-  // user comes back to the same investigation context. URL params still
-  // win when present (so a shared link overrides the local cache).
   useEffect(() => {
     if (hasHydratedFromStorage) return;
     if (searchParams.toString().length > 0) {
@@ -745,35 +871,64 @@ export function Audit() {
     }
     setSearchParams(next, { replace: true });
     setHasHydratedFromStorage(true);
-    // searchParams intentionally not in deps: we only want to read on first mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHydratedFromStorage]);
 
-  // Default: last 24h
-  const [since, setSince] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 16);
-  });
+  const sinceDefault = sinceIsoFromHours(hours).slice(0, 16);
+  const [since, setSince] = useState(sinceDefault);
   const [until, setUntil] = useState("");
+
+  useEffect(() => {
+    setSince(sinceIsoFromHours(hours).slice(0, 16));
+    setPage(0);
+  }, [hours]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value); else next.delete(key);
+    if (value) next.set(key, value);
+    else next.delete(key);
     setSearchParams(next);
     setPage(0);
     if ((FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) {
       const snapshot = readFilterSnapshot();
-      if (value) {
-        snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
-      } else {
-        delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
-      }
+      if (value) snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
+      else delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
       writeFilterSnapshot(snapshot);
     }
   }
 
-  const queryStr = buildQuery({
+  function setHours(nextHours: WindowHours) {
+    updateParam("hours", String(nextHours));
+  }
+
+  function openTurnDrawer(turnId: string) {
+    setSelectedTurnId(turnId);
+    setTurnDrawerOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.set("turnId", turnId);
+    setSearchParams(next);
+  }
+
+  const turnsQueryStr = buildQuery({
+    user: user || undefined,
+    source: turnSource === "inferred" || turnSource === "reported" ? turnSource : "all",
+    hours,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE
+  });
+
+  const turnsQuery = useQuery({
+    queryKey: ["admin", "audit", "turns", turnsQueryStr],
+    queryFn: () => apiGet<AuditTurnsResponse>(`/api/admin/audit/turns${turnsQueryStr}`),
+    enabled: tab === "turns"
+  });
+
+  const callsQueryStr = buildQuery({
     user: user || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
@@ -781,139 +936,270 @@ export function Audit() {
     until: until || undefined,
     tableSearch: tableSearch || undefined,
     sessionId: sessionId || undefined,
-    turnId: turnId || undefined,
+    turnId: turnIdFilter || undefined,
     platform: platform || undefined,
     includeProtocol,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
   });
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["admin", "audit", queryStr],
-    queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${queryStr}`),
-    enabled: tab === "log"
+  const callsQuery = useQuery({
+    queryKey: ["admin", "audit", "calls", callsQueryStr, slowOnly],
+    queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${callsQueryStr}`),
+    enabled: tab === "calls"
   });
 
-  const entries = data?.entries ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const turnEntries = turnsQuery.data?.entries ?? [];
+  const turnTotal = turnsQuery.data?.total ?? 0;
+  const referenceLatency = turnsQuery.data?.referenceLatency;
+  const p95Ms = referenceLatency?.p95Ms ?? 0;
 
-  const exportUrl = `/api/admin/audit/export${buildQuery({ user: user || undefined, tool: tool || undefined, outcome: outcome || undefined, since: since || undefined, until: until || undefined, tableSearch: tableSearch || undefined, sessionId: sessionId || undefined, turnId: turnId || undefined, platform: platform || undefined, includeProtocol })}`;
+  const filteredTurnEntries = useMemo(() => {
+    if (!turnSearch.trim()) return turnEntries;
+    const needle = turnSearch.trim().toLowerCase();
+    return turnEntries.filter((entry) => {
+      const haystack = [
+        entry.userId,
+        entry.questionSummary,
+        entry.questionPreview,
+        entry.tools.join(" "),
+        entry.sources.map((s) => s.physicalTable).join(" ")
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [turnEntries, turnSearch]);
+
+  const callEntries = (callsQuery.data?.entries ?? []).filter((entry) => {
+    if (!slowOnly || p95Ms <= 0) return true;
+    return entry.durationMs > p95Ms;
+  });
+  const callTotal = callsQuery.data?.total ?? 0;
+  const isCallsSlowFiltered = tab === "calls" && slowOnly;
+  const totalPages = Math.ceil((tab === "turns" ? turnTotal : (isCallsSlowFiltered ? callEntries.length : callTotal)) / PAGE_SIZE) || 1;
+
+  const statsUpdatedAtMs = tab === "turns" ? turnsQuery.dataUpdatedAt : callsQuery.dataUpdatedAt;
+  const statsTimeLabel = formatStatsTimeLabel(statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null, now);
+
+  const exportUrl = `/api/admin/audit/export${buildQuery({
+    user: user || undefined,
+    tool: tool || undefined,
+    outcome: outcome || undefined,
+    since: since || undefined,
+    until: until || undefined,
+    tableSearch: tableSearch || undefined,
+    sessionId: sessionId || undefined,
+    turnId: turnIdFilter || undefined,
+    platform: platform || undefined,
+    includeProtocol
+  })}`;
+
+  const tabLink = (nextTab: AuditTab) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextTab === "turns") next.delete("tab");
+    else next.set("tab", nextTab);
+    const qs = next.toString();
+    return qs ? `/admin/audit?${qs}` : "/admin/audit";
+  };
 
   return (
     <div className="pl-page-stack">
       <PageHeader
         title="访问日志"
-        breadcrumbs={tab === "heatmap" ? ["访问治理", "访问日志", "数据热力"] : undefined}
-        description="查看 MCP Proxy 记录的工具调用，可按用户、工具、状态过滤。"
-        badges={tab === "log" ? <span>{total} 条记录</span> : undefined}
-        actions={tab === "log" ? <a href={exportUrl} download className="pl-btn pl-btn--secondary text-sm">导出 CSV</a> : undefined}
+        description="按 Agent 问询与 MCP 工具调用追溯访问行为；耗时可与使用概况「多数请求耗时」交叉核对。"
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-fg-muted whitespace-nowrap" data-testid="audit-stats-time">
+              统计时间：{statsTimeLabel}
+            </span>
+            <div
+              className="pl-segmented-control pl-segmented-control--cols-2"
+              role="tablist"
+              aria-label="统计窗口"
+              data-testid="audit-window-control"
+            >
+              <button
+                type="button"
+                className={hours === 24 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                onClick={() => setHours(24)}
+              >
+                24 小时
+              </button>
+              <button
+                type="button"
+                className={hours === 168 ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                onClick={() => setHours(168)}
+              >
+                7 天
+              </button>
+            </div>
+            {tab === "calls" ? (
+              <a href={exportUrl} download className="pl-btn pl-btn--primary text-sm" data-testid="audit-export-csv">
+                导出 CSV
+              </a>
+            ) : null}
+          </div>
+        }
       />
 
       <div className="flex items-center gap-2" role="tablist" aria-label="访问日志视图">
-        <Link
-          to="/admin/audit"
-          role="tab"
-          aria-selected={tab === "log"}
-          className="pl-btn pl-btn--ghost text-sm"
-        >
-          明细
+        <Link to={tabLink("turns")} role="tab" aria-selected={tab === "turns"} className="pl-btn pl-btn--ghost text-sm">
+          问询记录
         </Link>
-        <Link
-          to="/admin/audit?tab=heatmap"
-          role="tab"
-          aria-selected={tab === "heatmap"}
-          className="pl-btn pl-btn--ghost text-sm"
-        >
-          数据热力
+        <Link to={tabLink("calls")} role="tab" aria-selected={tab === "calls"} className="pl-btn pl-btn--ghost text-sm">
+          调用流水
         </Link>
       </div>
 
-      <div className="pl-admin-filterbar">
-        <input
-          className="pl-input w-36"
-          placeholder="用户 ID"
-          value={user}
-          onChange={(e) => updateParam("user", e.target.value)}
-        />
-        <input
-          className="pl-input w-36"
-          placeholder="工具名"
-          value={tool}
-          onChange={(e) => updateParam("tool", e.target.value)}
-        />
-        <select
-          className="pl-input w-28"
-          value={outcome}
-          onChange={(e) => updateParam("outcome", e.target.value)}
-        >
-          <option value="">全部状态</option>
-          <option value="ok">成功</option>
-          <option value="error">错误</option>
-          <option value="denied">拒绝</option>
-        </select>
-        <input
-          className="pl-input w-44"
-          type="datetime-local"
-          value={since}
-          onChange={(e) => { setSince(e.target.value); setPage(0); }}
-        />
-        <span className="text-fg-muted self-center">—</span>
-        <input
-          className="pl-input w-44"
-          type="datetime-local"
-          value={until}
-          onChange={(e) => { setUntil(e.target.value); setPage(0); }}
-        />
-        <input
-          className="pl-input w-40"
-          placeholder="搜索表名"
-          value={tableSearch}
-          onChange={(e) => updateParam("tableSearch", e.target.value)}
-        />
-        <input
-          className="pl-input w-40"
-          placeholder="Session ID"
-          value={sessionId}
-          onChange={(e) => updateParam("sessionId", e.target.value)}
-        />
-        <input
-          className="pl-input w-36"
-          placeholder="Turn ID"
-          value={turnId}
-          onChange={(e) => updateParam("turnId", e.target.value)}
-        />
-        <input
-          className="pl-input w-32"
-          placeholder="平台"
-          value={platform}
-          onChange={(e) => updateParam("platform", e.target.value)}
-        />
-        <label className="flex items-center gap-2 text-sm text-fg-muted">
+      {tab === "turns" ? (
+        <div className="pl-admin-filterbar">
           <input
-            type="checkbox"
-            checked={includeProtocol}
-            onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")}
+            className="pl-input w-36 notranslate"
+            translate="no"
+            placeholder="Agent ID"
+            value={user}
+            onChange={(e) => updateParam("user", e.target.value)}
           />
-          显示协议调用
-        </label>
-      </div>
+          <select className="pl-input w-32" value={turnSource} onChange={(e) => updateParam("turnSource", e.target.value)}>
+            <option value="">全部来源</option>
+            <option value="reported">已上报</option>
+            <option value="inferred">推断</option>
+          </select>
+          <input
+            className="pl-input flex-1 min-w-[12rem]"
+            placeholder="搜索摘要 / 工具 / 表名"
+            value={turnSearch}
+            onChange={(e) => updateParam("turnSearch", e.target.value)}
+          />
+        </div>
+      ) : (
+        <div className="pl-admin-filterbar">
+          <input className="pl-input w-36" placeholder="用户 ID" value={user} onChange={(e) => updateParam("user", e.target.value)} />
+          <input className="pl-input w-36" placeholder="工具名" value={tool} onChange={(e) => updateParam("tool", e.target.value)} />
+          <select className="pl-input w-28" value={outcome} onChange={(e) => updateParam("outcome", e.target.value)}>
+            <option value="">全部状态</option>
+            <option value="ok">成功</option>
+            <option value="error">错误</option>
+            <option value="denied">拒绝</option>
+          </select>
+          <input className="pl-input w-44" type="datetime-local" value={since} onChange={(e) => { setSince(e.target.value); setPage(0); }} />
+          <span className="text-fg-muted self-center">—</span>
+          <input className="pl-input w-44" type="datetime-local" value={until} onChange={(e) => { setUntil(e.target.value); setPage(0); }} />
+          <input className="pl-input w-40" placeholder="搜索表名" value={tableSearch} onChange={(e) => updateParam("tableSearch", e.target.value)} />
+          <input className="pl-input w-40" placeholder="Session ID" value={sessionId} onChange={(e) => updateParam("sessionId", e.target.value)} />
+          <input className="pl-input w-36" placeholder="Turn ID" value={turnIdFilter} onChange={(e) => updateParam("turnIdFilter", e.target.value)} />
+          <input className="pl-input w-32" placeholder="平台" value={platform} onChange={(e) => updateParam("platform", e.target.value)} />
+          <label className="flex items-center gap-2 text-sm text-fg-muted">
+            <input type="checkbox" checked={includeProtocol} onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")} />
+            显示协议调用
+          </label>
+          <label className="flex items-center gap-2 text-sm text-fg-muted">
+            <input type="checkbox" checked={slowOnly} onChange={(e) => updateParam("slowOnly", e.target.checked ? "1" : "")} />
+            仅慢于多数请求
+          </label>
+        </div>
+      )}
 
-      {tab === "log" && (isLoading ? (
+      {tab === "turns" && referenceLatency && p95Ms > 0 ? (
+        <p className="text-sm text-fg-muted" data-testid="audit-latency-reference">
+          使用概况 · {windowLabel(hours)}：多数请求耗时{" "}
+          <span className="tabular-nums notranslate" translate="no">{p95Ms} ms</span>
+          {" "}· 本页 {referenceLatency.slowCallsInFilter} 次慢于此值
+        </p>
+      ) : null}
+
+      {tab === "turns" && (turnsQuery.isLoading ? (
         <div className="pl-notice">加载中…</div>
-      ) : error ? (
-        <div className="pl-notice">加载失败：{(error as Error).message}</div>
+      ) : turnsQuery.error ? (
+        <div className="pl-notice">加载失败：{(turnsQuery.error as Error).message}</div>
       ) : (
         <>
-          <div className="pl-metric-grid">
-            <div className="pl-metric-card"><span>业务调用</span><strong>{data?.summary?.businessCalls ?? 0}</strong><small>默认展示</small></div>
-            <div className="pl-metric-card"><span>协议调用</span><strong>{data?.summary?.protocolCalls ?? 0}</strong><small>{includeProtocol ? "已显示" : "已隐藏"}</small></div>
-            <div className="pl-metric-card"><span>拒绝</span><strong>{data?.summary?.deniedCalls ?? 0}</strong><small>ACL 拒绝</small></div>
-            <div className="pl-metric-card"><span>触达数据</span><strong>{data?.summary?.dataBearingCalls ?? 0}</strong><small>有表记录</small></div>
+          <div className="text-sm text-fg-muted">
+            {turnTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, turnTotal)} / 共 ${turnTotal} 条`}
           </div>
-          <div className="text-sm text-fg-muted">{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} / 共 {total} 条</div>
           <div className="overflow-x-auto">
-            <table className="pl-audit-table w-full text-sm">
+            <table className="pl-audit-table pl-data-grid w-full text-sm" data-testid="audit-turns-table">
+              <thead>
+                <tr className="border-b border-border-default text-left text-xs text-fg-muted">
+                  <th className="px-3 py-2">开始时间</th>
+                  <th className="px-3 py-2">结束时间</th>
+                  <th className="px-3 py-2">问询时长</th>
+                  <th className="px-3 py-2"><span className="notranslate" translate="no">Agent</span></th>
+                  <th className="px-3 py-2">问询摘要</th>
+                  <th className="px-3 py-2">调用数</th>
+                  <th className="px-3 py-2">工具 / 表</th>
+                  <th className="px-3 py-2">耗时</th>
+                  <th className="px-3 py-2">结果</th>
+                  <th className="px-3 py-2">来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTurnEntries.length === 0 ? (
+                  <tr><td colSpan={10} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                ) : (
+                  filteredTurnEntries.map((entry) => {
+                    const denied = entry.outcomeSummary?.denied ?? 0;
+                    const errors = entry.outcomeSummary?.error ?? 0;
+                    return (
+                      <tr
+                        key={entry.id}
+                        className="pl-audit-row cursor-pointer"
+                        data-testid={`audit-turn-row-${entry.id}`}
+                        onClick={() => openTurnDrawer(entry.id)}
+                      >
+                        <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.startedAt).toLocaleString("zh-CN")}</td>
+                        <td className="px-3 py-2 text-xs text-fg-muted whitespace-nowrap">{new Date(entry.endedAt).toLocaleString("zh-CN")}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <div>{formatDurationMs(entry.turnSpanMs ?? 0)}</div>
+                          {(entry.totalCallDurationMs ?? 0) > 0 ? (
+                            <div className="text-fg-muted">执行 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 text-sm notranslate" translate="no">{entry.userId}</td>
+                        <td className="px-3 py-2 text-sm">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
+                        <td className="px-3 py-2 tabular-nums">{entry.businessCallCount}</td>
+                        <td className="px-3 py-2 text-xs text-fg-muted">
+                          <div>{entry.tools.slice(0, 3).join(", ")}{entry.tools.length > 3 ? "…" : ""}</div>
+                          <div>{entry.sources.slice(0, 2).map((s) => s.physicalTable).join(", ")}{entry.sources.length > 2 ? "…" : ""}</div>
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {(entry.slowCallCount ?? 0) > 0 ? (
+                            <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 次慢调用</span>
+                          ) : (
+                            <span className="text-fg-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          {denied > 0 ? <span className="pl-status-badge pl-status-partial">{denied} 拒绝</span> : null}
+                          {errors > 0 ? <span className="pl-status-badge pl-status-validation_failed">{errors} 错误</span> : null}
+                          {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
+                        </td>
+                        <td className="px-3 py-2"><TurnSourceBadge source={entry.source} /></td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ))}
+
+      {tab === "calls" && (callsQuery.isLoading ? (
+        <div className="pl-notice">加载中…</div>
+      ) : callsQuery.error ? (
+        <div className="pl-notice">加载失败：{(callsQuery.error as Error).message}</div>
+      ) : (
+        <>
+          <div className="text-sm text-fg-muted" data-testid="audit-calls-summary">
+            {isCallsSlowFiltered
+              ? `本页慢调用 ${callEntries.length} 条（筛选前共 ${callTotal} 条）`
+              : (callTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, callTotal)} / 共 ${callTotal} 条`)}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="pl-audit-table w-full text-sm" data-testid="audit-calls-table">
               <thead>
                 <tr className="border-b border-border-default text-left text-xs text-fg-muted">
                   <th className="px-3 py-2">时间</th>
@@ -926,37 +1212,35 @@ export function Audit() {
                 </tr>
               </thead>
               <tbody>
-                {entries.length === 0 ? (
+                {callEntries.length === 0 ? (
                   <tr><td colSpan={7} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
-                  entries.map((entry) => <EntryRow key={entry.id} entry={entry} />)
+                  callEntries.map((entry) => <EntryRow key={entry.id} entry={entry} />)
                 )}
               </tbody>
             </table>
           </div>
-          <div className="flex justify-between items-center">
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost text-sm"
-              disabled={page === 0}
-              onClick={() => setPage(page - 1)}
-            >
-              ‹ 上一页
-            </button>
-            <span className="text-sm text-fg-muted">{page + 1} / {totalPages || 1}</span>
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost text-sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage(page + 1)}
-            >
-              下一页 ›
-            </button>
-          </div>
         </>
       ))}
 
-      {tab === "heatmap" && <HeatmapView />}
+      <div className="flex justify-between items-center">
+        <button type="button" className="pl-btn pl-btn--ghost text-sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
+          ‹ 上一页
+        </button>
+        <span className="text-sm text-fg-muted" data-testid="audit-pagination-summary">
+          {isCallsSlowFiltered ? "慢调用筛选：仅统计当前页" : `${page + 1} / ${totalPages}`}
+        </span>
+        <button type="button" className="pl-btn pl-btn--ghost text-sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+          下一页 ›
+        </button>
+      </div>
+
+      <TurnDetailDrawer
+        turnId={selectedTurnId}
+        hours={hours}
+        open={turnDrawerOpen}
+        onOpenChange={setTurnDrawerOpen}
+      />
     </div>
   );
 }

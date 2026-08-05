@@ -9,6 +9,7 @@ docs/ui-ux-feedback/
   README.md
   pages/
     admin-agents.md
+    admin-audit.md
     catalog.md
     connections.md
     global-shell.md
@@ -40,8 +41,12 @@ docs/ui-ux-feedback/
 | Connections | `/connections`, `/connections/enabled-tables` | [`pages/connections.md`](pages/connections.md) |
 | Business Wiki | `/wiki` | [`pages/wiki.md`](pages/wiki.md) |
 | Publish History | `/publish/history` | [`pages/publish-history.md`](pages/publish-history.md) |
+| Quality Eval | `/eval/cases`, `/eval/runs`, `/eval/security-candidates` | [`pages/eval.md`](pages/eval.md) |
+| Config Audit | `/admin/config-audit` | [`pages/admin-config-audit.md`](pages/admin-config-audit.md) |
+| Help Center | `/help` | [`pages/help.md`](pages/help.md) |
 | Agent Admin | `/admin/agents`, `/admin/roles` | [`pages/admin-agents.md`](pages/admin-agents.md) |
 | Admin Governance / Usage Overview | `/admin/usage`（旧 `/admin/governance` redirect） | [`pages/admin-governance.md`](pages/admin-governance.md) |
+| Admin Audit / Access Log | `/admin/audit` | [`pages/admin-audit.md`](pages/admin-audit.md) |
 | Global Shell | all WebUI routes, including `/overview` | [`pages/global-shell.md`](pages/global-shell.md) |
 | Overview | `/overview` | [`pages/overview.md`](pages/overview.md) |
 
@@ -49,6 +54,12 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-05 | Help Center `/help` | 纳入本轮统一性检查：新增 `pages/help.md` 条目 `UX-HELP-001`～`003`（状态 `Open`，本轮不做浏览器验证）。结论：无“共 N 条”计数冗余，但存在页头实现路径不统一（手写 header）、面包屑末项与 H1 重复、返回动作语义与落点不一致。 |
+| 2026-08-05 | List pages cross-cutting | Spec 91 / `wo-202608-24` 落地：`UX-PUBLISH-HISTORY-006`～`007`、`UX-EVAL-001`～`003`、`UX-ADMIN-CONFIG-AUDIT-001`、`UX-CATALOG-027` → `Fixed`；`UX-HELP-001` → `Open`（本轮不做浏览器验证）。删 PageHeader 纯计数 badges；发布记录 H1 对齐侧栏；配置审计导出改 secondary；评测模块 `pl-page-stack`；安全候选去 breadcrumbs + `pl-btn`；表编辑补 backAction；`/help` 纳入检查范围并登记长期跟踪。新建 `pages/eval.md`、`pages/admin-config-audit.md`、`pages/help.md`；跨页面主题新增 `list-page header count badge`。验证：`publish-history`、`admin-config-audit`、`eval-cases`、`security-eval-candidates`、`table-editor` tests、`lint:terminology`、`build`。 |
+| 2026-08-05 | Admin Audit `/admin/audit` | Spec 89 / `wo-202608-22` 落地：`UX-ADMIN-AUDIT-001`～`010` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。默认「问询记录」Tab + Drawer；删 heatmap / 四 KPI / count badge；起止时间与 P95 参照；导出 CSV 改 primary 且仅 calls Tab。同步 `06-navigation-ia.md`、术语 §4.7。验证：`admin-audit-turns.test.tsx`、`audit.test.tsx`、`audit-sources-redirect.test.tsx`、`server/__tests__/admin-audit.test.ts`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Agent Admin `/admin/roles`, `/admin/roles/new` | Spec 89 / `wo-202608-21` 落地：`UX-ADMIN-AGENTS-027`～`030` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。列表描述去 `access.yaml`；KPI 改静态四卡（含解析异常、无 danger）；详情 Tab 拆基本信息/权限配置/生效边界；新建隐藏使用情况。验证：`role-list.test.tsx`、`role-detail.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Agent Admin `/admin/agents` | Spec 88 / `wo-202608-20` 落地：`UX-ADMIN-AGENTS-022`～`026` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。H1/侧栏改「Agent」；删 PageHeader count badges；KPI 对齐 usage；列表改 `pl-data-grid` 表；去行内复制 MCP。验证：`agent-list.test.tsx`、`navigation.test.ts`、`app-shell.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Admin Governance `/admin/usage` | Spec 87 / `wo-202608-19` 落地：`UX-ADMIN-GOV-021` → `Fixed`（本轮不做浏览器验证）。PageHeader actions 在 24h/7d 左侧增加「统计时间」徽标（相对时间对齐系统概览）；术语 §4.5 登记 Stats Snapshot Time。验证：`admin-governance-observability.test.tsx`、`lint:terminology`。 |
 | 2026-08-05 | Admin Governance `/admin/usage` | Spec 86 / `wo-202608-18` 落地：`UX-ADMIN-GOV-017`～`020` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。主路由迁 `/admin/usage`（旧 path redirect）；排行 Top-10 槽位高度；「配置表」→「授权表」；「响应上限（P95）」→「多数请求耗时」。同步术语 §4.5、`06-navigation-ia.md`。验证：`admin-governance-observability.test.tsx`、`navigation.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Publish History `/publish/history` | Spec 85 / `wo-202608-17` 落地：新建 `pages/publish-history.md`（`UX-PUBLISH-HISTORY-001`～`005`）→ `Fixed`（本轮不做浏览器验证，结束后只做 code review）。序号/变更范围/规模列；操作列去行内伪快照下载；Header「导出当前语义资产包 (.zip)」；export `require("yaml")` ESM 修复；`pl-data-grid` 轻量收敛。验证：`publish-history.test.tsx`、`api.semantic-asset-export.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Admin Governance `/admin/governance` | Spec 84 / `wo-202608-16` 落地：`UX-ADMIN-GOV-010`～`016` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。KPI 窗口进标题；三块改为 1×3 调用排行条形图；Token API `calls`；顶栏 `pl-segmented-control`；删「管理角色」；页面索引补登记 `admin-governance.md`；术语 §4.5 同步。验证：`admin-governance-observability`（前后端）、`lint:terminology`、`build`。 |
@@ -122,14 +133,18 @@ docs/ui-ux-feedback/
 | `test / source drift`（测试 fixture 与 source 脱钩） | UX-GLOBAL-SHELL-008 | Open | 跨工单清理 |
 | `version-history list-first`（版本列表优先，预览外置，当前行收敛） | UX-WIKI-031～035 | 5 Fixed | Spec 80 / wo-202608-12，待浏览器复核 |
 | `css grid track stretch`（父级拉高时 auto 行均分，须 `content-start`） | UX-WIKI-006、UX-WIKI-027、UX-WIKI-036 | 1 Verified + 2 Fixed | Spec 79 / 81；`006` 已 Verified |
+| `role-detail tab IA`（配置编辑 vs 只读生效边界 Tab 命名与 mode 可见性） | UX-ADMIN-AGENTS-029、UX-ADMIN-AGENTS-030 | 2 Fixed | Spec 89 / wo-202608-21，待浏览器复核 |
+| `role-admin kpi vs filter separation`（KPI 静态概览、异常钻取下沉筛选） | UX-ADMIN-AGENTS-027、UX-ADMIN-AGENTS-028 | 2 Fixed | Spec 89 / wo-202608-21，待浏览器复核 |
 | `history table business density`（发布/审计类历史表须展示变更范围与规模，导出不得冒充批次快照） | UX-PUBLISH-HISTORY-001～005 | 5 Fixed | Spec 85 / wo-202608-17，待浏览器复核 |
 | `export entry clarity`（当前工作区资产包导出仅 Header；禁止行内伪历史下载） | UX-PUBLISH-HISTORY-003 | 1 Fixed | Spec 85 / wo-202608-17，待浏览器复核 |
+| `list-page header count badge`（列表/历史页纯计数不得进 PageHeader badges） | UX-PUBLISH-HISTORY-006、UX-EVAL-001、UX-ADMIN-CONFIG-AUDIT-001 | 3 Fixed | Spec 91 / wo-202608-24，待浏览器复核 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 
 ## 跨页面治理规则
 
 - Header 只承载对象身份、位置上下文和关键状态；不得放低价值统计 chips 或页面功能说明。
+- 列表/历史页的「共 N 条」「N 个 case」等纯计数只能出现在表格空态、表尾或分页区，不得出现在 PageHeader `badges`（主题 `list-page header count badge`；样板见 Spec 88 Agent 列表、Spec 91）。
 - 数据库对象标识符（Connection ID、Schema 名、表名、列名、路径、URL）必须保留仓库源字符串大小写；不得通过 JavaScript `.toUpperCase()` / `.toLowerCase()` 或 CSS `text-transform: uppercase` / `capitalize` / `lowercase` 强制改写。涉及数据库对象名的分组标题、链接文案、aria-label 都必须带 `translate="no"` 与 `notranslate`。测试必须直接断言渲染文本为仓库源字符串大小写，并保留反向断言（`queryByText(/UPPERCASE/)` 为空）。后端数据库标识符约定优先于 UI 渲染约定。
 - 高密度数据表格里的对象链接默认保持正文级字重；可点击性优先通过颜色、hover underline、focus ring、图标或动作列表达，不靠把链接升成标题级粗体。表头、分组标题和真正的对象详情 H1 才使用更高字重建立层级。
 - 同一视口内，同一个全局命令只能有一个主触发点；不得依赖 aria label 来补救可见命令重复。
@@ -153,6 +168,8 @@ docs/ui-ux-feedback/
 - 涉及对象关系的指标必须说明统计口径和关系边界，例如 Agent 数、配置 Token、活跃 Token、调用次数分别按哪个实体聚合、是否去重、时间窗是什么。
 - Metric label 不使用不解释的英文缩写；安全异常指标可以保留，但不得挤掉更高价值的近期使用信息。
 - 低频、高责任配置页默认展示可服务状态、异常状态和审阅入口；不得把模板数量、复制入口或预设清单作为页面主心智。
+- 列表页 KPI 行默认只做静态概览，不承担筛选交互；业务钻取（含解析异常 / 待修复）下沉到 filterbar 下拉或列表内 badge。
+- 配置编辑 Tab 与只读生效边界 Tab 必须分离命名：编辑区用「权限配置」，解析结果用「生效边界」；新建 / 复制流程不得展示无数据的「使用情况」空 Tab。
 - 筛选器选项必须表达用户要完成的业务 / 运维判断，不展示裸后端枚举值，如 `yaml`、`template`、`invalid`。
 - 状态标签必须区分对象来源、异常状态和生命周期状态；`待修复` 不得替代 `已停用`，中性来源标签不得使用 danger 视觉。
 - 配置复制 / 从模板创建必须进入明确的新建流程，并展示写入目标、diff / dry-run 和人工确认语义。

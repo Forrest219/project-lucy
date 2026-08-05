@@ -654,14 +654,19 @@ export type ConfigAuditEntry = {
   id: number;
   ts: string;
   actor: string;
+  actorType: "ui_admin" | "batch_job" | "system";
+  source?: string;
   sessionId?: string;
   filePath: string;
+  assetKind: "governance" | "semantic" | "wiki" | "eval" | "publish";
   changeType: string;
+  operation?: string;
   targetId?: string;
   oldSummary?: unknown;
   newSummary?: unknown;
   diff?: string;
   requestId?: string;
+  writeStatus: "pending" | "committed" | "failed";
 };
 
 export type ConfigAuditResponse = {
@@ -687,6 +692,70 @@ export type AuditResponse = {
     deniedCalls: number;
     dataBearingCalls: number;
   };
+};
+
+export type AuditTurnOutcomeSummary = {
+  ok: number;
+  denied: number;
+  error: number;
+};
+
+export type AuditTurnEntry = {
+  id: string;
+  source: "inferred" | "reported";
+  userId: string;
+  startedAt: string;
+  endedAt: string;
+  businessCallCount: number;
+  questionSummary?: string;
+  questionPreview?: string;
+  confidence: string;
+  tools: string[];
+  sources: Array<{ connectionId?: string; schema?: string; sourceName?: string; physicalTable: string }>;
+  turnSpanMs?: number;
+  totalCallDurationMs?: number;
+  maxCallDurationMs?: number;
+  slowCallCount?: number;
+  outcomeSummary?: AuditTurnOutcomeSummary;
+};
+
+export type AuditTurnReferenceLatency = {
+  windowHours: 24 | 168;
+  p95Ms: number;
+  totalCallsInWindow: number;
+  slowCallsInFilter: number;
+};
+
+export type AuditTurnsResponse = {
+  total: number;
+  entries: AuditTurnEntry[];
+  referenceLatency: AuditTurnReferenceLatency;
+};
+
+export type AuditTurnCallLog = {
+  id: number;
+  ts: string;
+  tool: string;
+  outcome: string;
+  decisionReason?: string;
+  durationMs: number;
+  isSlowCall: boolean;
+  traceId?: string;
+  tables?: string[];
+};
+
+export type AuditTurnDetailResponse = {
+  id: string;
+  source: "inferred" | "reported";
+  userId: string;
+  startedAt?: string;
+  endedAt?: string;
+  questionSummary?: string | null;
+  questionPreview?: string | null;
+  confidence?: string;
+  accessLogs: AuditTurnCallLog[];
+  sources?: unknown[];
+  referenceLatency: { windowHours: 24 | 168; p95Ms: number };
 };
 
 export type McpToolInfo = { name: string; description?: string; globalDenied: boolean };

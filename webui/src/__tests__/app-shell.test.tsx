@@ -148,9 +148,9 @@ describe("AppFrame shell", () => {
     ["/eval/cases", "CaseList", "评测用例"],
     ["/eval/runs", "RunList", "运行历史"],
     ["/eval/monitor", "Monitor", "趋势监控"],
-    ["/admin/agents", "AgentList", "Agent 实例"],
+    ["/admin/agents", "AgentList", "Agent"],
     ["/admin/audit", "Audit", "访问日志"],
-    ["/admin/audit?tab=heatmap", "Audit", "访问日志"],
+    ["/admin/audit?tab=turns", "Audit", "访问日志"],
     ["/admin/roles", "RoleList", "角色权限"],
     ["/admin/config-audit", "ConfigAudit", "配置审计"]
   ])("renders route %s and marks active navigation", (path, pageName, activeLink) => {
@@ -265,7 +265,7 @@ describe("AppFrame shell", () => {
     // and the legacy `Lucy WebUI` Product-Placement rewrite must not
     // silently come back, and the KTX brand must stay banned.
     renderAt("/overview");
-    expect(screen.getByText("Lucy WebUI")).toBeInTheDocument();
+    expect(screen.getByTestId("brand-title")).toHaveTextContent("LucyWebUI");
     expect(screen.getByText("Data Agent 运维控制台")).toBeInTheDocument();
     expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运行状态" })).not.toBeInTheDocument();
@@ -286,7 +286,7 @@ describe("AppFrame shell", () => {
     // click on either the mark or the wordmark navigates.
     const brandBlock = screen.getByTestId("sidebar-brand");
     expect(brandBlock).toBe(brandLink);
-    expect(within(brandLink).getByText("Lucy WebUI")).toBeInTheDocument();
+    expect(within(brandLink).getByTestId("brand-title")).toHaveTextContent("LucyWebUI");
     expect(within(brandLink).getByText("Data Agent 运维控制台")).toBeInTheDocument();
   });
 
@@ -337,7 +337,7 @@ describe("AppFrame shell", () => {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
 
-    // M35: 数据热力已下沉为 /admin/audit?tab=heatmap 内的 Tab，不再作为侧边栏二级项。
+    // Spec 89: 数据热力 Tab 已移除；`/admin/audit-sources` 重定向到 `/admin/audit`。
     expect(screen.queryByRole("link", { name: "数据热力" })).not.toBeInTheDocument();
 
     // v1.9.0: 连通测试（兼容）从主导航移除，连接卡内测试 Drawer（M25）成为唯一入口。
@@ -421,7 +421,7 @@ describe("AppFrame shell", () => {
 
   it("marks admin agent context pages as agent navigation", () => {
     renderAt("/admin/agents/zhangsan/tokens/new");
-    expect(screen.getByRole("link", { name: "Agent 实例" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Agent" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("route-page")).toHaveTextContent("NewToken");
   });
 
@@ -449,7 +449,7 @@ describe("AppFrame shell", () => {
       const group = screen.getByTestId("nav-group-governance");
       expect(group).toHaveAttribute("data-open", "true");
       expect(screen.getByRole("button", { name: "访问治理" })).toHaveAttribute("aria-expanded", "true");
-      expect(screen.getByRole("link", { name: "Agent 实例" })).toBeVisible();
+      expect(screen.getByRole("link", { name: "Agent" })).toBeVisible();
     });
 
     it("hides a group's children when the user collapses it and restores them on toggle", () => {
@@ -525,33 +525,27 @@ describe("AppFrame shell", () => {
     });
   });
 
-  describe("M65 brand block right-edge alignment", () => {
-    it("renders the brand title and tagline inside a single 152px flex column", () => {
-      // M65 Brand Alignment: the brand text container is now `flex flex-col
-      // items-end` (not `grid`) so `Lucy WebUI` and `Data Agent 运维控制台`
-      // share the right edge inside the same 152px column. The tagline must
-      // not silently truncate via `text-overflow: ellipsis` — its class
-      // should not carry the legacy single-line clamp markers.
+  describe("M66 brand block left/right alignment", () => {
+    it("renders the brand title and tagline in a grid column sized to the tagline", () => {
+      // M66 Brand Alignment: a single grid column sizes to the tagline;
+      // the title uses `justify-between` so L aligns with D and I with 台.
       renderAt("/overview");
 
       const brandLink = screen.getByRole("link", { name: "返回系统概览" });
       const brandText = brandLink.querySelector(".pl-brand-text");
       expect(brandText).not.toBeNull();
       expect(brandText).toHaveClass("pl-brand-text");
-      // jsdom only knows className tokens; we assert against the literal
-      // Tailwind tokens we expect, not the compiled CSS.
-      expect(brandText?.className ?? "").toContain("flex");
-      expect(brandText?.className ?? "").toContain("flex-col");
-      expect(brandText?.className ?? "").toContain("items-end");
 
       const title = screen.getByTestId("brand-title");
       const tagline = screen.getByTestId("brand-tagline");
-      expect(title).toHaveTextContent("Lucy WebUI");
+      expect(title).toHaveTextContent("LucyWebUI");
+      expect(within(title).getByText("Lucy")).toBeInTheDocument();
+      expect(within(title).getByText("WebUI")).toBeInTheDocument();
       expect(tagline).toHaveTextContent("Data Agent 运维控制台");
+      expect(title).toHaveClass("pl-brand-title");
 
       // The legacy ellipse clamps lived inline on `.pl-brand-block
-      // .pl-brand-tagline`; the M65 CSS dropped them, so the helper class
-      // list on the tagline span must NOT include `truncate`.
+      // .pl-brand-tagline`; they must not come back.
       expect(tagline.className).not.toContain("truncate");
     });
   });

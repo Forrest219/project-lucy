@@ -128,8 +128,14 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-14-admin-usage-overview-table-grid-light-conformance.md](wo-202608-14-admin-usage-overview-table-grid-light-conformance.md) | 202608-14 | Admin 使用概况三表轻量 `pl-data-grid` 收敛（12px 密度、数量次级、弱操作链；不做 connections colgroup） |
 | [wo-202608-15-wiki-version-history-data-grid-alignment.md](wo-202608-15-wiki-version-history-data-grid-alignment.md) | 202608-15 | Wiki 版本记录表 pl-data-grid 对齐与当前行操作列留空 |
 | [wo-202608-16-admin-usage-overview-activity-rank-and-header-polish.md](wo-202608-16-admin-usage-overview-activity-rank-and-header-polish.md) | 202608-16 | Admin 使用概况：调用排行 1×3 条形图、KPI 窗口进标题、Token `calls`、顶栏 segmented、删管理角色 |
-| [wo-202608-18-admin-usage-overview-route-and-kpi-clarity.md](wo-202608-18-admin-usage-overview-route-and-kpi-clarity.md) | 202608-18 | Admin 使用概况：迁 `/admin/usage`、排行槽位高度、授权表、多数请求耗时 |
 | [wo-202608-17-publish-history-business-columns-and-export-clarity.md](wo-202608-17-publish-history-business-columns-and-export-clarity.md) | 202608-17 | 发布记录：序号/变更范围/规模、操作列去伪快照下载、Header 导出语义资产包、export ESM 修复、`pl-data-grid` |
+| [wo-202608-18-admin-usage-overview-route-and-kpi-clarity.md](wo-202608-18-admin-usage-overview-route-and-kpi-clarity.md) | 202608-18 | Admin 使用概况：迁 `/admin/usage`、排行槽位高度、授权表、多数请求耗时 |
+| [wo-202608-19-admin-usage-overview-stats-time.md](wo-202608-19-admin-usage-overview-stats-time.md) | 202608-19 | Admin 使用概况：顶栏「统计时间」徽标（24h/7d 左侧） |
+| [wo-202608-20-agent-admin-list-ia-terminology-and-table-grid.md](wo-202608-20-agent-admin-list-ia-terminology-and-table-grid.md) | 202608-20 | `/admin/agents` 命名改 Agent、删 Header badges、KPI 对齐 usage、列表 `pl-data-grid` 表、去行内复制 MCP |
+| [wo-202608-21-role-admin-list-and-detail-ia.md](wo-202608-21-role-admin-list-and-detail-ia.md) | 202608-21 | `/admin/roles` 静态 KPI + 描述对齐；Role 详情 Tab 拆分基本信息 / 权限配置 / 生效边界 |
+| [wo-202608-22-admin-audit-turn-drilldown.md](wo-202608-22-admin-audit-turn-drilldown.md) | 202608-22 | `/admin/audit` 问询记录 + 调用流水双 Tab、起止时间、Drawer 明细、P95 交叉验证、删 heatmap / KPI badge |
+| [wo-202608-23-admin-config-audit-unified-scope.md](wo-202608-23-admin-config-audit-unified-scope.md) | 202608-23 | 配置审计范围一视同仁：`safeWrite` 统一写审计、语义/Wiki/评测/发布、`asset_kind` 筛选与深链 |
+| [wo-202608-24-list-page-header-consistency.md](wo-202608-24-list-page-header-consistency.md) | 202608-24 | 列表/历史页 PageHeader 收敛：删纯计数 badges、标题对齐、评测容器、表编辑 backAction |
 
 ### 202608 Governance & Observability — 并行启动建议
 

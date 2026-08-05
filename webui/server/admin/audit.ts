@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -59,6 +60,11 @@ const NON_LINKED_CALL_TOOL_LIST = [...PROTOCOL_TOOLS, "lucy_begin_question"].map
 const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
 const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
 const CSV_FORMULA_RE = /^[=+\-@]/;
+const CONFIG_AUDIT_DIFF_MAX_BYTES = 256 * 1024;
+
+export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish";
+export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system";
+export type ConfigAuditWriteStatus = "pending" | "committed" | "failed";
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
   const rows = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
@@ -231,6 +237,17 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
   `);
+  ensureColumn(db, "config_change_log", "asset_kind", "TEXT NOT NULL DEFAULT 'governance'");
+  ensureColumn(db, "config_change_log", "operation", "TEXT");
+  ensureColumn(db, "config_change_log", "actor_type", "TEXT NOT NULL DEFAULT 'ui_admin'");
+  ensureColumn(db, "config_change_log", "source", "TEXT");
+  ensureColumn(db, "config_change_log", "idempotency_key", "TEXT");
+  ensureColumn(db, "config_change_log", "write_status", "TEXT NOT NULL DEFAULT 'committed'");
+  ensureColumn(db, "config_change_log", "error_reason", "TEXT");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_ccl_asset_kind_ts ON config_change_log(asset_kind, ts);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_ccl_idempotency ON config_change_log(idempotency_key);
+  `);
   // 202608-01 Trace / Evidence Kernel — append-only event store for MCP trace,
   // policy decisions, and reviewer evidence refs. Schema is idempotent so
   // first-touch and existing databases both end up with the same shape.
@@ -249,6 +266,13 @@ export async function recordConfigChange(input: {
   filePath: string;
   changeType: string;
   actor?: string;
+  actorType?: ConfigAuditActorType;
+  source?: string;
+  assetKind?: ConfigAuditAssetKind;
+  operation?: string;
+  writeStatus?: ConfigAuditWriteStatus;
+  errorReason?: string;
+  idempotencyKey?: string;
   targetId?: string;
   oldSummary?: unknown;
   newSummary?: unknown;
@@ -257,24 +281,94 @@ export async function recordConfigChange(input: {
   sessionId?: string | null;
 }): Promise<number | undefined> {
   const database = await getAuditDb();
+  const oldSummaryJson = input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary);
+  const newSummaryJson = input.newSummary === undefined ? null : JSON.stringify(input.newSummary);
+  const safeDiff = input.diff
+    ? Buffer.byteLength(input.diff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
+      ? `${input.diff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
+      : input.diff
+    : null;
+  const stableIdempotencyKey = input.idempotencyKey ?? createHash("sha256").update(
+    JSON.stringify({
+      requestId: input.requestId ?? null,
+      filePath: input.filePath,
+      changeType: input.changeType,
+      targetId: input.targetId ?? null,
+      actor: input.actor ?? "local-admin",
+      actorType: input.actorType ?? "ui_admin",
+      source: input.source ?? null,
+      assetKind: input.assetKind ?? "governance",
+      operation: input.operation ?? null,
+      writeStatus: input.writeStatus ?? "committed",
+      sessionId: input.sessionId ?? null,
+      oldSummary: oldSummaryJson,
+      newSummary: newSummaryJson,
+      diff: safeDiff
+    })
+  ).digest("hex");
+
   const result = database.prepare(`
     INSERT INTO config_change_log
-      (ts, actor, session_id, file_path, change_type, target_id, old_summary, new_summary, diff, request_id)
+      (ts, actor, actor_type, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, idempotency_key, write_status, error_reason)
     VALUES
-      (@ts, @actor, @session_id, @file_path, @change_type, @target_id, @old_summary, @new_summary, @diff, @request_id)
+      (@ts, @actor, @actor_type, @source, @session_id, @file_path, @change_type, @asset_kind, @operation, @target_id, @old_summary, @new_summary, @diff, @request_id, @idempotency_key, @write_status, @error_reason)
+    ON CONFLICT(idempotency_key) DO NOTHING
   `).run({
     ts: new Date().toISOString(),
     actor: input.actor ?? "local-admin",
+    actor_type: input.actorType ?? "ui_admin",
+    source: input.source ?? null,
     session_id: input.sessionId ?? null,
     file_path: input.filePath,
     change_type: input.changeType,
+    asset_kind: input.assetKind ?? "governance",
+    operation: input.operation ?? null,
     target_id: input.targetId ?? null,
-    old_summary: input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary),
-    new_summary: input.newSummary === undefined ? null : JSON.stringify(input.newSummary),
-    diff: input.diff ?? null,
-    request_id: input.requestId ?? null
+    old_summary: oldSummaryJson,
+    new_summary: newSummaryJson,
+    diff: safeDiff,
+    request_id: input.requestId ?? null,
+    idempotency_key: stableIdempotencyKey,
+    write_status: input.writeStatus ?? "committed",
+    error_reason: input.errorReason ?? null
   });
-  return typeof result.lastInsertRowid === "number" ? result.lastInsertRowid : Number(result.lastInsertRowid);
+  if (typeof result.lastInsertRowid === "number" && result.lastInsertRowid > 0) return result.lastInsertRowid;
+  const existing = database.prepare(
+    "SELECT id FROM config_change_log WHERE idempotency_key = ? LIMIT 1"
+  ).get(stableIdempotencyKey) as { id: number } | undefined;
+  return existing?.id;
+}
+
+export async function updateConfigChangeStatus(input: {
+  id: number;
+  writeStatus: ConfigAuditWriteStatus;
+  errorReason?: string;
+  diff?: string | null;
+  oldSummary?: unknown;
+  newSummary?: unknown;
+}): Promise<void> {
+  const database = await getAuditDb();
+  const safeDiff = input.diff
+    ? Buffer.byteLength(input.diff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
+      ? `${input.diff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
+      : input.diff
+    : input.diff ?? null;
+  database.prepare(`
+    UPDATE config_change_log
+    SET write_status = @write_status,
+        error_reason = @error_reason,
+        diff = COALESCE(@diff, diff),
+        old_summary = COALESCE(@old_summary, old_summary),
+        new_summary = COALESCE(@new_summary, new_summary)
+    WHERE id = @id
+  `).run({
+    id: input.id,
+    write_status: input.writeStatus,
+    error_reason: input.errorReason ?? null,
+    diff: safeDiff,
+    old_summary: input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary),
+    new_summary: input.newSummary === undefined ? null : JSON.stringify(input.newSummary)
+  });
 }
 
 interface QueryRow {
@@ -309,6 +403,12 @@ interface QueryRow {
   decision_reason: string | null;
 }
 
+interface TurnOutcomeSummary {
+  ok: number;
+  denied: number;
+  error: number;
+}
+
 interface TurnEntry {
   id: string;
   source: "inferred" | "reported";
@@ -321,6 +421,109 @@ interface TurnEntry {
   confidence: string;
   tools: string[];
   sources: Array<{ connectionId?: string; schema?: string; sourceName?: string; physicalTable: string }>;
+  turnSpanMs?: number;
+  totalCallDurationMs?: number;
+  maxCallDurationMs?: number;
+  slowCallCount?: number;
+  outcomeSummary?: TurnOutcomeSummary;
+}
+
+function sinceIsoFromHours(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
+function parseWindowHours(raw: string | undefined): 24 | 168 {
+  return raw === "24" ? 24 : 168;
+}
+
+/** True p95 over all window rows — same algorithm as governance-observability. */
+function queryP95LatencyMs(database: Database.Database, hours: number): number {
+  const since = sinceIsoFromHours(hours);
+  const countRow = database.prepare(`SELECT COUNT(*) AS count FROM access_log WHERE ts >= ?`).get(since) as { count: number };
+  const count = countRow?.count ?? 0;
+  if (count <= 0) return 0;
+  const offset = Math.min(count - 1, Math.ceil(count * 0.95) - 1);
+  const row = database
+    .prepare(`SELECT duration_ms FROM access_log WHERE ts >= ? ORDER BY duration_ms ASC LIMIT 1 OFFSET ?`)
+    .get(since, offset) as { duration_ms: number } | undefined;
+  return row?.duration_ms ?? 0;
+}
+
+function turnSpanMs(startedAt: string, endedAt: string): number {
+  return Math.max(0, new Date(endedAt).getTime() - new Date(startedAt).getTime());
+}
+
+function loadAccessLogMetrics(
+  database: Database.Database,
+  accessLogIds: number[],
+  p95Ms: number
+): {
+  totalCallDurationMs: number;
+  maxCallDurationMs: number;
+  slowCallCount: number;
+  outcomeSummary: TurnOutcomeSummary;
+} {
+  const empty = { totalCallDurationMs: 0, maxCallDurationMs: 0, slowCallCount: 0, outcomeSummary: { ok: 0, denied: 0, error: 0 } };
+  if (accessLogIds.length === 0) return empty;
+  const placeholders = accessLogIds.map(() => "?").join(",");
+  const rows = database
+    .prepare(`SELECT outcome, duration_ms FROM access_log WHERE id IN (${placeholders})`)
+    .all(...accessLogIds) as Array<{ outcome: string; duration_ms: number }>;
+  let totalCallDurationMs = 0;
+  let maxCallDurationMs = 0;
+  let slowCallCount = 0;
+  const outcomeSummary: TurnOutcomeSummary = { ok: 0, denied: 0, error: 0 };
+  for (const row of rows) {
+    totalCallDurationMs += row.duration_ms;
+    maxCallDurationMs = Math.max(maxCallDurationMs, row.duration_ms);
+    if (p95Ms > 0 && row.duration_ms > p95Ms) slowCallCount += 1;
+    if (row.outcome === "ok") outcomeSummary.ok += 1;
+    else if (row.outcome === "denied") outcomeSummary.denied += 1;
+    else if (row.outcome === "error") outcomeSummary.error += 1;
+  }
+  return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary };
+}
+
+function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): number[] {
+  if (entry.source === "inferred") {
+    const links = database
+      .prepare(`SELECT access_log_id FROM inferred_turn_access_logs WHERE inferred_turn_id = ?`)
+      .all(entry.id) as Array<{ access_log_id: number }>;
+    return links.map((link) => link.access_log_id);
+  }
+  const rows = database
+    .prepare(`SELECT id FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC`)
+    .all(entry.id) as Array<{ id: number }>;
+  return rows.map((row) => row.id);
+}
+
+function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: number): TurnEntry {
+  const accessLogIds = listTurnAccessLogIds(database, entry);
+  const metrics = loadAccessLogMetrics(database, accessLogIds, p95Ms);
+  return {
+    ...entry,
+    turnSpanMs: turnSpanMs(entry.startedAt, entry.endedAt),
+    ...metrics
+  };
+}
+
+function countSlowCallsForFilter(
+  database: Database.Database,
+  since: string | null,
+  p95Ms: number,
+  user: string | null
+): number {
+  if (p95Ms <= 0) return 0;
+  const conditions = ["ts >= ?", "duration_ms > ?"];
+  const params: Array<string | number> = [since ?? sinceIsoFromHours(168), p95Ms];
+  if (user) {
+    conditions.push("user_id = ?");
+    params.push(user);
+  }
+  const row = database
+    .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ${conditions.join(" AND ")}`)
+    .get(...params) as { cnt: number };
+  return row?.cnt ?? 0;
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
@@ -328,6 +531,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
     Querystring: {
       targetId?: string;
       filePath?: string;
+      assetKind?: string;
+      changeType?: string;
+      source?: string;
       limit?: string;
       offset?: string;
     };
@@ -339,14 +545,21 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const conditions: string[] = [];
     const params: Record<string, string | null> = {
       targetId: q.targetId ?? null,
-      filePath: q.filePath ? `%${q.filePath}%` : null
+      filePath: q.filePath ? `%${q.filePath}%` : null,
+      assetKind: q.assetKind ?? null,
+      changeType: q.changeType ?? null,
+      source: q.source ?? null
     };
     if (params.targetId) conditions.push("target_id = @targetId");
     if (params.filePath) conditions.push("file_path LIKE @filePath");
+    if (params.assetKind) conditions.push("asset_kind = @assetKind");
+    if (params.changeType) conditions.push("change_type = @changeType");
+    if (params.source) conditions.push("source = @source");
+    conditions.push("write_status = 'committed'");
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const total = database.prepare(`SELECT COUNT(*) AS cnt FROM config_change_log ${where}`).get(params) as { cnt: number };
     const rows = database.prepare(`
-      SELECT id, ts, actor, session_id, file_path, change_type, target_id, old_summary, new_summary, diff, request_id
+      SELECT id, ts, actor, actor_type, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, write_status
       FROM config_change_log ${where}
       ORDER BY ts DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -354,14 +567,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       id: number;
       ts: string;
       actor: string;
+      actor_type: string;
+      source: string | null;
       session_id: string | null;
       file_path: string;
       change_type: string;
+      asset_kind: ConfigAuditAssetKind;
+      operation: string | null;
       target_id: string | null;
       old_summary: string | null;
       new_summary: string | null;
       diff: string | null;
       request_id: string | null;
+      write_status: ConfigAuditWriteStatus;
     }>;
 
     return {
@@ -374,14 +592,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
           id: row.id,
           ts: row.ts,
           actor: row.actor,
+          actorType: row.actor_type as ConfigAuditActorType,
+          source: row.source ?? undefined,
           sessionId: row.session_id ?? undefined,
           filePath: row.file_path,
           changeType: row.change_type,
+          assetKind: row.asset_kind,
+          operation: row.operation ?? undefined,
           targetId: row.target_id ?? undefined,
           oldSummary: row.old_summary ? JSON.parse(row.old_summary) : undefined,
           newSummary: row.new_summary ? JSON.parse(row.new_summary) : undefined,
           diff: row.diff ?? undefined,
-          requestId: row.request_id ?? undefined
+          requestId: row.request_id ?? undefined,
+          writeStatus: row.write_status
         }))
       }
     };
@@ -391,6 +614,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
     Querystring: {
       targetId?: string;
       filePath?: string;
+      assetKind?: string;
+      changeType?: string;
+      source?: string;
     };
   }>("/api/admin/config-audit/export.csv", async (request, reply) => {
     const q = request.query;
@@ -398,27 +624,39 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const conditions: string[] = [];
     const params: Record<string, string | null> = {
       targetId: q.targetId ?? null,
-      filePath: q.filePath ? `%${q.filePath}%` : null
+      filePath: q.filePath ? `%${q.filePath}%` : null,
+      assetKind: q.assetKind ?? null,
+      changeType: q.changeType ?? null,
+      source: q.source ?? null
     };
     if (params.targetId) conditions.push("target_id = @targetId");
     if (params.filePath) conditions.push("file_path LIKE @filePath");
+    if (params.assetKind) conditions.push("asset_kind = @assetKind");
+    if (params.changeType) conditions.push("change_type = @changeType");
+    if (params.source) conditions.push("source = @source");
+    conditions.push("write_status = 'committed'");
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const rows = database.prepare(`
-      SELECT id, ts, actor, session_id, file_path, change_type, target_id, old_summary, new_summary, diff, request_id
+      SELECT id, ts, actor, actor_type, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, write_status
       FROM config_change_log ${where}
       ORDER BY ts DESC
     `).all(params) as Array<{
       id: number;
       ts: string;
       actor: string;
+      actor_type: string;
+      source: string | null;
       session_id: string | null;
       file_path: string;
       change_type: string;
+      asset_kind: ConfigAuditAssetKind;
+      operation: string | null;
       target_id: string | null;
       old_summary: string | null;
       new_summary: string | null;
       diff: string | null;
       request_id: string | null;
+      write_status: ConfigAuditWriteStatus;
     }>;
 
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -426,14 +664,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       "id",
       "ts",
       "actor",
+      "actor_type",
+      "source",
       "session_id",
       "file_path",
+      "asset_kind",
       "change_type",
+      "operation",
       "target_id",
       "old_summary",
       "new_summary",
       "diff",
-      "request_id"
+      "request_id",
+      "write_status"
     ];
     const csvLines = [
       headers.join(","),
@@ -442,14 +685,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
           row.id,
           csvCell(row.ts),
           csvCell(row.actor),
+          csvCell(row.actor_type),
+          csvCell(row.source),
           csvCell(row.session_id),
           csvCell(row.file_path),
+          csvCell(row.asset_kind),
           csvCell(row.change_type),
+          csvCell(row.operation),
           csvCell(row.target_id),
           csvCell(redactJsonString(row.old_summary)),
           csvCell(redactJsonString(row.new_summary)),
           csvCell(row.diff ? redactText(row.diff) : null),
-          csvCell(row.request_id)
+          csvCell(row.request_id),
+          csvCell(row.write_status)
         ].join(",")
       )
     ];
@@ -798,6 +1046,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       until?: string;
       source?: string;
       lookbackHours?: string;
+      hours?: string;
       limit?: string;
       offset?: string;
     };
@@ -806,12 +1055,15 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
     const limit = Math.min(parseInt(q.limit ?? "50", 10) || 50, 500);
     const offset = parseInt(q.offset ?? "0", 10) || 0;
-    const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : undefined;
+    const windowHours = parseWindowHours(q.hours);
+    const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : windowHours;
 
     const database = await getAuditDb();
+    const p95Ms = queryP95LatencyMs(database, windowHours);
+    const sinceDefault = sinceIsoFromHours(windowHours);
 
     if (source !== "reported") {
-      const cutoff = new Date(Date.now() - (lookbackHours ?? Number(process.env.LUCY_TURN_INFER_LOOKBACK_HOURS ?? 24)) * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
       const targetUsers = q.user
         ? [q.user]
         : (database.prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`).all(cutoff) as Array<{ user_id: string }>).map((row) => row.user_id);
@@ -824,7 +1076,11 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     if (source === "inferred" || source === "all") {
       const conditions: string[] = [];
-      const params: Record<string, string | null> = { user: q.user ?? null, since: q.since ?? null, until: q.until ?? null };
+      const params: Record<string, string | null> = {
+        user: q.user ?? null,
+        since: q.since ?? sinceDefault,
+        until: q.until ?? null
+      };
       if (params.user) conditions.push("user_id = @user");
       if (params.since) conditions.push("started_at >= @since");
       if (params.until) conditions.push("started_at <= @until");
@@ -841,24 +1097,30 @@ export function registerAuditRoutes(app: FastifyInstance) {
         confidence: string;
       }>;
       for (const row of rows) {
-        entries.push({
-          id: row.inferred_turn_id,
-          source: "inferred",
-          userId: row.user_id,
-          startedAt: row.started_at,
-          endedAt: row.ended_at,
-          businessCallCount: row.business_call_count,
-          questionSummary: row.question_summary ?? undefined,
-          confidence: row.confidence,
-          tools: JSON.parse(row.tool_summary) as string[],
-          sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
-        });
+        entries.push(
+          enrichTurnEntry(database, {
+            id: row.inferred_turn_id,
+            source: "inferred",
+            userId: row.user_id,
+            startedAt: row.started_at,
+            endedAt: row.ended_at,
+            businessCallCount: row.business_call_count,
+            questionSummary: row.question_summary ?? undefined,
+            confidence: row.confidence,
+            tools: JSON.parse(row.tool_summary) as string[],
+            sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
+          }, p95Ms)
+        );
       }
     }
 
     if (source === "reported" || source === "all") {
       const conditions: string[] = [];
-      const params: Record<string, string | null> = { user: q.user ?? null, since: q.since ?? null, until: q.until ?? null };
+      const params: Record<string, string | null> = {
+        user: q.user ?? null,
+        since: q.since ?? sinceDefault,
+        until: q.until ?? null
+      };
       if (params.user) conditions.push("user_id = @user");
       if (params.since) conditions.push("created_at >= @since");
       if (params.until) conditions.push("created_at <= @until");
@@ -881,38 +1143,79 @@ export function registerAuditRoutes(app: FastifyInstance) {
               FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
             `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
           : [];
-        entries.push({
-          id: row.turn_id,
-          source: "reported",
-          userId: row.user_id,
-          startedAt: row.created_at,
-          endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
-          businessCallCount: linked.length,
-          questionSummary: row.question_summary ?? undefined,
-          questionPreview: row.question_preview ?? undefined,
-          confidence: "high",
-          tools: [...new Set(linked.map((l) => l.tool))],
-          sources: sourceRows.map((s) => ({
-            connectionId: s.connection_id ?? undefined,
-            schema: s.schema_name ?? undefined,
-            sourceName: s.source_name ?? undefined,
-            physicalTable: s.physical_table
-          }))
-        });
+        entries.push(
+          enrichTurnEntry(database, {
+            id: row.turn_id,
+            source: "reported",
+            userId: row.user_id,
+            startedAt: row.created_at,
+            endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
+            businessCallCount: linked.length,
+            questionSummary: row.question_summary ?? undefined,
+            questionPreview: row.question_preview ?? undefined,
+            confidence: "high",
+            tools: [...new Set(linked.map((l) => l.tool))],
+            sources: sourceRows.map((s) => ({
+              connectionId: s.connection_id ?? undefined,
+              schema: s.schema_name ?? undefined,
+              sourceName: s.source_name ?? undefined,
+              physicalTable: s.physical_table
+            }))
+          }, p95Ms)
+        );
       }
     }
 
     entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
     const total = entries.length;
     const paged = entries.slice(offset, offset + limit);
+    const slowCallsInFilter = countSlowCallsForFilter(database, q.since ?? sinceDefault, p95Ms, q.user ?? null);
+    const totalCallsRow = database
+      .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ts >= ?`)
+      .get(sinceDefault) as { cnt: number };
 
-    return { ok: true, data: { total, entries: paged } };
+    return {
+      ok: true,
+      data: {
+        total,
+        entries: paged,
+        referenceLatency: {
+          windowHours,
+          p95Ms,
+          totalCallsInWindow: totalCallsRow?.cnt ?? 0,
+          slowCallsInFilter
+        }
+      }
+    };
   });
 
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
-  app.get<{ Params: { turnId: string } }>("/api/admin/audit/turns/:turnId", async (request, reply) => {
+  app.get<{ Params: { turnId: string }; Querystring: { hours?: string } }>("/api/admin/audit/turns/:turnId", async (request, reply) => {
     const { turnId } = request.params;
+    const windowHours = parseWindowHours(request.query.hours);
     const database = await getAuditDb();
+    const p95Ms = queryP95LatencyMs(database, windowHours);
+
+    const mapAccessLogRow = (row: {
+      id: number;
+      ts: string;
+      tool: string;
+      outcome: string;
+      decision_reason: string | null;
+      duration_ms: number;
+      trace_id: string | null;
+      tables: string | null;
+    }) => ({
+      id: row.id,
+      ts: row.ts,
+      tool: row.tool,
+      outcome: row.outcome,
+      decisionReason: row.decision_reason ?? undefined,
+      durationMs: row.duration_ms,
+      isSlowCall: p95Ms > 0 && row.duration_ms > p95Ms,
+      traceId: row.trace_id ?? undefined,
+      tables: row.tables ? (JSON.parse(row.tables) as string[]) : undefined
+    });
 
     if (turnId.startsWith("inf_")) {
       const row = database.prepare(`SELECT * FROM inferred_turns WHERE inferred_turn_id = ?`).get(turnId) as Record<string, unknown> | undefined;
@@ -923,7 +1226,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       const links = database.prepare(`SELECT access_log_id FROM inferred_turn_access_logs WHERE inferred_turn_id = ?`).all(turnId) as Array<{ access_log_id: number }>;
       const accessLogIds = links.map((l) => l.access_log_id);
       const accessLogs = accessLogIds.length > 0
-        ? database.prepare(`SELECT id, ts, tool, outcome, decision_reason FROM access_log WHERE id IN (${accessLogIds.map(() => "?").join(",")}) ORDER BY ts ASC`).all(...accessLogIds)
+        ? database.prepare(`
+            SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables
+            FROM access_log WHERE id IN (${accessLogIds.map(() => "?").join(",")}) ORDER BY ts ASC
+          `).all(...accessLogIds) as Array<{
+            id: number;
+            ts: string;
+            tool: string;
+            outcome: string;
+            decision_reason: string | null;
+            duration_ms: number;
+            trace_id: string | null;
+            tables: string | null;
+          }>
         : [];
       return {
         ok: true,
@@ -940,7 +1255,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
           sources: JSON.parse(row.source_summary as string),
           questionSummary: row.question_summary,
           evidence: JSON.parse(row.evidence_json as string),
-          accessLogs
+          accessLogs: accessLogs.map(mapAccessLogRow),
+          referenceLatency: { windowHours, p95Ms }
         }
       };
     }
@@ -951,10 +1267,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       return { ok: false, error: "not found" };
     }
     const accessLogs = database.prepare(`
-      SELECT id, ts, tool, outcome, decision_reason FROM access_log
+      SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables FROM access_log
       WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST})
       ORDER BY ts ASC
-    `).all(turnId) as Array<{ id: number }>;
+    `).all(turnId) as Array<{
+      id: number;
+      ts: string;
+      tool: string;
+      outcome: string;
+      decision_reason: string | null;
+      duration_ms: number;
+      trace_id: string | null;
+      tables: string | null;
+    }>;
     const accessLogIds = accessLogs.map((l) => l.id);
     const sources = accessLogIds.length > 0
       ? database.prepare(`SELECT DISTINCT connection_id, schema_name, source_name, physical_table FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})`).all(...accessLogIds)
@@ -969,8 +1294,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
         questionPreview: row.question_preview,
         questionSource: row.question_source,
         createdAt: row.created_at,
-        accessLogs,
-        sources
+        accessLogs: accessLogs.map(mapAccessLogRow),
+        sources,
+        referenceLatency: { windowHours, p95Ms }
       }
     };
   });

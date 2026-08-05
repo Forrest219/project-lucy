@@ -169,7 +169,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Unused Role | 未引用 | 暂无 Agent 引用 | 未被 Agent 使用（主标签）、空闲（暗示可删） | 正式 Role 且无 Agent 引用 |
 | Needs Repair Role | 待修复 | 权限解析失败 | Invalid、禁用、已停用 | 正式 Role 无法解析为有效权限边界 |
 | Config Last Written | 配置最近写入 | access.yaml 最近修改 | 创建日期（在无字段时伪造） | 来自 access.yaml mtime（Asia/Shanghai 展示） |
-| Data Heatmap | 数据热力 | 表级访问热力 | 数据源热力、源热力 | 从访问审计派生的表级访问与拒绝分布；UI 收敛为访问日志内的 heatmap Tab（`/admin/audit?tab=heatmap`），原独立路由 `/admin/audit-sources` 保留为兼容重定向（M35） |
+| Data Heatmap | 数据热力 | 表级访问热力 | 数据源热力、源热力 | 表级访问与拒绝分布 API（`/api/admin/audit/sources`）仍保留；Spec 89 已从 `/admin/audit` 移除 heatmap Tab；原 `/admin/audit-sources` 重定向到 `/admin/audit` |
 | Config Audit | 配置审计 | 配置变更审计 | 配置变更（仅限主导航/PageHeader 标题） | 访问配置写入的审计记录 |
 | Review | 审阅 | 变更审阅 | 审核混用 | 人工审阅、PR-like review |
 | Approval | 审批 | 批准 | 审阅混用 | 需要明确批准 / 驳回的流程 |
@@ -324,6 +324,7 @@ Connection (连接)
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
 | Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板 | 主路由 `/admin/usage` |
+| Agent Admin Page Title | Agent | — | Agent 实例（弃用主标签） | `/admin/agents` 侧栏与 H1 |
 | Configured Agent Count | Agent 总数 | 已配置实例 | access.yaml 中的实例（主 hint） | 不随窗口变；含 `enabled: false` |
 | Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题** |
 | Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入活跃 Agent 卡副行，不独立成卡 |
@@ -337,10 +338,11 @@ Connection (连接)
 | Agent Call Ranking | Agent 调用排行 · 近 N | Agent 使用排行 | 近窗口调用；实现向排序说明 | 条形图 Top 10；跟随窗口 |
 | Token Call Ranking | Token 调用排行 · 近 N | Token 使用摘要 | 不重复展示顶部 KPI | 按窗口 `calls` 降序 |
 | Table Call Ranking | 表调用排行 · 近 N | 最受访问表（Top 10） | 仅统计已结构化…（主副文案） | 条形图 Top 10 |
+| Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 三组 query 成功后的快照新鲜度；相对时间对齐系统概览；位于时间窗口切换左侧 |
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、表名 / physical table、token hash prefix、role id、Agent id。
 
-详见 Spec 78 / 84 / 86。
+详见 Spec 78 / 84 / 86 / 87。
 
 ### 4.6 系统与运维
 
@@ -351,6 +353,26 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
 | Sidebar Group | 系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 | 5+1 主导航 | 运行状态、数据库接入、语义层维护、业务文档作为主导航分组 | Lucy WebUI 侧边栏固定 IA |
+
+### 4.7 访问日志 / Admin Audit
+
+`/admin/audit` 页面术语来自 Spec 89，并与 Spec 86 的「多数请求耗时」口径交叉验证：
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Turn Inquiry Tab | 问询记录 | — | 问题簇、turn（裸露） | 默认 Tab `?tab=turns`；L1 Agent × 问询列表 |
+| Call Log Tab | 调用流水 | — | 明细（旧 Tab 名）、access_log | 取证 Tab `?tab=calls`；含 CSV 导出 |
+| Turn / Question cluster | 问询 | 问询摘要 | 问题簇 | 列表行对象；Drawer 标题 |
+| Reported turn | 已上报问询 | — | reported turn | 来源 badge |
+| Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
+| Turn span | 问询时长 | — | turn span | 开始至结束 wall-clock |
+| Slow call | 慢于多数请求 | 慢调用 | 慢查询 | 相对 P95 参照 |
+| Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；参照线文案含窗口 |
+| Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
+
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id。
+
+详见 Spec 89。
 
 ## 5. 新术语登记流程
 

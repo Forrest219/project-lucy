@@ -383,6 +383,45 @@ describe("GET /api/admin/audit/turns", () => {
       await app.close();
     }
   });
+
+  it("includes timing enrichment and referenceLatency for turns list and detail", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+    await writeLog({ ts: at(0), userId: "latency-user", tool: "sl_query", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 500, requestId: "latency-slow" });
+    await writeLog({ ts: at(30_000), userId: "latency-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 10, requestId: "latency-fast-1" });
+    await writeLog({ ts: at(60_000), userId: "latency-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 10, requestId: "latency-fast-2" });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const listRes = await request(app.server).get("/api/admin/audit/turns?user=latency-user&source=inferred&hours=24").expect(200);
+      expect(listRes.body.data.referenceLatency).toMatchObject({
+        windowHours: 24,
+        totalCallsInWindow: 3
+      });
+      expect(listRes.body.data.referenceLatency.p95Ms).toBeGreaterThanOrEqual(10);
+      expect(listRes.body.data.entries[0]).toMatchObject({
+        turnSpanMs: expect.any(Number),
+        totalCallDurationMs: expect.any(Number),
+        maxCallDurationMs: expect.any(Number),
+        slowCallCount: expect.any(Number),
+        outcomeSummary: expect.objectContaining({ ok: expect.any(Number) })
+      });
+
+      const turnId = listRes.body.data.entries[0].id as string;
+      const detailRes = await request(app.server).get(`/api/admin/audit/turns/${turnId}?hours=24`).expect(200);
+      expect(detailRes.body.data.referenceLatency).toMatchObject({ windowHours: 24, p95Ms: expect.any(Number) });
+      expect(detailRes.body.data.accessLogs[0]).toMatchObject({
+        durationMs: expect.any(Number),
+        isSlowCall: expect.any(Boolean)
+      });
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 describe("POST /api/admin/audit/conversation-turns/purge", () => {

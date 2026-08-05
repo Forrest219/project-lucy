@@ -14,7 +14,7 @@ function renderAudit() {
   });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/admin/audit?tab=calls"]}>
         <Audit />
       </MemoryRouter>
     </QueryClientProvider>
@@ -30,6 +30,9 @@ describe("Audit", () => {
   it("redacts sensitive expanded row details", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
+      }
       if (url.startsWith("/api/admin/audit")) {
         return new Response(
           JSON.stringify({
@@ -77,12 +80,13 @@ describe("Audit", () => {
     renderAudit();
 
     expect(await screen.findByRole("heading", { name: "访问日志" })).toBeInTheDocument();
-    // M40: 一级根页面不再渲染面包屑
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
-    expect(await screen.findByText("业务调用")).toBeInTheDocument();
-    expect(screen.getByText("协议调用")).toBeInTheDocument();
-    expect(screen.getByText("tool_denied")).toBeInTheDocument();
-    await waitFor(() => expect(String(fetchMock.mock.calls[0]?.[0])).toContain("includeProtocol=false"));
+    expect(await screen.findByRole("tab", { name: "问询记录" })).toBeInTheDocument();
+    expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "调用流水" }));
+    expect(await screen.findByText("tool_denied")).toBeInTheDocument();
+    await waitFor(() => expect(String(fetchMock.mock.calls.find((call) => String(call[0]).startsWith("/api/admin/audit?"))?.[0] ?? "")).toContain("includeProtocol=false"));
 
     fireEvent.click(await screen.findByText("zhangsan"));
     expect(await screen.findByText("Args：")).toBeInTheDocument();

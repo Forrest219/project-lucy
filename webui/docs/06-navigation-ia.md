@@ -48,7 +48,7 @@ KTX WebUI
 
 访问治理
 - 使用概况
-- Agent 实例
+- Agent
 - 角色权限
 - 访问日志
 - 配置审计
@@ -70,12 +70,12 @@ KTX WebUI
 | 质量评测 | 运行历史 | `/eval/runs` | 查看 eval run 结果 |
 | 质量评测 | 趋势监控 | `/eval/monitor` | 查看 eval 趋势和阈值 |
 | 访问治理 | 使用概况 | `/admin/usage` | 查看 Agent、Token 和表的访问使用情况与调用量（Spec 86；旧 `/admin/governance` redirect） |
-| 访问治理 | Agent 实例 | `/admin/agents` | 管理 Agent、role 和 token |
-| 访问治理 | 角色权限 | `/admin/roles` | 管理 access.yaml 中的 role 模板与 RBAC 权限 |
-| 访问治理 | 访问日志 | `/admin/audit` | 查询 MCP proxy 访问日志；内含 `log` / `heatmap` 两个 Tab（`?tab=` 切换） |
+| 访问治理 | Agent | `/admin/agents` | 管理 Agent、role 和 token |
+| 访问治理 | 角色权限 | `/admin/roles` | 管理每个 Role 的连接、表范围与 MCP 工具授权（Spec 89） |
+| 访问治理 | 访问日志 | `/admin/audit` | 按 Agent 问询与 MCP 调用流水审计；内含 `turns` / `calls` 两个 Tab（Spec 89；`?tab=` 切换） |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看 WebUI 写配置的审计记录 |
 
-> 兼容入口：`/admin/audit-sources` 重定向到 `/admin/audit?tab=heatmap`，保留为外部链接兼容（M35）。
+> 兼容入口：`/admin/audit-sources` 重定向到 `/admin/audit`，保留为外部链接兼容（M35 → Spec 89 移除 heatmap Tab）。
 
 `表语义编辑` 和 `关联关系` 是上下文页面，不作为固定入口直接列出空态路由；从表目录或单表页进入。
 
@@ -97,10 +97,10 @@ KTX WebUI
 | 运行历史 | `质量评测 / 运行历史` |
 | 趋势监控 | `质量评测 / 趋势监控` |
 | 使用概况 | `访问治理 / 使用概况` |
-| Agent 实例 | `访问治理 / Agent 实例` |
+| Agent | `访问治理 / Agent` |
 | 角色权限 | `访问治理 / 角色权限` |
-| 访问日志（log tab） | `访问治理 / 访问日志` |
-| 访问日志（heatmap tab） | `访问治理 / 访问日志 / 数据热力` |
+| 访问日志（问询记录 tab） | `访问治理 / 访问日志` |
+| 访问日志（调用流水 tab） | `访问治理 / 访问日志` |
 | 配置审计 | `访问治理 / 配置审计` |
 
 ## 5. 页面标题与说明
