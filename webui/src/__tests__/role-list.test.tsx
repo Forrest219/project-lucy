@@ -29,6 +29,7 @@ function makeRole(overrides: Partial<Role> = {}): Role {
     source: "yaml",
     tools: ["lucy_query"],
     connections: ["mysql-aliyun"],
+    sourceNames: ["superstore_orders", "dataforai.superstore_orders"],
     sourceCount: 3,
     invalid: false,
     warnings: [],
@@ -53,6 +54,7 @@ const TEMPLATE_ROLE: Role = {
   source: "template",
   tools: ["wiki_search", "wiki_read"],
   connections: [],
+  sourceNames: [],
   sourceCount: 0,
   invalid: false,
   warnings: [],
@@ -68,6 +70,7 @@ const INVALID_TEMPLATE_ROLE: Role = {
   source: "template",
   tools: ["lucy_query"],
   connections: ["poc-mysql-aliyun"],
+  sourceNames: [],
   sourceCount: 5,
   invalid: true,
   warnings: ["role_resolution_failed:lucy_r1_exact_readonly"],
@@ -82,6 +85,7 @@ const INVALID_YAML_ROLE: Role = {
   source: "yaml",
   tools: ["nope"],
   connections: [],
+  sourceNames: [],
   sourceCount: 0,
   invalid: true,
   warnings: ["unknown tool: nope"],
@@ -353,7 +357,7 @@ describe("RoleList", () => {
     expect(await screen.findByText("没有正式 Role 待修复")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText(/搜索/), { target: { value: "xyz" } });
-    expect(await screen.findByText("没有匹配的 role")).toBeInTheDocument();
+    expect(await screen.findByText("没有匹配的 Role")).toBeInTheDocument();
     expect(screen.queryByText("没有正式 Role 待修复")).not.toBeInTheDocument();
   });
 
@@ -372,7 +376,7 @@ describe("RoleList", () => {
     ]);
     renderRoleList();
     const card = await waitFor(() => findCard("demo_readonly"));
-    expect(within(card).getByText(/描述：/)).toBeInTheDocument();
+    expect(within(card).getByText(/说明：/)).toBeInTheDocument();
     expect(within(card).getByText(/数据范围：/)).toBeInTheDocument();
     expect(within(card).getByText(/允许的 MCP 工具：/)).toBeInTheDocument();
     expect(card.textContent).toMatch(/引用\s*Agent：\s*2\s*个/);
@@ -433,6 +437,53 @@ describe("RoleList", () => {
     expect(
       within(card).queryByText(/exact 6-tool controlled data service surface/)
     ).not.toBeInTheDocument();
+  });
+
+  it("filters by connection, MCP tool, and table; empty sourceNames miss table filter", async () => {
+    stubRoles([
+      makeRole({
+        id: "with_table",
+        connections: ["mysql-aliyun"],
+        tools: ["lucy_query"],
+        sourceNames: ["superstore_orders"]
+      }),
+      makeRole({
+        id: "other_conn",
+        connections: ["poc-mysql"],
+        tools: ["wiki_search"],
+        sourceNames: ["poc_metric_catalog"]
+      }),
+      makeRole({
+        id: "unresolved",
+        connections: ["mysql-aliyun"],
+        tools: ["lucy_query"],
+        sourceNames: [],
+        invalid: true,
+        warnings: ["role_resolution_failed:unresolved"]
+      })
+    ]);
+    renderRoleList();
+    await screen.findByTestId("role-list");
+
+    fireEvent.change(screen.getByTestId("role-filter-connection"), { target: { value: "mysql-aliyun" } });
+    expect(findCardOrNull("with_table")).toBeTruthy();
+    expect(findCardOrNull("other_conn")).toBeNull();
+
+    fireEvent.change(screen.getByTestId("role-filter-connection"), { target: { value: "" } });
+    fireEvent.change(screen.getByTestId("role-filter-tool"), { target: { value: "wiki_search" } });
+    expect(findCardOrNull("other_conn")).toBeTruthy();
+    expect(findCardOrNull("with_table")).toBeNull();
+
+    fireEvent.change(screen.getByTestId("role-filter-tool"), { target: { value: "" } });
+    fireEvent.change(screen.getByTestId("role-filter-table"), { target: { value: "superstore" } });
+    expect(findCardOrNull("with_table")).toBeTruthy();
+    expect(findCardOrNull("unresolved")).toBeNull();
+    expect(screen.getByTestId("role-current-filter").textContent).toMatch(/无法解析表范围/);
+
+    fireEvent.change(screen.getByLabelText("搜索 role"), { target: { value: "wiki_search" } });
+    fireEvent.change(screen.getByTestId("role-filter-table"), { target: { value: "" } });
+    expect(findCardOrNull("other_conn")).toBeTruthy();
+    expect(findCardOrNull("with_table")).toBeNull();
   });
 });
 

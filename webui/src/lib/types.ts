@@ -478,6 +478,8 @@ export type Role = {
   source?: "yaml" | "template";
   tools: string[];
   connections: string[];
+  /** Always present; resolved table/source names; [] when resolve failed or zero sources */
+  sourceNames: string[];
   sourceCount: number;
   invalid: boolean;
   warnings: string[];

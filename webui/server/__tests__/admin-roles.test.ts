@@ -251,6 +251,18 @@ describe("GET /api/admin/roles", () => {
     await app.close();
   });
 
+  it("always returns sourceNames array on list summaries", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/roles").expect(200);
+    const roles = res.body.data.roles as Array<{ sourceNames: unknown }>;
+    expect(roles.length).toBeGreaterThan(0);
+    for (const role of roles) {
+      expect(Array.isArray(role.sourceNames)).toBe(true);
+    }
+    await app.close();
+  });
+
   it("hides templates when includeTemplates=false", async () => {
     const app = buildServer();
     await app.ready();

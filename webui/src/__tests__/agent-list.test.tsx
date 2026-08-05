@@ -56,6 +56,7 @@ const analystRole: Role = {
   source: "yaml",
   tools: ["lucy_query", "lucy_read_source"],
   connections: ["mysql-aliyun"],
+  sourceNames: ["superstore_orders"],
   sourceCount: 3,
   invalid: false,
   warnings: []
@@ -265,6 +266,7 @@ describe("AgentList", () => {
       source: "yaml",
       tools: ["lucy_query", "lucy_read_source", "lucy_catalog"],
       connections: ["mysql-aliyun", "postgres-aws"],
+      sourceNames: ["orders"],
       sourceCount: 7,
       invalid: false,
       warnings: ["Selector matched 0 sources for connection=postgres-aws"]

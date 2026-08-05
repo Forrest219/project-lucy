@@ -121,6 +121,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-07-wiki-workbench-secondary-feedback-fixes.md](wo-202608-07-wiki-workbench-secondary-feedback-fixes.md) | 202608-07 | Wiki 工作台二轮反馈修复：目录树层级引导线 + 默认只展目录、新建文档跳转新建目录、正文标题去重、移动到目录弹窗精简、版本记录表格化与历史预览懒加载 |
 
 | [wo-202608-08-role-admin-list-clarity-followup.md](wo-202608-08-role-admin-list-clarity-followup.md) | 202608-08 | Role Admin 列表清晰度二轮：待修复 KPI 只计正式 Role、Header/状态条降噪、使用中/未引用、卡片字段标签、基于此新建、configUpdatedAt |
+| [wo-202608-09-role-admin-create-edit-usability.md](wo-202608-09-role-admin-create-edit-usability.md) | 202608-09 | Role Admin 新建/编辑可用性：Wave A 中文标签与 picker+受控回退；Wave B `sourceNames` + 连接/工具/表能力筛选 |
 
 ### 202608 Governance & Observability — 并行启动建议
 

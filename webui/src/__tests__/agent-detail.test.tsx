@@ -123,6 +123,7 @@ function stubAgentEndpoints() {
                 source: "yaml",
                 tools: ["lucy_query"],
                 connections: ["mysql-aliyun"],
+                sourceNames: ["superstore_orders"],
                 sourceCount: 2,
                 invalid: false,
                 warnings: []
@@ -270,6 +271,7 @@ describe("AgentDetail", () => {
                   source: "yaml",
                   tools: ["lucy_query"],
                   connections: ["mysql-aliyun"],
+                  sourceNames: ["superstore_orders"],
                   sourceCount: 2,
                   invalid: false,
                   warnings: []

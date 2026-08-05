@@ -155,6 +155,14 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Evaluation | 质量评测 | 评测 | 质量评价混用 | 数据问答或语义质量评测 |
 | Evaluation Case | 评测用例 | 评测集 | Case 管理、案例管理 | 数据问答 / 语义质量评测的单条样例 |
 | Role Permission | 角色权限 | Role、RBAC 角色 | 角色配置、角色模板 | access.yaml 中的 role 模板 |
+| Role ID | 角色标识 | 技术 ID、role id | Role Name（暗示可当 yaml key 的中文名）、流水号（无 schema 时） | `access.yaml.roles.<id>`；Agent 引用用技术标识；规则 `^[A-Za-z0-9_-]{1,64}$` |
+| Role Description | 说明 | 用途说明 | Role Name（与角色标识混淆时） | Role 的中文用途说明；列表/详情主文案 |
+| Role Connection Allow-list | 允许的连接 | 数据库连接 | Connections（裸露主标签）、链接 | Role 可使用的连接；`allow.connections` |
+| Role MCP Tool Allow-list | 允许的 MCP 工具 | 工具权限 | Tools（裸露）、MCP Tools（无中文主标签） | Role 显式工具清单；禁止 `*` |
+| Role Table Selector | 可访问的表范围 | 表授权范围 | Table Selectors（裸露）、selector（主按钮文案） | `allow.tableSelectors` |
+| Exact Table Names | 指定表名 | 精确授权这些表 | names（裸露 radio） | selector `names` |
+| Table Name Prefix | 按前缀匹配 | 前缀批量授权 | prefix（裸露 radio） | selector `prefix`；UI 标为高级 |
+| Role Capability Filter | 按能力筛选 | 按连接 / 工具 / 表筛选 | 功能筛选（与状态筛选混淆） | `/admin/roles` 次级筛选维 |
 | Persisted Role | 正式 Role | 已落盘 Role、正式（badge 短标签） | YAML role（作为主标签）、已启用（无 enabled 字段时） | `source=yaml`，写入 access.yaml |
 | Reference Role Template | 参考模板 | 内置参考模板 | Template（裸露）、模板角色（暗示可直接运行） | 系统预置只读参考配置，低频辅助创建 |
 | In Use Role | 使用中 | 被 Agent 引用 | 正在服务 Agent（主标签）、in use、已启用 | 正式 Role 且至少 1 个 Agent 引用 |

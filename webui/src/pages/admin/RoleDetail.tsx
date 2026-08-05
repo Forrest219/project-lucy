@@ -1,23 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../../lib/apiClient";
-import type { RoleAllowConfig, RoleDetail as RoleDetailType, RoleSelector } from "../../lib/types";
+import type {
+  ConnectionInfo,
+  ConnectionTablesResponse,
+  ConnectionsResponse,
+  McpToolInfo,
+  RoleAllowConfig,
+  RoleDetail as RoleDetailType,
+  RoleSelector
+} from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { TagInput } from "../../components/TagInput";
 
 type Tab = "config" | "permissions" | "usage" | "diff";
 
 type RoleFormState = {
   roleId: string;
   description: string;
-  connectionsText: string;
-  toolsText: string;
+  connections: string[];
+  tools: string[];
   selectors: Array<{
     connection: string;
     schema: string;
     kind: "names" | "prefix";
-    namesText: string;
+    names: string[];
     prefix: string;
   }>;
 };
@@ -59,21 +68,10 @@ type DeletePreview = {
 const EMPTY_FORM: RoleFormState = {
   roleId: "",
   description: "",
-  connectionsText: "",
-  toolsText: "",
+  connections: [],
+  tools: [],
   selectors: []
 };
-
-function splitList(value: string): string[] {
-  return value
-    .split(/[\n,]/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function joinList(items: string[] | undefined): string {
-  return items ? items.join("\n") : "";
-}
 
 function roleWarningDiagnosis(warning: string): { diagnosis: string; technical: string } {
   const trimmed = warning.trim();
@@ -89,6 +87,17 @@ function roleWarningDiagnosis(warning: string): { diagnosis: string; technical: 
   };
 }
 
+function suggestRoleIdFromDescription(description: string): string {
+  const ascii = description
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase()
+    .slice(0, 64);
+  return ascii;
+}
+
 function selectorsToForm(selectors: RoleSelector[] | undefined): RoleFormState["selectors"] {
   if (!selectors) return [];
   return selectors.map((selector) => {
@@ -97,7 +106,7 @@ function selectorsToForm(selectors: RoleSelector[] | undefined): RoleFormState["
         connection: selector.connection ?? "",
         schema: selector.schema,
         kind: "names" as const,
-        namesText: selector.names.join("\n"),
+        names: [...selector.names],
         prefix: ""
       };
     }
@@ -105,15 +114,15 @@ function selectorsToForm(selectors: RoleSelector[] | undefined): RoleFormState["
       connection: selector.connection ?? "",
       schema: selector.schema,
       kind: "prefix" as const,
-      namesText: "",
+      names: [],
       prefix: selector.prefix
     };
   });
 }
 
 function formToAllow(state: RoleFormState): RoleAllowConfig {
-  const connections = splitList(state.connectionsText);
-  const tools = splitList(state.toolsText);
+  const connections = state.connections.map((item) => item.trim()).filter(Boolean);
+  const tools = state.tools.map((item) => item.trim()).filter(Boolean);
   const tableSelectors: RoleSelector[] = state.selectors
     .filter((row) => row.schema.trim().length > 0)
     .map((row) => {
@@ -127,7 +136,7 @@ function formToAllow(state: RoleFormState): RoleAllowConfig {
       return {
         connection: row.connection.trim() || undefined,
         schema: row.schema.trim(),
-        names: splitList(row.namesText)
+        names: row.names.map((item) => item.trim()).filter(Boolean)
       } as RoleSelector;
     });
   return {
@@ -141,10 +150,15 @@ function initFormFromDetail(detail: RoleDetailType): RoleFormState {
   return {
     roleId: detail.id,
     description: detail.role.description ?? "",
-    connectionsText: joinList(detail.role.allow.connections),
-    toolsText: joinList(detail.role.allow.tools),
+    connections: [...(detail.role.allow.connections ?? [])],
+    tools: [...(detail.role.allow.tools ?? [])],
     selectors: selectorsToForm(detail.role.allow.tableSelectors)
   };
+}
+
+function sameStringList(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((item, index) => item === b[index]);
 }
 
 function isRoleDirty(form: RoleFormState, detail: RoleDetailType | null, mode: "create" | "edit" | "copy" | "delete"): boolean {
@@ -152,16 +166,31 @@ function isRoleDirty(form: RoleFormState, detail: RoleDetailType | null, mode: "
   if (!detail) return false;
   const current = initFormFromDetail(detail);
   if (form.description !== current.description) return true;
-  if (form.connectionsText !== current.connectionsText) return true;
-  if (form.toolsText !== current.toolsText) return true;
+  if (!sameStringList(form.connections, current.connections)) return true;
+  if (!sameStringList(form.tools, current.tools)) return true;
   if (form.selectors.length !== current.selectors.length) return true;
   for (let i = 0; i < form.selectors.length; i += 1) {
     const a = form.selectors[i]!;
     const b = current.selectors[i]!;
     if (a.connection !== b.connection || a.schema !== b.schema || a.kind !== b.kind) return true;
-    if (a.namesText !== b.namesText || a.prefix !== b.prefix) return true;
+    if (a.prefix !== b.prefix || !sameStringList(a.names, b.names)) return true;
   }
   return false;
+}
+
+function toggleInList(list: string[], value: string, enabled: boolean): string[] {
+  if (enabled) {
+    return list.includes(value) ? list : [...list, value];
+  }
+  return list.filter((item) => item !== value);
+}
+
+function tablesForSchema(flatTables: string[], schema: string): string[] {
+  const prefix = `${schema}.`;
+  return flatTables
+    .filter((item) => item.startsWith(prefix))
+    .map((item) => item.slice(prefix.length))
+    .filter(Boolean);
 }
 
 export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
@@ -193,6 +222,47 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   const [createPreview, setCreatePreview] = useState<CreatePreview | CopyPreview | null>(null);
   const [deletePreview, setDeletePreview] = useState<DeletePreview | null>(null);
 
+  const connectionsQuery = useQuery({
+    queryKey: ["connections"],
+    queryFn: () => apiGet<ConnectionsResponse>("/api/connections")
+  });
+  const mcpToolsQuery = useQuery({
+    queryKey: ["admin", "mcp-tools"],
+    queryFn: () => apiGet<{ tools: McpToolInfo[] }>("/api/admin/mcp-tools")
+  });
+
+  const connectionCandidates = connectionsQuery.data?.connections ?? [];
+  const showConnectionPicker = connectionCandidates.length > 0;
+  const connectionsFallback =
+    connectionsQuery.isError || (!connectionsQuery.isLoading && connectionCandidates.length === 0);
+  const mcpTools = mcpToolsQuery.data?.tools ?? [];
+  const showToolPicker = mcpTools.length > 0;
+  const toolsFallback = mcpToolsQuery.isError || (!mcpToolsQuery.isLoading && mcpTools.length === 0);
+
+  const selectorConnIds = useMemo(
+    () => [...new Set(form.selectors.map((row) => row.connection.trim()).filter(Boolean))],
+    [form.selectors]
+  );
+  const tableQueries = useQueries({
+    queries: selectorConnIds.map((connId) => ({
+      queryKey: ["connection-tables", connId],
+      queryFn: () => apiGet<ConnectionTablesResponse>(`/api/connections/${encodeURIComponent(connId)}/tables`),
+      enabled: connId.length > 0
+    }))
+  });
+  const tablesByConnection = useMemo(() => {
+    const map = new Map<string, { tables: string[]; isError: boolean; isLoading: boolean }>();
+    selectorConnIds.forEach((connId, index) => {
+      const result = tableQueries[index];
+      map.set(connId, {
+        tables: result?.data?.tables ?? [],
+        isError: Boolean(result?.isError),
+        isLoading: Boolean(result?.isLoading)
+      });
+    });
+    return map;
+  }, [selectorConnIds, tableQueries]);
+
   function clearPreviews() {
     setCreatePreview(null);
     setDeletePreview(null);
@@ -220,12 +290,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     }
   }, [mode, detail]);
 
-  const allow = useMemo(() => formToAllow(form), [form]);
   const roleIdIsValid = useMemo(
     () => /^[A-Za-z0-9_-]{1,64}$/.test(form.roleId),
     [form.roleId]
   );
-  const toolsCount = splitList(form.toolsText).length;
+  const toolsCount = form.tools.filter((item) => item.trim().length > 0).length;
   const dirty = isRoleDirty(form, detail, mode);
 
   const createMutation = useMutation({
@@ -330,11 +399,15 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   function handleCreatePreview() {
     if (!roleIdIsValid) {
-      toast.error("Role id 必须匹配 ^[A-Za-z0-9_-]{1,64}$");
+      toast.error("角色标识必须匹配 ^[A-Za-z0-9_-]{1,64}$");
       return;
     }
     if (toolsCount === 0) {
       toast.error("至少需要一个 MCP 工具");
+      return;
+    }
+    if (form.tools.some((tool) => tool.includes("*"))) {
+      toast.error("禁止使用 * 通配符");
       return;
     }
     const payload = {
@@ -375,7 +448,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   function handleCopyPreview() {
     if (!roleIdIsValid) {
-      toast.error("新 Role id 必须匹配 ^[A-Za-z0-9_-]{1,64}$");
+      toast.error("新角色标识必须匹配 ^[A-Za-z0-9_-]{1,64}$");
+      return;
+    }
+    if (form.tools.some((tool) => tool.includes("*"))) {
+      toast.error("禁止使用 * 通配符");
       return;
     }
     copyMutation.mutate({ dryRun: true, newRoleId: form.roleId, role: buildRolePayload() });
@@ -448,7 +525,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
           <>
             {mode === "create" && (
               <>
-                新建正式 Role，所有写入必须经过 <span className="notranslate" translate="no">access.yaml</span> dryRun diff 确认。
+                配置 <span className="notranslate" translate="no">Agent</span> 可访问的连接、表范围与{" "}
+                <span className="notranslate" translate="no">MCP</span> 工具。保存前须确认{" "}
+                <span className="notranslate" translate="no">access.yaml</span> 变更 diff。
               </>
             )}
             {mode === "edit" && detail?.source === "template" && (
@@ -458,12 +537,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
             )}
             {mode === "edit" && detail?.source !== "template" && (
               <>
-                编辑正式 Role，所有写入必须经过 <span className="notranslate" translate="no">access.yaml</span> dryRun diff 确认。
+                编辑正式 Role 的访问边界。保存前须确认{" "}
+                <span className="notranslate" translate="no">access.yaml</span> 变更 diff。
               </>
             )}
             {mode === "copy" && (
               <>
-                从已有 role 复制出新的正式 Role。需输入新 id。
+                从已有 role 复制出新的正式 Role。需输入新的角色标识。
               </>
             )}
             {mode === "delete" && (
@@ -521,174 +601,389 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         {activeTab === "config" && (
           <div className="grid gap-4 max-w-2xl pb-32">
             <label className="grid gap-1" htmlFor="role-id-input">
-              <span className="text-sm font-medium">Role ID</span>
+              <span className="text-sm font-medium">角色标识</span>
               <input
                 id="role-id-input"
-                className="pl-input"
+                className="pl-input notranslate"
+                translate="no"
                 value={form.roleId}
                 disabled={mode === "edit" && detail?.source !== "template"}
                 placeholder="例：poc_data_engineer"
                 onChange={(e) => updateForm({ ...form, roleId: e.target.value })}
               />
-              <span className="text-xs text-fg-muted">规则：{"^[A-Za-z0-9_-]{1,64}$"}</span>
+              <span className="text-xs text-fg-muted">
+                <span className="notranslate" translate="no">Agent</span> 引用此 Role 时使用的技术标识。仅英文字母、数字、下划线与连字符，最多 64 位。
+              </span>
             </label>
             <label className="grid gap-1" htmlFor="role-description-input">
-              <span className="text-sm font-medium">描述</span>
+              <span className="text-sm font-medium">说明</span>
               <input
                 id="role-description-input"
                 className="pl-input"
                 value={form.description}
-                placeholder="可选"
-                onChange={(e) => updateForm({ ...form, description: e.target.value })}
+                placeholder="例如：POC 只读问答角色"
+                onChange={(e) => {
+                  const description = e.target.value;
+                  const next: RoleFormState = { ...form, description };
+                  if (
+                    (mode === "create" || mode === "copy") &&
+                    form.roleId.trim().length === 0
+                  ) {
+                    const suggested = suggestRoleIdFromDescription(description);
+                    if (suggested) next.roleId = suggested;
+                  }
+                  updateForm(next);
+                }}
                 disabled={isReadOnlyTemplate}
               />
             </label>
-            <label className="grid gap-1" htmlFor="role-connections-input">
-              <span className="text-sm font-medium">Connections</span>
-              <textarea
-                id="role-connections-input"
-                className="pl-input"
-                rows={2}
-                placeholder="一行或逗号分隔，例如：mysql-aliyun"
-                value={form.connectionsText}
-                onChange={(e) => updateForm({ ...form, connectionsText: e.target.value })}
-                disabled={isReadOnlyTemplate}
+
+            <div className="grid gap-2" data-testid="role-connections-field">
+              <div className="text-sm font-medium">允许的连接</div>
+              <p className="text-xs text-fg-muted">该 Role 可使用哪些数据库连接。</p>
+              {connectionsFallback ? (
+                <p className="text-xs text-warning-strong" data-testid="role-connections-fallback-hint">
+                  连接候选暂不可用，可手动填写连接 ID。
+                </p>
+              ) : null}
+              {!connectionsFallback && showConnectionPicker ? (
+                <div className="grid gap-1 rounded-md border border-border-default bg-bg-base p-3" role="group" aria-label="允许的连接">
+                  {connectionCandidates.map((conn: ConnectionInfo) => (
+                    <label key={conn.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={form.connections.includes(conn.id)}
+                        disabled={isReadOnlyTemplate}
+                        onChange={(e) =>
+                          updateForm({
+                            ...form,
+                            connections: toggleInList(form.connections, conn.id, e.target.checked)
+                          })
+                        }
+                      />
+                      <span className="notranslate font-mono text-xs" translate="no">
+                        {conn.id}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              <TagInput
+                value={form.connections}
+                onChange={(connections) => updateForm({ ...form, connections })}
+                placeholder="输入连接 ID 后回车"
               />
-            </label>
-            <label className="grid gap-1" htmlFor="role-tools-input">
-              <span className="text-sm font-medium"><span className="notranslate" translate="no">MCP</span> 工具</span>
-              <textarea
-                id="role-tools-input"
-                className="pl-input"
-                rows={3}
-                placeholder="lucy_query&#10;lucy_read_source"
-                value={form.toolsText}
-                onChange={(e) => updateForm({ ...form, toolsText: e.target.value })}
-                disabled={isReadOnlyTemplate}
-              />
-              <span className="text-xs text-fg-muted">
-                显式列举工具名，禁止使用 <code>*</code> 通配符。
-              </span>
-            </label>
-            <div className="grid gap-2">
+            </div>
+
+            <div className="grid gap-2" data-testid="role-tools-field">
+              <div className="text-sm font-medium">
+                允许的 <span className="notranslate" translate="no">MCP</span> 工具
+              </div>
+              <p className="text-xs text-fg-muted">
+                <span className="notranslate" translate="no">Agent</span> 可调用的能力清单；须显式勾选，禁止使用{" "}
+                <code>*</code>。
+              </p>
+              {toolsFallback ? (
+                <p className="text-xs text-warning-strong" data-testid="role-tools-fallback-hint">
+                  工具候选暂不可用，可手动填写工具名。
+                </p>
+              ) : null}
+              {!toolsFallback && showToolPicker ? (
+                <div
+                  className="grid max-h-56 gap-1 overflow-auto rounded-md border border-border-default bg-bg-base p-3 notranslate"
+                  role="group"
+                  aria-label="允许的 MCP 工具"
+                  translate="no"
+                >
+                  {mcpTools.map((tool) => (
+                    <label
+                      key={tool.name}
+                      className={`flex items-start gap-2 text-sm ${tool.globalDenied ? "opacity-60" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={form.tools.includes(tool.name)}
+                        disabled={isReadOnlyTemplate || tool.globalDenied}
+                        onChange={(e) =>
+                          updateForm({
+                            ...form,
+                            tools: toggleInList(form.tools, tool.name, e.target.checked)
+                          })
+                        }
+                      />
+                      <span>
+                        <span className="notranslate font-mono text-xs" translate="no">
+                          {tool.name}
+                        </span>
+                        {tool.globalDenied ? (
+                          <span className="ml-2 text-xs text-danger">全局禁止</span>
+                        ) : null}
+                        {tool.description ? (
+                          <span className="mt-0.5 block text-xs text-fg-muted">{tool.description}</span>
+                        ) : null}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              <div id="role-tools-input">
+                <TagInput
+                  value={form.tools}
+                  onChange={(tools) => {
+                    const denied = new Set(
+                      mcpTools.filter((tool) => tool.globalDenied).map((tool) => tool.name)
+                    );
+                    updateForm({
+                      ...form,
+                      tools: denied.size > 0 ? tools.filter((name) => !denied.has(name)) : tools
+                    });
+                  }}
+                  placeholder="输入工具名后回车"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2" data-testid="role-table-ranges-field">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Table Selectors</span>
+                <div>
+                  <div className="text-sm font-medium">可访问的表范围</div>
+                  <p className="text-xs text-fg-muted">
+                    限定该 Role 可查询的 <span className="notranslate" translate="no">Schema</span> 与表。未添加任何范围时，不能访问数据表。
+                  </p>
+                </div>
                 <button
                   type="button"
                   className="pl-btn pl-btn--ghost text-xs"
                   onClick={() =>
                     updateForm({
                       ...form,
-                      selectors: [...form.selectors, { connection: "", schema: "", kind: "names", namesText: "", prefix: "" }]
+                      selectors: [
+                        ...form.selectors,
+                        {
+                          connection: form.connections[0] ?? "",
+                          schema: "",
+                          kind: "names",
+                          names: [],
+                          prefix: ""
+                        }
+                      ]
                     })
                   }
                   disabled={isReadOnlyTemplate}
                 >
-                  + 添加 selector
+                  + 添加表范围
                 </button>
               </div>
               {form.selectors.length === 0 ? (
-                <p className="text-xs text-fg-muted">没有 selector。此 role 不能访问任何数据源。</p>
+                <p className="text-xs text-fg-muted">尚未添加表范围。此 Role 不能访问任何数据表。</p>
               ) : (
                 <div className="grid gap-2">
-                  {form.selectors.map((row, idx) => (
-                    <div key={idx} className="grid gap-2 rounded-md border border-border-default bg-bg-base p-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          className="pl-input"
-                          placeholder="connection (可选)"
-                          value={row.connection}
-                          onChange={(e) => {
-                            const next = [...form.selectors];
-                            next[idx] = { ...row, connection: e.target.value };
-                            updateForm({ ...form, selectors: next });
-                          }}
-                          disabled={isReadOnlyTemplate}
-                          aria-label={`selector ${idx + 1} connection`}
-                        />
-                        <input
-                          className="pl-input notranslate"
-                          placeholder="Schema (必填)"
-                          value={row.schema}
-                          onChange={(e) => {
-                            const next = [...form.selectors];
-                            next[idx] = { ...row, schema: e.target.value };
-                            updateForm({ ...form, selectors: next });
-                          }}
-                          disabled={isReadOnlyTemplate}
-                          aria-label={`selector ${idx + 1} Schema`}
-                          translate="no"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1 text-xs">
-                          <input
-                            type="radio"
-                            checked={row.kind === "names"}
-                            onChange={() => {
-                              const next = [...form.selectors];
-                              next[idx] = { ...row, kind: "names" };
+                  {form.selectors.map((row, idx) => {
+                    const connMeta = connectionCandidates.find((item) => item.id === row.connection);
+                    const schemaOptions = connMeta?.schemas ?? [];
+                    const schemaFallback = Boolean(row.connection) && schemaOptions.length === 0;
+                    const tableState = row.connection
+                      ? tablesByConnection.get(row.connection)
+                      : undefined;
+                    const tableCandidates =
+                      row.schema && tableState ? tablesForSchema(tableState.tables, row.schema) : [];
+                    const tablesFallback =
+                      row.kind === "names" &&
+                      Boolean(row.connection && row.schema) &&
+                      (tableState?.isError ||
+                        (!tableState?.isLoading && tableCandidates.length === 0));
+
+                    return (
+                      <div
+                        key={idx}
+                        className="grid gap-2 rounded-md border border-border-default bg-bg-base p-3"
+                        data-testid={`role-table-range-${idx + 1}`}
+                      >
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="grid gap-1">
+                            <span className="text-xs text-fg-muted">连接</span>
+                            <select
+                              className="pl-input notranslate"
+                              translate="no"
+                              value={row.connection}
+                              aria-label={`表范围 ${idx + 1} 连接`}
+                              disabled={isReadOnlyTemplate}
+                              onChange={(e) => {
+                                const next = [...form.selectors];
+                                next[idx] = { ...row, connection: e.target.value, schema: "", names: [] };
+                                updateForm({ ...form, selectors: next });
+                              }}
+                            >
+                              <option value="">选择连接</option>
+                              {(form.connections.length > 0 ? form.connections : connectionCandidates.map((c) => c.id)).map(
+                                (id) => (
+                                  <option key={id} value={id}>
+                                    {id}
+                                  </option>
+                                )
+                              )}
+                            </select>
+                          </label>
+                          <label className="grid gap-1">
+                            <span className="text-xs text-fg-muted">
+                              <span className="notranslate" translate="no">
+                                Schema
+                              </span>
+                              （必填）
+                            </span>
+                            {schemaFallback ? (
+                              <input
+                                className="pl-input notranslate"
+                                translate="no"
+                                placeholder="手动输入 Schema"
+                                value={row.schema}
+                                aria-label={`表范围 ${idx + 1} Schema`}
+                                disabled={isReadOnlyTemplate}
+                                onChange={(e) => {
+                                  const next = [...form.selectors];
+                                  next[idx] = { ...row, schema: e.target.value, names: [] };
+                                  updateForm({ ...form, selectors: next });
+                                }}
+                              />
+                            ) : (
+                              <select
+                                className="pl-input notranslate"
+                                translate="no"
+                                value={row.schema}
+                                aria-label={`表范围 ${idx + 1} Schema`}
+                                disabled={isReadOnlyTemplate || !row.connection}
+                                onChange={(e) => {
+                                  const next = [...form.selectors];
+                                  next[idx] = { ...row, schema: e.target.value, names: [] };
+                                  updateForm({ ...form, selectors: next });
+                                }}
+                              >
+                                <option value="" className="notranslate" translate="no">
+                                  选择 Schema
+                                </option>
+                                {schemaOptions.map((schema) => (
+                                  <option key={schema} value={schema}>
+                                    {schema}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </label>
+                        </div>
+                        {schemaFallback ? (
+                          <p className="text-xs text-warning-strong">
+                            当前连接无 <span className="notranslate" translate="no">Schema</span> 候选，可手动填写。
+                          </p>
+                        ) : null}
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              type="radio"
+                              checked={row.kind === "names"}
+                              onChange={() => {
+                                const next = [...form.selectors];
+                                next[idx] = { ...row, kind: "names" };
+                                updateForm({ ...form, selectors: next });
+                              }}
+                              disabled={isReadOnlyTemplate}
+                            />
+                            指定表名
+                          </label>
+                          <label className="flex items-center gap-1 text-xs">
+                            <input
+                              type="radio"
+                              checked={row.kind === "prefix"}
+                              onChange={() => {
+                                const next = [...form.selectors];
+                                next[idx] = { ...row, kind: "prefix" };
+                                updateForm({ ...form, selectors: next });
+                              }}
+                              disabled={isReadOnlyTemplate}
+                            />
+                            按前缀匹配（高级）
+                          </label>
+                          <button
+                            type="button"
+                            className="pl-btn pl-btn--ghost text-xs ml-auto"
+                            onClick={() => {
+                              const next = form.selectors.filter((_, i) => i !== idx);
                               updateForm({ ...form, selectors: next });
                             }}
                             disabled={isReadOnlyTemplate}
-                          />
-                          names
-                        </label>
-                        <label className="flex items-center gap-1 text-xs">
-                          <input
-                            type="radio"
-                            checked={row.kind === "prefix"}
-                            onChange={() => {
-                              const next = [...form.selectors];
-                              next[idx] = { ...row, kind: "prefix" };
-                              updateForm({ ...form, selectors: next });
-                            }}
-                            disabled={isReadOnlyTemplate}
-                          />
-                          prefix
-                        </label>
-                        <button
-                          type="button"
-                          className="pl-btn pl-btn--ghost text-xs ml-auto"
-                          onClick={() => {
-                            const next = form.selectors.filter((_, i) => i !== idx);
-                            updateForm({ ...form, selectors: next });
-                          }}
-                          disabled={isReadOnlyTemplate}
-                        >
-                          删除
-                        </button>
+                          >
+                            删除
+                          </button>
+                        </div>
+                        {row.kind === "names" ? (
+                          <div className="grid gap-2">
+                            {tablesFallback ? (
+                              <p className="text-xs text-warning-strong" data-testid={`role-table-names-fallback-${idx + 1}`}>
+                                表候选暂不可用，可手动填写表名。
+                              </p>
+                            ) : null}
+                            {!tablesFallback && tableCandidates.length > 0 ? (
+                              <div
+                                className="grid max-h-40 gap-1 overflow-auto rounded-md border border-border-subtle p-2"
+                                role="group"
+                                aria-label={`表范围 ${idx + 1} 指定表名`}
+                              >
+                                {tableCandidates.map((tableName) => (
+                                  <label key={tableName} className="flex items-center gap-2 text-xs">
+                                    <input
+                                      type="checkbox"
+                                      checked={row.names.includes(tableName)}
+                                      disabled={isReadOnlyTemplate}
+                                      onChange={(e) => {
+                                        const next = [...form.selectors];
+                                        next[idx] = {
+                                          ...row,
+                                          names: toggleInList(row.names, tableName, e.target.checked)
+                                        };
+                                        updateForm({ ...form, selectors: next });
+                                      }}
+                                    />
+                                    <span className="notranslate font-mono" translate="no">
+                                      {tableName}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : null}
+                            <TagInput
+                              value={row.names}
+                              onChange={(names) => {
+                                const next = [...form.selectors];
+                                next[idx] = { ...row, names };
+                                updateForm({ ...form, selectors: next });
+                              }}
+                              placeholder="输入表名后回车"
+                            />
+                          </div>
+                        ) : (
+                          <label className="grid gap-1">
+                            <span className="text-xs text-fg-muted">表名前缀</span>
+                            <input
+                              className="pl-input notranslate"
+                              translate="no"
+                              placeholder="例如 poc_"
+                              value={row.prefix}
+                              aria-label={`表范围 ${idx + 1} 按前缀匹配`}
+                              onChange={(e) => {
+                                const next = [...form.selectors];
+                                next[idx] = { ...row, prefix: e.target.value };
+                                updateForm({ ...form, selectors: next });
+                              }}
+                              disabled={isReadOnlyTemplate}
+                            />
+                            <span className="text-xs text-fg-muted">
+                              授权所有以此前缀开头的表，例如 <code className="notranslate" translate="no">poc_</code>
+                            </span>
+                          </label>
+                        )}
                       </div>
-                      {row.kind === "names" ? (
-                        <textarea
-                          className="pl-input"
-                          rows={2}
-                          placeholder="一行或逗号分隔 source name"
-                          value={row.namesText}
-                          onChange={(e) => {
-                            const next = [...form.selectors];
-                            next[idx] = { ...row, namesText: e.target.value };
-                            updateForm({ ...form, selectors: next });
-                          }}
-                          disabled={isReadOnlyTemplate}
-                          aria-label={`selector ${idx + 1} names`}
-                        />
-                      ) : (
-                        <input
-                          className="pl-input"
-                          placeholder="source name 前缀"
-                          value={row.prefix}
-                          onChange={(e) => {
-                            const next = [...form.selectors];
-                            next[idx] = { ...row, prefix: e.target.value };
-                            updateForm({ ...form, selectors: next });
-                          }}
-                          disabled={isReadOnlyTemplate}
-                          aria-label={`selector ${idx + 1} prefix`}
-                        />
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

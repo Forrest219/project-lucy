@@ -193,6 +193,23 @@ function buildRoleSummary(config: YamlAccessConfig, resolved: ResolvedRole) {
   };
 }
 
+function sourceNamesFromPreview(
+  preview: Awaited<ReturnType<typeof previewRolePermissionsForAdmin>>
+): string[] {
+  if (!preview.ok) return [];
+  return [
+    ...new Set(
+      preview.permissions.sources.flatMap((source) => {
+        const full = source.table;
+        const short = full.includes(".") ? full.slice(full.lastIndexOf(".") + 1) : full;
+        return [full, short, source.sourceName].filter(
+          (item): item is string => typeof item === "string" && item.length > 0
+        );
+      })
+    )
+  ];
+}
+
 function isTableTouchingTool(tool: string): boolean {
   return [
     "sl_query",
@@ -378,9 +395,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
           entry.source === "template" ? { role: entry.role } : undefined
         );
         const summary = buildRoleSummary(config, entry);
+        const sourceNames = sourceNamesFromPreview(resolved);
         return {
           ...summary,
           sourceCount: resolved.ok ? resolved.permissions.sources.length : 0,
+          sourceNames,
           invalid: !resolved.ok,
           warnings: resolved.ok ? [] : [resolved.reason],
           configUpdatedAt: entry.source === "yaml" ? configUpdatedAt : null
@@ -404,12 +423,14 @@ export function registerRoleRoutes(app: FastifyInstance) {
       resolved.id,
       resolved.source === "template" ? { role: resolved.role } : undefined
     );
+    const sourceNames = sourceNamesFromPreview(preview);
     return {
       ok: true,
       data: {
         ...summary,
         version,
         sourceCount: preview.ok ? preview.permissions.sources.length : 0,
+        sourceNames,
         invalid: !preview.ok,
         warnings: preview.ok ? [] : [preview.reason],
         configUpdatedAt: resolved.source === "yaml" ? new Date(mtimeMs).toISOString() : null,
@@ -549,6 +570,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
+          sourceNames: sourceNamesFromPreview(preview),
           invalid: !preview.ok,
           warnings: preview.ok ? [] : [preview.reason],
           role: {
@@ -891,6 +913,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
+          sourceNames: sourceNamesFromPreview(preview),
           invalid: !preview.ok,
           warnings: preview.ok ? [] : [preview.reason],
           role: {

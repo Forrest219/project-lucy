@@ -208,7 +208,7 @@ function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
           </div>
           {role.description && (
             <p className="text-sm text-fg-muted">
-              <span className="text-fg-muted">描述：</span>
+              <span className="text-fg-muted">说明：</span>
               {role.description}
             </p>
           )}
@@ -334,6 +334,9 @@ export function RoleList() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("formal");
+  const [connectionFilter, setConnectionFilter] = useState("");
+  const [toolFilter, setToolFilter] = useState("");
+  const [tableFilter, setTableFilter] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "roles"],
@@ -343,11 +346,37 @@ export function RoleList() {
   const roles = data?.roles ?? [];
   const summary = useMemo(() => summarizeRoles(roles), [roles]);
 
+  const connectionOptions = useMemo(
+    () => [...new Set(roles.flatMap((role) => role.connections))].sort(),
+    [roles]
+  );
+  const toolOptions = useMemo(
+    () => [...new Set(roles.flatMap((role) => role.tools))].sort(),
+    [roles]
+  );
+
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const tableQ = tableFilter.trim().toLowerCase();
     return roles.filter((role) => {
-      if (search) {
-        const hay = `${role.id} ${role.description ?? ""}`.toLowerCase();
-        if (!hay.includes(search.toLowerCase())) return false;
+      if (q) {
+        const hay = [
+          role.id,
+          role.description ?? "",
+          ...role.connections,
+          ...role.tools,
+          ...(role.sourceNames ?? [])
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (connectionFilter && !role.connections.includes(connectionFilter)) return false;
+      if (toolFilter && !role.tools.includes(toolFilter)) return false;
+      if (tableQ) {
+        const names = role.sourceNames ?? [];
+        if (names.length === 0) return false;
+        if (!names.some((name) => name.toLowerCase().includes(tableQ))) return false;
       }
       switch (sourceFilter) {
         case "in-use":
@@ -363,9 +392,22 @@ export function RoleList() {
           return role.source === "yaml";
       }
     });
-  }, [roles, search, sourceFilter]);
+  }, [roles, search, sourceFilter, connectionFilter, toolFilter, tableFilter]);
 
   const filterLabel = FILTER_OPTIONS.find((opt) => opt.value === sourceFilter)?.label ?? sourceFilter;
+  const capabilityActive = Boolean(connectionFilter || toolFilter || tableFilter.trim());
+  const unresolvedTableRoles = useMemo(
+    () =>
+      tableFilter.trim()
+        ? roles.filter(
+            (role) =>
+              role.source === "yaml" &&
+              role.invalid &&
+              (role.sourceNames ?? []).length === 0
+          ).length
+        : 0,
+    [roles, tableFilter]
+  );
 
   if (isLoading) return <div className="pl-notice">加载中…</div>;
   if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
@@ -406,10 +448,10 @@ export function RoleList() {
         ))}
       </div>
 
-      <div className="pl-admin-filterbar">
+      <div className="pl-admin-filterbar flex flex-wrap gap-2">
         <input
-          className="pl-input flex-1"
-          placeholder="按 role id / 描述搜索"
+          className="pl-input flex-1 min-w-[12rem]"
+          placeholder="按标识 / 说明 / 连接 / 工具 / 表名搜索"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="搜索 role"
@@ -426,13 +468,62 @@ export function RoleList() {
             </option>
           ))}
         </select>
+        <select
+          className="pl-input w-44"
+          value={connectionFilter}
+          onChange={(e) => setConnectionFilter(e.target.value)}
+          aria-label="按连接筛选"
+          data-testid="role-filter-connection"
+        >
+          <option value="">全部连接</option>
+          {connectionOptions.map((id) => (
+            <option key={id} value={id} className="notranslate" translate="no">
+              {id}
+            </option>
+          ))}
+        </select>
+        <select
+          className="pl-input w-48 notranslate"
+          translate="no"
+          value={toolFilter}
+          onChange={(e) => setToolFilter(e.target.value)}
+          aria-label="按 MCP 工具筛选"
+          data-testid="role-filter-tool"
+        >
+          <option value="" className="notranslate" translate="no">
+            全部 MCP 工具
+          </option>
+          {toolOptions.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <input
+          className="pl-input w-44"
+          placeholder="按表名筛选"
+          value={tableFilter}
+          onChange={(e) => setTableFilter(e.target.value)}
+          aria-label="按表筛选"
+          data-testid="role-filter-table"
+        />
       </div>
 
-      {sourceFilter !== "formal" && (
+      {(sourceFilter !== "formal" || capabilityActive) && (
         <div className="text-xs text-fg-muted" data-testid="role-current-filter">
-          当前筛选：{filterLabel}（{filtered.length}）
-          {sourceFilter === "needs-repair" && filtered.length === 0 && !search.trim()
+          当前筛选：{filterLabel}
+          {connectionFilter ? ` · 连接 ${connectionFilter}` : ""}
+          {toolFilter ? ` · 工具 ${toolFilter}` : ""}
+          {tableFilter.trim() ? ` · 表 ${tableFilter.trim()}` : ""}
+          （{filtered.length}）
+          {sourceFilter === "needs-repair" && filtered.length === 0 && !search.trim() && !capabilityActive
             ? " · 没有正式 Role 待修复"
+            : null}
+          {filtered.length === 0 && tableFilter.trim()
+            ? " · 没有匹配当前表条件的 Role"
+            : null}
+          {tableFilter.trim() && unresolvedTableRoles > 0
+            ? " · 部分 Role 无法解析表范围，不会出现在按表筛选结果中"
             : null}
         </div>
       )}
@@ -449,10 +540,12 @@ export function RoleList() {
                 新建第一个 Role
               </Link>
             </div>
-          ) : sourceFilter === "needs-repair" && !search.trim() ? (
+          ) : sourceFilter === "needs-repair" && !search.trim() && !capabilityActive ? (
             "没有正式 Role 待修复"
+          ) : tableFilter.trim() ? (
+            "没有匹配当前表条件的 Role"
           ) : (
-            "没有匹配的 role"
+            "没有匹配的 Role"
           )}
         </div>
       ) : (

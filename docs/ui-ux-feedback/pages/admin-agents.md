@@ -468,3 +468,179 @@ Reported: 2026-08-04
 ### Notes
 Mapped to Spec 76 / `wo-202608-08`. Per-role `createdAt` remains Non-goal until `access.yaml` schema changes.
 2026-08-04 Spec 76 / wo-202608-08 已落地（Vitest + lint:terminology + build；本轮不做浏览器复核）。
+
+## UX-ADMIN-AGENTS-016: 新建 Role 标题与副标题叠句
+
+Status: Fixed
+Route: `/admin/roles/new`
+Area: Role create header
+Severity: P3
+Reported: 2026-08-04
+Fixed: 2026-08-04（Spec 77 / wo-202608-09 Wave A；Vitest + lint + build；本轮不做浏览器复核）
+
+### Feedback
+标题「新建 Role」与副标题「新建正式 Role，…」重复；不清楚两者区别。
+
+### Evidence
+- Browser: page H1 `新建 Role`；description 以 `新建正式 Role` 开头。
+- Code: `RoleDetail.tsx` create-mode `PageHeader` title/description.
+
+### Expected
+- 标题保持 `新建 Role`。
+- 副标题改为职责说明（连接 / 表范围 / MCP 工具 + dryRun 确认），不以「新建正式 Role」开头。
+- 「正式」仅在相对参考模板需要区分时出现。
+
+### Browser Check
+1. Open `/admin/roles/new`.
+2. Verify title is `新建 Role`.
+3. Verify description does not start with `新建正式 Role`.
+
+### Notes
+Mapped to Spec 77 / `wo-202608-09`. 「正式 Role」相对「参考模板」的概念仍保留在列表/badge。
+
+## UX-ADMIN-AGENTS-017: Role 身份字段只有技术 ID，缺少中文说明心智
+
+Status: Fixed
+Route: `/admin/roles/new`
+Area: Role create identity fields
+Severity: P2
+Reported: 2026-08-04
+Fixed: 2026-08-04（Spec 77 / wo-202608-09 Wave A；Vitest + lint + build；本轮不做浏览器复核）
+
+### Feedback
+Role ID 与 Role Name 应分开；用户只需填中文名，ID 应像流水号。
+
+### Evidence
+- Form only has `Role ID` (slug regex) + `描述`.
+- `access.yaml` role key is the id Agents bind to; no separate display name field.
+
+### Expected
+- Label `Role ID` → `角色标识`，hint 说明是 Agent 引用用的技术标识。
+- `描述` → `说明`（中文用途主文案）。
+- Do **not** default to meaningless serial ids this round.
+- Optional: suggest ASCII slug from 说明 when 标识 empty; never overwrite user input.
+
+### Browser Check
+1. Open `/admin/roles/new`.
+2. Verify labels `角色标识` and `说明`.
+3. Verify hint explains technical id / Agent reference purpose.
+
+### Notes
+Mapped to Spec 77 / `wo-202608-09`. `displayName` / serial schema deferred.
+
+## UX-ADMIN-AGENTS-018: 权限字段英文标签缺少业务用途
+
+Status: Fixed
+Route: `/admin/roles/new`
+Area: Role allow config labels
+Severity: P2
+Reported: 2026-08-04
+Fixed: 2026-08-04（Spec 77 / wo-202608-09 Wave A；Vitest + lint + build；本轮不做浏览器复核）
+
+### Feedback
+Connections、MCP 工具、Table Selectors 难懂，应优先中文并提示业务用途。
+
+### Evidence
+- Labels: `Connections`, `MCP 工具`, `Table Selectors`, button `+ 添加 selector`.
+
+### Expected
+- `允许的连接` / `允许的 MCP 工具` / `可访问的表范围` + purpose hints.
+- Primary button `+ 添加表范围`.
+
+### Browser Check
+1. Open `/admin/roles/new`.
+2. Verify Chinese primary labels and purpose hints.
+3. Verify no bare `Connections` / `Table Selectors` as primary labels.
+
+### Notes
+Mapped to Spec 77 / `wo-202608-09`. Aligns with terminology standard Connection → 连接.
+
+## UX-ADMIN-AGENTS-019: MCP 工具与表范围以手录为主，缺少选择器
+
+Status: Fixed
+Route: `/admin/roles/new`
+Area: Role allow config inputs
+Severity: P1
+Reported: 2026-08-04
+Fixed: 2026-08-04（Spec 77 / wo-202608-09 Wave A；Vitest + lint + build；本轮不做浏览器复核）
+
+### Feedback
+MCP 工具、Table Selectors 应该用选择方式，而不是录入。
+
+### Evidence
+- Connections / MCP tools are textareas.
+- Spec 15 §5.3 already required multi-select; implementation lagged.
+- Candidate APIs exist: `/api/admin/mcp-tools`, `/api/connections`, `/api/connections/:id/tables`.
+
+### Expected
+- Connections and MCP tools: multi-select from candidates.
+- Exact table names: multi-select tables after connection/schema.
+- Global denied tools not selectable.
+- Write path body shape unchanged (`connections` / `tools` / `tableSelectors`).
+
+### Browser Check
+1. Open `/admin/roles/new`.
+2. Verify connection and MCP tool pickers (not textarea-only).
+3. Add a table range and select tables via picker for 指定表名.
+
+### Notes
+Mapped to Spec 77 / `wo-202608-09`. Completes Spec 15 §5.3 debt.
+
+## UX-ADMIN-AGENTS-020: table selector 的 names / prefix 难懂
+
+Status: Fixed
+Route: `/admin/roles/new`
+Area: Table selector match mode
+Severity: P2
+Reported: 2026-08-04
+Fixed: 2026-08-04（Spec 77 / wo-202608-09 Wave A；Vitest + lint + build；本轮不做浏览器复核）
+
+### Feedback
+prefix 和 names 是什么意思？有什么区别？用户难以理解。
+
+### Evidence
+- After `+ 添加 selector`, radios show English `names` / `prefix` with no purpose copy.
+
+### Expected
+- Default: `指定表名`（exact authorize listed tables）.
+- Advanced: `按前缀匹配` with hint e.g. authorize tables starting with `poc_`.
+- No bare English `names` / `prefix` as primary radio labels.
+
+### Browser Check
+1. Open `/admin/roles/new` and add a table range.
+2. Verify Chinese match-mode labels and prefix hint.
+
+### Notes
+Mapped to Spec 77 / `wo-202608-09`. YAML field names remain `names` / `prefix` under the hood.
+
+## UX-ADMIN-AGENTS-021: Role 列表缺少按连接 / 工具 / 表的能力筛选
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role list filters
+Severity: P2
+Reported: 2026-08-04
+Fixed: 2026-08-04（Spec 77 / wo-202608-09 Wave B；Vitest + lint + build；本轮不做浏览器复核）
+
+### Feedback
+截图中的筛选器需要同步修正，支持按 MCP 工具、Table、Connections 等关键条件筛选。
+
+### Evidence
+- Filter dropdown only: 全部正式 Role / 正在服务 Agent / 待修复 / 未被 Agent 使用 / 参考模板.
+- Search placeholder: `按 role id / 描述搜索`.
+- User screenshot of status filter matches runtime options.
+
+### Expected
+- Keep status filter (align wording with Spec 76 when present).
+- Add capability filters: by connection, by MCP tool, by table/source.
+- Search covers id / 说明 / connection / tool / table (`sourceNames` on list API).
+- Status AND capability; multi-select within a capability dimension uses OR.
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify capability filter controls exist.
+3. Filter by a known connection/tool/table and confirm list matches.
+4. Search by tool or table name and confirm hit.
+
+### Notes
+Mapped to Spec 77 / `wo-202608-09`. Parallel to Spec 76 status/KPI work; does not replace it.

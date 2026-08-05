@@ -66,6 +66,7 @@
 | [74-wiki-workbench-secondary-feedback-fixes-spec.md](74-wiki-workbench-secondary-feedback-fixes-spec.md) | Wiki Workbench Secondary Feedback Fixes：目录树层级引导线与内容模型、新建文档跳转新建目录、正文标题去重、移动到目录弹窗精简、版本记录表格化与懒加载 | 产品 / UX / Frontend |
 
 | [76-role-admin-list-clarity-followup-spec.md](76-role-admin-list-clarity-followup-spec.md) | Role Admin List Clarity Follow-up：待修复 KPI 口径、Header/状态条降噪、Role 主语术语、卡片字段标签、基于此新建、配置最近写入 | 产品 / UX / IA / Terminology / 前端 / 后端 |
+| [77-role-admin-create-edit-usability-spec.md](77-role-admin-create-edit-usability-spec.md) | Role Admin Create/Edit Usability：新建标题去重、角色标识/说明、连接/工具/表范围 picker+受控回退、names/prefix 中文化、列表能力筛选与 `sourceNames` | 产品 / UX / IA / Terminology / 前端 / 后端 |
 
 ## 与原 README 的关键校正
 

@@ -47,6 +47,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-04 | Agent Admin `/admin/roles`, `/admin/roles/new` | Spec 77 / `wo-202608-09` 落地：`UX-ADMIN-AGENTS-016`～`021` → `Fixed`（本轮不做浏览器验证）。Wave A：新建/编辑中文标签、picker+TagInput 受控回退、表范围匹配模式；Wave B：`sourceNames` 列表字段 + 连接/工具/表能力筛选。验证：`role-detail`/`role-list`/`admin-roles` Vitest、`lint:terminology`、`build`。 |
 | 2026-08-04 | Connections `/connections`, Overview `/overview` | 用户确认 docker 已重建后执行并列按钮复核：`UX-CONNECTIONS-023` 与 `UX-OVERVIEW-008` 均未通过。`/connections` 中刷新动作仍为 `pl-btn--primary`；`/overview` 中 `复制 MCP 配置` 仍为 `pl-btn--primary`，与 host 源码统一 `secondary` 不一致。已在对应条目 Notes 补充 CDP class 证据；两条状态保持 `Fixed`，待部署产物与源码版本同步后再复核。 |
 | 2026-08-04 | Catalog `/catalog/:conn/:schema/:table` | Spec 73 / wo-202608-06 落地 `UX-CATALOG-021`–`026`（状态 `Fixed`，本轮不做浏览器验证）：`校验` 统一 `secondary` + tooltip；表描述 DB/AI/Human 三段式；行粒度字段多选；字段改为 `pl-data-grid` 表密度；指标/分群补业务价值文案；关联内联进 tab 并修正 `UX-CATALOG-011`（首屏仍禁 banner，候选仅在关联 tab）。非浏览器验证：`table-editor.test.tsx` 28/28、`lint:terminology`、`build`。 |
 | 2026-08-04 | Catalog `/catalog/:conn/:schema/:table` | 浏览器 + 代码双重核查单表编辑页 6 项新反馈，追加 `UX-CATALOG-021` 至 `UX-CATALOG-026`（均确认属实）：按钮语义不一致、表描述缺 AI、行粒度自由输入、字段卡片冗余、价值文案缺失、关联独立跳转；截图归档 `assets/catalog/`。 |

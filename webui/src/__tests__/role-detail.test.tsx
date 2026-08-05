@@ -30,6 +30,7 @@ function makeYamlRole(overrides: Partial<RoleDetailType> = {}): RoleDetailType {
     source: "yaml",
     tools: ["lucy_query"],
     connections: ["mysql-aliyun"],
+    sourceNames: ["superstore_orders", "dataforai.superstore_orders"],
     sourceCount: 1,
     invalid: false,
     warnings: [],
@@ -67,6 +68,7 @@ function makeTemplateRole(): RoleDetailType {
     source: "template",
     tools: ["wiki_search", "wiki_read"],
     connections: [],
+    sourceNames: [],
     sourceCount: 0,
     role: {
       description: "Wiki only template",
@@ -90,10 +92,60 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function stubCatalogApis(fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> | Response) {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "/api/connections") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            connections: [
+              {
+                id: "mysql-aliyun",
+                schemas: ["dataforai"],
+                enabledTables: ["dataforai.superstore_orders"]
+              }
+            ]
+          }
+        })
+      );
+    }
+    if (url === "/api/admin/mcp-tools") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            tools: [
+              { name: "lucy_query", description: "query", globalDenied: false },
+              { name: "lucy_read_source", description: "read", globalDenied: false },
+              { name: "wiki_search", description: "wiki", globalDenied: false },
+              { name: "wiki_read", description: "wiki", globalDenied: false },
+              { name: "sql_execution", description: "raw sql", globalDenied: true }
+            ]
+          }
+        })
+      );
+    }
+    if (url === "/api/connections/mysql-aliyun/tables") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: { tables: ["dataforai.superstore_orders", "dataforai.superstore_returns"] }
+        })
+      );
+    }
+    if (fetchImpl) {
+      return fetchImpl(input, init);
+    }
+    return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+  });
+}
+
 function stubSingleRole(detail: RoleDetailType) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    stubCatalogApis(async (input) => {
       const url = String(input);
       if (url === `/api/admin/roles/${detail.id}`) {
         return new Response(JSON.stringify({ ok: true, data: detail }));
@@ -105,15 +157,24 @@ function stubSingleRole(detail: RoleDetailType) {
 
 describe("RoleDetail", () => {
   it("/admin/roles/new renders the create form and shows role id input", async () => {
+    vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
     expect(await screen.findByRole("heading", { name: "新建 Role" })).toBeInTheDocument();
-    expect(document.getElementById("role-id-input")).toBeInTheDocument();
-    expect(document.getElementById("role-tools-input")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/新建正式 Role/);
+    expect(document.body.textContent ?? "").toMatch(/配置/);
+    expect(screen.getByLabelText(/^角色标识/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^说明/)).toBeInTheDocument();
+    expect(screen.getByText("允许的连接")).toBeInTheDocument();
+    expect(screen.getByTestId("role-tools-field")).toBeInTheDocument();
+    expect(screen.getByText("可访问的表范围")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ 添加表范围" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /预览保存/ })).toBeInTheDocument();
+    expect(await screen.findByRole("checkbox", { name: /lucy_query/ })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /sql_execution/ })).toBeDisabled();
   });
 
   it("create flow calls POST /api/admin/roles dryRun first, then dryRun:false on confirm", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
       if (url === "/api/admin/roles" && init?.method === "POST") {
         const body = JSON.parse(String(init.body));
@@ -140,9 +201,9 @@ describe("RoleDetail", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderAt("/admin/roles/new");
-    fireEvent.change(await screen.findByLabelText(/^Role ID/), { target: { value: "new_role" } });
-    fireEvent.change(screen.getByLabelText(/^MCP 工具/), { target: { value: "lucy_query" } });
-    fireEvent.change(screen.getByLabelText(/^Connections/), { target: { value: "mysql-aliyun" } });
+    fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "new_role" } });
+    fireEvent.click(await screen.findByRole("checkbox", { name: /lucy_query/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /mysql-aliyun/ }));
 
     fireEvent.click(screen.getByRole("button", { name: /预览保存/ }));
 
@@ -151,6 +212,9 @@ describe("RoleDetail", () => {
         (call) => call[1]?.method === "POST" && JSON.parse(String(call[1].body)).dryRun === true
       );
       expect(dryRunCall).toBeTruthy();
+      const body = JSON.parse(String((dryRunCall![1] as RequestInit).body));
+      expect(body.role.allow.tools).toContain("lucy_query");
+      expect(body.role.allow.connections).toContain("mysql-aliyun");
     });
 
     expect(await screen.findByTestId("role-diff")).toBeInTheDocument();
@@ -162,6 +226,35 @@ describe("RoleDetail", () => {
       );
       expect(saveCall).toBeTruthy();
     });
+  });
+
+  it("shows controlled manual fallback when catalog APIs fail", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ ok: false, error: { code: "DOWN", message: "down" } }), { status: 500 }))
+    );
+    renderAt("/admin/roles/new");
+    expect(await screen.findByTestId("role-connections-fallback-hint")).toBeInTheDocument();
+    expect(screen.getByTestId("role-tools-fallback-hint")).toBeInTheDocument();
+    const toolInput = within(screen.getByTestId("role-tools-field")).getByLabelText("添加标签");
+    fireEvent.change(toolInput, { target: { value: "lucy_query" } });
+    fireEvent.keyDown(toolInput, { key: "Enter" });
+    expect(within(screen.getByTestId("role-tools-field")).getByText("lucy_query")).toBeInTheDocument();
+  });
+
+  it("table range uses connection schemas and supports 指定表名 / 按前缀匹配", async () => {
+    vi.stubGlobal("fetch", stubCatalogApis());
+    renderAt("/admin/roles/new");
+    fireEvent.click(await screen.findByRole("checkbox", { name: /mysql-aliyun/ }));
+    fireEvent.click(screen.getByRole("button", { name: "+ 添加表范围" }));
+    const range = await screen.findByTestId("role-table-range-1");
+    fireEvent.change(within(range).getByLabelText(/表范围 1 连接/), { target: { value: "mysql-aliyun" } });
+    fireEvent.change(within(range).getByLabelText(/表范围 1 Schema/), { target: { value: "dataforai" } });
+    expect(within(range).getByLabelText(/表范围 1 Schema/).tagName).toBe("SELECT");
+    expect(await within(range).findByRole("checkbox", { name: /superstore_orders/ })).toBeInTheDocument();
+    fireEvent.click(within(range).getByRole("radio", { name: /^指定表名$/ }));
+    fireEvent.click(within(range).getByRole("radio", { name: /按前缀匹配/ }));
+    expect(within(range).getByLabelText(/表范围 1 按前缀匹配/)).toBeInTheDocument();
   });
 
   it("renders edit form for yaml role and dirty state triggers sticky save bar", async () => {
@@ -199,12 +292,12 @@ describe("RoleDetail", () => {
     const idInput = document.getElementById("role-id-input") as HTMLInputElement;
     expect(idInput.value).toBe("");
     // tools pre-filled from template
-    const toolsTextarea = document.getElementById("role-tools-input") as HTMLTextAreaElement;
-    expect(toolsTextarea.value).toContain("wiki_search");
+    expect(await screen.findByRole("checkbox", { name: /wiki_search/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /wiki_read/ })).toBeChecked();
   });
 
   it("copy flow calls POST /api/admin/roles/:roleId/copy dryRun first then dryRun:false", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
       if (url === "/api/admin/roles/wiki_only" && !init) {
         return new Response(JSON.stringify({ ok: true, data: makeTemplateRole() }));
@@ -234,9 +327,9 @@ describe("RoleDetail", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderAt("/admin/roles/wiki_only?mode=copy");
-    const idInput = (await screen.findByLabelText(/^Role ID/)) as HTMLInputElement;
+    const idInput = (await screen.findByLabelText(/^角色标识/)) as HTMLInputElement;
     fireEvent.change(idInput, { target: { value: "wiki_clone" } });
-    fireEvent.change(screen.getByLabelText(/^描述/), { target: { value: "Copied and edited" } });
+    fireEvent.change(screen.getByLabelText(/^说明/), { target: { value: "Copied and edited" } });
     fireEvent.click(screen.getByRole("button", { name: /预览复制/ }));
 
     await waitFor(() => {
@@ -259,11 +352,13 @@ describe("RoleDetail", () => {
   });
 
   it("rejects wildcard tools before submit", async () => {
+    vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
-    fireEvent.change(await screen.findByLabelText(/^Role ID/), { target: { value: "wildcard_role" } });
-    fireEvent.change(screen.getByLabelText(/^MCP 工具/), { target: { value: "*" } });
+    fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "wildcard_role" } });
+    const toolInput = within(await screen.findByTestId("role-tools-field")).getByLabelText("添加标签");
+    fireEvent.change(toolInput, { target: { value: "*" } });
+    fireEvent.keyDown(toolInput, { key: "Enter" });
     fireEvent.click(screen.getByRole("button", { name: /预览保存/ }));
-    // No fetch calls because we don't have a fetch mock
     expect(screen.queryByTestId("role-diff")).not.toBeInTheDocument();
   });
 
@@ -308,8 +403,7 @@ describe("RoleDetail", () => {
   });
 
   it("editing after preview clears stale diff and save uses the preview version", async () => {
-    stubSingleRole(makeYamlRole());
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
       if (url === "/api/admin/roles/analyst" && !init) {
         return new Response(JSON.stringify({ ok: true, data: makeYamlRole() }));
@@ -363,7 +457,7 @@ describe("RoleDetail", () => {
   });
 
   it("delete flow sends dryRun false in the DELETE body on confirm", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
       if (url === "/api/admin/roles/analyst" && !init) {
         return new Response(JSON.stringify({ ok: true, data: makeYamlRole() }));
