@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Wiki Version History List-First UX Spec |
 | 文档类型 | Spec |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Auto |
 | 委托人 | zhangxingchen |
@@ -105,9 +105,10 @@ This feature follows `webui/docs/00-product-terminology-standard.md` and Spec 55
 
 ### 6.3 当前行操作
 
-- 当前行（`versions[0]`）：操作列为空（或仅静态「当前」文案，不可点恢复 / 查看）。
+- 当前行（`versions[0]`）：操作列留空（版本列「修订 N（当前）」已表达身份；不渲染冗余「当前」hint）。
 - 非当前行：提供「查看」「恢复此版本」；「恢复此版本」仍走既有恢复预检。
 - 列表仅 1 条时：该行即为当前，不出现任何查看 / 恢复按钮。
+- **表格基线（Spec 83）**：历史版本表必须使用 `pl-data-grid`；操作按钮放在 `td` 内层 flex 容器，不得在 `<td>` 上设 `display:flex`。
 
 ## 7. 版本详情态（替代常驻侧栏）
 
@@ -159,3 +160,4 @@ This feature follows `webui/docs/00-product-terminology-standard.md` and Spec 55
 |---|---|---|
 | v1.0 | 2026-08-05 | 初版：列表优先、业务化列、当前行收敛、全宽详情 |
 | v1.1 | 2026-08-05 | 审阅补充：`versions[0]` 当前契约、未知 operation 兜底与边界用例写入 §9.3；After 截图挂浏览器复核 |
+| v1.2 | 2026-08-05 | Spec 83：当前行操作列留空；表格基线改为 `pl-data-grid`（见 §6.3） |

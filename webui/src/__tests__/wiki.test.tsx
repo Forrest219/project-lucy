@@ -1521,8 +1521,10 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     expect(dialog).toHaveTextContent("指标服务表设计草案.md");
 
     // UX-WIKI-031–035 / Spec 80: list-first table with business columns.
+    // UX-WIKI-038–040 / Spec 83: pl-data-grid baseline + empty current actions.
     const table = within(dialog).getByTestId("wiki-version-table");
     expect(table.tagName).toBe("TABLE");
+    expect(table.className).toContain("pl-data-grid");
     expect(table).toHaveTextContent("版本");
     expect(table).toHaveTextContent("变更说明");
     expect(table).toHaveTextContent("时间");
@@ -1533,11 +1535,17 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     expect(table).toHaveTextContent("修订 2（当前）");
     expect(table).toHaveTextContent("修订 1");
 
-    // Newest snapshot is current: no view/restore affordances.
+    // Newest snapshot is current: no view/restore and no redundant 当前 hint.
     expect(screen.queryByTestId("wiki-version-view-v-upload-replace")).not.toBeInTheDocument();
     expect(
       screen.queryByTestId("wiki-version-restore-v-upload-replace")
     ).not.toBeInTheDocument();
+    expect(dialog.querySelector(".pl-wiki-version-current-hint")).toBeNull();
+
+    const css = readFileSync("src/app/app.css", "utf8");
+    expect(css).toMatch(/\.pl-wiki-version-row-actions\s*\{[^}]*inline-flex/s);
+    expect(css).not.toMatch(/td\.pl-wiki-version-row-actions/);
+    expect(css).not.toMatch(/\.pl-wiki-version-current-hint/);
 
     // No side-pane placeholder; detail stays lazy until 查看.
     expect(screen.queryByTestId("wiki-version-markdown-preview")).not.toBeInTheDocument();

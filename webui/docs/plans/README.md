@@ -124,7 +124,9 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-10-admin-usage-overview-ux-refinement.md](wo-202608-10-admin-usage-overview-ux-refinement.md) | 202608-10 | Admin 使用概况 UX：命名、窗口全局化、KPI 2×4、表统计并集 |
 | [wo-202608-11-wiki-edit-workbench-layout-and-save-status.md](wo-202608-11-wiki-edit-workbench-layout-and-save-status.md) | 202608-11 | Wiki 编辑态布局与保存状态：dirty 状态、预览 grid、三列标题、去工具栏、保存预检文案 |
 | [wo-202608-12-wiki-version-history-list-first-ux.md](wo-202608-12-wiki-version-history-list-first-ux.md) | 202608-12 | Wiki 版本记录列表优先：全宽业务化表格、当前行收敛、查看进全宽详情 |
+| [wo-202608-13-wiki-read-layout-and-header-action-hierarchy.md](wo-202608-13-wiki-read-layout-and-header-action-hierarchy.md) | 202608-13 | Wiki 阅读态 layout + Header primary 层级 |
 | [wo-202608-14-admin-usage-overview-table-grid-light-conformance.md](wo-202608-14-admin-usage-overview-table-grid-light-conformance.md) | 202608-14 | Admin 使用概况三表轻量 `pl-data-grid` 收敛（12px 密度、数量次级、弱操作链；不做 connections colgroup） |
+| [wo-202608-15-wiki-version-history-data-grid-alignment.md](wo-202608-15-wiki-version-history-data-grid-alignment.md) | 202608-15 | Wiki 版本记录表 pl-data-grid 对齐与当前行操作列留空 |
 
 ### 202608 Governance & Observability — 并行启动建议
 

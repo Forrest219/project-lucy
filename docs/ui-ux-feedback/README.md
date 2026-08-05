@@ -47,8 +47,8 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
-| 2026-08-05 | Business Wiki `/wiki` 阅读态 | Spec 81 / `wo-202608-13` 落地：`UX-WIKI-036`～`037` → `Fixed`（本轮不做浏览器验证）。阅读区 `content-start` 防 grid 拉伸；`编辑` 为末位唯一 primary，`上传覆盖` 降为 ghost。同步跨页面主题 `css grid track stretch` 与治理规则。 |
 | 2026-08-05 | Admin Governance `/admin/governance` | Spec 82 / `wo-202608-14` 落地：`UX-ADMIN-GOV-009` → `Fixed`（本轮不做浏览器验证）。三表轻量收敛 `pl-data-grid` + `pl-usage-overview-table`（12px 密度、数量 `tabular-nums`、弱 `pl-row-action-link`）；不搬 connections colgroup。验证：`admin-governance-observability.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-05 | Business Wiki `/wiki` 阅读态 | Spec 81 / `wo-202608-13` 落地：`UX-WIKI-036`～`037` → `Fixed`（本轮不做浏览器验证）。阅读区 `content-start` 防 grid 拉伸；`编辑` 为末位唯一 primary，`上传覆盖` 降为 ghost。同步跨页面主题 `css grid track stretch` 与治理规则。 |
 | 2026-08-05 | Business Wiki `/wiki` 版本记录 | Spec 80 / `wo-202608-12` 落地：`UX-WIKI-031`～`035` → `Fixed`（本轮不做浏览器验证）。列表优先全宽表；变更说明业务化；当前行无查看/恢复；查看进全宽详情；截图 `assets/wiki/UX-WIKI-031-035-*`。验证：`wiki.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-05 | Business Wiki `/wiki` 编辑态 | Spec 79 / `wo-202608-11` 落地：`UX-WIKI-026`～`030` → `Fixed`（本轮不做浏览器验证）。dirty 驱动状态并入操作行；修复渲染预览 grid 拉伸；三列标题同基线；移除 Markdown 工具栏；「保存并发布」→「保存预检」。 |
 | 2026-08-05 | Admin Governance `/admin/governance` | Spec 78 / `wo-202608-10` 落地：`UX-ADMIN-GOV-001`～`008` → `Fixed`（本轮不做浏览器验证）。页面/侧栏改「使用概况」；顶栏删窗口 badge 与「访问日志」；活跃 Agent/Token/表、调用量、P95、热门表全部随 `hours` 窗口；KPI 合并为 2×4（活跃卡含活跃率副行，新增配置表/活跃表，P95 替代平均响应时长）；`activeTableCount` 两源并集，`popularTables` 暴露 `tableStatsSource`；tokens 返回 `activeInWindow`（双发废弃 `activeInLast7d`）。同步 `00-product-terminology-standard.md` §4.5、`06-navigation-ia.md`。验证：`admin-governance-observability`（前后端）、`navigation.test.ts`、`lint:terminology`、`build`。 |
@@ -116,6 +116,7 @@ docs/ui-ux-feedback/
 | `single-table editing IA fragmentation`（单表编辑内容跳转到独立页面维护） | UX-CATALOG-026 | Fixed | Spec 73；与 UX-CATALOG-011 已按「禁首屏 banner、允许关联 tab 内联」修正 |
 | `test / source drift`（测试 fixture 与 source 脱钩） | UX-GLOBAL-SHELL-008 | Open | 跨工单清理 |
 | `version-history list-first`（版本列表优先，预览外置，当前行收敛） | UX-WIKI-031～035 | 5 Fixed | Spec 80 / wo-202608-12，待浏览器复核 |
+| `css grid track stretch`（父级拉高时 auto 行均分，须 `content-start`） | UX-WIKI-006、UX-WIKI-027、UX-WIKI-036 | 1 Verified + 2 Fixed | Spec 79 / 81；`006` 已 Verified |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 

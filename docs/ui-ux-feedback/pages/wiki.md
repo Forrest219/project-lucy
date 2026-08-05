@@ -1111,6 +1111,96 @@ Reported: 2026-08-05
 
 Fixed by Spec 80。本轮不做浏览器验证。URL deep-link 为后续候选项。
 
+## UX-WIKI-038: 版本记录表未使用 pl-data-grid 基线
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history table
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+「历史版本」作为表格，应遵从本项目表格规范（`pl-data-grid`），除非有特殊场景可申诉。
+
+### Evidence
+
+- Screenshot: ../assets/wiki/UX-WIKI-038-040-before.png
+- Spec 80 落地后表仅 `pl-wiki-version-table`，另起 typography/padding 基线。
+- 规范：`webui/docs/design-system/11-components-data-grid.md` §3。
+
+### Expected
+
+`<table class="pl-data-grid pl-wiki-version-table">`；业务类不得重写全套网格基线。
+
+### Browser Check
+
+1. Open 版本记录。
+2. Verify 表具备 `pl-data-grid` 视觉（表头 bg/字重/密度与其它数据表一致）。
+
+### Notes
+
+Fixed by Spec 83 / `wo-202608-15`。本轮不做浏览器验证。
+
+## UX-WIKI-039: 当前行操作列「当前」与时间列不连贯
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history current row
+Severity: P3
+Reported: 2026-08-05
+
+### Feedback
+
+「修订 2（当前）」行的操作列「当前」与时间列横向视觉不连贯（字号更小、冗余）。
+
+### Evidence
+
+- Screenshot: ../assets/wiki/UX-WIKI-038-040-before.png
+
+### Expected
+
+当前行操作列留空；身份仅由版本列「修订 N（当前）」表达。
+
+### Browser Check
+
+1. Open 版本记录。
+2. Verify 第一行操作列为空，无「当前」hint。
+
+### Notes
+
+Fixed by Spec 83。本轮不做浏览器验证。修订 Spec 80 §6.3。
+
+## UX-WIKI-040: 查看/恢复按钮未与列、行对齐
+
+Status: Fixed
+Route: /wiki
+Area: Wiki version history action column
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+
+「查看」「恢复此版本」既未与「操作」列表头左缘对齐，也未与同行文字垂直对齐；行底边出现错阶。
+
+### Evidence
+
+- Screenshot: ../assets/wiki/UX-WIKI-038-040-before.png
+- 根因：`display:flex` 直接作用在 `<td>` 上。
+
+### Expected
+
+操作按钮在 `td` 内层 `inline-flex` 容器；`td` 保持 table-cell + middle；与表头左缘及同行文本对齐；同行底边共线。
+
+### Browser Check
+
+1. Open 版本记录（≥2 版）。
+2. Verify 非当前行两按钮左右平齐、与文字垂直居中、操作列左缘对齐；行分隔线无错阶。
+
+### Notes
+
+Fixed by Spec 83。本轮不做浏览器验证。
+
 ## UX-WIKI-036: 阅读态标题与正文被 grid 拉伸到面板中部
 
 Status: Fixed

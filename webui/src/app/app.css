@@ -1969,18 +1969,10 @@
     width: min(960px, 94vw);
   }
   /* UX-WIKI-031–035 / Spec 80: list-first full-width table; detail is a
-     separate full-width pane, not a side-by-side preview column. */
+     separate full-width pane. UX-WIKI-038–040 / Spec 83: table also uses
+     pl-data-grid; pl-wiki-version-table is a semantic hook with overrides below. */
   .pl-wiki-version-list {
     @apply content-start;
-  }
-  .pl-wiki-version-table {
-    @apply w-full border-collapse text-sm;
-  }
-  .pl-wiki-version-table th {
-    @apply border-b border-border-default px-3 py-2 text-left font-medium text-fg-muted;
-  }
-  .pl-wiki-version-table td {
-    @apply border-b border-border-default px-3 py-2 align-middle text-fg-body;
   }
   .pl-wiki-version-revision--current {
     @apply text-fg-muted;
@@ -1995,11 +1987,9 @@
   .pl-wiki-version-row td code {
     @apply break-all rounded bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-muted;
   }
+  /* Flex lives on an inner div — never on <td> (breaks row border continuity). */
   .pl-wiki-version-row-actions {
-    @apply flex flex-nowrap items-center gap-2 whitespace-nowrap;
-  }
-  .pl-wiki-version-current-hint {
-    @apply text-xs text-fg-muted;
+    @apply inline-flex flex-nowrap items-center gap-2 whitespace-nowrap;
   }
   .pl-wiki-version-detail {
     @apply content-start;

@@ -161,7 +161,7 @@ export function WikiVersionHistoryDialog({
               ) : versions.length === 0 ? (
                 <p className="pl-notice">暂无历史版本。首次保存、上传或恢复后会生成记录。</p>
               ) : (
-                <table className="pl-wiki-version-table" data-testid="wiki-version-table">
+                <table className="pl-data-grid pl-wiki-version-table" data-testid="wiki-version-table">
                   <thead>
                     <tr>
                       <th scope="col">版本</th>
@@ -214,11 +214,9 @@ export function WikiVersionHistoryDialog({
                               {formatVersionTime(version.createdAt)}
                             </time>
                           </td>
-                          <td className="pl-wiki-version-row-actions">
-                            {isCurrent ? (
-                              <span className="pl-wiki-version-current-hint">当前</span>
-                            ) : (
-                              <>
+                          <td>
+                            {isCurrent ? null : (
+                              <div className="pl-wiki-version-row-actions">
                                 <button
                                   className="pl-btn pl-btn--ghost"
                                   data-testid={`wiki-version-view-${version.versionId}`}
@@ -236,7 +234,7 @@ export function WikiVersionHistoryDialog({
                                 >
                                   恢复此版本
                                 </button>
-                              </>
+                              </div>
                             )}
                           </td>
                         </tr>
