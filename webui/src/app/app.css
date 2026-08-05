@@ -204,32 +204,24 @@
     line-height: 1;
     letter-spacing: -0.02em;
   }
-  /* M61: fixed text column width makes `Lucy WebUI` and the Chinese tagline
-     share the same right edge. 152px leaves room for the 36px mark + 8px
-     gap inside the padded 248px sidebar without squeezing the grid.
-     M65: switch to flex column with items-end so both lines right-align
-     against the same edge, and remove the ellipsis on the tagline so the
-     `Data Agent 运维控制台` text is never silently truncated. The Tailwind
-     layout utilities are spelled out as class tokens (not just @apply) so
-     the test layer can read them off the rendered className. */
+  /* M61: brand text column sits beside the 36px mark inside the padded
+     sidebar grid. M66 sizes the column to the tagline via a single grid
+     track so both lines share one width; the title then distributes
+     `Lucy` / `WebUI` to the same left/right edges as `Data Agent` / `台`. */
   .pl-brand-text.pl-brand-text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    min-width: 0;
+    display: grid;
+    width: max-content;
     gap: 0.125rem;
-    width: 152px;
+  }
+  .pl-brand-title,
+  .pl-brand-block .pl-brand-tagline {
+    grid-column: 1;
   }
   .pl-brand-title {
-    @apply text-[14px] font-semibold leading-none text-fg-default;
-    /* Slight positive tracking tightens the wordmark with the Chinese
-       tagline so both lines end on roughly the same pixel. */
-    letter-spacing: 0.01em;
+    @apply flex w-full items-baseline justify-between text-[14px] font-semibold leading-none text-fg-default;
   }
   .pl-brand-block .pl-brand-tagline {
     display: block;
-    /* M65: bump tagline to 12px and let it size to content so the right
-       edge sits flush with the title inside the 152px column. */
     width: max-content;
     font-size: 0.75rem;
     color: var(--token-color-fg-muted, #6b7280);
@@ -726,23 +718,6 @@
   .pl-publish-history-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-publish-history-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-publish-history-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
-  /* Spec 85: publish history — light pl-data-grid conformance (business scope + scale). */
-  .pl-publish-history-table tbody td { @apply text-xs font-medium leading-4; }
-  .pl-publish-history-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
-  .pl-publish-history-scope { @apply grid gap-0.5; }
-  .pl-publish-history-scope-primary { @apply text-xs font-medium text-fg-default; }
-  .pl-publish-history-scope-secondary { @apply text-xs font-normal text-fg-muted; }
-  .pl-publish-history-scope-more { @apply text-xs font-normal text-fg-muted; }
-  .pl-publish-history-scope-empty { @apply text-xs font-normal text-fg-muted; }
-  .pl-publish-history-time { @apply grid gap-0.5; }
-  .pl-publish-history-time-status { @apply text-xs font-normal text-fg-muted; }
-  .pl-publish-history-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
-  .pl-publish-history-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
-  .pl-publish-history-status { @apply inline-flex items-center rounded-pill border px-2 py-0.5 text-xs font-semibold; }
-  .pl-publish-history-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
-  .pl-publish-history-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
-  .pl-publish-history-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
-  .pl-publish-history-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
   /* Spec 82: usage overview dashboard tables — light pl-data-grid conformance (12px body, no workbench colgroup). */
   .pl-usage-overview-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-usage-overview-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
@@ -750,6 +725,14 @@
   .pl-usage-overview-table-name-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
   .pl-usage-overview-table-meta { @apply text-xs font-normal text-fg-muted; }
   .pl-usage-overview-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
+  /* Spec 88: agent admin list table — light pl-data-grid conformance. */
+  .pl-agent-list-table tbody td { @apply text-xs font-medium leading-4; }
+  .pl-agent-list-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
+  .pl-agent-list-table-name { @apply grid gap-0.5; }
+  .pl-agent-list-table-name-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
+  .pl-agent-list-table-meta { @apply text-xs font-normal text-fg-muted; }
+  .pl-agent-list-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
+  .pl-agent-list-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
   .pl-usage-rank-grid { @apply grid gap-3 xl:grid-cols-3; }
   .pl-usage-rank-body {
     min-height: calc(10 * 2.25rem + 9 * 0.625rem);

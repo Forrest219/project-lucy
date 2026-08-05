@@ -126,7 +126,7 @@ describe("AgentList", () => {
     stubAgentsEndpoints([makeAgent({ id: "no1", name: "无访问", stats: { callsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
 
     renderAgentList();
-    expect(await screen.findByRole("heading", { name: "Agent 实例" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Agent" })).toBeInTheDocument();
     // M40: 一级根页面不再渲染面包屑
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     await waitFor(() => {
@@ -170,50 +170,13 @@ describe("AgentList", () => {
     expect(roleLine).toHaveTextContent(/legacy wildcard/);
   });
 
-  it("copy MCP config writes a safe template with placeholder token and no plaintext", async () => {
+  it("renders agent list as pl-data-grid table without row-level MCP copy", async () => {
     stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })]);
-    const writeText = vi.fn<(value: string) => Promise<void>>(async () => undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText }
-    });
 
     renderAgentList();
     await waitFor(() => expect(screen.getByText("张三")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /MCP 配置/ }));
-
-    await waitFor(() => {
-      expect(writeText).toHaveBeenCalled();
-    });
-    const payload = String((writeText.mock.calls as Array<[string]>)[0]?.[0] ?? "");
-    const parsed = JSON.parse(payload);
-    expect(parsed.mcpServers.lucy.headers.Authorization).toBe("Bearer ${LUCY_AGENT_TOKEN}");
-    expect(parsed.mcpServers.lucy.url).toBe("https://lucy.example.com/mcp");
-    expect(payload).not.toMatch(/sha256:[0-9a-f]{16,}/i);
-    expect(payload).not.toMatch(/[0-9a-f]{32,}/);
-    expect(payload).not.toContain("http://localhost:7879/mcp");
-    expect(payload).not.toContain("http://127.0.0.1:7879/mcp");
-  });
-
-  it("surfaces runtime diagnostics when MCP config copy is unavailable", async () => {
-    stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })], [analystRole], {
-      url: null,
-      status: "invalid",
-      source: "env",
-      configured: false,
-      diagnostics: [
-        {
-          code: "INVALID_PUBLIC_MCP_URL",
-          message: "LUCY_PUBLIC_MCP_URL must be a valid absolute URL."
-        }
-      ]
-    });
-
-    renderAgentList();
-
-    expect(await screen.findByText("张三")).toBeInTheDocument();
-    expect(screen.getByText("LUCY_PUBLIC_MCP_URL must be a valid absolute URL.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /MCP 配置/ })).toBeDisabled();
+    expect(screen.getByTestId("agent-list-table")).toHaveClass("pl-data-grid");
+    expect(screen.queryByRole("button", { name: /MCP 配置/ })).not.toBeInTheDocument();
   });
 
   it("view logs navigates to /admin/audit?user=<agentId>", async () => {
@@ -387,13 +350,14 @@ describe("AgentList", () => {
     );
 
     renderAgentList();
-    await screen.findByRole("heading", { name: "Agent 实例" });
+    await screen.findByRole("heading", { name: "Agent" });
 
-    // 顶部 4 个指标按 spec §6.1
-    expect(screen.getByTestId("metric-active-tokens")).toHaveTextContent("活跃 Token");
-    expect(screen.getByTestId("metric-active-tokens")).toHaveTextContent("1");
-    expect(screen.getByTestId("metric-calls-last-7d")).toHaveTextContent("近 7 天调用");
-    expect(screen.getByTestId("metric-calls-last-7d")).toHaveTextContent("10");
+    // 顶部 4 个指标对齐使用概况命名（Spec 88）
+    expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃 Token");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
+    expect(screen.getByTestId("metric-calls")).toHaveTextContent("10");
     expect(screen.getByTestId("metric-denied-last-7d")).toHaveTextContent("近 7 天拒绝");
     expect(screen.getByTestId("metric-denied-last-7d")).toHaveTextContent("0");
 
@@ -401,11 +365,12 @@ describe("AgentList", () => {
     expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
     expect(document.body).not.toHaveTextContent(/^\s*Token 数\s*$/);
 
-    // PageHeader badge 暴露配置 Token 数量
-    expect(screen.getByTestId("badge-configured-token-total")).toHaveTextContent("1 配置 Token");
+    // PageHeader 不再展示 count badges（由 KPI 网格承载）
+    expect(screen.queryByTestId("badge-configured-token-total")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("badge-agent-total")).not.toBeInTheDocument();
   });
 
-  it("agent card links role id to role detail and exposes 查看权限 link", async () => {
+  it("agent table row links role id to role detail and exposes 查看权限 link", async () => {
     stubAgentsEndpoints([
       makeAgent({
         id: "demo_agent",
@@ -422,7 +387,7 @@ describe("AgentList", () => {
     ]);
 
     renderAgentList();
-    await screen.findByTestId("agent-card-demo_agent");
+    await screen.findByTestId("agent-row-demo_agent");
 
     const roleLink = screen.getByTestId("agent-role-link-demo_agent");
     expect(roleLink).toHaveTextContent("demo_readonly");
@@ -506,8 +471,8 @@ describe("AgentList", () => {
     });
     vi.stubGlobal("fetch", fetchWithSummary);
     renderAgentList();
-    await screen.findByTestId("metric-active-tokens");
-    expect(screen.getByTestId("metric-active-tokens")).toHaveTextContent("1");
+    await screen.findByTestId("metric-active-token-count");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
 
     // Fallback 路径：移除 summary 后再次渲染，helper 仍能算出 1
     vi.stubGlobal(
@@ -556,7 +521,7 @@ describe("AgentList", () => {
       </QueryClientProvider>
     );
     await waitFor(() => {
-      expect(screen.getAllByTestId("metric-active-tokens").at(-1)).toHaveTextContent("1");
+      expect(screen.getAllByTestId("metric-active-token-count").at(-1)).toHaveTextContent("1");
     });
   });
 
@@ -577,7 +542,7 @@ describe("AgentList", () => {
 
     renderAgentList();
     const deniedCell = await screen.findByTestId("agent-denied-7d-demo_agent");
-    expect(deniedCell).toHaveTextContent("3 次拒绝");
+    expect(deniedCell).toHaveTextContent("3");
     expect(deniedCell.className).toContain("text-warning-strong");
   });
 });

@@ -205,7 +205,7 @@ export const navGroups: Array<{
       },
       {
         id: "admin-agents",
-        label: "Agent 实例",
+        label: "Agent",
         to: "/admin/agents",
         iconKey: "agents",
         active: (path) => path.startsWith("/admin/agents"),

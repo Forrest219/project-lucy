@@ -86,7 +86,7 @@ describe("navigation (shared sidebar config)", () => {
       { group: "质量评测", id: "eval-monitor", label: "趋势监控", to: "/eval/monitor" },
       { group: "质量评测", id: "eval-security-candidates", label: "安全候选", to: "/eval/security-candidates" },
       { group: "访问治理", id: "admin-governance", label: "使用概况", to: "/admin/usage" },
-      { group: "访问治理", id: "admin-agents", label: "Agent 实例", to: "/admin/agents" },
+      { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
       { group: "访问治理", id: "admin-roles", label: "角色权限", to: "/admin/roles" },
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" }

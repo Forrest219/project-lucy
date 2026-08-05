@@ -46,12 +46,12 @@ describe("PageHeader", () => {
   it("renders backAction above title and suppresses breadcrumbs", () => {
     renderInRouter(
       <PageHeader
-        backAction={<a href="/admin/agents">‹ 返回 Agent 实例</a>}
+        backAction={<a href="/admin/agents">‹ 返回 Agent</a>}
         title="Agent 详情"
-        breadcrumbs={["访问治理", "Agent 实例", "agent-1"]}
+        breadcrumbs={["访问治理", "Agent", "agent-1"]}
       />
     );
-    expect(screen.getByRole("link", { name: /返回 Agent 实例/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /返回 Agent/ })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
   });
 

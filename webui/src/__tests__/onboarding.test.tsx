@@ -801,13 +801,13 @@ describe("Onboarding", () => {
     const drawer = await screen.findByRole("dialog", { name: "MCP 配置" });
     expect(drawer).toBeInTheDocument();
     expect(within(drawer).getByTestId("mcp-config-drawer-title")).toHaveTextContent("MCP 配置");
-    // The Drawer hosts the JSON config + the `查看 Agent 实例 ↗` deep link.
+    // The Drawer hosts the JSON config + the `查看 Agent ↗` deep link.
     // The duplicate copy button and env / diagnostic hints stay out of
     // the Drawer; the main page already has the primary copy action.
     expect(within(drawer).queryByRole("button", { name: "复制 MCP 配置" })).not.toBeInTheDocument();
     expect(drawer).not.toHaveTextContent("诊断信息");
     expect(drawer).not.toHaveTextContent("LUCY_PUBLIC_MCP_URL");
-    const agentLink = within(drawer).getByRole("link", { name: /查看 Agent 实例/ });
+    const agentLink = within(drawer).getByRole("link", { name: /查看 Agent/ });
     expect(agentLink).toHaveAttribute("href", "/admin/agents");
     expect(agentLink.textContent ?? "").toMatch(/↗/);
   });

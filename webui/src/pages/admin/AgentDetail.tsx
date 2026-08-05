@@ -233,7 +233,7 @@ export function AgentDetail() {
         }
         backAction={
           <Link to="/admin/agents" className="pl-page-header-back">
-            ‹ 返回 Agent 实例
+            ‹ 返回 Agent
           </Link>
         }
         description="编辑前先生成变更预览，确认后写入访问配置。Cmd+S / Ctrl+S 触发预览。"

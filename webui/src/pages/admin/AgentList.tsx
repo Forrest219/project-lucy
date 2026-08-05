@@ -3,11 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import { queryKeys } from "../../lib/queryKeys";
-import { buildObjectDetailSearch } from "../../lib/objectDetail";
-import type { Agent, AgentsResponseSummary, CreateAgentBody, ProjectInfo, Role } from "../../lib/types";
+import type { Agent, AgentsResponseSummary, CreateAgentBody, Role } from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
 
 type AgentsResponse = {
   agents: Agent[];
@@ -140,17 +139,7 @@ export function summarizeAgents(
   };
 }
 
-async function copyAgentMcpConfig(endpoint: string | null): Promise<void> {
-  if (!endpoint) {
-    toast.error("Lucy MCP endpoint 不可用，无法复制 MCP 配置");
-    return;
-  }
-  const snippet = buildSafeMcpConfig(endpoint);
-  await navigator.clipboard.writeText(snippet);
-  toast.success("MCP 配置已复制");
-}
-
-function MetricCard({ label, value, hint, testId }: { label: string; value: string | number; hint: string; testId?: string }) {
+function MetricCard({ label, value, hint, testId }: { label: React.ReactNode; value: string | number; hint: React.ReactNode; testId?: string }) {
   return (
     <div className="pl-metric-card" data-testid={testId}>
       <span>{label}</span>
@@ -169,130 +158,6 @@ function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
     <span title={title} aria-label={`最近访问：${title}`}>
       {label}
     </span>
-  );
-}
-
-function AgentCard({ agent, endpoint, onViewLogs }: { agent: Agent; endpoint: string | null; onViewLogs: () => void }) {
-  const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
-  const canCopyMcp = endpoint !== null;
-  const callsLast7d = agent.stats?.callsLast7d ?? 0;
-  const deniedLast7d = agent.stats?.deniedLast7d ?? 0;
-  const activeTokens = activeTokenCount(agent);
-  const configuredTokens = configuredTokenCount(agent);
-  const authorizedSourceCount =
-    agent.effectivePermissions?.sources.length ?? agent.allow?.tables?.length ?? 0;
-  const authorizedResourceLabel = agent.effectivePermissions
-    ? `${agent.effectivePermissions.sources.length} 个源 / ${agent.effectivePermissions.connections.length} 个 connection`
-    : legacyWildcard
-      ? "legacy wildcard"
-      : `${authorizedSourceCount} 个源`;
-
-  return (
-    <div className="pl-card" data-testid={`agent-card-${agent.id}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">{agent.name}</span>
-            <span className="text-fg-muted text-sm notranslate" translate="no">({agent.id})</span>
-            <span className={`pl-status-badge ${agent.enabled ? "pl-status-done" : "pl-status-not_started"}`}>
-              {agent.enabled ? "启用" : "禁用"}
-            </span>
-          </div>
-          <div className="text-sm text-fg-muted mt-1" data-testid={`agent-role-line-${agent.id}`}>
-            {agent.role ? (
-              <>
-                <span>角色：</span>
-                <Link
-                  to={`/admin/roles/${encodeURIComponent(agent.role)}`}
-                  className="text-accent hover:underline notranslate"
-                  translate="no"
-                  aria-label={`查看角色 ${agent.role}`}
-                  data-testid={`agent-role-link-${agent.id}`}
-                >
-                  {agent.role}
-                </Link>
-                {!legacyWildcard && (
-                  <span className="ml-2">· {authorizedResourceLabel}</span>
-                )}
-                {legacyWildcard && <span className="ml-2">· legacy wildcard</span>}
-              </>
-            ) : (
-              <span className="notranslate" translate="no">旧 ACL · legacy wildcard</span>
-            )}
-          </div>
-          <div
-            className="text-sm text-fg-muted mt-0.5"
-            data-testid={`agent-usage-row-${agent.id}`}
-          >
-            最近访问 <LastSeen lastSeen={agent.stats?.lastSeen} />
-            <span className="ml-1">·</span>
-            <span className="ml-1" data-testid={`agent-calls-7d-${agent.id}`}>
-              近 7 天 {callsLast7d} 次调用
-            </span>
-            <span className="ml-1">·</span>
-            <span
-              className="ml-1 notranslate"
-              translate="no"
-              data-testid={`agent-active-tokens-${agent.id}`}
-            >
-              {activeTokens} 个活跃 Token
-            </span>
-            <span className="ml-1">·</span>
-            <span
-              className={`ml-1 ${deniedLast7d > 0 ? "text-warning-strong" : ""}`}
-              data-testid={`agent-denied-7d-${agent.id}`}
-            >
-              {deniedLast7d} 次拒绝
-            </span>
-          </div>
-          <div
-            className="text-sm text-fg-muted mt-0.5 notranslate"
-            translate="no"
-            data-testid={`agent-config-row-${agent.id}`}
-          >
-            配置 Token：{configuredTokens} 个
-            <span className="ml-3">
-              <Link
-                to={`/admin/agents/${encodeURIComponent(agent.id)}?tab=permissions`}
-                className="text-accent hover:underline"
-                aria-label={`查看 ${agent.name} 的权限`}
-                data-testid={`agent-permissions-link-${agent.id}`}
-              >
-                查看权限
-              </Link>
-            </span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          <div className="flex gap-2">
-            <Link
-              to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
-              className="pl-btn pl-btn--ghost text-sm notranslate"
-              translate="no"
-              aria-label={`查看 ${agent.name} 的对象详情`}
-              data-testid={`agent-row-detail-${agent.id}`}
-            >
-              查看详情
-            </Link>
-            <Link to={`/admin/agents/${agent.id}`} className="pl-btn pl-btn--ghost text-sm">编辑</Link>
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost text-sm notranslate"
-              translate="no"
-              onClick={() => {
-                void copyAgentMcpConfig(endpoint);
-              }}
-              aria-label={`复制 ${agent.name} 的 MCP 配置`}
-              disabled={!canCopyMcp}
-              title={canCopyMcp ? undefined : "Lucy MCP endpoint 不可用"}
-            >
-              📋 复制 <span className="notranslate" translate="no">MCP</span> 配置
-            </button>
-            <button type="button" onClick={onViewLogs} className="pl-btn pl-btn--ghost text-sm">查看日志</button>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -528,20 +393,9 @@ export function AgentList() {
     queryKey: ["admin", "roles"],
     queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
   });
-  const { data: projectData } = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
-  });
-  const mcpEndpointInfo = projectData?.mcpEndpoint;
-  const mcpEndpoint = mcpEndpointInfo?.url ?? null;
 
   const agents = data?.agents ?? [];
-  // Prefer the server-supplied aggregate when present, but always derive a
-  // client-side fallback so legacy backends (pre-M55) keep rendering the
-  // same metric grid without dropping the active-token column.
   const summary = data?.summary ?? summarizeAgents(agents);
-  const enabledCount = summary.enabledAgentCount;
-  const configuredTokenTotal = summary.configuredTokenCount;
   const activeTokenTotal = summary.activeTokenCountLast7d;
   const callsLast7dTotal = summary.callsLast7d;
   const deniedLast7dTotal = summary.deniedLast7d;
@@ -560,17 +414,10 @@ export function AgentList() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="Agent 实例"
+        title={<span className="notranslate" translate="no">Agent</span>}
         description={
           <>
-            配置每个 <span className="notranslate" translate="no">Agent</span> 实例能用哪些 <span className="notranslate" translate="no">MCP</span> 工具和访问哪些表。
-          </>
-        }
-        badges={
-          <>
-            <span data-testid="badge-agent-total">{agents.length} 个 Agent</span>
-            <span data-testid="badge-enabled-total">{enabledCount} 已启用</span>
-            <span data-testid="badge-configured-token-total">{configuredTokenTotal} 配置 Token</span>
+            管理每个 <span className="notranslate" translate="no">Agent</span> 的角色、<span className="notranslate" translate="no">Token</span> 与数据访问边界。
           </>
         }
         actions={
@@ -580,38 +427,34 @@ export function AgentList() {
 
       <div className="pl-metric-grid" data-testid="agent-metric-grid">
         <MetricCard
-          label="Agent 数"
+          label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
           value={agents.length}
-          hint="access.yaml 中的实例"
+          hint="已配置实例（含未启用）"
           testId="metric-agent-count"
         />
         <MetricCard
-          label="活跃 Token"
+          label={
+            <span>
+              近 7 天活跃 <span className="notranslate" translate="no">Token</span>
+            </span>
+          }
           value={activeTokenTotal}
-          hint="近 7 天访问日志中出现过的去重 token"
-          testId="metric-active-tokens"
+          hint="访问日志中去重 token"
+          testId="metric-active-token-count"
         />
         <MetricCard
-          label="近 7 天调用"
+          label="近 7 天调用量"
           value={callsLast7dTotal}
-          hint="来自访问日志 access_log"
-          testId="metric-calls-last-7d"
+          hint={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
+          testId="metric-calls"
         />
         <MetricCard
           label="近 7 天拒绝"
           value={deniedLast7dTotal}
-          hint="访问日志 access_log 中 outcome=denied"
+          hint="access_log outcome=denied"
           testId="metric-denied-last-7d"
         />
       </div>
-
-      {mcpEndpointInfo?.status === "invalid" || projectData === undefined ? (
-        <div className={mcpEndpointInfo?.status === "invalid" ? "pl-error" : "pl-notice"} data-testid="mcp-endpoint-diagnostic">
-          {mcpEndpointInfo?.diagnostics.length
-            ? mcpEndpointInfo.diagnostics.map((d, i) => <div key={`${d.code}-${i}`}>{d.message}</div>)
-            : "Lucy MCP endpoint 正在加载；加载完成前无法复制 MCP 配置。"}
-        </div>
-      ) : null}
 
       <div className="pl-admin-filterbar">
         <input
@@ -641,16 +484,141 @@ export function AgentList() {
           ) : "没有匹配的 Agent"}
         </div>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              endpoint={mcpEndpoint}
-              onViewLogs={() => navigate(`/admin/audit?user=${agent.id}`)}
-            />
-          ))}
-        </div>
+        <section
+          className="rounded-md border border-border-default bg-bg-surface p-4"
+          data-testid="agent-list-section"
+        >
+          <div className="overflow-x-auto">
+            <table
+              className="pl-data-grid pl-data-table pl-agent-list-table"
+              data-testid="agent-list-table"
+            >
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span className="notranslate" translate="no">Agent</span>
+                  </th>
+                  <th scope="col">角色</th>
+                  <th scope="col">最近访问</th>
+                  <th scope="col">近 7 天调用量</th>
+                  <th scope="col">
+                    近 7 天活跃 <span className="notranslate" translate="no">Token</span>
+                  </th>
+                  <th scope="col">
+                    配置 <span className="notranslate" translate="no">Token</span>
+                  </th>
+                  <th scope="col">近 7 天拒绝</th>
+                  <th scope="col">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((agent) => {
+                  const legacyWildcard =
+                    agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
+                  const callsLast7d = agent.stats?.callsLast7d ?? 0;
+                  const deniedLast7d = agent.stats?.deniedLast7d ?? 0;
+                  const activeTokens = activeTokenCount(agent);
+                  const configuredTokens = configuredTokenCount(agent);
+
+                  return (
+                    <tr key={agent.id} data-testid={`agent-row-${agent.id}`}>
+                      <td>
+                        <div className="pl-agent-list-table-name">
+                          <span className="font-medium">{agent.name}</span>
+                          <span className="pl-agent-list-table-meta notranslate" translate="no">
+                            {agent.id}
+                          </span>
+                          <span
+                            className={`pl-status-badge ${agent.enabled ? "pl-status-done" : "pl-status-not_started"}`}
+                          >
+                            {agent.enabled ? "启用" : "禁用"}
+                          </span>
+                        </div>
+                      </td>
+                      <td data-testid={`agent-role-line-${agent.id}`}>
+                        {agent.role ? (
+                          <Link
+                            to={`/admin/roles/${encodeURIComponent(agent.role)}`}
+                            className="pl-agent-list-table-name-link notranslate"
+                            translate="no"
+                            aria-label={`查看角色 ${agent.role}`}
+                            data-testid={`agent-role-link-${agent.id}`}
+                          >
+                            {agent.role}
+                          </Link>
+                        ) : (
+                          <span className="text-fg-muted notranslate" translate="no">旧 ACL</span>
+                        )}
+                        {legacyWildcard && !agent.role && (
+                          <span className="pl-agent-list-table-meta notranslate" translate="no">legacy wildcard</span>
+                        )}
+                      </td>
+                      <td>
+                        <LastSeen lastSeen={agent.stats?.lastSeen} />
+                      </td>
+                      <td
+                        className="pl-agent-list-table-num"
+                        data-testid={`agent-calls-7d-${agent.id}`}
+                      >
+                        {callsLast7d}
+                      </td>
+                      <td
+                        className="pl-agent-list-table-num notranslate"
+                        translate="no"
+                        data-testid={`agent-active-tokens-${agent.id}`}
+                      >
+                        {activeTokens}
+                      </td>
+                      <td className="pl-agent-list-table-num notranslate" translate="no">
+                        {configuredTokens}
+                      </td>
+                      <td
+                        className={`pl-agent-list-table-num ${deniedLast7d > 0 ? "text-warning-strong" : ""}`}
+                        data-testid={`agent-denied-7d-${agent.id}`}
+                      >
+                        {deniedLast7d}
+                      </td>
+                      <td>
+                        <div className="pl-agent-list-row-actions">
+                          <Link
+                            to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
+                            className="pl-row-action-link notranslate"
+                            translate="no"
+                            aria-label={`查看 ${agent.name} 的对象详情`}
+                            data-testid={`agent-row-detail-${agent.id}`}
+                          >
+                            查看详情
+                          </Link>
+                          <Link
+                            to={`/admin/agents/${agent.id}`}
+                            className="pl-row-action-link"
+                          >
+                            编辑
+                          </Link>
+                          <Link
+                            to={`/admin/agents/${encodeURIComponent(agent.id)}?tab=permissions`}
+                            className="pl-row-action-link"
+                            aria-label={`查看 ${agent.name} 的权限`}
+                            data-testid={`agent-permissions-link-${agent.id}`}
+                          >
+                            查看权限
+                          </Link>
+                          <button
+                            type="button"
+                            className="pl-row-action-link"
+                            onClick={() => navigate(`/admin/audit?user=${agent.id}`)}
+                          >
+                            查看日志
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {showNew && (

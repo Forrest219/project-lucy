@@ -644,3 +644,225 @@ Fixed: 2026-08-04（Spec 77 / wo-202608-09 Wave B；Vitest + lint + build；本�
 
 ### Notes
 Mapped to Spec 77 / `wo-202608-09`. Parallel to Spec 76 status/KPI work; does not replace it.
+
+## UX-ADMIN-AGENTS-022: 「Agent 实例」命名不符用户认知
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Page title, sidebar nav label, breadcrumbs, back links
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 88 / `wo-202608-20`；本轮不做浏览器验证）
+
+### Feedback
+「Agent 实例」不符合用户对访问身份（Demo Agent 等）的认知；副标题重复「实例」。
+
+### Evidence
+- 浏览器 2026-08-05：侧栏与 H1 均为「Agent 实例」。
+- 代码：`AgentList.tsx` title、`navigation.ts` label。
+
+### Expected
+侧栏、H1、面包屑、返回链主标签改为 **Agent**；路由仍 `/admin/agents`。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Verify sidebar current item and `h1` read `Agent`, not `Agent 实例`.
+
+### Notes
+Spec 88 / `wo-202608-20`。术语 §4.5 登记 Agent Admin Page Title。
+
+## UX-ADMIN-AGENTS-023: PageHeader count badges 与 KPI 重复
+
+Status: Fixed
+Route: `/admin/agents`
+Area: PageHeader badges
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 88 / `wo-202608-20`；本轮不做浏览器验证）
+
+### Feedback
+`3 个 Agent / N 已启用 / N 配置 Token` 与下方 KPI 重复，且与 `/admin/usage`、`/admin/roles` 顶栏规范不一致。
+
+### Evidence
+- PageHeader badges：`badge-agent-total`、`badge-enabled-total`、`badge-configured-token-total`。
+- 对照页无同类 count badge。
+
+### Expected
+删除 PageHeader badges；`actions` 仅保留 `新建 Agent`（primary）。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Confirm no badge text matching `个 Agent` / `已启用` / `配置 Token` in PageHeader.
+3. Confirm `新建 Agent` primary button remains.
+
+### Notes
+对齐 Spec 42 PageHeader 规范与 `角色权限` 页。
+
+## UX-ADMIN-AGENTS-024: 顶部 KPI 命名未与使用概况对齐
+
+Status: Fixed
+Route: `/admin/agents`
+Area: KPI metric grid
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 88 / `wo-202608-20`；本轮不做浏览器验证）
+
+### Feedback
+四 KPI 应为 `Agent 总数`、`近 7 天活跃 Token`、`近 7 天调用量`、`近 7 天拒绝`，与 `/admin/usage` 术语一致。
+
+### Evidence
+- 现网：`Agent 数`、`活跃 Token`、`近 7 天调用`（无「量」）。
+
+### Expected
+KPI 主标签与 hint 对齐术语 §4.5 / Spec 78；固定近 7 天窗口进标题。
+
+### Browser Check
+1. Open `/admin/agents` and `/admin/usage`.
+2. Compare KPI primary labels for overlapping metrics.
+
+### Notes
+`近 7 天拒绝` 为列表页运维向指标，usage 无对应卡。
+
+## UX-ADMIN-AGENTS-025: 行内「复制 MCP 配置」冗余
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Agent list row actions
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 88 / `wo-202608-20`；本轮不做浏览器验证）
+
+### Feedback
+每行「复制 MCP 配置」结果相同（全局 endpoint 安全模板），与系统概览重复。
+
+### Evidence
+- `buildSafeMcpConfig(endpoint)` 不区分 agent id。
+- 三行均展示相同按钮。
+
+### Expected
+列表页移除行内与页级「复制 MCP 配置」；保留系统概览与详情/Token 流程。
+
+### Browser Check
+1. Open `/admin/agents`.
+2. Confirm no row or page-level `复制 MCP 配置` control.
+
+### Notes
+`buildSafeMcpConfig` 仍导出供单元测试；列表 UI 不再调用。
+
+## UX-ADMIN-AGENTS-026: 整行卡片布局导致中间空白过大
+
+Status: Fixed
+Route: `/admin/agents`
+Area: Agent list layout
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 88 / `wo-202608-20`；本轮不做浏览器验证）
+
+### Feedback
+`justify-between` 整行卡片使信息左贴、操作右贴，宽屏中间大面积空白。
+
+### Evidence
+- 浏览器 CDP：cardWidth ~1608px，left/right 分区间巨大 gap。
+- 用户截图：Demo Agent 行中间空白。
+
+### Expected
+改为 `pl-data-grid` 轻量表格；列：Agent、角色、最近访问、调用量、活跃/配置 Token、拒绝、操作。
+
+### Browser Check
+1. Open `/admin/agents` at ≥1280px width.
+2. Verify `agent-list-table` uses `pl-data-grid`; no `agent-card-*` rows.
+3. Verify columns fill table width without a large empty middle band.
+
+### Notes
+CSS：`.pl-agent-list-table` 对齐 Spec 82 轻量密度。
+
+## UX-ADMIN-AGENTS-027: Role 列表 PageHeader 描述暴露 access.yaml
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role list PageHeader
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 89 / `wo-202608-21`；本轮不做浏览器验证）
+
+### Feedback
+描述写「管理 Agent 可访问的数据源和 MCP 工具边界。正式 Role 写入 access.yaml」，与同组访问治理页面（使用概况、Agent、访问日志）的「管理/查看 + 用户动作」模式不一致，且暴露实现细节。
+
+### Expected
+描述改为：管理每个 Role 的连接、表范围与 MCP 工具授权；不提及 `access.yaml`。
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify PageHeader description matches Spec 89 §5.1.
+3. Verify description does not contain `access.yaml`.
+
+### Notes
+`RoleList.tsx` PageHeader description 已更新。验证：`role-list.test.tsx`、`lint:terminology`。
+
+## UX-ADMIN-AGENTS-028: Role 列表 KPI 可点击且「待修复」零值仍 danger 高亮
+
+Status: Fixed
+Route: `/admin/roles`
+Area: Role list KPI grid
+Severity: P1
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 89 / `wo-202608-21`；本轮不做浏览器验证）
+
+### Feedback
+四 KPI 为可点击筛选按钮；「待修复」卡片在 count=0 时仍使用红色 danger 样式，与 `/admin/agents` 静态概览 KPI 不一致。
+
+### Expected
+四张静态 KPI：`Role 总数` / `使用中` / `未引用` / `解析异常`；无 danger 高亮；`needsRepairCount > 0` 时显示普通 inline notice；「待修复」保留在筛选下拉。
+
+### Browser Check
+1. Open `/admin/roles`.
+2. Verify KPI cards are not buttons and have no red background when count is 0.
+3. Verify filter dropdown still includes「待修复」.
+
+### Notes
+`RoleList.tsx`：`pl-metric-card` 改静态 `div`；KPI testId `metric-role-count` 等。验证：`role-list.test.tsx`。
+
+## UX-ADMIN-AGENTS-029: 新建 Role 展示无数据的「使用情况」等 Tab
+
+Status: Fixed
+Route: `/admin/roles/new`
+Area: Role detail tabs (create mode)
+Severity: P2
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 89 / `wo-202608-21`；本轮不做浏览器验证）
+
+### Feedback
+新建页展示「使用情况」「权限预览」空 Tab，无 Agent 引用或生效边界可展示。
+
+### Expected
+create / copy 仅展示：基本信息 · 权限配置 · 变更预览。
+
+### Browser Check
+1. Open `/admin/roles/new`.
+2. Verify tab bar has exactly three tabs per Spec 89 §5.3.
+3. Verify「使用情况」「生效边界」不存在。
+
+### Notes
+`RoleDetail.tsx`：`visibleTabsForMode()`。验证：`role-detail.test.tsx`。
+
+## UX-ADMIN-AGENTS-030: 权限编辑区落在「基本配置」而「权限预览」为只读
+
+Status: Fixed
+Route: `/admin/roles/new`, `/admin/roles/:roleId`
+Area: Role detail tab IA
+Severity: P1
+Reported: 2026-08-05
+Fixed: 2026-08-05（Spec 89 / `wo-202608-21`；本轮不做浏览器验证）
+
+### Feedback
+连接 / MCP 工具 / 表范围编辑在「基本配置」，「权限预览」Tab 仅展示保存后只读边界，Tab 命名与职责颠倒。
+
+### Expected
+基本信息：角色标识、说明；权限配置：连接 / 工具 / 表范围；生效边界：只读 `effectivePermissions`。
+
+### Browser Check
+1. Open `/admin/roles/new` →「权限配置」含连接与工具编辑。
+2. Open saved role →「生效边界」展示工具与 Source 列表。
+
+### Notes
+`RoleDetail.tsx` Tab 拆分与重命名。验证：`role-detail.test.tsx`。

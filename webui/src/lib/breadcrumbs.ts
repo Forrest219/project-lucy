@@ -65,13 +65,13 @@ export function breadcrumbItems(pathname: string): string[] {
   }
   if (parts[0] === "admin") {
     if (parts[1] === "agents" && parts[2] && parts[3] === "tokens") {
-      return ["访问治理", "Agent 实例", parts[2], "新建 Token"];
+      return ["访问治理", "Agent", parts[2], "新建 Token"];
     }
     if (parts[1] === "agents" && parts[2]) {
-      return ["访问治理", "Agent 实例", parts[2]];
+      return ["访问治理", "Agent", parts[2]];
     }
     if (parts[1] === "agents") {
-      return ["访问治理", "Agent 实例"];
+      return ["访问治理", "Agent"];
     }
     if (parts[1] === "roles" && parts[2] === "new") {
       return ["访问治理", "角色权限", "新建 Role"];

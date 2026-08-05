@@ -119,7 +119,7 @@ export function NewToken() {
 
   if (generatedToken && snippets) {
     return (
-      <div className="grid gap-6 max-w-2xl">
+      <div className="pl-page-stack max-w-2xl">
         <PageHeader
           title="Token 已生成"
           backAction={
@@ -129,7 +129,7 @@ export function NewToken() {
               </Link>
             ) : (
               <Link to="/admin/agents" className="pl-page-header-back">
-                ‹ 返回 Agent 实例
+                ‹ 返回 Agent
               </Link>
             )
           }
@@ -233,7 +233,7 @@ export function NewToken() {
             }
           ];
     return (
-      <div className="grid gap-6 max-w-2xl">
+      <div className="pl-page-stack max-w-2xl">
         <PageHeader
           title="Token 已生成"
           backAction={
@@ -243,7 +243,7 @@ export function NewToken() {
               </Link>
             ) : (
               <Link to="/admin/agents" className="pl-page-header-back">
-                ‹ 返回 Agent 实例
+                ‹ 返回 Agent
               </Link>
             )
           }
@@ -276,7 +276,7 @@ export function NewToken() {
   }
 
   return (
-    <div className="grid gap-6 max-w-xl">
+    <div className="pl-page-stack max-w-xl">
       <PageHeader
         title={<>为 {userId} 创建新 <span className="notranslate" translate="no">Token</span></>}
         backAction={
@@ -286,7 +286,7 @@ export function NewToken() {
             </Link>
           ) : (
             <Link to="/admin/agents" className="pl-page-header-back">
-              ‹ 返回 Agent 实例
+              ‹ 返回 Agent
             </Link>
           )
         }

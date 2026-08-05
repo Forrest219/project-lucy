@@ -310,7 +310,7 @@ function McpConfigDrawer({
             translate="no"
             data-testid="mcp-config-drawer-agent-link"
           >
-            查看 <span className="notranslate" translate="no">Agent</span> 实例 ↗
+            查看 <span className="notranslate" translate="no">Agent</span> ↗
           </Link>
         </footer>
       </div>

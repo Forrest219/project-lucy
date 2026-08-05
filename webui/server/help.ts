@@ -25,12 +25,17 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/表白名单/, "table-whitelist"],
   [/刷新本地目录|静态 Catalog reload|Catalog Reload|Reload Catalog/i, "catalog-reload"],
   [/语义层维护/, "semantic-layer"],
+  [/为什么要编写语义 YAML|编写语义 YAML/, "semantic-yaml-why"],
+  [/推荐编写工作流|语义编写工作流/, "semantic-authoring-workflow"],
+  [/grain、join 与 fanout|grain.*fanout/i, "semantic-grain-fanout"],
+  [/^overlay 常见字段速查$/, "semantic-overlay-fields"],
+  [/KTX 官方延伸阅读/, "ktx-further-reading"],
   [/表目录/, "semantic-catalog"],
   [/表语义编辑|Human vs AI/, "semantic-table-editor"],
   [/关联关系|Joins/i, "semantic-joins"],
   [/业务文档 Wiki|业务 Wiki/, "business-wiki"],
   [/访问治理 Admin/, "admin-governance"],
-  [/Agent 实例/, "admin-agents"],
+  [/^Agent$/, "admin-agents"],
   [/Role 权限模板|角色配置/, "admin-roles"],
   [/Bearer Token|Token 发行/, "admin-tokens"],
   [/MCP 访问日志|问题簇|审计/, "admin-audit"],
@@ -39,6 +44,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/Run 试跑|运行历史/, "eval-runs"],
   [/趋势监控/, "eval-monitor"],
   [/YAML 文件规范与交付验收|YAML Delivery/i, "yaml-delivery-runbook"],
+  [/^overlay 字段速查（编写辅导）$/, "yaml-overlay-field-guide"],
   [/YAML 类型总览/, "yaml-type-overview"],
   [/Schema manifest 规范|Schema Manifest/i, "yaml-schema-manifest"],
   [/Manifest augmentation overlay|Augmentation Overlay|Overlay 规范/i, "yaml-augmentation-overlay"],
@@ -63,6 +69,14 @@ const DATABASE_OPS_HEADING_TITLES = new Set([
   "连接形态与配置字段",
   "新增数据库连接（运维 Runbook）",
   "Agent 可见性与 ACL 同步"
+]);
+
+const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
+  "为什么要编写语义 YAML",
+  "推荐编写工作流",
+  "grain、join 与 fanout",
+  "overlay 常见字段速查",
+  "KTX 官方延伸阅读"
 ]);
 
 export type HelpTocItem = {
@@ -133,7 +147,14 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
     const yamlRunbookSubheading = rawLevel === 4 && /^3\.7\.\d+/.test(title);
     const cleanTitle = title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
     const databaseOpsSubheading = rawLevel === 4 && DATABASE_OPS_HEADING_TITLES.has(cleanTitle);
-    if (!match || rawLevel < 2 || (rawLevel > 3 && !yamlRunbookSubheading && !databaseOpsSubheading)) continue;
+    const semanticAuthoringSubheading =
+      rawLevel === 4 && SEMANTIC_AUTHORING_HEADING_TITLES.has(cleanTitle);
+    if (
+      !match ||
+      rawLevel < 2 ||
+      (rawLevel > 3 && !yamlRunbookSubheading && !databaseOpsSubheading && !semanticAuthoringSubheading)
+    )
+      continue;
     // 3.7.x 子标题为兼容性保留 level 3；3.2.x 运维 Runbook 子标题按真实 level 4 输出。
     const level: 2 | 3 | 4 = yamlRunbookSubheading
       ? (Math.min(rawLevel, 3) as 2 | 3)
