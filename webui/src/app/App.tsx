@@ -6,6 +6,7 @@ import {
   Cable,
   ChartNoAxesCombined,
   ChevronRight,
+  CircleHelp,
   Database,
   Gauge,
   History,
@@ -353,9 +354,16 @@ export function AppFrame() {
         <div className="pl-sidebar-footer" data-testid="sidebar-footer">
           <div className="pl-sidebar-utility" data-testid="sidebar-utility">
             <HelpButton className="pl-sidebar-help-link">
-              <span aria-hidden="true">?</span>
+              <CircleHelp aria-hidden="true" className="size-4" />
               <span>系统手册</span>
             </HelpButton>
+            <span
+              className="pl-sidebar-version notranslate"
+              translate="no"
+              data-testid="sidebar-version"
+            >
+              Lucy v0.16
+            </span>
           </div>
         </div>
         </aside>

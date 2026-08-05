@@ -361,6 +361,9 @@
     @apply flex min-h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium text-fg-body no-underline transition-colors;
   }
   .pl-sidebar-help-link:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-sidebar-version {
+    @apply px-3 pb-1 text-xs text-fg-muted;
+  }
   .pl-help-button {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
   }
