@@ -626,10 +626,10 @@ describe("TableWhitelist", () => {
 
     const summary = await screen.findByTestId("whitelist-missing-manifest-summary");
     expect(summary).toHaveTextContent("1 个 Schema 缺少 Manifest，暂不可配置表范围。");
-    expect(within(summary).getByRole("link", { name: "去连接概览上传 Manifest" })).toHaveAttribute(
-      "href",
-      "/connections"
-    );
+    const summaryLink = within(summary).getByRole("link", { name: /去连接概览上传 Manifest/ });
+    expect(summaryLink).toHaveAttribute("href", "/connections");
+    expect(summaryLink).toHaveClass("pl-card-cta");
+    expect(summaryLink.textContent ?? "").toMatch(/↗/);
     expect(
       screen.queryByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")
     ).not.toBeInTheDocument();
@@ -645,7 +645,10 @@ describe("TableWhitelist", () => {
     expect(within(empty).getByRole("button", { name: "展开详情" })).toHaveAttribute("aria-expanded", "false");
     expect(within(empty).getByRole("button", { name: "复制路径" })).toBeInTheDocument();
     expect(within(empty).queryByRole("button", { name: "上传 Manifest" })).not.toBeInTheDocument();
-    expect(within(empty).getByRole("link", { name: "去连接概览上传 Manifest" })).toHaveAttribute("href", "/connections");
+    const emptyRepairLink = within(empty).getByRole("link", { name: /去连接概览上传 Manifest/ });
+    expect(emptyRepairLink).toHaveAttribute("href", "/connections");
+    expect(emptyRepairLink).toHaveClass("pl-card-cta");
+    expect(emptyRepairLink.textContent ?? "").toMatch(/↗/);
     expect(within(empty).queryByText("上传该 Schema 的 YAML")).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalog-asset-upload-drawer")).not.toBeInTheDocument();
     expect(
@@ -707,9 +710,11 @@ describe("TableWhitelist", () => {
       "configured-schema-empty-mysql-aliyun-openclaw_db"
     );
     const repairLink = within(empty).getByRole("link", {
-      name: "去连接概览上传 Manifest"
+      name: /去连接概览上传 Manifest/
     });
     expect(repairLink).toHaveAttribute("href", "/connections");
+    expect(repairLink).toHaveClass("pl-card-cta");
+    expect(repairLink.textContent ?? "").toMatch(/↗/);
     expect(within(empty).queryByRole("button", { name: "上传 Manifest" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalog-asset-upload-drawer")).not.toBeInTheDocument();
     // The action should not be a duplicate global reload — the toolbar covers

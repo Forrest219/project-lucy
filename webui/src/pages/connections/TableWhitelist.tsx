@@ -674,11 +674,11 @@ export function TableWhitelist() {
           </span>
           <Link
             to="/connections"
-            className="pl-inline-link notranslate"
+            className="pl-card-cta notranslate"
             translate="no"
             data-testid="whitelist-missing-manifest-summary-link"
           >
-            去连接概览上传 Manifest
+            去连接概览上传 Manifest ↗
           </Link>
         </div>
       ) : null}
@@ -753,11 +753,11 @@ export function TableWhitelist() {
                 </button>
                 <Link
                   to="/connections"
-                  className="pl-btn pl-btn--ghost pl-btn--sm notranslate"
+                  className="pl-card-cta notranslate"
                   translate="no"
                   data-testid={`whitelist-missing-manifest-overview-${conn.id}-${schema}`}
                 >
-                  去连接概览上传 Manifest
+                  去连接概览上传 Manifest ↗
                 </Link>
               </div>
             </div>
