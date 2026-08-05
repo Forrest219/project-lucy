@@ -227,11 +227,12 @@ describe("CommandPalette", () => {
     });
     const input = screen.getByTestId("command-palette-input");
 
-    // With the test query `wiki` only one entry matches, so the keyboard
-    // wrap-around behavior is what we exercise: ArrowDown from the last
-    // (and only) item must wrap back to itself.
+    // With the test query `wiki` only one entry matches, so Enter can commit
+    // without an explicit arrow confirmation. ArrowDown still wraps on the
+    // single row after the first keypress locks the preview.
     const wikiOption = screen.getByTestId("command-palette-option-semantic-wiki");
     expect(wikiOption).toHaveAttribute("data-active", "true");
+    expect(screen.getByTestId("command-palette-enter-hint")).toBeInTheDocument();
 
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(wikiOption).toHaveAttribute("data-active", "true");
@@ -245,6 +246,8 @@ describe("CommandPalette", () => {
     // "评测" matches the entries inside 质量评测. Use it to verify that
     // the active highlight tracks ArrowDown / ArrowUp across multiple rows
     // (the wiki-query case above only ever has a single match).
+    // First ArrowDown/ArrowUp locks the previewed row without moving so the
+    // default first match can still be opened via Enter after confirmation.
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
@@ -255,6 +258,15 @@ describe("CommandPalette", () => {
     const options = within(list).getAllByRole("option");
     expect(options.length).toBe(4);
     expect(options[0]).toHaveAttribute("data-active", "true");
+    expect(screen.queryByTestId("command-palette-enter-hint")).not.toBeInTheDocument();
+    expect(screen.getByTestId("command-palette-footer")).toHaveTextContent(
+      "用方向键选择后回车"
+    );
+
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(options[0]).toHaveAttribute("data-active", "true");
+    expect(screen.getByTestId("command-palette-enter-hint")).toBeInTheDocument();
+    expect(screen.getByTestId("command-palette-footer")).toHaveTextContent("Enter 打开");
 
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(options[1]).toHaveAttribute("data-active", "true");
@@ -272,6 +284,52 @@ describe("CommandPalette", () => {
     // ArrowUp wraps to the last.
     fireEvent.keyDown(input, { key: "ArrowUp" });
     expect(options[3]).toHaveAttribute("data-active", "true");
+  });
+
+  it("does not navigate on Enter when multiple results are still only previewed", () => {
+    renderAt("/overview");
+    fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "token" }
+    });
+    const input = screen.getByTestId("command-palette-input");
+    const options = within(screen.getByTestId("command-palette-list")).getAllByRole("option");
+    expect(options.length).toBeGreaterThan(1);
+    expect(options[0]).toHaveAttribute("data-active", "true");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByTestId("command-palette")).toBeInTheDocument();
+    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+  });
+
+  it("navigates on Enter after Arrow confirmation when multiple results match", () => {
+    renderAt("/overview");
+    fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "token" }
+    });
+    const input = screen.getByTestId("command-palette-input");
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    expect(screen.getByTestId("route-page")).toHaveTextContent("AgentList");
+  });
+
+  it("ignores Enter while an IME composition is active", () => {
+    renderAt("/overview");
+    fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "wiki" }
+    });
+    // jsdom KeyboardEvent init does not reliably surface isComposing on the
+    // React synthetic event; keyCode 229 is the IME composition sentinel the
+    // handler also guards against.
+    fireEvent.keyDown(screen.getByTestId("command-palette-input"), {
+      key: "Enter",
+      keyCode: 229
+    });
+    expect(screen.getByTestId("command-palette")).toBeInTheDocument();
+    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
   });
 
   it("wraps ArrowDown at the end of the list", () => {

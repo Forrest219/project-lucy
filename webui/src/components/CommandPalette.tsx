@@ -259,6 +259,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  // Multi-result Enter must not jump on the default preview highlight.
+  // ArrowUp/ArrowDown (or a single unique match) marks the selection as
+  // explicit so Enter can commit. Click always commits regardless.
+  const [selectionExplicit, setSelectionExplicit] = useState(false);
 
   // Reset transient state every time the palette opens so a previous
   // session's query / highlight don't carry over.
@@ -266,6 +270,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     if (open) {
       setQuery("");
       setActiveIndex(0);
+      setSelectionExplicit(false);
     }
   }, [open]);
 
@@ -297,6 +302,16 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   }, [allEntries, query]);
   const visible = filtered;
   const normalizedQuery = normalize(query);
+  // Unique match: Enter opens immediately. Multiple matches: Enter waits
+  // until the user confirms with ↑↓ (or clicks a row).
+  const canCommitWithEnter = filtered.length === 1 || selectionExplicit;
+
+  // Typing a new query clears any prior keyboard confirmation so a stale
+  // Enter path cannot jump after the result set changes.
+  useEffect(() => {
+    setSelectionExplicit(false);
+    setActiveIndex(0);
+  }, [query]);
 
   // Clamp the active index whenever the filtered list shrinks so a stale
   // highlight from a longer list never points past the end.
@@ -327,16 +342,31 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   };
 
   const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // IME composition Enter (e.g. confirming Chinese candidates) must not
+    // navigate. keyCode 229 covers browsers that still emit it during IME.
+    if (event.isComposing || event.keyCode === 229) return;
+
     if (event.key === "ArrowDown") {
       event.preventDefault();
       if (filtered.length === 0) return;
+      // First arrow locks the previewed row (usually index 0) so Enter can
+      // open it without forcing the user past the first match.
+      if (!selectionExplicit) {
+        setSelectionExplicit(true);
+        return;
+      }
       setActiveIndex((prev) => (prev + 1) % filtered.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       if (filtered.length === 0) return;
+      if (!selectionExplicit) {
+        setSelectionExplicit(true);
+        return;
+      }
       setActiveIndex((prev) => (prev - 1 + filtered.length) % filtered.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
+      if (!canCommitWithEnter) return;
       commitSelection(activeIndex);
     }
   };
@@ -447,12 +477,23 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       <span className="pl-command-palette-item-label">
                         {renderTextSegments(labelSegments, `${entry.id}-label`)}
                       </span>
-                      <span
-                        className="pl-command-palette-route-hint notranslate"
-                        translate="no"
-                        aria-hidden="true"
-                      >
-                        {entry.to}
+                      <span className="pl-command-palette-title-meta">
+                        <span
+                          className="pl-command-palette-route-hint notranslate"
+                          translate="no"
+                          aria-hidden="true"
+                        >
+                          {entry.to}
+                        </span>
+                        {isActive && canCommitWithEnter ? (
+                          <span
+                            aria-hidden="true"
+                            className="pl-command-palette-enter-hint"
+                            data-testid="command-palette-enter-hint"
+                          >
+                            ↵
+                          </span>
+                        ) : null}
                       </span>
                     </div>
                     <div className="pl-command-palette-item-description">
@@ -463,6 +504,16 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               })
             )}
           </div>
+          {visible.length > 0 ? (
+            <div
+              className="pl-command-palette-footer"
+              data-testid="command-palette-footer"
+            >
+              {canCommitWithEnter
+                ? "↑↓ 选择 · Enter 打开 · Esc 关闭"
+                : "用方向键选择后回车 · Esc 关闭"}
+            </div>
+          ) : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
