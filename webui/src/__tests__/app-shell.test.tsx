@@ -423,6 +423,12 @@ describe("AppFrame shell", () => {
     expect(shellRule).toContain("min-width: var(--layout-min-readable-width)");
   });
 
+  it("mounts global Toaster at bottom-right away from PageHeader actions (Spec 120)", () => {
+    const appSource = readFileSync("src/app/App.tsx", "utf8");
+    expect(appSource).toMatch(/<Toaster\b[^>]*\bposition="bottom-right"/);
+    expect(appSource).not.toMatch(/<Toaster\b[^>]*\bposition="top-right"/);
+  });
+
   it("renders PageHeader with the global H1 styling hook", () => {
     render(
       <MemoryRouter>

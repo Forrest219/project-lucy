@@ -170,8 +170,8 @@ Reported: 2026-08-04
 ### Feedback
 当前 `refreshStatus` 在 5 个 query 任一失败时仅弹出 toast `系统概览刷新失败`，徽标 `上次更新：…` 保持上次成功的时间不变。这种"静默保留旧值"虽然避免了把过期数据冒充为新鲜数据，但**完全没有失败状态的视觉信号**：
 1. 用户看到 `上次更新：17 秒前`，但刚刚点了刷新按钮——他不知道刷新到底有没有跑、跑成没跑成。
-2. 必须依赖 toast，但 sonner 默认 toast 在右下角，容易被忽略；toast 结束后就丢失"刚刚失败过"的提示。
-3. 多个连续点击失败会重复 toast，但没有"失败 N 次"的累计提示。
+2. 必须依赖 toast，但瞬时 toast 结束后就丢失「刚刚失败过」的提示；落点以 Spec 120 为准（`bottom-right`，避让 PageHeader）。历史上 Lucy 曾用 `top-right`，台账旧文「默认右下角」不准确。
+3. 多个连续点击失败会重复 toast，但没有「失败 N 次」的累计提示。
 
 ### Evidence
 - 实现：`webui/src/pages/Onboarding.tsx:refreshStatus()` 失败分支 `toast.error("系统概览刷新失败"); return;` 不写 `lastUpdatedAt`。

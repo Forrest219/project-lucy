@@ -56,6 +56,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-07 | Global Shell / 全站 Toast | Spec 120 / `wo-202608-53` 落地：`UX-GLOBAL-SHELL-009` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。全局 Toaster `top-right`→`bottom-right`，避让 PageHeader actions；Design System 新增 `13-components-toast.md`；修订 Spec 28 §5.2。跨页面主题新增 `toast vs pageheader actions`。验证：`app-shell.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Business Wiki `/wiki` 删除 Markdown 文档 | Spec 118 / `wo-202608-51` 落地：`UX-WIKI-045` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。阅读态 Header「删除文档」；确认对话框；`DELETE /api/wiki/:key`；清理版本历史；成功后离开文档页。修订 Spec 58/81。跨页面主题 `button hierarchy consistency` 增挂 `UX-WIKI-045`。验证：`wiki.test.ts`、`wiki.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Catalog 表导入 + Publish Workbench 校验/junk | Spec 114 / `wo-202608-47`：`UX-CATALOG-030` → `Fixed`（overlay-safe 导入，不冲掉 columns）。Spec 115 / `wo-202608-48`：`UX-PUBLISH-WORKBENCH-004` → `Fixed`（工作台 issues 披露 + `._*` scrub + 上传拒收）。本轮不做浏览器验证，结束后只做 code review。延伸 `validation failure disclosure`；新增 `overlay-safe table yaml import`、`semantic-layer junk scrub`。验证：`api.source-import`、`semantic-layer-junk`、`api.semantic-assets`、`table-editor`、`review`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish History `/publish/history` | Spec 113 / `wo-202608-46` 落地：`UX-PUBLISH-HISTORY-008`～`010` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`#`→序号；筛选栏+分页；Header「导出 CSV」明细（移除语义资产包 ZIP）；`releases` 支持筛选/`total` + `export.csv`。修订 Spec 35/85/91。跨页面主题延伸 `export-table field parity`、新增 `list-page filter-pagination parity`。验证：`publish-history.test.tsx`、`api.semantic-assets.reindex.test.ts`、`lint:terminology`、`build`。 |
@@ -141,6 +142,7 @@ docs/ui-ux-feedback/
 
 | Theme | 影响 ledger | Status 分布 | Spec / Plan |
 |---|---|---|---|
+| `toast vs pageheader actions`（全局 Toast 不得遮挡 PageHeader 右上动作；标准落点 `bottom-right`） | UX-GLOBAL-SHELL-009 | 1 Fixed | Spec 120 / wo-202608-53，待浏览器复核 |
 | `validation failure disclosure`（校验/门禁失败须展示可读 issues，禁止仅 Exit Code） | UX-CATALOG-029、UX-PUBLISH-WORKBENCH-004 | 2 Fixed | Spec 110 / wo-43；Spec 115 / wo-48 延伸至发布工作台；待浏览器复核 |
 | `overlay-safe table yaml import`（表页导入不得冲掉 Schema Manifest 字段） | UX-CATALOG-030 | 1 Fixed | Spec 114 / wo-202608-47 |
 | `semantic-layer junk scrub`（校验前清理 `._*` / `.DS_Store`；上传拒收） | UX-PUBLISH-WORKBENCH-004 | 1 Fixed | Spec 115 / wo-202608-48 |
@@ -201,6 +203,7 @@ docs/ui-ux-feedback/
 
 ## 跨页面治理规则
 
+- 全局 Toast（sonner）默认落点为 **`bottom-right`**，不得使用会与 PageHeader `actions` / badges 重叠的 `top-right`；需要确认或读完再继续的反馈用 Dialog / Drawer / 页内结果区，不用视口正中 toast（主题 `toast vs pageheader actions`；样板见 Spec 120）。
 - Header 只承载对象身份、位置上下文和关键状态；不得放低价值统计 chips 或页面功能说明。
 - 列表/历史页的「共 N 条」「N 个 case」等纯计数只能出现在表格空态、表尾或分页区，不得出现在 PageHeader `badges`（主题 `list-page header count badge`；样板见 Spec 88 Agent 列表、Spec 91）。
 - PageHeader `actions` 不得重复侧栏已有的兄弟页导航入口（主题 `header sibling nav redundancy`；样板见 Spec 97 配置审计删「访问日志」）。

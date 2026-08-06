@@ -105,6 +105,7 @@
 | [114-table-editor-overlay-safe-yaml-import-spec.md](114-table-editor-overlay-safe-yaml-import-spec.md) | 表编辑器导入 overlay 不得冲掉 Schema Manifest 字段；抽屉引导发布工作台（Implemented v1.0；`UX-CATALOG-030`） | 产品 / UX / API / Frontend |
 | [115-publish-workbench-validation-disclosure-and-junk-scrub-spec.md](115-publish-workbench-validation-disclosure-and-junk-scrub-spec.md) | 发布工作台校验 issues 披露；`._*` scrub；上传拒收 junk（Implemented v1.0；`UX-PUBLISH-WORKBENCH-004`） | 产品 / UX / API / Frontend |
 | [116-enabled-tables-orphan-drift-save-spec.md](116-enabled-tables-orphan-drift-save-spec.md) | 启用表无效启用漂移：保存差分门禁 + warnings；UI 暴露与一键移出（Implemented v1.0；`UX-CONNECTIONS-031`） | 产品 / UX / API / Frontend |
+| [120-global-toast-placement-away-from-header-actions-spec.md](120-global-toast-placement-away-from-header-actions-spec.md) | 全局 Toast 改 `bottom-right`，避让 PageHeader actions（Implemented v1.0；`UX-GLOBAL-SHELL-009`） | 产品 / UX / Design System / Frontend |
 | [111-help-center-search-and-connection-kpi-glossary-spec.md](111-help-center-search-and-connection-kpi-glossary-spec.md) | `/help` 手册关键词搜索 + 连接概览「已发现表数」等 KPI 术语写入手册并可搜索命中（Planned → Implemented） | 产品 / UX / Frontend / Docs |
 
 ## 与原 README 的关键校正

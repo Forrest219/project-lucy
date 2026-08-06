@@ -172,7 +172,7 @@ Transient completion feedback may also appear as a Toast, but only as a short-li
 
 Recommended toast behavior:
 
-- Position: app-standard toast region, preferably top-right if the global system supports it.
+- Position: app-standard toast region（全局 `bottom-right`；见 Spec 120 / Design System `13-components-toast.md`）。**不得**默认 `top-right`（会与 PageHeader actions 重叠）。
 - Duration: about 3 seconds for success.
 - Content: `本地目录已刷新 · 3 张表` with optional `1 个提示`.
 - No toast is required for initial page load or already-stored reload state.

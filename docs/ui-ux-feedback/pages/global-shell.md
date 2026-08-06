@@ -281,3 +281,34 @@ expected element with text "访问治理" to have text "质量评测"
 
 ### Notes
 2026-08-04 在 M64 浏览器复核后跑全套测试时发现，与 M64 改动无依赖关系。归属另一前置工单（可能涉及 `e35c784 fix(webui): polish global sidebar navigation` 这类 commit）。建议修复文件：`webui/src/__tests__/help-center.test.tsx`（更新 fixture）+ `webui/src/__tests__/navigation.test.ts`（如有相关断言）+ 跑 `npm test` 全套。Owner 待 M65 / M66 排期时再指定。
+
+## UX-GLOBAL-SHELL-009: 全局 Toast 不得遮挡 PageHeader 右上角动作
+
+Status: Fixed
+Route: all WebUI routes（复现样板 `/publish/workbench`）
+Area: Global sonner Toaster / PageHeader actions
+Severity: P1
+Reported: 2026-08-07
+
+### Feedback
+消息通知在右上角，与页头按钮重叠，经常看不到 / 点不到按钮；不止一个页面出现。
+
+### Evidence
+- Screenshot: [`../assets/global-shell/UX-GLOBAL-SHELL-009-before.png`](../assets/global-shell/UX-GLOBAL-SHELL-009-before.png)
+- Playwright（1440×900）在 `/publish/workbench` 真实触发「KTX 索引重建完成」：toast `top:32,left:1052,right:1408,bottom:85.5`，与「上传语义资产 / 强制重建索引 / 导出当前快照」及 badge 几何相交。
+- 根因：`App.tsx` `<Toaster position="top-right" />` 与 PageHeader aside 同占右上角（offset 32px）。
+- 同预测框：评测、Agent、Wiki、配置审计、发布记录、访问日志等带 Header actions 的页均为 HIGH 风险。
+
+### Expected
+- 全局 Toast 默认落点避开 PageHeader `actions` / badges。
+- 批准方案：`position="bottom-right"`（非视口正中；居中属 Dialog 语义）。
+- Design System 固化落点，禁止再写「prefer top-right」。
+
+### Browser Check
+1. Open `/publish/workbench`（或任意带页头多按钮页）。
+2. Trigger a success toast（如「强制重建索引」或其它 `toast.success`）。
+3. Verify toast appears at **bottom-right**，不遮挡页头动作按钮。
+4. Spot-check `/wiki`、`/admin/agents`、`/eval/cases`：页头按钮在 toast 可见期间仍可点击。
+
+### Notes
+Spec 120 / `wo-202608-53` 已落地（本轮不做浏览器验证，结束后只做 code review）。`App.tsx` → `bottom-right`；Design System `13-components-toast.md`；主题 `toast vs pageheader actions`。待 Docker 重建后按 Browser Check 升 `Verified`。
