@@ -43,6 +43,9 @@
   --token-radius-xl: 12px;
   --token-radius-pill: 9999px;
   --token-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
+  /* Design System 02: desktop min readable width. Shell locks here;
+     below-threshold viewports scroll horizontally instead of compressing. */
+  --layout-min-readable-width: 1200px;
 }
 
 /* @theme 层：暴露给 Tailwind utility 和 BEM 命名 */
@@ -96,6 +99,12 @@
 }
 
 @layer base {
+  /* Outer scroll carrier for --layout-min-readable-width (Design System 02).
+     Keep overflow-x on `html` (not an intermediate wrapper) so
+     `.pl-sidebar { position: sticky }` still sticks to the viewport. */
+  html {
+    overflow-x: auto;
+  }
   body {
     background: var(--color-bg-base);
     color: var(--color-fg-body);
@@ -108,8 +117,13 @@
   /* M60 Sidebar Brand Navigation Polish: widen sidebar from 216px → 248px so
      the brand mark, search entry and chinese group titles have breathing
      room. The shell grid keeps `[sidebar main]` so PageHeader + body
-     layouts are not touched. */
-  .pl-app-shell { @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] bg-bg-base text-fg-body; }
+     layouts are not touched.
+     Design System 02 / Viewport Policy: lock desktop layout width; do not
+     keep compressing the shell below --layout-min-readable-width. */
+  .pl-app-shell {
+    @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] bg-bg-base text-fg-body;
+    min-width: var(--layout-min-readable-width);
+  }
   .pl-sidebar { @apply sticky top-0 flex h-screen flex-col overflow-hidden border-r border-border-default bg-bg-surface px-3 py-4; }
   /* M-Next sidebar scrollbar: 让 .pl-nav 在分组全展开、内容超过 viewport
    * 而 nav 可滚动时,滚动条本身始终可见,避免用户把"nav 可滚"误读为
@@ -966,7 +980,9 @@
   .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-left; }
   .pl-schema-asset-table-num { @apply text-left font-normal tabular-nums whitespace-nowrap text-fg-body; }
   .pl-schema-asset-table-action { @apply whitespace-normal text-left; }
-  .pl-schema-asset-actions { @apply flex flex-nowrap items-center justify-start gap-3 overflow-hidden; }
+  /* Design System 02: never clip/hide core row actions to fake narrow fit.
+     Prefer wrap under residual pressure after the shell min-width lock. */
+  .pl-schema-asset-actions { @apply flex flex-wrap items-center justify-start gap-x-3 gap-y-1; }
   .pl-schema-asset-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
   .pl-schema-asset-table button.pl-row-action-link:disabled { @apply cursor-wait opacity-60; }
   .pl-schema-asset-table .pl-row-action-link--muted { @apply text-fg-muted; }
@@ -1606,13 +1622,15 @@
   .pl-diff-hunk { @apply text-warning; }
   .pl-yaml-preview { @apply rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed overflow-auto whitespace-pre-wrap; }
 
-  /* 审核页 */
-  .pl-review-layout { @apply grid grid-cols-[260px_minmax(0,1fr)] gap-4; }
-  .pl-review-layout { @apply xl:grid-cols-[280px_minmax(0,1fr)_340px]; }
+  /* 发布工作台：本次将同步的变更 | 生效准备（Spec 119/123） */
+  .pl-review-layout { @apply grid grid-cols-1 gap-4; }
+  .pl-review-layout { @apply md:grid-cols-[minmax(280px,2fr)_minmax(0,3fr)]; }
+  .pl-review-layout { @apply xl:grid-cols-[minmax(320px,2fr)_minmax(0,3fr)]; }
   .pl-review-sidebar,
   .pl-review-main { @apply rounded-md border border-border-default bg-bg-surface p-4; }
   .pl-review-main { @apply min-w-0; }
   .pl-review-main-header { @apply mb-3 flex flex-wrap items-start justify-between gap-3; }
+  .pl-drawer-panel--change-detail { @apply max-w-3xl; }
   .pl-file-list { @apply grid gap-1; }
   .pl-file-button { @apply grid grid-cols-[auto_1fr] items-center gap-2 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm; }
   .pl-file-button:hover { @apply bg-bg-muted; }

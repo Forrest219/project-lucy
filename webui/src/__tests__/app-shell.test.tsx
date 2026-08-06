@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
+import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -410,6 +411,16 @@ describe("AppFrame shell", () => {
     expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "主导航" })).toHaveClass("pl-nav");
     expect(screen.getByRole("link", { name: "连接概览" })).toHaveClass("pl-nav-link", "pl-nav-link--active");
+  });
+
+  it("locks desktop shell to --layout-min-readable-width with html overflow-x (Design System 02)", () => {
+    // jsdom does not compute Tailwind/CSSOM from app.css; assert the contract
+    // source so viewport zoom / sub-1200 windows keep desktop layout width.
+    const css = readFileSync("src/app/app.css", "utf8");
+    expect(css).toMatch(/--layout-min-readable-width:\s*1200px/);
+    expect(css).toMatch(/html\s*\{[^}]*overflow-x:\s*auto/s);
+    const shellRule = css.match(/\.pl-app-shell\s*\{[^}]*\}/s)?.[0] ?? "";
+    expect(shellRule).toContain("min-width: var(--layout-min-readable-width)");
   });
 
   it("renders PageHeader with the global H1 styling hook", () => {
