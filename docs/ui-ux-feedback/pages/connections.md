@@ -827,3 +827,48 @@ Reported: 2026-08-06
 
 ### Notes
 Spec 116。交叉：`UX-CONNECTIONS-005`（连接概览本地 0 / 启用 >0 drift）；不自动 prune。本轮以单测验收，不做浏览器验证。
+
+## UX-CONNECTIONS-032: Manifest 状态近义词双文案
+
+Status: Fixed
+Route: `/connections`
+Area: Schema 表 `Manifest 状态`
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+同一页同时出现 `缺失 Manifest`（warning 徽章）与 `未发现本地 Manifest`（muted 灰字）。顶部 KPI「缺 Manifest 的 Schema」把二者算成同一类，行状态却用近义词区分，用户无法理解差异。根因：无 sync warning 且本地表数为 0 时走兜底文案。
+
+### Expected
+配置了 Schema、本地没有可读 Manifest 时，行状态统一为 `缺失 Manifest`（warning）。删除 `未发现本地 Manifest`。状态与 KPI 对齐（可参考 `manifestSchemas` / 本地表数），不以「最近一次 sync warning 是否存在」换标签。
+
+### Browser Check
+1. Open `/connections`.
+2. Locate `openclaw_db` and any starrocks Schema with 0 discovered tables.
+3. Verify both show `缺失 Manifest`; page has no `未发现本地 Manifest`.
+4. Verify KPI missing count matches warning-tone missing rows.
+
+### Notes
+2026-08-06：`schemaAssetState` 兜底改为 `缺失 Manifest`；有本地 Manifest 文件但 0 表时标 `空 Manifest`。单测覆盖无 warning 兜底路径。
+
+## UX-CONNECTIONS-033: Footer「重新拉取库内目录」与并列动作层级不一致
+
+Status: Fixed
+Route: `/connections`
+Area: Connection card footer actions
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+卡片底部 `+ 添加 Schema`、`同步配置变更` 为 `secondary`，中间的 `重新拉取库内目录` 为 `ghost`（无边框），视觉上不像同组按钮。
+
+### Expected
+三个并列维护动作均为 `pl-btn--secondary`；同组无 primary / 无单独降级为 ghost。
+
+### Browser Check
+1. Open `/connections`.
+2. Inspect any Connection card footer.
+3. Verify `+ 添加 Schema`、`重新拉取库内目录`、`同步配置变更` 均为 secondary 描边按钮。
+
+### Notes
+2026-08-06：`refresh-live-catalog-*` 从 `pl-btn--ghost` 改为 `pl-btn--secondary`；M29/M44 单测断言三按钮同级。后续 icon 化仍见 UX-CONNECTIONS-024 / Spec 101。

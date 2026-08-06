@@ -119,7 +119,8 @@ function schemaAssetState(
   connectionId: string,
   schema: string,
   tables: SourceSummary[],
-  run: CatalogReloadsResponse["lastByConnection"][string] | undefined
+  run: CatalogReloadsResponse["lastByConnection"][string] | undefined,
+  hasLocalManifestFile = false
 ): SchemaAssetState {
   const tableCount = tables.filter((table) => table.conn === connectionId && table.schema === schema).length;
   const warnings = matchingSchemaWarnings(run?.warnings ?? [], connectionId, schema);
@@ -135,7 +136,13 @@ function schemaAssetState(
   if (tableCount > 0) {
     return { label: "已存在", tableCount, tone: "success" };
   }
-  return { label: "未发现本地 Manifest", tableCount, tone: "muted" };
+  // Align row status with KPI「缺 Manifest 的 Schema」: configured schema without a
+  // readable local Manifest uses one canonical label. Do not introduce a near-synonym
+  // fallback such as「未发现本地 Manifest」when the last sync warning is absent.
+  if (hasLocalManifestFile) {
+    return { label: "空 Manifest", tableCount, tone: "warning" };
+  }
+  return { label: "缺失 Manifest", tableCount, tone: "warning" };
 }
 
 function schemaHasReadableManifest(assetState: SchemaAssetState): boolean {
@@ -548,7 +555,13 @@ export function ConnectionOverview() {
               ).length;
               return {
                 schema,
-                assetState: schemaAssetState(conn.id, schema, semanticTables, lastRun),
+                assetState: schemaAssetState(
+                  conn.id,
+                  schema,
+                  semanticTables,
+                  lastRun,
+                  localManifestSchemas.has(schemaRefKey(conn.id, schema))
+                ),
                 enabledTableCount: enabledTableCountForSchema,
                 liveCount: liveTableCountCell(
                   schema,
@@ -1042,7 +1055,7 @@ export function ConnectionOverview() {
                     </button>
                     <button
                       type="button"
-                      className="pl-btn pl-btn--ghost notranslate"
+                      className="pl-btn pl-btn--secondary notranslate"
                       disabled={Boolean(liveQuery?.isFetching || refreshingLiveByConnection[conn.id])}
                       onClick={() => {
                         void (async () => {

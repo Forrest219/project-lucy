@@ -1243,6 +1243,10 @@ describe("ConnectionOverview", () => {
       within(footerActions).getAllByRole("button").map((button) => button.textContent?.trim())
     ).toEqual(["+ 添加 Schema", "重新拉取库内目录", "同步配置变更"]);
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toHaveClass("pl-btn--secondary");
+    const liveRefreshButton = within(footerActions).getByRole("button", { name: "重新拉取库内目录" });
+    expect(liveRefreshButton).toHaveClass("pl-btn--secondary");
+    expect(liveRefreshButton).not.toHaveClass("pl-btn--ghost");
+    expect(liveRefreshButton).not.toHaveClass("pl-btn--primary");
     const refreshButton = within(footerActions).getByRole("button", { name: "同步配置变更" });
     expect(refreshButton).toHaveClass("pl-btn--secondary");
     expect(within(footerActions).queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
@@ -1250,6 +1254,7 @@ describe("ConnectionOverview", () => {
     expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();
     // Peer actions in the footer should stay at the same secondary hierarchy.
     expect(within(footerActions).queryByRole("button", { name: "同步配置变更" })).not.toHaveClass("pl-btn--primary");
+    expect(within(footerActions).queryByRole("button", { name: "重新拉取库内目录" })).not.toHaveClass("pl-btn--primary");
     expect(within(card).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "上传语义包" })
@@ -1389,6 +1394,54 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByText("财政部舱单")).not.toBeInTheDocument();
     expect(screen.queryByText("模式清单")).not.toBeInTheDocument();
     assertNoForbiddenTerms(document.body);
+  });
+
+  it("uses 缺失 Manifest when local tables are empty even without a sync warning", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "starrocks-r1",
+          driver: "mysql",
+          schemas: ["demo_finance", "meta"],
+          enabledTables: ["demo_finance.ceo_metric_snapshot"]
+        }
+      ],
+      tables: [],
+      catalogReloadsResponse: {
+        runs: [],
+        last: null,
+        lastByConnection: {
+          "starrocks-r1": {
+            id: "rel_20260806_000001",
+            status: "success",
+            startedAt: "2026-08-06T02:00:00.000Z",
+            finishedAt: "2026-08-06T02:00:00.040Z",
+            durationMs: 40,
+            requestedConnectionId: "starrocks-r1",
+            connectionIds: ["starrocks-r1"],
+            connections: 1,
+            configuredSchemas: 2,
+            manifestSchemas: 0,
+            tables: 0,
+            enabledTables: 1,
+            warnings: [],
+            source: "static-yaml"
+          }
+        }
+      }
+    });
+    renderOverview();
+
+    const financeStatus = await screen.findByTestId("schema-asset-status-starrocks-r1-demo_finance");
+    expect(financeStatus).toHaveTextContent("缺失 Manifest");
+    expect(financeStatus).toHaveClass("pl-schema-asset-status--warning");
+    expect(screen.getByTestId("schema-row-starrocks-r1-demo_finance")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByTestId("upload-yaml-starrocks-r1-demo_finance")).toBeInTheDocument();
+
+    const metaStatus = screen.getByTestId("schema-asset-status-starrocks-r1-meta");
+    expect(metaStatus).toHaveTextContent("缺失 Manifest");
+    expect(metaStatus).not.toHaveTextContent("未发现本地 Manifest");
+    expect(screen.queryByText("未发现本地 Manifest")).not.toBeInTheDocument();
   });
 });
 
