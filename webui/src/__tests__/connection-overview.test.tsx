@@ -1568,6 +1568,12 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     const actionColRule = css.match(/\.pl-schema-asset-col-action\s*\{[^}]*\}/);
     expect(actionColRule).not.toBeNull();
     expect(actionColRule![0]).toMatch(/width:\s*26%/);
+
+    // Design System 02 / page-layout: do not hide core row actions via overflow clipping.
+    const actionsRule = css.match(/\.pl-schema-asset-actions\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(actionsRule).toMatch(/flex-wrap/);
+    expect(actionsRule).not.toMatch(/overflow-hidden/);
+    expect(actionsRule).not.toMatch(/flex-nowrap/);
   });
 
   it("Spec 107: shows live DB table counts distinct from Manifest and enabled counts", async () => {
