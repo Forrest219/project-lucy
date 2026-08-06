@@ -337,6 +337,71 @@ describe("wiki editor storage", () => {
     await rm(outside, { recursive: true, force: true });
   });
 
+  it("deletes a Markdown document and clears its version history (Spec 118 UX-WIKI-045)", async () => {
+    const { deleteWiki, WikiNotFoundError } = await import("../wiki");
+    await writeWiki(projectRoot, "global/to-delete.md", { content: "# Delete me\n" });
+    await createWikiVersionSnapshot(projectRoot, "global/to-delete.md", "# Delete me\n", {
+      operation: "edit_save",
+      force: true
+    });
+    const before = await listWikiVersions(projectRoot, "global/to-delete.md");
+    expect(before.versions.length).toBeGreaterThan(0);
+
+    const result = await deleteWiki(projectRoot, "global/to-delete.md");
+    expect(result).toEqual({
+      key: "global/to-delete.md",
+      deleted: true,
+      filePath: "wiki/global/to-delete.md"
+    });
+    await expect(
+      stat(path.join(projectRoot, "wiki", "global", "to-delete.md"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    const after = await listWikiVersions(projectRoot, "global/to-delete.md");
+    expect(after.versions).toEqual([]);
+    await expect(deleteWiki(projectRoot, "global/to-delete.md")).rejects.toBeInstanceOf(
+      WikiNotFoundError
+    );
+  });
+
+  it("deletes a Markdown document through the wiki API route (Spec 118)", async () => {
+    await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+    await writeWiki(projectRoot, "global/api-delete-doc.md", { content: "# API Delete\n" });
+    const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    const app = buildServer();
+    try {
+      const deleted = await app.inject({
+        method: "DELETE",
+        url: "/api/wiki/global%2Fapi-delete-doc.md"
+      });
+      expect(deleted.statusCode).toBe(200);
+      expect(deleted.json()).toMatchObject({
+        ok: true,
+        data: {
+          key: "global/api-delete-doc.md",
+          deleted: true,
+          filePath: "wiki/global/api-delete-doc.md"
+        }
+      });
+      const missing = await app.inject({
+        method: "DELETE",
+        url: "/api/wiki/global%2Fapi-delete-doc.md"
+      });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.json()).toMatchObject({
+        ok: false,
+        error: { code: "WIKI_NOT_FOUND" }
+      });
+    } finally {
+      await app.close();
+      if (previousProjectRoot === undefined) {
+        delete process.env.KTX_PROJECT_ROOT;
+      } else {
+        process.env.KTX_PROJECT_ROOT = previousProjectRoot;
+      }
+    }
+  });
+
   it("exposes directory deletion through the wiki API route (M56 UX-WIKI-010)", async () => {
     const { createWikiDirectory } = await import("../wiki");
     await createWikiDirectory(projectRoot, { path: "api-delete" });

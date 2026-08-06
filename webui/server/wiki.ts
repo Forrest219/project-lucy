@@ -13,7 +13,7 @@ import {
   safeRenameDirectory,
   safeWrite
 } from "./fs-safe";
-import { auditedWriteFile } from "./admin/config-audit-write.js";
+import { auditedRemoveFile, auditedWriteFile } from "./admin/config-audit-write.js";
 
 export type WikiFrontmatter = {
   summary?: string;
@@ -61,6 +61,12 @@ export type WikiDirectoryCreateResult = {
 
 export type WikiDirectoryDeleteResult = {
   path: string;
+  deleted: boolean;
+  filePath: string;
+};
+
+export type WikiDocumentDeleteResult = {
+  key: string;
   deleted: boolean;
   filePath: string;
 };
@@ -877,6 +883,50 @@ export async function deleteWikiDirectory(
     path: normalizedPath,
     deleted: true,
     filePath: `${relPath}/`
+  };
+}
+
+/**
+ * Delete a saved Wiki Markdown document and prune its version history.
+ *
+ * Spec 118 / UX-WIKI-045: hard delete only (no recycle bin). Config audit
+ * records the file removal; version snapshots for this key are removed so
+ * orphaned history does not linger under `.lucy-history`.
+ */
+export async function deleteWiki(
+  projectRoot: string,
+  key: string
+): Promise<WikiDocumentDeleteResult> {
+  const normalized = normalizeWikiKey(key);
+  const filePath = relPathForKey(normalized);
+  if (!(await wikiExists(projectRoot, normalized))) {
+    throw new WikiNotFoundError("Wiki 文档不存在。");
+  }
+
+  await auditedRemoveFile(projectRoot, filePath, {
+    enabled: true,
+    changeType: "wiki_delete",
+    assetKind: "wiki",
+    actorType: "ui_admin",
+    source: "wiki_api",
+    targetId: normalized,
+    operation: "delete"
+  });
+
+  const index = await readWikiHistoryIndex(projectRoot);
+  const document = index.documents[normalized];
+  if (document) {
+    for (const version of document.versions) {
+      await safeRemove(projectRoot, version.snapshotPath);
+    }
+    delete index.documents[normalized];
+    await writeWikiHistoryIndex(projectRoot, index);
+  }
+
+  return {
+    key: normalized,
+    deleted: true,
+    filePath
   };
 }
 

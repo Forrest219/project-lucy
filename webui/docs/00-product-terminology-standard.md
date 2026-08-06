@@ -272,6 +272,8 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Directory Rename Preflight | 重命名预检 | 覆盖预检混用 | 重命名前展示源/目标路径与影响摘要 |
 | Source Wiki Directory | 当前目录路径 | 源目录（仅预检补充） | 改名前 `wiki/<path>/` |
 | Target Wiki Directory | 目标目录路径 | 新目录（仅预检补充） | 改名后 `wiki/<path>/` |
+| Delete Markdown Document | 删除文档 | 删除 MD、删文件、删除 page | 删除当前已保存 Wiki Markdown（Spec 118） |
+| Document Delete Confirmation | 删除确认 | 删除预检（与上传预检混用） | 删除文档确认对话框；展示目标 `wiki/<key>` |
 | Business Annotation | 业务注释 | 查看注释可接受 | 面向业务的表 / 字段解释 |
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |

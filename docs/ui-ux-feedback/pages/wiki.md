@@ -1382,3 +1382,34 @@ Reported: 2026-08-05
 ### Notes
 
 Fixed by Spec 109 / `wo-202608-42`：`POST /api/wiki/directories/rename(/preview)`、`WikiRenameDirectoryDialog`、树菜单「重命名目录」。Non-browser 验证：`wiki.test.ts` / `wiki.test.tsx`、`lint:terminology`、`build`。
+
+## UX-WIKI-045: 缺少删除 Markdown 文档入口
+
+Status: Fixed
+Route: /wiki
+Area: Wiki document delete
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+
+已打开的 Markdown 文档操作区没有删除入口；只能删空目录或移动/覆盖，无法清理误传或测试残留文档。
+
+### Evidence
+
+- 2026-08-06 代码核实：阅读态 Header 为下载 / 移动 / 版本记录 / 上传覆盖 / 编辑；无「删除文档」。
+- 无 `DELETE /api/wiki/:key`；Spec 58 将批量/递归删除列为非目标，单文档删除此前未产品化。
+
+### Expected
+
+阅读态文档操作区提供「删除文档」；确认对话框展示 `wiki/<key>`；确认后硬删除文件并清理该 key 版本历史；成功后离开文档页。
+
+### Browser Check
+
+1. Open 已保存文档 → Header 可见「删除文档」（ghost），「编辑」仍为唯一 primary。
+2. 确认对话框展示目标路径；取消不删；确认后文档消失且 URL 离开该 key。
+3. 本轮按约束不做浏览器验证；Vitest / lint / build 通过后升 Fixed，浏览器复核另议。
+
+### Notes
+
+Fixed by Spec 118 / `wo-202608-51`：`DELETE /api/wiki/:key`、`WikiDeleteDocumentDialog`、Header「删除文档」。Non-browser 验证：`wiki.test.ts` / `wiki.test.tsx`、`lint:terminology`、`build`。

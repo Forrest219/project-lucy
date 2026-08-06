@@ -280,6 +280,15 @@ function buildFetchMock(
         })
       );
     }
+    if (init?.method === "DELETE" && url.startsWith("/api/wiki/") && !url.includes("/directories/")) {
+      const key = decodeURIComponent(url.replace("/api/wiki/", ""));
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: { key, deleted: true, filePath: `wiki/${key}` }
+        })
+      );
+    }
     if (url === "/api/wiki/directories/rename/preview" && init?.method === "POST") {
       const body = JSON.parse(String(init.body));
       const sourcePath = String(body.sourcePath ?? "");
@@ -692,6 +701,7 @@ describe("WikiEditor Read Mode default (P0)", () => {
       "wiki-move-button",
       "wiki-version-button",
       "wiki-upload-replace-button",
+      "wiki-delete-document-button",
       "wiki-edit-button"
     ]);
     expect(screen.getByTestId("wiki-edit-button").className).toMatch(/pl-btn--primary/);
@@ -699,6 +709,10 @@ describe("WikiEditor Read Mode default (P0)", () => {
       /pl-btn--primary/
     );
     expect(screen.getByTestId("wiki-upload-replace-button").className).toMatch(/pl-btn--ghost/);
+    expect(screen.getByTestId("wiki-delete-document-button").className).toMatch(/pl-btn--ghost/);
+    expect(screen.getByTestId("wiki-delete-document-button").className).not.toMatch(
+      /pl-btn--primary/
+    );
     for (const testId of [
       "wiki-download-button",
       "wiki-move-button",
@@ -1828,10 +1842,11 @@ describe("WikiEditor directory and document governance (M56)", () => {
   it("deletes an empty directory through the WikiTree menu (UX-WIKI-010)", async () => {
     const fetchMock = buildFetchMock(WIKI_PAGES, SOURCES, EMPTY_WIKI_DIRECTORIES);
     vi.stubGlobal("fetch", fetchMock);
-    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+    // Start on the empty directory itself — after delete the URL must leave
+    // that dir, otherwise the library panel keeps the same empty state.
+    renderWiki("/wiki?dir=ops");
 
     const tree = await screen.findByTestId("wiki-tree");
-    const opsButton = await within(tree).findByRole("button", { name: /ops\s*0\s*篇/ });
     // Open the ops directory `...` menu and pick 删除目录.
     fireEvent.click(await within(tree).findByRole("button", { name: "ops 目录操作" }));
     const deleteItem = await within(tree).findByTestId("wiki-tree-delete-directory-ops");
@@ -1850,6 +1865,64 @@ describe("WikiEditor directory and document governance (M56)", () => {
         (call) => call[0] === "/api/wiki/directories/ops" && call[1]?.method === "DELETE"
       );
       expect(deleteCall).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location").textContent).toBe("/wiki");
+    });
+    expect(await screen.findByTestId("wiki-library-select-prompt")).toBeInTheDocument();
+  });
+
+  it("navigates to the parent directory after deleting a nested empty directory", async () => {
+    const fetchMock = buildFetchMock(WIKI_PAGES, SOURCES, EMPTY_WIKI_DIRECTORIES);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?dir=ops%2Fplaybooks");
+
+    const tree = await screen.findByTestId("wiki-tree");
+    fireEvent.click(
+      await within(tree).findByRole("button", { name: "ops/playbooks 目录操作" })
+    );
+    fireEvent.click(
+      await within(tree).findByTestId("wiki-tree-delete-directory-ops-playbooks")
+    );
+
+    const confirmDialog = await screen.findByTestId("wiki-delete-directory-dialog");
+    fireEvent.click(within(confirmDialog).getByTestId("wiki-delete-directory-confirm"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location").textContent).toContain("dir=ops");
+      expect(screen.getByTestId("current-location").textContent).not.toContain(
+        "ops/playbooks"
+      );
+    });
+  });
+
+  it("deletes the current Markdown document from the header actions (UX-WIKI-045)", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    expect(await screen.findByTestId("wiki-delete-document-button")).toHaveTextContent("删除文档");
+    fireEvent.click(screen.getByTestId("wiki-delete-document-button"));
+
+    const confirmDialog = await screen.findByTestId("wiki-delete-document-dialog");
+    expect(within(confirmDialog).getByTestId("wiki-delete-document-target")).toHaveTextContent(
+      "wiki/global/superstore-analysis-playbook.md"
+    );
+
+    fireEvent.click(within(confirmDialog).getByTestId("wiki-delete-document-confirm"));
+
+    await waitFor(() => {
+      const deleteCall = fetchMock.mock.calls.find(
+        (call) =>
+          call[0] === "/api/wiki/global%2Fsuperstore-analysis-playbook.md" &&
+          call[1]?.method === "DELETE"
+      );
+      expect(deleteCall).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("current-location").textContent).toBe("/wiki?dir=global");
     });
   });
 

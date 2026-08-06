@@ -336,6 +336,13 @@ export type WikiDirectoryDeleteResult = {
   filePath: string;
 };
 
+
+export type WikiDocumentDeleteResult = {
+  key: string;
+  deleted: boolean;
+  filePath: string;
+};
+
 export type WikiDirectoryRenameInput = {
   sourcePath: string;
   newName: string;

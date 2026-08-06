@@ -56,6 +56,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-06 | Business Wiki `/wiki` 删除 Markdown 文档 | Spec 118 / `wo-202608-51` 落地：`UX-WIKI-045` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。阅读态 Header「删除文档」；确认对话框；`DELETE /api/wiki/:key`；清理版本历史；成功后离开文档页。修订 Spec 58/81。跨页面主题 `button hierarchy consistency` 增挂 `UX-WIKI-045`。验证：`wiki.test.ts`、`wiki.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Catalog 表导入 + Publish Workbench 校验/junk | Spec 114 / `wo-202608-47`：`UX-CATALOG-030` → `Fixed`（overlay-safe 导入，不冲掉 columns）。Spec 115 / `wo-202608-48`：`UX-PUBLISH-WORKBENCH-004` → `Fixed`（工作台 issues 披露 + `._*` scrub + 上传拒收）。本轮不做浏览器验证，结束后只做 code review。延伸 `validation failure disclosure`；新增 `overlay-safe table yaml import`、`semantic-layer junk scrub`。验证：`api.source-import`、`semantic-layer-junk`、`api.semantic-assets`、`table-editor`、`review`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish History `/publish/history` | Spec 113 / `wo-202608-46` 落地：`UX-PUBLISH-HISTORY-008`～`010` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`#`→序号；筛选栏+分页；Header「导出 CSV」明细（移除语义资产包 ZIP）；`releases` 支持筛选/`total` + `export.csv`。修订 Spec 35/85/91。跨页面主题延伸 `export-table field parity`、新增 `list-page filter-pagination parity`。验证：`publish-history.test.tsx`、`api.semantic-assets.reindex.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish Workbench `/publish/workbench` | Spec 112 / `wo-202608-45` 落地：`UX-PUBLISH-WORKBENCH-001`～`003` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。发布门禁 + 步骤指示；三栏角色；Header 收口（删表目录）；Schema/表影响分流；进页自动校验。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
@@ -156,7 +157,7 @@ docs/ui-ux-feedback/
 | `thead sticky / visual anchor`（长表格 thead 失去参照） | UX-CATALOG-020 | Open | 待 M66 |
 | `chip nesting`（chip 容器不得套 chip） | UX-OVERVIEW-001 | Verified | 已在 README 规则集中 |
 | `aria-live noise`（每秒 ticker 不得走 aria-live） | UX-OVERVIEW-003 | Open | 待排期 |
-| `button hierarchy consistency`（同组并列动作不得主次混用；唯一主路径 primary 须在组首或组末且与 Spec 主动作一致） | UX-CONNECTIONS-023、UX-OVERVIEW-008、UX-WIKI-037 | 2 Fixed + 1 Fixed | Spec 81 / wo-202608-13；Connections/Overview 待浏览器复核 |
+| `button hierarchy consistency`（同组并列动作不得主次混用；唯一主路径 primary 须在组首或组末且与 Spec 主动作一致；破坏性动作 ghost 触发 + dialog danger 确认） | UX-CONNECTIONS-023、UX-OVERVIEW-008、UX-WIKI-037、UX-WIKI-045 | 3 Fixed + 1 Fixed | Spec 81 / wo-202608-13；Spec 118 / wo-202608-51；Connections/Overview 待浏览器复核 |
 | `internal-term translation`（内部状态术语不得裸露给用户） | UX-OVERVIEW-010 | 1 Fixed | 代码已修（`427ab38`），待浏览器复核 |
 | `header microcopy value density`（页头说明必须表达用户价值，不讲内部实现叙事） | UX-OVERVIEW-009 | 1 Fixed | 代码已修（`427ab38`），待浏览器复核 |
 | `button semantic consistency (secondary vs ghost)`（同一 action group 不得混用 `secondary`/`ghost` 造成误导性弱化） | UX-CATALOG-021 | Fixed | Spec 73 / wo-202608-06，待浏览器复核 |

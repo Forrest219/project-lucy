@@ -47,6 +47,7 @@ POST /api/wiki/directories
 POST /api/wiki/directories/rename/preview
 POST /api/wiki/directories/rename
 DELETE /api/wiki/directories/:path
+DELETE /api/wiki/:key
 POST /api/wiki/:key/move/preview
 POST /api/wiki/:key/move
 GET  /api/wiki/:key/versions
@@ -329,6 +330,8 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 `mode` 取值：`create`（不存在则创建，存在返回 `409 WIKI_DIRECTORY_EXISTS`）、`create_or_get`（不存在则创建，存在则直接返回已有的目录）。
 
 `DELETE /api/wiki/directories/:path` 删除目录。目录非空（仍残留文档） → `409 WIKI_DIRECTORY_NOT_EMPTY`；目录不存在 → `404 WIKI_DIRECTORY_NOT_FOUND`。
+
+`DELETE /api/wiki/:key` 删除已保存 Markdown 文档（Spec 118）。成功返回 `{ key, deleted: true, filePath }`，并清理该 key 的版本历史索引与快照。文档不存在 → `404 WIKI_NOT_FOUND`。
 
 `POST /api/wiki/directories/rename/preview` 预览同父级目录重命名（只改最后一段）。请求：
 

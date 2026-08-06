@@ -56,6 +56,7 @@ import {
 import {
   createWikiDirectory,
   commitWikiUpload,
+  deleteWiki,
   deleteWikiDirectory,
   listWiki,
   listWikiDirectories,
@@ -685,6 +686,20 @@ export function buildServer() {
     const result = await deleteWikiDirectory(projectRoot, request.params.path);
     writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
     writtenFiles.push({ filePath: result.filePath });
+    return {
+      ok: true,
+      data: result
+    };
+  });
+
+
+  app.delete<{
+    Params: { key: string };
+  }>("/api/wiki/:key", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const result = await deleteWiki(projectRoot, request.params.key);
+    writtenFiles.push({ filePath: result.filePath });
+    writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
       ok: true,
       data: result

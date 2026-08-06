@@ -77,13 +77,15 @@ No new product terms. Paths / keys / `Markdown` keep `notranslate` / `translate=
 | 2 | 移动到目录 | `wiki-move-button` | `pl-btn--ghost` |
 | 3 | 版本记录 | `wiki-version-button` | `pl-btn--ghost` |
 | 4 | 上传覆盖 | `wiki-upload-replace-button` | `pl-btn--ghost` |
-| 5 | 编辑 | `wiki-edit-button` | **`pl-btn--primary`** |
+| 5 | 删除文档 | `wiki-delete-document-button` | `pl-btn--ghost` |
+| 6 | 编辑 | `wiki-edit-button` | **`pl-btn--primary`** |
 
 约束：
 
 - 同组最多一个 `primary`，且必须是 `编辑`（对齐 Spec 36）。
-- `上传覆盖` 不得使用 `primary`（破坏性覆盖，非默认下一步）。
+- `上传覆盖` / `删除文档` 不得使用 `primary`（破坏性动作，非默认下一步；删除确认见 Spec 118）。
 - 顺序与 testid 契约保持稳定，便于测试与后续 E2E。
+- 「删除文档」由 Spec 118 / `UX-WIKI-045` 引入；本表为阅读态 Header 权威顺序。
 
 ## 7. 长期台账机制更新
 

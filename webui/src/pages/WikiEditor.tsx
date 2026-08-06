@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { PageHeader } from "../components/PageHeader";
 import { TemplatePicker } from "../components/TemplatePicker";
 import { WikiDeleteDirectoryDialog } from "../components/WikiDeleteDirectoryDialog";
+import { WikiDeleteDocumentDialog } from "../components/WikiDeleteDocumentDialog";
 import { WikiLibraryHome } from "../components/WikiLibraryHome";
 import { WikiMoveDocumentDialog } from "../components/WikiMoveDocumentDialog";
 import { WikiNewDirectoryDialog } from "../components/WikiNewDirectoryDialog";
@@ -48,6 +49,7 @@ import type {
   WikiDirectoryRenamePreview,
   WikiDirectoryRenameResult,
   WikiDirectorySummary,
+  WikiDocumentDeleteResult,
   WikiSummary,
   WikiUploadPreview
 } from "../lib/types";
@@ -166,6 +168,8 @@ export function WikiEditor() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [deleteDirectoryPath, setDeleteDirectoryPath] = useState<string | null>(null);
   const [deleteDirectoryError, setDeleteDirectoryError] = useState<string | null>(null);
+  const [deleteDocumentKey, setDeleteDocumentKey] = useState<string | null>(null);
+  const [deleteDocumentError, setDeleteDocumentError] = useState<string | null>(null);
   const [renameDirectoryPath, setRenameDirectoryPath] = useState<string | null>(null);
   const [renameDirectoryName, setRenameDirectoryName] = useState("");
   const [renameDirectoryPreview, setRenameDirectoryPreview] =
@@ -466,6 +470,21 @@ export function WikiEditor() {
       ),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      // Viewing the deleted directory (common for empty-dir delete) would
+      // otherwise keep showing the same empty library panel — looking like
+      // the delete did nothing. Navigate to the parent (or library home).
+      if (
+        dirParam === result.path ||
+        (dirParam.length > 0 && dirParam.startsWith(`${result.path}/`))
+      ) {
+        const slash = result.path.lastIndexOf("/");
+        const parent = slash >= 0 ? result.path.slice(0, slash) : "";
+        if (parent) {
+          setSearchParams({ dir: parent }, { replace: true });
+        } else {
+          setSearchParams({}, { replace: true });
+        }
+      }
       setDeleteDirectoryPath(null);
       setDeleteDirectoryError(null);
       toast.success(`已删除目录 ${result.path}`);
@@ -474,6 +493,33 @@ export function WikiEditor() {
       const message =
         error instanceof Error ? error.message : "未知错误";
       setDeleteDirectoryError(message);
+    }
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (documentKey: string) =>
+      apiDelete<WikiDocumentDeleteResult>(
+        `/api/wiki/${encodeURIComponent(documentKey)}`
+      ),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+      const slash = result.key.lastIndexOf("/");
+      const parent = slash >= 0 ? result.key.slice(0, slash) : "";
+      if (parent) {
+        setSearchParams({ dir: parent }, { replace: true });
+      } else {
+        setSearchParams({}, { replace: true });
+      }
+      setDeleteDocumentKey(null);
+      setDeleteDocumentError(null);
+      setUiMode("read");
+      markClean();
+      toast.success(`已删除文档 ${result.key}`);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "未知错误";
+      setDeleteDocumentError(message);
+      toast.error(`删除文档失败：${message}`);
     }
   });
 
@@ -863,6 +909,27 @@ export function WikiEditor() {
       return;
     }
     deleteDirectoryMutation.mutate(deleteDirectoryPath);
+  }
+
+  function openDeleteDocumentDialog() {
+    if (mode !== "loaded" || !key) {
+      toast.error("只能删除已保存的 Markdown 文档。");
+      return;
+    }
+    setDeleteDocumentKey(key);
+    setDeleteDocumentError(null);
+  }
+
+  function cancelDeleteDocument() {
+    setDeleteDocumentKey(null);
+    setDeleteDocumentError(null);
+  }
+
+  function confirmDeleteDocument() {
+    if (!deleteDocumentKey) {
+      return;
+    }
+    deleteDocumentMutation.mutate(deleteDocumentKey);
   }
 
   function openRenameDirectoryDialog(directoryPath: string) {
@@ -1323,6 +1390,14 @@ export function WikiEditor() {
                     上传覆盖
                   </button>
                   <button
+                    className="pl-btn pl-btn--ghost"
+                    data-testid="wiki-delete-document-button"
+                    onClick={openDeleteDocumentDialog}
+                    type="button"
+                  >
+                    删除文档
+                  </button>
+                  <button
                     className="pl-btn pl-btn--primary"
                     data-testid="wiki-edit-button"
                     onClick={switchToEdit}
@@ -1587,6 +1662,14 @@ export function WikiEditor() {
         isDeleting={deleteDirectoryMutation.isPending}
         onCancel={cancelDeleteDirectory}
         onConfirm={confirmDeleteDirectory}
+      />
+
+      <WikiDeleteDocumentDialog
+        documentKey={deleteDocumentKey}
+        error={deleteDocumentError}
+        isDeleting={deleteDocumentMutation.isPending}
+        onCancel={cancelDeleteDocument}
+        onConfirm={confirmDeleteDocument}
       />
 
       <WikiRenameDirectoryDialog
