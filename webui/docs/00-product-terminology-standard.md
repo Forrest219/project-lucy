@@ -255,6 +255,8 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Discovered Table Count | 已发现表数 | 本地表数（作主标签时易混）、物理表数、远端表数 | Schema Manifest 已读入本地 Catalog 的表数；KPI 卡亦称「服务器目录已发现表」；非 DB 实时扫描 |
 | Enabled Table Count | 已启用表数 | 白名单表数、启用表数（旧列头，仅兼容旧文档） | `ktx.yaml` `enabled_tables`；对齐 `/connections` 列头「已启用表数」 |
 | Unenabled Table Count | 未启用表 | 未白名单表（主导航禁用） | 已发现但未进入 `enabled_tables`；缺 Manifest 的未知表不计入 |
+| Invalid Enabled Table | 无效启用 | 孤儿表、孤儿启用（用户可见主文案禁用） | `enabled_tables` 有、本地 Schema Manifest 无的 `schema.table`（Spec 116） |
+| Remove Invalid Enabled | 移出无效启用 | 清理孤儿、删除脏启用 | 启用表范围页从草稿移除全部无效启用（Spec 116） |
 | Live Catalog | 库内目录 | 物理扫描（作主标签） | Owner 按需只读目录查询结果 |
 | Refresh Live Catalog | 重新拉取库内目录 | 刷新本地目录（易混） | 仅 bypass TTL 重查物理库 |
 | Select Schema | 选择 Schema | 选择架构、选择模式 | Add Schema 下拉候选 |

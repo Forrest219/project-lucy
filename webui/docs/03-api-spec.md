@@ -379,7 +379,14 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 { "ok": true, "data": { "tables": ["dataforai.superstore_orders"] } }
 ```
 
-`PUT /api/connections/:connId/enabled-tables` 默认 `dryRun:true`。`enabledTables` 必须是已扫描物理表清单中的 `schema.table`，拒绝空串、路径字符、重复项和未扫描表。
+`PUT /api/connections/:connId/enabled-tables` 默认 `dryRun:true`。
+
+**写入门禁（Spec 116）：**
+
+- `enabledTables` 项必须是合法 `schema.table`（拒绝空串、路径字符、重复项）。
+- **新增**到列表中的表必须出现在本地已扫描 Manifest；否则 `400 TABLE_NOT_SCANNED`。
+- **已存在**于当前 `ktx.yaml` `enabled_tables`、但本地 Manifest 已缺失的表（无效启用）允许暂时保留；响应 `warnings[]` 中给出 `ENABLED_TABLE_NOT_SCANNED`（不阻塞保存）。
+- 空列表、仅删除（含移出无效启用）始终允许。
 
 请求：
 
@@ -394,14 +401,31 @@ dryRun 响应：
   "diff": "...",
   "proposedYaml": "...",
   "oldEnabledTables": [],
-  "newEnabledTables": ["dataforai.superstore_orders"]
+  "newEnabledTables": ["dataforai.superstore_orders"],
+  "warnings": []
+}}
+```
+
+保留无效启用时 `warnings` 示例：
+
+```jsonc
+{ "ok": true, "data": {
+  "diff": "...",
+  "proposedYaml": "...",
+  "oldEnabledTables": ["demo_finance.ads_finance_revenue_day"],
+  "newEnabledTables": ["demo_finance.ads_finance_revenue_day", "ai.ksc_income_statement_detail"],
+  "warnings": [{
+    "code": "ENABLED_TABLE_NOT_SCANNED",
+    "table": "demo_finance.ads_finance_revenue_day",
+    "message": "Table 'demo_finance.ads_finance_revenue_day' is enabled but not present in scanned semantic-layer schema"
+  }]
 }}
 ```
 
 `dryRun:false` 写 `ktx.yaml` 并记录 `config_change_log`：
 
 ```jsonc
-{ "ok": true, "data": { "written": true, "auditId": 1, "oldEnabledTables": [], "newEnabledTables": ["dataforai.superstore_orders"] }}
+{ "ok": true, "data": { "written": true, "auditId": 1, "oldEnabledTables": [], "newEnabledTables": ["dataforai.superstore_orders"], "warnings": [] }}
 ```
 
 错误码：`CONNECTION_NOT_FOUND` `INVALID_ENABLED_TABLE` `DUPLICATE_ENABLED_TABLE` `TABLE_NOT_SCANNED`。

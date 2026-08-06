@@ -51,6 +51,7 @@ function makeSource(table: string, overrides: Partial<SourceSummary> = {}): Sour
     conn: "mysql-aliyun",
     schema: "dataforai",
     table,
+    qualifiedName: `dataforai.${table}`,
     filePath: "",
     columnCount: 1,
     columnNames: [],
@@ -61,6 +62,10 @@ function makeSource(table: string, overrides: Partial<SourceSummary> = {}): Sour
     wikiRefCount: 0,
     completion: "not_started",
     mtime: "",
+    enabled: true,
+    authorizedAgentCount: 0,
+    semanticUpdatedAt: "2026-06-15T08:00:00.000Z",
+    semanticUpdatedAtSource: "manifest",
     ...overrides
   };
 }
@@ -107,6 +112,14 @@ function defaultHandlers(opts: {
       const b = body as { dryRun?: boolean; enabledTables?: string[] };
       const newEnabled = b.enabledTables ?? [];
       const persisted = persistedByConnection.get(conn.id) ?? [];
+      const scanned = new Set(opts.tablesByConnection?.[conn.id] ?? opts.tables ?? TEST_TABLES);
+      const warnings = newEnabled
+        .filter((t) => !scanned.has(t) && persisted.includes(t))
+        .map((table) => ({
+          code: "ENABLED_TABLE_NOT_SCANNED" as const,
+          table,
+          message: `Table '${table}' is enabled but not present in scanned semantic-layer schema`
+        }));
       if (b.dryRun === true) {
         const added = newEnabled.filter((t) => !persisted.includes(t));
         const diffLines = ["--- ktx.yaml", "+++ ktx.yaml", "@@"].concat(
@@ -124,7 +137,8 @@ function defaultHandlers(opts: {
                 newEnabled.join("\n      - ") +
                 "\n",
               oldEnabledTables: persisted,
-              newEnabledTables: newEnabled
+              newEnabledTables: newEnabled,
+              warnings
             }
           })
         );
@@ -136,7 +150,8 @@ function defaultHandlers(opts: {
           data: {
             written: true,
             oldEnabledTables: persisted,
-            newEnabledTables: newEnabled
+            newEnabledTables: newEnabled,
+            warnings
           }
         })
       );
@@ -997,5 +1012,131 @@ describe("TableWhitelist", () => {
     expect(nameCell.tagName).toBe("SPAN");
     expect(nameCell).toHaveAttribute("translate", "no");
     expect(nameCell.className).toContain("notranslate");
+  });
+
+  describe("Spec 116: invalid enabled (orphan) drift", () => {
+    const STARROCKS_CONN: ConnectionInfo = {
+      id: "starrocks-r1",
+      driver: "mysql",
+      engine: "starrocks",
+      wireProtocol: "mysql",
+      readOnlyExpected: true,
+      schemas: ["ai", "demo_finance", "meta"],
+      enabledTables: [
+        "demo_finance.ads_finance_revenue_day",
+        "meta.field_abbr_dict",
+        "meta.dict_enum"
+      ]
+    };
+
+    const AI_TABLES = [
+      "ai.ksc_balance_sheet_detail",
+      "ai.ksc_cash_flow_statement_detail",
+      "ai.ksc_income_statement_detail"
+    ];
+
+    it("surfaces invalid enabled rows and saves scanned tables while retaining orphans in payload", async () => {
+      const { fetchMock } = stubWhitelistFetch(
+        defaultHandlers({
+          connection: STARROCKS_CONN,
+          tables: AI_TABLES,
+          sources: []
+        })
+      );
+      renderWhitelist(["/?connection=starrocks-r1&schema=ai"]);
+
+      await screen.findByTestId("whitelist-row-ai.ksc_balance_sheet_detail");
+      expect(screen.getByTestId("whitelist-hidden-invalid-enabled-banner")).toBeInTheDocument();
+      expect(screen.getByText(/本连接另有 3 张无效启用/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("whitelist-show-invalid-enabled"));
+      expect(await screen.findByTestId("whitelist-invalid-enabled-section")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("whitelist-invalid-row-demo_finance.ads_finance_revenue_day")
+      ).toBeInTheDocument();
+      expect(screen.getAllByText("无效启用").length).toBeGreaterThanOrEqual(1);
+
+      fireEvent.click(
+        within(screen.getByTestId("whitelist-row-ai.ksc_balance_sheet_detail")).getByRole(
+          "checkbox"
+        )
+      );
+      fireEvent.click(
+        within(screen.getByTestId("whitelist-row-ai.ksc_cash_flow_statement_detail")).getByRole(
+          "checkbox"
+        )
+      );
+      fireEvent.click(
+        within(screen.getByTestId("whitelist-row-ai.ksc_income_statement_detail")).getByRole(
+          "checkbox"
+        )
+      );
+
+      fireEvent.click(await screen.findByTestId("whitelist-save-changes"));
+
+      await waitFor(() => {
+        const putCall = fetchMock.mock.calls.find(
+          (call) =>
+            String(call[0]).includes("/api/connections/starrocks-r1/enabled-tables") &&
+            (call[1] as RequestInit | undefined)?.method === "PUT"
+        );
+        expect(putCall).toBeTruthy();
+        const body = JSON.parse(String((putCall?.[1] as RequestInit).body));
+        expect(body.dryRun).toBe(false);
+        expect(body.enabledTables).toEqual(
+          expect.arrayContaining([
+            "demo_finance.ads_finance_revenue_day",
+            "meta.field_abbr_dict",
+            "meta.dict_enum",
+            ...AI_TABLES
+          ])
+        );
+        expect(body.enabledTables).toHaveLength(6);
+      });
+
+      await waitFor(() => {
+        expect(
+          toastMocks.success.mock.calls.some(([message]) =>
+            String(message).includes("无效启用")
+          )
+        ).toBe(true);
+      });
+    });
+
+    it("one-click remove invalid enabled drops orphans from the save payload", async () => {
+      const { fetchMock } = stubWhitelistFetch(
+        defaultHandlers({
+          connection: STARROCKS_CONN,
+          tables: AI_TABLES,
+          sources: []
+        })
+      );
+      renderWhitelist(["/?connection=starrocks-r1"]);
+
+      expect(await screen.findByTestId("whitelist-invalid-enabled-section")).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId("whitelist-remove-invalid-enabled"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("whitelist-floating-bar")).toBeInTheDocument();
+      });
+
+      const orphanRow = screen.getByTestId(
+        "whitelist-invalid-row-demo_finance.ads_finance_revenue_day"
+      );
+      expect(within(orphanRow).getByText("待移出")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("whitelist-save-changes"));
+
+      await waitFor(() => {
+        const putCall = fetchMock.mock.calls.find(
+          (call) =>
+            String(call[0]).includes("/api/connections/starrocks-r1/enabled-tables") &&
+            (call[1] as RequestInit | undefined)?.method === "PUT"
+        );
+        expect(putCall).toBeTruthy();
+        const body = JSON.parse(String((putCall?.[1] as RequestInit).body));
+        expect(body.enabledTables).toEqual([]);
+      });
+    });
   });
 });

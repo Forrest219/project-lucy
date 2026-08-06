@@ -331,12 +331,28 @@ async function scannedPhysicalTables(projectRoot: string, connId: string): Promi
   return tables;
 }
 
-function validateEnabledTables(enabledTables: unknown, scanned: Set<string>): string[] {
+type EnabledTableWarning = {
+  code: "ENABLED_TABLE_NOT_SCANNED";
+  table: string;
+  message: string;
+};
+
+/**
+ * Spec 116: only *newly added* tables must be in the scanned Manifest.
+ * Tables already present in oldEnabledTables may be retained (invalid enabled /
+ * orphan drift) and are reported via warnings instead of blocking the write.
+ */
+function validateEnabledTables(
+  enabledTables: unknown,
+  scanned: Set<string>,
+  previouslyEnabled: Set<string>
+): { tables: string[]; warnings: EnabledTableWarning[] } {
   if (!Array.isArray(enabledTables)) {
     throw enabledTableError("INVALID_ENABLED_TABLE", "enabledTables must be an array");
   }
   const seen = new Set<string>();
   const valid: string[] = [];
+  const warnings: EnabledTableWarning[] = [];
   for (const item of enabledTables) {
     if (typeof item !== "string") {
       throw enabledTableError("INVALID_ENABLED_TABLE", "enabled table must be a string");
@@ -348,13 +364,20 @@ function validateEnabledTables(enabledTables: unknown, scanned: Set<string>): st
     if (seen.has(table)) {
       throw enabledTableError("DUPLICATE_ENABLED_TABLE", `Duplicate enabled table '${table}'`);
     }
-    if (!scanned.has(table)) {
+    if (!scanned.has(table) && !previouslyEnabled.has(table)) {
       throw enabledTableError("TABLE_NOT_SCANNED", `Table '${table}' is not present in scanned semantic-layer schema`);
+    }
+    if (!scanned.has(table)) {
+      warnings.push({
+        code: "ENABLED_TABLE_NOT_SCANNED",
+        table,
+        message: `Table '${table}' is enabled but not present in scanned semantic-layer schema`
+      });
     }
     seen.add(table);
     valid.push(table);
   }
-  return valid;
+  return { tables: valid, warnings };
 }
 
 export function buildServer() {
@@ -912,10 +935,14 @@ export function buildServer() {
       throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
     }
     const scanned = await scannedPhysicalTables(projectRoot, connId);
-    const newEnabledTables = validateEnabledTables(enabledTables, scanned);
     const oldEnabledTables = Array.isArray(connections[connId].enabled_tables)
       ? connections[connId].enabled_tables.filter((item): item is string => typeof item === "string")
       : [];
+    const { tables: newEnabledTables, warnings } = validateEnabledTables(
+      enabledTables,
+      scanned,
+      new Set(oldEnabledTables)
+    );
 
     // M45: local patch preserves order, comments and unknown
     // fields in unrelated parts of ktx.yaml so the dry-run diff only shows
@@ -924,7 +951,7 @@ export function buildServer() {
     const diff = makeDiff(yamlText, proposedYaml);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables } };
+      return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
     }
 
     const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
@@ -939,7 +966,7 @@ export function buildServer() {
       diff,
       requestId: request.id
     });
-    return { ok: true, data: { written: true, auditId, oldEnabledTables, newEnabledTables } };
+    return { ok: true, data: { written: true, auditId, oldEnabledTables, newEnabledTables, warnings } };
   });
 
   app.post<{
@@ -1277,7 +1304,6 @@ export function buildServer() {
     reply.header("Content-Disposition", `attachment; filename="${filename}"`);
     return reply.send(buildPublishHistoryCsvRows(records));
   });
-
 
   app.get<{
     Params: { id: string };

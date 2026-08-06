@@ -146,6 +146,7 @@ StarRocks 出现矛盾统计：`demo_finance` 中本地表数是 `0`，但启用
 2026-08-02 浏览器复核未通过：`demo_finance` and `meta` still show `本地表数 = 0 张表` with `启用表数 > 0 张表` without visible source-difference explanation in the table row.
 2026-08-04 M65 修复：`webui/src/pages/connections/ConnectionOverview.tsx` schema 行计算 `explainSourceDrift = assetState.tableCount === 0 && enabledTableCount > 0`，本地表数单元格 `<span class="pl-schema-asset-local-count" data-state="drift|ok">` 携带 title tooltip + aria-describedby，并追加内联 `<span class="pl-schema-asset-source-drift-tag"> · 来源：enabled_tables</span>` 让用户在 hover 之前就能看到来源差异；CSS 在 `webui/src/app/app.css` 中按 `data-state="drift"` 调整为 warning-toned 加粗。等待 docker 重建后浏览器复核。
 2026-08-04 vitest 覆盖：`src/__tests__/connection-overview.test.tsx` 新增 M65 describe，覆盖 drift / ok 双向断言（testid `schema-local-count-*` / `schema-source-drift-tag-*` / `aria-describedby` / `title`）。
+2026-08-06：启用表范围侧同类脏数据导致保存阻塞，见 `UX-CONNECTIONS-031` / Spec 116（无效启用可见性 + 差分门禁）。
 
 ## UX-CONNECTIONS-006: Schema 表格后两列视觉拥挤
 
@@ -801,3 +802,28 @@ Reported: 2026-08-06
 
 ### Notes
 Spec 107 / `wo-202608-40` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`live catalog vs local inventory`。
+
+## UX-CONNECTIONS-031: 启用表范围保存被无效启用（孤儿）阻塞
+
+Status: Fixed
+Route: `/connections/enabled-tables`
+Area: Save gate + invalid-enabled visibility
+Severity: P1
+Reported: 2026-08-06
+
+### Feedback
+在 `starrocks-r1` / Schema `ai` 勾选三张已扫描表并「保存变更」时报：`Table 'demo_finance.ads_finance_revenue_day' is not present in scanned semantic-layer schema`。页面上看不到该表，无法取消，保存永久卡住。根因：`enabled_tables` 残留无效启用，草稿按全连接提交，旧 API 要求 `new ⊆ scanned`。
+
+### Expected
+1. **新增**启用必须仍在本地 Manifest；**已存在**的无效启用不阻塞同连接其它变更（响应 `warnings`）。
+2. 启用表范围页暴露「已启用 · 本地无 Manifest」分区；聚焦其它 Schema 时顶部告警；提供「移出无效启用」。
+3. 保存成功若仍保留无效启用，Toast/状态条提示清理，不挡写入。
+
+### Browser Check
+1. 复现态：`enabled_tables` 含 `demo_finance.*`/`meta.*`，Manifest 仅 `ai`。
+2. 勾选三张 `ai` 表保存成功。
+3. 查看无效启用分区 / 告警；一键移出后保存，`enabled_tables` 仅剩 scanned。
+4. 尝试新启用未扫描表仍失败。
+
+### Notes
+Spec 116。交叉：`UX-CONNECTIONS-005`（连接概览本地 0 / 启用 >0 drift）；不自动 prune。本轮以单测验收，不做浏览器验证。

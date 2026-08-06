@@ -205,6 +205,105 @@ describe("connection enabled_tables API", () => {
     await app.close();
   });
 
+  // Spec 116: grandfather previously-enabled unscanned tables; warn, do not block.
+  it("allows retaining previously enabled unscanned tables with warnings when adding scanned tables", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - demo_finance.ads_finance_revenue_day
+      - meta.field_abbr_dict
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: [
+          "demo_finance.ads_finance_revenue_day",
+          "meta.field_abbr_dict",
+          "dataforai.superstore_orders"
+        ]
+      })
+      .expect(200);
+
+    expect(response.body.data.newEnabledTables).toEqual([
+      "demo_finance.ads_finance_revenue_day",
+      "meta.field_abbr_dict",
+      "dataforai.superstore_orders"
+    ]);
+    expect(response.body.data.warnings).toEqual([
+      {
+        code: "ENABLED_TABLE_NOT_SCANNED",
+        table: "demo_finance.ads_finance_revenue_day",
+        message: "Table 'demo_finance.ads_finance_revenue_day' is enabled but not present in scanned semantic-layer schema"
+      },
+      {
+        code: "ENABLED_TABLE_NOT_SCANNED",
+        table: "meta.field_abbr_dict",
+        message: "Table 'meta.field_abbr_dict' is enabled but not present in scanned semantic-layer schema"
+      }
+    ]);
+    await app.close();
+  });
+
+  it("still rejects newly added unscanned tables even when orphans exist", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - demo_finance.ads_finance_revenue_day
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: ["demo_finance.ads_finance_revenue_day", "dataforai.brand_new_unscanned"]
+      })
+      .expect(400);
+
+    expect(response.body.error.code).toBe("TABLE_NOT_SCANNED");
+    await app.close();
+  });
+
+  it("allows removing invalid enabled tables without warnings", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - demo_finance.ads_finance_revenue_day
+      - dataforai.superstore_orders
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: ["dataforai.superstore_orders"]
+      })
+      .expect(200);
+
+    expect(response.body.data.newEnabledTables).toEqual(["dataforai.superstore_orders"]);
+    expect(response.body.data.warnings).toEqual([]);
+    await app.close();
+  });
+
   it("writes only when dryRun:false and returns an audit id", async () => {
     await writeConnectionProject();
     const app = buildServer();

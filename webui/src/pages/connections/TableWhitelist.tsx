@@ -21,6 +21,8 @@ type WhitelistTableRow = {
   qualifiedName: string;
   enabledPersisted: boolean;
   enabledDraft: boolean;
+  /** Spec 116: in enabled_tables (or draft) but absent from local Manifest scan. */
+  invalidEnabled: boolean;
   columnCount?: number;
   hasTableDesc?: boolean;
   completion?: CompletionStatus;
@@ -31,13 +33,22 @@ type WhitelistStatus =
   | "enabled_semantic_pending"
   | "disabled"
   | "draft_enable"
-  | "draft_disable";
+  | "draft_disable"
+  | "invalid_enabled"
+  | "orphan_pending_remove";
+
+type EnabledTableWarning = {
+  code: "ENABLED_TABLE_NOT_SCANNED";
+  table: string;
+  message: string;
+};
 
 type EnabledTablesPreview = {
   diff: string;
   proposedYaml: string;
   oldEnabledTables: string[];
   newEnabledTables: string[];
+  warnings?: EnabledTableWarning[];
 };
 
 type EnabledTablesPreviewByConnection = {
@@ -50,6 +61,7 @@ type EnabledTablesWrite = {
   auditId?: number;
   oldEnabledTables: string[];
   newEnabledTables: string[];
+  warnings?: EnabledTableWarning[];
 };
 
 const STATUS_LABELS: Record<WhitelistStatus, string> = {
@@ -57,7 +69,9 @@ const STATUS_LABELS: Record<WhitelistStatus, string> = {
   enabled_semantic_pending: "已启用，待补语义",
   disabled: "未启用",
   draft_enable: "待启用",
-  draft_disable: "待禁用"
+  draft_disable: "待禁用",
+  invalid_enabled: "无效启用",
+  orphan_pending_remove: "待移出"
 };
 
 const STATUS_CLASS: Record<WhitelistStatus, string> = {
@@ -65,7 +79,9 @@ const STATUS_CLASS: Record<WhitelistStatus, string> = {
   enabled_semantic_pending: "pl-status-badge pl-status-badge--semantic-pending",
   disabled: "pl-status-badge pl-status-badge--disabled",
   draft_enable: "pl-status-badge pl-status-badge--pending",
-  draft_disable: "pl-status-badge pl-status-badge--pending"
+  draft_disable: "pl-status-badge pl-status-badge--pending",
+  invalid_enabled: "pl-status-badge pl-status-badge--semantic-pending",
+  orphan_pending_remove: "pl-status-badge pl-status-badge--pending"
 };
 
 function parseQualifiedName(name: string): { schema: string; table: string } {
@@ -75,12 +91,18 @@ function parseQualifiedName(name: string): { schema: string; table: string } {
 }
 
 function whitelistStatus(row: WhitelistTableRow): WhitelistStatus {
+  if (row.invalidEnabled) {
+    if (row.enabledDraft !== row.enabledPersisted) {
+      return row.enabledDraft ? "draft_enable" : "orphan_pending_remove";
+    }
+    return row.enabledDraft ? "invalid_enabled" : "disabled";
+  }
   if (row.enabledDraft !== row.enabledPersisted) {
     return row.enabledDraft ? "draft_enable" : "draft_disable";
   }
-  if (row.enabledPersisted && row.completion === "done") return "enabled_complete";
-  if (row.enabledPersisted) return "enabled_semantic_pending";
-  return "disabled";
+  if (!row.enabledDraft) return "disabled";
+  if (row.completion === "done") return "enabled_complete";
+  return "enabled_semantic_pending";
 }
 
 function setDifference<T>(a: Iterable<T>, b: Iterable<T>): T[] {
@@ -152,6 +174,7 @@ export function TableWhitelist() {
     return connections.map((conn, idx) => {
       const tablesData = tablesQueries[idx]?.data;
       const tables = tablesData?.tables ?? [];
+      const scannedSet = new Set(tables);
       const persisted = conn.enabledTables;
       const draft = draftByConnection[conn.id] ?? persisted;
       const persistedSet = new Set(persisted);
@@ -167,11 +190,28 @@ export function TableWhitelist() {
           qualifiedName,
           enabledPersisted: persistedSet.has(qualifiedName),
           enabledDraft: draftSet.has(qualifiedName),
+          invalidEnabled: false,
           columnCount: source?.columnCount,
           hasTableDesc: source?.hasTableDesc,
           completion: source?.completion
         };
       });
+      // Spec 116: surface invalid enabled (enabled but not in local Manifest).
+      const invalidCandidates = new Set<string>();
+      for (const name of persisted) if (!scannedSet.has(name)) invalidCandidates.add(name);
+      for (const name of draft) if (!scannedSet.has(name)) invalidCandidates.add(name);
+      for (const qualifiedName of Array.from(invalidCandidates).sort()) {
+        const { schema, table } = parseQualifiedName(qualifiedName);
+        rows.push({
+          connectionId: conn.id,
+          schema,
+          table,
+          qualifiedName,
+          enabledPersisted: persistedSet.has(qualifiedName),
+          enabledDraft: draftSet.has(qualifiedName),
+          invalidEnabled: true
+        });
+      }
       return { conn, rows };
     });
   }, [connections, tablesQueries, sourceByKey, draftByConnection]);
@@ -223,12 +263,13 @@ export function TableWhitelist() {
     if (!allSchemas.includes(schemaFilter)) setSchemaFilter("all");
   }, [allSchemas, schemaFilter]);
 
-  // Apply search + schema filter for visible groups
+  // Apply search + schema filter for visible groups (scanned tables only)
   const visibleGroups = useMemo(() => {
     const lowerSearch = search.trim().toLowerCase();
     return connectionFilteredRows.flatMap(({ conn, rows }) => {
       const rowsBySchema = new Map<string, WhitelistTableRow[]>();
       for (const row of rows) {
+        if (row.invalidEnabled) continue;
         if (schemaFilter !== "all" && row.schema !== schemaFilter) continue;
         if (lowerSearch) {
           const matched =
@@ -247,10 +288,55 @@ export function TableWhitelist() {
     });
   }, [connectionFilteredRows, search, schemaFilter]);
 
+  // Spec 116: invalid enabled rows shown when filter is all or matches their schema.
+  const visibleInvalidGroups = useMemo(() => {
+    const lowerSearch = search.trim().toLowerCase();
+    return connectionFilteredRows.flatMap(({ conn, rows }) => {
+      const invalidRows = rows.filter((row) => {
+        if (!row.invalidEnabled) return false;
+        if (schemaFilter !== "all" && row.schema !== schemaFilter) return false;
+        if (lowerSearch) {
+          const matched =
+            row.table.toLowerCase().includes(lowerSearch) ||
+            row.qualifiedName.toLowerCase().includes(lowerSearch);
+          if (!matched) return false;
+        }
+        return true;
+      });
+      if (invalidRows.length === 0) return [];
+      return [{ conn, rows: invalidRows }];
+    });
+  }, [connectionFilteredRows, search, schemaFilter]);
+
+  const hiddenInvalidEnabledCount = useMemo(() => {
+    if (schemaFilter === "all") return 0;
+    let count = 0;
+    for (const { rows } of connectionFilteredRows) {
+      for (const row of rows) {
+        if (row.invalidEnabled && row.enabledDraft && row.schema !== schemaFilter) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }, [connectionFilteredRows, schemaFilter]);
+
+  const draftInvalidEnabledCount = useMemo(() => {
+    let count = 0;
+    for (const { rows } of connectionFilteredRows) {
+      for (const row of rows) {
+        if (row.invalidEnabled && row.enabledDraft) count += 1;
+      }
+    }
+    return count;
+  }, [connectionFilteredRows]);
+
   const configuredSchemasWithoutTables = useMemo(() => {
     if (search.trim()) return [];
     return connectionFilteredRows.flatMap(({ conn, rows }) => {
-      const scannedSchemas = new Set(rows.map((row) => row.schema).filter(Boolean));
+      const scannedSchemas = new Set(
+        rows.filter((row) => !row.invalidEnabled).map((row) => row.schema).filter(Boolean)
+      );
       return conn.schemas
         .filter((schema) => schema && (schemaFilter === "all" || schemaFilter === schema))
         .filter((schema) => !scannedSchemas.has(schema))
@@ -338,13 +424,29 @@ export function TableWhitelist() {
     setStatusTone(null);
   }
 
+  /** Spec 116: drop all invalid-enabled entries from draft for filtered connections. */
+  function removeInvalidEnabled() {
+    setPreviewOpen(false);
+    setDraftByConnection((prev) => {
+      const next = { ...prev };
+      for (const { conn, rows } of connectionFilteredRows) {
+        const current = new Set(next[conn.id] ?? conn.enabledTables);
+        for (const row of rows) {
+          if (row.invalidEnabled) current.delete(row.qualifiedName);
+        }
+        next[conn.id] = Array.from(current);
+      }
+      return next;
+    });
+  }
+
   /**
    * Action-column cell renderer. The action column must never mix in-page
    * state toggles with cross-module navigation; enable / disable is owned
    * exclusively by the row checkbox. Draft states always render 待保存.
    */
   function renderActionCell(status: WhitelistStatus, row: WhitelistTableRow) {
-    if (status === "draft_enable" || status === "draft_disable") {
+    if (status === "draft_enable" || status === "draft_disable" || status === "orphan_pending_remove") {
       return (
         <span
           className="text-xs text-fg-muted notranslate"
@@ -352,6 +454,17 @@ export function TableWhitelist() {
           data-testid="whitelist-action-draft"
         >
           待保存
+        </span>
+      );
+    }
+    if (status === "invalid_enabled") {
+      return (
+        <span
+          className="text-xs text-fg-muted notranslate"
+          translate="no"
+          data-testid="whitelist-action-invalid-enabled"
+        >
+          本地无 Manifest
         </span>
       );
     }
@@ -459,9 +572,23 @@ export function TableWhitelist() {
 
       // M45: auto-reload local catalog after save so the user never sees a
       // stale "保存不会自动刷新本地目录" warning with no follow-up.
-      toast.success("启用表范围已保存");
-      setStatusMessage("启用表范围已保存，正在刷新本地目录...");
-      setStatusTone("success");
+      const warningCount = results.reduce(
+        (sum, r) => sum + (r.write.warnings?.length ?? 0),
+        0
+      );
+      if (warningCount > 0) {
+        toast.success(
+          `启用表范围已保存；仍有 ${warningCount} 张无效启用，可在本页移出。`
+        );
+        setStatusMessage(
+          `启用表范围已保存；仍有 ${warningCount} 张无效启用（本地无 Manifest），可使用「移出无效启用」清理。`
+        );
+        setStatusTone("warning");
+      } else {
+        toast.success("启用表范围已保存");
+        setStatusMessage("启用表范围已保存，正在刷新本地目录...");
+        setStatusTone("success");
+      }
       const reloadErrors: string[] = [];
       for (const { connId } of results) {
         try {
@@ -476,8 +603,10 @@ export function TableWhitelist() {
         }
       }
       if (reloadErrors.length === 0) {
-        setStatusMessage("启用表范围已保存，本地目录已刷新。");
-        setStatusTone("success");
+        if (warningCount === 0) {
+          setStatusMessage("启用表范围已保存，本地目录已刷新。");
+          setStatusTone("success");
+        }
       } else {
         setStatusMessage(
           `启用表范围已保存；本地目录刷新失败，请重试。${reloadErrors.join(" / ")}`
@@ -574,6 +703,17 @@ export function TableWhitelist() {
               >
                 已选 {visibleChecked}/{visibleTotal} 张表
               </span>
+              {draftInvalidEnabledCount > 0 ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--secondary"
+                  onClick={removeInvalidEnabled}
+                  data-testid="whitelist-remove-invalid-enabled"
+                  translate="no"
+                >
+                  移出无效启用
+                </button>
+              ) : null}
               {visibleTotal > 0 ? (
                 <div className="pl-whitelist-batch-actions" data-testid="whitelist-batch-actions">
                   <button
@@ -599,6 +739,37 @@ export function TableWhitelist() {
             </div>
           </div>
         )}
+
+      {hiddenInvalidEnabledCount > 0 ? (
+        <div
+          className="pl-validation-banner pl-validation-banner--warning mt-4"
+          role="status"
+          data-testid="whitelist-hidden-invalid-enabled-banner"
+        >
+          <span className="notranslate" translate="no">
+            本连接另有 {hiddenInvalidEnabledCount} 张无效启用（本地无 Manifest），当前 Schema 筛选下未显示。
+          </span>
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost pl-btn--sm"
+            onClick={() => {
+              setUserOverrodeSchema(true);
+              setSchemaFilter("all");
+            }}
+            data-testid="whitelist-show-invalid-enabled"
+          >
+            查看全部
+          </button>
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost pl-btn--sm"
+            onClick={removeInvalidEnabled}
+            data-testid="whitelist-remove-invalid-enabled-from-banner"
+          >
+            移出无效启用
+          </button>
+        </div>
+      ) : null}
 
       {visibleGroups.length > 0 && (
         <div className="pl-table-wrapper mt-4">
@@ -662,6 +833,67 @@ export function TableWhitelist() {
           </table>
         </div>
       )}
+
+      {visibleInvalidGroups.length > 0 ? (
+        <div className="pl-table-wrapper mt-4" data-testid="whitelist-invalid-enabled-section">
+          <table className="pl-data-grid pl-data-table">
+            <thead>
+              <tr>
+                <th>选择</th>
+                <th className="notranslate" translate="no">表名 (Table)</th>
+                <th>字段数</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            {visibleInvalidGroups.map(({ conn, rows }) => (
+              <tbody
+                key={`${conn.id}-invalid-enabled`}
+                data-testid={`whitelist-invalid-group-${conn.id}`}
+              >
+                <tr className="pl-table-group-row">
+                  <td colSpan={5}>
+                    <span className="notranslate" translate="no">
+                      连接：{conn.id} · 已启用 · 本地无 Manifest
+                    </span>
+                    <span className="pl-table-group-row-count notranslate" translate="no">
+                      （共 {rows.length} 张表）
+                    </span>
+                  </td>
+                </tr>
+                {rows.map((row) => {
+                  const status = whitelistStatus(row);
+                  return (
+                    <tr
+                      key={`${row.connectionId}-invalid-${row.qualifiedName}`}
+                      data-testid={`whitelist-invalid-row-${row.qualifiedName}`}
+                    >
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={row.enabledDraft}
+                          onChange={() => toggleRow(row)}
+                          aria-label={`选择无效启用 ${row.qualifiedName}`}
+                        />
+                      </td>
+                      <td>
+                        <span className="font-medium notranslate" translate="no">
+                          {row.qualifiedName}
+                        </span>
+                      </td>
+                      <td>-</td>
+                      <td>
+                        <span className={STATUS_CLASS[status]}>{STATUS_LABELS[status]}</span>
+                      </td>
+                      <td>{renderActionCell(status, row)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            ))}
+          </table>
+        </div>
+      ) : null}
 
       {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
         <div
@@ -765,7 +997,10 @@ export function TableWhitelist() {
         );
       })}
 
-      {connections.length > 0 && visibleGroups.length === 0 && configuredSchemasWithoutTables.length === 0 && (
+      {connections.length > 0 &&
+        visibleGroups.length === 0 &&
+        visibleInvalidGroups.length === 0 &&
+        configuredSchemasWithoutTables.length === 0 && (
         <div className="pl-empty-state mt-4">
           当前筛选条件下没有可启用的表。
         </div>
