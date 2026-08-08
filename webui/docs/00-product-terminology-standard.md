@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名） |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane）；2026-08-08 v0.3（登记 Access Control Upgrade / AC-P0 术语，见 §3 与 §4.8） |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
-| 关联文档 | `webui/docs/06-navigation-ia.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/06-navigation-ia.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/98-access-control-p0-runtime-spec.md`、`docs/access-control/design-upgrade.md`、`docs/DEVELOPMENT.md` |
 
 ## 1. 目标
 
@@ -192,7 +192,23 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Action Required | 待处理事项 | 运维待办 | 告警列表泛化 | 首页聚合的跨模块待处理队列 |
 | Object Detail Drawer | 对象详情抽屉 | 详情抽屉 | 详情弹窗泛化 | 跨模块查看 Connection / Table / Agent / Eval Run / Audit Event 等对象上下文 |
 | Change Impact | 变更影响范围 | 影响范围 | 影响分析（作为按钮主名） | 发布前说明哪些对象、Agent、eval 可能被影响 |
-| Quality Operations | 质量运营 | 质量评测运营 | 质量评价 | 评测模块从列表管理升级为持续运营，含趋势、阈值、失败归因 |
+| Quality Operations | 质量运营 | 质量评测运营 | 质量评价 | 评测模块从列表管理升级为持续运营，含趋势、频率、失败归因 |
+| Access Control Upgrade | 访问权限升级 | AC Upgrade、权限升级 | Dynamic RLS、行级动态隔离（作为本升级总称） | 访问权限独立升级域总称；波次 AC-P0 / AC-P1；设计见 `docs/access-control/design-upgrade.md` |
+| Data Capability | 数据能力元组 | capability、工具×源授权 | 工具并集、表并集、权限笛卡尔积 | `(tool, canonicalSourceKey, rowGrant)`；Admin 权限摘要必须按元组展示 |
+| Effective Data Capabilities | 有效数据能力集 | 有效 capability、合成后的数据能力 | `(∪tools)×(∪sources)`、工具并集+表并集 | 多 Role capability 并集；禁止独立维度笛卡尔放大 |
+| Row Grant | 行授予 | rowGrant | Agent Constraints、Role 间 AND | 某 capability 上的行集合；AC-P0 恒为 TRUE |
+| Agent Constraints | Agent 强制约束 | 人级收紧、FinalRows 收紧 | Role 间 AND、Row Grant OR（混称） | 挂在 Agent 上、与 EffectiveRowGrant AND；AC-P1.5 |
+| Permission Model Version | 权限模型版本 | `permission_model_version`、模型版本 | 用户字段 role/roles、修改历史推断世代 | Role 上 `1`=legacy、`2`=显式模型 |
+| Row Policy | 行级策略 | row_policy、结构化行谓词 | Segment、查询 filters、overlay 表达式当权限 | 仅 `access.yaml` 内 structured 谓词；AC-P1 |
+| Canonical Source Key | 规范源键 | canonicalSourceKey、源键四元组 | 裸 sourceName、裸 physicalTable 作唯一身份 | `connectionId \| schema \| sourceName \| physicalTable` |
+| Tool Class | 工具分级 | AbsoluteDeny / DataPlane / Meta | known_tools、table_touching_tools（现网字段名当分级） | 代码分类表；未分类默认 AbsoluteDeny |
+| Effective Policy | 有效策略包 | 已编译策略、runtime 策略 | 热路径临时拼装、仅 YAML 原文 | 编译后不可变对象，含 `policyVersion` |
+| Policy Compilation Input | 策略编译输入 | 编译输入 | 仅 access.yaml（漏 source map） | access.yaml digest + source map version（+ 分类表版本）共同决定策略世代 |
+| Policy Version | 策略版本 | `policyVersion` | source map TTL、配置 mtime 裸展示当版本 | sha256(编译输入)；写入快照与 access_log |
+| Runtime Ack | 运行时确认 | `runtimeAck`、策略已生效确认 | 仅写盘成功、dryRun 通过即成功 | Admin 保存成功须 `runtimeAck: true` |
+| Capability Forbidden | 能力未授权 | `capability_forbidden` | 仅用 table_forbidden 作文案主码（AC-P0 DataPlane） | 裁决码 `capability_forbidden:<tool>:<sourceKey>` |
+| Policy Scope Expanded | 授权范围扩大 | `policy_scope_expanded`、前缀扩权记录 | 静默扩权、无审计扩权 | legacy v1 `prefix` 因语义层变化扩权时的可观测事件 |
+| Policy Degraded | 策略降级 | 权限降级态、DataPlane 整体拒绝 | 服务不可用、完全健康（降级时） | 编译失败导致受影响 Agent 或整体 DataPlane deny |
 
 ### 3.0 弃用别名（仅供溯源，不允许出现在新代码 / 新文档）
 
@@ -385,6 +401,29 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id。
 
 详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名。
+
+### 4.8 访问权限升级（Access Control Upgrade / AC-P0）
+
+术语事实源：`docs/access-control/design-upgrade.md` Terminology Compliance；实现 Spec：`webui/docs/98-access-control-p0-runtime-spec.md`。下列为 Admin / 审计 / 错误文案落地时的模块补充（全局定义见 §3）。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Data Capability Preview | 数据能力 | capability 列表、工具 × 源 | 工具并集、表并集（作为唯一摘要） | Agent / Role 详情权限预览；须展示元组 |
+| Permission Model Version | 权限模型版本 | v1 legacy / v2 | 角色版本、修改代数 | Role 表单与 dryRun diff |
+| Row Access | 行访问 | `row_access: all` | 行级权限已开启（AC-P0）、scoped（作为已交付） | AC-P0 仅 `all`；UI 不得宣称 scoped 可用 |
+| Canonical Source Key | 规范源键 | 源键 | 表名（作为唯一 ID） | 预览 / snapshot 展示四元组 |
+| Policy Version | 策略版本 | `policyVersion` | 配置时间戳（冒充策略世代） | 保存成功回执与审计列 |
+| Runtime Ack | 运行时确认 | 已生效 | 已保存（无 ack 时显示成功） | 收窄保存成功条件 |
+| Capability Forbidden | 能力未授权 | 无该工具×源能力 | 表未授权（AC-P0 DataPlane 主文案，避免与旧 table_forbidden 混用） | 审计筛选与 Toast |
+| Policy Scope Expanded | 授权范围扩大 | 前缀匹配扩权 | 自动加表（无事件） | Admin 可观测记录 |
+| Policy Degraded | 策略降级 | 数据面拒绝 | 系统正常（降级时） | Admin 常驻 banner |
+| Tool Class Absolute Deny | 绝对拒绝工具 | 代码基线拒绝 | 可配置放开的禁用 | `sl_*` 等；YAML 无法解除 |
+| Tool Class Data Plane | 数据面工具 | DataPlane | 元数据工具 | 须绑 capability |
+| Tool Class Meta | 元信息工具 | Meta | 数据查询工具 | catalog / wiki 等 |
+
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组。
+
+与既有 Role Admin 术语（§3 `Role Permission` / `Role Table Selector` / `Table Name Prefix` 等）并存：升级后「权限摘要」主展示改为 Data Capability Preview，不得回退为仅工具并集+表并集。
 
 ## 5. 新术语登记流程
 

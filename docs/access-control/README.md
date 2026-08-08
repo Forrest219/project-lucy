@@ -32,10 +32,11 @@
 
 | 优先级 | 文档 | 状态 |
 |---|---|---|
-| **P0 必读** | [`design-upgrade.md`](design-upgrade.md) **v1.1.2** | **ADR 已批准（Gate A）**；可写 AC-P0 Spec |
-| **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | Gate A DONE；实现仍须 Gate B |
-| 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
-| Admin 契约 | [`webui/docs/14-agent-admin-enterprise-delivery-spec.md`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md)、[`15-role-admin-spec.md`](../../webui/docs/15-role-admin-spec.md) | Agent / Role Admin |
+| **P0 必读** | [`design-upgrade.md`](design-upgrade.md) **v1.1.2** | **ADR 已批准（Gate A）** |
+| **P0 Runtime Spec** | [`webui/docs/98-access-control-p0-runtime-spec.md`](../../webui/docs/98-access-control-p0-runtime-spec.md) **v0.1** | **WP-S0 DONE**；**Gate B 待你评审** |
+| **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | WP-S0/S1 DONE；实现仍须 Gate B |
+| 术语 | [`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md) §3 / §4.8 | AC-P0 术语已登记（v0.3） |
+| 实现契约草稿 | [`07`](../../webui/docs/07-mcp-auth-proxy-spec.md) / [`14`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md) / [`15`](../../webui/docs/15-role-admin-spec.md) | **WP-S1 DONE**（权威语义以 Spec 98 为准） |
 
 **冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。
 
@@ -90,7 +91,7 @@
 
 | 波次 | 状态 |
 |---|---|
-| AC-P0 Spec | **可写**（Gate A 已过）；见 WO-59 |
+| AC-P0 Spec | **初稿已交**（Spec 98 + 术语）；待 Gate B；WP-S1 契约补丁未合并 |
 | AC-P0 实施 WO | Spec 评审通过（Gate B）后另批开工 |
 | AC-P1 | 冻结（须上游强制谓词契约） |
 

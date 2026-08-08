@@ -4,11 +4,90 @@
 |---|---|
 | 文档名称 | Role Admin Spec |
 | 文档类型 | Product / UX / API Spec |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-07-27 |
-| 适用范围 | Lucy WebUI 访问治理模块：Role 列表、Role 新建/编辑/删除、Role preview、Agent 新建/编辑入口联动 |
-| 事实源 | `webui/config/access.yaml` 的 `roles:` / `users[].role`、内置 role templates、Lucy MCP Proxy ACL resolver |
-| 关联文档 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md` |
+| 版本 | v0.2（AC-P0 契约补丁草稿 / WP-S1；Gate B 前） |
+| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08 |
+| 适用范围 | Lucy WebUI 访问治理模块：Role 列表、Role 新建/编辑/删除、Role preview、Agent 新建/编辑入口联动；v0.2 对齐 AC-P0 版本迁移与 capability preview |
+| 事实源 | `webui/config/access.yaml` 的 `roles:` / `users[].role` / `users[].roles`、内置 role templates、Lucy MCP Proxy ACL resolver；AC-P0 语义权威 [`98-access-control-p0-runtime-spec.md`](98-access-control-p0-runtime-spec.md) |
+| 关联文档 | `webui/docs/07-mcp-auth-proxy-spec.md` v1.4、`webui/docs/14-agent-admin-enterprise-delivery-spec.md` v0.2、`docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md` §9 |
+| 冲突裁决 | AC-P0 安全 / 合成语义以 Spec 98 为准；与 `design-upgrade.md` 冲突 → design-upgrade |
+
+## 0. AC-P0 契约补丁（WP-S1）
+
+> **权威语义：** `permission_model_version`、v2 禁 `prefix`、capability 代数、编译提交 → Spec 98 §3 / §5 / §7 / §8。本文只修订 Role Admin 的字段、校验、preview 与迁移 UX。
+
+### 0.1 相对 v0.1 的增量
+
+| 项 | v0.1 | AC-P0（本补丁） | Spec 98 锚点 |
+|---|---|---|---|
+| 模型版本 | 无 | Role 必有 `permission_model_version: 1\|2`；新建强制 `2`；缺字段稳态编译失败（一次性迁移写 `1`） | §7 |
+| Selector | `names` / `prefix` 二选一 | **v2 禁用 `prefix`**，仅 `names`；每个 selector 显式 `row_access: all`（AC-P0）；出现 `scoped` → 拒绝 | §7 |
+| Preview | tools + connections + resolved sources（双并集观感） | **Data Capability Preview**（tool × source）；禁止只展示双并集 | §5 |
+| 保存 | dryRun → 写盘 | + `runtimeAck` / `policyVersion`（与 Spec 14 §0.3 同口径） | §8.2 |
+| 迁移 | 无 | 编辑并保存 v1 Role：升 v2、补 `row_access: all`、`prefix` 展开为 `names`；无法展开 → 保存失败；dryRun 展示完整展开清单 | §7 |
+| 行级 Non-Goal | 「不实现列级 / 行级」 | 波次边界：AC-P0 仅 `all`；scoped 属 AC-P1 | §2 |
+
+### 0.2 `permission_model_version` 与 Admin 迁移
+
+| 动作 | 行为 |
+|---|---|
+| 新建 Role | 强制写入 `permission_model_version: 2`；selector 仅 `names` + `row_access: all`；UI 不提供 `prefix` 选项 |
+| 编辑 v1 Role 并保存 | 升为 `2`；每 selector 补 `row_access: all`；含 `prefix` 的必须先展开为 `names` 明细（dryRun 展示完整源清单）；无法展开 → 保存失败 |
+| 编辑时出现 v2 + `prefix` / v2 + `scoped` | 校验拒绝（U-VER-02/03） |
+| AbsoluteDeny / 未分类工具写入 `allow.tools` | lint / 保存拒绝 |
+
+迁移 dryRun diff **必须**让管理员看见：版本字段变化、`prefix`→`names` 展开结果、新增的 `row_access: all`。
+
+### 0.3 Preview / API 形状（增量）
+
+```ts
+type YamlRoleAcP0 = {
+  description?: string;
+  permission_model_version: 1 | 2;
+  allow: {
+    connections?: string[];
+    tableSelectors?: Array<{
+      connection?: string;
+      schema: string;
+      names?: string[];
+      prefix?: string;           // 仅 v1 合法；v2 禁止
+      row_access?: "all" | "scoped"; // v2 必填；AC-P0 仅允许 all
+    }>;
+    tools?: string[];
+  };
+};
+
+// preview / detail 成功响应须能支撑 capability 列表（字段名以实现为准，语义固定）
+type RoleEffectivePreviewAcP0 = {
+  capabilities: Array<{
+    tool: string;
+    canonicalSourceKey: {
+      connectionId: string;
+      schema: string;
+      sourceName: string;
+      physicalTable: string;
+    };
+    rowGrant: "all"; // AC-P0
+  }>;
+  metaTools: string[];
+  policyVersion?: string;       // 编译成功时
+  sourceMapVersion: string;
+  warnings: string[];
+  // 可保留 connections / sourceCount 作辅助统计，但不得作为唯一摘要
+};
+```
+
+保存成功（`dryRun:false`）响应须含 `policyVersion` 与 `runtimeAck: true`（同 Spec 14 §0.3）。
+
+### 0.4 与 design-upgrade §9（Admin API 行）对照
+
+| 要求 | 落点 |
+|---|---|
+| 版本迁移与 `prefix` 展开 dryRun | §0.2、§5.3、§6.*、§7 |
+| capability preview | §0.3、§5.4 |
+| `runtimeAck` | §0.3、§6.4+ |
+| 禁双并集唯一摘要 | §0.1、§5.4 |
+
+---
 
 ## 1. 背景
 
@@ -42,9 +121,10 @@ M11 已把 Agent Admin 的交付链路补齐：新建 Agent 时必须选择 role
 
 - 不实现多管理员 RBAC。
 - 不实现 role rename 的原地语义；rename 视为新建新 role + 迁移 Agent 引用 + 删除旧 role。
-- 不实现列级 / 行级权限。
+- **波次边界：** AC-P0 不交付列级权限、`row_access: scoped` / Row Policy 编辑器；AC-P1 另批。不得写成「永不做行级」。
 - 不实现 token scope。未来 token scope 只能在 role 基础上做交集收窄，不能增权。
 - 不实现 role 版本历史的单独模型；变更历史继续走 `config_change_log`。
+- 不在本文复述 Tool Class 全表或 capability 代数（→ Spec 98）。
 
 ## 4. 信息模型
 
@@ -54,6 +134,7 @@ M11 已把 Agent Admin 的交付链路补齐：新建 Agent 时必须选择 role
 roles:
   poc_readonly:
     description: POC内测只读角色
+    permission_model_version: 2   # AC-P0：新建强制 2；存量一次性迁移为 1
     allow:
       connections:
         - poc-mysql-aliyun
@@ -62,6 +143,7 @@ roles:
           schema: data_agent_poc
           names:
             - poc_metric_catalog
+          row_access: all           # AC-P0：v2 必填；仅允许 all
       tools:
         - lucy_catalog
         - lucy_read_source
@@ -71,11 +153,13 @@ roles:
 字段语义：
 
 - `description`：管理员可读说明。
+- `permission_model_version`：**AC-P0 必填口径**见 §0.2 / Spec 98 §7。
 - `allow.connections`：该 role 可访问的 connection id。只要 role 有 table selector 或数据访问工具，必须非空。
 - `allow.tableSelectors`：授权 source 选择器。
-  - `names`：精确列出 source name，生产敏感数据推荐。
-  - `prefix`：前缀匹配 source name，适合开发或低敏探索角色。
-- `allow.tools`：允许暴露给 Agent 的 MCP 工具，必须显式列名，不能是 `["*"]`。
+  - `names`：精确列出 source name，生产敏感数据推荐；**v2 唯一合法选择器形态**。
+  - `prefix`：前缀匹配 source name；**仅 v1 legacy 允许**。v2 禁止；Admin 迁移时必须展开为 `names`（§0.2）。开放式授权风险见既有 §5.1.3 叙述，AC-P0 起 v2 用禁用来闭合静默扩权。
+  - `row_access`：v2 必填；AC-P0 仅 `all`；`scoped` → 拒绝配置。
+- `allow.tools`：允许暴露给 Agent 的 MCP 工具，必须显式列名，不能是 `["*"]`；不得包含 AbsoluteDeny / 未分类工具（Spec 98 §4）。
 
 ### 4.2 Template Role
 
@@ -186,8 +270,9 @@ Tab：
   - template 复制时必填新 id。
   - 规则：`^[A-Za-z0-9_-]{1,64}$`
 - 描述
+- **权限模型版本**（只读展示 + 迁移提示）：新建固定 `2`；编辑 v1 时提示「保存将迁移为 v2」
 - Connections 多选或可编辑 chips
-- Tools 多选
+- Tools 多选（过滤 AbsoluteDeny / 未分类；命中则禁用或保存拒绝）
 - Table selectors editor
 
 Table selectors editor：
@@ -196,32 +281,41 @@ Table selectors editor：
   - connection
   - schema
   - selector type：`names` / `prefix`
+    - **新建或 `permission_model_version: 2`：** 仅 `names`；不展示或禁用 `prefix`
+    - **编辑 v1：** 可继续展示既有 `prefix`，但保存路径必须走展开（§0.2）
   - names 多选或手动输入 source name 列表
-  - prefix 文本输入
-- `names` 和 `prefix` 二选一。
+  - prefix 文本输入（仅 v1 迁移前）
+  - **`row_access`：** v2 表单固定 `all`（AC-P0 不提供 scoped 控件）
+- `names` 和 `prefix` 二选一（v1）；v2 仅 `names`。
 - `connection` 可以省略时使用 role-level connections，但 UI 推荐显式填入。
 
 ### 5.4 权限预览
 
-预览必须复用后端 role preview：
+预览必须复用后端 role preview（与 runtime **同一**合成器；Spec 98 §5）：
 
-- tools
-- connections
-- resolved sources
-- snapshotHash
-- sourceMapVersion
-- warnings
+- **主展示：** `capabilities[]`（tool × 规范源键 × rowGrant）
+- `metaTools`
+- `sourceMapVersion` /（编译成功时）`policyVersion`
+- `warnings`
+- 辅助：connections、sourceCount（可选）
 
-渲染方式：
+**禁止**仅渲染：
 
 ```text
-mysql-aliyun
-  dataforai
-    superstore_orders -> dataforai.superstore_orders
+<!-- 禁止作为唯一摘要 -->
+Allowed tools: …
+<table tree of sources>
+```
 
-Allowed tools:
+渲染方式（示意）：
+
+```text
+Capabilities:
+  lucy_query       × poc-mysql-aliyun | data_agent_poc | poc_metric_catalog | …
+  lucy_read_source × poc-mysql-aliyun | data_agent_poc | poc_metric_catalog | …
+Meta tools:
   lucy_catalog
-  lucy_query
+sourceMapVersion: …
 ```
 
 ### 5.5 使用情况
@@ -240,8 +334,9 @@ Allowed tools:
 所有 create / patch / delete / copy-template 都必须：
 
 1. 先调用 dryRun。
-2. 展示 `webui/config/access.yaml` diff。
+2. 展示 `webui/config/access.yaml` diff（含 `permission_model_version`、`row_access`、`prefix`→`names` 展开）。
 3. 用户确认后才 `dryRun:false` 落盘。
+4. 成功响应须 `runtimeAck: true` 与 `policyVersion`（删除不影响 runtime 合成的纯未引用 role 时可注明 N/A，但收窄 / 替换被引用 role 必须 ack）。
 
 保存成功后：
 
@@ -284,16 +379,17 @@ Response：
 type RoleDetail = RoleSummary & {
   role: {
     description?: string;
+    permission_model_version?: 1 | 2;
     allow: {
       connections?: string[];
       tableSelectors?: Array<
-        | { connection?: string; schema: string; names: string[] }
-        | { connection?: string; schema: string; prefix: string }
+        | { connection?: string; schema: string; names: string[]; row_access?: "all" | "scoped" }
+        | { connection?: string; schema: string; prefix: string; row_access?: "all" | "scoped" }
       >;
       tools?: string[];
     };
   };
-  effectivePermissions?: EffectivePermissionsPreview;
+  effectivePermissions?: RoleEffectivePreviewAcP0; // §0.3；兼容旧名 EffectivePermissionsPreview
 };
 ```
 
@@ -443,15 +539,17 @@ Rules：
 Role 写入前必须通过：
 
 - role id regex。
-- schema whitelist：只允许 `description` / `allow` / `allow.connections` / `allow.tableSelectors` / `allow.tools` / selector 的 `connection`、`schema`、`names`、`prefix`。
+- schema whitelist：`description` / `permission_model_version` / `allow` / `allow.connections` / `allow.tableSelectors` / `allow.tools` / selector 的 `connection`、`schema`、`names`、`prefix`（仅 v1）、`row_access`。
+- `permission_model_version`：新建必须为 `2`；稳态缺字段拒绝；v2 + `prefix` 拒绝；v2 + `scoped` 拒绝（AC-P0）；v2 selector 缺 `row_access` 拒绝。
 - `tools` 非空，不能包含 `*`。
-- 所有 tool 必须在 `defaults.known_tools` 中。
+- 所有 tool 必须在分类表 / `defaults.known_tools` 中，且**不得**为 AbsoluteDeny 或未分类（Spec 98 §4）。
 - `defaults.deny_tools` 命中的工具即使列入 role，也会在 preview 中被剔除或标 warning；保存时建议拒绝，避免用户误以为可用。
-- 有 table selector 或 table-touching tool 时，connections 必须非空。
-- 每个 selector 必须解析到至少一个 source。
+- 有 table selector 或 DataPlane tool 时，connections 必须非空。
+- 每个 selector 必须解析到至少一个 source（`prefix` 展开后的 `names` 同此）。
 - `names` 和 `prefix` 互斥。
 - `names` 不能为空数组。
-- `prefix` 不能为空字符串。
+- `prefix` 不能为空字符串；**v2 不得出现 `prefix`**。
+- v1→v2 保存：必须完成 §0.2 迁移步骤；展开失败则整个保存失败。
 
 ## 8. Agent Admin 联动
 
@@ -479,10 +577,12 @@ Agent detail 基本信息 tab 的 role select 旁也加 `管理角色` link。
 
 - Role list 渲染 YAML / template / invalid / usageCount。
 - 搜索和筛选。
-- 新建 role dryRun -> diff -> confirm。
-- 编辑 role dryRun -> diff -> confirm。
+- 新建 role dryRun -> diff -> confirm（含强制 `permission_model_version: 2`、无 prefix）。
+- 编辑 v1 role：迁移 diff 含版本升级与 `prefix`→`names` 展开；失败路径可测。
+- capability preview 展示元组而非仅双并集。
+- 保存成功依赖 `runtimeAck`（与 Spec 14 同断言风格）。
 - 删除 role 时 in-use 阻止。
-- Template role 只读，复制为 YAML role。
+- Template role 只读，复制为 YAML role（复制结果为 v2）。
 - Agent 新建弹窗的 `管理角色` link 可见。
 
 后端：
@@ -493,7 +593,8 @@ Agent detail 基本信息 tab 的 role select 旁也加 `管理角色` link。
 - `PATCH /api/admin/roles/:roleId` 拒绝 template，校验 version。
 - `DELETE /api/admin/roles/:roleId` 拒绝 in-use，允许删除未引用 role。
 - copy template 展开落盘且无 template pointer 字段。
-- invalid tools / wildcard tools / empty selector / missing connections fail。
+- invalid tools / wildcard tools / AbsoluteDeny tools / empty selector / missing connections / v2+prefix / v2+scoped fail。
+- v1→v2 迁移 dryRun 展示展开后的 names；无法展开则拒绝 `dryRun:false`。
 
 建议命令：
 
@@ -507,10 +608,12 @@ npm run build
 
 - `/admin/roles` 可从侧边栏访问。
 - 管理员能不手写 YAML 完成 role 创建、编辑、删除、复制模板。
-- 所有 role 写入都经过 dryRun diff。
+- 所有 role 写入都经过 dryRun diff；成功保存满足 `runtimeAck` 契约（被引用 role 收窄路径）。
+- Data Capability Preview 为权限摘要主展示。
+- v2 Role 无法经 UI 写入 `prefix` 或 `scoped`。
 - 删除被 Agent 引用的 role 被阻止。
-- Template role 只读，复制后落盘为普通 YAML role。
+- Template role 只读，复制后落盘为普通 YAML role（v2）。
 - Agent 新建和编辑入口能跳到 role 管理。
 - `access.yaml` 中不出现 `role-template` / `templateId` 等指针字段。
-- 聚焦测试和 build 通过。
+- 聚焦测试和 build 通过（Gate B 后实施时）。
 

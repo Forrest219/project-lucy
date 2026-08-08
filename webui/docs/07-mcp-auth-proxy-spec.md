@@ -4,13 +4,101 @@
 |---|---|
 | 文档名称 | MCP Auth Proxy — 访问日志与多用户权限 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23 |
-| 撰写人 | Claude (Opus 架构设计) |
-| 委托人 | 张星晨 |
-| 基于材料 | project-lucy 代码库、KTX 上游源码（/Users/zhangxingchen/Projects/ktx）、Opus 架构分析 |
-| 适用范围 | project-lucy webui/server/ 新增 MCP Auth Proxy，不修改 KTX 上游 |
-| 输出位置 | /Users/zhangxingchen/Projects/project-lucy/webui/docs/07-mcp-auth-proxy-spec.md |
+| 版本 | v1.4.1（Gate B P0：正文对齐 Spec 98；WP-S1 条件清理） |
+| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 补丁 2026-08-08；v1.4.1 2026-08-08 |
+| 撰写人 | Claude (Opus 架构设计)；v1.4 / v1.4.1 Cursor Agent |
+| 委托人 | 张星晨 / xingchen |
+| 基于材料 | project-lucy 代码库、KTX 上游源码（/Users/zhangxingchen/Projects/ktx）、Opus 架构分析；`docs/access-control/design-upgrade.md` v1.1.2 §9；`webui/docs/98-access-control-p0-runtime-spec.md`；Gate B Opus 审阅（P0-1…P0-4） |
+| 适用范围 | project-lucy webui/server/ 新增 MCP Auth Proxy，不修改 KTX 上游；v1.4.x 契约草稿**不改变现网 runtime 行为直至 Gate B 勾选 + WP-I\*** |
+| 输出位置 | `webui/docs/07-mcp-auth-proxy-spec.md` |
+| 冲突裁决 | AC-P0 安全语义以 Spec 98 为准；与 `design-upgrade.md` 冲突 → design-upgrade |
+
+---
+
+## 0. AC-P0 契约补丁（WP-S1）
+
+> **权威语义（禁止另立口径）：** Capability 代数、Tool Class 全表、Canonical Source Key、`permission_model_version`、编译 / 提交 / 降级、Deny 全表 → [`98-access-control-p0-runtime-spec.md`](98-access-control-p0-runtime-spec.md)。  
+> **设计清单：** [`docs/access-control/design-upgrade.md`](../../docs/access-control/design-upgrade.md) §9。  
+> 本节只把 Proxy / 审计契约钉到 Spec 07；Admin UI / API 见 Spec 14 / 15 同波次补丁。
+
+### 0.1 相对 v1.3 的契约增量
+
+| 项 | v1.3（现网文档） | AC-P0（本补丁） | Spec 98 锚点 |
+|---|---|---|---|
+| 数据面授权 | tools 与 tables 独立并集后做表检查 | `(tool, canonicalSourceKey)` ∈ Effective Data Capabilities；禁止 `(∪tools)×(∪sources)` | §5 |
+| DataPlane 拒绝主码 | `table_forbidden:<table>` | `capability_forbidden:<tool>:<sourceKey>`（实施后主码；可短暂双写兼容审计） | §10.2 |
+| 工具分级 | `defaults.deny_tools` + known tools | AbsoluteDeny / DataPlane / Meta；**未分类 = AbsoluteDeny**；`sl_*` 代码基线不可移除 | §4 |
+| 策略版本 | snapshot hash / source map mtime 叙述 | `policyVersion = sha256(accessConfigDigest \|\| sourceMapVersion \|\| toolClassificationVersion)` | §8.1 |
+| 行级表述 | Non-Goals「不实现行级权限」 | **波次边界**：AC-P0 不交付 scoped / Row Policy；AC-P1 另批（见 §3） | §2 |
+| Agent 绑定 | `users[].role` 单 Role | `roles[]` Role Set；legacy `role: x` ≡ `roles: [x]`（Admin 见 Spec 14） | §3 |
+| 审计 | snapshot hash / decision_reason | + `policy_version`、capability digest、`toolClassificationVersion`、`policy_scope_expanded`、降级事件 | §10.3 |
+
+### 0.2 裁决码（增量；完整表见 Spec 98 §10.2）
+
+现网 §6.1.1 枚举**继续有效**；AC-P0 实施后 DataPlane 源级拒绝**主裁决码**为：
+
+```text
+capability_forbidden:<tool>:<sourceKey>
+```
+
+其中 `<sourceKey>` 的展示 / 序列化口径遵循 Spec 98 §6（Canonical Source Key；禁止裸 `sourceName` / 裸 `physicalTable` 作唯一身份）。
+
+新增 / 收紧码（实现以 Spec 98 §10.2 为准，此处不复述全表）：
+
+| Code | 用途 |
+|---|---|
+| `capability_forbidden:<tool>:<sourceKey>` | DataPlane 缺 `(tool, source)` capability |
+| `tool_absolute_deny:<tool>` | 代码基线 AbsoluteDeny（含 `sl_query` / `sl_read_source` 等） |
+| `tool_unclassified:<tool>` | 未分类工具按 AbsoluteDeny |
+| `policy_degraded_deny` | 策略降级态导致的 DataPlane deny |
+
+`table_forbidden:<table>`：AC-P0 实施后**停止作为 DataPlane 主裁决码**；可短暂双写以兼容审计筛选；Admin 审计 UI 筛选项须补 `capability_forbidden`（术语与文案见术语标准 §4.8）。
+
+### 0.3 Tool Class 与 AbsoluteDeny（指针）
+
+- 三分级定义与**全量分类表**不得在本文另写副本 → Spec 98 §4.1–§4.2。
+- `defaults.deny_tools` 仍为 YAML 双保险；**不能**解除代码基线 AbsoluteDeny（U-DENY-01）。
+- `tools/list` 与 `tools/call` 双重授权不变；DataPlane 工具可见性由「是否存在至少一条 capability」推导（Spec 98 §4.6）。
+- 唯一上游数据闸门：`authorizeAndRewrite`（Spec 98 §4.6 / §10.1）；**全部 DataPlane**（含 freshness / explain / 未包装工具）均须过闸，不得旁路。
+
+### 0.4 `policyVersion` 与编译输入
+
+热路径只读当前原子引用的 Effective Policy（含 `policyVersion`）。编译输入与哈希定义 → Spec 98 §8.1；Admin 收窄提交与 `runtimeAck` → Spec 98 §8.2 / Spec 14·15。本文不另定义哈希公式。
+
+### 0.5 审计 schema 增量（对齐 design-upgrade §9）
+
+在既有 `access_log` / `permission_snapshots` / `config_change_log` 上增加（列名可实现为独立列或约定 metadata key；须可查询）：
+
+| 表 | 字段 / 事件 | 语义 |
+|---|---|---|
+| `access_log` | `policy_version` | 当次裁决所用 `policyVersion` |
+| `permission_snapshots` | capability digest；`toolClassificationVersion` | 与 `resolved_json` / roles 一并复盘「当时有效 capability」 |
+| `config_change_log` | `policy_scope_expanded` | legacy v1 `prefix` 因 source map 变化导致授权集合扩大时的**显式**记录（不得静默） |
+| `config_change_log` | 策略降级进入 / 恢复事件 | 对应 Spec 98 §8.3–§8.4；健康检查须区分「服务可用」与「策略降级」 |
+
+canonical source keys 继续经 `access_log_sources`（Spec 08）落库；键口径升级为 Spec 98 §6。
+
+### 0.6 Gate B P0 正文对齐（v1.4.1）
+
+Gate B 审阅要求：§0 指针正确不足以过关——下文 **§5.1.2 / §5.1.3 / §6** 及 Role 示例不得再写与 Spec 98 冲突的旧语义。本版已按下列项改写（权威仍在 Spec 98）：
+
+| Gate B ID | 正文落点 | 对齐 Spec 98 |
+|---|---|---|
+| P0-1 | §5.1.2 | §8.2–§8.3：非法 / 收窄失败不得沿用更宽旧权 |
+| P0-2 | §6 | §6 / §8.1：`(connectionId, sourceName)` 正向键；反向 `(connectionId, physicalTable)`；mtime 检测须触发重编译 |
+| P0-3 | §5.1.3 | §7：`prefix` 仅 legacy v1；v2 禁用；扩权须 `policy_scope_expanded` |
+| P0-4 | §5.1 / §5.1.1 / §6.2 示例 | §4：Role.tools 用 `lucy_*`；`sl_*` = AbsoluteDeny |
+
+### 0.6 与 design-upgrade §9 对照（本文件范围）
+
+| design-upgrade §9 行 | 本补丁落点 | 状态 |
+|---|---|---|
+| Spec 07：`capability_forbidden`；工具分级；`policyVersion`；波次边界 | §0.2–§0.4、§3 | **草稿** |
+| 审计 schema：`policy_version` / digest / `policy_scope_expanded` / 降级 | §0.5 | **草稿** |
+| Admin 审计 UI 筛选项补 `capability_forbidden` | §0.2（契约要求）；UI 实现属 WP-I6 | 契约已登记 |
+| 术语标准 | Spec 98 WP-S0 / `00-product-terminology-standard.md` | 已由 WP-S0 |
+| Admin API `roles[]` / `runtimeAck` / 迁移 | Spec 14 / 15 WP-S1 | 见彼处 |
+| Security Eval / vision.md | 非本文；见 Spec 98 §12 | 延后 |
 
 ---
 
@@ -37,13 +125,13 @@ project-lucy 以 KTX HTTP MCP server（`localhost:7878/mcp`）暴露数据问答
 
 ## 3. Non-Goals
 
-- 不实现行级权限（列级、条件过滤）
+- **波次边界（取代「永久不实现行级」表述）**：本 Spec 历史 Phase / Non-Goals 中「不实现行级权限」一律解读为 **AC-P0 不交付** `row_access: scoped` / Row Policy 运行时注入 / 强制谓词 AST；**AC-P1 另批**（须上游强制谓词契约，见 `design-upgrade.md` ADR-AC-05 与 Spec 98 §2）。列级权限 / 动态掩码另立 CLS，不在本 Proxy Spec 范围。**不得**将本条解读为产品永久承诺「永不做行级」。
 - 不实现 OIDC / OAuth，只用静态 Bearer token
-- `sql_execution` 工具默认禁用，不做 SQL AST 表名解析（后期可扩展）
-- 不实现 Web UI 管理界面（Phase 3 可选）
+- `sql_execution` 工具默认禁用，不做 SQL AST 表名解析（后期可扩展）；AC-P0 起该工具属 AbsoluteDeny 代码基线（Spec 98 §4），YAML 无法解除
+- 不实现 Web UI 管理界面（Phase 3 可选）——**历史条目**：Admin UI 已由 Spec 14/15 交付；本条仅保留为 Phase 叙述上下文，不再约束产品范围
 - 不把 skill 当作安全边界。skill 只指导模型怎么用工具；最终授权必须由 Lucy MCP Proxy 裁决
 - v1.2 不实现 token scope。后续若引入，只允许在 role 基础上做交集收窄，不能增加权限
-- v1.3 新增的 `initialize.result.instructions` 注入（见 §4.4）是"指导"职责的扩展，不具备安全边界效力——它只决定模型看到什么提示文字，不决定模型能调用什么工具或看到什么数据。真正的权限边界始终是 `acl.check()` 和 `tools/list` 改写；instructions 文本写错或缺失最多导致模型少一些路由提示，不会导致越权
+- v1.3 新增的 `initialize.result.instructions` 注入（见 §4.4）是"指导"职责的扩展，不具备安全边界效力——它只决定模型看到什么提示文字，不决定模型能调用什么工具或看到什么数据。真正的权限边界始终是 `acl.check()` / `authorizeAndRewrite` 和 `tools/list` 改写；instructions 文本写错或缺失最多导致模型少一些路由提示，不会导致越权
 
 ## 4. 架构设计
 
@@ -111,6 +199,8 @@ POST /mcp (client)
 
 ### 5.1 用户权限配置 `webui/config/access.yaml`
 
+> **历史示例（v1.0 `users[].allow`）：** 下列 YAML 保留作兼容叙述。**AC-P0 Role / 新建 Agent 不得**在 `allow.tools` 中配置 `sl_query` / `sl_read_source`（AbsoluteDeny；见 Spec 98 §4）。主查询面为 `lucy_query` / `lucy_read_source`。
+
 ```yaml
 users:
   - id: zhangsan
@@ -123,8 +213,8 @@ users:
       tables:
         - dataforai.superstore_orders
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_query              # AC-P0 DataPlane；历史配置可能仍写 sl_*（运行时 AbsoluteDeny）
+        - lucy_read_source
         - wiki_search
         - wiki_read
         - entity_details
@@ -144,13 +234,15 @@ users:
 defaults:
   deny_tools:
     - sql_execution               # 原生 SQL 写口，默认对所有用户禁用
+    - sl_query                    # AC-P0：YAML 双保险；真正边界在代码 AbsoluteDeny
+    - sl_read_source
     - memory_ingest
     - memory_ingest_status
 ```
 
-- `tools: ["*"]` 表示放行全部工具（除 `defaults.deny_tools`）
+- `tools: ["*"]` 表示放行全部工具（除 `defaults.deny_tools`）；**AC-P0：** AbsoluteDeny / 未分类工具仍不可见、不可调用
 - `tables: ["*"]` 表示放行全部已在 `ktx.yaml` 中 `enabled_tables` 声明的表
-- yaml 变更后需重启，或通过 `fs.watch` hot reload（见 §7）
+- yaml 变更后需重启，或通过 `fs.watch` hot reload（见 §7）；**AC-P0 热加载语义以 Spec 98 §8.2–§8.3 为准**（见 §5.1.2）
 
 ### 5.1.1 v1.2 Role 权限模型
 
@@ -160,6 +252,8 @@ v1.2 的目标用户体验是：同事拿到一个 `kx_readonly` token 后，只
 roles:
   kx_readonly:
     description: KX 财务数据只读问答
+    # AC-P0：新建 / 保存为 v2 时须 permission_model_version: 2，且禁止 prefix
+    permission_model_version: 2
     allow:
       connections:
         - mysql-aliyun
@@ -173,10 +267,11 @@ roles:
             - kx_vw_balance_sheet_detail
             - kx_vw_cash_flow_statement_detail
             - kx_vw_income_statement_detail
+          row_access: all
       tools:
         - kx_catalog
-        - sl_query
-        - sl_read_source
+        - lucy_query              # DataPlane；禁止写 sl_query（AbsoluteDeny）
+        - lucy_read_source        # DataPlane；禁止写 sl_read_source（AbsoluteDeny）
         - entity_details
 
 users:
@@ -192,6 +287,8 @@ users:
 defaults:
   deny_tools:
     - sql_execution
+    - sl_query
+    - sl_read_source
     - memory_ingest
     - memory_ingest_status
 ```
@@ -199,57 +296,72 @@ defaults:
 **有效权限合成规则（必须单向、可解释）：**
 
 ```text
+# v1.2 / 现网（历史）
 effective_permissions(token)
   = resolve(user.role)
   - defaults.deny_tools
+
+# AC-P0（权威定义 Spec 98 §5；本处只钉契约方向，不另立代数）
+EffectiveDataCapabilities(agent)
+  = ∪_roles RoleCapabilities(r)   # 元组并集，禁止 (∪tools)×(∪sources)
+EffectiveMetaTools(agent)
+  = ∪_roles RoleMetaTools(r)
+再减去 AbsoluteDeny / defaults.deny_tools 双保险
 ```
 
-- `roles` 是长期主模型；`users[].role` 指向一个全局 role。
-- `defaults.deny_tools` 是绝对否定；role 不能突破全局禁用工具。
-- `users[].allow` 仅作为 v1.0 兼容层保留，标记 deprecated；新建 Agent 不再生成 `users[].allow`。迁移期内，如果同一 user 同时有 `role` 和 `allow`，proxy 必须在 reload 阶段告警，并按 `role` 优先生效。
-- `role.allow.tools` 必须显式列工具名；`["*"]` 仅允许出现在历史 `users[].allow` 兼容配置中。
-- 如果 role 授权任何表访问工具或 `tableSelectors`，则 `role.allow.connections` 必填且不能为空；缺失视为 `role_resolution_failed:<role>`。纯 wiki / 非数据工具 role 可以省略 `connections`。
+- `roles` 是长期主模型；`users[].role` 指向一个全局 role。**AC-P0：** Agent 使用 `roles: [...]` Role Set；legacy 单字段 `role: x` ≡ `roles: [x]`；`role` 与 `roles` 双写 → 保存拒绝 / reload fail-closed（Spec 98 §3）。
+- `defaults.deny_tools` 是绝对否定；role 不能突破全局禁用工具。**AC-P0：** 另有代码基线 AbsoluteDeny（含 `sl_*`），YAML 删除 deny 条目仍拒绝。
+- `users[].allow` 仅作为 v1.0 兼容层保留，标记 deprecated；新建 Agent 不再生成 `users[].allow`。迁移期内，如果同一 user 同时有 `role`/`roles` 和 `allow`，proxy 必须在 reload 阶段告警，并按 role 优先生效。
+- `role.allow.tools` 必须显式列工具名；`["*"]` 仅允许出现在历史 `users[].allow` 兼容配置中。**AC-P0：** 不得包含 AbsoluteDeny / 未分类工具（lint fail）；示例与生产配置一律写 `lucy_*`，不得把 `sl_query` / `sl_read_source` 写进 Role.tools。
+- 如果 role 授权任何表访问工具或 `tableSelectors`，则 `role.allow.connections` 必填且不能为空；缺失视为 `role_resolution_failed:<role>`。纯 wiki / 非数据工具 role 可以省略 `connections`。**AC-P0：** 含 selectors / DataPlane 时空 `allow.connections` → **编译失败**（与 Spec 98 §5.4 / Spec 15 对齐）。
 - v1.2 不实现 `tokens[].scopes`；如未来实现，只能引用已有 role 作为交集收窄，不能增加工具、连接或表权限。
 - 未识别 role、空 role、selector 解析失败、tool 不存在或 selector 匹配 0 个 source 时，配置 reload 必须 fail-closed；不得静默降级为全放行、空权限或历史 `users[].allow`。
+- **AC-P0 补充：** `permission_model_version`、v2 禁 `prefix` / 禁 `scoped`、编译输入含 source map → Spec 98 §7–§8；Admin 迁移与 preview → Spec 14 / 15。
 
-KX role 示例中的工具归属：
+KX role 示例中的工具归属（AC-P0）：
 
-| Tool | 来源 | 说明 |
-|---|---|---|
-| `sl_query` | KTX upstream | 语义层查询 |
-| `sl_read_source` | KTX upstream | 读取语义层 source |
-| `entity_details` | KTX upstream | 读取实体详情；若上游未暴露该工具，role 校验失败 |
-| `kx_catalog` | Lucy proxy | proxy 注入并直接服务的能力发现工具 |
+| Tool | 来源 | 分级 | 说明 |
+|---|---|---|---|
+| `lucy_query` | Lucy proxy → KTX | DataPlane | 主查询面；经 `authorizeAndRewrite` |
+| `lucy_read_source` | Lucy proxy → KTX | DataPlane | 整源读取 |
+| `entity_details` | KTX upstream | DataPlane（未包装） | 仍过闸门做 capability 检查；若上游未暴露则 role 校验失败 |
+| `kx_catalog` | Lucy proxy | Meta | proxy 注入并直接服务的能力发现工具 |
+| `sl_query` / `sl_read_source` | KTX upstream | **AbsoluteDeny** | **不得**出现在 Role.tools；代码基线不可解除 |
 
 ### 5.1.2 Role 生命周期
 
-- role 是全局命名权限模板；`users[].role` 只能引用已存在 role。
+- role 是全局命名权限模板；`users[].role` / `users[].roles[]` 只能引用已存在 role。
 - role 改名不支持原地 rename；必须新增新 role、迁移引用、再删除旧 role。
 - 删除仍被 user 引用的 role 是配置错误；reload fail-closed。
-- 修改 role 的 tools / connections / tableSelectors 后，新的 effective permissions 在下一次配置 reload 生效。30 秒 TTL 内的已缓存请求仍按旧 role 裁决；WebUI 写入 role / user 变更时应默认触发主动 reload。
-- 每次 reload 后，proxy 重新解析 role，并为每个 role 生成 permission snapshot hash。
-- role 解析失败时，proxy 必须拒绝使用该配置版本并继续使用上一份已验证配置；若启动期无上一份有效配置，则拒绝启动。
+- 修改 role 的 tools / connections / tableSelectors 后，新的 Effective Policy 在下一次**成功编译并提交**后生效。热路径只读当前原子引用；**禁止**热路径解析 YAML 或重建 source map（Spec 98 §8.2）。
+- 每次成功编译后，proxy 写入 `policyVersion`、capability digest，并为复盘生成 permission snapshot（与 Spec 98 §8.1 / §10.3 对齐）。
+- **配置失败 / 热加载语义（权威 Spec 98 §8.2–§8.3；禁止沿用「继续使用上一份已验证配置」作为一般路径）：**
+  - **Admin 推荐路径：** dryRun → 编译失败则不写盘、不切 runtime；编译成功才写盘并原子切换；切换失败回滚磁盘并保持写前 runtime。
+  - **外部手改 YAML / 非法热加载：** 编译失败且可定位受影响 Agent → 这些 Agent 的 **DataPlane 全部 deny**（Meta 数据相关输出默认 deny / catalog 置空）；无法可靠定位（如 YAML 无法解析）→ **数据面整体 deny**，直至修复或回滚。
+  - **last-known-good 仅允许：** 等价或放宽切换失败时回退；进程重启加载**上一份已验证成功**的策略。**禁止**在「意图收窄但编译/切换失败」时继续提供更宽旧权并表现为健康。
+  - **启动期**无任何已验证策略 → 拒绝进入可服务状态。
 
 ### 5.1.3 `tableSelectors` 语义
 
-`tableSelectors` 表达授权意图，proxy 通过 semantic-layer source map 解析为具体 `(connection, schema, sourceName, table)` 集合。role reload 必须先刷新 source map，或至少记录用于解析的 source map version / mtime；admin preview 必须展示该版本，避免 preview 与运行时用不同 catalog。
+`tableSelectors` 表达授权意图，proxy 通过 semantic-layer source map 解析为具体 `canonicalSourceKey = (connectionId, schema, sourceName, physicalTable)` 集合（Spec 98 §6）。role 编译必须钉住用于解析的 `sourceMapVersion`；admin preview 必须展示该版本，避免 preview 与运行时用不同 catalog。
 
-| Selector | 语义 | 适用场景 |
+| Selector | 语义 | AC-P0 可用性 |
 |---|---|---|
-| `{ connection, schema, prefix }` | 指定 connection/schema 下，source/table 名以 prefix 开头 | 多 connection 环境首选 |
-| `{ schema, prefix }` | 任一授权 connection 下，schema 内 prefix 匹配 | 单 connection 或角色已限定 connection |
-| `{ connection, schema, names }` | 精确列举 source/table 名 | 小范围精确白名单 |
-| `{ schema, names }` | 任一授权 connection 下，schema 内精确列举 | 兼容单 connection |
+| `{ connection, schema, names }`（+ v2 必填 `row_access: all\|scoped`） | 精确列举 source/table 名 | **v1 / v2 首选**；AC-P0 仅允许 `row_access: all`（缺省 / 显式）；`scoped` → 配置拒绝 |
+| `{ schema, names }` | 任一授权 connection 下，schema 内精确列举 | 兼容单 connection；同上 |
+| `{ connection, schema, prefix }` | 指定 connection/schema 下，source/table 名以 prefix 开头 | **仅 `permission_model_version: 1`（legacy）**；**v2 禁用**（编译失败） |
+| `{ schema, prefix }` | 任一授权 connection 下，schema 内 prefix 匹配 | 同上，仅 v1 |
 
 规则：
 
-- 多个 selector 之间是 union。
-- `prefix` 大小写敏感；不支持 glob、regex 或负向匹配。
+- 多个 selector 之间是 union（同 Role 重叠 source 的 rowGrant digest 规则 → Spec 98 §5.6）。
+- **`prefix`（仅 v1）：** 大小写敏感；不支持 glob、regex 或负向匹配。因 source map 变化导致授权集合扩大时，必须产生可观测 `policy_scope_expanded` 记录（§0.5 / Spec 98 §8.1）；**不得**静默扩权。
+- **`prefix`（v2）：** 任何含 `prefix` 的 selector → **配置拒绝 / 编译失败**（Spec 98 §7）。Admin 迁移须将 v1 `prefix` 展开为 `names`（无法展开 → 保存失败）。
 - selector 只匹配 semantic-layer 已注册 source；物理库里存在但未纳入 semantic-layer 的表不授权。
 - selector 解析结果必须可预览，并在 reload / admin UI 中展示给管理员。
 - selector 匹配 0 个 source 是错误：preview API 返回 `400 INVALID_ROLE`，配置保存 / reload fail-closed。
-- KX 财务只读 role 必须使用 `names` 明示授权 source，不能用 `prefix: kx_` 作为默认策略。
-- `prefix` 是开放式授权，新增匹配 source 会自动纳入角色；仅适合开发、探索或低敏数据域。生产敏感数据 role 使用 prefix 时，admin preview 必须显示开放式授权 warning，并要求人工确认。
+- KX 财务只读 role 必须使用 `names` 明示授权 source，不能用 `prefix: kx_` 作为默认或生产策略。
+- 生产敏感数据 role：**禁止**依赖开放式 `prefix`；Admin 对仍存活的 v1 `prefix` 须显示开放式授权 warning，并要求人工确认迁移。
 
 ### 5.1.4 客户端配置合同
 
@@ -283,7 +395,7 @@ CREATE TABLE access_log (
   ts            TEXT    NOT NULL,   -- ISO8601 UTC, e.g. "2026-06-18T00:30:00.000Z"
   user_id       TEXT    NOT NULL,   -- 'zhangsan'
   client        TEXT,               -- 'hermes' | 'cursor'（从 initialize 握手的 clientInfo.name 抓）
-  tool          TEXT    NOT NULL,   -- 'sl_query'
+  tool          TEXT    NOT NULL,   -- e.g. 'lucy_query'（历史日志可能含 sl_*）
   tables        TEXT,               -- JSON array: ["dataforai.superstore_orders"]
   args_summary  TEXT,               -- 精简入参 JSON（白名单字段，不含完整 rows）
   outcome       TEXT    NOT NULL,   -- 'ok' | 'error' | 'denied'
@@ -306,28 +418,41 @@ v1.2 扩展字段（可新增列或放入 JSON metadata，具体实现二选一�
 
 ```sql
 -- 建议字段；SQLite 迁移可用 ALTER TABLE 逐步追加
-role_ids                         TEXT,  -- JSON array，如 ["kx_readonly"]
+role_ids                         TEXT,  -- JSON array，如 ["kx_readonly"]；AC-P0 为 Role Set
 permission_snapshot_hash          TEXT,  -- effective permissions 快照 hash
 effective_tables_count            INTEGER,
-decision_reason                   TEXT   -- tool_forbidden / table_forbidden / unknown_connection 等
+decision_reason                   TEXT   -- 见 §6.1.1；AC-P0 主码含 capability_forbidden
 ```
 
-同时新增权限快照表；`access_log.permission_snapshot_hash` 必须能关联到当时的完整 effective permissions。
+**v1.4 / AC-P0 增量（WP-S1；与 §0.5 一致）：**
+
+```sql
+-- access_log 追加
+policy_version                    TEXT   -- 当次裁决 policyVersion
+
+-- permission_snapshots 追加（可入 resolved_json 旁路字段，须可查询）
+capability_digest                 TEXT,  -- Effective Data Capabilities 摘要
+tool_classification_version       TEXT   -- 参与 policyVersion 哈希的分类表版本
+```
+
+同时新增权限快照表；`access_log.permission_snapshot_hash` 必须能关联到当时的完整 effective permissions（AC-P0：含 capability 集合，而非仅 tools∪ + sources∪）。
 
 ```sql
 CREATE TABLE permission_snapshots (
   hash        TEXT PRIMARY KEY,
   created_at  TEXT NOT NULL,
   roles_json  TEXT NOT NULL,  -- 参与合成的 role 定义
-  resolved_json TEXT NOT NULL -- tools/connections/sources/tableSelectors 解析结果
+  resolved_json TEXT NOT NULL -- AC-P0：须可复盘 capability 元组；禁止仅存双并集
 );
 ```
 
+`config_change_log`（Admin 写入审计，见 Spec 90）须能记录：`policy_scope_expanded`、策略降级进入 / 恢复（§0.5）。事件 payload 细节以实现 WP-I6 为准，本补丁只钉契约存在性。
+
 写入顺序：
 
-1. 计算 effective permissions 与 snapshot hash。
+1. 计算 Effective Policy（含 `policyVersion`、capability digest）与 snapshot hash。
 2. `INSERT OR IGNORE permission_snapshots(hash, ...)`。
-3. 写 `access_log.permission_snapshot_hash`。
+3. 写 `access_log.permission_snapshot_hash` 与 `access_log.policy_version`。
 
 审计日志必须足以解释「当时为什么允许或拒绝」。当 role 或 selector 未来变化时，仍应通过 `permission_snapshots.resolved_json` 复盘。
 
@@ -335,39 +460,53 @@ CREATE TABLE permission_snapshots (
 
 ## 6. 表名提取逻辑
 
-代理从工具参数里提取物理表名用于 ACL 检查和日志。
+代理从工具参数里提取物理表名 / canonical source key，用于 ACL 检查和日志。
 
-| 工具 | 表名来源 | 提取方式 |
+> **AC-P0：** 身份键与裁决以 Spec 98 §6 Canonical Source Key 为准；本节不得再规范「全局裸 `sourceName` Map」。`sl_query` / `sl_read_source` 为 AbsoluteDeny，**不**作为可授权调用路径出现在下表「允许工具」列；下表保留参数提取形状，供审计兼容与拒绝对话诊断。
+
+| 工具 | 表名 / 源键来源 | 提取方式 |
 |---|---|---|
-| `sl_query` | `arguments.measures[]` / `arguments.dimensions[].field` | 取 `.` 前的 sourceName，查内存 Map → 物理表名 |
-| `sl_read_source` | `arguments.sourceName` + `arguments.connectionId` | 同上查 Map |
-| `entity_details` | `arguments.sourceName` / `arguments.entities[].table` / `schema+name` / `type|kind + name|id` / `qualifiedName` | 规范化后查 source map |
-| `discover_data` / `dictionary_search` | 无具体表 | 仅做 tool 级权限检查 |
-| `wiki_search` / `wiki_read` | 与表无关 | 仅做 tool 级权限检查 |
-| `connection_list` | 无 | 无需检查 |
+| `lucy_query`（及拒绝对话中的历史 `sl_query` 参数形） | `arguments.measures[]` / `arguments.dimensions[].field` | 取 `.` 前的 sourceName，与 `connectionId` 一并查正向 map → canonical key / 物理表 |
+| `lucy_read_source`（及历史 `sl_read_source` 参数形） | `arguments.sourceName` + `arguments.connectionId` | 同上查正向 map |
+| `entity_details` | `arguments.sourceName` / `arguments.entities[].table` / `schema+name` / `type|kind + name|id` / `qualifiedName` | 规范化后查 source map（须带 connection 语境） |
+| `lucy_freshness` / `lucy_explain_query` / `sl_validate` | 各工具参数中的 source / connection | 一律经 `authorizeAndRewrite` 做 capability 检查（Spec 98 §4.5–§4.6） |
+| `discover_data` / `dictionary_search` | 无具体表（敏感 Meta） | tool 级 + 前缀下「任意 DataPlane」parity（Spec 98 §4.4） |
+| `wiki_search` / `wiki_read` | 与表无关 | 仅做 tool 级 / wiki ACL |
+| `connection_list` / `lucy_catalog` / `kx_catalog` | 无单源绑定 | Meta；输出按 Effective Data Capabilities 过滤（Spec 98 §5.5） |
 
-v1.2 增加连接裁决：
+v1.2 / AC-P0 连接裁决：
 
-- 对表访问工具，若 effective permissions 含 `connections`，请求必须显式携带允许的 connection。
-- 缺失 connection、未知 connection、非授权 connection 均拒绝并 audit。
+- 对表访问 / DataPlane 工具，若 effective permissions 含连接约束，请求必须显式携带允许的 connection。
+- 缺失 connection、未知 connection、非授权 connection 均拒绝并 audit（`unknown_or_forbidden_connection:<id>`，先于 capability 检查）。
 - `schema` 只用于表归属，不等同于 connection；不得把 `{ schema: dataforai }` 误判为 connection。
-- `sl_query` 如果没有可解析 source/table 引用，且用户不是 `tables: ["*"]` 兼容通配，必须拒绝为 `explicit_table_required:<empty>`。
-- 一次请求引用多表时，任一表或 connection 未授权则整体拒绝；`decision_reason` 记录第一个违规对象，并在 `args_summary` 或 metadata 中保留违规总数。
+- DataPlane 查询若没有可解析 source/table 引用，且用户不是历史 `tables: ["*"]` 兼容通配，必须拒绝为 `explicit_table_required:<empty>`。
+- 一次请求引用多源时，任一源或缺 `(tool, canonicalSourceKey)` capability 则整体拒绝；主裁决码 `capability_forbidden:<tool>:<sourceKey>`（可短暂双写 `table_forbidden`）；`args_summary` 或 metadata 中保留违规总数。
 
-**sourceName → 物理表名映射**：启动时扫描 `semantic-layer/**/*.yaml`，读取每个 source 的 `name`（sourceName）及其所属 connection + schema，构建内存 Map：
+**Canonical source map（AC-P0；权威 Spec 98 §6 / §8.1）：**
+
+启动 / 编译时扫描 `semantic-layer/**/*.yaml`，读取每个 source 的 `name`（sourceName）、所属 `connectionId`、schema 与物理表，构建：
 
 ```typescript
-// Map<sourceName, "schema.table">
-// e.g. "superstore_orders" -> "dataforai.superstore_orders"
+// 正向：至少 (connectionId, sourceName) → { schema, physicalTable, ... }
+// 反向：至少 (connectionId, physicalTable) → { schema, sourceName, ... }
+// 禁止：全局裸 Map<sourceName, ...> 或裸 Map<physicalTable, ...> 作唯一身份
+// 同 connectionId 内 sourceName 必须唯一；冲突 → 编译失败
 ```
 
-按文件 mtime 每 60 秒刷新一次（变化不频繁，不需要 fs.watch）。
+**变更检测与重编译：**
+
+- 可用文件 mtime / 哈希轮询（例如每 60 秒）**仅作变更检测**。
+- 一旦检测到 source map 变化，必须触发与 access.yaml 变化**同等语义**的重编译，并产生新的 `policyVersion`（Spec 98 §8.1）。
+- **禁止**依赖「60s TTL 静默刷新内存 Map、热路径直接读新 map 而不重编译」的旧语义。
+- 同一 `policyVersion` 内所有请求使用同一份钉住的 source map 快照。
+- v1 `prefix` 因 map 变化导致授权集合扩大 → 必须记 `policy_scope_expanded`（不得静默）。
 
 ### 6.1 `tools/list` 与 `tools/call` 双重授权
 
-- `tools/list`：proxy 改写下行工具列表，只返回 token 有权看到的工具。若 effective permissions 允许 `kx_catalog`，proxy 可注入该自服务工具。
-- `tools/call`：proxy 对每次调用再次校验工具、connection、source/table；不能依赖客户端只调用 list 中出现过的工具。
-- `kx_catalog`：由 proxy 直接服务，返回内容按 effective permissions 过滤。没有任何数据权限的 token 不应看到或调用 `kx_catalog`。
+- `tools/list`：proxy 改写下行工具列表，只返回 token 有权看到的工具。若 effective permissions 允许 `kx_catalog` / `lucy_catalog`，proxy 可注入该自服务工具。
+- `tools/call`：proxy 对每次调用再次校验工具、connection、canonical source / capability；不能依赖客户端只调用 list 中出现过的工具。
+- **全部 DataPlane**（含 proxy-local `lucy_freshness` / `lucy_explain_query`、未包装 `entity_details` / `sl_validate`）均须经 `authorizeAndRewrite`（Spec 98 §4.6）；不得旁路。
+- `kx_catalog` / `lucy_catalog`：由 proxy 直接服务，返回内容按 Effective Data Capabilities 过滤。纯 Meta、无 DataPlane capability 时：catalog **源列表为空**（仍可按 wiki ACL 使用 wiki 工具）；不得把「无数据权限」解释成「仍展示全量 catalog」。
 - 拒绝必须 fail-closed，并写 `access_log.outcome='denied'`。
 
 `tools/list` 改写策略：
@@ -387,16 +526,22 @@ v1.2 增加连接裁决：
 | `allowed` | 允许执行 |
 | `tool_forbidden` | role 未授权该工具 |
 | `tool_forbidden_global` | 命中 `defaults.deny_tools` |
-| `table_forbidden:<table>` | 表不在 effective permissions 中 |
-| `table_forbidden:<table>; total=<n>` | 多表请求中至少一个表未授权，记录首个违规和违规总数 |
+| `table_forbidden:<table>` | （v1.2/v1.3）表不在 effective permissions 中；**AC-P0 实施后 DataPlane 主码改为 `capability_forbidden`，本码可短暂双写兼容** |
+| `table_forbidden:<table>; total=<n>` | 多表请求中至少一个表未授权，记录首个违规和违规总数（兼容同上） |
+| `capability_forbidden:<tool>:<sourceKey>` | **AC-P0 新增**：缺少 `(tool, sourceKey)` Data Capability（权威定义 Spec 98 §10.2） |
+| `tool_absolute_deny:<tool>` | **AC-P0 新增**：代码基线 AbsoluteDeny |
+| `tool_unclassified:<tool>` | **AC-P0 新增**：未分类工具按 AbsoluteDeny |
+| `policy_degraded_deny` | **AC-P0 新增**：策略降级态导致的 DataPlane deny |
 | `unknown_or_forbidden_connection:<id>` | connection 缺失、未知或未授权；缺失用 `<missing>` |
 | `explicit_table_required:<empty>` | 非通配用户调用表访问工具但没有明确表引用 |
 | `role_not_found:<role>` | user 引用不存在 role |
 | `role_resolution_failed:<role>` | role selector / tool / connection 解析失败 |
-| `user_disabled` | user disabled |
+| `user_disabled` | user disabled（实现侧或称 `agent_disabled`；以代码与 Spec 98 对齐为准） |
 | `token_revoked` | token 已撤销 |
 | `token_expired` | token 已过期 |
 | `tools_list_rewrite_failed` | `tools/list` 改写失败，拒绝透传 |
+
+> AC-P0 完整裁决码表、流水线与审计字段以 Spec 98 §10 为准；上表是 Spec 07 既有枚举的**就地补丁**，避免两套互相矛盾的主码定义。
 
 ### 6.2 `kx_catalog` 返回合同
 
@@ -419,7 +564,7 @@ v1.2 增加连接裁决：
       ],
       "examples": [
         {
-          "tool": "sl_query",
+          "tool": "lucy_query",
           "arguments": {
             "connectionId": "mysql-aliyun",
             "measures": [{ "$text": "kx_fact_financial_amount.amount" }]
@@ -478,7 +623,7 @@ function identifyRequest(authHeader: string | undefined): Identity | null
 // acl.ts
 interface AclDecision {
   allowed: boolean;
-  reason?: string;  // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_default_deny'
+  reason?: string;  // AC-P0: 见 §6.1.1 / Spec 98 §10.2；含 capability_forbidden:<tool>:<sourceKey>
 }
 function check(identity: Identity, toolName: string, args: unknown): AclDecision
 function extractTables(toolName: string, args: unknown): string[]  // 物理表名列表
@@ -520,7 +665,7 @@ function writeLog(entry: AccessLogEntry): void
 5. `webui/server/index.ts` 启动 proxy
 6. `.mcp.json` 切到 `:7879`
 
-**验证**：张三和李四各发 5 个 sl_query，`SELECT * FROM access_log` 能看到正确 user_id、tool、duration_ms。
+**验证**：张三和李四各发 5 个 `lucy_query`（历史阶段文档曾写 `sl_query`；AC-P0 主查询面为 `lucy_*`），`SELECT * FROM access_log` 能看到正确 user_id、tool、duration_ms。
 
 ### Phase 2：可治理（2–3 天）
 目标：ACL 生效，权限拒绝有日志
@@ -548,7 +693,7 @@ function writeLog(entry: AccessLogEntry): void
 
 - 新建 `kx_readonly` role 和 token 后，Codex app 只配 URL/token，`tools/list` 只能看到允许工具。
 - `kx_catalog` 返回 `mysql-aliyun` 与 `dataforai.kx_*` 已注册 semantic-layer source。
-- `sl_query` 缺 connection、`connectionId=warehouse`、非 `kx_` 表、无明确表引用均被拒绝并 audit。
+- `lucy_query` 缺 connection、`connectionId=warehouse`、非授权源、无明确表引用均被拒绝并 audit；对 `sl_query` 调用须 `tool_absolute_deny`。
 - 当前 `workhorse` 的逐表配置可迁移为 `role: kx_readonly`，行为等价或更严格。
 
 ### Phase 3：可运维（可选，半天）
@@ -585,5 +730,5 @@ function writeLog(entry: AccessLogEntry): void
 | token 明文泄漏 | 只存 sha256 hash；日志里不记录原始 token；`.mcp.json` 加入 `.gitignore` |
 | better-sqlite3 同步写阻塞 | 本机、低 QPS 场景同步写可接受；后期可换 WAL 模式减少锁 |
 | role / selector 配错导致越权 | reload fail-closed；selector 预览；audit 记录 permission snapshot hash |
-| prefix selector 自动纳入未来敏感表 | 只匹配 semantic-layer 已注册 source；管理员上线前审查 selector 预览；敏感表不得注册到通用 `kx_` 前缀角色 |
+| prefix selector 自动纳入未来敏感表 | **v2 禁用 `prefix`**；v1 扩权必须 `policy_scope_expanded`；管理员审查 selector 预览；敏感表不得挂在通用 `kx_` 前缀角色 |
 | tools/list 改写破坏响应头 | 改写后删除原 `content-length` / `transfer-encoding`，按新 body 重算 |

@@ -21,7 +21,9 @@
 | 域档案落位 | **DONE** | `docs/access-control/` |
 | ADR v1.1.2 | **已批准（Gate A）** | 本 WO 以该文为唯一设计事实源 |
 | **Gate A：ADR 批准** | **DONE** | 2026-08-08；允许写 Spec / 术语 / 契约补丁 |
-| **Gate B：AC-P0 Spec 评审通过** | 待勾选 | 勾选后才允许拆实施子任务并改代码 |
+| WP-S0 Spec + 术语 | **DONE** | `webui/docs/98-access-control-p0-runtime-spec.md` v0.1；术语标准 v0.3 §3/§4.8 |
+| WP-S1 契约补丁草稿 | **DONE** | 07 **v1.4.1** 已按 Gate B P0 对齐 Spec 98 正文；14/15 v0.2 |
+| **Gate B：AC-P0 Spec 评审通过** | **待你勾选** | Spec 07 P0 条件已清；勾选后才允许 WP-I\* |
 | Gate C：AC-P0 实现 + 门禁绿 | 未开始 | |
 | AC-P1 | **冻结** | 本 WO 明确 Non-Goal |
 
@@ -70,7 +72,7 @@
 
 | 交付物 | 路径 | Gate |
 |---|---|---|
-| AC-P0 Runtime Spec | `webui/docs/<nn>-access-control-p0-runtime-spec.md`（编号在撰写时取下一可用号；建议紧跟现有序列） | A→B |
+| AC-P0 Runtime Spec | `webui/docs/98-access-control-p0-runtime-spec.md`（v0.1 Gate B 评审稿） | A→B（WP-S0 DONE） |
 | Spec 07 补丁 | `webui/docs/07-mcp-auth-proxy-spec.md` | B 前完成草稿，B 时合并口径 |
 | Spec 14/15 补丁 | Agent/Role Admin：`roles[]`、preview capability、版本迁移、runtimeAck | 同左 |
 | 术语登记 | `webui/docs/00-product-terminology-standard.md` | A 后、B 前 |
