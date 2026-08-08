@@ -792,3 +792,71 @@ tables:
           db: 更新时间
     descriptions:
       db: Tableau 示例超市退货 ODS 表
+  ad_account_daily:
+    table: dataforai.ad_account_daily
+    columns:
+    - name: date
+      type: time
+      pk: true
+      nullable: false
+      descriptions:
+        db: 投放业务日。相对「最近/本周」锚定本表 max(date)，不用系统今天。
+        ai: 投放日期；相对时间锚定 max(date)。
+    - name: account_name
+      type: string
+      pk: true
+      nullable: false
+      descriptions:
+        db: 广告账户名。含「自运营」或「代理」表示运营类型（无独立字段）。账户与渠道、客户等级固定绑定。
+        ai: 账户名；自运营/代理从名称识别。
+    - name: channel
+      type: string
+      nullable: false
+      descriptions:
+        db: 投放渠道。枚举：巨量引擎 / 腾讯广告 / 百度营销 / 小红书 / 快手磁力引擎。
+        ai: 投放渠道。
+    - name: customer_level
+      type: string
+      nullable: false
+      descriptions:
+        db: 账户客户等级。枚举：A级 / B级 / C级。
+        ai: 客户等级 A/B/C。
+    - name: spend
+      type: number
+      nullable: false
+      descriptions:
+        db: 当日广告花费，单位元人民币。
+        ai: 日花费（元）。
+    - name: valid_customers
+      type: number
+      nullable: false
+      descriptions:
+        db: 当日有效客户数。漏斗最上层。
+        ai: 有效客户数。
+    - name: quality_customers
+      type: number
+      nullable: false
+      descriptions:
+        db: 当日优质客户数。应 ≤ valid_customers。
+        ai: 优质客户数。
+    - name: good_customers
+      type: number
+      nullable: false
+      descriptions:
+        db: 当日良好客户数。应 ≤ quality_customers。
+        ai: 良好客户数。
+    - name: appointments
+      type: number
+      nullable: false
+      descriptions:
+        db: 当日预约数。漏斗最下层；应 ≤ good_customers。默认 CPA 分母。
+        ai: 预约数；预约 CPA 分母。
+    descriptions:
+      db: '投放账户日级漏斗事实表。粒度：账户 × 日。
+
+        漏斗：有效客户 → 优质客户 → 良好客户 → 预约。
+
+        派生比率一律 SUM/SUM，禁止按日再平均。单表无 joins。
+
+        '
+      ai: 投放账户日漏斗；grain=账户×日；CPA 用合计相除。

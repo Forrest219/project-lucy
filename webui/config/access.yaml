@@ -113,6 +113,7 @@ roles:
             - kx_vw_balance_sheet_detail
             - kx_vw_cash_flow_statement_detail
             - kx_vw_income_statement_detail
+            - ad_account_daily
       tools:
         - lucy_catalog
         - kx_catalog
