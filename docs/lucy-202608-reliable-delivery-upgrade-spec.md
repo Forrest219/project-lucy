@@ -8,7 +8,7 @@
 | Written date | 2026-08-03；v0.4 更新 2026-08-03（收窄 202608 主线为企业访问治理与可观测性，移出 FDE Copilot 与通用 semantic delivery 提效）；v0.5 更新 2026-08-03（删除 Dynamic RLS / CLS POC 超前设计，收敛 P2 为当前访问治理复核与发布证据包） |
 | Scope | Lucy 202608 版本升级：Access Governance Trace / Evidence、ACL policy decision trace、Admin Audit Trace read model、Tiered Access Governance Gate、Safe Log-to-Security-Eval、Admin Observability、Agent / Role Risk Review、Release Readiness Evidence Package |
 | Execution control | `docs/lucy-202608-upgrade-execution-control.md` |
-| Gap analysis | `docs/lucy-202608-access-governance-gap-analysis.md` |
+| Gap analysis | `docs/access-control/gap-analysis-202608.md`（旧路径 `docs/lucy-202608-access-governance-gap-analysis.md` 为跳转桩） |
 
 ---
 

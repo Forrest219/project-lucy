@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-07-27 |
 | 适用范围 | Lucy WebUI 访问治理模块：Role 列表、Role 新建/编辑/删除、Role preview、Agent 新建/编辑入口联动 |
 | 事实源 | `webui/config/access.yaml` 的 `roles:` / `users[].role`、内置 role templates、Lucy MCP Proxy ACL resolver |
-| 关联文档 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`docs/access-governance-design.md` |
+| 关联文档 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md` |
 
 ## 1. 背景
 

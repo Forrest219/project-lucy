@@ -25,20 +25,19 @@
 | `lucy-r1-release-runbook.md` | Lucy R1 发布检查、Doris/Hermes 证据、排障和回滚手册 |
 | `lucy-202608-reliable-delivery-upgrade-spec.md` | Lucy 202608 Enterprise Governance & Observability 升级蓝图：访问治理 Trace / Evidence、ACL policy decision trace、Admin 可观测、Security Eval、风险复核与发布证据包 |
 | `lucy-202608-upgrade-execution-control.md` | Lucy 202608 升级执行总控：spec / plan / task 状态、并行波次、minimax handoff、验证矩阵 |
-| `lucy-202608-access-governance-gap-analysis.md` | Lucy 202608 Governance & Observability 差距分析：对齐 `/admin` 现状、权限 / Agent 管理边界、已实现能力与企业级 data agent 平台缺口 |
 | `starrocks-r1-support-plan.md` | StarRocks R1 P1 gated support 边界、证据路径与发布限制 |
-| `design-agent-permissions.md` | Module 1 Agent 权限管控详细设计 |
+| **`access-control/`** | **访问权限域档案**（设计 / ADR / UAT / 本域 WO）；入口 [`access-control/README.md`](access-control/README.md)；现行基线 [`access-control/design-upgrade.md`](access-control/design-upgrade.md) v1.1.2 |
 | `design-db-connection.md` | 数据库接入模块技术设计 |
 | `design-eval-monitoring.md` | Module 2 Eval 配置与监控详细设计 |
 | `design-eval-tool-budget.md` | Eval Tool-Budget 设计：把"少重复调用"做成可测回归约束 |
 | `design-webui-ui-refresh.md` | WebUI UI Refresh 与工作台化改造 Spec |
-| `access-governance-design.md` | 权限模型设计方案：runtime ACL、admin 写入路径、迁移防回退 |
+| `access-governance-design.md` | **跳转桩** → `access-control/design-governance-baseline.md` |
 
 ## 3. 复核（Review — 已实现代码的审查报告）
 
 | 文档 | 用途 |
 |---|---|
-| `review-module1-agent-permissions.md` | Module 1 Agent 权限管控代码审查报告 |
+| `review-module1-agent-permissions.md` | **跳转桩** → `access-control/review-agent-permissions-v1.md` |
 | `review-module2-eval-monitoring.md` | Module 2 Eval 配置与监控代码审查 |
 | `review-ktx-llm-switch-to-minimax.md` | KTX LLM Backend 切换 Claude Code → MiniMax 结论 |
 
@@ -46,7 +45,7 @@
 
 | 文档 | 用途 |
 |---|---|
-| `uat-agent-permissions.md` | Module 1 UAT 用例集 — Agent 权限管控 |
+| `uat-agent-permissions.md` | **跳转桩** → `access-control/uat-agent-permissions-v1.md` |
 | `uat-module2-eval-monitoring.md` | Module 2 Eval 配置与监控人工 UAT 用例 |
 
 ## 5. WebUI 现状
