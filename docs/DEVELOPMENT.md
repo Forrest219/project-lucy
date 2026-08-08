@@ -52,6 +52,7 @@ Lucy 项目默认不做移动窄屏测试。除非用户、当前任务说明或
 ## Spec 落位规则
 
 - 仓库级 spec / 治理 / 跨模块产品视图落在 `docs/`，作为本仓库的事实来源
+- **访问权限（Access Control）域档案**落在 [`docs/access-control/`](access-control/README.md)：域设计 / ADR / UAT / 本域 WO；Proxy/Admin 编号实现 Spec 仍就近留在 `webui/docs/`（如 `07`/`14`/`15`），由域 README 交叉引用
 - 子模块自带的架构 / API / 数据模型等实现细节允许放在 `<module>/docs/`（当前实例：`webui/docs/01–06`），并在 `docs/project-overview.md` 注册索引
 - `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian

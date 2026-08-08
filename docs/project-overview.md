@@ -141,9 +141,9 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 - 工具级、connection 级、表级 ACL。
 - SQLite audit 记录。
 
-当前 `webui/config/access.yaml` 已含 v1.2 role 模型（例如 `kx_readonly`），Admin UI/API 已按 role-first 写入路径闭环：新建/编辑 Agent 强制 role，legacy `allow` 只读，token 与配置写入进入审计。2026-06-22 P1 增量已补 Role 模板库、模板展开落盘、`lint:spec` 防模板指针漂移、Onboarding MCP 失败原因细分和 `config_change_log` CSV 导出。后续列级 / 行级权限仅作为长期 spec 锚点，见 `docs/access-governance-design.md`。
+当前 `webui/config/access.yaml` 已含 v1.2 role 模型（例如 `kx_readonly`），Admin UI/API 已按 role-first 写入路径闭环：新建/编辑 Agent 强制 role，legacy `allow` 只读，token 与配置写入进入审计。2026-06-22 P1 增量已补 Role 模板库、模板展开落盘、`lint:spec` 防模板指针漂移、Onboarding MCP 失败原因细分和 `config_change_log` CSV 导出。访问权限升级域档案见 `docs/access-control/`；现行基线 `docs/access-control/design-upgrade.md` v1.1.2。
 
-2026-06-22 另验证了「VIEW-as-pseudo-table」变通方案（CIO demo）：role `superstore_region_huadong` 通过 VIEW `dataforai.superstore_orders_huadong` 把表级 ACL 锁定到单一区域，零代理层代码改动；细节与局限见 `docs/access-governance-design.md` §3.2。
+2026-06-22 另验证了「VIEW-as-pseudo-table」变通方案（CIO demo）：role `superstore_region_huadong` 通过 VIEW `dataforai.superstore_orders_huadong` 把表级 ACL 锁定到单一区域，零代理层代码改动；细节见 `docs/access-control/design-governance-baseline.md` §3.2。
 
 ## 9. 关键文档索引
 
@@ -152,7 +152,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Lucy 产品定位与愿景 | `docs/vision.md` |
 | Lucy 202608 Enterprise Governance & Observability 升级蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Lucy 202608 升级执行总控 | `docs/lucy-202608-upgrade-execution-control.md` |
-| Lucy 202608 Governance & Observability 差距分析 | `docs/lucy-202608-access-governance-gap-analysis.md` |
+| Lucy 202608 Governance & Observability 差距分析 | `docs/access-control/gap-analysis-202608.md` |
 | Lucy context compiler / MCP runtime 产品化目标 | `docs/lucy-platform-goal-checklist.md` |
 | Docker 部署 | `docs/deployment-docker.md` |
 | Kubernetes / Helm 部署（单副本） | `deploy/k8s/helm/lucy/`、`docs/customer-k8s-deployer-quickstart.md` |
@@ -174,8 +174,12 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | WebUI 内置系统手册 / Help Center | `docs/design-system-handbook-help.md`、`docs/SYSTEM_HANDBOOK.md` |
 | YAML 交付自助运维 / Agent 自检 | `webui/docs/24-yaml-delivery-runbook-spec.md`、`webui/docs/plans/wo-M20-yaml-delivery-runbook.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
-| Agent 权限设计 | `docs/design-agent-permissions.md` |
-| 访问治理闭环设计 | `docs/access-governance-design.md` |
+| **访问权限域档案（入口）** | **`docs/access-control/README.md`** |
+| 访问权限升级设计 v1.1.2 | `docs/access-control/design-upgrade.md` |
+| AC-P0 实施计划 | `docs/access-control/plans/wo-202608-59-access-control-p0.md` |
+| Agent 权限设计（Module 1 历史） | `docs/access-control/design-agent-permissions-v1.md` |
+| 访问治理闭环设计（2026-06 基线） | `docs/access-control/design-governance-baseline.md` |
+| 行级 ACL 可行性附录（SUPERSEDED） | `docs/access-control/feasibility-row-acl.SUPERSEDED.md` |
 | Agent Admin 企业级交付 spec | `webui/docs/14-agent-admin-enterprise-delivery-spec.md` |
 | Eval 设计 | `docs/design-eval-monitoring.md` |
 | Eval Tool-Budget 设计 | `docs/design-eval-tool-budget.md` |
@@ -185,7 +189,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 
 ## 10. 当前整改优先级
 
-1. ✅ 2026-06-22 P0-1 Admin Role-First 已闭环；剩余长期 Policy 表达式锚点见 `docs/access-governance-design.md`。
+1. ✅ 2026-06-22 P0-1 Admin Role-First 已闭环；访问权限升级见 `docs/access-control/design-upgrade.md` v1.1.2 与 `docs/access-control/plans/wo-202608-59-access-control-p0.md`。
 2. ✅ `access.yaml` 等治理配置写入已补 dryRun、diff、输入校验与审计；`config_change_log` 支持 CSV 导出。真实 `ktx.yaml` 已改为本机 ignored 配置，仓库只提交 `ktx.yaml.example`。
 3. ✅ 建立 spec 防漂移检查：route/status、API/spec、skill dependencies、eval schema、access role selector，并新增模板指针字段 fail 规则。
 4. 补全当前 API / Model 索引，避免 `webui/docs/03-04` 与实现漂移。
