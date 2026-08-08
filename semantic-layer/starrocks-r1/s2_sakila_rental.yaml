@@ -1,0 +1,8 @@
+# WO-202608-58 Phase 2 thin overlay (measures only; physical cols in Manifest)
+name: s2_sakila_rental
+grain:
+- rental_id
+measures:
+- name: rental_count
+  expr: count(rental_id)
+  description: Number of rentals.

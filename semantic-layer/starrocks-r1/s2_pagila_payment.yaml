@@ -1,0 +1,11 @@
+# WO-202608-58 Phase 2 thin overlay (measures only; physical cols in Manifest)
+name: s2_pagila_payment
+grain:
+- payment_id
+measures:
+- name: payment_amount
+  expr: sum(amount)
+  description: Total payment amount.
+- name: payment_count
+  expr: count(payment_id)
+  description: Number of payments.

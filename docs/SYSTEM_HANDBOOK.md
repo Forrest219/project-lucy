@@ -5,7 +5,7 @@
 | 文档类型 | System Handbook |
 | 适用对象 | 使用者、管理员、运维人员、接入 Agent 的协作者、开发者 |
 | 事实来源 | `webui/server/`、`webui/src/`、`semantic-layer/`、`webui/config/`、`ktx.yaml.example`、`webui/docs/01-17` |
-| 当前日期 | 2026-07-29 |
+| 当前日期 | 2026-08-08 |
 
 ## 目录
 
@@ -30,6 +30,11 @@
 - [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)
 - [5. 配置与环境变量速查](#5-配置与环境变量速查)
 - [6. FAQ 与排障指南](#6-faq-与排障指南)
+  - [6.10 `lucy_query` 报 No join path / 跨表失败](#610-lucy_query-报-no-join-path--跨表失败)
+  - [6.11 fanout / Aggregate locality 拒绝查询](#611-fanout--aggregate-locality-拒绝查询)
+  - [6.12 `order_by` 排序无效或排反](#612-order_by-排序无效或排反)
+  - [6.13 语义查询答不出复杂分析题，或 Eval 对不上 gold](#613-语义查询答不出复杂分析题或-eval-对不上-gold)
+  - [6.14 改了 Manifest / Wiki，MCP 仍旧或 reindex 失败](#614-改了-manifest--wikimcp-仍旧或-reindex-失败)
 
 ## 0. 常见问题速查
 
@@ -49,9 +54,11 @@
 | `YAML` 改完后为什么 `Agent` 仍然搜不到新口径？ | `WebUI` 读文件即可看到；`KTX` / `MCP` 检索需要 `ktx admin reindex`，并且还要用 `sl read` 确认 `overlay` 已合并到目标 `source`。 | [6.3 配置文件改动后什么时候生效？](#63-配置文件改动后什么时候生效)、[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查) |
 | 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |
 | 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |
+| `lucy_query` 报 `No join path`？ | 跨 source 查询需要 Manifest/overlay 声明 `joins` + `relationship`，并完成索引重建；有物理外键不等于语义层已连通。 | [6.10 `lucy_query` 报 No join path / 跨表失败](#610-lucy_query-报-no-join-path--跨表失败)、[grain、join 与 fanout](#grainjoin-与-fanout) |
+| 查询被 fanout / Aggregate locality 拒绝？ | measure 源与 filter/dimension 路径不能靠 `one_to_many` 扇出聚合；换 measure 源、改维度，或拆成多步半连接式查询。 | [6.11 fanout / Aggregate locality 拒绝查询](#611-fanout--aggregate-locality-拒绝查询) |
 | 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
 | `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |
-| 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录；`ACL` 看近 7 天 `denied` 汇总。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |
+| 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录。近 7 天 `ACL` 拒绝只在「访问风险」指标卡展示，不进入待处理事项。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |
 
 ### 0.2 面向管理员
 
@@ -67,6 +74,8 @@
 | --- | --- | --- |
 | `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |
 | 本地开发应该访问哪个端口？ | 页面端口以启动日志为准；常见开发入口是 `Vite 5173`，`API 5174`，`Lucy MCP Proxy 7879`。`Docker` / demo 宿主端口可能是 `55176` 等映射端口。 | [2.2 本地启动](#22-本地启动)、[4.1 接入地址](#41-接入地址) |
+| 为什么 Visible Scope 没有我刚启用的表？ | 检查 `enabled_tables`、`role` 的 `tableSelectors`、以及是否**新开** MCP session；扩权后旧 session 不会自动刷新 Scope。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查) |
+| `order_by` 为什么没按我想的降序？ | 结构化参数请用 `direction: desc|asc`；仅写 `dir` 可能被忽略，导致默认升序。 | [6.12 `order_by` 排序无效或排反](#612-order_by-排序无效或排反) |
 
 ## 1. 系统概述与架构拓扑
 
@@ -298,7 +307,8 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | N 个 Catalog 对象待处理 | 同上 | **当前实现与「待补语义」使用同一公式**（已启用集上的 `total − done`）；文案写 Catalog 同步不完整，但数字并非独立 Catalog 同步指标。 |
 | 存在 N 个待发布文件 | `GET /api/diff` | 返回的可审阅变更文件数（`files.length`）。 |
 | 近 30 天无评测数据 | `GET /api/eval/runs?limit=1` | 仅在接口成功且确认 **0 条**评测运行记录时出现。探测实现是「是否已有至少 1 条 run」，**未按 30 天时间窗过滤**；加载中或接口失败时不展示该项。 |
-| 近 7 天存在 ACL 拒绝 | `GET /api/admin/agents` | 各 `Agent` 的 `stats.deniedLast7d` 求和；来自审计库近 7 天 `outcome=denied`。 |
+
+近 7 天 ACL 拒绝（各 `Agent` 的 `stats.deniedLast7d` 求和）只在「访问风险」指标卡展示，**不进入**「待处理事项」——滚动窗口无法通过「查看访问日志」闭环消除。
 
 一张表何时算 `done`（`webui/server/completion.ts`）：
 
@@ -1491,6 +1501,9 @@ Lucy 能读取什么数据？
 | Agent 选到错误 source | 同一物理表出现多个业务 source 且口径不清 | 合并到原 source 或补 Wiki / Eval / ACL 指导（参见 3.7.4） |
 | `MANIFEST_PARSE_FAILED` | YAML 语法或 manifest shape 错误 | 先用 `ktx sl validate` 复现；修 YAML parse 后再回到 3.7.6.2 |
 | `eval` 跑出 `tool_error` | smoke 选源失败或 ACL 不通过 | 先确认 3.7.6.2 + 3.7.6.3 通过；再回到 Eval |
+| `No join path` / join graph 未连通 | Manifest/overlay 未声明 `joins`，或未 reindex | 见 [6.10](#610-lucy_query-报-no-join-path--跨表失败) |
+| fanout / Aggregate locality | measure 与 filter 路径经 `one_to_many` 扇出 | 见 [6.11](#611-fanout--aggregate-locality-拒绝查询)、[grain、join 与 fanout](#grainjoin-与-fanout) |
+| Wiki reindex `NOT NULL ... summary` | Wiki frontmatter 缺非空 `summary` | 见 [6.14](#614-改了-manifest--wikimcp-仍旧或-reindex-失败) |
 
 诊断命令（与 3.7.6.1 共用，按需调用）：
 
@@ -1521,6 +1534,7 @@ FAQ 交叉引用（既有章节同步增补）：
 | 6.3 配置文件改动后什么时候生效？ | 区分 `access.yaml` 缓存、KTX reindex、Reload Catalog 的生效时机 |
 | 6.7 为什么白名单表保存失败？ | 增补 ACL / source 新增风险（参见 3.7.4） |
 | 6.9 最小健康检查清单 | 增补 `sl read`、真实 query、MCP smoke 步骤（参见 3.7.6） |
+| 6.10–6.14 语义查询 / Eval / 生效排障 | join 图、fanout、`order_by.direction`、复杂分析边界、Manifest/Wiki 生效 |
 
 #### 3.7.8 Agent 自检协议
 
@@ -2035,3 +2049,65 @@ ktx sl validate <source-name> --connection-id <connection-id>
 > - 上述清单覆盖"健康"层面；要确认 YAML 交付包**业务语义合并正确**，必须按 [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) 全量跑过。
 > - 完整交付前请至少额外执行 `ktx sl read`、真实 `ktx sl query` 与 Agent MCP smoke，问题簇查询见 [3.7.6.3 真实语义查询 + MCP smoke](#3763-真实语义查询--mcp-smoke)。
 > - Agent 自动复核协议见 [3.7.8 Agent 自检协议](#378-agent-自检协议)。
+
+### 6.10 `lucy_query` 报 No join path / 跨表失败
+
+含义：语义编译器在 **join 图**里找不到从 measure source 到 dimension/filter source 的安全路径。常见文案含 `No join path`、`not connected in the join graph`。
+
+这与「物理库里有外键 / 表已启用」不是一回事：`lucy_query` 只认 Manifest / overlay 里声明的 `joins`。
+
+| 检查项 | 做法 |
+| --- | --- |
+| 是否声明 join | 在 `semantic-layer/<conn>/_schema/<schema>.yaml`（或相关 overlay）为相关表写 `joins`：`to`、`on`（source 限定列名）、`relationship`、`source: formal` |
+| relationship 是否合法 | 仅用 `many_to_one` / `one_to_many` / `one_to_one`；禁止 `many_to_many`。桥表拆成两条 `many_to_one` 指向两端 |
+| 索引是否更新 | 改 YAML 后执行 `ktx admin reindex`（或 WebUI 语义资产全量重建）；Docker 卷部署还须先把文件同步进容器数据卷 |
+| 是否读到合并结果 | `ktx sl read <source> --connection-id <conn>` 确认 joins 已出现在合并模型中 |
+
+概念说明见 [grain、join 与 fanout](#grainjoin-与-fanout)。YAML 写法见 [3.7 YAML 文件规范与交付验收](#37-yaml-文件规范与交付验收)。
+
+### 6.11 fanout / Aggregate locality 拒绝查询
+
+含义：join 路径可能存在，但编译器认为沿 `one_to_many` 做 filter/dimension 会 **扇出放大** 聚合，或 measure 源无法安全到达目标维度。常见文案含 `fanout`、`Aggregate locality cannot safely reach`。
+
+处理原则：
+
+1. **换 measure 源**：尽量从「多对一」指向维度的事实/桥表发起 `count`/`sum`，再挂 `many_to_one` 维度。  
+2. **少用跨 o2m 的 filter**：若过滤维度只能经 `one_to_many` 到达，先单独查出允许的键集合，再在第二步用 `in` 过滤（半连接式两步查询）。  
+3. **补反向边要谨慎**：为连通性增加 `one_to_many` 可能引入多路径歧义（`Ambiguous join path`）；优先保证业务主路径清晰。  
+4. **不要用「先 join 再聚合」的直觉硬刚**：语义层会改写预聚合策略；错误 `grain`/`relationship` 会导致拒查或静默错数。详见 [grain、join 与 fanout](#grainjoin-与-fanout)。
+
+### 6.12 `order_by` 排序无效或排反
+
+`lucy_query` / `sl_query` 的 `order_by` 项必须是对象，且降序/升序字段名为 **`direction`**（取值 `desc` / `asc`）。
+
+| 写法 | 结果 |
+| --- | --- |
+| `{"field":"metric","direction":"desc"}` | 按预期降序 |
+| `{"field":"metric","dir":"desc"}` | `dir` 常被忽略，可能变成默认升序，Top-N 看起来「答错」 |
+| 字符串 `"-metric"` 或非对象项 | 可能直接 `invalid_arguments` |
+
+排障：打开 `include: ["sql"]`（若环境允许）核对最终 `ORDER BY` 是否带 `DESC`。
+
+### 6.13 语义查询答不出复杂分析题，或 Eval 对不上 gold
+
+分清三类问题，避免把能力边界当成「环境坏了」：
+
+| 现象 | 含义 | 处理 |
+| --- | --- | --- |
+| 单表/已声明 join 的聚合可查，但窗口函数、NTILE 分箱、回归、复杂中位数链路失败 | 薄语义层（缺专用 measure/segment/派生列）表达力不足 | 补业务 measure/segment，或接受评测用例走受控 SQL / 旁路口径；**默认 MCP 拒绝 raw SQL**（见 [6.8 安全边界速查](#68-安全边界速查)） |
+| Case 标注需要 raw SQL fallback，但 Agent 只有 `lucy_*` | 产品面与评测元数据不一致 | 扩工具授权须走治理；Pilot/内测可用独立 SQL 旁路评分，不得假装 `lucy_query` Pass |
+| 换引擎或重装载后数值与旧 gold 不一致 | gold 引擎漂移（分位数、时区、类型映射） | 在目标库重算并更新 `evals/**/gold`；对不稳定算法放宽 `numeric_tolerance`，并在校准说明中登记 |
+
+Eval 入口见 [3.6 质量评测 Eval](#36-质量评测-eval)。交付验收勿用「单次 query 碰巧有数」代替 [GO / NO-GO](#376-go--no-go-交付-checklist)。
+
+### 6.14 改了 Manifest / Wiki，MCP 仍旧或 reindex 失败
+
+| 症状 | 高概率原因 | 处理 |
+| --- | --- | --- |
+| 仓库 YAML 已改，MCP / `sl read` 仍是旧模型 | 进程读的是 Docker 数据卷或另一 `PROJECT_ROOT` | 同步文件到实际项目根，再 `admin reindex` / 语义资产「同步索引」 |
+| `Visible Scope` 仍无新表 | ACL 未扩 `tableSelectors`，或仍在用旧 MCP session | 更新 `access.yaml` role；**新开** session 再 `initialize` |
+| Agent 绑定 role 失败 / 配置不生效 | 用户字段误用复数 `roles` | 使用单数 `role: <roleId>` |
+| Wiki reindex 报 `NOT NULL ... summary` | frontmatter 缺非空 `summary` | 补 `summary` 后重新上传/commit，再 reindex |
+| reindex 部分 scope 失败、部分成功 | 日志里看清失败 scope（如仅 `wiki/global`） | 先修失败 scope，不要假设「有 failed=1 就等于语义层未更新」——以 `sl/<conn> scanned=…` 行为准 |
+
+生效时机总表见 [6.3 配置文件改动后什么时候生效？](#63-配置文件改动后什么时候生效)。

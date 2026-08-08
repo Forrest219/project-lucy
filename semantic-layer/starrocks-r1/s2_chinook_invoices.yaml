@@ -1,0 +1,11 @@
+# WO-202608-58 Phase 2 thin overlay (measures only; physical cols in Manifest)
+name: s2_chinook_invoices
+grain:
+- InvoiceId
+measures:
+- name: invoice_total
+  expr: sum(Total)
+  description: Invoice totals.
+- name: invoice_count
+  expr: count(InvoiceId)
+  description: Invoice count.

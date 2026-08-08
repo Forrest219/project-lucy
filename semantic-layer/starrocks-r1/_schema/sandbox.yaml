@@ -1,0 +1,3272 @@
+tables:
+  s2_sakila_actor:
+    table: sandbox.s2_sakila_actor
+    columns:
+    - name: actor_id
+      type: number
+      nullable: true
+      descriptions:
+        db: actor_id
+        ai: Column actor_id from Spider2-lite pilot table s2_sakila_actor.
+      pk: true
+    - name: first_name
+      type: string
+      nullable: true
+      descriptions:
+        db: first_name
+        ai: Column first_name from Spider2-lite pilot table s2_sakila_actor.
+    - name: last_name
+      type: string
+      nullable: true
+      descriptions:
+        db: last_name
+        ai: Column last_name from Spider2-lite pilot table s2_sakila_actor.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_actor.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_actor
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_actor.
+    joins:
+    - to: s2_sakila_film_actor
+      'on': s2_sakila_actor.actor_id = s2_sakila_film_actor.actor_id
+      relationship: one_to_many
+      source: formal
+  s2_sakila_address:
+    table: sandbox.s2_sakila_address
+    columns:
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_sakila_address.
+      pk: true
+    - name: address
+      type: string
+      nullable: true
+      descriptions:
+        db: address
+        ai: Column address from Spider2-lite pilot table s2_sakila_address.
+    - name: address2
+      type: string
+      nullable: true
+      descriptions:
+        db: address2
+        ai: Column address2 from Spider2-lite pilot table s2_sakila_address.
+    - name: district
+      type: string
+      nullable: true
+      descriptions:
+        db: district
+        ai: Column district from Spider2-lite pilot table s2_sakila_address.
+    - name: city_id
+      type: number
+      nullable: true
+      descriptions:
+        db: city_id
+        ai: Column city_id from Spider2-lite pilot table s2_sakila_address.
+    - name: postal_code
+      type: string
+      nullable: true
+      descriptions:
+        db: postal_code
+        ai: Column postal_code from Spider2-lite pilot table s2_sakila_address.
+    - name: phone
+      type: string
+      nullable: true
+      descriptions:
+        db: phone
+        ai: Column phone from Spider2-lite pilot table s2_sakila_address.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_address.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_address
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_address.
+    joins:
+    - to: s2_sakila_city
+      'on': s2_sakila_address.city_id = s2_sakila_city.city_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_category:
+    table: sandbox.s2_sakila_category
+    columns:
+    - name: category_id
+      type: number
+      nullable: true
+      descriptions:
+        db: category_id
+        ai: Column category_id from Spider2-lite pilot table s2_sakila_category.
+      pk: true
+    - name: name
+      type: string
+      nullable: true
+      descriptions:
+        db: name
+        ai: Column name from Spider2-lite pilot table s2_sakila_category.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_category.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_category
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_category.
+    joins:
+    - to: s2_sakila_film_category
+      'on': s2_sakila_category.category_id = s2_sakila_film_category.category_id
+      relationship: one_to_many
+      source: formal
+  s2_sakila_city:
+    table: sandbox.s2_sakila_city
+    columns:
+    - name: city_id
+      type: number
+      nullable: true
+      descriptions:
+        db: city_id
+        ai: Column city_id from Spider2-lite pilot table s2_sakila_city.
+      pk: true
+    - name: city
+      type: string
+      nullable: true
+      descriptions:
+        db: city
+        ai: Column city from Spider2-lite pilot table s2_sakila_city.
+    - name: country_id
+      type: number
+      nullable: true
+      descriptions:
+        db: country_id
+        ai: Column country_id from Spider2-lite pilot table s2_sakila_city.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_city.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_city
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_city.
+    joins:
+    - to: s2_sakila_country
+      'on': s2_sakila_city.country_id = s2_sakila_country.country_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_country:
+    table: sandbox.s2_sakila_country
+    columns:
+    - name: country_id
+      type: number
+      nullable: true
+      descriptions:
+        db: country_id
+        ai: Column country_id from Spider2-lite pilot table s2_sakila_country.
+      pk: true
+    - name: country
+      type: string
+      nullable: true
+      descriptions:
+        db: country
+        ai: Column country from Spider2-lite pilot table s2_sakila_country.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_country.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_country
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_country.
+  s2_sakila_customer:
+    table: sandbox.s2_sakila_customer
+    columns:
+    - name: customer_id
+      type: number
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_sakila_customer.
+      pk: true
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_sakila_customer.
+    - name: first_name
+      type: string
+      nullable: true
+      descriptions:
+        db: first_name
+        ai: Column first_name from Spider2-lite pilot table s2_sakila_customer.
+    - name: last_name
+      type: string
+      nullable: true
+      descriptions:
+        db: last_name
+        ai: Column last_name from Spider2-lite pilot table s2_sakila_customer.
+    - name: email
+      type: string
+      nullable: true
+      descriptions:
+        db: email
+        ai: Column email from Spider2-lite pilot table s2_sakila_customer.
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_sakila_customer.
+    - name: active
+      type: string
+      nullable: true
+      descriptions:
+        db: active
+        ai: Column active from Spider2-lite pilot table s2_sakila_customer.
+    - name: create_date
+      type: time
+      nullable: true
+      descriptions:
+        db: create_date
+        ai: Column create_date from Spider2-lite pilot table s2_sakila_customer.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_customer.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_customer
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_customer.
+    joins:
+    - to: s2_sakila_address
+      'on': s2_sakila_customer.address_id = s2_sakila_address.address_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_store
+      'on': s2_sakila_customer.store_id = s2_sakila_store.store_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_film:
+    table: sandbox.s2_sakila_film
+    columns:
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_sakila_film.
+      pk: true
+    - name: title
+      type: string
+      nullable: true
+      descriptions:
+        db: title
+        ai: Column title from Spider2-lite pilot table s2_sakila_film.
+    - name: description
+      type: string
+      nullable: true
+      descriptions:
+        db: description
+        ai: Column description from Spider2-lite pilot table s2_sakila_film.
+    - name: release_year
+      type: string
+      nullable: true
+      descriptions:
+        db: release_year
+        ai: Column release_year from Spider2-lite pilot table s2_sakila_film.
+    - name: language_id
+      type: number
+      nullable: true
+      descriptions:
+        db: language_id
+        ai: Column language_id from Spider2-lite pilot table s2_sakila_film.
+    - name: original_language_id
+      type: number
+      nullable: true
+      descriptions:
+        db: original_language_id
+        ai: Column original_language_id from Spider2-lite pilot table s2_sakila_film.
+    - name: rental_duration
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_duration
+        ai: Column rental_duration from Spider2-lite pilot table s2_sakila_film.
+    - name: rental_rate
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_rate
+        ai: Column rental_rate from Spider2-lite pilot table s2_sakila_film.
+    - name: length
+      type: number
+      nullable: true
+      descriptions:
+        db: length
+        ai: Column length from Spider2-lite pilot table s2_sakila_film.
+    - name: replacement_cost
+      type: number
+      nullable: true
+      descriptions:
+        db: replacement_cost
+        ai: Column replacement_cost from Spider2-lite pilot table s2_sakila_film.
+    - name: rating
+      type: string
+      nullable: true
+      descriptions:
+        db: rating
+        ai: Column rating from Spider2-lite pilot table s2_sakila_film.
+    - name: special_features
+      type: string
+      nullable: true
+      descriptions:
+        db: special_features
+        ai: Column special_features from Spider2-lite pilot table s2_sakila_film.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_film.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_film
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_film.
+    joins:
+    - to: s2_sakila_language
+      'on': s2_sakila_film.language_id = s2_sakila_language.language_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_film_actor
+      'on': s2_sakila_film.film_id = s2_sakila_film_actor.film_id
+      relationship: one_to_many
+      source: formal
+    - to: s2_sakila_film_category
+      'on': s2_sakila_film.film_id = s2_sakila_film_category.film_id
+      relationship: one_to_many
+      source: formal
+  s2_sakila_film_actor:
+    table: sandbox.s2_sakila_film_actor
+    columns:
+    - name: actor_id
+      type: number
+      nullable: true
+      descriptions:
+        db: actor_id
+        ai: Column actor_id from Spider2-lite pilot table s2_sakila_film_actor.
+      pk: true
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_sakila_film_actor.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_film_actor.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_film_actor
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_film_actor.
+    joins:
+    - to: s2_sakila_actor
+      'on': s2_sakila_film_actor.actor_id = s2_sakila_actor.actor_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_film
+      'on': s2_sakila_film_actor.film_id = s2_sakila_film.film_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_film_category:
+    table: sandbox.s2_sakila_film_category
+    columns:
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_sakila_film_category.
+      pk: true
+    - name: category_id
+      type: number
+      nullable: true
+      descriptions:
+        db: category_id
+        ai: Column category_id from Spider2-lite pilot table s2_sakila_film_category.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_film_category.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_film_category
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_film_category.
+    joins:
+    - to: s2_sakila_film
+      'on': s2_sakila_film_category.film_id = s2_sakila_film.film_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_category
+      'on': s2_sakila_film_category.category_id = s2_sakila_category.category_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_film_text:
+    table: sandbox.s2_sakila_film_text
+    columns:
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_sakila_film_text.
+      pk: true
+    - name: title
+      type: string
+      nullable: true
+      descriptions:
+        db: title
+        ai: Column title from Spider2-lite pilot table s2_sakila_film_text.
+    - name: description
+      type: string
+      nullable: true
+      descriptions:
+        db: description
+        ai: Column description from Spider2-lite pilot table s2_sakila_film_text.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_film_text
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_film_text.
+    joins:
+    - to: s2_sakila_film
+      'on': s2_sakila_film_text.film_id = s2_sakila_film.film_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_inventory:
+    table: sandbox.s2_sakila_inventory
+    columns:
+    - name: inventory_id
+      type: number
+      nullable: true
+      descriptions:
+        db: inventory_id
+        ai: Column inventory_id from Spider2-lite pilot table s2_sakila_inventory.
+      pk: true
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_sakila_inventory.
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_sakila_inventory.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_inventory.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_inventory
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_inventory.
+    joins:
+    - to: s2_sakila_film
+      'on': s2_sakila_inventory.film_id = s2_sakila_film.film_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_store
+      'on': s2_sakila_inventory.store_id = s2_sakila_store.store_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_language:
+    table: sandbox.s2_sakila_language
+    columns:
+    - name: language_id
+      type: number
+      nullable: true
+      descriptions:
+        db: language_id
+        ai: Column language_id from Spider2-lite pilot table s2_sakila_language.
+      pk: true
+    - name: name
+      type: string
+      nullable: true
+      descriptions:
+        db: name
+        ai: Column name from Spider2-lite pilot table s2_sakila_language.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_language.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_language
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_language.
+  s2_sakila_payment:
+    table: sandbox.s2_sakila_payment
+    columns:
+    - name: payment_id
+      type: number
+      nullable: true
+      descriptions:
+        db: payment_id
+        ai: Column payment_id from Spider2-lite pilot table s2_sakila_payment.
+      pk: true
+    - name: customer_id
+      type: number
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_sakila_payment.
+    - name: staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: staff_id
+        ai: Column staff_id from Spider2-lite pilot table s2_sakila_payment.
+    - name: rental_id
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_id
+        ai: Column rental_id from Spider2-lite pilot table s2_sakila_payment.
+    - name: amount
+      type: number
+      nullable: true
+      descriptions:
+        db: amount
+        ai: Column amount from Spider2-lite pilot table s2_sakila_payment.
+    - name: payment_date
+      type: time
+      nullable: true
+      descriptions:
+        db: payment_date
+        ai: Column payment_date from Spider2-lite pilot table s2_sakila_payment.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_payment.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_payment
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_payment.
+    joins:
+    - to: s2_sakila_customer
+      'on': s2_sakila_payment.customer_id = s2_sakila_customer.customer_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_rental
+      'on': s2_sakila_payment.rental_id = s2_sakila_rental.rental_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_staff
+      'on': s2_sakila_payment.staff_id = s2_sakila_staff.staff_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_rental:
+    table: sandbox.s2_sakila_rental
+    columns:
+    - name: rental_id
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_id
+        ai: Column rental_id from Spider2-lite pilot table s2_sakila_rental.
+      pk: true
+    - name: rental_date
+      type: time
+      nullable: true
+      descriptions:
+        db: rental_date
+        ai: Column rental_date from Spider2-lite pilot table s2_sakila_rental.
+    - name: inventory_id
+      type: number
+      nullable: true
+      descriptions:
+        db: inventory_id
+        ai: Column inventory_id from Spider2-lite pilot table s2_sakila_rental.
+    - name: customer_id
+      type: number
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_sakila_rental.
+    - name: return_date
+      type: time
+      nullable: true
+      descriptions:
+        db: return_date
+        ai: Column return_date from Spider2-lite pilot table s2_sakila_rental.
+    - name: staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: staff_id
+        ai: Column staff_id from Spider2-lite pilot table s2_sakila_rental.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_rental.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_rental
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_rental.
+    joins:
+    - to: s2_sakila_inventory
+      'on': s2_sakila_rental.inventory_id = s2_sakila_inventory.inventory_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_customer
+      'on': s2_sakila_rental.customer_id = s2_sakila_customer.customer_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_staff
+      'on': s2_sakila_rental.staff_id = s2_sakila_staff.staff_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_staff:
+    table: sandbox.s2_sakila_staff
+    columns:
+    - name: staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: staff_id
+        ai: Column staff_id from Spider2-lite pilot table s2_sakila_staff.
+      pk: true
+    - name: first_name
+      type: string
+      nullable: true
+      descriptions:
+        db: first_name
+        ai: Column first_name from Spider2-lite pilot table s2_sakila_staff.
+    - name: last_name
+      type: string
+      nullable: true
+      descriptions:
+        db: last_name
+        ai: Column last_name from Spider2-lite pilot table s2_sakila_staff.
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_sakila_staff.
+    - name: email
+      type: string
+      nullable: true
+      descriptions:
+        db: email
+        ai: Column email from Spider2-lite pilot table s2_sakila_staff.
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_sakila_staff.
+    - name: active
+      type: number
+      nullable: true
+      descriptions:
+        db: active
+        ai: Column active from Spider2-lite pilot table s2_sakila_staff.
+    - name: username
+      type: string
+      nullable: true
+      descriptions:
+        db: username
+        ai: Column username from Spider2-lite pilot table s2_sakila_staff.
+    - name: password
+      type: string
+      nullable: true
+      descriptions:
+        db: password
+        ai: Column password from Spider2-lite pilot table s2_sakila_staff.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_staff.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_staff
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_staff.
+    joins:
+    - to: s2_sakila_address
+      'on': s2_sakila_staff.address_id = s2_sakila_address.address_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_sakila_store
+      'on': s2_sakila_staff.store_id = s2_sakila_store.store_id
+      relationship: many_to_one
+      source: formal
+  s2_sakila_store:
+    table: sandbox.s2_sakila_store
+    columns:
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_sakila_store.
+      pk: true
+    - name: manager_staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: manager_staff_id
+        ai: Column manager_staff_id from Spider2-lite pilot table s2_sakila_store.
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_sakila_store.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_sakila_store.
+    descriptions:
+      db: Spider2-lite pilot s2_sakila_store
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_sakila_store.
+    joins:
+    - to: s2_sakila_address
+      'on': s2_sakila_store.address_id = s2_sakila_address.address_id
+      relationship: many_to_one
+      source: formal
+  s2_chinook_albums:
+    table: sandbox.s2_chinook_albums
+    columns:
+    - name: AlbumId
+      type: number
+      nullable: true
+      descriptions:
+        db: AlbumId
+        ai: Column AlbumId from Spider2-lite pilot table s2_chinook_albums.
+      pk: true
+    - name: Title
+      type: string
+      nullable: true
+      descriptions:
+        db: Title
+        ai: Column Title from Spider2-lite pilot table s2_chinook_albums.
+    - name: ArtistId
+      type: number
+      nullable: true
+      descriptions:
+        db: ArtistId
+        ai: Column ArtistId from Spider2-lite pilot table s2_chinook_albums.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_albums
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_albums.
+    joins:
+    - to: s2_chinook_artists
+      'on': s2_chinook_albums.ArtistId = s2_chinook_artists.ArtistId
+      relationship: many_to_one
+      source: formal
+  s2_chinook_artists:
+    table: sandbox.s2_chinook_artists
+    columns:
+    - name: ArtistId
+      type: number
+      nullable: true
+      descriptions:
+        db: ArtistId
+        ai: Column ArtistId from Spider2-lite pilot table s2_chinook_artists.
+      pk: true
+    - name: Name
+      type: string
+      nullable: true
+      descriptions:
+        db: Name
+        ai: Column Name from Spider2-lite pilot table s2_chinook_artists.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_artists
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_artists.
+  s2_chinook_customers:
+    table: sandbox.s2_chinook_customers
+    columns:
+    - name: CustomerId
+      type: number
+      nullable: true
+      descriptions:
+        db: CustomerId
+        ai: Column CustomerId from Spider2-lite pilot table s2_chinook_customers.
+      pk: true
+    - name: FirstName
+      type: string
+      nullable: true
+      descriptions:
+        db: FirstName
+        ai: Column FirstName from Spider2-lite pilot table s2_chinook_customers.
+    - name: LastName
+      type: string
+      nullable: true
+      descriptions:
+        db: LastName
+        ai: Column LastName from Spider2-lite pilot table s2_chinook_customers.
+    - name: Company
+      type: string
+      nullable: true
+      descriptions:
+        db: Company
+        ai: Column Company from Spider2-lite pilot table s2_chinook_customers.
+    - name: Address
+      type: string
+      nullable: true
+      descriptions:
+        db: Address
+        ai: Column Address from Spider2-lite pilot table s2_chinook_customers.
+    - name: City
+      type: string
+      nullable: true
+      descriptions:
+        db: City
+        ai: Column City from Spider2-lite pilot table s2_chinook_customers.
+    - name: State
+      type: string
+      nullable: true
+      descriptions:
+        db: State
+        ai: Column State from Spider2-lite pilot table s2_chinook_customers.
+    - name: Country
+      type: string
+      nullable: true
+      descriptions:
+        db: Country
+        ai: Column Country from Spider2-lite pilot table s2_chinook_customers.
+    - name: PostalCode
+      type: string
+      nullable: true
+      descriptions:
+        db: PostalCode
+        ai: Column PostalCode from Spider2-lite pilot table s2_chinook_customers.
+    - name: Phone
+      type: string
+      nullable: true
+      descriptions:
+        db: Phone
+        ai: Column Phone from Spider2-lite pilot table s2_chinook_customers.
+    - name: Fax
+      type: string
+      nullable: true
+      descriptions:
+        db: Fax
+        ai: Column Fax from Spider2-lite pilot table s2_chinook_customers.
+    - name: Email
+      type: string
+      nullable: true
+      descriptions:
+        db: Email
+        ai: Column Email from Spider2-lite pilot table s2_chinook_customers.
+    - name: SupportRepId
+      type: number
+      nullable: true
+      descriptions:
+        db: SupportRepId
+        ai: Column SupportRepId from Spider2-lite pilot table s2_chinook_customers.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_customers
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_customers.
+    joins:
+    - to: s2_chinook_employees
+      'on': s2_chinook_customers.SupportRepId = s2_chinook_employees.EmployeeId
+      relationship: many_to_one
+      source: formal
+  s2_chinook_employees:
+    table: sandbox.s2_chinook_employees
+    columns:
+    - name: EmployeeId
+      type: number
+      nullable: true
+      descriptions:
+        db: EmployeeId
+        ai: Column EmployeeId from Spider2-lite pilot table s2_chinook_employees.
+      pk: true
+    - name: LastName
+      type: string
+      nullable: true
+      descriptions:
+        db: LastName
+        ai: Column LastName from Spider2-lite pilot table s2_chinook_employees.
+    - name: FirstName
+      type: string
+      nullable: true
+      descriptions:
+        db: FirstName
+        ai: Column FirstName from Spider2-lite pilot table s2_chinook_employees.
+    - name: Title
+      type: string
+      nullable: true
+      descriptions:
+        db: Title
+        ai: Column Title from Spider2-lite pilot table s2_chinook_employees.
+    - name: ReportsTo
+      type: number
+      nullable: true
+      descriptions:
+        db: ReportsTo
+        ai: Column ReportsTo from Spider2-lite pilot table s2_chinook_employees.
+    - name: BirthDate
+      type: time
+      nullable: true
+      descriptions:
+        db: BirthDate
+        ai: Column BirthDate from Spider2-lite pilot table s2_chinook_employees.
+    - name: HireDate
+      type: time
+      nullable: true
+      descriptions:
+        db: HireDate
+        ai: Column HireDate from Spider2-lite pilot table s2_chinook_employees.
+    - name: Address
+      type: string
+      nullable: true
+      descriptions:
+        db: Address
+        ai: Column Address from Spider2-lite pilot table s2_chinook_employees.
+    - name: City
+      type: string
+      nullable: true
+      descriptions:
+        db: City
+        ai: Column City from Spider2-lite pilot table s2_chinook_employees.
+    - name: State
+      type: string
+      nullable: true
+      descriptions:
+        db: State
+        ai: Column State from Spider2-lite pilot table s2_chinook_employees.
+    - name: Country
+      type: string
+      nullable: true
+      descriptions:
+        db: Country
+        ai: Column Country from Spider2-lite pilot table s2_chinook_employees.
+    - name: PostalCode
+      type: string
+      nullable: true
+      descriptions:
+        db: PostalCode
+        ai: Column PostalCode from Spider2-lite pilot table s2_chinook_employees.
+    - name: Phone
+      type: string
+      nullable: true
+      descriptions:
+        db: Phone
+        ai: Column Phone from Spider2-lite pilot table s2_chinook_employees.
+    - name: Fax
+      type: string
+      nullable: true
+      descriptions:
+        db: Fax
+        ai: Column Fax from Spider2-lite pilot table s2_chinook_employees.
+    - name: Email
+      type: string
+      nullable: true
+      descriptions:
+        db: Email
+        ai: Column Email from Spider2-lite pilot table s2_chinook_employees.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_employees
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_employees.
+  s2_chinook_genres:
+    table: sandbox.s2_chinook_genres
+    columns:
+    - name: GenreId
+      type: number
+      nullable: true
+      descriptions:
+        db: GenreId
+        ai: Column GenreId from Spider2-lite pilot table s2_chinook_genres.
+      pk: true
+    - name: Name
+      type: string
+      nullable: true
+      descriptions:
+        db: Name
+        ai: Column Name from Spider2-lite pilot table s2_chinook_genres.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_genres
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_genres.
+  s2_chinook_invoice_items:
+    table: sandbox.s2_chinook_invoice_items
+    columns:
+    - name: InvoiceLineId
+      type: number
+      nullable: true
+      descriptions:
+        db: InvoiceLineId
+        ai: Column InvoiceLineId from Spider2-lite pilot table s2_chinook_invoice_items.
+      pk: true
+    - name: InvoiceId
+      type: number
+      nullable: true
+      descriptions:
+        db: InvoiceId
+        ai: Column InvoiceId from Spider2-lite pilot table s2_chinook_invoice_items.
+    - name: TrackId
+      type: number
+      nullable: true
+      descriptions:
+        db: TrackId
+        ai: Column TrackId from Spider2-lite pilot table s2_chinook_invoice_items.
+    - name: UnitPrice
+      type: number
+      nullable: true
+      descriptions:
+        db: UnitPrice
+        ai: Column UnitPrice from Spider2-lite pilot table s2_chinook_invoice_items.
+    - name: Quantity
+      type: number
+      nullable: true
+      descriptions:
+        db: Quantity
+        ai: Column Quantity from Spider2-lite pilot table s2_chinook_invoice_items.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_invoice_items
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_invoice_items.
+    joins:
+    - to: s2_chinook_invoices
+      'on': s2_chinook_invoice_items.InvoiceId = s2_chinook_invoices.InvoiceId
+      relationship: many_to_one
+      source: formal
+    - to: s2_chinook_tracks
+      'on': s2_chinook_invoice_items.TrackId = s2_chinook_tracks.TrackId
+      relationship: many_to_one
+      source: formal
+  s2_chinook_invoices:
+    table: sandbox.s2_chinook_invoices
+    columns:
+    - name: InvoiceId
+      type: number
+      nullable: true
+      descriptions:
+        db: InvoiceId
+        ai: Column InvoiceId from Spider2-lite pilot table s2_chinook_invoices.
+      pk: true
+    - name: CustomerId
+      type: number
+      nullable: true
+      descriptions:
+        db: CustomerId
+        ai: Column CustomerId from Spider2-lite pilot table s2_chinook_invoices.
+    - name: InvoiceDate
+      type: time
+      nullable: true
+      descriptions:
+        db: InvoiceDate
+        ai: Column InvoiceDate from Spider2-lite pilot table s2_chinook_invoices.
+    - name: BillingAddress
+      type: string
+      nullable: true
+      descriptions:
+        db: BillingAddress
+        ai: Column BillingAddress from Spider2-lite pilot table s2_chinook_invoices.
+    - name: BillingCity
+      type: string
+      nullable: true
+      descriptions:
+        db: BillingCity
+        ai: Column BillingCity from Spider2-lite pilot table s2_chinook_invoices.
+    - name: BillingState
+      type: string
+      nullable: true
+      descriptions:
+        db: BillingState
+        ai: Column BillingState from Spider2-lite pilot table s2_chinook_invoices.
+    - name: BillingCountry
+      type: string
+      nullable: true
+      descriptions:
+        db: BillingCountry
+        ai: Column BillingCountry from Spider2-lite pilot table s2_chinook_invoices.
+    - name: BillingPostalCode
+      type: string
+      nullable: true
+      descriptions:
+        db: BillingPostalCode
+        ai: Column BillingPostalCode from Spider2-lite pilot table s2_chinook_invoices.
+    - name: Total
+      type: number
+      nullable: true
+      descriptions:
+        db: Total
+        ai: Column Total from Spider2-lite pilot table s2_chinook_invoices.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_invoices
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_invoices.
+    joins:
+    - to: s2_chinook_customers
+      'on': s2_chinook_invoices.CustomerId = s2_chinook_customers.CustomerId
+      relationship: many_to_one
+      source: formal
+  s2_chinook_media_types:
+    table: sandbox.s2_chinook_media_types
+    columns:
+    - name: MediaTypeId
+      type: number
+      nullable: true
+      descriptions:
+        db: MediaTypeId
+        ai: Column MediaTypeId from Spider2-lite pilot table s2_chinook_media_types.
+      pk: true
+    - name: Name
+      type: string
+      nullable: true
+      descriptions:
+        db: Name
+        ai: Column Name from Spider2-lite pilot table s2_chinook_media_types.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_media_types
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_media_types.
+  s2_chinook_playlist_track:
+    table: sandbox.s2_chinook_playlist_track
+    columns:
+    - name: PlaylistId
+      type: number
+      nullable: true
+      descriptions:
+        db: PlaylistId
+        ai: Column PlaylistId from Spider2-lite pilot table s2_chinook_playlist_track.
+      pk: true
+    - name: TrackId
+      type: number
+      nullable: true
+      descriptions:
+        db: TrackId
+        ai: Column TrackId from Spider2-lite pilot table s2_chinook_playlist_track.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_playlist_track
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_playlist_track.
+    joins:
+    - to: s2_chinook_playlists
+      'on': s2_chinook_playlist_track.PlaylistId = s2_chinook_playlists.PlaylistId
+      relationship: many_to_one
+      source: formal
+    - to: s2_chinook_tracks
+      'on': s2_chinook_playlist_track.TrackId = s2_chinook_tracks.TrackId
+      relationship: many_to_one
+      source: formal
+  s2_chinook_playlists:
+    table: sandbox.s2_chinook_playlists
+    columns:
+    - name: PlaylistId
+      type: number
+      nullable: true
+      descriptions:
+        db: PlaylistId
+        ai: Column PlaylistId from Spider2-lite pilot table s2_chinook_playlists.
+      pk: true
+    - name: Name
+      type: string
+      nullable: true
+      descriptions:
+        db: Name
+        ai: Column Name from Spider2-lite pilot table s2_chinook_playlists.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_playlists
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_playlists.
+  s2_chinook_tracks:
+    table: sandbox.s2_chinook_tracks
+    columns:
+    - name: TrackId
+      type: number
+      nullable: true
+      descriptions:
+        db: TrackId
+        ai: Column TrackId from Spider2-lite pilot table s2_chinook_tracks.
+      pk: true
+    - name: Name
+      type: string
+      nullable: true
+      descriptions:
+        db: Name
+        ai: Column Name from Spider2-lite pilot table s2_chinook_tracks.
+    - name: AlbumId
+      type: number
+      nullable: true
+      descriptions:
+        db: AlbumId
+        ai: Column AlbumId from Spider2-lite pilot table s2_chinook_tracks.
+    - name: MediaTypeId
+      type: number
+      nullable: true
+      descriptions:
+        db: MediaTypeId
+        ai: Column MediaTypeId from Spider2-lite pilot table s2_chinook_tracks.
+    - name: GenreId
+      type: number
+      nullable: true
+      descriptions:
+        db: GenreId
+        ai: Column GenreId from Spider2-lite pilot table s2_chinook_tracks.
+    - name: Composer
+      type: string
+      nullable: true
+      descriptions:
+        db: Composer
+        ai: Column Composer from Spider2-lite pilot table s2_chinook_tracks.
+    - name: Milliseconds
+      type: number
+      nullable: true
+      descriptions:
+        db: Milliseconds
+        ai: Column Milliseconds from Spider2-lite pilot table s2_chinook_tracks.
+    - name: Bytes
+      type: number
+      nullable: true
+      descriptions:
+        db: Bytes
+        ai: Column Bytes from Spider2-lite pilot table s2_chinook_tracks.
+    - name: UnitPrice
+      type: number
+      nullable: true
+      descriptions:
+        db: UnitPrice
+        ai: Column UnitPrice from Spider2-lite pilot table s2_chinook_tracks.
+    descriptions:
+      db: Spider2-lite pilot s2_chinook_tracks
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_chinook_tracks.
+    joins:
+    - to: s2_chinook_albums
+      'on': s2_chinook_tracks.AlbumId = s2_chinook_albums.AlbumId
+      relationship: many_to_one
+      source: formal
+    - to: s2_chinook_genres
+      'on': s2_chinook_tracks.GenreId = s2_chinook_genres.GenreId
+      relationship: many_to_one
+      source: formal
+    - to: s2_chinook_media_types
+      'on': s2_chinook_tracks.MediaTypeId = s2_chinook_media_types.MediaTypeId
+      relationship: many_to_one
+      source: formal
+  s2_northwind_categories:
+    table: sandbox.s2_northwind_categories
+    columns:
+    - name: categoryid
+      type: number
+      nullable: true
+      descriptions:
+        db: categoryid
+        ai: Column categoryid from Spider2-lite pilot table s2_northwind_categories.
+      pk: true
+    - name: categoryname
+      type: string
+      nullable: true
+      descriptions:
+        db: categoryname
+        ai: Column categoryname from Spider2-lite pilot table s2_northwind_categories.
+    - name: description
+      type: string
+      nullable: true
+      descriptions:
+        db: description
+        ai: Column description from Spider2-lite pilot table s2_northwind_categories.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_categories
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_categories.
+  s2_northwind_customercustomerdemo:
+    table: sandbox.s2_northwind_customercustomerdemo
+    columns:
+    - name: customerid
+      type: string
+      nullable: true
+      descriptions:
+        db: customerid
+        ai: Column customerid from Spider2-lite pilot table s2_northwind_customercustomerdemo.
+      pk: true
+    - name: customertypeid
+      type: string
+      nullable: true
+      descriptions:
+        db: customertypeid
+        ai: Column customertypeid from Spider2-lite pilot table s2_northwind_customercustomerdemo.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_customercustomerdemo
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_customercustomerdemo.
+    joins:
+    - to: s2_northwind_customers
+      'on': s2_northwind_customercustomerdemo.customerid = s2_northwind_customers.customerid
+      relationship: many_to_one
+      source: formal
+    - to: s2_northwind_customerdemographics
+      'on': s2_northwind_customercustomerdemo.customertypeid = s2_northwind_customerdemographics.customertypeid
+      relationship: many_to_one
+      source: formal
+  s2_northwind_customerdemographics:
+    table: sandbox.s2_northwind_customerdemographics
+    columns:
+    - name: customertypeid
+      type: string
+      nullable: true
+      descriptions:
+        db: customertypeid
+        ai: Column customertypeid from Spider2-lite pilot table s2_northwind_customerdemographics.
+      pk: true
+    - name: customerdesc
+      type: string
+      nullable: true
+      descriptions:
+        db: customerdesc
+        ai: Column customerdesc from Spider2-lite pilot table s2_northwind_customerdemographics.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_customerdemographics
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_customerdemographics.
+  s2_northwind_customergroupthreshold:
+    table: sandbox.s2_northwind_customergroupthreshold
+    columns:
+    - name: groupname
+      type: string
+      nullable: true
+      descriptions:
+        db: groupname
+        ai: Column groupname from Spider2-lite pilot table s2_northwind_customergroupthreshold.
+      pk: true
+    - name: rangebottom
+      type: number
+      nullable: true
+      descriptions:
+        db: rangebottom
+        ai: Column rangebottom from Spider2-lite pilot table s2_northwind_customergroupthreshold.
+    - name: rangetop
+      type: number
+      nullable: true
+      descriptions:
+        db: rangetop
+        ai: Column rangetop from Spider2-lite pilot table s2_northwind_customergroupthreshold.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_customergroupthreshold
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_customergroupthreshold.
+  s2_northwind_customers:
+    table: sandbox.s2_northwind_customers
+    columns:
+    - name: customerid
+      type: string
+      nullable: true
+      descriptions:
+        db: customerid
+        ai: Column customerid from Spider2-lite pilot table s2_northwind_customers.
+      pk: true
+    - name: companyname
+      type: string
+      nullable: true
+      descriptions:
+        db: companyname
+        ai: Column companyname from Spider2-lite pilot table s2_northwind_customers.
+    - name: contactname
+      type: string
+      nullable: true
+      descriptions:
+        db: contactname
+        ai: Column contactname from Spider2-lite pilot table s2_northwind_customers.
+    - name: contacttitle
+      type: string
+      nullable: true
+      descriptions:
+        db: contacttitle
+        ai: Column contacttitle from Spider2-lite pilot table s2_northwind_customers.
+    - name: address
+      type: string
+      nullable: true
+      descriptions:
+        db: address
+        ai: Column address from Spider2-lite pilot table s2_northwind_customers.
+    - name: city
+      type: string
+      nullable: true
+      descriptions:
+        db: city
+        ai: Column city from Spider2-lite pilot table s2_northwind_customers.
+    - name: region
+      type: string
+      nullable: true
+      descriptions:
+        db: region
+        ai: Column region from Spider2-lite pilot table s2_northwind_customers.
+    - name: postalcode
+      type: string
+      nullable: true
+      descriptions:
+        db: postalcode
+        ai: Column postalcode from Spider2-lite pilot table s2_northwind_customers.
+    - name: country
+      type: string
+      nullable: true
+      descriptions:
+        db: country
+        ai: Column country from Spider2-lite pilot table s2_northwind_customers.
+    - name: phone
+      type: string
+      nullable: true
+      descriptions:
+        db: phone
+        ai: Column phone from Spider2-lite pilot table s2_northwind_customers.
+    - name: fax
+      type: string
+      nullable: true
+      descriptions:
+        db: fax
+        ai: Column fax from Spider2-lite pilot table s2_northwind_customers.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_customers
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_customers.
+  s2_northwind_employees:
+    table: sandbox.s2_northwind_employees
+    columns:
+    - name: employeeid
+      type: number
+      nullable: true
+      descriptions:
+        db: employeeid
+        ai: Column employeeid from Spider2-lite pilot table s2_northwind_employees.
+      pk: true
+    - name: lastname
+      type: string
+      nullable: true
+      descriptions:
+        db: lastname
+        ai: Column lastname from Spider2-lite pilot table s2_northwind_employees.
+    - name: firstname
+      type: string
+      nullable: true
+      descriptions:
+        db: firstname
+        ai: Column firstname from Spider2-lite pilot table s2_northwind_employees.
+    - name: title
+      type: string
+      nullable: true
+      descriptions:
+        db: title
+        ai: Column title from Spider2-lite pilot table s2_northwind_employees.
+    - name: titleofcourtesy
+      type: string
+      nullable: true
+      descriptions:
+        db: titleofcourtesy
+        ai: Column titleofcourtesy from Spider2-lite pilot table s2_northwind_employees.
+    - name: birthdate
+      type: time
+      nullable: true
+      descriptions:
+        db: birthdate
+        ai: Column birthdate from Spider2-lite pilot table s2_northwind_employees.
+    - name: hiredate
+      type: time
+      nullable: true
+      descriptions:
+        db: hiredate
+        ai: Column hiredate from Spider2-lite pilot table s2_northwind_employees.
+    - name: address
+      type: string
+      nullable: true
+      descriptions:
+        db: address
+        ai: Column address from Spider2-lite pilot table s2_northwind_employees.
+    - name: city
+      type: string
+      nullable: true
+      descriptions:
+        db: city
+        ai: Column city from Spider2-lite pilot table s2_northwind_employees.
+    - name: region
+      type: string
+      nullable: true
+      descriptions:
+        db: region
+        ai: Column region from Spider2-lite pilot table s2_northwind_employees.
+    - name: postalcode
+      type: string
+      nullable: true
+      descriptions:
+        db: postalcode
+        ai: Column postalcode from Spider2-lite pilot table s2_northwind_employees.
+    - name: country
+      type: string
+      nullable: true
+      descriptions:
+        db: country
+        ai: Column country from Spider2-lite pilot table s2_northwind_employees.
+    - name: homephone
+      type: string
+      nullable: true
+      descriptions:
+        db: homephone
+        ai: Column homephone from Spider2-lite pilot table s2_northwind_employees.
+    - name: extension
+      type: string
+      nullable: true
+      descriptions:
+        db: extension
+        ai: Column extension from Spider2-lite pilot table s2_northwind_employees.
+    - name: notes
+      type: string
+      nullable: true
+      descriptions:
+        db: notes
+        ai: Column notes from Spider2-lite pilot table s2_northwind_employees.
+    - name: reportsto
+      type: number
+      nullable: true
+      descriptions:
+        db: reportsto
+        ai: Column reportsto from Spider2-lite pilot table s2_northwind_employees.
+    - name: photopath
+      type: string
+      nullable: true
+      descriptions:
+        db: photopath
+        ai: Column photopath from Spider2-lite pilot table s2_northwind_employees.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_employees
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_employees.
+  s2_northwind_employeeterritories:
+    table: sandbox.s2_northwind_employeeterritories
+    columns:
+    - name: employeeid
+      type: number
+      nullable: true
+      descriptions:
+        db: employeeid
+        ai: Column employeeid from Spider2-lite pilot table s2_northwind_employeeterritories.
+      pk: true
+    - name: territoryid
+      type: string
+      nullable: true
+      descriptions:
+        db: territoryid
+        ai: Column territoryid from Spider2-lite pilot table s2_northwind_employeeterritories.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_employeeterritories
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_employeeterritories.
+    joins:
+    - to: s2_northwind_employees
+      'on': s2_northwind_employeeterritories.employeeid = s2_northwind_employees.employeeid
+      relationship: many_to_one
+      source: formal
+    - to: s2_northwind_territories
+      'on': s2_northwind_employeeterritories.territoryid = s2_northwind_territories.territoryid
+      relationship: many_to_one
+      source: formal
+  s2_northwind_order_details:
+    table: sandbox.s2_northwind_order_details
+    columns:
+    - name: orderid
+      type: number
+      nullable: true
+      descriptions:
+        db: orderid
+        ai: Column orderid from Spider2-lite pilot table s2_northwind_order_details.
+      pk: true
+    - name: productid
+      type: number
+      nullable: true
+      descriptions:
+        db: productid
+        ai: Column productid from Spider2-lite pilot table s2_northwind_order_details.
+    - name: unitprice
+      type: number
+      nullable: true
+      descriptions:
+        db: unitprice
+        ai: Column unitprice from Spider2-lite pilot table s2_northwind_order_details.
+    - name: quantity
+      type: number
+      nullable: true
+      descriptions:
+        db: quantity
+        ai: Column quantity from Spider2-lite pilot table s2_northwind_order_details.
+    - name: discount
+      type: number
+      nullable: true
+      descriptions:
+        db: discount
+        ai: Column discount from Spider2-lite pilot table s2_northwind_order_details.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_order_details
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_order_details.
+    joins:
+    - to: s2_northwind_orders
+      'on': s2_northwind_order_details.orderid = s2_northwind_orders.orderid
+      relationship: many_to_one
+      source: formal
+    - to: s2_northwind_products
+      'on': s2_northwind_order_details.productid = s2_northwind_products.productid
+      relationship: many_to_one
+      source: formal
+  s2_northwind_orders:
+    table: sandbox.s2_northwind_orders
+    columns:
+    - name: orderid
+      type: number
+      nullable: true
+      descriptions:
+        db: orderid
+        ai: Column orderid from Spider2-lite pilot table s2_northwind_orders.
+      pk: true
+    - name: customerid
+      type: string
+      nullable: true
+      descriptions:
+        db: customerid
+        ai: Column customerid from Spider2-lite pilot table s2_northwind_orders.
+    - name: employeeid
+      type: number
+      nullable: true
+      descriptions:
+        db: employeeid
+        ai: Column employeeid from Spider2-lite pilot table s2_northwind_orders.
+    - name: orderdate
+      type: time
+      nullable: true
+      descriptions:
+        db: orderdate
+        ai: Column orderdate from Spider2-lite pilot table s2_northwind_orders.
+    - name: requireddate
+      type: time
+      nullable: true
+      descriptions:
+        db: requireddate
+        ai: Column requireddate from Spider2-lite pilot table s2_northwind_orders.
+    - name: shippeddate
+      type: time
+      nullable: true
+      descriptions:
+        db: shippeddate
+        ai: Column shippeddate from Spider2-lite pilot table s2_northwind_orders.
+    - name: shipvia
+      type: number
+      nullable: true
+      descriptions:
+        db: shipvia
+        ai: Column shipvia from Spider2-lite pilot table s2_northwind_orders.
+    - name: freight
+      type: number
+      nullable: true
+      descriptions:
+        db: freight
+        ai: Column freight from Spider2-lite pilot table s2_northwind_orders.
+    - name: shipname
+      type: string
+      nullable: true
+      descriptions:
+        db: shipname
+        ai: Column shipname from Spider2-lite pilot table s2_northwind_orders.
+    - name: shipaddress
+      type: string
+      nullable: true
+      descriptions:
+        db: shipaddress
+        ai: Column shipaddress from Spider2-lite pilot table s2_northwind_orders.
+    - name: shipcity
+      type: string
+      nullable: true
+      descriptions:
+        db: shipcity
+        ai: Column shipcity from Spider2-lite pilot table s2_northwind_orders.
+    - name: shipregion
+      type: string
+      nullable: true
+      descriptions:
+        db: shipregion
+        ai: Column shipregion from Spider2-lite pilot table s2_northwind_orders.
+    - name: shippostalcode
+      type: string
+      nullable: true
+      descriptions:
+        db: shippostalcode
+        ai: Column shippostalcode from Spider2-lite pilot table s2_northwind_orders.
+    - name: shipcountry
+      type: string
+      nullable: true
+      descriptions:
+        db: shipcountry
+        ai: Column shipcountry from Spider2-lite pilot table s2_northwind_orders.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_orders
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_orders.
+    joins:
+    - to: s2_northwind_customers
+      'on': s2_northwind_orders.customerid = s2_northwind_customers.customerid
+      relationship: many_to_one
+      source: formal
+    - to: s2_northwind_employees
+      'on': s2_northwind_orders.employeeid = s2_northwind_employees.employeeid
+      relationship: many_to_one
+      source: formal
+    - to: s2_northwind_shippers
+      'on': s2_northwind_orders.shipvia = s2_northwind_shippers.shipperid
+      relationship: many_to_one
+      source: formal
+  s2_northwind_products:
+    table: sandbox.s2_northwind_products
+    columns:
+    - name: productid
+      type: number
+      nullable: true
+      descriptions:
+        db: productid
+        ai: Column productid from Spider2-lite pilot table s2_northwind_products.
+      pk: true
+    - name: productname
+      type: string
+      nullable: true
+      descriptions:
+        db: productname
+        ai: Column productname from Spider2-lite pilot table s2_northwind_products.
+    - name: supplierid
+      type: number
+      nullable: true
+      descriptions:
+        db: supplierid
+        ai: Column supplierid from Spider2-lite pilot table s2_northwind_products.
+    - name: categoryid
+      type: number
+      nullable: true
+      descriptions:
+        db: categoryid
+        ai: Column categoryid from Spider2-lite pilot table s2_northwind_products.
+    - name: quantityperunit
+      type: string
+      nullable: true
+      descriptions:
+        db: quantityperunit
+        ai: Column quantityperunit from Spider2-lite pilot table s2_northwind_products.
+    - name: unitprice
+      type: number
+      nullable: true
+      descriptions:
+        db: unitprice
+        ai: Column unitprice from Spider2-lite pilot table s2_northwind_products.
+    - name: unitsinstock
+      type: number
+      nullable: true
+      descriptions:
+        db: unitsinstock
+        ai: Column unitsinstock from Spider2-lite pilot table s2_northwind_products.
+    - name: unitsonorder
+      type: number
+      nullable: true
+      descriptions:
+        db: unitsonorder
+        ai: Column unitsonorder from Spider2-lite pilot table s2_northwind_products.
+    - name: reorderlevel
+      type: number
+      nullable: true
+      descriptions:
+        db: reorderlevel
+        ai: Column reorderlevel from Spider2-lite pilot table s2_northwind_products.
+    - name: discontinued
+      type: number
+      nullable: true
+      descriptions:
+        db: discontinued
+        ai: Column discontinued from Spider2-lite pilot table s2_northwind_products.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_products
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_products.
+    joins:
+    - to: s2_northwind_categories
+      'on': s2_northwind_products.categoryid = s2_northwind_categories.categoryid
+      relationship: many_to_one
+      source: formal
+    - to: s2_northwind_suppliers
+      'on': s2_northwind_products.supplierid = s2_northwind_suppliers.supplierid
+      relationship: many_to_one
+      source: formal
+  s2_northwind_region:
+    table: sandbox.s2_northwind_region
+    columns:
+    - name: regionid
+      type: number
+      nullable: true
+      descriptions:
+        db: regionid
+        ai: Column regionid from Spider2-lite pilot table s2_northwind_region.
+      pk: true
+    - name: regiondescription
+      type: string
+      nullable: true
+      descriptions:
+        db: regiondescription
+        ai: Column regiondescription from Spider2-lite pilot table s2_northwind_region.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_region
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_region.
+  s2_northwind_shippers:
+    table: sandbox.s2_northwind_shippers
+    columns:
+    - name: shipperid
+      type: number
+      nullable: true
+      descriptions:
+        db: shipperid
+        ai: Column shipperid from Spider2-lite pilot table s2_northwind_shippers.
+      pk: true
+    - name: companyname
+      type: string
+      nullable: true
+      descriptions:
+        db: companyname
+        ai: Column companyname from Spider2-lite pilot table s2_northwind_shippers.
+    - name: phone
+      type: string
+      nullable: true
+      descriptions:
+        db: phone
+        ai: Column phone from Spider2-lite pilot table s2_northwind_shippers.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_shippers
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_shippers.
+  s2_northwind_suppliers:
+    table: sandbox.s2_northwind_suppliers
+    columns:
+    - name: supplierid
+      type: number
+      nullable: true
+      descriptions:
+        db: supplierid
+        ai: Column supplierid from Spider2-lite pilot table s2_northwind_suppliers.
+      pk: true
+    - name: companyname
+      type: string
+      nullable: true
+      descriptions:
+        db: companyname
+        ai: Column companyname from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: contactname
+      type: string
+      nullable: true
+      descriptions:
+        db: contactname
+        ai: Column contactname from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: contacttitle
+      type: string
+      nullable: true
+      descriptions:
+        db: contacttitle
+        ai: Column contacttitle from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: address
+      type: string
+      nullable: true
+      descriptions:
+        db: address
+        ai: Column address from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: city
+      type: string
+      nullable: true
+      descriptions:
+        db: city
+        ai: Column city from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: region
+      type: string
+      nullable: true
+      descriptions:
+        db: region
+        ai: Column region from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: postalcode
+      type: string
+      nullable: true
+      descriptions:
+        db: postalcode
+        ai: Column postalcode from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: country
+      type: string
+      nullable: true
+      descriptions:
+        db: country
+        ai: Column country from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: phone
+      type: string
+      nullable: true
+      descriptions:
+        db: phone
+        ai: Column phone from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: fax
+      type: string
+      nullable: true
+      descriptions:
+        db: fax
+        ai: Column fax from Spider2-lite pilot table s2_northwind_suppliers.
+    - name: homepage
+      type: string
+      nullable: true
+      descriptions:
+        db: homepage
+        ai: Column homepage from Spider2-lite pilot table s2_northwind_suppliers.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_suppliers
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_suppliers.
+  s2_northwind_territories:
+    table: sandbox.s2_northwind_territories
+    columns:
+    - name: territoryid
+      type: string
+      nullable: true
+      descriptions:
+        db: territoryid
+        ai: Column territoryid from Spider2-lite pilot table s2_northwind_territories.
+      pk: true
+    - name: territorydescription
+      type: string
+      nullable: true
+      descriptions:
+        db: territorydescription
+        ai: Column territorydescription from Spider2-lite pilot table s2_northwind_territories.
+    - name: regionid
+      type: number
+      nullable: true
+      descriptions:
+        db: regionid
+        ai: Column regionid from Spider2-lite pilot table s2_northwind_territories.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_territories
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_territories.
+    joins:
+    - to: s2_northwind_region
+      'on': s2_northwind_territories.regionid = s2_northwind_region.regionid
+      relationship: many_to_one
+      source: formal
+  s2_northwind_usstates:
+    table: sandbox.s2_northwind_usstates
+    columns:
+    - name: stateid
+      type: number
+      nullable: true
+      descriptions:
+        db: stateid
+        ai: Column stateid from Spider2-lite pilot table s2_northwind_usstates.
+      pk: true
+    - name: statename
+      type: string
+      nullable: true
+      descriptions:
+        db: statename
+        ai: Column statename from Spider2-lite pilot table s2_northwind_usstates.
+    - name: stateabbr
+      type: string
+      nullable: true
+      descriptions:
+        db: stateabbr
+        ai: Column stateabbr from Spider2-lite pilot table s2_northwind_usstates.
+    - name: stateregion
+      type: string
+      nullable: true
+      descriptions:
+        db: stateregion
+        ai: Column stateregion from Spider2-lite pilot table s2_northwind_usstates.
+    descriptions:
+      db: Spider2-lite pilot s2_northwind_usstates
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_northwind_usstates.
+  s2_pagila_actor:
+    table: sandbox.s2_pagila_actor
+    columns:
+    - name: actor_id
+      type: number
+      nullable: true
+      descriptions:
+        db: actor_id
+        ai: Column actor_id from Spider2-lite pilot table s2_pagila_actor.
+      pk: true
+    - name: first_name
+      type: string
+      nullable: true
+      descriptions:
+        db: first_name
+        ai: Column first_name from Spider2-lite pilot table s2_pagila_actor.
+    - name: last_name
+      type: string
+      nullable: true
+      descriptions:
+        db: last_name
+        ai: Column last_name from Spider2-lite pilot table s2_pagila_actor.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_actor.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_actor
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_actor.
+    joins:
+    - to: s2_pagila_film_actor
+      'on': s2_pagila_actor.actor_id = s2_pagila_film_actor.actor_id
+      relationship: one_to_many
+      source: formal
+  s2_pagila_address:
+    table: sandbox.s2_pagila_address
+    columns:
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_pagila_address.
+      pk: true
+    - name: address
+      type: string
+      nullable: true
+      descriptions:
+        db: address
+        ai: Column address from Spider2-lite pilot table s2_pagila_address.
+    - name: address2
+      type: string
+      nullable: true
+      descriptions:
+        db: address2
+        ai: Column address2 from Spider2-lite pilot table s2_pagila_address.
+    - name: district
+      type: string
+      nullable: true
+      descriptions:
+        db: district
+        ai: Column district from Spider2-lite pilot table s2_pagila_address.
+    - name: city_id
+      type: number
+      nullable: true
+      descriptions:
+        db: city_id
+        ai: Column city_id from Spider2-lite pilot table s2_pagila_address.
+    - name: postal_code
+      type: string
+      nullable: true
+      descriptions:
+        db: postal_code
+        ai: Column postal_code from Spider2-lite pilot table s2_pagila_address.
+    - name: phone
+      type: string
+      nullable: true
+      descriptions:
+        db: phone
+        ai: Column phone from Spider2-lite pilot table s2_pagila_address.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_address.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_address
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_address.
+    joins:
+    - to: s2_pagila_city
+      'on': s2_pagila_address.city_id = s2_pagila_city.city_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_category:
+    table: sandbox.s2_pagila_category
+    columns:
+    - name: category_id
+      type: number
+      nullable: true
+      descriptions:
+        db: category_id
+        ai: Column category_id from Spider2-lite pilot table s2_pagila_category.
+      pk: true
+    - name: name
+      type: string
+      nullable: true
+      descriptions:
+        db: name
+        ai: Column name from Spider2-lite pilot table s2_pagila_category.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_category.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_category
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_category.
+    joins:
+    - to: s2_pagila_film_category
+      'on': s2_pagila_category.category_id = s2_pagila_film_category.category_id
+      relationship: one_to_many
+      source: formal
+  s2_pagila_city:
+    table: sandbox.s2_pagila_city
+    columns:
+    - name: city_id
+      type: number
+      nullable: true
+      descriptions:
+        db: city_id
+        ai: Column city_id from Spider2-lite pilot table s2_pagila_city.
+      pk: true
+    - name: city
+      type: string
+      nullable: true
+      descriptions:
+        db: city
+        ai: Column city from Spider2-lite pilot table s2_pagila_city.
+    - name: country_id
+      type: number
+      nullable: true
+      descriptions:
+        db: country_id
+        ai: Column country_id from Spider2-lite pilot table s2_pagila_city.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_city.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_city
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_city.
+    joins:
+    - to: s2_pagila_country
+      'on': s2_pagila_city.country_id = s2_pagila_country.country_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_country:
+    table: sandbox.s2_pagila_country
+    columns:
+    - name: country_id
+      type: number
+      nullable: true
+      descriptions:
+        db: country_id
+        ai: Column country_id from Spider2-lite pilot table s2_pagila_country.
+      pk: true
+    - name: country
+      type: string
+      nullable: true
+      descriptions:
+        db: country
+        ai: Column country from Spider2-lite pilot table s2_pagila_country.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_country.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_country
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_country.
+  s2_pagila_customer:
+    table: sandbox.s2_pagila_customer
+    columns:
+    - name: customer_id
+      type: number
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_pagila_customer.
+      pk: true
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_pagila_customer.
+    - name: first_name
+      type: string
+      nullable: true
+      descriptions:
+        db: first_name
+        ai: Column first_name from Spider2-lite pilot table s2_pagila_customer.
+    - name: last_name
+      type: string
+      nullable: true
+      descriptions:
+        db: last_name
+        ai: Column last_name from Spider2-lite pilot table s2_pagila_customer.
+    - name: email
+      type: string
+      nullable: true
+      descriptions:
+        db: email
+        ai: Column email from Spider2-lite pilot table s2_pagila_customer.
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_pagila_customer.
+    - name: active
+      type: string
+      nullable: true
+      descriptions:
+        db: active
+        ai: Column active from Spider2-lite pilot table s2_pagila_customer.
+    - name: create_date
+      type: time
+      nullable: true
+      descriptions:
+        db: create_date
+        ai: Column create_date from Spider2-lite pilot table s2_pagila_customer.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_customer.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_customer
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_customer.
+    joins:
+    - to: s2_pagila_address
+      'on': s2_pagila_customer.address_id = s2_pagila_address.address_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_store
+      'on': s2_pagila_customer.store_id = s2_pagila_store.store_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_film:
+    table: sandbox.s2_pagila_film
+    columns:
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_pagila_film.
+      pk: true
+    - name: title
+      type: string
+      nullable: true
+      descriptions:
+        db: title
+        ai: Column title from Spider2-lite pilot table s2_pagila_film.
+    - name: description
+      type: string
+      nullable: true
+      descriptions:
+        db: description
+        ai: Column description from Spider2-lite pilot table s2_pagila_film.
+    - name: release_year
+      type: string
+      nullable: true
+      descriptions:
+        db: release_year
+        ai: Column release_year from Spider2-lite pilot table s2_pagila_film.
+    - name: language_id
+      type: number
+      nullable: true
+      descriptions:
+        db: language_id
+        ai: Column language_id from Spider2-lite pilot table s2_pagila_film.
+    - name: original_language_id
+      type: number
+      nullable: true
+      descriptions:
+        db: original_language_id
+        ai: Column original_language_id from Spider2-lite pilot table s2_pagila_film.
+    - name: rental_duration
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_duration
+        ai: Column rental_duration from Spider2-lite pilot table s2_pagila_film.
+    - name: rental_rate
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_rate
+        ai: Column rental_rate from Spider2-lite pilot table s2_pagila_film.
+    - name: length
+      type: number
+      nullable: true
+      descriptions:
+        db: length
+        ai: Column length from Spider2-lite pilot table s2_pagila_film.
+    - name: replacement_cost
+      type: number
+      nullable: true
+      descriptions:
+        db: replacement_cost
+        ai: Column replacement_cost from Spider2-lite pilot table s2_pagila_film.
+    - name: rating
+      type: string
+      nullable: true
+      descriptions:
+        db: rating
+        ai: Column rating from Spider2-lite pilot table s2_pagila_film.
+    - name: special_features
+      type: string
+      nullable: true
+      descriptions:
+        db: special_features
+        ai: Column special_features from Spider2-lite pilot table s2_pagila_film.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_film.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_film
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_film.
+    joins:
+    - to: s2_pagila_language
+      'on': s2_pagila_film.language_id = s2_pagila_language.language_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_film_actor
+      'on': s2_pagila_film.film_id = s2_pagila_film_actor.film_id
+      relationship: one_to_many
+      source: formal
+    - to: s2_pagila_film_category
+      'on': s2_pagila_film.film_id = s2_pagila_film_category.film_id
+      relationship: one_to_many
+      source: formal
+  s2_pagila_film_actor:
+    table: sandbox.s2_pagila_film_actor
+    columns:
+    - name: actor_id
+      type: number
+      nullable: true
+      descriptions:
+        db: actor_id
+        ai: Column actor_id from Spider2-lite pilot table s2_pagila_film_actor.
+      pk: true
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_pagila_film_actor.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_film_actor.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_film_actor
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_film_actor.
+    joins:
+    - to: s2_pagila_actor
+      'on': s2_pagila_film_actor.actor_id = s2_pagila_actor.actor_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_film
+      'on': s2_pagila_film_actor.film_id = s2_pagila_film.film_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_film_category:
+    table: sandbox.s2_pagila_film_category
+    columns:
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_pagila_film_category.
+      pk: true
+    - name: category_id
+      type: number
+      nullable: true
+      descriptions:
+        db: category_id
+        ai: Column category_id from Spider2-lite pilot table s2_pagila_film_category.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_film_category.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_film_category
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_film_category.
+    joins:
+    - to: s2_pagila_film
+      'on': s2_pagila_film_category.film_id = s2_pagila_film.film_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_category
+      'on': s2_pagila_film_category.category_id = s2_pagila_category.category_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_film_text:
+    table: sandbox.s2_pagila_film_text
+    columns:
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_pagila_film_text.
+      pk: true
+    - name: title
+      type: string
+      nullable: true
+      descriptions:
+        db: title
+        ai: Column title from Spider2-lite pilot table s2_pagila_film_text.
+    - name: description
+      type: string
+      nullable: true
+      descriptions:
+        db: description
+        ai: Column description from Spider2-lite pilot table s2_pagila_film_text.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_film_text
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_film_text.
+    joins:
+    - to: s2_pagila_film
+      'on': s2_pagila_film_text.film_id = s2_pagila_film.film_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_inventory:
+    table: sandbox.s2_pagila_inventory
+    columns:
+    - name: inventory_id
+      type: number
+      nullable: true
+      descriptions:
+        db: inventory_id
+        ai: Column inventory_id from Spider2-lite pilot table s2_pagila_inventory.
+      pk: true
+    - name: film_id
+      type: number
+      nullable: true
+      descriptions:
+        db: film_id
+        ai: Column film_id from Spider2-lite pilot table s2_pagila_inventory.
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_pagila_inventory.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_inventory.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_inventory
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_inventory.
+    joins:
+    - to: s2_pagila_film
+      'on': s2_pagila_inventory.film_id = s2_pagila_film.film_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_store
+      'on': s2_pagila_inventory.store_id = s2_pagila_store.store_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_language:
+    table: sandbox.s2_pagila_language
+    columns:
+    - name: language_id
+      type: number
+      nullable: true
+      descriptions:
+        db: language_id
+        ai: Column language_id from Spider2-lite pilot table s2_pagila_language.
+      pk: true
+    - name: name
+      type: string
+      nullable: true
+      descriptions:
+        db: name
+        ai: Column name from Spider2-lite pilot table s2_pagila_language.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_language.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_language
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_language.
+  s2_pagila_payment:
+    table: sandbox.s2_pagila_payment
+    columns:
+    - name: payment_id
+      type: number
+      nullable: true
+      descriptions:
+        db: payment_id
+        ai: Column payment_id from Spider2-lite pilot table s2_pagila_payment.
+      pk: true
+    - name: customer_id
+      type: number
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_pagila_payment.
+    - name: staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: staff_id
+        ai: Column staff_id from Spider2-lite pilot table s2_pagila_payment.
+    - name: rental_id
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_id
+        ai: Column rental_id from Spider2-lite pilot table s2_pagila_payment.
+    - name: amount
+      type: number
+      nullable: true
+      descriptions:
+        db: amount
+        ai: Column amount from Spider2-lite pilot table s2_pagila_payment.
+    - name: payment_date
+      type: time
+      nullable: true
+      descriptions:
+        db: payment_date
+        ai: Column payment_date from Spider2-lite pilot table s2_pagila_payment.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_payment.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_payment
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_payment.
+    joins:
+    - to: s2_pagila_customer
+      'on': s2_pagila_payment.customer_id = s2_pagila_customer.customer_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_rental
+      'on': s2_pagila_payment.rental_id = s2_pagila_rental.rental_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_staff
+      'on': s2_pagila_payment.staff_id = s2_pagila_staff.staff_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_rental:
+    table: sandbox.s2_pagila_rental
+    columns:
+    - name: rental_id
+      type: number
+      nullable: true
+      descriptions:
+        db: rental_id
+        ai: Column rental_id from Spider2-lite pilot table s2_pagila_rental.
+      pk: true
+    - name: rental_date
+      type: time
+      nullable: true
+      descriptions:
+        db: rental_date
+        ai: Column rental_date from Spider2-lite pilot table s2_pagila_rental.
+    - name: inventory_id
+      type: number
+      nullable: true
+      descriptions:
+        db: inventory_id
+        ai: Column inventory_id from Spider2-lite pilot table s2_pagila_rental.
+    - name: customer_id
+      type: number
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_pagila_rental.
+    - name: return_date
+      type: time
+      nullable: true
+      descriptions:
+        db: return_date
+        ai: Column return_date from Spider2-lite pilot table s2_pagila_rental.
+    - name: staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: staff_id
+        ai: Column staff_id from Spider2-lite pilot table s2_pagila_rental.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_rental.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_rental
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_rental.
+    joins:
+    - to: s2_pagila_inventory
+      'on': s2_pagila_rental.inventory_id = s2_pagila_inventory.inventory_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_customer
+      'on': s2_pagila_rental.customer_id = s2_pagila_customer.customer_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_staff
+      'on': s2_pagila_rental.staff_id = s2_pagila_staff.staff_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_staff:
+    table: sandbox.s2_pagila_staff
+    columns:
+    - name: staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: staff_id
+        ai: Column staff_id from Spider2-lite pilot table s2_pagila_staff.
+      pk: true
+    - name: first_name
+      type: string
+      nullable: true
+      descriptions:
+        db: first_name
+        ai: Column first_name from Spider2-lite pilot table s2_pagila_staff.
+    - name: last_name
+      type: string
+      nullable: true
+      descriptions:
+        db: last_name
+        ai: Column last_name from Spider2-lite pilot table s2_pagila_staff.
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_pagila_staff.
+    - name: email
+      type: string
+      nullable: true
+      descriptions:
+        db: email
+        ai: Column email from Spider2-lite pilot table s2_pagila_staff.
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_pagila_staff.
+    - name: active
+      type: number
+      nullable: true
+      descriptions:
+        db: active
+        ai: Column active from Spider2-lite pilot table s2_pagila_staff.
+    - name: username
+      type: string
+      nullable: true
+      descriptions:
+        db: username
+        ai: Column username from Spider2-lite pilot table s2_pagila_staff.
+    - name: password
+      type: string
+      nullable: true
+      descriptions:
+        db: password
+        ai: Column password from Spider2-lite pilot table s2_pagila_staff.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_staff.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_staff
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_staff.
+    joins:
+    - to: s2_pagila_address
+      'on': s2_pagila_staff.address_id = s2_pagila_address.address_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_pagila_store
+      'on': s2_pagila_staff.store_id = s2_pagila_store.store_id
+      relationship: many_to_one
+      source: formal
+  s2_pagila_store:
+    table: sandbox.s2_pagila_store
+    columns:
+    - name: store_id
+      type: number
+      nullable: true
+      descriptions:
+        db: store_id
+        ai: Column store_id from Spider2-lite pilot table s2_pagila_store.
+      pk: true
+    - name: manager_staff_id
+      type: number
+      nullable: true
+      descriptions:
+        db: manager_staff_id
+        ai: Column manager_staff_id from Spider2-lite pilot table s2_pagila_store.
+    - name: address_id
+      type: number
+      nullable: true
+      descriptions:
+        db: address_id
+        ai: Column address_id from Spider2-lite pilot table s2_pagila_store.
+    - name: last_update
+      type: time
+      nullable: true
+      descriptions:
+        db: last_update
+        ai: Column last_update from Spider2-lite pilot table s2_pagila_store.
+    descriptions:
+      db: Spider2-lite pilot s2_pagila_store
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_pagila_store.
+    joins:
+    - to: s2_pagila_address
+      'on': s2_pagila_store.address_id = s2_pagila_address.address_id
+      relationship: many_to_one
+      source: formal
+  s2_ecommerce_customers:
+    table: sandbox.s2_ecommerce_customers
+    columns:
+    - name: customer_id
+      type: string
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_ecommerce_customers.
+      pk: true
+    - name: customer_unique_id
+      type: string
+      nullable: true
+      descriptions:
+        db: customer_unique_id
+        ai: Column customer_unique_id from Spider2-lite pilot table s2_ecommerce_customers.
+    - name: customer_zip_code_prefix
+      type: number
+      nullable: true
+      descriptions:
+        db: customer_zip_code_prefix
+        ai: Column customer_zip_code_prefix from Spider2-lite pilot table s2_ecommerce_customers.
+    - name: customer_city
+      type: string
+      nullable: true
+      descriptions:
+        db: customer_city
+        ai: Column customer_city from Spider2-lite pilot table s2_ecommerce_customers.
+    - name: customer_state
+      type: string
+      nullable: true
+      descriptions:
+        db: customer_state
+        ai: Column customer_state from Spider2-lite pilot table s2_ecommerce_customers.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_customers
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_customers.
+  s2_ecommerce_geolocation:
+    table: sandbox.s2_ecommerce_geolocation
+    columns:
+    - name: geolocation_zip_code_prefix
+      type: number
+      nullable: true
+      descriptions:
+        db: geolocation_zip_code_prefix
+        ai: Column geolocation_zip_code_prefix from Spider2-lite pilot table s2_ecommerce_geolocation.
+      pk: true
+    - name: geolocation_lat
+      type: number
+      nullable: true
+      descriptions:
+        db: geolocation_lat
+        ai: Column geolocation_lat from Spider2-lite pilot table s2_ecommerce_geolocation.
+    - name: geolocation_lng
+      type: number
+      nullable: true
+      descriptions:
+        db: geolocation_lng
+        ai: Column geolocation_lng from Spider2-lite pilot table s2_ecommerce_geolocation.
+    - name: geolocation_city
+      type: string
+      nullable: true
+      descriptions:
+        db: geolocation_city
+        ai: Column geolocation_city from Spider2-lite pilot table s2_ecommerce_geolocation.
+    - name: geolocation_state
+      type: string
+      nullable: true
+      descriptions:
+        db: geolocation_state
+        ai: Column geolocation_state from Spider2-lite pilot table s2_ecommerce_geolocation.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_geolocation
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_geolocation.
+  s2_ecommerce_leads_closed:
+    table: sandbox.s2_ecommerce_leads_closed
+    columns:
+    - name: mql_id
+      type: string
+      nullable: true
+      descriptions:
+        db: mql_id
+        ai: Column mql_id from Spider2-lite pilot table s2_ecommerce_leads_closed.
+      pk: true
+    - name: seller_id
+      type: string
+      nullable: true
+      descriptions:
+        db: seller_id
+        ai: Column seller_id from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: sdr_id
+      type: string
+      nullable: true
+      descriptions:
+        db: sdr_id
+        ai: Column sdr_id from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: sr_id
+      type: string
+      nullable: true
+      descriptions:
+        db: sr_id
+        ai: Column sr_id from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: won_date
+      type: string
+      nullable: true
+      descriptions:
+        db: won_date
+        ai: Column won_date from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: business_segment
+      type: string
+      nullable: true
+      descriptions:
+        db: business_segment
+        ai: Column business_segment from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: lead_type
+      type: string
+      nullable: true
+      descriptions:
+        db: lead_type
+        ai: Column lead_type from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: lead_behaviour_profile
+      type: string
+      nullable: true
+      descriptions:
+        db: lead_behaviour_profile
+        ai: Column lead_behaviour_profile from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: has_company
+      type: number
+      nullable: true
+      descriptions:
+        db: has_company
+        ai: Column has_company from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: has_gtin
+      type: number
+      nullable: true
+      descriptions:
+        db: has_gtin
+        ai: Column has_gtin from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: average_stock
+      type: string
+      nullable: true
+      descriptions:
+        db: average_stock
+        ai: Column average_stock from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: business_type
+      type: string
+      nullable: true
+      descriptions:
+        db: business_type
+        ai: Column business_type from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: declared_product_catalog_size
+      type: number
+      nullable: true
+      descriptions:
+        db: declared_product_catalog_size
+        ai: Column declared_product_catalog_size from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    - name: declared_monthly_revenue
+      type: number
+      nullable: true
+      descriptions:
+        db: declared_monthly_revenue
+        ai: Column declared_monthly_revenue from Spider2-lite pilot table s2_ecommerce_leads_closed.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_leads_closed
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_leads_closed.
+    joins:
+    - to: s2_ecommerce_leads_qualified
+      'on': s2_ecommerce_leads_closed.mql_id = s2_ecommerce_leads_qualified.mql_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_ecommerce_sellers
+      'on': s2_ecommerce_leads_closed.seller_id = s2_ecommerce_sellers.seller_id
+      relationship: many_to_one
+      source: formal
+  s2_ecommerce_leads_qualified:
+    table: sandbox.s2_ecommerce_leads_qualified
+    columns:
+    - name: mql_id
+      type: string
+      nullable: true
+      descriptions:
+        db: mql_id
+        ai: Column mql_id from Spider2-lite pilot table s2_ecommerce_leads_qualified.
+      pk: true
+    - name: first_contact_date
+      type: string
+      nullable: true
+      descriptions:
+        db: first_contact_date
+        ai: Column first_contact_date from Spider2-lite pilot table s2_ecommerce_leads_qualified.
+    - name: landing_page_id
+      type: string
+      nullable: true
+      descriptions:
+        db: landing_page_id
+        ai: Column landing_page_id from Spider2-lite pilot table s2_ecommerce_leads_qualified.
+    - name: origin
+      type: string
+      nullable: true
+      descriptions:
+        db: origin
+        ai: Column origin from Spider2-lite pilot table s2_ecommerce_leads_qualified.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_leads_qualified
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_leads_qualified.
+  s2_ecommerce_order_items:
+    table: sandbox.s2_ecommerce_order_items
+    columns:
+    - name: order_id
+      type: string
+      nullable: true
+      descriptions:
+        db: order_id
+        ai: Column order_id from Spider2-lite pilot table s2_ecommerce_order_items.
+      pk: true
+    - name: order_item_id
+      type: number
+      nullable: true
+      descriptions:
+        db: order_item_id
+        ai: Column order_item_id from Spider2-lite pilot table s2_ecommerce_order_items.
+    - name: product_id
+      type: string
+      nullable: true
+      descriptions:
+        db: product_id
+        ai: Column product_id from Spider2-lite pilot table s2_ecommerce_order_items.
+    - name: seller_id
+      type: string
+      nullable: true
+      descriptions:
+        db: seller_id
+        ai: Column seller_id from Spider2-lite pilot table s2_ecommerce_order_items.
+    - name: shipping_limit_date
+      type: string
+      nullable: true
+      descriptions:
+        db: shipping_limit_date
+        ai: Column shipping_limit_date from Spider2-lite pilot table s2_ecommerce_order_items.
+    - name: price
+      type: number
+      nullable: true
+      descriptions:
+        db: price
+        ai: Column price from Spider2-lite pilot table s2_ecommerce_order_items.
+    - name: freight_value
+      type: number
+      nullable: true
+      descriptions:
+        db: freight_value
+        ai: Column freight_value from Spider2-lite pilot table s2_ecommerce_order_items.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_order_items
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_order_items.
+    joins:
+    - to: s2_ecommerce_orders
+      'on': s2_ecommerce_order_items.order_id = s2_ecommerce_orders.order_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_ecommerce_products
+      'on': s2_ecommerce_order_items.product_id = s2_ecommerce_products.product_id
+      relationship: many_to_one
+      source: formal
+    - to: s2_ecommerce_sellers
+      'on': s2_ecommerce_order_items.seller_id = s2_ecommerce_sellers.seller_id
+      relationship: many_to_one
+      source: formal
+  s2_ecommerce_order_payments:
+    table: sandbox.s2_ecommerce_order_payments
+    columns:
+    - name: order_id
+      type: string
+      nullable: true
+      descriptions:
+        db: order_id
+        ai: Column order_id from Spider2-lite pilot table s2_ecommerce_order_payments.
+      pk: true
+    - name: payment_sequential
+      type: number
+      nullable: true
+      descriptions:
+        db: payment_sequential
+        ai: Column payment_sequential from Spider2-lite pilot table s2_ecommerce_order_payments.
+    - name: payment_type
+      type: string
+      nullable: true
+      descriptions:
+        db: payment_type
+        ai: Column payment_type from Spider2-lite pilot table s2_ecommerce_order_payments.
+    - name: payment_installments
+      type: number
+      nullable: true
+      descriptions:
+        db: payment_installments
+        ai: Column payment_installments from Spider2-lite pilot table s2_ecommerce_order_payments.
+    - name: payment_value
+      type: number
+      nullable: true
+      descriptions:
+        db: payment_value
+        ai: Column payment_value from Spider2-lite pilot table s2_ecommerce_order_payments.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_order_payments
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_order_payments.
+    joins:
+    - to: s2_ecommerce_orders
+      'on': s2_ecommerce_order_payments.order_id = s2_ecommerce_orders.order_id
+      relationship: many_to_one
+      source: formal
+  s2_ecommerce_order_reviews:
+    table: sandbox.s2_ecommerce_order_reviews
+    columns:
+    - name: review_id
+      type: string
+      nullable: true
+      descriptions:
+        db: review_id
+        ai: Column review_id from Spider2-lite pilot table s2_ecommerce_order_reviews.
+      pk: true
+    - name: order_id
+      type: string
+      nullable: true
+      descriptions:
+        db: order_id
+        ai: Column order_id from Spider2-lite pilot table s2_ecommerce_order_reviews.
+    - name: review_score
+      type: number
+      nullable: true
+      descriptions:
+        db: review_score
+        ai: Column review_score from Spider2-lite pilot table s2_ecommerce_order_reviews.
+    - name: review_comment_title
+      type: string
+      nullable: true
+      descriptions:
+        db: review_comment_title
+        ai: Column review_comment_title from Spider2-lite pilot table s2_ecommerce_order_reviews.
+    - name: review_comment_message
+      type: string
+      nullable: true
+      descriptions:
+        db: review_comment_message
+        ai: Column review_comment_message from Spider2-lite pilot table s2_ecommerce_order_reviews.
+    - name: review_creation_date
+      type: string
+      nullable: true
+      descriptions:
+        db: review_creation_date
+        ai: Column review_creation_date from Spider2-lite pilot table s2_ecommerce_order_reviews.
+    - name: review_answer_timestamp
+      type: string
+      nullable: true
+      descriptions:
+        db: review_answer_timestamp
+        ai: Column review_answer_timestamp from Spider2-lite pilot table s2_ecommerce_order_reviews.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_order_reviews
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_order_reviews.
+    joins:
+    - to: s2_ecommerce_orders
+      'on': s2_ecommerce_order_reviews.order_id = s2_ecommerce_orders.order_id
+      relationship: many_to_one
+      source: formal
+  s2_ecommerce_orders:
+    table: sandbox.s2_ecommerce_orders
+    columns:
+    - name: order_id
+      type: string
+      nullable: true
+      descriptions:
+        db: order_id
+        ai: Column order_id from Spider2-lite pilot table s2_ecommerce_orders.
+      pk: true
+    - name: customer_id
+      type: string
+      nullable: true
+      descriptions:
+        db: customer_id
+        ai: Column customer_id from Spider2-lite pilot table s2_ecommerce_orders.
+    - name: order_status
+      type: string
+      nullable: true
+      descriptions:
+        db: order_status
+        ai: Column order_status from Spider2-lite pilot table s2_ecommerce_orders.
+    - name: order_purchase_timestamp
+      type: string
+      nullable: true
+      descriptions:
+        db: order_purchase_timestamp
+        ai: Column order_purchase_timestamp from Spider2-lite pilot table s2_ecommerce_orders.
+    - name: order_approved_at
+      type: string
+      nullable: true
+      descriptions:
+        db: order_approved_at
+        ai: Column order_approved_at from Spider2-lite pilot table s2_ecommerce_orders.
+    - name: order_delivered_carrier_date
+      type: string
+      nullable: true
+      descriptions:
+        db: order_delivered_carrier_date
+        ai: Column order_delivered_carrier_date from Spider2-lite pilot table s2_ecommerce_orders.
+    - name: order_delivered_customer_date
+      type: string
+      nullable: true
+      descriptions:
+        db: order_delivered_customer_date
+        ai: Column order_delivered_customer_date from Spider2-lite pilot table s2_ecommerce_orders.
+    - name: order_estimated_delivery_date
+      type: string
+      nullable: true
+      descriptions:
+        db: order_estimated_delivery_date
+        ai: Column order_estimated_delivery_date from Spider2-lite pilot table s2_ecommerce_orders.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_orders
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_orders.
+    joins:
+    - to: s2_ecommerce_customers
+      'on': s2_ecommerce_orders.customer_id = s2_ecommerce_customers.customer_id
+      relationship: many_to_one
+      source: formal
+  s2_ecommerce_product_category_name_translation:
+    table: sandbox.s2_ecommerce_product_category_name_translation
+    columns:
+    - name: product_category_name
+      type: string
+      nullable: true
+      descriptions:
+        db: product_category_name
+        ai: Column product_category_name from Spider2-lite pilot table s2_ecommerce_product_category_name_translation.
+      pk: true
+    - name: product_category_name_english
+      type: string
+      nullable: true
+      descriptions:
+        db: product_category_name_english
+        ai: Column product_category_name_english from Spider2-lite pilot table s2_ecommerce_product_category_name_translation.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_product_category_name_translation
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_product_category_name_translation.
+  s2_ecommerce_products:
+    table: sandbox.s2_ecommerce_products
+    columns:
+    - name: product_id
+      type: string
+      nullable: true
+      descriptions:
+        db: product_id
+        ai: Column product_id from Spider2-lite pilot table s2_ecommerce_products.
+      pk: true
+    - name: product_category_name
+      type: string
+      nullable: true
+      descriptions:
+        db: product_category_name
+        ai: Column product_category_name from Spider2-lite pilot table s2_ecommerce_products.
+    - name: product_name_lenght
+      type: number
+      nullable: true
+      descriptions:
+        db: product_name_lenght
+        ai: Column product_name_lenght from Spider2-lite pilot table s2_ecommerce_products.
+    - name: product_description_lenght
+      type: number
+      nullable: true
+      descriptions:
+        db: product_description_lenght
+        ai: Column product_description_lenght from Spider2-lite pilot table s2_ecommerce_products.
+    - name: product_photos_qty
+      type: number
+      nullable: true
+      descriptions:
+        db: product_photos_qty
+        ai: Column product_photos_qty from Spider2-lite pilot table s2_ecommerce_products.
+    - name: product_weight_g
+      type: number
+      nullable: true
+      descriptions:
+        db: product_weight_g
+        ai: Column product_weight_g from Spider2-lite pilot table s2_ecommerce_products.
+    - name: product_length_cm
+      type: number
+      nullable: true
+      descriptions:
+        db: product_length_cm
+        ai: Column product_length_cm from Spider2-lite pilot table s2_ecommerce_products.
+    - name: product_height_cm
+      type: number
+      nullable: true
+      descriptions:
+        db: product_height_cm
+        ai: Column product_height_cm from Spider2-lite pilot table s2_ecommerce_products.
+    - name: product_width_cm
+      type: number
+      nullable: true
+      descriptions:
+        db: product_width_cm
+        ai: Column product_width_cm from Spider2-lite pilot table s2_ecommerce_products.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_products
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_products.
+    joins:
+    - to: s2_ecommerce_product_category_name_translation
+      'on': s2_ecommerce_products.product_category_name = s2_ecommerce_product_category_name_translation.product_category_name
+      relationship: many_to_one
+      source: formal
+  s2_ecommerce_sellers:
+    table: sandbox.s2_ecommerce_sellers
+    columns:
+    - name: seller_id
+      type: string
+      nullable: true
+      descriptions:
+        db: seller_id
+        ai: Column seller_id from Spider2-lite pilot table s2_ecommerce_sellers.
+      pk: true
+    - name: seller_zip_code_prefix
+      type: number
+      nullable: true
+      descriptions:
+        db: seller_zip_code_prefix
+        ai: Column seller_zip_code_prefix from Spider2-lite pilot table s2_ecommerce_sellers.
+    - name: seller_city
+      type: string
+      nullable: true
+      descriptions:
+        db: seller_city
+        ai: Column seller_city from Spider2-lite pilot table s2_ecommerce_sellers.
+    - name: seller_state
+      type: string
+      nullable: true
+      descriptions:
+        db: seller_state
+        ai: Column seller_state from Spider2-lite pilot table s2_ecommerce_sellers.
+    descriptions:
+      db: Spider2-lite pilot s2_ecommerce_sellers
+      ai: Spider2-lite local pilot table loaded into StarRocks sandbox as s2_ecommerce_sellers.

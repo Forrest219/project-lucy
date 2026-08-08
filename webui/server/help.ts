@@ -61,6 +61,12 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/MCP 返回 401/, "mcp-401"],
   [/KTX upstream 不可用/, "ktx-upstream-unavailable"],
   [/安全边界速查/, "security-boundaries"],
+  [/最小健康检查清单/, "health-checklist"],
+  [/No join path|跨表失败/, "lucy-query-no-join-path"],
+  [/fanout|Aggregate locality/, "lucy-query-fanout-locality"],
+  [/order_by.*排序无效|排序无效或排反/, "lucy-query-order-by"],
+  [/复杂分析题|Eval 对不上 gold|对不上 gold/, "eval-semantic-vs-gold"],
+  [/MCP 仍旧|reindex 失败/, "manifest-wiki-reindex-sync"],
   [/审阅|校验/, "review-validate"],
   [/WebUI 入口速查/, "webui-entry-map"]
 ];

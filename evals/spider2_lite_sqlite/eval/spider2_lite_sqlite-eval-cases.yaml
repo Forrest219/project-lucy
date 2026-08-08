@@ -1,0 +1,1003 @@
+lucy_eval_schema_version: 1
+kind: lucy_eval_suite
+suite_id: spider2_lite_sqlite_v1
+domain: spider2_lite_sqlite
+title: Spider2-lite Pilot @ StarRocks sandbox
+description: 'Long-running gated stress suite: Pilot 17 seed cohort on starrocks-r1/sandbox.s2_*'
+metadata:
+  document_name: Spider2-lite SQLite Pilot Eval Cases
+  document_type: Eval
+  version: v0.1
+  runner_schema_version: v1.4
+  written_date: '2026-08-08'
+  author: Cursor Agent
+  requester: zhangxingchen
+  based_on:
+  - Spider2 spider2-lite local*
+  - WO-202608-58 §11
+  - docs/test-layers-and-release-gates.md
+  scope: Pilot 17 seed; sample_case_ids for weekly G-sample
+  output_path: evals/spider2_lite_sqlite/eval/spider2_lite_sqlite-eval-cases.yaml
+  data_source: mixed
+  connection_id: starrocks-r1
+  schema: sandbox
+  sample_case_ids:
+  - spider2_lite-local002
+  - spider2_lite-local003
+  - spider2_lite-local038
+  - spider2_lite-local054
+  - spider2_lite-local056
+  - spider2_lite-local081
+  - spider2_lite-local193
+  - spider2_lite-local198
+  gate_policy: optional_gated_not_customer_headless
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+  - .ktx/secrets/
+  forbid_cross_source_join: true
+  forbidden_ast:
+  - type: forbidden_ast
+    value: UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE
+    reason: eval readonly
+  - type: forbidden_ast
+    value: cross_source_join
+    reason: no cross-source join
+cases:
+- id: spider2_lite-local002
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_ecommerce_`. Do not query other
+    schemas. Can you calculate the 5-day symmetric moving average of predicted toy
+    sales for December 5 to 8, 2018, using daily sales data from January 1, 2017,
+    to August 29, 2018, with a simple linear regression model? Finally provide the
+    sum of those four 5-day moving averages?'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local002
+  upstream_db: E_commerce
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - ecommerce
+  - sample
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '4340.1019'
+      - '1085.0255'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - NUM_DAYS
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - NUM_DAYS: 4
+        TOTAL_MOVING_AVERAGES: 4340.1019
+        AVG_MOVING_AVERAGE: 1085.0255
+  gold_csv: ../gold/starrocks_pilot/local002.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local002; tables sandbox.s2_ecommerce_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local003
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_ecommerce_`. Do not query other
+    schemas. According to the RFM definition document, calculate the average sales
+    per order for each customer within distinct RFM segments, considering only ''delivered''
+    orders. Use the customer unique identifier. Clearly define how to calculate Recency
+    based on the latest purchase timestamp and specify the criteria for classifying
+    RFM segments. The average sales should be computed as the total spend divided
+    by the total number of orders. Please analyze and report the differences in average
+    sales across the RFM segments'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local003
+  upstream_db: E_commerce
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - ecommerce
+  - sample
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - Champions
+      - Hibernating
+      - "Can't Lose Them"
+      - Loyal Customers
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - RFM_Segment
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 2.0
+    data:
+      rows:
+      - RFM_Segment: Can't Lose Them
+        AverageSalesPerOrder: 355.47960589650916
+      - RFM_Segment: Champions
+        AverageSalesPerOrder: 248.02208447967953
+      - RFM_Segment: Loyal Customers
+        AverageSalesPerOrder: 238.35584143993353
+      - RFM_Segment: Hibernating
+        AverageSalesPerOrder: 182.83055945256507
+      - RFM_Segment: Needs Attention
+        AverageSalesPerOrder: 145.07343242264318
+      - RFM_Segment: Potential Loyalists
+        AverageSalesPerOrder: 131.07064979228684
+      - RFM_Segment: Recent Users
+        AverageSalesPerOrder: 67.94451186308842
+      - RFM_Segment: Lost
+        AverageSalesPerOrder: 57.28117627827841
+      - RFM_Segment: About to Sleep
+        AverageSalesPerOrder: 57.0168341907401
+      - RFM_Segment: Price Sensitive
+        AverageSalesPerOrder: 34.73308885163461
+      - RFM_Segment: Promising
+        AverageSalesPerOrder: 34.27680694143171
+  gold_csv: ../gold/starrocks_pilot/local003.csv
+  gold_status: recalibrated_sr_20260808
+  notes: Seed cohort from Spider2-lite local003; gold recalibrated from StarRocks sandbox
+    RFM SQL (NTILE may have small tie drift; tolerance 2.0).
+  snapshot_date: '2026-08-08'
+  context_required:
+    keys:
+    - global/spider2-ecommerce-rfm.md
+- id: spider2_lite-local004
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_ecommerce_`. Do not query other
+    schemas. Could you tell me the number of orders, average payment per order and
+    customer lifespan in weeks of the 3 custumers with the highest average payment
+    per order, where the lifespan is calculated by subtracting the earliest purchase
+    date from the latest purchase date in days, dividing by seven, and if the result
+    is less than seven days, setting it to 1.0?'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local004
+  upstream_db: E_commerce
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - ecommerce
+  - full_only
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - 0a0a92112bd4c708ca5fde585afaa872
+      - '13664.08'
+      - '1.0'
+      - 763c8b1c9c68a0229c42c9fc6f662b93
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - customer_unique_id
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - customer_unique_id: 0a0a92112bd4c708ca5fde585afaa872
+        NUM_ORDERS: 1
+        AVG_PAYMENT_PER_ORDER: 13664.08
+        CUSTOMER_LIFESPAN_WEEKS: 1.0
+      - customer_unique_id: 763c8b1c9c68a0229c42c9fc6f662b93
+        NUM_ORDERS: 1
+        AVG_PAYMENT_PER_ORDER: 7274.88
+        CUSTOMER_LIFESPAN_WEEKS: 1.0
+      - customer_unique_id: dc4802a71eae9be1dd28f5d788ceb526
+        NUM_ORDERS: 1
+        AVG_PAYMENT_PER_ORDER: 6929.31
+        CUSTOMER_LIFESPAN_WEEKS: 1.0
+  gold_csv: ../gold/starrocks_pilot/local004.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local004; tables sandbox.s2_ecommerce_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local038
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_pagila_`. Do not query other schemas.
+    Could you help me determine which actor starred most frequently in English-language
+    children''s category films that were rated either G or PG, had a running time
+    of 120 minutes or less, and were released between 2000 and 2010? Please provide
+    the actor''s full name.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local038
+  upstream_db: Pagila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - pagila
+  - sample
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - HELEN VOIGHT
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - actor_full_name
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - actor_full_name: HELEN VOIGHT
+  gold_csv: ../gold/starrocks_pilot/local038.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local038; tables sandbox.s2_pagila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local039
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_pagila_`. Do not query other schemas.
+    Please help me find the film category with the highest total rental hours in cities
+    where the city''s name either starts with "A" or contains a hyphen. '
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local039
+  upstream_db: Pagila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - pagila
+  - full_only
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - Sports
+      - '16858.166667'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - category_name
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - category_name: Sports
+        total_rental_hours: 16858.166667
+  gold_csv: ../gold/starrocks_pilot/local039.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local039; tables sandbox.s2_pagila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local054
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_chinook_`. Do not query other schemas.
+    Could you tell me the first names of customers who spent less than $1 on albums
+    by the best-selling artist, along with the amounts they spent?'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local054
+  upstream_db: chinook
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - chinook
+  - sample
+  expected_source: semantic_layer
+  expected_measures:
+  - s2_chinook_invoices.invoice_total
+  - s2_chinook_invoice_items.line_revenue
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  - type: required_tool
+    value: lucy_query|sl_query
+    reason: Prefer semantic query when overlay measures exist.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - Edward
+      - '0.99'
+      - Ladislav
+      - Eduardo
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - FirstName
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - FirstName: Edward
+        TOTALSPENT: 0.99
+      - FirstName: Ladislav
+        TOTALSPENT: 0.99
+      - FirstName: Eduardo
+        TOTALSPENT: 0.99
+      - FirstName: Hugh
+        TOTALSPENT: 0.99
+      - FirstName: Stanisław
+        TOTALSPENT: 0.99
+  gold_csv: ../gold/starrocks_pilot/local054.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local054; tables sandbox.s2_chinook_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local055
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_chinook_`. Do not query other schemas.
+    Identify the artist with the highest overall sales of albums (tie broken by alphabetical
+    order) and the artist with the lowest overall sales of albums (tie broken by alphabetical
+    order), then calculate the amount each customer spent specifically on those two
+    artists’ albums. Next, compute the average spending for the customers who purchased
+    from the top-selling artist and the average spending for the customers who purchased
+    from the lowest-selling artist, and finally return the absolute difference between
+    these two averages.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local055
+  upstream_db: chinook
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - chinook
+  - full_only
+  expected_source: semantic_layer
+  expected_measures:
+  - s2_chinook_invoices.invoice_total
+  - s2_chinook_invoice_items.line_revenue
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  - type: required_tool
+    value: lucy_query|sl_query
+    reason: Prefer semantic query when overlay measures exist.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '5.133333333333334'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - average_spending_difference
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - average_spending_difference: 5.133333333333334
+  gold_csv: ../gold/starrocks_pilot/local055.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local055; tables sandbox.s2_chinook_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local198
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_chinook_`. Do not query other schemas.
+    Using the sales data, what is the median value of total sales made in countries
+    where the number of customers is greater than 4?'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local198
+  upstream_db: chinook
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - chinook
+  - sample
+  expected_source: semantic_layer
+  expected_measures:
+  - s2_chinook_invoices.invoice_total
+  - s2_chinook_invoice_items.line_revenue
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  - type: required_tool
+    value: lucy_query|sl_query
+    reason: Prefer semantic query when overlay measures exist.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '249.53'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - Median_total_sales
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - Median_total_sales: 249.53
+  gold_csv: ../gold/starrocks_pilot/local198.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local198; tables sandbox.s2_chinook_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local056
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_sakila_`. Do not query other schemas.
+    Which customer has the highest average monthly change in payment amounts? Provide
+    the customer''s full name.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local056
+  upstream_db: sqlite-sakila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - sakila
+  - sample
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - STEPHEN QUALLS
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - CUSTOMER_FULL_NAME
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - CUSTOMER_FULL_NAME: STEPHEN QUALLS
+  gold_csv: ../gold/starrocks_pilot/local056.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local056; tables sandbox.s2_sakila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local081
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_northwind_`. Do not query other
+    schemas. Considering only the customers who placed orders in 1998, calculate the
+    total amount each customer spent by summing the unit price multiplied by the quantity
+    of all products in their orders, excluding any discounts. Assign each customer
+    to a spending group based on the customer group thresholds, and determine how
+    many customers are in each spending group and what percentage of the total number
+    of customers who placed orders in 1998 each group represents.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local081
+  upstream_db: northwind
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - northwind
+  - sample
+  expected_source: semantic_layer
+  expected_measures:
+  - s2_northwind_orders.order_count
+  - s2_northwind_order_details.line_amount
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  - type: required_tool
+    value: lucy_query|sl_query
+    reason: Prefer semantic query when overlay measures exist.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - Low
+      - '24.69'
+      - Medium
+      - '44.44'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - groupname
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - groupname: Low
+        CUSTOMER_COUNT: 20
+        PERCENTAGE: 24.69
+      - groupname: Medium
+        CUSTOMER_COUNT: 36
+        PERCENTAGE: 44.44
+      - groupname: High
+        CUSTOMER_COUNT: 12
+        PERCENTAGE: 14.81
+      - groupname: Very High
+        CUSTOMER_COUNT: 13
+        PERCENTAGE: 16.05
+  gold_csv: ../gold/starrocks_pilot/local081.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local081; tables sandbox.s2_northwind_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local085
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_northwind_`. Do not query other
+    schemas. Among employees who have more than 50 total orders, which three have
+    the highest percentage of late orders, where an order is considered late if the
+    shipped date is on or after its required date? Please list each employee''s ID,
+    the number of late orders, and the corresponding late-order percentage.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local085
+  upstream_db: northwind
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - northwind
+  - full_only
+  expected_source: semantic_layer
+  expected_measures:
+  - s2_northwind_orders.order_count
+  - s2_northwind_order_details.line_amount
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  - type: required_tool
+    value: lucy_query|sl_query
+    reason: Prefer semantic query when overlay measures exist.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '6.410256'
+      - '5.555556'
+      - '4.807692'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - EMPLOYEE_ID
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - EMPLOYEE_ID: 4
+        LATE_ORDERS: 10
+        LATE_ORDER_PERCENTAGE: 6.410256
+      - EMPLOYEE_ID: 7
+        LATE_ORDERS: 4
+        LATE_ORDER_PERCENTAGE: 5.555556
+      - EMPLOYEE_ID: 8
+        LATE_ORDERS: 5
+        LATE_ORDER_PERCENTAGE: 4.807692
+  gold_csv: ../gold/starrocks_pilot/local085.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local085; tables sandbox.s2_northwind_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local193
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_sakila_`. Do not query other schemas.
+    Could you find out the average percentage of the total lifetime sales (LTV) that
+    occur in the first 7 and 30 days after a customer''s initial purchase? Also, include
+    the average total lifetime sales (LTV). Please exclude customers with zero lifetime
+    sales. The 7- and 30-day periods should be based on the exact number of hours-minutes-seconds,
+    not calendar days.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local193
+  upstream_db: sqlite-sakila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - sakila
+  - sample
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '9.37964298027943'
+      - '24.758796259511534'
+      - '112.54843071786313'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - avg_pct_ltv_7_days
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - avg_pct_ltv_7_days: 9.37964298027943
+        avg_pct_ltv_30_days: 24.758796259511534
+        avg_ltv: 112.54843071786313
+  gold_csv: ../gold/starrocks_pilot/local193.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local193; tables sandbox.s2_sakila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local194
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_sakila_`. Do not query other schemas.
+    Please provide a list of the top three revenue-generating films for each actor,
+    along with the average revenue per actor in those films, calculated by dividing
+    the total film revenue equally among the actors for each film.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local194
+  upstream_db: sqlite-sakila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - sakila
+  - full_only
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - PENELOPE
+      - GUINESS
+      - GLEAMING JAWBREAKER
+      - '136.69999999999996'
+  gold_csv: ../gold/starrocks_pilot/local194.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local194; tables sandbox.s2_sakila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local195
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_sakila_`. Do not query other schemas.
+    Please find out how widespread the appeal of our top five actors is. What percentage
+    of our customers have rented films featuring these actors?'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local195
+  upstream_db: sqlite-sakila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - sakila
+  - full_only
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '99.1652754590985'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - "CAST(COUNT(DISTINCT T3.\"CUSTOMER_ID\") AS REAL) * 100 / (\n    SELECT\n  \
+      \    COUNT(*)\n    FROM \"SQLITE_SAKILA\".\"SQLITE_SAKILA\".\"CUSTOMER\"\n \
+      \ )"
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - ? "CAST(COUNT(DISTINCT T3.\"CUSTOMER_ID\") AS REAL) * 100 / (\n    SELECT\n\
+          \      COUNT(*)\n    FROM \"SQLITE_SAKILA\".\"SQLITE_SAKILA\".\"CUSTOMER\"\
+          \n  )"
+        : 99.1652754590985
+  gold_csv: ../gold/starrocks_pilot/local195.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local195; tables sandbox.s2_sakila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local196
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_sakila_`. Do not query other schemas.
+    For each rating category of the first movie rented by customers—where the first
+    movie is identified based on the earliest payment date per customer—please provide
+    the average total amount spent per customer and the average number of subsequent
+    rentals (calculated as the total number of rentals minus one) for customers whose
+    first rented movie falls into that rating category.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local196
+  upstream_db: sqlite-sakila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - sakila
+  - full_only
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '110.65990384615384'
+      - '25.298077'
+      - NC-17
+      - '111.94145299145302'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - rating
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - rating: G
+        avg_total_spend: 110.65990384615384
+        avg_subsequent_rental_count: 25.298077
+      - rating: NC-17
+        avg_total_spend: 111.94145299145302
+        avg_subsequent_rental_count: 25.358974
+      - rating: PG
+        avg_total_spend: 112.67066037735849
+        avg_subsequent_rental_count: 26.264151
+      - rating: PG-13
+        avg_total_spend: 115.23639455782313
+        avg_subsequent_rental_count: 26.380952
+      - rating: R
+        avg_total_spend: 111.42312000000001
+        avg_subsequent_rental_count: 25.48
+  gold_csv: ../gold/starrocks_pilot/local196.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local196; tables sandbox.s2_sakila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local197
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_sakila_`. Do not query other schemas.
+    Among our top 10 paying customers, can you identify the largest change in payment
+    amounts from one month to the immediately following month? Specifically, please
+    determine for which customer and during which month this maximum month-over-month
+    difference occurred, and provide the difference rounded to two decimal places.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local197
+  upstream_db: sqlite-sakila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - sakila
+  - full_only
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '148'
+      - ELEANOR
+      - HUNT
+      - '2005-07-01'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - customer_id
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - customer_id: 148
+        first_name: ELEANOR
+        last_name: HUNT
+        month: '2005-07-01'
+        difference: 77.83
+  gold_csv: ../gold/starrocks_pilot/local197.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local197; tables sandbox.s2_sakila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'
+- id: spider2_lite-local199
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: '[Lucy Spider2-lite Pilot] Use connection `starrocks-r1` only. Physical
+    tables are in schema `sandbox` with prefix `s2_sakila_`. Do not query other schemas.
+    Can you identify the year and month with the highest rental orders created by
+    the store''s staff for each store? Please list the store ID, the year, the month,
+    and the total rentals for those dates.'
+  domain: spider2_lite_sqlite
+  upstream_instance_id: local199
+  upstream_db: sqlite-sakila
+  trace_required: true
+  risk_tags:
+  - spider2_pilot
+  - starrocks_sandbox
+  - sakila
+  - full_only
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  tool_assertions:
+  - type: required_tool
+    value: lucy_catalog|sl_search|lucy_read_source|sl_read_source
+    reason: Must discover sandbox.s2_* sources before answering.
+  result_assertions:
+  - value_type: text
+    compare_mode: subset
+    check_schema: false
+    check_row_count: false
+    data:
+      must_mention:
+      - '2005'
+      - '3342'
+      - '3367'
+  - value_type: dataframe
+    compare_mode: unordered_rows
+    key_columns:
+    - store_id
+    check_schema: true
+    check_row_count: true
+    numeric_tolerance: 0.05
+    data:
+      rows:
+      - store_id: 1
+        year: 2005
+        month: 7
+        total_rentals: 3342
+      - store_id: 2
+        year: 2005
+        month: 7
+        total_rentals: 3367
+  gold_csv: ../gold/starrocks_pilot/local199.csv
+  gold_status: provisional_from_spider_exec_result_a
+  notes: Seed cohort from Spider2-lite local199; tables sandbox.s2_sakila_*; gold
+    provisional pending SR recalibration.
+  snapshot_date: '2026-08-08'

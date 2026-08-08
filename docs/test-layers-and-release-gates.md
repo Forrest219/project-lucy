@@ -18,6 +18,14 @@ Lucy 的测试分三层，不能互相替代：
 | Platform tests | 验证 Lucy 自身管理平台行为 | WebUI/API、MCP Proxy、auth/ACL/audit、Docker entrypoint/healthcheck |
 | Business evals | 验证 agent 能用业务语义、wiki 和口径回答问题 | `evals/` cases、expected SQL/result/text、LLM/agent behavior |
 
+跨层 / 主题类 E2E **先读** [`docs/qa/e2e-sop.md`](qa/e2e-sop.md)（总指引 + 测试集分表索引），再打开对应分表；不替代上表三层模型。QA 地图见 [`docs/qa/README.md`](qa/README.md)。
+
+| 测试集 | 分表 | 层级侧重 |
+|---|---|---|
+| `E2E-WEBUI` | [`qa/suite-webui-browser.md`](qa/suite-webui-browser.md) | Platform（浏览器） |
+| `E2E-ONBOARD-EVAL` | [`qa/suite-semantic-onboard-mcp-eval.md`](qa/suite-semantic-onboard-mcp-eval.md) | Platform + Business eval（含 Spider2 Pilot §14） |
+| `E2E-AGENT` | [`qa/suite-agent-mcp.md`](qa/suite-agent-mcp.md) | Business eval / Agent（命令见本文件 §2–§3；Spider2 抽样见分表 §5） |
+
 ## 2. Current Commands
 
 | Command | Layer | Purpose |
@@ -30,6 +38,10 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p0:demo` | runtime + platform + customer path | demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:business-eval` | business eval catalog | verifies core eval suites can be read by runner |
+| `npm run smoke:p0:spider2-lite-eval` | business eval catalog (optional gated) | Spider2-lite Pilot suite list-cases; no StarRocks required；跑法见 [`qa/suite-semantic-onboard-mcp-eval.md`](qa/suite-semantic-onboard-mcp-eval.md) §14 |
+| `npm run smoke:p1:spider2-lite-runtime` | runtime (optional gated) | `starrocks-r1` connection + `s2_*` validate + sandbox row probes; missing SR → blocked；同上 §14 |
+| `npm run e2e:spider2-lite:sample` | business agent E2E (optional gated) | MCP-direct on Cursor `lucy-demo` token：Visible Scope + catalog s2_* + datapath；缺 Scope → blocked；跑法见 [`qa/suite-agent-mcp.md`](qa/suite-agent-mcp.md) §5 |
+| `npm run spider2-lite:reseed-sandbox` | data hygiene | idempotent SQLite→`sandbox.s2_*` reseed；ONBOARD §14 Phase 1 |
 | `npm run smoke:p0:customer` | customer/manual | verifies configured real DB path on this machine |
 | `npm run smoke:p1:context` | context governance | semantic-layer inventory/readability and key wiki playbook evidence; optional KTX/proxy runtime checks |
 | `npm run smoke:p1:skills` | skill governance | `SKILL.md` frontmatter, dependency references, runtime boundary, and eval `skill_version` coverage |

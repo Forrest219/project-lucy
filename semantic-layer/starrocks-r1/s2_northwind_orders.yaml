@@ -1,0 +1,11 @@
+# WO-202608-58 Phase 2 thin overlay (measures only; physical cols in Manifest)
+name: s2_northwind_orders
+grain:
+- orderid
+measures:
+- name: order_count
+  expr: count(orderid)
+  description: Order count.
+- name: freight_sum
+  expr: sum(freight)
+  description: Total freight.

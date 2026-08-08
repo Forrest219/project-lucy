@@ -5,6 +5,64 @@
 
 ---
 
+## 2026-08-08 · docs/runtime · Spider2 G-sample 改 MCP-direct（Cursor lucy-demo）
+
+### 修改
+- `demo_agent` / `ksc_financial_readonly`：ACL 追加 `sandbox` `prefix: s2_`（保留 KSC `ai.*`）
+- `scripts/e2e-spider2-lite-sample.mjs`：默认 mcp-direct + `lucy-demo-agent-token`，移除 Claude CLI 依赖
+- `docs/qa/suite-agent-mcp.md` §5、suite README / ONBOARD §14 交叉引用同步
+
+### 影响映射更新
+- 无（非 WebUI selector）
+
+---
+
+## 2026-08-08 · docs · Spider2-lite Pilot 挂入 E2E 总指引 + 分表
+
+### 修改
+- `docs/qa/e2e-sop.md` v1.1：§3 增加 Spider2 选用决策；配套索引指向 `evals/spider2_lite_sqlite/` 与 WO-58
+- `docs/qa/suite-semantic-onboard-mcp-eval.md` v1.2：新增 §14 Spider2-lite Pilot 参考实例（参数表、Phase 差异、npm 门禁、复跑清单）
+- `docs/qa/suite-agent-mcp.md` v1.1：新增 §5 Spider2 Agent 抽样可选扩展
+- `docs/qa/README.md`：地图注明 Spider2 走 ONBOARD / AGENT 分表，不新建第四测试集
+
+### 影响映射更新
+- 无（非 WebUI selector 变更；不新增 `E2E-*` ID）
+
+---
+
+## 2026-08-08 · docs · E2E SOP 总指引 + 测试集分表
+
+### 新增
+- `docs/qa/e2e-sop.md`：E2E SOP 总指引（测试集总表、选用决策）
+- `docs/qa/suite-webui-browser.md`：分表 `E2E-WEBUI`
+- `docs/qa/suite-semantic-onboard-mcp-eval.md`：分表 `E2E-ONBOARD-EVAL`（由原主题接入 SOP 迁入）
+- `docs/qa/suite-agent-mcp.md`：分表 `E2E-AGENT`
+
+### 修改
+- `docs/qa/README.md` / `docs/test-layers-and-release-gates.md` / `docs/README.md`：改为「总指引 + 分表」结构
+- 旧路径 `docs/qa/semantic-onboard-mcp-eval-sop.md`、`docs/sop-semantic-upload-mcp-eval-e2e.md` 改为迁移桩
+
+### 影响映射更新
+- 无（非 WebUI selector 变更）
+
+---
+
+## 2026-08-08 · docs · 主题接入 SOP 入驻 docs/qa
+
+### 新增
+- `docs/qa/semantic-onboard-mcp-eval-sop.md`：语义上传包 → WebUI → ACL → MCP vs gold 端到端 SOP（跨 platform + business eval）
+- `docs/qa/README.md`：QA / E2E 文档地图
+
+### 修改
+- `docs/test-layers-and-release-gates.md`：§1 增加跨层 E2E 文档索引表
+- `docs/README.md`：§7 指向 `qa/` 下套件与 SOP
+- 旧路径 `docs/sop-semantic-upload-mcp-eval-e2e.md` 改为迁移桩
+
+### 影响映射更新
+- 无（非 WebUI selector 变更）
+
+---
+
 ## 模板
 
 ```md

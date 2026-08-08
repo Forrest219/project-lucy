@@ -522,6 +522,32 @@ describe("Help handbook", () => {
     expect(byTitle["KTX 官方延伸阅读"]).toBe("ktx-further-reading");
   });
 
+  it("maps FAQ §6.10–6.14 semantic query troubleshooting to stable alias ids", () => {
+    const toc = parseHelpToc(
+      [
+        "## 6. FAQ 与排障指南",
+        "",
+        "### 6.10 `lucy_query` 报 No join path / 跨表失败",
+        "",
+        "### 6.11 fanout / Aggregate locality 拒绝查询",
+        "",
+        "### 6.12 `order_by` 排序无效或排反",
+        "",
+        "### 6.13 语义查询答不出复杂分析题，或 Eval 对不上 gold",
+        "",
+        "### 6.14 改了 Manifest / Wiki，MCP 仍旧或 reindex 失败"
+      ].join("\n")
+    );
+    const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
+    expect(byTitle["6.10 `lucy_query` 报 No join path / 跨表失败"]).toBe("lucy-query-no-join-path");
+    expect(byTitle["6.11 fanout / Aggregate locality 拒绝查询"]).toBe("lucy-query-fanout-locality");
+    expect(byTitle["6.12 `order_by` 排序无效或排反"]).toBe("lucy-query-order-by");
+    expect(byTitle["6.13 语义查询答不出复杂分析题，或 Eval 对不上 gold"]).toBe("eval-semantic-vs-gold");
+    expect(byTitle["6.14 改了 Manifest / Wiki，MCP 仍旧或 reindex 失败"]).toBe(
+      "manifest-wiki-reindex-sync"
+    );
+  });
+
   it("maps §3.7.0 overlay field guide to yaml-overlay-field-guide", () => {
     const toc = parseHelpToc([
       "### 3.7 YAML 文件规范与交付验收",
@@ -551,6 +577,9 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("#### grain、join 与 fanout");
     expect(handbook.markdown).toContain("#### KTX 官方延伸阅读");
     expect(handbook.markdown).toContain("#### 3.7.0 overlay 字段速查（编写辅导）");
+    expect(handbook.markdown).toContain("### 6.10 `lucy_query` 报 No join path / 跨表失败");
+    expect(handbook.markdown).toContain("### 6.11 fanout / Aggregate locality 拒绝查询");
+    expect(handbook.markdown).toContain("direction: desc");
     expect(handbook.markdown).toContain("fanout");
     expect(handbook.markdown).toContain("descriptions.human");
     expect(handbook.markdown).toContain("https://docs.kaelio.com/ktx/docs/guides/writing-context");
