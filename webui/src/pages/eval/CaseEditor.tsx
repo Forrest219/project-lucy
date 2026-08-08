@@ -122,7 +122,7 @@ export function CaseEditor() {
   ] as const;
 
   return (
-    <div className="grid gap-6">
+    <div className="pl-page-stack">
       <PageHeader
         title={isNew ? "新建评测用例" : form.id}
         backAction={

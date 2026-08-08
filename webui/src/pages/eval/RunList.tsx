@@ -95,13 +95,10 @@ export function RunList() {
   const runs = runsData?.runs ?? [];
 
   return (
-    <div className="grid gap-6">
+    <div className="pl-page-stack">
       <PageHeader
         title="运行历史"
         description="查看评测运行历史；服务器运行作为高级入口保留。"
-        badges={
-          <span>{runs.length} / {runsData?.total ?? 0} 条</span>
-        }
         actions={
           <button
             type="button"

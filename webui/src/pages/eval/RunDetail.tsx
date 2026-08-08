@@ -133,7 +133,7 @@ export function RunDetail() {
   const comparableRuns = (runsData?.runs ?? []).filter((candidate) => candidate.id !== run.id);
 
   return (
-    <div className="grid gap-6">
+    <div className="pl-page-stack">
       <PageHeader
         title={`Run #${run.id}`}
         backAction={

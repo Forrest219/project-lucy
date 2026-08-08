@@ -77,6 +77,8 @@ describe("SecurityCandidates", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "安全候选" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "抽取候选" })).toHaveClass("pl-btn--primary");
     expect(await screen.findByText(/展示 Token 消耗最高的表/)).toBeInTheDocument();
     expect(screen.queryByText(/abcdefghijklmnopqrstuvwxyz1234567890/)).not.toBeInTheDocument();
 

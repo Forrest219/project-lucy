@@ -96,14 +96,13 @@ export function SecurityCandidates() {
   });
 
   return (
-    <div className="p-6">
+    <div className="pl-page-stack">
       <PageHeader
         title="安全候选"
-        breadcrumbs={["质量评测", "安全候选"]}
         description="从访问拒绝日志中沉淀权限与隔离类 Eval 候选，必须人工审定后才能入库。"
         actions={
           <button
-            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-fg"
+            className="pl-btn pl-btn--primary text-sm"
             type="button"
             onClick={() => extractMutation.mutate()}
             disabled={extractMutation.isPending}
