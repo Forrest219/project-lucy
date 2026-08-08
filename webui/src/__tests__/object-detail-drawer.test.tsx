@@ -38,6 +38,7 @@ const tableFixture: SourceSummary = {
   conn: "mysql-aliyun",
   schema: "dataforai",
   table: "superstore_orders",
+  qualifiedName: "dataforai.superstore_orders",
   filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
   columnCount: 8,
   columnNames: ["order_key", "row_id"],
@@ -47,7 +48,11 @@ const tableFixture: SourceSummary = {
   joinCount: 0,
   wikiRefCount: 1,
   completion: "done",
-  mtime: "2026-07-30T00:00:00.000Z"
+  mtime: "2026-07-30T00:00:00.000Z",
+  enabled: true,
+  authorizedAgentCount: 1,
+  semanticUpdatedAt: "2026-07-30T00:00:00.000Z",
+  semanticUpdatedAtSource: "manifest"
 };
 
 function stubDrawerFetch() {

@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Overview Health-to-Action Deep Link Closed Loop Spec |
 | 文档类型 | Spec |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-08-05 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-08-06 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
 | 基于材料 | Attu 集群健康卡 → 修复对象评估；Attu Overview 指标卡视觉参考 [02-overview.png](https://github.com/zilliztech/attu/blob/main/.github/images/v3/02-overview.png)；交叉审阅（可行性/可落地性，2026-08-05）；`webui/docs/99-mcp-playground-acl-decision-visibility-spec.md`；`webui/docs/39-data-agent-ops-platform-global-ux-spec.md` §7；`webui/docs/41-system-overview-enterprise-ops-polish-spec.md`；`webui/docs/43-system-overview-header-and-health-simplification-spec.md`；`webui/src/lib/opsDashboard.ts`；`webui/src/pages/Onboarding.tsx`；`webui/src/pages/Catalog.tsx` |
@@ -23,6 +23,10 @@
 | 日期 | 2026-08-05 |
 | 范围 | 统一深链登记表；修正过时深链；query-driven Catalog；ActionRequiredItem 必填 impact/evidence；回写刷新约定；Attu 式指标卡 + 小 icon；契约测试 |
 
+> **口径修订（Spec 104）：** §3「不改待处理事项计数口径」已被 [`104-enabled-scope-semantic-coverage-alignment-spec.md`](104-enabled-scope-semantic-coverage-alignment-spec.md) 修订：语义覆盖 / 待补语义分母改为「已启用 ∩ Manifest」。本 Spec 的 Canonical Deep Link URL（含 `/catalog?completion=incomplete`）不变；Catalog 默认 `scope=enabled` 后深链结果与待办一致。
+>
+> **审计深链修订（Spec 106）：** 生产者改为 `view=calls&range=7d`（兼容读旧 `tab`/`hours`）。下文历史示例中的 `tab=calls&hours=168` 以 Spec 106 / `DEEP_LINKS` 为准。
+
 ### Changelog
 
 | 版本 | 变更 |
@@ -30,6 +34,7 @@
 | v1.0 | 初稿：自 Attu 健康卡闭环评估收敛为 Lucy overview P0 |
 | v1.1 | 补充 Attu Overview 指标卡（含小 icon）视觉借鉴；纳入质量/访问快照 metric 呈现要求（§8） |
 | v1.2 | 交叉审阅补齐：修正 §5.1/`incomplete` 自相矛盾；新增共享深链登记表与弃用表；`impact`/`evidence` 升为必填；Catalog URL 读写原子交付；待办回写刷新约定；与 Spec 99 接口对齐 |
+| v1.3 | 待处理事项移除 `acl-deny`：近 7 天 ACL 拒绝仅由「访问风险」指标卡展示（滚动窗口不可闭环处理） |
 
 ## 0. 与 Spec 99 的组合关系（非重复）
 
@@ -119,7 +124,8 @@ Protected：`Lucy MCP`、`KTX Runtime`、`Agent`、`Token`、`ACL`、`Catalog`�
 | `catalog-pending` | Catalog 待处理 > 0 | 查看连接 | `/connections` | 已有 |
 | `publish-pending` | 待发布文件 > 0 | 打开发布工作台 | `/publish/workbench` | 已有 |
 | `eval-gap` | 近 30 天 run = 0 | 查看趋势监控 | `/eval/monitor` | 已有 |
-| `acl-deny` | 近 7 天 ACL deny > 0 | 查看访问日志 | `/admin/audit?tab=calls&outcome=denied&hours=168` | Tab=调用流水 + outcome + hours 生效 |
+
+> **v1.3：** `acl-deny` 已从待处理事项移除。近 7 天 ACL 拒绝只走 §5.4「访问风险」指标卡 CTA；`opsDashboard.buildActionRequiredItems` **不得**再生产 `id: "acl-deny"`。
 
 ### 5.2 语义缺口筛选语义
 
@@ -173,7 +179,7 @@ Overview「待补语义」计数 = `total - done`，深链 **只生产** `incomp
 
 `agentId` 与审计筛选字段对齐：若审计现用 `user=` 表示 Agent id，则 Registry 与 Spec 99 remediation 必须与 `Audit.tsx` 实际 query key **同一键名**（实现前以代码为准拍板，写入本表脚注，禁止文档用 `agentId`、代码用 `user` 双轨）。
 
-> **拍板（v1.2）：** 审计页 Agent 筛选 query 继续用既有 `user=`（与 Agent 列表「查看日志」一致）。Spec 99 remediation / 调试台预填 Agent 上下文用 `agentId=`；从审计跳调试台时做 `user`→`agentId` 映射。Overview→审计继续用 `user` 仅当需要锁定某 Agent；默认 acl-deny 全量 denied **不带** user。
+> **拍板（v1.2）：** 审计页 Agent 筛选 query 继续用既有 `user=`（与 Agent 列表「查看日志」一致）。Spec 99 remediation / 调试台预填 Agent 上下文用 `agentId=`；从审计跳调试台时做 `user`→`agentId` 映射。Overview→审计继续用 `user` 仅当需要锁定某 Agent；默认访问风险 ACL 拒绝全量 denied **不带** user。
 
 ## 6. 待处理事项行模型（必填契约）
 
@@ -196,7 +202,6 @@ export type ActionRequiredItem = {
 | catalog-pending | 本地目录与启用表范围可能不一致 | 数据接入 |
 | publish-pending | 变更尚未进入 KTX 索引 | 语义发布 |
 | eval-gap | 缺少质量回归基线 | 质量评测 |
-| acl-deny | Agent 调用被拒绝，交付受阻 | 访问日志 |
 
 不强制负责人 / 更新时间（无稳定数据源不造假）。
 
@@ -269,7 +274,7 @@ PageHeader / panel / `pl-card-cta` / `pl-metric-card` / alert；状态不靠单�
 
 - [ ] 仓库内 overview/opsDashboard **不生产** §5.0 弃用路径；`semantic-gap` = `/catalog?completion=incomplete`。
 - [ ] Catalog：`completion=incomplete` 过滤正确；URL↔state 双向；与 overview 新链同 PR。
-- [ ] `acl-deny` 与访问风险 CTA = `/admin/audit?tab=calls&outcome=denied&hours=168`。
+- [ ] 访问风险「近 7 天 ACL 拒绝」CTA = `/admin/audit?tab=calls&outcome=denied&hours=168`（或 Spec 106 的 `view=calls&range=7d`）；待处理事项 **不**含 `acl-deny`。
 - [ ] `ActionRequiredItem` 每条含非空 `impact`/`evidence`；UI 可见。
 - [ ] 返回 `/overview` 触发待办相关 refetch（§7.2）。
 - [ ] Warning/Danger CTA 符合 §5.3。

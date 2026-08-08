@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { SelectField } from "../components/SelectField";
@@ -17,6 +17,7 @@ const STATUS_LABELS: Record<CompletionStatus, string> = {
 };
 
 type StatusFilter = CompletionStatus | "all" | "incomplete";
+type ScopeFilter = "enabled" | "all" | "disabled";
 
 function unique(values: string[]) {
   return Array.from(new Set(values)).sort();
@@ -29,10 +30,21 @@ function parseStatusParam(raw: string | null): StatusFilter {
   return "all";
 }
 
+function parseScopeParam(raw: string | null): ScopeFilter {
+  if (raw === "all" || raw === "disabled") return raw;
+  return "enabled";
+}
+
 function matchesStatusFilter(completion: CompletionStatus, filter: StatusFilter): boolean {
   if (filter === "all") return true;
   if (filter === "incomplete") return completion !== "done";
   return completion === filter;
+}
+
+function matchesScopeFilter(enabled: boolean, filter: ScopeFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "enabled") return enabled;
+  return !enabled;
 }
 
 function structureLabel(table: SourceSummary): string {
@@ -50,6 +62,10 @@ function groupLabel(conn: string, schema: string, count: number): string {
 function slRefWikiHref(table: SourceSummary): string {
   const slRef = `${table.conn}/${table.schema}/${table.table}`;
   return `/wiki?sl_ref=${encodeURIComponent(slRef)}`;
+}
+
+function enabledTablesHref(table: SourceSummary): string {
+  return `/connections/enabled-tables?connection=${encodeURIComponent(table.conn)}&schema=${encodeURIComponent(table.schema)}`;
 }
 
 /**
@@ -74,11 +90,33 @@ function semanticUpdatedTooltip(table: SourceSummary): string {
   return `取该表 Schema Manifest 与语义 overlay 文件的较晚修改时间。来源：${source}`;
 }
 
-function catalogEmptyMessage(total: number): { title: string; detail: string } {
-  if (total === 0) {
+function catalogEmptyMessage(input: {
+  total: number;
+  scope: ScopeFilter;
+  enabledCount: number;
+}): { title: string; detail: ReactNode } {
+  if (input.total === 0) {
     return {
       title: "尚未加载到语义资产",
       detail: "请刷新本地 Catalog，或检查 semantic-layer YAML 是否已经存在。"
+    };
+  }
+  if (input.scope === "enabled" && input.enabledCount === 0) {
+    return {
+      title: "当前没有已启用的语义资产",
+          detail: (
+            <>
+              默认只展示已进入语义层的表。请先在{" "}
+              <Link to="/connections/enabled-tables" className="pl-inline-link">
+                启用表范围
+              </Link>{" "}
+              勾选表，或将启用范围切换为「全部」查看{" "}
+              <span className="notranslate" translate="no">
+                Manifest
+              </span>{" "}
+              库存。
+            </>
+          )
     };
   }
   return {
@@ -90,14 +128,17 @@ function catalogEmptyMessage(total: number): { title: string; detail: string } {
 export function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
   // Spec 100 §7.1: URL is the single source of truth so deep links / Back work while mounted.
+  // Spec 104: default scope is enabled (omit or scope=enabled).
   const connection = searchParams.get("connection") ?? "all";
   const schema = searchParams.get("schema") ?? "all";
+  const scope = parseScopeParam(searchParams.get("scope"));
   const status = parseStatusParam(searchParams.get("completion"));
   const search = searchParams.get("q") ?? "";
 
   function patchSearchParams(patch: {
     connection?: string;
     schema?: string;
+    scope?: ScopeFilter;
     completion?: StatusFilter;
     q?: string;
   }) {
@@ -109,6 +150,8 @@ export function Catalog() {
     };
     apply("connection", patch.connection, "all");
     apply("schema", patch.schema, "all");
+    // Default scope is enabled: omit from URL when enabled to keep deep links clean.
+    apply("scope", patch.scope, "enabled");
     apply("completion", patch.completion, "all");
     apply("q", patch.q !== undefined ? patch.q.trim() : undefined, "");
     if (next.toString() !== searchParams.toString()) {
@@ -122,6 +165,7 @@ export function Catalog() {
   });
 
   const tables = data?.tables ?? [];
+  const enabledCount = useMemo(() => tables.filter((table) => table.enabled).length, [tables]);
   const connections = useMemo(() => unique(tables.map((table) => table.conn)), [tables]);
   const connectionOptions = useMemo(
     () => [
@@ -143,6 +187,14 @@ export function Catalog() {
     () => [{ value: "all", label: "全部 Schema" }, ...schemas.map((value) => ({ value, label: value }))],
     [schemas]
   );
+  const scopeOptions = useMemo(
+    () => [
+      { value: "enabled", label: "已启用" },
+      { value: "all", label: "全部" },
+      { value: "disabled", label: "未启用" }
+    ],
+    []
+  );
   const statusOptions = useMemo(
     () => [
       { value: "all", label: "全部状态" },
@@ -162,6 +214,9 @@ export function Catalog() {
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return tables.filter((table) => {
+      if (!matchesScopeFilter(table.enabled, scope)) {
+        return false;
+      }
       if (connection !== "all" && table.conn !== connection) {
         return false;
       }
@@ -176,7 +231,7 @@ export function Catalog() {
       }
       return `${table.conn}/${table.schema}/${table.table} ${table.columnNames.join(" ")}`.toLowerCase().includes(needle);
     });
-  }, [connection, schema, search, status, tables]);
+  }, [connection, schema, scope, search, status, tables]);
 
   const groupedTables = useMemo(() => {
     const groups = new Map<string, { conn: string; schema: string; rows: SourceSummary[] }>();
@@ -200,11 +255,25 @@ export function Catalog() {
     return <p className="pl-error">语义资产加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
   }
 
+  const empty = catalogEmptyMessage({ total: tables.length, scope, enabledCount });
+
   return (
     <div className="pl-page-stack">
       <PageHeader
         title="语义资产"
-        description={<span className="notranslate" translate="no">维护当前 KTX 项目的结构化 semantic-layer YAML 模型，按搜索、连接、Schema 和语义状态定位对象。</span>}
+        description={
+          <span>
+            维护已进入语义层的结构化{" "}
+            <span className="notranslate" translate="no">
+              semantic-layer YAML
+            </span>{" "}
+            模型。默认只展示已启用表；可切换启用范围查看{" "}
+            <span className="notranslate" translate="no">
+              Manifest
+            </span>{" "}
+            全量。
+          </span>
+        }
       />
 
       <section className="pl-panel">
@@ -245,6 +314,17 @@ export function Catalog() {
               />
             </label>
             <label className="grid gap-1.5 text-sm">
+              <span>启用范围</span>
+              <SelectField
+                className="pl-catalog-filter-select"
+                ariaLabel="启用范围"
+                value={scope}
+                onValueChange={(value) => patchSearchParams({ scope: value as ScopeFilter })}
+                options={scopeOptions}
+                placeholder="已启用"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm">
               <span>语义状态</span>
               <SelectField
                 className="pl-catalog-filter-select"
@@ -265,8 +345,8 @@ export function Catalog() {
 
         {filtered.length === 0 ? (
           <div className="pl-catalog-empty mt-4" data-testid="catalog-empty-state">
-            <strong>{catalogEmptyMessage(tables.length).title}</strong>
-            <p className="notranslate" translate="no">{catalogEmptyMessage(tables.length).detail}</p>
+            <strong>{empty.title}</strong>
+            <p>{empty.detail}</p>
           </div>
         ) : (
         <div className="pl-catalog-table-wrap mt-4" data-testid="catalog-table">
@@ -298,15 +378,22 @@ export function Catalog() {
                 return (
                   <tr key={`${table.conn}/${table.schema}/${table.table}`} data-testid={`catalog-row-${table.table}`}>
                     <td className="pl-catalog-table-name">
-                      <Link
-                        to={editorHref}
-                        className="pl-catalog-table-name-link notranslate"
-                        translate="no"
-                        data-testid={`catalog-row-edit-${table.table}`}
-                        title={fullRef}
-                      >
-                        {table.table}
-                      </Link>
+                      <div className="pl-catalog-table-name-cell">
+                        <Link
+                          to={table.enabled ? editorHref : enabledTablesHref(table)}
+                          className="pl-catalog-table-name-link notranslate"
+                          translate="no"
+                          data-testid={`catalog-row-edit-${table.table}`}
+                          title={fullRef}
+                        >
+                          {table.table}
+                        </Link>
+                        {!table.enabled ? (
+                          <span className="pl-status-badge pl-status-partial" data-testid={`catalog-row-not-enabled-${table.table}`}>
+                            未启用
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td><StatusBadge status={table.completion} /></td>
                     <td className="pl-catalog-table-structure notranslate" translate="no">{structureLabel(table)}</td>
@@ -318,15 +405,27 @@ export function Catalog() {
                     </td>
                     <td className="pl-catalog-table-actions">
                       <div className="pl-catalog-table-actions-inner">
-                        <Link
-                          aria-label={`维护 ${table.schema}.${table.table} 语义`}
-                          className="pl-inline-link text-xs notranslate"
-                          translate="no"
-                          to={editorHref}
-                          data-testid={`catalog-row-maintain-${table.table}`}
-                        >
-                          维护语义 ↗
-                        </Link>
+                        {table.enabled ? (
+                          <Link
+                            aria-label={`维护 ${table.schema}.${table.table} 语义`}
+                            className="pl-inline-link text-xs notranslate"
+                            translate="no"
+                            to={editorHref}
+                            data-testid={`catalog-row-maintain-${table.table}`}
+                          >
+                            维护语义 ↗
+                          </Link>
+                        ) : (
+                          <Link
+                            aria-label={`去启用表范围：${table.schema}.${table.table}`}
+                            className="pl-inline-link text-xs notranslate"
+                            translate="no"
+                            to={enabledTablesHref(table)}
+                            data-testid={`catalog-row-enable-scope-${table.table}`}
+                          >
+                            去启用表范围 ↗
+                          </Link>
+                        )}
                         {table.wikiRefCount > 0 ? (
                           <RowMoreMenu
                             ariaLabel={moreLabel}

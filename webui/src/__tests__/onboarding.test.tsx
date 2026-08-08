@@ -45,6 +45,7 @@ const readySource: SourceSummary = {
   conn: "mysql-demo",
   schema: "demo",
   table: "orders",
+  qualifiedName: "demo.orders",
   filePath: "semantic-layer/mysql-demo/_schema/demo.yaml",
   columnCount: 4,
   columnNames: ["id", "amount"],
@@ -55,6 +56,7 @@ const readySource: SourceSummary = {
   wikiRefCount: 0,
   completion: "done",
   mtime: "2026-06-21T00:00:00.000Z",
+  enabled: true,
   authorizedAgentCount: 1,
   semanticUpdatedAt: "2026-06-21T00:00:00.000Z",
   semanticUpdatedAtSource: "manifest"
@@ -712,6 +714,24 @@ describe("Onboarding", () => {
     expect(document.querySelector('[data-testid="ops-service-health"]')).toBeNull();
   });
 
+  it("shows ACL denials on access risk only, not in action-required", async () => {
+    renderPage({
+      agents: [{ ...readyAgent, stats: { callsLast7d: 10, deniedLast7d: 3, topTables: [] } }]
+    });
+
+    const queue = await screen.findByTestId("ops-action-required");
+    expect(queue.textContent ?? "").not.toContain("近 7 天存在 ACL 拒绝");
+    expect(screen.queryByTestId("ops-action-acl-deny")).not.toBeInTheDocument();
+
+    const accessRisk = screen.getByTestId("ops-access-risk");
+    expect(accessRisk.textContent ?? "").toContain("近 7 天 ACL 拒绝");
+    expect(accessRisk.textContent ?? "").toContain("3");
+    expect(screen.getByTestId("ops-metric-acl").querySelector("a")).toHaveAttribute(
+      "href",
+      expect.stringMatching(/outcome=denied/)
+    );
+  });
+
   it("uses Chinese severity labels (no bare Critical / Warning / Ready / Info) for action items", async () => {
     renderPage({
       sources: [
@@ -742,7 +762,8 @@ describe("Onboarding", () => {
     for (const item of Array.from(items)) {
       const itemText = item.textContent ?? "";
       expect(itemText).toMatch(/高风险|待处理|提醒/);
-      expect(itemText).toMatch(/语义覆盖|Catalog 同步|语义变更|评测运行|访问日志/);
+      expect(itemText).toMatch(/语义覆盖|Catalog 同步|语义变更|评测运行/);
+      expect(itemText).not.toMatch(/近 7 天存在 ACL 拒绝/);
       expect(itemText).toMatch(/影响：/);
       expect(itemText).toMatch(/证据来源：/);
       expect(itemText).not.toMatch(/负责人|数据治理组|架构组|语义发布负责人|QA 团队|访问治理组/);
@@ -759,9 +780,9 @@ describe("Onboarding", () => {
     renderPage({
       sources: [
         readySource,
-        { ...readySource, table: "customers", completion: "done" },
-        { ...readySource, table: "products", completion: "not_started" },
-        { ...readySource, table: "orders2", completion: "partial" }
+        { ...readySource, table: "customers", qualifiedName: "demo.customers", completion: "done" },
+        { ...readySource, table: "products", qualifiedName: "demo.products", completion: "not_started" },
+        { ...readySource, table: "orders2", qualifiedName: "demo.orders2", completion: "partial" }
       ]
     });
 
@@ -777,6 +798,34 @@ describe("Onboarding", () => {
     // The label must describe the metric in text so screen readers don't
     // rely solely on color/length.
     expect(progress?.getAttribute("aria-label") ?? snapshot.textContent ?? "").toMatch(/语义/);
+  });
+
+  it("scopes semantic coverage to enabled tables only (Spec 104)", async () => {
+    renderPage({
+      sources: [
+        readySource,
+        {
+          ...readySource,
+          table: "customers",
+          qualifiedName: "demo.customers",
+          completion: "partial",
+          enabled: false
+        },
+        {
+          ...readySource,
+          table: "products",
+          qualifiedName: "demo.products",
+          completion: "not_started",
+          enabled: false
+        }
+      ]
+    });
+
+    const snapshot = await screen.findByTestId("ops-quality-snapshot");
+    expect(snapshot.textContent ?? "").toMatch(/1\/1/);
+    expect(snapshot.textContent ?? "").not.toMatch(/1\/3/);
+    expect(screen.queryByText(/张表待补语义/)).not.toBeInTheDocument();
+    expect(snapshot.textContent ?? "").toMatch(/0\s*张表待补/);
   });
 
   it("unifies quality and access metric rows with right-center CTAs (Spec 102)", async () => {
@@ -810,7 +859,7 @@ describe("Onboarding", () => {
     expect(publishCta).toHaveAttribute("href", "/publish/workbench");
 
     const aclCta = screen.getByTestId("ops-metric-acl").querySelector("a.pl-ops-metric-row-cta");
-    expect(aclCta).toHaveAttribute("href", "/admin/audit?tab=calls&outcome=denied&hours=168");
+    expect(aclCta).toHaveAttribute("href", "/admin/audit?view=calls&range=7d&outcome=denied");
 
     const tokenRow = screen.getByTestId("ops-metric-tokens");
     expect(tokenRow.querySelector('[data-testid="ops-metric-icon-token"]')).toBeInTheDocument();

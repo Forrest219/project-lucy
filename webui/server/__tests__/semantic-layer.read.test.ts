@@ -70,8 +70,27 @@ describe("semantic-layer read", () => {
       hasGrain: true,
       measureCount: 1,
       joinCount: 1,
-      completion: "done"
+      completion: "done",
+      enabled: false
     });
+  });
+
+  it("marks tables enabled when they appear in ktx.yaml enabled_tables (Spec 104)", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+`,
+      "utf8"
+    );
+
+    const summaries = await listSources(projectRoot);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.enabled).toBe(true);
+    expect(summaries[0]?.qualifiedName).toBe("dataforai.superstore_orders");
   });
 
   it("lists local Schema Manifest files as first-hand catalog facts", async () => {

@@ -9,10 +9,13 @@ import { Catalog } from "../pages/Catalog";
 import type { SourceSummary } from "../lib/types";
 
 function makeSummary(overrides: Partial<SourceSummary> = {}): SourceSummary {
+  const table = overrides.table ?? "superstore_orders";
+  const schema = overrides.schema ?? "dataforai";
   return {
     conn: "mysql-aliyun",
-    schema: "dataforai",
-    table: "superstore_orders",
+    schema,
+    table,
+    qualifiedName: `${schema}.${table}`,
     filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
     columnCount: 8,
     columnNames: ["order_id", "order_date"],
@@ -23,10 +26,12 @@ function makeSummary(overrides: Partial<SourceSummary> = {}): SourceSummary {
     wikiRefCount: 0,
     completion: "done",
     mtime: "2026-06-15T08:00:00.000Z",
+    enabled: true,
     authorizedAgentCount: 3,
     semanticUpdatedAt: "2026-07-01T10:30:00.000Z",
     semanticUpdatedAtSource: "overlay",
-    ...overrides
+    ...overrides,
+    qualifiedName: overrides.qualifiedName ?? `${overrides.schema ?? schema}.${overrides.table ?? table}`
   };
 }
 
@@ -323,5 +328,56 @@ describe("Catalog completion deep link (Spec 100)", () => {
     expect(screen.getByTestId("catalog-row-not_started_table")).toBeInTheDocument();
     expect(screen.queryByTestId("catalog-row-done_table")).not.toBeInTheDocument();
     expect(screen.getByTestId("catalog-result-count")).toHaveTextContent("2 条结果");
+  });
+});
+
+describe("Catalog enabled scope (Spec 104)", () => {
+  it("defaults to enabled tables and hides disabled Manifest inventory", async () => {
+    renderCatalog([
+      makeSummary({ table: "superstore_orders", enabled: true, completion: "done" }),
+      makeSummary({ table: "superstore_people", enabled: false, completion: "partial" }),
+      makeSummary({ table: "superstore_returns", enabled: false, completion: "partial" })
+    ]);
+
+    await screen.findByTestId("catalog-table");
+    expect(screen.getByTestId("catalog-row-superstore_orders")).toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-row-superstore_people")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalog-row-superstore_returns")).not.toBeInTheDocument();
+    expect(screen.getByTestId("catalog-result-count")).toHaveTextContent("1 条结果");
+    expect(screen.getByTestId("catalog-row-maintain-superstore_orders")).toBeInTheDocument();
+  });
+
+  it("shows disabled rows with 未启用 badge and enable-scope CTA when scope=all", async () => {
+    renderCatalog(
+      [
+        makeSummary({ table: "superstore_orders", enabled: true }),
+        makeSummary({ table: "superstore_people", enabled: false, completion: "partial" })
+      ],
+      "/catalog?scope=all"
+    );
+
+    await screen.findByTestId("catalog-table");
+    expect(screen.getByTestId("catalog-row-superstore_people")).toBeInTheDocument();
+    expect(screen.getByTestId("catalog-row-not-enabled-superstore_people")).toHaveTextContent("未启用");
+    const enableLink = screen.getByTestId("catalog-row-enable-scope-superstore_people");
+    expect(enableLink).toHaveAttribute(
+      "href",
+      "/connections/enabled-tables?connection=mysql-aliyun&schema=dataforai"
+    );
+    expect(screen.queryByTestId("catalog-row-maintain-superstore_people")).not.toBeInTheDocument();
+  });
+
+  it("keeps incomplete deep link inside enabled scope so disabled gaps stay hidden", async () => {
+    renderCatalog(
+      [
+        makeSummary({ table: "superstore_orders", enabled: true, completion: "done" }),
+        makeSummary({ table: "superstore_people", enabled: false, completion: "partial" })
+      ],
+      "/catalog?completion=incomplete"
+    );
+
+    const empty = await screen.findByTestId("catalog-empty-state");
+    expect(empty).toHaveTextContent("没有匹配的语义资产");
+    expect(screen.queryByTestId("catalog-row-superstore_people")).not.toBeInTheDocument();
   });
 });

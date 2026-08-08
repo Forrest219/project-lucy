@@ -57,6 +57,8 @@ export type SourceSummary = {
   conn: string;
   schema: string;
   table: string;
+  /** Physical `schema.table` used to match `ktx.yaml` `enabled_tables`. */
+  qualifiedName: string;
   filePath: string;
   columnCount: number;
   columnNames: string[];
@@ -67,6 +69,11 @@ export type SourceSummary = {
   wikiRefCount: number;
   completion: CompletionStatus;
   mtime: string;
+  /**
+   * Whether this table appears in the connection's `enabled_tables`.
+   * Semantic coverage / Catalog default scope use this flag (Spec 104).
+   */
+  enabled: boolean;
   /**
    * Number of enabled Agents whose effective permissions include this source
    * (matches by `connectionId === conn && schema === schema && sourceName === table`).
@@ -166,6 +173,32 @@ export type AddSchemaResult = {
   auditId?: number;
   oldSchemas: string[];
   newSchemas: string[];
+};
+
+export type RemoveSchemaImpact = {
+  hasManifest: boolean;
+  manifestPath: string | null;
+  overlayPaths: string[];
+  wikiRefCount: number;
+  wikiSamplePaths: string[];
+};
+
+export type RemoveSchemaPreview = {
+  diff: string;
+  proposedYaml: string;
+  oldSchemas: string[];
+  newSchemas: string[];
+  removedEnabledTables: string[];
+  impact: RemoveSchemaImpact;
+};
+
+export type RemoveSchemaResult = {
+  written: true;
+  auditId?: number;
+  oldSchemas: string[];
+  newSchemas: string[];
+  removedEnabledTables: string[];
+  deletedFiles: string[];
 };
 
 export type ConnectionTestDetail = {

@@ -10,17 +10,15 @@ import {
 } from "../lib/opsDashboard";
 
 describe("opsDashboard view model", () => {
-  it("prioritizes semantic gaps, pending changes, eval gaps, and access risk", () => {
+  it("prioritizes semantic gaps, pending changes, and eval gaps", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 4, total: 16 },
       pendingCatalogItems: 10,
       pendingPublishFiles: 3,
-      evalRunsLast30d: 0,
-      aclDenied7d: 2
+      evalRunsLast30d: 0
     });
     expect(items.map((item) => item.title)).toEqual([
       "12 张表待补语义",
-      "近 7 天存在 ACL 拒绝",
       "10 个 Catalog 对象待处理",
       "存在 3 个待发布文件",
       "近 30 天无评测数据"
@@ -36,8 +34,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 8, total: 8 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     expect(items).toEqual([]);
   });
@@ -98,8 +95,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 2, total: 16 },
       pendingCatalogItems: 4,
       pendingPublishFiles: 2,
-      evalRunsLast30d: 0,
-      aclDenied7d: 1
+      evalRunsLast30d: 0
     });
     for (const item of items) {
       expect(item.title).toBeTruthy();
@@ -115,9 +111,20 @@ describe("opsDashboard view model", () => {
     }
     const semantic = items.find((item) => item.id === "semantic-gap");
     expect(semantic?.actionUrl).toBe("/catalog?completion=incomplete");
-    const acl = items.find((item) => item.id === "acl-deny");
-    expect(acl?.severity).toBe("critical");
-    expect(acl?.actionUrl).toBe("/admin/audit?tab=calls&outcome=denied&hours=168");
+    expect(items.find((item) => item.id === "acl-deny")).toBeUndefined();
+  });
+
+  it("never surfaces acl-deny in the action-required queue", () => {
+    // Rolling 7-day ACL deny is shown only on the 访问风险 metric card;
+    // viewing audit logs cannot clear historical denials.
+    const items = buildActionRequiredItems({
+      semanticCoverage: { done: 16, total: 16 },
+      pendingCatalogItems: 0,
+      pendingPublishFiles: 0,
+      evalRunsLast30d: 5
+    });
+    expect(items.find((item) => item.id === "acl-deny")).toBeUndefined();
+    expect(items.some((item) => item.title.includes("ACL"))).toBe(false);
   });
 
   it("labels a large semantic gap as critical and a small gap as warning", () => {
@@ -125,8 +132,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 2, total: 16 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     const gapLarge = large.find((item) => item.id === "semantic-gap");
     expect(gapLarge).toBeDefined();
@@ -136,8 +142,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 12, total: 16 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     const gapSmall = small.find((item) => item.id === "semantic-gap");
     expect(gapSmall).toBeDefined();
@@ -147,8 +152,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 16, total: 16 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     expect(none.find((item) => item.id === "semantic-gap")).toBeUndefined();
   });
@@ -162,8 +166,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 5, total: 15 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     const gap = items.find((item) => item.id === "semantic-gap");
     expect(gap).toBeDefined();
@@ -175,8 +178,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 5, total: 16 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     const gap = items.find((item) => item.id === "semantic-gap");
     expect(gap).toBeDefined();
@@ -188,8 +190,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 4, total: 13 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     const gap = items.find((item) => item.id === "semantic-gap");
     expect(gap).toBeDefined();
@@ -201,8 +202,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 8, total: 8 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 0,
-      aclDenied7d: 0
+      evalRunsLast30d: 0
     });
     const evalGap = items.find((item) => item.id === "eval-gap");
     expect(evalGap).toBeDefined();
@@ -220,8 +220,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 8, total: 8 },
       pendingCatalogItems: 0,
       pendingPublishFiles: 0,
-      evalRunsLast30d: null,
-      aclDenied7d: 0
+      evalRunsLast30d: null
     });
     const evalGap = items.find((item) => item.id === "eval-gap");
     expect(evalGap).toBeUndefined();
@@ -232,8 +231,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 4, total: 16 },
       pendingCatalogItems: 5,
       pendingPublishFiles: 3,
-      evalRunsLast30d: 0,
-      aclDenied7d: 2
+      evalRunsLast30d: 0
     });
     const expected: Record<string, { text: string }> = {
       "semantic-gap": {
@@ -241,31 +239,13 @@ describe("opsDashboard view model", () => {
       },
       "catalog-pending": { text: "Catalog 同步发现 5 个对象同步不完整（部分字段或元数据缺失）" },
       "publish-pending": { text: "当前有 3 个语义变更尚未发布" },
-      "eval-gap": { text: "尚未检测到近 30 天评测运行记录" },
-      "acl-deny": { text: "访问日志记录到 2 次 ACL 拒绝" }
+      "eval-gap": { text: "尚未检测到近 30 天评测运行记录" }
     };
     for (const item of items) {
       const want = expected[item.id];
       expect(want, `unexpected action item id: ${item.id}`).toBeDefined();
       expect(`${item.title} ${item.description}`).toContain(want.text);
     }
-  });
-
-  it("uses 'ACL 拒绝' user-facing copy with no English 'deny' substring", () => {
-    const items = buildActionRequiredItems({
-      semanticCoverage: { done: 16, total: 16 },
-      pendingCatalogItems: 0,
-      pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 4
-    });
-    const acl = items.find((item) => item.id === "acl-deny");
-    expect(acl).toBeDefined();
-    expect(acl?.title).toContain("拒绝");
-    expect(acl?.title).not.toContain("deny");
-    expect(acl?.title).not.toMatch(/Deny/);
-    expect(acl?.description).toContain("拒绝");
-    expect(acl?.description).not.toContain("deny");
   });
 
   // M39 polish (MINOR-1): negative-input guards. A buggy upstream ETL
@@ -278,8 +258,7 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 16, total: 16 },
       pendingCatalogItems: -5,
       pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     const catalog = items.find((item) => item.id === "catalog-pending");
     expect(catalog).toBeUndefined();
@@ -290,22 +269,9 @@ describe("opsDashboard view model", () => {
       semanticCoverage: { done: 16, total: 16 },
       pendingCatalogItems: 0,
       pendingPublishFiles: -3,
-      evalRunsLast30d: 5,
-      aclDenied7d: 0
+      evalRunsLast30d: 5
     });
     const publish = items.find((item) => item.id === "publish-pending");
     expect(publish).toBeUndefined();
-  });
-
-  it("clamps negative aclDenied7d to zero (no phantom critical item)", () => {
-    const items = buildActionRequiredItems({
-      semanticCoverage: { done: 16, total: 16 },
-      pendingCatalogItems: 0,
-      pendingPublishFiles: 0,
-      evalRunsLast30d: 5,
-      aclDenied7d: -2
-    });
-    const acl = items.find((item) => item.id === "acl-deny");
-    expect(acl).toBeUndefined();
   });
 });

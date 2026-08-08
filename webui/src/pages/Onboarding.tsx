@@ -538,7 +538,10 @@ export function Onboarding() {
   const connections = projectQuery.data?.connections ?? [];
   const enabledTables = connections.reduce((sum, conn) => sum + conn.enabledTables.length, 0);
   const sources = sourcesQuery.data?.tables ?? [];
-  const doneSources = sources.filter((source) => source.completion === "done").length;
+  // Spec 104: semantic coverage / gap only count Manifest tables that are enabled.
+  const enabledSources = sources.filter((source) => source.enabled);
+  const doneSources = enabledSources.filter((source) => source.completion === "done").length;
+  const coverageTotal = enabledSources.length;
   const changedFiles = diffQuery.data?.files ?? [];
   const agents = agentsQuery.data?.agents ?? [];
   const enabledAgents = agents.filter((agent) => agent.enabled);
@@ -632,11 +635,11 @@ export function Onboarding() {
         : "text-xs text-fg-muted whitespace-nowrap";
   const connectionReady = connections.length > 0 && projectQuery.data?.ktxAvailable === true;
   const tableScopeReady = enabledTables > 0;
-  const semanticReady = sources.length > 0 && doneSources > 0;
+  const semanticReady = coverageTotal > 0 && doneSources > 0;
   const validationReady = changedFiles.length === 0;
   const mcpEndpointReady = endpointInfo?.status !== "invalid";
   const mcpAccessReady = !mcpNotReadyReason && mcpEndpointReady;
-  const semanticPendingCount = sources.length - doneSources;
+  const semanticPendingCount = coverageTotal - doneSources;
   const semanticTone: HealthTone =
     semanticReady && tableScopeReady
       ? semanticPendingCount > 0
@@ -651,7 +654,8 @@ export function Onboarding() {
         : "需要完善";
 
   // M36: Ops Dashboard view-model inputs.
-  const pendingCatalogItems = Math.max(0, sources.length - doneSources);
+  // Spec 104: catalog-pending stays same formula as semantic gap, on enabled set.
+  const pendingCatalogItems = Math.max(0, coverageTotal - doneSources);
   const aclDenied7d = agents.reduce(
     (sum, agent) => sum + (agent.stats?.deniedLast7d ?? 0),
     0
@@ -659,7 +663,7 @@ export function Onboarding() {
   const actionItems = useMemo(
     () =>
       buildActionRequiredItems({
-        semanticCoverage: { done: doneSources, total: sources.length },
+        semanticCoverage: { done: doneSources, total: coverageTotal },
         pendingCatalogItems,
         pendingPublishFiles: changedFiles.length,
         // M39 review follow-up (P2-B): pass `null` while the eval probe is
@@ -668,17 +672,15 @@ export function Onboarding() {
         // Only an explicit `0` from the eval API surfaces the item.
         evalRunsLast30d: evalLastRunQuery.isSuccess
           ? (evalLastRunQuery.data?.runs.length ?? 0)
-          : null,
-        aclDenied7d
+          : null
       }),
     [
       doneSources,
-      sources.length,
+      coverageTotal,
       pendingCatalogItems,
       changedFiles.length,
       evalLastRunQuery.isSuccess,
-      evalLastRunQuery.data,
-      aclDenied7d
+      evalLastRunQuery.data
     ]
   );
   const serviceHealth = useMemo(
@@ -686,7 +688,7 @@ export function Onboarding() {
       buildServiceHealth({
         ktxAvailable: projectQuery.data?.ktxAvailable === true,
         mcpReady: mcpAccessReady,
-        semanticCoverage: { done: doneSources, total: sources.length },
+        semanticCoverage: { done: doneSources, total: coverageTotal },
         agentsEnabled: enabledAgents.length,
         agentsTotal: agents.length,
         availableTokenCount: availableTokenCountValue
@@ -695,7 +697,7 @@ export function Onboarding() {
       projectQuery.data?.ktxAvailable,
       mcpAccessReady,
       doneSources,
-      sources.length,
+      coverageTotal,
       enabledAgents.length,
       agents.length,
       availableTokenCountValue
@@ -709,13 +711,13 @@ export function Onboarding() {
       summarizeServiceHealth(
         mcpEndpointReady,
         projectQuery.data?.ktxAvailable === true,
-        { done: doneSources, total: sources.length },
+        { done: doneSources, total: coverageTotal },
         { enabled: enabledAgents.length, total: agents.length }
       ),
-    [mcpEndpointReady, projectQuery.data?.ktxAvailable, doneSources, sources.length, enabledAgents.length, agents.length]
+    [mcpEndpointReady, projectQuery.data?.ktxAvailable, doneSources, coverageTotal, enabledAgents.length, agents.length]
   );
   const ktxAvailable = projectQuery.data?.ktxAvailable === true;
-  const semanticPercent = percent(doneSources, sources.length);
+  const semanticPercent = percent(doneSources, coverageTotal);
 
   /**
    * M39 polish (SEVERE-4): the main page button and the Drawer button
@@ -921,7 +923,7 @@ export function Onboarding() {
         <div className="pl-section-heading">
           <div>
             <h2 className="pl-panel-title mb-1">待处理事项</h2>
-            <p className="pl-notice">聚合语义缺口、待发布变更、评测缺口、ACL 风险。点击任一项可直接进入处理页面。</p>
+            <p className="pl-notice">聚合语义缺口、待发布变更、评测缺口。点击任一项可直接进入处理页面。ACL 拒绝见下方访问风险。</p>
           </div>
           <span className="pl-notice" data-testid="ops-action-required-count">
             {actionItems.length} 项
@@ -949,7 +951,7 @@ export function Onboarding() {
             </div>
           </div>
           <div className="pl-snapshot-list">
-            <SemanticCoverageCard done={doneSources} total={sources.length} />
+            <SemanticCoverageCard done={doneSources} total={coverageTotal} />
             <OpsMetricRow
               testId="ops-metric-publish"
               icon={<Upload className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-publish" />}

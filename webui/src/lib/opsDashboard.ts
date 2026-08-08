@@ -42,8 +42,8 @@ export const DEEP_LINKS = {
   connections: "/connections",
   publishWorkbench: "/publish/workbench",
   evalMonitor: "/eval/monitor",
-  auditCalls: "/admin/audit?tab=calls&hours=168",
-  auditDenied: "/admin/audit?tab=calls&outcome=denied&hours=168",
+  auditCalls: "/admin/audit?view=calls&range=7d",
+  auditDenied: "/admin/audit?view=calls&range=7d&outcome=denied",
   agents: "/admin/agents",
   mcpPlayground: "/admin/mcp-playground",
   overviewMcpAnchor: "#overview-mcp"
@@ -94,7 +94,6 @@ export type ActionRequiredInput = {
    * `0` means "we confirmed zero runs"; `n>0` means "n runs exist".
    */
   evalRunsLast30d: number | null;
-  aclDenied7d: number;
 };
 
 const SEVERITY_BY_COUNT: Array<{ severity: Severity; test: (n: number) => boolean }> = [
@@ -156,10 +155,12 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
   // "近 30 天无评测数据" item against a still-loading / failed query.
   const safeEvalRuns =
     input.evalRunsLast30d === null ? null : Math.max(0, input.evalRunsLast30d);
-  const safeAclDenied = Math.max(0, input.aclDenied7d);
   const semanticGap = pendingSemanticCount(input.semanticCoverage);
   const semanticSeverity = semanticGapSeverity(input.semanticCoverage);
 
+  // ACL deny counts stay on the 访问风险 metric card only: a rolling
+  // 7-day window is not an actionable queue item (viewing logs cannot
+  // clear historical denials).
   const items: Array<ActionRequiredItem | null> = [
     semanticSeverity
       ? {
@@ -212,18 +213,6 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           actionUrl: DEEP_LINKS.evalMonitor,
           impact: "缺少质量回归基线",
           evidence: "质量评测"
-        }
-      : null,
-    safeAclDenied > 0
-      ? {
-          id: "acl-deny",
-          title: "近 7 天存在 ACL 拒绝",
-          description: `访问日志记录到 ${formatCount(safeAclDenied)} 次 ACL 拒绝`,
-          severity: "critical",
-          actionText: "查看访问日志",
-          actionUrl: DEEP_LINKS.auditDenied,
-          impact: "Agent 调用被拒绝，交付受阻",
-          evidence: "访问日志"
         }
       : null
   ];
