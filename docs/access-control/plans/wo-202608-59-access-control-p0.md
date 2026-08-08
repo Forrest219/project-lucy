@@ -23,7 +23,13 @@
 | **Gate A：ADR 批准** | **DONE** | 2026-08-08；允许写 Spec / 术语 / 契约补丁 |
 | WP-S0 Spec + 术语 | **DONE** | `webui/docs/98-access-control-p0-runtime-spec.md` v0.1；术语标准 v0.3 §3/§4.8 |
 | WP-S1 契约补丁草稿 | **DONE** | 07 **v1.4.1** 已按 Gate B P0 对齐 Spec 98 正文；14/15 v0.2 |
-| **Gate B：AC-P0 Spec 评审通过** | **待你勾选** | Spec 07 P0 条件已清；勾选后才允许 WP-I\* |
+| WP-I1 Canonical Source Key | **DONE** | `(connectionId, sourceName)` / reverse；U-KEY-01..03 |
+| WP-I2 Tool Class + AbsoluteDeny | **DONE** | 代码基线 AbsoluteDeny；U-CLS-01..03 / U-DENY-01 |
+| WP-I3 Capability 合成与闸门 | **DONE** | `authorizeAndRewrite`；U-CAP-01..04 / U-COMPAT-01；别名绕过 P0 已修 |
+| WP-I4 permission_model_version | **DONE** | v1/v2 编译规则；Admin 升 v2；Agent 模板物化亦升 v2 |
+| WP-I3 Capability 合成与闸门 | **DONE** | `roles[]` Role Set；capability 元组并集；`authorizeAndRewrite` 源级闸门；U-CAP-01/02/04、U-COMPAT-01 |
+| WP-I4 `permission_model_version` + 迁移 | **DONE** | 缺字段迁移窗口读作 1（`normalizePermissionModelVersion`）；v2 禁 `prefix`、必填 `row_access`；`scoped` 一律编译失败；Admin 保存自动升 v2 + 展开 `prefix`；`lint:spec` 缺字段 warn / v2 违规 fail；U-VER-01..04 |
+| WP-I5 EffectivePolicy 编译与提交 | **DONE** | `policyVersion` 绑定 access digest + sourceMapVersion + toolClassificationVersion；`commitEffectivePolicy` 原子交换；Admin write 返回 `runtimeAck`/`policyVersion`；YAML 解析失败全局 DataPlane degrade；Agent 编译失败 per-agent degrade；U-REL-01/04 |
 | Gate C：AC-P0 实现 + 门禁绿 | 未开始 | |
 | AC-P1 | **冻结** | 本 WO 明确 Non-Goal |
 
@@ -144,16 +150,16 @@
 | 测试 | U-VER-01..04、S3、S6 |
 | 验证 | `npm run lint:spec` |
 
-### WP-I5 — EffectivePolicy 编译与提交语义（1.5–2 天）
+### WP-I5 — EffectivePolicy 编译与提交语义（1.5–2 天） — **DONE**（含 code review P0/P1）
 
 | 文件 | 改动 |
 |---|---|
-| `acl.ts` + identity/proxy | 编译输入含 access digest + sourceMapVersion；原子替换；热路径只读 |
-| Admin save | 先编译 → 写盘 → 切 runtime → 失败回滚；返回 `policyVersion`+`runtimeAck` |
-| 外部 YAML | 编译失败 → 定位 Agent deny / 整体 DataPlane deny；banner + 日志 |
-| source map 变化 | 触发重编译；v1 prefix 扩权记 `policy_scope_expanded` |
-| 测试 | U-REL-01..04、S7、S10、S12 |
-| 验证 | 手工：保存坏配置不落盘；收窄成功立即生效 |
+| `acl.ts` + identity/proxy | 编译输入含 access digest + sourceMapVersion；原子替换；热路径只读 committed snapshot（含 Meta catalog / listTools / extractTables 钉住 source map） |
+| Admin save | 写盘 → 串行 `commitEffectivePolicy` → `runtimeAck` 要求 digest 匹配且非全局 degrade；失败回滚磁盘并再 commit |
+| 外部 YAML | 编译失败 → 定位 Agent deny / 整体 DataPlane deny；全局 degrade 保留 LKG 供 Wiki Meta；catalog 置空 |
+| source map 变化 | 经 commit 重编译；v1 prefix 扩权记 `policy_scope_expanded`（热路径不静默刷新） |
+| 测试 | `policy-compile` + ACL 矩阵 74 tests |
+| 验证 | 单元：外部 widen 不可见直至 commit；`runtimeAck` digest；全局 degrade Wiki+LKG |
 
 ### WP-I6 — 审计 / 类型 / Admin UI 最小面（1 天）
 

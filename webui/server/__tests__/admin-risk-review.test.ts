@@ -231,7 +231,7 @@ const ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
   risk_officer:
     description: Sensitive finance role
     allow:
@@ -243,7 +243,7 @@ const ACCESS_YAML = `roles:
           names:
             - kx_fact_financial_amount
       tools:
-        - sl_query
+        - lucy_query
   orphan_role:
     description: Never referenced
     allow:
@@ -255,7 +255,7 @@ const ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三

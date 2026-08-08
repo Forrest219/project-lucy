@@ -91,7 +91,7 @@ const ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三
@@ -104,7 +104,7 @@ users:
       tables:
         - dataforai.superstore_orders
       tools:
-        - sl_query
+        - lucy_query
   - id: lisi
     name: 李四
     enabled: false
@@ -431,7 +431,7 @@ describe("Access Governance Gate — Agent endpoints", () => {
           names:
             - kx_fact_financial_amount
       tools:
-        - sl_query
+        - lucy_query
   analyst:
     description: Analyst role
     allow:
@@ -443,7 +443,7 @@ describe("Access Governance Gate — Agent endpoints", () => {
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三

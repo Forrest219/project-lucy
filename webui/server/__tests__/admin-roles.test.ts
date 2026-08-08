@@ -55,7 +55,7 @@ const ANALYST_ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
         - wiki_search
 users:
   - id: zhangsan
@@ -81,7 +81,7 @@ const IN_USE_ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三
@@ -111,7 +111,7 @@ const CUSTOM_KX_ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users: []
 defaults:
   deny_tools:
@@ -292,7 +292,7 @@ describe("GET /api/admin/roles/:roleId", () => {
       { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
     ]);
     expect(res.body.data.effectivePermissions.sources).toHaveLength(1);
-    expect(res.body.data.effectivePermissions.tools).toEqual(expect.arrayContaining(["sl_query", "wiki_search"]));
+    expect(res.body.data.effectivePermissions.tools).toEqual(expect.arrayContaining(["lucy_query", "wiki_search"]));
     await app.close();
   });
 
@@ -695,7 +695,7 @@ describe("PATCH /api/admin/roles/:roleId", () => {
             tableSelectors: [
               { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_returns"] }
             ],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -874,7 +874,7 @@ describe("Access Governance Gate — Role endpoints", () => {
           allow: {
             connections: ["mysql-aliyun"],
             tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -907,7 +907,7 @@ describe("Access Governance Gate — Role endpoints", () => {
           allow: {
             connections: ["mysql-aliyun"],
             tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -927,7 +927,7 @@ describe("Access Governance Gate — Role endpoints", () => {
               { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] },
               { connection: "mysql-aliyun", schema: "dataforai", names: ["kx_fact_financial_amount"] }
             ],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -956,7 +956,7 @@ describe("Access Governance Gate — Role endpoints", () => {
           allow: {
             connections: ["mysql-aliyun"],
             tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -984,7 +984,7 @@ describe("Access Governance Gate — Role endpoints", () => {
               { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] },
               { connection: "mysql-aliyun", schema: "dataforai", names: ["kx_fact_financial_amount"] }
             ],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })

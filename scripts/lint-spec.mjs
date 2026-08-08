@@ -244,9 +244,9 @@ function accessRolePolicy() {
   const tableTouching = new Set(config.defaults?.table_touching_tools ?? ["sl_query", "sl_read_source", "sl_validate", "entity_details"]);
   const sources = loadSourceEntries();
   const topLevelKeys = new Set(["roles", "users", "defaults"]);
-  const roleKeys = new Set(["description", "allow"]);
+  const roleKeys = new Set(["description", "permission_model_version", "allow"]);
   const roleAllowKeys = new Set(["connections", "tableSelectors", "tools"]);
-  const selectorKeys = new Set(["connection", "schema", "names", "prefix"]);
+  const selectorKeys = new Set(["connection", "schema", "names", "prefix", "row_access"]);
   const userKeys = new Set(["id", "name", "note", "enabled", "role", "tokens", "allow"]);
   const userAllowKeys = new Set(["tables", "tools", "connections"]);
   const tokenKeys = new Set(["hash", "label", "created", "expires_at"]);
@@ -265,6 +265,14 @@ function accessRolePolicy() {
     checkAllowedKeys(check, role, roleKeys, `role ${roleId}`);
     const allow = role.allow ?? {};
     checkAllowedKeys(check, allow, roleAllowKeys, `role ${roleId}.allow`);
+    // Spec 98 §7 — generation is explicit; a missing field is only tolerated
+    // inside the AC-P0 migration window (warn), and becomes fail afterwards.
+    const modelVersion = role.permission_model_version;
+    if (modelVersion === undefined) {
+      add(check, "warn", `webui/config/access.yaml: role ${roleId} has no permission_model_version (migration window)`);
+    } else if (modelVersion !== 1 && modelVersion !== 2) {
+      add(check, "fail", `webui/config/access.yaml: role ${roleId} permission_model_version must be 1 or 2`);
+    }
     const tools = Array.isArray(allow.tools) ? allow.tools : [];
     if (tools.includes("*")) add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains *`);
     for (const tool of tools) {
@@ -277,6 +285,20 @@ function accessRolePolicy() {
     }
     for (const selector of selectors) {
       checkAllowedKeys(check, selector, selectorKeys, `role ${roleId}.allow.tableSelectors[]`);
+      const rowAccess = selector.row_access;
+      if (rowAccess !== undefined && rowAccess !== "all" && rowAccess !== "scoped") {
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} selector row_access must be 'all' or 'scoped'`);
+      }
+      // AC-P0 Non-Goal: `scoped` has no runtime row policy in this wave.
+      if (rowAccess === "scoped") {
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} selector row_access 'scoped' is not supported in AC-P0`);
+      }
+      if (modelVersion === 2 && selector.prefix !== undefined) {
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} selector uses prefix, which v2 forbids`);
+      }
+      if (modelVersion === 2 && rowAccess === undefined) {
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} selector is missing row_access, which v2 requires`);
+      }
       const matches = sources.filter((entry) => selectorMatches(selector, entry));
       if (matches.length === 0) add(check, "fail", `webui/config/access.yaml: role ${roleId} selector matches 0 sources`);
     }

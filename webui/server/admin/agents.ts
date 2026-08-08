@@ -6,8 +6,14 @@ import type { FastifyInstance } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
-import { previewRolePermissionsForAdmin, resolveEffectivePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
+import {
+  expandSelectorSourceNames,
+  normalizePermissionModelVersion,
+  previewRolePermissionsForAdmin,
+  resolveEffectivePermissionsForAdmin,
+  type EffectivePermissions
+} from "../proxy/acl.js";
 import {
   evaluateAccessGovernanceGate,
   evaluateGovernanceOverride,
@@ -16,6 +22,40 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
+
+/** Persist template Roles as generation 2 (Spec 98 §7) when Agent Admin materializes them. */
+async function materializeTemplateRoleForWrite(roleId: string, role: YamlRole): Promise<
+  { ok: true; role: YamlRole } | { ok: false; reason: string }
+> {
+  const before = normalizePermissionModelVersion(role);
+  if (!before.ok) return { ok: false, reason: "role.permission_model_version must be 1 or 2" };
+  const selectors = role.allow?.tableSelectors;
+  const nextSelectors: NonNullable<YamlRole["allow"]>["tableSelectors"] = [];
+  if (selectors) {
+    for (const selector of selectors) {
+      if (selector.row_access === "scoped") {
+        return { ok: false, reason: "table selector row_access 'scoped' is not supported in AC-P0" };
+      }
+      if ("prefix" in selector && selector.prefix !== undefined) {
+        const names = await expandSelectorSourceNames(selector);
+        if (names.length === 0) {
+          return { ok: false, reason: `table selector prefix '${selector.prefix}' expands to 0 source` };
+        }
+        nextSelectors.push({ connection: selector.connection, schema: selector.schema, names, row_access: "all" });
+        continue;
+      }
+      nextSelectors.push({ ...selector, row_access: "all" });
+    }
+  }
+  const migrated: YamlRole = {
+    ...role,
+    permission_model_version: 2,
+    allow: role.allow ? { ...role.allow, tableSelectors: selectors ? nextSelectors : role.allow.tableSelectors } : role.allow
+  };
+  const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated });
+  if (!resolved.ok) return { ok: false, reason: resolved.reason };
+  return { ok: true, role: migrated };
+}
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -43,11 +83,12 @@ export interface YamlUser {
 
 export interface YamlRole {
   description?: string;
+  permission_model_version?: 1 | 2;
   allow?: {
     connections?: string[];
     tableSelectors?: Array<
-      | { connection?: string; schema: string; names: string[] }
-      | { connection?: string; schema: string; prefix: string }
+      | { connection?: string; schema: string; names: string[]; row_access?: "all" | "scoped" }
+      | { connection?: string; schema: string; prefix: string; row_access?: "all" | "scoped" }
     >;
     tools?: string[];
   };
@@ -89,7 +130,15 @@ async function writeAccessYaml(
     requestId?: string;
     source?: string;
   }
-): Promise<{ auditId?: number }> {
+): Promise<{ auditId?: number; policyVersion: string; runtimeAck: boolean }> {
+  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
+  let previousRaw: string | undefined;
+  try {
+    previousRaw = await readFile(accessPath, "utf-8");
+  } catch {
+    previousRaw = undefined;
+  }
+
   // Strip derived last_used before writing
   const toWrite: YamlAccessConfig = {
     ...config,
@@ -102,7 +151,14 @@ async function writeAccessYaml(
     }))
   };
   const content = stringify(toWrite, { lineWidth: 0 });
-  return auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
+  const {
+    commitEffectivePolicy,
+    computeAccessConfigDigest,
+    evaluateRuntimeAck
+  } = await import("../proxy/acl.js");
+  const expectedDigest = computeAccessConfigDigest(parse(content) as Parameters<typeof computeAccessConfigDigest>[0]);
+
+  const writeResult = await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
     enabled: true,
     changeType: audit.changeType,
     assetKind: "governance",
@@ -114,6 +170,22 @@ async function writeAccessYaml(
     diff: audit.diff,
     requestId: audit.requestId
   } : undefined);
+
+  let status = await commitEffectivePolicy();
+  let runtimeAck = evaluateRuntimeAck(status, expectedDigest);
+
+  if (!runtimeAck && previousRaw !== undefined) {
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(accessPath, previousRaw, "utf8");
+    status = await commitEffectivePolicy();
+    runtimeAck = false;
+  }
+
+  return {
+    ...writeResult,
+    policyVersion: status.policyVersion,
+    runtimeAck
+  };
 }
 
 function computeVersion(raw: string, mtimeMs: number): string {
@@ -601,14 +673,23 @@ export function registerAgentRoutes(app: FastifyInstance) {
       tokens: [],
       role: resolvedRole.id
     };
+    let rolesForWrite = config.roles;
+    if (resolvedRole.source === "template") {
+      const materialized = await materializeTemplateRoleForWrite(resolvedRole.id, resolvedRole.role);
+      if (!materialized.ok) {
+        return reply.status(400).send({
+          ok: false,
+          error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${materialized.reason}` }
+        });
+      }
+      rolesForWrite = {
+        ...(config.roles ?? {}),
+        [resolvedRole.id]: materialized.role
+      };
+    }
     const newConfig: YamlAccessConfig = {
       ...config,
-      roles: resolvedRole.source === "template"
-        ? {
-            ...(config.roles ?? {}),
-            [resolvedRole.id]: resolvedRole.role
-          }
-        : config.roles,
+      roles: rolesForWrite,
       users: [...config.users, newUser]
     };
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
@@ -658,7 +739,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "agent_create",
       targetId: newUser.id,
@@ -667,7 +748,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
       diff,
       requestId: request.id
     });
-    return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(newUser) } };
+    return {
+      ok: true,
+      data: {
+        written: true,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
+        gate,
+        agent: await userToAgentWithPermissions(newUser)
+      }
+    };
   });
 
   // GET /api/admin/agents/:userId
@@ -749,9 +839,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
         return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
       }
       if (resolvedRole.source === "template") {
+        const materialized = await materializeTemplateRoleForWrite(resolvedRole.id, resolvedRole.role);
+        if (!materialized.ok) {
+          return reply.status(400).send({
+            ok: false,
+            error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${materialized.reason}` }
+          });
+        }
         config.roles = {
           ...(config.roles ?? {}),
-          [resolvedRole.id]: resolvedRole.role
+          [resolvedRole.id]: materialized.role
         };
       }
     }
@@ -827,7 +924,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor());
     }
 
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "agent_patch",
       targetId: updatedUser.id,
@@ -836,7 +933,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
       diff,
       requestId: request.id
     });
-    return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(updatedUser) } };
+    return {
+      ok: true,
+      data: {
+        written: true,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
+        gate,
+        agent: await userToAgentWithPermissions(updatedUser)
+      }
+    };
   });
 
   // DELETE /api/admin/agents/:userId
@@ -903,7 +1009,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     const newConfig: YamlAccessConfig = { ...config, users: config.users.filter((u) => u.id !== request.params.userId) };
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "agent_delete",
       targetId: user.id,
@@ -911,6 +1017,14 @@ export function registerAgentRoutes(app: FastifyInstance) {
       newSummary: { userIds: newConfig.users.map((item) => item.id) },
       requestId: request.id
     });
-    return { ok: true, data: { written: true, gate } };
+    return {
+      ok: true,
+      data: {
+        written: true,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
+        gate
+      }
+    };
   });
 }

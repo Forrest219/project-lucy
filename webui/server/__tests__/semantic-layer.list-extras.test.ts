@@ -20,7 +20,7 @@ const ACCESS_YAML = `roles:
             - superstore_orders
             - superstore_returns
       tools:
-        - sl_query
+        - lucy_query
   readonly:
     description: Readonly role
     allow:
@@ -31,7 +31,7 @@ const ACCESS_YAML = `roles:
           schema: dataforai
           prefix: superstore_
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: alice
     name: Alice

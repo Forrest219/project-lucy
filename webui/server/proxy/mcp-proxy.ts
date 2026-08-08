@@ -4,7 +4,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import path from "node:path";
 import { identifyRequest, setSessionClient, type Identity } from "./identity.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { allowedToolNames, authorizeAndRewrite, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { resolveProjectRoot } from "../project.js";
 import {
@@ -1869,7 +1869,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
   // ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
-    const decision = await aclCheck(identity, toolName, toolArgs);
+    const decision = await authorizeAndRewrite(identity, toolName, toolArgs);
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
       const meta = await auditMeta(identity, errorMsg);
