@@ -4,29 +4,30 @@
 |---|---|
 | 文档名称 | Admin Config Audit Table & Filter Polish Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Auto |
 | 委托人 | zhangxingchen |
-| 基于材料 | 浏览器核查 `/admin/config-audit`（2026-08-05）；`docs/ui-ux-feedback/pages/admin-config-audit.md`；Spec 90 / 91 / 82 |
+| 基于材料 | 浏览器核查 `/admin/config-audit`（2026-08-05）；`docs/ui-ux-feedback/pages/admin-config-audit.md`；Spec 90 / 91 / 82；Spec 122 时间筛选 parity |
 | 适用范围 | `/admin/config-audit` 分页、表格规范、术语、筛选对齐与时间窗口 |
 | 输出位置 | `webui/docs/96-admin-config-audit-table-filter-polish-spec.md` |
 
 | 字段 | 内容 |
 |---|---|
 | Spec 编号 | 96 |
-| 关联工单 | `webui/docs/plans/wo-202608-29-admin-config-audit-table-filter-polish.md` |
+| 关联工单 | `webui/docs/plans/wo-202608-29-admin-config-audit-table-filter-polish.md`；时间默认见 `wo-202608-56` / Spec 122 |
 | 关联页面 | `/admin/config-audit` |
-| 关联台账 | `docs/ui-ux-feedback/pages/admin-config-audit.md`（`UX-ADMIN-CONFIG-AUDIT-002`～`006`） |
-| 上游 Spec | Spec 90（统一写审计范围）；Spec 91（Header）；Spec 82（`pl-data-grid` 轻量） |
+| 关联台账 | `docs/ui-ux-feedback/pages/admin-config-audit.md`（`UX-ADMIN-CONFIG-AUDIT-002`～`006`、`009`） |
+| 上游 Spec | Spec 90（统一写审计范围）；Spec 91（Header）；Spec 82（`pl-data-grid` 轻量）；Spec 122（时间筛选 parity） |
 | 状态 | Implemented |
-| 日期 | 2026-08-05 |
-| 范围 | Wave A 表格/术语/分页；Wave B 时间筛选 API+UI；Wave C 快捷窗口与变更类型动态选项 |
+| 日期 | 2026-08-07 |
+| 范围 | Wave A 表格/术语/分页；Wave B 时间筛选 API+UI；Wave C 快捷窗口与变更类型动态选项；时间筛选对齐发布记录（Spec 122） |
 
 ### Changelog
 
 | 版本 | 变更 |
 |---|---|
+| v1.1 | §5.4 对齐 Spec 122：可见「时间」、近 24 小时、默认整点 |
 | v1.0 | 初稿并落地 Wave A/B/C |
 
 ## 1. 背景
@@ -100,10 +101,12 @@
 顺序：
 
 ```
-[快捷窗口 ▼] [开始时间] — [结束时间] | [资产域 ▼] | [变更类型 ▼] | [目标 ID] | [文件路径] | [来源]
+[时间] [快捷窗口 ▼] [开始时间] — [结束时间] | [资产域 ▼] | [变更类型 ▼] | [目标 ID] | [文件路径] | [来源]
 ```
 
-- 快捷窗口：全部 / 近 7 天 / 近 30 天（Wave C）；选中后写入 `since`/`until`（或仅 `since`）。
+- 可见标签「时间」覆盖快捷窗 + 起止（Spec 122）。
+- 快捷窗口：全部 / 近 24 小时 / 近 7 天 / 近 30 天；选中后写入整点 `since`，清 `until`。
+- 首访无时间参数时默认 `window=24h`（Spec 122；样板 Spec 113 v1.1）。
 - 变更类型：选项随当前 `assetKind` 过滤（Wave C）；无资产域时展示全量已知类型。
 - 导出 CSV 携带与列表相同的筛选参数（含 `since`/`until`/`changeType`）。
 

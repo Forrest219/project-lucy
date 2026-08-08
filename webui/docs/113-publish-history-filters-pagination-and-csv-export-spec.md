@@ -4,29 +4,30 @@
 |---|---|
 | 文档名称 | Publish History Filters, Pagination & CSV Export Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-06 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
-| 基于材料 | 浏览器核查 `/publish/history` vs `/admin/config-audit`；用户批准改善方案（序号/筛选/分页；导出改为明细 CSV，禁止语义资产包 ZIP） |
+| 基于材料 | 浏览器核查 `/publish/history` vs `/admin/config-audit`；用户批准改善方案（序号/筛选/分页；导出改为明细 CSV，禁止语义资产包 ZIP）；`UX-PUBLISH-HISTORY-011`（时间筛选缺可见名称与默认窗口） |
 | 适用范围 | `/publish/history` 列表契约、筛选分页、Header 导出明细；修订 Spec 35 §7.3、Spec 85 Header 导出、Spec 91 §5.1 actions |
 | 输出位置 | `webui/docs/113-publish-history-filters-pagination-and-csv-export-spec.md` |
 
 | 字段 | 内容 |
 |---|---|
 | Spec 编号 | 113 |
-| 关联工单 | `webui/docs/plans/wo-202608-46-publish-history-filters-pagination-and-csv-export.md` |
+| 关联工单 | `webui/docs/plans/wo-202608-46-publish-history-filters-pagination-and-csv-export.md`；`wo-202608-55-publish-history-time-filter-default-24h.md` |
 | 关联页面 | `/publish/history` |
-| 关联台账 | `docs/ui-ux-feedback/pages/publish-history.md`（`UX-PUBLISH-HISTORY-008`～`010`） |
+| 关联台账 | `docs/ui-ux-feedback/pages/publish-history.md`（`UX-PUBLISH-HISTORY-008`～`011`） |
 | 上游 Spec | Spec 35（发布记录 IA）；Spec 85（业务列）；Spec 91（Header）；Spec 96/97（配置审计筛选/导出样板） |
 | 状态 | Implemented |
-| 日期 | 2026-08-06 |
-| 范围 | `#`→序号；筛选栏；分页；Header「导出 CSV」明细；移除语义资产包 ZIP；releases API `total`+筛选+`export.csv` |
+| 日期 | 2026-08-07 |
+| 范围 | `#`→序号；筛选栏；分页；Header「导出 CSV」明细；移除语义资产包 ZIP；releases API `total`+筛选+`export.csv`；时间筛选可见标签 + 默认近 24 小时（整点） |
 
 ### Changelog
 
 | 版本 | 变更 |
 |---|---|
+| v1.1 | 时间筛选补可见标签「时间」；快捷窗口增加「近 24 小时」；首访无时间参数时默认 `window=24h`，`since` 取整点 |
 | v1.0 | 初稿并落地 |
 
 ## 1. 背景
@@ -78,12 +79,15 @@ Protected：`Reindex`、actor、connectionId、sourceName、release id → `notr
 
 | 控件 | Query | 说明 |
 |---|---|---|
-| 时间窗口 | `window=7d\|30d` | 设 since=窗口起点；清 until；切自定义时间删 window |
+| 时间（可见标签） | — | 筛选栏最左侧文案「时间」，覆盖快捷窗口 + 起止 |
+| 时间窗口 | `window=24h\|7d\|30d` | 设 since=窗口起点（整点）；清 until；切自定义时间删 window |
 | 开始/结束 | `since` / `until` | ISO；datetime-local |
 | 触发方式 | `trigger=webui_publish\|webui_manual_reindex` | 空=全部 |
 | Reindex 状态 | `reindexStatus=success\|failed\|running\|not_run` | 对齐 UI 成功/失败/进行中/未执行 |
 | 操作人 | `actor` | 子串匹配（大小写不敏感） |
 | 分页 | `limit` / `offset`（API）；UI 本地 `page` 或 URL 均可，默认 20 | 改筛选重置 page=0 |
+
+**默认：** 首访 URL 无 `window`/`since`/`until` 时，`replace` 写入 `window=24h` 与整点 `since`（`now - 24h`，分钟/秒归零）。用户显式选「全部时间」后不再自动回填。快捷窗口文案：「全部时间 / 近 24 小时 / 近 7 天 / 近 30 天」。
 
 ## 7. API
 
@@ -128,7 +132,7 @@ Response：
 |---|---|
 | PageHeader description | 「查看历史发布批次的变更范围与结果。」 |
 | PageHeader actions | `<a href={exportUrl}>导出 CSV</a>` |
-| 筛选栏 | 新建，见 §6 |
+| 筛选栏 | 新建，见 §6；时间组前可见标签「时间」；默认近 24 小时 |
 | 表头 | `#` → **序号** |
 | 分页 | 对齐 ConfigAudit |
 
@@ -146,8 +150,9 @@ Response：
 4. `GET .../releases` 返回 `total`；筛选/分页正确。
 5. Vitest + `lint:terminology` + `build` 通过。
 6. 台账 `UX-PUBLISH-HISTORY-008`～`010` → `Fixed`（本轮不做浏览器验证）。
+7. 时间筛选有可见「时间」标签；无 URL 时间参数时默认「近 24 小时」且 `since` 为整点；台账 `UX-PUBLISH-HISTORY-011` → `Fixed`。
 
 ## 11. 测试要求
 
-- `publish-history.test.tsx`：序号、筛选、分页、导出 CSV 链接；无 ZIP 按钮。
+- `publish-history.test.tsx`：序号、筛选、分页、导出 CSV 链接；无 ZIP 按钮；时间标签与默认 24h。
 - `api.semantic-assets.reindex.test.ts`（或新增）：releases list `total`/筛选；export.csv 表头与筛选。

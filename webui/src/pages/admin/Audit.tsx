@@ -506,7 +506,7 @@ function parseAuditView(searchParams: URLSearchParams): AuditTab {
 
 function sinceIsoFromHours(hours: WindowHours): string {
   const d = new Date();
-  d.setHours(d.getHours() - hours);
+  d.setHours(d.getHours() - hours, 0, 0, 0);
   return d.toISOString();
 }
 
@@ -1338,10 +1338,17 @@ export function Audit() {
           value={user}
           onChange={(e) => updateParam("user", e.target.value)}
         />
+        <span
+          className="text-sm text-fg-muted self-center whitespace-nowrap"
+          data-testid="audit-time-label"
+        >
+          时间
+        </span>
         <input
           className="pl-input w-44"
           type="datetime-local"
           aria-label="开始时间"
+          data-testid="audit-since"
           value={since}
           onChange={(e) => {
             setSince(e.target.value);
@@ -1353,6 +1360,7 @@ export function Audit() {
           className="pl-input w-44"
           type="datetime-local"
           aria-label="结束时间"
+          data-testid="audit-until"
           value={until}
           onChange={(e) => {
             setUntil(e.target.value);

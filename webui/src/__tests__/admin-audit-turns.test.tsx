@@ -96,13 +96,16 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByText("工具调用数")).toBeInTheDocument();
     expect(screen.getByText("涉及数据表")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Agent 名称或 ID")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-time-label")).toHaveTextContent("时间");
+    const sinceInput = screen.getByTestId("audit-since") as HTMLInputElement;
+    expect(sinceInput.value).toMatch(/:00$/);
     expect(screen.queryByTestId("audit-latency-reference")).not.toBeInTheDocument();
     expect(screen.getByText("Demo Agent (demo_agent)")).toBeInTheDocument();
     expect(screen.getByText("含 1 次慢调用")).toBeInTheDocument();
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
   });
 
-  it("shows primary export on calls tab only", async () => {
+  it("shows primary export on both tabs (Spec 106 header parity)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -117,12 +120,108 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       })
     );
 
-    renderAudit("/admin/audit?tab=calls");
+    renderAudit("/admin/audit?view=calls&range=7d");
 
     expect(await screen.findByTestId("audit-tab-calls")).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByTestId("audit-tab-calls")).toHaveClass("pl-segmented-control-item--active");
-    expect(screen.getByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "false");
     expect(screen.getByTestId("audit-export-csv")).toHaveClass("pl-btn--primary");
+
+    cleanup();
+    renderAudit("/admin/audit?range=7d");
+    expect(await screen.findByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("audit-export-csv")).toHaveClass("pl-btn--primary");
+  });
+
+  it("exposes identity columns, shared filters, and accepts legacy hours URL (Spec 106)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                agents: [{ id: "demo_agent", name: "Demo Agent", enabled: true, tokenCount: 1 }],
+                version: 1,
+                summary: {}
+              }
+            })
+          );
+        }
+        if (url.includes("/api/admin/audit/turns")) {
+          expect(url).toMatch(/hours=168/);
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 1,
+                referenceLatency: { windowHours: 168, p95Ms: 120, totalCallsInWindow: 10, slowCallsInFilter: 0 },
+                entries: [
+                  {
+                    id: "inf_test_1",
+                    source: "inferred",
+                    userId: "demo_agent",
+                    startedAt: "2026-08-04T08:00:00.000Z",
+                    endedAt: "2026-08-04T08:00:16.000Z",
+                    businessCallCount: 1,
+                    questionSummary: "推断：查询",
+                    confidence: "medium",
+                    tools: ["sl_query"],
+                    sources: [{ physicalTable: "dataforai.superstore_orders" }],
+                    turnSpanMs: 16000,
+                    totalCallDurationMs: 100,
+                    maxCallDurationMs: 100,
+                    slowCallCount: 0,
+                    outcomeSummary: { ok: 1, denied: 0, error: 0 }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url.startsWith("/api/admin/audit?")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 1,
+                entries: [
+                  {
+                    id: 42,
+                    ts: "2026-08-04T08:00:00.000Z",
+                    userId: "demo_agent",
+                    tool: "sl_query",
+                    outcome: "ok",
+                    durationMs: 10,
+                    tables: ["dataforai.superstore_orders"],
+                    lucyTurnId: "inf_test_1",
+                    requestId: 1
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, data: { entries: [], total: 0 } }));
+      })
+    );
+
+    renderAudit("/admin/audit?hours=168");
+    expect(await screen.findByTestId("audit-shared-filters")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-key-search")).toBeInTheDocument();
+    const turnsTable = await screen.findByTestId("audit-turns-table");
+    expect(screen.getByRole("columnheader", { name: "问询 ID" })).toBeInTheDocument();
+    expect(turnsTable.querySelector("th.w-14.whitespace-nowrap")).not.toBeNull();
+    expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("inf_test_1");
+    expect(screen.getByTestId("audit-export-csv")).toBeInTheDocument();
+
+    cleanup();
+    renderAudit("/admin/audit?tab=calls&hours=168");
+    expect(await screen.findByTestId("audit-calls-table")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "事件 ID" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
+    expect(screen.getByTestId("audit-event-id-42")).toHaveTextContent("42");
+    expect(screen.getByTestId("audit-call-turn-id-42")).toHaveTextContent("inf_test_1");
   });
 
   it("shows page-scoped summary when slowOnly is enabled on calls tab", async () => {

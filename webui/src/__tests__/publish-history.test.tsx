@@ -122,6 +122,7 @@ describe("PublishHistory", () => {
   it("renders filter bar, 序号 column, pagination, and business columns", async () => {
     renderHistory();
     expect(await screen.findByTestId("publish-history-filterbar")).toBeInTheDocument();
+    expect(screen.getByTestId("publish-history-time-label")).toHaveTextContent("时间");
     const table = await screen.findByTestId("publish-history-table");
     expect(table).toHaveClass("pl-data-grid");
     expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
@@ -151,6 +152,62 @@ describe("PublishHistory", () => {
     expect(screen.getByRole("button", { name: "查看 Diff" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看错误" })).toBeInTheDocument();
     expect(screen.queryAllByRole("button", { name: "下载当前快照" })).toHaveLength(0);
+  });
+
+  it("defaults time filter to 近 24 小时 with hour-rounded since", async () => {
+    const fixedNow = new Date("2026-08-07T01:45:30.000+08:00");
+    vi.spyOn(Date, "now").mockReturnValue(fixedNow.getTime());
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (isReleasesListUrl(url)) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { records: [makePublishRecord()], total: 1 }
+          })
+        );
+      }
+      return new Response(
+        JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
+        { status: 404 }
+      );
+    });
+    vi.unstubAllGlobals();
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHistory();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("publish-history-window")).toHaveValue("24h");
+    });
+    expect(screen.getByTestId("publish-history-time-label")).toHaveTextContent("时间");
+
+    const sinceInput = screen.getByTestId("publish-history-since") as HTMLInputElement;
+    expect(sinceInput.value).toMatch(/:00$/);
+    expect(sinceInput.value).not.toBe("");
+
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes("since="))).toBe(true);
+    });
+
+    const sinceQuery = fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .find((url) => url.includes("since="));
+    expect(sinceQuery).toBeTruthy();
+    const sinceParam = new URL(sinceQuery!, "http://localhost").searchParams.get("since");
+    expect(sinceParam).toBeTruthy();
+    const sinceDate = new Date(sinceParam!);
+    expect(sinceDate.getMinutes()).toBe(0);
+    expect(sinceDate.getSeconds()).toBe(0);
+    expect(sinceDate.getMilliseconds()).toBe(0);
+
+    fireEvent.change(screen.getByTestId("publish-history-window"), { target: { value: "" } });
+    await waitFor(() => {
+      expect(screen.getByTestId("publish-history-window")).toHaveValue("");
+      expect(screen.getByTestId("publish-history-since")).toHaveValue("");
+    });
   });
 
   it("requests filtered releases when trigger filter changes", async () => {

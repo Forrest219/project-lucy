@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
@@ -17,6 +17,7 @@ import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import type { ConfigAuditEntry, ConfigAuditResponse } from "../../lib/types";
 
 const PAGE_SIZE = 20;
+const DEFAULT_TIME_WINDOW = "24h";
 
 type AssetKind = ConfigAuditAssetKind;
 
@@ -43,8 +44,25 @@ function fromDatetimeLocalValue(local: string): string {
   return date.toISOString();
 }
 
+function floorToHourIso(date: Date): string {
+  const d = new Date(date);
+  d.setMinutes(0, 0, 0);
+  return d.toISOString();
+}
+
+function sinceHoursAgoRounded(hours: number): string {
+  return floorToHourIso(new Date(Date.now() - hours * 60 * 60 * 1000));
+}
+
 function sinceDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  return floorToHourIso(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+}
+
+function sinceForWindowPreset(preset: string): string {
+  if (preset === "24h") return sinceHoursAgoRounded(24);
+  if (preset === "7d") return sinceDaysAgo(7);
+  if (preset === "30d") return sinceDaysAgo(30);
+  return "";
 }
 
 /**
@@ -129,6 +147,7 @@ function ChangeRow({ entry, index }: { entry: ConfigAuditEntry; index: number })
 export function ConfigAudit() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
+  const didInitDefaultWindow = useRef(false);
   const targetId = searchParams.get("targetId") ?? "";
   const filePath = searchParams.get("filePath") ?? "";
   const assetKind = searchParams.get("assetKind") ?? "";
@@ -137,6 +156,18 @@ export function ConfigAudit() {
   const since = searchParams.get("since") ?? "";
   const until = searchParams.get("until") ?? "";
   const windowPreset = searchParams.get("window") ?? "";
+
+  useEffect(() => {
+    if (didInitDefaultWindow.current) return;
+    didInitDefaultWindow.current = true;
+    if (searchParams.has("window") || searchParams.has("since") || searchParams.has("until")) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.set("window", DEFAULT_TIME_WINDOW);
+    next.set("since", sinceForWindowPreset(DEFAULT_TIME_WINDOW));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -152,9 +183,8 @@ export function ConfigAudit() {
       next.delete("since");
       next.delete("until");
     } else {
-      const days = preset === "7d" ? 7 : 30;
       next.set("window", preset);
-      next.set("since", sinceDaysAgo(days));
+      next.set("since", sinceForWindowPreset(preset));
       next.delete("until");
     }
     setSearchParams(next);
@@ -217,6 +247,12 @@ export function ConfigAudit() {
       />
 
       <div className="pl-admin-filterbar" data-testid="config-audit-filterbar">
+        <span
+          className="text-sm text-fg-muted self-center whitespace-nowrap"
+          data-testid="config-audit-time-label"
+        >
+          时间
+        </span>
         <select
           className="pl-input w-32"
           value={windowPreset}
@@ -225,6 +261,7 @@ export function ConfigAudit() {
           data-testid="config-audit-window"
         >
           <option value="">全部时间</option>
+          <option value="24h">近 24 小时</option>
           <option value="7d">近 7 天</option>
           <option value="30d">近 30 天</option>
         </select>

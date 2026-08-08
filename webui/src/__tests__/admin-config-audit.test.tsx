@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfigAudit } from "../pages/admin/ConfigAudit";
@@ -114,6 +114,34 @@ describe("ConfigAudit Spec 96 polish", () => {
     const exportLink = screen.getByRole("link", { name: "导出 CSV" });
     expect(exportLink.getAttribute("href")).toContain("since=");
     expect(exportLink.getAttribute("href")).toContain("assetKind=semantic");
+  });
+
+  it("defaults time filter to 近 24 小时 with visible label and hour-rounded since", async () => {
+    const fixedNow = new Date("2026-08-07T01:45:30.000+08:00");
+    vi.spyOn(Date, "now").mockReturnValue(fixedNow.getTime());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [] } }))
+      )
+    );
+
+    renderConfigAudit();
+    await screen.findByRole("heading", { name: "配置审计" });
+
+    expect(screen.getByTestId("config-audit-time-label")).toHaveTextContent("时间");
+    await waitFor(() => {
+      expect(screen.getByTestId("config-audit-window")).toHaveValue("24h");
+    });
+    const sinceInput = screen.getByTestId("config-audit-since") as HTMLInputElement;
+    expect(sinceInput.value).toMatch(/:00$/);
+    expect(sinceInput.value).not.toBe("");
+
+    fireEvent.change(screen.getByTestId("config-audit-window"), { target: { value: "" } });
+    await waitFor(() => {
+      expect(screen.getByTestId("config-audit-window")).toHaveValue("");
+      expect(screen.getByTestId("config-audit-since")).toHaveValue("");
+    });
   });
 });
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
@@ -22,6 +22,7 @@ import type {
 } from "../../lib/types";
 
 const SCOPE_PREVIEW_LIMIT = 2;
+const DEFAULT_TIME_WINDOW = "24h";
 
 function reindexStatusClass(label: ReindexLabel): string {
   switch (label) {
@@ -60,8 +61,25 @@ function fromDatetimeLocalValue(local: string): string {
   return date.toISOString();
 }
 
+function floorToHourIso(date: Date): string {
+  const d = new Date(date);
+  d.setMinutes(0, 0, 0);
+  return d.toISOString();
+}
+
+function sinceHoursAgoRounded(hours: number): string {
+  return floorToHourIso(new Date(Date.now() - hours * 60 * 60 * 1000));
+}
+
 function sinceDaysAgo(days: number): string {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  return floorToHourIso(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+}
+
+function sinceForWindowPreset(preset: string): string {
+  if (preset === "24h") return sinceHoursAgoRounded(24);
+  if (preset === "7d") return sinceDaysAgo(7);
+  if (preset === "30d") return sinceDaysAgo(30);
+  return "";
 }
 
 function previewList(items: string[], limit = SCOPE_PREVIEW_LIMIT): { shown: string[]; more: number } {
@@ -303,6 +321,7 @@ export function PublishHistory() {
   const [page, setPage] = useState(0);
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
+  const didInitDefaultWindow = useRef(false);
 
   const windowPreset = searchParams.get("window") ?? "";
   const since = searchParams.get("since") ?? "";
@@ -310,6 +329,18 @@ export function PublishHistory() {
   const trigger = searchParams.get("trigger") ?? "";
   const reindexStatus = searchParams.get("reindexStatus") ?? "";
   const actor = searchParams.get("actor") ?? "";
+
+  useEffect(() => {
+    if (didInitDefaultWindow.current) return;
+    didInitDefaultWindow.current = true;
+    if (searchParams.has("window") || searchParams.has("since") || searchParams.has("until")) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.set("window", DEFAULT_TIME_WINDOW);
+    next.set("since", sinceForWindowPreset(DEFAULT_TIME_WINDOW));
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -326,9 +357,8 @@ export function PublishHistory() {
       next.delete("since");
       next.delete("until");
     } else {
-      const days = preset === "7d" ? 7 : 30;
       next.set("window", preset);
-      next.set("since", sinceDaysAgo(days));
+      next.set("since", sinceForWindowPreset(preset));
       next.delete("until");
     }
     setSearchParams(next);
@@ -395,6 +425,12 @@ export function PublishHistory() {
       />
 
       <div className="pl-admin-filterbar" data-testid="publish-history-filterbar">
+        <span
+          className="text-sm text-fg-muted self-center whitespace-nowrap"
+          data-testid="publish-history-time-label"
+        >
+          时间
+        </span>
         <select
           className="pl-input w-32"
           value={windowPreset}
@@ -403,6 +439,7 @@ export function PublishHistory() {
           data-testid="publish-history-window"
         >
           <option value="">全部时间</option>
+          <option value="24h">近 24 小时</option>
           <option value="7d">近 7 天</option>
           <option value="30d">近 30 天</option>
         </select>
