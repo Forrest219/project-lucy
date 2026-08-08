@@ -153,14 +153,20 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-202608-40-connection-live-catalog-discovery.md](wo-202608-40-connection-live-catalog-discovery.md) | 202608-40 | Spec 107：连接库内目录发现 — 库内表数 + Add Schema 可选（Implemented） |
 | [wo-202608-41-connection-card-connectivity-health-summary.md](wo-202608-41-connection-card-connectivity-health-summary.md) | 202608-41 | Spec 108：连接卡右侧连通健康摘要 + 进页探测（Implemented） |
 | [wo-202608-42-wiki-directory-rename.md](wo-202608-42-wiki-directory-rename.md) | 202608-42 | Spec 109：`/wiki` 目录重命名（Implemented） |
-| [wo-202608-51-wiki-document-delete.md](wo-202608-51-wiki-document-delete.md) | 202608-51 | Spec 118：`/wiki` 删除 Markdown 文档（Implemented） |
-| [wo-202608-53-global-toast-placement-away-from-header-actions.md](wo-202608-53-global-toast-placement-away-from-header-actions.md) | 202608-53 | Spec 120：全局 Toast `bottom-right`，避让 PageHeader actions（Implemented） |
 | [wo-202608-45-publish-workbench-flow-and-gate-ia.md](wo-202608-45-publish-workbench-flow-and-gate-ia.md) | 202608-45 | Spec 112：发布工作台流程 / 门禁 IA（Implemented） |
 | [wo-202608-43-table-editor-validation-issue-disclosure.md](wo-202608-43-table-editor-validation-issue-disclosure.md) | 202608-43 | Spec 110：表编辑器校验失败披露 issues（Implemented） |
 | [wo-202608-46-publish-history-filters-pagination-and-csv-export.md](wo-202608-46-publish-history-filters-pagination-and-csv-export.md) | 202608-46 | Spec 113：发布记录筛选/分页/明细 CSV（Implemented） |
+| [wo-202608-55-publish-history-time-filter-default-24h.md](wo-202608-55-publish-history-time-filter-default-24h.md) | 202608-55 | Spec 113 v1.1：发布记录时间筛选可见标签 + 默认近 24 小时整点（Implemented） |
+| [wo-202608-56-list-history-time-filter-parity.md](wo-202608-56-list-history-time-filter-parity.md) | 202608-56 | Spec 122：配置审计时间筛选对齐发布记录；访问日志「时间」标签 + since 整点（Implemented） |
 | [wo-202608-47-table-editor-overlay-safe-yaml-import.md](wo-202608-47-table-editor-overlay-safe-yaml-import.md) | 202608-47 | Spec 114：表编辑器 overlay-safe YAML 导入（Implemented） |
 | [wo-202608-48-publish-workbench-validation-disclosure-and-junk-scrub.md](wo-202608-48-publish-workbench-validation-disclosure-and-junk-scrub.md) | 202608-48 | Spec 115：工作台校验披露 + semantic-layer junk scrub（Implemented） |
 | [wo-202608-44-help-center-search-and-connection-kpi-glossary.md](wo-202608-44-help-center-search-and-connection-kpi-glossary.md) | 202608-44 | Spec 111：Help 手册搜索 + 连接概览 KPI 术语可搜（Implemented） |
+| [wo-202608-50-connection-schema-remove.md](wo-202608-50-connection-schema-remove.md) | 202608-50 | Spec 117：连接 Schema 移除 — `removeSchema` API + `RemoveSchemaDrawer` + Overview 入口（Implemented） |
+| [wo-202608-51-wiki-document-delete.md](wo-202608-51-wiki-document-delete.md) | 202608-51 | Spec 118：`/wiki` 删除 Markdown 文档（Implemented） |
+| [wo-202608-52-publish-workbench-queue-gate-ia.md](wo-202608-52-publish-workbench-queue-gate-ia.md) | 202608-52 | Spec 119：发布工作台队列–门禁双栏 + 变更详情 Drawer（Implemented） |
+| [wo-202608-53-global-toast-placement-away-from-header-actions.md](wo-202608-53-global-toast-placement-away-from-header-actions.md) | 202608-53 | Spec 120：全局 Toast `bottom-right`，避让 PageHeader actions（Implemented） |
+| [wo-202608-54-publish-workbench-cta-confirm.md](wo-202608-54-publish-workbench-cta-confirm.md) | 202608-54 | Spec 121：发布工作台「发布并重建索引」确认侧栏（非上传）（Implemented） |
+| [wo-202608-57-publish-workbench-activation-ia.md](wo-202608-57-publish-workbench-activation-ia.md) | 202608-57 | Spec 123：发布工作台语义生效台（去上传/导出；同步索引并生效）（Implemented） |
 
 ### 202608 Governance & Observability — 并行启动建议
 

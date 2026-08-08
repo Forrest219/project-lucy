@@ -98,14 +98,19 @@
 | [107-connection-live-catalog-discovery-spec.md](107-connection-live-catalog-discovery-spec.md) | `/connections` Owner 按需只读库内目录：库内表数列、Add Schema 可选、live-schemas API（Implemented v1.0；修订 Spec 21 边界） | 产品 / UX / API / Frontend |
 | [108-connection-card-connectivity-health-summary-spec.md](108-connection-card-connectivity-health-summary-spec.md) | `/connections` 连接卡右侧连通健康摘要：进页并行探测、延迟 ms、Drawer 同源（Implemented v1.0；修订 Spec 44 入口） | 产品 / UX / Frontend |
 | [109-wiki-directory-rename-spec.md](109-wiki-directory-rename-spec.md) | `/wiki` 目录重命名：同父级改名、前缀批量改写、预检/提交 API（Implemented v1.1；承接 UX-WIKI-044） | 产品 / UX / IA / API / Frontend |
-| [118-wiki-document-delete-spec.md](118-wiki-document-delete-spec.md) | `/wiki` 删除 Markdown 文档：阅读态 Header 入口、确认对话框、`DELETE /api/wiki/:key`（Implemented v1.1；`UX-WIKI-045`） | 产品 / UX / API / Frontend |
 | [112-publish-workbench-flow-and-gate-ia-spec.md](112-publish-workbench-flow-and-gate-ia-spec.md) | `/publish/workbench` 发布流程可视、三栏角色、Header 收口、发布门禁（Implemented v1.0；修订 Spec 35 §6.1–6.3） | 产品 / UX / IA / Frontend |
 | [110-table-editor-validation-issue-disclosure-spec.md](110-table-editor-validation-issue-disclosure-spec.md) | 表编辑器「校验」失败披露 `issues`：可读问题列表、Toast 首因、弱化 Exit Code（Implemented v1.0；`UX-CATALOG-029`） | 产品 / UX / Frontend |
-| [113-publish-history-filters-pagination-and-csv-export-spec.md](113-publish-history-filters-pagination-and-csv-export-spec.md) | `/publish/history` 序号/筛选/分页；Header 导出明细 CSV（取代 ZIP）（Implemented v1.0） | 产品 / UX / API / Frontend |
+| [113-publish-history-filters-pagination-and-csv-export-spec.md](113-publish-history-filters-pagination-and-csv-export-spec.md) | `/publish/history` 序号/筛选/分页；Header 导出明细 CSV（取代 ZIP）；时间筛选可见标签 + 默认近 24 小时（Implemented v1.1） | 产品 / UX / API / Frontend |
 | [114-table-editor-overlay-safe-yaml-import-spec.md](114-table-editor-overlay-safe-yaml-import-spec.md) | 表编辑器导入 overlay 不得冲掉 Schema Manifest 字段；抽屉引导发布工作台（Implemented v1.0；`UX-CATALOG-030`） | 产品 / UX / API / Frontend |
 | [115-publish-workbench-validation-disclosure-and-junk-scrub-spec.md](115-publish-workbench-validation-disclosure-and-junk-scrub-spec.md) | 发布工作台校验 issues 披露；`._*` scrub；上传拒收 junk（Implemented v1.0；`UX-PUBLISH-WORKBENCH-004`） | 产品 / UX / API / Frontend |
 | [116-enabled-tables-orphan-drift-save-spec.md](116-enabled-tables-orphan-drift-save-spec.md) | 启用表无效启用漂移：保存差分门禁 + warnings；UI 暴露与一键移出（Implemented v1.0；`UX-CONNECTIONS-031`） | 产品 / UX / API / Frontend |
+| [117-connection-schema-remove-spec.md](117-connection-schema-remove-spec.md) | 连接 Schema 移除：从 `ktx.yaml` 卸载 Schema 配置 + prune `enabled_tables`；dryRun 影响面；可选删 Manifest/overlay（Implemented v1.0；`UX-CONNECTIONS-034`） | 产品 / UX / API / Frontend |
+| [118-wiki-document-delete-spec.md](118-wiki-document-delete-spec.md) | `/wiki` 删除 Markdown 文档：阅读态 Header 入口、确认对话框、`DELETE /api/wiki/:key`（Implemented v1.1；`UX-WIKI-045`） | 产品 / UX / API / Frontend |
+| [119-publish-workbench-queue-gate-ia-spec.md](119-publish-workbench-queue-gate-ia-spec.md) | `/publish/workbench` 队列–门禁双栏；变更详情按需 Drawer（Implemented v1.0；修订 Spec 112 §5.3；`UX-PUBLISH-WORKBENCH-005`） | 产品 / UX / IA / Frontend |
 | [120-global-toast-placement-away-from-header-actions-spec.md](120-global-toast-placement-away-from-header-actions-spec.md) | 全局 Toast 改 `bottom-right`，避让 PageHeader actions（Implemented v1.0；`UX-GLOBAL-SHELL-009`） | 产品 / UX / Design System / Frontend |
+| [121-publish-workbench-cta-confirm-spec.md](121-publish-workbench-cta-confirm-spec.md) | `/publish/workbench` Header「发布并重建索引」确认侧栏（非上传）；路径与「上传语义资产」分离（Implemented v1.0；`UX-PUBLISH-WORKBENCH-006`） | 产品 / UX / IA / Frontend |
+| [122-list-history-time-filter-parity-spec.md](122-list-history-time-filter-parity-spec.md) | 配置审计时间筛选对齐发布记录；访问日志补「时间」标签 + since 整点（Implemented v1.0；`UX-ADMIN-CONFIG-AUDIT-009`、`UX-ADMIN-AUDIT-026`） | 产品 / UX / Frontend |
+| [123-publish-workbench-activation-ia-spec.md](123-publish-workbench-activation-ia-spec.md) | `/publish/workbench` 语义生效台：去上传/导出；「生效准备」；同步索引并生效；更多全量重建（Implemented v1.0；修订 Spec 35；`UX-PUBLISH-WORKBENCH-007`） | 产品 / UX / IA / Frontend |
 | [111-help-center-search-and-connection-kpi-glossary-spec.md](111-help-center-search-and-connection-kpi-glossary-spec.md) | `/help` 手册关键词搜索 + 连接概览「已发现表数」等 KPI 术语写入手册并可搜索命中（Planned → Implemented） | 产品 / UX / Frontend / Docs |
 
 ## 与原 README 的关键校正
