@@ -572,3 +572,26 @@ Reported: 2026-08-05
 
 ### Notes
 同 Spec 102 / wo-202608-35。本轮不做浏览器验证，状态保持 `Fixed`。
+
+## UX-OVERVIEW-019: 语义覆盖 / 待补语义分母含未启用 Manifest 表
+
+Status: Fixed
+Route: /overview
+Area: 待处理事项 / 质量快照语义覆盖
+Severity: P1
+Reported: 2026-08-05
+
+### Feedback
+启用表范围仅开放 1 张表，但系统概览仍显示「语义覆盖 1/3」「2 张表待补语义」，把未启用的 Manifest 表算进运维待办，与「启用表范围控制进入语义层」矛盾。
+
+### Expected
+语义覆盖 / 待补语义只统计 `enabled_tables` ∩ 本地 Manifest 的表。仅启用 1 张且该表 `done` 时，应为覆盖 1/1、无「待补语义」项。
+
+### Browser Check
+1. Ensure `/connections/enabled-tables` shows 已选 1/3（仅 `superstore_orders`）。
+2. Open `/overview`.
+3. Verify 质量快照语义覆盖为 `1/1`（或等价 100%），且待处理事项无「张表待补语义」。
+4. （可选）启用一张 partial 表后，确认待补语义 = 1。
+
+### Notes
+Spec 104 / `wo-202608-37` 已落地（本轮不做浏览器验证，待复核后升 Verified）。手册 FAQ 与 Catalog 默认启用范围同步。

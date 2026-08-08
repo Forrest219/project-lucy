@@ -138,3 +138,82 @@ Reported: 2026-08-06
 
 ### Notes
 Spec 115 / `wo-202608-48` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。延伸跨页面主题 `validation failure disclosure`；新增 `semantic-layer junk scrub`。
+
+## UX-PUBLISH-WORKBENCH-005: 三栏顺序与工作台心智矛盾
+
+Status: Fixed
+Route: `/publish/workbench`
+Area: Queue–gate dual-panel IA（修订 Spec 112 三栏）
+Severity: P1
+Reported: 2026-08-07
+
+### Feedback
+用户反馈「待发布变更、变更详情、发布门禁」顺序与常识矛盾：对「发布工作台」的第一视角是待办 → 选择 → 批准；当前把最大栏留给 Diff（代码审阅范式），批准面挤在最右。
+
+### Evidence
+- Playwright DOM（1440×900，`:55176`）：三子节点 LTR 为待发布变更 (~26%) | 变更详情 (~43%) | 发布门禁 (~31%)。
+- 选中 Schema Manifest 时中栏空 Diff「该文件暂无可展示的补丁内容。」仍占主舞台。
+- 门禁步骤「审阅 → 校验 → 发布」与栏叙事「列表 → Diff → 门禁」不一致。
+- 过程截图：`inbox/publish-workbench-ia-check/workbench-viewport.png`（tmp；非台账资产强制路径）。
+
+### Expected
+首屏双栏：**待发布变更 | 发布门禁**（门禁为主工作面）；**变更详情**按需 Drawer；进页不自动打开 Diff；空 Diff 不得占默认主舞台。不做批量分文件发布。
+
+### Browser Check
+1. Open `/publish/workbench` with ≥1 pending file at ≥1280px。
+2. Confirm layout children are pending panel + gate panel only；no resident center Diff column。
+3. Confirm Diff /「变更详情」仅在点击文件后出现于 Drawer；进页默认无 Drawer。
+4. Confirm gate steps + validate summary + Header CTA 仍可用。
+
+### Notes
+Spec 119 / `wo-202608-52` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。主题：`publish workbench queue-gate ia`（取代 Spec 112 的 `publish workbench three-panel ia` 布局契约）。
+
+## UX-PUBLISH-WORKBENCH-006: Header「发布并重建索引」误开上传侧栏
+
+Status: Fixed
+Route: `/publish/workbench`
+Area: Header CTA vs upload Drawer path separation
+Severity: P1
+Reported: 2026-08-07
+
+### Feedback
+门禁 ready 时点击「发布并重建索引」，出现「发布语义资产」上传侧栏（选文件 / 拖入 YAML），与用户预期「确认发布当前待发布变更并重建索引」不一致。
+
+### Evidence
+- Playwright：`workbench-publish-and-reindex` gate=ready → `semantic-asset-publish-drawer`，标题含「发布语义资产」，文案含「选择文件 / 拖入」。
+- 代码：`PublishWorkbench` 中上传与发布 CTA 均 `setPublishOpen(true)`。
+
+### Expected
+- 「发布并重建索引」→ 确认侧栏（待发布摘要）→ reindex；不得打开上传 Drawer。
+- 「上传语义资产」→ 仍打开「发布语义资产」上传侧栏。
+
+### Browser Check
+1. Open `/publish/workbench` with pending files；wait gate ready.
+2. Click Header「发布并重建索引」→ confirm drawer titled「确认发布并重建索引」；no file picker；no `semantic-asset-publish-drawer`.
+3. Confirm → reindex Toast；drawer closes.
+4. Click「上传语义资产」→ upload drawer「发布语义资产」仍可用。
+
+### Notes
+Spec 121 / `wo-202608-54` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。主题：`publish cta vs upload path separation`。
+
+## UX-PUBLISH-WORKBENCH-007: 工作台定位为语义生效台（去上传/导出）
+
+Status: Fixed
+Route: `/publish/workbench`
+Area: Activation IA — sync index, not upload/export
+Severity: P1
+Reported: 2026-08-07
+
+### Feedback
+页面混入「上传语义资产」「导出当前快照」与「发布门禁 / 发布并重建索引」叙事，掩盖真实主路径：磁盘语义已更新后校验并同步 KTX 索引使 Agent 检索生效。用户否定 Spec 35 本页一站式上传。
+
+### Expected
+- 左栏「本次将同步的变更」+ 整批同步说明；右栏「生效准备」。
+- Header：「校验变更」+「同步索引并生效」（空态「同步索引」）；「更多」仅「全量重建索引」且 `force:true`。
+- 本页无上传、无导出 UI；确认侧栏「确认同步索引并生效」。
+
+### Browser Check
+（本轮按用户约束不做浏览器验证；升 Verified 时再跑。）
+
+### Notes
+Spec 123 / `wo-202608-57` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。主题：`publish workbench activation ia`。

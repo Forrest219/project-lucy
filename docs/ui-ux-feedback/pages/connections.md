@@ -872,3 +872,29 @@ Reported: 2026-08-06
 
 ### Notes
 2026-08-06：`refresh-live-catalog-*` 从 `pl-btn--ghost` 改为 `pl-btn--secondary`；M29/M44 单测断言三按钮同级。后续 icon 化仍见 UX-CONNECTIONS-024 / Spec 101。
+
+## UX-CONNECTIONS-034: 连接概览只能添加 Schema、无法移除
+
+Status: Fixed
+Route: `/connections`
+Area: Connection card schema table / 操作 · 移除 Schema
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+浏览器核查 `:55176/connections`：每个连接仅有「+ 添加 Schema」，Schema 行无删除/移除入口；后端亦无对称 API。误加或收缩 Schema 时只能手改 `ktx.yaml`，且若只删 `schemas` 而残留 `enabled_tables` 前缀，Overview 仍会推导显示该 Schema。移除后本地 Manifest、overlay、业务 Wiki 的处理边界此前未定义。
+
+### Expected
+1. Schema 行提供「移除 Schema」（危险次要 row action，非 Primary）。
+2. dryRun 预览：将 prune 的已启用表、Manifest/overlay/Wiki 影响；Wiki **只告警不删**。
+3. 确认写入必须同时改 `schemas` 与前缀 `enabled_tables`；可选勾选删 Manifest/overlay（默认关）。
+4. 不触碰物理库 Schema/表。
+
+### Browser Check
+1. Open `/connections`；任选已配置 Schema 行，确认有「移除 Schema」。
+2. 打开抽屉：见已启用表列表、Manifest/overlay/Wiki 摘要、diff；两可选删除默认未勾选。
+3. 确认后该 Schema 从卡片消失；未勾选时磁盘 Manifest 仍在。
+4. 勾选删除 Manifest/overlay 时对应文件消失；Wiki 文件仍在。
+
+### Notes
+主题：`connection schema remove lifecycle`。Spec 117 / `wo-202608-50`。交叉：`UX-CONNECTIONS-031`（无效启用）方向相反；本操作为用户显式卸载。本轮不做浏览器验证，结束后只做 code review；状态 `Fixed`，待浏览器复核升 `Verified`。

@@ -377,3 +377,179 @@ Reported: 2026-08-05
 - Spec: `webui/docs/99-mcp-playground-acl-decision-visibility-spec.md`
 - Plan: `webui/docs/plans/wo-202608-32-mcp-playground-acl-decision-visibility.md`
 - Fix（2026-08-05）: `DecisionReasonCell` 双行展示 + 「在调试台复现」深链。本轮不做浏览器验证，状态保持 `Fixed`。
+
+## UX-ADMIN-AUDIT-019: 无法区分 MCP 调试台受控试调与 Agent 接入调用
+
+Status: Fixed
+Route: /admin/audit?tab=calls
+Area: 调用流水调用来源筛选
+Severity: P2
+Reported: 2026-08-05
+
+### Feedback
+受控试调会真实打本机 Proxy 并写入访问日志，但与 Agent 客户端调用混在一起，无法筛选或一眼识别。
+
+### Expected
+- 受控试调带 `lucy_platform=mcp-playground`。
+- 调用流水提供「调用来源」：全部 / MCP 调试台受控试调 / Agent 接入调用。
+- 受控试调行展示「受控试调」badge；筛选 playground 时自动含协议调用。
+
+### Browser Check
+1. Run live-smoke from MCP 调试台.
+2. Open `/admin/audit?tab=calls&callSource=playground` and confirm the row appears with badge.
+3. Switch to `callSource=agent` and confirm playground row is excluded.
+
+### Notes
+- Spec 99 v1.2 §7.3；术语表 §4.7 Call origin filter / §4.8 Call origin.
+- Fix（2026-08-05）: live-smoke `x-lucy-platform` + `callSource` API/UI。本轮不做浏览器验证，状态保持 `Fixed`。
+
+## UX-ADMIN-AUDIT-020: 双 Tab Header 导出槽位不一致
+
+Status: Fixed
+Route: /admin/audit
+Area: PageHeader actions
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+问询记录与调用流水右上角布局不同：仅调用流水显示「导出 CSV」，切 Tab 时 Header 跳动。
+
+### Expected
+两 Tab Header 槽位同构：统计时间 + 时间窗 + 导出 CSV（导出调用流水，tooltip 说明）。
+
+### Browser Check
+1. Open turns and calls tabs.
+2. Confirm both show primary「导出 CSV」in the same Header slot.
+
+### Notes
+Spec 106 / `wo-202608-39`（本轮不做浏览器验证，结束后只做 code review）。
+
+## UX-ADMIN-AUDIT-021: 问询「序号」列过窄换行
+
+Status: Fixed
+Route: /admin/audit（问询记录）
+Area: Turn list 序号 column
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+`w-12` 导致表头「序号」拆成两行，三位数不足。
+
+### Expected
+`whitespace-nowrap` + 宽度至少容纳 `999`（如 `w-14`）。
+
+### Browser Check
+1. Confirm 序号 header is single line; column fits 999.
+
+### Notes
+Spec 106 / `wo-202608-39`。
+
+## UX-ADMIN-AUDIT-022: 调用流水缺首列序号
+
+Status: Fixed
+Route: /admin/audit?view=calls
+Area: Call log columns
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+调用流水表无序号列，与问询记录不一致。
+
+### Expected
+首列「序号」（分页行号）。
+
+### Browser Check
+1. Calls table first column is 序号.
+
+### Notes
+Spec 106 / `wo-202608-39`。
+
+## UX-ADMIN-AUDIT-023: 主表缺少可关联 Key / ID
+
+Status: Fixed
+Route: /admin/audit
+Area: Identity columns
+Severity: P1
+Reported: 2026-08-06
+
+### Feedback
+问询/调用主表无问询 ID、事件 ID，无法可信关联取证。
+
+### Expected
+问询表：问询 ID；调用表：事件 ID + 问询 ID；可复制；问询 ID 可打开 Drawer。
+
+### Browser Check
+1. Confirm identity columns visible and copyable.
+2. Click 问询 ID on a call row opens turn drawer when present.
+
+### Notes
+Spec 106 / `wo-202608-39`。
+
+## UX-ADMIN-AUDIT-024: 筛选器不齐备且双 Tab 不对齐
+
+Status: Fixed
+Route: /admin/audit
+Area: Filter bar
+Severity: P1
+Reported: 2026-08-06
+
+### Feedback
+问询缺日期/状态/Key；调用偏实现字段；与用户体验排查相关的筛选不足。
+
+### Expected
+共享：日期区间、Agent、表名、状态、Key；问询特有来源/摘要；调用特有调用来源/工具 + 高级折叠。
+
+### Browser Check
+1. Both tabs show shared filters.
+2. Key search and outcome work.
+
+### Notes
+Spec 106 / `wo-202608-39`。
+
+## UX-ADMIN-AUDIT-025: URL 暴露 hours=168 等实现语义
+
+Status: Fixed
+Route: /admin/audit
+Area: URL semantics
+Severity: P2
+Reported: 2026-08-06
+
+### Feedback
+`?hours=168&tab=calls` 草率，含临时数字 168。
+
+### Expected
+写入 `view` + `range=24h|7d`；兼容读旧 `tab`/`hours`；深链生产者更新。
+
+### Browser Check
+1. Switching 7 天 writes `range=7d` not `hours=168`.
+2. Legacy `?hours=168&tab=calls` still loads calls + 7d window.
+
+### Notes
+Spec 106 / `wo-202608-39`；Registry 见 Spec 100 修订注。
+
+## UX-ADMIN-AUDIT-026: 筛选栏时间组无可见名称且 since 非整点
+
+Status: Fixed
+Route: `/admin/audit`
+Area: Shared filter bar / time range
+Severity: P3
+Reported: 2026-08-07
+
+### Feedback
+共享筛选栏起止 `datetime-local` 无可见「时间」标签；由统计窗推导的 `since` 带分钟/秒，与发布记录「整点」机构不一致。默认仍为近 7 天（Spec 89），本轮不改为 24h，也不加快捷窗。
+
+### Evidence
+- 代码：`Audit.tsx` 起止仅 `aria-label`；`sinceIsoFromHours` 用 `setHours` 不归零分钟。
+- 对照：Spec 113 v1.1；批准方案 B1。
+
+### Expected
+1. 起止组前可见「时间」。
+2. 默认/切换统计窗后的 `since` 为整点。
+3. 顶栏默认 `range=7d` 与统计窗分段不变。
+
+### Browser Check
+1. Open `/admin/audit`；verify「时间」在起止前；开始时间为整点。
+2. Switch Header 24 小时 / 7 天；since 仍为整点；默认仍为 7 天。
+
+### Notes
+Spec 122 / `wo-202608-56` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`list-history time-filter parity`。

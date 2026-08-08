@@ -1,0 +1,3191 @@
+lucy_eval_schema_version: 1
+kind: lucy_eval_suite
+suite_id: chatbi_intl_v1
+domain: chatbi_intl
+title: chatbi 国际化指标 Eval Suite v1
+description: 20 道 numeric（demo-db）+ 80 道口径 text 断言；路径 A 同库对照
+metadata:
+  document_name: chatbi 国际化指标 Eval Cases
+  document_type: Eval
+  version: v0.2
+  runner_schema_version: v1.4
+  written_date: 2026-08-06
+  author: Cursor Agent
+  requester: zhangxingchen
+  based_on:
+    - ~/Desktop/lucy_upload/*.yaml
+    - wiki/global/chatbi-intl-metrics-playbook.md
+    - AI 友好型问答.docx（题型，不绑死样本日）
+  scope: chatbi 100 题：20 numeric scalar + 80 logic text must_mention；demo-db 快照
+  output_path: eval/chatbi_intl-eval-cases.yaml
+  data_source: semantic_layer
+  result_assertions_status: filled_v0.2
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - .ktx/secrets/
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE
+      reason: eval 只能只读，不允许 DDL 或 DML。
+    - type: forbidden_ast
+      value: cross_source_join
+      reason: 禁止跨数据源 Join。
+cases:
+  - id: chatbi_intl-country-001
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 的 DAU 是多少？（单位：人）
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+      - dau
+      - numeric
+      - country
+    expected_source: semantic_layer
+    expected_measures:
+      - dau
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(dau) FROM chatbi.ai_intl_country_daily WHERE date='2026-07-13' AND platform='android' AND
+      country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_country_daily.dau
+      filters:
+        - ai_intl_country_daily.date = '2026-07-13'
+        - ai_intl_country_daily.platform = 'android'
+        - ai_intl_country_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          dau: 6000
+    notes: 金标来自 demo-db；DAU 单位为人。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-country-002
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 美国 iPhone 的 DAU 是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - platform
+      - synonym
+      - numeric
+      - country
+    expected_source: semantic_layer
+    expected_measures:
+      - dau
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(dau) FROM chatbi.ai_intl_country_daily WHERE date='2026-07-13' AND platform='iphone' AND
+      country_abbr='US'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_country_daily.dau
+      filters:
+        - ai_intl_country_daily.date = '2026-07-13'
+        - ai_intl_country_daily.platform = 'iphone'
+        - ai_intl_country_daily.country_abbr = 'US'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          dau: 2400
+    notes: iOS/iPhone 映射 platform=iphone。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-country-003
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国全平台 DAU 之和是多少？（端侧加总）
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - country
+      - filter
+      - numeric
+    expected_source: semantic_layer
+    expected_measures:
+      - dau
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(dau) FROM chatbi.ai_intl_country_daily WHERE date='2026-07-13' AND country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_country_daily.dau
+      filters:
+        - ai_intl_country_daily.date = '2026-07-13'
+        - ai_intl_country_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          dau: 9100
+    notes: 跨端 sum 非严格去重。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-country-004
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 韩国市场可能存在 South Korea / Korea South 双写，按国家汇总时应怎么做？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - country
+      - alias
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 优先 country_abbr 或 country_region_cn。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 优先 country_abbr 或 countr
+            - country_abbr
+            - country_region_cn
+  - id: chatbi_intl-country-005
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 跨 Android + iPhone 直接 sum(dau) 得到全球 DAU 有什么风险？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dedup
+      - dau
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 跨端去重风险，只是端侧加总上限。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 跨端去重风险，只是端侧加总上限
+  - id: chatbi_intl-country-006
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 人均打开次数能否对 avg_launch_per_user 做 AVG？正确做法是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - aggregation
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 禁止 AVG；用 sum(launch_cnt)/sum(dau)。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 禁止 AVG
+            - 用 sum(launch_cnt)
+            - launch_cnt
+            - dau
+  - id: chatbi_intl-country-007
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 新增-服务器（墨迹）人数是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - reconcile
+      - new_user
+      - numeric
+      - country
+    expected_source: semantic_layer
+    expected_measures:
+      - new_user_server_cnt
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(new_user_moji_cnt) FROM chatbi.ai_intl_country_daily WHERE date='2026-07-13' AND
+      platform='android' AND country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_country_daily.new_user_server_cnt
+      filters:
+        - ai_intl_country_daily.date = '2026-07-13'
+        - ai_intl_country_daily.platform = 'android'
+        - ai_intl_country_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          new_user_server_cnt: 400
+    notes: new_user_moji_cnt / new_user_server_cnt。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-country-008
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: AF 归因覆盖率怎么算？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+      - af
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: sum(new_user_af_cnt)/sum(new_user_moji_cnt)。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - new_user_af_cnt
+            - new_user_moji_cnt
+  - id: chatbi_intl-country-009
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 次日留存人数 retained_user_1d_cnt 的单位是什么？能否直接当留存率？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+      - retention
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 绝对人数，不是百分比。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 绝对人数，不是百分比
+  - id: chatbi_intl-country-010
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 经营表 date 对次日留存语义上表示什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - time
+      - retention
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: cohort 新增日，不是留存发生日。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - cohort 新增日，不是留存发生日
+            - cohort
+  - id: chatbi_intl-country-011
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户问某日某国 Android DAU，应查哪张表、哪些维度过滤？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+      - dau
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: ai_intl_country_daily；date/platform/country。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - ai_intl_country_daily
+            - date
+            - platform
+            - country
+  - id: chatbi_intl-country-012
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: MAU 跨国家直接 sum 有什么问题？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - aggregation
+      - mau
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 不是去重 MAU。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 不是去重 MAU
+            - MAU
+  - id: chatbi_intl-country-013
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: launch_cnt 与 DAU 量纲差异是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 次 vs 人，禁止混答。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 次 vs 人，禁止混答
+  - id: chatbi_intl-country-014
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 新增-AF 人数是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - synonym
+      - new_user
+      - numeric
+      - country
+    expected_source: semantic_layer
+    expected_measures:
+      - new_user_af_cnt
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(new_user_af_cnt) FROM chatbi.ai_intl_country_daily WHERE date='2026-07-13' AND platform='android'
+      AND country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_country_daily.new_user_af_cnt
+      filters:
+        - ai_intl_country_daily.date = '2026-07-13'
+        - ai_intl_country_daily.platform = 'android'
+        - ai_intl_country_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          new_user_af_cnt: 320
+    notes: AF 归因子集。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-country-015
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户说「AF 新增」对应哪个字段？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - synonym
+      - new_user
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: new_user_af_cnt。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - new_user_af_cnt
+  - id: chatbi_intl-country-016
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 若某行 AF 新增大于服务器新增，应如何解读？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dirty
+      - reconcile
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 脏数/异常，不应当作正常口径。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 脏数
+            - 异常，不应当作正常口径
+  - id: chatbi_intl-country-017
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 日环比应基于哪个时间字段？month 能否替代？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - time
+      - mom
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 以 date 为准；month 仅月标签。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 以 date 为准
+            - date
+            - month 仅月标签
+            - month
+  - id: chatbi_intl-country-018
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 亚洲大区过滤可用哪个 segment 或字段？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - segment
+      - region
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: region='亚洲' 或 asia segment。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - region='亚洲' 或 asia segme
+            - region
+            - asia
+            - segment
+  - id: chatbi_intl-country-019
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 解释 DAU ≈ 当日新增 + 当日回访老用户时，能否用 retained_user_1d_cnt 替代全部老用户？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - logic
+      - dau
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 不能；次日留存只覆盖前一日 cohort。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 不能
+            - 次日留存只覆盖前一日 cohort
+            - cohort
+  - id: chatbi_intl-country-020
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 查询「北美洲 iPhone DAU」时平台与大区如何同时过滤？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - filter
+      - platform
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: platform=iphone 且 region=北美洲。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - platform=iphone 且 region
+            - platform
+            - iphone
+            - region
+  - id: chatbi_intl-country-021
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: UTC ISO 时间展示时如何解释业务日？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - time
+      - timezone
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 先转 Asia/Shanghai 再按自然日。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 先转 Asia
+            - Asia
+            - Shanghai 再按自然日
+            - Shanghai
+  - id: chatbi_intl-country-022
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: avg_dau_30d 跨国家 sum 是否等于全球 30 日日均？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - aggregation
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 不等于去重口径；优先看日 DAU 或 UV 表。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 不等于去重口径
+            - 优先看日 DAU 或 UV 表
+            - DAU
+  - id: chatbi_intl-country-023
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户问「启动次数」却得到 DAU，错在哪里？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+      - misroute
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 量纲混淆；应取 launch_cnt。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 量纲混淆
+            - 应取 launch_cnt
+            - launch_cnt
+  - id: chatbi_intl-country-024
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 按子区域东亚汇总 DAU，维度字段是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - filter
+      - sub_region
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: sub_region='东亚'。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - sub_region='东亚'
+            - sub_region
+  - id: chatbi_intl-country-025
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 经营表 grain 是什么？回答时如何避免重复计数？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - grain
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 日期×平台×国家；聚合须按 grain 理解。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 日期×平台×国家
+            - 聚合须按 grain 理解
+            - grain
+  - id: chatbi_intl-ad-001
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 广告花费（USD）是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+      - spend
+      - numeric
+      - ad
+    expected_source: semantic_layer
+    expected_measures:
+      - spend_usd
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(spend_usd) FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-13' AND platform='android' AND
+      country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_ad_daily.spend_usd
+      filters:
+        - ai_intl_ad_daily.date = '2026-07-13'
+        - ai_intl_ad_daily.platform = 'android'
+        - ai_intl_ad_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          spend_usd: 150
+    notes: spend_usd 单位 USD。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-ad-002
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 的 CPI_AF（花费/AF新增）是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+      - cpi
+      - numeric
+      - ad
+    expected_source: semantic_layer
+    expected_measures:
+      - cpi_af_usd
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(spend_usd)/NULLIF(SUM(new_user_af_cnt),0) FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-13'
+      AND platform='android' AND country_abbr='KR'
+    lucy_derived:
+      op: divide
+      numerator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_ad_daily.spend_usd
+        filters:
+          - ai_intl_ad_daily.date = '2026-07-13'
+          - ai_intl_ad_daily.platform = 'android'
+          - ai_intl_ad_daily.country_abbr = 'KR'
+      denominator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_ad_daily.new_user_af_cnt
+        filters:
+          - ai_intl_ad_daily.date = '2026-07-13'
+          - ai_intl_ad_daily.platform = 'android'
+          - ai_intl_ad_daily.country_abbr = 'KR'
+      result_header: cpi_af_usd
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          cpi_af_usd: 0.46875
+    notes: 比率 measure 直查可能双层 SUM；评测期望数值；Lucy 侧可用派生。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-ad-003
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: CAC 与 CPI_AF 是否同一公式？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - alias
+      - cpi
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 是，CAC 为别名。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 是，CAC 为别名
+            - CAC
+  - id: chatbi_intl-ad-004
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 的 CTR（点击/曝光）是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+      - ctr
+      - numeric
+      - ad
+    expected_source: semantic_layer
+    expected_measures:
+      - ctr
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(click_cnt)/NULLIF(SUM(imp_cnt),0) FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-13' AND
+      platform='android' AND country_abbr='KR'
+    lucy_derived:
+      op: divide
+      numerator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_ad_daily.click_cnt
+        filters:
+          - ai_intl_ad_daily.date = '2026-07-13'
+          - ai_intl_ad_daily.platform = 'android'
+          - ai_intl_ad_daily.country_abbr = 'KR'
+      denominator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_ad_daily.imp_cnt
+        filters:
+          - ai_intl_ad_daily.date = '2026-07-13'
+          - ai_intl_ad_daily.platform = 'android'
+          - ai_intl_ad_daily.country_abbr = 'KR'
+      result_header: ctr
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          ctr: 0.024
+    notes: CTR=click/imp。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-ad-005
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: CPC、CPM 单位分别是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+      - cpc
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: USD/次；USD/千次曝光。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 千次曝光
+  - id: chatbi_intl-ad-006
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 广告表 grain 是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - grain
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 日期×平台×国家。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 日期×平台×国家
+  - id: chatbi_intl-ad-007
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户问某日美国 Android 花费，应查哪张表？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+      - spend
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: ai_intl_ad_daily。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - ai_intl_ad_daily
+  - id: chatbi_intl-ad-008
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 美国全平台广告花费合计（USD）？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - edge
+      - cpi
+      - numeric
+      - ad
+    expected_source: semantic_layer
+    expected_measures:
+      - spend_usd
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(spend_usd) FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-13' AND country_abbr='US'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_ad_daily.spend_usd
+      filters:
+        - ai_intl_ad_daily.date = '2026-07-13'
+        - ai_intl_ad_daily.country_abbr = 'US'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          spend_usd: 198.62
+    notes: 美元加总。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-ad-009
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 花费 ÷ DAU 与 CPI_AF 有何不同？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+      - cross
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 分母分别是 DAU 与 AF 新增；口径不同。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 分母分别是 DAU 与 AF 新增
+            - DAU
+            - 口径不同
+  - id: chatbi_intl-ad-010
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 广告曝光与点击字段名是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - field
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: imp_cnt / click_cnt。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - imp_cnt
+            - click_cnt
+  - id: chatbi_intl-ad-011
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-14 韩国 Android 广告花费（USD）是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - aggregation
+      - spend
+      - numeric
+      - ad
+    expected_source: semantic_layer
+    expected_measures:
+      - spend_usd
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(spend_usd) FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-14' AND platform='android' AND
+      country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_ad_daily.spend_usd
+      filters:
+        - ai_intl_ad_daily.date = '2026-07-14'
+        - ai_intl_ad_daily.platform = 'android'
+        - ai_intl_ad_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          spend_usd: 152
+    notes: 换日回归。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-ad-012
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户说 Spend/花费 对应哪个字段？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - synonym
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: spend_usd。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - spend_usd
+  - id: chatbi_intl-ad-013
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: CPM 公式中为何乘 1000？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+      - cpm
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 千次曝光计价。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 千次曝光计价
+  - id: chatbi_intl-ad-014
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 广告表是否含服务器新增字段？跨表 CPI_服务器怎么做？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - join
+      - cpi
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 需 JOIN 经营表取 new_user_moji_cnt。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 需 JOIN 经营表取 new_user_moj
+            - JOIN
+            - new_user_moji_cnt
+  - id: chatbi_intl-ad-015
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 欧洲大区广告 CTR 计算应如何聚合？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - aggregation
+      - ctr
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 先过滤 region 再 sum/sum。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 先过滤 region 再 sum
+            - region
+  - id: chatbi_intl-ad-016
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: iOS 广告花费过滤 platform 值？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - platform
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: iphone。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - iphone
+  - id: chatbi_intl-ad-017
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 若 CTR > 1 如何解读？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dirty
+      - ctr
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 异常脏数，需核查。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 异常脏数，需核查
+  - id: chatbi_intl-ad-018
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 广告花费回答成「人」错在哪里？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 花费是 USD。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 花费是 USD
+  - id: chatbi_intl-ad-019
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 同一国家英文双写对广告花费汇总的影响？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - country
+      - alias
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 可能重复或漏计；用 abbr。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 可能重复或漏计
+            - 用 abbr
+            - abbr
+  - id: chatbi_intl-ad-020
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 广告表与经营表 JOIN KEY 应包含哪些？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - join
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: date + platform + country_abbr（或等价国家键）。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - date + platform + countr
+            - date
+            - platform
+            - country_abbr
+  - id: chatbi_intl-retention-001
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 次日留存人数是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - grain
+      - retention
+      - numeric
+    expected_source: semantic_layer
+    expected_measures:
+      - retained_user_cnt
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(retained_user_cnt) FROM chatbi.ai_intl_retention_daily WHERE date='2026-07-13' AND
+      platform='android' AND country_abbr='KR' AND retention_days=1
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_retention_daily.retained_user_cnt
+      segments:
+        - ai_intl_retention_daily.day1
+      filters:
+        - ai_intl_retention_daily.date = '2026-07-13'
+        - ai_intl_retention_daily.platform = 'android'
+        - ai_intl_retention_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          retained_user_cnt: 140
+    notes: 绝对人数，不是百分比。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-retention-002
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: D1/D7/D30 分别对应 retention_days 何值？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - segment
+      - retention
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 1/7/30。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention: []
+  - id: chatbi_intl-retention-003
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 次日留存率（留存/服务器新增分母）是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+      - retention
+      - numeric
+    expected_source: semantic_layer
+    expected_measures:
+      - retention_rate
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(retained_user_cnt)/NULLIF(SUM(new_user_base_moji_cnt),0) FROM chatbi.ai_intl_retention_daily
+      WHERE date='2026-07-13' AND platform='android' AND country_abbr='KR' AND retention_days=1
+    lucy_derived:
+      op: divide
+      numerator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_retention_daily.retained_user_cnt
+        segments:
+          - ai_intl_retention_daily.day1
+        filters:
+          - ai_intl_retention_daily.date = '2026-07-13'
+          - ai_intl_retention_daily.platform = 'android'
+          - ai_intl_retention_daily.country_abbr = 'KR'
+      denominator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_retention_daily.new_user_base_moji_cnt
+        segments:
+          - ai_intl_retention_daily.day1
+        filters:
+          - ai_intl_retention_daily.date = '2026-07-13'
+          - ai_intl_retention_daily.platform = 'android'
+          - ai_intl_retention_daily.country_abbr = 'KR'
+      result_header: retention_rate
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          retention_rate: 0.35
+    notes: 小数比率；展示百分比需 *100。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-retention-004
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 留存人数单位是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 绝对人数。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 绝对人数
+  - id: chatbi_intl-retention-005
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 留存率 > 1（>100%）说明什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dirty
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 异常脏数。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 异常脏数
+  - id: chatbi_intl-retention-006
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 美国 Android 次日留存人数是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dirty
+      - reconcile
+      - numeric
+      - retention
+    expected_source: semantic_layer
+    expected_measures:
+      - retained_user_cnt
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(retained_user_cnt) FROM chatbi.ai_intl_retention_daily WHERE date='2026-07-13' AND
+      platform='android' AND country_abbr='US' AND retention_days=1
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_retention_daily.retained_user_cnt
+      segments:
+        - ai_intl_retention_daily.day1
+      filters:
+        - ai_intl_retention_daily.date = '2026-07-13'
+        - ai_intl_retention_daily.platform = 'android'
+        - ai_intl_retention_daily.country_abbr = 'US'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          retained_user_cnt: 100
+    notes: D1 留存人数。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-retention-007
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 经营表 retained_user_1d_cnt 与留存表 D1 如何勾稽？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - reconcile
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 同 cohort 日平台国家应对齐。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 同 cohort 日平台国家应对齐
+            - cohort
+  - id: chatbi_intl-retention-008
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户问「次日留存率」应查哪张表、哪个 segment？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: ai_intl_retention_daily + day1。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - ai_intl_retention_daily
+            - day1
+  - id: chatbi_intl-retention-009
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 留存率必须 SUM/SUM 的原因？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - aggregation
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 禁止对比率行 AVG。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 禁止对比率行 AVG
+  - id: chatbi_intl-retention-010
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 展示百分比时如何处理小数留存率？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: ×100 并标明%。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - ×100 并标明%
+  - id: chatbi_intl-retention-011
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 美国 iPhone 的 D7 留存人数是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - segment
+      - numeric
+      - retention
+    expected_source: semantic_layer
+    expected_measures:
+      - retained_user_cnt
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(retained_user_cnt) FROM chatbi.ai_intl_retention_daily WHERE date='2026-07-13' AND
+      platform='iphone' AND country_abbr='US' AND retention_days=7
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_retention_daily.retained_user_cnt
+      segments:
+        - ai_intl_retention_daily.day7
+      filters:
+        - ai_intl_retention_daily.date = '2026-07-13'
+        - ai_intl_retention_daily.platform = 'iphone'
+        - ai_intl_retention_daily.country_abbr = 'US'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          retained_user_cnt: 30
+    notes: retention_days=7。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-retention-012
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 留存分母用 AF 新增是否正确？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 本语义以服务器/墨迹新增为分母。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 本语义以服务器
+            - 墨迹新增为分母
+  - id: chatbi_intl-retention-013
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: cohort 日与观察日混淆会怎样？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - time
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 日期语义错位导致答错。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 日期语义错位导致答错
+  - id: chatbi_intl-retention-014
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 亚洲 D30 留存人数如何过滤？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - filter
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: region=亚洲且 retention_days=30。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - region=亚洲且 retention_day
+            - region
+            - retention_days
+  - id: chatbi_intl-retention-015
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: iPhone D1 留存率计算步骤？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 过滤 iphone+day1，再 sum/sum。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 过滤 iphone+day1，再 sum
+            - iphone
+            - day1
+  - id: chatbi_intl-retention-016
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 留存表是否适合直接回答 DAU？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 不适合；DAU 在经营表。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 不适合
+            - DAU 在经营表
+            - DAU
+  - id: chatbi_intl-retention-017
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 多日留存曲线应按什么维度展开？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - grain
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: retention_days。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - retention_days
+  - id: chatbi_intl-retention-018
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 若 new_user_base_moji_cnt=0，留存率如何处理？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - edge
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: nullif 防除零。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - nullif 防除零
+  - id: chatbi_intl-retention-019
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户只说「留存」未指明 D几，应如何澄清？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - clarify
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 确认 D1/D7/D30 等。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 确认 D1
+            - D30 等
+            - D30
+  - id: chatbi_intl-retention-020
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 留存率回答成「人」错在哪里？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 比率与人数量纲不同。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 比率与人数量纲不同
+  - id: chatbi_intl-uv-001
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 的 30 日 UV（cnt_uv）是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - uv
+      - numeric
+    expected_source: semantic_layer
+    expected_measures:
+      - cnt_uv
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(cnt_uv) FROM chatbi.ai_intl_user_active_30d_uv_daily WHERE date='2026-07-13' AND
+      platform='android' AND country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_user_active_30d_uv_daily.cnt_uv
+      filters:
+        - ai_intl_user_active_30d_uv_daily.date = '2026-07-13'
+        - ai_intl_user_active_30d_uv_daily.platform = 'android'
+        - ai_intl_user_active_30d_uv_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          cnt_uv: 58000
+    notes: cnt_uv。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-uv-002
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 美国 iPhone 的 30 日 UV 是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dedup
+      - uv
+      - numeric
+    expected_source: semantic_layer
+    expected_measures:
+      - cnt_uv
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(cnt_uv) FROM chatbi.ai_intl_user_active_30d_uv_daily WHERE date='2026-07-13' AND
+      platform='iphone' AND country_abbr='US'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_user_active_30d_uv_daily.cnt_uv
+      filters:
+        - ai_intl_user_active_30d_uv_daily.date = '2026-07-13'
+        - ai_intl_user_active_30d_uv_daily.platform = 'iphone'
+        - ai_intl_user_active_30d_uv_daily.country_abbr = 'US'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          cnt_uv: 22000
+    notes: 去重 UV。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-uv-003
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 30 日 UV 表 grain 是什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - grain
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 日期×平台×国家。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 日期×平台×国家
+  - id: chatbi_intl-uv-004
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 跨平台 sum(30日UV) 的去重风险？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dedup
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 跨端用户可能重复。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 跨端用户可能重复
+  - id: chatbi_intl-uv-005
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-14 韩国 Android 的 30 日 UV 是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+      - numeric
+      - uv
+    expected_source: semantic_layer
+    expected_measures:
+      - cnt_uv
+    comparison_mode: numeric
+    golden_sql: SELECT SUM(cnt_uv) FROM chatbi.ai_intl_user_active_30d_uv_daily WHERE date='2026-07-14' AND
+      platform='android' AND country_abbr='KR'
+    lucy_query:
+      connectionId: demo-mysql
+      measures:
+        - ai_intl_user_active_30d_uv_daily.cnt_uv
+      filters:
+        - ai_intl_user_active_30d_uv_daily.date = '2026-07-14'
+        - ai_intl_user_active_30d_uv_daily.platform = 'android'
+        - ai_intl_user_active_30d_uv_daily.country_abbr = 'KR'
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          cnt_uv: 58200
+    notes: 换日。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-uv-006
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: avg_dau_30d 与 30 日 UV 是否同一指标？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - logic
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 不是；日均 DAU ≠ 去重 UV。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 不是
+            - 日均 DAU ≠ 去重 UV
+            - DAU
+  - id: chatbi_intl-uv-007
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 美国 iPhone 30 日 UV 如何过滤？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - filter
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: country_abbr=US + platform=iphone。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - country_abbr
+            - platform
+            - iphone
+  - id: chatbi_intl-uv-008
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用 MAU 替代 30 日 UV 是否总正确？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - logic
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 不一定；定义窗口可能不同。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 不一定
+            - 定义窗口可能不同
+  - id: chatbi_intl-uv-009
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 30 日 UV 回答成启动次数错在哪里？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: UV 是人。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - UV 是人
+  - id: chatbi_intl-uv-010
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 解释「去重陷阱」在国际化多端场景的表现。
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dedup
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 端侧/国家加总高估真实去重用户。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 端侧
+            - 国家加总高估真实去重用户
+  - id: chatbi_intl-cross-001
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 的 CPI_服务器（广告花费÷经营表服务器新增）是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - join
+      - cpi
+      - numeric
+      - cross
+    expected_source: semantic_layer
+    expected_measures:
+      - cpi_server_usd
+    comparison_mode: numeric
+    golden_sql: SELECT a.s/NULLIF(c.n,0) FROM (SELECT SUM(spend_usd) s FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-13'
+      AND platform='android' AND country_abbr='KR') a CROSS JOIN (SELECT SUM(new_user_moji_cnt) n FROM
+      chatbi.ai_intl_country_daily WHERE date='2026-07-13' AND platform='android' AND country_abbr='KR') c
+    lucy_derived:
+      op: divide
+      numerator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_ad_daily.spend_usd
+        filters:
+          - ai_intl_ad_daily.date = '2026-07-13'
+          - ai_intl_ad_daily.platform = 'android'
+          - ai_intl_ad_daily.country_abbr = 'KR'
+      denominator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_country_daily.new_user_server_cnt
+        filters:
+          - ai_intl_country_daily.date = '2026-07-13'
+          - ai_intl_country_daily.platform = 'android'
+          - ai_intl_country_daily.country_abbr = 'KR'
+      result_header: cpi_server_usd
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          cpi_server_usd: 0.375
+    notes: 跨表派生。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-cross-002
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 韩国 Android 花费÷DAU 是多少？（USD/人）
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - join
+      - formula
+      - numeric
+      - cross
+    expected_source: semantic_layer
+    expected_measures:
+      - spend_per_dau
+    comparison_mode: numeric
+    golden_sql: SELECT a.s/NULLIF(c.d,0) FROM (SELECT SUM(spend_usd) s FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-13'
+      AND platform='android' AND country_abbr='KR') a CROSS JOIN (SELECT SUM(dau) d FROM chatbi.ai_intl_country_daily
+      WHERE date='2026-07-13' AND platform='android' AND country_abbr='KR') c
+    lucy_derived:
+      op: divide
+      numerator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_ad_daily.spend_usd
+        filters:
+          - ai_intl_ad_daily.date = '2026-07-13'
+          - ai_intl_ad_daily.platform = 'android'
+          - ai_intl_ad_daily.country_abbr = 'KR'
+      denominator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_country_daily.dau
+        filters:
+          - ai_intl_country_daily.date = '2026-07-13'
+          - ai_intl_country_daily.platform = 'android'
+          - ai_intl_country_daily.country_abbr = 'KR'
+      result_header: spend_per_dau
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          spend_per_dau: 0.025
+    notes: 与 CPI_AF 分母不同。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-cross-003
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 2026-07-13 美国 Android 的 CPI_服务器是多少？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - join
+      - numeric
+      - cross
+    expected_source: semantic_layer
+    expected_measures:
+      - cpi_server_usd
+    comparison_mode: numeric
+    golden_sql: SELECT a.s/NULLIF(c.n,0) FROM (SELECT SUM(spend_usd) s FROM chatbi.ai_intl_ad_daily WHERE date='2026-07-13'
+      AND platform='android' AND country_abbr='US') a CROSS JOIN (SELECT SUM(new_user_moji_cnt) n FROM
+      chatbi.ai_intl_country_daily WHERE date='2026-07-13' AND platform='android' AND country_abbr='US') c
+    lucy_derived:
+      op: divide
+      numerator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_ad_daily.spend_usd
+        filters:
+          - ai_intl_ad_daily.date = '2026-07-13'
+          - ai_intl_ad_daily.platform = 'android'
+          - ai_intl_ad_daily.country_abbr = 'US'
+      denominator:
+        connectionId: demo-mysql
+        measures:
+          - ai_intl_country_daily.new_user_server_cnt
+        filters:
+          - ai_intl_country_daily.date = '2026-07-13'
+          - ai_intl_country_daily.platform = 'android'
+          - ai_intl_country_daily.country_abbr = 'US'
+      result_header: cpi_server_usd
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 取数题必须走语义查询。
+    result_assertions:
+      - value_type: scalar
+        compare_mode: approx
+        numeric_tolerance: 0.01
+        data:
+          cpi_server_usd: 0.40166667
+    notes: 跨表 US。
+    snapshot_date: 2026-07-13
+  - id: chatbi_intl-cross-004
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 为何国家键优先 country_abbr？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - join
+      - country
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 规避英文双写导致的错误匹配。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 规避英文双写导致的错误匹配
+  - id: chatbi_intl-cross-005
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 计算某日韩国 Android 的 CPI_服务器，需要哪些表？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+      - join
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: ad + country。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - country
+  - id: chatbi_intl-cross-006
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: AF CPI 与服务器 CPI 谁通常更高？为什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - reconcile
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 服务器分母更大时 CPI_服务器更低。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 服务器分母更大时 CPI_服务器更低
+            - CPI_
+  - id: chatbi_intl-cross-007
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 跨表后仍对行级 CPI 做 AVG 错在哪里？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - aggregation
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 比率必须重聚合。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 比率必须重聚合
+  - id: chatbi_intl-cross-008
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 广告花费与经营 DAU 日期不对齐会怎样？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - time
+      - join
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: JOIN 丢行或错配。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - JOIN 丢行或错配
+            - JOIN
+  - id: chatbi_intl-cross-009
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 平台同义词在跨表时如何保持一致？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - platform
+      - join
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 两端都映射 iphone/android。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 两端都映射 iphone
+            - iphone
+            - android
+  - id: chatbi_intl-cross-010
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 如何验证「花费÷新增-服务器」与 Wiki 口径一致？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - wiki
+      - cpi
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 对照 playbook 公式。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 对照 playbook 公式
+            - playbook
+  - id: chatbi_intl-cross-011
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 跨表查询是否允许跨 connection？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - safety
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 禁止跨源 JOIN。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 禁止跨源 JOIN
+            - JOIN
+  - id: chatbi_intl-cross-012
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用留存表去算 CPI 是否合适？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 不合适；CPI 用广告×经营。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 不合适
+            - CPI 用广告×经营
+            - CPI
+  - id: chatbi_intl-cross-013
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 北美全平台花费÷DAU 的步骤？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - formula
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 过滤北美，分别 sum 再相除。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 过滤北美，分别 sum 再相除
+  - id: chatbi_intl-cross-014
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 跨表结果出现 AF 新增>服务器新增如何披露？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dirty
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 标注异常勾稽。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 标注异常勾稽
+  - id: chatbi_intl-cross-015
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户同时要 CTR 与次日留存，应如何拆问/拆查？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 广告表 CTR + 留存表 D1，勿混 grain。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 广告表 CTR + 留存表 D1，勿混 grai
+            - CTR
+            - grain
+  - id: chatbi_intl-common-001
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 列出本域三类常见单位：人、%、美元/人，并各举一例字段。
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: DAU/留存率/CPI。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - DAU
+            - 留存率
+            - CPI
+  - id: chatbi_intl-common-002
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 归因口径：为何服务器新增应覆盖 AF 新增？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - attribution
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: AF 仅为归因成功子集。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - AF 仅为归因成功子集
+  - id: chatbi_intl-common-003
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 脏数三例：留存率>100%、AF>服务器、CTR>1。分别意味着什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - dirty
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 需核查数据质量。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 需核查数据质量
+  - id: chatbi_intl-common-004
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 回答指标前如何选择 Wiki 页？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - wiki
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 国际化口径优先 chatbi playbook。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 国际化口径优先 chatbi playbook
+            - chatbi
+            - playbook
+  - id: chatbi_intl-common-005
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 禁止把百分比字段当绝对人数回答——举例。
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 留存率 vs 留存人数。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 留存率 vs 留存人数
+  - id: chatbi_intl-common-006
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 禁止把 USD 花费当成人数——举例。
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - unit
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: spend_usd。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - spend_usd
+  - id: chatbi_intl-common-007
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 样本日期缺失时，评测应关注什么？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - logic
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 公式与口径，而非死记某日数字。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 公式与口径，而非死记某日数字
+  - id: chatbi_intl-common-008
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 用户混用「留存」与「DAU」时如何澄清？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - clarify
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 确认要人数、比率还是活跃。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 确认要人数、比率还是活跃
+  - id: chatbi_intl-common-009
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 安全约束：eval 是否允许写库？
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - safety
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 只读，禁止 DML/DDL。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 只读，禁止 DML
+            - DML
+            - DDL
+  - id: chatbi_intl-common-010
+    case_type: single_turn
+    skill_version: v0.1
+    semantic_version: v0.1
+    question: 总结四表分工：经营/广告/留存/30日UV 各回答什么。
+    domain: chatbi_intl
+    trace_required: true
+    context_required:
+      keys:
+        - global/chatbi-intl-metrics-playbook.md
+    risk_tags:
+      - routing
+    expected_source: semantic_layer
+    tool_assertions:
+      - type: required_tool
+        value: sl_query
+        reason: 需要结合语义层取数或字段口径说明，不能只凭猜测。
+    notes: 活跃新增、花费效率、cohort 留存、去重活跃。
+    comparison_mode: logic_only
+    result_assertions:
+      - value_type: text
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+        data:
+          must_mention:
+            - 活跃新增、花费效率、cohort 留存、去重活跃
+            - cohort

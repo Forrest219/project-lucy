@@ -171,3 +171,31 @@ CSV 列头/单元格与主表一致（时间、操作者、来源、资产域、
 
 ### Notes
 Spec 97 / `wo-202608-30` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`export-table field parity`、`export filename second precision`。
+
+## UX-ADMIN-CONFIG-AUDIT-009: 时间筛选缺可见名称与默认近 24 小时
+
+Status: Fixed
+Route: `/admin/config-audit`
+Area: Filter bar / time range
+Severity: P2
+Reported: 2026-08-07
+
+### Feedback
+与 `/publish/history` 同构的时间筛选无可见名称；快捷窗默认「全部时间」，无「近 24 小时」；起止为空时不知默认窗口。应对齐发布记录：可见「时间」、默认近 24 小时（整点）。
+
+### Evidence
+- 代码：`ConfigAudit.tsx` 筛选栏仅 `aria-label`；窗口选项仅全部 / 近 7 天 / 近 30 天；无首访默认。
+- 对照：Spec 113 v1.1 / `UX-PUBLISH-HISTORY-011`。
+
+### Expected
+1. 可见标签「时间」。
+2. 快捷窗：全部时间 / 近 24 小时 / 近 7 天 / 近 30 天。
+3. 首访默认「近 24 小时」，`since` 整点；选「全部时间」不自动回填。
+
+### Browser Check
+1. Open `/admin/config-audit` with clean URL.
+2. Verify「时间」标签；窗口为「近 24 小时」；开始时间为整点。
+3. Switch to「全部时间」→ 起止清空且不回填。
+
+### Notes
+Spec 122 / `wo-202608-56` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`list-history time-filter parity`。

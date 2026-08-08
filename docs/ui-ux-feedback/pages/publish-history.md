@@ -248,3 +248,31 @@ Reported: 2026-08-06
 
 ### Notes
 Spec 113 / `wo-202608-46` 已落地（本轮不做浏览器验证，结束后只做 code review）。
+
+## UX-PUBLISH-HISTORY-011: 时间筛选无可见名称且无默认窗口
+
+Status: Fixed
+Route: `/publish/history`
+Area: Filter bar / time range
+Severity: P2
+Reported: 2026-08-07
+
+### Feedback
+时间筛选器没有可见名称；起止时间为空，不清楚默认是 7 天还是 24 小时。建议默认最近 24 小时，按整点即可。
+
+### Evidence
+- 浏览器：`/publish/history` 起止 `datetime-local` 仅占位「年 / 月 / 日 --:--」，无字段标签；快捷窗口默认「全部时间」。
+- 截图：`docs/ui-ux-feedback/assets/publish-history/UX-PUBLISH-HISTORY-011-before.png`
+
+### Expected
+1. 时间筛选组有可见名称「时间」。
+2. 首访无时间参数时默认「近 24 小时」；`since` 为 `now - 24h` 的整点；`until` 可空（至当前）。
+3. 用户仍可选「全部时间 / 近 7 天 / 近 30 天」或自定义起止。
+
+### Browser Check
+1. Open `/publish/history` with clean URL（无 `window`/`since`/`until`）。
+2. Verify visible label「时间」；快捷窗口为「近 24 小时」；开始时间有整点默认值。
+3. Switch to「全部时间」→ 起止清空且不自动回填。
+
+### Notes
+Spec 113 v1.1 / `wo-202608-55` 已落地（本轮不做浏览器验证，结束后只做 code review）。

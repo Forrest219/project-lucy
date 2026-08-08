@@ -56,8 +56,14 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-08-07 | Publish Workbench `/publish/workbench` 语义生效台 | Spec 123 / `wo-202608-57` 落地：`UX-PUBLISH-WORKBENCH-007` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。去上传/导出；「生效准备」+「同步索引并生效」；「更多」全量重建 `force:true`。修订 Spec 35；术语 §4.3。跨页面主题新增 `publish workbench activation ia`。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-07 | Publish Workbench `/publish/workbench` CTA 确认路径 | Spec 121 / `wo-202608-54` 落地：`UX-PUBLISH-WORKBENCH-006` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。Header「发布并重建索引」打开确认侧栏并 reindex，不再打开「发布语义资产」上传 Drawer；上传入口仍独占上传路径。修订 Spec 35 §6.2 / Spec 112。跨页面主题新增 `publish cta vs upload path separation`。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-07 | List history 时间筛选 parity | Spec 122 / `wo-202608-56` 落地：`UX-ADMIN-CONFIG-AUDIT-009`、`UX-ADMIN-AUDIT-026` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。配置审计对齐发布记录（可见「时间」+ 默认近 24 小时整点）；访问日志补「时间」标签 + since 整点（保留默认 7 天）。跨页面主题新增 `list-history time-filter parity`。验证：`admin-config-audit.test.tsx`、`admin-audit-turns.test.tsx`、`lint:terminology`。 |
+| 2026-08-07 | Publish History `/publish/history` 时间筛选默认 | Spec 113 v1.1 / `wo-202608-55` 落地：`UX-PUBLISH-HISTORY-011` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。筛选栏可见「时间」标签；快捷窗口增加「近 24 小时」；首访默认 `window=24h` 且 `since` 整点。验证：`publish-history.test.tsx`、`lint:terminology`。 |
 | 2026-08-07 | Global Shell / 全站 Toast | Spec 120 / `wo-202608-53` 落地：`UX-GLOBAL-SHELL-009` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。全局 Toaster `top-right`→`bottom-right`，避让 PageHeader actions；Design System 新增 `13-components-toast.md`；修订 Spec 28 §5.2。跨页面主题新增 `toast vs pageheader actions`。验证：`app-shell.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-07 | Publish Workbench `/publish/workbench` 队列–门禁 IA | Spec 119 / `wo-202608-52` 落地：`UX-PUBLISH-WORKBENCH-005` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。双栏「待发布变更 \| 发布门禁」；变更详情按需 Drawer；进页不自动打开 Diff。修订 Spec 112 §5.3 / Spec 35 交叉引用。跨页面主题新增 `publish workbench queue-gate ia`；`publish workbench three-panel ia` 布局契约由 Spec 119 取代。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Business Wiki `/wiki` 删除 Markdown 文档 | Spec 118 / `wo-202608-51` 落地：`UX-WIKI-045` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。阅读态 Header「删除文档」；确认对话框；`DELETE /api/wiki/:key`；清理版本历史；成功后离开文档页。修订 Spec 58/81。跨页面主题 `button hierarchy consistency` 增挂 `UX-WIKI-045`。验证：`wiki.test.ts`、`wiki.test.tsx`、`lint:terminology`、`build`。 |
+| 2026-08-06 | Connections `/connections` Schema 移除 | Spec 117 / `wo-202608-50` 落地：`UX-CONNECTIONS-034` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。对称 Add：`removeSchema` + dryRun 影响面；必清 `schemas`+前缀 `enabled_tables`；可选删 Manifest/overlay；Wiki 只告警。跨页面主题新增 `connection schema remove lifecycle`。验证：`project.remove-schema`、`api.remove-schema`、`remove-schema-drawer`、`connection-overview`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Catalog 表导入 + Publish Workbench 校验/junk | Spec 114 / `wo-202608-47`：`UX-CATALOG-030` → `Fixed`（overlay-safe 导入，不冲掉 columns）。Spec 115 / `wo-202608-48`：`UX-PUBLISH-WORKBENCH-004` → `Fixed`（工作台 issues 披露 + `._*` scrub + 上传拒收）。本轮不做浏览器验证，结束后只做 code review。延伸 `validation failure disclosure`；新增 `overlay-safe table yaml import`、`semantic-layer junk scrub`。验证：`api.source-import`、`semantic-layer-junk`、`api.semantic-assets`、`table-editor`、`review`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish History `/publish/history` | Spec 113 / `wo-202608-46` 落地：`UX-PUBLISH-HISTORY-008`～`010` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。`#`→序号；筛选栏+分页；Header「导出 CSV」明细（移除语义资产包 ZIP）；`releases` 支持筛选/`total` + `export.csv`。修订 Spec 35/85/91。跨页面主题延伸 `export-table field parity`、新增 `list-page filter-pagination parity`。验证：`publish-history.test.tsx`、`api.semantic-assets.reindex.test.ts`、`lint:terminology`、`build`。 |
 | 2026-08-06 | Publish Workbench `/publish/workbench` | Spec 112 / `wo-202608-45` 落地：`UX-PUBLISH-WORKBENCH-001`～`003` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。发布门禁 + 步骤指示；三栏角色；Header 收口（删表目录）；Schema/表影响分流；进页自动校验。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
@@ -143,11 +149,15 @@ docs/ui-ux-feedback/
 | Theme | 影响 ledger | Status 分布 | Spec / Plan |
 |---|---|---|---|
 | `toast vs pageheader actions`（全局 Toast 不得遮挡 PageHeader 右上动作；标准落点 `bottom-right`） | UX-GLOBAL-SHELL-009 | 1 Fixed | Spec 120 / wo-202608-53，待浏览器复核 |
+| `connection schema remove lifecycle`（可移除 Schema；必清 enabled 前缀；Wiki 只告警；可选清 Manifest/overlay） | UX-CONNECTIONS-034 | 1 Fixed | Spec 117 / wo-202608-50，待浏览器复核 |
 | `validation failure disclosure`（校验/门禁失败须展示可读 issues，禁止仅 Exit Code） | UX-CATALOG-029、UX-PUBLISH-WORKBENCH-004 | 2 Fixed | Spec 110 / wo-43；Spec 115 / wo-48 延伸至发布工作台；待浏览器复核 |
 | `overlay-safe table yaml import`（表页导入不得冲掉 Schema Manifest 字段） | UX-CATALOG-030 | 1 Fixed | Spec 114 / wo-202608-47 |
 | `semantic-layer junk scrub`（校验前清理 `._*` / `.DS_Store`；上传拒收） | UX-PUBLISH-WORKBENCH-004 | 1 Fixed | Spec 115 / wo-202608-48 |
 | `publish flow discoverability`（发布工作台须可视化「审阅→校验→发布」主路径与 gate 原因） | UX-PUBLISH-WORKBENCH-001 | 1 Fixed | Spec 112 / wo-202608-45，待浏览器复核 |
-| `publish workbench three-panel ia`（左选文件 / 中变更详情 / 右发布门禁；禁裸路径作栏标题、禁内部 status 码） | UX-PUBLISH-WORKBENCH-002 | 1 Fixed | Spec 112 / wo-202608-45，待浏览器复核 |
+| `publish workbench three-panel ia`（历史：左选文件 / 中变更详情 / 右发布门禁） | UX-PUBLISH-WORKBENCH-002 | 1 Fixed（布局已由 Spec 119 取代） | Spec 112 命名/状态；布局见 `queue-gate ia` |
+| `publish workbench queue-gate ia`（待发布变更 \| 发布门禁；变更详情按需 Drawer；禁常驻 Diff 主舞台） | UX-PUBLISH-WORKBENCH-005 | 1 Fixed | Spec 119 / wo-202608-52，待浏览器复核 |
+| `publish cta vs upload path separation`（Header「发布并重建索引」=确认+reindex；「上传语义资产」=上传 Drawer；禁止共用 open 状态） | UX-PUBLISH-WORKBENCH-006 | 1 Fixed | Spec 121 / wo-202608-54，待浏览器复核 |
+| `publish workbench activation ia`（语义生效台：去本页上传/导出；生效准备；同步索引并生效；全量重建 force） | UX-PUBLISH-WORKBENCH-007 | 1 Fixed | Spec 123 / wo-202608-57，待浏览器复核 |
 | `header action density`（PageHeader 动作须分层，主组不宜 ≥5 平权并列） | UX-PUBLISH-WORKBENCH-003 | 1 Fixed | Spec 112 / wo-202608-45，待浏览器复核 |
 | `enabled-scope semantic coverage`（运维语义覆盖 / Catalog 默认列表须对齐 `enabled_tables`） | UX-OVERVIEW-019、UX-CATALOG-028 | 2 Fixed | Spec 104 / wo-202608-37，待浏览器复核 |
 | `connection-card connectivity health`（连接卡右侧连通健康：进页探测 + ms + Drawer 同源） | UX-CONNECTIONS-028～030 | 3 Fixed | Spec 108 / wo-202608-41，待浏览器复核 |
@@ -198,6 +208,7 @@ docs/ui-ux-feedback/
 | `export-table field parity`（列表导出须与主表列头/业务文案一致，禁止原始字段 dump） | UX-ADMIN-CONFIG-AUDIT-008、UX-PUBLISH-HISTORY-009～010 | 3 Fixed | Spec 97 / 113，待浏览器复核 |
 | `export filename second precision`（审计类 CSV 文件名须含到秒的时间戳） | UX-ADMIN-CONFIG-AUDIT-008、UX-PUBLISH-HISTORY-010 | 2 Fixed | Spec 97 / 113，待浏览器复核 |
 | `list-page filter-pagination parity`（运维列表须具备筛选栏 + 固定页大小分页 + 序号，样板配置审计） | UX-PUBLISH-HISTORY-008 | 1 Fixed | Spec 113 / wo-202608-46，待浏览器复核 |
+| `list-history time-filter parity`（列表历史时间筛选：可见「时间」；同类快捷窗默认近 24 小时整点；访问日志仅标签+整点、默认仍 7 天） | UX-PUBLISH-HISTORY-011、UX-ADMIN-CONFIG-AUDIT-009、UX-ADMIN-AUDIT-026 | 3 Fixed | Spec 113 v1.1 / Spec 122，待浏览器复核 |
 
 新增 / 更新 ledger 时，如果属于以上主题，请在 `Notes` 引用主题名；新主题直接在表格追加一行。
 
@@ -210,6 +221,7 @@ docs/ui-ux-feedback/
 - 列表页「导出 CSV」默认须与主表可见列头及业务文案一致，禁止把英文原始字段 / 详情 dump 作为默认导出（主题 `export-table field parity`；样板见 Spec 97、Spec 113）。
 - 审计类 CSV 的 `Content-Disposition` 文件名须含到秒的时间戳（`YYYYMMDD-HHmmss`），避免同日多次导出覆盖混淆（主题 `export filename second precision`；样板见 Spec 97、Spec 113）。
 - 运维列表/历史页应对齐配置审计：筛选栏 + 固定页大小分页 +「序号」列 + 分页区计数（主题 `list-page filter-pagination parity`；样板见 Spec 96、Spec 113）。
+- 列表历史类时间筛选须有可见「时间」标签；与发布记录同构的快捷窗应对齐「全部 / 近 24 小时 / 近 7 天 / 近 30 天」且默认近 24 小时整点；访问日志保留顶栏统计窗与默认 7 天，仅补标签与整点（主题 `list-history time-filter parity`；样板见 Spec 113 v1.1、Spec 122）。
 - 数据库对象标识符（Connection ID、Schema 名、表名、列名、路径、URL）必须保留仓库源字符串大小写；不得通过 JavaScript `.toUpperCase()` / `.toLowerCase()` 或 CSS `text-transform: uppercase` / `capitalize` / `lowercase` 强制改写。涉及数据库对象名的分组标题、链接文案、aria-label 都必须带 `translate="no"` 与 `notranslate`。测试必须直接断言渲染文本为仓库源字符串大小写，并保留反向断言（`queryByText(/UPPERCASE/)` 为空）。后端数据库标识符约定优先于 UI 渲染约定。
 - 高密度数据表格里的对象链接默认保持正文级字重；可点击性优先通过颜色、hover underline、focus ring、图标或动作列表达，不靠把链接升成标题级粗体。表头、分组标题和真正的对象详情 H1 才使用更高字重建立层级。
 - 同一视口内，同一个全局命令只能有一个主触发点；不得依赖 aria label 来补救可见命令重复。
@@ -261,7 +273,7 @@ docs/ui-ux-feedback/
 - 访问日志 / 审计类主表必须把可关联身份 Key（问询 ID、事件 ID 等）作为一等列展示并可复制，不得只藏在 testid、展开区或对象详情深链里（主题 `audit identity join keys`；样板见 Spec 106）。
 - 面向用户的时间窗 / 视图 query 须使用产品语义（如 `range=7d`、`view=calls`），禁止新写入暴露实现数字（如 `hours=168`）；旧参可读一版兼容（主题 `url semantic presets`；样板见 Spec 106）。
 - 同一列表页内 Tab 切换不得增减 PageHeader 主操作槽位（如导出按钮忽隐忽现）；Tab 特有动作应保持槽位占位或下沉到表格工具条（主题 `tab header action parity`；样板见 Spec 106）。
-- 发布工作台须把「审阅 → 校验 → 发布并重建索引」做成可读主路径：右栏用「发布门禁」承载步骤、影响分流与下一步说明；中栏标题用「变更详情」而非裸路径；Header 按空态/有变更切换 ≤3 主动作并禁止「表目录」；Schema Manifest 不得计入「影响表」（主题 `publish flow discoverability` / `publish workbench three-panel ia` / `header action density`；样板见 Spec 112）。
+- 发布工作台须把「审阅 → 校验 → 发布并重建索引」做成可读主路径：主工作面用「发布门禁」承载步骤、影响分流与下一步说明；左栏「待发布变更」为队列；「变更详情」按需 Drawer，禁止默认常驻 Diff 最大栏；Header 按空态/有变更切换 ≤3 主动作并禁止「表目录」；Schema Manifest 不得计入「影响表」（主题 `publish flow discoverability` / `publish workbench queue-gate ia` / `header action density`；样板见 Spec 112 + Spec 119）。
 
 ## 工作流
 

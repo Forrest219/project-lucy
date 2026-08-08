@@ -1,0 +1,1569 @@
+lucy_eval_schema_version: 1
+kind: lucy_eval_suite
+suite_id: ksc_financial_spider2_v1
+domain: ksc_financial
+title: 金山云财务报表 Eval Suite（对标 Spider 2.0 风格）
+description: |
+  对标 Spider 2.0 的企业级多步 text-to-SQL / 分析工作流：跨表杜邦、勾稽验算、单位与符号陷阱、
+  面板趋势。判分以 result_assertions（exec-result）为主，golden_sql / gold CSV 供复现；
+  不把 Gold SQL 当作唯一 SFT 目标（与 Spider2 发布说明一致）。
+metadata:
+  document_name: 金山云财务报表 Eval Cases（Spider2-style）
+  document_type: Eval
+  version: v0.1
+  runner_schema_version: v1.4
+  written_date: '2026-08-08'
+  author: Cursor Agent
+  requester: zhangxingchen
+  based_on:
+    - /Users/zhangxingchen/Desktop/Inbox/lucy_upload_ksc_financial/
+    - wiki/global/ksc-financial-dupont-playbook.md
+    - https://spider2-sql.github.io/
+    - docs/eval-quiz-conventions.md v1.4
+  scope: |
+    KSC 三表年报（2021–2025, fiscal_quarter=0）：基础取数、反模式、边界、杜邦跨表、
+    现金流勾稽（含 fx_effect）、多轮口径、路径选择。金额单位千元人民币。
+  output_path: evals/ksc_financial/eval/ksc_financial-eval-cases.yaml
+  data_source: semantic_layer
+  result_assertions_status: filled_v0.1
+  snapshot_date: '2026-08-08'
+  snapshot_batch: starrocks-r1_ai_ksc_20260808
+  snapshot_rows:
+    ksc_income_statement_detail: 125
+    ksc_balance_sheet_detail: 205
+    ksc_cash_flow_statement_detail: 195
+  gold_dir: evals/ksc_financial/gold/
+  spider2_alignment:
+    task_style: enterprise multi-step analytics / text-to-SQL workflow
+    scoring: exec_result (result_assertions + gold CSV), not SQL string match
+    external_knowledge: wiki/global/ksc-financial-dupont-playbook.md
+    connectionId: starrocks-r1
+  coverage_matrix:
+    basic:
+      - ksc-income-revenue-2024
+      - ksc-income-netloss-2025
+      - ksc-balance-assets-2024
+      - ksc-cashflow-cfo-2025
+      - ksc-rowcount-001
+    anti_pattern:
+      - ksc-unit-001
+      - ksc-filter-line-item-code-001
+      - ksc-sign-cogs-001
+      - ksc-null-not-zero-001
+      - ksc-parent-vs-consol-001
+      - ksc-dupont-period-end-001
+      - ksc-quarter-default-001
+      - ksc-is-deleted-forbidden-001
+    boundary:
+      - ksc-related-party-null-001
+      - ksc-no-quarterly-001
+      - ksc-bs-vs-cf-cash-2025
+      - ksc-eps-2025
+      - ksc-current-ratio-2023
+    degradation:
+      - ksc-no-quarterly-001
+      - ksc-is-deleted-forbidden-001
+    multi_turn:
+      - ksc-multiturn-dupont-001
+    path_selection:
+      - ksc-path-dupont-tables-001
+      - ksc-dupont-2024
+      - ksc-cashflow-fx-recon-2025
+    spider2_hard:
+      - ksc-dupont-2024
+      - ksc-dupont-2025
+      - ksc-dupont-panel-2021-2025
+      - ksc-cashflow-fx-recon-2025
+      - ksc-ops-snapshot-2025
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - .ktx/secrets/
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE
+      reason: eval 只能只读，不允许 DDL 或 DML。
+    - type: forbidden_ast
+      value: cross_source_join
+      reason: 禁止跨数据源 Join。
+
+quiz_cases:
+  - id: Q1
+    stem: 金额类科目默认单位是什么？
+    difficulty: 0.5
+    question_type: single
+    display_type: conceptual
+    eval_refs: [ksc-unit-001]
+    options:
+      - key: A
+        text: 元人民币
+      - key: B
+        text: 千元人民币
+      - key: C
+        text: 万元人民币
+      - key: D
+        text: 美元
+    answer: B
+    explanation: unit_code=RMB_THOUSAND，默认千元人民币。
+  - id: Q2
+    stem: 2024 年合并总收入（千元）是多少？
+    difficulty: 1
+    question_type: single
+    display_type: exact_value
+    eval_refs: [ksc-income-revenue-2024]
+    options:
+      - key: A
+        text: "7047461"
+      - key: B
+        text: "7785180"
+      - key: C
+        text: "8180107"
+      - key: D
+        text: "9558619"
+    answer: B
+    explanation: total_revenue @ 2024FY = 7785180 千元。
+  - id: Q3
+    stem: 杜邦默认资产/权益口径是？
+    difficulty: 1
+    question_type: single
+    display_type: conceptual
+    eval_refs: [ksc-dupont-period-end-001]
+    options:
+      - key: A
+        text: 期初余额
+      - key: B
+        text: 期末余额
+      - key: C
+        text: 期初期末平均
+      - key: D
+        text: 任意时点均可
+    answer: B
+    explanation: Wiki 默认期末；平均口径待 Owner 确认。
+  - id: Q4
+    stem: 2024 年合并 ROE（期末）约为？
+    difficulty: 2
+    question_type: single
+    display_type: exact_value
+    eval_refs: [ksc-dupont-2024]
+    options:
+      - key: A
+        text: "-0.1013"
+      - key: B
+        text: "-0.2805"
+      - key: C
+        text: "-0.3595"
+      - key: D
+        text: "-0.0755"
+    answer: C
+    explanation: net_loss/total_equity ≈ -0.359478。
+  - id: Q5
+    stem: 现金流勾稽时，仅加 cfo+cfi+cff 在 2025 年会漏掉哪一项？
+    difficulty: 2
+    question_type: single
+    display_type: conceptual
+    eval_refs: [ksc-cashflow-fx-recon-2025]
+    options:
+      - key: A
+        text: 现金及现金等价物（资产负债表）
+      - key: B
+        text: 汇率影响 fx_effect
+      - key: C
+        text: EPS
+      - key: D
+        text: 递延税项资产
+    answer: B
+    explanation: 2025 年 fx_effect=-67146，必须计入净增减。
+  - id: Q6
+    stem: 查总收入正确过滤字段是？
+    difficulty: 1
+    question_type: single
+    display_type: conceptual
+    eval_refs: [ksc-filter-line-item-code-001]
+    options:
+      - key: A
+        text: line_item_name_cn = '总收入'
+      - key: B
+        text: line_item_code = 'total_revenue'
+      - key: C
+        text: section_code = 'net'
+      - key: D
+        text: source_key LIKE '%revenue%'
+    answer: B
+    explanation: 中文名含前导空格与注释，必须用业务码。
+  - id: Q7
+    stem: 2023 流动比率是否低于 1？
+    difficulty: 1.5
+    question_type: single
+    display_type: boolean
+    eval_refs: [ksc-current-ratio-2023]
+    options:
+      - key: A
+        text: 是，约 0.89
+      - key: B
+        text: 否，约 1.65
+      - key: C
+        text: 恰好等于 1
+      - key: D
+        text: 无法计算
+    answer: A
+    explanation: current_ratio ≈ 0.893028。
+  - id: Q8
+    stem: （多选）默认杜邦分子分母科目码包括？
+    difficulty: 2
+    question_type: multi
+    display_type: conceptual
+    eval_refs: [ksc-parent-vs-consol-001, ksc-dupont-2024]
+    options:
+      - key: A
+        text: net_loss
+      - key: B
+        text: total_revenue
+      - key: C
+        text: total_assets
+      - key: D
+        text: parent_equity
+      - key: E
+        text: total_equity
+    answer: [A, B, C, E]
+    explanation: 默认合并口径用 net_loss/total_revenue/total_assets/total_equity；parent_equity 属母公司口径。
+
+cases:
+
+- id: ksc-income-revenue-2024
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2024 年金山云合并报表总收入是多少？请写明单位。
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [basic, unit, numeric, income]
+  expected_source: semantic_layer
+  expected_measures: [总收入]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT value_amount AS 总收入
+    FROM ai.ksc_income_statement_detail
+    WHERE line_item_code = 'total_revenue'
+      AND fiscal_year = 2024 AND fiscal_quarter = 0 AND value_status = 'OK'
+  lucy_query:
+    connectionId: starrocks-r1
+    measures: [ksc_income_statement_detail.总收入]
+    filters:
+      - ksc_income_statement_detail.fiscal_year = 2024
+      - ksc_income_statement_detail.fiscal_quarter = 0
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  sql_assertions:
+    - type: required_normalized_regex
+      value: "total_revenue|总收入"
+      normalize: true
+      reason: 必须按 total_revenue / 总收入取数。
+    - type: forbidden_normalized_regex
+      value: 'line_item_name_cn\\s*='
+      normalize: true
+      reason: 禁止用中文科目名等值过滤。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        总收入: 7785180
+  notes: 单位千元人民币；金标来自 StarRocks ai schema 2026-08-08 抽样。
+  snapshot_date: '2026-08-08'
+  gold_csv: ../gold/income_core_fy2021_2025.csv
+
+
+- id: ksc-income-netloss-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2025 年合并口径净亏损是多少？注意符号，不要擅自取绝对值。
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [basic, numeric, sign, income]
+  expected_source: semantic_layer
+  expected_measures: [净亏损]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT value_amount AS 净亏损
+    FROM ai.ksc_income_statement_detail
+    WHERE line_item_code = 'net_loss'
+      AND fiscal_year = 2025 AND fiscal_quarter = 0 AND value_status = 'OK'
+  lucy_query:
+    connectionId: starrocks-r1
+    measures: [ksc_income_statement_detail.净亏损]
+    filters:
+      - ksc_income_statement_detail.fiscal_year = 2025
+      - ksc_income_statement_detail.fiscal_quarter = 0
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  sql_assertions:
+    - type: forbidden_ast
+      value: "ABS("
+      normalize: true
+      reason: 禁止对净亏损取绝对值。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        净亏损: -943692
+  notes: 披露符号为负；单位千元。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-balance-assets-2024
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2024 年末资产总额是多少？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [basic, numeric, balance]
+  expected_source: semantic_layer
+  expected_measures: [资产总额]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT value_amount AS 资产总额
+    FROM ai.ksc_balance_sheet_detail
+    WHERE line_item_code = 'total_assets'
+      AND fiscal_year = 2024 AND fiscal_quarter = 0 AND value_status = 'OK'
+  lucy_query:
+    connectionId: starrocks-r1
+    measures: [ksc_balance_sheet_detail.资产总额]
+    filters:
+      - ksc_balance_sheet_detail.fiscal_year = 2024
+      - ksc_balance_sheet_detail.fiscal_quarter = 0
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        资产总额: 17592654
+  notes: 期末时点余额，千元。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-cashflow-cfo-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2025 年经营活动现金流量净额是多少？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [basic, numeric, cashflow]
+  expected_source: semantic_layer
+  expected_measures: [经营活动现金流量净额]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT value_amount AS 经营活动现金流量净额
+    FROM ai.ksc_cash_flow_statement_detail
+    WHERE line_item_code = 'cfo'
+      AND fiscal_year = 2025 AND fiscal_quarter = 0 AND value_status = 'OK'
+  lucy_query:
+    connectionId: starrocks-r1
+    measures: [ksc_cash_flow_statement_detail.经营活动现金流量净额]
+    filters:
+      - ksc_cash_flow_statement_detail.fiscal_year = 2025
+      - ksc_cash_flow_statement_detail.fiscal_quarter = 0
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        经营活动现金流量净额: 3801028
+  notes: 千元；经营现金流已转正。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-rowcount-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 三张 KSC 报表明细表各有多少行？利润表有几个不同的 line_item_code？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [basic, schema, numeric]
+  expected_source: raw_sql_fallback
+  expected_measures: []
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT 'income' AS tbl, COUNT(*) AS rows_n, COUNT(DISTINCT line_item_code) AS codes
+    FROM ai.ksc_income_statement_detail
+    UNION ALL
+    SELECT 'balance', COUNT(*), COUNT(DISTINCT line_item_code)
+    FROM ai.ksc_balance_sheet_detail
+    UNION ALL
+    SELECT 'cashflow', COUNT(*), COUNT(DISTINCT line_item_code)
+    FROM ai.ksc_cash_flow_statement_detail
+  tool_assertions:
+    - type: required_tool
+      value: lucy_query|sl_query|sql
+      reason: 规模画像需只读查询。
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [tbl]
+      check_schema: true
+      check_row_count: true
+      numeric_tolerance: 0
+      data:
+        rows:
+          - tbl: income
+            rows_n: 125
+            codes: 25
+          - tbl: balance
+            rows_n: 205
+            codes: 41
+          - tbl: cashflow
+            rows_n: 195
+            codes: 39
+  notes: 快照规模；用于发现 ingest 漂移。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-unit-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 利润表金额科目 value_amount 的默认单位是什么？EPS 能否与总收入直接相加？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, unit]
+  expected_source: semantic_layer
+  comparison_mode: text
+  tool_assertions:
+    - type: required_tool
+      value: sl_read_source|wiki_read|lucy_read_source|wiki_search
+      reason: 单位口径应来自语义/Wiki，不能凭猜测。
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 千元
+          - RMB_THOUSAND
+          - 不能
+          - 每股
+  notes: 金额默认千元；EPS 为 RMB_PER_SHARE。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-filter-line-item-code-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 查「总收入」时应按哪个字段过滤？为什么不要用 line_item_name_cn 做等值匹配？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, filter]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - line_item_code
+          - total_revenue
+          - 前导空格
+  notes: 中文名含前导空格与 FY 注释。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-sign-cogs-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 营业成本 cogs 在库中常为正还是负？勾稽「总收入 + 营业成本 ≈ 毛利」时能否先对成本取绝对值？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, sign, recon]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 负
+          - 禁止
+          - 绝对值
+  notes: 披露符号为负；勾稽用原符号相加。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-null-not-zero-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2024 年递延税项资产 deferred_tax_asset 的金额应如何解读？能否当作 0 参与资产合计？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, null, boundary]
+  expected_source: raw_sql_fallback
+  comparison_mode: text
+  golden_sql: |
+    SELECT fiscal_year, line_item_code, value_amount, value_status
+    FROM ai.ksc_balance_sheet_detail
+    WHERE line_item_code = 'deferred_tax_asset' AND fiscal_year = 2024 AND fiscal_quarter = 0
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - NOT_DISCLOSED
+          - NULL
+          - 不等于 0
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [line_item_code]
+      check_schema: true
+      check_row_count: false
+      data:
+        rows:
+          - fiscal_year: 2024
+            line_item_code: deferred_tax_asset
+            value_amount: null
+            value_status: NOT_DISCLOSED
+  notes: NULL≠0；正式分析默认只取 OK。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-parent-vs-consol-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 默认杜邦 ROE 用合并口径还是母公司口径？对应科目码分别是什么？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, dupont, caliber]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 合并
+          - net_loss
+          - total_equity
+          - parent_net_loss
+          - parent_equity
+  notes: 默认合并；母公司需显式切换。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-dupont-period-end-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 本包杜邦分析的资产/权益默认用期末余额还是期初期末平均？若改用平均需要什么？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, dupont]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 期末
+          - Owner
+  notes: 默认期末；平均口径待 Owner 确认。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-quarter-default-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 用户只说「2024 年」未提季度时，fiscal_quarter 应取什么？当前库内是否有季报样本？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, period]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - "0"
+          - 年报
+          - 无季报
+  notes: 默认全年；样本仅 fiscal_quarter=0。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-dupont-2024
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: |
+    请对 2024 年做合并口径杜邦分析（期末资产/权益）：给出总收入、净亏损、资产总额、权益总额，
+    以及销售净利率、总资产周转率、权益乘数、ROE。并用「净亏损/权益总额」验算 ROE。
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [dupont, cross_table, numeric, spider2_hard]
+  expected_source: semantic_layer
+  expected_measures: [总收入, 净亏损, 销售净利率, 资产总额, 权益总额, 权益乘数]
+  comparison_mode: numeric
+  golden_sql: |
+    WITH i AS (
+      SELECT
+        MAX(CASE WHEN line_item_code='total_revenue' THEN value_amount END) AS total_revenue,
+        MAX(CASE WHEN line_item_code='net_loss' THEN value_amount END) AS net_loss
+      FROM ai.ksc_income_statement_detail
+      WHERE fiscal_year=2024 AND fiscal_quarter=0 AND value_status='OK'
+    ),
+    b AS (
+      SELECT
+        MAX(CASE WHEN line_item_code='total_assets' THEN value_amount END) AS total_assets,
+        MAX(CASE WHEN line_item_code='total_equity' THEN value_amount END) AS total_equity
+      FROM ai.ksc_balance_sheet_detail
+      WHERE fiscal_year=2024 AND fiscal_quarter=0 AND value_status='OK'
+    )
+    SELECT 2024 AS fiscal_year,
+      i.total_revenue, i.net_loss, b.total_assets, b.total_equity,
+      i.net_loss/i.total_revenue AS npm,
+      i.total_revenue/b.total_assets AS asset_turnover,
+      b.total_assets/b.total_equity AS equity_multiplier,
+      (i.net_loss/i.total_revenue)*(i.total_revenue/b.total_assets)*(b.total_assets/b.total_equity) AS roe_3factor,
+      i.net_loss/b.total_equity AS roe_direct
+    FROM i CROSS JOIN b
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 杜邦需分表取数后按期间对齐。
+  sql_assertions:
+    - type: forbidden_ast
+      value: "ABS("
+      normalize: true
+      reason: 禁止对亏损取绝对值。
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [fiscal_year]
+      check_schema: true
+      check_row_count: true
+      numeric_tolerance: 0.0005
+      data:
+        rows:
+          - fiscal_year: 2024
+            total_revenue: 7785180
+            net_loss: -1979042
+            total_assets: 17592654
+            total_equity: 5505320
+            npm: -0.254206
+            asset_turnover: 0.442524
+            equity_multiplier: 3.195573
+            roe_3factor: -0.359478
+            roe_direct: -0.359478
+  notes: Spider2 风格跨表多步题；金标见 gold/dupont_fy2024.csv。
+  snapshot_date: '2026-08-08'
+  gold_csv: ../gold/dupont_fy2024.csv
+
+
+- id: ksc-dupont-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 计算 2025 年合并口径杜邦三因子与 ROE（期末口径），金额单位千元。
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [dupont, cross_table, numeric, spider2_hard]
+  expected_source: semantic_layer
+  expected_measures: [总收入, 净亏损, 销售净利率, 资产总额, 权益总额, 权益乘数]
+  comparison_mode: numeric
+  golden_sql: |
+    WITH i AS (
+      SELECT MAX(CASE WHEN line_item_code='total_revenue' THEN value_amount END) AS rev,
+             MAX(CASE WHEN line_item_code='net_loss' THEN value_amount END) AS net
+      FROM ai.ksc_income_statement_detail
+      WHERE fiscal_year=2025 AND fiscal_quarter=0 AND value_status='OK'
+    ),
+    b AS (
+      SELECT MAX(CASE WHEN line_item_code='total_assets' THEN value_amount END) AS assets,
+             MAX(CASE WHEN line_item_code='total_equity' THEN value_amount END) AS equity
+      FROM ai.ksc_balance_sheet_detail
+      WHERE fiscal_year=2025 AND fiscal_quarter=0 AND value_status='OK'
+    )
+    SELECT 2025 AS fiscal_year, i.rev AS total_revenue, i.net AS net_loss,
+      b.assets AS total_assets, b.equity AS total_equity,
+      i.net/i.rev AS npm, i.rev/b.assets AS asset_turnover,
+      b.assets/b.equity AS equity_multiplier, i.net/b.equity AS roe
+    FROM i CROSS JOIN b
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [fiscal_year]
+      check_schema: true
+      check_row_count: true
+      numeric_tolerance: 0.0005
+      data:
+        rows:
+          - fiscal_year: 2025
+            total_revenue: 9558619
+            net_loss: -943692
+            total_assets: 26729189
+            total_equity: 9313034
+            npm: -0.098727
+            asset_turnover: 0.357610
+            equity_multiplier: 2.870084
+            roe: -0.101330
+  notes: 2025 ROE 亏损收窄。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-parent-roe-2024
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2024 年母公司口径 ROE（parent_net_loss / parent_equity）是多少？与合并 ROE 哪个更低？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [dupont, parent, numeric]
+  expected_source: semantic_layer
+  expected_measures: [母公司应占净亏损]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      (SELECT value_amount FROM ai.ksc_income_statement_detail
+       WHERE line_item_code='parent_net_loss' AND fiscal_year=2024 AND fiscal_quarter=0 AND value_status='OK')
+      /
+      (SELECT value_amount FROM ai.ksc_balance_sheet_detail
+       WHERE line_item_code='parent_equity' AND fiscal_year=2024 AND fiscal_quarter=0 AND value_status='OK')
+      AS parent_roe
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.0005
+      data:
+        parent_roe: -0.380547
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 母公司
+          - 更低
+  notes: 母公司 ROE -0.3805 vs 合并 -0.3595。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-gross-recon-2024
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 用 2024 年总收入、营业成本、毛利做勾稽：总收入 + 营业成本 - 毛利 应等于多少？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [recon, sign, numeric]
+  expected_source: semantic_layer
+  expected_measures: [总收入, 营业成本, 毛利]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      MAX(CASE WHEN line_item_code='total_revenue' THEN value_amount END)
+      + MAX(CASE WHEN line_item_code='cogs' THEN value_amount END)
+      - MAX(CASE WHEN line_item_code='gross_profit' THEN value_amount END) AS gross_recon_diff
+    FROM ai.ksc_income_statement_detail
+    WHERE fiscal_year=2024 AND fiscal_quarter=0 AND value_status='OK'
+  sql_assertions:
+    - type: forbidden_ast
+      value: "ABS("
+      normalize: true
+      reason: 勾稽禁止先取绝对值。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        gross_recon_diff: 0
+  notes: 因成本为负，用加法勾稽。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-balance-equation-2024
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 验证 2024 年末会计恒等式：资产总额 − 负债总额 − 权益总额 是否为 0？请给出三项金额。
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [recon, balance, numeric]
+  expected_source: semantic_layer
+  expected_measures: [资产总额, 负债总额, 权益总额]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      MAX(CASE WHEN line_item_code='total_assets' THEN value_amount END) AS total_assets,
+      MAX(CASE WHEN line_item_code='total_liabilities' THEN value_amount END) AS total_liabilities,
+      MAX(CASE WHEN line_item_code='total_equity' THEN value_amount END) AS total_equity,
+      MAX(CASE WHEN line_item_code='total_assets' THEN value_amount END)
+        - MAX(CASE WHEN line_item_code='total_liabilities' THEN value_amount END)
+        - MAX(CASE WHEN line_item_code='total_equity' THEN value_amount END) AS bal_recon_diff
+    FROM ai.ksc_balance_sheet_detail
+    WHERE fiscal_year=2024 AND fiscal_quarter=0 AND value_status='OK'
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [total_assets]
+      check_schema: true
+      check_row_count: false
+      numeric_tolerance: 0.01
+      data:
+        rows:
+          - total_assets: 17592654
+            total_liabilities: 12087334
+            total_equity: 5505320
+            bal_recon_diff: 0
+  notes: 会计恒等式勾稽。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-cashflow-fx-recon-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: |
+    2025 年现金流勾稽：经营活动+投资+筹资净额 + 汇率影响 fx_effect 是否等于现金净增减 net_change_cash？
+    并验证 年初现金 + 现金净增减 = 年末现金。给出各科目金额。
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [recon, cashflow, numeric, spider2_hard]
+  expected_source: raw_sql_fallback
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      MAX(CASE WHEN line_item_code='cfo' THEN value_amount END) AS cfo,
+      MAX(CASE WHEN line_item_code='cfi' THEN value_amount END) AS cfi,
+      MAX(CASE WHEN line_item_code='cff' THEN value_amount END) AS cff,
+      MAX(CASE WHEN line_item_code='fx_effect' THEN value_amount END) AS fx_effect,
+      MAX(CASE WHEN line_item_code='net_change_cash' THEN value_amount END) AS net_change_cash,
+      MAX(CASE WHEN line_item_code='cash_begin' THEN value_amount END) AS cash_begin,
+      MAX(CASE WHEN line_item_code='cash_end' THEN value_amount END) AS cash_end
+    FROM ai.ksc_cash_flow_statement_detail
+    WHERE fiscal_year=2025 AND fiscal_quarter=0 AND value_status='OK'
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [cfo]
+      check_schema: true
+      check_row_count: false
+      numeric_tolerance: 0.01
+      data:
+        rows:
+          - cfo: 3801028
+            cfi: -4529729
+            cff: 4182983
+            fx_effect: -67146
+            net_change_cash: 3387136
+            cash_begin: 2730101
+            cash_end: 6117237
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - fx_effect
+          - 相等
+  notes: 仅加 cfo+cfi+cff 会差 67146，必须含汇率影响。
+  snapshot_date: '2026-08-08'
+  gold_csv: ../gold/cashflow_core_fy2021_2025.csv
+
+
+- id: ksc-bs-vs-cf-cash-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2025 年末资产负债表「现金及现金等价物」与现金流量表「年末现金余额」是否相同？差额多少？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [boundary, cross_table, numeric]
+  expected_source: raw_sql_fallback
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      (SELECT value_amount FROM ai.ksc_balance_sheet_detail
+       WHERE line_item_code='cash' AND fiscal_year=2025 AND fiscal_quarter=0 AND value_status='OK') AS bs_cash,
+      (SELECT value_amount FROM ai.ksc_cash_flow_statement_detail
+       WHERE line_item_code='cash_end' AND fiscal_year=2025 AND fiscal_quarter=0 AND value_status='OK') AS cf_cash_end
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [bs_cash]
+      check_schema: true
+      check_row_count: false
+      numeric_tolerance: 0.01
+      data:
+        rows:
+          - bs_cash: 6018043
+            cf_cash_end: 6117237
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 不相同
+          - "99194"
+  notes: 口径不同，禁止混用两表现金科目做无说明勾稽。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-revenue-yoy-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2025 年相对 2024 年总收入同比增速是多少？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [trend, numeric]
+  expected_source: raw_sql_fallback
+  comparison_mode: numeric
+  golden_sql: |
+    WITH r AS (
+      SELECT fiscal_year, value_amount AS rev
+      FROM ai.ksc_income_statement_detail
+      WHERE line_item_code='total_revenue' AND fiscal_quarter=0 AND value_status='OK'
+        AND fiscal_year IN (2024, 2025)
+    )
+    SELECT
+      (MAX(CASE WHEN fiscal_year=2025 THEN rev END)
+       - MAX(CASE WHEN fiscal_year=2024 THEN rev END))
+      / NULLIF(MAX(CASE WHEN fiscal_year=2024 THEN rev END), 0) AS rev_yoy
+    FROM r
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.0005
+      data:
+        rev_yoy: 0.227797
+  notes: (9558619-7785180)/7785180。
+  snapshot_date: '2026-08-08'
+  gold_csv: ../gold/revenue_yoy.csv
+
+
+- id: ksc-dupont-panel-2021-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: |
+    列出 2021–2025 各年合并口径杜邦面板：总收入、净亏损、资产总额、权益总额、
+    销售净利率、总资产周转率、权益乘数、ROE。哪一年 ROE 最差？哪一年毛利率最高？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [dupont, panel, numeric, spider2_hard]
+  expected_source: raw_sql_fallback
+  comparison_mode: numeric
+  golden_sql: |
+    -- see gold/dupont_fy2021_2025.csv
+    SELECT 1
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [fiscal_year]
+      check_schema: true
+      check_row_count: true
+      numeric_tolerance: 0.0005
+      data:
+        rows:
+          - fiscal_year: 2021
+            total_revenue: 9060784
+            net_loss: -1591756
+            total_assets: 21078040
+            total_equity: 11492423
+            npm: -0.175675
+            asset_turnover: 0.429868
+            equity_multiplier: 1.834081
+            roe: -0.138505
+          - fiscal_year: 2022
+            total_revenue: 8180107
+            net_loss: -2688388
+            total_assets: 17316231
+            total_equity: 9583499
+            npm: -0.328649
+            asset_turnover: 0.472395
+            equity_multiplier: 1.806880
+            roe: -0.280523
+          - fiscal_year: 2023
+            total_revenue: 7047461
+            net_loss: -2183647
+            total_assets: 15070278
+            total_equity: 7245904
+            npm: -0.309849
+            asset_turnover: 0.467640
+            equity_multiplier: 2.079834
+            roe: -0.301363
+          - fiscal_year: 2024
+            total_revenue: 7785180
+            net_loss: -1979042
+            total_assets: 17592654
+            total_equity: 5505320
+            npm: -0.254206
+            asset_turnover: 0.442524
+            equity_multiplier: 3.195573
+            roe: -0.359478
+          - fiscal_year: 2025
+            total_revenue: 9558619
+            net_loss: -943692
+            total_assets: 26729189
+            total_equity: 9313034
+            npm: -0.098727
+            asset_turnover: 0.357610
+            equity_multiplier: 2.870084
+            roe: -0.101330
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - "2024"
+          - "2024"
+          - 毛利率
+  # 毛利率最高是 2024 (0.172241)，ROE 最差也是 2024
+  notes: ROE 最差与毛利率最高同为 2024；金标 CSV 见 gold/dupont_fy2021_2025.csv。
+  snapshot_date: '2026-08-08'
+  gold_csv: ../gold/dupont_fy2021_2025.csv
+
+
+- id: ksc-gpm-peak-year
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2021–2025 哪一年毛利率最高？该年毛利率是多少？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [trend, numeric]
+  expected_source: semantic_layer
+  expected_measures: [毛利率]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT fiscal_year,
+      MAX(CASE WHEN line_item_code='gross_profit' THEN value_amount END)
+      / NULLIF(MAX(CASE WHEN line_item_code='total_revenue' THEN value_amount END),0) AS gpm
+    FROM ai.ksc_income_statement_detail
+    WHERE fiscal_quarter=0 AND value_status='OK'
+    GROUP BY fiscal_year
+    ORDER BY gpm DESC
+    LIMIT 1
+  sql_assertions:
+    - type: forbidden_ast
+      value: "AVG("
+      normalize: true
+      reason: 比率必须 sum/sum，禁止 AVG。
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [fiscal_year]
+      check_schema: true
+      check_row_count: true
+      numeric_tolerance: 0.0005
+      data:
+        rows:
+          - fiscal_year: 2024
+            gpm: 0.172241
+  notes: 最高毛利率年份 2024。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-current-ratio-2023
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2023 年末流动比率是多少？是否低于 1？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [ratio, numeric, boundary]
+  expected_source: semantic_layer
+  expected_measures: [流动比率]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      MAX(CASE WHEN line_item_code='total_current_assets' THEN value_amount END)
+      / NULLIF(MAX(CASE WHEN line_item_code='total_current_liabilities' THEN value_amount END),0) AS current_ratio
+    FROM ai.ksc_balance_sheet_detail
+    WHERE fiscal_year=2023 AND fiscal_quarter=0 AND value_status='OK'
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.0005
+      data:
+        current_ratio: 0.893028
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 低于
+          - "1"
+  notes: 2023 流动比率跌破 1。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-debt-ratio-2024
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2024 年末资产负债率是多少？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [ratio, numeric]
+  expected_source: semantic_layer
+  expected_measures: [资产负债率]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      MAX(CASE WHEN line_item_code='total_liabilities' THEN value_amount END)
+      / NULLIF(MAX(CASE WHEN line_item_code='total_assets' THEN value_amount END),0) AS debt_ratio
+    FROM ai.ksc_balance_sheet_detail
+    WHERE fiscal_year=2024 AND fiscal_quarter=0 AND value_status='OK'
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.0005
+      data:
+        资产负债率: 0.687067
+  notes: 负债/资产。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-public-cloud-share-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2025 年公有云收入占总收入的比例是多少？公有云与行业云之和是否等于总收入？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [segment, recon, numeric]
+  expected_source: semantic_layer
+  expected_measures: [公有云收入, 行业云收入, 总收入]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      MAX(CASE WHEN line_item_code='revenue_public_cloud' THEN value_amount END) AS pub,
+      MAX(CASE WHEN line_item_code='revenue_industry_cloud' THEN value_amount END) AS ind,
+      MAX(CASE WHEN line_item_code='total_revenue' THEN value_amount END) AS tot,
+      MAX(CASE WHEN line_item_code='revenue_public_cloud' THEN value_amount END)
+        / NULLIF(MAX(CASE WHEN line_item_code='total_revenue' THEN value_amount END),0) AS pub_share,
+      MAX(CASE WHEN line_item_code='revenue_public_cloud' THEN value_amount END)
+        + MAX(CASE WHEN line_item_code='revenue_industry_cloud' THEN value_amount END)
+        - MAX(CASE WHEN line_item_code='total_revenue' THEN value_amount END) AS pub_ind_vs_total
+    FROM ai.ksc_income_statement_detail
+    WHERE fiscal_year=2025 AND fiscal_quarter=0 AND value_status='OK'
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [pub]
+      check_schema: true
+      check_row_count: false
+      numeric_tolerance: 0.0005
+      data:
+        rows:
+          - pub: 6633492
+            ind: 2925127
+            tot: 9558619
+            pub_share: 0.693980
+            pub_ind_vs_total: 0
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 等于
+  notes: 2025 年分项之和恰好等于总收入；更早年份有小差额。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-op-loss-improve-2024-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 经营亏损从 2024 年到 2025 年改善了多少（千元，用代数差：2025 − 2024）？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [trend, sign, numeric]
+  expected_source: semantic_layer
+  expected_measures: [经营亏损]
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT
+      MAX(CASE WHEN fiscal_year=2025 THEN value_amount END)
+      - MAX(CASE WHEN fiscal_year=2024 THEN value_amount END) AS op_delta
+    FROM ai.ksc_income_statement_detail
+    WHERE line_item_code='operating_loss' AND fiscal_quarter=0 AND value_status='OK'
+      AND fiscal_year IN (2024,2025)
+  sql_assertions:
+    - type: forbidden_ast
+      value: "ABS("
+      normalize: true
+      reason: 改善幅度用代数差，不要先取绝对值再减。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        op_delta: 966097
+  notes: -772913 - (-1739010) = 966097；亏损收窄。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-eps-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 2025 年基本/摊薄每股亏损（eps_basic_diluted）是多少？单位是什么？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [unit, numeric, boundary]
+  expected_source: raw_sql_fallback
+  comparison_mode: numeric
+  golden_sql: |
+    SELECT value_amount AS eps, unit_code
+    FROM ai.ksc_income_statement_detail
+    WHERE line_item_code='eps_basic_diluted' AND fiscal_year=2025 AND fiscal_quarter=0 AND value_status='OK'
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [unit_code]
+      check_schema: true
+      check_row_count: false
+      numeric_tolerance: 0.0001
+      data:
+        rows:
+          - eps: -0.23
+            unit_code: RMB_PER_SHARE
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 每股
+          - RMB_PER_SHARE
+  notes: 勿与千元金额混加。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-path-dupont-tables-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 做杜邦三因子分析必须用到哪些表？跨表对齐键是什么？能否在 Manifest 里写三表 many_to_many JOIN？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [path_selection, join]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - ksc_income_statement_detail
+          - ksc_balance_sheet_detail
+          - fiscal_year
+          - fiscal_quarter
+          - 分表
+  notes: 现金流量表非杜邦三因子必选；禁止 many_to_many。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-related-party-null-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: related_party_revenue_public 在库中的 value_status 是什么？金额能否当作 0？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [boundary, null]
+  expected_source: raw_sql_fallback
+  comparison_mode: text
+  golden_sql: |
+    SELECT DISTINCT value_status, value_amount IS NULL AS is_null
+    FROM ai.ksc_income_statement_detail
+    WHERE line_item_code='related_party_revenue_public'
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - NOT_PRESENT_IN_INPUT_SHEET
+          - NULL
+          - 不等于 0
+  notes: 输入表未出现 ≠ 0。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-no-quarterly-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 当前样本能否计算 2024Q2 杜邦？应如何回答？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [boundary, degradation]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 不能
+          - 年报
+          - fiscal_quarter
+  notes: 仅有全年样本，禁止编造季报。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-multiturn-dupont-001
+  case_type: multi_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [multi_turn, dupont]
+  expected_source: semantic_layer
+  expected_measures: [总收入, 净亏损]
+  turns:
+    - turn_id: 1
+      user: 2024 年合并总收入和净亏损分别是多少？
+      expected_measures: [总收入, 净亏损]
+      result_assertions:
+        - value_type: dataframe
+          compare_mode: unordered_rows
+          key_columns: [总收入]
+          check_schema: false
+          check_row_count: false
+          numeric_tolerance: 0.01
+          data:
+            rows:
+              - 总收入: 7785180
+                净亏损: -1979042
+    - turn_id: 2
+      user: 在同一合并口径与期末资产/权益下，继续算 2024 年 ROE。
+      expected_measures: [总收入, 净亏损]
+      context_assertions:
+        inherit_measures: [总收入, 净亏损]
+        inherit_filters: []
+        inherit_dimensions: []
+        inherit_time_grain: null
+      result_assertions:
+        - value_type: scalar
+          compare_mode: approx
+          numeric_tolerance: 0.0005
+          data:
+            roe: -0.359478
+        - value_type: text
+          compare_mode: subset
+          check_schema: false
+          check_row_count: false
+          data:
+            must_mention:
+              - 合并
+              - 期末
+  notes: 多轮保持合并口径与 2024 期间。
+  snapshot_date: '2026-08-08'
+
+
+- id: ksc-ops-snapshot-2025
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: |
+    汇总 2025 年经营情况：总收入、毛利、毛利率、经营亏损、净亏损、经营现金流、现金流量表年末现金、合并 ROE。
+    金额单位千元；比率保留小数。
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [ops, cross_table, numeric, spider2_hard]
+  expected_source: semantic_layer
+  expected_measures: [总收入, 毛利, 毛利率, 经营亏损, 净亏损, 经营活动现金流量净额]
+  comparison_mode: numeric
+  golden_sql: |
+    -- composite; see gold/ops_snapshot_fy2025.csv
+    SELECT 1
+  result_assertions:
+    - value_type: dataframe
+      compare_mode: unordered_rows
+      key_columns: [fiscal_year]
+      check_schema: true
+      check_row_count: true
+      numeric_tolerance: 0.0005
+      data:
+        rows:
+          - fiscal_year: 2025
+            total_revenue: 9558619
+            gross_profit: 1503408
+            gross_margin: 0.157283
+            operating_loss: -772913
+            net_loss: -943692
+            cfo: 3801028
+            cash_end_cf: 6117237
+            roe: -0.101330
+  notes: Spider2 风格多表经营摘要；金标 CSV 见 gold/ops_snapshot_fy2025.csv。
+  snapshot_date: '2026-08-08'
+  gold_csv: ../gold/ops_snapshot_fy2025.csv
+
+
+- id: ksc-is-deleted-forbidden-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 查询 KSC 财务报表时是否应加 is_deleted = 0？
+  domain: ksc_financial
+  trace_required: true
+  context_required:
+    keys:
+      - global/ksc-financial-dupont-playbook.md
+  risk_tags: [anti_pattern, degradation]
+  expected_source: semantic_layer
+  comparison_mode: text
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - 不
+          - 无此字段
+  notes: 本域无 is_deleted。
+  snapshot_date: '2026-08-08'
