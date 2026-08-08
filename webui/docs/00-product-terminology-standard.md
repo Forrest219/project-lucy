@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -191,7 +191,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Config Audit Change Type | 变更类型 | 配置变更类型 | 类型（过宽）、changeType（裸露） | Spec 96 表头与筛选 |
 | Config Audit Asset Kind | 资产域 | 配置资产域 | assetKind、资产类型（与 Semantic Asset Kind 混淆） | Spec 90/96：governance/semantic/wiki/eval/publish |
 | Config Audit CSV Export | 导出 CSV（与主表一致） | 配置审计导出 | 英文原始列 dump、仅到日的文件名 | Spec 97：列头/单元格与主表 7 列中文一致；文件名 `config-audit-YYYYMMDD-HHmmss.csv` |
-| Publish History CSV Export | 导出 CSV（与主表一致） | 发布记录导出 | 导出当前语义资产包 (.zip)、下载当前快照 | Spec 113：明细 CSV；文件名 `publish-history-YYYYMMDD-HHmmss.csv`；ZIP 仅发布工作台 |
+| Publish History CSV Export | 导出 CSV（与主表一致） | 发布记录导出 | 导出当前语义资产包 (.zip)（作发布记录主导出） | Spec 113：明细 CSV；文件名 `publish-history-YYYYMMDD-HHmmss.csv`；工作台 ZIP UI 已移除（Spec 123） |
 | Review | 审阅 | 变更审阅 | 审核混用 | 人工审阅、PR-like review |
 | Approval | 审批 | 批准 | 审阅混用 | 需要明确批准 / 驳回的流程 |
 | Audit | 审计 | 审计日志 | 审阅 | 操作追踪、合规记录 |
@@ -261,6 +261,10 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Refresh Live Catalog | 重新拉取库内目录 | 刷新本地目录（易混） | 仅 bypass TTL 重查物理库 |
 | Select Schema | 选择 Schema | 选择架构、选择模式 | Add Schema 下拉候选 |
 | Enter Schema Manually | 手动输入 Schema 名称 | 手动输入架构 | 候选不可用或自定义时 |
+| Remove Schema | 移除 Schema | 删除数据库、删库、删除架构、删除模式 | 从连接配置卸载 Schema；不触碰物理库（Spec 117） |
+| Schema Remove Impact | 移除影响 | — | dryRun 摘要：已启用表、Manifest、overlay、Wiki 引用（Spec 117） |
+| Delete Schema Manifest (optional) | 同时删除 Schema Manifest | 默认级联删除 | 可选勾选；默认关；仅 dryRun:false 时生效（Spec 117） |
+| Delete Semantic Overlays (optional) | 同时删除 semantic overlay | 默认级联删除 | 可选勾选；默认关；仅 dryRun:false 时生效（Spec 117） |
 
 ### 4.2 语义建模
 
@@ -339,13 +343,19 @@ Connection (连接)
 | Approval Flow | 审批流程 | 审阅流程混用 | 需要批准 / 驳回的流程 |
 | Reviewer | 审阅人 | 审核员混用 | 执行 review 的角色 |
 | Approver | 审批人 | 审阅人混用 | 执行 approval 的角色 |
-| Publish Gate Panel | 发布门禁 | 变更影响范围（作右栏唯一标题）、Validate Gate（作栏标题） | `/publish/workbench` 右栏审阅区（Spec 112） |
-| Change Detail | 变更详情 | 裸文件路径作栏主标题 | 工作台中栏角色标题；路径为副信息 |
-| File Change Status | 已修改 / 新增 / 已删除 / 已重命名 / 已变更 | 状态：W、M、A（裸内部码） | 待发布文件业务态 |
-| Schema Manifest Impact | Schema Manifest 变更 | 把 `_schema` basename 当作「表」 | 发布门禁影响区分栏 |
+| Activation Prep Panel | 生效准备 | 发布门禁（作本页栏标题） | `/publish/workbench` 右栏（Spec 123；取代 Spec 112「发布门禁」栏名） |
+| Sync Change List | 本次将同步的变更 | 待发布变更（作唯一栏标题） | 左栏；副文「本批一并同步 N 项（不可分文件勾选）」（Spec 123） |
+| Change Detail | 变更详情 | 裸文件路径作栏主标题；默认常驻最大栏 Diff | 按需 Drawer；路径为副信息（Spec 119） |
+| File Change Status | 已修改 / 新增 / 已删除 / 已重命名 / 已变更 | 状态：W、M、A（裸内部码） | 待同步文件业务态 |
+| Schema Manifest Impact | Schema Manifest 变更 | 把 `_schema` basename 当作「表」 | 生效准备影响区分栏 |
 | Table Overlay Impact | 表语义变更 | — | overlay 影响表列表 |
-| Publish Flow Steps | 审阅变更 → 校验 → 发布并重建索引 | 自拟过长流水线文案 | 门禁轻量步骤指示 |
-| Advanced Publish Actions | 高级 | — | 强制重建索引 / 有待发布时的上传与边界检查 |
+| Publish Flow Steps | 审阅变更 → 校验 → 同步索引 | 发布并重建索引（作本页步骤末项） | 生效步骤指示（Spec 123） |
+| Sync Index and Activate | 同步索引并生效 | 发布并重建索引（作本页 Header/确认主 CTA） | 有待同步变更时主按钮（Spec 123） |
+| Sync Index | 同步索引 | — | 无待同步变更时增量 reindex |
+| Full Reindex | 全量重建索引 | 强制重建索引（作本页文案） | 「更多」菜单；`force:true`（Spec 123） |
+| Confirm Sync Drawer | 确认同步索引并生效 | 确认发布并重建索引；发布语义资产（作本确认侧栏标题） | 确认路径（Spec 121+123）；非上传 |
+| Upload Semantic Assets | 上传语义资产 | — | Catalog / 连接等入口；**禁止**作为 `/publish/workbench` 本页入口（Spec 123） |
+| Publish Semantic Assets Drawer | 发布语义资产 | — | 仅上传路径 Drawer 标题；不在工作台本页 |
 
 审阅与审批的流程分工必须与第 3.1 节一致：
 

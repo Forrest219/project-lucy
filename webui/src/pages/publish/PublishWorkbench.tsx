@@ -17,10 +17,6 @@ import type {
   ValidationResult
 } from "../../lib/types";
 import {
-  SemanticAssetExportButton,
-  SemanticAssetPublishDrawer
-} from "../../components/semantic-assets";
-import {
   formatValidationFailureToast,
   isNoiseValidationLine,
   listValidationIssueMessages,
@@ -209,23 +205,24 @@ function derivePublishGate(
 
 function gateNextStepCopy(gate: PublishGate, failedCount: number, hasValidate: boolean): string {
   if (gate.state === "empty") {
-    return "暂无待发布变更。可上传语义资产，或在 CLI / Git 更新后强制重建索引。";
+    return "暂无待同步变更。可直接同步索引，或在「更多」中全量重建。";
   }
   if (!hasValidate) {
     return "下一步：校验变更。";
   }
   if (failedCount > 0) {
-    return `${failedCount} 张表校验未通过，发布已被阻断。`;
+    return `${failedCount} 张表校验未通过，同步已被阻断。`;
   }
   if (gate.state === "pending") {
-    return "当前变更无可校验对象或校验未通过，发布已阻断。";
+    return "当前变更无可校验对象或校验未通过，同步已阻断。";
   }
-  return "校验已通过，可使用顶部「发布并重建索引」。";
+  return "校验已通过，可使用顶部「同步索引并生效」。";
 }
 
 export function PublishWorkbench() {
   const [selected, setSelected] = useState<string | null>(null);
-  const [publishOpen, setPublishOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [confirmPublishOpen, setConfirmPublishOpen] = useState(false);
   const autoValidatedSignature = useRef<string | null>(null);
 
   const diffQuery = useQuery({
@@ -261,7 +258,10 @@ export function PublishWorkbench() {
     }
   });
   const reindexMutation = useMutation({
-    mutationFn: () => apiPost<SemanticAssetManualReindexResponse>("/api/semantic-assets/reindex", { force: false }),
+    mutationFn: (opts?: { force?: boolean }) =>
+      apiPost<SemanticAssetManualReindexResponse>("/api/semantic-assets/reindex", {
+        force: opts?.force === true
+      }),
     onSuccess: (data) => {
       if (data.reindex.ok) {
         toast.success("KTX 索引重建完成");
@@ -282,7 +282,7 @@ export function PublishWorkbench() {
   const fileSignature = files.map((file) => file.filePath).join("\n");
   const hasPendingFiles = files.length > 0;
   const boundaryChecklist = boundaryChecklistForChangedFiles(files.map((file) => file.filePath));
-  const active = files.find((file) => file.filePath === (selected ?? files[0]?.filePath));
+  const active = selected ? files.find((file) => file.filePath === selected) ?? null : null;
   const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
   const publishGate = derivePublishGate(files.length, validateMutation.data);
   const publishCtaDisabled = publishGate.state !== "ready";
@@ -333,6 +333,17 @@ export function PublishWorkbench() {
     runValidate
   ]);
 
+  useEffect(() => {
+    if (!detailOpen && !confirmPublishOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (confirmPublishOpen) setConfirmPublishOpen(false);
+      else if (detailOpen) setDetailOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [detailOpen, confirmPublishOpen]);
+
   function validationForFile(filePath: string) {
     const tableName = tableNameFromPath(filePath);
     return validateMutation.data?.results.find((item) => item.table === tableName)?.validation;
@@ -341,7 +352,9 @@ export function PublishWorkbench() {
   const publishCtaLabel =
     reindexMutation.isPending || validateMutation.isPending
       ? "处理中…"
-      : "发布并重建索引";
+      : hasPendingFiles
+        ? "同步索引并生效"
+        : "同步索引";
 
   const nextStepCopy = gateNextStepCopy(
     publishGate,
@@ -354,30 +367,35 @@ export function PublishWorkbench() {
   const stepValidateActive = hasPendingFiles && publishGate.state === "pending";
   const stepPublishActive = publishGate.state === "ready";
 
-  function renderForceReindexButton(testId = "workbench-reindex") {
-    return (
-      <button
-        type="button"
-        className="pl-btn pl-btn--secondary"
-        onClick={() => reindexMutation.mutate()}
-        disabled={reindexMutation.isPending}
-        data-testid={testId}
-      >
-        {reindexMutation.isPending ? "重建中…" : "强制重建索引"}
-      </button>
+  function submitConfirmPublish() {
+    reindexMutation.mutate(
+      { force: false },
+      {
+        onSuccess: (data) => {
+          if (data.reindex.ok) setConfirmPublishOpen(false);
+        }
+      }
     );
   }
 
-  function renderUploadButton(testId = "workbench-upload-semantic-asset") {
+  function renderMoreMenu() {
     return (
-      <button
-        type="button"
-        className="pl-btn pl-btn--secondary"
-        onClick={() => setPublishOpen(true)}
-        data-testid={testId}
-      >
-        上传语义资产
-      </button>
+      <details className="relative" data-testid="workbench-more-menu">
+        <summary className="pl-btn pl-btn--ghost cursor-pointer list-none">更多</summary>
+        <div className="absolute right-0 z-20 mt-1 min-w-[12rem] rounded-md border border-border-default bg-bg-surface p-2 shadow-lg">
+          <button
+            type="button"
+            className="pl-btn pl-btn--secondary w-full justify-start text-sm"
+            onClick={() => reindexMutation.mutate({ force: true })}
+            disabled={reindexMutation.isPending}
+            data-testid="workbench-reindex"
+            title="清空后全量重建，较慢"
+          >
+            {reindexMutation.isPending ? "重建中…" : "全量重建索引"}
+          </button>
+          <p className="mt-2 px-1 text-xs text-fg-muted">清空后重建，较慢；日常请用「同步索引」。</p>
+        </div>
+      </details>
     );
   }
 
@@ -385,13 +403,13 @@ export function PublishWorkbench() {
     <div className="pl-page-stack">
       <PageHeader
         title="发布工作台"
-        description="审阅待生效语义资产，校验通过后一键发布并重建索引。"
+        description="同步 KTX 索引，让 Agent 检索到磁盘上的最新语义与 Wiki。"
         badges={
           <>
             <span data-testid="workbench-pending-count">
               {files.length > 0
-                ? `${files.length} 个待发布文件`
-                : "暂无待发布变更"}
+                ? `${files.length} 个待同步文件`
+                : "暂无待同步变更"}
             </span>
             {validateMutation.data ? (
               <span>
@@ -424,7 +442,10 @@ export function PublishWorkbench() {
                     publishGate.state === "ready" ? "pl-btn--primary" : "pl-btn--secondary",
                     publishGate.state === "ready" && "pl-btn--cta"
                   )}
-                  onClick={() => setPublishOpen(true)}
+                  onClick={() => {
+                    setDetailOpen(false);
+                    setConfirmPublishOpen(true);
+                  }}
                   disabled={publishCtaDisabled}
                   data-testid="workbench-publish-and-reindex"
                   data-gate={publishGate.state}
@@ -434,23 +455,24 @@ export function PublishWorkbench() {
                 </button>
               </>
             ) : (
-              <>
-                {renderUploadButton()}
-                {renderForceReindexButton()}
-              </>
+              <button
+                type="button"
+                className="pl-btn pl-btn--secondary"
+                onClick={() => reindexMutation.mutate({ force: false })}
+                disabled={reindexMutation.isPending}
+                data-testid="workbench-sync-index"
+              >
+                {reindexMutation.isPending ? "同步中…" : "同步索引"}
+              </button>
             )}
-            <SemanticAssetExportButton
-              label="导出当前快照 (.zip)"
-              variant="ghost"
-              testId="workbench-export-snapshot"
-            />
+            {renderMoreMenu()}
           </>
         }
       />
 
       <div className="pl-review-layout" data-testid="publish-workbench-layout">
-        <aside className="pl-review-sidebar">
-          <p className="pl-panel-title mb-2">待发布变更</p>
+        <aside className="pl-review-sidebar" data-testid="workbench-pending-panel">
+          <p className="pl-panel-title mb-2">本次将同步的变更</p>
           {diffQuery.isLoading ? <p className="pl-notice">正在加载变更…</p> : null}
           {diffQuery.error ? (
             <p className="pl-error">
@@ -460,22 +482,30 @@ export function PublishWorkbench() {
           ) : null}
           {files.length === 0 && !diffQuery.isLoading ? (
             <div className="pl-notice" data-testid="workbench-empty-state">
-              <p className="font-medium">暂无待发布变更</p>
+              <p className="font-medium">暂无待同步变更</p>
               <p className="mt-1">
-                你仍可以上传语义资产，或在已有 YAML 由 CLI / Git 更新后强制重建索引。
+                磁盘语义已是最新时可直接同步索引；CLI / Git 大改后可用「更多」中的全量重建。
               </p>
             </div>
+          ) : null}
+          {files.length > 0 ? (
+            <p className="pl-notice text-xs mb-2" data-testid="workbench-batch-sync-hint">
+              本批一并同步 {files.length} 项（不可分文件勾选）。点击文件查看变更详情。
+            </p>
           ) : null}
           <div className="pl-file-list">
             {files.map((file) => (
               <button
                 className={clsx(
                   "pl-file-button",
-                  active?.filePath === file.filePath && "pl-file-button--active"
+                  detailOpen && active?.filePath === file.filePath && "pl-file-button--active"
                 )}
                 key={file.filePath}
                 type="button"
-                onClick={() => setSelected(file.filePath)}
+                onClick={() => {
+                  setSelected(file.filePath);
+                  setDetailOpen(true);
+                }}
               >
                 <span>{fileChangeStatusLabel(file.status)}</span>
                 <span className="truncate notranslate" translate="no">
@@ -489,26 +519,10 @@ export function PublishWorkbench() {
           </div>
         </aside>
 
-        <section className="pl-review-main">
-          <div className="pl-review-main-header">
-            <p className="pl-panel-title mb-1">变更详情</p>
-            {active ? (
-              <>
-                <p className="pl-notice notranslate truncate" translate="no">
-                  {active.filePath}
-                </p>
-                <p className="pl-notice" data-testid="workbench-file-status">
-                  {fileChangeStatusLabel(active.status)}
-                </p>
-              </>
-            ) : (
-              <p className="pl-notice">请选择左侧文件查看 diff。</p>
-            )}
-          </div>
-          <DiffViewer diff={active?.diff || "该文件暂无可展示的补丁内容。"} />
-        </section>
-
-        <aside className="pl-review-sidebar">
+        <section
+          className="pl-review-main grid gap-4"
+          data-testid="publish-gate-panel"
+        >
           <section
             className="grid gap-3"
             data-testid="publish-change-impact"
@@ -522,12 +536,12 @@ export function PublishWorkbench() {
                     : "pending"
             }
           >
-            <p className="pl-panel-title">发布门禁</p>
+            <p className="pl-panel-title">生效准备</p>
 
             <ol
               className="flex flex-wrap items-center gap-1 text-xs text-fg-muted"
               data-testid="publish-flow-steps"
-              aria-label="发布步骤"
+              aria-label="生效步骤"
             >
               <li className={clsx(stepReviewDone && "text-fg-default font-medium")}>审阅变更</li>
               <li aria-hidden="true">→</li>
@@ -540,7 +554,7 @@ export function PublishWorkbench() {
               </li>
               <li aria-hidden="true">→</li>
               <li className={clsx(stepPublishActive && "text-fg-default font-medium")}>
-                发布并重建索引
+                同步索引
               </li>
             </ol>
 
@@ -623,7 +637,7 @@ export function PublishWorkbench() {
 
                 {failedCount > 0 ? (
                   <p className="pl-error text-xs" data-testid="publish-change-impact-blocked">
-                    {failedCount} 张表校验未通过，发布已被阻断。
+                    {failedCount} 张表校验未通过，同步已被阻断。
                   </p>
                 ) : null}
               </div>
@@ -666,16 +680,9 @@ export function PublishWorkbench() {
             )}
           </section>
 
-          <details className="grid gap-2" data-testid="publish-advanced-actions">
-            <summary className="pl-panel-title cursor-pointer">高级</summary>
+          <details className="grid gap-2" data-testid="publish-boundary-and-index">
+            <summary className="pl-panel-title cursor-pointer">索引与边界</summary>
             <div className="grid gap-3 pt-1">
-              {hasPendingFiles ? (
-                <div className="flex flex-wrap gap-2">
-                  {renderUploadButton("workbench-upload-semantic-asset")}
-                  {renderForceReindexButton("workbench-reindex")}
-                </div>
-              ) : null}
-
               {boundaryChecklist.length > 0 ? (
                 <section
                   className="grid gap-2 notranslate"
@@ -696,7 +703,7 @@ export function PublishWorkbench() {
                   <span className="notranslate" translate="no">
                     KTX
                   </span>{" "}
-                  索引
+                  索引结果
                 </p>
                 {reindexMutation.data ? (
                   <div
@@ -722,7 +729,7 @@ export function PublishWorkbench() {
                   </div>
                 ) : (
                   <p className="pl-notice text-xs">
-                    发布成功后系统会自动重建索引；此处仅用于 CLI / Git 改动后的兜底重建。
+                    同步索引并生效后结果将显示在这里；全量重建请用顶部「更多」。
                   </p>
                 )}
               </section>
@@ -738,11 +745,11 @@ export function PublishWorkbench() {
                 </span>
               </p>
               <p className="text-xs text-fg-muted">
-                发布已完成{" "}
+                同步已完成{" "}
                 <span className="notranslate" translate="no">
                   KTX
                 </span>{" "}
-                索引重建。建议立即触发相关 domain 的{" "}
+                索引。建议立即触发相关 domain 的{" "}
                 <span className="notranslate" translate="no">
                   eval run
                 </span>
@@ -780,7 +787,7 @@ export function PublishWorkbench() {
             <section className="grid gap-3">
               <p className="pl-panel-title">下一步</p>
               <p className="text-xs text-fg-muted">
-                没有待发布变更，
+                没有待同步变更，
                 <span className="notranslate" translate="no">
                   KTX
                 </span>{" "}
@@ -788,12 +795,137 @@ export function PublishWorkbench() {
               </p>
             </section>
           ) : null}
-        </aside>
+        </section>
       </div>
-      <SemanticAssetPublishDrawer
-        open={publishOpen}
-        onClose={() => setPublishOpen(false)}
-      />
+
+      {detailOpen && active ? (
+        <div
+          className="pl-drawer-backdrop notranslate"
+          data-testid="workbench-change-detail-drawer"
+          role="presentation"
+          onClick={() => setDetailOpen(false)}
+        >
+          <div
+            className="pl-drawer-panel pl-drawer-panel--change-detail"
+            role="dialog"
+            aria-modal="true"
+            aria-label="变更详情"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="pl-drawer-header">
+              <div className="min-w-0 grid gap-1">
+                <p className="pl-panel-title mb-0">变更详情</p>
+                <p className="pl-notice notranslate truncate text-sm" translate="no">
+                  {active.filePath}
+                </p>
+                <p className="pl-notice text-xs" data-testid="workbench-file-status">
+                  {fileChangeStatusLabel(active.status)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost pl-drawer-close pl-drawer-close--prominent"
+                onClick={() => setDetailOpen(false)}
+                aria-label="关闭变更详情"
+              >
+                关闭
+              </button>
+            </header>
+            <div className="pl-drawer-body min-h-0 flex-1 overflow-auto">
+              <DiffViewer diff={active.diff || "该文件暂无可展示的补丁内容。"} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmPublishOpen ? (
+        <div
+          className="pl-drawer-backdrop notranslate"
+          data-testid="workbench-publish-confirm-drawer"
+          role="presentation"
+          onClick={() => setConfirmPublishOpen(false)}
+        >
+          <div
+            className="pl-drawer-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="确认同步索引并生效"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="pl-drawer-header">
+              <div className="min-w-0 grid gap-1">
+                <p className="pl-panel-title mb-0">确认同步索引并生效</p>
+                <p className="pl-notice text-sm">
+                  将同步{" "}
+                  <span className="notranslate" translate="no">
+                    KTX
+                  </span>{" "}
+                  索引，使{" "}
+                  <span className="notranslate" translate="no">
+                    Agent
+                  </span>{" "}
+                  检索到磁盘上的最新语义与 Wiki。
+                </p>
+              </div>
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost pl-drawer-close pl-drawer-close--prominent"
+                onClick={() => setConfirmPublishOpen(false)}
+                aria-label="关闭确认同步"
+              >
+                关闭
+              </button>
+            </header>
+            <div className="pl-drawer-body grid gap-3">
+              <p className="text-sm" data-testid="workbench-publish-confirm-summary">
+                本批一并同步 {files.length} 项
+                {schemaManifests.length > 0
+                  ? ` · Schema Manifest ${schemaManifests.length}`
+                  : ""}
+                {impactedTables.length > 0 ? ` · 表语义变更 ${impactedTables.length} 张` : ""}
+                {otherChanges.length > 0 ? ` · 其它 ${otherChanges.length} 项` : ""}
+              </p>
+              {schemaManifests.length > 0 ? (
+                <ul className="grid gap-1 text-sm">
+                  {schemaManifests.slice(0, 8).map((item) => (
+                    <li key={item.filePath} className="notranslate" translate="no">
+                      {item.conn}/{item.schema}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {impactedTables.length > 0 ? (
+                <ul className="grid gap-1 text-sm">
+                  {impactedTables.slice(0, 8).map((tableName) => (
+                    <li key={tableName} className="notranslate" translate="no">
+                      {tableName}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <footer className="pl-drawer-footer">
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost"
+                onClick={() => setConfirmPublishOpen(false)}
+                disabled={reindexMutation.isPending}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="pl-btn pl-btn--primary pl-btn--cta"
+                onClick={submitConfirmPublish}
+                disabled={reindexMutation.isPending}
+                data-testid="workbench-publish-confirm-submit"
+              >
+                {reindexMutation.isPending ? "处理中…" : "同步索引并生效"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

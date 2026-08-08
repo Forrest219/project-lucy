@@ -70,7 +70,7 @@ describe("PublishWorkbench helpers", () => {
 });
 
 describe("PublishWorkbench", () => {
-  it("renders empty-state header actions without 表目录", async () => {
+  it("renders empty-state activation actions without upload or export", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -90,18 +90,19 @@ describe("PublishWorkbench", () => {
       screen.getByRole("heading", { name: "发布工作台" })
     ).toBeInTheDocument();
     expect(
-      screen.getByText("审阅待生效语义资产，校验通过后一键发布并重建索引。")
+      screen.getByText("同步 KTX 索引，让 Agent 检索到磁盘上的最新语义与 Wiki。")
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "上传语义资产" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "强制重建索引" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "导出当前快照 (.zip)" })).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-sync-index")).toHaveTextContent("同步索引");
+    expect(screen.getByTestId("workbench-more-menu")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "上传语义资产" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /导出当前快照/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "校验变更" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
-    expect(screen.queryByText("变更审阅与校验")).not.toBeInTheDocument();
-    expect(screen.getByText("发布门禁")).toBeInTheDocument();
+    expect(screen.getByText("生效准备")).toBeInTheDocument();
+    expect(screen.getByText("本次将同步的变更")).toBeInTheDocument();
   });
 
-  it("switches changed files and auto-validates pending files", async () => {
+  it("uses queue-gate dual panel and opens change detail only on file click", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -141,11 +142,30 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    expect(await screen.findByText(/\+ orders diff/)).toBeInTheDocument();
-    expect(screen.getByText("变更详情")).toBeInTheDocument();
-    expect(screen.getByTestId("workbench-file-status")).toHaveTextContent("已修改");
-    fireEvent.click(screen.getByRole("button", { name: /customers.yaml/ }));
-    expect(screen.getByText(/\+ customers diff/)).toBeInTheDocument();
+    expect(await screen.findByTestId("workbench-pending-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("publish-gate-panel")).toBeInTheDocument();
+    expect(screen.getByText("生效准备")).toBeInTheDocument();
+    expect(await screen.findByTestId("workbench-batch-sync-hint")).toHaveTextContent(
+      /本批一并同步 2 项/
+    );
+    expect(screen.queryByTestId("workbench-change-detail-drawer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\+ orders diff/)).not.toBeInTheDocument();
+    expect(screen.queryByText("变更详情")).not.toBeInTheDocument();
+
+    const ordersButton = await screen.findByRole("button", { name: /superstore_orders\.yaml/ });
+    fireEvent.click(ordersButton);
+    const drawer = await screen.findByTestId("workbench-change-detail-drawer");
+    expect(within(drawer).getByText("变更详情")).toBeInTheDocument();
+    expect(within(drawer).getByText(/\+ orders diff/)).toBeInTheDocument();
+    expect(within(drawer).getByTestId("workbench-file-status")).toHaveTextContent("已修改");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByTestId("workbench-change-detail-drawer")).not.toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /customers\.yaml/ }));
+    expect(await within(screen.getByTestId("workbench-change-detail-drawer")).findByText(/\+ customers diff/)).toBeInTheDocument();
     expect(await screen.findByText("1 张表未通过")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("未通过")).toBeInTheDocument());
     expect(screen.queryByText("FAIL")).not.toBeInTheDocument();
@@ -220,8 +240,8 @@ describe("PublishWorkbench", () => {
     expect(screen.getByTestId("workbench-validation-tech-details")).toBeInTheDocument();
   });
 
-  it("keeps the force-reindex action visible and labeled 强制重建索引 even when there are no changed files", async () => {
-    const calls: string[] = [];
+  it("keeps full reindex in more menu with force true when empty", async () => {
+    const bodies: unknown[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -235,12 +255,12 @@ describe("PublishWorkbench", () => {
           );
         }
         if (url === "/api/semantic-assets/reindex" && init?.method === "POST") {
-          calls.push(url);
+          bodies.push(JSON.parse(String(init.body ?? "{}")));
           return new Response(
             JSON.stringify({
               ok: true,
               data: {
-                force: false,
+                force: true,
                 startedAt: "2026-07-31T00:00:00.000Z",
                 finishedAt: "2026-07-31T00:00:01.000Z",
                 reindex: { ok: true, exitCode: 0, stdout: "indexed", stderr: "" }
@@ -255,21 +275,20 @@ describe("PublishWorkbench", () => {
     renderWorkbench();
 
     expect(await screen.findByTestId("workbench-empty-state")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-sync-index")).toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-upload-semantic-asset")).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByTestId("workbench-more-menu")).getByText("更多"));
     const reindexButton = screen.getByTestId("workbench-reindex");
-    expect(reindexButton).toHaveTextContent("强制重建索引");
-    expect(screen.getByTestId("workbench-upload-semantic-asset")).toHaveTextContent(
-      "上传语义资产"
-    );
-
+    expect(reindexButton).toHaveTextContent("全量重建索引");
     fireEvent.click(reindexButton);
 
     expect(await screen.findByTestId("workbench-reindex-result")).toHaveTextContent(
       "reindex 完成，退出码 0"
     );
-    expect(calls).toEqual(["/api/semantic-assets/reindex"]);
+    expect(bodies).toEqual([{ force: true }]);
   });
 
-  it("opens the semantic asset publish drawer from advanced upload when pending files exist", async () => {
+  it("does not expose upload or export on the activation workbench", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -316,12 +335,13 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    expect(await screen.findByText(/\+ orders diff/)).toBeInTheDocument();
-    const advanced = screen.getByTestId("publish-advanced-actions");
-    fireEvent.click(within(advanced).getByText("高级"));
-    const uploadButton = await within(advanced).findByTestId("workbench-upload-semantic-asset");
-    fireEvent.click(uploadButton);
-    expect(await screen.findByTestId("semantic-asset-publish-drawer")).toBeInTheDocument();
+    expect(await screen.findByTestId("publish-gate-panel")).toBeInTheDocument();
+    expect(screen.queryByText(/\+ orders diff/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("publish-advanced-actions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-upload-semantic-asset")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-export-snapshot")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("semantic-asset-publish-drawer")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "同步索引并生效" })).toBeInTheDocument();
   });
 
   it("keeps the publish-and-reindex CTA disabled when validate-changed returns no rows for pending files", async () => {
@@ -370,13 +390,14 @@ describe("PublishWorkbench", () => {
       expect(publishCta).toHaveAttribute("data-gate", "pending")
     );
     expect(publishCta).toBeDisabled();
-    expect(screen.getByTestId("publish-gate-next-step")).toHaveTextContent(/发布已阻断/);
+    expect(screen.getByTestId("publish-gate-next-step")).toHaveTextContent(/同步已阻断|同步已被阻断/);
     expect(screen.queryByText("建议命令")).not.toBeInTheDocument();
     expect(screen.queryByText("git diff")).not.toBeInTheDocument();
   });
 
   it("auto-validates and highlights publish CTA when validate gate passes", async () => {
     let validateCalls = 0;
+    const reindexBodies: unknown[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -415,6 +436,20 @@ describe("PublishWorkbench", () => {
             })
           );
         }
+        if (url === "/api/semantic-assets/reindex" && init?.method === "POST") {
+          reindexBodies.push(JSON.parse(String(init.body ?? "{}")));
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                force: false,
+                startedAt: "2026-08-07T00:00:00.000Z",
+                finishedAt: "2026-08-07T00:00:01.000Z",
+                reindex: { ok: true, exitCode: 0, stdout: "indexed", stderr: "" }
+              }
+            })
+          );
+        }
         if (url === "/api/sources") {
           return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
         }
@@ -431,9 +466,24 @@ describe("PublishWorkbench", () => {
     );
     expect(publishCta).not.toBeDisabled();
     expect(screen.getByTestId("publish-gate-next-step")).toHaveTextContent(/校验已通过/);
+
+    fireEvent.click(publishCta);
+    const confirmDrawer = await screen.findByTestId("workbench-publish-confirm-drawer");
+    expect(within(confirmDrawer).getByText("确认同步索引并生效")).toBeInTheDocument();
+    expect(screen.queryByTestId("semantic-asset-publish-drawer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/选择文件|拖入此处|拖入 Schema/)).not.toBeInTheDocument();
+    expect(within(confirmDrawer).getByTestId("workbench-publish-confirm-summary")).toHaveTextContent(
+      /本批一并同步 1 项/
+    );
+
+    fireEvent.click(screen.getByTestId("workbench-publish-confirm-submit"));
+    await waitFor(() => expect(reindexBodies).toEqual([{ force: false }]));
+    await waitFor(() =>
+      expect(screen.queryByTestId("workbench-publish-confirm-drawer")).not.toBeInTheDocument()
+    );
   });
 
-  it("shows boundary checklist prompts for changed implementation files under advanced", async () => {
+  it("shows boundary checklist prompts for changed implementation files under 索引与边界", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -678,7 +728,7 @@ describe("PublishWorkbench", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("uses pending-state header with validate and publish, without 表目录", async () => {
+  it("uses pending-state header with validate and sync, without upload or export", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -713,7 +763,9 @@ describe("PublishWorkbench", () => {
 
     expect(await screen.findByTestId("workbench-validate")).toBeInTheDocument();
     expect(screen.getByTestId("workbench-publish-and-reindex")).toBeInTheDocument();
-    expect(screen.getByTestId("workbench-export-snapshot")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "同步索引并生效" })).toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-export-snapshot")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-upload-semantic-asset")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
     expect(screen.getByTestId("publish-flow-steps")).toHaveTextContent("审阅变更");
   });

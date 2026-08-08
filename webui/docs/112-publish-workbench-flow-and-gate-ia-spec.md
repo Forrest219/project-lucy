@@ -1,10 +1,12 @@
 # Publish Workbench Flow and Gate IA Spec
 
+> **修订（Spec 119，2026-08-07；Spec 121，2026-08-07）：** 首屏布局由「待发布变更 | 变更详情 | 发布门禁」三栏改为「待发布变更 | 发布门禁」双栏；**变更详情**下沉为按需 Drawer。详见 [`119-publish-workbench-queue-gate-ia-spec.md`](119-publish-workbench-queue-gate-ia-spec.md)。Header「发布并重建索引」不得打开上传 Drawer，见 [`121-publish-workbench-cta-confirm-spec.md`](121-publish-workbench-cta-confirm-spec.md)。本 Spec §5.1 Header / 步骤、§5.4 影响分流、§5.5 自动校验仍有效；§5.3 与验收「三栏标题」以 Spec 119 为准。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Publish Workbench Flow and Gate IA Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-06 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -27,6 +29,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.1 | 交叉引用 Spec 119：§5.3 三栏布局由队列–门禁双栏 + 变更详情 Drawer 取代 |
 | v1.0 | 初稿并落地：发布门禁、三栏角色、Header 收口、影响分流 |
 
 ## 1. 背景
@@ -65,8 +68,8 @@ Follows `webui/docs/00-product-terminology-standard.md`（§4.3 / 语义发布�
 
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
-| Publish Gate Panel | 发布门禁 | 变更影响范围（作右栏唯一标题）、Validate Gate（作栏标题） | 右栏审阅区 |
-| Change Detail | 变更详情 | 裸路径作栏主标题 | 中栏角色标题；路径为副信息 |
+| Publish Gate Panel | 发布门禁 | 变更影响范围（作唯一栏标题）、Validate Gate（作栏标题） | 主工作面审阅区（布局见 Spec 119） |
+| Change Detail | 变更详情 | 裸路径作栏主标题；默认常驻最大栏 Diff | 按需 Drawer；路径为副信息（Spec 119） |
 | Pending Changes | 待发布变更 | — | 左栏（沿用 Spec 35） |
 | File Change Status | 已修改 / 新增 / 已删除 / 已重命名 / 已变更 | 状态：W、M、A（裸码） | 文件变更业务态 |
 | Schema Manifest Impact | Schema Manifest 变更 | 把 `_schema` 文件算作「表」 | 影响区分栏 |
@@ -126,17 +129,19 @@ Badges 可保留：待发布文件数、校验通过/失败摘要（属工作流
 
 ### 5.3 三栏布局
 
+> **已由 Spec 119 修订：** 默认布局为「待发布变更 | 发布门禁」双栏；变更详情为按需 Drawer。下列 ASCII 仅保留为 Spec 112 历史契约，实现以 Spec 119 §5.1–5.2 为准。
+
 ```text
-┌ 待发布变更 ┐  ┌ 变更详情 ────────────────┐  ┌ 发布门禁 ────────────┐
-│ 文件列表    │  │ 路径副标题 + 业务状态     │  │ 步骤 + 状态 + 影响   │
-│             │  │ Diff                     │  │ 校验摘要 + 下一步说明 │
-│             │  │                          │  │ 高级（重建/上传/边界）│
-└────────────┘  └──────────────────────────┘  └─────────────────────┘
+┌ 待发布变更 ┐  ┌ 发布门禁（主工作面）────────────────┐
+│ 文件队列    │  │ 步骤 + 状态 + 影响 + 校验摘要        │
+│ 点击开详情  │  │ 高级（重建/上传/边界）               │
+└────────────┘  └─────────────────────────────────────┘
+         → Drawer：变更详情（路径副标题 + Diff）
 ```
 
-- 中栏主标题固定「变更详情」；`filePath` 为副标题（`notranslate`）。
+- Drawer 主标题固定「变更详情」；`filePath` 为副标题（`notranslate`）。
 - 状态映射：`W`/`M`/`modified` → 已修改；`A`/`added` → 新增；`D`/`deleted` → 已删除；`R`/`renamed` → 已重命名；其它 → 已变更。
-- 删除右栏「建议命令」`git diff` 块。
+- 删除右栏「建议命令」`git diff` 块（仍有效）。
 - 边界检查清单若存在，放入「高级」折叠，默认收起。
 
 ### 5.4 影响范围分流
@@ -184,7 +189,7 @@ Badges 可保留：待发布文件数、校验通过/失败摘要（属工作流
 
 1. 有待发布时 Header 无「表目录」；主组可见「校验变更」「发布并重建索引」；导出为 ghost。
 2. 无待发布时 Header 可见「上传语义资产」「强制重建索引」；强制重建可点。
-3. 三栏标题为「待发布变更」「变更详情」「发布门禁」。
+3. 双栏标题为「待发布变更」「发布门禁」；「变更详情」仅在 Drawer（Spec 119）。
 4. 中栏不展示裸 `状态：W`；Schema Manifest 不进表影响列表。
 5. 门禁展示步骤与下一步说明；无 `git diff` 建议命令块。
 6. 有待发布时进页自动校验一次；gate=ready 时发布 CTA 高亮可点；空 validate 结果仍 fail-closed。

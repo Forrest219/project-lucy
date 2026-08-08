@@ -11,7 +11,7 @@
 | 事实源 | 用户截图：当前 `/review` 页面；用户设计输入：一级菜单改为 `语义发布`，二级菜单仅保留 `发布工作台` 与 `发布记录` |
 | 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/06-navigation-ia.md`, `webui/docs/23-semantic-asset-publish-export-spec.md`, `webui/docs/24-yaml-delivery-runbook-spec.md`, `webui/docs/29-connection-semantic-boundary-automation-spec.md`, `docs/DEVELOPMENT.md` |
 
-> **修订（Spec 112，2026-08-06）：** `/publish/workbench` 的 PageHeader 动作密度、三栏角色标题与右栏「发布门禁」契约见 [`112-publish-workbench-flow-and-gate-ia-spec.md`](112-publish-workbench-flow-and-gate-ia-spec.md)。本 Spec §6.1–6.3 中「四按钮常驻同排 / 松散右栏状态块」以 Spec 112 为准；导航、「发布即索引」、Validate Gate fail-closed 与 `/review` 重定向不变。
+> **修订（Spec 112，2026-08-06；Spec 119，2026-08-07；Spec 121，2026-08-07；Spec 123，2026-08-07）：** PageHeader 动作密度见 [`112-publish-workbench-flow-and-gate-ia-spec.md`](112-publish-workbench-flow-and-gate-ia-spec.md)。双栏 + 变更详情 Drawer 见 [`119-publish-workbench-queue-gate-ia-spec.md`](119-publish-workbench-queue-gate-ia-spec.md)。确认侧栏路径见 [`121-publish-workbench-cta-confirm-spec.md`](121-publish-workbench-cta-confirm-spec.md)。**语义生效台**（去本页上传/导出；「生效准备」；「同步索引并生效」；「更多」全量重建 `force:true`）见 [`123-publish-workbench-activation-ia-spec.md`](123-publish-workbench-activation-ia-spec.md)。本 Spec §6.1–6.4 中「四按钮常驻 / 工作台上传与导出」以 Spec 123 为准；导航、Validate Gate fail-closed 与 `/review` 重定向不变。
 
 ## 1. 背景
 
@@ -150,7 +150,7 @@ Required behavior:
 | `校验变更` | 调用现有 `/api/validate-changed`；展示每个 changed source 的 validate 结果 |
 | `强制重建索引` | 调用 `/api/semantic-assets/reindex`；常驻显示；用于 CLI/Git 改动或发布后补救 |
 | `上传语义资产` | 打开语义资产 Drawer；支持 YAML / zip / tar.gz；仅 Dry-Run 时不落盘 |
-| `发布并重建索引` | 对已通过 validate gate 的发布批次执行 promote，然后自动 reindex；工作台内仅在 `pending files > 0` 且校验通过后高亮可用；Drawer 内作为提交主按钮 |
+| `发布并重建索引` | 工作台：门禁 ready 时打开确认侧栏，确认后 `POST /api/semantic-assets/reindex`（Spec 121）；**不得**打开上传 Drawer。上传 Drawer 内 submit 仍可用同文案 |
 
 Primary/secondary weight:
 
