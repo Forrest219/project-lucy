@@ -45,17 +45,18 @@
 
 | Canonical Term | UI 主术语 | 说明 |
 |---|---|---|
-| Agent Display Name | 显示名 | 列表主列、详情可编辑字段 |
+| Agent Display Name | 显示名 | 详情可编辑字段、新建表单 |
 | Agent User ID | 用户 ID | 技术标识；搜索、详情只读 |
+| Agent List Identity Column | 显示名/用户 ID | 列表主列头（Spec 98）；双行单元格 |
 | Agent List Search | 搜索显示名或用户 ID | 列表搜索 placeholder |
 
-禁止：列表主列继续用 `Agent` 作列名；搜索用 `Agent 名称`。
+禁止：列表主列继续用 `Agent` 作列名；搜索用 `Agent 名称`；列表主列仅写「显示名」而忽略次行用户 ID。
 
 ## 5. UI 变更
 
 ### 5.1 列表
 
-- 表头主列：`显示名`（次行仍展示 `用户 ID`）。
+- 表头主列：`显示名/用户 ID`（Spec 98；次行仍展示 `用户 ID`）。
 - 搜索 label `搜索`；placeholder `搜索显示名或用户 ID`。
 - 筛选 label：`当前状态`、`角色`、`近 7 天活跃`。
 - 删除「配置 Token」分层筛选。
@@ -72,7 +73,7 @@
 
 ## 6. 验收标准
 
-- [x] 列表主列为 `显示名`；搜索 placeholder 为 `搜索显示名或用户 ID`。
+- [x] 列表主列为 `显示名/用户 ID`（Spec 98）；搜索 placeholder 为 `搜索显示名或用户 ID`。
 - [x] 筛选器三个维度均有可见 label；无配置 Token 筛选。
 - [x] 改启用状态后点一次 `保存` 即落盘（两次 PATCH：dryRun + write）。
 - [x] 改角色后 `保存` 弹出 diff 确认，确认后落盘。

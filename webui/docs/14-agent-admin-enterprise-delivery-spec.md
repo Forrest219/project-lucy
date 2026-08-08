@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-07-27 |
 | 适用范围 | Lucy WebUI 访问治理模块：`/admin/agents`、新建 Agent 弹窗、`/admin/agents/:userId`、Token 交付流 |
 | 事实源 | `webui/config/access.yaml`、Lucy MCP Proxy audit sqlite、Admin API |
-| 关联文档 | `docs/access-governance-design.md`、`docs/agent-integration-guide.md`、`docs/admin-guide.md`、`docs/project-overview.md` |
+| 关联文档 | `docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md`、`docs/agent-integration-guide.md`、`docs/admin-guide.md`、`docs/project-overview.md` |
 
 ## 1. 背景
 
