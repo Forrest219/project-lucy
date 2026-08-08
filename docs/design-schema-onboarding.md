@@ -32,7 +32,7 @@
 **不做(明确划线,与 `design-db-connection.md §八` 一致):**
 - **新建连接**:host / port / user / password 仍走 `ktx setup` 终端
 - **写 `.ktx/secrets/`**:密码文件永远在 DENY 列表
-- **删除 / 重命名 schema**:不在 v1 范围
+- **删除 / 重命名 schema**:「移除 Schema」已在 Spec 117（`webui/docs/117-connection-schema-remove-spec.md`）实现，提供 `POST /api/connections/:connId/schemas/remove` + `RemoveSchemaDrawer`；重命名仍不在范围
 - **编辑 `ktx.yaml` 的其它顶层字段**(llm / scan / ingest / agent / storage / setup):不在 v1 范围
 - **批量添加 schema**:v1 一次只接一个
 
@@ -222,7 +222,7 @@ export type AddSchemaResult = {
 ## 十、不在 v1 范围(后续考虑)
 
 - 批量添加 schema(一次性输入多行 / CSV 导入)
-- 在 webui 中重命名 / 删除 schema
+- 在 webui 中重命名 / 删除 schema（移除 Schema 已通过 Spec 117 实现，详见 `webui/docs/117-connection-schema-remove-spec.md`；物理删除 / 重命名不在范围）
 - 接管「新建连接」(host / port / user / password 仍走 `ktx setup`)
 - 编辑 `ktx.yaml` 的 llm / scan / ingest 等其它顶层字段
 - 跨连接移动 schema

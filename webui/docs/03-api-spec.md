@@ -66,6 +66,7 @@ GET  /api/connections/:connId/tables
 GET  /api/connections/:connId/live-schemas       # Owner on-demand read-only DB catalog (Spec 107)
 PUT  /api/connections/:connId/enabled-tables     # default dryRun
 POST /api/connections/:connId/schemas            # add schema metadata to existing connection
+POST /api/connections/:connId/schemas/remove     # remove schema from connection (dryRun:true default; prunes enabled_tables prefix; optional deleteManifest/deleteOverlays)
 POST /api/connections/:connId/test
 POST /api/connections/:connId/ingest
 GET  /api/connections/ingest-runs

@@ -12,7 +12,7 @@ import {
   listLiveSchemas,
   LiveCatalogConnectionNotFoundError
 } from "./live-catalog";
-import { addSchema, readConnections, readProject, resolveProjectRoot } from "./project";
+import { addSchema, readConnections, readProject, resolveProjectRoot, removeSchema } from "./project";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -692,7 +692,6 @@ export function buildServer() {
     };
   });
 
-
   app.delete<{
     Params: { key: string };
   }>("/api/wiki/:key", async (request) => {
@@ -1009,6 +1008,33 @@ export function buildServer() {
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
+    }
+    return { ok: true, data: result };
+  });
+
+  app.post<{
+    Params: { connId: string };
+    Body: { schema?: string; dryRun?: boolean; deleteManifest?: boolean; deleteOverlays?: boolean };
+  }>("/api/connections/:connId/schemas/remove", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const body = request.body ?? {};
+    const dryRun = body.dryRun !== false;
+    if (typeof body.schema !== "string") {
+      throw enabledTableError("BAD_REQUEST", "schema is required");
+    }
+    const result = await removeSchema(projectRoot, connId, body.schema, dryRun, {
+      recordConfigChange,
+      deleteManifest: body.deleteManifest,
+      deleteOverlays: body.deleteOverlays
+    });
+    if (!dryRun) {
+      writtenFiles.push({ filePath: "ktx.yaml" });
+      if ("deletedFiles" in result) {
+        for (const filePath of result.deletedFiles) {
+          writtenFiles.push({ filePath });
+        }
+      }
     }
     return { ok: true, data: result };
   });

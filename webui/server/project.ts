@@ -3,9 +3,9 @@ import path from "node:path";
 import { isMap, isScalar, isSeq, parse, parseDocument, type Document, type Node, YAMLSeq } from "yaml";
 import { execFile } from "node:child_process";
 import { testConnection } from "./ktx";
-import { safeWrite } from "./fs-safe";
+import { ForbiddenPathError, safeRemove, safeWrite } from "./fs-safe";
 import { resolveMcpEndpoint } from "./runtime-config";
-import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo, ProjectInfo } from "./model";
+import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo, ProjectInfo, RemoveSchemaPreview, RemoveSchemaResult } from "./model";
 import { previewDiff } from "./diff";
 
 export type ProjectOptions = {
@@ -53,6 +53,16 @@ export class SchemaAlreadyExistsError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "SchemaAlreadyExistsError";
+  }
+}
+
+export class SchemaNotFoundError extends Error {
+  code = "SCHEMA_NOT_FOUND";
+  statusCode = 404;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "SchemaNotFoundError";
   }
 }
 
@@ -272,6 +282,20 @@ export async function writeKtxYaml(
 export const SCHEMA_NAME_PATTERN = "^[a-zA-Z_][a-zA-Z0-9_]{0,62}$";
 const SCHEMA_NAME_RE = new RegExp(SCHEMA_NAME_PATTERN);
 
+/** Path segment for conn/table under semantic-layer (blocks traversal). */
+const SAFE_PATH_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+function isSafePathSegment(value: string): boolean {
+  return typeof value === "string" && SAFE_PATH_SEGMENT_RE.test(value);
+}
+
+function overlayRelPath(connId: string, tableName: string): string | null {
+  if (!isSafePathSegment(connId) || !isSafePathSegment(tableName)) {
+    return null;
+  }
+  return `semantic-layer/${connId}/${tableName}.yaml`;
+}
+
 export type AddSchemaOptions = {
   recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
   testConnectionFn?: typeof testConnection;
@@ -472,5 +496,256 @@ export async function addSchema(
     auditId,
     oldSchemas,
     newSchemas
+  };
+}
+
+// ─── removeSchema (Spec 117) ──────────────────────────────────────────────────
+
+export type RemoveSchemaOptions = {
+  recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
+  listWikiFn?: typeof import("./wiki").listWiki;
+  deleteManifest?: boolean;
+  deleteOverlays?: boolean;
+};
+
+function locateEnabledTables(
+  doc: ReturnType<typeof parseDocument>,
+  connId: string
+): import("yaml").YAMLSeq | undefined {
+  const conns = doc.get("connections", true);
+  if (!isMap(conns)) return undefined;
+  const conn = conns.get(connId, true);
+  if (!isMap(conn)) return undefined;
+  const node = conn.get("enabled_tables", true);
+  if (!node || !isSeq(node)) return undefined;
+  return node;
+}
+
+function enabledTablesList(node: import("yaml").YAMLSeq | undefined): string[] {
+  if (!node) return [];
+  return node.items
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (isScalar(item) && typeof item.value === "string") return item.value;
+      return null;
+    })
+    .filter((v): v is string => v !== null);
+}
+
+export function removeSchema(
+  root: string,
+  connId: string,
+  schema: string,
+  dryRun: true,
+  options?: RemoveSchemaOptions
+): Promise<RemoveSchemaPreview>;
+export function removeSchema(
+  root: string,
+  connId: string,
+  schema: string,
+  dryRun: false,
+  options?: RemoveSchemaOptions
+): Promise<RemoveSchemaResult>;
+export function removeSchema(
+  root: string,
+  connId: string,
+  schema: string,
+  dryRun: boolean,
+  options?: RemoveSchemaOptions
+): Promise<RemoveSchemaPreview | RemoveSchemaResult>;
+export async function removeSchema(
+  root: string,
+  connId: string,
+  schema: string,
+  dryRun: boolean,
+  options: RemoveSchemaOptions = {}
+): Promise<RemoveSchemaPreview | RemoveSchemaResult> {
+  if (typeof schema !== "string" || !SCHEMA_NAME_RE.test(schema)) {
+    throw new SchemaNameInvalidError(
+      `Schema name '${schema}' does not match pattern ${SCHEMA_NAME_PATTERN}`
+    );
+  }
+
+  // Read current state to check existence and gather old values.
+  const ktxPath = path.join(root, "ktx.yaml");
+  const currentText = await readFile(ktxPath, "utf8");
+  const currentDoc = parseDocument(currentText, { keepSourceTokens: true });
+  if (currentDoc.errors.length > 0) {
+    throw new KtxYamlParseError(`Failed to parse ktx.yaml: ${currentDoc.errors[0]?.message ?? "unknown error"}`);
+  }
+
+  const { oldSchemas } = locateSchemas(currentDoc, connId);
+  const etSeq = locateEnabledTables(currentDoc, connId);
+  const currentEnabledTables = enabledTablesList(etSeq);
+  const prefix = `${schema}.`;
+  const removedEnabledTables = currentEnabledTables.filter((t) => t.startsWith(prefix));
+
+  const inSchemas = oldSchemas.includes(schema);
+  const inEnabled = removedEnabledTables.length > 0;
+  if (!inSchemas && !inEnabled) {
+    throw new SchemaNotFoundError(
+      `Schema '${schema}' not found in schemas list or enabled_tables for connection '${connId}'`
+    );
+  }
+
+  // Build the mutator: remove from schemas seq + prune enabled_tables.
+  const mutator = (doc: ReturnType<typeof parseDocument>) => {
+    // Remove from schemas list if present.
+    const { seq } = locateSchemas(doc, connId);
+    if (seq) {
+      for (let i = seq.items.length - 1; i >= 0; i--) {
+        const item = seq.items[i];
+        const val = typeof item === "string" ? item : isScalar(item) && typeof item.value === "string" ? item.value : null;
+        if (val === schema) {
+          seq.items.splice(i, 1);
+        }
+      }
+    }
+    // Prune enabled_tables.
+    const etNode = locateEnabledTables(doc, connId);
+    if (etNode) {
+      for (let i = etNode.items.length - 1; i >= 0; i--) {
+        const item = etNode.items[i];
+        const val = typeof item === "string" ? item : isScalar(item) && typeof item.value === "string" ? item.value : null;
+        if (val && val.startsWith(prefix)) {
+          etNode.items.splice(i, 1);
+        }
+      }
+    }
+  };
+
+  const preview = await writeKtxYaml(root, mutator, { dryRun: true });
+  const newSchemas = schemasFromSerialized(preview.serialized, connId);
+  const safeOldText = redactKtxYamlForPreview(preview.oldText);
+  const safeProposedYaml = redactKtxYamlForPreview(preview.serialized);
+  const diff = previewDiff(safeOldText, safeProposedYaml, "ktx.yaml");
+
+  // Impact collection.
+  const manifestPath = `semantic-layer/${connId}/_schema/${schema}.yaml`;
+  const manifestAbsPath = path.join(root, manifestPath);
+  let hasManifest = false;
+  let manifestTableNames: string[] = [];
+  try {
+    const manifestText = await readFile(manifestAbsPath, "utf8");
+    hasManifest = true;
+    const manifestDoc = parse(manifestText) as Record<string, unknown> | null;
+    const tables = manifestDoc && typeof manifestDoc === "object" && manifestDoc.tables && typeof manifestDoc.tables === "object"
+      ? manifestDoc.tables as Record<string, unknown>
+      : {};
+    manifestTableNames = Object.keys(tables);
+  } catch {
+    hasManifest = false;
+  }
+
+  // Overlay paths: union of manifest table names + removedEnabledTables table names.
+  // Reject unsafe path segments (e.g. `../ktx`) before join / existence probe / delete.
+  const tableNamesForOverlay = new Set<string>([
+    ...manifestTableNames,
+    ...removedEnabledTables.map((t) => t.slice(prefix.length))
+  ]);
+  const overlayPaths: string[] = [];
+  for (const tableName of tableNamesForOverlay) {
+    const relPath = overlayRelPath(connId, tableName);
+    if (!relPath) continue;
+    try {
+      await readFile(path.join(root, relPath), "utf8");
+      overlayPaths.push(relPath);
+    } catch {
+      // File does not exist; skip.
+    }
+  }
+
+  // Wiki refs.
+  let wikiRefCount = 0;
+  let wikiSamplePaths: string[] = [];
+  try {
+    const listWikiFn = options.listWikiFn ?? (await import("./wiki")).listWiki;
+    const wikiPages = await listWikiFn(root);
+    const slRefPrefix = `${connId}/${schema}/`;
+    const matching = wikiPages.filter((page) =>
+      page.slRefs.some((ref) => ref.startsWith(slRefPrefix))
+    );
+    wikiRefCount = matching.length;
+    // listWiki keys are already relative under wiki/ and usually end with `.md`
+    // (e.g. `global/playbook.md`). Do not append another `.md`.
+    wikiSamplePaths = matching.slice(0, 5).map((page) =>
+      page.key.startsWith("wiki/") ? page.key : `wiki/${page.key}`
+    );
+  } catch {
+    wikiRefCount = 0;
+    wikiSamplePaths = [];
+  }
+
+  const impact = {
+    hasManifest,
+    manifestPath: hasManifest ? manifestPath : null,
+    overlayPaths,
+    wikiRefCount,
+    wikiSamplePaths
+  };
+
+  if (dryRun) {
+    return {
+      diff,
+      proposedYaml: safeProposedYaml,
+      oldSchemas,
+      newSchemas,
+      removedEnabledTables,
+      impact
+    };
+  }
+
+  // Write path. Preflight optional deletes so we fail closed before mutating ktx.yaml.
+  if (options.deleteManifest && hasManifest) {
+    if (!isSafePathSegment(connId) || !isSafePathSegment(schema)) {
+      throw new ForbiddenPathError("connectionId or schema is not a safe path segment for Manifest delete");
+    }
+  }
+  if (options.deleteOverlays) {
+    for (const overlayPath of overlayPaths) {
+      // Already filtered by overlayRelPath; double-check no traversal slipped in.
+      if (overlayPath.includes("..") || !overlayPath.startsWith(`semantic-layer/${connId}/`)) {
+        throw new ForbiddenPathError(`Refusing to delete unsafe overlay path ${overlayPath}`);
+      }
+    }
+  }
+
+  await writeKtxYaml(root, mutator, { dryRun: false });
+
+  const deletedFiles: string[] = [];
+
+  // Optional: delete manifest (safeRemove no-ops ENOENT).
+  if (options.deleteManifest && hasManifest) {
+    await safeRemove(root, manifestPath);
+    deletedFiles.push(manifestPath);
+  }
+
+  // Optional: delete overlays.
+  if (options.deleteOverlays) {
+    for (const overlayPath of overlayPaths) {
+      await safeRemove(root, overlayPath);
+      deletedFiles.push(overlayPath);
+    }
+  }
+
+  let auditId: number | undefined;
+  if (options.recordConfigChange) {
+    auditId = await options.recordConfigChange({
+      filePath: "ktx.yaml",
+      changeType: "schema_remove",
+      targetId: `${connId}:${schema}`,
+      oldSummary: { schemas: oldSchemas, removedEnabledTables },
+      newSummary: { schemas: newSchemas, removedEnabledTables },
+      diff
+    });
+  }
+
+  return {
+    written: true,
+    auditId,
+    oldSchemas,
+    newSchemas,
+    removedEnabledTables,
+    deletedFiles
   };
 }

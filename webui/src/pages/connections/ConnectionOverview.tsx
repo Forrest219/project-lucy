@@ -25,6 +25,7 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
+import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
 import {
   CatalogAssetManifestDrawer,
   CatalogAssetUploadButton,
@@ -427,6 +428,7 @@ export function ConnectionOverview() {
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [reloadRunsByConnection, setReloadRunsByConnection] = useState<Record<string, CatalogReloadRun>>({});
   const [reloadErrorsByConnection, setReloadErrorsByConnection] = useState<Record<string, Error | null>>({});
   const [reloadingConnections, setReloadingConnections] = useState<Record<string, boolean>>({});
@@ -942,6 +944,15 @@ export function ConnectionOverview() {
                                         {expanded ? "收起详情" : "查看详情"}
                                       </button>
                                     ) : null}
+                                    <button
+                                      type="button"
+                                      className="pl-row-action-link pl-row-action-link--danger notranslate"
+                                      translate="no"
+                                      onClick={() => setRemoveTarget({ connection: conn, schema })}
+                                      data-testid={`remove-schema-${conn.id}-${schema}`}
+                                    >
+                                      移除 Schema
+                                    </button>
                                   </div>
                                 </td>
                               </tr>
@@ -1107,6 +1118,14 @@ export function ConnectionOverview() {
           connection={addTarget}
           open={Boolean(addTarget)}
           onClose={() => setAddTarget(null)}
+        />
+      )}
+      {removeTarget && (
+        <RemoveSchemaDrawer
+          connection={removeTarget.connection}
+          schema={removeTarget.schema}
+          open={Boolean(removeTarget)}
+          onClose={() => setRemoveTarget(null)}
         />
       )}
       {manifestViewTarget ? (

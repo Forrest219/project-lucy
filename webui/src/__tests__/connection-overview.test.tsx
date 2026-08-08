@@ -741,6 +741,30 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByRole("button", { name: "重新加载资产" })).not.toBeInTheDocument();
   });
 
+  it("renders 移除 Schema button for each schema row in the mysql-aliyun card", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai", "openclaw_db"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")]
+    });
+    renderOverview();
+
+    const card = await screen.findByTestId("connection-card-mysql-aliyun");
+    expect(card.querySelector("[data-testid='remove-schema-mysql-aliyun-dataforai']")).not.toBeNull();
+    expect(
+      card.querySelector("[data-testid='remove-schema-mysql-aliyun-dataforai']")?.textContent
+    ).toBe("移除 Schema");
+    expect(
+      card.querySelector("[data-testid='remove-schema-mysql-aliyun-dataforai']")
+    ).toHaveClass("pl-row-action-link--danger");
+  });
+
   it("renders the connection-level 同步配置变更 action and no CLI ingest wording", async () => {
     stubOverviewFetch({
       connections: [
@@ -1563,11 +1587,11 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
 
     const liveColRule = css.match(/\.pl-schema-asset-col-live-count\s*\{[^}]*\}/);
     expect(liveColRule).not.toBeNull();
-    expect(liveColRule![0]).toMatch(/width:\s*14%/);
+    expect(liveColRule![0]).toMatch(/width:\s*10%/);
 
     const actionColRule = css.match(/\.pl-schema-asset-col-action\s*\{[^}]*\}/);
     expect(actionColRule).not.toBeNull();
-    expect(actionColRule![0]).toMatch(/width:\s*26%/);
+    expect(actionColRule![0]).toMatch(/width:\s*42%/);
 
     // Design System 02 / page-layout: do not hide core row actions via overflow clipping.
     const actionsRule = css.match(/\.pl-schema-asset-actions\s*\{[^}]*\}/)?.[0] ?? "";
