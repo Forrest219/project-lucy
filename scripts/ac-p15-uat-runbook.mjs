@@ -10,7 +10,7 @@
  *   ACP15_SKIP_MCP=1   skip MCP spotchecks
  *   ACP15_KEEP_AGENT=1 keep acp15_uat_agent after run
  */
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, unlink, readdir } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -52,8 +52,52 @@ function record(id, pass, detail) {
   console.log(`[${mark}] ${id}${detail ? ` — ${detail}` : ""}`);
 }
 
-async function saveJson(name, body) {
-  await writeFile(path.join(API_DIR, name), JSON.stringify(body, null, 2), "utf8");
+/** Keys whose values are treated as secrets when archived as evidence. */
+const SENSITIVE_KEY_RE = /^(authorization|token|plainToken|plaintext|password|secret|api[_-]?key)$/i;
+
+function redactText(value, knownSecrets = []) {
+  let text = String(value ?? "");
+  for (const secret of knownSecrets.filter(Boolean)) {
+    text = text.split(secret).join("[REDACTED]");
+  }
+  return text
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [REDACTED]")
+    .replace(/(token|password|secret|api[_-]?key)=([^\s]+)/gi, "$1=[REDACTED]");
+}
+
+function redactValue(value, knownSecrets = [], depth = 0) {
+  if (depth > 12) return "[MAX_DEPTH]";
+  if (typeof value === "string") return redactText(value, knownSecrets);
+  if (Array.isArray(value)) return value.map((item) => redactValue(item, knownSecrets, depth + 1));
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (SENSITIVE_KEY_RE.test(key)) {
+      out[key] = item == null || item === "" ? item : "[REDACTED]";
+    } else {
+      out[key] = redactValue(item, knownSecrets, depth + 1);
+    }
+  }
+  return out;
+}
+
+async function saveJson(name, body, knownSecrets = []) {
+  const safe = redactValue(body, knownSecrets);
+  await writeFile(path.join(API_DIR, name), `${JSON.stringify(safe, null, 2)}\n`, "utf8");
+}
+
+async function removeStaleFailedScreenshots() {
+  let names = [];
+  try {
+    names = await readdir(SHOT_DIR);
+  } catch {
+    return;
+  }
+  await Promise.all(
+    names
+      .filter((n) => /-failed\.png$/i.test(n))
+      .map((n) => unlink(path.join(SHOT_DIR, n)).catch(() => {}))
+  );
 }
 
 async function api(method, urlPath, body) {
@@ -308,6 +352,7 @@ async function runUiCases() {
         && /不表示行级取数已生效/.test(dryText)
         && /protected|constraints=/i.test(dryText);
       await page.screenshot({ path: path.join(SHOT_DIR, "02-dryrun-finalrows.png"), fullPage: true });
+      await unlink(path.join(SHOT_DIR, "02-ui2-failed.png")).catch(() => {});
       record("UI-2", ok, ok ? "dryRun FinalRows preview" : dryText.slice(0, 160));
     } catch (err) {
       await page.screenshot({ path: path.join(SHOT_DIR, "02-ui2-failed.png"), fullPage: true }).catch(() => {});
@@ -325,6 +370,7 @@ async function runUiCases() {
         && /protected|constraints=/i.test(previewText)
         && previewText.includes("不表示行级取数已在上游注入生效");
       await page.screenshot({ path: path.join(SHOT_DIR, "04-capability-preview.png"), fullPage: true });
+      await unlink(path.join(SHOT_DIR, "04-ui3-failed.png")).catch(() => {});
       record("UI-3", ui3, ui3 ? "preview FinalRows/protected" : previewText.slice(0, 160));
     } catch (err) {
       await page.screenshot({ path: path.join(SHOT_DIR, "04-ui3-failed.png"), fullPage: true }).catch(() => {});
@@ -342,13 +388,13 @@ async function runMcpCases() {
     return;
   }
 
-  // Create short-lived token
+  // Create short-lived token (plaintext kept in-memory only; evidence is redacted).
   const version = await getAgentVersion();
   const tok = await api("POST", `/api/admin/agents/${AGENT_ID}/tokens`, {
     label: "acp15-uat-T1"
   });
-  await saveJson("07-token-create.json", tok);
   const token = tok.json?.data?.token ?? tok.json?.data?.plainToken ?? tok.json?.data?.plaintext;
+  await saveJson("07-token-create.json", tok, token ? [token] : []);
   if (!token) {
     record("MCP-1", false, "token create failed");
     record("MCP-2", false, "skipped");
@@ -360,7 +406,7 @@ async function runMcpCases() {
     version: await getAgentVersion(),
     patch: { note: `acp15-uat runtime reload ${Date.now()}` }
   });
-  await saveJson("07a-runtime-reload-after-token.json", bump);
+  await saveJson("07a-runtime-reload-after-token.json", bump, [token]);
   void version;
 
   async function mcpRpc(method, params, sessionId) {
@@ -385,7 +431,7 @@ async function runMcpCases() {
     capabilities: {},
     clientInfo: { name: "acp15-uat", version: "1.0.0" }
   });
-  await saveJson("07b-mcp-initialize.json", init);
+  await saveJson("07b-mcp-initialize.json", init, [token]);
   let sessionId = init.sessionId;
   if (sessionId) {
     await mcpRpc("notifications/initialized", {}, sessionId);
@@ -399,7 +445,7 @@ async function runMcpCases() {
     connectionId: "demo-mysql",
     measures: ["superstore_orders.total_sales"]
   });
-  await saveJson("08-mcp-lucy-query.json", q);
+  await saveJson("08-mcp-lucy-query.json", q, [token]);
   const unproven = /row_policy_upstream_unproven/.test(q.text);
   record("MCP-1", unproven, unproven ? "unproven deny" : q.text.slice(0, 200));
 
@@ -407,7 +453,7 @@ async function runMcpCases() {
     connectionId: "demo-mysql",
     sourceName: "superstore_orders"
   });
-  await saveJson("09-mcp-lucy-read-source.json", read);
+  await saveJson("09-mcp-lucy-read-source.json", read, [token]);
   const wrapped = /row_policy_requires_wrapped_tool/.test(read.text);
   record("MCP-2", wrapped, wrapped ? "unwrapped deny" : read.text.slice(0, 200));
 
@@ -415,7 +461,7 @@ async function runMcpCases() {
   const v2 = await getAgentVersion();
   const rev = await api("DELETE", `/api/admin/agents/${AGENT_ID}/tokens/${encodeURIComponent("acp15-uat-T1")}`, undefined);
   // Some APIs need version in query — try path delete first; if fails, ignore for hygiene note
-  await saveJson("10-token-revoke.json", { rev, versionTried: v2 });
+  await saveJson("10-token-revoke.json", { rev, versionTried: v2 }, [token]);
 }
 
 async function runClearAndNonClaim() {
@@ -473,13 +519,17 @@ async function writeConclusion() {
   };
   await writeFile(path.join(EVIDENCE, "00-results-summary.json"), JSON.stringify(summary, null, 2), "utf8");
 
+  if (failed.length === 0) {
+    await removeStaleFailedScreenshots();
+  }
+
   const md = `# AC-P1.5 UAT / Runbook Path D 自动化结论
 
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | AC-P1.5 UAT / Runbook 自动化结论 |
 | 文档类型 | Test Report |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-09 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
@@ -500,6 +550,11 @@ async function writeConclusion() {
 ${results.map((r) => `| ${r.id} | ${r.pass ? "**PASS**" : "**FAIL**"} | ${r.detail ?? ""} |`).join("\n")}
 
 **汇总：** ${summary.passed} passed / ${summary.failed} failed
+
+## 卫生
+
+- API 证据经 \`saveJson\` 自动脱敏：\`token\` / \`plainToken\` / Bearer 等字段写入 \`[REDACTED]\`；\`hash\` 保留供对账。
+- 全绿时清理 \`screenshots/*-failed.png\`，避免早期失败截图与成功结论并存。
 
 ## 结论
 

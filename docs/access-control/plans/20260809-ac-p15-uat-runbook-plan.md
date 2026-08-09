@@ -98,8 +98,8 @@ node scripts/ac-p15-uat-runbook.mjs
 | 文件 | 内容 |
 |---|---|
 | `00-results-summary.json` | 用例 pass/fail |
-| `api/*.json` | 每次 Admin/MCP 响应 |
-| `screenshots/*.png` | Playwright |
+| `api/*.json` | 每次 Admin/MCP 响应（`saveJson` 自动脱敏：`token` / Bearer → `[REDACTED]`；`hash` 保留） |
+| `screenshots/*.png` | Playwright（全绿时清理 `*-failed.png`） |
 | `09-process-and-conclusion.md` | 过程结论（供签字） |
 
 ## 6. 成功标准
