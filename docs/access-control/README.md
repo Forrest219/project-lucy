@@ -46,10 +46,11 @@
 | UAT / Runbook / Release（P1） | [`uat-ac-p1.md`](uat-ac-p1.md) / [`runbook-row-policy.md`](runbook-row-policy.md) / [`release-notes-ac-p1.md`](release-notes-ac-p1.md) | Gate C 已签字；proven 默认 false（置真=运维变更） |
 | UAT / Runbook / Release（P1.5） | [`uat-ac-p15.md`](uat-ac-p15.md) / [`runbook-row-policy.md`](runbook-row-policy.md) 路径 D / [`release-notes-ac-p15.md`](release-notes-ac-p15.md) | Gate C 已签字；总签 `inbox/20260809-ac-p15-gate-c-signoff.md` |
 | **AC-P1.5（已交付）** | [`plans/wo-202608-61-access-control-p15-agent-constraints.md`](plans/wo-202608-61-access-control-p15-agent-constraints.md) | Gate A/B/C **DONE**（2026-08-09）；签字 `inbox/20260809-ac-p15-gate-c-signoff.md` |
+| **P1.5 后路线图（必读）** | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) **v1.0** | **已批准（2026-08-09）**：冻结 TokenScope / Dynamic RLS / AC-P2+ 整包；优先单机部署落地 |
 
-**冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。
+**冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。**P1.5 之后是否开 TokenScope / Dynamic RLS / P2+** → 以 [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) 为准。
 
-**开波禁令：** **不得**仅凭 `design-upgrade.md` 直接开工改 `acl.ts` / `mcp-proxy.ts`。AC-P1 须先过 WO-60 Gate A/B；**AC-P1.5** Gate A = 批准 WO 范围与 O-P15 默认（授权写 Spec），**Gate B** = Spec 100 评审通过后才改 runtime（**Gate B 已于 2026-08-09 批准**）。`feasibility-row-acl.SUPERSEDED.md` 禁止作为实施依据。
+**开波禁令：** **不得**仅凭 `design-upgrade.md` 直接开工改 `acl.ts` / `mcp-proxy.ts`。AC-P0/P1/P1.5 主线已交付；**禁止**默认续开 TokenScope、Dynamic RLS / 多租户、或 AC-P2+ 整包（见路线图冻结 ADR）。`feasibility-row-acl.SUPERSEDED.md` 禁止作为实施依据。
 
 ---
 
@@ -66,6 +67,7 @@
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
 | `adr-upstream-forced-predicate.md` | AC-P1 Gate A：上游强制谓词契约（已批准） |
+| `adr-post-p15-roadmap-freeze.md` | AC-P1.5 后路线图冻结（TokenScope / Dynamic RLS / P2+；单机优先） |
 | `uat-ac-p1.md` | AC-P1 UAT 勾选清单 |
 | `uat-ac-p15.md` | AC-P1.5 Agent Constraints UAT 勾选清单 |
 | `release-notes-ac-p15.md` | AC-P1.5 发布说明（Non-Claim） |
@@ -112,6 +114,7 @@
 |---|---|
 | AC-P0 Spec / 实施 | **已交付**（Spec 98；WO-59 Gate C 2026-08-09） |
 | **AC-P1 Row Policy** | **已交付**（[WO-60](plans/wo-202608-60-access-control-p1.md) Gate C 2026-08-09）；[UAT](uat-ac-p1.md) / [Runbook](runbook-row-policy.md) / [Release notes](release-notes-ac-p1.md)；proven 默认 false |
-| **AC-P1.5 Agent Constraints** | **已交付**（[WO-61](plans/wo-202608-61-access-control-p15-agent-constraints.md) Gate C 2026-08-09）；[UAT](uat-ac-p15.md) / [Runbook](runbook-row-policy.md) 路径 D / [Release notes](release-notes-ac-p15.md)；TokenScope 非目标；proven 仍默认 false |
+| **AC-P1.5 Agent Constraints** | **已交付**（[WO-61](plans/wo-202608-61-access-control-p15-agent-constraints.md) Gate C 2026-08-09）；[UAT](uat-ac-p15.md) / [Runbook](runbook-row-policy.md) 路径 D / [Release notes](release-notes-ac-p15.md)；proven 仍默认 false |
+| **P1.5 之后** | **主线收束**；见 [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md)：TokenScope / Dynamic RLS / AC-P2+ 整包**冻结**；优先单机部署落地与体验补齐 |
 
 — 完

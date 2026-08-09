@@ -744,6 +744,8 @@ npm run lint:spec
 | **AC-P1.5** | Agent Constraints | S4 constrained；AC-SEC-CONSTRAINT | AC-P0 已交付 |
 | **AC-P2+** | Active Role、Dynamic claim、CLS、DB 原生 RLS | 另立项 | 冻结 |
 
+> **P1.5 交付后的执行裁决（2026-08-09）：** TokenScope / Dynamic RLS / 多租户 / AC-P2+ 整包继续冻结，优先单机部署落地——见域 ADR [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md)。本文仍为升级设计事实源；**是否开下一权限波次**以该 ADR 为准。
+
 ---
 
 ## 8. 决策状态

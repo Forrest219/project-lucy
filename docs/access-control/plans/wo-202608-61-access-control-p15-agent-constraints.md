@@ -280,11 +280,11 @@ npm test -- --run row-policy agent-constraints constraint acl-capability
 
 1. **Gate A DONE** → 执行 WP-S0（及 WP-S1）。  
 2. **Gate B DONE** → 按 §3 实施 WP-I\*。  
-3. Gate C 全绿 → 更新域 README；TokenScope / 更广 op 另立 WO。
+3. Gate C 全绿 → 更新域 README；后续开波见路线图冻结 ADR（**默认不做** TokenScope）。
 
 ### 下一步（当前）
 
 1. ~~产品 Gate C 签字~~ **DONE**（2026-08-09）。  
-2. TokenScope / 更广 op 另立 WO。
+2. **路线图：** 见 [`adr-post-p15-roadmap-freeze.md`](../adr-post-p15-roadmap-freeze.md)（已批准）——TokenScope / Dynamic RLS / AC-P2+ 整包冻结；优先单机部署落地。更广 op / CLS 等仅在满足该 ADR §2.3 硬条件时另立 WO。
 
 — 完

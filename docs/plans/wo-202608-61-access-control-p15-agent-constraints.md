@@ -10,4 +10,5 @@
 Spec：[`webui/docs/100-access-control-p15-agent-constraints-spec.md`](../../webui/docs/100-access-control-p15-agent-constraints-spec.md) v0.1.1  
 契约：Spec 07 v1.6 / 14 v0.4 / 15 v0.4（WP-S1）
 
-**当前停靠：** Gate A/B/C **DONE** — **AC-P1.5 已交付**（2026-08-09；总签 `inbox/20260809-ac-p15-gate-c-signoff.md`）。
+**当前停靠：** Gate A/B/C **DONE** — **AC-P1.5 已交付**（2026-08-09；总签 `inbox/20260809-ac-p15-gate-c-signoff.md`）。  
+**P1.5 后路线图：** [`adr-post-p15-roadmap-freeze.md`](../access-control/adr-post-p15-roadmap-freeze.md)（TokenScope / Dynamic RLS / P2+ 冻结；单机部署优先）。
