@@ -162,11 +162,11 @@ docker compose \
 
 | 项 | 签名 | 日期 | 证据 |
 |---|---|---|---|
-| §2.0 配置连续（路径 A/B） | 待确认 | | `00-compose-identity.env` |
-| P3-00…P3-06 抽检 | 待确认 | | `inbox/…-single-deploy-p3/` |
-| P3-07 对称回滚 proven=false | 待确认 | | |
-| Non-Claim 未破（无 Dynamic RLS / TokenScope 声称） | 待确认 | | |
-| **Phase 3 批准（可议 Phase 4）** | 待确认 | | |
+| §2.0 配置连续（路径 A/B） | xingchen | 2026-08-09 | `inbox/20260809-single-deploy-p3/00-compose-identity.env` |
+| P3-00…P3-06 抽检 | xingchen | 2026-08-09 | `inbox/20260809-single-deploy-p3/` |
+| P3-07 对称回滚 proven=false | xingchen | 2026-08-09 | `…-p3/api/11` / `12` |
+| Non-Claim 未破（无 Dynamic RLS / TokenScope 声称） | xingchen | 2026-08-09 | 阶段报告 |
+| **Phase 3 批准（可议 Phase 4）** | xingchen | 2026-08-09 | 总报告 §9；**暂不 merge** |
 
 ---
 
@@ -255,10 +255,10 @@ docker compose \
 
 | 项 | 签名 | 日期 | 结论 |
 |---|---|---|---|
-| Allow/Deny 清单确认 | 待确认 | | |
-| 用户真实测试证据已审阅 | 待确认 | | |
-| PR 范围批准（A / B / C） | 待确认 | | |
-| **批准 merge 到 main**（非仅开 draft） | 待确认 | | **仅**在 §3.1.4 三件套齐全后 |
+| Allow/Deny 清单确认 | xingchen | 2026-08-09 | **通过** |
+| 用户真实测试证据已审阅 | xingchen | 2026-08-09 | **通过（HTTP MCP SSE + 服务端日志）**；Cursor Agent SSE 手测另做 |
+| PR 范围批准（A / B / C） | xingchen | 2026-08-09 | **暂缓**（待 Agent SSE 手测后再定） |
+| **批准 merge 到 main**（非仅开 draft） | xingchen | 2026-08-09 | **否（明确暂缓）** — 待亲自完成 Cursor Agent SSE/`lucy_query` 测试后再议 |
 
 ---
 
@@ -294,7 +294,7 @@ docker compose \
 | Phase 0 | 见 Phase 0/1 文档 | | |
 | Phase 1 | 见 Phase 0/1 文档 | | |
 | Phase 2 | [Phase 2 清单](checklist-single-deploy-phase2.md) §9 + 本文 §1 | | |
-| **Phase 3** | §2.6 | | |
-| **Phase 4** | §3.7 | | |
+| **Phase 3** | §2.6 **通过** | xingchen | 2026-08-09 |
+| **Phase 4** | §3.7 **门禁通过 / merge 暂缓** | xingchen | 2026-08-09 |
 
 — 完
