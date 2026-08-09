@@ -52,6 +52,8 @@ interface UserConfig {
   roles?: string[];
   tokens: UserToken[];
   allow?: UserAllow;
+  /** Spec 100 — Agent Constraints (compiled in acl; Role must not have this field). */
+  constraints?: unknown;
 }
 
 interface Defaults {

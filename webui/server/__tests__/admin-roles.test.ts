@@ -398,6 +398,32 @@ describe("POST /api/admin/roles", () => {
     await app.close();
   });
 
+  it("SC-P15-04 / Spec 100 §3.3: Role Admin rejects constraints key", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: true,
+        roleId: "role_with_constraints",
+        role: {
+          description: "illegal",
+          constraints: { sources: [] },
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.ok).toBe(false);
+    expect(String(res.body.error?.message ?? "")).toMatch(/constraints/);
+    await app.close();
+  });
+
   it("writes role on dryRun:false", async () => {
     const app = buildServer();
     await app.ready();

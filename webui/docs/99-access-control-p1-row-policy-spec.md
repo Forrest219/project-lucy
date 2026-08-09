@@ -9,7 +9,7 @@
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
 | 基于材料 | `docs/access-control/design-upgrade.md` v1.1.2 ADR-AC-03/05/06；[`adr-upstream-forced-predicate.md`](../../docs/access-control/adr-upstream-forced-predicate.md) **v0.2 Gate A 已批准**；WO-60；Spec 98（AC-P0 基线，只读依赖） |
-| 适用范围 | AC-P1 **行授予 / FinalRows / 强制谓词注入**的实现事实源；Gate B 已批准 → **授权 WP-I\* runtime**；**不含** AC-P1.5 Agent Constraints |
+| 适用范围 | AC-P1 **行授予 / FinalRows / 强制谓词注入**的实现事实源；Gate B 已批准 → **授权 WP-I\* runtime**；Agent Constraints → [`100-access-control-p15-agent-constraints-spec.md`](100-access-control-p15-agent-constraints-spec.md) |
 | 输出位置 | `webui/docs/99-access-control-p1-row-policy-spec.md` |
 | 冲突裁决 | 与 `design-upgrade.md` / Gate A ADR 冲突 → **design-upgrade / ADR**，并回修本文；实现与本文冲突 → 本文 |
 | 关联 WO | WO-202608-60；Gate A DONE；**Gate B DONE（2026-08-09）** → WP-I\* |
@@ -83,7 +83,7 @@ Protected DOM terms（`translate="no"` + `notranslate`）：既有 Spec 98 集�
 
 | 非目标 | 说明 |
 |---|---|
-| Agent Constraints / TokenScope 收紧 | **AC-P1.5**；本波 `constraints` → lint/compile **fail** |
+| Agent Constraints / TokenScope 收紧 | **AC-P1.5 → [`Spec 100`](100-access-control-p15-agent-constraints-spec.md)**；在 Spec 100 Gate B 前，本波口径仍为：`constraints` → lint/compile **fail**（P1 已交付行为不变） |
 | `ne` / 范围比较 op | 另批 |
 | DB 原生 RLS / Dynamic claim / Active Role / CLS | AC-P2+ |
 | 依据 SUPERSEDED 行级文 | 禁止 |
@@ -357,7 +357,7 @@ upstream_forced_predicate_proven ∈ { false, true }
 | measure / 非行级 field 绑定 | §3.2；**BY-19** / U-ROW-FIELD-MEASURE |
 | explain / freshness | §5.2；BY-17/18 |
 | 未证明 | §6.3；BY-09 |
-| constraints | §4.3；SC-P1-06 |
+| constraints（P1 拒绝；P1.5 见 Spec 100） | §4.3；SC-P1-06；[`Spec 100`](100-access-control-p15-agent-constraints-spec.md) |
 
 验证命令（实现后）：
 

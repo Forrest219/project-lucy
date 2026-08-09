@@ -41,12 +41,15 @@
 | **AC-P1（已交付）** | [`plans/wo-202608-60-access-control-p1.md`](plans/wo-202608-60-access-control-p1.md) | Gate A/B/C **DONE**（2026-08-09）；签字 `inbox/20260809-ac-p1-gate-c-signoff.md` |
 | **Gate A ADR** | [`adr-upstream-forced-predicate.md`](adr-upstream-forced-predicate.md) | v0.2.2；Lucy `filters[]` 载体；不以 Kaelio 发版为前置 |
 | **AC-P1 Runtime Spec** | [`webui/docs/99-access-control-p1-row-policy-spec.md`](../../webui/docs/99-access-control-p1-row-policy-spec.md) | v0.1.2；Gate B 已批准 |
+| **AC-P1.5 Runtime Spec** | [`webui/docs/100-access-control-p15-agent-constraints-spec.md`](../../webui/docs/100-access-control-p15-agent-constraints-spec.md) | v0.1.1；**Gate B 已批准**（2026-08-09） |
 | **强制谓词载体证据** | [`evidence-ktx-forced-filters.md`](evidence-ktx-forced-filters.md) | Gate C 项 1：**Lucy** 对 bundled KTX 的 `filters[]` 前缀 + Proxy 测 |
 | UAT / Runbook / Release（P1） | [`uat-ac-p1.md`](uat-ac-p1.md) / [`runbook-row-policy.md`](runbook-row-policy.md) / [`release-notes-ac-p1.md`](release-notes-ac-p1.md) | Gate C 已签字；proven 默认 false（置真=运维变更） |
+| UAT / Runbook / Release（P1.5） | [`uat-ac-p15.md`](uat-ac-p15.md) / [`runbook-row-policy.md`](runbook-row-policy.md) 路径 D / [`release-notes-ac-p15.md`](release-notes-ac-p15.md) | Gate C 已签字；总签 `inbox/20260809-ac-p15-gate-c-signoff.md` |
+| **AC-P1.5（已交付）** | [`plans/wo-202608-61-access-control-p15-agent-constraints.md`](plans/wo-202608-61-access-control-p15-agent-constraints.md) | Gate A/B/C **DONE**（2026-08-09）；签字 `inbox/20260809-ac-p15-gate-c-signoff.md` |
 
 **冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。
 
-**开波禁令：** **不得**仅凭 `design-upgrade.md` 直接开工改 `acl.ts` / `mcp-proxy.ts`。AC-P1 必须先过 WO-60 **Gate A**（上游强制谓词契约 ADR），再写 Spec（Gate B），通过后才改 runtime。`feasibility-row-acl.SUPERSEDED.md` 禁止作为实施依据。
+**开波禁令：** **不得**仅凭 `design-upgrade.md` 直接开工改 `acl.ts` / `mcp-proxy.ts`。AC-P1 须先过 WO-60 Gate A/B；**AC-P1.5** Gate A = 批准 WO 范围与 O-P15 默认（授权写 Spec），**Gate B** = Spec 100 评审通过后才改 runtime（**Gate B 已于 2026-08-09 批准**）。`feasibility-row-acl.SUPERSEDED.md` 禁止作为实施依据。
 
 ---
 
@@ -64,7 +67,10 @@
 | `plans/` | 本域 Work Order |
 | `adr-upstream-forced-predicate.md` | AC-P1 Gate A：上游强制谓词契约（已批准） |
 | `uat-ac-p1.md` | AC-P1 UAT 勾选清单 |
-| `runbook-row-policy.md` | AC-P1 行策略 / 未证明恢复 Runbook |
+| `uat-ac-p15.md` | AC-P1.5 Agent Constraints UAT 勾选清单 |
+| `release-notes-ac-p15.md` | AC-P1.5 发布说明（Non-Claim） |
+| `runbook-row-policy.md` | AC-P1 行策略 / P1.5 Constraints（路径 D）恢复 Runbook |
+| `plans/wo-202608-61-…` | AC-P1.5 Agent Constraints WO（已交付） |
 
 ---
 
@@ -73,12 +79,14 @@
 | 区域 | 路径 |
 |---|---|
 | 裁决 / source map | `webui/server/proxy/acl.ts` |
+| Row Policy / FinalRows 载体 | `webui/server/proxy/row-policy.ts` |
+| Agent Constraints / FinalRows AND | `webui/server/proxy/agent-constraints.ts`（AC-P1.5） |
 | 闸门 / rewrite | `webui/server/proxy/mcp-proxy.ts` |
 | 身份 | `webui/server/proxy/identity.ts` |
 | 审计 | `webui/server/proxy/audit.ts` |
 | Admin API | `webui/server/admin/{agents,roles,tokens,audit}.ts` |
 | 事实源 | `webui/config/access.yaml` |
-| 单测 | `webui/server/__tests__/kx-acl.test.ts`、`mcp-proxy-acl.test.ts` 等 |
+| 单测 | `webui/server/__tests__/kx-acl.test.ts`、`row-policy-ac-p1.test.ts`、`agent-constraints-ac-p15.test.ts` 等 |
 
 ---
 
@@ -104,6 +112,6 @@
 |---|---|
 | AC-P0 Spec / 实施 | **已交付**（Spec 98；WO-59 Gate C 2026-08-09） |
 | **AC-P1 Row Policy** | **已交付**（[WO-60](plans/wo-202608-60-access-control-p1.md) Gate C 2026-08-09）；[UAT](uat-ac-p1.md) / [Runbook](runbook-row-policy.md) / [Release notes](release-notes-ac-p1.md)；proven 默认 false |
-| AC-P1.5 Agent Constraints | 未开波；不在 WO-60 范围 |
+| **AC-P1.5 Agent Constraints** | **已交付**（[WO-61](plans/wo-202608-61-access-control-p15-agent-constraints.md) Gate C 2026-08-09）；[UAT](uat-ac-p15.md) / [Runbook](runbook-row-policy.md) 路径 D / [Release notes](release-notes-ac-p15.md)；TokenScope 非目标；proven 仍默认 false |
 
 — 完

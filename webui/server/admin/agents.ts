@@ -10,10 +10,18 @@ import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   expandSelectorSourceNames,
   normalizePermissionModelVersion,
+  previewAgentPermissionsForAdmin,
   previewRolePermissionsForAdmin,
   resolveEffectivePermissionsForAdmin,
   type EffectivePermissions
 } from "../proxy/acl.js";
+import {
+  constraintsSourceKey,
+  lookupFinalRows,
+  parseAgentConstraintsShape
+} from "../proxy/agent-constraints.js";
+import type { AccessConfig } from "../proxy/identity.js";
+import type { RowGrant, ResolvedRowPolicyPredicate } from "../proxy/row-policy.js";
 import {
   evaluateAccessGovernanceGate,
   evaluateGovernanceOverride,
@@ -73,12 +81,15 @@ export interface YamlUser {
   note?: string;
   enabled?: boolean;
   role?: string;
+  roles?: string[];
   tokens: YamlToken[];
   allow?: {
     tables: string[];
     tools: string[];
     connections?: string[];
   };
+  /** Spec 100 Agent Constraints; validated at EffectivePolicy compile. */
+  constraints?: unknown;
 }
 
 export interface YamlRole {
@@ -341,6 +352,8 @@ function userToAgent(
       tools: user.allow?.tools ?? [],
       connections: user.allow?.connections ?? []
     } : undefined,
+    // Spec 100 — expose Agent Constraints for Admin editor (Role path forbids this field).
+    ...(user.constraints !== undefined ? { constraints: user.constraints } : {}),
     createdAt: timeline?.createdAt,
     configUpdatedAt: timeline?.configUpdatedAt,
     stats
@@ -385,6 +398,30 @@ async function getAgentConfigTimelineMap(userIds: string[]): Promise<Map<string,
   return result;
 }
 
+function rowGrantToPreview(grant: RowGrant | undefined):
+  | "all"
+  | { kind: "scoped"; digest: string; predicates?: ResolvedRowPolicyPredicate[] } {
+  if (!grant || grant.kind === "all") return "all";
+  return {
+    kind: "scoped",
+    digest: grant.digest,
+    predicates: grant.predicates
+  };
+}
+
+function constraintsSummaryForSource(
+  preds: ResolvedRowPolicyPredicate[] | undefined
+): string | undefined {
+  if (!preds || preds.length === 0) return undefined;
+  return preds
+    .slice(0, 3)
+    .map((pred) => {
+      if (pred.op === "eq") return `${pred.field}=${String(pred.value ?? "")}`;
+      return `${pred.field} in [${(pred.values ?? []).map((item) => String(item)).join(",")}]`;
+    })
+    .join(" AND ") + (preds.length > 3 ? " …" : "");
+}
+
 function effectivePermissionsToPreview(permissions: EffectivePermissions) {
   return {
     roleIds: permissions.roleIds,
@@ -395,19 +432,51 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
     sources: permissions.sources,
     legacyAllow: permissions.legacyAllow,
     capabilityDigest: permissions.capabilityDigest,
-    capabilities: permissions.capabilities.map((capability) => ({
-      tool: capability.tool,
-      connectionId: capability.connectionId,
-      schema: capability.schema,
-      sourceName: capability.sourceName,
-      physicalTable: capability.physicalTable,
-      sourceKey: `${capability.connectionId}|${capability.schema}|${capability.sourceName}|${capability.physicalTable}`,
-      // Spec 99 §8 — expose FinalRows-facing grant; never fake "all" when scoped
-      rowGrant: capability.rowGrant?.kind === "scoped"
-        ? { kind: "scoped" as const, digest: capability.rowGrant.digest }
-        : ("all" as const)
-    }))
+    capabilities: permissions.capabilities.map((capability) => {
+      const finalRows = lookupFinalRows(
+        permissions.finalRowsBySource,
+        capability.connectionId,
+        capability.sourceName,
+        capability.rowGrant
+      );
+      const constraintKey = constraintsSourceKey(capability.connectionId, capability.sourceName);
+      const constraintPreds = permissions.agentConstraintsBySource?.[constraintKey];
+      return {
+        tool: capability.tool,
+        connectionId: capability.connectionId,
+        schema: capability.schema,
+        sourceName: capability.sourceName,
+        physicalTable: capability.physicalTable,
+        sourceKey: `${capability.connectionId}|${capability.schema}|${capability.sourceName}|${capability.physicalTable}`,
+        // Spec 99 §8 — EffectiveRowGrant (Role OR); never fake "all" when scoped
+        rowGrant: rowGrantToPreview(capability.rowGrant),
+        // Spec 100 / Spec 14 §0.0a — FinalRows after Constraints AND
+        finalRows: rowGrantToPreview(finalRows),
+        protected: finalRows.kind === "scoped",
+        constraintsSummary: constraintsSummaryForSource(constraintPreds)
+      };
+    })
   };
+}
+
+const CONSTRAINT_FAIL_CODES = new Set([
+  "constraints_invalid_shape",
+  "constraints_source_not_in_capability",
+  "constraints_forbidden_on_role",
+  "final_rows_limit_exceeded",
+  "final_rows_unsatisfiable",
+  "row_policy_field_unresolved",
+  "row_policy_op_forbidden"
+]);
+
+function constraintsCompileError(reason: string): { code: string; message: string } {
+  const code = CONSTRAINT_FAIL_CODES.has(reason)
+    || reason.startsWith("row_policy_")
+    || reason.startsWith("constraints_")
+    || reason.startsWith("final_rows_")
+    ? reason.split(":")[0] ?? reason
+    : "CONSTRAINTS_COMPILE_FAILED";
+  return { code, message: reason };
 }
 
 /**
@@ -813,7 +882,17 @@ export function registerAgentRoutes(app: FastifyInstance) {
       dryRun?: boolean;
       version?: string;
       override?: AccessGovernanceOverrideRequest;
-      patch: { name?: string; note?: string; enabled?: boolean; role?: string; allow?: unknown; tokens?: unknown; id?: unknown };
+      patch: {
+        name?: string;
+        note?: string;
+        enabled?: boolean;
+        role?: string;
+        allow?: unknown;
+        tokens?: unknown;
+        id?: unknown;
+        /** Spec 100 — set Agent Constraints; `null` clears the key. */
+        constraints?: unknown;
+      };
     };
   }>("/api/admin/agents/:userId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -884,11 +963,51 @@ export function registerAgentRoutes(app: FastifyInstance) {
       ...(patch.role !== undefined ? { role: patch.role } : {})
     };
     if (updatedUser.role) delete updatedUser.allow;
+
+    const patchHasConstraints = bodyHasOwn(patch, "constraints");
+    if (patchHasConstraints) {
+      if (patch.constraints === null) {
+        delete updatedUser.constraints;
+      } else {
+        const shape = parseAgentConstraintsShape(patch.constraints);
+        if (!shape.ok) {
+          const err = constraintsCompileError(shape.reason);
+          return reply.status(400).send({ ok: false, error: err });
+        }
+        updatedUser.constraints = patch.constraints;
+      }
+    }
+
     const newUsers = [...config.users];
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
+
+    // Spec 100 §10 — illegal / unsatisfiable / over-limit constraints must fail before write.
+    let proposedEffectivePermissions: ReturnType<typeof effectivePermissionsToPreview> | undefined;
+    if (patchHasConstraints || updatedUser.constraints !== undefined) {
+      // Omit `constraints` when cleared — passing `constraints: undefined` still
+      // keeps the key and compile treats it as invalid shape.
+      const compiled = await previewAgentPermissionsForAdmin(
+        {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          enabled: updatedUser.enabled,
+          role: updatedUser.role,
+          roles: updatedUser.roles,
+          tokens: updatedUser.tokens,
+          allow: updatedUser.allow,
+          ...(updatedUser.constraints !== undefined ? { constraints: updatedUser.constraints } : {})
+        },
+        { roleOverrides: newConfig.roles as AccessConfig["roles"] }
+      );
+      if (!compiled.ok) {
+        const err = constraintsCompileError(compiled.reason);
+        return reply.status(400).send({ ok: false, error: err });
+      }
+      proposedEffectivePermissions = effectivePermissionsToPreview(compiled.permissions);
+    }
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
     const stats = await getStats(existingUser.id, existingUser.tokens.length);
@@ -904,7 +1023,15 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate } };
+      return {
+        ok: true,
+        data: {
+          diff,
+          proposedYaml,
+          gate,
+          ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
+        }
+      };
     }
 
     if (gate.decision === "block") {
@@ -941,8 +1068,18 @@ export function registerAgentRoutes(app: FastifyInstance) {
       enabled: true,
       changeType: "agent_patch",
       targetId: updatedUser.id,
-      oldSummary: { enabled: existingUser.enabled !== false, role: existingUser.role, hasLegacyAllow: Boolean(existingUser.allow) },
-      newSummary: { enabled: updatedUser.enabled !== false, role: updatedUser.role, hasLegacyAllow: Boolean(updatedUser.allow) },
+      oldSummary: {
+        enabled: existingUser.enabled !== false,
+        role: existingUser.role,
+        hasLegacyAllow: Boolean(existingUser.allow),
+        hasConstraints: existingUser.constraints !== undefined
+      },
+      newSummary: {
+        enabled: updatedUser.enabled !== false,
+        role: updatedUser.role,
+        hasLegacyAllow: Boolean(updatedUser.allow),
+        hasConstraints: updatedUser.constraints !== undefined
+      },
       diff,
       requestId: request.id
     });
@@ -953,7 +1090,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
         policyVersion: writeResult.policyVersion,
         runtimeAck: writeResult.runtimeAck,
         gate,
-        agent: await userToAgentWithPermissions(updatedUser)
+        agent: await userToAgentWithPermissions(updatedUser),
+        ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
       }
     };
   });

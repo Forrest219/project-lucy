@@ -19,8 +19,14 @@ import {
   rowGrantDigest,
   validateProtectedLucyQueryArgs,
   type ForcedFiltersPayload,
-  type RowGrant
+  type RowGrant,
+  type ResolvedRowPolicyPredicate
 } from "./row-policy.js";
+import {
+  compileAgentConstraints,
+  compileFinalRowsBySource,
+  lookupFinalRows
+} from "./agent-constraints.js";
 
 export interface AclDecision {
   allowed: boolean;
@@ -649,6 +655,16 @@ export interface EffectivePermissions {
   rolesJson: unknown;
   resolvedJson: unknown;
   legacyAllow: boolean;
+  /**
+   * Spec 100 — AgentConstraints per source (connectionId\\0sourceName → AND preds).
+   * Missing / empty ⇒ Constraints≡TRUE for all sources (AC-P1 behavior).
+   */
+  agentConstraintsBySource?: Record<string, ResolvedRowPolicyPredicate[]>;
+  /**
+   * Spec 100 — FinalRows per source after EffectiveRowGrant AND Constraints (DNF pruned).
+   * Hot path / explain use this; capability.rowGrant remains EffectiveRowGrant (OR).
+   */
+  finalRowsBySource?: Record<string, RowGrant>;
 }
 
 export type RoleResolutionResult = {
@@ -688,7 +704,9 @@ function makePermissions(input: Omit<EffectivePermissions, "snapshotHash">): Eff
     sourceMapVersion: input.sourceMapVersion,
     rolesJson: input.rolesJson,
     resolvedJson: input.resolvedJson,
-    legacyAllow: input.legacyAllow
+    legacyAllow: input.legacyAllow,
+    agentConstraintsBySource: input.agentConstraintsBySource ?? null,
+    finalRowsBySource: input.finalRowsBySource ?? null
   };
   return {
     ...input,
@@ -929,7 +947,7 @@ async function compileRole(
   const failed: CompiledRoleResult = { ok: false, reason: `role_resolution_failed:${roleId}` };
   if (!role?.allow) return failed;
   if (Object.prototype.hasOwnProperty.call(role, "constraints")) {
-    return { ok: false, reason: `role_resolution_failed:${roleId}:constraints_unsupported` };
+    return { ok: false, reason: "constraints_forbidden_on_role" };
   }
 
   const modelVersion = normalizePermissionModelVersion(role);
@@ -1036,10 +1054,6 @@ async function resolveEffectivePermissions(
   const user = config.users.find((u) => u.id === identity.userId);
   if (!user) return { ok: false, reason: "tool_forbidden" };
   if (user.enabled === false) return { ok: false, reason: "agent_disabled" };
-  if (Object.prototype.hasOwnProperty.call(user, "constraints")) {
-    return { ok: false, reason: "constraints_unsupported" };
-  }
-
   const state = options.sourceMap ?? await loadSourceMap({ fresh: options.freshSourceMap ?? true });
   if (state.compileError) {
     return { ok: false, reason: `source_map_compile_failed:${state.compileError}` };
@@ -1049,6 +1063,10 @@ async function resolveEffectivePermissions(
   if (!roleSet.ok) return { ok: false, reason: roleSet.reason };
 
   if (roleSet.roleIds.length === 0) {
+    if (Object.prototype.hasOwnProperty.call(user, "constraints")) {
+      // Spec 100: constraints require DataPlane capability sources from Role Set.
+      return { ok: false, reason: "constraints_source_not_in_capability" };
+    }
     const tools = configList(user.allow?.tools, []).filter(
       (tool) => tool === "*" || !absoluteDenyOrUnclassifiedReason(tool)
     );
@@ -1090,6 +1108,32 @@ async function resolveEffectivePermissions(
   const capabilities = dedupeCapabilities(
     compiledRoles.flatMap((role) => buildCapabilities(role.dataPlaneTools, role.sources, role.sourceGrants))
   );
+
+  let agentConstraintsBySource: Record<string, ResolvedRowPolicyPredicate[]> | undefined;
+  let constraintsMap: Map<string, ResolvedRowPolicyPredicate[]> | undefined;
+  const capabilityRefs = capabilities.map((capability) => ({
+    connectionId: capability.connectionId,
+    sourceName: capability.sourceName,
+    schema: capability.schema,
+    physicalTable: capability.physicalTable,
+    rowGrant: capability.rowGrant
+  }));
+
+  if (Object.prototype.hasOwnProperty.call(user, "constraints")) {
+    const compiledConstraints = await compileAgentConstraints(
+      (user as { constraints?: unknown }).constraints,
+      capabilityRefs
+    );
+    if (!compiledConstraints.ok) return { ok: false, reason: compiledConstraints.reason };
+    constraintsMap = compiledConstraints.constraints.bySource;
+    agentConstraintsBySource = Object.fromEntries(constraintsMap.entries());
+  }
+
+  // Spec 100 §5 — FinalRows AND (DNF prune) for every capability source.
+  const compiledFinalRows = compileFinalRowsBySource(capabilityRefs, constraintsMap);
+  if (!compiledFinalRows.ok) return { ok: false, reason: compiledFinalRows.reason };
+  const finalRowsBySource = compiledFinalRows.finalRowsBySource;
+
   const capabilityTools = new Set(capabilities.map((capability) => capability.tool));
   const metaTools = uniqueSorted(compiledRoles.flatMap((role) => role.metaTools));
   const tools = uniqueSorted([...capabilityTools, ...metaTools]);
@@ -1102,7 +1146,17 @@ async function resolveEffectivePermissions(
   ]);
   const deniedTools = uniqueSorted(compiledRoles.flatMap((role) => role.deniedTools));
   const rolesJson = Object.fromEntries(roleSet.roleIds.map((roleId) => [roleId, config.roles?.[roleId]]));
-  const resolvedJson = { tools, deniedTools, connections, tables, sources, capabilities, sourceMapVersion };
+  const resolvedJson = {
+    tools,
+    deniedTools,
+    connections,
+    tables,
+    sources,
+    capabilities,
+    sourceMapVersion,
+    agentConstraintsBySource: agentConstraintsBySource ?? null,
+    finalRowsBySource
+  };
 
   return {
     ok: true,
@@ -1118,7 +1172,9 @@ async function resolveEffectivePermissions(
       sourceMapVersion,
       rolesJson,
       resolvedJson,
-      legacyAllow: false
+      legacyAllow: false,
+      agentConstraintsBySource,
+      finalRowsBySource
     })
   };
 }
@@ -1371,6 +1427,40 @@ export async function previewRolePermissionsForAdmin(
   return resolveEffectivePermissions({ userId: previewUserId, tokenLabel: "admin-preview", tokenHashPrefix: "admin-preview" }, previewConfig, policy, {
     freshSourceMap: options.freshSourceMap ?? true
   });
+}
+
+/**
+ * Spec 100 / Spec 14 §0.0a — Admin dryRun / save preview for a candidate Agent
+ * (including `constraints`) without writing access.yaml.
+ */
+export async function previewAgentPermissionsForAdmin(
+  user: AccessConfig["users"][number],
+  options: {
+    freshSourceMap?: boolean;
+    roleOverrides?: AccessConfig["roles"];
+  } = {}
+): Promise<RoleResolutionResult> {
+  const config = await getAccessConfig({ fresh: true });
+  const policy = aclPolicy(config);
+  const previewConfig: AccessConfig = {
+    ...config,
+    roles: options.roleOverrides
+      ? {
+          ...(config.roles ?? {}),
+          ...options.roleOverrides
+        }
+      : config.roles,
+    users: [
+      ...config.users.filter((existing) => existing.id !== user.id),
+      user
+    ]
+  };
+  return resolveEffectivePermissions(
+    { userId: user.id, tokenLabel: "admin-preview", tokenHashPrefix: "admin-preview" },
+    previewConfig,
+    policy,
+    { freshSourceMap: options.freshSourceMap ?? true }
+  );
 }
 
 export async function allowedToolNames(identity: Identity): Promise<string[]> {
@@ -1918,8 +2008,8 @@ export async function authorizeAndRewrite(
         if (reason) return { allowed: false, reason };
       }
 
-      // Spec 99 §5 — FinalRows / forced_filters after capability allow.
-      const scopedSources: Array<{ sourceName: string; grant: Extract<RowGrant, { kind: "scoped" }> }> = [];
+      // Spec 99 §5 / Spec 100 §5 — FinalRows (EffectiveRowGrant AND Constraints) / forced_filters.
+      const protectedSources: Array<{ sourceName: string; grant: Extract<RowGrant, { kind: "scoped" }> }> = [];
       for (const table of requested) {
         const capability = resolveCapabilityForTable(
           toolName,
@@ -1928,11 +2018,18 @@ export async function authorizeAndRewrite(
           sourceMap,
           requestedConnection
         );
-        if (capability?.rowGrant.kind === "scoped") {
-          scopedSources.push({ sourceName: capability.sourceName, grant: capability.rowGrant });
+        if (!capability) continue;
+        const finalRows = lookupFinalRows(
+          resolved.permissions.finalRowsBySource,
+          capability.connectionId,
+          capability.sourceName,
+          capability.rowGrant
+        );
+        if (finalRows.kind === "scoped") {
+          protectedSources.push({ sourceName: capability.sourceName, grant: finalRows });
         }
       }
-      if (scopedSources.length > 0) {
+      if (protectedSources.length > 0) {
         if (ROW_POLICY_UNWRAPPED_TOOLS.has(toolName)) {
           return { allowed: false, reason: "row_policy_requires_wrapped_tool" };
         }
@@ -1943,12 +2040,16 @@ export async function authorizeAndRewrite(
           if (!isUpstreamForcedPredicateProven()) {
             return { allowed: false, reason: "row_policy_upstream_unproven" };
           }
-          if (scopedSources.length > 1) {
+          if (protectedSources.length > 1) {
             return { allowed: false, reason: "row_policy_query_shape_forbidden" };
           }
-          const primary = scopedSources[0]!;
+          const primary = protectedSources[0]!;
           const forcedFilters = buildForcedFiltersPayload(primary.grant, primary.sourceName);
-          return forcedFilters ? { allowed: true, forcedFilters } : { allowed: true };
+          // Spec 100 §7 / Spec 99 — FinalRows≠TRUE must inject; empty payload is fail-closed.
+          if (!forcedFilters) {
+            return { allowed: false, reason: "row_policy_forced_filters_empty" };
+          }
+          return { allowed: true, forcedFilters };
         }
         // lucy_explain_query: allow locally without forcedFilters injection.
       }

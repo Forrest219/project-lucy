@@ -88,7 +88,8 @@
 | [96-admin-config-audit-table-filter-polish-spec.md](96-admin-config-audit-table-filter-polish-spec.md) | `/admin/config-audit` 固定 20 行、`pl-data-grid`、中文业务字段、时间筛选与快捷窗口 | 产品 / UX / Frontend / API |
 | [97-admin-config-audit-header-export-parity-spec.md](97-admin-config-audit-header-export-parity-spec.md) | `/admin/config-audit` 删页头「访问日志」；CSV 与主表 7 列中文对齐；文件名精确到秒 | 产品 / UX / Frontend / API |
 | [98-access-control-p0-runtime-spec.md](98-access-control-p0-runtime-spec.md) | AC-P0 Runtime：Capability / Tool Class / Canonical Key / `permission_model_version` / 编译提交；已交付基线 | 安全 / 后端 / 产品 |
-| [99-access-control-p1-row-policy-spec.md](99-access-control-p1-row-policy-spec.md) | AC-P1 Runtime：`scoped` / `row_policy` / FinalRows / `forced_filters`；Gate B 评审稿；**批准前不改 runtime** | 安全 / 后端 / 产品 |
+| [99-access-control-p1-row-policy-spec.md](99-access-control-p1-row-policy-spec.md) | AC-P1 Runtime：`scoped` / `row_policy` / FinalRows / `forced_filters`；Gate B 已批准并已交付 | 安全 / 后端 / 产品 |
+| [100-access-control-p15-agent-constraints-spec.md](100-access-control-p15-agent-constraints-spec.md) | AC-P1.5 Runtime：Agent Constraints / FinalRows AND（DNF）/ digest / 精确上限；**Gate B 已批准**（2026-08-09） | 安全 / 后端 / 产品 |
 
 ## 与原 README 的关键校正
 

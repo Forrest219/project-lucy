@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | Role Admin Spec |
 | 文档类型 | Product / UX / API Spec |
-| 版本 | v0.3（AC-P1 契约补丁草稿 / WO-60 WP-S2；Spec 99 Gate B 前不改 runtime） |
-| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08；v0.3 2026-08-09 |
+| 版本 | v0.4（AC-P1.5 契约补丁 / WO-61 WP-S1；Role constraints 继续 forbidden） |
+| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08；v0.3 2026-08-09；v0.4 2026-08-09 |
 | 适用范围 | Lucy WebUI 访问治理模块：Role 列表、Role 新建/编辑/删除、Role preview、Agent 联动 |
-| 事实源 | `access.yaml` roles；AC-P0 → Spec 98；AC-P1 → Spec 99 |
-| 关联文档 | Spec 07 v1.5、Spec 14 v0.3、Gate A ADR、`design-upgrade.md` |
-| 冲突裁决 | AC-P0 → Spec 98；AC-P1 → Spec 99；与 design-upgrade / ADR 冲突 → design-upgrade / ADR |
+| 事实源 | `access.yaml` roles；AC-P0 → Spec 98；AC-P1 → Spec 99；AC-P1.5 Constraints → Spec 100（Agent 侧，非本文） |
+| 关联文档 | Spec 07 v1.6、Spec 14 v0.4、Spec 100、Gate A ADR、`design-upgrade.md` |
+| 冲突裁决 | AC-P0 → Spec 98；AC-P1 → Spec 99；AC-P1.5 → Spec 100；与 design-upgrade / ADR 冲突 → design-upgrade / ADR |
 
 ## 0. AC-P0 契约补丁（WP-S1）
 
@@ -22,10 +22,19 @@
 | `row_access: scoped` | **Gate B + WP-I1 后**允许；须合法 `row_policy.predicates`（op∈{eq,in}；**仅行级字段，禁止 measure**；Spec 99 §3.2） | §3–§3.2 |
 | dryRun | 展示 predicates、rowGrant digest、受影响源；**禁止**「看起来有行级但未注入」的成功文案 | §8 |
 | `row_access: all` + `row_policy` | 拒绝 | §3.1 |
-| `constraints` | Role/Agent 均拒绝（P1.5 前） | §4.3 |
+| `constraints` | **Role 继续拒绝**（见 §0.0a）；Agent 侧不在 Role Admin | Spec 99 §4.3 → Spec 100 §3.3 |
 | Preview `rowGrant` | `"all"` \| `{ predicates, digest }`（字段名以实现为准） | §8 |
 
 > **节奏：** Spec 99 Gate B 前，Admin/runtime/`lint:spec` 对 `scoped` 仍拒绝入库（防无注入配置）；Gate B + WP-I1 后按上表放行。
+
+### 0.0a AC-P1.5 边界（v0.4 / Spec 100）
+
+| 项 | 要求 | Spec 100 |
+|---|---|---|
+| Role `constraints` | YAML / API / UI **一律 forbidden** → `constraints_forbidden_on_role`；**不提供** Constraints 编辑器 | §3.3 |
+| Agent `constraints` | **不属于 Role Admin**；编辑 / dryRun / preview 在 Spec 14 / Spec 100 | §10 |
+| TokenScope | 非本 Spec；Role Admin 不引入 token 行收紧 | Spec 100 §2 |
+| Preview | Role dryRun 仍只展示 rowGrant；FinalRows（含 Constraints）在 Agent preview | Spec 14 §0.0a |
 
 ### 0.1 相对 v0.1 的增量
 
@@ -140,8 +149,8 @@ M11 已把 Agent Admin 的交付链路补齐：新建 Agent 时必须选择 role
 
 - 不实现多管理员 RBAC。
 - 不实现 role rename 的原地语义；rename 视为新建新 role + 迁移 Agent 引用 + 删除旧 role。
-- **波次边界：** AC-P0 不交付 scoped 编辑器。**AC-P1** 允许 `scoped`+`row_policy`（Spec 99；Gate B 后）。不得展示「有行级文案但未注入」。Agent Constraints / `ne`/范围 op / Dynamic RLS 不在本 Spec。不得写成「永不做行级」。
-- 不实现 token scope。未来 token scope 只能在 role 基础上做交集收窄，不能增权。
+- **波次边界：** AC-P0 不交付 scoped 编辑器。**AC-P1** 允许 `scoped`+`row_policy`（Spec 99；Gate B 后）。不得展示「有行级文案但未注入」。**Agent Constraints 不在 Role Admin**（Spec 14 / Spec 100）；Role `constraints` 继续 forbidden。`ne`/范围 op / Dynamic RLS / TokenScope 不在本 Spec。不得写成「永不做行级」。
+- 不实现 token scope / TokenScope 行收紧。若未来另立，只能在 role/capability 基础上做交集收窄，不能增权。
 - 不实现 role 版本历史的单独模型；变更历史继续走 `config_change_log`。
 - 不在本文复述 Tool Class 全表或 capability 代数（→ Spec 98）。
 
@@ -562,7 +571,8 @@ Role 写入前必须通过：
 - role id regex。
 - schema whitelist：`description` / `permission_model_version` / `allow` / `allow.connections` / `allow.tableSelectors` / `allow.tools` / selector 的 `connection`、`schema`、`names`、`prefix`（仅 v1）、`row_access`、`row_policy`（仅 `scoped`）。
 - `permission_model_version`：新建必须为 `2`；稳态缺字段拒绝；v2 + `prefix` 拒绝；v2 selector 缺 `row_access` 拒绝。
-- **AC-P1（Spec 99）：** Gate B 前 `scoped` 仍拒绝；**Gate B + WP-I1 后** `scoped` 须合法 `row_policy`（op∈{eq,in}；§3.2 仅行级字段，**禁止 measure**）；`all`+`row_policy` 拒绝；`constraints` 拒绝。
+- **AC-P1（Spec 99）：** Gate B 前 `scoped` 仍拒绝；**Gate B + WP-I1 后** `scoped` 须合法 `row_policy`（op∈{eq,in}；§3.2 仅行级字段，**禁止 measure**）；`all`+`row_policy` 拒绝。
+- **AC-P1.5（Spec 100）：** Role 出现 `constraints` → **拒绝**（`constraints_forbidden_on_role`）；Agent `constraints` 不在本校验面（→ Spec 14）。
 - `tools` 非空，不能包含 `*`。
 - 所有 tool 必须在分类表 / `defaults.known_tools` 中，且**不得**为 AbsoluteDeny 或未分类（Spec 98 §4）。
 - `defaults.deny_tools` 命中的工具即使列入 role，也会在 preview 中被剔除或标 warning；保存时建议拒绝，避免用户误以为可用。

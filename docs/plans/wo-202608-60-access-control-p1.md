@@ -7,4 +7,5 @@
 设计基线：[`docs/access-control/design-upgrade.md`](../access-control/design-upgrade.md) v1.1.2  
 域索引：[`docs/access-control/README.md`](../access-control/README.md)
 
-**当前停靠：** Gate A/B/C **DONE（2026-08-09）** — [`uat-ac-p1.md`](../access-control/uat-ac-p1.md) / [`release-notes-ac-p1.md`](../access-control/release-notes-ac-p1.md)；proven 默认 false（置真=运维变更）。
+**当前停靠：** Gate A/B/C **DONE（2026-08-09）** — [`uat-ac-p1.md`](../access-control/uat-ac-p1.md) / [`release-notes-ac-p1.md`](../access-control/release-notes-ac-p1.md)；proven 默认 false（置真=运维变更）。  
+**后续波次：** AC-P1.5 → [`WO-61`](../access-control/plans/wo-202608-61-access-control-p15-agent-constraints.md)。

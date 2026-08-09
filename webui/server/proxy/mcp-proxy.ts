@@ -1052,7 +1052,8 @@ async function lucyExplainQuery(identity: Identity, args: unknown): Promise<Reco
 
   const rowPolicy = buildExplainForcedPredicateDiagnostics({
     capabilities: permissions.ok ? permissions.permissions.capabilities : [],
-    requestedSources
+    requestedSources,
+    finalRowsBySource: permissions.ok ? permissions.permissions.finalRowsBySource : undefined
   });
 
   return {

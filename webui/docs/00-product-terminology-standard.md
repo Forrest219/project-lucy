@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane）；2026-08-08 v0.3（登记 Access Control Upgrade / AC-P0 术语，见 §3 与 §4.8） |
+| 版本 | v0.3.1 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane）；2026-08-08 v0.3（登记 Access Control Upgrade / AC-P0 术语，见 §3 与 §4.8）；2026-08-09 v0.3.1（AC-P1.5 Agent Constraints 波次说明） |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -193,18 +193,18 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Object Detail Drawer | 对象详情抽屉 | 详情抽屉 | 详情弹窗泛化 | 跨模块查看 Connection / Table / Agent / Eval Run / Audit Event 等对象上下文 |
 | Change Impact | 变更影响范围 | 影响范围 | 影响分析（作为按钮主名） | 发布前说明哪些对象、Agent、eval 可能被影响 |
 | Quality Operations | 质量运营 | 质量评测运营 | 质量评价 | 评测模块从列表管理升级为持续运营，含趋势、频率、失败归因 |
-| Access Control Upgrade | 访问权限升级 | AC Upgrade、权限升级 | Dynamic RLS、行级动态隔离（作为本升级总称） | 访问权限独立升级域总称；波次 AC-P0 / AC-P1；设计见 `docs/access-control/design-upgrade.md` |
+| Access Control Upgrade | 访问权限升级 | AC Upgrade、权限升级 | Dynamic RLS、行级动态隔离（作为本升级总称） | 访问权限独立升级域总称；波次 AC-P0 / AC-P1 / AC-P1.5；设计见 `docs/access-control/design-upgrade.md` |
 | Data Capability | 数据能力元组 | capability、工具×源授权 | 工具并集、表并集、权限笛卡尔积 | `(tool, canonicalSourceKey, rowGrant)`；Admin 权限摘要必须按元组展示 |
 | Effective Data Capabilities | 有效数据能力集 | 有效 capability、合成后的数据能力 | `(∪tools)×(∪sources)`、工具并集+表并集 | 多 Role capability 并集；禁止独立维度笛卡尔放大 |
 | Row Grant | 行授予 | rowGrant | Agent Constraints、Role 间 AND | 某 capability 上的行集合；AC-P0 恒 TRUE；AC-P1 可为 Row Policy AST |
 | Effective Row Grant | 有效行授予 | EffectiveRowGrant | Role 间 AND、FinalRows（混称） | 同源多 Role 行授予 **OR**；见 Spec 99 §4.2 |
-| Final Rows | 最终行约束 | FinalRows | 仅用户 filter、仅 Role 并集 | `EffectiveRowGrant AND Constraints AND TokenScope`；AC-P1 本波 Constraints/TokenScope≡TRUE |
+| Final Rows | 最终行约束 | FinalRows | 仅用户 filter、仅 Role 并集 | `EffectiveRowGrant AND AgentConstraints AND TokenScope`；AC-P1：Constraints/TokenScope≡TRUE；**AC-P1.5**：Constraints 可非 TRUE（Spec 100）；TokenScope 仍≡TRUE |
 | Forced Predicate | 强制谓词 | ForcedPredicateAST | 拼进用户 filters 的 SQL | Proxy 编译自 FinalRows；不可被 OR/括号等放宽 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户可写 filters | AC-P1 上游主路径；仅 Proxy 可写 |
 | Upstream Forced Predicate Proven | 上游强制谓词已证明 | proven 标志 | 代码写完即已证明 | Gate C bypass 全绿后才可置真；未证明取数 deny |
 | Row Policy Requires Wrapped Tool | 需包装工具 | `row_policy_requires_wrapped_tool` | capability_forbidden（混作主文案） | 受保护源上非 lucy_query 取数通道 |
 | Row Policy Upstream Unproven | 上游契约未证明 | `row_policy_upstream_unproven` | 临时放行碰运气 | FinalRows≠TRUE 且 proven≠true 的取数路径 |
-| Agent Constraints | Agent 强制约束 | 人级收紧、FinalRows 收紧 | Role 间 AND、Row Grant OR（混称） | 挂在 Agent 上、与 EffectiveRowGrant AND；**AC-P1.5**；AC-P1 配置出现即失败 |
+| Agent Constraints | Agent 强制约束 | 人级收紧、FinalRows 收紧 | Role 间 AND、Row Grant OR（混称）、TokenScope | 挂在 Agent 上、与 EffectiveRowGrant **AND**；**AC-P1.5 Spec 100**；Role 上 forbidden；AC-P1 配置出现即失败 |
 | Permission Model Version | 权限模型版本 | `permission_model_version`、模型版本 | 用户字段 role/roles、修改历史推断世代 | Role 上 `1`=legacy、`2`=显式模型 |
 | Row Policy | 行级策略 | row_policy、结构化行谓词 | Segment、查询 filters、overlay 表达式当权限 | 仅 `access.yaml` 内 structured 谓词；op∈{eq,in}；Spec 99 |
 | Canonical Source Key | 规范源键 | canonicalSourceKey、源键四元组 | 裸 sourceName、裸 physicalTable 作唯一身份 | `connectionId \| schema \| sourceName \| physicalTable` |
@@ -409,9 +409,9 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 
 详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名。
 
-### 4.8 访问权限升级（Access Control Upgrade / AC-P0 + AC-P1）
+### 4.8 访问权限升级（Access Control Upgrade / AC-P0 + AC-P1 + AC-P1.5）
 
-术语事实源：`docs/access-control/design-upgrade.md`；实现 Spec：[`98`](98-access-control-p0-runtime-spec.md)（P0）、[`99`](99-access-control-p1-row-policy-spec.md)（P1）；Gate A ADR：`docs/access-control/adr-upstream-forced-predicate.md`。
+术语事实源：`docs/access-control/design-upgrade.md`；实现 Spec：[`98`](98-access-control-p0-runtime-spec.md)（P0）、[`99`](99-access-control-p1-row-policy-spec.md)（P1）、[`100`](100-access-control-p15-agent-constraints-spec.md)（P1.5）；Gate A ADR：`docs/access-control/adr-upstream-forced-predicate.md`。
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
@@ -419,7 +419,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Permission Model Version | 权限模型版本 | v1 legacy / v2 | 角色版本、修改代数 | Role 表单与 dryRun diff |
 | Row Access | 行访问 | `row_access: all` / `scoped` | 行级已开启但未注入；Dynamic RLS 已交付 | AC-P0 仅 `all`；AC-P1 允许 `scoped`+`row_policy`（Gate B 后） |
 | Row Policy Editor | 行级策略 | predicates / eq / in | Segment 当行权限 | Role Admin；op 仅 eq\|in |
-| Final Rows Preview | 最终行约束 | FinalRows 摘要 | 已取数成功（explain 场景） | dryRun / explain 诊断 |
+| Final Rows Preview | 最终行约束 | FinalRows 摘要 | 已取数成功（explain 场景） | dryRun / explain 诊断；P1.5 须含 Constraints 参与后的 digest（Spec 100） |
+| Agent Constraints Editor | Agent 强制约束 | constraints / 人级收紧 | Role 强制约束、Token 行收紧、多 Role 自动 AND | **仅 Agent Admin**（Spec 100）；Role / Token 不提供 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户 filters 即行权限 | 仅 Proxy 注入 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | 请使用 lucy_query | 表未授权（混用） | Toast / 审计主文案 |
 | Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | proven 前取数 deny |
@@ -433,7 +434,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Tool Class Data Plane | 数据面工具 | DataPlane | 元数据工具 | 须绑 capability |
 | Tool Class Meta | 元信息工具 | Meta | 数据查询工具 | catalog / wiki 等 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_access`、`forced_filters`、`FinalRows`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_access`、`forced_filters`、`constraints`、`FinalRows`、`AgentConstraints`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
 
 与既有 Role Admin 术语（§3 `Role Permission` / `Role Table Selector` / `Table Name Prefix` 等）并存：升级后「权限摘要」主展示改为 Data Capability Preview，不得回退为仅工具并集+表并集。
 

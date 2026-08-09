@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatRowGrantPreviewLabel } from "../lib/row-grant-preview";
+import { formatFinalRowsPreviewLabel, formatRowGrantPreviewLabel } from "../lib/row-grant-preview";
 
 describe("formatRowGrantPreviewLabel", () => {
   it("renders FinalRows TRUE for all-access grants", () => {
@@ -30,5 +30,20 @@ describe("formatRowGrantPreviewLabel", () => {
   it("does not invent TRUE when grant shape is unknown", () => {
     expect(formatRowGrantPreviewLabel(undefined)).toBe("unknown");
     expect(formatRowGrantPreviewLabel({ kind: "scoped" })).toBe("unknown");
+  });
+});
+
+describe("formatFinalRowsPreviewLabel", () => {
+  it("prefers FinalRows over rowGrant fallback", () => {
+    expect(
+      formatFinalRowsPreviewLabel(
+        { kind: "scoped", digest: "aabbccddeeff0011" },
+        { kind: "all" }
+      )
+    ).toBe("scoped:aabbccddeeff0011");
+  });
+
+  it("falls back to rowGrant when FinalRows omitted", () => {
+    expect(formatFinalRowsPreviewLabel(undefined, "all")).toBe("TRUE");
   });
 });

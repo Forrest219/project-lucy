@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentDetail } from "../pages/admin/AgentDetail";
+import { AgentDetail, constraintsFromAgent, serializeConstraints } from "../pages/admin/AgentDetail";
+import type { Agent } from "../lib/types";
 
 function renderAgentDetail(initialPath = "/admin/agents/zhangsan") {
   const client = new QueryClient({
@@ -104,7 +105,39 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
         return new Response(
           JSON.stringify({
             ok: true,
-            data: { diff: "+ name: 张三编辑", proposedYaml: "yaml" }
+            data: {
+              diff: body.patch?.constraints !== undefined
+                ? "+ constraints:\n+   sources:"
+                : "+ name: 张三编辑",
+              proposedYaml: "yaml",
+              ...(body.patch?.constraints !== undefined
+                ? {
+                    effectivePermissions: {
+                      roleIds: ["analyst"],
+                      snapshotHash: "snap-1234",
+                      sourceMapVersion: "v1",
+                      tools: ["lucy_query"],
+                      connections: ["mysql-aliyun"],
+                      sources: [],
+                      legacyAllow: false,
+                      capabilities: [
+                        {
+                          tool: "lucy_query",
+                          connectionId: "mysql-aliyun",
+                          schema: "dataforai",
+                          sourceName: "superstore_orders",
+                          physicalTable: "dataforai.superstore_orders",
+                          sourceKey: "mysql-aliyun|dataforai|superstore_orders|dataforai.superstore_orders",
+                          rowGrant: "all",
+                          finalRows: { kind: "scoped", digest: "deadbeefcafebabe" },
+                          protected: true,
+                          constraintsSummary: "region=East"
+                        }
+                      ]
+                    }
+                  }
+                : {})
+            }
           })
         );
       }
@@ -113,13 +146,18 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
           ok: true,
           data: {
             written: true,
+            runtimeAck: true,
+            policyVersion: "pv-test-agent-detail-001",
             agent: {
               id: "zhangsan",
               name: body.patch?.name ?? "张三编辑",
               enabled: body.patch?.enabled ?? true,
               role: body.patch?.role ?? "analyst",
               tokens: [],
-              allow: { tables: [], tools: [] }
+              allow: { tables: [], tools: [] },
+              ...(body.patch?.constraints !== undefined
+                ? { constraints: body.patch.constraints }
+                : {})
             }
           }
         })
@@ -360,7 +398,10 @@ describe("AgentDetail", () => {
                     sourceName: "superstore_orders",
                     physicalTable: "dataforai.superstore_orders",
                     sourceKey: "mysql-aliyun|dataforai|superstore_orders|dataforai.superstore_orders",
-                    rowGrant: { kind: "scoped", digest: "883501db707ba111" }
+                    rowGrant: { kind: "scoped", digest: "883501db707ba111" },
+                    finalRows: { kind: "scoped", digest: "aabbccddeeff0011" },
+                    protected: true,
+                    constraintsSummary: "region=East"
                   }
                 ]
               }
@@ -378,7 +419,101 @@ describe("AgentDetail", () => {
     fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
     const preview = await screen.findByTestId("capability-preview");
     expect(preview).toHaveTextContent("rowGrant=scoped:883501db707ba111");
+    expect(preview).toHaveTextContent("FinalRows=scoped:aabbccddeeff0011");
+    expect(preview).toHaveTextContent("protected");
+    expect(preview).toHaveTextContent("constraints=region=East");
     expect(preview.textContent ?? "").not.toMatch(/rowGrant=TRUE/);
+    expect(preview.textContent ?? "").not.toMatch(/行级取数已生效/);
+  });
+
+  it("constraints form round-trip preserves TypedScalar (number / spaces / case)", () => {
+    const agent = {
+      id: "zhangsan",
+      name: "张三",
+      enabled: true,
+      role: "analyst",
+      tokens: [],
+      constraints: {
+        sources: [
+          {
+            connection: "mysql-aliyun",
+            schema: "dataforai",
+            names: ["superstore_orders"],
+            predicates: [
+              { field: "qty", op: "eq", value: 1 },
+              { field: "region", op: "eq", value: "ABC " },
+              { field: "flag", op: "in", values: [true, 0, "x "] }
+            ]
+          }
+        ]
+      }
+    } as Agent;
+    const form = constraintsFromAgent(agent);
+    const serialized = serializeConstraints(form);
+    expect(serialized?.sources?.[0]?.predicates).toEqual([
+      { field: "qty", op: "eq", value: 1 },
+      { field: "region", op: "eq", value: "ABC " },
+      { field: "flag", op: "in", values: [true, 0, "x "] }
+    ]);
+    expect(typeof serialized?.sources?.[0]?.predicates?.[0]?.value).toBe("number");
+  });
+
+  it("Agent Constraints editor is present and does not claim row filters are live", async () => {
+    stubAgentEndpoints();
+    renderAgentDetail();
+    const editor = await screen.findByTestId("agent-constraints-editor");
+    expect(editor).toHaveTextContent("Agent 强制约束");
+    expect(editor.querySelector(".notranslate")).toBeTruthy();
+    expect(editor.textContent ?? "").toMatch(/不表示行级取数已生效/);
+    fireEvent.click(within(editor).getByRole("button", { name: "添加源约束" }));
+    expect(within(editor).getByText(/源约束 1/)).toBeInTheDocument();
+    expect(await screen.findByTestId("sticky-save-bar")).toBeInTheDocument();
+  });
+
+  it("constraints save opens confirm modal with FinalRows preview then writes with runtimeAck", async () => {
+    const fetchMock = stubAgentEndpoints();
+    renderAgentDetail();
+    const editor = await screen.findByTestId("agent-constraints-editor");
+    fireEvent.click(within(editor).getByRole("button", { name: "添加源约束" }));
+
+    const inputs = within(editor).getAllByRole("textbox");
+    expect(inputs.length).toBeGreaterThanOrEqual(5);
+    fireEvent.change(inputs[0]!, { target: { value: "mysql-aliyun" } });
+    fireEvent.change(inputs[1]!, { target: { value: "dataforai" } });
+    fireEvent.change(inputs[2]!, { target: { value: "superstore_orders" } });
+    fireEvent.change(inputs[3]!, { target: { value: "region" } });
+    fireEvent.change(inputs[4]!, { target: { value: "East" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    const modal = await screen.findByTestId("agent-save-confirm-modal");
+    expect(within(modal).getByText("确认强制约束变更")).toBeInTheDocument();
+    // Sticky save bar must not remain mounted — it intercepts pointer events on confirm.
+    expect(screen.queryByTestId("sticky-save-bar")).not.toBeInTheDocument();
+    const preview = within(modal).getByTestId("confirm-finalrows-preview");
+    expect(preview).toHaveTextContent("FinalRows=scoped:deadbeefcafebabe");
+    expect(preview).toHaveTextContent("protected");
+    expect(preview).toHaveTextContent("不表示行级取数已生效");
+
+    fireEvent.click(within(modal).getByTestId("agent-save-confirm-submit"));
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
+      );
+      expect(saveCall).toBeTruthy();
+      const body = JSON.parse(String(saveCall?.[1]?.body));
+      expect(body.patch.constraints).toMatchObject({
+        sources: [
+          {
+            connection: "mysql-aliyun",
+            schema: "dataforai",
+            names: ["superstore_orders"],
+            predicates: [{ field: "region", op: "eq", value: "East" }]
+          }
+        ]
+      });
+    });
   });
 
   it("Effective Permissions tree shows legacy wildcard warning when legacyAllow", async () => {

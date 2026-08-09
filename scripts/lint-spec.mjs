@@ -249,7 +249,7 @@ function accessRolePolicy() {
   // row_policy listed so "all"+row_policy can be rejected explicitly; scoped+row_policy
   // remains blocked by the scoped Gate-B gate below until WP-I1.
   const selectorKeys = new Set(["connection", "schema", "names", "prefix", "row_access", "row_policy"]);
-  const userKeys = new Set(["id", "name", "note", "enabled", "role", "roles", "tokens", "allow"]);
+  const userKeys = new Set(["id", "name", "note", "enabled", "role", "roles", "tokens", "allow", "constraints"]);
   const userAllowKeys = new Set(["tables", "tools", "connections"]);
   const tokenKeys = new Set(["hash", "label", "created", "expires_at"]);
   const defaultsKeys = new Set([
@@ -259,6 +259,7 @@ function accessRolePolicy() {
     "sensitive_metadata_tools",
     "sensitive_table_prefixes"
   ]);
+  const constraintBindingKeys = new Set(["connection", "schema", "names", "predicates"]);
 
   checkAllowedKeys(check, config, topLevelKeys, "top level");
   checkAllowedKeys(check, config.defaults, defaultsKeys, "defaults");
@@ -268,7 +269,7 @@ function accessRolePolicy() {
       add(
         check,
         "fail",
-        `webui/config/access.yaml: role ${roleId} contains 'constraints' (unsupported until AC-P1.5; Spec 99)`
+        `webui/config/access.yaml: role ${roleId} contains 'constraints' (constraints_forbidden_on_role; Spec 100)`
       );
     }
     checkAllowedKeys(check, role, roleKeys, `role ${roleId}`);
@@ -353,17 +354,53 @@ function accessRolePolicy() {
   }
 
   for (const user of users) {
-    if (user && typeof user === "object" && Object.prototype.hasOwnProperty.call(user, "constraints")) {
-      add(
-        check,
-        "fail",
-        `webui/config/access.yaml: user ${user.id ?? "<missing id>"} contains 'constraints' (unsupported until AC-P1.5; Spec 99)`
-      );
-    }
     checkAllowedKeys(check, user, userKeys, `user ${user.id ?? "<missing id>"}`);
     checkAllowedKeys(check, user.allow, userAllowKeys, `user ${user.id ?? "<missing id>"}.allow`);
     for (const token of Array.isArray(user.tokens) ? user.tokens : []) {
       checkAllowedKeys(check, token, tokenKeys, `user ${user.id ?? "<missing id>"}.tokens[]`);
+    }
+    // Spec 100 — Agent constraints shape (catalog/capability binding is runtime compile).
+    if (user && typeof user === "object" && Object.prototype.hasOwnProperty.call(user, "constraints")) {
+      const constraints = user.constraints;
+      if (!constraints || typeof constraints !== "object" || Array.isArray(constraints)) {
+        add(check, "fail", `webui/config/access.yaml: user ${user.id ?? "<missing id>"} constraints must be an object (Spec 100)`);
+      } else {
+        const sources = constraints.sources;
+        if (!Array.isArray(sources) || sources.length === 0) {
+          add(check, "fail", `webui/config/access.yaml: user ${user.id ?? "<missing id>"} constraints.sources must be a non-empty array (Spec 100)`);
+        } else {
+          for (const [index, binding] of sources.entries()) {
+            if (!binding || typeof binding !== "object" || Array.isArray(binding)) {
+              add(check, "fail", `webui/config/access.yaml: user ${user.id} constraints.sources[${index}] must be an object`);
+              continue;
+            }
+            checkAllowedKeys(check, binding, constraintBindingKeys, `user ${user.id}.constraints.sources[${index}]`);
+            if (binding.prefix !== undefined) {
+              add(check, "fail", `webui/config/access.yaml: user ${user.id} constraints.sources[${index}] forbids prefix`);
+            }
+            if (!Array.isArray(binding.names) || binding.names.length === 0) {
+              add(check, "fail", `webui/config/access.yaml: user ${user.id} constraints.sources[${index}] names must be a non-empty array`);
+            }
+            const predicates = binding.predicates;
+            if (!Array.isArray(predicates) || predicates.length === 0) {
+              add(check, "fail", `webui/config/access.yaml: user ${user.id} constraints.sources[${index}] predicates must be a non-empty array`);
+            } else {
+              for (const pred of predicates) {
+                if (!pred || typeof pred !== "object" || Array.isArray(pred)) {
+                  add(check, "fail", `webui/config/access.yaml: user ${user.id} constraints predicate must be an object`);
+                  continue;
+                }
+                if (typeof pred.field !== "string" || !pred.field.trim()) {
+                  add(check, "fail", `webui/config/access.yaml: user ${user.id} constraints predicate field is required`);
+                }
+                if (pred.op !== "eq" && pred.op !== "in") {
+                  add(check, "fail", `webui/config/access.yaml: user ${user.id} constraints predicate op must be eq|in`);
+                }
+              }
+            }
+          }
+        }
+      }
     }
     if (user.role && !roles[user.role]) add(check, "fail", `webui/config/access.yaml: user ${user.id} references missing role ${user.role}`);
     if (user.role && user.allow) add(check, "warn", `webui/config/access.yaml: user ${user.id} has both role and legacy allow`);

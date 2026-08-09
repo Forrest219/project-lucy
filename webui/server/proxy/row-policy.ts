@@ -559,6 +559,8 @@ export function buildExplainForcedPredicateDiagnostics(input: {
     rowGrant: RowGrant;
   }>;
   requestedSources: Array<{ connectionId?: string; sourceName?: string }>;
+  /** Spec 100 — precomputed FinalRows; when set, explain uses FinalRows not bare rowGrant. */
+  finalRowsBySource?: Record<string, RowGrant>;
 }): ExplainForcedPredicateDiagnostics {
   const proven = isUpstreamForcedPredicateProven();
   const protectedSources: Array<{
@@ -580,20 +582,23 @@ export function buildExplainForcedPredicateDiagnostics(input: {
       if (connectionId && normalizeRef(cap.connectionId) !== connectionId) return false;
       return true;
     });
-    const scoped = matches.find((cap) => cap.rowGrant.kind === "scoped");
-    if (scoped && scoped.rowGrant.kind === "scoped") {
+    const match = matches[0];
+    if (!match) continue;
+    const key = `${normalizeRef(match.connectionId)}\0${normalizeRef(match.sourceName)}`;
+    const finalRows = input.finalRowsBySource?.[key] ?? match.rowGrant;
+    if (finalRows.kind === "scoped") {
       if (
         !protectedSources.some(
           (item) =>
-            item.sourceName === normalizeRef(scoped.sourceName) &&
-            item.connectionId === normalizeRef(scoped.connectionId)
+            item.sourceName === normalizeRef(match.sourceName) &&
+            item.connectionId === normalizeRef(match.connectionId)
         )
       ) {
         protectedSources.push({
-          connectionId: scoped.connectionId,
-          sourceName: scoped.sourceName,
-          digest: scoped.rowGrant.digest,
-          grant: scoped.rowGrant
+          connectionId: match.connectionId,
+          sourceName: match.sourceName,
+          digest: finalRows.digest,
+          grant: finalRows
         });
       }
     }

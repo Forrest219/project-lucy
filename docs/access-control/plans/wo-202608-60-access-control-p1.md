@@ -29,7 +29,7 @@
 | WP-I5 Admin | **DONE** | preview scoped digest；Role UI scoped/`row_policy` 编辑器已抛光（round-trip） |
 | WP-I6 BY/UAT/Runbook | **DONE** | BY 矩阵 + BY-01 集成 + Preview/Runbook 演练；签字见 `inbox/20260809-ac-p1-gate-c-signoff.md` |
 | **Gate C：bypass + UAT 签字** | **DONE（2026-08-09）** | xingchen 总批准；证据 `inbox/20260809-ac-p1-by01-uat/` + `inbox/20260809-ac-p1-runbook-uat/`；Release notes [`release-notes-ac-p1.md`](../release-notes-ac-p1.md)；**proven 置真须另开运维变更（默认仍 false）** |
-| AC-P1.5 Agent Constraints | **本 WO Non-Goal** | 另立 WO |
+| AC-P1.5 Agent Constraints | **本 WO Non-Goal** | 已另立 [`WO-61`](wo-202608-61-access-control-p15-agent-constraints.md) |
 
 **冲突裁决：** 实现与 Spec 冲突 → Spec；Spec 与 `design-upgrade.md` 冲突 → **design-upgrade**，并回修 Spec。  
 **禁止依据：** `feasibility-row-acl.SUPERSEDED.md` 不得作为实施或 Spec 事实源。
@@ -256,12 +256,12 @@ npm test -- --run row-policy bypass acl-capability policy-compile
 
 1. 批准 Gate A（WP-S0 ADR）→ 执行 WP-S1/S2。  
 2. Spec 评审通过并勾选 Gate B → 按 §3 实施 WP-I\*。  
-3. Gate C 全绿 → 更新域 README；AC-P1.5 另立 WO。  
+3. Gate C 全绿 → 更新域 README；AC-P1.5 另立 WO（**已立 [`WO-61`](wo-202608-61-access-control-p15-agent-constraints.md)**）。  
 
 ### 下一步（Gate C 后）
 
 1. 目标环境若需行级取数：单独运维变更置 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true`（可回滚）。  
 2. Role Admin scoped 编辑器 UI 抛光：**DONE**。  
-3. AC-P1.5 Constraints：另立 WO。
+3. AC-P1.5 Constraints：见 [`WO-61`](wo-202608-61-access-control-p15-agent-constraints.md)（停靠 Gate A）。
 
 — 完

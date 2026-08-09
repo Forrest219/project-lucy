@@ -1,6 +1,7 @@
 /**
- * Spec 99 §8 — Admin Capability Preview must show real rowGrant
- * (FinalRows TRUE, or scoped policy digest). Never hardcode TRUE.
+ * Spec 99 §8 / Spec 100 §10 — Admin Capability Preview must show real
+ * rowGrant / FinalRows (TRUE or scoped digest). Never hardcode TRUE.
+ * Never claim 「行级取数已生效」from compile-time preview alone.
  */
 
 export type RowGrantPreview =
@@ -23,7 +24,7 @@ function formatPredicateShort(pred: unknown): string | null {
   return field;
 }
 
-/** Display label for Data Capability Preview lines. */
+/** Display label for Data Capability Preview lines (rowGrant or FinalRows). */
 export function formatRowGrantPreviewLabel(rowGrant: unknown): string {
   if (rowGrant === true || rowGrant === "all") return "TRUE";
   if (rowGrant && typeof rowGrant === "object" && !Array.isArray(rowGrant)) {
@@ -45,4 +46,15 @@ export function formatRowGrantPreviewLabel(rowGrant: unknown): string {
     }
   }
   return "unknown";
+}
+
+/** Spec 100 — FinalRows label; falls back to rowGrant when API omits finalRows. */
+export function formatFinalRowsPreviewLabel(
+  finalRows: unknown,
+  rowGrantFallback?: unknown
+): string {
+  if (finalRows !== undefined && finalRows !== null) {
+    return formatRowGrantPreviewLabel(finalRows);
+  }
+  return formatRowGrantPreviewLabel(rowGrantFallback);
 }

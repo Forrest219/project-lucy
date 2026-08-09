@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | Agent Admin Enterprise Delivery Spec |
 | 文档类型 | Product / UX Spec |
-| 版本 | v0.3（AC-P1 契约补丁草稿 / WO-60 WP-S2；Spec 99 Gate B 前不改 runtime） |
-| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08；v0.3 2026-08-09 |
+| 版本 | v0.4（AC-P1.5 契约补丁 / WO-61 WP-S1；Spec 100 Gate B 前不改 runtime） |
+| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08；v0.3 2026-08-09；v0.4 2026-08-09 |
 | 适用范围 | Lucy WebUI 访问治理模块：`/admin/agents`、新建 Agent 弹窗、`/admin/agents/:userId`、Token 交付流 |
-| 事实源 | `webui/config/access.yaml`、Admin API；AC-P0 → Spec 98；AC-P1 行授予 → Spec 99 |
-| 关联文档 | Spec 07 v1.5、Spec 15、`design-upgrade.md`、Gate A ADR |
-| 冲突裁决 | AC-P0 → Spec 98；AC-P1 → Spec 99；与 design-upgrade / ADR 冲突 → design-upgrade / ADR |
+| 事实源 | `webui/config/access.yaml`、Admin API；AC-P0 → Spec 98；AC-P1 行授予 → Spec 99；AC-P1.5 Constraints → Spec 100 |
+| 关联文档 | Spec 07 v1.6、Spec 15、Spec 100、`design-upgrade.md`、Gate A ADR |
+| 冲突裁决 | AC-P0 → Spec 98；AC-P1 → Spec 99；AC-P1.5 → Spec 100；与 design-upgrade / ADR 冲突 → design-upgrade / ADR |
 
 ## 0. AC-P0 契约补丁（WP-S1）
 
@@ -21,8 +21,20 @@
 |---|---|---|
 | Capability Preview | 元组须展示 **rowGrant**（`all` / Row Policy 摘要）；多 Role OR 后的 FinalRows 可读 | §8 |
 | 禁止虚假行级成功 | **不得**在未注入 / `upstream_forced_predicate_proven≠true` 时展示「行级取数已生效」 | Terminology / §8 |
-| `constraints` | 本波 UI 不提供；YAML 出现 → 保存/lint 失败（AC-P1.5 前） | §4.3 |
+| `constraints` | P1：UI 不提供；YAML 出现 → 失败。**P1.5 见 §0.0a** | Spec 99 §4.3 → Spec 100 |
 | 行级编辑 | Agent Admin **不**编辑 `row_policy`（在 Role Admin）；仅消费 preview | Spec 15 |
+
+### 0.0a AC-P1.5 增量（v0.4 / Spec 100）
+
+| 项 | 要求 | Spec 100 |
+|---|---|---|
+| Agent Constraints Editor | Spec 100 Gate B 后：Agent 详情可编辑 `constraints.sources`（同构 predicates：`eq`/`in`；字段绑定同 Spec 99 §3.2） | §3 / §10 |
+| dryRun / preview | 展示每源 **FinalRows** 摘要、`FinalRowsDigest`、是否受保护；多 Role OR 后再 AND Constraints 的结果须可读 | §5 / §8 |
+| 保存 | 写盘成功且 **`runtimeAck: true`** 且返回 `policyVersion` 才显示成功；非法 constraints / 超限 / 不可满足 → 保存失败 | §10；Spec 98 §8 |
+| 禁止虚假生效 | **不得**在未注入 / `upstream_forced_predicate_proven≠true` 时展示「Constraints / 行级取数已生效」 | §10；Terminology |
+| 非本页 | **不**编辑 Role `row_policy`；**不**提供 Token 行收紧（TokenScope Non-Goal） | §2 |
+
+> **节奏：** Spec 100 Gate B 前，Agent YAML `constraints` 仍 lint/compile 拒绝（与现网一致）；**Gate B（2026-08-09）已批准** → WP-I1 后按上表放行合法形态。
 
 ### 0.1 相对 v0.1 的增量
 
@@ -122,7 +134,7 @@ type AgentRoleBinding =
 
 - 新增登录或多管理员 RBAC。
 - 改造 Lucy MCP Proxy runtime ACL 裁决逻辑的**实现**（语义以 Spec 98 为准；本 Spec 只约束 Admin 契约与展示；Gate B 前不改代码）。
-- **波次边界：** AC-P0 不交付列级权限 / scoped 编辑。**AC-P1** Row Policy 在 Role Admin（Spec 15 / Spec 99）；Agent Admin 仅 capability+rowGrant preview，禁止虚假「行级取数已生效」。Agent Constraints（`constraints`）属 AC-P1.5。不得写成「永不做行级」。
+- **波次边界：** AC-P0 不交付列级权限 / scoped 编辑。**AC-P1** Row Policy 在 Role Admin（Spec 15 / Spec 99）；Agent Admin 对 rowGrant 仅 preview，禁止虚假「行级取数已生效」。**AC-P1.5** Agent Constraints 在 Agent Admin（§0.0a / Spec 100）；Role / Token 不承担 Constraints。不得写成「永不做行级」。
 - 保存或重新展示 token 明文。
 - 完整 revoked token history。若需要展示已撤销 token 历史，需另开后端聚合设计。
 

@@ -270,3 +270,124 @@ measures:
     }
   });
 });
+
+/**
+ * AC-SEC-CONSTRAINT (Spec 100 / design-upgrade §6.4).
+ * Full SC-P15 matrix: agent-constraints-ac-p15.test.ts.
+ * Smoke here: OR→TRUE + Constraints tighten; cannot widen via user filters; P1 unproven holds.
+ */
+describe("AC-SEC-CONSTRAINT", () => {
+  async function seedConstrainedAllRole(): Promise<void> {
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      `roles:
+  ledger_all:
+    permission_model_version: 2
+    allow:
+      connections: [warehouse]
+      tableSelectors:
+        - connection: warehouse
+          schema: fin
+          names: [fin_ledger]
+          row_access: all
+      tools: [lucy_query, lucy_read_source, wiki_search]
+users:
+  - id: constrained_smoke
+    enabled: true
+    role: ledger_all
+    tokens: []
+    constraints:
+      sources:
+        - connection: warehouse
+          schema: fin
+          names: [fin_ledger]
+          predicates:
+            - field: region
+              op: eq
+              value: East
+defaults:
+  deny_tools: []
+`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "warehouse", "fin_ledger.yaml"),
+      `columns:
+  - name: region
+measures:
+  - name: amount
+`,
+      "utf8"
+    );
+  }
+
+  it("OR=TRUE + Constraints → FinalRows≠TRUE; proven injects; user forged filters cannot widen", async () => {
+    const previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+    process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
+    try {
+      await seedConstrainedAllRole();
+      const {
+        authorizeAndRewrite,
+        commitEffectivePolicy,
+        effectivePermissions,
+        resetEffectivePolicyForTests
+      } = await loadAcl();
+      resetEffectivePolicyForTests();
+      await commitEffectivePolicy();
+
+      const resolved = await effectivePermissions(identity("constrained_smoke"));
+      expect(resolved.ok).toBe(true);
+      if (resolved.ok) {
+        expect(resolved.permissions.capabilities[0]?.rowGrant).toEqual({ kind: "all" });
+        const finalRows = Object.values(resolved.permissions.finalRowsBySource ?? {})[0];
+        expect(finalRows?.kind).toBe("scoped");
+      }
+
+      const decision = await authorizeAndRewrite(identity("constrained_smoke"), "lucy_query", {
+        connectionId: "warehouse",
+        measures: ["fin_ledger.amount"],
+        // BY-05 — forged widen attempt must not become the enforced domain.
+        forced_filters: {
+          or: [{ and: [{ field: "fin_ledger.region", op: "eq", value: "West" }] }]
+        }
+      });
+      expect(decision.allowed).toBe(true);
+      if (decision.allowed) {
+        expect(decision.forcedFilters).toEqual({
+          or: [{ and: [{ field: "fin_ledger.region", op: "eq", value: "East" }] }]
+        });
+      }
+
+      await expect(
+        authorizeAndRewrite(identity("constrained_smoke"), "lucy_read_source", {
+          connectionId: "warehouse",
+          sourceName: "fin_ledger"
+        })
+      ).resolves.toEqual({ allowed: false, reason: "row_policy_requires_wrapped_tool" });
+    } finally {
+      if (previousProven === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+      else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = previousProven;
+    }
+  });
+
+  it("Constraints do not bypass unproven gate (P1 regression)", async () => {
+    const previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+    delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+    try {
+      await seedConstrainedAllRole();
+      const { authorizeAndRewrite, commitEffectivePolicy, resetEffectivePolicyForTests } = await loadAcl();
+      resetEffectivePolicyForTests();
+      await commitEffectivePolicy();
+
+      await expect(
+        authorizeAndRewrite(identity("constrained_smoke"), "lucy_query", {
+          connectionId: "warehouse",
+          measures: ["fin_ledger.amount"]
+        })
+      ).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+    } finally {
+      if (previousProven === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+      else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = previousProven;
+    }
+  });
+});

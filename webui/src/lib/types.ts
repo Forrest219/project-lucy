@@ -458,6 +458,16 @@ export type JoinCandidatesResponse = {
   candidates: JoinCandidate[];
 };
 
+/** Spec 100 — Agent Constraints config (Admin editor / access.yaml users[].constraints). */
+export type AgentConstraintsConfig = {
+  sources: Array<{
+    connection: string;
+    schema?: string;
+    names: string[];
+    predicates: RoleRowPolicyPredicate[];
+  }>;
+};
+
 export type Agent = {
   id: string;
   name: string;
@@ -468,6 +478,8 @@ export type Agent = {
   configUpdatedAt?: string;
   tokens: TokenSummary[];
   allow?: { tables: string[] | ["*"]; tools: string[] | ["*"]; connections?: string[] };
+  /** Spec 100 — Agent 强制约束；缺省表示 Constraints≡TRUE。 */
+  constraints?: AgentConstraintsConfig;
   effectivePermissions?: EffectivePermissionsPreview;
   permissionWarnings?: string[];
   stats?: AgentStats;
@@ -556,7 +568,14 @@ export type EffectiveCapabilityPreview = {
   sourceName: string;
   physicalTable: string;
   sourceKey: string;
+  /** Spec 99 — EffectiveRowGrant (Role OR). */
   rowGrant: EffectiveRowGrantPreview;
+  /** Spec 100 — FinalRows after Constraints AND; digest / protected for Admin preview. */
+  finalRows?: EffectiveRowGrantPreview;
+  /** FinalRows ≠ TRUE → 受保护源（编译态；不表示上游已注入生效）。 */
+  protected?: boolean;
+  /** AgentConstraints 摘要（无约束时缺省）。 */
+  constraintsSummary?: string;
 };
 
 export type EffectivePermissionsPreview = {
@@ -646,6 +665,8 @@ export type AgentPatch = {
   note?: string;
   enabled?: boolean;
   role?: string;
+  /** Spec 100 — set constraints; `null` clears the YAML key. */
+  constraints?: AgentConstraintsConfig | null;
 };
 
 export type CreateAgentBody = {

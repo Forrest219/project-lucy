@@ -4,14 +4,14 @@
 |---|---|
 | 文档名称 | MCP Auth Proxy — 访问日志与多用户权限 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.5.0（AC-P1 契约补丁草稿：登记行授予裁决码；**不改 runtime 直至 Spec 99 Gate B**） |
-| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 补丁 2026-08-08；v1.4.1 2026-08-08；v1.5.0 2026-08-09 |
-| 撰写人 | Claude (Opus 架构设计)；v1.4 / v1.4.1 / v1.5 Cursor Agent |
+| 版本 | v1.6.0（AC-P1.5 契约补丁：Agent Constraints / FinalRows AND 裁决码；**不改 runtime 直至 Spec 100 Gate B**） |
+| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 补丁 2026-08-08；v1.4.1 2026-08-08；v1.5.0 2026-08-09；v1.6.0 2026-08-09 |
+| 撰写人 | Claude (Opus 架构设计)；v1.4 / v1.4.1 / v1.5 / v1.6 Cursor Agent |
 | 委托人 | 张星晨 / xingchen |
-| 基于材料 | project-lucy 代码库、KTX 上游源码；`design-upgrade.md` v1.1.2；Spec 98；Spec 99；`adr-upstream-forced-predicate.md` Gate A 已批准 |
-| 适用范围 | MCP Auth Proxy 契约；v1.5 **不改变现网 runtime** 直至 Spec 99 Gate B + WP-I\* |
+| 基于材料 | project-lucy 代码库、KTX 上游源码；`design-upgrade.md` v1.1.2；Spec 98；Spec 99；Spec 100；`adr-upstream-forced-predicate.md` Gate A 已批准 |
+| 适用范围 | MCP Auth Proxy 契约；v1.6 **不改变现网 runtime** 直至 Spec 100 Gate B + WP-I\*（P1 runtime 已按 Spec 99 交付） |
 | 输出位置 | `webui/docs/07-mcp-auth-proxy-spec.md` |
-| 冲突裁决 | AC-P0 → Spec 98；AC-P1 行授予 → Spec 99；与 `design-upgrade.md` / Gate A ADR 冲突 → design-upgrade / ADR |
+| 冲突裁决 | AC-P0 → Spec 98；AC-P1 行授予 → Spec 99；AC-P1.5 Constraints → Spec 100；与 `design-upgrade.md` / Gate A ADR 冲突 → design-upgrade / ADR |
 
 ---
 
@@ -19,20 +19,32 @@
 
 > **权威语义（禁止另立口径）：** Capability 代数、Tool Class 全表、Canonical Source Key、`permission_model_version`、编译 / 提交 / 降级、Deny 全表 → [`98-access-control-p0-runtime-spec.md`](98-access-control-p0-runtime-spec.md)。  
 > **AC-P1 行授予 / 强制谓词：** [`99-access-control-p1-row-policy-spec.md`](99-access-control-p1-row-policy-spec.md)；Gate A [`adr-upstream-forced-predicate.md`](../../docs/access-control/adr-upstream-forced-predicate.md)。  
+> **AC-P1.5 Agent Constraints / FinalRows AND：** [`100-access-control-p15-agent-constraints-spec.md`](100-access-control-p15-agent-constraints-spec.md)。  
 > **设计清单：** [`docs/access-control/design-upgrade.md`](../../docs/access-control/design-upgrade.md) §9。  
 > 本节只把 Proxy / 审计契约钉到 Spec 07；Admin UI / API 见 Spec 14 / 15。
 
-### 0.0 AC-P1 契约补丁（v1.5 / WO-60 WP-S2）
+### 0.0 AC-P1 契约补丁（v1.5 / WO-60 WP-S2；已交付基线）
 
 | 项 | AC-P0（v1.4.x） | AC-P1（本补丁） | Spec 99 锚点 |
 |---|---|---|---|
-| 行级波次 | AC-P0 不交付 scoped；AC-P1 另批 | **交付后**允许 `row_access: scoped` + `row_policy`；强制谓词经 `lucy_query`→`forced_filters` | §3–§6 |
+| 行级波次 | AC-P0 不交付 scoped；AC-P1 另批 | **已交付**允许 `row_access: scoped` + `row_policy`；强制谓词经 `lucy_query`→`forced_filters` | §3–§6 |
 | 未包装 / 非注入通道 | 仅 capability | 受保护源另加 `row_policy_requires_wrapped_tool`（O2；含 `lucy_read_source` / `lucy_freshness`） | §5.2 |
 | 未证明取数 | — | `row_policy_upstream_unproven`（proven 前取数 fail-closed） | §6.3 |
 | 禁止查询形态 | guardrail 子集 | 受保护源：`row_policy_query_shape_forbidden`（括号/自连接/LEFT JOIN/聚合·HAVING/子查询等） | §6.2 |
-| Agent Constraints | 未交付 | 配置出现 `constraints` → 拒绝（P1.5 前） | §4.3 |
+| Agent Constraints | 未交付 | P1 阶段配置出现 `constraints` → 拒绝；**P1.5 见 §0.0a** | §4.3 → Spec 100 |
 
-**本补丁不授权改 runtime**，直至 Spec 99 Gate B 批准。
+### 0.0a AC-P1.5 契约补丁（v1.6 / WO-61 WP-S1）
+
+| 项 | AC-P1（v1.5） | AC-P1.5（本补丁） | Spec 100 锚点 |
+|---|---|---|---|
+| Agent `constraints` | 出现即拒绝 | Spec 100 Gate B 后：合法 shape 可编译；参与 `FinalRows = EffectiveRowGrant AND AgentConstraints`（DNF） | §3–§5 |
+| Role `constraints` | 拒绝 | **继续拒绝** `constraints_forbidden_on_role` | §3.3 |
+| TokenScope | ≡ TRUE | **仍 ≡ TRUE**（Non-Goal；不引入 token 行谓词） | §2 |
+| FinalRows / 受保护源 | ≈ EffectiveRowGrant | Constraints 可导致非 TRUE；注入 / O2 / unproven **复用** Spec 99 路径 | §5 / §7 |
+| 编译失败码 | — | `constraints_invalid_shape` / `constraints_source_not_in_capability` / `final_rows_limit_exceeded` / `final_rows_unsatisfiable` | §11 |
+| explain | E1–E5（P1） | 须含 **FinalRowsDigest**（Spec 100 §8；剪枝后 DNF）；不得暗示已取数 | §7 |
+
+**本补丁不授权改 runtime**，直至 Spec 100 Gate B 批准。—— **Gate B 已于 2026-08-09 批准**；runtime 变更仅限 WO-61 WP-I\*。
 
 ### 0.1 相对 v1.3 的契约增量
 
@@ -68,8 +80,23 @@ capability_forbidden:<tool>:<sourceKey>
 | `row_policy_upstream_unproven` | **AC-P1**：取数且 FinalRows≠TRUE 且上游契约未证明 |
 | `row_policy_query_shape_forbidden` | **AC-P1**：受保护源禁止的查询形态 |
 | `row_policy_field_unresolved` | **AC-P1**：`row_policy.predicates[].field` 无法绑定到当前源已知字段（Spec 99 §3.2；多为编译/保存失败，亦可出现在 dryRun） |
+| `constraints_forbidden_on_role` | **AC-P1.5**：Role 出现 `constraints`（编译 / lint） |
+| `constraints_invalid_shape` | **AC-P1.5**：Agent constraints 结构非法 |
+| `constraints_source_not_in_capability` | **AC-P1.5**：Constraints 引用无 capability 源 |
+| `final_rows_limit_exceeded` | **AC-P1.5**：突破 Spec 100 §6 精确上限 |
+| `final_rows_unsatisfiable` | **AC-P1.5**：Constraints 不可满足，或 DNF 剪枝后无剩余臂 |
 
-`table_forbidden:<table>`：AC-P0 实施后**停止作为 DataPlane 主裁决码**；可短暂双写以兼容审计筛选；Admin 审计 UI 筛选项须补 `capability_forbidden`（术语与文案见术语标准 §4.8）。AC-P1 实施后审计筛选项须另补上表 `row_policy_*` 码。
+`table_forbidden:<table>`：AC-P0 实施后**停止作为 DataPlane 主裁决码**；可短暂双写以兼容审计筛选；Admin 审计 UI 筛选项须补 `capability_forbidden`（术语与文案见术语标准 §4.8）。AC-P1 实施后审计筛选项须另补上表 `row_policy_*` 码；AC-P1.5 另补 `constraints_*` / `final_rows_*`。
+
+#### explain / FinalRows digest（AC-P1.5）
+
+`lucy_explain_query` 本地安全响应（ADR E1–E5）在 Spec 100 Gate B 后须额外满足：
+
+| 字段（逻辑名） | 要求 |
+|---|---|
+| `finalRowsDigest` / 等价 | 每受保护源展示 Spec 100 §8 `FinalRowsDigest`（剪枝后 DNF；值侧保留 JSON 标量原值） |
+| ForcedPredicateAST 摘要 | 与注入载荷一致；含 Constraints 贡献 |
+| 文案 | 仍为权限/强制谓词诊断；**≠** 数据已返回 |
 
 ### 0.3 Tool Class 与 AbsoluteDeny（指针）
 
