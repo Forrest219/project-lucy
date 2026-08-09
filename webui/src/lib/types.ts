@@ -41,7 +41,6 @@ export type TableModel = {
   table: string;
   qualifiedName?: string;
   filePath: string;
-  qualifiedName?: string;
   descriptions: AuthoredText;
   grain?: string[];
   columns: Column[];
@@ -519,6 +518,16 @@ export type RoleDetail = Role & {
   effectivePermissions?: EffectivePermissionsPreview;
 };
 
+export type EffectiveCapabilityPreview = {
+  tool: string;
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+  physicalTable: string;
+  sourceKey: string;
+  rowGrant: true;
+};
+
 export type EffectivePermissionsPreview = {
   roleIds: string[];
   snapshotHash: string;
@@ -532,6 +541,25 @@ export type EffectivePermissionsPreview = {
     table: string;
   }>;
   legacyAllow: boolean;
+  /** Spec 98 §5 — capability digest for audit correlation. */
+  capabilityDigest?: string;
+  /** Spec 14/15 — Data Capability Preview (tool × canonical source key). */
+  capabilities?: EffectiveCapabilityPreview[];
+};
+
+export type PolicyRuntimeStatus = {
+  policyVersion: string;
+  degradedGlobal: boolean;
+  degradedAgents: string[];
+  accessConfigDigest: string;
+  sourceMapVersion: string;
+  healthy: boolean;
+};
+
+export type AccessWriteAck = {
+  written: boolean;
+  policyVersion?: string;
+  runtimeAck?: boolean;
 };
 
 export type TokenSummary = {
@@ -636,6 +664,8 @@ export type AuditLogEntry = {
   permissionSnapshotHash?: string;
   effectiveTablesCount?: number;
   decisionReason?: string;
+  policyVersion?: string;
+  capabilityDigest?: string;
 };
 
 export type AuditQuery = {
@@ -649,6 +679,8 @@ export type AuditQuery = {
   turnId?: string;
   platform?: string;
   includeProtocol?: boolean;
+  /** Prefix match on decision_reason (e.g. capability_forbidden). */
+  decisionReasonPrefix?: string;
   limit?: number;
   offset?: number;
 };

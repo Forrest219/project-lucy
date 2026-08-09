@@ -660,7 +660,7 @@ function TurnDetailDrawer({
  * shareable surface.
  */
 const AUDIT_FILTER_STORAGE_KEY = "lucy:webui:audit:filters:v2";
-const FILTER_PERSIST_FIELDS = ["tab", "hours", "user", "tool", "outcome", "tableSearch", "sessionId", "turnId", "platform", "turnSource"] as const;
+const FILTER_PERSIST_FIELDS = ["tab", "hours", "user", "tool", "outcome", "decisionReasonPrefix", "tableSearch", "sessionId", "turnId", "platform", "turnSource"] as const;
 type FilterSnapshot = Partial<Record<(typeof FILTER_PERSIST_FIELDS)[number], string>>;
 
 function readFilterSnapshot(): FilterSnapshot {
@@ -728,7 +728,15 @@ function EntryRow({ entry }: { entry: AuditLogEntry }) {
         <td>{entry.userId}</td>
         <td className="pl-audit-table-mono">{entry.tool}</td>
         <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
-        <td className="pl-audit-table-muted">{entry.decisionReason ?? "—"}</td>
+        <td className="pl-audit-table-muted">
+          <div>{entry.decisionReason ?? "—"}</div>
+          {entry.policyVersion ? (
+            <div className="font-mono text-[10px] text-fg-muted notranslate" translate="no">
+              pv={entry.policyVersion.slice(0, 12)}…
+              {entry.capabilityDigest ? ` · dig=${entry.capabilityDigest}` : ""}
+            </div>
+          ) : null}
+        </td>
         <td>
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
@@ -875,6 +883,7 @@ export function Audit() {
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
+  const decisionReasonPrefix = searchParams.get("decisionReasonPrefix") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
   const turnIdFilter = searchParams.get("turnIdFilter") ?? "";
@@ -982,6 +991,7 @@ export function Audit() {
     user: user || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
+    decisionReasonPrefix: decisionReasonPrefix || undefined,
     since: since || undefined,
     until: until || undefined,
     tableSearch: tableSearch || undefined,
@@ -1152,6 +1162,19 @@ export function Audit() {
             <option value="ok">成功</option>
             <option value="error">错误</option>
             <option value="denied">拒绝</option>
+          </select>
+          <select
+            className="pl-input w-48"
+            value={decisionReasonPrefix}
+            onChange={(e) => updateParam("decisionReasonPrefix", e.target.value)}
+            data-testid="audit-decision-reason-filter"
+          >
+            <option value="">全部拒绝原因</option>
+            <option value="capability_forbidden">capability_forbidden</option>
+            <option value="tool_absolute_deny">tool_absolute_deny</option>
+            <option value="tool_unclassified">tool_unclassified</option>
+            <option value="policy_degraded_deny">policy_degraded_deny</option>
+            <option value="role_resolution_failed">role_resolution_failed</option>
           </select>
           <input className="pl-input w-44" type="datetime-local" value={since} onChange={(e) => { setSince(e.target.value); setPage(0); }} />
           <span className="text-fg-muted self-center">—</span>

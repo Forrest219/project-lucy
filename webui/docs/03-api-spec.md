@@ -136,6 +136,18 @@ GET    /api/admin/mcp-tools
 GET    /api/admin/governance/risk-review
 POST   /api/admin/governance/risk-review/:id/review
 GET    /api/admin/governance/release-readiness-package
+GET    /api/admin/governance/overview
+GET    /api/admin/governance/agents
+GET    /api/admin/governance/roles
+GET    /api/admin/governance/tokens
+GET    /api/admin/governance/denials
+GET    /api/admin/policy-runtime
+
+GET    /api/eval/security-candidates
+POST   /api/eval/security-candidates/extract
+POST   /api/eval/security-candidates/:id/review
+POST   /api/eval/security-candidates/:id/promote/preview
+POST   /api/eval/security-candidates/:id/promote
 
 POST /mcp                                      # MCP proxy, port 7879
 ```

@@ -35,10 +35,16 @@ export interface AccessLogEntry {
   permissionSnapshotHash?: string;
   effectiveTablesCount?: number;
   decisionReason?: string;
+  /** Spec 98 §10.3 — EffectivePolicy version at decision time. */
+  policyVersion?: string;
+  /** Spec 98 §10.3 — capability digest (also stored on permission_snapshots). */
+  capabilityDigest?: string;
   permissionSnapshot?: {
     hash: string;
     rolesJson: unknown;
     resolvedJson: unknown;
+    capabilityDigest?: string;
+    toolClassificationVersion?: string;
   };
 }
 
@@ -70,7 +76,14 @@ const ACCESS_LOG_COLUMNS = [
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
   ["response_truncated", "INTEGER"],
-  ["trace_id", "TEXT"]
+  ["trace_id", "TEXT"],
+  ["policy_version", "TEXT"],
+  ["capability_digest", "TEXT"]
+] as const;
+
+const PERMISSION_SNAPSHOT_COLUMNS = [
+  ["capability_digest", "TEXT"],
+  ["tool_classification_version", "TEXT"]
 ] as const;
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
@@ -130,7 +143,9 @@ async function getDb(): Promise<Database.Database> {
       hash          TEXT PRIMARY KEY,
       created_at    TEXT NOT NULL,
       roles_json    TEXT NOT NULL,
-      resolved_json TEXT NOT NULL
+      resolved_json TEXT NOT NULL,
+      capability_digest TEXT,
+      tool_classification_version TEXT
     );
     CREATE TABLE IF NOT EXISTS access_log_sources (
       id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,6 +206,9 @@ async function getDb(): Promise<Database.Database> {
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
   }
+  for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
+    ensureColumn(db, "permission_snapshots", column, definition);
+  }
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
@@ -221,24 +239,28 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     if (!snapshotStmt) {
       snapshotStmt = database.prepare(`
         INSERT OR IGNORE INTO permission_snapshots
-          (hash, created_at, roles_json, resolved_json)
+          (hash, created_at, roles_json, resolved_json, capability_digest, tool_classification_version)
         VALUES
-          (@hash, @createdAt, @rolesJson, @resolvedJson)
+          (@hash, @createdAt, @rolesJson, @resolvedJson, @capabilityDigest, @toolClassificationVersion)
       `);
     }
     snapshotStmt.run({
       hash: entry.permissionSnapshot.hash,
       createdAt: entry.ts,
       rolesJson: JSON.stringify(entry.permissionSnapshot.rolesJson),
-      resolvedJson: JSON.stringify(entry.permissionSnapshot.resolvedJson)
+      resolvedJson: JSON.stringify(entry.permissionSnapshot.resolvedJson),
+      capabilityDigest: entry.permissionSnapshot.capabilityDigest
+        ?? entry.capabilityDigest
+        ?? null,
+      toolClassificationVersion: entry.permissionSnapshot.toolClassificationVersion ?? null
     });
   }
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest)
     `);
   }
   const result = insertStmt.run({
@@ -270,6 +292,10 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     permissionSnapshotHash: entry.permissionSnapshotHash ?? entry.permissionSnapshot?.hash ?? null,
     effectiveTablesCount: entry.effectiveTablesCount ?? null,
     decisionReason: entry.decisionReason ?? null,
+    policyVersion: entry.policyVersion ?? null,
+    capabilityDigest: entry.capabilityDigest
+      ?? entry.permissionSnapshot?.capabilityDigest
+      ?? null
   });
   return Number(result.lastInsertRowid);
 }

@@ -5,13 +5,24 @@ import { toast } from "sonner";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
-import type { Agent, AgentPatch, EffectivePermissionsPreview, Role } from "../../lib/types";
+import type { AccessWriteAck, Agent, AgentPatch, EffectivePermissionsPreview, Role } from "../../lib/types";
 
 type AgentDetailResponse = { agent: Agent; version: string };
 type PatchDryRunResponse = { diff: string; proposedYaml: string };
 type DiffPreview = PatchDryRunResponse & { patch: AgentPatch };
-type PatchSaveResponse = { written: boolean; agent: Agent };
+type PatchSaveResponse = AccessWriteAck & { agent: Agent };
 type RolesResponse = { roles: Role[] };
+
+/** Returns true only when runtimeAck confirms the save; callers must not navigate/clear on false. */
+function toastAccessWriteAck(result: AccessWriteAck, fallback = "已保存"): boolean {
+  if (result.runtimeAck === false) {
+    toast.error("保存未生效：runtime 未确认（runtimeAck=false）。磁盘可能已回滚，请检查策略降级 banner。");
+    return false;
+  }
+  const version = result.policyVersion ? ` · policyVersion=${result.policyVersion.slice(0, 12)}…` : "";
+  toast.success(`${fallback}${version}`);
+  return true;
+}
 
 type Tab = "info" | "tokens" | "permissions" | "diff";
 
@@ -140,8 +151,9 @@ export function AgentDetail() {
   const saveMutation = useMutation({
     mutationFn: (patch: AgentPatch) =>
       apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch }),
-    onSuccess: () => {
-      toast.success("已保存");
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+      if (!toastAccessWriteAck(result)) return;
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
       setDiffPreview(null);
@@ -161,8 +173,9 @@ export function AgentDetail() {
       await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
       return apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch });
     },
-    onSuccess: () => {
-      toast.success("已保存");
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+      if (!toastAccessWriteAck(result)) return;
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
       setDiffPreview(null);
@@ -537,6 +550,31 @@ export function AgentDetail() {
                       effective.tools.map((tool) => <span key={tool} className="pl-status-badge pl-status-included">{tool}</span>)
                     )}
                   </div>
+                </div>
+                <div className="grid gap-2" data-testid="capability-preview">
+                  <div className="text-sm font-medium">
+                    Data Capability Preview
+                    {effective.capabilityDigest ? (
+                      <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
+                        digest={effective.capabilityDigest}
+                      </span>
+                    ) : null}
+                  </div>
+                  {(effective.capabilities?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-fg-muted">
+                      {legacyWildcard
+                        ? "legacy tables:* — capability 列表为空（按设计）。"
+                        : "无 DataPlane capability。"}
+                    </p>
+                  ) : (
+                    <ul className="grid gap-1 font-mono text-xs">
+                      {effective.capabilities!.map((cap) => (
+                        <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
+                          {cap.tool} × {cap.sourceKey} · rowGrant=TRUE
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             ) : (

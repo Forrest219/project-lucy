@@ -1222,15 +1222,22 @@ export async function permissionSnapshot(identity: Identity): Promise<{
   effectiveTablesCount: number;
   rolesJson: unknown;
   resolvedJson: unknown;
+  capabilityDigest: string;
+  toolClassificationVersion: string;
+  policyVersion: string;
 } | undefined> {
   const resolved = await effectivePermissions(identity);
   if (!resolved.ok) return undefined;
+  const runtime = await ensurePolicyRuntime();
   return {
     roleIds: resolved.permissions.roleIds,
     hash: resolved.permissions.snapshotHash,
     effectiveTablesCount: resolved.permissions.tables.length,
     rolesJson: resolved.permissions.rolesJson,
-    resolvedJson: resolved.permissions.resolvedJson
+    resolvedJson: resolved.permissions.resolvedJson,
+    capabilityDigest: resolved.permissions.capabilityDigest,
+    toolClassificationVersion: TOOL_CLASSIFICATION_VERSION,
+    policyVersion: runtime.policyVersion
   };
 }
 
@@ -1361,6 +1368,11 @@ export function getPolicyRuntimeStatus(): PolicyRuntimeStatus {
   };
 }
 
+/** Spec 98 §8.4 — shared healthy signal for /api/health and /api/admin/policy-runtime. */
+export function isPolicyRuntimeHealthy(status: PolicyRuntimeStatus = getPolicyRuntimeStatus()): boolean {
+  return !status.degradedGlobal && status.degradedAgents.length === 0 && status.policyVersion !== "";
+}
+
 /** Test helper: clear compiled runtime so the next ensure/commit rebuilds. */
 export function resetEffectivePolicyForTests(): void {
   effectivePolicyRef = null;
@@ -1405,6 +1417,53 @@ function emitPolicyScopeExpanded(roleId: string, before: number, after: number, 
   console.warn(
     `[acl] policy_scope_expanded roleId=${roleId} sourcesBefore=${before} sourcesAfter=${after} sourceMapVersion=${sourceMapVersion}`
   );
+  void import("../admin/audit.js")
+    .then(({ recordConfigChange }) => recordConfigChange({
+      filePath: "webui/config/access.yaml",
+      changeType: "policy_scope_expanded",
+      actorType: "system",
+      source: "acl_policy_compile",
+      assetKind: "governance",
+      targetId: roleId,
+      writeStatus: "committed",
+      oldSummary: { sourcesBefore: before, sourceMapVersion },
+      newSummary: { sourcesAfter: after, sourceMapVersion }
+    }))
+    .catch((err) => {
+      console.error("[acl] failed to record policy_scope_expanded", err);
+    });
+}
+
+async function recordPolicyDegradeEvent(input: {
+  changeType: "policy_degraded_enter" | "policy_degraded_recover" | "policy_degraded_scope_changed";
+  degradedGlobal: boolean;
+  degradedAgents: string[];
+  policyVersion: string;
+  errorReason?: string;
+  addedAgents?: string[];
+  removedAgents?: string[];
+}): Promise<void> {
+  try {
+    const { recordConfigChange } = await import("../admin/audit.js");
+    await recordConfigChange({
+      filePath: "webui/config/access.yaml",
+      changeType: input.changeType,
+      actorType: "system",
+      source: "acl_policy_compile",
+      assetKind: "governance",
+      writeStatus: input.changeType === "policy_degraded_recover" ? "committed" : "failed",
+      errorReason: input.errorReason,
+      newSummary: {
+        degradedGlobal: input.degradedGlobal,
+        degradedAgents: input.degradedAgents,
+        policyVersion: input.policyVersion,
+        addedAgents: input.addedAgents ?? [],
+        removedAgents: input.removedAgents ?? []
+      }
+    });
+  } catch (err) {
+    console.error("[acl] failed to record policy degrade event", err);
+  }
 }
 
 function isDegradedBlockedTool(toolName: string): boolean {
@@ -1441,6 +1500,7 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
       byUserId: previous?.byUserId ?? new Map(),
       v1PrefixSourceCounts: previous?.v1PrefixSourceCounts ?? new Map()
     };
+    const wasDegraded = Boolean(previous?.degradedGlobal);
     effectivePolicyRef = degraded;
     // Spec 98 §8.5 — keep LKG identity/config cache so Wiki Meta can still resolve under wiki ACL.
     if (previous?.policyVersion) {
@@ -1449,6 +1509,15 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
       invalidateAccessConfigCache();
     }
     console.error("[acl] policy_degraded_global: access.yaml parse/load failed", err);
+    if (!wasDegraded) {
+      await recordPolicyDegradeEvent({
+        changeType: "policy_degraded_enter",
+        degradedGlobal: true,
+        degradedAgents: [],
+        policyVersion: degraded.policyVersion,
+        errorReason: err instanceof Error ? err.message : String(err)
+      });
+    }
     return getPolicyRuntimeStatus();
   }
 
@@ -1493,6 +1562,12 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
     byUserId.set(user.id, resolved);
   }
 
+  const previousDegradedGlobal = Boolean(previous?.degradedGlobal);
+  const previousAgents = previous?.degradedAgents ?? new Set<string>();
+  const nextAgents = [...degradedAgents].sort();
+  const addedAgents = nextAgents.filter((id) => !previousAgents.has(id));
+  const removedAgents = [...previousAgents].filter((id) => !degradedAgents.has(id)).sort();
+
   effectivePolicyRef = {
     policyVersion,
     accessConfigDigest,
@@ -1505,6 +1580,41 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
     byUserId,
     v1PrefixSourceCounts
   };
+
+  // Spec 98 §8.4 — record global recover, first enter, and subsequent scope changes.
+  if (previousDegradedGlobal) {
+    await recordPolicyDegradeEvent({
+      changeType: "policy_degraded_recover",
+      degradedGlobal: false,
+      degradedAgents: nextAgents,
+      policyVersion,
+      addedAgents,
+      removedAgents
+    });
+  }
+  if (addedAgents.length > 0 || removedAgents.length > 0) {
+    if (degradedAgents.size === 0 && previousAgents.size > 0 && !previousDegradedGlobal) {
+      await recordPolicyDegradeEvent({
+        changeType: "policy_degraded_recover",
+        degradedGlobal: false,
+        degradedAgents: nextAgents,
+        policyVersion,
+        addedAgents,
+        removedAgents,
+        errorReason: "agent_compile_recovered"
+      });
+    } else if (degradedAgents.size > 0) {
+      await recordPolicyDegradeEvent({
+        changeType: previousAgents.size === 0 ? "policy_degraded_enter" : "policy_degraded_scope_changed",
+        degradedGlobal: false,
+        degradedAgents: nextAgents,
+        policyVersion,
+        addedAgents,
+        removedAgents,
+        errorReason: "agent_compile_failed"
+      });
+    }
+  }
   return getPolicyRuntimeStatus();
 }
 

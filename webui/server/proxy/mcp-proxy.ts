@@ -4,7 +4,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import path from "node:path";
 import { identifyRequest, setSessionClient, type Identity } from "./identity.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, authorizeAndRewrite, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { allowedToolNames, authorizeAndRewrite, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, getPolicyRuntimeStatus, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { resolveProjectRoot } from "../project.js";
 import {
@@ -301,23 +301,34 @@ function recordMcpTraceForTool(input: {
 }
 
 async function auditMeta(identity: Awaited<ReturnType<typeof identifyRequest>>, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
-  if (!identity) return { decisionReason };
+  // Spec 98 §10.1 / §10.3 — always stamp committed policyVersion, even when snapshot compile fails.
+  const runtime = getPolicyRuntimeStatus();
+  const policyVersion = runtime.policyVersion || undefined;
+  if (!identity) return { decisionReason, policyVersion };
   const snapshot = await permissionSnapshot(identity).catch(() => undefined);
   const tokenMeta = {
     tokenLabel: identity.tokenLabel,
     tokenHashPrefix: identity.tokenHashPrefix,
-    decisionReason
+    decisionReason,
+    policyVersion
   };
-  if (!snapshot) return tokenMeta;
+  if (!snapshot) {
+    // Compile-failed / degraded agent: no capability digest (explicitly omitted → NULL in DB).
+    return tokenMeta;
+  }
   return {
     ...tokenMeta,
     roleIds: snapshot.roleIds,
     permissionSnapshotHash: snapshot.hash,
     effectiveTablesCount: snapshot.effectiveTablesCount,
+    policyVersion: snapshot.policyVersion || policyVersion,
+    capabilityDigest: snapshot.capabilityDigest,
     permissionSnapshot: {
       hash: snapshot.hash,
       rolesJson: snapshot.rolesJson,
-      resolvedJson: snapshot.resolvedJson
+      resolvedJson: snapshot.resolvedJson,
+      capabilityDigest: snapshot.capabilityDigest,
+      toolClassificationVersion: snapshot.toolClassificationVersion
     }
   };
 }

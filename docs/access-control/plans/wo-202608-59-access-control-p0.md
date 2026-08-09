@@ -30,7 +30,9 @@
 | WP-I3 Capability 合成与闸门 | **DONE** | `roles[]` Role Set；capability 元组并集；`authorizeAndRewrite` 源级闸门；U-CAP-01/02/04、U-COMPAT-01 |
 | WP-I4 `permission_model_version` + 迁移 | **DONE** | 缺字段迁移窗口读作 1（`normalizePermissionModelVersion`）；v2 禁 `prefix`、必填 `row_access`；`scoped` 一律编译失败；Admin 保存自动升 v2 + 展开 `prefix`；`lint:spec` 缺字段 warn / v2 违规 fail；U-VER-01..04 |
 | WP-I5 EffectivePolicy 编译与提交 | **DONE** | `policyVersion` 绑定 access digest + sourceMapVersion + toolClassificationVersion；`commitEffectivePolicy` 原子交换；Admin write 返回 `runtimeAck`/`policyVersion`；YAML 解析失败全局 DataPlane degrade；Agent 编译失败 per-agent degrade；U-REL-01/04 |
-| Gate C：AC-P0 实现 + 门禁绿 | 未开始 | |
+| WP-I6 审计 / banner / runtimeAck UI | **DONE** | audit 字段；policy-runtime API；Admin banner；Capability Preview；Toast 读 runtimeAck；Codex P1/P2 已修（见 `20260809-i6-i7-codex-review.md` v1.1） |
+| WP-I7 Security Eval + UAT + Runbook | **DONE** | AC-SEC-* vitest；`uat-ac-p0.md`；`runbook-policy-degrade.md`；AC-SEC-KEY 断言已收紧 |
+| Gate C：AC-P0 实现 + 门禁绿 | **DONE（2026-08-09）** | 工程证据 `20260809-gate-c-sc-evidence.md`；集成 UAT `inbox/20260809-gate-c-uat/`；`uat-ac-p0.md` / Runbook 已由 xingchen 批准勾选；tsc 书面豁免保留 |
 | AC-P1 | **冻结** | 本 WO 明确 Non-Goal |
 
 **冲突裁决：** 实现与 Spec 冲突 → Spec；Spec 与 `design-upgrade.md` 冲突 → **design-upgrade**，并回修 Spec。
@@ -161,22 +163,25 @@
 | 测试 | `policy-compile` + ACL 矩阵 74 tests |
 | 验证 | 单元：外部 widen 不可见直至 commit；`runtimeAck` digest；全局 degrade Wiki+LKG |
 
-### WP-I6 — 审计 / 类型 / Admin UI 最小面（1 天）
+### WP-I6 — 审计 / 类型 / Admin UI 最小面（1 天） — **DONE**
 
 | 文件 | 改动 |
 |---|---|
-| `audit.ts`、types | snapshot / access_log 字段 |
-| Agent/Role 详情 | capability 列表预览；降级 banner |
-| 验证 | 一次 allow/deny 可在审计中看到 policyVersion 与 capability digest |
+| `proxy/audit.ts` + `admin/audit.ts` | `access_log.policy_version` / `capability_digest`；snapshot 增 `capability_digest` + `tool_classification_version`；Audit 筛 `decisionReasonPrefix` |
+| `mcp-proxy.ts` `auditMeta` | 写入 policyVersion + capability digest |
+| `admin/policy-runtime.ts` + `/api/health` | 降级状态 API；health 区分 degraded |
+| Agent/Role 详情 | Capability Preview；保存 Toast 读 `runtimeAck`/`policyVersion` |
+| `PolicyDegradeBanner` | Admin 顶部常驻降级 banner |
+| 验证 | `policy-runtime-i6` + 既有 ACL 矩阵 |
 
-### WP-I7 — Security Eval + UAT + Runbook（1 天）
+### WP-I7 — Security Eval + UAT + Runbook（1 天） — **DONE**
 
 | 产出 | 内容 |
 |---|---|
-| Eval cases | AC-SEC-SL / CLS / CAP / KEY / SCOPE |
-| UAT | `docs/access-control/uat-ac-p0.md`（从 design §5 勾选） |
-| Runbook | 降级恢复两条路径 |
-| 验证 | Eval 全绿；UAT 关键路径人工勾选 |
+| Eval cases | `webui/server/__tests__/ac-security-eval.test.ts`（AC-SEC-SL/CLS/CAP/KEY/SCOPE） |
+| UAT | `docs/access-control/uat-ac-p0.md` |
+| Runbook | `docs/access-control/runbook-policy-degrade.md` |
+| 验证 | `npm test -- ac-security-eval` 绿；UAT 关键路径待人工勾选 |
 
 ---
 
@@ -226,12 +231,12 @@ npm run lint:spec
 
 ### 6.2 Gate C 检查表
 
-- [ ] SC-01 … SC-10 全部有证据（测试输出或 UAT 勾选）
-- [ ] U-COMPAT-01 绿
-- [ ] AC-SEC-SL/CLS/CAP/KEY/SCOPE 绿
-- [ ] 降级 banner + Runbook 已合并
-- [ ] Release notes **未**声称 Dynamic RLS / 行级 scoped 已交付
-- [ ] `docs/access-control/README.md` 状态更新为「AC-P0 已交付」
+- [x] SC-01 … SC-10 全部有证据（测试输出或 UAT 勾选）— 工程：`plans/20260809-gate-c-sc-evidence.md`；UAT：`uat-ac-p0.md`（xingchen 2026-08-09）
+- [x] U-COMPAT-01 绿
+- [x] AC-SEC-SL/CLS/CAP/KEY/SCOPE 绿
+- [x] 降级 banner + Runbook 已合并（演练签字：`runbook-policy-degrade.md`）
+- [x] Release notes **未**声称 Dynamic RLS / 行级 scoped 已交付
+- [x] `docs/access-control/README.md` 状态更新为「AC-P0 已交付」
 
 ---
 

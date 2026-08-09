@@ -4,6 +4,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../../lib/apiClient";
 import type {
+  AccessWriteAck,
   ConnectionInfo,
   ConnectionTablesResponse,
   ConnectionsResponse,
@@ -16,6 +17,17 @@ import { PageHeader } from "../../components/PageHeader";
 import { TagInput } from "../../components/TagInput";
 
 type Tab = "identity" | "permissions" | "effective" | "usage" | "diff";
+
+/** Returns true only when runtimeAck confirms the save; callers must not navigate/clear on false. */
+function toastAccessWriteAck(result: AccessWriteAck, fallback: string): boolean {
+  if (result.runtimeAck === false) {
+    toast.error("保存未生效：runtime 未确认（runtimeAck=false）。磁盘可能已回滚，请检查策略降级 banner。");
+    return false;
+  }
+  const version = result.policyVersion ? ` · policyVersion=${result.policyVersion.slice(0, 12)}…` : "";
+  toast.success(`${fallback}${version}`);
+  return true;
+}
 
 function visibleTabsForMode(
   mode: "create" | "edit" | "copy" | "delete",
@@ -332,7 +344,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const createMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; payload: { roleId: string; role: RoleWritePayload } }) =>
-      apiPost<{ diff: string; proposedYaml: string } | { written: boolean; role: RoleDetailType }>(
+      apiPost<{ diff: string; proposedYaml: string } | (AccessWriteAck & { role: RoleDetailType })>(
         "/api/admin/roles",
         { dryRun: body.dryRun, roleId: body.payload.roleId, role: body.payload.role }
       ),
@@ -344,7 +356,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDeletePreview(null);
         setActiveTab("diff");
       } else {
-        toast.success("Role 已创建");
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, "Role 已创建")) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
         navigate(`/admin/roles/${encodeURIComponent(vars.payload.roleId)}`);
@@ -355,7 +368,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const patchMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; version: string | undefined; patch: RoleWritePayload }) =>
-      apiPatch<{ diff: string; proposedYaml: string; version?: string } | { written: boolean; version: string }>(
+      apiPatch<{ diff: string; proposedYaml: string; version?: string } | (AccessWriteAck & { version: string })>(
         `/api/admin/roles/${roleId}`,
         { dryRun: body.dryRun, version: body.version, patch: body.patch }
       ),
@@ -367,7 +380,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDeletePreview(null);
         setActiveTab("diff");
       } else {
-        toast.success("Role 已保存");
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, "Role 已保存")) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agent", roleId] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
@@ -379,7 +393,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const copyMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; newRoleId: string; role: RoleWritePayload }) =>
-      apiPost<{ diff: string; proposedYaml: string } | { written: boolean; role: RoleDetailType }>(
+      apiPost<{ diff: string; proposedYaml: string } | (AccessWriteAck & { role: RoleDetailType })>(
         `/api/admin/roles/${roleId}/copy`,
         { dryRun: body.dryRun, newRoleId: body.newRoleId, role: body.role }
       ),
@@ -391,7 +405,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDeletePreview(null);
         setActiveTab("diff");
       } else {
-        toast.success(`Role '${vars.newRoleId}' 已从 '${roleId}' 复制`);
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, `Role '${vars.newRoleId}' 已从 '${roleId}' 复制`)) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         navigate(`/admin/roles/${encodeURIComponent(vars.newRoleId)}`);
       }
@@ -401,7 +416,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const deleteMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; version: string | undefined }) =>
-      apiDelete<{ diff: string; proposedYaml: string; version?: string } | { written: boolean }>(
+      apiDelete<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(
         `/api/admin/roles/${roleId}`,
         { dryRun: body.dryRun, version: body.version }
       ),
@@ -413,7 +428,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDiffPreview(null);
         setActiveTab("diff");
       } else {
-        toast.success(`Role '${roleId}' 已删除`);
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, `Role '${roleId}' 已删除`)) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
         navigate("/admin/roles");
@@ -1121,6 +1137,27 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                       </div>
                     ))}
                   </div>
+                </div>
+                <div className="grid gap-2" data-testid="capability-preview">
+                  <div className="text-sm font-medium">
+                    Data Capability Preview
+                    {detail.effectivePermissions?.capabilityDigest ? (
+                      <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
+                        digest={detail.effectivePermissions.capabilityDigest}
+                      </span>
+                    ) : null}
+                  </div>
+                  {(detail.effectivePermissions?.capabilities?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-fg-muted">无 DataPlane capability。</p>
+                  ) : (
+                    <ul className="grid gap-1 font-mono text-xs">
+                      {detail.effectivePermissions!.capabilities!.map((cap) => (
+                        <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
+                          {cap.tool} × {cap.sourceKey} · rowGrant=TRUE
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </>
             )}

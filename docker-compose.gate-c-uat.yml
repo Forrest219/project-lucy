@@ -1,0 +1,15 @@
+# Gate C UAT override: bind-mount this worktree's AC-P0 WebUI into the demo image.
+# Usage:
+#   docker compose -f docker-compose.demo.yml -f docker-compose.gate-c-uat.yml \
+#     -p lucy-gate-c-uat up -d --build
+services:
+  lucy:
+    volumes:
+      # Runtime project data stays on the named volume (seeded by entrypoint).
+      - lucy-demo-data:/data/lucy
+      - ./evals:/data/lucy/evals:ro
+      # Branch code: tsx serves server/; static UI from dist/.
+      - ./webui/server:/app/webui/server:ro
+      - ./webui/dist:/app/webui/dist:ro
+      - ./webui/src:/app/webui/src:ro
+      - ./webui/package.json:/app/webui/package.json:ro

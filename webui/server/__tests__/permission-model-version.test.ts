@@ -435,11 +435,13 @@ describe("WP-I4 Admin migration on save", () => {
 
   it("rejects a save that asks for row_access scoped", async () => {
     const app = await buildApp();
+    const before = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
 
     const res = await request(app.server)
       .post("/api/admin/roles")
       .send({
-        dryRun: true,
+        // U-REL-01: validation/compile failure must not write disk (even dryRun:false).
+        dryRun: false,
         roleId: "scoped_role",
         role: {
           permission_model_version: 2,
@@ -456,6 +458,8 @@ describe("WP-I4 Admin migration on save", () => {
 
     expect(res.body.error).toMatchObject({ code: "INVALID_ROLE" });
     expect(res.body.error.message).toMatch(/scoped/);
+    const after = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(after).toBe(before);
     await app.close();
   });
 

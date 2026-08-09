@@ -210,6 +210,51 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
     expect(acl.getPolicyRuntimeStatus().degradedGlobal).toBe(false);
   });
 
+  it("U-REL-02: runtimeAck failure rolls disk back and restores prior runtime", async () => {
+    vi.resetModules();
+    let evalCalls = 0;
+    vi.doMock("../proxy/acl.js", async () => {
+      const actual = await vi.importActual<typeof import("../proxy/acl.js")>("../proxy/acl.js");
+      return {
+        ...actual,
+        evaluateRuntimeAck(
+          status: Parameters<typeof actual.evaluateRuntimeAck>[0],
+          digest: string
+        ) {
+          evalCalls += 1;
+          // First post-write ack fails → writeAccessYaml must roll disk back.
+          if (evalCalls === 1) return false;
+          return actual.evaluateRuntimeAck(status, digest);
+        }
+      };
+    });
+
+    const { parse } = await import("yaml");
+    const { readFile } = await import("node:fs/promises");
+    const acl = await import("../proxy/acl.js");
+    const before = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    const beforeStatus = await acl.commitEffectivePolicy();
+    expect(beforeStatus.degradedGlobal).toBe(false);
+
+    const { writeAccessYaml } = await import("../admin/access-config.js");
+    const config = parse(before) as Parameters<typeof writeAccessYaml>[1];
+    delete config.roles?.bad_role;
+    config.users = (config.users ?? []).filter((user) => user.id !== "bad_agent");
+    if (config.users[0]) config.users[0].name = "Must Not Persist";
+
+    const result = await writeAccessYaml(projectRoot, config, {
+      enabled: false,
+      changeType: "test_urel02_rollback"
+    });
+
+    expect(result.runtimeAck).toBe(false);
+    expect(evalCalls).toBeGreaterThanOrEqual(1);
+    const after = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(after).toBe(before);
+    expect(acl.getPolicyRuntimeStatus().accessConfigDigest).toBe(beforeStatus.accessConfigDigest);
+    expect(acl.getPolicyRuntimeStatus().policyVersion).toBe(beforeStatus.policyVersion);
+  });
+
   it("policyVersion formula binds access digest, source map, and tool classification", async () => {
     const acl = await loadAcl();
     const status = await acl.commitEffectivePolicy();

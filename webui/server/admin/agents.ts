@@ -393,7 +393,17 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
     tools: permissions.tools,
     connections: permissions.connections,
     sources: permissions.sources,
-    legacyAllow: permissions.legacyAllow
+    legacyAllow: permissions.legacyAllow,
+    capabilityDigest: permissions.capabilityDigest,
+    capabilities: permissions.capabilities.map((capability) => ({
+      tool: capability.tool,
+      connectionId: capability.connectionId,
+      schema: capability.schema,
+      sourceName: capability.sourceName,
+      physicalTable: capability.physicalTable,
+      sourceKey: `${capability.connectionId}|${capability.schema}|${capability.sourceName}|${capability.physicalTable}`,
+      rowGrant: true as const
+    }))
   };
 }
 

@@ -61,7 +61,13 @@ const ACCESS_LOG_COLUMNS = [
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
   ["response_truncated", "INTEGER"],
-  ["trace_id", "TEXT"]
+  ["trace_id", "TEXT"],
+  ["policy_version", "TEXT"],
+  ["capability_digest", "TEXT"]
+] as const;
+const PERMISSION_SNAPSHOT_COLUMNS = [
+  ["capability_digest", "TEXT"],
+  ["tool_classification_version", "TEXT"]
 ] as const;
 const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
@@ -167,7 +173,9 @@ export async function getAuditDb(): Promise<Database.Database> {
       hash          TEXT PRIMARY KEY,
       created_at    TEXT NOT NULL,
       roles_json    TEXT NOT NULL,
-      resolved_json TEXT NOT NULL
+      resolved_json TEXT NOT NULL,
+      capability_digest TEXT,
+      tool_classification_version TEXT
     );
     CREATE TABLE IF NOT EXISTS config_change_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,6 +250,9 @@ export async function getAuditDb(): Promise<Database.Database> {
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
+  }
+  for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
+    ensureColumn(db, "permission_snapshots", column, definition);
   }
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
@@ -411,6 +422,8 @@ interface QueryRow {
   permission_snapshot_hash: string | null;
   effective_tables_count: number | null;
   decision_reason: string | null;
+  policy_version: string | null;
+  capability_digest: string | null;
 }
 
 interface TurnOutcomeSummary {
@@ -803,6 +816,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       turnId?: string;
       platform?: string;
       includeProtocol?: string;
+      decisionReasonPrefix?: string;
       limit?: string;
       offset?: string;
     };
@@ -823,7 +837,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
       sessionId: q.sessionId ?? null,
       turnId: q.turnId ?? null,
-      platform: q.platform ?? null
+      platform: q.platform ?? null,
+      decisionReasonPrefix: q.decisionReasonPrefix ? `${q.decisionReasonPrefix}%` : null
     };
 
     if (params.user) baseConditions.push("user_id = @user");
@@ -835,6 +850,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
     if (params.sessionId) baseConditions.push("lucy_session_id = @sessionId");
     if (params.turnId) baseConditions.push("lucy_turn_id = @turnId");
     if (params.platform) baseConditions.push("lucy_platform = @platform");
+    // Spec 07 §0.2 / Spec 98 §10.2 — Admin filter for capability_forbidden (and other reason prefixes).
+    if (params.decisionReasonPrefix) baseConditions.push("decision_reason LIKE @decisionReasonPrefix");
 
     const includeProtocol = q.includeProtocol === "true";
     const conditions = [...baseConditions];
@@ -884,7 +901,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       roleIds: row.role_ids ? (JSON.parse(row.role_ids) as string[]) : undefined,
       permissionSnapshotHash: row.permission_snapshot_hash ?? undefined,
       effectiveTablesCount: row.effective_tables_count ?? undefined,
-      decisionReason: row.decision_reason ?? undefined
+      decisionReason: row.decision_reason ?? undefined,
+      policyVersion: row.policy_version ?? undefined,
+      capabilityDigest: row.capability_digest ?? undefined
     }));
 
     return {
@@ -917,7 +936,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       includeProtocol?: string;
     };
   }>("/api/admin/audit/export", async (request, reply) => {
-    const q = request.query;
+    const q = request.query as {
+      user?: string;
+      tool?: string;
+      outcome?: string;
+      since?: string;
+      until?: string;
+      tableSearch?: string;
+      sessionId?: string;
+      turnId?: string;
+      platform?: string;
+      includeProtocol?: string;
+      decisionReasonPrefix?: string;
+    };
     const database = await getAuditDb();
 
     const conditions: string[] = [];
@@ -930,7 +961,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
       sessionId: q.sessionId ?? null,
       turnId: q.turnId ?? null,
-      platform: q.platform ?? null
+      platform: q.platform ?? null,
+      decisionReasonPrefix: q.decisionReasonPrefix ? `${q.decisionReasonPrefix}%` : null
     };
 
     if (params.user) conditions.push("user_id = @user");
@@ -938,6 +970,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     if (params.outcome) conditions.push("outcome = @outcome");
     if (params.since) conditions.push("ts >= @since");
     if (params.until) conditions.push("ts <= @until");
+    if (params.decisionReasonPrefix) conditions.push("decision_reason LIKE @decisionReasonPrefix");
     if (params.tableSearch) conditions.push("tables LIKE @tableSearch");
     if (params.sessionId) conditions.push("lucy_session_id = @sessionId");
     if (params.turnId) conditions.push("lucy_turn_id = @turnId");
@@ -979,7 +1012,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       "role_ids",
       "permission_snapshot_hash",
       "effective_tables_count",
-      "decision_reason"
+      "decision_reason",
+      "policy_version",
+      "capability_digest"
     ];
     const csvLines = [
       headers.join(","),
@@ -1013,7 +1048,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
           csvCell(row.role_ids),
           csvCell(row.permission_snapshot_hash),
           row.effective_tables_count ?? "",
-          csvCell(row.decision_reason)
+          csvCell(row.decision_reason),
+          csvCell(row.policy_version),
+          csvCell(row.capability_digest)
         ].join(",")
       )
     ];
