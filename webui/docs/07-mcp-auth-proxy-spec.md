@@ -4,9 +4,9 @@
 |---|---|
 | 文档名称 | MCP Auth Proxy — 访问日志与多用户权限 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.6.0（AC-P1.5 契约补丁：Agent Constraints / FinalRows AND 裁决码；**不改 runtime 直至 Spec 100 Gate B**） |
-| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 补丁 2026-08-08；v1.4.1 2026-08-08；v1.5.0 2026-08-09；v1.6.0 2026-08-09 |
-| 撰写人 | Claude (Opus 架构设计)；v1.4 / v1.4.1 / v1.5 / v1.6 Cursor Agent |
+| 版本 | v1.6.1（SSE 缓冲改写：多帧时必须选 JSON-RPC response 帧；禁止首条 `data:` 误判 progress） |
+| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 补丁 2026-08-08；v1.4.1 2026-08-08；v1.5.0 2026-08-09；v1.6.0 2026-08-09；v1.6.1 2026-08-09 |
+| 撰写人 | Claude (Opus 架构设计)；v1.4 / v1.4.1 / v1.5 / v1.6 / v1.6.1 Cursor Agent |
 | 委托人 | 张星晨 / xingchen |
 | 基于材料 | project-lucy 代码库、KTX 上游源码；`design-upgrade.md` v1.1.2；Spec 98；Spec 99；Spec 100；`adr-upstream-forced-predicate.md` Gate A 已批准 |
 | 适用范围 | MCP Auth Proxy 契约；v1.6 **不改变现网 runtime** 直至 Spec 100 Gate B + WP-I\*（P1 runtime 已按 Spec 99 交付） |
@@ -222,7 +222,13 @@ POST /mcp (client)
 - `mcp-session-id` header **双向透传**，代理不生成新 session ID
 - 一个 client session → 一个 upstream session（不复用连接）
 - 请求 body 可缓冲（每次工具调用是单个 JSON 对象，通常 < 10KB）
-- 非 `tools/list` 响应必须原样 pipe，不 buffer 完整响应，避免破坏 SSE/chunked 语义
+- **默认**：非改写路径的响应保持流式透传（pipe），避免破坏 SSE/chunked 语义
+- **例外（有限缓冲改写）**：下列路径必须缓冲完整上游 body 再改写后发回（仍保持 `text/event-stream` 或原 content-type，不得为 UX 擅自改成纯 JSON 冒充通过）：
+  - `tools/list`（权限过滤 / 工具注入）
+  - `initialize`（instructions 注入，fail-open，见 §4.4）
+  - `tools/call` 的 `lucy_query` / `lucy_read_source`（结果 `_meta` 注入）
+  - `tools/call` 的 `wiki_search`（wiki ACL 过滤）
+- 凡属上列缓冲改写，SSE 多帧解码规则见 **§6.1.0**（禁止取首条 `data:`）
 - `tools/list` 是协议发现面，proxy 对该响应做有限缓冲改写：过滤无权工具，注入 proxy 自服务工具（如 `kx_catalog`），并重写 `content-length` / `transfer-encoding`
 
 ### 4.4 Initialize Instructions 注入（v1.3）
@@ -556,13 +562,29 @@ v1.2 / AC-P0 连接裁决：
 
 `tools/list` 改写策略：
 
-- proxy 只对 `tools/list` 的有限响应做缓冲改写；非 `tools/list` 仍保持流式透传。
+- proxy 对 `tools/list` 的有限响应做缓冲改写；其余未列入 §4.3 例外清单的 `tools/call` 仍保持流式透传。
 - 对 `application/json` 响应：完整读取 JSON-RPC 响应体，过滤 `result.tools`，保留其他字段。
-- 对 SSE 响应：完整读取本次 `tools/list` 的 SSE 帧，解析 `event: message` / `data:` JSON，保留 `id:`、`retry:` 等非 data 字段，再重发改写后的单帧 SSE。
+- 对 SSE 响应：完整读取本次 `tools/list` 的 SSE 帧，按 **§6.1.0** 选取 JSON-RPC **response** 帧后过滤 `result.tools`，保留 `id:`、`retry:` 等非 data 字段，再重发改写后的单帧 SSE。
 - 若上游返回多帧流式 `tools/list`、无法完整解析、body 超过 `MAX_TOOLS_LIST_REWRITE_BYTES = 4 MiB` 或 JSON-RPC 不是单个 response，proxy 必须 fail-closed 返回 JSON-RPC error，不得透传未过滤工具列表。
 - 若上游 tools/list 支持分页 / cursor，proxy 过滤当前页并原样保留 pagination 字段；不得合并跨页工具。
 - `initialize.capabilities` 不做权限过滤；权限发现以 `tools/list` 的实际响应为准。
 - v1.2 不实现主动 `listChanged` 推送；role 变更后，新 `tools/list` 请求在配置 reload 后反映新权限。
+
+### 6.1.0 缓冲改写 SSE：必须选 JSON-RPC response 帧（v1.6.1）
+
+**背景（2026-08-09 实锤）**：Cursor 等 Streamable HTTP 客户端在 `tools/call` 时会带 `progressToken`。KTX 上游可能先推多条 `notifications/progress`（SSE `data:` 帧，JSON-RPC **notification**，有 `method`/`params`、无 `id`/`result`），最后才推带请求 `id` 的 `result`/`error` **response** 帧。
+
+**事故形态**：Proxy 若对缓冲 body 使用「第一条 `data:`」解码（如 `lines.find(l => l.startsWith("data: "))`），会把 progress 通知当成最终工具结果改写发回。客户端一直等匹配 `id` 的 JSON-RPC response → 表现为 `MCP error -32001: Request timed out`。服务端审计仍可能是 `outcome=ok`（上游查询已成功），curl/不带 progressToken 的客户端往往只有单帧 result，不易复现。
+
+**硬性规则（所有 §4.3 缓冲改写路径）**：
+
+1. 解析 SSE 时收集全部 `data:` JSON 对象。
+2. **必须**选取 JSON-RPC **response** 帧：对象同时含 `id` 与（`result` 或 `error`）。优先匹配当前请求的 `requestId`；否则取最后一个 response 帧。
+3. **禁止**用首条 `data:` 作为改写输入；**禁止**把 `method: notifications/progress`（或其它 notification）当作 `tools/call` / `tools/list` / `initialize` 的最终响应。
+4. 改写后可重发**单帧** SSE `event: message`（当前 `lucy_query` / `lucy_read_source` / `tools/list` / `initialize` / `wiki_search` 实现如此）。Progress 透传与 Cursor 60s 超时续命是独立议题，不在本条范围内；本条只保证「最终 response 帧不被 progress 顶替」。
+5. 实现锚点：`decodeSseJsonRpcResponse`（`webui/server/proxy/mcp-proxy.ts`）。回归：`webui/server/__tests__/mcp-proxy-sse-early-headers.test.ts`（含 progress→result 用例）。
+
+**回归自检**：任何新增「缓冲上游 SSE → 解析 → 再编码」的代码路径，PR 必须证明其使用 response 帧选择（或等价测试）；不得引入 `.find()` 首条 `data:` 作为唯一解码。
 
 ### 6.1.1 `decision_reason` 枚举
 
@@ -777,3 +799,4 @@ function writeLog(entry: AccessLogEntry): void
 | role / selector 配错导致越权 | reload fail-closed；selector 预览；audit 记录 permission snapshot hash |
 | prefix selector 自动纳入未来敏感表 | **v2 禁用 `prefix`**；v1 扩权必须 `policy_scope_expanded`；管理员审查 selector 预览；敏感表不得挂在通用 `kx_` 前缀角色 |
 | tools/list 改写破坏响应头 | 改写后删除原 `content-length` / `transfer-encoding`，按新 body 重算 |
+| 缓冲改写 SSE 误取首条 `data:`（progress）导致 Cursor `-32001` | **§6.1.0**：必须选 `id`+`result|error` response 帧；回归测 `mcp-proxy-sse-early-headers.test.ts` |
