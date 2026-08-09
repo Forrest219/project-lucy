@@ -256,9 +256,9 @@ docker compose \
 | 项 | 签名 | 日期 | 结论 |
 |---|---|---|---|
 | Allow/Deny 清单确认 | xingchen | 2026-08-09 | **通过** |
-| 用户真实测试证据已审阅 | xingchen | 2026-08-09 | **通过（HTTP MCP SSE + 服务端日志）**；Cursor Agent SSE 手测另做 |
-| PR 范围批准（A / B / C） | xingchen | 2026-08-09 | **暂缓**（待 Agent SSE 手测后再定） |
-| **批准 merge 到 main**（非仅开 draft） | xingchen | 2026-08-09 | **否（明确暂缓）** — 待亲自完成 Cursor Agent SSE/`lucy_query` 测试后再议 |
+| 用户真实测试证据已审阅 | xingchen | 2026-08-09 | **通过（HTTP MCP SSE + 服务端日志）**；Cursor Agent SSE 于 23:09 **PASS**（`inbox/.../16-sse-gap01-close.md`） |
+| PR 范围批准（A / B / C） | xingchen | 2026-08-09 | Agent SSE 阻塞已解除；**PR/merge 仍待显式批准** |
+| **批准 merge 到 main**（非仅开 draft） | xingchen | 2026-08-09 | **否（当时暂缓）** — GAP-01 已关；**仍待显式批准 merge** |
 
 ---
 

@@ -205,4 +205,93 @@ describe("lucy_query SSE early headers (Cursor Streamable HTTP)", () => {
       await new Promise<void>((resolve, reject) => upstream.close((err) => (err ? reject(err) : resolve())));
     }
   });
+
+  it("rewrites the JSON-RPC response frame when upstream SSE includes progress notifications", async () => {
+    const upstream = createServer(async (req, res) => {
+      const raw = await readRequestBody(req);
+      const parsed = JSON.parse(raw) as { id?: unknown };
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        "mcp-session-id": "upstream-session-progress"
+      });
+      res.write(
+        `event: message\ndata: ${JSON.stringify({
+          jsonrpc: "2.0",
+          method: "notifications/progress",
+          params: { progressToken: parsed.id, progress: 0.5, message: "Executing" }
+        })}\n\n`
+      );
+      res.write(
+        `event: message\ndata: ${JSON.stringify({
+          jsonrpc: "2.0",
+          id: parsed.id,
+          result: { content: [{ type: "text", text: JSON.stringify({ rows: [["East", 2]] }) }] }
+        })}\n\n`
+      );
+      res.end();
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { resetEffectivePolicyForTests } = await import("../proxy/acl");
+    resetEffectivePolicyForTests();
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const payload = JSON.stringify({
+        jsonrpc: "2.0",
+        id: "sse-progress-1",
+        method: "tools/call",
+        params: {
+          name: "lucy_query",
+          arguments: {
+            connectionId: "demo-mysql",
+            measures: ["superstore_orders.total_sales"]
+          }
+        }
+      });
+
+      const body = await new Promise<string>((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: "127.0.0.1",
+            port: proxyPort,
+            path: "/mcp",
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              accept: "application/json, text/event-stream",
+              authorization: `Bearer ${TOKEN}`,
+              "content-length": Buffer.byteLength(payload)
+            }
+          },
+          (res) => {
+            let buf = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk) => {
+              buf += chunk;
+            });
+            res.on("end", () => resolve(buf));
+            res.on("error", reject);
+          }
+        );
+        req.on("error", reject);
+        req.end(payload);
+      });
+
+      expect(body).toContain("event: message");
+      expect(body).toContain("sse-progress-1");
+      expect(body).toContain("East");
+      expect(body).not.toContain("notifications/progress");
+      expect(body).toContain("_meta");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => (err ? reject(err) : resolve())));
+    }
+  });
 });

@@ -1239,10 +1239,40 @@ function encodeSseMessage(payload: unknown): string {
   return `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
 }
 
+function decodeSseMessages(body: string): unknown[] {
+  const messages: unknown[] = [];
+  for (const line of body.split(/\r?\n/)) {
+    if (!line.startsWith("data: ")) continue;
+    try {
+      messages.push(JSON.parse(line.slice("data: ".length)));
+    } catch {
+      // skip malformed SSE data lines
+    }
+  }
+  return messages;
+}
+
+/**
+ * Pick the JSON-RPC *response* frame from a buffered SSE body.
+ * KTX may emit notifications/progress before the tools/call result; taking the
+ * first `data:` line breaks Cursor (it waits forever for an id-matched response).
+ */
+function decodeSseJsonRpcResponse(body: string, requestId?: string | number): unknown | undefined {
+  const messages = decodeSseMessages(body);
+  const responses = messages.filter((msg) => {
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) return false;
+    const record = msg as Record<string, unknown>;
+    return "id" in record && ("result" in record || "error" in record);
+  });
+  if (requestId !== undefined) {
+    const matched = responses.find((msg) => (msg as Record<string, unknown>).id === requestId);
+    if (matched) return matched;
+  }
+  return responses.length > 0 ? responses[responses.length - 1] : undefined;
+}
+
 function decodeSseMessage(body: string): unknown | undefined {
-  const line = body.split(/\r?\n/).find((item) => item.startsWith("data: "));
-  if (!line) return undefined;
-  return JSON.parse(line.slice("data: ".length));
+  return decodeSseJsonRpcResponse(body) ?? decodeSseMessages(body).at(-1);
 }
 
 /** Forward selected upstream headers onto the client response (strip hop-by-hop / length). */
@@ -1624,7 +1654,7 @@ async function writeLucySemanticResponse(
 
   try {
     if (isSse) {
-      const payload = decodeSseMessage(originalBody);
+      const payload = decodeSseJsonRpcResponse(originalBody, requestId) ?? decodeSseMessage(originalBody);
       if (!payload) throw new Error("missing SSE data frame");
       body = encodeSseMessage(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
       responseContentType = "text/event-stream";
@@ -1765,7 +1795,7 @@ async function writeToolsListResponse(
   let forceJson = false;
   try {
     if (contentType.includes("text/event-stream")) {
-      const payload = decodeSseMessage(originalBody);
+      const payload = decodeSseJsonRpcResponse(originalBody, requestId) ?? decodeSseMessage(originalBody);
       if (!payload) throw new Error("missing SSE data frame");
       if (payload) body = encodeSseMessage(filterAndAddAllowedTools(payload, visibleTools, requestId));
     } else if (contentType.includes("application/json")) {
@@ -1825,7 +1855,7 @@ async function writeInitializeResponse(
   } else {
     try {
       if (isSse) {
-        const payload = decodeSseMessage(originalBody);
+        const payload = decodeSseJsonRpcResponse(originalBody, requestId) ?? decodeSseMessage(originalBody);
         if (!payload) throw new Error("missing SSE data frame");
         const record = payload as Record<string, unknown>;
         const result = record.result as Record<string, unknown> | undefined;
@@ -2567,7 +2597,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
     try {
       if (contentType.includes("text/event-stream")) {
-        const payload = decodeSseMessage(originalBody);
+        const payload = decodeSseJsonRpcResponse(originalBody, requestId) ?? decodeSseMessage(originalBody);
         if (!payload) throw new Error("missing SSE data frame");
         const filtered = await filterWikiSearchPayload(identity, payload);
         if (filtered.failed) {

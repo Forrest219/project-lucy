@@ -228,7 +228,7 @@ docker compose "${COMPOSE_BASELINE[@]}" -f docker-compose.ac-p1-by01-proven-off.
 | **CP1** Phase 0/1 报告 + 签字 | xingchen | Step 2 |
 | **CP2** Phase 2 报告 + 签字 | xingchen | Step 3 |
 | **CP3** Phase 3 报告 + 回滚确认 | xingchen **已通过 2026-08-09** | Step 4 材料整理 |
-| **CP4** 用户真实测试 + Phase 4 签字 | xingchen **门禁通过 2026-08-09**；**merge 暂缓**（待亲自完成 Cursor Agent SSE 手测） | draft/merge 另议；本计划仍不自动 merge |
+| **CP4** 用户真实测试 + Phase 4 签字 | xingchen **门禁通过 2026-08-09**；Cursor Agent SSE **PASS 23:09**（GAP-01 关闭）；**merge 仍待显式批准** | draft/merge 另议；本计划仍不自动 merge |
 
 ---
 
