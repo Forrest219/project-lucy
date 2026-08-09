@@ -47,6 +47,9 @@
 | UAT / Runbook / Release（P1.5） | [`uat-ac-p15.md`](uat-ac-p15.md) / [`runbook-row-policy.md`](runbook-row-policy.md) 路径 D / [`release-notes-ac-p15.md`](release-notes-ac-p15.md) | Gate C 已签字；总签 `inbox/20260809-ac-p15-gate-c-signoff.md` |
 | **AC-P1.5（已交付）** | [`plans/wo-202608-61-access-control-p15-agent-constraints.md`](plans/wo-202608-61-access-control-p15-agent-constraints.md) | Gate A/B/C **DONE**（2026-08-09）；签字 `inbox/20260809-ac-p15-gate-c-signoff.md` |
 | **P1.5 后路线图（必读）** | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) **v1.0** | **已批准（2026-08-09）**：冻结 TokenScope / Dynamic RLS / AC-P2+ 整包；优先单机部署落地 |
+| **单机部署 Phase 0/1** | [`checklist-single-deploy-phase0-1.md`](checklist-single-deploy-phase0-1.md) | Phase 0 边界 + Phase 1 proven-off Compose 命令；**未验证前不 merge main** |
+| **单机部署 Phase 2** | [`checklist-single-deploy-phase2.md`](checklist-single-deploy-phase2.md) | 真实/近似 `access.yaml` 挂载；Compose 身份登记；proven 仍 false |
+| **单机部署 Phase 3/4** | [`checklist-single-deploy-phase3-4.md`](checklist-single-deploy-phase3-4.md) | Phase 3 proven 置真/回滚；Phase 4 合 main Allow/Deny 门禁 |
 
 **冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。**P1.5 之后是否开 TokenScope / Dynamic RLS / P2+** → 以 [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) 为准。
 
@@ -68,6 +71,9 @@
 | `plans/` | 本域 Work Order |
 | `adr-upstream-forced-predicate.md` | AC-P1 Gate A：上游强制谓词契约（已批准） |
 | `adr-post-p15-roadmap-freeze.md` | AC-P1.5 后路线图冻结（TokenScope / Dynamic RLS / P2+；单机优先） |
+| `checklist-single-deploy-phase0-1.md` | 单机部署 Phase 0 checklist + Phase 1 proven-off 命令清单 |
+| `checklist-single-deploy-phase2.md` | 单机部署 Phase 2 真实配置落地清单 |
+| `checklist-single-deploy-phase3-4.md` | 单机部署 Phase 3 proven 置真 + Phase 4 合 main 门禁 |
 | `uat-ac-p1.md` | AC-P1 UAT 勾选清单 |
 | `uat-ac-p15.md` | AC-P1.5 Agent Constraints UAT 勾选清单 |
 | `release-notes-ac-p15.md` | AC-P1.5 发布说明（Non-Claim） |
@@ -115,6 +121,6 @@
 | AC-P0 Spec / 实施 | **已交付**（Spec 98；WO-59 Gate C 2026-08-09） |
 | **AC-P1 Row Policy** | **已交付**（[WO-60](plans/wo-202608-60-access-control-p1.md) Gate C 2026-08-09）；[UAT](uat-ac-p1.md) / [Runbook](runbook-row-policy.md) / [Release notes](release-notes-ac-p1.md)；proven 默认 false |
 | **AC-P1.5 Agent Constraints** | **已交付**（[WO-61](plans/wo-202608-61-access-control-p15-agent-constraints.md) Gate C 2026-08-09）；[UAT](uat-ac-p15.md) / [Runbook](runbook-row-policy.md) 路径 D / [Release notes](release-notes-ac-p15.md)；proven 仍默认 false |
-| **P1.5 之后** | **主线收束**；见 [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md)：TokenScope / Dynamic RLS / AC-P2+ 整包**冻结**；优先单机部署落地与体验补齐 |
+| **P1.5 之后** | **主线收束**；见 [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md)：TokenScope / Dynamic RLS / AC-P2+ 整包**冻结**；单机部署清单 [Phase 0/1](checklist-single-deploy-phase0-1.md) / [Phase 2](checklist-single-deploy-phase2.md) / [Phase 3/4](checklist-single-deploy-phase3-4.md)（**未验证前不 merge main**；proven 默认 false） |
 
 — 完

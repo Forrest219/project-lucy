@@ -68,9 +68,9 @@
 
 | ID | 优先事项 | 成功标准（示例） |
 |---|---|---|
-| P1 | 单机 / 内网部署路径跑顺 | Compose / 安装文档可复现；健康检查与降级 banner 可理解 |
-| P2 | proven 按环境运维启用（可选） | 目标环境显式变更 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN`；默认真值仍为 false；可回滚 |
-| P3 | 真实 `access.yaml` 落地 | Role `scoped` + Agent `constraints` 覆盖企业常见职责包；Admin dryRun → 保存 → MCP 抽检闭环 |
+| P1 | 单机 / 内网部署路径跑顺 | Compose / 安装文档可复现；健康检查与降级 banner 可理解；执行清单见 [`checklist-single-deploy-phase0-1.md`](checklist-single-deploy-phase0-1.md) |
+| P2 | proven 按环境运维启用（可选） | 目标环境显式变更 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN`；默认真值仍为 false；可回滚；见 [`checklist-single-deploy-phase3-4.md`](checklist-single-deploy-phase3-4.md) Phase 3 |
+| P3 | 真实 `access.yaml` 落地 | Role `scoped` + Agent `constraints` 覆盖企业常见职责包；Admin dryRun → 保存 → MCP 抽检闭环；执行清单见 [`checklist-single-deploy-phase2.md`](checklist-single-deploy-phase2.md)；合 main 见 [`checklist-single-deploy-phase3-4.md`](checklist-single-deploy-phase3-4.md) Phase 4 |
 | P4 | 体验与可运维性 | Runbook 演练、错误文案、配置误操作恢复；不为「新权限模型」开 Spec |
 
 ### 2.3 将来重新开波的硬条件（须另批）
