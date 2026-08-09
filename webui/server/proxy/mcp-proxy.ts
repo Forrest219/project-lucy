@@ -1245,6 +1245,52 @@ function decodeSseMessage(body: string): unknown | undefined {
   return JSON.parse(line.slice("data: ".length));
 }
 
+/** Forward selected upstream headers onto the client response (strip hop-by-hop / length). */
+function copyUpstreamResponseHeaders(
+  upstream: IncomingMessage,
+  extra: Record<string, string | string[] | number> = {}
+): Record<string, string | string[] | number> {
+  const headers: Record<string, string | string[] | number> = {};
+  for (const [k, v] of Object.entries(upstream.headers)) {
+    const lower = k.toLowerCase();
+    if (
+      v !== undefined
+      && lower !== "content-length"
+      && lower !== "transfer-encoding"
+      && lower !== "content-type"
+      && lower !== "connection"
+    ) {
+      headers[k] = v;
+    }
+  }
+  Object.assign(headers, extra);
+  return headers;
+}
+
+/**
+ * Open an SSE response immediately (headers only) before the final JSON-RPC
+ * event is ready. Cursor / Streamable HTTP clients time out when tools/call
+ * holds response headers until the upstream body is fully buffered.
+ *
+ * Do NOT write an SSE comment (`:\n\n`) here: Cursor Agent CallMcpTool can hang
+ * when the first body chunk is a lone comment and the real `event: message`
+ * arrives hundreds of ms later (lucy_query). lucy_read_source often lands
+ * comment+message in one read and appears fine — keep headers early, body quiet.
+ * Spec: keep text/event-stream; do not convert to application/json for UX.
+ */
+function beginSseResponse(res: ServerResponse, upstream: IncomingMessage): void {
+  if (res.headersSent) return;
+  const headers = copyUpstreamResponseHeaders(upstream, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache, no-transform",
+    "x-accel-buffering": "no",
+    connection: "keep-alive"
+  });
+  res.writeHead(upstream.statusCode ?? 200, headers);
+  const flushable = res as ServerResponse & { flushHeaders?: () => void; flush?: () => void };
+  flushable.flushHeaders?.();
+}
+
 function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
   return JSON.stringify({
     jsonrpc: "2.0",
@@ -1559,26 +1605,32 @@ async function writeLucySemanticResponse(
   queryTables: string[],
   traceId: string
 ): Promise<void> {
+  const contentType = String(upstream.headers["content-type"] ?? "");
+  const isSse = contentType.includes("text/event-stream");
+  // Flush SSE headers before buffering upstream body so Streamable HTTP clients
+  // (Cursor) do not hit request timeouts while KTX is still computing.
+  if (isSse) beginSseResponse(res, upstream);
+
   const chunks: Buffer[] = [];
   for await (const chunk of upstream as AsyncIterable<Buffer>) {
     chunks.push(chunk);
   }
 
   const originalBody = Buffer.concat(chunks).toString();
-  const contentType = String(upstream.headers["content-type"] ?? "");
   const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
   let body = originalBody;
   let metaFailed: string | undefined;
-  let forceJson = false;
+  let responseContentType = contentType || "application/json";
 
   try {
-    if (contentType.includes("text/event-stream")) {
+    if (isSse) {
       const payload = decodeSseMessage(originalBody);
       if (!payload) throw new Error("missing SSE data frame");
       body = encodeSseMessage(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
+      responseContentType = "text/event-stream";
     } else if (contentType.includes("application/json")) {
       body = JSON.stringify(withLucyResultMeta(JSON.parse(originalBody), requestId, toolName, toolArgs, sourceRefs));
-      forceJson = true;
+      responseContentType = "application/json";
     } else {
       throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
@@ -1587,21 +1639,24 @@ async function writeLucySemanticResponse(
     body = originalBody;
   }
 
-  const headers: Record<string, string | string[] | number> = {};
-  for (const [k, v] of Object.entries(upstream.headers)) {
-    const lower = k.toLowerCase();
-    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
-  }
-  headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
   const responseBytes = Buffer.byteLength(body);
-  headers["content-length"] = responseBytes;
-  res.writeHead(upstream.statusCode ?? 200, headers);
-  res.end(body);
+  if (isSse) {
+    // Stream already opened; do not set Content-Length (chunked end).
+    res.write(body);
+    res.end();
+  } else {
+    const headers = copyUpstreamResponseHeaders(upstream, {
+      "content-type": responseContentType,
+      "content-length": responseBytes
+    });
+    res.writeHead(upstream.statusCode ?? 200, headers);
+    res.end(body);
+  }
 
   let outcome: "ok" | "error" = "ok";
   let errorDetail = metaFailed;
   try {
-    const parsed = contentType.includes("application/json")
+    const parsed = responseContentType.includes("application/json")
       ? JSON.parse(body) as Record<string, unknown>
       : decodeSseMessage(body) as Record<string, unknown> | undefined;
     const parsedError = parsed?.error;
@@ -1627,7 +1682,7 @@ async function writeLucySemanticResponse(
     outcome,
     errorDetail,
     durationMs: Date.now() - start,
-    ...responseAuditMeta(Buffer.from(body), headers["content-type"]),
+    ...responseAuditMeta(Buffer.from(body), responseContentType),
     requestId,
     traceId,
     ...requestMeta,
