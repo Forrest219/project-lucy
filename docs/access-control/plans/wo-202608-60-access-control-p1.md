@@ -26,7 +26,7 @@
 | WP-S2 契约补丁（07/14/15 + lint） | **DONE（草稿）** | Spec 07 v1.5 / 14·15 v0.3；lint 随 WP-I1 放行合法 scoped |
 | **Gate B：AC-P1 Spec 评审通过** | **DONE（2026-08-09）** | 授权 WP-I\* runtime |
 | WP-I1…I4 | **DONE（测绿）** | 编译/闸门/forced_filters；proven 默认 false |
-| WP-I5 Admin | **部分 DONE** | preview scoped digest；Role UI scoped 编辑器可后续抛光 |
+| WP-I5 Admin | **DONE** | preview scoped digest；Role UI scoped/`row_policy` 编辑器已抛光（round-trip） |
 | WP-I6 BY/UAT/Runbook | **DONE** | BY 矩阵 + BY-01 集成 + Preview/Runbook 演练；签字见 `inbox/20260809-ac-p1-gate-c-signoff.md` |
 | **Gate C：bypass + UAT 签字** | **DONE（2026-08-09）** | xingchen 总批准；证据 `inbox/20260809-ac-p1-by01-uat/` + `inbox/20260809-ac-p1-runbook-uat/`；Release notes [`release-notes-ac-p1.md`](../release-notes-ac-p1.md)；**proven 置真须另开运维变更（默认仍 false）** |
 | AC-P1.5 Agent Constraints | **本 WO Non-Goal** | 另立 WO |
@@ -261,7 +261,7 @@ npm test -- --run row-policy bypass acl-capability policy-compile
 ### 下一步（Gate C 后）
 
 1. 目标环境若需行级取数：单独运维变更置 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true`（可回滚）。  
-2. 可选：Role Admin scoped 编辑器 UI 抛光。  
+2. Role Admin scoped 编辑器 UI 抛光：**DONE**。  
 3. AC-P1.5 Constraints：另立 WO。
 
 — 完

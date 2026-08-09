@@ -14,6 +14,19 @@ describe("formatRowGrantPreviewLabel", () => {
     );
   });
 
+  it("appends predicate summary when Role preview includes predicates", () => {
+    expect(
+      formatRowGrantPreviewLabel({
+        kind: "scoped",
+        digest: "883501db707ba111",
+        predicates: [
+          { field: "region", op: "eq", value: "East" },
+          { field: "segment", op: "in", values: ["Consumer", "Corporate"] }
+        ]
+      })
+    ).toBe("scoped:883501db707ba111 · region=East AND segment in [Consumer,Corporate]");
+  });
+
   it("does not invent TRUE when grant shape is unknown", () => {
     expect(formatRowGrantPreviewLabel(undefined)).toBe("unknown");
     expect(formatRowGrantPreviewLabel({ kind: "scoped" })).toBe("unknown");

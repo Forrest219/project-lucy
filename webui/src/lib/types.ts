@@ -497,9 +497,33 @@ export type RoleUserReference = {
   tokenCount: number;
 };
 
+/** Spec 99 — Role Admin / access.yaml selector row_policy predicate. */
+export type RoleRowPolicyPredicate = {
+  field: string;
+  op: "eq" | "in";
+  value?: string | number | boolean;
+  values?: Array<string | number | boolean>;
+};
+
+export type RoleRowPolicy = {
+  predicates: RoleRowPolicyPredicate[];
+};
+
 export type RoleSelector =
-  | { connection?: string; schema: string; names: string[] }
-  | { connection?: string; schema: string; prefix: string };
+  | {
+      connection?: string;
+      schema: string;
+      names: string[];
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicy;
+    }
+  | {
+      connection?: string;
+      schema: string;
+      prefix: string;
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicy;
+    };
 
 export type RoleAllowConfig = {
   connections?: string[];
