@@ -377,6 +377,46 @@ describe("RoleDetail", () => {
     expect(screen.getByText(/dataforai/)).toBeInTheDocument();
   });
 
+  it("Data Capability Preview shows scoped digest, not hardcoded TRUE", async () => {
+    stubSingleRole(
+      makeYamlRole({
+        effectivePermissions: {
+          roleIds: ["analyst"],
+          snapshotHash: "abc",
+          sourceMapVersion: "v1",
+          tools: ["lucy_query"],
+          connections: ["mysql-aliyun"],
+          sources: [
+            {
+              connectionId: "mysql-aliyun",
+              schema: "dataforai",
+              sourceName: "superstore_orders",
+              table: "dataforai.superstore_orders"
+            }
+          ],
+          legacyAllow: false,
+          capabilityDigest: "ae0a470dc0ca9931",
+          capabilities: [
+            {
+              tool: "lucy_query",
+              connectionId: "mysql-aliyun",
+              schema: "dataforai",
+              sourceName: "superstore_orders",
+              physicalTable: "dataforai.superstore_orders",
+              sourceKey: "mysql-aliyun|dataforai|superstore_orders|dataforai.superstore_orders",
+              rowGrant: { kind: "scoped", digest: "883501db707ba111" }
+            }
+          ]
+        }
+      })
+    );
+    renderAt("/admin/roles/analyst");
+    fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
+    const preview = await screen.findByTestId("capability-preview");
+    expect(preview).toHaveTextContent("rowGrant=scoped:883501db707ba111");
+    expect(preview.textContent ?? "").not.toMatch(/rowGrant=TRUE/);
+  });
+
   it("M55: 生效边界 explains that allowed MCP tools filter tools/list and intercept tools/call", async () => {
     stubSingleRole(makeYamlRole());
     renderAt("/admin/roles/analyst");

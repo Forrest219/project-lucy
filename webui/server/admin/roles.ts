@@ -7,6 +7,7 @@ import {
   previewRolePermissionsForAdmin,
   type EffectivePermissions
 } from "../proxy/acl.js";
+import { parseRowPolicyShape } from "../proxy/row-policy.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   ACCESS_YAML_REL,
@@ -19,6 +20,7 @@ import {
   type YamlPermissionModelVersion,
   type YamlRole,
   type YamlRowAccess,
+  type YamlRowPolicy,
   type YamlTableSelector
 } from "./access-config.js";
 import {
@@ -75,7 +77,7 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
       sourceName: capability.sourceName,
       physicalTable: capability.physicalTable,
       sourceKey: `${capability.connectionId}|${capability.schema}|${capability.sourceName}|${capability.physicalTable}`,
-      rowGrant: true as const
+      rowGrant: capability.rowGrant
     }))
   };
 }
@@ -292,7 +294,14 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
         return { ok: false, reason: "table selector must be an object" };
       }
       for (const key of Object.keys(raw)) {
-        if (key !== "connection" && key !== "schema" && key !== "names" && key !== "prefix" && key !== "row_access") {
+        if (
+          key !== "connection"
+          && key !== "schema"
+          && key !== "names"
+          && key !== "prefix"
+          && key !== "row_access"
+          && key !== "row_policy"
+        ) {
           return { ok: false, reason: `table selector ${key} is not allowed` };
         }
       }
@@ -306,6 +315,27 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
         return { ok: false, reason: "table selector row_access must be 'all' or 'scoped'" };
       }
       const rowAccess = raw.row_access as YamlRowAccess | undefined;
+      if (rowAccess !== "scoped" && raw.row_policy !== undefined) {
+        return { ok: false, reason: "table selector row_policy is only valid with row_access 'scoped'" };
+      }
+      // Spec 99 §7 — generation 1 (incl. missing version) has no scoped / row_policy.
+      if (
+        modelVersion.version === 1 &&
+        (rowAccess === "scoped" || raw.row_policy !== undefined)
+      ) {
+        return {
+          ok: false,
+          reason: "permission_model_version 1 forbids scoped/row_policy (v1_scoped_forbidden)"
+        };
+      }
+      let rowPolicy: YamlRowPolicy | undefined;
+      if (rowAccess === "scoped") {
+        const parsed = parseRowPolicyShape(raw.row_policy);
+        if (!parsed.ok) {
+          return { ok: false, reason: `table selector scoped requires valid row_policy (${parsed.reason})` };
+        }
+        rowPolicy = { predicates: parsed.predicates };
+      }
       const hasNames = raw.names !== undefined;
       const hasPrefix = raw.prefix !== undefined;
       if (hasNames === hasPrefix) {
@@ -322,7 +352,8 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
           connection: typeof raw.connection === "string" ? raw.connection.trim() || undefined : undefined,
           schema: raw.schema.trim(),
           names: (raw.names as string[]).map((item) => item.trim()).filter(Boolean),
-          row_access: rowAccess
+          row_access: rowAccess,
+          row_policy: rowPolicy
         });
       } else {
         if (typeof raw.prefix !== "string" || !raw.prefix.trim()) {
@@ -332,7 +363,8 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
           connection: typeof raw.connection === "string" ? raw.connection.trim() || undefined : undefined,
           schema: raw.schema.trim(),
           prefix: (raw.prefix as string).trim(),
-          row_access: rowAccess
+          row_access: rowAccess,
+          row_policy: rowPolicy
         });
       }
     }
@@ -400,7 +432,38 @@ export async function migrateRoleToV2(
     nextSelectors = [];
     for (const selector of selectors) {
       if (selector.row_access === "scoped") {
-        return { ok: false, reason: "table selector row_access 'scoped' is not supported in AC-P0" };
+        const parsed = parseRowPolicyShape(selector.row_policy);
+        if (!parsed.ok) {
+          return {
+            ok: false,
+            reason: `table selector row_access 'scoped' requires valid row_policy (${parsed.reason})`
+          };
+        }
+        if ("prefix" in selector && selector.prefix !== undefined) {
+          const names = await expandSelectorSourceNames(selector);
+          if (names.length === 0) {
+            return { ok: false, reason: `table selector prefix '${selector.prefix}' expands to 0 source` };
+          }
+          expandedPrefixes.push({ prefix: selector.prefix, names });
+          nextSelectors.push({
+            connection: selector.connection,
+            schema: selector.schema,
+            names,
+            row_access: "scoped",
+            row_policy: { predicates: parsed.predicates }
+          });
+          selectorsChanged = true;
+          continue;
+        }
+        nextSelectors.push({
+          ...selector,
+          row_access: "scoped",
+          row_policy: { predicates: parsed.predicates }
+        });
+        continue;
+      }
+      if (selector.row_policy !== undefined) {
+        return { ok: false, reason: "table selector row_policy is only valid with row_access 'scoped'" };
       }
       if ("prefix" in selector && selector.prefix !== undefined) {
         const names = await expandSelectorSourceNames(selector);

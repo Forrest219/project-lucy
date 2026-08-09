@@ -6,6 +6,7 @@ import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
 import type { AccessWriteAck, Agent, AgentPatch, EffectivePermissionsPreview, Role } from "../../lib/types";
+import { formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 
 type AgentDetailResponse = { agent: Agent; version: string };
 type PatchDryRunResponse = { diff: string; proposedYaml: string };
@@ -570,7 +571,7 @@ export function AgentDetail() {
                     <ul className="grid gap-1 font-mono text-xs">
                       {effective.capabilities!.map((cap) => (
                         <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
-                          {cap.tool} × {cap.sourceKey} · rowGrant=TRUE
+                          {cap.tool} × {cap.sourceKey} · rowGrant={formatRowGrantPreviewLabel(cap.rowGrant)}
                         </li>
                       ))}
                     </ul>

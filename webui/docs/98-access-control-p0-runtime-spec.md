@@ -90,7 +90,7 @@ Protected DOM terms（`translate="no"` + `notranslate`）：`Role`、`Agent`、`
 
 | 非目标 | 说明 |
 |---|---|
-| `row_access: scoped` / `row_policy` / 强制谓词 AST | AC-P1；本波次配置出现 `scoped` → 编译失败 |
+| `row_access: scoped` / `row_policy` / 强制谓词 AST | **AC-P1 → [`99-access-control-p1-row-policy-spec.md`](99-access-control-p1-row-policy-spec.md)**；本 Spec（P0）配置出现 `scoped` → 编译失败 |
 | Agent Constraints | AC-P1.5 |
 | Dynamic RLS / JWT ABAC / Active Role | AC-P2+ |
 | 完整列级权限 / 动态掩码 | 另立 CLS |

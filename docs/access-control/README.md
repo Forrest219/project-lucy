@@ -34,12 +34,19 @@
 |---|---|---|
 | **P0 必读** | [`design-upgrade.md`](design-upgrade.md) **v1.1.2** | **ADR 已批准（Gate A）** |
 | **P0 Runtime Spec** | [`webui/docs/98-access-control-p0-runtime-spec.md`](../../webui/docs/98-access-control-p0-runtime-spec.md) **v0.1** | **AC-P0 已交付**（Gate C 2026-08-09） |
-| **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | Gate A/B/C DONE；AC-P1 冻结另立 WO |
+| **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | Gate A/B/C DONE；后续行级见 WO-60 |
 | 术语 | [`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md) §3 / §4.8 | AC-P0 术语已登记（v0.3） |
-| 实现契约 | [`07`](../../webui/docs/07-mcp-auth-proxy-spec.md) / [`14`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md) / [`15`](../../webui/docs/15-role-admin-spec.md) | 权威语义以 Spec 98 为准 |
-| UAT / Runbook | [`uat-ac-p0.md`](uat-ac-p0.md) / [`runbook-policy-degrade.md`](runbook-policy-degrade.md) | Gate C 已签字；证据 `inbox/20260809-gate-c-uat/` |
+| 实现契约 | [`07`](../../webui/docs/07-mcp-auth-proxy-spec.md) / [`14`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md) / [`15`](../../webui/docs/15-role-admin-spec.md) | P0 以 Spec 98 为准；P1 以 Spec 99 为准 |
+| UAT / Runbook（P0） | [`uat-ac-p0.md`](uat-ac-p0.md) / [`runbook-policy-degrade.md`](runbook-policy-degrade.md) | Gate C 已签字 |
+| **AC-P1（已交付）** | [`plans/wo-202608-60-access-control-p1.md`](plans/wo-202608-60-access-control-p1.md) | Gate A/B/C **DONE**（2026-08-09）；签字 `inbox/20260809-ac-p1-gate-c-signoff.md` |
+| **Gate A ADR** | [`adr-upstream-forced-predicate.md`](adr-upstream-forced-predicate.md) | v0.2.2；Lucy `filters[]` 载体；不以 Kaelio 发版为前置 |
+| **AC-P1 Runtime Spec** | [`webui/docs/99-access-control-p1-row-policy-spec.md`](../../webui/docs/99-access-control-p1-row-policy-spec.md) | v0.1.2；Gate B 已批准 |
+| **强制谓词载体证据** | [`evidence-ktx-forced-filters.md`](evidence-ktx-forced-filters.md) | Gate C 项 1：**Lucy** 对 bundled KTX 的 `filters[]` 前缀 + Proxy 测 |
+| UAT / Runbook / Release（P1） | [`uat-ac-p1.md`](uat-ac-p1.md) / [`runbook-row-policy.md`](runbook-row-policy.md) / [`release-notes-ac-p1.md`](release-notes-ac-p1.md) | Gate C 已签字；proven 默认 false（置真=运维变更） |
 
 **冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。
+
+**开波禁令：** **不得**仅凭 `design-upgrade.md` 直接开工改 `acl.ts` / `mcp-proxy.ts`。AC-P1 必须先过 WO-60 **Gate A**（上游强制谓词契约 ADR），再写 Spec（Gate B），通过后才改 runtime。`feasibility-row-acl.SUPERSEDED.md` 禁止作为实施依据。
 
 ---
 
@@ -55,6 +62,9 @@
 | `gap-analysis-202608.md` | 202608 Governance 差距分析（不含 Dynamic RLS） |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
+| `adr-upstream-forced-predicate.md` | AC-P1 Gate A：上游强制谓词契约（已批准） |
+| `uat-ac-p1.md` | AC-P1 UAT 勾选清单 |
+| `runbook-row-policy.md` | AC-P1 行策略 / 未证明恢复 Runbook |
 
 ---
 
@@ -88,12 +98,12 @@
 
 ---
 
-## 5. 波次状态（摘自 design-upgrade）
+## 5. 波次状态
 
 | 波次 | 状态 |
 |---|---|
-| AC-P0 Spec | **初稿已交**（Spec 98 + 术语）；待 Gate B；WP-S1 契约补丁未合并 |
-| AC-P0 实施 WO | Spec 评审通过（Gate B）后另批开工 |
-| AC-P1 | 冻结（须上游强制谓词契约） |
+| AC-P0 Spec / 实施 | **已交付**（Spec 98；WO-59 Gate C 2026-08-09） |
+| **AC-P1 Row Policy** | **已交付**（[WO-60](plans/wo-202608-60-access-control-p1.md) Gate C 2026-08-09）；[UAT](uat-ac-p1.md) / [Runbook](runbook-row-policy.md) / [Release notes](release-notes-ac-p1.md)；proven 默认 false |
+| AC-P1.5 Agent Constraints | 未开波；不在 WO-60 范围 |
 
 — 完

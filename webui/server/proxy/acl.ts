@@ -11,10 +11,22 @@ import {
   resolveAccessConfigPath
 } from "./identity.js";
 import type { Identity, PermissionModelVersion } from "./identity.js";
+import {
+  buildForcedFiltersPayload,
+  compileScopedRowGrant,
+  isUpstreamForcedPredicateProven,
+  mergeRowGrants,
+  rowGrantDigest,
+  validateProtectedLucyQueryArgs,
+  type ForcedFiltersPayload,
+  type RowGrant
+} from "./row-policy.js";
 
 export interface AclDecision {
   allowed: boolean;
-  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'tool_absolute_deny:<tool>' | 'tool_unclassified:<tool>' | 'agent_disabled' | 'raw_query_forbidden' | 'query_concurrency_exceeded' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>' | 'source_map_compile_failed:<detail>' | 'policy_degraded_deny'
+  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'tool_absolute_deny:<tool>' | 'tool_unclassified:<tool>' | 'agent_disabled' | 'raw_query_forbidden' | 'query_concurrency_exceeded' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>' | 'source_map_compile_failed:<detail>' | 'policy_degraded_deny' | 'row_policy_*'
+  /** AC-P1 — set when lucy_query is allowed against a protected (scoped) source. */
+  forcedFilters?: ForcedFiltersPayload;
 }
 
 /** AC-P0 Spec 98 §4.3 — bumps with classification table changes; feeds policyVersion (WP-I5). */
@@ -611,14 +623,14 @@ export interface EffectiveSource {
   table: string;
 }
 
-/** Spec 98 §5.1 — (tool, canonicalSourceKey, rowGrant); AC-P0 rowGrant is always TRUE. */
+/** Spec 98 §5.1 / Spec 99 §4 — (tool, canonicalSourceKey, rowGrant). */
 export interface EffectiveCapability {
   tool: string;
   connectionId: string;
   schema: string;
   sourceName: string;
   physicalTable: string;
-  rowGrant: true;
+  rowGrant: RowGrant;
 }
 
 export interface EffectivePermissions {
@@ -694,6 +706,7 @@ export interface SelectorShape {
   prefix?: string;
   names?: string[];
   row_access?: string;
+  row_policy?: unknown;
 }
 
 function selectorMatches(
@@ -740,38 +753,62 @@ function sourceIndexKey(connectionId: string, physicalTable: string): string {
   return `${connectionId}\0${physicalTable}`;
 }
 
+function grantDigestToken(grant: RowGrant): string {
+  return grant.kind === "all" ? "TRUE" : grant.digest;
+}
+
 /** RoleCapabilities(r) = (r.allow.tools ∩ DataPlane) \ AbsoluteDeny × SourcesGrantedBy(r). */
-function buildCapabilities(dataPlaneTools: string[], sources: EffectiveSource[]): EffectiveCapability[] {
+function buildCapabilities(
+  dataPlaneTools: string[],
+  sources: EffectiveSource[],
+  sourceGrants?: Map<string, RowGrant>
+): EffectiveCapability[] {
   const capabilities: EffectiveCapability[] = [];
   for (const tool of dataPlaneTools) {
     for (const source of sources) {
+      const key = sourceIndexKey(source.connectionId, source.table);
       capabilities.push({
         tool,
         connectionId: source.connectionId,
         schema: source.schema,
         sourceName: source.sourceName,
         physicalTable: source.table,
-        rowGrant: true
+        rowGrant: sourceGrants?.get(key) ?? { kind: "all" }
       });
     }
   }
   return capabilities;
 }
 
+/** Union capabilities across Roles; same (tool, source) merges rowGrant with OR. */
 function dedupeCapabilities(capabilities: EffectiveCapability[]): EffectiveCapability[] {
-  return [...new Map(
-    capabilities.map((capability) => [
-      capabilityIndexKey(capability.tool, capability.connectionId, capability.physicalTable),
-      capability
-    ])
-  ).values()].sort((a, b) =>
+  const merged = new Map<string, EffectiveCapability>();
+  for (const capability of capabilities) {
+    const key = capabilityIndexKey(capability.tool, capability.connectionId, capability.physicalTable);
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, capability);
+      continue;
+    }
+    merged.set(key, {
+      ...existing,
+      rowGrant: mergeRowGrants(existing.rowGrant, capability.rowGrant)
+    });
+  }
+  return [...merged.values()].sort((a, b) =>
     a.tool.localeCompare(b.tool) || canonicalSourceKeyDisplay(a).localeCompare(canonicalSourceKeyDisplay(b))
   );
 }
 
 function capabilityDigest(capabilities: EffectiveCapability[]): string {
   return createHash("sha256")
-    .update(capabilities.map((capability) => `${capability.tool}|${canonicalSourceKeyDisplay(capability)}|TRUE`).join("\n"))
+    .update(
+      capabilities
+        .map((capability) =>
+          `${capability.tool}|${canonicalSourceKeyDisplay(capability)}|${grantDigestToken(capability.rowGrant)}`
+        )
+        .join("\n")
+    )
     .digest("hex")
     .slice(0, 16);
 }
@@ -823,13 +860,16 @@ export function normalizePermissionModelVersion(
   return { ok: false, reason: "invalid_permission_model_version" };
 }
 
-/** Spec 98 §7 — selector legality for a given generation; undefined when legal. */
+/** Spec 98 §7 / Spec 99 §3 / §7 — selector legality for a given generation; undefined when legal. */
 function selectorVersionFailure(version: PermissionModelVersion, selector: SelectorShape): string | undefined {
   const rowAccess = typeof selector.row_access === "string" ? normalizeRef(selector.row_access) : undefined;
   if (rowAccess !== undefined && rowAccess !== "all" && rowAccess !== "scoped") return "invalid_row_access";
-  // AC-P0 Non-Goal: no row policy runtime exists, so `scoped` can never compile.
-  if (rowAccess === "scoped") return "row_access_scoped_forbidden";
-  if (version === 1) return undefined;
+  if (rowAccess !== "scoped" && selector.row_policy !== undefined) return "row_policy_on_all_forbidden";
+  // Spec 99 §7 — generation 1 has no scoped / row_policy surface.
+  if (version === 1) {
+    if (rowAccess === "scoped" || selector.row_policy !== undefined) return "v1_scoped_forbidden";
+    return undefined;
+  }
   if (selector.prefix !== undefined) return "v2_prefix_forbidden";
   if (rowAccess === undefined) return "v2_row_access_required";
   return undefined;
@@ -857,20 +897,40 @@ interface CompiledRole {
   metaTools: string[];
   deniedTools: string[];
   sources: EffectiveSource[];
+  /** Per (connectionId, physicalTable) row grant for this Role. */
+  sourceGrants: Map<string, RowGrant>;
   declaredConnections: string[];
   hasSelectors: boolean;
 }
 
 type CompiledRoleResult = { ok: true; role: CompiledRole } | { ok: false; reason: string };
 
-function compileRole(
+function scopedGrantForSource(
+  multiSourceGrant: Extract<RowGrant, { kind: "scoped" }>,
+  sourceName: string
+): RowGrant {
+  const predicates = multiSourceGrant.predicates.filter(
+    (predicate) => normalizeRef(predicate.sourceName) === normalizeRef(sourceName)
+  );
+  return {
+    kind: "scoped",
+    digest: rowGrantDigest(predicates),
+    predicates,
+    orArms: [predicates]
+  };
+}
+
+async function compileRole(
   roleId: string,
   role: NonNullable<AccessConfig["roles"]>[string] | undefined,
   policy: AclPolicy,
   state: SourceMapState
-): CompiledRoleResult {
+): Promise<CompiledRoleResult> {
   const failed: CompiledRoleResult = { ok: false, reason: `role_resolution_failed:${roleId}` };
   if (!role?.allow) return failed;
+  if (Object.prototype.hasOwnProperty.call(role, "constraints")) {
+    return { ok: false, reason: `role_resolution_failed:${roleId}:constraints_unsupported` };
+  }
 
   const modelVersion = normalizePermissionModelVersion(role);
   if (!modelVersion.ok) return { ok: false, reason: `role_resolution_failed:${roleId}:${modelVersion.reason}` };
@@ -888,14 +948,43 @@ function compileRole(
   }
 
   const sourceMatches: EffectiveSource[] = [];
+  const sourceGrants = new Map<string, RowGrant>();
   for (const selector of selectors) {
     const versionFailure = selectorVersionFailure(modelVersion.version, selector);
     if (versionFailure) return { ok: false, reason: `role_resolution_failed:${roleId}:${versionFailure}` };
     const matches = [...state.forward.values()].filter((entry) => selectorMatches(selector, entry));
     if (matches.length === 0) return failed;
+
+    const rowAccess = typeof selector.row_access === "string" ? normalizeRef(selector.row_access) : "all";
+    let multiScoped: Extract<RowGrant, { kind: "scoped" }> | undefined;
+    if (rowAccess === "scoped") {
+      const compiled = await compileScopedRowGrant(
+        selector.row_policy,
+        matches.map((entry) => ({
+          connectionId: entry.connectionId,
+          sourceName: entry.sourceName,
+          schema: entry.schema
+        }))
+      );
+      if (!compiled.ok) return { ok: false, reason: `role_resolution_failed:${roleId}:${compiled.reason}` };
+      if (compiled.grant.kind !== "scoped") {
+        return { ok: false, reason: `role_resolution_failed:${roleId}:row_policy_invalid` };
+      }
+      multiScoped = compiled.grant;
+    }
+
     for (const entry of matches) {
       // U-CAP-04: a capability source on an undeclared connection is a compile failure.
       if (!declaredConnections.includes(entry.connectionId)) return failed;
+      const grant: RowGrant = multiScoped
+        ? scopedGrantForSource(multiScoped, entry.sourceName)
+        : { kind: "all" };
+      const key = sourceIndexKey(entry.connectionId, entry.physicalTable);
+      const existing = sourceGrants.get(key);
+      if (existing && grantDigestToken(existing) !== grantDigestToken(grant)) {
+        return { ok: false, reason: `role_resolution_failed:${roleId}:row_grant_conflict` };
+      }
+      sourceGrants.set(key, grant);
       sourceMatches.push({
         connectionId: entry.connectionId,
         schema: entry.schema,
@@ -914,6 +1003,7 @@ function compileRole(
       metaTools: meta,
       deniedTools: denied,
       sources: [...new Map(sourceMatches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()],
+      sourceGrants,
       declaredConnections,
       hasSelectors: selectors.length > 0
     }
@@ -946,6 +1036,9 @@ async function resolveEffectivePermissions(
   const user = config.users.find((u) => u.id === identity.userId);
   if (!user) return { ok: false, reason: "tool_forbidden" };
   if (user.enabled === false) return { ok: false, reason: "agent_disabled" };
+  if (Object.prototype.hasOwnProperty.call(user, "constraints")) {
+    return { ok: false, reason: "constraints_unsupported" };
+  }
 
   const state = options.sourceMap ?? await loadSourceMap({ fresh: options.freshSourceMap ?? true });
   if (state.compileError) {
@@ -989,13 +1082,13 @@ async function resolveEffectivePermissions(
 
   const compiledRoles: CompiledRole[] = [];
   for (const roleId of roleSet.roleIds) {
-    const compiled = compileRole(roleId, config.roles?.[roleId], policy, state);
+    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state);
     if (!compiled.ok) return { ok: false, reason: compiled.reason };
     compiledRoles.push(compiled.role);
   }
 
   const capabilities = dedupeCapabilities(
-    compiledRoles.flatMap((role) => buildCapabilities(role.dataPlaneTools, role.sources))
+    compiledRoles.flatMap((role) => buildCapabilities(role.dataPlaneTools, role.sources, role.sourceGrants))
   );
   const capabilityTools = new Set(capabilities.map((capability) => capability.tool));
   const metaTools = uniqueSorted(compiledRoles.flatMap((role) => role.metaTools));
@@ -1684,9 +1777,31 @@ function capabilityDenyReason(
   return `capability_forbidden:${toolName}:${display}`;
 }
 
+const ROW_POLICY_UNWRAPPED_TOOLS = new Set([
+  "lucy_freshness",
+  "lucy_read_source",
+  "entity_details",
+  "sl_validate"
+]);
+
+function resolveCapabilityForTable(
+  toolName: string,
+  table: string,
+  permissions: EffectivePermissions,
+  state: SourceMapState,
+  connectionId: string | undefined
+): EffectiveCapability | undefined {
+  const normalizedTable = normalizeRef(table);
+  const entry = lookupReverse(normalizedTable, state, connectionId);
+  const resolvedConnection = entry?.connectionId ?? normalizeRef(connectionId ?? "");
+  const key = sourceIndexKey(resolvedConnection, normalizedTable);
+  return permissions.capabilities.find((capability) =>
+    capability.tool === toolName && sourceIndexKey(capability.connectionId, capability.physicalTable) === key
+  );
+}
+
 /**
- * Spec 98 §4.6 — the single data gate. Every upstream data call must pass through here.
- * AC-P0 performs no row rewrite (rowGrant is always TRUE); the rewrite slot is AC-P1.
+ * Spec 98 §4.6 / Spec 99 §5 — the single data gate. Every upstream data call must pass through here.
  * Hot path prefers the committed EffectivePolicy snapshot (Spec 98 §8).
  */
 export async function authorizeAndRewrite(
@@ -1801,6 +1916,41 @@ export async function authorizeAndRewrite(
       for (const table of requested) {
         const reason = capabilityDenyReason(toolName, table, resolved.permissions, sourceMap, requestedConnection);
         if (reason) return { allowed: false, reason };
+      }
+
+      // Spec 99 §5 — FinalRows / forced_filters after capability allow.
+      const scopedSources: Array<{ sourceName: string; grant: Extract<RowGrant, { kind: "scoped" }> }> = [];
+      for (const table of requested) {
+        const capability = resolveCapabilityForTable(
+          toolName,
+          table,
+          resolved.permissions,
+          sourceMap,
+          requestedConnection
+        );
+        if (capability?.rowGrant.kind === "scoped") {
+          scopedSources.push({ sourceName: capability.sourceName, grant: capability.rowGrant });
+        }
+      }
+      if (scopedSources.length > 0) {
+        if (ROW_POLICY_UNWRAPPED_TOOLS.has(toolName)) {
+          return { allowed: false, reason: "row_policy_requires_wrapped_tool" };
+        }
+        if (toolName === "lucy_query") {
+          // BY-02…05 / BY-12…16 — shape fail-closed before proven gate.
+          const shapeDeny = validateProtectedLucyQueryArgs(args);
+          if (shapeDeny) return { allowed: false, reason: shapeDeny };
+          if (!isUpstreamForcedPredicateProven()) {
+            return { allowed: false, reason: "row_policy_upstream_unproven" };
+          }
+          if (scopedSources.length > 1) {
+            return { allowed: false, reason: "row_policy_query_shape_forbidden" };
+          }
+          const primary = scopedSources[0]!;
+          const forcedFilters = buildForcedFiltersPayload(primary.grant, primary.sourceName);
+          return forcedFilters ? { allowed: true, forcedFilters } : { allowed: true };
+        }
+        // lucy_explain_query: allow locally without forcedFilters injection.
       }
     }
   }

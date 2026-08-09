@@ -4,22 +4,35 @@
 |---|---|
 | 文档名称 | MCP Auth Proxy — 访问日志与多用户权限 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.4.1（Gate B P0：正文对齐 Spec 98；WP-S1 条件清理） |
-| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 补丁 2026-08-08；v1.4.1 2026-08-08 |
-| 撰写人 | Claude (Opus 架构设计)；v1.4 / v1.4.1 Cursor Agent |
+| 版本 | v1.5.0（AC-P1 契约补丁草稿：登记行授予裁决码；**不改 runtime 直至 Spec 99 Gate B**） |
+| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 补丁 2026-08-08；v1.4.1 2026-08-08；v1.5.0 2026-08-09 |
+| 撰写人 | Claude (Opus 架构设计)；v1.4 / v1.4.1 / v1.5 Cursor Agent |
 | 委托人 | 张星晨 / xingchen |
-| 基于材料 | project-lucy 代码库、KTX 上游源码（/Users/zhangxingchen/Projects/ktx）、Opus 架构分析；`docs/access-control/design-upgrade.md` v1.1.2 §9；`webui/docs/98-access-control-p0-runtime-spec.md`；Gate B Opus 审阅（P0-1…P0-4） |
-| 适用范围 | project-lucy webui/server/ 新增 MCP Auth Proxy，不修改 KTX 上游；v1.4.x 契约草稿**不改变现网 runtime 行为直至 Gate B 勾选 + WP-I\*** |
+| 基于材料 | project-lucy 代码库、KTX 上游源码；`design-upgrade.md` v1.1.2；Spec 98；Spec 99；`adr-upstream-forced-predicate.md` Gate A 已批准 |
+| 适用范围 | MCP Auth Proxy 契约；v1.5 **不改变现网 runtime** 直至 Spec 99 Gate B + WP-I\* |
 | 输出位置 | `webui/docs/07-mcp-auth-proxy-spec.md` |
-| 冲突裁决 | AC-P0 安全语义以 Spec 98 为准；与 `design-upgrade.md` 冲突 → design-upgrade |
+| 冲突裁决 | AC-P0 → Spec 98；AC-P1 行授予 → Spec 99；与 `design-upgrade.md` / Gate A ADR 冲突 → design-upgrade / ADR |
 
 ---
 
 ## 0. AC-P0 契约补丁（WP-S1）
 
 > **权威语义（禁止另立口径）：** Capability 代数、Tool Class 全表、Canonical Source Key、`permission_model_version`、编译 / 提交 / 降级、Deny 全表 → [`98-access-control-p0-runtime-spec.md`](98-access-control-p0-runtime-spec.md)。  
+> **AC-P1 行授予 / 强制谓词：** [`99-access-control-p1-row-policy-spec.md`](99-access-control-p1-row-policy-spec.md)；Gate A [`adr-upstream-forced-predicate.md`](../../docs/access-control/adr-upstream-forced-predicate.md)。  
 > **设计清单：** [`docs/access-control/design-upgrade.md`](../../docs/access-control/design-upgrade.md) §9。  
-> 本节只把 Proxy / 审计契约钉到 Spec 07；Admin UI / API 见 Spec 14 / 15 同波次补丁。
+> 本节只把 Proxy / 审计契约钉到 Spec 07；Admin UI / API 见 Spec 14 / 15。
+
+### 0.0 AC-P1 契约补丁（v1.5 / WO-60 WP-S2）
+
+| 项 | AC-P0（v1.4.x） | AC-P1（本补丁） | Spec 99 锚点 |
+|---|---|---|---|
+| 行级波次 | AC-P0 不交付 scoped；AC-P1 另批 | **交付后**允许 `row_access: scoped` + `row_policy`；强制谓词经 `lucy_query`→`forced_filters` | §3–§6 |
+| 未包装 / 非注入通道 | 仅 capability | 受保护源另加 `row_policy_requires_wrapped_tool`（O2；含 `lucy_read_source` / `lucy_freshness`） | §5.2 |
+| 未证明取数 | — | `row_policy_upstream_unproven`（proven 前取数 fail-closed） | §6.3 |
+| 禁止查询形态 | guardrail 子集 | 受保护源：`row_policy_query_shape_forbidden`（括号/自连接/LEFT JOIN/聚合·HAVING/子查询等） | §6.2 |
+| Agent Constraints | 未交付 | 配置出现 `constraints` → 拒绝（P1.5 前） | §4.3 |
+
+**本补丁不授权改 runtime**，直至 Spec 99 Gate B 批准。
 
 ### 0.1 相对 v1.3 的契约增量
 
@@ -29,7 +42,7 @@
 | DataPlane 拒绝主码 | `table_forbidden:<table>` | `capability_forbidden:<tool>:<sourceKey>`（实施后主码；可短暂双写兼容审计） | §10.2 |
 | 工具分级 | `defaults.deny_tools` + known tools | AbsoluteDeny / DataPlane / Meta；**未分类 = AbsoluteDeny**；`sl_*` 代码基线不可移除 | §4 |
 | 策略版本 | snapshot hash / source map mtime 叙述 | `policyVersion = sha256(accessConfigDigest \|\| sourceMapVersion \|\| toolClassificationVersion)` | §8.1 |
-| 行级表述 | Non-Goals「不实现行级权限」 | **波次边界**：AC-P0 不交付 scoped / Row Policy；AC-P1 另批（见 §3） | §2 |
+| 行级表述 | Non-Goals「不实现行级权限」 | **波次边界**：AC-P0 不交付 scoped；**AC-P1 行授予见 Spec 99 / §0.0**（本 Spec v1.5） | §2 / Spec 99 |
 | Agent 绑定 | `users[].role` 单 Role | `roles[]` Role Set；legacy `role: x` ≡ `roles: [x]`（Admin 见 Spec 14） | §3 |
 | 审计 | snapshot hash / decision_reason | + `policy_version`、capability digest、`toolClassificationVersion`、`policy_scope_expanded`、降级事件 | §10.3 |
 
@@ -51,8 +64,12 @@ capability_forbidden:<tool>:<sourceKey>
 | `tool_absolute_deny:<tool>` | 代码基线 AbsoluteDeny（含 `sl_query` / `sl_read_source` 等） |
 | `tool_unclassified:<tool>` | 未分类工具按 AbsoluteDeny |
 | `policy_degraded_deny` | 策略降级态导致的 DataPlane deny |
+| `row_policy_requires_wrapped_tool` | **AC-P1**：受保护源上非 `lucy_query` 取数通道（Spec 99 §9） |
+| `row_policy_upstream_unproven` | **AC-P1**：取数且 FinalRows≠TRUE 且上游契约未证明 |
+| `row_policy_query_shape_forbidden` | **AC-P1**：受保护源禁止的查询形态 |
+| `row_policy_field_unresolved` | **AC-P1**：`row_policy.predicates[].field` 无法绑定到当前源已知字段（Spec 99 §3.2；多为编译/保存失败，亦可出现在 dryRun） |
 
-`table_forbidden:<table>`：AC-P0 实施后**停止作为 DataPlane 主裁决码**；可短暂双写以兼容审计筛选；Admin 审计 UI 筛选项须补 `capability_forbidden`（术语与文案见术语标准 §4.8）。
+`table_forbidden:<table>`：AC-P0 实施后**停止作为 DataPlane 主裁决码**；可短暂双写以兼容审计筛选；Admin 审计 UI 筛选项须补 `capability_forbidden`（术语与文案见术语标准 §4.8）。AC-P1 实施后审计筛选项须另补上表 `row_policy_*` 码。
 
 ### 0.3 Tool Class 与 AbsoluteDeny（指针）
 
@@ -125,7 +142,7 @@ project-lucy 以 KTX HTTP MCP server（`localhost:7878/mcp`）暴露数据问答
 
 ## 3. Non-Goals
 
-- **波次边界（取代「永久不实现行级」表述）**：本 Spec 历史 Phase / Non-Goals 中「不实现行级权限」一律解读为 **AC-P0 不交付** `row_access: scoped` / Row Policy 运行时注入 / 强制谓词 AST；**AC-P1 另批**（须上游强制谓词契约，见 `design-upgrade.md` ADR-AC-05 与 Spec 98 §2）。列级权限 / 动态掩码另立 CLS，不在本 Proxy Spec 范围。**不得**将本条解读为产品永久承诺「永不做行级」。
+- **波次边界（取代「永久不实现行级」表述）**：历史「不实现行级权限」解读为 **AC-P0 不交付** scoped / Row Policy 注入。**AC-P1 行授予**以 [`99-access-control-p1-row-policy-spec.md`](99-access-control-p1-row-policy-spec.md) 与 Gate A ADR 为准（专用强制字段 `forced_filters`；未证明取数 fail-closed；O2）。列级 / 动态掩码另立 CLS。**不得**解读为「永不做行级」，也**不得**在 Spec 99 Gate B 前宣称行级 runtime 已交付。
 - 不实现 OIDC / OAuth，只用静态 Bearer token
 - `sql_execution` 工具默认禁用，不做 SQL AST 表名解析（后期可扩展）；AC-P0 起该工具属 AbsoluteDeny 代码基线（Spec 98 §4），YAML 无法解除
 - 不实现 Web UI 管理界面（Phase 3 可选）——**历史条目**：Admin UI 已由 Spec 14/15 交付；本条仅保留为 Phase 叙述上下文，不再约束产品范围
@@ -316,7 +333,8 @@ EffectiveMetaTools(agent)
 - 如果 role 授权任何表访问工具或 `tableSelectors`，则 `role.allow.connections` 必填且不能为空；缺失视为 `role_resolution_failed:<role>`。纯 wiki / 非数据工具 role 可以省略 `connections`。**AC-P0：** 含 selectors / DataPlane 时空 `allow.connections` → **编译失败**（与 Spec 98 §5.4 / Spec 15 对齐）。
 - v1.2 不实现 `tokens[].scopes`；如未来实现，只能引用已有 role 作为交集收窄，不能增加工具、连接或表权限。
 - 未识别 role、空 role、selector 解析失败、tool 不存在或 selector 匹配 0 个 source 时，配置 reload 必须 fail-closed；不得静默降级为全放行、空权限或历史 `users[].allow`。
-- **AC-P0 补充：** `permission_model_version`、v2 禁 `prefix` / 禁 `scoped`、编译输入含 source map → Spec 98 §7–§8；Admin 迁移与 preview → Spec 14 / 15。
+- **AC-P0 补充：** `permission_model_version`、v2 禁 `prefix`、编译输入含 source map → Spec 98 §7–§8；Admin → Spec 14 / 15。
+- **AC-P1 补充：** `scoped`+`row_policy`、`forced_filters`、行策略裁决码 → Spec 99；Gate B 前 runtime 行为仍按 AC-P0（拒绝 scoped）。
 
 KX role 示例中的工具归属（AC-P0）：
 
@@ -347,7 +365,7 @@ KX role 示例中的工具归属（AC-P0）：
 
 | Selector | 语义 | AC-P0 可用性 |
 |---|---|---|
-| `{ connection, schema, names }`（+ v2 必填 `row_access: all\|scoped`） | 精确列举 source/table 名 | **v1 / v2 首选**；AC-P0 仅允许 `row_access: all`（缺省 / 显式）；`scoped` → 配置拒绝 |
+| `{ connection, schema, names }`（+ v2 必填 `row_access: all\|scoped`） | 精确列举 source/table 名 | **v1 / v2 首选**；AC-P0 仅 `all`；**AC-P1** `scoped`+`row_policy` 见 Spec 99（Gate B 后） |
 | `{ schema, names }` | 任一授权 connection 下，schema 内精确列举 | 兼容单 connection；同上 |
 | `{ connection, schema, prefix }` | 指定 connection/schema 下，source/table 名以 prefix 开头 | **仅 `permission_model_version: 1`（legacy）**；**v2 禁用**（编译失败） |
 | `{ schema, prefix }` | 任一授权 connection 下，schema 内 prefix 匹配 | 同上，仅 v1 |

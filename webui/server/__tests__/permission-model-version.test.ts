@@ -55,7 +55,7 @@ const ACCESS_YAML = `roles:
       tools:
         - lucy_query
   v2_scoped:
-    description: scoped has no AC-P0 runtime
+    description: scoped without row_policy fails compilation
     permission_model_version: 2
     allow:
       connections:
@@ -66,6 +66,25 @@ const ACCESS_YAML = `roles:
           names:
             - fin_ledger
           row_access: scoped
+      tools:
+        - lucy_query
+  v2_scoped_ok:
+    description: scoped with legal row_policy compiles
+    permission_model_version: 2
+    allow:
+      connections:
+        - warehouse
+      tableSelectors:
+        - connection: warehouse
+          schema: fin
+          names:
+            - fin_ledger
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: East
       tools:
         - lucy_query
   v2_missing_row_access:
@@ -144,6 +163,11 @@ users:
     enabled: true
     role: v2_scoped
     tokens: []
+  - id: v2_scoped_ok_agent
+    name: V2 Scoped Ok Agent
+    enabled: true
+    role: v2_scoped_ok
+    tokens: []
   - id: v2_missing_row_access_agent
     name: V2 Missing Row Access Agent
     enabled: true
@@ -171,8 +195,20 @@ defaults:
 const FIN_SCHEMA_YAML = `tables:
   fin_ledger:
     table: fin.fin_ledger
+    columns:
+      - name: region
+      - name: amount
   fin_budget:
     table: fin.fin_budget
+    columns:
+      - name: region
+`;
+
+const FIN_LEDGER_OVERLAY_YAML = `columns:
+  - name: region
+  - name: amount
+measures:
+  - name: total_sales
 `;
 
 let projectRoot: string;
@@ -190,6 +226,7 @@ async function makeProject(accessYaml = ACCESS_YAML) {
   await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
   await writeFile(path.join(root, "webui", "config", "access.yaml"), accessYaml, "utf8");
   await writeFile(path.join(root, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA_YAML, "utf8");
+  await writeFile(path.join(root, "semantic-layer", "warehouse", "fin_ledger.yaml"), FIN_LEDGER_OVERLAY_YAML, "utf8");
   return root;
 }
 
@@ -267,18 +304,19 @@ describe("WP-I4 permission_model_version", () => {
     })).resolves.toEqual({ allowed: false, reason: "role_resolution_failed:v2_prefix:v2_prefix_forbidden" });
   });
 
-  it("U-VER-03: row_access scoped fails compilation in AC-P0, and v2 requires the field", async () => {
+  it("U-VER-03: scoped without row_policy fails; scoped+policy resolves; v2 requires the field", async () => {
     const { authorizeAndRewrite, effectivePermissions } = await loadAcl();
 
-    await expect(effectivePermissions(identity("v2_scoped_agent"))).resolves.toEqual({
-      ok: false,
-      reason: "role_resolution_failed:v2_scoped:row_access_scoped_forbidden"
-    });
-    // AC-P0 has no row policy runtime, so `scoped` is illegal on v1 Roles too.
-    await expect(effectivePermissions(identity("v1_scoped_agent"))).resolves.toEqual({
-      ok: false,
-      reason: "role_resolution_failed:v1_scoped:row_access_scoped_forbidden"
-    });
+    const v2Scoped = await effectivePermissions(identity("v2_scoped_agent"));
+    expect(v2Scoped.ok).toBe(false);
+    if (!v2Scoped.ok) expect(v2Scoped.reason).toMatch(/^role_resolution_failed:v2_scoped:row_policy_/);
+
+    const v1Scoped = await effectivePermissions(identity("v1_scoped_agent"));
+    expect(v1Scoped.ok).toBe(false);
+    if (!v1Scoped.ok) {
+      expect(v1Scoped.reason).toBe("role_resolution_failed:v1_scoped:v1_scoped_forbidden");
+    }
+
     await expect(effectivePermissions(identity("v2_missing_row_access_agent"))).resolves.toEqual({
       ok: false,
       reason: "role_resolution_failed:v2_missing_row_access:v2_row_access_required"
@@ -288,10 +326,22 @@ describe("WP-I4 permission_model_version", () => {
       reason: "role_resolution_failed:bad_version:invalid_permission_model_version"
     });
 
+    const scopedOk = await effectivePermissions(identity("v2_scoped_ok_agent"));
+    expect(scopedOk.ok).toBe(true);
+    if (scopedOk.ok) {
+      expect(scopedOk.permissions.capabilities).toHaveLength(1);
+      expect(scopedOk.permissions.capabilities[0]?.rowGrant.kind).toBe("scoped");
+    }
+    // Proven flag defaults false → lucy_query still denies until Gate C.
+    await expect(authorizeAndRewrite(identity("v2_scoped_ok_agent"), "lucy_query", {
+      connectionId: "warehouse",
+      measures: ["fin_ledger.amount"]
+    })).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+
     await expect(authorizeAndRewrite(identity("v2_scoped_agent"), "lucy_query", {
       connectionId: "warehouse",
       measures: ["fin_ledger.amount"]
-    })).resolves.toEqual({ allowed: false, reason: "role_resolution_failed:v2_scoped:row_access_scoped_forbidden" });
+    })).resolves.toMatchObject({ allowed: false, reason: expect.stringMatching(/row_policy_/) });
   });
 
   it("U-VER-04: v2 with row_access all and explicit names resolves to the named capability", async () => {
@@ -312,7 +362,7 @@ describe("WP-I4 permission_model_version", () => {
         schema: "fin",
         sourceName: "fin_ledger",
         physicalTable: "fin.fin_ledger",
-        rowGrant: true
+        rowGrant: { kind: "all" }
       }
     ]);
 
@@ -433,7 +483,41 @@ describe("WP-I4 Admin migration on save", () => {
     await app.close();
   });
 
-  it("rejects a save that asks for row_access scoped", async () => {
+  it("rejects a save that asks for v1 + scoped / row_policy", async () => {
+    const app = await buildApp();
+
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: true,
+        roleId: "v1_scoped_role",
+        role: {
+          permission_model_version: 1,
+          allow: {
+            connections: ["warehouse"],
+            tableSelectors: [
+              {
+                connection: "warehouse",
+                schema: "fin",
+                names: ["fin_ledger"],
+                row_access: "scoped",
+                row_policy: {
+                  predicates: [{ field: "region", op: "eq", value: "East" }]
+                }
+              }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(400);
+
+    expect(res.body.error).toMatchObject({ code: "INVALID_ROLE" });
+    expect(res.body.error.message).toMatch(/v1_scoped_forbidden|forbids scoped/);
+    await app.close();
+  });
+
+  it("rejects a save that asks for row_access scoped without row_policy", async () => {
     const app = await buildApp();
     const before = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
 
@@ -457,7 +541,7 @@ describe("WP-I4 Admin migration on save", () => {
       .expect(400);
 
     expect(res.body.error).toMatchObject({ code: "INVALID_ROLE" });
-    expect(res.body.error.message).toMatch(/scoped/);
+    expect(res.body.error.message).toMatch(/row_policy|scoped/);
     const after = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
     expect(after).toBe(before);
     await app.close();

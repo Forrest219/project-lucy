@@ -246,8 +246,10 @@ function accessRolePolicy() {
   const topLevelKeys = new Set(["roles", "users", "defaults"]);
   const roleKeys = new Set(["description", "permission_model_version", "allow"]);
   const roleAllowKeys = new Set(["connections", "tableSelectors", "tools"]);
-  const selectorKeys = new Set(["connection", "schema", "names", "prefix", "row_access"]);
-  const userKeys = new Set(["id", "name", "note", "enabled", "role", "tokens", "allow"]);
+  // row_policy listed so "all"+row_policy can be rejected explicitly; scoped+row_policy
+  // remains blocked by the scoped Gate-B gate below until WP-I1.
+  const selectorKeys = new Set(["connection", "schema", "names", "prefix", "row_access", "row_policy"]);
+  const userKeys = new Set(["id", "name", "note", "enabled", "role", "roles", "tokens", "allow"]);
   const userAllowKeys = new Set(["tables", "tools", "connections"]);
   const tokenKeys = new Set(["hash", "label", "created", "expires_at"]);
   const defaultsKeys = new Set([
@@ -262,6 +264,13 @@ function accessRolePolicy() {
   checkAllowedKeys(check, config.defaults, defaultsKeys, "defaults");
 
   for (const [roleId, role] of Object.entries(roles)) {
+    if (role && typeof role === "object" && Object.prototype.hasOwnProperty.call(role, "constraints")) {
+      add(
+        check,
+        "fail",
+        `webui/config/access.yaml: role ${roleId} contains 'constraints' (unsupported until AC-P1.5; Spec 99)`
+      );
+    }
     checkAllowedKeys(check, role, roleKeys, `role ${roleId}`);
     const allow = role.allow ?? {};
     checkAllowedKeys(check, allow, roleAllowKeys, `role ${roleId}.allow`);
@@ -289,9 +298,48 @@ function accessRolePolicy() {
       if (rowAccess !== undefined && rowAccess !== "all" && rowAccess !== "scoped") {
         add(check, "fail", `webui/config/access.yaml: role ${roleId} selector row_access must be 'all' or 'scoped'`);
       }
-      // AC-P0 Non-Goal: `scoped` has no runtime row policy in this wave.
+      // Spec 99 §7 — generation 1 has no scoped / row_policy.
+      if (
+        (modelVersion === 1 || modelVersion === undefined) &&
+        (rowAccess === "scoped" || selector.row_policy !== undefined)
+      ) {
+        add(
+          check,
+          "fail",
+          `webui/config/access.yaml: role ${roleId} selector uses scoped/row_policy, which permission_model_version 1 forbids`
+        );
+      }
+      // Spec 99 §11 / Gate B — scoped requires structural row_policy (op ∈ {eq,in}); all+row_policy fails.
       if (rowAccess === "scoped") {
-        add(check, "fail", `webui/config/access.yaml: role ${roleId} selector row_access 'scoped' is not supported in AC-P0`);
+        const policy = selector.row_policy;
+        if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+          add(check, "fail", `webui/config/access.yaml: role ${roleId} scoped selector requires row_policy`);
+        } else {
+          const predicates = policy.predicates;
+          if (!Array.isArray(predicates) || predicates.length === 0) {
+            add(check, "fail", `webui/config/access.yaml: role ${roleId} row_policy.predicates must be a non-empty array`);
+          } else {
+            for (const pred of predicates) {
+              if (!pred || typeof pred !== "object" || Array.isArray(pred)) {
+                add(check, "fail", `webui/config/access.yaml: role ${roleId} row_policy predicate must be an object`);
+                continue;
+              }
+              if (typeof pred.field !== "string" || !pred.field.trim()) {
+                add(check, "fail", `webui/config/access.yaml: role ${roleId} row_policy predicate field is required`);
+              }
+              if (pred.op !== "eq" && pred.op !== "in") {
+                add(check, "fail", `webui/config/access.yaml: role ${roleId} row_policy op must be eq|in`);
+              }
+            }
+          }
+        }
+      }
+      if (selector.row_policy !== undefined && rowAccess !== "scoped") {
+        add(
+          check,
+          "fail",
+          `webui/config/access.yaml: role ${roleId} selector row_policy is only valid with row_access 'scoped'`
+        );
       }
       if (modelVersion === 2 && selector.prefix !== undefined) {
         add(check, "fail", `webui/config/access.yaml: role ${roleId} selector uses prefix, which v2 forbids`);
@@ -305,6 +353,13 @@ function accessRolePolicy() {
   }
 
   for (const user of users) {
+    if (user && typeof user === "object" && Object.prototype.hasOwnProperty.call(user, "constraints")) {
+      add(
+        check,
+        "fail",
+        `webui/config/access.yaml: user ${user.id ?? "<missing id>"} contains 'constraints' (unsupported until AC-P1.5; Spec 99)`
+      );
+    }
     checkAllowedKeys(check, user, userKeys, `user ${user.id ?? "<missing id>"}`);
     checkAllowedKeys(check, user.allow, userAllowKeys, `user ${user.id ?? "<missing id>"}.allow`);
     for (const token of Array.isArray(user.tokens) ? user.tokens : []) {

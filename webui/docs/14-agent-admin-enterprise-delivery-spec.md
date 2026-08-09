@@ -4,16 +4,25 @@
 |---|---|
 | 文档名称 | Agent Admin Enterprise Delivery Spec |
 | 文档类型 | Product / UX Spec |
-| 版本 | v0.2（AC-P0 契约补丁草稿 / WP-S1；Gate B 前） |
-| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08 |
-| 适用范围 | Lucy WebUI 访问治理模块：`/admin/agents`、新建 Agent 弹窗、`/admin/agents/:userId`、Token 交付流；v0.2 对齐 AC-P0 Admin 契约 |
-| 事实源 | `webui/config/access.yaml`、Lucy MCP Proxy audit sqlite、Admin API；AC-P0 语义权威 [`98-access-control-p0-runtime-spec.md`](98-access-control-p0-runtime-spec.md) |
-| 关联文档 | `docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md` §9、`webui/docs/07-mcp-auth-proxy-spec.md` v1.4、`webui/docs/15-role-admin-spec.md`、`docs/agent-integration-guide.md`、`docs/admin-guide.md`、`docs/project-overview.md` |
-| 冲突裁决 | AC-P0 安全 / 合成语义以 Spec 98 为准；与 `design-upgrade.md` 冲突 → design-upgrade |
+| 版本 | v0.3（AC-P1 契约补丁草稿 / WO-60 WP-S2；Spec 99 Gate B 前不改 runtime） |
+| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08；v0.3 2026-08-09 |
+| 适用范围 | Lucy WebUI 访问治理模块：`/admin/agents`、新建 Agent 弹窗、`/admin/agents/:userId`、Token 交付流 |
+| 事实源 | `webui/config/access.yaml`、Admin API；AC-P0 → Spec 98；AC-P1 行授予 → Spec 99 |
+| 关联文档 | Spec 07 v1.5、Spec 15、`design-upgrade.md`、Gate A ADR |
+| 冲突裁决 | AC-P0 → Spec 98；AC-P1 → Spec 99；与 design-upgrade / ADR 冲突 → design-upgrade / ADR |
 
 ## 0. AC-P0 契约补丁（WP-S1）
 
 > **权威语义：** Capability 代数、版本迁移、编译提交 → Spec 98。本文只修订 Agent Admin 的 **API / UX / 保存回执** 契约，禁止另写第二套权限摘要口径。
+
+### 0.0 AC-P1 增量（v0.3 / Spec 99）
+
+| 项 | 要求 | Spec 99 |
+|---|---|---|
+| Capability Preview | 元组须展示 **rowGrant**（`all` / Row Policy 摘要）；多 Role OR 后的 FinalRows 可读 | §8 |
+| 禁止虚假行级成功 | **不得**在未注入 / `upstream_forced_predicate_proven≠true` 时展示「行级取数已生效」 | Terminology / §8 |
+| `constraints` | 本波 UI 不提供；YAML 出现 → 保存/lint 失败（AC-P1.5 前） | §4.3 |
+| 行级编辑 | Agent Admin **不**编辑 `row_policy`（在 Role Admin）；仅消费 preview | Spec 15 |
 
 ### 0.1 相对 v0.1 的增量
 
@@ -23,7 +32,7 @@
 | 权限预览 | Effective Tree：表树 + 旁列 Allowed tools（双并集观感） | **Data Capability Preview**：工具 × 规范源键 × 行授予列表；**禁止**只展示 tools∪ + sources∪ 两列作为唯一摘要 | §5；术语 §4.8 |
 | 保存成功 | dryRun → 写盘成功即成功 | 写盘成功且 **`runtimeAck: true`** 且返回 `policyVersion` 才显示成功；收窄失败盘与 runtime 均保持写前 | §8.2 |
 | 版本 / prefix | 未涉及 | 编辑导致引用 Role 升 v2 / `prefix` 展开时，dryRun diff 必须可见（展开细节以 Role Admin Spec 15 为准） | §7 |
-| 行级 Out of Scope | 「列级、行级权限」 | 波次边界：AC-P0 不交付 scoped；AC-P1 另批（与 Spec 07 §3 / Spec 98 §2 同口径） | §2 |
+| 行级 Out of Scope | 「列级、行级权限」 | AC-P0 不交付 scoped；**AC-P1 见 §0.0 / Spec 99**（Agent 侧只 preview，不编 row_policy） | Spec 99 |
 
 ### 0.2 `roles[]` 契约
 
@@ -113,7 +122,7 @@ type AgentRoleBinding =
 
 - 新增登录或多管理员 RBAC。
 - 改造 Lucy MCP Proxy runtime ACL 裁决逻辑的**实现**（语义以 Spec 98 为准；本 Spec 只约束 Admin 契约与展示；Gate B 前不改代码）。
-- **波次边界：** AC-P0 不交付列级权限、`row_access: scoped` / Row Policy；AC-P1 另批。不得将本条写成「产品永不做行级」。
+- **波次边界：** AC-P0 不交付列级权限 / scoped 编辑。**AC-P1** Row Policy 在 Role Admin（Spec 15 / Spec 99）；Agent Admin 仅 capability+rowGrant preview，禁止虚假「行级取数已生效」。Agent Constraints（`constraints`）属 AC-P1.5。不得写成「永不做行级」。
 - 保存或重新展示 token 明文。
 - 完整 revoked token history。若需要展示已撤销 token 历史，需另开后端聚合设计。
 

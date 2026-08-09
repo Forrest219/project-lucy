@@ -33,12 +33,21 @@ export interface YamlUser {
 /** Spec 98 §7 — Role generation; Admin writes always persist `2`. */
 export type YamlPermissionModelVersion = 1 | 2;
 
-/** Spec 98 §7 — AC-P0 only accepts `all`; `scoped` is AC-P1. */
+/** Spec 98 §7 / Spec 99 — `all` or `scoped` (+ row_policy). */
 export type YamlRowAccess = "all" | "scoped";
 
+export interface YamlRowPolicy {
+  predicates: Array<{
+    field: string;
+    op: "eq" | "in";
+    value?: string | number | boolean;
+    values?: Array<string | number | boolean>;
+  }>;
+}
+
 export type YamlTableSelector =
-  | { connection?: string; schema: string; names: string[]; row_access?: YamlRowAccess }
-  | { connection?: string; schema: string; prefix: string; row_access?: YamlRowAccess };
+  | { connection?: string; schema: string; names: string[]; row_access?: YamlRowAccess; row_policy?: YamlRowPolicy }
+  | { connection?: string; schema: string; prefix: string; row_access?: YamlRowAccess; row_policy?: YamlRowPolicy };
 
 export interface YamlRole {
   description?: string;

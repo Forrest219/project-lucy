@@ -15,6 +15,7 @@ import type {
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { TagInput } from "../../components/TagInput";
+import { formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 
 type Tab = "identity" | "permissions" | "effective" | "usage" | "diff";
 
@@ -1153,7 +1154,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                     <ul className="grid gap-1 font-mono text-xs">
                       {detail.effectivePermissions!.capabilities!.map((cap) => (
                         <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
-                          {cap.tool} × {cap.sourceKey} · rowGrant=TRUE
+                          {cap.tool} × {cap.sourceKey} · rowGrant={formatRowGrantPreviewLabel(cap.rowGrant)}
                         </li>
                       ))}
                     </ul>

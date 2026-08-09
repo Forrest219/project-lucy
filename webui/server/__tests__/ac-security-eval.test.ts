@@ -48,6 +48,9 @@ defaults:
 const SCHEMA_A = `tables:
   fin_ledger:
     table: fin.fin_ledger
+    columns:
+      - name: region
+      - name: amount
   pub_orders:
     table: pub.pub_orders
 `;
@@ -197,5 +200,73 @@ describe("AC-SEC-SCOPE", () => {
       allowed: false,
       reason: expect.stringMatching(/capability_forbidden|table_forbidden/)
     });
+  });
+});
+
+/**
+ * AC-SEC-ROW / BYPASS (ADR §5.1 BY-01…19).
+ * Full matrix lives in row-policy-ac-p1.test.ts ("AC-SEC-ROW / BYPASS").
+ * Smoke here: unproven deny + AbsoluteDeny sl_query still holds with a scoped Role present.
+ */
+describe("AC-SEC-ROW", () => {
+  it("smoke: unproven deny + AbsoluteDeny sl_query with scoped role", async () => {
+    const previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+    delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+    try {
+      await writeFile(
+        path.join(projectRoot, "webui", "config", "access.yaml"),
+        `roles:
+  scoped_finance:
+    permission_model_version: 2
+    allow:
+      connections: [warehouse]
+      tableSelectors:
+        - connection: warehouse
+          schema: fin
+          names: [fin_ledger]
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: East
+      tools: [lucy_query, lucy_read_source, wiki_search]
+users:
+  - id: scoped_smoke
+    enabled: true
+    role: scoped_finance
+    tokens: []
+defaults:
+  deny_tools: []
+`,
+        "utf8"
+      );
+      await writeFile(
+        path.join(projectRoot, "semantic-layer", "warehouse", "fin_ledger.yaml"),
+        `columns:
+  - name: region
+measures:
+  - name: amount
+`,
+        "utf8"
+      );
+
+      const { authorizeAndRewrite, commitEffectivePolicy, resetEffectivePolicyForTests } = await loadAcl();
+      resetEffectivePolicyForTests();
+      await commitEffectivePolicy();
+
+      await expect(authorizeAndRewrite(identity("scoped_smoke"), "lucy_query", {
+        connectionId: "warehouse",
+        measures: ["fin_ledger.amount"]
+      })).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+
+      await expect(authorizeAndRewrite(identity("scoped_smoke"), "sl_query", {
+        connectionId: "warehouse",
+        measures: ["fin_ledger.amount"]
+      })).resolves.toEqual({ allowed: false, reason: "tool_absolute_deny:sl_query" });
+    } finally {
+      if (previousProven === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
+      else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = previousProven;
+    }
   });
 });

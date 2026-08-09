@@ -1,0 +1,4 @@
+services:
+  lucy:
+    environment:
+      LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN: "false"

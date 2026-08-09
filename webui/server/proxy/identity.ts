@@ -20,7 +20,7 @@ interface UserAllow {
 /** Spec 98 §7 — Role generation: 1 = legacy, 2 = explicit row access. */
 export type PermissionModelVersion = 1 | 2;
 
-/** Spec 98 §7 — AC-P0 only compiles `all`; `scoped` is AC-P1. */
+/** Spec 98 §7 / Spec 99 — `all` or `scoped` (+ row_policy). */
 export type RowAccess = "all" | "scoped";
 
 interface TableSelector {
@@ -29,6 +29,7 @@ interface TableSelector {
   prefix?: string;
   names?: string[];
   row_access?: RowAccess;
+  row_policy?: unknown;
 }
 
 interface RoleAllow {

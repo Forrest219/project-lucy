@@ -402,7 +402,10 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
       sourceName: capability.sourceName,
       physicalTable: capability.physicalTable,
       sourceKey: `${capability.connectionId}|${capability.schema}|${capability.sourceName}|${capability.physicalTable}`,
-      rowGrant: true as const
+      // Spec 99 §8 — expose FinalRows-facing grant; never fake "all" when scoped
+      rowGrant: capability.rowGrant?.kind === "scoped"
+        ? { kind: "scoped" as const, digest: capability.rowGrant.digest }
+        : ("all" as const)
     }))
   };
 }

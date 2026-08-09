@@ -87,7 +87,8 @@
 | [95-agent-admin-naming-filters-and-save-flow-spec.md](95-agent-admin-naming-filters-and-save-flow-spec.md) | `/admin/agents` 显示名/用户 ID 统一、筛选 label、低风险一步保存、角色变更 diff 确认 | 产品 / UX / Frontend |
 | [96-admin-config-audit-table-filter-polish-spec.md](96-admin-config-audit-table-filter-polish-spec.md) | `/admin/config-audit` 固定 20 行、`pl-data-grid`、中文业务字段、时间筛选与快捷窗口 | 产品 / UX / Frontend / API |
 | [97-admin-config-audit-header-export-parity-spec.md](97-admin-config-audit-header-export-parity-spec.md) | `/admin/config-audit` 删页头「访问日志」；CSV 与主表 7 列中文对齐；文件名精确到秒 | 产品 / UX / Frontend / API |
-| [98-access-control-p0-runtime-spec.md](98-access-control-p0-runtime-spec.md) | AC-P0 Runtime：Capability / Tool Class / Canonical Key / `permission_model_version` / 编译提交；Gate B 评审稿；契约补丁见 Spec 07/14/15 | 安全 / 后端 / 产品 |
+| [98-access-control-p0-runtime-spec.md](98-access-control-p0-runtime-spec.md) | AC-P0 Runtime：Capability / Tool Class / Canonical Key / `permission_model_version` / 编译提交；已交付基线 | 安全 / 后端 / 产品 |
+| [99-access-control-p1-row-policy-spec.md](99-access-control-p1-row-policy-spec.md) | AC-P1 Runtime：`scoped` / `row_policy` / FinalRows / `forced_filters`；Gate B 评审稿；**批准前不改 runtime** | 安全 / 后端 / 产品 |
 
 ## 与原 README 的关键校正
 

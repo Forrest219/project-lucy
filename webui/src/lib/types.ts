@@ -518,6 +518,13 @@ export type RoleDetail = Role & {
   effectivePermissions?: EffectivePermissionsPreview;
 };
 
+/** Spec 99 §8 — TRUE / all, or scoped digest (Role API may also include predicates). */
+export type EffectiveRowGrantPreview =
+  | true
+  | "all"
+  | { kind: "all" }
+  | { kind: "scoped"; digest: string; predicates?: unknown; orArms?: unknown };
+
 export type EffectiveCapabilityPreview = {
   tool: string;
   connectionId: string;
@@ -525,7 +532,7 @@ export type EffectiveCapabilityPreview = {
   sourceName: string;
   physicalTable: string;
   sourceKey: string;
-  rowGrant: true;
+  rowGrant: EffectiveRowGrantPreview;
 };
 
 export type EffectivePermissionsPreview = {

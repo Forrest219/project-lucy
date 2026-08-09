@@ -33,7 +33,7 @@
 | WP-I6 审计 / banner / runtimeAck UI | **DONE** | audit 字段；policy-runtime API；Admin banner；Capability Preview；Toast 读 runtimeAck；Codex P1/P2 已修（见 `20260809-i6-i7-codex-review.md` v1.1） |
 | WP-I7 Security Eval + UAT + Runbook | **DONE** | AC-SEC-* vitest；`uat-ac-p0.md`；`runbook-policy-degrade.md`；AC-SEC-KEY 断言已收紧 |
 | Gate C：AC-P0 实现 + 门禁绿 | **DONE（2026-08-09）** | 工程证据 `20260809-gate-c-sc-evidence.md`；集成 UAT `inbox/20260809-gate-c-uat/`；`uat-ac-p0.md` / Runbook 已由 xingchen 批准勾选；tsc 书面豁免保留 |
-| AC-P1 | **冻结** | 本 WO 明确 Non-Goal |
+| AC-P1 | **另立 WO-60** | 见 [`wo-202608-60-access-control-p1.md`](wo-202608-60-access-control-p1.md)；本 WO Non-Goal |
 
 **冲突裁决：** 实现与 Spec 冲突 → Spec；Spec 与 `design-upgrade.md` 冲突 → **design-upgrade**，并回修 Spec。
 
@@ -264,6 +264,6 @@ npm run lint:spec
 
 1. 勾选 Gate A → 执行 WP-S0/S1。  
 2. Spec 评审通过并勾选 Gate B → 按 §3/§5 实施 WP-I\*。  
-3. Gate C 全绿 → 更新域 README 状态；AC-P1 另立 WO。  
+3. Gate C 全绿 → 更新域 README 状态；**AC-P1 → [`WO-60`](wo-202608-60-access-control-p1.md)**（Row Policy；不含 P1.5）。  
 
 — 完

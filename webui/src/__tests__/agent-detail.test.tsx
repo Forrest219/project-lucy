@@ -329,6 +329,58 @@ describe("AgentDetail", () => {
     expect(tree).toHaveTextContent("lucy_query");
   });
 
+  it("Data Capability Preview shows scoped digest from API rowGrant", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/agents/zhangsan") {
+        return new Response(
+          JSON.stringify(
+            makeAgentDetailResponse({
+              effectivePermissions: {
+                roleIds: ["analyst"],
+                snapshotHash: "snap-1234",
+                sourceMapVersion: "v1",
+                tools: ["lucy_query"],
+                connections: ["mysql-aliyun"],
+                sources: [
+                  {
+                    connectionId: "mysql-aliyun",
+                    schema: "dataforai",
+                    sourceName: "superstore_orders",
+                    table: "dataforai.superstore_orders"
+                  }
+                ],
+                legacyAllow: false,
+                capabilityDigest: "ae0a470dc0ca9931",
+                capabilities: [
+                  {
+                    tool: "lucy_query",
+                    connectionId: "mysql-aliyun",
+                    schema: "dataforai",
+                    sourceName: "superstore_orders",
+                    physicalTable: "dataforai.superstore_orders",
+                    sourceKey: "mysql-aliyun|dataforai|superstore_orders|dataforai.superstore_orders",
+                    rowGrant: { kind: "scoped", digest: "883501db707ba111" }
+                  }
+                ]
+              }
+            })
+          )
+        );
+      }
+      if (url === "/api/admin/roles") {
+        return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderAgentDetail();
+    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    const preview = await screen.findByTestId("capability-preview");
+    expect(preview).toHaveTextContent("rowGrant=scoped:883501db707ba111");
+    expect(preview.textContent ?? "").not.toMatch(/rowGrant=TRUE/);
+  });
+
   it("Effective Permissions tree shows legacy wildcard warning when legacyAllow", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
