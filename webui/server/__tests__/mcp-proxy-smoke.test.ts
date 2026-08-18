@@ -436,10 +436,8 @@ describe("MCP proxy smoke", () => {
         body: JSON.stringify({ jsonrpc: "2.0", id: "tools-list", method: "tools/list" })
       });
       expect(listRes.status).toBe(200);
-      const listText = await listRes.text();
-      const listData = listText.split(/\r?\n/).find((line) => line.startsWith("data: "));
-      expect(listData).toBeTruthy();
-      const listBody = JSON.parse(listData!.slice("data: ".length)) as { jsonrpc: string; id: string; result: { tools: Array<{ name: string; inputSchema?: Record<string, unknown> }> } };
+      expect(listRes.headers.get("content-type") ?? "").toContain("application/json");
+      const listBody = await listRes.json() as { jsonrpc: string; id: string; result: { tools: Array<{ name: string; inputSchema?: Record<string, unknown> }> } };
       expect(listBody.jsonrpc).toBe("2.0");
       expect(listBody.id).toBe("tools-list");
       expect(listBody.result.tools.map((tool) => tool.name)).toContain("lucy_catalog");
@@ -566,10 +564,8 @@ describe("MCP proxy smoke", () => {
         body: JSON.stringify({ jsonrpc: "2.0", id: "tools-list-exact-r1", method: "tools/list" })
       });
       expect(listRes.status).toBe(200);
-      const listText = await listRes.text();
-      const listData = listText.split(/\r?\n/).find((line) => line.startsWith("data: "));
-      expect(listData).toBeTruthy();
-      const listBody = JSON.parse(listData!.slice("data: ".length)) as { result: { tools: Array<{ name: string }> } };
+      expect(listRes.headers.get("content-type") ?? "").toContain("application/json");
+      const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
       const names = listBody.result.tools.map((tool) => tool.name);
       expect(names).toEqual([
         "lucy_catalog",
@@ -707,6 +703,90 @@ describe("MCP proxy smoke", () => {
       const queryAudit = await waitForAuditRow("lucy-query");
       expect(queryAudit.tool).toBe("lucy_query");
       expect(JSON.parse(String(queryAudit.tables))).toEqual(["dataforai.superstore_orders"]);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("normalizes upstream SSE lucy_query/lucy_read_source responses to application/json", async () => {
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as { id: string };
+      const payload = {
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          content: [{ type: "text", text: JSON.stringify({ headers: ["dau"], rows: [["2902"]], totalRows: 1 }) }],
+          structuredContent: { headers: ["dau"], rows: [["2902"]], totalRows: 1 }
+        }
+      };
+      const sseBody = `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
+      // KTX commonly returns a finite SSE frame with Content-Length; proxy must
+      // not re-emit that shape to Streamable HTTP clients after buffering.
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+        "content-length": Buffer.byteLength(sseBody)
+      });
+      res.end(sseBody);
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      for (const [id, name, args] of [
+        ["sse-lucy-query", "lucy_query", {
+          connectionId: "mysql-aliyun",
+          measures: ["superstore_orders.sales"],
+          limit: 5
+        }],
+        ["sse-lucy-read", "lucy_read_source", {
+          connectionId: "mysql-aliyun",
+          sourceName: "superstore_orders"
+        }]
+      ] as const) {
+        const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+            authorization: `Bearer ${TOKEN}`
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            method: "tools/call",
+            params: { name, arguments: args }
+          })
+        });
+        expect(res.status).toBe(200);
+        expect(res.headers.get("content-type") ?? "").toContain("application/json");
+        expect(res.headers.get("content-type") ?? "").not.toContain("text/event-stream");
+        expect(res.headers.get("cache-control") ?? "").toContain("no-store");
+        const text = await res.text();
+        expect(text.startsWith("event:")).toBe(false);
+        const parsed = JSON.parse(text) as {
+          id: string;
+          result: {
+            content: Array<{ text: string }>;
+            structuredContent?: { rows?: unknown[] };
+            _meta?: { lucy?: { tool?: string } };
+          };
+        };
+        expect(parsed.id).toBe(id);
+        expect(parsed.result.content[0]?.text ?? "").toContain("2902");
+        expect(parsed.result.structuredContent?.rows?.[0]).toEqual(["2902"]);
+        expect(parsed.result._meta?.lucy?.tool).toBe(name);
+      }
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));

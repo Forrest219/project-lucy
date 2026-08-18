@@ -1163,6 +1163,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
       "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
       "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.",
+      `- Visible Scope below is captured at MCP initialize; call ${catalogTool} before routing if sources may have changed since this session started.`,
       "",
       "## Visible Scope",
       "",
@@ -1184,14 +1185,35 @@ function instructionsInjectionEnabled(): boolean {
   return process.env.LUCY_ENABLE_INSTRUCTIONS_INJECTION !== "false";
 }
 
-function encodeSseMessage(payload: unknown): string {
-  return `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
-}
-
 function decodeSseMessage(body: string): unknown | undefined {
   const line = body.split(/\r?\n/).find((item) => item.startsWith("data: "));
   if (!line) return undefined;
   return JSON.parse(line.slice("data: ".length));
+}
+
+/** Headers for a fully-buffered application/json MCP response.
+ * Do not inherit KTX SSE framing headers — Streamable HTTP clients may hang
+ * on finite SSE bodies. Keep mcp-session-id / protocol version for session affinity. */
+function bufferedJsonHeaders(upstream: IncomingMessage): Record<string, string | string[] | number> {
+  const headers: Record<string, string | string[] | number> = {
+    "content-type": "application/json",
+    "cache-control": "no-store"
+  };
+  const sessionId = upstream.headers["mcp-session-id"];
+  const protocolVersion = upstream.headers["mcp-protocol-version"];
+  if (sessionId !== undefined) headers["mcp-session-id"] = sessionId;
+  if (protocolVersion !== undefined) headers["mcp-protocol-version"] = protocolVersion;
+  return headers;
+}
+
+function passthroughBodyHeaders(upstream: IncomingMessage): Record<string, string | string[] | number> {
+  const headers: Record<string, string | string[] | number> = {};
+  for (const [k, v] of Object.entries(upstream.headers)) {
+    const lower = k.toLowerCase();
+    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
+  }
+  headers["content-type"] = upstream.headers["content-type"] ?? "application/json";
+  return headers;
 }
 
 function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
@@ -1518,13 +1540,18 @@ async function writeLucySemanticResponse(
   const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
   let body = originalBody;
   let metaFailed: string | undefined;
+  // Buffered tools/call responses are always normalized to application/json when
+  // rewrite succeeds. Re-emitting a finite SSE frame with Content-Length +
+  // keep-alive causes some Streamable HTTP clients (notably Cursor) to wait for
+  // stream end and surface MCP -32001 Request timed out even though KTX finished.
   let forceJson = false;
 
   try {
     if (contentType.includes("text/event-stream")) {
       const payload = decodeSseMessage(originalBody);
       if (!payload) throw new Error("missing SSE data frame");
-      body = encodeSseMessage(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
+      body = JSON.stringify(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
+      forceJson = true;
     } else if (contentType.includes("application/json")) {
       body = JSON.stringify(withLucyResultMeta(JSON.parse(originalBody), requestId, toolName, toolArgs, sourceRefs));
       forceJson = true;
@@ -1536,12 +1563,7 @@ async function writeLucySemanticResponse(
     body = originalBody;
   }
 
-  const headers: Record<string, string | string[] | number> = {};
-  for (const [k, v] of Object.entries(upstream.headers)) {
-    const lower = k.toLowerCase();
-    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
-  }
-  headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
+  const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
   const responseBytes = Buffer.byteLength(body);
   headers["content-length"] = responseBytes;
   res.writeHead(upstream.statusCode ?? 200, headers);
@@ -1550,7 +1572,7 @@ async function writeLucySemanticResponse(
   let outcome: "ok" | "error" = "ok";
   let errorDetail = metaFailed;
   try {
-    const parsed = contentType.includes("application/json")
+    const parsed = (!metaFailed || contentType.includes("application/json"))
       ? JSON.parse(body) as Record<string, unknown>
       : decodeSseMessage(body) as Record<string, unknown> | undefined;
     const parsedError = parsed?.error;
@@ -1661,9 +1683,11 @@ async function writeToolsListResponse(
     if (contentType.includes("text/event-stream")) {
       const payload = decodeSseMessage(originalBody);
       if (!payload) throw new Error("missing SSE data frame");
-      if (payload) body = encodeSseMessage(filterAndAddAllowedTools(payload, visibleTools, requestId));
+      body = JSON.stringify(filterAndAddAllowedTools(payload, visibleTools, requestId));
+      forceJson = true;
     } else if (contentType.includes("application/json")) {
       body = JSON.stringify(filterAndAddAllowedTools(JSON.parse(originalBody), visibleTools, requestId));
+      forceJson = true;
     } else {
       throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
@@ -1674,12 +1698,7 @@ async function writeToolsListResponse(
     forceJson = true;
   }
 
-  const headers: Record<string, string | string[] | number> = {};
-  for (const [k, v] of Object.entries(upstream.headers)) {
-    const lower = k.toLowerCase();
-    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
-  }
-  headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
+  const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
   const responseBytes = Buffer.byteLength(body);
   headers["content-length"] = responseBytes;
   res.writeHead(upstream.statusCode ?? 200, headers);
@@ -1725,13 +1744,15 @@ async function writeInitializeResponse(
         const result = record.result as Record<string, unknown> | undefined;
         if (!result || typeof result !== "object") throw new Error("missing result object");
         const rewritten = ensureJsonRpcEnvelope({ ...record, result: { ...result, instructions } }, requestId);
-        body = encodeSseMessage(rewritten);
+        body = JSON.stringify(rewritten);
+        forceJson = true;
       } else if (contentType.includes("application/json")) {
         const parsed = JSON.parse(originalBody) as Record<string, unknown>;
         const result = parsed.result as Record<string, unknown> | undefined;
         if (!result || typeof result !== "object") throw new Error("missing result object");
         const rewritten = ensureJsonRpcEnvelope({ ...parsed, result: { ...result, instructions } }, requestId);
         body = JSON.stringify(rewritten);
+        forceJson = true;
       } else {
         throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
       }
@@ -1742,12 +1763,7 @@ async function writeInitializeResponse(
     }
   }
 
-  const headers: Record<string, string | string[] | number> = {};
-  for (const [k, v] of Object.entries(upstream.headers)) {
-    const lower = k.toLowerCase();
-    if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
-  }
-  headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
+  const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
   const responseBytes = Buffer.byteLength(body);
   headers["content-length"] = responseBytes;
   res.writeHead(upstream.statusCode ?? 200, headers);
@@ -2457,11 +2473,12 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         const filtered = await filterWikiSearchPayload(identity, payload);
         if (filtered.failed) {
           filterFailed = filtered.failed;
-          body = encodeSseMessage(rpcErrorResponse(requestId, "wiki_search filtering failed", filtered.failed));
+          body = JSON.stringify(rpcErrorResponse(requestId, "wiki_search filtering failed", filtered.failed));
         } else {
           filteredCount = filtered.filtered;
-          body = encodeSseMessage(ensureJsonRpcEnvelope(filtered.payload, requestId));
+          body = JSON.stringify(ensureJsonRpcEnvelope(filtered.payload, requestId));
         }
+        forceJson = true;
       } else if (contentType.includes("application/json")) {
         const filtered = await filterWikiSearchPayload(identity, JSON.parse(originalBody));
         if (filtered.failed) {
@@ -2471,6 +2488,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         } else {
           filteredCount = filtered.filtered;
           body = JSON.stringify(ensureJsonRpcEnvelope(filtered.payload, requestId));
+          forceJson = true;
         }
       } else {
         filterFailed = `wiki_search_filter_failed:unsupported_content_type:${contentType || "<missing>"}`;
@@ -2483,12 +2501,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       forceJson = true;
     }
 
-    const headers: Record<string, string | string[] | number> = {};
-    for (const [k, v] of Object.entries(upstream.headers)) {
-      const lower = k.toLowerCase();
-      if (v !== undefined && lower !== "content-length" && lower !== "transfer-encoding" && lower !== "content-type") headers[k] = v;
-    }
-    headers["content-type"] = forceJson ? "application/json" : (upstream.headers["content-type"] ?? "application/json");
+    const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
     const responseBytes = Buffer.byteLength(body);
     headers["content-length"] = responseBytes;
     res.writeHead(upstream.statusCode ?? 200, headers);

@@ -198,6 +198,7 @@ describe("MCP proxy initialize instructions injection", () => {
       expect(body.result.instructions).toContain("lucy_catalog");
       expect(body.result.instructions).toContain("lucy_query");
       expect(body.result.instructions).toContain("lucy_read_source");
+      expect(body.result.instructions).toContain("Visible Scope below is captured at MCP initialize");
       expect(body.result.instructions).not.toContain("call `sl_query` or `sl_read_source`");
       expect(body.result.instructions).toContain("mysql-aliyun.dataforai.superstore_orders");
       expect(body.result.instructions).toContain("source-qualified semantic keys");
@@ -287,11 +288,9 @@ describe("MCP proxy initialize instructions injection", () => {
         body: initializeRequest("init-sse")
       });
       expect(res.status).toBe(200);
-      const text = await res.text();
-      expect(text.startsWith("event: message\ndata: ")).toBe(true);
-      const dataLine = text.split(/\r?\n/).find((line) => line.startsWith("data: "));
-      expect(dataLine).toBeTruthy();
-      const payload = JSON.parse(dataLine!.slice("data: ".length)) as { jsonrpc: string; id: string; result: { instructions: string } };
+      expect(res.headers.get("content-type") ?? "").toContain("application/json");
+      expect(res.headers.get("cache-control") ?? "").toContain("no-store");
+      const payload = await res.json() as { jsonrpc: string; id: string; result: { instructions: string } };
       expect(payload.jsonrpc).toBe("2.0");
       expect(payload.id).toBe("init-sse");
       expect(payload.result.instructions).toContain("Lucy Data QA Runtime Instructions");

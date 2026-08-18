@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | MCP Auth Proxy — 访问日志与多用户权限 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23 |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 修订 2026-08-11 |
 | 撰写人 | Claude (Opus 架构设计) |
 | 委托人 | 张星晨 |
 | 基于材料 | project-lucy 代码库、KTX 上游源码（/Users/zhangxingchen/Projects/ktx）、Opus 架构分析 |
@@ -90,7 +90,13 @@ POST /mcp (client)
 - `mcp-session-id` header **双向透传**，代理不生成新 session ID
 - 一个 client session → 一个 upstream session（不复用连接）
 - 请求 body 可缓冲（每次工具调用是单个 JSON 对象，通常 < 10KB）
-- 非 `tools/list` 响应必须原样 pipe，不 buffer 完整响应，避免破坏 SSE/chunked 语义
+- 默认非改写路径仍原样 pipe，避免破坏真正的流式 SSE/chunked 语义
+- 下列路径会**有限缓冲并改写**响应，改写成功后统一以 `application/json` 返回（即使上游是 `text/event-stream`），且不继承上游的 SSE/`x-accel-buffering` 等帧头（保留 `mcp-session-id`）：
+  - `initialize` instructions 注入（失败 fail-open 透传原响应）
+  - `tools/list`（权限过滤 / 工具注入）
+  - `tools/call` 的 `lucy_query` / `lucy_read_source`（结果 `_meta` enrichment）
+  - `tools/call` 的 `wiki_search`（结果 ACL 过滤）
+- 原因：KTX 常对 MCP 响应返回**带 `Content-Length` 的单帧 SSE** + `Connection: keep-alive`。部分 Streamable HTTP 客户端（实测 Cursor）会把该响应当作未结束的事件流一直等待，最终报 `MCP error -32001: Request timed out`，而上游实际已在亚秒级完成。proxy 既然已经整包缓冲，就应归一化为 JSON。
 - `tools/list` 是协议发现面，proxy 对该响应做有限缓冲改写：过滤无权工具，注入 proxy 自服务工具（如 `kx_catalog`），并重写 `content-length` / `transfer-encoding`
 
 ### 4.4 Initialize Instructions 注入（v1.3）
@@ -374,7 +380,7 @@ v1.2 增加连接裁决：
 
 - proxy 只对 `tools/list` 的有限响应做缓冲改写；非 `tools/list` 仍保持流式透传。
 - 对 `application/json` 响应：完整读取 JSON-RPC 响应体，过滤 `result.tools`，保留其他字段。
-- 对 SSE 响应：完整读取本次 `tools/list` 的 SSE 帧，解析 `event: message` / `data:` JSON，保留 `id:`、`retry:` 等非 data 字段，再重发改写后的单帧 SSE。
+- 对 SSE 响应：完整读取本次 `tools/list` 的 SSE 帧，解析 `event: message` / `data:` JSON，改写后以 `application/json` 返回（不再重发 SSE 单帧），避免 Streamable HTTP 客户端把有限 SSE 当成长连接。
 - 若上游返回多帧流式 `tools/list`、无法完整解析、body 超过 `MAX_TOOLS_LIST_REWRITE_BYTES = 4 MiB` 或 JSON-RPC 不是单个 response，proxy 必须 fail-closed 返回 JSON-RPC error，不得透传未过滤工具列表。
 - 若上游 tools/list 支持分页 / cursor，proxy 过滤当前页并原样保留 pagination 字段；不得合并跨页工具。
 - `initialize.capabilities` 不做权限过滤；权限发现以 `tools/list` 的实际响应为准。
