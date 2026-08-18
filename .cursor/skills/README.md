@@ -8,6 +8,8 @@
 | `lucy-semantic-author` | 生成 Schema Manifest + overlays |
 | `lucy-wiki-author` | 生成 `/wiki` 业务口径 Markdown |
 | `lucy-eval-author` | 生成 eval cases（测逻辑，不绑死样本日） |
+| `moji-intl-weekly-brief` | 墨迹国际化近 7 日经营周报（本地 Markdown） |
+| `moji-intl-ops-dashboard` | 墨迹国际化近 7 日经营看板（JSON → 静态 HTML） |
 
 ## 中文要求
 

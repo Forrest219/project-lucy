@@ -1,0 +1,154 @@
+# chatbi 国际化语义源（standalone，供 mysql-aliyun）。
+# 物理列齐全 + grain/measures/segments；列上不含 pk/nullable。
+# 事实表之间仅按 date/platform/country_region 对齐，不写 joins。
+
+name: ai_intl_country_daily
+table: chatbi.ai_intl_country_daily
+descriptions:
+  human: 国际化分国家/平台每日经营指标语义源。用于查询 DAU、MAU、启动次数、人均打开次数、近30日日均 DAU、新增用户、经营总览次日留存等日粒度指标。普通经营类指标优先使用本源；近30日去重活跃使用
+    ai_intl_user_active_30d_uv_daily；完整 N 日留存使用 ai_intl_retention_daily；广告投放和 CAC 使用 ai_intl_ad_daily。
+  ai: 国际化分国家/平台每日经营指标语义源。用于查询 DAU、MAU、启动次数、人均打开次数、近30日日均 DAU、新增用户、经营总览次日留存等日粒度指标。普通经营类指标优先使用本源；近30日去重活跃使用
+    ai_intl_user_active_30d_uv_daily；完整 N 日留存使用 ai_intl_retention_daily；广告投放和 CAC 使用 ai_intl_ad_daily。
+grain:
+- date
+- platform
+- country_region
+columns:
+- name: date
+  type: time
+  descriptions:
+    db: 统计日期，日粒度。 按 Asia/Shanghai 业务日理解；若以 UTC ISO 展示需先转换。
+    ai: 指标统计日期。
+  role: time
+- name: platform
+  type: string
+  descriptions:
+    db: 平台，标准值建议为 android、iphone。 用户说 iOS/ios/iPhone 时映射为 platform='iphone'；Android 映射为 android。
+    ai: 客户端平台，常见取值为 android、iphone。
+- name: country_region
+  type: string
+  descriptions:
+    db: 国家或地区英文名，取 forAI 国家英文-第一次矫正。
+    ai: 国家或地区英文名，是国家维度分析和跨表对齐的主要业务 key。
+- name: country_region_cn
+  type: string
+  descriptions:
+    db: 国家或地区中文名。
+    ai: 国家或地区中文展示名。
+- name: country_abbr
+  type: string
+  descriptions:
+    db: 国家或地区简称。
+    ai: 国家或地区简称。
+- name: region
+  type: string
+  descriptions:
+    db: 大区。
+    ai: 国家所属大区。
+- name: sub_region
+  type: string
+  descriptions:
+    db: 子区域。
+    ai: 国家所属子区域。
+- name: month
+  type: string
+  descriptions:
+    db: 月份，格式通常为 yyyy-mm。
+    ai: 指标所属月份。
+- name: dau
+  type: number
+  descriptions:
+    db: DAU，日活跃用户数。
+    ai: 日活跃用户数，经营类日活问题默认使用本字段。
+- name: mau
+  type: number
+  descriptions:
+    db: MAU，月活跃用户数。
+    ai: 月活跃用户数，源数据可能存在小数。
+- name: launches
+  type: number
+  descriptions:
+    db: 启动次数。
+    ai: App 被打开或启动的总次数。
+- name: avg_launch_per_user
+  type: number
+  descriptions:
+    db: 人均打开次数，行级值为 launches / nullif(dau,0)。
+    ai: 行级人均打开次数；跨维度汇总时必须重算。
+- name: avg_dau_30d
+  type: number
+  descriptions:
+    db: 近30日日均 DAU，不足30天时按窗口内已有日期计算。
+    ai: 近30日日均 DAU；跨维度汇总时应先按日汇总 dau 再重新计算。
+- name: new_users_moji
+  type: number
+  descriptions:
+    db: 新增用户数-墨迹口径。
+    ai: 墨迹口径新增用户数。
+- name: new_users_af
+  type: number
+  descriptions:
+    db: 新增用户数-AF口径，来源于 forAI。
+    ai: 经营口径的 AppsFlyer 新增用户数。
+- name: retained_users_1d
+  type: number
+  descriptions:
+    db: 次日留存人数。
+    ai: 经营总览中的次日留存人数；完整 N 日留存分析应使用 ai_intl_retention_daily。
+- name: updated_at
+  type: time
+  descriptions:
+    db: 数据更新时间。
+    ai: ETL 数据更新时间。
+measures:
+- name: dau
+  expr: sum(dau)
+  description: DAU，日活跃用户数。
+- name: mau
+  expr: sum(mau)
+  description: MAU，月活跃用户数。源数据存在小数，展示为人数时可按客户确认规则取整。
+- name: launches
+  expr: sum(launches)
+  description: 启动次数，App 被打开或启动的总次数。
+- name: avg_launch_per_user
+  expr: sum(launches) / nullif(sum(dau), 0)
+  description: 人均打开次数。跨日期、平台、国家或区域汇总时必须按 sum(launches) / nullif(sum(dau), 0) 重算，不直接平均行级 avg_launch_per_user。
+- name: avg_dau_30d
+  expr: sum(dau) / nullif(count(distinct date), 0)
+  description: 近30日日均 DAU。查询近30日窗口时，应先按查询条件过滤到截止日前 30 天，再按 sum(dau) / count(distinct date) 计算；不要直接平均行级
+    avg_dau_30d。
+- name: new_users_moji
+  expr: sum(new_users_moji)
+  description: 新增用户数-墨迹口径。
+- name: new_users_af
+  expr: sum(new_users_af)
+  description: 新增用户数-AF口径，经营问答默认使用本字段；广告投放和 CAC 语境使用 ai_intl_ad_daily.new_users_af。
+- name: retained_users_1d
+  expr: sum(retained_users_1d)
+  description: 次日留存人数，用于经营总览中的 D1 留存人数查询；完整 N 日留存分析使用 ai_intl_retention_daily。
+- name: retention_1d_rate_moji
+  expr: sum(retained_users_1d) / nullif(sum(new_users_moji), 0)
+  description: 经营总览次日留存率，按次日留存人数 / 墨迹口径新增用户数计算。完整留存率问答优先使用 ai_intl_retention_daily。
+segments:
+- name: valid_rows
+  expr: date is not null
+  description: 有统计日期的有效记录。
+- name: valid_dau_rows
+  expr: date is not null AND dau is not null
+  description: 有统计日期且 DAU 不为空的有效记录。
+- name: android
+  expr: lower(platform) = 'android'
+  description: Android 平台记录。
+- name: iphone
+  expr: lower(platform) = 'iphone'
+  description: iPhone 平台记录。
+- name: country_detail
+  expr: country_region is not null AND country_region <> ''
+  description: 国家或地区明细记录。
+- name: china
+  expr: country_abbr = 'CN'
+  description: 中国大陆记录。
+- name: excluding_china
+  expr: coalesce(country_abbr, '') <> 'CN'
+  description: 不含中国大陆的记录；港澳台按独立地区保留，除非用户明确要求大中华口径。
+joins: []

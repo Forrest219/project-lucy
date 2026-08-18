@@ -114,6 +114,13 @@ roles:
             - kx_vw_cash_flow_statement_detail
             - kx_vw_income_statement_detail
             - ad_account_daily
+        - connection: mysql-aliyun
+          schema: chatbi
+          names:
+            - ai_intl_ad_daily
+            - ai_intl_country_daily
+            - ai_intl_retention_daily
+            - ai_intl_user_active_30d_uv_daily
       tools:
         - lucy_catalog
         - kx_catalog

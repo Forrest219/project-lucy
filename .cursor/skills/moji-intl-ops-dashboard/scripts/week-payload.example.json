@@ -1,0 +1,205 @@
+{
+  "title": "国际化经营周看板",
+  "biz_start": "2026-07-09",
+  "biz_end": "2026-07-15",
+  "generated_at": "2026-08-11 15:16:53（北京时间）",
+  "connection_id": "mysql-aliyun",
+  "kpis": {
+    "dau": 26410.0,
+    "new_moji": 11981.0,
+    "new_af": 10982.0,
+    "spend": 6432.739999999998,
+    "cac": 0.5857530504461845,
+    "d1_rate": 0.337398770611767
+  },
+  "daily": [
+    {
+      "biz_date": "2026-07-09",
+      "dau": 26080.0,
+      "new_moji": 1690.0,
+      "spend": 907.4599999999999
+    },
+    {
+      "biz_date": "2026-07-10",
+      "dau": 26190.0,
+      "new_moji": 1698.0,
+      "spend": 910.76
+    },
+    {
+      "biz_date": "2026-07-11",
+      "dau": 26300.0,
+      "new_moji": 1705.0,
+      "spend": 916.0400000000001
+    },
+    {
+      "biz_date": "2026-07-12",
+      "dau": 26410.0,
+      "new_moji": 1711.0,
+      "spend": 919.34
+    },
+    {
+      "biz_date": "2026-07-13",
+      "dau": 26520.0,
+      "new_moji": 1719.0,
+      "spend": 922.64
+    },
+    {
+      "biz_date": "2026-07-14",
+      "dau": 26630.0,
+      "new_moji": 1726.0,
+      "spend": 925.94
+    },
+    {
+      "biz_date": "2026-07-15",
+      "dau": 26740.0,
+      "new_moji": 1732.0,
+      "spend": 930.5600000000001
+    }
+  ],
+  "by_country": [
+    {
+      "country_abbr": "HK",
+      "country_cn": "中国香港",
+      "dau": 6802.0,
+      "spend": 1827.06,
+      "cac": 0.6449205788916343
+    },
+    {
+      "country_abbr": "KR",
+      "country_cn": "韩国",
+      "dau": 6042.0,
+      "spend": 1534.4,
+      "cac": 0.6100994035785289
+    },
+    {
+      "country_abbr": "DE",
+      "country_cn": "德国",
+      "dau": 5282.0,
+      "spend": 1264.5600000000002,
+      "cac": 0.5758469945355192
+    },
+    {
+      "country_abbr": "US",
+      "country_cn": "美国",
+      "dau": 4522.0,
+      "spend": 1016.18,
+      "cac": 0.5410969116080937
+    },
+    {
+      "country_abbr": "TH",
+      "country_cn": "泰国",
+      "dau": 3762.0,
+      "spend": 790.5400000000001,
+      "cac": 0.5067564102564103
+    }
+  ],
+  "detail": [
+    {
+      "country_abbr": "HK",
+      "platform": "android",
+      "dau": 3271.0,
+      "new_moji": 1485.0,
+      "spend": 878.3799999999999,
+      "cac": 0.6444460748349229,
+      "d1_rate": 0.33752950432730133
+    },
+    {
+      "country_abbr": "HK",
+      "platform": "iphone",
+      "dau": 3531.0,
+      "new_moji": 1603.0,
+      "spend": 948.6799999999998,
+      "cac": 0.645360544217687,
+      "d1_rate": 0.33819241982507287
+    },
+    {
+      "country_abbr": "KR",
+      "platform": "android",
+      "dau": 2891.0,
+      "new_moji": 1312.0,
+      "spend": 734.3000000000001,
+      "cac": 0.6098837209302326,
+      "d1_rate": 0.33689839572192515
+    },
+    {
+      "country_abbr": "KR",
+      "platform": "iphone",
+      "dau": 3151.0,
+      "new_moji": 1430.0,
+      "spend": 800.0999999999999,
+      "cac": 0.6102974828375285,
+      "d1_rate": 0.3382352941176471
+    },
+    {
+      "country_abbr": "DE",
+      "platform": "android",
+      "dau": 2511.0,
+      "new_moji": 1139.0,
+      "spend": 601.26,
+      "cac": 0.575919540229885,
+      "d1_rate": 0.33675564681724846
+    },
+    {
+      "country_abbr": "DE",
+      "platform": "iphone",
+      "dau": 2771.0,
+      "new_moji": 1257.0,
+      "spend": 663.3000000000001,
+      "cac": 0.57578125,
+      "d1_rate": 0.33767441860465114
+    },
+    {
+      "country_abbr": "US",
+      "platform": "android",
+      "dau": 2131.0,
+      "new_moji": 966.0,
+      "spend": 478.64,
+      "cac": 0.5408361581920904,
+      "d1_rate": 0.3365617433414044
+    },
+    {
+      "country_abbr": "US",
+      "platform": "iphone",
+      "dau": 2391.0,
+      "new_moji": 1084.0,
+      "spend": 537.54,
+      "cac": 0.5413293051359517,
+      "d1_rate": 0.33872707659115425
+    },
+    {
+      "country_abbr": "TH",
+      "platform": "android",
+      "dau": 1751.0,
+      "new_moji": 793.0,
+      "spend": 367.72,
+      "cac": 0.5072,
+      "d1_rate": 0.336283185840708
+    },
+    {
+      "country_abbr": "TH",
+      "platform": "iphone",
+      "dau": 2011.0,
+      "new_moji": 912.0,
+      "spend": 422.82,
+      "cac": 0.50637125748503,
+      "d1_rate": 0.33589743589743587
+    }
+  ],
+  "notes": [
+    "周均 DAU = 窗口内按日 DAU 的算术平均；跨 android/iphone 相加为端侧加总，非全球去重。",
+    "周新增 / 周 Spend 为窗口合计；CAC = 周Spend/周新增AF；D1 留存率 = sum(retained)/sum(new_users_base_moji)。",
+    "KPI「较上周」= 相对上一等长 7 日窗口的变化率；CAC 上升视为负面着色。",
+    "业务日与生成时间均为北京时间。",
+    "窗口 2026-07-09 ~ 2026-07-15；覆盖市场：中国香港、韩国、德国、美国、泰国。"
+  ],
+  "kpi_section_title": "本周总览",
+  "kpi_delta_label": "较上周",
+  "kpi_wow": {
+    "dau": 0.028,
+    "new_moji": 0.015,
+    "new_af": 0.012,
+    "spend": 0.041,
+    "cac": 0.018,
+    "d1_rate": -0.006
+  }
+}

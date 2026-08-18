@@ -1,0 +1,386 @@
+tables:
+  ai_intl_country_daily:
+    table: chatbi.ai_intl_country_daily
+    descriptions:
+      db: AI 国际化国家日经营指标表。
+      human: 按 date、platform、country_region 粒度统计国际化经营指标，覆盖 DAU、MAU、启动次数、人均打开次数、近30日日均 DAU、新增用户数和经营总览中的次日留存人数。
+      ai: 按 date、platform、country_region 粒度统计国际化经营指标，覆盖 DAU、MAU、启动次数、人均打开次数、近30日日均 DAU、新增用户数和经营总览中的次日留存人数。
+    columns:
+    - name: date
+      type: time
+      nullable: false
+      descriptions:
+        db: 统计日期，日粒度。
+        human: 指标统计日期。
+        ai: 指标统计日期。
+    - name: platform
+      type: string
+      nullable: false
+      descriptions:
+        db: 平台，标准值建议为 android、iphone。
+        human: 客户端平台，常见取值为 android、iphone。
+        ai: 客户端平台，常见取值为 android、iphone。
+    - name: country_region
+      type: string
+      nullable: false
+      descriptions:
+        db: 国家或地区英文名，取 forAI 国家英文-第一次矫正。
+        human: 国家或地区英文名，是国家维度分析和跨表对齐的主要业务 key。
+        ai: 国家或地区英文名，是国家维度分析和跨表对齐的主要业务 key。
+    - name: country_region_cn
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区中文名。
+        human: 国家或地区中文展示名。
+        ai: 国家或地区中文展示名。
+    - name: country_abbr
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区简称。
+        human: 国家或地区简称。
+        ai: 国家或地区简称。
+    - name: region
+      type: string
+      nullable: true
+      descriptions:
+        db: 大区。
+        human: 国家所属大区。
+        ai: 国家所属大区。
+    - name: sub_region
+      type: string
+      nullable: true
+      descriptions:
+        db: 子区域。
+        human: 国家所属子区域。
+        ai: 国家所属子区域。
+    - name: month
+      type: string
+      nullable: true
+      descriptions:
+        db: 月份，格式通常为 yyyy-mm。
+        human: 指标所属月份。
+        ai: 指标所属月份。
+    - name: dau
+      type: number
+      nullable: true
+      descriptions:
+        db: DAU，日活跃用户数。
+        human: 日活跃用户数，经营类日活问题默认使用本字段。
+        ai: 日活跃用户数，经营类日活问题默认使用本字段。
+    - name: mau
+      type: number
+      nullable: true
+      descriptions:
+        db: MAU，月活跃用户数。
+        human: 月活跃用户数，源数据可能存在小数。
+        ai: 月活跃用户数，源数据可能存在小数。
+    - name: launches
+      type: number
+      nullable: true
+      descriptions:
+        db: 启动次数。
+        human: App 被打开或启动的总次数。
+        ai: App 被打开或启动的总次数。
+    - name: avg_launch_per_user
+      type: number
+      nullable: true
+      descriptions:
+        db: 人均打开次数，行级值为 launches / nullif(dau,0)。
+        human: 行级人均打开次数；跨维度汇总时必须重算。
+        ai: 行级人均打开次数；跨维度汇总时必须重算。
+    - name: avg_dau_30d
+      type: number
+      nullable: true
+      descriptions:
+        db: 近30日日均 DAU，不足30天时按窗口内已有日期计算。
+        human: 近30日日均 DAU；跨维度汇总时应先按日汇总 dau 再重新计算。
+        ai: 近30日日均 DAU；跨维度汇总时应先按日汇总 dau 再重新计算。
+    - name: new_users_moji
+      type: number
+      nullable: true
+      descriptions:
+        db: 新增用户数-墨迹口径。
+        human: 墨迹口径新增用户数。
+        ai: 墨迹口径新增用户数。
+    - name: new_users_af
+      type: number
+      nullable: true
+      descriptions:
+        db: 新增用户数-AF口径，来源于 forAI。
+        human: 经营口径的 AppsFlyer 新增用户数。
+        ai: 经营口径的 AppsFlyer 新增用户数。
+    - name: retained_users_1d
+      type: number
+      nullable: true
+      descriptions:
+        db: 次日留存人数。
+        human: 经营总览中的次日留存人数；完整 N 日留存分析应使用 ai_intl_retention_daily。
+        ai: 经营总览中的次日留存人数；完整 N 日留存分析应使用 ai_intl_retention_daily。
+    - name: updated_at
+      type: time
+      nullable: true
+      descriptions:
+        db: 数据更新时间。
+        human: ETL 数据更新时间。
+        ai: ETL 数据更新时间。
+  ai_intl_user_active_30d_uv_daily:
+    table: chatbi.ai_intl_user_active_30d_uv_daily
+    descriptions:
+      db: AI 国际化近30日去重活跃用户日快照表。
+      human: 按 date、platform、country_region 粒度统计近30日窗口内去重活跃用户数。
+      ai: 按 date、platform、country_region 粒度统计近30日窗口内去重活跃用户数。
+    columns:
+    - name: date
+      type: time
+      nullable: false
+      descriptions:
+        db: 统计日期，近30日窗口截止日期。
+        human: 近30日窗口截止日期。
+        ai: 近30日窗口截止日期。
+    - name: platform
+      type: string
+      nullable: false
+      descriptions:
+        db: 平台，标准值建议为 android、iphone。
+        human: 客户端平台，常见取值为 android、iphone。
+        ai: 客户端平台，常见取值为 android、iphone。
+    - name: country_region
+      type: string
+      nullable: false
+      descriptions:
+        db: 国家或地区英文名，取近30日活跃表国家英文-第一次矫正。
+        human: 国家或地区英文名。
+        ai: 国家或地区英文名。
+    - name: country_region_cn
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区中文名。
+        human: 国家或地区中文展示名。
+        ai: 国家或地区中文展示名。
+    - name: country_abbr
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区简称。
+        human: 国家或地区简称。
+        ai: 国家或地区简称。
+    - name: region
+      type: string
+      nullable: true
+      descriptions:
+        db: 大区。
+        human: 国家所属大区。
+        ai: 国家所属大区。
+    - name: sub_region
+      type: string
+      nullable: true
+      descriptions:
+        db: 子区域。
+        human: 国家所属子区域。
+        ai: 国家所属子区域。
+    - name: active_30d_uv
+      type: number
+      nullable: true
+      descriptions:
+        db: 近30日去重活跃用户数。
+        human: 近30日窗口内去重活跃用户数。
+        ai: 近30日窗口内去重活跃用户数。
+    - name: updated_at
+      type: time
+      nullable: true
+      descriptions:
+        db: 数据更新时间。
+        human: ETL 数据更新时间。
+        ai: ETL 数据更新时间。
+  ai_intl_retention_daily:
+    table: chatbi.ai_intl_retention_daily
+    descriptions:
+      db: AI 国际化留存日指标表。
+      human: 按 date、platform、country_region、retention_days 粒度统计 N 日留存人数和留存率。
+      ai: 按 date、platform、country_region、retention_days 粒度统计 N 日留存人数和留存率。
+    columns:
+    - name: date
+      type: time
+      nullable: false
+      descriptions:
+        db: 留存 cohort 日期，即新增用户产生日期。
+        human: 留存 cohort 日期。
+        ai: 留存 cohort 日期。
+    - name: platform
+      type: string
+      nullable: false
+      descriptions:
+        db: 平台，标准值建议为 android、iphone。
+        human: 客户端平台，常见取值为 android、iphone。
+        ai: 客户端平台，常见取值为 android、iphone。
+    - name: country_region
+      type: string
+      nullable: false
+      descriptions:
+        db: 国家或地区英文名，取 forAI 国家英文-第一次矫正。
+        human: 国家或地区英文名。
+        ai: 国家或地区英文名。
+    - name: country_region_cn
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区中文名。
+        human: 国家或地区中文展示名。
+        ai: 国家或地区中文展示名。
+    - name: country_abbr
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区简称。
+        human: 国家或地区简称。
+        ai: 国家或地区简称。
+    - name: region
+      type: string
+      nullable: true
+      descriptions:
+        db: 大区。
+        human: 国家所属大区。
+        ai: 国家所属大区。
+    - name: sub_region
+      type: string
+      nullable: true
+      descriptions:
+        db: 子区域。
+        human: 国家所属子区域。
+        ai: 国家所属子区域。
+    - name: retention_days
+      type: number
+      nullable: false
+      descriptions:
+        db: 留存天数，取值为 1、2、3、4、5、6、7、14、30。
+        human: 留存天数 N，用于查询 N 日留存。
+        ai: 留存天数 N，用于查询 N 日留存。
+    - name: retained_users
+      type: number
+      nullable: true
+      descriptions:
+        db: N 日留存人数。
+        human: 对应 retention_days 的 N 日留存人数。
+        ai: 对应 retention_days 的 N 日留存人数。
+    - name: new_users_base_moji
+      type: number
+      nullable: true
+      descriptions:
+        db: 留存率分母，墨迹口径新增用户数。
+        human: 计算留存率默认使用的墨迹口径新增用户数分母。
+        ai: 计算留存率默认使用的墨迹口径新增用户数分母。
+    - name: retention_rate
+      type: number
+      nullable: true
+      descriptions:
+        db: N 日留存率，小数形式存储，0.37 表示 37%。
+        human: 行级 N 日留存率；跨维度汇总时应按分子分母重算。
+        ai: 行级 N 日留存率；跨维度汇总时应按分子分母重算。
+    - name: updated_at
+      type: time
+      nullable: true
+      descriptions:
+        db: 数据更新时间。
+        human: ETL 数据更新时间。
+        ai: ETL 数据更新时间。
+  ai_intl_ad_daily:
+    table: chatbi.ai_intl_ad_daily
+    descriptions:
+      db: AI 国际化广告日指标表。
+      human: 按 date、platform、country_region 粒度统计广告投放、获客成本、曝光和点击指标。
+      ai: 按 date、platform、country_region 粒度统计广告投放、获客成本、曝光和点击指标。
+    columns:
+    - name: date
+      type: time
+      nullable: false
+      descriptions:
+        db: 广告投放日期。
+        human: 广告投放日期。
+        ai: 广告投放日期。
+    - name: platform
+      type: string
+      nullable: false
+      descriptions:
+        db: 平台，AF 源表 ios 标准化为 iphone。
+        human: 广告来源平台，ios 标准化为 iphone。
+        ai: 广告来源平台，ios 标准化为 iphone。
+    - name: country_region
+      type: string
+      nullable: false
+      descriptions:
+        db: 国家或地区英文名，取 AF 表国家-英文-第一次矫正。
+        human: 国家或地区英文名。
+        ai: 国家或地区英文名。
+    - name: country_region_cn
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区中文名。
+        human: 国家或地区中文展示名。
+        ai: 国家或地区中文展示名。
+    - name: country_abbr
+      type: string
+      nullable: true
+      descriptions:
+        db: 国家或地区简称。
+        human: 国家或地区简称。
+        ai: 国家或地区简称。
+    - name: region
+      type: string
+      nullable: true
+      descriptions:
+        db: 大区。
+        human: 国家所属大区。
+        ai: 国家所属大区。
+    - name: sub_region
+      type: string
+      nullable: true
+      descriptions:
+        db: 子区域。
+        human: 国家所属子区域。
+        ai: 国家所属子区域。
+    - name: spend
+      type: number
+      nullable: true
+      descriptions:
+        db: 每日广告消耗 Spend，单位 USD。
+        human: 广告消耗金额，单位美元。
+        ai: 广告消耗金额，单位美元。
+    - name: new_users_af
+      type: number
+      nullable: true
+      descriptions:
+        db: 新增用户数-AF口径，来源于 forAI 新增用户数-AF口径（人）。
+        human: 用于广告 CAC 计算的 AF 口径新增用户数。
+        ai: 用于广告 CAC 计算的 AF 口径新增用户数。
+    - name: cac
+      type: number
+      nullable: true
+      descriptions:
+        db: 单用户获取成本 CAC，spend / nullif(new_users_af,0)。
+        human: 行级 CAC；跨维度汇总时必须重算。
+        ai: 行级 CAC；跨维度汇总时必须重算。
+    - name: impressions
+      type: number
+      nullable: true
+      descriptions:
+        db: 广告曝光次数 Imp。
+        human: 广告曝光次数。
+        ai: 广告曝光次数。
+    - name: clicks
+      type: number
+      nullable: true
+      descriptions:
+        db: 广告点击次数 Click。
+        human: 广告点击次数。
+        ai: 广告点击次数。
+    - name: updated_at
+      type: time
+      nullable: true
+      descriptions:
+        db: 数据更新时间。
+        human: ETL 数据更新时间。
+        ai: ETL 数据更新时间。

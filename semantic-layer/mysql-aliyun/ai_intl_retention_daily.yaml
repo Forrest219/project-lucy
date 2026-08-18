@@ -1,0 +1,134 @@
+# chatbi 国际化语义源（standalone，供 mysql-aliyun）。
+# 物理列齐全 + grain/measures/segments；列上不含 pk/nullable。
+# 事实表之间仅按 date/platform/country_region 对齐，不写 joins。
+
+name: ai_intl_retention_daily
+table: chatbi.ai_intl_retention_daily
+descriptions:
+  human: 国际化留存日指标语义源。用于回答 N 日留存人数、N 日留存率、分国家 N 日留存率均值、总 N 日留存率等问题。retention_days 支持 1、2、3、4、5、6、7、14、30。
+  ai: 国际化留存日指标语义源。用于回答 N 日留存人数、N 日留存率、分国家 N 日留存率均值、总 N 日留存率等问题。retention_days 支持 1、2、3、4、5、6、7、14、30。
+grain:
+- date
+- platform
+- country_region
+- retention_days
+columns:
+- name: date
+  type: time
+  descriptions:
+    db: 留存 cohort 日期，即新增用户产生日期。 按 Asia/Shanghai 业务日理解；若以 UTC ISO 展示需先转换。
+    ai: 留存 cohort 日期。
+  role: time
+- name: platform
+  type: string
+  descriptions:
+    db: 平台，标准值建议为 android、iphone。 用户说 iOS/ios/iPhone 时映射为 platform='iphone'；Android 映射为 android。
+    ai: 客户端平台，常见取值为 android、iphone。
+- name: country_region
+  type: string
+  descriptions:
+    db: 国家或地区英文名，取 forAI 国家英文-第一次矫正。
+    ai: 国家或地区英文名。
+- name: country_region_cn
+  type: string
+  descriptions:
+    db: 国家或地区中文名。
+    ai: 国家或地区中文展示名。
+- name: country_abbr
+  type: string
+  descriptions:
+    db: 国家或地区简称。
+    ai: 国家或地区简称。
+- name: region
+  type: string
+  descriptions:
+    db: 大区。
+    ai: 国家所属大区。
+- name: sub_region
+  type: string
+  descriptions:
+    db: 子区域。
+    ai: 国家所属子区域。
+- name: retention_days
+  type: number
+  descriptions:
+    db: 留存天数，取值为 1、2、3、4、5、6、7、14、30。
+    ai: 留存天数 N，用于查询 N 日留存。
+- name: retained_users
+  type: number
+  descriptions:
+    db: N 日留存人数。
+    ai: 对应 retention_days 的 N 日留存人数。
+- name: new_users_base_moji
+  type: number
+  descriptions:
+    db: 留存率分母，墨迹口径新增用户数。
+    ai: 计算留存率默认使用的墨迹口径新增用户数分母。
+- name: retention_rate
+  type: number
+  descriptions:
+    db: N 日留存率，小数形式存储，0.37 表示 37%。
+    ai: 行级 N 日留存率；跨维度汇总时应按分子分母重算。
+- name: updated_at
+  type: time
+  descriptions:
+    db: 数据更新时间。
+    ai: ETL 数据更新时间。
+measures:
+- name: retained_users
+  expr: sum(retained_users)
+  description: N 日留存人数。查询时通常需要结合 retention_days = N 过滤。
+- name: new_users_base_moji
+  expr: sum(new_users_base_moji)
+  description: 留存率分母，墨迹口径新增用户数。
+- name: retention_rate
+  expr: sum(retained_users) / nullif(sum(new_users_base_moji), 0)
+  description: N 日留存率，默认使用墨迹口径新增用户数作为分母。跨日期、平台、国家或区域汇总时必须按 sum(retained_users) / nullif(sum(new_users_base_moji),
+    0) 重算，不直接平均行级 retention_rate。
+segments:
+- name: valid_rows
+  expr: date is not null
+  description: 有 cohort 日期的有效记录。
+- name: android
+  expr: lower(platform) = 'android'
+  description: Android 平台记录。
+- name: iphone
+  expr: lower(platform) = 'iphone'
+  description: iPhone 平台记录。
+- name: country_detail
+  expr: country_region is not null AND country_region <> ''
+  description: 国家或地区明细记录。
+- name: china
+  expr: country_abbr = 'CN'
+  description: 中国大陆记录。
+- name: excluding_china
+  expr: coalesce(country_abbr, '') <> 'CN'
+  description: 不含中国大陆的记录；港澳台按独立地区保留，除非用户明确要求大中华口径。
+- name: retention_1d
+  expr: retention_days = 1
+  description: 次日留存记录。
+- name: retention_2d
+  expr: retention_days = 2
+  description: 2 日留存记录。
+- name: retention_3d
+  expr: retention_days = 3
+  description: 3 日留存记录。
+- name: retention_4d
+  expr: retention_days = 4
+  description: 4 日留存记录。
+- name: retention_5d
+  expr: retention_days = 5
+  description: 5 日留存记录。
+- name: retention_6d
+  expr: retention_days = 6
+  description: 6 日留存记录。
+- name: retention_7d
+  expr: retention_days = 7
+  description: 7 日留存记录。
+- name: retention_14d
+  expr: retention_days = 14
+  description: 14 日留存记录。
+- name: retention_30d
+  expr: retention_days = 30
+  description: 30 日留存记录。
+joins: []
