@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | MCP Audit Source & Question Tracing Spec |
 | 文档类型 | Spec |
-| 版本 | v0.5 |
-| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现）；v0.4 修订 2026-06-22（二次代码审阅发现 5 处问题修复后，澄清 §8.1 "跟 kx_catalog 一起列" 为建议而非强制约束）；v0.5 修订 2026-06-22（三次审阅 nit 跟进：detail 视图 accessLogs 排除自身、debounce key 修正、§8.4 purge 触发时机措辞与实现对齐） |
+| 版本 | v0.6 |
+| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现）；v0.4 修订 2026-06-22（二次代码审阅发现 5 处问题修复后，澄清 §8.1 "跟 kx_catalog 一起列" 为建议而非强制约束）；v0.5 修订 2026-06-22（三次审阅 nit 跟进：detail 视图 accessLogs 排除自身、debounce key 修正、§8.4 purge 触发时机措辞与实现对齐）；v0.6 修订 2026-08-20（§16 Lucy 侧 soft uplift：instructions 软引导、工具文案、Admin 上报覆盖率；漏报非错误） |
 | 委托人 | 张星晨 |
 | 基于材料 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/{mcp-proxy,acl,audit}.ts`、`semantic-layer/mysql-aliyun/_schema/dataforai.yaml`、2026-06-22 workhorse MCP 审计查询 |
 | 适用范围 | Lucy MCP Proxy 审计增强：调用数据源正规化、问题簇推断、可选自然语言问题上报 |
@@ -494,3 +494,12 @@ POST /api/admin/audit/rebuild-derived
 4. **30 天 preview retention 是否过长？决策：默认值不变，但补一个目前 spec 里"可配置"却没有对应开关的缺口。** 新增环境变量 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS`（默认 `30`），并设计一个轻量 purge 机制（见 §8.4）——本地单用户环境和客户部署环境用同一个默认值起步，部署侧需要更短窗口时改环境变量即可，不需要代码分支。
 5. **`access_log_sources` 要不要进 CSV 导出？决策：不做。** 维持只通过 UI/API（`GET /api/admin/audit/:id/sources`）展开。理由：现有 `GET /api/admin/audit/export` 是"一个 access_log 行 = 一行 CSV"的扁平语义；`access_log_sources` 是 1:N 关系，硬塞进同一份 CSV 要么逐 source 复制整行（冗余且容易让人误读成多条独立调用），要么改变现有 CSV 的行语义（破坏已有消费者假设）。如果未来真需要离线分析，应该开一个独立的 source 级 CSV 端点，不是本轮范围。
 
+## 16. Lucy 侧 soft uplift（问询原文锦上添花）
+
+在不修改外部 Agent 宿主、不改变 MCP 稳定性边界的前提下，Lucy 侧做三项软增强：
+
+1. **Initialize instructions 软引导**：当当前 identity 的 `tools/list` 可见 `lucy_begin_question` 时，role-aware instructions 追加 optional 上报提示；不可见时不注入。Fallback [`webui/config/data-qa-instructions.md`](../config/data-qa-instructions.md) 含同等说明。instructions 注入失败仍 fail-open。
+2. **工具发现文案**：`lucy_begin_question` description 标明 optional but recommended、`question` 优先传用户原话；`required` 仍仅为 `intentSummary`。漏调永远不阻断业务 `tools/call`。
+3. **Admin 上报覆盖率**：`GET /api/admin/audit/turns` 返回 `summary.{reportedCount,inferredCount,reportedShare}`；问询记录 Tab 展示已上报 / 推断占比，并在无上报时提示原文依赖客户端可选上报。
+
+Non-goals 不变：不强制上报、不实现 `question_source=header`、不落盘完整未脱敏原文、不改 ACL fail-closed。

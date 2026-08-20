@@ -742,13 +742,14 @@ Query：
 
 `GET /api/admin/audit/export` 使用与 `/api/admin/audit` 相同过滤条件导出 CSV，并对 spreadsheet formula 前缀做转义。
 
-`GET /api/admin/audit/turns` 返回问答轮次视图，合并 inferred turns 与客户端显式上报的 conversation turns。支持 `user`、`since`、`until`、`source=inferred|reported|all`、`lookbackHours`、`limit`、`offset`；默认 `source=all`、`limit=50`，最大 `500`。
+`GET /api/admin/audit/turns` 返回问答轮次视图，合并 inferred turns 与客户端显式上报的 conversation turns。支持 `user`、`since`、`until`、`source=inferred|reported|all`、`lookbackHours`、`limit`、`offset`；默认 `source=all`、`limit=50`，最大 `500`。响应额外包含当前筛选窗口的 `summary`：`reportedCount` / `inferredCount` / `reportedShare`（上报占比，0–1），便于观察可选原文上报覆盖率；漏报不是错误。
 
 响应：
 
 ```jsonc
 { "ok": true, "data": {
   "total": 1,
+  "summary": { "reportedCount": 0, "inferredCount": 1, "reportedShare": 0 },
   "entries": [{
     "id": "inf_20260629_001",
     "source": "inferred",

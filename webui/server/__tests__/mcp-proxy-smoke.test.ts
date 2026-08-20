@@ -1314,8 +1314,12 @@ describe("MCP proxy smoke", () => {
         headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
         body: JSON.stringify({ jsonrpc: "2.0", id: "tools-list-begin", method: "tools/list" })
       });
-      const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
-      expect(listBody.result.tools.map((tool) => tool.name)).toContain("lucy_begin_question");
+      const listBody = await listRes.json() as { result: { tools: Array<{ name: string; description?: string; inputSchema?: { required?: string[] } }> } };
+      const beginTool = listBody.result.tools.find((tool) => tool.name === "lucy_begin_question");
+      expect(beginTool).toBeDefined();
+      expect(beginTool?.description).toContain("Optional but recommended");
+      expect(beginTool?.description).toContain("never blocks");
+      expect(beginTool?.inputSchema?.required).toEqual(["intentSummary"]);
 
       const beginRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -1369,6 +1373,66 @@ describe("MCP proxy smoke", () => {
 
       const followUpAudit = await waitForAuditRow("after-begin-1");
       expect(followUpAudit.lucy_turn_id).toBe(turnId);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("allows business tools/call without a prior lucy_begin_question (skipping report never blocks queries)", async () => {
+    const upstreamSeen: string[] = [];
+    const upstream = createServer(async (req, res) => {
+      const body = await readRequestBody(req);
+      upstreamSeen.push(body);
+      const parsed = JSON.parse(body) as { id?: string };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id ?? "skip-begin-query",
+        result: { content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }], truncated: false }) }] }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const queryRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "skip-begin-query",
+          method: "tools/call",
+          params: {
+            name: "lucy_query",
+            arguments: {
+              connectionId: "mysql-aliyun",
+              measures: ["superstore_orders.sales"],
+              dimensions: [{ field: "superstore_orders.region" }],
+              limit: 5
+            }
+          }
+        })
+      });
+      expect(queryRes.status).toBe(200);
+      const queryBody = await queryRes.json() as { result?: { isError?: boolean; _meta?: { lucy?: { tool?: string } } }; error?: unknown };
+      expect(queryBody.error).toBeUndefined();
+      expect(queryBody.result?.isError).not.toBe(true);
+      expect(queryBody.result?._meta?.lucy?.tool).toBe("lucy_query");
+      expect(upstreamSeen).toHaveLength(1);
+
+      const audit = await waitForAuditRow("skip-begin-query");
+      expect(audit.tool).toBe("lucy_query");
+      expect(audit.outcome).toBe("ok");
+      expect(audit.lucy_turn_id == null || audit.lucy_turn_id === "").toBe(true);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));

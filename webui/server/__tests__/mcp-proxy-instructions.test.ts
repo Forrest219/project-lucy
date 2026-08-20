@@ -203,6 +203,62 @@ describe("MCP proxy initialize instructions injection", () => {
       expect(body.result.instructions).toContain("mysql-aliyun.dataforai.superstore_orders");
       expect(body.result.instructions).toContain("source-qualified semantic keys");
       expect(body.result.instructions).toContain("Use `{expr,name}` objects only for ad hoc aggregate expressions");
+      expect(body.result.instructions).not.toContain("lucy_begin_question");
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("injects optional lucy_begin_question soft nudge only when the tool is visible", async () => {
+    const withBeginYaml = `users:
+  - id: instructions_agent
+    name: Instructions Agent
+    enabled: true
+    tokens:
+      - hash: "${tokenHash(TOKEN)}"
+        label: instructions-token
+        created: 2026-06-23
+    allow:
+      tables:
+        - dataforai.superstore_orders
+      tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
+        - lucy_begin_question
+        - kx_catalog
+        - sl_read_source
+defaults:
+  deny_tools: []
+`;
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), withBeginYaml, "utf8");
+
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: "init-begin-nudge",
+        result: {
+          protocolVersion: "2024-11-05",
+          serverInfo: { name: "ktx", version: "0.12.0" },
+          capabilities: { tools: {} },
+          instructions: ""
+        }
+      }));
+    });
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: initializeRequest("init-begin-nudge")
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as { result: { instructions: string } };
+      expect(body.result.instructions).toContain("lucy_begin_question");
+      expect(body.result.instructions).toContain("Skipping this call never blocks catalog or query tools");
+      expect(body.result.instructions).toContain("Prefer the user's original wording in `question`");
     } finally {
       await closeAll(upstream, server);
     }

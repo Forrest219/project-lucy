@@ -249,6 +249,7 @@ Guardrail：
 - 后续同 identity 的 tool call 会在 attach window 内自动关联该 turn。
 - `question` 做 PII/sensitive redaction 后才可存 preview。
 - 缺少 `intentSummary` 返回 `isError: true`。
+- **Recommended when available / never blocking**：工具可选但推荐；有用户原话时优先填 `question`。漏调或写库失败不得阻断后续 catalog / query 等业务工具。
 
 ## 6. Contract Eval 要点
 
