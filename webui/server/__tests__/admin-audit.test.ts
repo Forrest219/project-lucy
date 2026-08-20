@@ -543,3 +543,61 @@ describe("POST /api/admin/audit/conversation-turns/purge", () => {
     }
   });
 });
+
+describe("GET /api/admin/audit/query-artifacts", () => {
+  it("decrypts cold-store SQL by requestId and records forensic access", async () => {
+    process.env.LUCY_AUDIT_QUERY_KEY = "admin-audit-forensics-key";
+    process.env.LUCY_AUDIT_COLD_DIR = path.join(projectRoot, "cold");
+
+    const { writeQueryArtifact } = await import("../audit/query-artifact-store");
+    const { writeLog } = await import("../proxy/audit");
+    const written = await writeQueryArtifact({
+      kind: "generated_sql",
+      tool: "lucy_query",
+      requestId: "forensic-req-1",
+      plaintext: "SELECT SUM(sales) FROM orders"
+    });
+    expect(written).not.toBeNull();
+    await writeLog({
+      ts: "2026-08-20T10:00:00.000Z",
+      userId: "analyst",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 12,
+      requestId: "forensic-req-1",
+      queryHash: written!.queryHash,
+      queryArtifactRef: written!.ref,
+      queryPreview: "SELECT SUM(sales) FROM orders WHERE id = ?",
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const list = await request(app.server).get("/api/admin/audit?includeProtocol=1").expect(200);
+      const entry = list.body.data.entries.find((row: { requestId: string }) => row.requestId === "forensic-req-1");
+      expect(entry.queryArtifactRef).toBe(written!.ref);
+      expect(JSON.stringify(list.body)).not.toContain("SELECT SUM(sales) FROM orders\"");
+      // list may include redacted preview, but must not embed the cold-store plaintext field
+      expect(list.body.data.entries.every((row: { plaintext?: string }) => row.plaintext === undefined)).toBe(true);
+
+      const viewed = await request(app.server)
+        .get("/api/admin/audit/query-artifacts?requestId=forensic-req-1")
+        .expect(200);
+      expect(viewed.body.data.plaintext).toBe("SELECT SUM(sales) FROM orders");
+      expect(viewed.body.data.kind).toBe("generated_sql");
+
+      const { getAuditDb } = await import("../admin/audit");
+      const db = await getAuditDb();
+      const access = db
+        .prepare("SELECT outcome, artifact_ref FROM query_artifact_access_log ORDER BY id DESC LIMIT 1")
+        .get() as { outcome: string; artifact_ref: string };
+      expect(access.outcome).toBe("ok");
+      expect(access.artifact_ref).toBe(written!.ref);
+    } finally {
+      await app.close();
+      delete process.env.LUCY_AUDIT_QUERY_KEY;
+      delete process.env.LUCY_AUDIT_COLD_DIR;
+    }
+  });
+});

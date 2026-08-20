@@ -13,6 +13,11 @@ import {
   type LucySpanStatus
 } from "../trace/evidence.js";
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
+import { captureQueryPayload, mergeIncludeSql } from "../audit/query-artifact-capture.js";
+import {
+  queryArtifactEncryptionEnabled,
+  writeQueryArtifact
+} from "../audit/query-artifact-store.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -853,11 +858,48 @@ function normalizeLucyFiltersForUpstream(value: unknown): unknown {
 
 function lucyQueryUpstreamArgs(args: unknown): Record<string, unknown> {
   const record = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
-  return {
+  const normalized = {
     ...record,
     filters: normalizeLucyFiltersForUpstream(record.filters),
     limit: numericLimit(record.limit)
   };
+  // Spec 124: when forensic cold-store key is configured, ask upstream for generated SQL.
+  if (queryArtifactEncryptionEnabled()) {
+    return mergeIncludeSql(normalized);
+  }
+  return normalized;
+}
+
+async function enrichWithQueryArtifact(options: {
+  entry: Parameters<typeof writeLog>[0];
+  toolArgs?: unknown;
+  toolResultBody?: unknown;
+}): Promise<Parameters<typeof writeLog>[0]> {
+  try {
+    const captured = captureQueryPayload({
+      toolArgs: options.toolArgs,
+      toolResultBody: options.toolResultBody
+    });
+    if (!captured) return options.entry;
+    const written = await writeQueryArtifact({
+      kind: captured.kind,
+      tool: options.entry.tool,
+      requestId: options.entry.requestId,
+      traceId: options.entry.traceId,
+      plaintext: captured.plaintext,
+      queryHash: captured.queryHash
+    });
+    if (!written) return options.entry;
+    return {
+      ...options.entry,
+      queryArtifactRef: written.ref,
+      queryHash: options.entry.queryHash ?? written.queryHash,
+      queryLength: options.entry.queryLength ?? captured.plaintext.length,
+      queryOperation: options.entry.queryOperation ?? (captured.kind === "semantic_query" ? "semantic" : "select")
+    };
+  } catch {
+    return options.entry;
+  }
 }
 
 function hasNonEmptyStringField(record: Record<string, unknown>, fields: string[]): boolean {
@@ -1571,10 +1613,12 @@ async function writeLucySemanticResponse(
 
   let outcome: "ok" | "error" = "ok";
   let errorDetail = metaFailed;
+  let parsedBody: Record<string, unknown> | undefined;
   try {
     const parsed = (!metaFailed || contentType.includes("application/json"))
       ? JSON.parse(body) as Record<string, unknown>
       : decodeSseMessage(body) as Record<string, unknown> | undefined;
+    parsedBody = parsed;
     const parsedError = parsed?.error;
     const parsedResult = parsed?.result as Record<string, unknown> | undefined;
     if (parsedError || parsedResult?.isError) {
@@ -1587,7 +1631,7 @@ async function writeLucySemanticResponse(
 
   const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
   const tables = [...new Set([...structuredTables, ...queryTables])];
-  recordAudit({
+  const baseEntry: Parameters<typeof writeLog>[0] = {
     ts: new Date().toISOString(),
     userId: identity.userId,
     client: identity.client,
@@ -1603,7 +1647,15 @@ async function writeLucySemanticResponse(
     traceId,
     ...requestMeta,
     ...(await auditMeta(identity, outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error")),
-  }, outcome === "ok" ? sourceRefs : undefined);
+  };
+  recordAudit(
+    await enrichWithQueryArtifact({
+      entry: baseEntry,
+      toolArgs,
+      toolResultBody: parsedBody
+    }),
+    outcome === "ok" ? sourceRefs : undefined
+  );
   recordMcpTraceForTool({
     traceId,
     identity,
@@ -1830,8 +1882,18 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     // non-JSON body; proxy as-is
   }
 
-  const recordRequestAudit = (entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]) => {
-    recordAudit(rpcMethod === "tools/call" ? { ...entry, traceId } : entry, sources);
+  const recordRequestAudit = (
+    entry: Parameters<typeof writeLog>[0],
+    sources?: SourceRef[]
+  ) => {
+    const withTrace = rpcMethod === "tools/call" ? { ...entry, traceId } : entry;
+    if (rpcMethod === "tools/call" && toolArgs !== undefined) {
+      void enrichWithQueryArtifact({ entry: withTrace, toolArgs }).then((enriched) => {
+        recordAudit(enriched, sources);
+      });
+      return;
+    }
+    recordAudit(withTrace, sources);
   };
 
   // Near-neighbor turn correlation (spec §8.2): if the client didn't send an explicit

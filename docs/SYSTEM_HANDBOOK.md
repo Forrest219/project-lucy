@@ -158,7 +158,8 @@ KTX CLI / MCP daemon
 | `evals/<domain>/eval/*-eval-cases.yaml` | Agent 质量评测用例 | 测试/数据维护者 |
 | `webui/config/access.yaml` | Role、Agent、Token hash、默认 deny/known tools | 管理员 |
 | `webui/config/data-qa-instructions.md` | MCP initialize 注入的数据问答运行时指导 | 平台维护者 |
-| `.ktx-ui/audit.sqlite`（或 `LUCY_AUDIT_DB`） | MCP 访问审计热库：撤销 token、权限快照、问题簇、`query_hash` / 脱敏 preview；不存完整 SQL 原文 | 系统生成 |
+| `.ktx-ui/audit.sqlite`（或 `LUCY_AUDIT_DB`） | MCP 访问审计热库：撤销 token、权限快照、问题簇、`query_hash` / 脱敏 preview / `query_artifact_ref`；不存完整 SQL 原文 | 系统生成 |
+| `.ktx-ui/audit-cold/query-artifacts/`（或 `LUCY_AUDIT_COLD_DIR`） | 查询原文 AES-GCM 冷存（需 `LUCY_AUDIT_QUERY_KEY`） | 系统生成 |
 | `.ktx-ui/catalog-reloads.json` | 最近静态 Catalog reload 记录 | 系统生成 |
 | `.ktx-ui/eval/runs.sqlite`（或 `LUCY_EVAL_DB`） | Eval run 历史 | 系统生成 |
 
@@ -1056,14 +1057,21 @@ Token 发行规则：
 
 #### 审计热库与冷库（SQL 留存边界）
 
-访问日志与 Trace / Evidence 采用**分层存储**。当前近线事实源是本地**热库**；长期**冷归档**是产品规划能力（对象存储，规划保留 180 天+）。深链：`/help?section=admin-audit-hot-cold-store`。
+访问日志与 Trace / Evidence 采用**分层存储**。当前近线事实源是本地**热库**；**查询原文加密冷存**（Spec 124）已落地为本地 MVP，长期对象存储归档仍为规划能力。深链：`/help?section=admin-audit-hot-cold-store`。
 
-| | 热库（当前实现） | 冷库 / 冷归档（规划） |
-| --- | --- | --- |
-| 位置 | `.ktx-ui/audit.sqlite`（可用 `LUCY_AUDIT_DB` 覆盖） | 对象存储归档（S3 兼容），不是 Admin 默认即时查询源 |
-| 用途 | `/admin/audit` 即时查询、Trace 钻取、拒绝原因复盘 | 长期留存、合规抽查、偶发深挖 |
-| 查询体验 | 快，与 WebUI / Admin API 绑定 | 慢，按归档批次取回 |
-| SQL 相关 | **允许**：`query_hash`、脱敏截断的 `query_preview`（字面量替换且长度截断）、结构摘要 / Trace metadata。**禁止**：完整 `SQL` / `SQL AST` 原文、完整结果行、Token 明文、数据库凭据、客户行级样本 | 若业务需要事后阅读完整 `SQL`，应走受控冷归档并对静态内容加密；**不是**热库默认行为 |
+| | 热库（当前实现） | 查询原文冷存（Spec 124 MVP） | 对象存储冷归档（规划） |
+| --- | --- | --- | --- |
+| 位置 | `.ktx-ui/audit.sqlite`（可用 `LUCY_AUDIT_DB` 覆盖） | `.ktx-ui/audit-cold/query-artifacts/`（可用 `LUCY_AUDIT_COLD_DIR` 覆盖） | 对象存储（S3 兼容） |
+| 用途 | `/admin/audit` 即时查询、Trace 钻取、拒绝原因复盘 | 生产溯源：按 `requestId` / 引用解密查看当时查询 | 长期留存、合规抽查 |
+| 查询体验 | 快，与 WebUI / Admin API 绑定 | 受控解密；每次查看写取证审计 | 慢，按归档批次取回 |
+| SQL 相关 | **允许**：`query_hash`、脱敏截断的 `query_preview`、`query_artifact_ref`。**禁止**：完整 `SQL` / `SQL AST` 原文、完整结果行、Token 明文 | AES-256-GCM 密文；种类为 `raw_sql` / `generated_sql` / `semantic_query` | 规划中可承接同一 artifact 格式 |
+
+**启用生产溯源冷存**
+
+1. 设置 `LUCY_AUDIT_QUERY_KEY`（任意密钥字符串；实现会归一化为 32 字节 AES 密钥）。
+2. 重启 WebUI / Lucy MCP Proxy。
+3. 之后 `lucy_query`（及含 raw `sql`/`query` 的调用）会在热库写入 `query_artifact_ref`；在 `/admin/audit` 调用流水展开行点击「查看查询原文」。
+4. 未配置密钥时：MCP 行为不变，不写冷存，不影响主路径。
 
 **为什么热库不明文存完整 SQL**
 
@@ -1073,23 +1081,24 @@ Token 发行规则：
 
 **哈希 vs 加密（不要混用）**
 
-| | 哈希（例如 `query_hash`） | 加密 |
+| | 哈希（例如 `query_hash`） | 加密（冷存） |
 | --- | --- | --- |
-| 能否还原原文 | **不能**（单向） | **能**（持有正确密钥时可解密） |
-| 典型用途 | 判断两次调用是否同一条 `SQL`、做去重与对照 | 冷归档需要事后阅读全文时的静态保护 |
+| 能否还原原文 | **不能**（单向） | **能**（持有 `LUCY_AUDIT_QUERY_KEY` 时可解密） |
+| 典型用途 | 判断两次调用是否同一条 `SQL`、做去重与对照 | 生产溯源需要事后阅读全文 |
 | 丢了原文 / 密钥 | hash 仍在，但永远看不到 `SQL` 正文 | 密文仍在，没有密钥也解不开 |
 
-因此：热库用 hash + 脱敏 preview，是「默认可验证同异、不可还原全文」；若未来冷库存完整 `SQL`，加密是为了「默认谁也读不了，只有授权流程能解密查看」，不是为了永久销毁可读性。
+因此：热库用 hash + 脱敏 preview + 可选 `query_artifact_ref`，是「默认可验证同异、不可还原全文」；冷存加密是为了「默认谁也读不了，只有授权查看能解密」。
 
 **与 Eval 的边界**
 
 | 事实源 | 是否可存完整 SQL | 说明 |
 | --- | --- | --- |
-| `.ktx-ui/audit.sqlite`（审计热库） | 否 | 生产 MCP 调用的近线审计；安全候选抽取也只能基于脱敏摘要 |
+| `.ktx-ui/audit.sqlite`（审计热库） | 否 | 生产 MCP 调用的近线审计；仅指针与摘要 |
+| `.ktx-ui/audit-cold/query-artifacts/` | 密文 | Spec 124 生产溯源；需密钥解密 |
 | `.ktx-ui/eval/runs.sqlite`（Eval 运行库） | 是（runner 捕获时） | 与审计库隔离；供 `sql_assertions` 与失败分析 |
-| `/eval/security-candidates` | 否（来自审计） | 从访问日志归一化而来，不含完整 `SQL` 原文 |
+| `/eval/security-candidates` | 否（来自审计热库） | 从访问日志归一化而来，不含完整 `SQL` 原文 |
 
-含义：业务 Eval **在线跑**可以验证生成 `SQL`；用生产 `/admin/audit` **反推**完整 `SQL` 结构会天然受限。这是安全边界，不是页面漏字段。
+含义：业务 Eval **在线跑**可以验证生成 `SQL`；生产 `/admin/audit` 默认仍看不到全文，但配置密钥后可走「查看查询原文」做受控溯源。
 
 Admin API 示例：
 
@@ -1884,6 +1893,8 @@ setup:
 | `LUCY_PROXY_UPSTREAM_TIMEOUT_MS` | `30000` | 上游超时 |
 | `LUCY_ACCESS_CONFIG_PATH` | `webui/config/access.yaml` | 覆盖 access 配置路径 |
 | `LUCY_AUDIT_DB` | `.ktx-ui/audit.sqlite` | 覆盖 MCP 审计库 |
+| `LUCY_AUDIT_QUERY_KEY` | （未设置） | 启用查询原文加密冷存（Spec 124）；未设置则不写冷存 |
+| `LUCY_AUDIT_COLD_DIR` | `.ktx-ui/audit-cold/query-artifacts` | 覆盖查询原文冷存目录 |
 | `LUCY_EVAL_DB` | `.ktx-ui/eval/runs.sqlite` | 覆盖 Eval 运行库 |
 | `LUCY_ENABLE_INSTRUCTIONS_INJECTION` | 开启 | `false` 时关闭 initialize instructions 注入 |
 | `LUCY_ENABLE_QUESTION_TOOL` | 开启 | `false` 时不注入 `lucy_begin_question` |
@@ -2060,7 +2071,7 @@ Proxy 转发目标由 `LUCY_PROXY_UPSTREAM_HOST` / `LUCY_PROXY_UPSTREAM_PORT` �
 | Role tools wildcard | `role.allow.tools` 为空或包含 `*` 会让整个 role fail-closed，返回 `role_resolution_failed:<role>` |
 | 外部 Agent | 只拿 Agent token，不拿 `KTX_INTERNAL_TOKEN` |
 | 原始 SQL | `lucy_query` / `sl_query` raw `query`/`sql` 默认拒绝 |
-| 审计热库 SQL 留存 | 热库（`.ktx-ui/audit.sqlite`）不存完整 `SQL` / `SQL AST` 原文；只存 `query_hash` 与脱敏 `query_preview`。详见 [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界) |
+| 审计热库 SQL 留存 | 热库（`.ktx-ui/audit.sqlite`）不存完整 `SQL` / `SQL AST` 原文；只存 `query_hash`、脱敏 `query_preview` 与可选 `query_artifact_ref`。配置 `LUCY_AUDIT_QUERY_KEY` 后可走加密冷存溯源。详见 [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界) |
 | 服务绑定 | 本地默认 `127.0.0.1`；Docker/客户部署才显式 `0.0.0.0` |
 
 ### 6.9 最小健康检查清单
