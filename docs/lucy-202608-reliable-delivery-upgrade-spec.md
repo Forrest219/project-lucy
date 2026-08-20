@@ -4,11 +4,12 @@
 |---|---|
 | Document name | Lucy 202608 Enterprise Governance & Observability Upgrade Spec |
 | Document type | Product / Architecture Upgrade Spec |
-| Version | v0.5 |
-| Written date | 2026-08-03；v0.4 更新 2026-08-03（收窄 202608 主线为企业访问治理与可观测性，移出 FDE Copilot 与通用 semantic delivery 提效）；v0.5 更新 2026-08-03（删除 Dynamic RLS / CLS POC 超前设计，收敛 P2 为当前访问治理复核与发布证据包） |
+| Version | v0.6 |
+| Written date | 2026-08-03；v0.4 更新 2026-08-03（收窄 202608 主线为企业访问治理与可观测性，移出 FDE Copilot 与通用 semantic delivery 提效）；v0.5 更新 2026-08-03（删除 Dynamic RLS / CLS POC 超前设计，收敛 P2 为当前访问治理复核与发布证据包）；v0.6 更新 2026-08-20（Spec 62 v0.5 / P0 plan 交叉引用；Kernel Landed 与 P0 Closure 分档） |
 | Scope | Lucy 202608 版本升级：Access Governance Trace / Evidence、ACL policy decision trace、Admin Audit Trace read model、Tiered Access Governance Gate、Safe Log-to-Security-Eval、Admin Observability、Agent / Role Risk Review、Release Readiness Evidence Package |
 | Execution control | `docs/lucy-202608-upgrade-execution-control.md` |
 | Gap analysis | `docs/access-control/gap-analysis-202608.md`（旧路径 `docs/lucy-202608-access-governance-gap-analysis.md` 为跳转桩） |
+| P0 Trace plan | `docs/plans/2026-08-20-trace-evidence-p0-plan.md` |
 
 ---
 
@@ -225,7 +226,7 @@ Package includes:
 
 | Spec | Status in 202608 | Scope |
 |---|---|---|
-| `webui/docs/62-trace-evidence-kernel-spec.md` | Active P0 | Trace / Evidence store, policy decision events, MCP Proxy integration |
+| `webui/docs/62-trace-evidence-kernel-spec.md` | Active P0（v0.5；Kernel Landed，Closure open） | Trace / Evidence store, policy decision events, MCP Proxy integration, Admin Trace Read Model；P0 plan: `docs/plans/2026-08-20-trace-evidence-p0-plan.md` |
 | `webui/docs/64-tiered-publish-gate-spec.md` | Active P1, renamed in content to Access Governance Gate | Agent / Role / Token / access policy gate and override evidence |
 | `webui/docs/65-safe-log-to-eval-spec.md` | Active P1, narrowed in content to Safe Log-to-Security-Eval | Security candidate pool, negative cases, reviewer evidence |
 | `webui/docs/69-admin-governance-observability-spec.md` | Active P1/P2 | Admin dashboard, trace read model, risk review candidates, release readiness evidence package |

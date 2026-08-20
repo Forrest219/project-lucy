@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5） |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -442,9 +442,32 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码。
+#### 4.7.1 Trace Read Model（Spec 62）
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL。
+`/admin/audit` 内只读 Trace 核查链路（非 Visual Debugger）。术语来自 Spec 62 v0.5：
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Trace Detail | Trace 详情 | 核查链路 | 调试器、Visual Debugger、审计 2.0 | 从访问日志行打开的只读 Drawer / 面板 |
+| Trace Event | Trace Event | — | 审计行（与事件 ID 混淆）、log event（裸露作主标签） | append-only span 行 |
+| Evidence Event | Evidence Event | — | Action Evidence、发布证据 | 挂在 Trace 上的证据行 |
+| Evidence Ref | Evidence Ref | — | 证据来源（Action Evidence 挪用）、附件 | kind + ref + hash 引用 |
+| Ordered Spans | 有序 Span | — | Timeline（无说明）、调用树（过宽） | 按时间 / 父子排序的 span 列表 |
+| Policy Decision | 策略裁决 | — | 裁决原因（单独指 Decision Reason 展示）、ACL dump | `policy_decision` span；展示时可同时含裁决原因双行 |
+| Trace ID | Trace ID | — | trace id（裸露作唯一主标签且无保护） | 与 `access_log.trace_id` 对齐；可复制 |
+
+**消歧（禁止混用）：**
+
+| 概念 | UI / 文档应使用 | 不得称为 |
+|---|---|---|
+| Kernel Evidence（Spec 62） | Evidence Event / Evidence Ref | Action Evidence、发布证据包 |
+| Action Evidence（Spec 100） | 证据来源 | Trace Evidence、Evidence Ref |
+| Release Readiness Evidence Package（P2） | 发布就绪证据包（若产品化） | Trace 详情 |
+| Access Governance Gate（P1） | 访问治理门禁 | 发布门禁、Eval 质量门禁 |
+
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Trace`、`Evidence`、`Span`、`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID / Trace ID 值、裁决原因码、`trace_id`。
+
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 62** 要求 Trace Read Model 术语与热库证据消歧。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 

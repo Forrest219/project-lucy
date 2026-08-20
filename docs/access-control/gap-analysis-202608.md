@@ -4,12 +4,12 @@
 |---|---|
 | Document name | Lucy 202608 Governance & Observability Gap Analysis |
 | Document type | Product / Architecture Gap Analysis |
-| Version | v0.3 |
-| Written date | 2026-08-03；v0.2 更新 2026-08-03（按 202608 Governance & Observability 主线收窄）；v0.3 更新 2026-08-03（删除 Dynamic RLS / CLS POC 超前设计，P2 聚焦当前访问治理复核与发布证据） |
+| Version | v0.4 |
+| Written date | 2026-08-03；v0.2 更新 2026-08-03（按 202608 Governance & Observability 主线收窄）；v0.3 更新 2026-08-03（删除 Dynamic RLS / CLS POC 超前设计，P2 聚焦当前访问治理复核与发布证据）；v0.4 更新 2026-08-20（对齐 Spec 62 v0.5：P0 Kernel Landed；Closure 缺口为 evidence 完整度 / purge / 术语） |
 | Goal | 提升 Lucy 成为可信赖的企业级 data agent 平台 |
 | Scope | `/admin` 访问治理现状、202608 Governance & Observability specs / plans、权限管理与 Agent 管理相关需求边界、已实现能力与差距 |
 | Related blueprint | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| Related plan | `docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md` |
+| Related plan | `docs/plans/2026-08-20-trace-evidence-p0-plan.md`（P0）；`docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md`（全量 P0–P2） |
 
 ---
 
@@ -19,13 +19,13 @@ Lucy 当前已经具备企业级 data agent 平台的关键雏形：`access.yaml
 
 主要差距不是 FDE 建模效率，而是：
 
-1. 访问日志、权限裁决、配置变更和审计证据尚未统一成 append-only Trace / Evidence。
-2. `/admin/audit` 偏明细查询，缺少 Trace chain 与面向 Agent / Role / Token 的治理可观测聚合。
+1. Trace / Evidence Kernel 已落地（`trace_events` / `evidence_events` + Admin Trace Read Model），但 P0 Closure 仍缺：`result_snapshot_hash` / source evidence、retention purge worker、Trace UI 术语对齐（见 Spec 62 v0.5 与 `docs/plans/2026-08-20-trace-evidence-p0-plan.md`）。
+2. `/admin/audit` 已具备 Trace chain 入口；面向 Agent / Role / Token 的治理可观测聚合仍属 P1。
 3. denied / forbidden / raw query 等真实安全事件尚未沉淀成 P0 security Eval。
 4. Agent / Role / Token 变更缺少分级治理门禁与周期性风险复核。
 5. 发布前缺少基于当前 Agent / Role / Token / ACL / Audit / Eval 事实源的统一证据包。
 
-本地 `http://127.0.0.1:55176/admin` 在审阅时未响应，因此本报告基于代码与文档事实源：`webui/src/pages/admin/**`、`webui/server/admin/**`、`webui/server/proxy/**`、202608 specs 和 plans。
+本地 `http://127.0.0.1:55176/admin` 在审阅时未响应，因此本报告基于代码与文档事实源：`webui/src/pages/admin/**`、`webui/server/admin/**`、`webui/server/proxy/**`、`webui/server/trace/**`、202608 specs 和 plans。
 
 ## 2. Current Baseline
 
@@ -51,9 +51,9 @@ Lucy 当前已经具备企业级 data agent 平台的关键雏形：`access.yaml
 
 | Layer | Active task | Current state | Gap | User value |
 |---|---|---|---|---|
-| P0 | Trace / Evidence Kernel | `access_log` and `permission_snapshots` exist | No append-only `trace_events` / `evidence_events` contract | 审计能还原每次访问的完整证据链 |
-| P0 | ACL policy decision trace | `decision_reason` is stored in `access_log` | Not normalized as policy decision event with evidence refs | 能解释 allow / deny 的 Role、Token、权限快照和原因 |
-| P0 | Admin Audit Trace Read Model | `/admin/audit` shows rows and heatmap | No trace chain detail from audit row | 管理员在一个页面完成访问核查和权限解释 |
+| P0 | Trace / Evidence Kernel | `trace_events` / `evidence_events` + helper 已落地（Kernel Landed） | P0 Closure：retention purge worker | 审计能还原每次访问的完整证据链 |
+| P0 | ACL policy decision trace | MCP Proxy 双写 `policy_decision` + `access_policy` evidence；`access_log.decision_reason` 仍保留 | P0 Closure：已知行/列数时 `result_snapshot_hash`；有 sources 时 source / `semantic_yaml_node` evidence | 能解释 allow / deny 的 Role、Token、权限快照和原因 |
+| P0 | Admin Audit Trace Read Model | `/admin/audit` Trace Drawer + `GET /api/admin/trace/events` | P0 Closure：UI 主术语与 Spec 62 / 术语标准 §4.7.1 对齐 | 管理员在一个页面完成访问核查和权限解释 |
 | P1 | Tiered Access Governance Gate | Admin writes config with dryRun and config audit | No P0 / P1 / P2 risk gate for Agent / Role / Token changes | 权限扩张、敏感源暴露、global deny weakening 被发布前拦截 |
 | P1 | Safe Log-to-Security-Eval | Eval system exists; denied logs exist | No security candidate pool or reviewer promotion | 真实越权尝试可转成 P0 security regression |
 | P1 | Admin Observability Dashboard | Agent / Role pages show some local stats | No unified governance dashboard for Agent / Role / Token risk trends | 运维能快速发现高拒绝率 Agent、过宽 Role、异常 Token |
