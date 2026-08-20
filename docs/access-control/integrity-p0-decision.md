@@ -10,7 +10,7 @@
 | 状态 | **已批准落盘**（决策基线；非实现 Spec） |
 | 适用范围 | 售前 / 对内对齐 / 路线图升格；界定「必须承诺」与「已知限制」 |
 | 输出位置 | `docs/access-control/integrity-p0-decision.md` |
-| 相关 | [`gap-analysis-202608.md`](gap-analysis-202608.md)；[`../lucy-202608-reliable-delivery-upgrade-spec.md`](../lucy-202608-reliable-delivery-upgrade-spec.md)；[`webui/docs/62-trace-evidence-kernel-spec.md`](../../webui/docs/62-trace-evidence-kernel-spec.md) |
+| 相关 | [`gap-analysis-202608.md`](gap-analysis-202608.md)；[`../lucy-202608-reliable-delivery-upgrade-spec.md`](../lucy-202608-reliable-delivery-upgrade-spec.md)；[`webui/docs/62-trace-evidence-kernel-spec.md`](../../webui/docs/62-trace-evidence-kernel-spec.md) §4.1（与 IP0 关系）；[`../plans/2026-08-20-trace-evidence-p0-plan.md`](../plans/2026-08-20-trace-evidence-p0-plan.md) |
 
 ---
 

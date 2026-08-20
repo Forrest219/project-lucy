@@ -8,7 +8,8 @@
 
 **Tech Stack:** TypeScript, Fastify, React, better-sqlite3, existing Admin Audit page / Drawer patterns.
 
-**Canonical Spec:** `webui/docs/62-trace-evidence-kernel-spec.md` v0.5  
+**Canonical Spec:** `webui/docs/62-trace-evidence-kernel-spec.md` v0.5.1  
+**Integrity baseline:** `docs/access-control/integrity-p0-decision.md`（IP0；扩展且不替代本工程 P0）  
 **Blueprint:** `docs/lucy-202608-reliable-delivery-upgrade-spec.md` §5  
 **Execution control:** `docs/lucy-202608-upgrade-execution-control.md`（GOV-01）  
 **Kernel work order (historical):** `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`
@@ -26,6 +27,7 @@ This plan covers **only** P0:
 
 Out of scope:
 
+- 完整性 P0 全集中的 **IP0-3 / IP0-4** 实现（受控查询指纹、授权↔触达对账；须另批 Spec + WO）。本计划仅交付 **IP0-1**（工程 Trace P0）；IP0-2 覆盖率指标不阻塞 P0 Closed（见 Spec 62 §4.1）
 - AC-P0 `policyVersion` / capability model（`docs/access-control/plans/wo-202608-59-access-control-p0.md`）
 - P1 Access Governance Gate、Safe Log-to-Security-Eval、Admin Observability Dashboard
 - P2 Risk Review Candidates、Release Readiness Evidence Package
