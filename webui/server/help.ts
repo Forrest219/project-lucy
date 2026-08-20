@@ -40,6 +40,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/^Agent$/, "admin-agents"],
   [/Role 权限模板|角色配置/, "admin-roles"],
   [/Bearer Token|Token 发行/, "admin-tokens"],
+  [/热库与冷库|SQL 留存边界/, "admin-audit-hot-cold-store"],
   [/MCP 访问日志|问题簇|审计/, "admin-audit"],
   [/质量评测 Eval/, "eval"],
   [/Eval Case|Case 维护/, "eval-cases"],
@@ -85,6 +86,8 @@ const HELP_SEARCH_DEFAULT_LIMIT = 20;
 const HELP_SEARCH_SNIPPET_RADIUS = 72;
 
 const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事项"]);
+
+const ADMIN_GOVERNANCE_HEADING_TITLES = new Set(["审计热库与冷库（SQL 留存边界）"]);
 
 const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
   "为什么要编写语义 YAML",
@@ -185,6 +188,8 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
     const databaseOpsSubheading = rawLevel === 4 && DATABASE_OPS_HEADING_TITLES.has(cleanTitle);
     const deploymentChecklistSubheading =
       rawLevel === 4 && DEPLOYMENT_CHECKLIST_HEADING_TITLES.has(cleanTitle);
+    const adminGovernanceSubheading =
+      rawLevel === 4 && ADMIN_GOVERNANCE_HEADING_TITLES.has(cleanTitle);
     const semanticAuthoringSubheading =
       rawLevel === 4 && SEMANTIC_AUTHORING_HEADING_TITLES.has(cleanTitle);
     if (
@@ -194,6 +199,7 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
         !yamlRunbookSubheading &&
         !databaseOpsSubheading &&
         !deploymentChecklistSubheading &&
+        !adminGovernanceSubheading &&
         !semanticAuthoringSubheading)
     )
       continue;
