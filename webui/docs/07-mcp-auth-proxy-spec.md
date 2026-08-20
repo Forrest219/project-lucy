@@ -324,7 +324,7 @@ Spec 124 网络与设备上下文（`ALTER TABLE` 追加）：
 client_ip       TEXT,  -- X-Forwarded-For 首跳（仅 LUCY_TRUST_PROXY=1）或 socket remoteAddress
 user_agent      TEXT,  -- HTTP User-Agent，截断 256
 client_version  TEXT,  -- initialize.clientInfo.version
-device_name     TEXT,  -- 可选头 x-lucy-device-name 或 Token YAML device_name
+device_name     TEXT,  -- 仅可选头 x-lucy-device-name（不回填 YAML 备注）
 
 CREATE TABLE auth_failure_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

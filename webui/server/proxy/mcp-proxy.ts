@@ -1800,7 +1800,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     ...correlationMeta(req.headers),
     clientIp: networkMeta.clientIp,
     userAgent: networkMeta.userAgent,
-    // Per-request header wins over YAML-registered device name when both exist.
+    // Runtime device name only — never fall back to YAML remark.
     ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {})
   };
   if (!identify.ok) {
@@ -1810,9 +1810,6 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
   const identity = identify.identity;
-  if (!requestMeta.deviceName && identity.deviceName) {
-    requestMeta.deviceName = identity.deviceName;
-  }
 
   const body = await readBody(req);
   const start = Date.now();

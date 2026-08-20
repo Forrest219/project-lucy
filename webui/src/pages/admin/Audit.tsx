@@ -982,7 +982,7 @@ function EntryRow({
               )}
               {entry.deviceName && (
                 <div>
-                  <span className="font-medium">设备名：</span>
+                  <span className="font-medium">最近设备名：</span>
                   <span className="ml-2 text-fg-muted notranslate" translate="no">{entry.deviceName}</span>
                 </div>
               )}
@@ -1500,9 +1500,9 @@ export function Audit() {
           <input
             className="pl-input w-36 notranslate"
             translate="no"
-            placeholder="设备名"
+            placeholder="最近设备名"
             value={deviceNameFilter}
-            aria-label="设备名"
+            aria-label="最近设备名"
             onChange={(e) => updateParam("deviceName", e.target.value)}
           />
           <label className="flex items-center gap-2 text-sm text-fg-muted">

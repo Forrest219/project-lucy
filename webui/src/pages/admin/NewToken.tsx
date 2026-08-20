@@ -89,7 +89,7 @@ export function NewToken() {
     }
     mutation.mutate({
       label: label.trim(),
-      device_name: deviceName.trim() || label.trim(),
+      device_name: deviceName.trim() || null,
       expires_at: expiresAt || null
     });
   }
@@ -165,7 +165,7 @@ export function NewToken() {
               <>
                 {" · "}
                 <span>
-                  设备名：
+                  设备名备注：
                   <span className="notranslate" translate="no">{generatedToken.device_name}</span>
                 </span>
               </>
@@ -321,17 +321,19 @@ export function NewToken() {
           />
         </label>
         <label className="grid gap-1">
-          <span className="text-sm font-medium">设备名</span>
+          <span className="text-sm font-medium">设备名备注（可选）</span>
           <input
             className="pl-input notranslate"
             translate="no"
-            placeholder="例：xingchen-mbp（默认等于标签）"
+            placeholder="例：xingchen-mbp（仅备注，不参与鉴权）"
             value={deviceName}
             onChange={(e) => setDeviceName(e.target.value)}
-            aria-label="设备名"
+            aria-label="设备名备注"
           />
           <span className="text-xs text-fg-muted">
-            建议在客户端请求头配置 <code className="notranslate" translate="no">x-lucy-device-name</code>，便于审计按设备追查。
+            真正的设备归因来自运行时请求头 <code className="notranslate" translate="no">x-lucy-device-name</code>
+            与 <span className="notranslate" translate="no">MCP</span>{" "}
+            <span className="notranslate" translate="no">clientInfo</span>；本字段可留空。
           </span>
         </label>
         <label className="grid gap-1">

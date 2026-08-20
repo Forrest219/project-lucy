@@ -26,7 +26,7 @@ Rules:
 
 - Plaintext token is returned only once when created.
 - `webui/config/access.yaml` stores only `sha256:<hex>` token hashes.
-- Optional `device_name` records the intended client installation (defaults to label).
+- Optional YAML `device_name` is an admin remark only (may be omitted; does not default to label).
 - Prefer one Token per client installation for targeted revoke.
 - Token revocation is persisted in `.ktx-ui/audit.sqlite` and immediately invalidates the Proxy access-config cache.
 - `expires_at` is enforced by the MCP Proxy (expired tokens receive 401).

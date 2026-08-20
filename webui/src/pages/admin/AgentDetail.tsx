@@ -480,18 +480,34 @@ export function AgentDetail() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{token.label}</span>
                           <span className="pl-status-badge pl-status-done">活跃</span>
-                          {(token.device_name || token.last_device_name_seen) && (
-                            <span className="text-xs text-fg-muted">
-                              设备名：
-                              <span className="notranslate" translate="no">
-                                {token.device_name || token.last_device_name_seen}
-                              </span>
-                            </span>
-                          )}
                         </div>
                         <div className="text-xs text-fg-muted">
                           <span>创建 {token.created}</span>
                           {token.expires_at && <span> · 过期 {token.expires_at}</span>}
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          备注：
+                          {token.device_name ? (
+                            <span className="notranslate" translate="no">{token.device_name}</span>
+                          ) : (
+                            "—"
+                          )}
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          <span className="notranslate" translate="no">Agent</span> 类型：
+                          <span className="notranslate" translate="no">
+                            {token.last_client
+                              ? `${token.last_client}${token.last_client_version ? ` ${token.last_client_version}` : ""}`
+                              : "—"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          最近设备名：
+                          {token.last_device_name_seen ? (
+                            <span className="notranslate" translate="no">{token.last_device_name_seen}</span>
+                          ) : (
+                            "—"
+                          )}
                         </div>
                         <div className="text-xs text-fg-muted">
                           最近使用：
@@ -507,14 +523,6 @@ export function AgentDetail() {
                           {token.distinct_ips_7d != null && token.distinct_ips_7d > 1 ? (
                             <span className="text-warning"> · 近 7 日 {token.distinct_ips_7d} 个 IP</span>
                           ) : null}
-                        </div>
-                        <div className="text-xs text-fg-muted">
-                          客户端：
-                          <span className="notranslate" translate="no">
-                            {token.last_client
-                              ? `${token.last_client}${token.last_client_version ? ` ${token.last_client_version}` : ""}`
-                              : "—"}
-                          </span>
                         </div>
                         {token.last_user_agent ? (
                           <div className="text-xs text-fg-muted truncate" title={token.last_user_agent}>

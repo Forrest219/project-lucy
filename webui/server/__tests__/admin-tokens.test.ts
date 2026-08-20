@@ -92,7 +92,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.close();
   });
 
-  it("stores device_name (defaults to label) in yaml and response", async () => {
+  it("stores device_name when explicitly provided", async () => {
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -107,7 +107,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.close();
   });
 
-  it("defaults device_name to label when omitted", async () => {
+  it("omits device_name from yaml when not provided", async () => {
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -115,7 +115,10 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
       .send({ label: "hermes-only" })
       .expect(200);
 
-    expect(res.body.data.device_name).toBe("hermes-only");
+    expect(res.body.data.device_name).toBeNull();
+    const yamlContent = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yamlContent).toContain("label: hermes-only");
+    expect(yamlContent).not.toContain("device_name");
     await app.close();
   });
 

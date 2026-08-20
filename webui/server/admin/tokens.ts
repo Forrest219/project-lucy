@@ -113,7 +113,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
     const deviceName =
       typeof deviceNameRaw === "string" && deviceNameRaw.trim().length > 0
         ? deviceNameRaw.trim().slice(0, 128)
-        : label.trim();
+        : null;
 
     const projectRoot = await resolveProjectRoot();
     const filePath = path.join(projectRoot, ACCESS_YAML_REL);
@@ -198,7 +198,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
       hash: tokenHash,
       label,
       created,
-      device_name: deviceName,
+      ...(deviceName ? { device_name: deviceName } : {}),
       ...(expires_at !== undefined ? { expires_at: expires_at ?? null } : {})
     };
 
