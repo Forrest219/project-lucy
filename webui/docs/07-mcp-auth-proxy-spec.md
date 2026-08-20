@@ -318,6 +318,31 @@ effective_tables_count            INTEGER,
 decision_reason                   TEXT   -- tool_forbidden / table_forbidden / unknown_connection 等
 ```
 
+Spec 124 网络与设备上下文（`ALTER TABLE` 追加）：
+
+```sql
+client_ip       TEXT,  -- X-Forwarded-For 首跳（仅 LUCY_TRUST_PROXY=1）或 socket remoteAddress
+user_agent      TEXT,  -- HTTP User-Agent，截断 256
+client_version  TEXT,  -- initialize.clientInfo.version
+device_name     TEXT,  -- 可选头 x-lucy-device-name 或 Token YAML device_name
+
+CREATE TABLE auth_failure_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL,
+  reason TEXT NOT NULL,  -- missing_bearer | token_unrecognized | token_revoked | token_expired
+  client_ip TEXT,
+  user_agent TEXT,
+  token_hash_prefix TEXT,
+  user_id TEXT,
+  token_label TEXT,
+  request_id TEXT
+);
+```
+
+- Token `expires_at` 由 Proxy `identifyRequest` **强制拒绝**（`token_expired`）。
+- Token 吊销 / Agent 删除后调用 `invalidateAccessConfigCache()`，不再依赖 30s YAML 缓存窗口。
+- 一 Token ≈ 一台客户端安装；定向删除 = 按 `label` 吊销该 Token。详见 Spec 124。
+
 同时新增权限快照表；`access_log.permission_snapshot_hash` 必须能关联到当时的完整 effective permissions。
 
 ```sql

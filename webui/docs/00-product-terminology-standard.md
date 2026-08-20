@@ -399,10 +399,15 @@ Connection (连接)
 | Token Call Ranking | Token 调用排行 · 近 N | Token 使用摘要 | 不重复展示顶部 KPI | 按窗口 `calls` 降序 |
 | Table Call Ranking | 表调用排行 · 近 N | 最受访问表（Top 10） | 仅统计已结构化…（主副文案） | 条形图 Top 10 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 三组 query 成功后的快照新鲜度；相对时间对齐系统概览；位于时间窗口切换左侧 |
+| Device Name | 设备名 | Token 设备名 | Device（裸露作主标签）、绑定设备（暗示硬件强绑定） | 签发时登记；可选头 `x-lucy-device-name` 运行时观测；见 Spec 124 |
+| Client IP | 访问 IP | 最近访问 IP | remoteAddress、XFF（裸露作主标签） | `access_log.client_ip`；Token 列表派生 `last_ip` |
+| User-Agent | User-Agent | UA | 浏览器指纹 | HTTP 头截断存储；DOM 值 `notranslate` |
+| Client Version | 客户端版本 | — | clientInfo.version（裸露） | MCP `initialize.clientInfo.version` |
+| Token Device Inventory | Token 设备清单 | 设备视角 Token 列表 | 已登录设备、Sessions | Agent 详情 Token Tab |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、表名 / physical table、token hash prefix、role id、Agent id。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、表名 / physical table、token hash prefix、role id、Agent id、设备名值、访问 IP、`User-Agent`。
 
-详见 Spec 78 / 84 / 86 / 87。
+详见 Spec 78 / 84 / 86 / 87；设备与网络上下文见 Spec 124。
 
 ### 4.6 系统与运维
 
@@ -441,10 +446,14 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
+| Client IP | 访问 IP | 最近访问 IP | remoteAddress（裸露） | 调用流水 / Drawer；Spec 124 |
+| Device Name | 设备名 | — | Device（裸露作主标签） | 可选头观测值；Spec 124 |
+| User-Agent | User-Agent | UA | — | 调用流水高级区；值 `notranslate` |
+| Client Version | 客户端版本 | — | — | 与 `client`（产品名）成对 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、访问 IP、设备名、`User-Agent`。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 124** 补网络与设备上下文。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 

@@ -632,9 +632,16 @@ export type TokenSummary = {
   label: string;
   created: string;
   expires_at?: string | null;
+  device_name?: string | null;
   last_used?: string | null;
   last_tool?: string | null;
   last_outcome?: string | null;
+  last_ip?: string | null;
+  last_user_agent?: string | null;
+  last_client?: string | null;
+  last_client_version?: string | null;
+  last_device_name_seen?: string | null;
+  distinct_ips_7d?: number;
   revoked?: boolean;
   revoked_at?: string;
   revoke_reason?: string;
@@ -689,12 +696,13 @@ export type CreateAgentBody = {
   role: string;
 };
 
-export type CreateTokenBody = { label: string; expires_at?: string | null };
+export type CreateTokenBody = { label: string; device_name?: string | null; expires_at?: string | null };
 
 export type CreateTokenResponse = {
   token: string;
   hash: string;
   label: string;
+  device_name?: string | null;
   created: string;
   expires_at?: string | null;
 };
@@ -709,6 +717,10 @@ export type AuditLogEntry = {
   lucyTurnId?: string;
   lucyPlatform?: string;
   client?: string;
+  clientVersion?: string;
+  clientIp?: string;
+  userAgent?: string;
+  deviceName?: string;
   tool: string;
   tables?: string[];
   argsSummary?: Record<string, unknown>;
@@ -741,6 +753,8 @@ export type AuditQuery = {
   sessionId?: string;
   turnId?: string;
   platform?: string;
+  clientIp?: string;
+  deviceName?: string;
   includeProtocol?: boolean;
   limit?: number;
   offset?: number;

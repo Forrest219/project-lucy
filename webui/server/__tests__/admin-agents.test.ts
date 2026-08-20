@@ -76,6 +76,7 @@ vi.mock("../admin/audit.js", () => ({
     pragma: vi.fn()
   })),
   recordConfigChange: vi.fn(async () => 1),
+  updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAuditRoutes: vi.fn()
 }));
 

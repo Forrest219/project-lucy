@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
-import { identifyRequest, setSessionClient, type Identity } from "./identity.js";
-import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, type AccessLogSourceRecord } from "./audit.js";
+import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
+import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { resolveProjectRoot } from "../project.js";
@@ -13,6 +13,7 @@ import {
   type LucySpanStatus
 } from "../trace/evidence.js";
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
+import { extractRequestClientMeta } from "./request-client-meta.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -300,12 +301,13 @@ function recordMcpTraceForTool(input: {
     });
 }
 
-async function auditMeta(identity: Awaited<ReturnType<typeof identifyRequest>>, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
+async function auditMeta(identity: Identity | null | undefined, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
   if (!identity) return { decisionReason };
   const snapshot = await permissionSnapshot(identity).catch(() => undefined);
   const tokenMeta = {
     tokenLabel: identity.tokenLabel,
     tokenHashPrefix: identity.tokenHashPrefix,
+    clientVersion: identity.clientVersion,
     decisionReason
   };
   if (!snapshot) return tokenMeta;
@@ -336,6 +338,25 @@ function correlationMeta(headers: IncomingMessage["headers"]): Partial<Parameter
     lucyTurnId: normalizeHeader(headers["x-lucy-turn-id"]),
     lucyPlatform: normalizeHeader(headers["x-lucy-platform"])
   };
+}
+
+function recordAuthFailure(
+  req: IncomingMessage,
+  result: Awaited<ReturnType<typeof identifyRequestDetailed>>
+): void {
+  if (result.ok) return;
+  const network = extractRequestClientMeta(req);
+  void writeAuthFailureLog({
+    ts: new Date().toISOString(),
+    reason: result.reason,
+    clientIp: network.clientIp,
+    userAgent: network.userAgent,
+    tokenHashPrefix: result.tokenHashPrefix,
+    userId: result.userId,
+    tokenLabel: result.tokenLabel
+  }).catch((error) => {
+    console.error("[lucy-proxy] failed to write auth_failure_log", error);
+  });
 }
 
 function findRawQuery(value: unknown, depth = 0): string | undefined {
@@ -1773,12 +1794,24 @@ async function writeInitializeResponse(
 
 async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
-  const identity = await identifyRequest(req.headers.authorization, sessionId);
-  const requestMeta = correlationMeta(req.headers);
-  if (!identity) {
+  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
+  const networkMeta = extractRequestClientMeta(req);
+  const requestMeta: Partial<Parameters<typeof writeLog>[0]> = {
+    ...correlationMeta(req.headers),
+    clientIp: networkMeta.clientIp,
+    userAgent: networkMeta.userAgent,
+    // Per-request header wins over YAML-registered device name when both exist.
+    ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {})
+  };
+  if (!identify.ok) {
+    recordAuthFailure(req, identify);
     res.writeHead(401, { "content-type": "application/json" });
     res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null }));
     return;
+  }
+  const identity = identify.identity;
+  if (!requestMeta.deviceName && identity.deviceName) {
+    requestMeta.deviceName = identity.deviceName;
   }
 
   const body = await readBody(req);
@@ -1803,7 +1836,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (rpcMethod === "initialize") {
       const clientInfo = (parsed.params as Record<string, unknown> | undefined)?.clientInfo as Record<string, unknown> | undefined;
       if (clientInfo?.name && sessionId) {
-        setSessionClient(sessionId, identity.userId, identity.tokenLabel, String(clientInfo.name));
+        const version = clientInfo.version != null ? String(clientInfo.version) : undefined;
+        setSessionClient(sessionId, identity.userId, identity.tokenLabel, String(clientInfo.name), version);
+        identity.client = String(clientInfo.name);
+        identity.clientVersion = version;
       }
     }
 
@@ -2649,8 +2685,9 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
-  const identity = await identifyRequest(req.headers.authorization, sessionId);
-  if (!identity) {
+  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
+  if (!identify.ok) {
+    recordAuthFailure(req, identify);
     res.writeHead(401, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "Unauthorized" }));
     return;

@@ -27,6 +27,7 @@ vi.mock("../admin/audit.js", () => ({
     pragma: vi.fn()
   })),
   recordConfigChange: vi.fn(async () => 1),
+  updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAuditRoutes: vi.fn()
 }));
 
@@ -88,6 +89,33 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(hash).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(label).toBe("cursor-test");
+    await app.close();
+  });
+
+  it("stores device_name (defaults to label) in yaml and response", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "cursor-desk", device_name: "xingchen-mbp" })
+      .expect(200);
+
+    expect(res.body.data.device_name).toBe("xingchen-mbp");
+    const yamlContent = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yamlContent).toContain("device_name: xingchen-mbp");
+    expect(yamlContent).toContain("label: cursor-desk");
+    await app.close();
+  });
+
+  it("defaults device_name to label when omitted", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "hermes-only" })
+      .expect(200);
+
+    expect(res.body.data.device_name).toBe("hermes-only");
     await app.close();
   });
 

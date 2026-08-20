@@ -132,6 +132,74 @@ describe("proxy audit log", () => {
     }
   });
 
+  it("persists client_ip, user_agent, client_version, and device_name", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    await writeLog({
+      ts: new Date().toISOString(),
+      userId: "device-ctx",
+      tool: "sl_query",
+      outcome: "ok",
+      durationMs: 2,
+      requestId: "device-ctx-1",
+      client: "cursor",
+      clientVersion: "1.2.3",
+      clientIp: "203.0.113.10",
+      userAgent: "Cursor/1.2.3",
+      deviceName: "xingchen-mbp"
+    });
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const columns = db.prepare("PRAGMA table_info(access_log)").all() as Array<{ name: string }>;
+      const names = columns.map((c) => c.name);
+      expect(names).toEqual(expect.arrayContaining(["client_ip", "user_agent", "client_version", "device_name"]));
+      const row = db
+        .prepare(
+          "SELECT client, client_version, client_ip, user_agent, device_name FROM access_log WHERE request_id = ?"
+        )
+        .get("device-ctx-1") as {
+        client: string;
+        client_version: string;
+        client_ip: string;
+        user_agent: string;
+        device_name: string;
+      };
+      expect(row.client).toBe("cursor");
+      expect(row.client_version).toBe("1.2.3");
+      expect(row.client_ip).toBe("203.0.113.10");
+      expect(row.user_agent).toBe("Cursor/1.2.3");
+      expect(row.device_name).toBe("xingchen-mbp");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("writes auth_failure_log rows", async () => {
+    const { writeAuthFailureLog } = await import("../proxy/audit");
+    await writeAuthFailureLog({
+      ts: new Date().toISOString(),
+      reason: "token_expired",
+      clientIp: "198.51.100.7",
+      userAgent: "Hermes/0.1",
+      tokenHashPrefix: "sha256:deadbeef",
+      userId: "zhangsan",
+      tokenLabel: "old-laptop"
+    });
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const row = db
+        .prepare("SELECT reason, client_ip, user_id, token_label FROM auth_failure_log ORDER BY id DESC LIMIT 1")
+        .get() as { reason: string; client_ip: string; user_id: string; token_label: string };
+      expect(row.reason).toBe("token_expired");
+      expect(row.client_ip).toBe("198.51.100.7");
+      expect(row.user_id).toBe("zhangsan");
+      expect(row.token_label).toBe("old-laptop");
+    } finally {
+      db.close();
+    }
+  });
+
   it("writeLog returns the inserted row id, usable as a foreign key for writeAccessLogSources", async () => {
     const { writeLog, writeAccessLogSources } = await import("../proxy/audit");
 

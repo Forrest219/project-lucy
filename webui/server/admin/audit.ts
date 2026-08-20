@@ -62,7 +62,11 @@ const ACCESS_LOG_COLUMNS = [
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
   ["response_truncated", "INTEGER"],
-  ["trace_id", "TEXT"]
+  ["trace_id", "TEXT"],
+  ["client_ip", "TEXT"],
+  ["user_agent", "TEXT"],
+  ["client_version", "TEXT"],
+  ["device_name", "TEXT"]
 ] as const;
 const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
@@ -83,6 +87,8 @@ type AccessLogFilterQuery = {
   platform?: string;
   callSource?: string;
   includeProtocol?: string;
+  clientIp?: string;
+  deviceName?: string;
 };
 
 function buildAccessLogFilter(q: AccessLogFilterQuery): {
@@ -103,7 +109,9 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
     eventId: q.eventId ? `%${q.eventId}%` : null,
     key: q.key ? `%${q.key}%` : null,
     platform: q.platform ?? null,
-    playgroundPlatform: MCP_PLAYGROUND_PLATFORM
+    playgroundPlatform: MCP_PLAYGROUND_PLATFORM,
+    clientIp: q.clientIp ? `%${q.clientIp}%` : null,
+    deviceName: q.deviceName ? `%${q.deviceName}%` : null
   };
 
   const baseConditions: string[] = [];
@@ -114,6 +122,8 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   if (params.until) baseConditions.push("ts <= @until");
   if (params.tableSearch) baseConditions.push("tables LIKE @tableSearch");
   if (params.sessionId) baseConditions.push("lucy_session_id = @sessionId");
+  if (params.clientIp) baseConditions.push("IFNULL(client_ip, '') LIKE @clientIp");
+  if (params.deviceName) baseConditions.push("IFNULL(device_name, '') LIKE @deviceName");
   if (params.key) {
     baseConditions.push("(CAST(id AS TEXT) LIKE @key OR IFNULL(lucy_turn_id, '') LIKE @key)");
   } else {
@@ -313,6 +323,19 @@ export async function getAuditDb(): Promise<Database.Database> {
       PRIMARY KEY(inferred_turn_id, access_log_id)
     );
     CREATE INDEX IF NOT EXISTS idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
+    CREATE TABLE IF NOT EXISTS auth_failure_log (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts                 TEXT    NOT NULL,
+      reason             TEXT    NOT NULL,
+      client_ip          TEXT,
+      user_agent         TEXT,
+      token_hash_prefix  TEXT,
+      user_id            TEXT,
+      token_label        TEXT,
+      request_id         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_afl_ts ON auth_failure_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_afl_reason_ts ON auth_failure_log(reason, ts);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -320,6 +343,7 @@ export async function getAuditDb(): Promise<Database.Database> {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
   `);
   ensureColumn(db, "config_change_log", "asset_kind", "TEXT NOT NULL DEFAULT 'governance'");
   ensureColumn(db, "config_change_log", "operation", "TEXT");
@@ -328,6 +352,7 @@ export async function getAuditDb(): Promise<Database.Database> {
   ensureColumn(db, "config_change_log", "idempotency_key", "TEXT");
   ensureColumn(db, "config_change_log", "write_status", "TEXT NOT NULL DEFAULT 'committed'");
   ensureColumn(db, "config_change_log", "error_reason", "TEXT");
+  ensureColumn(db, "config_change_log", "actor_ip", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_ccl_asset_kind_ts ON config_change_log(asset_kind, ts);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_ccl_idempotency ON config_change_log(idempotency_key);
@@ -351,6 +376,7 @@ export async function recordConfigChange(input: {
   changeType: string;
   actor?: string;
   actorType?: ConfigAuditActorType;
+  actorIp?: string;
   source?: string;
   assetKind?: ConfigAuditAssetKind;
   operation?: string;
@@ -380,6 +406,7 @@ export async function recordConfigChange(input: {
       targetId: input.targetId ?? null,
       actor: input.actor ?? "local-admin",
       actorType: input.actorType ?? "ui_admin",
+      actorIp: input.actorIp ?? null,
       source: input.source ?? null,
       assetKind: input.assetKind ?? "governance",
       operation: input.operation ?? null,
@@ -393,14 +420,15 @@ export async function recordConfigChange(input: {
 
   const result = database.prepare(`
     INSERT INTO config_change_log
-      (ts, actor, actor_type, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, idempotency_key, write_status, error_reason)
+      (ts, actor, actor_type, actor_ip, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, idempotency_key, write_status, error_reason)
     VALUES
-      (@ts, @actor, @actor_type, @source, @session_id, @file_path, @change_type, @asset_kind, @operation, @target_id, @old_summary, @new_summary, @diff, @request_id, @idempotency_key, @write_status, @error_reason)
+      (@ts, @actor, @actor_type, @actor_ip, @source, @session_id, @file_path, @change_type, @asset_kind, @operation, @target_id, @old_summary, @new_summary, @diff, @request_id, @idempotency_key, @write_status, @error_reason)
     ON CONFLICT(idempotency_key) DO NOTHING
   `).run({
     ts: new Date().toISOString(),
     actor: input.actor ?? "local-admin",
     actor_type: input.actorType ?? "ui_admin",
+    actor_ip: input.actorIp ?? null,
     source: input.source ?? null,
     session_id: input.sessionId ?? null,
     file_path: input.filePath,
@@ -465,6 +493,10 @@ interface QueryRow {
   lucy_turn_id: string | null;
   lucy_platform: string | null;
   client: string | null;
+  client_version: string | null;
+  client_ip: string | null;
+  user_agent: string | null;
+  device_name: string | null;
   tool: string;
   tables: string | null;
   args_summary: string | null;
@@ -903,6 +935,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
       lucyTurnId: row.lucy_turn_id ?? undefined,
       lucyPlatform: row.lucy_platform ?? undefined,
       client: row.client ?? undefined,
+      clientVersion: row.client_version ?? undefined,
+      clientIp: row.client_ip ?? undefined,
+      userAgent: row.user_agent ?? undefined,
+      deviceName: row.device_name ?? undefined,
       tool: row.tool,
       tables: row.tables ? (JSON.parse(row.tables) as string[]) : undefined,
       argsSummary: row.args_summary ? (redactSensitive(JSON.parse(row.args_summary)) as Record<string, unknown>) : undefined,
@@ -964,6 +1000,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
       "lucy_turn_id",
       "lucy_platform",
       "client",
+      "client_version",
+      "client_ip",
+      "user_agent",
+      "device_name",
       "tool",
       "tables",
       "args_summary",
@@ -998,6 +1038,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
           csvCell(row.lucy_turn_id),
           csvCell(row.lucy_platform),
           csvCell(row.client),
+          csvCell(row.client_version),
+          csvCell(row.client_ip),
+          csvCell(row.user_agent),
+          csvCell(row.device_name),
           csvCell(row.tool),
           csvCell(row.tables),
           csvCell(redactJsonString(row.args_summary)),

@@ -9,6 +9,8 @@ interface UserToken {
   hash: string; // format: "sha256:<hex>"
   label: string;
   created?: string;
+  expires_at?: string | null;
+  device_name?: string | null;
 }
 
 interface UserAllow {
@@ -63,7 +65,25 @@ export interface Identity {
   tokenLabel: string;
   tokenHashPrefix: string;
   client?: string;
+  clientVersion?: string;
+  deviceName?: string;
 }
+
+export type IdentifyFailureReason =
+  | "missing_bearer"
+  | "token_unrecognized"
+  | "token_revoked"
+  | "token_expired";
+
+export type IdentifyResult =
+  | { ok: true; identity: Identity }
+  | {
+      ok: false;
+      reason: IdentifyFailureReason;
+      tokenHashPrefix?: string;
+      userId?: string;
+      tokenLabel?: string;
+    };
 
 let configCache: AccessConfig | null = null;
 let configCachePath = "";
@@ -95,12 +115,32 @@ export async function getAccessConfig(options: { fresh?: boolean } = {}): Promis
   return loadConfig(options);
 }
 
+/** Drop in-memory access.yaml cache so revoke / create take effect immediately. */
+export function invalidateAccessConfigCache(): void {
+  configCache = null;
+  configCachePath = "";
+  configLoadedAt = 0;
+}
+
 function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
 
-// session/user/token -> client name (populated from MCP initialize handshake)
-const sessionClients = new Map<string, { clientName: string; lastSeen: number }>();
+function isExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return false;
+  const ms = Date.parse(expiresAt);
+  if (Number.isNaN(ms)) return false;
+  return ms <= Date.now();
+}
+
+type SessionClientInfo = {
+  clientName: string;
+  clientVersion?: string;
+  lastSeen: number;
+};
+
+// session/user/token -> client info (populated from MCP initialize handshake)
+const sessionClients = new Map<string, SessionClientInfo>();
 
 function sessionClientKey(sessionId: string, userId: string, tokenLabel: string): string {
   return `${sessionId}:${userId}:${tokenLabel}`;
@@ -112,13 +152,27 @@ function purgeExpiredSessionClients(now = Date.now()): void {
   }
 }
 
-export function setSessionClient(sessionId: string, userId: string, tokenLabel: string, clientName: string): void {
+export function setSessionClient(
+  sessionId: string,
+  userId: string,
+  tokenLabel: string,
+  clientName: string,
+  clientVersion?: string
+): void {
   const now = Date.now();
   purgeExpiredSessionClients(now);
-  sessionClients.set(sessionClientKey(sessionId, userId, tokenLabel), { clientName, lastSeen: now });
+  sessionClients.set(sessionClientKey(sessionId, userId, tokenLabel), {
+    clientName,
+    clientVersion: clientVersion || undefined,
+    lastSeen: now
+  });
 }
 
-export function getSessionClient(sessionId: string | undefined, userId: string, tokenLabel: string): string | undefined {
+export function getSessionClient(
+  sessionId: string | undefined,
+  userId: string,
+  tokenLabel: string
+): SessionClientInfo | undefined {
   if (!sessionId) return undefined;
   const now = Date.now();
   purgeExpiredSessionClients(now);
@@ -126,31 +180,61 @@ export function getSessionClient(sessionId: string | undefined, userId: string, 
   const value = sessionClients.get(key);
   if (!value) return undefined;
   value.lastSeen = now;
-  return value.clientName;
+  return value;
+}
+
+export async function identifyRequestDetailed(
+  authHeader: string | undefined,
+  sessionId?: string
+): Promise<IdentifyResult> {
+  if (!authHeader?.startsWith("Bearer ")) {
+    return { ok: false, reason: "missing_bearer" };
+  }
+  const token = authHeader.slice(7);
+  if (!token) {
+    return { ok: false, reason: "missing_bearer" };
+  }
+  const tokenHash = hashToken(token);
+  const tokenHashPrefix = tokenHash.slice(0, 19);
+
+  if (await isTokenRevoked(tokenHash)) {
+    return { ok: false, reason: "token_revoked", tokenHashPrefix };
+  }
+
+  const config = await loadConfig();
+  for (const user of config.users) {
+    for (const t of user.tokens) {
+      if (t.hash !== tokenHash) continue;
+      if (isExpired(t.expires_at)) {
+        return {
+          ok: false,
+          reason: "token_expired",
+          tokenHashPrefix,
+          userId: user.id,
+          tokenLabel: t.label
+        };
+      }
+      const sessionClient = getSessionClient(sessionId, user.id, t.label);
+      return {
+        ok: true,
+        identity: {
+          userId: user.id,
+          tokenLabel: t.label,
+          tokenHashPrefix,
+          client: sessionClient?.clientName,
+          clientVersion: sessionClient?.clientVersion,
+          deviceName: t.device_name ?? undefined
+        }
+      };
+    }
+  }
+  return { ok: false, reason: "token_unrecognized", tokenHashPrefix };
 }
 
 export async function identifyRequest(
   authHeader: string | undefined,
   sessionId?: string
 ): Promise<Identity | null> {
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.slice(7);
-  const tokenHash = hashToken(token);
-
-  if (await isTokenRevoked(tokenHash)) return null;
-
-  const config = await loadConfig();
-  for (const user of config.users) {
-    for (const t of user.tokens) {
-      if (t.hash === tokenHash) {
-        return {
-          userId: user.id,
-          tokenLabel: t.label,
-          tokenHashPrefix: tokenHash.slice(0, 19),
-          client: getSessionClient(sessionId, user.id, t.label),
-        };
-      }
-    }
-  }
-  return null;
+  const result = await identifyRequestDetailed(authHeader, sessionId);
+  return result.ok ? result.identity : null;
 }

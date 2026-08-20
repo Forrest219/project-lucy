@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Security Guide |
 | 文档类型 | Security / Operations Guide |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-06-22；2026-07-06 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-08-20 |
 | 适用范围 | Docker 部署、MCP Proxy、Agent token、ACL、audit、secrets |
 
 ## 1. Security Model
@@ -26,7 +26,10 @@ Rules:
 
 - Plaintext token is returned only once when created.
 - `webui/config/access.yaml` stores only `sha256:<hex>` token hashes.
-- Token revocation is persisted in `.ktx-ui/audit.sqlite`.
+- Optional `device_name` records the intended client installation (defaults to label).
+- Prefer one Token per client installation for targeted revoke.
+- Token revocation is persisted in `.ktx-ui/audit.sqlite` and immediately invalidates the Proxy access-config cache.
+- `expires_at` is enforced by the MCP Proxy (expired tokens receive 401).
 - Disabled agents must be denied before tool-level checks.
 - Do not commit token plaintext, `.ktx/secrets/`, or `.ktx-ui/*.sqlite*`.
 
@@ -66,16 +69,22 @@ Audit records are stored in SQLite under `.ktx-ui/` by default.
 Audit captures:
 
 - user id and token label/hash prefix.
-- client/session metadata when available.
+- client/session metadata when available (`client`, `client_version`).
+- network context: `client_ip`, `user_agent`, optional `device_name` (`x-lucy-device-name`).
 - tool name, table refs, decision outcome, and duration.
 - permission snapshot hash.
 - response row/column summary when available.
+- auth failures in `auth_failure_log` (missing / unrecognized / revoked / expired), with IP and User-Agent.
+
+Set `LUCY_TRUST_PROXY=1` only behind a trusted reverse proxy so `X-Forwarded-For` may be used for `client_ip`.
 
 Sensitive payload handling:
 
 - Full raw SQL/query payloads are rejected by ACL for proxy tool calls.
 - Error detail is truncated before persistence.
 - Token hashes are prefix-only in access logs.
+
+See Spec 124 for Token device inventory and targeted revoke UX.
 
 ## 5. Secrets
 
