@@ -44,6 +44,7 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: webui/package-lock.json
+      - run: cp ktx.yaml.example ktx.yaml
       - run: npm ci
         working-directory: webui
       - run: npm run lint:terminology

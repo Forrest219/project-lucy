@@ -192,10 +192,19 @@ function redactJsonString(value: string | null): string | null {
 
 export async function getAuditDb(): Promise<Database.Database> {
   if (db) return db;
-  const projectRoot = await resolveProjectRoot();
-  const dir = path.join(projectRoot, ".ktx-ui");
-  mkdirSync(dir, { recursive: true });
-  const dbPath = process.env.LUCY_AUDIT_DB ?? path.join(dir, "audit.sqlite");
+  const envDbPath = process.env.LUCY_AUDIT_DB;
+  let dbPath: string;
+  if (envDbPath && envDbPath.trim().length > 0) {
+    // Tests and alternate audit stores can point at an explicit sqlite file
+    // without requiring a resolvable ktx.yaml project root.
+    dbPath = path.resolve(envDbPath);
+    mkdirSync(path.dirname(dbPath), { recursive: true });
+  } else {
+    const projectRoot = await resolveProjectRoot();
+    const dir = path.join(projectRoot, ".ktx-ui");
+    mkdirSync(dir, { recursive: true });
+    dbPath = path.join(dir, "audit.sqlite");
+  }
   db = new Database(dbPath);
   prepareTraceDatabase(db);
   db.exec(`

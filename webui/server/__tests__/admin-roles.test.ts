@@ -8,11 +8,17 @@ import { LUCY_R1_EXACT_TOOLS, ROLE_TEMPLATES } from "../admin/role-templates";
 
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
+    prepare: vi.fn(() => ({
+      get: vi.fn(() => undefined),
+      all: vi.fn(() => []),
+      run: vi.fn(() => ({ lastInsertRowid: 1 }))
+    })),
     exec: vi.fn(),
-    pragma: vi.fn()
+    pragma: vi.fn(),
+    transaction: vi.fn((fn: (...args: unknown[]) => unknown) => fn)
   })),
   recordConfigChange: vi.fn(async () => 1),
+  updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAuditRoutes: vi.fn()
 }));
 

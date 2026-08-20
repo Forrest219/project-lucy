@@ -202,6 +202,7 @@ vi.mock("../admin/audit.js", () => ({
     transaction: vi.fn((fn: (...args: unknown[]) => unknown) => fn)
   })),
   recordConfigChange: vi.fn(async () => 1),
+  updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAuditRoutes: vi.fn()
 }));
 
