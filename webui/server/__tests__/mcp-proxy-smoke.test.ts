@@ -793,6 +793,162 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("picks the JSON-RPC response frame when upstream SSE includes progress notifications", async () => {
+    const upstream = createServer(async (req, res) => {
+      const parsed = JSON.parse(await readRequestBody(req)) as { id?: unknown };
+      const progress = {
+        jsonrpc: "2.0",
+        method: "notifications/progress",
+        params: { progressToken: parsed.id, progress: 0.5, message: "Executing" }
+      };
+      const result = {
+        jsonrpc: "2.0",
+        id: parsed.id,
+        result: {
+          content: [{ type: "text", text: JSON.stringify({ headers: ["region"], rows: [["East", 2]] }) }],
+          structuredContent: { headers: ["region"], rows: [["East", 2]] }
+        }
+      };
+      const sseBody =
+        `event: message\ndata: ${JSON.stringify(progress)}\n\n` +
+        `event: message\ndata: ${JSON.stringify(result)}\n\n`;
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+        "content-length": Buffer.byteLength(sseBody)
+      });
+      res.end(sseBody);
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "sse-progress-1",
+          method: "tools/call",
+          params: {
+            name: "lucy_query",
+            arguments: {
+              connectionId: "mysql-aliyun",
+              measures: ["superstore_orders.sales"],
+              limit: 5
+            }
+          }
+        })
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type") ?? "").toContain("application/json");
+      const text = await res.text();
+      expect(text.startsWith("event:")).toBe(false);
+      expect(text).not.toContain("notifications/progress");
+      const parsed = JSON.parse(text) as {
+        id: string;
+        result: {
+          content: Array<{ text: string }>;
+          structuredContent?: { rows?: unknown[] };
+          _meta?: { lucy?: { tool?: string } };
+        };
+      };
+      expect(parsed.id).toBe("sse-progress-1");
+      expect(parsed.result.content[0]?.text ?? "").toContain("East");
+      expect(parsed.result.structuredContent?.rows?.[0]).toEqual(["East", 2]);
+      expect(parsed.result._meta?.lucy?.tool).toBe("lucy_query");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("normalizes legacy tools/call finite SSE (progress + result) to application/json", async () => {
+    const upstream = createServer(async (req, res) => {
+      const parsed = JSON.parse(await readRequestBody(req)) as { id?: unknown };
+      const progress = {
+        jsonrpc: "2.0",
+        method: "notifications/progress",
+        params: { progressToken: parsed.id, progress: 0.2, message: "Planning" }
+      };
+      const result = {
+        jsonrpc: "2.0",
+        id: parsed.id,
+        result: {
+          content: [{ type: "text", text: JSON.stringify({ rows: [["West", 9]] }) }]
+        }
+      };
+      const sseBody =
+        `event: message\ndata: ${JSON.stringify(progress)}\n\n` +
+        `event: message\ndata: ${JSON.stringify(result)}\n\n`;
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        connection: "keep-alive",
+        "content-length": Buffer.byteLength(sseBody)
+      });
+      res.end(sseBody);
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "sse-legacy-sl-query",
+          method: "tools/call",
+          params: {
+            name: "sl_query",
+            arguments: {
+              connectionId: "mysql-aliyun",
+              measures: [{ $text: "superstore_orders.sales" }]
+            }
+          }
+        })
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type") ?? "").toContain("application/json");
+      expect(res.headers.get("content-type") ?? "").not.toContain("text/event-stream");
+      const text = await res.text();
+      expect(text.startsWith("event:")).toBe(false);
+      expect(text).not.toContain("notifications/progress");
+      const parsed = JSON.parse(text) as {
+        id: string;
+        result: { content: Array<{ text: string }> };
+      };
+      expect(parsed.id).toBe("sse-legacy-sl-query");
+      expect(parsed.result.content[0]?.text ?? "").toContain("West");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("normalizes agent transport measure wrappers before validating and forwarding Lucy queries", async () => {
     const upstreamSeen: Array<Record<string, unknown>> = [];
     const upstream = createServer(async (req, res) => {

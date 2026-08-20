@@ -4,9 +4,9 @@
 |---|---|
 | 文档名称 | MCP Auth Proxy — 访问日志与多用户权限 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.4 |
-| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 修订 2026-08-11 |
-| 撰写人 | Claude (Opus 架构设计) |
+| 版本 | v1.5（SSE 缓冲改写：多帧时必须选 JSON-RPC response 帧；通用 tools/call 有限 SSE 归一化为 JSON） |
+| 撰写日期 | 2026-06-18；v1.2 修订 2026-06-21；v1.3 修订 2026-06-23；v1.4 修订 2026-08-11；v1.5 修订 2026-08-20 |
+| 撰写人 | Claude (Opus 架构设计)；v1.5 Cursor Agent |
 | 委托人 | 张星晨 |
 | 基于材料 | project-lucy 代码库、KTX 上游源码（/Users/zhangxingchen/Projects/ktx）、Opus 架构分析 |
 | 适用范围 | project-lucy webui/server/ 新增 MCP Auth Proxy，不修改 KTX 上游 |
@@ -90,13 +90,15 @@ POST /mcp (client)
 - `mcp-session-id` header **双向透传**，代理不生成新 session ID
 - 一个 client session → 一个 upstream session（不复用连接）
 - 请求 body 可缓冲（每次工具调用是单个 JSON 对象，通常 < 10KB）
-- 默认非改写路径仍原样 pipe，避免破坏真正的流式 SSE/chunked 语义
+- 默认非改写路径中，**非** `tools/call` 仍原样 pipe，避免破坏真正的流式 SSE/chunked 语义
 - 下列路径会**有限缓冲并改写**响应，改写成功后统一以 `application/json` 返回（即使上游是 `text/event-stream`），且不继承上游的 SSE/`x-accel-buffering` 等帧头（保留 `mcp-session-id`）：
   - `initialize` instructions 注入（失败 fail-open 透传原响应）
   - `tools/list`（权限过滤 / 工具注入）
   - `tools/call` 的 `lucy_query` / `lucy_read_source`（结果 `_meta` enrichment）
   - `tools/call` 的 `wiki_search`（结果 ACL 过滤）
-- 原因：KTX 常对 MCP 响应返回**带 `Content-Length` 的单帧 SSE** + `Connection: keep-alive`。部分 Streamable HTTP 客户端（实测 Cursor）会把该响应当作未结束的事件流一直等待，最终报 `MCP error -32001: Request timed out`，而上游实际已在亚秒级完成。proxy 既然已经整包缓冲，就应归一化为 JSON。
+  - **其余** `tools/call`（含 legacy `sl_*`）：上游若为有限 SSE，同样归一化为 JSON（v1.5）
+- 凡属上列缓冲改写，SSE 多帧解码规则见 **§6.1.0**（禁止取首条 `data:`）
+- 原因：KTX 常对 MCP 响应返回**带 `Content-Length` 的单帧 SSE** + `Connection: keep-alive`。部分 Streamable HTTP 客户端（实测 **Cursor / Claude Code**；OpenClaw 等较宽松客户端往往不易复现）会把该响应当作未结束的事件流一直等待，最终报 `MCP error -32001: Request timed out`，而上游实际已在亚秒级完成。proxy 既然已经整包缓冲，就应归一化为 JSON。
 - `tools/list` 是协议发现面，proxy 对该响应做有限缓冲改写：过滤无权工具，注入 proxy 自服务工具（如 `kx_catalog`），并重写 `content-length` / `transfer-encoding`
 
 ### 4.4 Initialize Instructions 注入（v1.3）
@@ -378,13 +380,27 @@ v1.2 增加连接裁决：
 
 `tools/list` 改写策略：
 
-- proxy 只对 `tools/list` 的有限响应做缓冲改写；非 `tools/list` 仍保持流式透传。
+- proxy 只对 `tools/list` 的有限响应做缓冲改写；非 `tools/list` 且非上列 `tools/call` 缓冲路径仍保持流式透传。
 - 对 `application/json` 响应：完整读取 JSON-RPC 响应体，过滤 `result.tools`，保留其他字段。
-- 对 SSE 响应：完整读取本次 `tools/list` 的 SSE 帧，解析 `event: message` / `data:` JSON，改写后以 `application/json` 返回（不再重发 SSE 单帧），避免 Streamable HTTP 客户端把有限 SSE 当成长连接。
+- 对 SSE 响应：完整读取本次 `tools/list` 的 SSE 帧，按 **§6.1.0** 选取 JSON-RPC **response** 帧后过滤 `result.tools`，再以 `application/json` 返回（不再重发 SSE 单帧），避免 Streamable HTTP 客户端把有限 SSE 当成长连接。
 - 若上游返回多帧流式 `tools/list`、无法完整解析、body 超过 `MAX_TOOLS_LIST_REWRITE_BYTES = 4 MiB` 或 JSON-RPC 不是单个 response，proxy 必须 fail-closed 返回 JSON-RPC error，不得透传未过滤工具列表。
 - 若上游 tools/list 支持分页 / cursor，proxy 过滤当前页并原样保留 pagination 字段；不得合并跨页工具。
 - `initialize.capabilities` 不做权限过滤；权限发现以 `tools/list` 的实际响应为准。
 - v1.2 不实现主动 `listChanged` 推送；role 变更后，新 `tools/list` 请求在配置 reload 后反映新权限。
+
+### 6.1.0 缓冲改写 SSE：必须选 JSON-RPC response 帧（v1.5）
+
+**背景**：Cursor / Claude Code 等 Streamable HTTP 客户端在 `tools/call` 时会带 `progressToken`。KTX 上游可能先推多条 `notifications/progress`（SSE `data:` 帧，JSON-RPC **notification**，有 `method`/`params`、无 `id`/`result`），最后才推带请求 `id` 的 `result`/`error` **response** 帧。OpenClaw 等客户端若不发 `progressToken` 或容忍有限 SSE，往往不易复现。
+
+**事故形态**：Proxy 若对缓冲 body 使用「第一条 `data:`」解码，会把 progress 通知当成最终工具结果改写发回。客户端一直等匹配 `id` 的 JSON-RPC response → 表现为 `MCP error -32001: Request timed out`。服务端审计仍可能是 `outcome=ok`（上游查询已成功），curl/不带 progressToken 的客户端往往只有单帧 result，不易复现。
+
+**强制规则**：
+
+1. 缓冲改写路径解码 SSE 时，必须收集全部 `data:` 帧，再选取带 `id` 且含 `result` 或 `error` 的 JSON-RPC **response** 帧。
+2. 若请求带 `id`，优先匹配同 `id` 的 response；否则取最后一个 response 帧。
+3. **禁止**用首条 `data:` 作为改写输入；**禁止**把 `method: notifications/progress`（或其它 notification）当作 `tools/call` / `tools/list` / `initialize` 的最终响应。
+4. 改写成功后以 `application/json` 返回（见 §4.3），不重发有限 SSE。Progress 透传与客户端超时续命是独立议题，不在本条范围内。
+5. 实现锚点：`decodeSseJsonRpcResponse`（`webui/server/proxy/mcp-proxy.ts`）。回归：`webui/server/__tests__/mcp-proxy-smoke.test.ts`（progress→result 用例）。
 
 ### 6.1.1 `decision_reason` 枚举
 
