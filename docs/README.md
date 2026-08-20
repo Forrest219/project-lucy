@@ -25,6 +25,7 @@
 | `lucy-r1-release-runbook.md` | Lucy R1 发布检查、Doris/Hermes 证据、排障和回滚手册 |
 | `lucy-202608-reliable-delivery-upgrade-spec.md` | Lucy 202608 Enterprise Governance & Observability 升级蓝图：访问治理 Trace / Evidence、ACL policy decision trace、Admin 可观测、Security Eval、风险复核与发布证据包 |
 | `lucy-202608-upgrade-execution-control.md` | Lucy 202608 升级执行总控：spec / plan / task 状态、并行波次、minimax handoff、验证矩阵 |
+| `access-control/integrity-p0-decision.md` | 企业完整性 P0 决策备忘：须承诺项（Trace/问询绑定/查询指纹/触达对账等）与已知限制；扩展而非替代 202608 工程 P0 |
 | `starrocks-r1-support-plan.md` | StarRocks R1 P1 gated support 边界、证据路径与发布限制 |
 | **`access-control/`** | **访问权限域档案**（设计 / ADR / UAT / 本域 WO）；入口 [`access-control/README.md`](access-control/README.md)；现行基线 [`access-control/design-upgrade.md`](access-control/design-upgrade.md) v1.1.2 |
 | `design-db-connection.md` | 数据库接入模块技术设计 |

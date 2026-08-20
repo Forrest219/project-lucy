@@ -176,6 +176,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | **访问权限域档案（入口）** | **`docs/access-control/README.md`** |
 | 访问权限升级设计 v1.1.2 | `docs/access-control/design-upgrade.md` |
+| 企业完整性 P0 决策备忘 | `docs/access-control/integrity-p0-decision.md` |
 | AC-P0 实施计划 | `docs/access-control/plans/wo-202608-59-access-control-p0.md` |
 | Agent 权限设计（Module 1 历史） | `docs/access-control/design-agent-permissions-v1.md` |
 | 访问治理闭环设计（2026-06 基线） | `docs/access-control/design-governance-baseline.md` |
