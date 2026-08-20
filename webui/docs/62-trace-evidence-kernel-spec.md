@@ -4,10 +4,11 @@
 |---|---|
 | 文档名称 | Trace / Evidence Kernel API Spec |
 | 文档类型 | Architecture / API / Data Contract Spec |
-| 版本 | v0.5 |
-| 撰写日期 | 2026-08-03；v0.2 更新 2026-08-03（补充 SQLite 并发与测试数据库隔离要求）；v0.3 更新 2026-08-03（补充 retention、auto_vacuum 与热库数据黑白名单）；v0.4 更新 2026-08-03（对齐 202608 Governance & Observability 主线）；v0.5 更新 2026-08-20（钉死 P0 最低充分条件、Implementation Status、Kernel Landed / P0 Closed 两档验收；明确 AC-P0 `policyVersion` 不进本 P0） |
+| 版本 | v0.5.1 |
+| 撰写日期 | 2026-08-03；v0.2 更新 2026-08-03（补充 SQLite 并发与测试数据库隔离要求）；v0.3 更新 2026-08-03（补充 retention、auto_vacuum 与热库数据黑白名单）；v0.4 更新 2026-08-03（对齐 202608 Governance & Observability 主线）；v0.5 更新 2026-08-20（钉死 P0 最低充分条件、Implementation Status、Kernel Landed / P0 Closed 两档验收；明确 AC-P0 `policyVersion` 不进本 P0）；v0.5.1 更新 2026-08-20（增补与完整性 P0 / IP0 关系小节；交叉引用 `docs/access-control/integrity-p0-decision.md`） |
 | 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
+| 关联完整性口径 | `docs/access-control/integrity-p0-decision.md` |
 | 关联 P0 计划 | `docs/plans/2026-08-20-trace-evidence-p0-plan.md` |
 | 关联工单 | `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`（Kernel Landed）；P0 Closure 见上述 P0 计划 T2–T4 |
 | 适用范围 | append-only trace / evidence event store、MCP Proxy 基础写入、ACL policy decision trace、Admin Audit Trace read model、Access Governance Gate 与 Security Eval 共用数据契约 |
@@ -39,6 +40,8 @@ Lucy 已有 `access_log`、`access_log_sources`、`conversation_turns`、`inferr
 - 不改变 MCP Proxy ACL 判定结果。
 - 不实施 Access Control AC-P0 的 `policyVersion` / capability digest（见 `docs/access-control/plans/wo-202608-59-access-control-p0.md`）；本 P0 以 `permissionSnapshotHash` 作为策略可解释绑定。
 - 不把 P1 Access Governance Gate、Safe Log-to-Security-Eval、Admin Observability Dashboard，或 P2 Risk Review / Release Readiness Evidence Package 计入本 Spec 的 P0 Closed 条件（它们可消费 Kernel，但不是本 P0 Done 条件）。
+- 不对齐「完整性 P0」全集（IP0-3 / IP0-4 等）为本 Spec 的 P0 Closed 条件；完整性扩展口径见 §4.1 与 `docs/access-control/integrity-p0-decision.md`。
+- 已知限制与对外不得口头扩大的清单以完整性决策备忘 §2 为准（含：不保证 100% 原话、不托管 Agent 最终自然语言答案、默认不存明文全量 SQL、无行/列级 RLS、无 SSO 作为完整性底线前置、无完整 Visual Debugger）。
 
 ## 4. P0 Minimum Sufficient Condition
 
@@ -75,6 +78,45 @@ flowchart LR
   kernel --> join
   join --> auditUI["Admin Audit Trace Read Model"]
 ```
+
+### 4.1 与完整性 P0（IP0）关系
+
+权威决策备忘：[`docs/access-control/integrity-p0-decision.md`](../../docs/access-control/integrity-p0-decision.md)。
+
+| 口径 | 主张 | 本 Spec 角色 |
+|---|---|---|
+| **工程 P0（GOV-01）** | Trace / Evidence 三件套 + 本 Spec 的 Kernel Landed / P0 Closed | **本文件范围** |
+| **完整性 P0（IP0）** | 对外宣称「访问可完整答辩」时的承诺最小集；**扩展且不替代**工程 P0 | 本文件只覆盖其中的 **IP0-1**，并承载部分契约钩子 |
+
+完整性判别链（决策备忘）：
+
+```text
+问了什么 → 谁问的 → 凭什么查 → 实际怎么查 → 触达什么 → 规模如何
+```
+
+与本 Spec / Closure 的映射：
+
+| IP0 | 能力 | 与本 Spec | 本任务是否计入 P0 Closed |
+|---|---|---|---|
+| **IP0-1** | Trace / Evidence 内核 + Admin 证据链 | **等同**本 Spec 工程 P0（含 Closure T2–T4） | **是** |
+| **IP0-2** | 问询稳定绑定 + 覆盖率披露 | Join keys 已含 `turn_id`；漏报不阻断查询。覆盖率指标 / 完整性报告披露为可选增强，不改变 MCP 语义 | **否**（契约已具备；覆盖率指标另增补，不阻塞本 Spec Closed） |
+| **IP0-3** | 受控查询指纹（hash + 脱敏结构预览 + 触达源清单） | 热库白名单已允许 AST hash / 脱敏结构 metadata；可预留 evidence kind（如 `query_fingerprint`）。**默认不存明文全量 SQL** | **否**（须另批实现 Spec + WO；不得写成已交付） |
+| **IP0-4** | 授权集合 ↔ 实际触达对账 | 依赖 IP0-3 或等价上游可观测契约；Closure 的 source / `semantic_yaml_node` evidence 仅为弱前驱 | **否**（须另批；可预留 `warn` / `denied_by` 对账 evidence） |
+| **IP0-5** | 配置变更可答辩 | 允许 evidence 引用 `config_change_log`；高危门禁属工程 P1 | **否**（挂钩允许；Gate 不进本 Closed） |
+| **IP0-6** | 对外口径固化 | 售前 / 发布材料引用决策备忘 §1–§2 | **否**（流程项） |
+
+依赖顺序（摘自决策备忘，实施时不得颠倒）：
+
+```text
+IP0-1 Trace/Evidence          ← 本 Spec（地基）
+    ├─ IP0-5 变更证据挂钩
+    ├─ IP0-2 问询绑定 + 覆盖率
+    └─ IP0-3 查询指纹 / 结构预览
+         └─ IP0-4 授权 ↔ 触达对账
+IP0-6 口径表随发布冻结
+```
+
+**对外口径硬约束：** 仅完成工程 P0（本 Spec）**不得**单独对外宣称已满足完整性 P0 全集。完整性承诺表与已知限制表以决策备忘 §1–§2 为准。
 
 ## 5. Implementation Status（相对仓库现状）
 
