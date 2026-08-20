@@ -495,6 +495,7 @@ describe("HelpCenter", () => {
     renderHelp();
 
     const header = await screen.findByTestId("page-header");
+    expect(within(header).getByText("无需登录即可查看")).toBeInTheDocument();
     expect(within(header).getByText("来源")).toBeInTheDocument();
     expect(within(header).getByText("docs/SYSTEM_HANDBOOK.md")).toHaveAttribute("translate", "no");
     expect(within(header).getByText(/更新时间/)).toBeInTheDocument();

@@ -6,6 +6,7 @@ import { isTokenExpired, normalizeExpiresAtInput } from "../proxy/identity.js";
 import { hashPassword, verifyPassword } from "../auth/password.js";
 import { resetAdminsCache } from "../auth/admins-store.js";
 import { resetSessionSecretCache } from "../auth/session.js";
+import { isPublicApi } from "../auth/guard.js";
 
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
@@ -17,6 +18,15 @@ vi.mock("../admin/audit.js", () => ({
   updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAuditRoutes: vi.fn()
 }));
+
+describe("isPublicApi", () => {
+  it("allows help handbook and search without a session", () => {
+    expect(isPublicApi("GET", "/api/help/handbook")).toBe(true);
+    expect(isPublicApi("GET", "/api/help/search?q=token")).toBe(true);
+    expect(isPublicApi("POST", "/api/help/handbook")).toBe(false);
+    expect(isPublicApi("GET", "/api/admin/agents")).toBe(false);
+  });
+});
 
 describe("isTokenExpired / normalizeExpiresAtInput", () => {
   it("treats null/empty as never expired", () => {
@@ -145,6 +155,11 @@ describe("webui admin auth API", () => {
     const denied = await app.inject({ method: "GET", url: "/api/admin/agents" });
     expect(denied.statusCode).toBe(401);
     expect(denied.json().error.code).toBe("AUTH_REQUIRED");
+
+    const help = await app.inject({ method: "GET", url: "/api/help/handbook" });
+    expect(help.statusCode).toBe(200);
+    expect(help.json().ok).toBe(true);
+    expect(help.json().data?.sourcePath).toBe("docs/SYSTEM_HANDBOOK.md");
 
     const login = await app.inject({
       method: "POST",
