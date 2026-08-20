@@ -100,7 +100,7 @@ export function AdminAccounts() {
           <Link to="/login" className="underline">
             登录页
           </Link>{" "}
-          创建首个所有者后，即可启用多管理员登录。
+          创建首个所有者后，即可启用多管理员登录。若丢失全部管理员凭据，见系统手册「丢失管理员账号或密码时如何恢复（break-glass）」——自托管不提供邮箱找回。
         </div>
       )}
 
