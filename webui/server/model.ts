@@ -175,6 +175,27 @@ export type AddSchemaResult = {
   newSchemas: string[];
 };
 
+/** Spec 124 Phase A: dryRun preview for POST /api/connections. */
+export type CreateConnectionPreview = {
+  diff: string;
+  proposedYaml: string;
+  secretRelPath: string;
+  connection: ConnectionInfo;
+};
+
+/** Spec 124 Phase A: committed create result. */
+export type CreateConnectionResult = {
+  written: true;
+  auditId?: number;
+  secretRelPath: string;
+  connection: ConnectionInfo;
+  test: {
+    status: "ok" | "error";
+    message?: string;
+    durationMs?: number;
+  };
+};
+
 export type RemoveSchemaImpact = {
   hasManifest: boolean;
   manifestPath: string | null;

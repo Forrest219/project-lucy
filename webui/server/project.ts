@@ -1,12 +1,28 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
-import { isMap, isScalar, isSeq, parse, parseDocument, type Document, type Node, YAMLSeq } from "yaml";
+import { isMap, isScalar, isSeq, parse, parseDocument, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
 import { execFile } from "node:child_process";
 import { testConnection } from "./ktx";
-import { ForbiddenPathError, safeRemove, safeWrite } from "./fs-safe";
+import {
+  ForbiddenPathError,
+  safeRemove,
+  safeRemoveSecretPasswordIfExists,
+  safeWrite,
+  safeWriteNewSecretPassword
+} from "./fs-safe";
 import { resolveMcpEndpoint } from "./runtime-config";
-import type { AddSchemaPreview, AddSchemaResult, ConnectionInfo, ProjectInfo, RemoveSchemaPreview, RemoveSchemaResult } from "./model";
+import type {
+  AddSchemaPreview,
+  AddSchemaResult,
+  ConnectionInfo,
+  CreateConnectionPreview,
+  CreateConnectionResult,
+  ProjectInfo,
+  RemoveSchemaPreview,
+  RemoveSchemaResult
+} from "./model";
 import { previewDiff } from "./diff";
+import type { ConnectionTestResult } from "./ktx";
 
 export type ProjectOptions = {
   projectRoot?: string;
@@ -86,6 +102,61 @@ export class ConnectionTestFailedError extends Error {
     this.name = "ConnectionTestFailedError";
     this.detail = detail;
   }
+}
+
+/** Spec 124: `connections.<id>` key naming. */
+export const CONNECTION_ID_PATTERN = "^[a-z][a-z0-9_-]{1,63}$";
+const CONNECTION_ID_RE = new RegExp(CONNECTION_ID_PATTERN);
+
+export class ConnectionIdInvalidError extends Error {
+  code = "CONNECTION_ID_INVALID";
+  statusCode = 400;
+  detail: { pattern: string };
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionIdInvalidError";
+    this.detail = { pattern: CONNECTION_ID_PATTERN };
+  }
+}
+
+export class ConnectionAlreadyExistsError extends Error {
+  code = "CONNECTION_ALREADY_EXISTS";
+  statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionAlreadyExistsError";
+  }
+}
+
+export class ConnectionPasswordRequiredError extends Error {
+  code = "CONNECTION_PASSWORD_REQUIRED";
+  statusCode = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionPasswordRequiredError";
+  }
+}
+
+export class ConnectionCreateValidationError extends Error {
+  code = "CONNECTION_CREATE_INVALID";
+  statusCode = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionCreateValidationError";
+  }
+}
+
+export function connectionSecretRelPath(connId: string): string {
+  if (!CONNECTION_ID_RE.test(connId)) {
+    throw new ConnectionIdInvalidError(
+      `Connection ID '${connId}' does not match pattern ${CONNECTION_ID_PATTERN}`
+    );
+  }
+  return `.ktx/secrets/${connId}-password`;
 }
 
 function stringArray(value: unknown): string[] {
@@ -379,6 +450,15 @@ function redactSensitiveYamlNode(doc: Document, node: Node | null | undefined): 
       if (!pair) continue;
       const key = isScalar(pair.key) ? String(pair.key.value ?? "") : "";
       if (SENSITIVE_CONFIG_KEY_RE.test(key)) {
+        const rawValue = isScalar(pair.value) ? String(pair.value.value ?? "") : "";
+        // Spec 124: keep file:/env: references in previews; strip inline secrets only.
+        if (
+          rawValue.startsWith("file:") ||
+          rawValue.startsWith("env:") ||
+          rawValue.includes("${")
+        ) {
+          continue;
+        }
         node.items.splice(index, 1);
       } else {
         redactSensitiveYamlNode(doc, pair.value as Node | null | undefined);
@@ -748,4 +828,287 @@ export async function removeSchema(
     removedEnabledTables,
     deletedFiles
   };
+}
+
+// ─── createConnection (Spec 124 Phase A) ──────────────────────────────────────
+
+export type CreateConnectionInput = {
+  id: string;
+  driver: "mysql" | "postgres";
+  engine?: string;
+  wireProtocol?: string;
+  readonly?: boolean;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  /** Required when dryRun is false; ignored for dryRun preview. */
+  password?: string;
+  schemas?: string[];
+};
+
+export type CreateConnectionOptions = {
+  recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
+  testConnectionFn?: typeof testConnection;
+  execFileImpl?: Parameters<typeof testConnection>[2];
+};
+
+function requiredNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ConnectionCreateValidationError(`${field} is required`);
+  }
+  return value.trim();
+}
+
+function validateCreateConnectionInput(input: CreateConnectionInput): CreateConnectionInput {
+  const id = typeof input.id === "string" ? input.id.trim() : "";
+  if (!CONNECTION_ID_RE.test(id)) {
+    throw new ConnectionIdInvalidError(
+      `Connection ID '${id}' does not match pattern ${CONNECTION_ID_PATTERN}`
+    );
+  }
+  if (input.driver !== "mysql" && input.driver !== "postgres") {
+    throw new ConnectionCreateValidationError("driver must be mysql or postgres");
+  }
+  const host = requiredNonEmptyString(input.host, "host");
+  const database = requiredNonEmptyString(input.database, "database");
+  const username = requiredNonEmptyString(input.username, "username");
+  if (typeof input.port !== "number" || !Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
+    throw new ConnectionCreateValidationError("port must be an integer between 1 and 65535");
+  }
+  const schemas = Array.isArray(input.schemas) ? input.schemas : [];
+  for (const schema of schemas) {
+    if (typeof schema !== "string" || !SCHEMA_NAME_RE.test(schema)) {
+      throw new SchemaNameInvalidError(
+        `Schema name '${schema}' does not match pattern ${SCHEMA_NAME_PATTERN}`
+      );
+    }
+  }
+  const engine =
+    typeof input.engine === "string" && input.engine.trim() ? input.engine.trim() : undefined;
+  const wireProtocol =
+    typeof input.wireProtocol === "string" && input.wireProtocol.trim()
+      ? input.wireProtocol.trim()
+      : undefined;
+  return {
+    id,
+    driver: input.driver,
+    ...(engine ? { engine } : {}),
+    ...(wireProtocol ? { wireProtocol } : {}),
+    readonly: input.readonly !== false,
+    host,
+    port: input.port,
+    database,
+    username,
+    ...(typeof input.password === "string" ? { password: input.password } : {}),
+    schemas
+  };
+}
+
+function passwordFileRef(projectRoot: string, connId: string): string {
+  return `file:${path.join(projectRoot, ".ktx", "secrets", `${connId}-password`)}`;
+}
+
+function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRef: string) {
+  return (doc: ReturnType<typeof parseDocument>) => {
+    let conns = doc.get("connections", true);
+    if (!conns) {
+      conns = new YAMLMap();
+      doc.set("connections", conns);
+    }
+    if (!isMap(conns)) {
+      throw new KtxYamlParseError("connections is not a mapping in ktx.yaml");
+    }
+    if (conns.has(input.id)) {
+      throw new ConnectionAlreadyExistsError(`Connection '${input.id}' already exists in ktx.yaml`);
+    }
+
+    const conn = new YAMLMap();
+    conn.set("driver", input.driver);
+    if (input.engine) {
+      conn.set("engine", input.engine);
+    }
+    if (input.wireProtocol) {
+      conn.set("wire_protocol", input.wireProtocol);
+    }
+    conn.set("readonly", input.readonly !== false);
+    const enabledTables = new YAMLSeq();
+    conn.set("enabled_tables", enabledTables);
+    conn.set("host", input.host);
+    conn.set("port", input.port);
+    conn.set("database", input.database);
+    conn.set("username", input.username);
+    conn.set("password", passwordRef);
+    const schemas = new YAMLSeq();
+    for (const schema of input.schemas ?? []) {
+      schemas.items.push(schema);
+    }
+    conn.set("schemas", schemas);
+    conns.set(input.id, conn);
+
+    let setup = doc.get("setup", true);
+    if (!setup) {
+      setup = new YAMLMap();
+      doc.set("setup", setup);
+    }
+    if (isMap(setup)) {
+      let ids = setup.get("database_connection_ids", true);
+      if (!ids) {
+        ids = new YAMLSeq();
+        setup.set("database_connection_ids", ids);
+      }
+      if (isSeq(ids)) {
+        const existing = schemasList(ids);
+        if (!existing.includes(input.id)) {
+          ids.items.push(input.id);
+        }
+      }
+    }
+  };
+}
+
+function connectionInfoFromInput(
+  input: CreateConnectionInput,
+  passwordSource: ConnectionInfo["passwordSource"] = "file"
+): ConnectionInfo {
+  const engine = input.engine?.toLowerCase();
+  let wireProtocol: ConnectionInfo["wireProtocol"] = "unknown";
+  if (input.wireProtocol === "mysql" || input.wireProtocol === "mysql-wire") {
+    wireProtocol = "mysql";
+  } else if (input.wireProtocol === "postgres" || input.wireProtocol === "postgresql") {
+    wireProtocol = "postgres";
+  } else if (engine === "doris" || engine === "starrocks" || input.driver === "mysql") {
+    wireProtocol = "mysql";
+  } else if (input.driver === "postgres") {
+    wireProtocol = "postgres";
+  }
+  return {
+    id: input.id,
+    driver: input.driver,
+    engine,
+    wireProtocol,
+    r1Target: engine === "doris",
+    readOnlyExpected: input.readonly !== false,
+    passwordSource,
+    host: input.host,
+    port: String(input.port),
+    database: input.database,
+    schemas: [...(input.schemas ?? [])].sort(),
+    enabledTables: []
+  };
+}
+
+export function createConnection(
+  root: string,
+  input: CreateConnectionInput,
+  dryRun: true,
+  options?: CreateConnectionOptions
+): Promise<CreateConnectionPreview>;
+export function createConnection(
+  root: string,
+  input: CreateConnectionInput,
+  dryRun: false,
+  options?: CreateConnectionOptions
+): Promise<CreateConnectionResult>;
+export function createConnection(
+  root: string,
+  input: CreateConnectionInput,
+  dryRun: boolean,
+  options?: CreateConnectionOptions
+): Promise<CreateConnectionPreview | CreateConnectionResult>;
+export async function createConnection(
+  root: string,
+  rawInput: CreateConnectionInput,
+  dryRun: boolean,
+  options: CreateConnectionOptions = {}
+): Promise<CreateConnectionPreview | CreateConnectionResult> {
+  const input = validateCreateConnectionInput(rawInput);
+  const secretRelPath = connectionSecretRelPath(input.id);
+  const passwordRef = passwordFileRef(root, input.id);
+  const mutator = connectionCreateMutatorFactory(input, passwordRef);
+  const preview = await writeKtxYaml(root, mutator, { dryRun: true });
+  const safeOldText = redactKtxYamlForPreview(preview.oldText);
+  const safeProposedYaml = redactKtxYamlForPreview(preview.serialized);
+  const diff = previewDiff(safeOldText, safeProposedYaml, "ktx.yaml");
+  const connection = connectionInfoFromInput(input, "file");
+
+  if (dryRun) {
+    return {
+      diff,
+      proposedYaml: safeProposedYaml,
+      secretRelPath,
+      connection
+    };
+  }
+
+  if (typeof input.password !== "string" || input.password.length === 0) {
+    throw new ConnectionPasswordRequiredError("password is required when dryRun is false");
+  }
+
+  // Phase write: secret first, then yaml, then connection test. Any failure after
+  // the secret write must roll back both artifacts.
+  let secretWritten = false;
+  let yamlWritten = false;
+  try {
+    await safeWriteNewSecretPassword(root, secretRelPath, input.password);
+    secretWritten = true;
+
+    await writeKtxYaml(root, mutator, { dryRun: false });
+    yamlWritten = true;
+
+    const testFn = options.testConnectionFn ?? testConnection;
+    const execFileImpl = options.execFileImpl ?? execFile;
+    const testResult: ConnectionTestResult = await testFn(root, input.id, execFileImpl);
+    if (testResult.status !== "ok") {
+      throw new ConnectionTestFailedError(
+        `ktx connection test failed for '${input.id}': ${testResult.reason ?? "unknown error"}`,
+        {
+          stdout: testResult.stdout ?? testResult.detail ?? "",
+          stderr: testResult.stderr ?? testResult.reason ?? "",
+          reason: testResult.reason ?? "Connection test failed"
+        }
+      );
+    }
+
+    let auditId: number | undefined;
+    if (options.recordConfigChange) {
+      auditId = await options.recordConfigChange({
+        filePath: "ktx.yaml",
+        changeType: "connection_create",
+        targetId: input.id,
+        oldSummary: { connections: "unchanged" },
+        newSummary: {
+          connectionId: input.id,
+          secretRelPath,
+          passwordBytes: Buffer.byteLength(input.password, "utf8"),
+          driver: input.driver,
+          host: input.host,
+          port: input.port,
+          database: input.database,
+          username: input.username
+        },
+        diff
+      });
+    }
+
+    return {
+      written: true,
+      auditId,
+      secretRelPath,
+      connection,
+      test: {
+        status: "ok",
+        message: testResult.detail,
+        durationMs: testResult.latencyMs
+      }
+    };
+  } catch (error) {
+    if (yamlWritten) {
+      await safeWrite(root, "ktx.yaml", preview.oldText);
+    }
+    if (secretWritten) {
+      await safeRemoveSecretPasswordIfExists(root, secretRelPath);
+    }
+    throw error;
+  }
 }

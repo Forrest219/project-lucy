@@ -12,7 +12,7 @@ import {
   listLiveSchemas,
   LiveCatalogConnectionNotFoundError
 } from "./live-catalog";
-import { addSchema, readConnections, readProject, resolveProjectRoot, removeSchema } from "./project";
+import { addSchema, createConnection, readConnections, readProject, resolveProjectRoot, removeSchema } from "./project";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -131,6 +131,17 @@ type SupportedError = FastifyError & {
 
 function supportedErrorDetail(error: SupportedError): unknown {
   if (error.code === "SCHEMA_NAME_INVALID") {
+    const detail = error.detail;
+    if (
+      detail &&
+      typeof detail === "object" &&
+      "pattern" in detail &&
+      typeof (detail as { pattern?: unknown }).pattern === "string"
+    ) {
+      return { pattern: (detail as { pattern: string }).pattern };
+    }
+  }
+  if (error.code === "CONNECTION_ID_INVALID") {
     const detail = error.detail;
     if (
       detail &&
@@ -886,6 +897,72 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     const connections = await readConnections(projectRoot);
     return { ok: true, data: { connections } };
+  });
+
+  // Spec 124 Phase A: create connection (secret one-shot write + ktx.yaml patch).
+  // dryRun defaults to true. No UI in this spike — API + security tests only.
+  app.post<{
+    Body: {
+      id?: string;
+      driver?: string;
+      engine?: string;
+      wireProtocol?: string;
+      readonly?: boolean;
+      host?: string;
+      port?: number;
+      database?: string;
+      username?: string;
+      password?: string;
+      schemas?: string[];
+      dryRun?: boolean;
+    };
+  }>("/api/connections", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    const dryRun = body.dryRun !== false;
+    if (typeof body.id !== "string") {
+      throw enabledTableError("BAD_REQUEST", "id is required");
+    }
+    if (body.driver !== "mysql" && body.driver !== "postgres") {
+      throw enabledTableError("BAD_REQUEST", "driver must be mysql or postgres");
+    }
+    if (typeof body.host !== "string") {
+      throw enabledTableError("BAD_REQUEST", "host is required");
+    }
+    if (typeof body.port !== "number") {
+      throw enabledTableError("BAD_REQUEST", "port is required");
+    }
+    if (typeof body.database !== "string") {
+      throw enabledTableError("BAD_REQUEST", "database is required");
+    }
+    if (typeof body.username !== "string") {
+      throw enabledTableError("BAD_REQUEST", "username is required");
+    }
+    const result = await createConnection(
+      projectRoot,
+      {
+        id: body.id,
+        driver: body.driver,
+        ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
+        ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
+        readonly: body.readonly,
+        host: body.host,
+        port: body.port,
+        database: body.database,
+        username: body.username,
+        ...(typeof body.password === "string" ? { password: body.password } : {}),
+        ...(Array.isArray(body.schemas) ? { schemas: body.schemas } : {})
+      },
+      dryRun,
+      { recordConfigChange }
+    );
+    if (!dryRun) {
+      writtenFiles.push({ filePath: "ktx.yaml" });
+      if ("secretRelPath" in result) {
+        writtenFiles.push({ filePath: result.secretRelPath });
+      }
+    }
+    return { ok: true, data: result };
   });
 
   app.get<{

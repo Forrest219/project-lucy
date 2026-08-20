@@ -81,8 +81,10 @@ describe("addSchema — dryRun path", () => {
     expect(result.proposedYaml).toContain("- finance_mart");
     expect(result.oldSchemas).toEqual(["dataforai"]);
     expect(result.newSchemas).toEqual(["dataforai", "finance_mart"]);
-    expect(result.proposedYaml).not.toMatch(/^\s*password:/m);
-    expect(result.diff).not.toMatch(/^\s*[ +\-]?\s*password:/m);
+    // Spec 124: file:/env: password refs may remain in previews; inline secrets must not.
+    expect(result.proposedYaml).toMatch(/password:\s*file:/);
+    expect(result.proposedYaml).not.toMatch(/password:\s+(?!file:|env:)[^\s#]+/);
+    expect(result.diff).not.toMatch(/password:\s+(?!file:|env:)[^\s#]+/);
 
     // Disk untouched
     await expect(readFile(path.join(root, "ktx.yaml"), "utf8")).resolves.toBe(original);
