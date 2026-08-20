@@ -1,0 +1,16 @@
+# Lucy WebUI 管理员账户（示例）
+#
+# 复制为 admins.yaml 后，用 scrypt 哈希替换 password_hash，或更推荐：
+# 设置 LUCY_WEBUI_AUTH=required 后打开 /login 走 bootstrap 创建首个所有者。
+#
+# version: "1"
+# admins:
+#   - id: xingchen
+#     display_name: 星尘
+#     password_hash: "scrypt:<saltHex>:<hashHex>"
+#     role: owner
+#     enabled: true
+#     created_at: "2026-08-20T00:00:00.000Z"
+
+version: "1"
+admins: []

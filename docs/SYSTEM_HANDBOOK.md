@@ -65,14 +65,14 @@
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |
-| `expires_at` 到期后 `token` 会自动失效吗？ | 不会。`expires_at` 当前只是 `metadata`；要下线 `token` 必须在 `Admin` 撤销或调用删除 `token` `API`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
+| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
 | 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |
 
 ### 0.3 面向接入协作者
 
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
-| `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |
+| `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、`expires_at` 已到期、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |
 | 本地开发应该访问哪个端口？ | 页面端口以启动日志为准；常见开发入口是 `Vite 5173`，`API 5174`，`Lucy MCP Proxy 7879`。`Docker` / demo 宿主端口可能是 `55176` 等映射端口。 | [2.2 本地启动](#22-本地启动)、[4.1 接入地址](#41-接入地址) |
 | 为什么 Visible Scope 没有我刚启用的表？ | 检查 `enabled_tables`、`role` 的 `tableSelectors`、以及是否**新开** MCP session；扩权后旧 session 不会自动刷新 Scope。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查) |
 | `order_by` 为什么没按我想的降序？ | 结构化参数请用 `direction: desc|asc`；仅写 `dir` 可能被忽略，导致默认升序。 | [6.12 `order_by` 排序无效或排反](#612-order_by-排序无效或排反) |
@@ -185,7 +185,8 @@ KTX CLI / MCP daemon
 | 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |
 | 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调 |
-| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |
+| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史；多管理员模式下 actor 为登录管理员 id |
+| 访问治理 | 管理员 | `/admin/admins` | 管理 WebUI 登录账户（所有者可添加多名管理员） |
 
 > 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
 
@@ -1972,9 +1973,9 @@ curl -fsS http://127.0.0.1:5174/api/health
 | 未带 `Authorization` | 客户端配置加 `Bearer ${LUCY_AGENT_TOKEN}` |
 | token 明文与 YAML hash 不匹配 | 重新在 Admin 生成 token |
 | token 已撤销 | 新建 token |
+| `expires_at` 已到期或不可解析 | 重新生成 token，或修正 `access.yaml` 中的过期时间 |
 | `LUCY_ACCESS_CONFIG_PATH` 指向了另一份配置 | 检查 WebUI/Proxy 进程环境 |
 | 客户端环境变量未展开 | 确认 `${LUCY_AGENT_TOKEN}` 在启动客户端前已 export |
-| 误以为 `expires_at` 会自动下线 token | 当前 `expires_at` 仅作 metadata；请撤销 token，或调用 `DELETE /api/admin/agents/:userId/tokens/:label` |
 
 ### 6.6 KTX upstream 不可用
 

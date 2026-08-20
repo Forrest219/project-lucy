@@ -110,14 +110,14 @@ function renderHelp(path = "/help") {
               "| 问题 | 快速答案 | 详见 |",
               "| --- | --- | --- |",
               "| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |",
-              "| `expires_at` 到期后 `token` 会自动失效吗？ | 不会。`expires_at` 当前只是 `metadata`；要下线 `token` 必须在 `Admin` 撤销或调用删除 `token` `API`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
+              "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
               "| 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |",
               "",
               "### 0.3 面向接入协作者",
               "",
               "| 问题 | 快速答案 | 详见 |",
               "| --- | --- | --- |",
-              "| `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |",
+              "| `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、`expires_at` 已到期、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |",
               "| 本地开发应该访问哪个端口？ | 页面端口以启动日志为准；常见开发入口是 `Vite 5173`，`API 5174`，`Lucy MCP Proxy 7879`。`Docker` / demo 宿主端口可能是 `55176` 等映射端口。 | [2.2 本地启动](#22-本地启动)、[4.1 接入地址](#41-接入地址) |",
               "",
               "## 1. 系统概述与架构拓扑",
@@ -370,7 +370,10 @@ describe("HelpCenter", () => {
     expect(screen.getByRole("link", { name: "KTX 合并与索引检查" })).not.toHaveAttribute("target");
     expect(screen.getByRole("heading", { name: "3.7.6.2 KTX 合并与索引检查" })).toHaveAttribute("id", "3762-ktx-合并与索引检查");
     expect(screen.getByText("docs/SYSTEM_HANDBOOK.md")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith("/api/help/handbook");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/help/handbook",
+      expect.objectContaining({ credentials: "same-origin" })
+    );
   });
 
   it("scrolls to the section from the section query parameter", async () => {
@@ -460,7 +463,10 @@ describe("HelpCenter", () => {
     expect(
       document.getElementById("database-connection-acl-sync")
     ).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith("/api/help/handbook");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/help/handbook",
+      expect.objectContaining({ credentials: "same-origin" })
+    );
   });
 
   it("scrolls to the database connection operations runbook section from a stable section id", async () => {
@@ -878,7 +884,12 @@ describe("HelpCenter", () => {
     const input = await screen.findByLabelText("搜索系统手册");
     expect(input).toBeInTheDocument();
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/help/handbook"));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/help/handbook",
+        expect.objectContaining({ credentials: "same-origin" })
+      )
+    );
 
     fireEvent.change(input, { target: { value: "已发现表数" } });
 
@@ -886,7 +897,8 @@ describe("HelpCenter", () => {
     expect(await screen.findByText("连接概览指标说明")).toBeInTheDocument();
     expect(screen.getByText(/统计本地 Schema Manifest 已读到的表/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/^\/api\/help\/search\?q=/)
+      expect.stringMatching(/^\/api\/help\/search\?q=/),
+      expect.objectContaining({ credentials: "same-origin" })
     );
 
     fireEvent.click(screen.getByRole("link", { name: /连接概览指标说明/ }));

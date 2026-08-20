@@ -34,6 +34,7 @@
 |---|---|---|
 | **P0 必读** | [`design-upgrade.md`](design-upgrade.md) **v1.1.2** | 审核基线；六项 ADR；批准后可写 AC-P0 Spec |
 | **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | 可交付开发任务计划 |
+| **WebUI 登录 / Token 失效** | [`design-webui-admin-auth.md`](design-webui-admin-auth.md) · [`plans/wo-202608-62-webui-admin-auth-and-token-expiry.md`](plans/wo-202608-62-webui-admin-auth-and-token-expiry.md) | Token `expires_at` 强制；多管理员本地登录 |
 | 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
 | Admin 契约 | [`webui/docs/14-agent-admin-enterprise-delivery-spec.md`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md)、[`15-role-admin-spec.md`](../../webui/docs/15-role-admin-spec.md) | Agent / Role Admin |
 

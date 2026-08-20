@@ -30,7 +30,7 @@ export class ApiError extends Error {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  const response = await fetch(path, { credentials: "same-origin" });
   const envelope = (await response.json()) as ApiEnvelope<T>;
 
   if (envelope.ok === false) {
@@ -43,6 +43,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(path, {
     method: "PUT",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json"
     },
@@ -60,6 +61,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(path, {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json"
     },
@@ -77,6 +79,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(path, {
     method: "PATCH",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json"
     },
@@ -94,6 +97,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 export async function apiDelete<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     method: "DELETE",
+    credentials: "same-origin",
     ...(body === undefined
       ? {}
       : {

@@ -9,6 +9,7 @@ interface UserToken {
   hash: string; // format: "sha256:<hex>"
   label: string;
   created?: string;
+  expires_at?: string | null;
 }
 
 interface UserAllow {
@@ -99,6 +100,37 @@ function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * Token expiry enforcement (WO-202608-62 / Spec 07 `token_expired`).
+ * - null/empty → never expires
+ * - unparseable → fail-closed (treat as expired)
+ * - date-only `YYYY-MM-DD` → end of that UTC day
+ */
+export function isTokenExpired(expiresAt: string | null | undefined, nowMs = Date.now()): boolean {
+  if (expiresAt == null || expiresAt === "") return false;
+  const normalized =
+    /^\d{4}-\d{2}-\d{2}$/.test(expiresAt) ? `${expiresAt}T23:59:59.999Z` : expiresAt;
+  const ts = Date.parse(normalized);
+  if (Number.isNaN(ts)) return true;
+  return ts <= nowMs;
+}
+
+/** Normalize create-token input to ISO-8601 or null. Throws on invalid non-empty values. */
+export function normalizeExpiresAtInput(raw: string | null | undefined): string | null {
+  if (raw == null || raw === "") return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return `${raw}T23:59:59.999Z`;
+  }
+  const ts = Date.parse(raw);
+  if (Number.isNaN(ts)) {
+    const err = new Error("expires_at must be a valid ISO-8601 timestamp or YYYY-MM-DD date");
+    (err as Error & { code?: string; statusCode?: number }).code = "EXPIRES_AT_INVALID";
+    (err as Error & { statusCode?: number }).statusCode = 400;
+    throw err;
+  }
+  return new Date(ts).toISOString();
+}
+
 // session/user/token -> client name (populated from MCP initialize handshake)
 const sessionClients = new Map<string, { clientName: string; lastSeen: number }>();
 
@@ -143,6 +175,7 @@ export async function identifyRequest(
   for (const user of config.users) {
     for (const t of user.tokens) {
       if (t.hash === tokenHash) {
+        if (isTokenExpired(t.expires_at)) return null;
         return {
           userId: user.id,
           tokenLabel: t.label,

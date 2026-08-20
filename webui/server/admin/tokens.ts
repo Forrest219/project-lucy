@@ -15,6 +15,9 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
+import { actorIdFromRequest } from "../auth/guard.js";
+import { normalizeExpiresAtInput } from "../proxy/identity.js";
+import type { FastifyRequest } from "fastify";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -22,8 +25,12 @@ function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
 
-function defaultActor(): AccessGovernanceApprover {
-  return { actorKind: "admin", actorId: "local-admin" };
+function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
+  return {
+    actorKind: "admin",
+    actorId: request ? actorIdFromRequest(request) : "local-admin",
+    identityProvider: "webui-local"
+  };
 }
 
 async function writeGateTrace(
@@ -83,8 +90,20 @@ export function registerTokenRoutes(app: FastifyInstance) {
     Body: { dryRun?: boolean; label: string; expires_at?: string | null; override?: AccessGovernanceOverrideRequest };
   }>("/api/admin/agents/:userId/tokens", async (request, reply) => {
     const { userId } = request.params;
-    const { label, expires_at } = request.body ?? {};
+    const { label } = request.body ?? {};
     const dryRun = request.body?.dryRun === true;
+    let expires_at: string | null = null;
+    try {
+      expires_at = normalizeExpiresAtInput(request.body?.expires_at);
+    } catch (error) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "EXPIRES_AT_INVALID",
+          message: error instanceof Error ? error.message : "expires_at invalid"
+        }
+      });
+    }
 
     if (!label || typeof label !== "string" || label.trim().length === 0) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "label is required" } });
@@ -134,7 +153,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
     }
 
     if (gate.decision === "block") {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       return reply.status(409).send({
         ok: false,
         error: {
@@ -148,7 +167,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
     if (gate.decision === "override_required") {
       const override = evaluateGovernanceOverride(request.body?.override, gate);
       if (!override.ok) {
-        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
         return reply.status(409).send({
           ok: false,
           error: {
@@ -158,9 +177,9 @@ export function registerTokenRoutes(app: FastifyInstance) {
           }
         });
       }
-      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+      await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
     } else {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
     // Generate token — plaintext never written anywhere except the HTTP response
@@ -172,7 +191,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
       hash: tokenHash,
       label,
       created,
-      ...(expires_at !== undefined ? { expires_at: expires_at ?? null } : {})
+      expires_at
     };
 
     const updatedUser = { ...user, tokens: [...user.tokens, newToken] };
@@ -188,7 +207,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
       source: "admin_tokens_api",
       targetId: userId,
       oldSummary: { tokenCount: user.tokens.length },
-      newSummary: { tokenCount: updatedUser.tokens.length, label, hashPrefix: tokenHash.slice(0, 19), expires_at: expires_at ?? null },
+      actor: actorIdFromRequest(request),
+      newSummary: { tokenCount: updatedUser.tokens.length, label, hashPrefix: tokenHash.slice(0, 19), expires_at },
       requestId: request.id
     });
 
@@ -236,7 +256,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
     });
 
     if (gate.decision === "block") {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       return reply.status(409).send({
         ok: false,
         error: {
@@ -250,7 +270,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
     if (gate.decision === "override_required") {
       const override = evaluateGovernanceOverride(request.body?.override, gate);
       if (!override.ok) {
-        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
         return reply.status(409).send({
           ok: false,
           error: {
@@ -260,9 +280,9 @@ export function registerTokenRoutes(app: FastifyInstance) {
           }
         });
       }
-      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+      await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
     } else {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
     const revokedAt = new Date().toISOString();
