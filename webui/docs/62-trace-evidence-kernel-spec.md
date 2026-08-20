@@ -129,10 +129,10 @@ IP0-6 口径表随发布冻结
 | Admin `GET /api/admin/trace/events` + Audit Trace Drawer | Implemented | |
 | Hot-store payload blacklist / sanitize | Implemented | |
 | Self-validation `webui/scripts/verify-202608-trace-evidence.mjs` | Implemented | |
-| `result_snapshot_hash` evidence（已知行 / 列数时） | Missing | P0 Closure |
-| `semantic_yaml_node` / source evidence（有 `access_log_sources` 时） | Missing | P0 Closure |
-| Retention purge / archive worker + 引用保护 + `incremental_vacuum` | Missing | 常量已有；worker 为 P0 Closure |
-| Admin Trace UI 术语对齐标准（中文主术语 + `translate="no"`） | Partial | P0 Closure |
+| `result_snapshot_hash` evidence（已知行 / 列数时） | Implemented | P0 Closure |
+| `semantic_yaml_node` / source evidence（有 `access_log_sources` 时） | Implemented | P0 Closure |
+| Retention purge / archive worker + 引用保护 + `incremental_vacuum` | Implemented | `purgeTraceEvidence`；Proxy 采样懒触发 |
+| Admin Trace UI 术语对齐标准（中文主术语 + `translate="no"`） | Implemented | P0 Closure |
 | `mcp_initialize` / `mcp_tools_list` spans | Deferred | 类型已有；**非** P0 Closed 阻塞项 |
 | AC-P0 `policyVersion` | Out of scope | 见 Non-goals |
 

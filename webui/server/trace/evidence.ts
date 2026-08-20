@@ -606,6 +606,21 @@ export interface RecordMcpToolsCallInput {
   status: LucySpanStatus;
   policyDecision?: PolicyDecisionMetadata | null;
   metadata?: Record<string, unknown>;
+  /** Bounded result-size summary. Written as `result_snapshot_hash` only when row or column count is known. */
+  resultSnapshot?: {
+    rowCount?: number | null;
+    columnCount?: number | null;
+    responseBytes?: number | null;
+    truncated?: boolean | null;
+  } | null;
+  /** Structured source refs already available for the call (from access_log_sources extraction). */
+  sourceRefs?: Array<{
+    connectionId?: string | null;
+    schema?: string | null;
+    sourceName?: string | null;
+    physicalTable: string;
+    confidence?: string | null;
+  }> | null;
 }
 
 export function recordMcpToolsCall(
@@ -666,5 +681,249 @@ export function recordMcpToolsCall(
     ]);
   }
 
+  const extraEvidence: WriteEvidenceRefInput[] = [];
+
+  const rowCount = input.resultSnapshot?.rowCount;
+  const columnCount = input.resultSnapshot?.columnCount;
+  if (
+    (typeof rowCount === "number" && Number.isFinite(rowCount)) ||
+    (typeof columnCount === "number" && Number.isFinite(columnCount))
+  ) {
+    const summary = {
+      rowCount: typeof rowCount === "number" && Number.isFinite(rowCount) ? rowCount : null,
+      columnCount: typeof columnCount === "number" && Number.isFinite(columnCount) ? columnCount : null,
+      responseBytes:
+        typeof input.resultSnapshot?.responseBytes === "number" && Number.isFinite(input.resultSnapshot.responseBytes)
+          ? input.resultSnapshot.responseBytes
+          : null,
+      truncated: input.resultSnapshot?.truncated === true
+    };
+    const snapshotHash = hashArtifact(JSON.stringify(summary));
+    extraEvidence.push({
+      traceEventId: callEventId,
+      traceId: input.traceId,
+      evidenceKind: "result_snapshot_hash",
+      evidenceRef: `rows=${summary.rowCount ?? "?"};cols=${summary.columnCount ?? "?"}`,
+      evidenceHash: snapshotHash,
+      relation: "observed",
+      metadata: summary
+    });
+  }
+
+  if (input.sourceRefs && input.sourceRefs.length > 0) {
+    const seen = new Set<string>();
+    for (const ref of input.sourceRefs) {
+      const physicalTable = typeof ref.physicalTable === "string" ? ref.physicalTable.trim() : "";
+      if (!physicalTable) continue;
+      const sourceName = typeof ref.sourceName === "string" && ref.sourceName.trim() ? ref.sourceName.trim() : null;
+      const connectionId =
+        typeof ref.connectionId === "string" && ref.connectionId.trim() ? ref.connectionId.trim() : null;
+      const schema = typeof ref.schema === "string" && ref.schema.trim() ? ref.schema.trim() : null;
+      const evidenceRef = sourceName
+        ? [connectionId, schema, sourceName].filter(Boolean).join("/") || sourceName
+        : physicalTable;
+      const dedupeKey = `${evidenceRef}|${physicalTable}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      extraEvidence.push({
+        traceEventId: callEventId,
+        traceId: input.traceId,
+        evidenceKind: "semantic_yaml_node",
+        evidenceRef,
+        evidenceHash: hashArtifact(
+          JSON.stringify({
+            connectionId,
+            schema,
+            sourceName,
+            physicalTable
+          })
+        ),
+        relation: input.policyDecision?.allowed === false ? "denied_by" : "used",
+        metadata: {
+          physicalTable,
+          connectionId,
+          schema,
+          sourceName,
+          confidence: ref.confidence ?? null
+        }
+      });
+    }
+  }
+
+  if (extraEvidence.length > 0) {
+    writeEvidenceEvents(database, extraEvidence);
+  }
+
   return { callEventId, policyEventId };
+}
+
+export interface PurgeTraceEvidenceOptions {
+  now?: Date;
+  retentionDays?: number;
+  maxRows?: number;
+  maxBytes?: number;
+  /** Extra trace IDs that must not be purged (e.g. active release packages). */
+  protectedTraceIds?: Iterable<string>;
+  incrementalVacuumPages?: number;
+}
+
+export interface PurgeTraceEvidenceResult {
+  deletedTraceEvents: number;
+  deletedEvidenceEvents: number;
+  protectedTraceCount: number;
+  candidateTraceCount: number;
+  vacuumPages: number;
+  reason: "noop" | "retention_days" | "max_rows" | "max_bytes" | "mixed";
+}
+
+/**
+ * Purge oldest Trace / Evidence rows when retention caps are exceeded.
+ * Preserves traces that still carry `reviewer_override` or `promoted` evidence,
+ * plus any explicitly protected trace IDs. Never deletes those protected traces.
+ * After deletes, may run `PRAGMA incremental_vacuum(N)`.
+ */
+export function purgeTraceEvidence(
+  database: Database.Database,
+  options: PurgeTraceEvidenceOptions = {}
+): PurgeTraceEvidenceResult {
+  ensureTraceEvidenceSchema(database);
+  const now = options.now ?? new Date();
+  const retentionDays = options.retentionDays ?? TRACE_RETENTION_DAYS;
+  const maxRows = options.maxRows ?? TRACE_MAX_ROWS;
+  const maxBytes = options.maxBytes ?? TRACE_MAX_BYTES;
+  const vacuumPages = Math.max(0, options.incrementalVacuumPages ?? 64);
+
+  const protectedSet = new Set<string>();
+  for (const id of options.protectedTraceIds ?? []) {
+    if (id) protectedSet.add(id);
+  }
+  const protectedFromEvidence = database
+    .prepare(
+      `SELECT DISTINCT trace_id AS traceId
+       FROM evidence_events
+       WHERE relation IN ('reviewer_override', 'promoted')`
+    )
+    .all() as Array<{ traceId: string }>;
+  for (const row of protectedFromEvidence) {
+    if (row.traceId) protectedSet.add(row.traceId);
+  }
+
+  const totalRows = Number(
+    (
+      database
+        .prepare(
+          `SELECT
+             (SELECT COUNT(*) FROM trace_events) +
+             (SELECT COUNT(*) FROM evidence_events) AS cnt`
+        )
+        .get() as { cnt: number }
+    )?.cnt ?? 0
+  );
+
+  let fileBytes = 0;
+  try {
+    const pageCount = Number(database.pragma("page_count", { simple: true }) ?? 0);
+    const pageSize = Number(database.pragma("page_size", { simple: true }) ?? 0);
+    fileBytes = pageCount * pageSize;
+  } catch {
+    fileBytes = 0;
+  }
+
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const overRows = totalRows > maxRows;
+  const overBytes = fileBytes > maxBytes;
+  const agedIds = new Set(
+    (
+      database
+        .prepare(
+          `SELECT DISTINCT trace_id AS traceId
+           FROM trace_events
+           WHERE created_at < ?`
+        )
+        .all(cutoff) as Array<{ traceId: string }>
+    )
+      .map((row) => row.traceId)
+      .filter((id) => id && !protectedSet.has(id))
+  );
+
+  const oldestOrder = database
+    .prepare(
+      `SELECT trace_id AS traceId, MIN(created_at) AS firstSeen
+       FROM trace_events
+       GROUP BY trace_id
+       ORDER BY firstSeen ASC`
+    )
+    .all() as Array<{ traceId: string }>;
+
+  const toDelete: string[] = [];
+  let remainingRows = totalRows;
+  for (const row of oldestOrder) {
+    if (!row.traceId || protectedSet.has(row.traceId)) continue;
+    const isAged = agedIds.has(row.traceId);
+    const needCapacity = remainingRows > maxRows || fileBytes > maxBytes;
+    if (!isAged && !needCapacity) continue;
+
+    const counts = database
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM trace_events WHERE trace_id = ?) +
+           (SELECT COUNT(*) FROM evidence_events WHERE trace_id = ?) AS cnt`
+      )
+      .get(row.traceId, row.traceId) as { cnt: number };
+    toDelete.push(row.traceId);
+    remainingRows -= Number(counts?.cnt ?? 0);
+  }
+
+  if (toDelete.length === 0) {
+    return {
+      deletedTraceEvents: 0,
+      deletedEvidenceEvents: 0,
+      protectedTraceCount: protectedSet.size,
+      candidateTraceCount: 0,
+      vacuumPages: 0,
+      reason: "noop"
+    };
+  }
+
+  const deleteEvidence = database.prepare(`DELETE FROM evidence_events WHERE trace_id = ?`);
+  const deleteTraces = database.prepare(`DELETE FROM trace_events WHERE trace_id = ?`);
+  let deletedEvidenceEvents = 0;
+  let deletedTraceEvents = 0;
+  const tx = database.transaction((ids: string[]) => {
+    for (const id of ids) {
+      deletedEvidenceEvents += deleteEvidence.run(id).changes;
+      deletedTraceEvents += deleteTraces.run(id).changes;
+    }
+  });
+  tx(toDelete);
+
+  let ranVacuum = 0;
+  if (vacuumPages > 0 && (deletedEvidenceEvents > 0 || deletedTraceEvents > 0)) {
+    try {
+      database.pragma(`incremental_vacuum(${vacuumPages})`);
+      ranVacuum = vacuumPages;
+    } catch {
+      ranVacuum = 0;
+    }
+  }
+
+  const reason: PurgeTraceEvidenceResult["reason"] =
+    overRows || overBytes
+      ? overRows && overBytes
+        ? "mixed"
+        : overRows
+          ? "max_rows"
+          : "max_bytes"
+      : agedIds.size > 0
+        ? "retention_days"
+        : "mixed";
+
+  return {
+    deletedTraceEvents,
+    deletedEvidenceEvents,
+    protectedTraceCount: protectedSet.size,
+    candidateTraceCount: toDelete.length,
+    vacuumPages: ranVacuum,
+    reason
+  };
 }

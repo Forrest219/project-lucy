@@ -230,6 +230,7 @@ function PolicyBlock({ policy }: { policy: PolicyDecisionView }) {
     : "pl-trace-detail-policy-denied";
   return (
     <div className="pl-trace-detail-policy" data-testid="trace-span-policy">
+      <div className="pl-trace-detail-policy-title text-xs font-semibold text-fg-muted">策略裁决</div>
       <div className={allowedClass} data-testid="trace-span-policy-allowed">
         {policy.allowed ? "✓ 允许" : "✗ 拒绝"}
       </div>
@@ -288,10 +289,21 @@ function SpanBlock({ event, isRoot }: { event: TraceEventView; isRoot: boolean }
       data-span-status={event.status}
     >
       <div className="pl-trace-detail-span-header">
-        <span className="pl-trace-detail-span-type">{event.spanType}</span>
+        <span className="pl-trace-detail-span-type notranslate" translate="no">
+          {event.spanType}
+        </span>
         <span className={`pl-status-badge ${statusClass}`}>{STATUS_LABEL[event.status]}</span>
-        <span className="text-fg-muted font-mono">{event.spanId}</span>
-        {event.actorId ? <span className="text-fg-muted">· {event.actorKind} {event.actorId}</span> : null}
+        <span className="text-fg-muted font-mono notranslate" translate="no">
+          {event.spanId}
+        </span>
+        {event.actorId ? (
+          <span className="text-fg-muted">
+            · <span className="notranslate" translate="no">{event.actorKind}</span>{" "}
+            <span className="notranslate" translate="no">
+              {event.actorId}
+            </span>
+          </span>
+        ) : null}
         <span className="ml-auto text-fg-muted">
           {event.startedAt ? new Date(event.startedAt).toLocaleString("zh-CN") : "—"}
           {event.endedAt ? ` → ${new Date(event.endedAt).toLocaleTimeString("zh-CN")}` : ""}
@@ -302,7 +314,7 @@ function SpanBlock({ event, isRoot }: { event: TraceEventView; isRoot: boolean }
         <div className="flex flex-wrap items-center gap-1" data-testid="trace-span-artifacts">
           <span className="text-fg-muted">Artifact:</span>
           {artifactHashes.map((hash) => (
-            <span key={hash} className="pl-trace-detail-hash" title={hash}>
+            <span key={hash} className="pl-trace-detail-hash notranslate" translate="no" title={hash}>
               {hash.slice(0, 16)}…
             </span>
           ))}
@@ -366,13 +378,27 @@ export function TraceLink({ traceId }: { traceId: string }) {
           >
             <header className="pl-trace-detail-header">
               <Dialog.Title className="pl-trace-detail-title" data-testid="trace-detail-title">
-                {traceId}
+                Trace 详情
               </Dialog.Title>
+              <p
+                className="pl-trace-detail-trace-id notranslate font-mono text-xs text-fg-muted"
+                translate="no"
+                data-testid="trace-detail-trace-id"
+              >
+                {traceId}
+              </p>
               <Dialog.Description
                 id={`trace-detail-${traceId}-desc`}
                 className="pl-trace-detail-subtitle"
               >
-                只读视图 · {totalSpans} spans · {totalEvidence} evidence
+                只读核查链路 · {totalSpans}{" "}
+                <span className="notranslate" translate="no">
+                  Span
+                </span>{" "}
+                · {totalEvidence}{" "}
+                <span className="notranslate" translate="no">
+                  Evidence
+                </span>
               </Dialog.Description>
               <Dialog.Close asChild>
                 <button
@@ -397,10 +423,10 @@ export function TraceLink({ traceId }: { traceId: string }) {
             {query.data?.data ? (
               <>
                 {orderedSpans.length === 0 ? (
-                  <div className="pl-notice" data-testid="trace-detail-empty">该 trace 暂无 span 记录。</div>
+                  <div className="pl-notice" data-testid="trace-detail-empty">该 Trace 暂无 Span 记录。</div>
                 ) : (
                   <section className="pl-trace-detail-section" data-testid="trace-detail-spans">
-                    <h3 className="pl-trace-detail-section-title">Ordered Spans</h3>
+                    <h3 className="pl-trace-detail-section-title">有序 Span</h3>
                     {orderedSpans.map((event) => (
                       <SpanBlock
                         key={event.spanId}
@@ -412,21 +438,39 @@ export function TraceLink({ traceId }: { traceId: string }) {
                 )}
                 {evidenceGroups.length > 0 ? (
                   <section className="pl-trace-detail-section" data-testid="trace-detail-evidence">
-                    <h3 className="pl-trace-detail-section-title">Evidence Refs</h3>
+                    <h3 className="pl-trace-detail-section-title">
+                      <span className="notranslate" translate="no">
+                        Evidence Ref
+                      </span>
+                    </h3>
                     {evidenceGroups.map(([kind, list]) => (
                       <div key={kind} className="pl-trace-detail-evidence-group">
-                        <h4 className="text-xs font-semibold text-fg-muted">{kind} · {list.length}</h4>
+                        <h4 className="text-xs font-semibold text-fg-muted">
+                          <span className="notranslate" translate="no">
+                            {kind}
+                          </span>{" "}
+                          · {list.length}
+                        </h4>
                         {list.map((ev) => (
                           <div
                             key={ev.id}
                             className="pl-trace-detail-evidence-row"
                             data-testid={`trace-evidence-${ev.id}`}
                           >
-                            <span className="pl-trace-detail-evidence-kind">{ev.evidenceKind}</span>
+                            <span
+                              className="pl-trace-detail-evidence-kind notranslate"
+                              translate="no"
+                            >
+                              {ev.evidenceKind}
+                            </span>
                             <span className="pl-trace-detail-evidence-relation">
                               {RELATION_LABEL[ev.relation] ?? ev.relation}
                             </span>
-                            <span className="pl-trace-detail-evidence-ref" title={ev.evidenceRef}>
+                            <span
+                              className="pl-trace-detail-evidence-ref notranslate"
+                              translate="no"
+                              title={ev.evidenceRef}
+                            >
                               {ev.evidenceRef}
                             </span>
                           </div>

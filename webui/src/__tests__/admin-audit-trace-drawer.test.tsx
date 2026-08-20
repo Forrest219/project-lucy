@@ -114,8 +114,12 @@ describe("TraceLink — Drawer (P0-CLOSE-01)", () => {
     const drawer = await screen.findByTestId("audit-trace-drawer-trace-drawer-1");
     // Wait for the spans to render (i.e. the query to settle)
     await within(drawer).findByTestId("trace-span-mcp_tools_call:connection_list:trace-drawer-1");
-    // Drawer title shows the traceId
-    expect(within(drawer).getByTestId("trace-detail-title").textContent).toBe("trace-drawer-1");
+    // Drawer title shows Trace 详情; Trace ID is in a protected mono line
+    expect(within(drawer).getByTestId("trace-detail-title").textContent).toBe("Trace 详情");
+    expect(within(drawer).getByTestId("trace-detail-trace-id").textContent).toBe("trace-drawer-1");
+    expect(within(drawer).getByText("有序 Span")).toBeTruthy();
+    expect(within(drawer).getByText("Evidence Ref")).toBeTruthy();
+    expect(within(drawer).getAllByText("策略裁决").length).toBeGreaterThan(0);
     // Two spans rendered — span root divs carry both data-testid
     // "trace-span-<spanId>" AND data-span-type="<spanType>". Inner
     // sub-blocks (trace-span-artifacts, trace-span-policy) don't have

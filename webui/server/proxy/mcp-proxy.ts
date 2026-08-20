@@ -9,6 +9,8 @@ import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from ".
 import { resolveProjectRoot } from "../project.js";
 import {
   recordMcpToolsCall,
+  purgeTraceEvidence,
+  TRACE_RETENTION_DAYS,
   type PolicyDecisionMetadata,
   type LucySpanStatus
 } from "../trace/evidence.js";
@@ -206,6 +208,13 @@ function recordMcpTrace(input: {
   sessionId?: string | null;
   requestId?: string | null;
   argsSummary?: Record<string, unknown>;
+  resultSnapshot?: {
+    rowCount?: number | null;
+    columnCount?: number | null;
+    responseBytes?: number | null;
+    truncated?: boolean | null;
+  } | null;
+  sourceRefs?: SourceRef[] | null;
 }): void {
   getAdminAuditDb()
     .then((db) => {
@@ -222,8 +231,19 @@ function recordMcpTrace(input: {
           turnId: input.turnId ?? null,
           requestId: input.requestId ?? null,
           policyDecision: input.policyDecision,
-          metadata: input.argsSummary
+          metadata: input.argsSummary,
+          resultSnapshot: input.resultSnapshot ?? null,
+          sourceRefs: input.sourceRefs ?? null
         });
+        // Spec 62 P0 Closure: sampled lazy purge — never blocks the MCP response.
+        const sampleRate = Number(process.env.LUCY_TRACE_PURGE_SAMPLE_RATE ?? 0.01);
+        if (Math.random() < sampleRate) {
+          try {
+            purgeTraceEvidence(db, { retentionDays: TRACE_RETENTION_DAYS });
+          } catch (purgeErr) {
+            console.error("[lucy-proxy] lazy trace purge failed", purgeErr);
+          }
+        }
       } catch (err) {
         console.error("[lucy-proxy] recordMcpToolsCall threw", err);
       }
@@ -259,6 +279,26 @@ function toolTraceSpanId(toolName: string, traceId: string): string {
   return `mcp_tools_call:${toolName}:${traceId}`;
 }
 
+function resultSnapshotFromAuditMeta(
+  meta: Partial<Parameters<typeof writeLog>[0]> | undefined
+): {
+  rowCount?: number | null;
+  columnCount?: number | null;
+  responseBytes?: number | null;
+  truncated?: boolean | null;
+} | null {
+  if (!meta) return null;
+  const rowCount = typeof meta.responseRowCount === "number" ? meta.responseRowCount : null;
+  const columnCount = typeof meta.responseColumnCount === "number" ? meta.responseColumnCount : null;
+  if (rowCount === null && columnCount === null) return null;
+  return {
+    rowCount,
+    columnCount,
+    responseBytes: typeof meta.responseBytes === "number" ? meta.responseBytes : null,
+    truncated: meta.responseTruncated === true
+  };
+}
+
 function recordMcpTraceForTool(input: {
   traceId: string;
   identity: Identity;
@@ -274,6 +314,13 @@ function recordMcpTraceForTool(input: {
   reason?: string;
   matchedRule?: string;
   policySource?: PolicyDecisionMetadata["source"];
+  resultSnapshot?: {
+    rowCount?: number | null;
+    columnCount?: number | null;
+    responseBytes?: number | null;
+    truncated?: boolean | null;
+  } | null;
+  sourceRefs?: SourceRef[] | null;
 }): void {
   buildTracePolicyDecision(input.identity, input.toolName, input.allowed, input.reason, input.matchedRule)
     .then((policyDecision) => {
@@ -289,6 +336,8 @@ function recordMcpTraceForTool(input: {
         sessionId: input.sessionId ?? null,
         requestId: normalizedTraceRequestId(input.requestId),
         argsSummary: input.argsSummary,
+        resultSnapshot: input.resultSnapshot ?? null,
+        sourceRefs: input.sourceRefs ?? null,
         policyDecision: {
           ...policyDecision,
           source: input.policySource ?? policyDecision.source
@@ -1587,6 +1636,7 @@ async function writeLucySemanticResponse(
 
   const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
   const tables = [...new Set([...structuredTables, ...queryTables])];
+  const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"]);
   recordAudit({
     ts: new Date().toISOString(),
     userId: identity.userId,
@@ -1598,7 +1648,7 @@ async function writeLucySemanticResponse(
     outcome,
     errorDetail,
     durationMs: Date.now() - start,
-    ...responseAuditMeta(Buffer.from(body), headers["content-type"]),
+    ...responseMeta,
     requestId,
     traceId,
     ...requestMeta,
@@ -1615,7 +1665,9 @@ async function writeLucySemanticResponse(
     requestId,
     argsSummary,
     allowed: true,
-    reason: outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error"
+    reason: outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error",
+    resultSnapshot: resultSnapshotFromAuditMeta(responseMeta),
+    sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
   });
 }
 
@@ -2013,7 +2065,14 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         argsSummary,
         allowed: true,
-        reason: "allowed"
+        reason: "allowed",
+        resultSnapshot: {
+          rowCount: 0,
+          columnCount: 0,
+          responseBytes: Buffer.byteLength(responseBody),
+          truncated: false
+        },
+        sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
       });
       return;
     }
@@ -2600,6 +2659,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
     }
 
+    const responseMeta = responseAuditMeta(responseBody, upstream.headers["content-type"]);
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -2611,7 +2671,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       outcome,
       errorDetail,
       durationMs: Date.now() - start,
-      ...responseAuditMeta(responseBody, upstream.headers["content-type"]),
+      ...responseMeta,
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, outcome === "ok" ? "allowed" : "upstream_error")),
@@ -2627,7 +2687,9 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       argsSummary,
       allowed: true,
-      reason: outcome === "ok" ? "allowed" : "upstream_error"
+      reason: outcome === "ok" ? "allowed" : "upstream_error",
+      resultSnapshot: resultSnapshotFromAuditMeta(responseMeta),
+      sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
     });
   } else {
     pipeResponse(upstream, res);

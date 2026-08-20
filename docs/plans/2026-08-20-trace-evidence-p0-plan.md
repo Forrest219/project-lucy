@@ -50,10 +50,10 @@ Global constraints:
 |---|---|
 | Kernel + helper + MCP policy decision dual-write | **Kernel Landed** |
 | Admin Trace Read API + Audit Drawer | **Kernel Landed** |
-| `result_snapshot_hash` / source evidence on MCP path | **P0 Closure pending** |
-| Retention purge worker | **P0 Closure pending** |
-| Trace UI terminology alignment | **P0 Closure pending** |
-| Spec / gap / terminology docs | **This plan T0** |
+| `result_snapshot_hash` / source evidence on MCP path | **P0 Closed** |
+| Retention purge worker | **P0 Closed** |
+| Trace UI terminology alignment | **P0 Closed** |
+| Spec / gap / terminology docs | **Done** |
 
 ---
 

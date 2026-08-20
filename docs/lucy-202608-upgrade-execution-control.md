@@ -41,7 +41,7 @@ Deferred out of 202608:
 
 | ID | Spec | Plan / Task | Owner mode | Status | Notes |
 |---|---|---|---|---|---|
-| 202608-GOV-01 | `webui/docs/62-trace-evidence-kernel-spec.md` v0.5 | Kernel WO: `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`；P0 Closure: `docs/plans/2026-08-20-trace-evidence-p0-plan.md` | minimax backend agent | **Kernel Landed**；P0 Closure open | Foundation landed；Closure = evidence 完整度 + purge + Trace UI 术语 |
+| 202608-GOV-01 | `webui/docs/62-trace-evidence-kernel-spec.md` v0.5.1 | Kernel WO: `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`；P0 Closure: `docs/plans/2026-08-20-trace-evidence-p0-plan.md` | minimax backend agent | **P0 Closed** | Foundation + Closure（evidence 完整度 / purge / Trace UI 术语）已落地 |
 | 202608-GOV-02 | `webui/docs/69-admin-governance-observability-spec.md` | `webui/docs/plans/wo-202608-GOV-02-admin-governance-observability-dashboard.md` | minimax admin observability agent | Ready for execution | Dashboard aggregation only (GOV-02 专项 work order; trace read model / risk review / release package 已完成，本单不要重做) |
 | 202608-GOV-03 | `webui/docs/64-tiered-publish-gate-spec.md` | `webui/docs/plans/wo-202608-03-tiered-publish-gate.md` | minimax governance gate agent | Ready after GOV-01 | Access Governance Gate, not generic publish gate |
 | 202608-GOV-04 | `webui/docs/65-safe-log-to-eval-spec.md` | `webui/docs/plans/wo-202608-04-safe-log-to-eval.md` | minimax security eval agent | Ready for execution | Safe Log-to-Security-Eval only; **no implementation exists yet** — minimax 必须从零实现并补 verifier |

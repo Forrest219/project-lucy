@@ -67,8 +67,8 @@ describe("TraceLink — read-only kernel entry (202608-01)", () => {
     // needs a tick to land.
     await waitFor(() => {
       const drawer = screen.queryByTestId("audit-trace-drawer-trace-click-2");
-      expect(drawer?.textContent ?? "").toMatch(/2 spans/);
-      expect(drawer?.textContent ?? "").toMatch(/1 evidence/);
+      expect(drawer?.textContent ?? "").toMatch(/2\s*Span/);
+      expect(drawer?.textContent ?? "").toMatch(/1\s*Evidence/);
     });
   });
 
@@ -110,7 +110,7 @@ describe("TraceLink — read-only kernel entry (202608-01)", () => {
     // settle (subtitle flips from 0 to 1) before scanning the document.
     await waitFor(() => {
       const drawer = screen.queryByTestId("audit-trace-drawer-trace-redact");
-      expect(drawer?.textContent ?? "").toMatch(/1 spans/);
+      expect(drawer?.textContent ?? "").toMatch(/1\s*Span/);
     });
     const fullDocumentText = document.body.textContent ?? "";
     expect(fullDocumentText).not.toContain("SELECT * FROM users");

@@ -51,9 +51,9 @@ Lucy 当前已经具备企业级 data agent 平台的关键雏形：`access.yaml
 
 | Layer | Active task | Current state | Gap | User value |
 |---|---|---|---|---|
-| P0 | Trace / Evidence Kernel | `trace_events` / `evidence_events` + helper 已落地（Kernel Landed） | P0 Closure：retention purge worker | 审计能还原每次访问的完整证据链 |
-| P0 | ACL policy decision trace | MCP Proxy 双写 `policy_decision` + `access_policy` evidence；`access_log.decision_reason` 仍保留 | P0 Closure：已知行/列数时 `result_snapshot_hash`；有 sources 时 source / `semantic_yaml_node` evidence | 能解释 allow / deny 的 Role、Token、权限快照和原因 |
-| P0 | Admin Audit Trace Read Model | `/admin/audit` Trace Drawer + `GET /api/admin/trace/events` | P0 Closure：UI 主术语与 Spec 62 / 术语标准 §4.7.1 对齐 | 管理员在一个页面完成访问核查和权限解释 |
+| P0 | Trace / Evidence Kernel | Kernel Landed + purge worker（`purgeTraceEvidence`） | —（P0 Closed） | 审计能还原每次访问的完整证据链 |
+| P0 | ACL policy decision trace | `policy_decision` + `access_policy` + `result_snapshot_hash` + `semantic_yaml_node` | —（P0 Closed） | 能解释 allow / deny 的 Role、Token、权限快照、触达源与结果规模 |
+| P0 | Admin Audit Trace Read Model | Trace Drawer 术语对齐 §4.7.1 | —（P0 Closed） | 管理员在一个页面完成访问核查和权限解释 |
 | P1 | Tiered Access Governance Gate | Admin writes config with dryRun and config audit | No P0 / P1 / P2 risk gate for Agent / Role / Token changes | 权限扩张、敏感源暴露、global deny weakening 被发布前拦截 |
 | P1 | Safe Log-to-Security-Eval | Eval system exists; denied logs exist | No security candidate pool or reviewer promotion | 真实越权尝试可转成 P0 security regression |
 | P1 | Admin Observability Dashboard | Agent / Role pages show some local stats | No unified governance dashboard for Agent / Role / Token risk trends | 运维能快速发现高拒绝率 Agent、过宽 Role、异常 Token |
