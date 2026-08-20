@@ -52,18 +52,18 @@ export function LoginPage() {
             </strong>
           </div>
           <h1 className="text-xl font-semibold">
-            {isBootstrap ? "创建首个所有者管理员" : "管理员登录"}
+            {isBootstrap ? "创建首个所有者" : "登录"}
           </h1>
           <p className="text-sm text-fg-muted">
             {isBootstrap
-              ? "当前实例要求登录。请创建首个所有者账户；之后可在「管理员」页添加更多管理员。"
-              : "使用管理员 id 与密码登录。Agent Token 不能用于 WebUI 登录。"}
+              ? "当前实例要求登录。请创建首个所有者账户；之后可在「登录账户」页添加运维人员，负责连接、语义、Eval 与 Agent Role 等日常工作。"
+              : "使用账户 id 与密码登录。运维与所有者共用此入口；Agent Token 不能用于 WebUI 登录。"}
           </p>
         </div>
 
         <form className="grid gap-3" onSubmit={onSubmit}>
           <label className="grid gap-1">
-            <span className="text-sm font-medium">管理员 id</span>
+            <span className="text-sm font-medium">账户 id</span>
             <input
               className="pl-input notranslate"
               translate="no"

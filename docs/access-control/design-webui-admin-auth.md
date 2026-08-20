@@ -66,7 +66,7 @@ admins:
   - id: xingchen
     display_name: 星尘
     password_hash: "scrypt:<saltHex>:<hashHex>"
-    role: owner   # owner | admin
+    role: owner   # owner | operator（legacy admin → operator）
     enabled: true
     created_at: "2026-08-20T00:00:00.000Z"
 ```
@@ -102,10 +102,16 @@ admins:
 
 ### 5.5 角色
 
-| Role | 能力 |
-|---|---|
-| `owner` | 全部 WebUI 写路径 + 管理其他管理员 |
-| `admin` | 全部 WebUI 写路径；不可创建 Owner、不可删除/禁用最后一名 Owner |
+| Role id | UI 主术语 | 能力 |
+|---|---|---|
+| `owner` | 所有者 | 全部 WebUI 写路径 + 管理登录账户 |
+| `operator` | 运维 | 全部日常 WebUI 写路径（连接 / 语义 / Wiki / 发布 / Eval / Agent·Role·Token / 审计）；**不可**管理登录账户 |
+
+读入兼容：YAML 中旧值 `admin` 视为 `operator`。
+
+运维即「普通运维人员」岗位：负责连接、配置语义、Eval、添加和管理 Agent Role（`access.yaml`）等日常工作；所有者保留控制面账户治理与 break-glass 相关责任。
+
+本轮仍不做更细的 WebUI RBAC（例如「只能看审计」）。
 
 ### 5.6 审计
 
@@ -128,26 +134,27 @@ New terms:
 
 | 英文 / 内部 | UI 主术语 | 禁止 |
 |---|---|---|
-| WebUI Admin | 管理员 | 超管（除非指 Owner）、用户（易与 Agent 混淆） |
+| WebUI Admin / 登录账户 | 登录账户 | 超管、用户（易与 Agent 混淆） |
 | Owner | 所有者 | 超管（可作为副文案时需登记） |
-| Admin role `admin` | 管理员 | |
+| Operator | 运维 | 管理员（易与所有者混淆） |
+| Legacy role `admin` | 运维 | 作为主术语 | 读入等价 operator |
 | Login | 登录 | Sign in 裸用 |
 | Session | 会话 | |
 | Token Expiry / `expires_at` | 过期时间 | 失效日期（可用作说明同义） |
 
-Protected DOM：`Token`、`MCP`、管理员 id、`expires_at` 值。
+Protected DOM：`Token`、`MCP`、账户 id、`expires_at` 值。
 
 ## 7. Design System Compliance
 
 - 登录页：单栏表单，沿用现有 `pl-input` / `pl-btn` / 品牌块，不做独立营销落地页。
-- 管理员列表：落在「访问治理」导航组，交互容器用现有 list/detail 模式。
+- 登录账户列表：落在「访问治理」导航组，交互容器用现有 list/detail 模式。
 
 ## 8. 验收
 
 1. 过期 Token 调 MCP Proxy → 401；未过期正常。
-2. 配置管理员后访问 `/api/admin/agents` 无 Cookie → 401；登录后 200。
-3. 两名管理员可分别登录；配置变更 actor 为各自 id。
-4. Owner 可创建第二名管理员；`admin` 角色不可删除最后 Owner。
+2. 配置登录账户后访问 `/api/admin/agents` 无 Cookie → 401；登录后 200。
+3. 所有者与运维可分别登录；配置变更 actor 为各自 id。
+4. Owner 可创建运维账户；运维不可调用登录账户管理 API；不可删除最后 Owner。
 5. 无 `admins.yaml` / 空列表时现有 vitest 套件无需改登录样板即可通过。
 6. `npm run lint:terminology` 通过。
 

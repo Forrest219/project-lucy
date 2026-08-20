@@ -6,7 +6,7 @@ export type AuthMode = "open" | "bootstrap" | "required";
 export type AuthMe = {
   id: string;
   displayName: string;
-  role: "owner" | "admin";
+  role: "owner" | "operator";
   enabled: boolean;
   createdAt: string | null;
 };

@@ -188,9 +188,10 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Data Heatmap | 数据热力 | 表级访问热力 | 数据源热力、源热力 | 表级访问与拒绝分布 API（`/api/admin/audit/sources`）仍保留；Spec 89 已从 `/admin/audit` 移除 heatmap Tab；原 `/admin/audit-sources` 重定向到 `/admin/audit` |
 | Config Audit | 配置审计 | 配置变更审计 | 配置变更（仅限主导航/PageHeader 标题） | 访问配置写入的审计记录 |
 | Config Audit Actor | 操作者 | 本机管理员（开放模式）或已登录管理员 id | Actor、local-admin（作为唯一可见列头） | Spec 96：表头用「操作者」；开放模式展示「本机管理员」；多管理员模式下展示管理员 id |
-| WebUI Admin | 管理员 | WebUI 登录账户 | 超管（除非专指所有者）、用户（易与 Agent 混淆） | WO-62：本地登录主体，非 MCP Agent |
-| WebUI Admin Owner | 所有者 | 所有者管理员 | 超管（主术语） | 可管理其他管理员账户 |
-| WebUI Login | 登录 | 管理员登录 | Sign in 裸用 | `/login` |
+| WebUI Admin | 登录账户 | WebUI 控制面账户 | 超管（除非专指所有者）、用户（易与 Agent 混淆） | WO-62：本地登录主体，非 MCP Agent |
+| WebUI Admin Owner | 所有者 | 所有者 | 超管（主术语）、管理者（可用作叙述同义） | 可管理其他登录账户 |
+| WebUI Admin Operator | 运维 | 运维人员 | 管理员（易与所有者混淆）、普通用户 | 日常连接 / 语义 / Eval / Agent Role；不可管登录账户 |
+| WebUI Login | 登录 | 控制面登录 | Sign in 裸用 | `/login` |
 | Token Expiry | 过期时间 | Token 失效时间 | 失效日期（可作为说明同义） | `expires_at`；到期后 Proxy 拒绝 |
 | Config Audit Change Type | 变更类型 | 配置变更类型 | 类型（过宽）、changeType（裸露） | Spec 96 表头与筛选 |
 | Config Audit Asset Kind | 资产域 | 配置资产域 | assetKind、资产类型（与 Semantic Asset Kind 混淆） | Spec 90/96：governance/semantic/wiki/eval/publish |

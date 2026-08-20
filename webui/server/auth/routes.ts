@@ -4,6 +4,7 @@ import {
   enabledAdmins,
   findAdmin,
   loadAdminsConfig,
+  normalizeWebuiAdminRole,
   publicAdminView,
   resolveAuthMode,
   saveAdminsConfig,
@@ -231,7 +232,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       adminId?: string;
       displayName?: string;
       password?: string;
-      role?: WebuiAdminRole;
+      role?: WebuiAdminRole | "admin";
     };
   }>("/api/admin/admins", async (request, reply) => {
     if ((await resolveAuthMode()) !== "required") {
@@ -245,7 +246,9 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     const adminId = request.body?.adminId?.trim() ?? "";
     const displayName = request.body?.displayName?.trim() || adminId;
     const password = request.body?.password ?? "";
-    const role: WebuiAdminRole = request.body?.role === "admin" ? "admin" : "owner";
+    // Default new accounts to operator (运维); owner must be explicit.
+    const role: WebuiAdminRole =
+      request.body?.role === "owner" ? "owner" : "operator";
 
     if (!ADMIN_ID_RE.test(adminId)) {
       return reply.status(400).send({
@@ -303,7 +306,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     Body: {
       displayName?: string;
       password?: string;
-      role?: WebuiAdminRole;
+      role?: WebuiAdminRole | "admin";
       enabled?: boolean;
     };
   }>("/api/admin/admins/:adminId", async (request, reply) => {
@@ -331,8 +334,8 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     if (typeof request.body?.displayName === "string" && request.body.displayName.trim()) {
       nextRecord.display_name = request.body.displayName.trim();
     }
-    if (request.body?.role === "owner" || request.body?.role === "admin") {
-      nextRecord.role = request.body.role;
+    if (request.body?.role === "owner" || request.body?.role === "operator" || request.body?.role === "admin") {
+      nextRecord.role = normalizeWebuiAdminRole(request.body.role);
     }
     if (typeof request.body?.enabled === "boolean") {
       nextRecord.enabled = request.body.enabled;

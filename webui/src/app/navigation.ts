@@ -252,12 +252,12 @@ export const navGroups: Array<{
       },
       {
         id: "admin-accounts",
-        label: "管理员",
+        label: "登录账户",
         to: "/admin/admins",
         iconKey: "admins",
         active: (path) => path === "/admin/admins" || path.startsWith("/admin/admins/"),
-        description: "管理 WebUI 登录账户与多管理员。",
-        keywords: ["登录", "Owner", "管理员账户"]
+        description: "管理 WebUI 登录账户：所有者与运维。",
+        keywords: ["登录", "Owner", "运维", "管理员账户"]
       }
     ]
   }

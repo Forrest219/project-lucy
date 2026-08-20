@@ -91,7 +91,7 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
-      { group: "访问治理", id: "admin-accounts", label: "管理员", to: "/admin/admins" }
+      { group: "访问治理", id: "admin-accounts", label: "登录账户", to: "/admin/admins" }
     ]);
   });
 

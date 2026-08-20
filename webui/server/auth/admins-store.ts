@@ -6,7 +6,17 @@ import { auditedWriteFile } from "../admin/config-audit-write.js";
 
 export const ADMINS_YAML_REL = "webui/config/admins.yaml";
 
-export type WebuiAdminRole = "owner" | "admin";
+export type WebuiAdminRole = "owner" | "operator";
+
+/** Accept legacy `admin` as alias of `operator` when reading YAML. */
+export function normalizeWebuiAdminRole(raw: unknown): WebuiAdminRole {
+  if (raw === "operator" || raw === "admin") return "operator";
+  return "owner";
+}
+
+export function webuiAdminRoleLabel(role: WebuiAdminRole): string {
+  return role === "owner" ? "所有者" : "运维";
+}
 
 export type WebuiAdminRecord = {
   id: string;
@@ -45,7 +55,7 @@ function normalizeConfig(raw: unknown): AdminsConfig {
     const row = item as Record<string, unknown>;
     if (typeof row.id !== "string" || !row.id.trim()) continue;
     if (typeof row.password_hash !== "string" || !row.password_hash) continue;
-    const role = row.role === "admin" ? "admin" : "owner";
+    const role = normalizeWebuiAdminRole(row.role);
     admins.push({
       id: row.id.trim(),
       display_name: typeof row.display_name === "string" && row.display_name.trim()

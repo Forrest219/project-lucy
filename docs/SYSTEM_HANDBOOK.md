@@ -189,7 +189,7 @@ KTX CLI / MCP daemon
 | 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调 |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史；多管理员模式下 actor 为登录管理员 id |
-| 访问治理 | 管理员 | `/admin/admins` | 管理 WebUI 登录账户（所有者可添加多名管理员）；丢密码见 break-glass |
+| 访问治理 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户（所有者 / 运维）；丢密码见 break-glass |
 
 > 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
 
@@ -961,30 +961,48 @@ PUT /api/wiki/:key
 | MCP 调试台 | `/admin/mcp-playground` | ACL 裁决预览与受控 `tools/list` 试调 |
 | 数据源热力 | `/admin/audit-sources` | 查看 source/table 调用和拒绝分布 |
 | 配置变更 | `/admin/config-audit` | 查看 `access.yaml`、`ktx.yaml`、`admins.yaml` 等配置变更 |
-| 管理员 | `/admin/admins` | WebUI 登录账户；所有者可增删管理员 |
+| 管理员 | `/admin/admins` | WebUI 登录账户（所有者 / 运维）；仅所有者可增删账户 |
 
 权威配置：
 
 | 文件 | 用途 |
 | --- | --- |
-| `webui/config/access.yaml` | Agent / Role / MCP `Token` ACL |
-| `webui/config/admins.yaml` | WebUI 管理员登录账户（scrypt 密码哈希；无明文） |
+| `webui/config/access.yaml` | Agent / Role / MCP `Token` ACL（数据面） |
+| `webui/config/admins.yaml` | WebUI 登录账户（控制面；scrypt 密码哈希；无明文） |
 
 #### WebUI 管理员登录
 
-Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找回」不同。
+Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找回」不同。控制面账户只有两级（与 MCP Agent Role 无关）：
+
+| 角色 id | UI 主术语 | 日常职责 | 不能做 |
+| --- | --- | --- | --- |
+| `owner` | 所有者 | 全部 WebUI 日常工作 + **登录账户治理**（增删改其他登录账户、指定所有者） | — |
+| `operator` | 运维 | 连接、语义 / Wiki / 发布、Eval、Agent / Role / Token、访问日志与配置审计 | 管理其他 WebUI 登录账户 |
+
+权限矩阵（控制面）：
+
+| 能力 | 所有者 | 运维 |
+| --- | --- | --- |
+| 数据库连接 / 启用表 / ingest | ✓ | ✓ |
+| 语义层 / Wiki / 发布工作台 | ✓ | ✓ |
+| Eval case / run / monitor | ✓ | ✓ |
+| Agent、Role（`access.yaml`）、Token 发行与撤销 | ✓ | ✓ |
+| 访问日志 / 配置审计 / MCP 调试台 | ✓ | ✓ |
+| `/admin/admins` 登录账户增删改 | ✓ | ✗ |
+
+说明：运维即可完成「连接、配置语义、Eval、添加和管理 Agent Role」等日常工作；所有者额外负责控制面账户与 break-glass 相关治理。旧配置里的 `role: admin` 读入时等价于 `operator`。
 
 | 模式 | 条件 | 行为 |
 | --- | --- | --- |
-| 开放（`open`） | 无启用中的管理员，且未设 `LUCY_WEBUI_AUTH=required` | 不强制登录；配置审计 actor 为「本机管理员」 |
-| 引导（`bootstrap`） | 无启用中的管理员，且 `LUCY_WEBUI_AUTH=required` | 打开 `/login` 创建首个**所有者** |
-| 需登录（`required`） | 至少一名启用管理员 | 除公开路由外需有效会话 Cookie |
+| 开放（`open`） | 无启用中的登录账户，且未设 `LUCY_WEBUI_AUTH=required` | 不强制登录；配置审计 actor 为「本机管理员」 |
+| 引导（`bootstrap`） | 无启用中的登录账户，且 `LUCY_WEBUI_AUTH=required` | 打开 `/login` 创建首个**所有者** |
+| 需登录（`required`） | 至少一名启用登录账户 | 除公开路由外需有效会话 Cookie |
 
 推荐正式部署：
 
 1. 设置 `LUCY_WEBUI_AUTH=required`（可选同时设置 `LUCY_WEBUI_SESSION_SECRET`）。
-2. 打开 `/login`，创建首个所有者（管理员 id + 密码，至少 10 字符）。
-3. 在「管理员」页按需添加其他管理员；日常改密由已登录所有者操作。
+2. 打开 `/login`，创建首个所有者（账户 id + 密码，至少 10 字符）。
+3. 在「登录账户」页添加运维账户（默认角色为运维）；按需再添加备用所有者。
 
 密码只存 `password_hash`（`scrypt:<salt>:<hash>`），**不能从配置反推明文**，也**没有邮箱找回**。
 
