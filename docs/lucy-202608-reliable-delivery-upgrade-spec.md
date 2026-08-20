@@ -230,7 +230,7 @@ Package includes:
 
 | Spec | Status in 202608 | Scope |
 |---|---|---|
-| `webui/docs/62-trace-evidence-kernel-spec.md` | Active P0（v0.5.1；Kernel Landed，Closure open；§4.1 对齐完整性 IP0） | Trace / Evidence store, policy decision events, MCP Proxy integration, Admin Trace Read Model；P0 plan: `docs/plans/2026-08-20-trace-evidence-p0-plan.md`；完整性口径: `docs/access-control/integrity-p0-decision.md` |
+| `webui/docs/62-trace-evidence-kernel-spec.md` | Active P0（v0.5.1；**P0 Closed**；§4.1 对齐完整性 IP0） | Trace / Evidence store, policy decision events, MCP Proxy integration, Admin Trace Read Model；P0 plan: `docs/plans/2026-08-20-trace-evidence-p0-plan.md`；完整性口径: `docs/access-control/integrity-p0-decision.md` |
 | `webui/docs/64-tiered-publish-gate-spec.md` | Active P1, renamed in content to Access Governance Gate | Agent / Role / Token / access policy gate and override evidence |
 | `webui/docs/65-safe-log-to-eval-spec.md` | Active P1, narrowed in content to Safe Log-to-Security-Eval | Security candidate pool, negative cases, reviewer evidence |
 | `webui/docs/69-admin-governance-observability-spec.md` | Active P1/P2 | Admin dashboard, trace read model, risk review candidates, release readiness evidence package |
