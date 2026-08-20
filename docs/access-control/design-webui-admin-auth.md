@@ -111,6 +111,15 @@ admins:
 
 `config_change_log.actor` / governance gate actor 在 Session 存在时使用 `adminId`，否则回退 `local-admin`。
 
+### 5.7 凭据丢失与 break-glass（非邮箱找回）
+
+自托管不提供邮箱「忘记密码」。恢复契约写在系统手册：
+
+- FAQ：`docs/SYSTEM_HANDBOOK.md` §0.2「忘记 WebUI 管理员账号或密码怎么办？」
+- Runbook：同手册 §3.5「丢失管理员账号或密码时如何恢复（break-glass）」
+
+原则：优先其他所有者重置；否则配置卷清空 `admins.yaml` → `LUCY_WEBUI_AUTH=required` → `/login` 重新 bootstrap；全程变更审计，不落密码明文。
+
 ## 6. Terminology Compliance
 
 本功能遵循 `webui/docs/00-product-terminology-standard.md`。
