@@ -6,7 +6,7 @@
 | Document type | Master Plan / Execution Control |
 | Version | v0.7 |
 | Written date | 2026-08-03；v0.3 更新 2026-08-03（收窄 202608 为访问治理与可观测性迭代，移出 FDE Copilot 与通用 Static Lint / Reindex）；v0.4 更新 2026-08-03（删除 Dynamic RLS / CLS POC active task，P2 收敛为只读风险复核与统一发布证据包）；v0.5 更新 2026-08-03（修正 Trace / Gate verifier 路径与 runner 口径）；v0.6 更新 2026-08-03（将 GOV-02 拆为 Dashboard 专项 work order，显式声明 GOV-04 为 P1 Active 缺口并允许 GOV-02 / GOV-04 并行启动）；v0.7 更新 2026-08-20（GOV-01 Kernel Landed；P0 Closure 指向 `docs/plans/2026-08-20-trace-evidence-p0-plan.md`） |
-| Source | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` v0.5 |
+| Source | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` v0.6 |
 | Scope | 202608 governance / observability specs, execution waves, minimax handoff, verification matrix |
 
 ---
