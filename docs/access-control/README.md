@@ -64,6 +64,7 @@
 | 闸门 / rewrite | `webui/server/proxy/mcp-proxy.ts` |
 | 身份 | `webui/server/proxy/identity.ts` |
 | 审计 | `webui/server/proxy/audit.ts` |
+| 查询原文冷存（Spec 124） | `webui/server/audit/query-artifact-*.ts`；契约 `webui/docs/124-audit-query-artifact-cold-store-spec.md` |
 | Admin API | `webui/server/admin/{agents,roles,tokens,audit}.ts` |
 | 事实源 | `webui/config/access.yaml` |
 | 单测 | `webui/server/__tests__/kx-acl.test.ts`、`mcp-proxy-acl.test.ts` 等 |
