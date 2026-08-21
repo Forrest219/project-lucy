@@ -103,14 +103,21 @@ GET    /api/eval/monitor/config
 PUT    /api/eval/monitor/config
 GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
+GET    /api/eval/security-candidates
+POST   /api/eval/security-candidates/extract
+POST   /api/eval/security-candidates/:id/review
+POST   /api/eval/security-candidates/:id/promote/preview
+POST   /api/eval/security-candidates/:id/promote
 
 GET    /api/r1/observability
 GET    /api/help/handbook
+GET    /api/help/search
 
 POST   /api/semantic-assets/validate
 POST   /api/semantic-assets/publish
 GET    /api/semantic-assets/releases
 GET    /api/semantic-assets/releases/:id/status
+GET    /api/semantic-assets/releases/export.csv
 POST   /api/semantic-assets/export
 GET    /api/semantic-assets/exports/:exportId/download
 POST   /api/semantic-assets/reindex
@@ -138,6 +145,13 @@ GET    /api/admin/audit/turns/:turnId
 POST   /api/admin/audit/conversation-turns/purge
 GET    /api/admin/trace/events
 GET    /api/admin/mcp-tools
+POST   /api/admin/mcp-playground/acl-preview
+POST   /api/admin/mcp-playground/live-smoke
+GET    /api/admin/governance/overview
+GET    /api/admin/governance/agents
+GET    /api/admin/governance/roles
+GET    /api/admin/governance/tokens
+GET    /api/admin/governance/denials
 GET    /api/admin/governance/risk-review
 POST   /api/admin/governance/risk-review/:id/review
 GET    /api/admin/governance/release-readiness-package
