@@ -793,6 +793,77 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("normalizes upstream SSE for raw tools/call (e.g. sl_query) to application/json", async () => {
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as { id: string; params?: { name?: string } };
+      expect(body.params?.name).toBe("sl_query");
+      const payload = {
+        jsonrpc: "2.0",
+        id: body.id,
+        result: {
+          content: [{ type: "text", text: JSON.stringify({ headers: ["dau"], rows: [["42"]], totalRows: 1 }) }]
+        }
+      };
+      const sseBody = `event: message\ndata: ${JSON.stringify(payload)}\n\n`;
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+        "content-length": Buffer.byteLength(sseBody)
+      });
+      res.end(sseBody);
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "sse-sl-query",
+          method: "tools/call",
+          params: {
+            name: "sl_query",
+            arguments: {
+              connectionId: "mysql-aliyun",
+              measures: ["superstore_orders.sales"],
+              limit: 5
+            }
+          }
+        })
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type") ?? "").toContain("application/json");
+      expect(res.headers.get("content-type") ?? "").not.toContain("text/event-stream");
+      expect(res.headers.get("cache-control") ?? "").toContain("no-store");
+      const text = await res.text();
+      expect(text.startsWith("event:")).toBe(false);
+      const parsed = JSON.parse(text) as {
+        id: string;
+        result: { content: Array<{ text: string }> };
+      };
+      expect(parsed.id).toBe("sse-sl-query");
+      expect(parsed.result.content[0]?.text ?? "").toContain("42");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("normalizes agent transport measure wrappers before validating and forwarding Lucy queries", async () => {
     const upstreamSeen: Array<Record<string, unknown>> = [];
     const upstream = createServer(async (req, res) => {

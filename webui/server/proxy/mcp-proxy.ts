@@ -2543,32 +2543,54 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
 
-  // For tool calls: sniff the response to detect errors; for others: pipe directly
+  // For tool calls: buffer upstream, sniff for errors, then return.
+  // Finite SSE + Content-Length + keep-alive hangs some Streamable HTTP clients
+  // (same class as lucy_query); normalize SSE tool results to application/json.
   if (rpcMethod === "tools/call") {
-    const responseHeaders: Record<string, string | string[] | number> = {};
-    for (const [k, v] of Object.entries(upstream.headers)) {
-      if (v !== undefined) responseHeaders[k] = v;
-    }
-    res.writeHead(upstream.statusCode ?? 200, responseHeaders);
-
     const chunks: Buffer[] = [];
     for await (const chunk of upstream as AsyncIterable<Buffer>) {
       chunks.push(chunk);
-      res.write(chunk);
     }
-    res.end();
-    const responseBody = Buffer.concat(chunks);
+    const originalBody = Buffer.concat(chunks);
+    const upstreamContentType = String(upstream.headers["content-type"] ?? "");
+
+    let responseBody = originalBody;
+    let responseContentType = upstreamContentType;
+    let headers: Record<string, string | string[] | number>;
+
+    if (upstreamContentType.includes("text/event-stream")) {
+      try {
+        const payload = decodeSseMessage(originalBody.toString());
+        if (!payload) throw new Error("missing SSE data frame");
+        responseBody = Buffer.from(JSON.stringify(payload));
+        responseContentType = "application/json";
+        headers = bufferedJsonHeaders(upstream);
+      } catch {
+        // Fail-open: keep the upstream SSE bytes, but still close with an explicit length.
+        headers = passthroughBodyHeaders(upstream);
+      }
+    } else {
+      headers = passthroughBodyHeaders(upstream);
+    }
+    headers["content-length"] = responseBody.length;
+    res.writeHead(upstream.statusCode ?? 200, headers);
+    res.end(responseBody);
 
     let outcome: "ok" | "error" = "ok";
     let errorDetail: string | undefined;
     let tables: string[] | undefined;
     try {
-      const contentType = upstream.headers["content-type"] ?? "";
-      if (contentType.includes("application/json")) {
+      if (responseContentType.includes("application/json")) {
         const parsed = JSON.parse(responseBody.toString()) as Record<string, unknown>;
         if (parsed.error || (parsed.result as Record<string, unknown> | undefined)?.isError) {
           outcome = "error";
           errorDetail = JSON.stringify(parsed.error ?? (parsed.result as Record<string, unknown>)?.content);
+        }
+      } else if (upstreamContentType.includes("text/event-stream")) {
+        const parsed = decodeSseMessage(responseBody.toString()) as Record<string, unknown> | undefined;
+        if (parsed?.error || (parsed?.result as Record<string, unknown> | undefined)?.isError) {
+          outcome = "error";
+          errorDetail = JSON.stringify(parsed?.error ?? (parsed?.result as Record<string, unknown>)?.content);
         }
       }
     } catch {
@@ -2611,7 +2633,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       outcome,
       errorDetail,
       durationMs: Date.now() - start,
-      ...responseAuditMeta(responseBody, upstream.headers["content-type"]),
+      ...responseAuditMeta(responseBody, responseContentType),
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, outcome === "ok" ? "allowed" : "upstream_error")),

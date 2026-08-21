@@ -96,7 +96,9 @@ POST /mcp (client)
   - `tools/list`（权限过滤 / 工具注入）
   - `tools/call` 的 `lucy_query` / `lucy_read_source`（结果 `_meta` enrichment）
   - `tools/call` 的 `wiki_search`（结果 ACL 过滤）
+  - **其余** `tools/call`（含直接 `sl_query` / 其他上游工具）：缓冲后若上游为 SSE，则归一化为 JSON（失败 fail-open 保留原 SSE 字节）；非 SSE 仍透传 body，但补齐 `content-length` 并结束响应
 - 原因：KTX 常对 MCP 响应返回**带 `Content-Length` 的单帧 SSE** + `Connection: keep-alive`。部分 Streamable HTTP 客户端（实测 Cursor）会把该响应当作未结束的事件流一直等待，最终报 `MCP error -32001: Request timed out`，而上游实际已在亚秒级完成。proxy 既然已经整包缓冲，就应归一化为 JSON。
+- 非 `tools/call` 的其他方法（以及未命中上述改写分支的路径）仍原样 pipe，避免破坏真正的长连接流式语义
 - `tools/list` 是协议发现面，proxy 对该响应做有限缓冲改写：过滤无权工具，注入 proxy 自服务工具（如 `kx_catalog`），并重写 `content-length` / `transfer-encoding`
 
 ### 4.4 Initialize Instructions 注入（v1.3）
