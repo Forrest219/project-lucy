@@ -4,6 +4,7 @@ import path from "node:path";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { listCases, addCase, updateCase, deleteCase, getCase, listDomains, CaseNotFoundError, CaseIdTakenError } from "../eval/cases";
 import { parse as parseYaml } from "yaml";
+import { resetAuditDbForTests } from "../admin/audit";
 
 const SAMPLE_YAML = `# eval cases for superstore domain
 # This comment must be preserved
@@ -53,20 +54,28 @@ cases:
 `;
 
 let projectRoot: string;
+let previousRoot: string | undefined;
 
 beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-eval-cases-"));
-  // Need ktx.yaml for project detection in fs-safe tests
+  // Need ktx.yaml for project detection in fs-safe tests / config audit
   await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
   await mkdir(path.join(projectRoot, "evals", "superstore", "eval"), { recursive: true });
   await writeFile(
     path.join(projectRoot, "evals", "superstore", "eval", "superstore-eval-cases.yaml"),
     SAMPLE_YAML,
     "utf8"
   );
+  previousRoot = process.env.KTX_PROJECT_ROOT;
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  resetAuditDbForTests();
 });
 
 afterEach(async () => {
+  resetAuditDbForTests();
+  if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+  else process.env.KTX_PROJECT_ROOT = previousRoot;
   await rm(projectRoot, { recursive: true, force: true });
 });
 

@@ -22,15 +22,25 @@ import {
 } from "../wiki";
 import { ForbiddenPathError, safeMkdir, safeRemove } from "../fs-safe";
 import { buildServer } from "../index";
+import { resetAuditDbForTests } from "../admin/audit";
 
 let projectRoot: string;
+let previousRoot: string | undefined;
 
 beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-wiki-"));
   await mkdir(path.join(projectRoot, "wiki", "global"), { recursive: true });
+  await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  previousRoot = process.env.KTX_PROJECT_ROOT;
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  resetAuditDbForTests();
 });
 
 afterEach(async () => {
+  resetAuditDbForTests();
+  if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+  else process.env.KTX_PROJECT_ROOT = previousRoot;
   await rm(projectRoot, { recursive: true, force: true });
 });
 
