@@ -305,15 +305,17 @@ Acceptance:
 
 ### 8.1 Storage
 
-Add hidden history storage under semantic-layer:
+Add hidden history storage under `.ktx-ui` (not under `semantic-layer/`, which KTX treats as connection roots):
 
 ```text
-semantic-layer/.lucy-history/
+.ktx-ui/table-yaml-history/
   table-yaml-index.json
   snapshots/
     <tableHash>/
       <versionId>.yaml
 ```
+
+Legacy `semantic-layer/.lucy-history/` is auto-relocated on validate/reindex and history access.
 
 Rules:
 
@@ -340,7 +342,7 @@ Suggested shape:
           "createdAt": "2026-08-02T18:00:00.000Z",
           "operation": "save",
           "contentHash": "sha256:...",
-          "snapshotPath": "semantic-layer/.lucy-history/snapshots/9a5e.../20260802T180000000Z-a1b2c3d4.yaml",
+          "snapshotPath": ".ktx-ui/table-yaml-history/snapshots/9a5e.../20260802T180000000Z-a1b2c3d4.yaml",
           "affectedFiles": ["semantic-layer/demo-mysql/superstore_orders.yaml"]
         }
       ]

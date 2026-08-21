@@ -1,12 +1,54 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { access, readFile, rename, rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeRemove, safeWrite } from "./fs-safe";
 
-const TABLE_YAML_HISTORY_INDEX_PATH = "semantic-layer/.lucy-history/table-yaml-index.json";
-const TABLE_YAML_HISTORY_SNAPSHOT_ROOT = "semantic-layer/.lucy-history/snapshots";
+/**
+ * Table YAML history must NOT live under `semantic-layer/`.
+ * KTX `admin reindex` treats every top-level directory there as a connection id
+ * and rejects `.lucy-history` (`Unsafe connection id`).
+ */
+export const TABLE_YAML_HISTORY_ROOT = ".ktx-ui/table-yaml-history";
+const TABLE_YAML_HISTORY_INDEX_PATH = `${TABLE_YAML_HISTORY_ROOT}/table-yaml-index.json`;
+const TABLE_YAML_HISTORY_SNAPSHOT_ROOT = `${TABLE_YAML_HISTORY_ROOT}/snapshots`;
+/** Legacy path that breaks KTX connection enumeration — migrate/remove on access. */
+export const LEGACY_TABLE_YAML_HISTORY_ROOT = "semantic-layer/.lucy-history";
 export const TABLE_YAML_VERSION_RETENTION_LIMIT = 5;
+
+async function pathExists(absPath: string): Promise<boolean> {
+  try {
+    await access(absPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Move leftover `semantic-layer/.lucy-history` to `.ktx-ui/table-yaml-history`
+ * (or delete it when the new root already exists). Call before any KTX
+ * walk of `semantic-layer/` (validate / reindex).
+ */
+export async function relocateTableYamlHistoryOutOfSemanticLayer(
+  projectRoot: string
+): Promise<{ relocated: boolean; removedLegacy: boolean }> {
+  const legacyAbs = path.join(projectRoot, ...LEGACY_TABLE_YAML_HISTORY_ROOT.split("/"));
+  const nextAbs = path.join(projectRoot, ...TABLE_YAML_HISTORY_ROOT.split("/"));
+  if (!(await pathExists(legacyAbs))) {
+    return { relocated: false, removedLegacy: false };
+  }
+
+  if (!(await pathExists(nextAbs))) {
+    await mkdir(path.dirname(nextAbs), { recursive: true });
+    await rename(legacyAbs, nextAbs);
+    return { relocated: true, removedLegacy: true };
+  }
+
+  // New root already present: drop the unsafe legacy tree.
+  await rm(legacyAbs, { recursive: true, force: true });
+  return { relocated: false, removedLegacy: true };
+}
 
 export type TableYamlVersionOperation = "save" | "import" | "restore";
 
@@ -136,6 +178,7 @@ function snapshotPath(key: string, versionId: string): string {
 }
 
 async function readIndex(projectRoot: string): Promise<TableYamlHistoryIndex> {
+  await relocateTableYamlHistoryOutOfSemanticLayer(projectRoot);
   try {
     const raw = await readFile(await assertReadable(projectRoot, TABLE_YAML_HISTORY_INDEX_PATH), "utf8");
     const parsed = JSON.parse(raw) as Partial<TableYamlHistoryIndex>;

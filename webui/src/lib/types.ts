@@ -1331,7 +1331,8 @@ export type SemanticAssetWarningCode =
   | "EMPTY_MANIFEST"
   | "TABLE_SCHEMA_MISMATCH"
   | "UNKNOWN_MANIFEST_SHAPE"
-  | "PUBLISH_LOCKED";
+  | "PUBLISH_LOCKED"
+  | "STRIPPED_MANIFEST_COLUMN_KEYS";
 
 export type SemanticAssetErrorCode =
   | "UNKNOWN_CONNECTION"

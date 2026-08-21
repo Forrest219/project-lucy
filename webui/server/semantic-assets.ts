@@ -47,6 +47,7 @@ import { reindexProject, validateSource, type Issue, type ValidationResult } fro
 import { reloadCatalog } from "./catalog-reload";
 import { recordConfigChange } from "./admin/audit.js";
 import { isSemanticLayerJunkName } from "./semantic-layer-junk";
+import { sanitizeSemanticSourceYaml } from "./semantic-overlay-sanitize";
 
 // ─── Public types (mirror of `webui/src/lib/types.ts`) ─────────────────────
 
@@ -57,7 +58,8 @@ export type SemanticAssetWarningCode =
   | "EMPTY_MANIFEST"
   | "TABLE_SCHEMA_MISMATCH"
   | "UNKNOWN_MANIFEST_SHAPE"
-  | "PUBLISH_LOCKED";
+  | "PUBLISH_LOCKED"
+  | "STRIPPED_MANIFEST_COLUMN_KEYS";
 
 export type SemanticAssetErrorCode =
   | "UNKNOWN_CONNECTION"
@@ -1376,6 +1378,7 @@ export async function validateSemanticAssets(
   const filePreviews: SemanticAssetFilePreview[] = [];
   const changedSources: SemanticAssetChangedSource[] = [];
   const changedSourceKeys = new Set<string>();
+  const stagedContents: string[] = [];
   const diffParts: string[] = [];
   const inputFiles = expandValidateInput(request, errors);
   const totalInputBytes = inputFiles.reduce((sum, file) => sum + Buffer.byteLength(file.content, "utf8"), 0);
@@ -1485,6 +1488,21 @@ export async function validateSemanticAssets(
       continue;
     }
 
+    let effectiveContent = content;
+    const overlaySanitizeWarnings: SemanticAssetWarning[] = [];
+    if (classification.kind === "semanticSource") {
+      const sanitized = sanitizeSemanticSourceYaml(content);
+      if (sanitized.stripped) {
+        effectiveContent = sanitized.text;
+        overlaySanitizeWarnings.push({
+          code: "STRIPPED_MANIFEST_COLUMN_KEYS",
+          message: `已自动移除 overlay 列上不被查询契约接受的字段：${sanitized.strippedKeys.join(", ")}`,
+          filePath: filename
+        });
+      }
+    }
+    const sizeBytesEffective = Buffer.byteLength(effectiveContent, "utf8");
+
     // Resolve the connection. We try in order: client-supplied default →
     // inferred from content → inferred from filename → single-connection
     // fallback (handled in `findConnection`).
@@ -1566,6 +1584,7 @@ export async function validateSemanticAssets(
         warnings: fileWarnings
       };
       filePreviews.push(preview);
+      stagedContents.push(content);
       diffParts.push(buildUnifiedDiff(targetPath, oldText, content));
       for (const sourceName of classification.sourceNames) {
         addChangedSource(changedSources, changedSourceKeys, {
@@ -1586,7 +1605,10 @@ export async function validateSemanticAssets(
       }
       const targetPath = buildOverlayTargetPath(conn.id, classification.sourceName);
       const oldText = await readExistingTextOrEmpty(projectRoot, targetPath);
-      const fileWarnings: SemanticAssetWarning[] = [...classification.warnings];
+      const fileWarnings: SemanticAssetWarning[] = [
+        ...classification.warnings,
+        ...overlaySanitizeWarnings
+      ];
       if (oldText.length > 0) {
         fileWarnings.push({
           code: "TARGET_EXISTS",
@@ -1599,15 +1621,16 @@ export async function validateSemanticAssets(
         kind: "semanticSource",
         targetPath,
         exists: oldText.length > 0,
-        sizeBytes,
-        sha256: sha256(content),
+        sizeBytes: sizeBytesEffective,
+        sha256: sha256(effectiveContent),
         connectionId: conn.id,
         sourceName: classification.sourceName,
         physicalTable: classification.physicalTable,
         warnings: fileWarnings
       };
       filePreviews.push(preview);
-      diffParts.push(buildUnifiedDiff(targetPath, oldText, content));
+      stagedContents.push(effectiveContent);
+      diffParts.push(buildUnifiedDiff(targetPath, oldText, effectiveContent));
       addChangedSource(changedSources, changedSourceKeys, {
         connectionId: conn.id,
         sourceName: classification.sourceName
@@ -1632,7 +1655,7 @@ export async function validateSemanticAssets(
       createdAt: new Date().toISOString(),
       files: filePreviews.map((p, index) => ({
         originalFilename: p.originalFilename,
-        content: inputFiles[index]?.content ?? "",
+        content: stagedContents[index] ?? "",
         kind: p.kind,
         connectionId: p.connectionId ?? "",
         schema: p.schema,

@@ -74,16 +74,19 @@ afterEach(async () => {
 });
 
 describe("source YAML import API", () => {
-  it("returns rawYaml as a re-importable table snippet", async () => {
+  it("returns rawYaml as a publishable overlay (name + table, no pk/nullable)", async () => {
     const app = buildServer();
     await app.ready();
     const sourceResponse = await request(app.server)
       .get("/api/sources/mysql-aliyun/dataforai/superstore_orders")
       .expect(200);
 
-    const rawYaml = sourceResponse.body.data.rawYaml;
+    const rawYaml = sourceResponse.body.data.rawYaml as string;
+    expect(rawYaml).toContain("name: superstore_orders");
     expect(rawYaml).toContain("table: dataforai.superstore_orders");
     expect(rawYaml).toContain("\ncolumns:");
+    expect(rawYaml).not.toMatch(/\bpk:/);
+    expect(rawYaml).not.toMatch(/\bnullable:/);
 
     const importResponse = await request(app.server)
       .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")

@@ -264,7 +264,9 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 
 ### Table YAML 版本记录与恢复（M54）
 
-`PUT /api/sources/:conn/:schema/:table` 和 `POST /api/sources/:conn/:schema/:table/import` 在 `dryRun:false` 落盘后，会先把写完后的 YAML 快照追加到 `semantic-layer/.lucy-history/`，再返回新版快照摘要。保留最近 5 个版本，按 `versionId` 倒序，最新写入的版本即 cover current state。
+`PUT /api/sources/:conn/:schema/:table` 和 `POST /api/sources/:conn/:schema/:table/import` 在 `dryRun:false` 落盘后，会先把写完后的 YAML 快照追加到 `.ktx-ui/table-yaml-history/`，再返回新版快照摘要。保留最近 5 个版本，按 `versionId` 倒序，最新写入的版本即 cover current state。
+
+> 历史目录故意不放在 `semantic-layer/` 下：KTX `admin reindex` 会把 `semantic-layer/` 顶层目录当成 connection id，`.lucy-history` 会触发 `Unsafe connection id`。启动 validate/reindex 前若仍发现遗留的 `semantic-layer/.lucy-history`，会自动迁到 `.ktx-ui/table-yaml-history/`。
 
 `GET /api/sources/:conn/:schema/:table/versions` 返回最近 5 个版本的摘要列表：
 

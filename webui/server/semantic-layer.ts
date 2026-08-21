@@ -9,6 +9,7 @@ import type { AuthoredText, Column, Join, ManifestSchemaSummary, Measure, Segmen
 import { previewOverlayUpdate } from "./overlay";
 import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
 import { readConnections } from "./project";
+import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -197,7 +198,7 @@ function columnsNode(tableNode: ParsedNode): ParsedNode[] {
   return node.items.filter((item): item is ParsedNode => typeof item === "object" && item !== null);
 }
 
-function tableYaml(doc: Document, table: string, _sourceText: string, overlay: Record<string, unknown> = {}): string {
+function tableYaml(doc: Document, schema: string, table: string, overlay: Record<string, unknown> = {}): string {
   const node = tableNodeFromDocument(doc, table);
   if (!node) {
     return "";
@@ -212,7 +213,16 @@ function tableYaml(doc: Document, table: string, _sourceText: string, overlay: R
   if (Array.isArray(overlay.segments)) {
     value.segments = overlay.segments;
   }
-  return new Document(value).toString({ lineWidth: 0 });
+  // Publishable semantic overlay shape (Lucy upload + KTX SourceColumn contract).
+  const published: Record<string, unknown> = {
+    ...value,
+    name: table,
+    table: typeof value.table === "string" && value.table.trim() ? value.table : `${schema}.${table}`
+  };
+  if (Array.isArray(published.columns)) {
+    published.columns = stripManifestOnlyColumnKeys(published.columns).columns;
+  }
+  return new Document(published).toString({ lineWidth: 0 });
 }
 
 function parseYaml(text: string, source: string): Document {
@@ -248,6 +258,10 @@ async function listSchemaFiles(projectRoot: string): Promise<SchemaFile[]> {
 
   for (const connection of connections) {
     if (!connection.isDirectory()) {
+      continue;
+    }
+    // Skip Lucy/KTX-internal hidden dirs (e.g. legacy `.lucy-history`).
+    if (connection.name.startsWith(".")) {
       continue;
     }
     const schemaDir = path.join(base, connection.name, "_schema");
@@ -524,7 +538,7 @@ export async function readSource(
   const model = modelFromTable(conn, schema, table, relPath, tableValue, tableNodeFromDocument(doc, table), overlay);
   return {
     model,
-    rawYaml: tableYaml(doc, table, text, overlay),
+    rawYaml: tableYaml(doc, schema, table, overlay),
     completion: computeCompletion(model)
   };
 }
