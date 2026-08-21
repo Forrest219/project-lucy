@@ -44,7 +44,7 @@ Lucy 当前已经具备企业级 data agent 平台的关键雏形：`access.yaml
 | Fact source | Role in 202608 | Allowed | Forbidden |
 |---|---|---|---|
 | `access.yaml` | Access configuration source | Agent、Role、Token hash、defaults deny、static ACL | Runtime events、reviewer decisions、Trace events |
-| `.ktx-ui/audit.sqlite` | Audit + Trace / Evidence hot store | access log、permission snapshot、policy decision、evidence ref、artifact hash、reviewer / override signature | Raw result rows、raw SQL AST、full question、Token plaintext、DB credentials、customer row samples |
+| `.ktx-ui/audit.sqlite` | Audit + Trace / Evidence hot store | access log（含 Spec 125 `generated_sql` 明文）、permission snapshot、policy decision、evidence ref、artifact hash、reviewer / override signature | Raw result rows、raw SQL AST / raw query 攻击载荷、full question、Token plaintext、DB credentials、customer row samples |
 | `.ktx-ui/eval/**` | Security Eval run / candidate store | security candidates、reviewer evidence、formal P0 negative cases | Unredacted logs、unreviewed formal Eval cases |
 
 ## 4. Three-Layer Gap Table

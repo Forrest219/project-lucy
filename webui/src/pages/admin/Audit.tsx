@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -802,41 +802,10 @@ function EntryRow({
   onOpenTurn: (turnId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [artifactPlaintext, setArtifactPlaintext] = useState<string | null>(null);
-  const [artifactKind, setArtifactKind] = useState<string | null>(null);
-  const [artifactError, setArtifactError] = useState<string | null>(null);
-  const [artifactLoading, setArtifactLoading] = useState(false);
   const outcomeClass =
     entry.outcome === "ok" ? "pl-status-done" : entry.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed";
   const redactedArgs = entry.argsSummary ? redactValue(entry.argsSummary) : null;
   const callOrigin = formatCallOriginLabel(entry.lucyPlatform);
-
-  async function viewQueryArtifact(event: MouseEvent) {
-    event.stopPropagation();
-    if (!entry.queryArtifactRef && !entry.requestId) return;
-    if (!window.confirm("查看查询原文会解密冷存内容，并写入取证审计。是否继续？")) return;
-    setArtifactLoading(true);
-    setArtifactError(null);
-    try {
-      const params = new URLSearchParams();
-      if (entry.requestId !== undefined && entry.requestId !== "") {
-        params.set("requestId", String(entry.requestId));
-      } else if (entry.queryArtifactRef) {
-        params.set("ref", entry.queryArtifactRef);
-      }
-      const data = await apiGet<{
-        kind: string;
-        plaintext: string;
-      }>(`/api/admin/audit/query-artifacts?${params.toString()}`);
-      setArtifactKind(data.kind);
-      setArtifactPlaintext(data.plaintext);
-    } catch (error) {
-      setArtifactError(error instanceof Error ? error.message : String(error));
-      setArtifactPlaintext(null);
-    } finally {
-      setArtifactLoading(false);
-    }
-  }
 
   return (
     <>
@@ -911,10 +880,23 @@ function EntryRow({
             </Link>
           </div>
         </td>
+        <td className="pl-audit-generated-sql max-w-md">
+          {entry.generatedSql ? (
+            <code
+              className="block max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-xs notranslate"
+              translate="no"
+              data-testid={`audit-generated-sql-${entry.id}`}
+            >
+              {entry.generatedSql}
+            </code>
+          ) : (
+            <span className="text-fg-muted">—</span>
+          )}
+        </td>
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
-          <td colSpan={11} className="px-3 py-3 text-xs">
+          <td colSpan={12} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-grid">
               <div>
                 <span className="font-medium">关联 <span className="notranslate" translate="no">Agent</span>：</span>
@@ -1019,7 +1001,7 @@ function EntryRow({
                   </span>
                 </div>
               )}
-              {(entry.queryHash || entry.queryPreview || entry.queryArtifactRef) && (
+              {(entry.queryHash || entry.queryPreview || entry.generatedSql) && (
                 <div>
                   <span className="font-medium">Query 审计：</span>
                   <span className="ml-2 text-fg-muted">
@@ -1028,31 +1010,13 @@ function EntryRow({
                     {entry.queryHash ? <span className="font-mono"> · {entry.queryHash.slice(0, 16)}…</span> : ""}
                   </span>
                   {entry.queryPreview ? <code className="ml-2">{entry.queryPreview}</code> : null}
-                  {entry.queryArtifactRef ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        className="pl-btn pl-btn--ghost text-xs"
-                        data-testid={`audit-view-query-artifact-${entry.id}`}
-                        onClick={viewQueryArtifact}
-                        disabled={artifactLoading}
-                      >
-                        {artifactLoading ? "解密中…" : "查看查询原文"}
-                      </button>
-                      <span className="text-fg-muted font-mono notranslate" translate="no">
-                        {entry.queryArtifactRef}
-                      </span>
-                    </div>
-                  ) : null}
-                  {artifactError ? <p className="mt-2 text-danger">{artifactError}</p> : null}
-                  {artifactPlaintext ? (
+                  {entry.generatedSql ? (
                     <pre
                       className="mt-2 overflow-auto rounded border border-border bg-bg-subtle p-2 font-mono text-xs notranslate"
                       translate="no"
-                      data-testid={`audit-query-artifact-plaintext-${entry.id}`}
+                      data-testid={`audit-generated-sql-detail-${entry.id}`}
                     >
-                      {artifactKind ? `kind=${artifactKind}\n\n` : ""}
-                      {artifactPlaintext}
+                      {entry.generatedSql}
                     </pre>
                   ) : null}
                 </div>
@@ -1635,11 +1599,12 @@ export function Audit() {
                   <th>状态</th>
                   <th>调用来源</th>
                   <th>耗时</th>
+                  <th>生成 SQL</th>
                 </tr>
               </thead>
               <tbody>
                 {callEntries.length === 0 ? (
-                  <tr><td colSpan={11} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
                   callEntries.map((entry, index) => (
                     <EntryRow

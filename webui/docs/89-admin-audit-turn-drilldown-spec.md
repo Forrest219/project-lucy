@@ -54,7 +54,7 @@
 ## 3. 非目标
 
 - 不重建 turn 聚类算法（复用 `rebuildInferredTurns`）。
-- 不展示完整 SQL / 结果行 / Token 明文。
+- 不展示结果行 / Token 明文；**生成 SQL**（Spec 125）可在调用流水列表与 CSV 直展。
 - 不把 inferred summary 表述为用户原文。
 - 不做 turn 级 CSV（Phase 2 另开）。
 - 不做浏览器验证（本轮 Vitest + terminology + build）。

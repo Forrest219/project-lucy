@@ -13,11 +13,7 @@ import {
   type LucySpanStatus
 } from "../trace/evidence.js";
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
-import { captureQueryPayload, mergeIncludeSql } from "../audit/query-artifact-capture.js";
-import {
-  queryArtifactEncryptionEnabled,
-  writeQueryArtifact
-} from "../audit/query-artifact-store.js";
+import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -863,43 +859,23 @@ function lucyQueryUpstreamArgs(args: unknown): Record<string, unknown> {
     filters: normalizeLucyFiltersForUpstream(record.filters),
     limit: numericLimit(record.limit)
   };
-  // Spec 124: when forensic cold-store key is configured, ask upstream for generated SQL.
-  if (queryArtifactEncryptionEnabled()) {
-    return mergeIncludeSql(normalized);
-  }
-  return normalized;
+  // Spec 125: always ask upstream for compiled SQL so hot store can persist generated_sql.
+  return mergeIncludeSql(normalized);
 }
 
-async function enrichWithQueryArtifact(options: {
-  entry: Parameters<typeof writeLog>[0];
-  toolArgs?: unknown;
-  toolResultBody?: unknown;
-}): Promise<Parameters<typeof writeLog>[0]> {
-  try {
-    const captured = captureQueryPayload({
-      toolArgs: options.toolArgs,
-      toolResultBody: options.toolResultBody
-    });
-    if (!captured) return options.entry;
-    const written = await writeQueryArtifact({
-      kind: captured.kind,
-      tool: options.entry.tool,
-      requestId: options.entry.requestId,
-      traceId: options.entry.traceId,
-      plaintext: captured.plaintext,
-      queryHash: captured.queryHash
-    });
-    if (!written) return options.entry;
-    return {
-      ...options.entry,
-      queryArtifactRef: written.ref,
-      queryHash: options.entry.queryHash ?? written.queryHash,
-      queryLength: options.entry.queryLength ?? captured.plaintext.length,
-      queryOperation: options.entry.queryOperation ?? (captured.kind === "semantic_query" ? "semantic" : "select")
-    };
-  } catch {
-    return options.entry;
-  }
+function generatedSqlAuditFields(
+  toolName: string,
+  toolResultBody: unknown
+): Partial<Parameters<typeof writeLog>[0]> {
+  if (toolName !== "lucy_query") return {};
+  const sql = extractSqlFromToolResult(toolResultBody);
+  if (!sql?.trim()) return {};
+  return {
+    generatedSql: sql,
+    queryHash: createHash("sha256").update(sql).digest("hex"),
+    queryLength: sql.length,
+    queryOperation: queryOperation(sql)
+  };
 }
 
 function hasNonEmptyStringField(record: Record<string, unknown>, fields: string[]): boolean {
@@ -1639,6 +1615,7 @@ async function writeLucySemanticResponse(
     tables: tables.length > 0 ? tables : undefined,
     argsSummary,
     ...queryMeta,
+    ...generatedSqlAuditFields(toolName, parsedBody),
     outcome,
     errorDetail,
     durationMs: Date.now() - start,
@@ -1648,14 +1625,7 @@ async function writeLucySemanticResponse(
     ...requestMeta,
     ...(await auditMeta(identity, outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error")),
   };
-  recordAudit(
-    await enrichWithQueryArtifact({
-      entry: baseEntry,
-      toolArgs,
-      toolResultBody: parsedBody
-    }),
-    outcome === "ok" ? sourceRefs : undefined
-  );
+  recordAudit(baseEntry, outcome === "ok" ? sourceRefs : undefined);
   recordMcpTraceForTool({
     traceId,
     identity,
@@ -1887,12 +1857,6 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     sources?: SourceRef[]
   ) => {
     const withTrace = rpcMethod === "tools/call" ? { ...entry, traceId } : entry;
-    if (rpcMethod === "tools/call" && toolArgs !== undefined) {
-      void enrichWithQueryArtifact({ entry: withTrace, toolArgs }).then((enriched) => {
-        recordAudit(enriched, sources);
-      });
-      return;
-    }
     recordAudit(withTrace, sources);
   };
 

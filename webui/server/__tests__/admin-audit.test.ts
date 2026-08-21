@@ -577,8 +577,6 @@ describe("GET /api/admin/audit/query-artifacts", () => {
       const list = await request(app.server).get("/api/admin/audit?includeProtocol=1").expect(200);
       const entry = list.body.data.entries.find((row: { requestId: string }) => row.requestId === "forensic-req-1");
       expect(entry.queryArtifactRef).toBe(written!.ref);
-      expect(JSON.stringify(list.body)).not.toContain("SELECT SUM(sales) FROM orders\"");
-      // list may include redacted preview, but must not embed the cold-store plaintext field
       expect(list.body.data.entries.every((row: { plaintext?: string }) => row.plaintext === undefined)).toBe(true);
 
       const viewed = await request(app.server)
@@ -598,6 +596,51 @@ describe("GET /api/admin/audit/query-artifacts", () => {
       await app.close();
       delete process.env.LUCY_AUDIT_QUERY_KEY;
       delete process.env.LUCY_AUDIT_COLD_DIR;
+    }
+  });
+});
+
+describe("Spec 125 generated_sql hot store", () => {
+  it("returns generatedSql on list and CSV without requiring cold-store key", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    await writeLog({
+      ts: "2026-08-21T10:00:00.000Z",
+      userId: "analyst",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 9,
+      requestId: "gen-sql-req-1",
+      generatedSql: "SELECT SUM(sales) AS total FROM dataforai.superstore_orders",
+      queryHash: "b".repeat(64),
+      queryLength: 58,
+      queryOperation: "select"
+    });
+    await writeLog({
+      ts: "2026-08-21T10:01:00.000Z",
+      userId: "attacker",
+      tool: "lucy_query",
+      outcome: "denied",
+      durationMs: 2,
+      requestId: "raw-deny-req-1",
+      queryPreview: "select * from secret where id = ?",
+      decisionReason: "raw_query_forbidden"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const list = await request(app.server).get("/api/admin/audit?includeProtocol=1").expect(200);
+      const okRow = list.body.data.entries.find((row: { requestId: string }) => row.requestId === "gen-sql-req-1");
+      const denyRow = list.body.data.entries.find((row: { requestId: string }) => row.requestId === "raw-deny-req-1");
+      expect(okRow.generatedSql).toBe("SELECT SUM(sales) AS total FROM dataforai.superstore_orders");
+      expect(denyRow.generatedSql).toBeUndefined();
+
+      const csv = await request(app.server).get("/api/admin/audit/export?includeProtocol=1").expect(200);
+      expect(csv.text).toContain("generated_sql");
+      expect(csv.text).toContain("SELECT SUM(sales) AS total FROM dataforai.superstore_orders");
+    } finally {
+      await app.close();
     }
   });
 });

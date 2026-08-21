@@ -17,39 +17,33 @@
 | Spec 编号 | 124 |
 | 关联页面 | `/admin/audit` |
 | 关联域 | Access Control / Audit |
-| 状态 | Implemented |
-| 日期 | 2026-08-20 |
+| 状态 | Superseded（主路径由 Spec 125 取代；本 Spec 保留为 optional / legacy） |
+| 日期 | 2026-08-21 |
+| 取代 | 运维主路径见 `webui/docs/125-audit-generated-sql-hot-store-spec.md`（热库明文 `generated_sql` + 列表直展） |
 
 ## 1. 背景
 
-审计热库（`.ktx-ui/audit.sqlite`）禁止存完整 SQL / SQL AST 原文，导致生产事故难以按 `requestId` / `query_hash` 还原「当时跑了什么」。业务需要受控生产溯源，且不得打穿热库红线。
+历史 MVP：审计热库禁止存完整 SQL，改为加密冷存 + 受控解密。私有化运维需要定期 review 生成 SQL 后，主路径改为热库明文 `generated_sql`（Spec 125）。本文件保留冷存设计供可选双写 / 未来对象存储，**不再作为运维默认入口**。
 
-## 2. 目标
+## 2. 目标（legacy）
 
-1. Proxy 在工具调用时把查询原文（raw SQL、生成 SQL 或规范化语义查询）写入**加密冷存**。
-2. 热库 `access_log` 仅增加 `query_artifact_ref` 指针；列表与默认 API 不返回明文。
-3. Admin 通过受控 API 解密查看；每次查看写入 forensic 访问审计。
-4. 缺密钥时 MCP 不失败；冷写跳过。
+1. （可选）Proxy 在配置 `LUCY_AUDIT_QUERY_KEY` 时仍可把查询原文写入加密冷存。
+2. 热库主字段改为 Spec 125 的 `generated_sql`；`query_artifact_ref` 不再作为查看主路径。
+3. Admin 解密 API 可保留，但 UI 默认不再引导「查看查询原文」。
+4. 缺密钥时 MCP 不失败。
 
 ## 3. 非目标
 
-- 对象存储 / S3 归档流水线（同一 artifact 格式可二期搬迁）
+- 对象存储 / S3 归档流水线
 - 结果行明文冷存
 - 削弱 `raw_query_forbidden`
-- Security Eval 从日志自动生成 AST 断言
-- 在 `/admin/audit` 列表默认展示全文
+- 与 Spec 125 抢主路径（热库 generated SQL 优先）
 
 ## 4. Terminology Compliance
 
 This feature follows `webui/docs/00-product-terminology-standard.md`.
 
-New terms:
-- Query Artifact: UI 主术语为「查询原文（加密）」；指冷存中的加密查询载荷
-- Query Artifact Ref: UI 主术语为「查询原文引用」；热库指针，不是明文
-- View Query Artifact: UI 主术语为「查看查询原文」；受控解密动作
-
-Forbidden terms:
-- 冷库明文 SQL、热库 SQL 原文、随意「解密」无授权语境
+Query Artifact 术语降为遗留；运维主术语见 Spec 125「生成 SQL」。
 
 ## 5. 存储边界
 

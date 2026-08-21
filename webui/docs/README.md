@@ -112,7 +112,8 @@
 | [122-list-history-time-filter-parity-spec.md](122-list-history-time-filter-parity-spec.md) | 配置审计时间筛选对齐发布记录；访问日志补「时间」标签 + since 整点（Implemented v1.0；`UX-ADMIN-CONFIG-AUDIT-009`、`UX-ADMIN-AUDIT-026`） | 产品 / UX / Frontend |
 | [123-publish-workbench-activation-ia-spec.md](123-publish-workbench-activation-ia-spec.md) | `/publish/workbench` 语义生效台：去上传/导出；「生效准备」；同步索引并生效；更多全量重建（Implemented v1.0；修订 Spec 35；`UX-PUBLISH-WORKBENCH-007`） | 产品 / UX / IA / Frontend |
 | [111-help-center-search-and-connection-kpi-glossary-spec.md](111-help-center-search-and-connection-kpi-glossary-spec.md) | `/help` 手册关键词搜索 + 连接概览「已发现表数」等 KPI 术语写入手册并可搜索命中（Planned → Implemented） | 产品 / UX / Frontend / Docs |
-| [124-audit-query-artifact-cold-store-spec.md](124-audit-query-artifact-cold-store-spec.md) | 生产溯源：查询原文 AES-GCM 冷存；热库仅 `query_artifact_ref`；Admin 受控解密查看（Implemented） | 产品 / 安全 / Audit / Backend / Frontend |
+| [124-audit-query-artifact-cold-store-spec.md](124-audit-query-artifact-cold-store-spec.md) | 查询原文加密冷存（Superseded / legacy；主路径见 Spec 125） | 产品 / 安全 / Audit |
+| [125-audit-generated-sql-hot-store-spec.md](125-audit-generated-sql-hot-store-spec.md) | 热库明文 `generated_sql` + 调用流水列表/CSV 直展（Implemented） | 产品 / 安全 / Audit / Backend / Frontend |
 
 ## 与原 README 的关键校正
 

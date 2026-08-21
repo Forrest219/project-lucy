@@ -717,6 +717,7 @@ export type AuditLogEntry = {
   queryOperation?: string;
   queryPreview?: string;
   queryArtifactRef?: string;
+  generatedSql?: string;
   outcome: "ok" | "error" | "denied";
   errorDetail?: string;
   durationMs: number;

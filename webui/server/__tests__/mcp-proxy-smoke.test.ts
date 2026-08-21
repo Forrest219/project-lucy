@@ -591,15 +591,20 @@ describe("MCP proxy smoke", () => {
   });
 
   it("rewrites lucy_read_source and lucy_query to upstream semantic tools while auditing Lucy tools", async () => {
+    const generatedSql = "SELECT SUM(sales) AS sales FROM dataforai.superstore_orders WHERE region = 'East'";
     const upstreamSeen: Array<{ body: Record<string, unknown> }> = [];
     const upstream = createServer(async (req, res) => {
       const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
       upstreamSeen.push({ body });
+      const tool = (body.params as { name?: string } | undefined)?.name;
+      const payload = tool === "sl_query"
+        ? { rows: [{ ok: true }], truncated: false, sql: generatedSql }
+        : { rows: [{ ok: true }], truncated: false };
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({
         jsonrpc: "2.0",
         id: body.id,
-        result: { content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }], truncated: false }) }] }
+        result: { content: [{ type: "text", text: JSON.stringify(payload) }] }
       }));
     });
 
@@ -692,6 +697,7 @@ describe("MCP proxy smoke", () => {
       ]);
       const forwardedQueryArgs = (upstreamSeen[1]?.body.params as Record<string, unknown>).arguments as Record<string, unknown>;
       expect(forwardedQueryArgs.limit).toBe(1000);
+      expect(forwardedQueryArgs.include).toEqual(expect.arrayContaining(["sql"]));
       expect(forwardedQueryArgs.filters).toEqual([
         "superstore_orders.sales > 100",
         "superstore_orders.region LIKE '%East%'"
@@ -700,9 +706,16 @@ describe("MCP proxy smoke", () => {
       const readAudit = await waitForAuditRow("lucy-read-source");
       expect(readAudit.tool).toBe("lucy_read_source");
       expect(JSON.parse(String(readAudit.tables))).toEqual(["dataforai.superstore_orders"]);
+      expect(readAudit.generated_sql).toBeNull();
       const queryAudit = await waitForAuditRow("lucy-query");
       expect(queryAudit.tool).toBe("lucy_query");
       expect(JSON.parse(String(queryAudit.tables))).toEqual(["dataforai.superstore_orders"]);
+      // Spec 125: hot-store plaintext is compiled SQL from the result, not args literals.
+      expect(queryAudit.generated_sql).toBe(generatedSql);
+      expect(queryAudit.query_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(queryAudit.query_length).toBe(generatedSql.length);
+      expect(queryAudit.query_operation).toBe("select");
+      expect(String(queryAudit.args_summary ?? "")).not.toContain(generatedSql);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -1667,6 +1680,8 @@ describe("MCP proxy smoke", () => {
       expect(String(audit.query_preview)).toContain("dataforai.superstore_orders");
       expect(String(audit.query_preview)).not.toContain("secret");
       expect(String(audit.query_preview)).not.toContain("100");
+      // Raw args query must stay out of generated_sql (preview-only redaction path).
+      expect(audit.generated_sql).toBeNull();
       expect(audit.response_bytes).toBeGreaterThan(0);
       expect(audit.response_row_count).toBe(2);
       expect(audit.response_column_count).toBe(2);

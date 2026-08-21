@@ -441,13 +441,14 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
-| Query Artifact | 查询原文（加密） | 加密查询原文 | 冷库明文 SQL、热库 SQL 原文 | Spec 124：冷存 AES-GCM 密文；按需解密 |
-| Query Artifact Ref | 查询原文引用 | artifact ref | 把 ref 当明文 SQL 展示 | 热库 `query_artifact_ref` 指针 |
-| View Query Artifact | 查看查询原文 | — | 解密（无授权语境作主按钮） | 调用流水展开行受控动作；必留 forensic 审计 |
+| Query Artifact | 查询原文（加密） | 加密查询原文 | — | Spec 124 legacy：可选冷存；运维主路径见 Generated SQL |
+| Query Artifact Ref | 查询原文引用 | artifact ref | 把 ref 当生成 SQL 展示 | Spec 124 legacy 指针 |
+| View Query Artifact | 查看查询原文 | — | 作为生成 SQL 的唯一入口 | Spec 124 legacy；Spec 125 改为列表直展 |
+| Generated SQL | 生成 SQL | compiled SQL | 热库 SQL 原文（过宽）、raw SQL | Spec 125：`lucy_query` 编译结果；热库 `generated_sql`；调用流水列 / CSV |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 124** 要求查询原文加密冷存与受控查看。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 
