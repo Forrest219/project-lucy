@@ -33,6 +33,7 @@
 | 优先级 | 文档 | 状态 |
 |---|---|---|
 | **P0 必读** | [`design-upgrade.md`](design-upgrade.md) **v1.1.2** | 审核基线；六项 ADR；批准后可写 AC-P0 Spec |
+| **完整性口径** | [`integrity-p0-decision.md`](integrity-p0-decision.md) **v1.0** | 企业完整性 P0 承诺 / 已知限制；扩展而非替代 202608 工程 P0 |
 | **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | 可交付开发任务计划 |
 | **WebUI 登录 / Token 失效** | [`design-webui-admin-auth.md`](design-webui-admin-auth.md) · [`plans/wo-202608-62-webui-admin-auth-and-token-expiry.md`](plans/wo-202608-62-webui-admin-auth-and-token-expiry.md) | Token `expires_at` 强制；多管理员本地登录 |
 | 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
@@ -52,6 +53,7 @@
 | `uat-agent-permissions-v1.md` | Module 1 UAT（表级 ACL；不含 Row Policy） |
 | `review-agent-permissions-v1.md` | Module 1 代码审查报告 |
 | `gap-analysis-202608.md` | 202608 Governance 差距分析（不含 Dynamic RLS） |
+| `integrity-p0-decision.md` | 企业完整性 P0 决策备忘（承诺表 / 已知限制 / 与工程 P0 对齐） |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
 

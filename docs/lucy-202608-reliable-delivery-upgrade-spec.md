@@ -221,6 +221,10 @@ Package includes:
 | Release package implies future capabilities | Unsafe expectation | Package includes only current Agent / Role / Token / ACL / Audit / Eval facts and known limitations |
 | Existing `/admin` gets crowded | UX degradation | Use detail links, summary dashboard, and current PageHeader / table / Drawer patterns |
 
+## 9.1 Related product baseline (Integrity P0)
+
+对外「访问可完整答辩」口径见 [`docs/access-control/integrity-p0-decision.md`](access-control/integrity-p0-decision.md)。该文件**扩展**本蓝图工程 P0（Trace / Evidence），增补问询覆盖率、受控查询指纹、授权↔触达对账等承诺边界；**不替代**本文件与 GOV-01 的工程范围。未另批 Spec 的增补项不得写成已交付。
+
 ## 10. Builder-Facing Specs
 
 | Spec | Status in 202608 | Scope |
