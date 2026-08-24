@@ -110,10 +110,17 @@ function ensureColumn(database: Database.Database, table: string, column: string
 
 async function getDb(): Promise<Database.Database> {
   if (db) return db;
-  const projectRoot = await resolveProjectRoot();
-  const dir = path.join(projectRoot, ".ktx-ui");
-  mkdirSync(dir, { recursive: true });
-  const dbPath = process.env.LUCY_AUDIT_DB ?? path.join(dir, "audit.sqlite");
+  const envDbPath = process.env.LUCY_AUDIT_DB;
+  let dbPath: string;
+  if (envDbPath && envDbPath.trim().length > 0) {
+    dbPath = path.resolve(envDbPath);
+    mkdirSync(path.dirname(dbPath), { recursive: true });
+  } else {
+    const projectRoot = await resolveProjectRoot();
+    const dir = path.join(projectRoot, ".ktx-ui");
+    mkdirSync(dir, { recursive: true });
+    dbPath = path.join(dir, "audit.sqlite");
+  }
   db = new Database(dbPath);
   prepareTraceDatabase(db);
   db.exec(`

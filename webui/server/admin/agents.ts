@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { stringify, parse } from "yaml";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
@@ -17,6 +17,7 @@ import {
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
+import { actorIdFromRequest } from "../auth/guard.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;

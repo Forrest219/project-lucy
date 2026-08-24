@@ -15,7 +15,8 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
-import { invalidateAccessConfigCache } from "../proxy/identity.js";
+import { invalidateAccessConfigCache, normalizeExpiresAtInput } from "../proxy/identity.js";
+import { actorIdFromRequest } from "../auth/guard.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -106,7 +107,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
     };
   }>("/api/admin/agents/:userId/tokens", async (request, reply) => {
     const { userId } = request.params;
-    const { label, expires_at } = request.body ?? {};
+    const { label } = request.body ?? {};
     const deviceNameRaw = request.body?.device_name;
     const dryRun = request.body?.dryRun === true;
     let expires_at: string | null = null;

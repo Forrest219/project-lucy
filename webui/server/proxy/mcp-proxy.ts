@@ -16,6 +16,7 @@ import {
 } from "../trace/evidence.js";
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
+import { extractRequestClientMeta } from "./request-client-meta.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -1716,6 +1717,7 @@ async function writeLucySemanticResponse(
 
   const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
   const tables = [...new Set([...structuredTables, ...queryTables])];
+  const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"]);
   const baseEntry: Parameters<typeof writeLog>[0] = {
     ts: new Date().toISOString(),
     userId: identity.userId,
