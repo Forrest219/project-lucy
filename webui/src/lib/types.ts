@@ -41,7 +41,6 @@ export type TableModel = {
   table: string;
   qualifiedName?: string;
   filePath: string;
-  qualifiedName?: string;
   descriptions: AuthoredText;
   grain?: string[];
   columns: Column[];
@@ -573,6 +572,16 @@ export type JoinCandidatesResponse = {
   candidates: JoinCandidate[];
 };
 
+/** Spec 100 — Agent Constraints config (Admin editor / access.yaml users[].constraints). */
+export type AgentConstraintsConfig = {
+  sources: Array<{
+    connection: string;
+    schema?: string;
+    names: string[];
+    predicates: RoleRowPolicyPredicate[];
+  }>;
+};
+
 export type Agent = {
   id: string;
   name: string;
@@ -583,6 +592,8 @@ export type Agent = {
   configUpdatedAt?: string;
   tokens: TokenSummary[];
   allow?: { tables: string[] | ["*"]; tools: string[] | ["*"]; connections?: string[] };
+  /** Spec 100 — Agent 强制约束；缺省表示 Constraints≡TRUE。 */
+  constraints?: AgentConstraintsConfig;
   effectivePermissions?: EffectivePermissionsPreview;
   permissionWarnings?: string[];
   stats?: AgentStats;
@@ -612,9 +623,33 @@ export type RoleUserReference = {
   tokenCount: number;
 };
 
+/** Spec 99 — Role Admin / access.yaml selector row_policy predicate. */
+export type RoleRowPolicyPredicate = {
+  field: string;
+  op: "eq" | "in";
+  value?: string | number | boolean;
+  values?: Array<string | number | boolean>;
+};
+
+export type RoleRowPolicy = {
+  predicates: RoleRowPolicyPredicate[];
+};
+
 export type RoleSelector =
-  | { connection?: string; schema: string; names: string[] }
-  | { connection?: string; schema: string; prefix: string };
+  | {
+      connection?: string;
+      schema: string;
+      names: string[];
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicy;
+    }
+  | {
+      connection?: string;
+      schema: string;
+      prefix: string;
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicy;
+    };
 
 export type RoleAllowConfig = {
   connections?: string[];
@@ -633,6 +668,30 @@ export type RoleDetail = Role & {
   effectivePermissions?: EffectivePermissionsPreview;
 };
 
+/** Spec 99 §8 — TRUE / all, or scoped digest (Role API may also include predicates). */
+export type EffectiveRowGrantPreview =
+  | true
+  | "all"
+  | { kind: "all" }
+  | { kind: "scoped"; digest: string; predicates?: unknown; orArms?: unknown };
+
+export type EffectiveCapabilityPreview = {
+  tool: string;
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+  physicalTable: string;
+  sourceKey: string;
+  /** Spec 99 — EffectiveRowGrant (Role OR). */
+  rowGrant: EffectiveRowGrantPreview;
+  /** Spec 100 — FinalRows after Constraints AND; digest / protected for Admin preview. */
+  finalRows?: EffectiveRowGrantPreview;
+  /** FinalRows ≠ TRUE → 受保护源（编译态；不表示上游已注入生效）。 */
+  protected?: boolean;
+  /** AgentConstraints 摘要（无约束时缺省）。 */
+  constraintsSummary?: string;
+};
+
 export type EffectivePermissionsPreview = {
   roleIds: string[];
   snapshotHash: string;
@@ -646,6 +705,25 @@ export type EffectivePermissionsPreview = {
     table: string;
   }>;
   legacyAllow: boolean;
+  /** Spec 98 §5 — capability digest for audit correlation. */
+  capabilityDigest?: string;
+  /** Spec 14/15 — Data Capability Preview (tool × canonical source key). */
+  capabilities?: EffectiveCapabilityPreview[];
+};
+
+export type PolicyRuntimeStatus = {
+  policyVersion: string;
+  degradedGlobal: boolean;
+  degradedAgents: string[];
+  accessConfigDigest: string;
+  sourceMapVersion: string;
+  healthy: boolean;
+};
+
+export type AccessWriteAck = {
+  written: boolean;
+  policyVersion?: string;
+  runtimeAck?: boolean;
 };
 
 export type TokenSummary = {
@@ -708,6 +786,8 @@ export type AgentPatch = {
   note?: string;
   enabled?: boolean;
   role?: string;
+  /** Spec 100 — set constraints; `null` clears the YAML key. */
+  constraints?: AgentConstraintsConfig | null;
 };
 
 export type CreateAgentBody = {
@@ -764,6 +844,8 @@ export type AuditLogEntry = {
   permissionSnapshotHash?: string;
   effectiveTablesCount?: number;
   decisionReason?: string;
+  policyVersion?: string;
+  capabilityDigest?: string;
 };
 
 export type AuditQuery = {
@@ -779,6 +861,8 @@ export type AuditQuery = {
   clientIp?: string;
   deviceName?: string;
   includeProtocol?: boolean;
+  /** Prefix match on decision_reason (e.g. capability_forbidden). */
+  decisionReasonPrefix?: string;
   limit?: number;
   offset?: number;
 };

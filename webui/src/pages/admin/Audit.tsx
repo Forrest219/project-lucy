@@ -1119,6 +1119,7 @@ export function Audit() {
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
+  const decisionReasonPrefix = searchParams.get("decisionReasonPrefix") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
   const clientIp = searchParams.get("clientIp") ?? "";
@@ -1269,6 +1270,7 @@ export function Audit() {
     user: resolvedUserFilter || user || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
+    decisionReasonPrefix: decisionReasonPrefix || undefined,
     since: since || undefined,
     until: until || undefined,
     tableSearch: tableSearch || undefined,

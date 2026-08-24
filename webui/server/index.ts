@@ -82,6 +82,7 @@ import { readHelpHandbook, searchHelpHandbook } from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
+import { registerPolicyRuntimeRoutes } from "./admin/policy-runtime.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
@@ -419,14 +420,25 @@ export function buildServer() {
     reply.status(statusCode).send(payload);
   });
 
-  app.get("/api/health", async () => ({
-    ok: true,
-    data: {
-      status: "ok",
-      lucyVersion: process.env.npm_package_version ?? "unknown",
-      bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown"
-    }
-  }));
+  app.get("/api/health", async () => {
+    const policy = getPolicyRuntimeStatus();
+    const healthy = isPolicyRuntimeHealthy(policy);
+    return {
+      ok: true,
+      data: {
+        // Spec 98 §8.4 — align with /api/admin/policy-runtime; empty policyVersion is not healthy.
+        status: healthy ? "ok" : "degraded",
+        lucyVersion: process.env.npm_package_version ?? "unknown",
+        bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
+        policy: {
+          policyVersion: policy.policyVersion,
+          degradedGlobal: policy.degradedGlobal,
+          degradedAgents: policy.degradedAgents,
+          healthy
+        }
+      }
+    };
+  });
 
   app.get("/api/project", async () => {
     const projectRoot = await resolveProjectRoot();
@@ -1570,6 +1582,7 @@ export function buildServer() {
   registerAgentRoutes(app);
   registerRoleRoutes(app);
   registerTokenRoutes(app);
+  registerPolicyRuntimeRoutes(app);
   registerAuditRoutes(app);
   registerMcpToolsRoutes(app);
   registerMcpPlaygroundRoutes(app);
@@ -1610,6 +1623,11 @@ export function buildServer() {
 }
 
 async function start() {
+  // Spec 98 §8.3 — compile verified EffectivePolicy before accepting traffic.
+  // Empty policyVersion must not be the steady-state after a clean start.
+  const { commitEffectivePolicy } = await import("./proxy/acl.js");
+  await commitEffectivePolicy();
+
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);

@@ -61,7 +61,7 @@ const ANALYST_ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
         - wiki_search
 users:
   - id: zhangsan
@@ -87,7 +87,7 @@ const IN_USE_ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三
@@ -117,7 +117,7 @@ const CUSTOM_KX_ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users: []
 defaults:
   deny_tools:
@@ -298,7 +298,7 @@ describe("GET /api/admin/roles/:roleId", () => {
       { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
     ]);
     expect(res.body.data.effectivePermissions.sources).toHaveLength(1);
-    expect(res.body.data.effectivePermissions.tools).toEqual(expect.arrayContaining(["sl_query", "wiki_search"]));
+    expect(res.body.data.effectivePermissions.tools).toEqual(expect.arrayContaining(["lucy_query", "wiki_search"]));
     await app.close();
   });
 
@@ -396,6 +396,32 @@ describe("POST /api/admin/roles", () => {
     expect(res.body.data.proposedYaml).toContain("new_role");
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).not.toContain("new_role");
+    await app.close();
+  });
+
+  it("SC-P15-04 / Spec 100 §3.3: Role Admin rejects constraints key", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: true,
+        roleId: "role_with_constraints",
+        role: {
+          description: "illegal",
+          constraints: { sources: [] },
+          allow: {
+            connections: ["mysql-aliyun"],
+            tableSelectors: [
+              { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }
+            ],
+            tools: ["lucy_query"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.ok).toBe(false);
+    expect(String(res.body.error?.message ?? "")).toMatch(/constraints/);
     await app.close();
   });
 
@@ -701,7 +727,7 @@ describe("PATCH /api/admin/roles/:roleId", () => {
             tableSelectors: [
               { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_returns"] }
             ],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -880,7 +906,7 @@ describe("Access Governance Gate — Role endpoints", () => {
           allow: {
             connections: ["mysql-aliyun"],
             tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -913,7 +939,7 @@ describe("Access Governance Gate — Role endpoints", () => {
           allow: {
             connections: ["mysql-aliyun"],
             tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -933,7 +959,7 @@ describe("Access Governance Gate — Role endpoints", () => {
               { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] },
               { connection: "mysql-aliyun", schema: "dataforai", names: ["kx_fact_financial_amount"] }
             ],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -962,7 +988,7 @@ describe("Access Governance Gate — Role endpoints", () => {
           allow: {
             connections: ["mysql-aliyun"],
             tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })
@@ -990,7 +1016,7 @@ describe("Access Governance Gate — Role endpoints", () => {
               { connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] },
               { connection: "mysql-aliyun", schema: "dataforai", names: ["kx_fact_financial_amount"] }
             ],
-            tools: ["sl_query"]
+            tools: ["lucy_query"]
           }
         }
       })

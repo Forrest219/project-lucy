@@ -41,10 +41,16 @@ export interface AccessLogEntry {
   permissionSnapshotHash?: string;
   effectiveTablesCount?: number;
   decisionReason?: string;
+  /** Spec 98 §10.3 — EffectivePolicy version at decision time. */
+  policyVersion?: string;
+  /** Spec 98 §10.3 — capability digest (also stored on permission_snapshots). */
+  capabilityDigest?: string;
   permissionSnapshot?: {
     hash: string;
     rolesJson: unknown;
     resolvedJson: unknown;
+    capabilityDigest?: string;
+    toolClassificationVersion?: string;
   };
 }
 
@@ -166,7 +172,9 @@ async function getDb(): Promise<Database.Database> {
       hash          TEXT PRIMARY KEY,
       created_at    TEXT NOT NULL,
       roles_json    TEXT NOT NULL,
-      resolved_json TEXT NOT NULL
+      resolved_json TEXT NOT NULL,
+      capability_digest TEXT,
+      tool_classification_version TEXT
     );
     CREATE TABLE IF NOT EXISTS access_log_sources (
       id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -240,6 +248,9 @@ async function getDb(): Promise<Database.Database> {
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
   }
+  for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
+    ensureColumn(db, "permission_snapshots", column, definition);
+  }
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
@@ -271,16 +282,20 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     if (!snapshotStmt) {
       snapshotStmt = database.prepare(`
         INSERT OR IGNORE INTO permission_snapshots
-          (hash, created_at, roles_json, resolved_json)
+          (hash, created_at, roles_json, resolved_json, capability_digest, tool_classification_version)
         VALUES
-          (@hash, @createdAt, @rolesJson, @resolvedJson)
+          (@hash, @createdAt, @rolesJson, @resolvedJson, @capabilityDigest, @toolClassificationVersion)
       `);
     }
     snapshotStmt.run({
       hash: entry.permissionSnapshot.hash,
       createdAt: entry.ts,
       rolesJson: JSON.stringify(entry.permissionSnapshot.rolesJson),
-      resolvedJson: JSON.stringify(entry.permissionSnapshot.resolvedJson)
+      resolvedJson: JSON.stringify(entry.permissionSnapshot.resolvedJson),
+      capabilityDigest: entry.permissionSnapshot.capabilityDigest
+        ?? entry.capabilityDigest
+        ?? null,
+      toolClassificationVersion: entry.permissionSnapshot.toolClassificationVersion ?? null
     });
   }
   if (!insertStmt) {
@@ -326,6 +341,10 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     permissionSnapshotHash: entry.permissionSnapshotHash ?? entry.permissionSnapshot?.hash ?? null,
     effectiveTablesCount: entry.effectiveTablesCount ?? null,
     decisionReason: entry.decisionReason ?? null,
+    policyVersion: entry.policyVersion ?? null,
+    capabilityDigest: entry.capabilityDigest
+      ?? entry.permissionSnapshot?.capabilityDigest
+      ?? null
   });
   return Number(result.lastInsertRowid);
 }

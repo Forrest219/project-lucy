@@ -19,11 +19,19 @@ interface UserAllow {
   tools?: string[];
 }
 
+/** Spec 98 §7 — Role generation: 1 = legacy, 2 = explicit row access. */
+export type PermissionModelVersion = 1 | 2;
+
+/** Spec 98 §7 / Spec 99 — `all` or `scoped` (+ row_policy). */
+export type RowAccess = "all" | "scoped";
+
 interface TableSelector {
   connection?: string;
   schema: string;
   prefix?: string;
   names?: string[];
+  row_access?: RowAccess;
+  row_policy?: unknown;
 }
 
 interface RoleAllow {
@@ -34,6 +42,7 @@ interface RoleAllow {
 
 interface RoleConfig {
   description?: string;
+  permission_model_version?: PermissionModelVersion;
   allow?: RoleAllow;
 }
 
@@ -42,8 +51,11 @@ interface UserConfig {
   name?: string;
   enabled?: boolean;
   role?: string;
+  roles?: string[];
   tokens: UserToken[];
   allow?: UserAllow;
+  /** Spec 100 — Agent Constraints (compiled in acl; Role must not have this field). */
+  constraints?: unknown;
 }
 
 interface Defaults {
@@ -54,7 +66,7 @@ interface Defaults {
   sensitive_table_prefixes?: string[];
 }
 
-interface AccessConfig {
+export interface AccessConfig {
   roles?: Record<string, RoleConfig>;
   users: UserConfig[];
   defaults?: Defaults;
@@ -105,7 +117,20 @@ async function loadConfig(options: { fresh?: boolean } = {}): Promise<AccessConf
     return configCache;
   }
   const content = await readFile(configPath, "utf-8");
-  configCache = parse(content) as AccessConfig;
+  let parsed: unknown;
+  try {
+    parsed = parse(content);
+  } catch (err) {
+    configCache = null;
+    configLoadedAt = 0;
+    throw err;
+  }
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as AccessConfig).users)) {
+    configCache = null;
+    configLoadedAt = 0;
+    throw new Error("invalid_access_config_shape");
+  }
+  configCache = parsed as AccessConfig;
   configCachePath = configPath;
   configLoadedAt = now;
   return configCache;

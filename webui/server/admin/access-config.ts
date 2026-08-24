@@ -30,14 +30,31 @@ export interface YamlUser {
   };
 }
 
+/** Spec 98 §7 — Role generation; Admin writes always persist `2`. */
+export type YamlPermissionModelVersion = 1 | 2;
+
+/** Spec 98 §7 / Spec 99 — `all` or `scoped` (+ row_policy). */
+export type YamlRowAccess = "all" | "scoped";
+
+export interface YamlRowPolicy {
+  predicates: Array<{
+    field: string;
+    op: "eq" | "in";
+    value?: string | number | boolean;
+    values?: Array<string | number | boolean>;
+  }>;
+}
+
+export type YamlTableSelector =
+  | { connection?: string; schema: string; names: string[]; row_access?: YamlRowAccess; row_policy?: YamlRowPolicy }
+  | { connection?: string; schema: string; prefix: string; row_access?: YamlRowAccess; row_policy?: YamlRowPolicy };
+
 export interface YamlRole {
   description?: string;
+  permission_model_version?: YamlPermissionModelVersion;
   allow?: {
     connections?: string[];
-    tableSelectors?: Array<
-      | { connection?: string; schema: string; names: string[] }
-      | { connection?: string; schema: string; prefix: string }
-    >;
+    tableSelectors?: YamlTableSelector[];
     tools?: string[];
   };
 }
@@ -101,7 +118,15 @@ export async function writeAccessYaml(
     operation?: string;
     assetKind?: ConfigAuditAssetKind;
   }
-): Promise<{ auditId?: number }> {
+): Promise<{ auditId?: number; policyVersion: string; runtimeAck: boolean }> {
+  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
+  let previousRaw: string | undefined;
+  try {
+    previousRaw = await readFile(accessPath, "utf-8");
+  } catch {
+    previousRaw = undefined;
+  }
+
   const toWrite: YamlAccessConfig = {
     ...config,
     users: config.users.map((u) => ({
@@ -110,7 +135,15 @@ export async function writeAccessYaml(
     }))
   };
   const content = stringify(toWrite, { lineWidth: 0 });
-  return auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
+  const {
+    commitEffectivePolicy,
+    computeAccessConfigDigest,
+    evaluateRuntimeAck
+  } = await import("../proxy/acl.js");
+  // Digest of the exact YAML bytes we are about to persist (post-stringify parse).
+  const expectedDigest = computeAccessConfigDigest(parse(content) as Parameters<typeof computeAccessConfigDigest>[0]);
+
+  const writeResult = await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
     enabled: audit.enabled,
     changeType: audit.changeType,
     assetKind: audit.assetKind ?? "governance",
@@ -125,6 +158,24 @@ export async function writeAccessYaml(
     requestId: audit.requestId,
     idempotencyKey: audit.idempotencyKey
   } : undefined);
+
+  // Spec 98 §8.2 — commit after write; ack only when runtime digest matches this write.
+  let status = await commitEffectivePolicy();
+  let runtimeAck = evaluateRuntimeAck(status, expectedDigest);
+
+  // Spec 98 §8.2 step 4 — runtime switch/compile failure → roll disk back; never ack stale widen.
+  if (!runtimeAck && previousRaw !== undefined) {
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(accessPath, previousRaw, "utf8");
+    status = await commitEffectivePolicy();
+    runtimeAck = false;
+  }
+
+  return {
+    ...writeResult,
+    policyVersion: status.policyVersion,
+    runtimeAck
+  };
 }
 
 export function makeDiff(oldYaml: string, newYaml: string): string {

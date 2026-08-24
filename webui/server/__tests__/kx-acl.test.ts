@@ -35,8 +35,8 @@ ${KX_TABLES.map((table) => `            - ${table.replace("dataforai.", "")}`).j
       tools:
         - kx_catalog
         - lucy_begin_question
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - entity_details
         - wiki_search
         - wiki_read
@@ -57,8 +57,8 @@ ${KX_TABLES.map((table) => `            - ${table.replace("dataforai.", "")}`).j
       tools:
         - lucy_catalog
         - connection_list
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - wiki_search
         - wiki_read
         - entity_details
@@ -98,8 +98,8 @@ users:
       tables:
 ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - sl_validate
         - entity_details
         - dictionary_search
@@ -112,8 +112,8 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
       tables:
         - dataforai.kx_fact_financial_amount
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - sl_validate
         - entity_details
   - id: workhorse
@@ -127,8 +127,8 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
 ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
       tools:
         - kx_catalog
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - entity_details
   - id: role_workhorse
     name: Role Workhorse
@@ -170,8 +170,8 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
       tables:
         - dataforai.superstore_orders
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - sl_validate
         - entity_details
   - id: no_table_agent
@@ -180,8 +180,8 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
     allow:
       tables: []
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - sl_validate
         - entity_details
         - lucy_begin_question
@@ -190,8 +190,8 @@ ${KX_TABLES.map((table) => `        - ${table}`).join("\n")}
     tokens: []
     allow:
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_query
+        - lucy_read_source
         - entity_details
   - id: missing_tools_agent
     name: Missing Tools Agent
@@ -321,10 +321,10 @@ describe("KX financial domain ACL guardrails", () => {
   it("maps every KX semantic source to its physical table", async () => {
     const { extractTables } = await loadAcl();
 
-    await expect(extractTables("sl_read_source", { sourceName: "kx_fact_financial_amount" }))
+    await expect(extractTables("lucy_read_source", { sourceName: "kx_fact_financial_amount" }))
       .resolves.toEqual(["dataforai.kx_fact_financial_amount"]);
 
-    await expect(extractTables("sl_query", {
+    await expect(extractTables("lucy_query", {
       measures: ["sum(kx_fact_financial_amount.amount)"],
       dimensions: [
         { field: "kx_dim_company.company_name" },
@@ -340,7 +340,7 @@ describe("KX financial domain ACL guardrails", () => {
   it("extractSourceRefs resolves sl_read_source to a single high-confidence args_source_name record", async () => {
     const { extractSourceRefs } = await loadAcl();
 
-    await expect(extractSourceRefs("sl_read_source", { sourceName: "kx_fact_financial_amount" }))
+    await expect(extractSourceRefs("lucy_read_source", { sourceName: "kx_fact_financial_amount" }))
       .resolves.toEqual([{
         connectionId: "mysql-aliyun",
         schema: "dataforai",
@@ -354,7 +354,7 @@ describe("KX financial domain ACL guardrails", () => {
   it("extractSourceRefs resolves sl_query measures/dimensions to multiple high-confidence field_ref records", async () => {
     const { extractSourceRefs } = await loadAcl();
 
-    const refs = await extractSourceRefs("sl_query", {
+    const refs = await extractSourceRefs("lucy_query", {
       measures: ["sum(kx_fact_financial_amount.amount)"],
       dimensions: [
         { field: "kx_dim_company.company_name" },
@@ -405,7 +405,7 @@ describe("KX financial domain ACL guardrails", () => {
 
     await expect(check(identity("wildcard_agent"), "sql_dialect_notes", {
       connectionId: "mysql-aliyun"
-    })).resolves.toEqual({ allowed: false, reason: "tool_forbidden_global" });
+    })).resolves.toEqual({ allowed: false, reason: "tool_absolute_deny:sql_dialect_notes" });
 
     // no_table_agent explicitly lists lucy_begin_question but resolves to zero tables/sources
     // -> still listed in allow.tools, but filtered out of tools/list by the sources>0 gate.
@@ -429,11 +429,11 @@ describe("KX financial domain ACL guardrails", () => {
       "kx_vw_cash_flow_statement_detail",
       "kx_vw_income_statement_detail"
     ]) {
-      await expect(check(identity("kx_guard_tester"), "sl_read_source", { sourceName: table }))
+      await expect(check(identity("kx_guard_tester"), "lucy_read_source", { sourceName: table }))
         .resolves.toEqual({ allowed: true });
     }
 
-    await expect(check(identity("kx_guard_tester"), "sl_query", {
+    await expect(check(identity("kx_guard_tester"), "lucy_query", {
       measures: ["sum(kx_fact_financial_amount.amount)"],
       dimensions: [{ field: "kx_dim_company.company_name" }]
     })).resolves.toEqual({ allowed: true });
@@ -446,10 +446,10 @@ describe("KX financial domain ACL guardrails", () => {
   it("denies the KX test agent when it tries to access non-KX tables", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("kx_guard_tester"), "sl_read_source", { sourceName: "superstore_orders" }))
+    await expect(check(identity("kx_guard_tester"), "lucy_read_source", { sourceName: "superstore_orders" }))
       .resolves.toEqual({ allowed: false, reason: "table_forbidden:dataforai.superstore_orders" });
 
-    await expect(check(identity("kx_guard_tester"), "sl_query", {
+    await expect(check(identity("kx_guard_tester"), "lucy_query", {
       measures: ["sum(superstore_orders.sales)"]
     })).resolves.toEqual({ allowed: false, reason: "table_forbidden:dataforai.superstore_orders" });
 
@@ -461,10 +461,10 @@ describe("KX financial domain ACL guardrails", () => {
   it("denies non-KX agents when they try to access KX tables", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("superstore_agent"), "sl_read_source", { sourceName: "kx_vw_income_statement_detail" }))
+    await expect(check(identity("superstore_agent"), "lucy_read_source", { sourceName: "kx_vw_income_statement_detail" }))
       .resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_vw_income_statement_detail" });
 
-    await expect(check(identity("superstore_agent"), "sl_query", {
+    await expect(check(identity("superstore_agent"), "lucy_query", {
       measures: ["sum(kx_fact_financial_amount.amount)"]
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
 
@@ -476,15 +476,15 @@ describe("KX financial domain ACL guardrails", () => {
   it("requires explicit KX table grants even for wildcard table agents", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("wildcard_agent"), "sl_read_source", {
+    await expect(check(identity("wildcard_agent"), "lucy_read_source", {
       sourceName: "superstore_orders"
     })).resolves.toEqual({ allowed: true });
 
-    await expect(check(identity("wildcard_agent"), "sl_read_source", {
+    await expect(check(identity("wildcard_agent"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
 
-    await expect(check(identity("wildcard_with_explicit_kx_agent"), "sl_read_source", {
+    await expect(check(identity("wildcard_with_explicit_kx_agent"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: true });
   });
@@ -494,14 +494,14 @@ describe("KX financial domain ACL guardrails", () => {
 
     await expect(check(identity("kx_guard_tester"), "sql_execution", {
       query: "select * from dataforai.kx_fact_financial_amount limit 1"
-    })).resolves.toEqual({ allowed: false, reason: "tool_forbidden_global" });
+    })).resolves.toEqual({ allowed: false, reason: "tool_absolute_deny:sql_execution" });
   });
 
   it("does not allow wildcard tool grants to call unknown tools", async () => {
     const { check } = await loadAcl();
 
     await expect(check(identity("wildcard_agent"), "future_table_export", {}))
-      .resolves.toEqual({ allowed: false, reason: "tool_forbidden" });
+      .resolves.toEqual({ allowed: false, reason: "tool_unclassified:future_table_export" });
 
     await expect(check(identity("wildcard_agent"), "wiki_search", { query: "discount policy" }))
       .resolves.toEqual({ allowed: true });
@@ -539,11 +539,11 @@ describe("KX financial domain ACL guardrails", () => {
   it("rejects raw query and sql parameters on sl_query before they can bypass table extraction", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("kx_guard_tester"), "sl_query", {
+    await expect(check(identity("kx_guard_tester"), "lucy_query", {
       query: "select * from dataforai.superstore_orders limit 5"
     })).resolves.toEqual({ allowed: false, reason: "raw_query_forbidden" });
 
-    await expect(check(identity("superstore_agent"), "sl_query", {
+    await expect(check(identity("superstore_agent"), "lucy_query", {
       sql: "select * from dataforai.kx_fact_financial_amount limit 5"
     })).resolves.toEqual({ allowed: false, reason: "raw_query_forbidden" });
   });
@@ -559,35 +559,35 @@ describe("KX financial domain ACL guardrails", () => {
       include: ["sql"]
     };
 
-    await expect(extractTables("sl_query", payload)).resolves.toEqual(["orders"]);
-    await expect(check(identity("workhorse"), "sl_query", payload))
+    await expect(extractTables("lucy_query", payload)).resolves.toEqual(["orders"]);
+    await expect(check(identity("workhorse"), "lucy_query", payload))
       .resolves.toEqual({ allowed: false, reason: "unknown_or_forbidden_connection:warehouse" });
   });
 
   it("requires the configured KX connection for workhorse table-touching tools", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("workhorse"), "sl_query", {
+    await expect(check(identity("workhorse"), "lucy_query", {
       connectionId: "mysql-aliyun",
       measures: [{ $text: "kx_fact_financial_amount.amount" }]
     })).resolves.toEqual({ allowed: true });
 
-    await expect(check(identity("workhorse"), "sl_query", {
+    await expect(check(identity("workhorse"), "lucy_query", {
       measures: [{ $text: "kx_fact_financial_amount.amount" }]
     })).resolves.toEqual({ allowed: false, reason: "unknown_or_forbidden_connection:<missing>" });
 
-    await expect(check(identity("workhorse"), "sl_read_source", {
+    await expect(check(identity("workhorse"), "lucy_read_source", {
       connectionId: "warehouse",
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: false, reason: "unknown_or_forbidden_connection:warehouse" });
 
-    await expect(check(identity("workhorse"), "sl_query", {
+    await expect(check(identity("workhorse"), "lucy_query", {
       connectionId: "mysql-aliyun",
       sourceName: "kx_vw_income_statement_detail",
       measures: [{ expr: "count(1)", name: "cnt" }]
     })).resolves.toEqual({ allowed: true });
 
-    await expect(check(identity("workhorse"), "sl_query", {
+    await expect(check(identity("workhorse"), "lucy_query", {
       connectionId: "mysql-aliyun",
       measures: [{ expr: "count(1)", name: "cnt" }]
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:<empty>" });
@@ -644,17 +644,17 @@ describe("KX financial domain ACL guardrails", () => {
   it("resolves role-based KX permissions and ignores deprecated allow when role is present", async () => {
     const { check, kxCatalog, permissionSnapshot } = await loadAcl();
 
-    await expect(check(identity("role_workhorse"), "sl_query", {
+    await expect(check(identity("role_workhorse"), "lucy_query", {
       connectionId: "mysql-aliyun",
       measures: [{ $text: "kx_fact_financial_amount.amount" }]
     })).resolves.toEqual({ allowed: true });
 
-    await expect(check(identity("role_workhorse"), "sl_query", {
+    await expect(check(identity("role_workhorse"), "lucy_query", {
       connectionId: "mysql-aliyun",
       measures: [{ $text: "superstore_orders.sales" }]
     })).resolves.toEqual({ allowed: false, reason: "table_forbidden:dataforai.superstore_orders" });
 
-    await expect(check(identity("role_workhorse"), "sl_query", {
+    await expect(check(identity("role_workhorse"), "lucy_query", {
       measures: [{ $text: "kx_fact_financial_amount.amount" }]
     })).resolves.toEqual({ allowed: false, reason: "unknown_or_forbidden_connection:<missing>" });
 
@@ -671,33 +671,33 @@ describe("KX financial domain ACL guardrails", () => {
   it("fails closed for invalid role references and invalid role definitions", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("missing_role_agent"), "sl_query", {}))
+    await expect(check(identity("missing_role_agent"), "lucy_query", {}))
       .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:missing_role" });
 
-    await expect(check(identity("missing_connections_role_agent"), "sl_query", {}))
+    await expect(check(identity("missing_connections_role_agent"), "lucy_query", {}))
       .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:invalid_kx_missing_connections" });
 
-    await expect(check(identity("wildcard_role_agent"), "sl_query", {}))
+    await expect(check(identity("wildcard_role_agent"), "lucy_query", {}))
       .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:invalid_wildcard_tools" });
 
-    await expect(check(identity("empty_selector_role_agent"), "sl_query", {}))
+    await expect(check(identity("empty_selector_role_agent"), "lucy_query", {}))
       .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:empty_selector" });
   });
 
   it("extracts unauthorized table references from filters, where, and joins", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("kx_guard_tester"), "sl_query", {
+    await expect(check(identity("kx_guard_tester"), "lucy_query", {
       measures: ["sum(kx_fact_financial_amount.amount)"],
       filters: [{ field: "superstore_orders.sales", op: "gt", value: 0 }]
     })).resolves.toEqual({ allowed: false, reason: "table_forbidden:dataforai.superstore_orders" });
 
-    await expect(check(identity("superstore_agent"), "sl_query", {
+    await expect(check(identity("superstore_agent"), "lucy_query", {
       measures: ["sum(superstore_orders.sales)"],
       where: "kx_fact_financial_amount.amount > 0"
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
 
-    await expect(check(identity("kx_guard_tester"), "sl_query", {
+    await expect(check(identity("kx_guard_tester"), "lucy_query", {
       measures: ["sum(kx_fact_financial_amount.amount)"],
       joins: [{ table: "superstore_returns", on: "superstore_returns.order_id = superstore_orders.order_id" }]
     })).resolves.toEqual({ allowed: false, reason: "table_forbidden:dataforai.superstore_returns" });
@@ -706,7 +706,7 @@ describe("KX financial domain ACL guardrails", () => {
   it("does not treat unqualified filter fields and values as table names", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("kx_guard_tester"), "sl_query", {
+    await expect(check(identity("kx_guard_tester"), "lucy_query", {
       measures: ["sum(kx_fact_financial_amount.amount)"],
       filters: [{ field: "amount_type", op: "eq", value: "end_balance" }]
     })).resolves.toEqual({ allowed: true });
@@ -715,7 +715,7 @@ describe("KX financial domain ACL guardrails", () => {
   it("denies disabled agents even when their table and tool allowlists would otherwise match", async () => {
     const { check, kxCatalog, permissionSnapshot } = await loadAcl();
 
-    await expect(check(identity("disabled_kx_agent"), "sl_read_source", {
+    await expect(check(identity("disabled_kx_agent"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: false, reason: "agent_disabled" });
 
@@ -731,10 +731,11 @@ describe("KX financial domain ACL guardrails", () => {
     });
   });
 
-  it("reloads access config for ACL checks without waiting for the cache TTL", async () => {
-    const { check } = await loadAcl();
+  it("applies access.yaml disable only after EffectivePolicy commit (Spec 98 §8.2)", async () => {
+    const acl = await loadAcl();
+    const { check, commitEffectivePolicy } = acl;
 
-    await expect(check(identity("kx_guard_tester"), "sl_read_source", {
+    await expect(check(identity("kx_guard_tester"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: true });
 
@@ -744,15 +745,22 @@ describe("KX financial domain ACL guardrails", () => {
     );
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), disabledYaml, "utf8");
 
-    await expect(check(identity("kx_guard_tester"), "sl_read_source", {
+    // Hot path must not parse YAML — disable is invisible until commit.
+    await expect(check(identity("kx_guard_tester"), "lucy_read_source", {
+      sourceName: "kx_fact_financial_amount"
+    })).resolves.toEqual({ allowed: true });
+
+    await commitEffectivePolicy();
+    await expect(check(identity("kx_guard_tester"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: false, reason: "agent_disabled" });
   });
 
-  it("reloads the source map for sensitive table checks without waiting for the source-map TTL", async () => {
-    const { check } = await loadAcl();
+  it("applies source-map sensitive tables only after EffectivePolicy commit (Spec 98 §8.2)", async () => {
+    const acl = await loadAcl();
+    const { check, commitEffectivePolicy } = acl;
 
-    await expect(check(identity("wildcard_agent"), "sl_read_source", {
+    await expect(check(identity("wildcard_agent"), "lucy_read_source", {
       sourceName: "superstore_orders"
     })).resolves.toEqual({ allowed: true });
 
@@ -762,7 +770,13 @@ describe("KX financial domain ACL guardrails", () => {
 `;
     await writeFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), updatedSchema, "utf8");
 
-    await expect(check(identity("wildcard_agent"), "sl_read_source", {
+    // Hot path pins committed source map — unknown bare name is not yet classified as kx_* sensitive.
+    await expect(check(identity("wildcard_agent"), "lucy_read_source", {
+      sourceName: "kx_new_sensitive_view"
+    })).resolves.toEqual({ allowed: true });
+
+    await commitEffectivePolicy();
+    await expect(check(identity("wildcard_agent"), "lucy_read_source", {
       sourceName: "kx_new_sensitive_view"
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_new_sensitive_view" });
   });
@@ -770,11 +784,11 @@ describe("KX financial domain ACL guardrails", () => {
   it("fails closed when tools or tables are missing from an allow block", async () => {
     const { check } = await loadAcl();
 
-    await expect(check(identity("missing_tables_agent"), "sl_read_source", {
+    await expect(check(identity("missing_tables_agent"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
 
-    await expect(check(identity("missing_tools_agent"), "sl_read_source", {
+    await expect(check(identity("missing_tools_agent"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: false, reason: "tool_forbidden" });
   });
@@ -871,12 +885,12 @@ describe("KX financial domain ACL guardrails", () => {
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), updatedAccess, "utf8");
     await writeFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), updatedSchema, "utf8");
 
-    await expect(check(identity("wildcard_agent"), "sl_read_source", {
+    await expect(check(identity("wildcard_agent"), "lucy_read_source", {
       sourceName: "sec_private_table"
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.sec_private_table" });
   });
 
-  it("uses configured tool classifications for future KTX tools", async () => {
+  it("rejects YAML-only promotion of unclassified tools (AC-P0 AbsoluteDeny closed set)", async () => {
     const { check } = await loadAcl();
     const updatedAccess = ACCESS_YAML
       .replace(
@@ -893,23 +907,13 @@ describe("KX financial domain ACL guardrails", () => {
       );
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), updatedAccess, "utf8");
 
+    // Adding tools to YAML known_tools / table_touching_tools cannot bypass AbsoluteDeny closed set.
     await expect(check(identity("wildcard_agent"), "future_table_export", {
       sourceName: "superstore_orders"
-    })).resolves.toEqual({ allowed: true });
-
-    await expect(check(identity("wildcard_with_explicit_kx_agent"), "future_table_export", {
-      sourceName: "kx_fact_financial_amount"
-    })).resolves.toEqual({ allowed: true });
-
-    await expect(check(identity("wildcard_agent"), "future_table_export", {
-      sourceName: "kx_fact_financial_amount"
-    })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
-
-    await expect(check(identity("wildcard_agent"), "future_table_export", {}))
-      .resolves.toEqual({ allowed: false, reason: "explicit_table_required:<empty>" });
+    })).resolves.toEqual({ allowed: false, reason: "tool_unclassified:future_table_export" });
 
     await expect(check(identity("wildcard_agent"), "future_data_catalog", {}))
-      .resolves.toEqual({ allowed: false, reason: "sensitive_metadata_forbidden:kx" });
+      .resolves.toEqual({ allowed: false, reason: "tool_unclassified:future_data_catalog" });
   });
 
   it("keeps built-in deny, tool classification, and KX sensitivity when defaults are empty", async () => {
@@ -925,13 +929,13 @@ describe("KX financial domain ACL guardrails", () => {
 
     await expect(check(identity("kx_guard_tester"), "sql_execution", {
       query: "select * from dataforai.kx_fact_financial_amount limit 1"
-    })).resolves.toEqual({ allowed: false, reason: "tool_forbidden_global" });
+    })).resolves.toEqual({ allowed: false, reason: "tool_absolute_deny:sql_execution" });
 
-    await expect(check(identity("wildcard_agent"), "sl_read_source", {
+    await expect(check(identity("wildcard_agent"), "lucy_read_source", {
       sourceName: "kx_fact_financial_amount"
     })).resolves.toEqual({ allowed: false, reason: "explicit_table_required:dataforai.kx_fact_financial_amount" });
 
     await expect(check(identity("wildcard_agent"), "future_table_export", {}))
-      .resolves.toEqual({ allowed: false, reason: "tool_forbidden" });
+      .resolves.toEqual({ allowed: false, reason: "tool_unclassified:future_table_export" });
   });
 });

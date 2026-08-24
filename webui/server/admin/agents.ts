@@ -6,8 +6,22 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
-import { previewRolePermissionsForAdmin, resolveEffectivePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
+import {
+  expandSelectorSourceNames,
+  normalizePermissionModelVersion,
+  previewAgentPermissionsForAdmin,
+  previewRolePermissionsForAdmin,
+  resolveEffectivePermissionsForAdmin,
+  type EffectivePermissions
+} from "../proxy/acl.js";
+import {
+  constraintsSourceKey,
+  lookupFinalRows,
+  parseAgentConstraintsShape
+} from "../proxy/agent-constraints.js";
+import type { AccessConfig } from "../proxy/identity.js";
+import type { RowGrant, ResolvedRowPolicyPredicate } from "../proxy/row-policy.js";
 import {
   evaluateAccessGovernanceGate,
   evaluateGovernanceOverride,
@@ -18,6 +32,40 @@ import {
 } from "../access-governance-gate.js";
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+
+/** Persist template Roles as generation 2 (Spec 98 §7) when Agent Admin materializes them. */
+async function materializeTemplateRoleForWrite(roleId: string, role: YamlRole): Promise<
+  { ok: true; role: YamlRole } | { ok: false; reason: string }
+> {
+  const before = normalizePermissionModelVersion(role);
+  if (!before.ok) return { ok: false, reason: "role.permission_model_version must be 1 or 2" };
+  const selectors = role.allow?.tableSelectors;
+  const nextSelectors: NonNullable<YamlRole["allow"]>["tableSelectors"] = [];
+  if (selectors) {
+    for (const selector of selectors) {
+      if (selector.row_access === "scoped") {
+        return { ok: false, reason: "table selector row_access 'scoped' is not supported in AC-P0" };
+      }
+      if ("prefix" in selector && selector.prefix !== undefined) {
+        const names = await expandSelectorSourceNames(selector);
+        if (names.length === 0) {
+          return { ok: false, reason: `table selector prefix '${selector.prefix}' expands to 0 source` };
+        }
+        nextSelectors.push({ connection: selector.connection, schema: selector.schema, names, row_access: "all" });
+        continue;
+      }
+      nextSelectors.push({ ...selector, row_access: "all" });
+    }
+  }
+  const migrated: YamlRole = {
+    ...role,
+    permission_model_version: 2,
+    allow: role.allow ? { ...role.allow, tableSelectors: selectors ? nextSelectors : role.allow.tableSelectors } : role.allow
+  };
+  const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated });
+  if (!resolved.ok) return { ok: false, reason: resolved.reason };
+  return { ok: true, role: migrated };
+}
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -36,21 +84,25 @@ export interface YamlUser {
   note?: string;
   enabled?: boolean;
   role?: string;
+  roles?: string[];
   tokens: YamlToken[];
   allow?: {
     tables: string[];
     tools: string[];
     connections?: string[];
   };
+  /** Spec 100 Agent Constraints; validated at EffectivePolicy compile. */
+  constraints?: unknown;
 }
 
 export interface YamlRole {
   description?: string;
+  permission_model_version?: 1 | 2;
   allow?: {
     connections?: string[];
     tableSelectors?: Array<
-      | { connection?: string; schema: string; names: string[] }
-      | { connection?: string; schema: string; prefix: string }
+      | { connection?: string; schema: string; names: string[]; row_access?: "all" | "scoped" }
+      | { connection?: string; schema: string; prefix: string; row_access?: "all" | "scoped" }
     >;
     tools?: string[];
   };
@@ -92,7 +144,15 @@ async function writeAccessYaml(
     requestId?: string;
     source?: string;
   }
-): Promise<{ auditId?: number }> {
+): Promise<{ auditId?: number; policyVersion: string; runtimeAck: boolean }> {
+  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
+  let previousRaw: string | undefined;
+  try {
+    previousRaw = await readFile(accessPath, "utf-8");
+  } catch {
+    previousRaw = undefined;
+  }
+
   // Strip derived last_used before writing
   const toWrite: YamlAccessConfig = {
     ...config,
@@ -105,7 +165,14 @@ async function writeAccessYaml(
     }))
   };
   const content = stringify(toWrite, { lineWidth: 0 });
-  return auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
+  const {
+    commitEffectivePolicy,
+    computeAccessConfigDigest,
+    evaluateRuntimeAck
+  } = await import("../proxy/acl.js");
+  const expectedDigest = computeAccessConfigDigest(parse(content) as Parameters<typeof computeAccessConfigDigest>[0]);
+
+  const writeResult = await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
     enabled: true,
     changeType: audit.changeType,
     assetKind: "governance",
@@ -117,6 +184,22 @@ async function writeAccessYaml(
     diff: audit.diff,
     requestId: audit.requestId
   } : undefined);
+
+  let status = await commitEffectivePolicy();
+  let runtimeAck = evaluateRuntimeAck(status, expectedDigest);
+
+  if (!runtimeAck && previousRaw !== undefined) {
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(accessPath, previousRaw, "utf8");
+    status = await commitEffectivePolicy();
+    runtimeAck = false;
+  }
+
+  return {
+    ...writeResult,
+    policyVersion: status.policyVersion,
+    runtimeAck
+  };
 }
 
 function computeVersion(raw: string, mtimeMs: number): string {
@@ -334,6 +417,8 @@ function userToAgent(
       tools: user.allow?.tools ?? [],
       connections: user.allow?.connections ?? []
     } : undefined,
+    // Spec 100 — expose Agent Constraints for Admin editor (Role path forbids this field).
+    ...(user.constraints !== undefined ? { constraints: user.constraints } : {}),
     createdAt: timeline?.createdAt,
     configUpdatedAt: timeline?.configUpdatedAt,
     stats
@@ -378,6 +463,30 @@ async function getAgentConfigTimelineMap(userIds: string[]): Promise<Map<string,
   return result;
 }
 
+function rowGrantToPreview(grant: RowGrant | undefined):
+  | "all"
+  | { kind: "scoped"; digest: string; predicates?: ResolvedRowPolicyPredicate[] } {
+  if (!grant || grant.kind === "all") return "all";
+  return {
+    kind: "scoped",
+    digest: grant.digest,
+    predicates: grant.predicates
+  };
+}
+
+function constraintsSummaryForSource(
+  preds: ResolvedRowPolicyPredicate[] | undefined
+): string | undefined {
+  if (!preds || preds.length === 0) return undefined;
+  return preds
+    .slice(0, 3)
+    .map((pred) => {
+      if (pred.op === "eq") return `${pred.field}=${String(pred.value ?? "")}`;
+      return `${pred.field} in [${(pred.values ?? []).map((item) => String(item)).join(",")}]`;
+    })
+    .join(" AND ") + (preds.length > 3 ? " …" : "");
+}
+
 function effectivePermissionsToPreview(permissions: EffectivePermissions) {
   return {
     roleIds: permissions.roleIds,
@@ -386,8 +495,53 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
     tools: permissions.tools,
     connections: permissions.connections,
     sources: permissions.sources,
-    legacyAllow: permissions.legacyAllow
+    legacyAllow: permissions.legacyAllow,
+    capabilityDigest: permissions.capabilityDigest,
+    capabilities: permissions.capabilities.map((capability) => {
+      const finalRows = lookupFinalRows(
+        permissions.finalRowsBySource,
+        capability.connectionId,
+        capability.sourceName,
+        capability.rowGrant
+      );
+      const constraintKey = constraintsSourceKey(capability.connectionId, capability.sourceName);
+      const constraintPreds = permissions.agentConstraintsBySource?.[constraintKey];
+      return {
+        tool: capability.tool,
+        connectionId: capability.connectionId,
+        schema: capability.schema,
+        sourceName: capability.sourceName,
+        physicalTable: capability.physicalTable,
+        sourceKey: `${capability.connectionId}|${capability.schema}|${capability.sourceName}|${capability.physicalTable}`,
+        // Spec 99 §8 — EffectiveRowGrant (Role OR); never fake "all" when scoped
+        rowGrant: rowGrantToPreview(capability.rowGrant),
+        // Spec 100 / Spec 14 §0.0a — FinalRows after Constraints AND
+        finalRows: rowGrantToPreview(finalRows),
+        protected: finalRows.kind === "scoped",
+        constraintsSummary: constraintsSummaryForSource(constraintPreds)
+      };
+    })
   };
+}
+
+const CONSTRAINT_FAIL_CODES = new Set([
+  "constraints_invalid_shape",
+  "constraints_source_not_in_capability",
+  "constraints_forbidden_on_role",
+  "final_rows_limit_exceeded",
+  "final_rows_unsatisfiable",
+  "row_policy_field_unresolved",
+  "row_policy_op_forbidden"
+]);
+
+function constraintsCompileError(reason: string): { code: string; message: string } {
+  const code = CONSTRAINT_FAIL_CODES.has(reason)
+    || reason.startsWith("row_policy_")
+    || reason.startsWith("constraints_")
+    || reason.startsWith("final_rows_")
+    ? reason.split(":")[0] ?? reason
+    : "CONSTRAINTS_COMPILE_FAILED";
+  return { code, message: reason };
 }
 
 /**
@@ -670,14 +824,23 @@ export function registerAgentRoutes(app: FastifyInstance) {
       tokens: [],
       role: resolvedRole.id
     };
+    let rolesForWrite = config.roles;
+    if (resolvedRole.source === "template") {
+      const materialized = await materializeTemplateRoleForWrite(resolvedRole.id, resolvedRole.role);
+      if (!materialized.ok) {
+        return reply.status(400).send({
+          ok: false,
+          error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${materialized.reason}` }
+        });
+      }
+      rolesForWrite = {
+        ...(config.roles ?? {}),
+        [resolvedRole.id]: materialized.role
+      };
+    }
     const newConfig: YamlAccessConfig = {
       ...config,
-      roles: resolvedRole.source === "template"
-        ? {
-            ...(config.roles ?? {}),
-            [resolvedRole.id]: resolvedRole.role
-          }
-        : config.roles,
+      roles: rolesForWrite,
       users: [...config.users, newUser]
     };
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
@@ -727,7 +890,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "agent_create",
       targetId: newUser.id,
@@ -736,7 +899,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
       diff,
       requestId: request.id
     });
-    return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(newUser) } };
+    return {
+      ok: true,
+      data: {
+        written: true,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
+        gate,
+        agent: await userToAgentWithPermissions(newUser)
+      }
+    };
   });
 
   // GET /api/admin/agents/:userId
@@ -779,7 +951,17 @@ export function registerAgentRoutes(app: FastifyInstance) {
       dryRun?: boolean;
       version?: string;
       override?: AccessGovernanceOverrideRequest;
-      patch: { name?: string; note?: string; enabled?: boolean; role?: string; allow?: unknown; tokens?: unknown; id?: unknown };
+      patch: {
+        name?: string;
+        note?: string;
+        enabled?: boolean;
+        role?: string;
+        allow?: unknown;
+        tokens?: unknown;
+        id?: unknown;
+        /** Spec 100 — set Agent Constraints; `null` clears the key. */
+        constraints?: unknown;
+      };
     };
   }>("/api/admin/agents/:userId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -818,9 +1000,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
         return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
       }
       if (resolvedRole.source === "template") {
+        const materialized = await materializeTemplateRoleForWrite(resolvedRole.id, resolvedRole.role);
+        if (!materialized.ok) {
+          return reply.status(400).send({
+            ok: false,
+            error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${materialized.reason}` }
+          });
+        }
         config.roles = {
           ...(config.roles ?? {}),
-          [resolvedRole.id]: resolvedRole.role
+          [resolvedRole.id]: materialized.role
         };
       }
     }
@@ -843,11 +1032,51 @@ export function registerAgentRoutes(app: FastifyInstance) {
       ...(patch.role !== undefined ? { role: patch.role } : {})
     };
     if (updatedUser.role) delete updatedUser.allow;
+
+    const patchHasConstraints = bodyHasOwn(patch, "constraints");
+    if (patchHasConstraints) {
+      if (patch.constraints === null) {
+        delete updatedUser.constraints;
+      } else {
+        const shape = parseAgentConstraintsShape(patch.constraints);
+        if (!shape.ok) {
+          const err = constraintsCompileError(shape.reason);
+          return reply.status(400).send({ ok: false, error: err });
+        }
+        updatedUser.constraints = patch.constraints;
+      }
+    }
+
     const newUsers = [...config.users];
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
     const proposedYaml = stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
+
+    // Spec 100 §10 — illegal / unsatisfiable / over-limit constraints must fail before write.
+    let proposedEffectivePermissions: ReturnType<typeof effectivePermissionsToPreview> | undefined;
+    if (patchHasConstraints || updatedUser.constraints !== undefined) {
+      // Omit `constraints` when cleared — passing `constraints: undefined` still
+      // keeps the key and compile treats it as invalid shape.
+      const compiled = await previewAgentPermissionsForAdmin(
+        {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          enabled: updatedUser.enabled,
+          role: updatedUser.role,
+          roles: updatedUser.roles,
+          tokens: updatedUser.tokens,
+          allow: updatedUser.allow,
+          ...(updatedUser.constraints !== undefined ? { constraints: updatedUser.constraints } : {})
+        },
+        { roleOverrides: newConfig.roles as AccessConfig["roles"] }
+      );
+      if (!compiled.ok) {
+        const err = constraintsCompileError(compiled.reason);
+        return reply.status(400).send({ ok: false, error: err });
+      }
+      proposedEffectivePermissions = effectivePermissionsToPreview(compiled.permissions);
+    }
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
     const stats = await getStats(existingUser.id, existingUser.tokens.length);
@@ -863,7 +1092,15 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate } };
+      return {
+        ok: true,
+        data: {
+          diff,
+          proposedYaml,
+          gate,
+          ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
+        }
+      };
     }
 
     if (gate.decision === "block") {
@@ -896,16 +1133,36 @@ export function registerAgentRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "agent_patch",
       targetId: updatedUser.id,
-      oldSummary: { enabled: existingUser.enabled !== false, role: existingUser.role, hasLegacyAllow: Boolean(existingUser.allow) },
-      newSummary: { enabled: updatedUser.enabled !== false, role: updatedUser.role, hasLegacyAllow: Boolean(updatedUser.allow) },
+      oldSummary: {
+        enabled: existingUser.enabled !== false,
+        role: existingUser.role,
+        hasLegacyAllow: Boolean(existingUser.allow),
+        hasConstraints: existingUser.constraints !== undefined
+      },
+      newSummary: {
+        enabled: updatedUser.enabled !== false,
+        role: updatedUser.role,
+        hasLegacyAllow: Boolean(updatedUser.allow),
+        hasConstraints: updatedUser.constraints !== undefined
+      },
       diff,
       requestId: request.id
     });
-    return { ok: true, data: { written: true, gate, agent: await userToAgentWithPermissions(updatedUser) } };
+    return {
+      ok: true,
+      data: {
+        written: true,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
+        gate,
+        agent: await userToAgentWithPermissions(updatedUser),
+        ...(proposedEffectivePermissions ? { effectivePermissions: proposedEffectivePermissions } : {})
+      }
+    };
   });
 
   // DELETE /api/admin/agents/:userId
@@ -972,7 +1229,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     const newConfig: YamlAccessConfig = { ...config, users: config.users.filter((u) => u.id !== request.params.userId) };
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "agent_delete",
       targetId: user.id,

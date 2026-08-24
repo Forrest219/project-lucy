@@ -43,3 +43,4 @@ venv/
 .ktx-ui/
 !customer-config.example/.ktx-ui/
 !customer-config.example/.ktx-ui/.gitkeep
+inbox/20260809-gate-c-uat/.tokens.local

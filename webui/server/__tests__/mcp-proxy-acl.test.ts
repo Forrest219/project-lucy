@@ -53,8 +53,8 @@ const ACCESS_YAML = `users:
       tables:
         - dataforai.superstore_orders
       tools:
-        - sl_read_source
-        - sl_query
+        - lucy_read_source
+        - lucy_query
         - dictionary_search
         - discover_data
         - sql_execution
@@ -70,7 +70,7 @@ const ACCESS_YAML = `users:
       tables:
         - dataforai.superstore_orders
       tools:
-        - sl_read_source
+        - lucy_read_source
         - sql_execution
   - id: wildcard_agent
     name: Wildcard Agent
@@ -187,8 +187,8 @@ describe("MCP proxy ACL enforcement", () => {
     await withProxy(async (port) => {
       await expectDenied(port, {
         id: "proxy-deny-kx-1",
-        name: "sl_read_source",
-        args: { sourceName: "kx_fact_financial_amount" },
+        name: "lucy_read_source",
+        args: { connectionId: "mysql-aliyun", sourceName: "kx_fact_financial_amount" },
         reason: "explicit_table_required:dataforai.kx_fact_financial_amount"
       });
     });
@@ -198,8 +198,8 @@ describe("MCP proxy ACL enforcement", () => {
     await withProxy(async (port) => {
       await expectDenied(port, {
         id: "proxy-deny-raw-query",
-        name: "sl_query",
-        args: { query: "select * from dataforai.superstore_orders limit 1" },
+        name: "lucy_query",
+        args: { connectionId: "mysql-aliyun", query: "select * from dataforai.superstore_orders limit 1" },
         reason: "raw_query_forbidden"
       });
 
@@ -224,14 +224,14 @@ describe("MCP proxy ACL enforcement", () => {
         id: "proxy-deny-global-tool",
         name: "sql_execution",
         args: {},
-        reason: "tool_forbidden_global"
+        reason: "tool_absolute_deny:sql_execution"
       });
 
       await expectDenied(port, {
         id: "proxy-deny-global-dialect-tool",
         name: "sql_dialect_notes",
         args: { connectionId: "mysql-aliyun" },
-        reason: "tool_forbidden_global"
+        reason: "tool_absolute_deny:sql_dialect_notes"
       });
 
       await expectDenied(port, {
@@ -239,7 +239,7 @@ describe("MCP proxy ACL enforcement", () => {
         token: "wildcard-token",
         name: "future_table_export",
         args: {},
-        reason: "tool_forbidden",
+        reason: "tool_unclassified:future_table_export",
         userId: "wildcard_agent"
       });
     });
@@ -249,7 +249,10 @@ describe("MCP proxy ACL enforcement", () => {
     testState.isTokenRevokedMock.mockReturnValue(true);
 
     await withProxy(async (port) => {
-      const res = await callTool(port, TOKEN, "proxy-revoked-token", "sl_read_source", { sourceName: "superstore_orders" });
+      const res = await callTool(port, TOKEN, "proxy-revoked-token", "lucy_read_source", {
+        connectionId: "mysql-aliyun",
+        sourceName: "superstore_orders"
+      });
       expect(res.status).toBe(401);
       expect(await res.json()).toMatchObject({ error: { message: "Unauthorized" } });
       expect(testState.writeLogMock).not.toHaveBeenCalled();
@@ -279,7 +282,10 @@ describe("MCP proxy ACL enforcement", () => {
 
     try {
       await withProxy(async (port) => {
-        const res = await callTool(port, TOKEN, "proxy-upstream-error", "sl_read_source", { sourceName: "superstore_orders" });
+        const res = await callTool(port, TOKEN, "proxy-upstream-error", "lucy_read_source", {
+          connectionId: "mysql-aliyun",
+          sourceName: "superstore_orders"
+        });
         expect(res.status).toBe(200);
         const body = await res.json() as { error?: { message?: string; data?: { reason?: string } } };
         expect(body).toMatchObject({

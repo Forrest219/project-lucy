@@ -5,13 +5,166 @@ import { toast } from "sonner";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
-import type { Agent, AgentPatch, EffectivePermissionsPreview, Role } from "../../lib/types";
+import type {
+  AccessWriteAck,
+  Agent,
+  AgentConstraintsConfig,
+  AgentPatch,
+  EffectivePermissionsPreview,
+  Role,
+  RoleRowPolicyPredicate
+} from "../../lib/types";
+import { formatFinalRowsPreviewLabel, formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 
 type AgentDetailResponse = { agent: Agent; version: string };
-type PatchDryRunResponse = { diff: string; proposedYaml: string };
+type PatchDryRunResponse = {
+  diff: string;
+  proposedYaml: string;
+  effectivePermissions?: EffectivePermissionsPreview;
+};
 type DiffPreview = PatchDryRunResponse & { patch: AgentPatch };
-type PatchSaveResponse = { written: boolean; agent: Agent };
+type PatchSaveResponse = AccessWriteAck & { agent: Agent };
 type RolesResponse = { roles: Role[] };
+
+/** Spec 100 TypedScalar — form keeps JSON scalar types; never trim/case-fold values. */
+type ConstraintScalar = string | number | boolean;
+
+type FormConstraintPredicate = {
+  field: string;
+  op: "eq" | "in";
+  value: ConstraintScalar;
+  values: ConstraintScalar[];
+  /** When non-null, `in` list is edited as raw text (no trim on values). */
+  inText: string | null;
+};
+
+type FormConstraintBinding = {
+  connection: string;
+  schema: string;
+  names: string;
+  predicates: FormConstraintPredicate[];
+};
+
+const EMPTY_CONSTRAINT_PRED: FormConstraintPredicate = {
+  field: "",
+  op: "eq",
+  value: "",
+  values: [],
+  inText: null
+};
+
+function isConstraintScalar(value: unknown): value is ConstraintScalar {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function formatConstraintScalar(value: ConstraintScalar): string {
+  return typeof value === "string" ? value : String(value);
+}
+
+/** Split `in` draft text; no trim. Drop only a trailing empty segment from a trailing delimiter. */
+function splitConstraintListNoTrim(text: string): string[] {
+  const parts = text.split(/[,，]/);
+  if (parts.length > 0 && parts[parts.length - 1] === "") parts.pop();
+  return parts;
+}
+
+function inValuesForSerialize(pred: FormConstraintPredicate): ConstraintScalar[] {
+  if (pred.inText !== null) return splitConstraintListNoTrim(pred.inText);
+  return pred.values;
+}
+
+function isMissingEqValue(value: ConstraintScalar): boolean {
+  return typeof value === "string" && value.length === 0;
+}
+
+export function constraintsFromAgent(agent: Agent): FormConstraintBinding[] {
+  const sources = agent.constraints?.sources;
+  if (!Array.isArray(sources) || sources.length === 0) return [];
+  return sources.map((binding) => ({
+    connection: binding.connection ?? "",
+    schema: binding.schema ?? "",
+    names: Array.isArray(binding.names) ? binding.names.join(", ") : "",
+    predicates: (binding.predicates ?? []).map((pred) => ({
+      field: typeof pred.field === "string" ? pred.field : "",
+      op: pred.op === "in" ? "in" : "eq",
+      // Spec 100 §8.1 — preserve TypedScalar; do not String() coerce on load.
+      value: pred.op === "eq" && isConstraintScalar(pred.value) ? pred.value : "",
+      values:
+        pred.op === "in" && Array.isArray(pred.values)
+          ? pred.values.filter(isConstraintScalar)
+          : [],
+      inText: null
+    }))
+  }));
+}
+
+export function serializeConstraints(bindings: FormConstraintBinding[]): AgentConstraintsConfig | null {
+  if (bindings.length === 0) return null;
+  const sources = bindings.map((binding) => {
+    const names = binding.names
+      .split(/[,，\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const predicates: RoleRowPolicyPredicate[] = binding.predicates.map((pred) => {
+      if (pred.op === "in") {
+        return {
+          field: pred.field.trim(),
+          op: "in" as const,
+          // Values: no trim / filter(Boolean) (would drop 0 / false).
+          values: inValuesForSerialize(pred)
+        };
+      }
+      return {
+        field: pred.field.trim(),
+        op: "eq" as const,
+        value: pred.value
+      };
+    });
+    return {
+      connection: binding.connection.trim(),
+      ...(binding.schema.trim() ? { schema: binding.schema.trim() } : {}),
+      names,
+      predicates
+    };
+  });
+  return { sources };
+}
+
+function validateConstraintsForm(bindings: FormConstraintBinding[]): string | null {
+  for (let i = 0; i < bindings.length; i += 1) {
+    const row = bindings[i]!;
+    if (!row.connection.trim()) return `强制约束源 ${i + 1}：缺少 connection`;
+    const names = row.names.split(/[,，\s]+/).map((item) => item.trim()).filter(Boolean);
+    if (names.length === 0) return `强制约束源 ${i + 1}：names 不能为空`;
+    if (row.predicates.length === 0) return `强制约束源 ${i + 1}：须至少一条谓词`;
+    for (let j = 0; j < row.predicates.length; j += 1) {
+      const pred = row.predicates[j]!;
+      if (!pred.field.trim()) return `强制约束源 ${i + 1}：第 ${j + 1} 条缺少字段`;
+      if (pred.op === "eq" && isMissingEqValue(pred.value)) {
+        return `强制约束源 ${i + 1}：第 ${j + 1} 条 eq 缺少取值`;
+      }
+      if (pred.op === "in" && inValuesForSerialize(pred).length === 0) {
+        return `强制约束源 ${i + 1}：第 ${j + 1} 条 in 缺少取值列表`;
+      }
+    }
+  }
+  return null;
+}
+
+function sameConstraints(a: FormConstraintBinding[], b: FormConstraintBinding[]): boolean {
+  return JSON.stringify(serializeConstraints(a)) === JSON.stringify(serializeConstraints(b));
+}
+
+/** Spec 14 §0.3 — success only when runtimeAck === true (missing/false both fail). */
+function toastAccessWriteAck(result: AccessWriteAck, fallback = "已保存"): boolean {
+  if (result.runtimeAck !== true) {
+    toast.error("保存未生效：runtime 未确认（runtimeAck≠true）。磁盘可能已回滚，请检查策略降级 banner。");
+    return false;
+  }
+  const version = result.policyVersion ? ` · policyVersion=${result.policyVersion.slice(0, 12)}…` : "";
+  toast.success(`${fallback}${version}`);
+  return true;
+}
 
 type Tab = "info" | "tokens" | "permissions" | "diff";
 
@@ -82,6 +235,8 @@ export function AgentDetail() {
   const [editNote, setEditNote] = useState<string | null>(null);
   const [editEnabled, setEditEnabled] = useState<boolean | null>(null);
   const [editRole, setEditRole] = useState<string | null>(null);
+  /** null = untouched; array (possibly empty) = dirty Constraints editor. */
+  const [editConstraints, setEditConstraints] = useState<FormConstraintBinding[] | null>(null);
   const [diffPreview, setDiffPreview] = useState<DiffPreview | null>(null);
   const [confirmSave, setConfirmSave] = useState<DiffPreview | null>(null);
   const [selectedTokenLabels, setSelectedTokenLabels] = useState<string[]>([]);
@@ -95,6 +250,12 @@ export function AgentDetail() {
     if (editNote !== null) patch.note = editNote;
     if (editEnabled !== null) patch.enabled = editEnabled;
     if (editRole !== null) patch.role = editRole;
+    if (editConstraints !== null && agent) {
+      const baseline = constraintsFromAgent(agent);
+      if (!sameConstraints(editConstraints, baseline)) {
+        patch.constraints = serializeConstraints(editConstraints);
+      }
+    }
     return patch;
   }
 
@@ -126,6 +287,19 @@ export function AgentDetail() {
     setEditRole(value);
   }
 
+  function updateEditConstraints(next: FormConstraintBinding[]) {
+    clearStaleDiffPreview();
+    setEditConstraints(next);
+  }
+
+  function clearEditForm() {
+    setEditName(null);
+    setEditNote(null);
+    setEditEnabled(null);
+    setEditRole(null);
+    setEditConstraints(null);
+  }
+
   const previewMutation = useMutation({
     mutationFn: async (patch: AgentPatch) => {
       const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
@@ -141,17 +315,15 @@ export function AgentDetail() {
   const saveMutation = useMutation({
     mutationFn: (patch: AgentPatch) =>
       apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch }),
-    onSuccess: () => {
-      toast.success("已保存");
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+      if (!toastAccessWriteAck(result)) return;
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
       setDiffPreview(null);
       setConfirmSave(null);
       setActiveTab("info");
-      setEditName(null);
-      setEditNote(null);
-      setEditEnabled(null);
-      setEditRole(null);
+      clearEditForm();
     },
     onError: (err: Error) => toast.error(err.message)
   });
@@ -162,16 +334,14 @@ export function AgentDetail() {
       await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
       return apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch });
     },
-    onSuccess: () => {
-      toast.success("已保存");
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+      if (!toastAccessWriteAck(result)) return;
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
       setDiffPreview(null);
       setConfirmSave(null);
-      setEditName(null);
-      setEditNote(null);
-      setEditEnabled(null);
-      setEditRole(null);
+      clearEditForm();
     },
     onError: (err: Error) => toast.error(err.message)
   });
@@ -245,18 +415,26 @@ export function AgentDetail() {
   }
 
   function handleDiscardEdits() {
-    setEditName(null);
-    setEditNote(null);
-    setEditEnabled(null);
-    setEditRole(null);
+    clearEditForm();
     setDiffPreview(null);
     setConfirmSave(null);
   }
 
   function handleSave() {
     if (!agent) return;
+    if (editConstraints !== null) {
+      const formError = validateConstraintsForm(editConstraints);
+      if (formError) {
+        toast.error(formError);
+        return;
+      }
+    }
     const patch = buildPatch();
-    if (patchChangesRole(patch, agent)) {
+    if (Object.keys(patch).length === 0) {
+      toast.message("没有可保存的修改");
+      return;
+    }
+    if (patchChangesRole(patch, agent) || patch.constraints !== undefined) {
       confirmPreviewMutation.mutate(patch);
     } else {
       directSaveMutation.mutate(patch);
@@ -264,6 +442,13 @@ export function AgentDetail() {
   }
 
   function handleViewDiff() {
+    if (editConstraints !== null) {
+      const formError = validateConstraintsForm(editConstraints);
+      if (formError) {
+        toast.error(formError);
+        return;
+      }
+    }
     previewMutation.mutate(buildPatch());
   }
 
@@ -277,14 +462,20 @@ export function AgentDetail() {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key.toLowerCase() !== "s") return;
       if (!agent) return;
-      if (editName === null && editNote === null && editEnabled === null && editRole === null) return;
+      if (
+        editName === null
+        && editNote === null
+        && editEnabled === null
+        && editRole === null
+        && editConstraints === null
+      ) return;
       e.preventDefault();
       handleSave();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent, editName, editNote, editEnabled, editRole, version]);
+  }, [agent, editName, editNote, editEnabled, editRole, editConstraints, version]);
 
   if (isLoading) return <div className="pl-notice">加载中…</div>;
   if (error || !agent) return <div className="pl-notice">加载失败：{error ? (error as Error).message : "Agent 不存在"}</div>;
@@ -293,8 +484,17 @@ export function AgentDetail() {
   const currentRole = editRole !== null ? editRole : agent.role;
   const effective = agent.effectivePermissions;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
-  const hasEdits = editName !== null || editNote !== null || editEnabled !== null || editRole !== null;
+  const constraintRows = editConstraints !== null ? editConstraints : constraintsFromAgent(agent);
+  const constraintsDirty =
+    editConstraints !== null && !sameConstraints(editConstraints, constraintsFromAgent(agent));
+  const hasEdits =
+    editName !== null
+    || editNote !== null
+    || editEnabled !== null
+    || editRole !== null
+    || constraintsDirty;
   const groupedSources = effective ? groupSourcesByConnectionAndSchema(effective.sources) : [];
+  const dryRunEffective = diffPreview?.effectivePermissions ?? confirmSave?.effectivePermissions;
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "info", label: "基本信息" },
@@ -365,71 +565,292 @@ export function AgentDetail() {
 
       <div className="pl-admin-tab-panel">
         {activeTab === "info" && (
-          <div className="grid gap-4 max-w-md pb-32">
-            <div className="grid gap-1">
-              <span className="text-sm text-fg-muted">用户 ID（不可改）</span>
-              <span className="font-mono text-sm">{agent.id}</span>
-            </div>
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">显示名</span>
-              <input
-                className="pl-input"
-                value={editName !== null ? editName : agent.name}
-                onChange={(e) => updateEditName(e.target.value)}
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">备注</span>
-              <textarea
-                className="pl-input"
-                rows={3}
-                value={editNote !== null ? editNote : (agent.note ?? "")}
-                onChange={(e) => updateEditNote(e.target.value)}
-              />
-            </label>
-            <div className="grid gap-1">
-              <span className="text-sm font-medium">状态</span>
-              <label className="flex items-center gap-2 text-sm">
+          <div className="grid gap-4 max-w-3xl pb-32">
+            <div className="grid gap-4 max-w-md">
+              <div className="grid gap-1">
+                <span className="text-sm text-fg-muted">用户 ID（不可改）</span>
+                <span className="font-mono text-sm">{agent.id}</span>
+              </div>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">显示名</span>
                 <input
-                  type="checkbox"
-                  checked={editEnabled !== null ? editEnabled : agent.enabled}
-                  onChange={(e) => updateEditEnabled(e.target.checked)}
+                  className="pl-input"
+                  value={editName !== null ? editName : agent.name}
+                  onChange={(e) => updateEditName(e.target.value)}
                 />
-                启用
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">备注</span>
+                <textarea
+                  className="pl-input"
+                  rows={3}
+                  value={editNote !== null ? editNote : (agent.note ?? "")}
+                  onChange={(e) => updateEditNote(e.target.value)}
+                />
+              </label>
+              <div className="grid gap-1">
+                <span className="text-sm font-medium">状态</span>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={editEnabled !== null ? editEnabled : agent.enabled}
+                    onChange={(e) => updateEditEnabled(e.target.checked)}
+                  />
+                  启用
+                </label>
+              </div>
+              <label className="grid gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">角色</span>
+                  <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                    管理角色 →
+                  </Link>
+                </div>
+                <select
+                  className="pl-input"
+                  value={currentRole ?? ""}
+                  onChange={(e) => updateEditRole(e.target.value)}
+                >
+                  <option value="" disabled>选择角色</option>
+                  {roles.map((role) => {
+                    const tags: string[] = [];
+                    if (role.source === "template") tags.push("参考模板");
+                    if (role.invalid) tags.push("待修复");
+                    const suffix = tags.length > 0 ? ` · ${tags.join(" · ")}` : "";
+                    return (
+                      <option key={role.id} value={role.id} disabled={role.invalid}>
+                        {role.id}
+                        {suffix}
+                      </option>
+                    );
+                  })}
+                </select>
+                {!agent.role && agent.allow && (
+                  <span className="text-xs text-fg-muted">
+                    旧 ACL 只读兼容；保存角色后会移除该 <span className="notranslate" translate="no">Agent</span> 的 legacy allow。
+                  </span>
+                )}
               </label>
             </div>
-            <label className="grid gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">角色</span>
-                <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
-                  管理角色 →
-                </Link>
+
+            <div className="pl-card grid gap-3" data-testid="agent-constraints-editor">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-medium">
+                    <span className="notranslate" translate="no">Agent</span>
+                    {" "}强制约束
+                    <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
+                      constraints
+                    </span>
+                  </div>
+                  <p className="text-xs text-fg-muted mt-1">
+                    对人级最终行约束做 AND 收紧；多 Role 不会自动对人级行集做 AND。配置成功只表示编译通过，
+                    <strong className="font-medium"> 不表示行级取数已生效</strong>。
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost text-xs"
+                    onClick={() =>
+                      updateEditConstraints([
+                        ...constraintRows,
+                        {
+                          connection: "",
+                          schema: "",
+                          names: "",
+                          predicates: [{ ...EMPTY_CONSTRAINT_PRED }]
+                        }
+                      ])
+                    }
+                  >
+                    添加源约束
+                  </button>
+                  {constraintRows.length > 0 && (
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--ghost text-xs"
+                      onClick={() => updateEditConstraints([])}
+                    >
+                      清除全部
+                    </button>
+                  )}
+                </div>
               </div>
-              <select
-                className="pl-input"
-                value={currentRole ?? ""}
-                onChange={(e) => updateEditRole(e.target.value)}
-              >
-                <option value="" disabled>选择角色</option>
-                {roles.map((role) => {
-                  const tags: string[] = [];
-                  if (role.source === "template") tags.push("参考模板");
-                  if (role.invalid) tags.push("待修复");
-                  const suffix = tags.length > 0 ? ` · ${tags.join(" · ")}` : "";
-                  return (
-                    <option key={role.id} value={role.id} disabled={role.invalid}>
-                      {role.id}
-                      {suffix}
-                    </option>
-                  );
-                })}
-              </select>
-              {!agent.role && agent.allow && (
-                <span className="text-xs text-fg-muted">
-                  旧 ACL 只读兼容；保存角色后会移除该 <span className="notranslate" translate="no">Agent</span> 的 legacy allow。
-                </span>
+
+              {constraintRows.length === 0 ? (
+                <p className="text-sm text-fg-muted">未配置强制约束（等同 Constraints≡TRUE）。</p>
+              ) : (
+                <ul className="grid gap-4">
+                  {constraintRows.map((row, idx) => (
+                    <li key={idx} className="grid gap-2 rounded-md border border-border p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">源约束 {idx + 1}</span>
+                        <button
+                          type="button"
+                          className="pl-btn pl-btn--ghost text-xs"
+                          onClick={() => updateEditConstraints(constraintRows.filter((_, i) => i !== idx))}
+                        >
+                          删除
+                        </button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <label className="grid gap-1 text-xs">
+                          <span className="notranslate" translate="no">connection</span>
+                          <input
+                            className="pl-input font-mono text-xs"
+                            value={row.connection}
+                            onChange={(e) => {
+                              const next = [...constraintRows];
+                              next[idx] = { ...row, connection: e.target.value };
+                              updateEditConstraints(next);
+                            }}
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs">
+                          <span className="notranslate" translate="no">schema</span>
+                          <input
+                            className="pl-input font-mono text-xs"
+                            value={row.schema}
+                            onChange={(e) => {
+                              const next = [...constraintRows];
+                              next[idx] = { ...row, schema: e.target.value };
+                              updateEditConstraints(next);
+                            }}
+                          />
+                        </label>
+                        <label className="grid gap-1 text-xs">
+                          <span className="notranslate" translate="no">names</span>
+                          <input
+                            className="pl-input font-mono text-xs"
+                            placeholder="comma-separated"
+                            value={row.names}
+                            onChange={(e) => {
+                              const next = [...constraintRows];
+                              next[idx] = { ...row, names: e.target.value };
+                              updateEditConstraints(next);
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <div className="grid gap-2">
+                        <div className="text-xs text-fg-muted">
+                          谓词（同组 AND；op 仅
+                          <span className="mx-1 font-mono notranslate" translate="no">eq</span>/
+                          <span className="mx-1 font-mono notranslate" translate="no">in</span>）
+                        </div>
+                        {row.predicates.map((pred, predIdx) => (
+                          <div key={predIdx} className="grid gap-2 sm:grid-cols-[1fr_6rem_1fr_auto] items-end">
+                            <label className="grid gap-1 text-xs">
+                              <span>字段</span>
+                              <input
+                                className="pl-input font-mono text-xs"
+                                value={pred.field}
+                                onChange={(e) => {
+                                  const predicates = [...row.predicates];
+                                  predicates[predIdx] = { ...pred, field: e.target.value };
+                                  const next = [...constraintRows];
+                                  next[idx] = { ...row, predicates };
+                                  updateEditConstraints(next);
+                                }}
+                              />
+                            </label>
+                            <label className="grid gap-1 text-xs">
+                              <span className="notranslate" translate="no">op</span>
+                              <select
+                                className="pl-input text-xs notranslate"
+                                translate="no"
+                                value={pred.op}
+                                onChange={(e) => {
+                                  const op = e.target.value === "in" ? "in" : "eq";
+                                  const predicates = [...row.predicates];
+                                  predicates[predIdx] = {
+                                    ...pred,
+                                    op,
+                                    value: op === "eq" ? pred.value : "",
+                                    values: op === "in" ? pred.values : [],
+                                    inText: op === "in" ? (pred.inText ?? "") : null
+                                  };
+                                  const next = [...constraintRows];
+                                  next[idx] = { ...row, predicates };
+                                  updateEditConstraints(next);
+                                }}
+                              >
+                                <option value="eq">eq</option>
+                                <option value="in">in</option>
+                              </select>
+                            </label>
+                            <label className="grid gap-1 text-xs">
+                              <span>{pred.op === "in" ? "取值列表（逗号分隔）" : "取值"}</span>
+                              {pred.op === "eq" ? (
+                                <input
+                                  className="pl-input font-mono text-xs"
+                                  value={formatConstraintScalar(pred.value)}
+                                  onChange={(e) => {
+                                    // Text input yields string; typed scalars preserved until edited.
+                                    const predicates = [...row.predicates];
+                                    predicates[predIdx] = { ...pred, value: e.target.value };
+                                    const next = [...constraintRows];
+                                    next[idx] = { ...row, predicates };
+                                    updateEditConstraints(next);
+                                  }}
+                                />
+                              ) : (
+                                <input
+                                  className="pl-input font-mono text-xs"
+                                  value={
+                                    pred.inText !== null
+                                      ? pred.inText
+                                      : pred.values.map(formatConstraintScalar).join(",")
+                                  }
+                                  onChange={(e) => {
+                                    // Spec 100 — no trim on values; keep draft until serialize.
+                                    const predicates = [...row.predicates];
+                                    predicates[predIdx] = { ...pred, inText: e.target.value };
+                                    const next = [...constraintRows];
+                                    next[idx] = { ...row, predicates };
+                                    updateEditConstraints(next);
+                                  }}
+                                />
+                              )}
+                            </label>
+                            <button
+                              type="button"
+                              className="pl-btn pl-btn--ghost text-xs"
+                              disabled={row.predicates.length <= 1}
+                              onClick={() => {
+                                const next = [...constraintRows];
+                                next[idx] = {
+                                  ...row,
+                                  predicates: row.predicates.filter((_, i) => i !== predIdx)
+                                };
+                                updateEditConstraints(next);
+                              }}
+                            >
+                              删谓词
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="pl-btn pl-btn--ghost text-xs w-fit"
+                          onClick={() => {
+                            const next = [...constraintRows];
+                            next[idx] = {
+                              ...row,
+                              predicates: [...row.predicates, { ...EMPTY_CONSTRAINT_PRED }]
+                            };
+                            updateEditConstraints(next);
+                          }}
+                        >
+                          添加谓词
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </label>
+            </div>
           </div>
         )}
 
@@ -639,6 +1060,42 @@ export function AgentDetail() {
                     )}
                   </div>
                 </div>
+                <div className="grid gap-2" data-testid="capability-preview">
+                  <div className="text-sm font-medium">
+                    Data Capability Preview
+                    {effective.capabilityDigest ? (
+                      <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
+                        digest={effective.capabilityDigest}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-fg-muted">
+                    展示编译态
+                    <span className="mx-1 font-mono notranslate" translate="no">FinalRows</span>
+                    摘要与是否受保护；不表示行级取数已在上游注入生效。
+                  </p>
+                  {(effective.capabilities?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-fg-muted">
+                      {legacyWildcard
+                        ? "legacy tables:* — capability 列表为空（按设计）。"
+                        : "无 DataPlane capability。"}
+                    </p>
+                  ) : (
+                    <ul className="grid gap-1 font-mono text-xs">
+                      {effective.capabilities!.map((cap) => (
+                        <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
+                          {cap.tool} × {cap.sourceKey}
+                          {" · rowGrant="}
+                          {formatRowGrantPreviewLabel(cap.rowGrant)}
+                          {" · FinalRows="}
+                          {formatFinalRowsPreviewLabel(cap.finalRows, cap.rowGrant)}
+                          {cap.protected ? " · protected" : ""}
+                          {cap.constraintsSummary ? ` · constraints=${cap.constraintsSummary}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="pl-card">
@@ -654,6 +1111,27 @@ export function AgentDetail() {
               <>
                 <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml，确认后才会落盘。</p>
                 <DiffViewer diff={diffPreview.diff} />
+                {dryRunEffective?.capabilities && dryRunEffective.capabilities.length > 0 && (
+                  <div className="pl-card grid gap-2" data-testid="dryrun-finalrows-preview">
+                    <div className="text-sm font-medium">
+                      dryRun
+                      <span className="mx-1 font-mono notranslate" translate="no">FinalRows</span>
+                      摘要
+                    </div>
+                    <p className="text-xs text-fg-muted">编译预览；不表示行级取数已生效。</p>
+                    <ul className="grid gap-1 font-mono text-xs">
+                      {dryRunEffective.capabilities.map((cap) => (
+                        <li key={`dry:${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
+                          {cap.tool} × {cap.sourceKey}
+                          {" · FinalRows="}
+                          {formatFinalRowsPreviewLabel(cap.finalRows, cap.rowGrant)}
+                          {cap.protected ? " · protected" : ""}
+                          {cap.constraintsSummary ? ` · constraints=${cap.constraintsSummary}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
@@ -676,13 +1154,13 @@ export function AgentDetail() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-fg-muted">在其他标签页编辑后，可点「查看变更 diff」审阅，或保存角色变更时在确认框中查看 diff。</p>
+              <p className="text-sm text-fg-muted">在其他标签页编辑后，可点「查看变更 diff」审阅，或保存角色 / 强制约束变更时在确认框中查看 diff。</p>
             )}
           </div>
         )}
       </div>
 
-      {hasEdits && activeTab !== "diff" && (
+      {hasEdits && activeTab !== "diff" && !confirmSave && (
         <div
           data-testid="sticky-save-bar"
           className="pl-floating-action-bar"
@@ -722,12 +1200,36 @@ export function AgentDetail() {
       )}
 
       {confirmSave && (
-        <div className="pl-modal-backdrop" data-testid="agent-save-confirm-modal">
-          <div className="pl-modal-panel max-w-2xl">
-            <h2 className="text-lg font-semibold mb-2">确认角色变更</h2>
-            <p className="text-sm text-fg-muted mb-4 notranslate" translate="no">以下改动将写入 access.yaml，确认后才会落盘。</p>
-            <DiffViewer diff={confirmSave.diff} />
-            <div className="flex justify-end gap-2 mt-4">
+        <div className="pl-modal-backdrop z-[60]" data-testid="agent-save-confirm-modal">
+          <div className="pl-modal-panel max-w-2xl max-h-[90vh] flex flex-col">
+            <h2 className="text-lg font-semibold mb-2 shrink-0">
+              {confirmSave.patch.constraints !== undefined ? "确认强制约束变更" : "确认角色变更"}
+            </h2>
+            <p className="text-sm text-fg-muted mb-4 shrink-0 notranslate" translate="no">以下改动将写入 access.yaml，确认后才会落盘。</p>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <DiffViewer diff={confirmSave.diff} />
+              {confirmSave.effectivePermissions?.capabilities
+                && confirmSave.effectivePermissions.capabilities.length > 0 && (
+                <div className="mt-3 grid gap-1" data-testid="confirm-finalrows-preview">
+                  <div className="text-xs text-fg-muted">
+                    编译态
+                    <span className="mx-1 font-mono notranslate" translate="no">FinalRows</span>
+                    （不表示行级取数已生效）
+                  </div>
+                  <ul className="grid gap-1 font-mono text-xs">
+                    {confirmSave.effectivePermissions.capabilities.map((cap) => (
+                      <li key={`c:${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
+                        {cap.sourceKey}
+                        {" · FinalRows="}
+                        {formatFinalRowsPreviewLabel(cap.finalRows, cap.rowGrant)}
+                        {cap.protected ? " · protected" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-4 shrink-0">
               <button
                 type="button"
                 className="pl-btn pl-btn--ghost"
@@ -738,6 +1240,7 @@ export function AgentDetail() {
               <button
                 type="button"
                 className="pl-btn pl-btn--primary"
+                data-testid="agent-save-confirm-submit"
                 onClick={() => saveMutation.mutate(confirmSave.patch)}
                 disabled={saveMutation.isPending}
               >

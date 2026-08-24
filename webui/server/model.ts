@@ -43,7 +43,6 @@ export type TableModel = {
   table: string;
   qualifiedName?: string;
   filePath: string;
-  qualifiedName?: string;
   descriptions: AuthoredText;
   grain?: string[];
   columns: Column[];

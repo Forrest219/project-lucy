@@ -11,12 +11,12 @@
 | [04-data-model.md](04-data-model.md) | 内部数据模型 ↔ 真实 YAML 映射、完成度算法 | 实现者 |
 | [05-task-list.md](05-task-list.md) | 里程碑任务拆分与验收标准 | 实现者 / 验收 |
 | [06-navigation-ia.md](06-navigation-ia.md) | 导航与信息架构优化，明确语义层/业务文档/审阅校验的用户口径 | 产品 / 前端 |
-| [07-mcp-auth-proxy-spec.md](07-mcp-auth-proxy-spec.md) | MCP Auth Proxy、访问日志、多用户权限与工具过滤 | 后端 / 安全 / 前端 |
+| [07-mcp-auth-proxy-spec.md](07-mcp-auth-proxy-spec.md) | MCP Auth Proxy、访问日志、多用户权限与工具过滤；**v1.4 AC-P0 契约补丁**（`capability_forbidden` / Tool Class / `policyVersion` / 审计增量；语义权威 Spec 98） | 后端 / 安全 / 前端 |
 | [08-mcp-audit-question-tracing-spec.md](08-mcp-audit-question-tracing-spec.md) | MCP 审计增强：数据源正规化、问题簇推断、可选自然语言问题上报 | 后端 / 前端 / 审计 |
 | [09-lucy-r1-mcp-tool-contract.md](09-lucy-r1-mcp-tool-contract.md) | Lucy R1 `lucy_*` MCP 工具契约、错误 reason、返回 metadata 和 contract eval 要点 | 后端 / 安全 / Agent |
 | [10-deployment-connection-ux-refresh.md](10-deployment-connection-ux-refresh.md) | 部署向导与连接概览体验升级：交付闭环、Metric Tooltip、连接卡片、Add Schema 抽屉 | 产品 / 前端 |
-| [14-agent-admin-enterprise-delivery-spec.md](14-agent-admin-enterprise-delivery-spec.md) | 访问治理 Agent Admin 企业级交付体验：列表配置复制、新建权限透明度、Token 首秀、详情页保存与权限树 | 产品 / 前端 / 安全 |
-| [15-role-admin-spec.md](15-role-admin-spec.md) | 访问治理 Role Admin：角色列表、新建/编辑/删除、template 复制、dryRun diff 与 Agent 入口联动 | 产品 / 前端 / 后端 / 安全 |
+| [14-agent-admin-enterprise-delivery-spec.md](14-agent-admin-enterprise-delivery-spec.md) | 访问治理 Agent Admin 企业级交付体验：列表配置复制、新建权限透明度、Token 首秀、详情页保存与权限树；**v0.2 AC-P0**：`roles[]` / Data Capability Preview / `runtimeAck` | 产品 / 前端 / 安全 |
+| [15-role-admin-spec.md](15-role-admin-spec.md) | 访问治理 Role Admin：角色列表、新建/编辑/删除、template 复制、dryRun diff 与 Agent 入口联动；**v0.2 AC-P0**：`permission_model_version` / v1→v2 迁移 / capability preview | 产品 / 前端 / 后端 / 安全 |
 | [16-ingest-first-class-ux-spec.md](16-ingest-first-class-ux-spec.md) | 数据库接入 Ingest 一等功能化：连接级入口、Schema 扫描入口、白名单解耦、运行状态与诊断日志 | 产品 / 前端 / 后端 |
 | [17-static-catalog-loading-spec.md](17-static-catalog-loading-spec.md) | 静态 Catalog 载入：核心数据管道零 LLM 依赖、废弃 WebUI CLI ingest、改用本地 YAML reload | 产品 / 前端 / 后端 |
 | [18-minimax-console-style-extraction.md](18-minimax-console-style-extraction.md) | MiniMax 控制台样式提取：全局 token、后台密度、导航/卡片/按钮视觉规范 | 产品 / 前端 |

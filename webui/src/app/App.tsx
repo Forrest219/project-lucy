@@ -62,6 +62,7 @@ import { HelpCenter } from "../pages/HelpCenter";
 import { HelpButton } from "../components/HelpButton";
 import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
 import { CommandPalette } from "../components/CommandPalette";
+import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
 import { findGroupIdForPathname, navGroups, topLevelEntry, type NavIconKey } from "./navigation";
 
 const queryClient = new QueryClient();
@@ -379,6 +380,7 @@ export function AppFrame() {
         </aside>
 
         <main className="pl-workspace">
+          <PolicyDegradeBanner />
           <div className="pl-workspace-body">
             <Routes>
             <Route path="/overview" element={<Onboarding />} />

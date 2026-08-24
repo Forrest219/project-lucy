@@ -4,18 +4,32 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost } from "../../lib/apiClient";
 import type {
+  AccessWriteAck,
   ConnectionInfo,
   ConnectionTablesResponse,
   ConnectionsResponse,
   McpToolInfo,
   RoleAllowConfig,
   RoleDetail as RoleDetailType,
+  RoleRowPolicyPredicate,
   RoleSelector
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { TagInput } from "../../components/TagInput";
+import { formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 
 type Tab = "identity" | "permissions" | "effective" | "usage" | "diff";
+
+/** Returns true only when runtimeAck confirms the save; callers must not navigate/clear on false. */
+function toastAccessWriteAck(result: AccessWriteAck, fallback: string): boolean {
+  if (result.runtimeAck === false) {
+    toast.error("保存未生效：runtime 未确认（runtimeAck=false）。磁盘可能已回滚，请检查策略降级 banner。");
+    return false;
+  }
+  const version = result.policyVersion ? ` · policyVersion=${result.policyVersion.slice(0, 12)}…` : "";
+  toast.success(`${fallback}${version}`);
+  return true;
+}
 
 function visibleTabsForMode(
   mode: "create" | "edit" | "copy" | "delete",
@@ -50,6 +64,13 @@ function visibleTabsForMode(
   ];
 }
 
+type FormRowPredicate = {
+  field: string;
+  op: "eq" | "in";
+  value: string;
+  values: string[];
+};
+
 type RoleFormState = {
   roleId: string;
   description: string;
@@ -61,8 +82,70 @@ type RoleFormState = {
     kind: "names" | "prefix";
     names: string[];
     prefix: string;
+    rowAccess: "all" | "scoped";
+    predicates: FormRowPredicate[];
   }>;
 };
+
+const EMPTY_PREDICATE: FormRowPredicate = { field: "", op: "eq", value: "", values: [] };
+
+function predicatesFromSelector(selector: RoleSelector): FormRowPredicate[] {
+  const policy = "row_policy" in selector ? selector.row_policy : undefined;
+  if (!policy?.predicates?.length) return [];
+  return policy.predicates.map((pred) => ({
+    field: typeof pred.field === "string" ? pred.field : "",
+    op: pred.op === "in" ? "in" : "eq",
+    value: pred.op === "eq" && pred.value !== undefined ? String(pred.value) : "",
+    values:
+      pred.op === "in" && Array.isArray(pred.values)
+        ? pred.values.map((item) => String(item))
+        : []
+  }));
+}
+
+function rowAccessFromSelector(selector: RoleSelector): "all" | "scoped" {
+  return selector.row_access === "scoped" ? "scoped" : "all";
+}
+
+function serializePredicates(predicates: FormRowPredicate[]): RoleRowPolicyPredicate[] {
+  return predicates.map((pred) => {
+    if (pred.op === "in") {
+      return {
+        field: pred.field.trim(),
+        op: "in" as const,
+        values: pred.values.map((item) => item.trim()).filter(Boolean)
+      };
+    }
+    return {
+      field: pred.field.trim(),
+      op: "eq" as const,
+      value: pred.value.trim()
+    };
+  });
+}
+
+function validateScopedSelectors(form: RoleFormState): string | null {
+  for (let i = 0; i < form.selectors.length; i += 1) {
+    const row = form.selectors[i]!;
+    if (row.rowAccess !== "scoped") continue;
+    if (row.predicates.length === 0) {
+      return `表范围 ${i + 1}：限定行须至少一条行级策略条件`;
+    }
+    for (let j = 0; j < row.predicates.length; j += 1) {
+      const pred = row.predicates[j]!;
+      if (!pred.field.trim()) {
+        return `表范围 ${i + 1}：第 ${j + 1} 条条件缺少字段`;
+      }
+      if (pred.op === "eq" && !pred.value.trim()) {
+        return `表范围 ${i + 1}：第 ${j + 1} 条 eq 条件缺少取值`;
+      }
+      if (pred.op === "in" && pred.values.map((item) => item.trim()).filter(Boolean).length === 0) {
+        return `表范围 ${i + 1}：第 ${j + 1} 条 in 条件缺少取值列表`;
+      }
+    }
+  }
+  return null;
+}
 
 type RoleWritePayload = {
   description?: string;
@@ -134,13 +217,17 @@ function suggestRoleIdFromDescription(description: string): string {
 function selectorsToForm(selectors: RoleSelector[] | undefined): RoleFormState["selectors"] {
   if (!selectors) return [];
   return selectors.map((selector) => {
+    const rowAccess = rowAccessFromSelector(selector);
+    const predicates = predicatesFromSelector(selector);
     if ("names" in selector) {
       return {
         connection: selector.connection ?? "",
         schema: selector.schema,
         kind: "names" as const,
         names: [...selector.names],
-        prefix: ""
+        prefix: "",
+        rowAccess,
+        predicates: rowAccess === "scoped" ? (predicates.length > 0 ? predicates : [{ ...EMPTY_PREDICATE }]) : []
       };
     }
     return {
@@ -148,7 +235,9 @@ function selectorsToForm(selectors: RoleSelector[] | undefined): RoleFormState["
       schema: selector.schema,
       kind: "prefix" as const,
       names: [],
-      prefix: selector.prefix
+      prefix: selector.prefix,
+      rowAccess,
+      predicates: rowAccess === "scoped" ? (predicates.length > 0 ? predicates : [{ ...EMPTY_PREDICATE }]) : []
     };
   });
 }
@@ -159,17 +248,26 @@ function formToAllow(state: RoleFormState): RoleAllowConfig {
   const tableSelectors: RoleSelector[] = state.selectors
     .filter((row) => row.schema.trim().length > 0)
     .map((row) => {
+      const rowFields =
+        row.rowAccess === "scoped"
+          ? {
+              row_access: "scoped" as const,
+              row_policy: { predicates: serializePredicates(row.predicates) }
+            }
+          : { row_access: "all" as const };
       if (row.kind === "prefix") {
         return {
           connection: row.connection.trim() || undefined,
           schema: row.schema.trim(),
-          prefix: row.prefix.trim()
+          prefix: row.prefix.trim(),
+          ...rowFields
         } as RoleSelector;
       }
       return {
         connection: row.connection.trim() || undefined,
         schema: row.schema.trim(),
-        names: row.names.map((item) => item.trim()).filter(Boolean)
+        names: row.names.map((item) => item.trim()).filter(Boolean),
+        ...rowFields
       } as RoleSelector;
     });
   return {
@@ -194,6 +292,19 @@ function sameStringList(a: string[], b: string[]): boolean {
   return a.every((item, index) => item === b[index]);
 }
 
+function samePredicates(a: FormRowPredicate[], b: FormRowPredicate[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((item, index) => {
+    const other = b[index]!;
+    return (
+      item.field === other.field &&
+      item.op === other.op &&
+      item.value === other.value &&
+      sameStringList(item.values, other.values)
+    );
+  });
+}
+
 function isRoleDirty(form: RoleFormState, detail: RoleDetailType | null, mode: "create" | "edit" | "copy" | "delete"): boolean {
   if (mode === "create" || mode === "copy") return true;
   if (!detail) return false;
@@ -207,6 +318,7 @@ function isRoleDirty(form: RoleFormState, detail: RoleDetailType | null, mode: "
     const b = current.selectors[i]!;
     if (a.connection !== b.connection || a.schema !== b.schema || a.kind !== b.kind) return true;
     if (a.prefix !== b.prefix || !sameStringList(a.names, b.names)) return true;
+    if (a.rowAccess !== b.rowAccess || !samePredicates(a.predicates, b.predicates)) return true;
   }
   return false;
 }
@@ -332,7 +444,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const createMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; payload: { roleId: string; role: RoleWritePayload } }) =>
-      apiPost<{ diff: string; proposedYaml: string } | { written: boolean; role: RoleDetailType }>(
+      apiPost<{ diff: string; proposedYaml: string } | (AccessWriteAck & { role: RoleDetailType })>(
         "/api/admin/roles",
         { dryRun: body.dryRun, roleId: body.payload.roleId, role: body.payload.role }
       ),
@@ -344,7 +456,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDeletePreview(null);
         setActiveTab("diff");
       } else {
-        toast.success("Role 已创建");
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, "Role 已创建")) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
         navigate(`/admin/roles/${encodeURIComponent(vars.payload.roleId)}`);
@@ -355,7 +468,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const patchMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; version: string | undefined; patch: RoleWritePayload }) =>
-      apiPatch<{ diff: string; proposedYaml: string; version?: string } | { written: boolean; version: string }>(
+      apiPatch<{ diff: string; proposedYaml: string; version?: string } | (AccessWriteAck & { version: string })>(
         `/api/admin/roles/${roleId}`,
         { dryRun: body.dryRun, version: body.version, patch: body.patch }
       ),
@@ -367,7 +480,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDeletePreview(null);
         setActiveTab("diff");
       } else {
-        toast.success("Role 已保存");
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, "Role 已保存")) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agent", roleId] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
@@ -379,7 +493,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const copyMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; newRoleId: string; role: RoleWritePayload }) =>
-      apiPost<{ diff: string; proposedYaml: string } | { written: boolean; role: RoleDetailType }>(
+      apiPost<{ diff: string; proposedYaml: string } | (AccessWriteAck & { role: RoleDetailType })>(
         `/api/admin/roles/${roleId}/copy`,
         { dryRun: body.dryRun, newRoleId: body.newRoleId, role: body.role }
       ),
@@ -391,7 +505,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDeletePreview(null);
         setActiveTab("diff");
       } else {
-        toast.success(`Role '${vars.newRoleId}' 已从 '${roleId}' 复制`);
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, `Role '${vars.newRoleId}' 已从 '${roleId}' 复制`)) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         navigate(`/admin/roles/${encodeURIComponent(vars.newRoleId)}`);
       }
@@ -401,7 +516,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   const deleteMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; version: string | undefined }) =>
-      apiDelete<{ diff: string; proposedYaml: string; version?: string } | { written: boolean }>(
+      apiDelete<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(
         `/api/admin/roles/${roleId}`,
         { dryRun: body.dryRun, version: body.version }
       ),
@@ -413,7 +528,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setDiffPreview(null);
         setActiveTab("diff");
       } else {
-        toast.success(`Role '${roleId}' 已删除`);
+        void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
+        if (!toastAccessWriteAck(data as AccessWriteAck, `Role '${roleId}' 已删除`)) return;
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
         void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
         navigate("/admin/roles");
@@ -443,6 +559,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       toast.error("禁止使用 * 通配符");
       return;
     }
+    const scopedError = validateScopedSelectors(form);
+    if (scopedError) {
+      toast.error(scopedError);
+      return;
+    }
     const payload = {
       roleId: form.roleId,
       role: buildRolePayload()
@@ -463,6 +584,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   function handlePatchPreview() {
     if (!detail) return;
+    const scopedError = validateScopedSelectors(form);
+    if (scopedError) {
+      toast.error(scopedError);
+      return;
+    }
     patchMutation.mutate({
       dryRun: true,
       version: detail.version,
@@ -486,6 +612,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     }
     if (form.tools.some((tool) => tool.includes("*"))) {
       toast.error("禁止使用 * 通配符");
+      return;
+    }
+    const scopedError = validateScopedSelectors(form);
+    if (scopedError) {
+      toast.error(scopedError);
       return;
     }
     copyMutation.mutate({ dryRun: true, newRoleId: form.roleId, role: buildRolePayload() });
@@ -819,7 +950,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                           schema: "",
                           kind: "names",
                           names: [],
-                          prefix: ""
+                          prefix: "",
+                          rowAccess: "all",
+                          predicates: []
                         }
                       ]
                     })
@@ -1035,6 +1168,201 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                             </span>
                           </label>
                         )}
+
+                        <div
+                          className="grid gap-2 border-t border-border-subtle pt-2"
+                          data-testid={`role-row-access-${idx + 1}`}
+                        >
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-xs font-medium">
+                              行访问
+                              <span className="ml-1 font-mono text-fg-muted notranslate" translate="no">
+                                row_access
+                              </span>
+                            </span>
+                            <label className="flex items-center gap-1 text-xs">
+                              <input
+                                type="radio"
+                                name={`role-row-access-${idx}`}
+                                checked={row.rowAccess === "all"}
+                                disabled={isReadOnlyTemplate}
+                                onChange={() => {
+                                  const next = [...form.selectors];
+                                  next[idx] = { ...row, rowAccess: "all", predicates: [] };
+                                  updateForm({ ...form, selectors: next });
+                                }}
+                              />
+                              全部行
+                              <span className="font-mono text-fg-muted notranslate" translate="no">
+                                all
+                              </span>
+                            </label>
+                            <label className="flex items-center gap-1 text-xs">
+                              <input
+                                type="radio"
+                                name={`role-row-access-${idx}`}
+                                checked={row.rowAccess === "scoped"}
+                                disabled={isReadOnlyTemplate}
+                                onChange={() => {
+                                  const next = [...form.selectors];
+                                  next[idx] = {
+                                    ...row,
+                                    rowAccess: "scoped",
+                                    predicates: row.predicates.length > 0 ? row.predicates : [{ ...EMPTY_PREDICATE }]
+                                  };
+                                  updateForm({ ...form, selectors: next });
+                                }}
+                              />
+                              限定行
+                              <span className="font-mono text-fg-muted notranslate" translate="no">
+                                scoped
+                              </span>
+                            </label>
+                          </div>
+                          {row.rowAccess === "scoped" ? (
+                            <div className="grid gap-2" data-testid={`role-row-policy-${idx + 1}`}>
+                              <p className="text-xs text-fg-muted">
+                                编辑
+                                <span className="mx-1 font-mono notranslate" translate="no">
+                                  row_policy
+                                </span>
+                                条件（op 仅
+                                <span className="mx-1 font-mono notranslate" translate="no">
+                                  eq
+                                </span>
+                                /
+                                <span className="mx-1 font-mono notranslate" translate="no">
+                                  in
+                                </span>
+                                ；字段须为行级列，禁止 measure）。Preview 显示 digest；本页不宣称取数已行级生效。
+                              </p>
+                              {row.predicates.map((pred, predIdx) => (
+                                <div
+                                  key={predIdx}
+                                  className="grid gap-2 rounded-md border border-border-subtle bg-bg-subtle p-2"
+                                  data-testid={`role-row-predicate-${idx + 1}-${predIdx + 1}`}
+                                >
+                                  <div className="grid grid-cols-[1fr_auto_1fr_auto] items-end gap-2">
+                                    <label className="grid gap-1">
+                                      <span className="text-xs text-fg-muted">字段</span>
+                                      <input
+                                        className="pl-input notranslate font-mono text-xs"
+                                        translate="no"
+                                        placeholder="region"
+                                        value={pred.field}
+                                        aria-label={`表范围 ${idx + 1} 条件 ${predIdx + 1} 字段`}
+                                        disabled={isReadOnlyTemplate}
+                                        onChange={(e) => {
+                                          const next = [...form.selectors];
+                                          const predicates = [...row.predicates];
+                                          predicates[predIdx] = { ...pred, field: e.target.value };
+                                          next[idx] = { ...row, predicates };
+                                          updateForm({ ...form, selectors: next });
+                                        }}
+                                      />
+                                    </label>
+                                    <label className="grid gap-1">
+                                      <span className="text-xs text-fg-muted">
+                                        <span className="notranslate" translate="no">
+                                          op
+                                        </span>
+                                      </span>
+                                      <select
+                                        className="pl-input notranslate"
+                                        translate="no"
+                                        value={pred.op}
+                                        aria-label={`表范围 ${idx + 1} 条件 ${predIdx + 1} op`}
+                                        disabled={isReadOnlyTemplate}
+                                        onChange={(e) => {
+                                          const op = e.target.value === "in" ? "in" : "eq";
+                                          const next = [...form.selectors];
+                                          const predicates = [...row.predicates];
+                                          predicates[predIdx] = {
+                                            ...pred,
+                                            op,
+                                            value: op === "eq" ? pred.value : "",
+                                            values: op === "in" ? pred.values : []
+                                          };
+                                          next[idx] = { ...row, predicates };
+                                          updateForm({ ...form, selectors: next });
+                                        }}
+                                      >
+                                        <option value="eq">eq</option>
+                                        <option value="in">in</option>
+                                      </select>
+                                    </label>
+                                    {pred.op === "eq" ? (
+                                      <label className="grid gap-1">
+                                        <span className="text-xs text-fg-muted">取值</span>
+                                        <input
+                                          className="pl-input notranslate font-mono text-xs"
+                                          translate="no"
+                                          placeholder="East"
+                                          value={pred.value}
+                                          aria-label={`表范围 ${idx + 1} 条件 ${predIdx + 1} 取值`}
+                                          disabled={isReadOnlyTemplate}
+                                          onChange={(e) => {
+                                            const next = [...form.selectors];
+                                            const predicates = [...row.predicates];
+                                            predicates[predIdx] = { ...pred, value: e.target.value };
+                                            next[idx] = { ...row, predicates };
+                                            updateForm({ ...form, selectors: next });
+                                          }}
+                                        />
+                                      </label>
+                                    ) : (
+                                      <div className="grid gap-1">
+                                        <span className="text-xs text-fg-muted">取值列表</span>
+                                        <TagInput
+                                          value={pred.values}
+                                          onChange={(values) => {
+                                            const next = [...form.selectors];
+                                            const predicates = [...row.predicates];
+                                            predicates[predIdx] = { ...pred, values };
+                                            next[idx] = { ...row, predicates };
+                                            updateForm({ ...form, selectors: next });
+                                          }}
+                                          placeholder="输入取值后回车"
+                                        />
+                                      </div>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="pl-btn pl-btn--ghost text-xs"
+                                      aria-label={`删除表范围 ${idx + 1} 条件 ${predIdx + 1}`}
+                                      disabled={isReadOnlyTemplate || row.predicates.length <= 1}
+                                      onClick={() => {
+                                        const next = [...form.selectors];
+                                        next[idx] = {
+                                          ...row,
+                                          predicates: row.predicates.filter((_, i) => i !== predIdx)
+                                        };
+                                        updateForm({ ...form, selectors: next });
+                                      }}
+                                    >
+                                      删除
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              <button
+                                type="button"
+                                className="pl-btn pl-btn--ghost text-xs justify-self-start"
+                                disabled={isReadOnlyTemplate}
+                                onClick={() => {
+                                  const next = [...form.selectors];
+                                  next[idx] = {
+                                    ...row,
+                                    predicates: [...row.predicates, { ...EMPTY_PREDICATE }]
+                                  };
+                                  updateForm({ ...form, selectors: next });
+                                }}
+                              >
+                                + 添加条件
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })}
@@ -1121,6 +1449,27 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                       </div>
                     ))}
                   </div>
+                </div>
+                <div className="grid gap-2" data-testid="capability-preview">
+                  <div className="text-sm font-medium">
+                    Data Capability Preview
+                    {detail.effectivePermissions?.capabilityDigest ? (
+                      <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
+                        digest={detail.effectivePermissions.capabilityDigest}
+                      </span>
+                    ) : null}
+                  </div>
+                  {(detail.effectivePermissions?.capabilities?.length ?? 0) === 0 ? (
+                    <p className="text-sm text-fg-muted">无 DataPlane capability。</p>
+                  ) : (
+                    <ul className="grid gap-1 font-mono text-xs">
+                      {detail.effectivePermissions!.capabilities!.map((cap) => (
+                        <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
+                          {cap.tool} × {cap.sourceKey} · rowGrant={formatRowGrantPreviewLabel(cap.rowGrant)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </>
             )}

@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Agent Admin Enterprise Delivery Spec |
 | 文档类型 | Product / UX Spec |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-07-27 |
+| 版本 | v0.4（AC-P1.5 契约补丁 / WO-61 WP-S1；Spec 100 Gate B 前不改 runtime） |
+| 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08；v0.3 2026-08-09；v0.4 2026-08-09 |
 | 适用范围 | Lucy WebUI 访问治理模块：`/admin/agents`、新建 Agent 弹窗、`/admin/agents/:userId`、Token 交付流 |
 | 事实源 | `webui/config/access.yaml`、Lucy MCP Proxy audit sqlite、Admin API |
 | 关联文档 | `docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md`、`docs/agent-integration-guide.md`、`docs/admin-guide.md`、`docs/project-overview.md` |
@@ -51,8 +51,8 @@
 ### 4.2 Out Of Scope
 
 - 新增登录或多管理员 RBAC。
-- 改造 Lucy MCP Proxy runtime ACL 裁决逻辑。
-- 列级、行级权限。
+- 改造 Lucy MCP Proxy runtime ACL 裁决逻辑的**实现**（语义以 Spec 98 为准；本 Spec 只约束 Admin 契约与展示；Gate B 前不改代码）。
+- **波次边界：** AC-P0 不交付列级权限 / scoped 编辑。**AC-P1** Row Policy 在 Role Admin（Spec 15 / Spec 99）；Agent Admin 对 rowGrant 仅 preview，禁止虚假「行级取数已生效」。**AC-P1.5** Agent Constraints 在 Agent Admin（§0.0a / Spec 100）；Role / Token 不承担 Constraints。不得写成「永不做行级」。
 - 保存或重新展示 token 明文。
 - 完整 revoked token history。若需要展示已撤销 token 历史，需另开后端聚合设计。
 
@@ -111,17 +111,15 @@
 
 目标行为：
 
-- 表单字段：用户 ID、显示名、备注、角色。
+- 表单字段：用户 ID、显示名、备注、**角色（AC-P0：Role Set / `roles[]`，至少选 1 个）**。
 - 主按钮文案调整为 `创建并预览配置` 或 `下一步：预览配置`。
-- 选择 role 后，在 role 下方展示权限即时卡片：
-  - 数据源数量：来自 `Role.sourceCount`。
-  - Connections：来自 `Role.connections`。
-  - MCP tools：来自 `Role.tools`，优先展示 `lucy_*`，兼容展示旧工具名。
-  - Role source：`yaml` 或 `template`。
-  - Warnings：`Role.warnings`。
+- 选择 role(s) 后，在下方展示**数据能力即时卡片**（术语：Data Capability Preview）：
+  - **主展示：** capability 元组列表（工具 × 规范源键；AC-P0 行授予恒为「全部行」/ TRUE）。多 Role 时展示**合成后**集合，禁止分别展示后再在前端做 tools∪×sources∪。
+  - 辅助统计（可选）：数据源数量、Connections、Role source（`yaml` / `template`）、Warnings。
+  - MCP tools 元信息工具可单独标注为 Meta；**不得**用「Allowed tools 一列 + 表树一列」作为**唯一**权限摘要。
 - 仍执行现有两段式写入：
-  1. `POST /api/admin/agents` with `dryRun:true`，显示 `access.yaml` diff。
-  2. 用户确认后 `dryRun:false` 保存。
+  1. `POST /api/admin/agents` with `dryRun:true`，显示 `access.yaml` diff（含将写入的 `roles`）。
+  2. 用户确认后 `dryRun:false` 保存；成功条件见 §0.3（`runtimeAck`）。
 - 创建成功后进入 token 交付路径：
   - v0.1 推荐：关闭 modal 后跳转详情页并高亮 Token tab / `生成新 Token`。
   - 可选：在同一流里继续弹出生成 token 表单，但必须是创建 Agent 成功之后的第二个 API 调用。
@@ -129,8 +127,10 @@
 验收：
 
 - invalid role 置灰或明确展示警告，不允许保存。
-- 创建 Agent 不接受 `allow` 字段。
+- 创建 Agent 不接受 `allow` 字段；写入 `roles`（或兼容单 `role` 展开为单元素数组）。
+- 权限卡片不得仅展示工具并集 + 表并集。
 - 使用 template role 创建后，落盘 YAML 展开为普通 role，不出现 `role-template`、`templateId` 等指针字段。
+- 保存成功 UI 仅在 `runtimeAck: true` 时出现。
 
 ### 5.3 Token 首秀交付
 
@@ -179,7 +179,7 @@ Tab：
 
 - 基本信息
 - Token
-- 权限预览 (Effective Tree)
+- 权限预览（Data Capability Preview；历史名 Effective Tree）
 - 变更预览 (Diff)
 
 #### 基本信息
@@ -190,7 +190,7 @@ Tab：
 - 显示名：可编辑。
 - 备注：可编辑。
 - 启用状态：toggle 或 checkbox。
-- 角色：select。
+- 角色：**Role Set 多选（`roles[]`）**；旁链「管理角色」→ `/admin/roles`。
 
 目标行为：
 
@@ -201,7 +201,7 @@ Tab：
   - `预览并保存`。
 - `预览并保存` 先调用 PATCH dryRun，成功后切到 Diff tab。
 - Diff tab 确认后才调用 `dryRun:false`。
-- 保存成功后清空 dirty 状态并刷新 Agent 数据。
+- 保存成功条件：响应含 `runtimeAck: true` 与 `policyVersion`；然后清空 dirty 状态并刷新 Agent 数据。否则展示失败原因，保持 dirty。
 
 #### Token
 
@@ -224,41 +224,44 @@ Tab：
 
 - 当前 YAML 删除 token 后只保留 revoked_tokens/audit 事实，不足以完整展示 revoked token history。本轮不承诺 revoked history，除非新增后端聚合 API。
 
-#### 权限预览 (Effective Tree)
+#### 权限预览 (Data Capability Preview)
 
 目标行为：
 
 - 使用 `agent.effectivePermissions` 或 `GET /api/admin/agents/:userId/effective-permissions`。
-- 渲染树：
-  - Connection
-  - Schema
-  - Source / table
-- 工具列表固定展示在树旁或树上方。
-- `legacyAllow`、role invalid、selector 0 source 等场景展示明确 warning。
+- **主渲染：capability 列表**（每行至少：tool、canonical source key 四元组、rowGrant；AC-P0 rowGrant 展示为「全部行」或省略为隐含 TRUE）。
+- 可按 connection / schema 分组折叠，但分组不得退化成「先并 tools、再并 sources」的两栏唯一视图。
+- Meta 工具可单独一区列出（无 source 绑定）。
+- `legacyAllow`、role invalid、selector 0 source、策略降级等场景展示明确 warning。
+- 展示当前 `policyVersion`（只读），与 Spec 07 审计字段同口径。
 
-示例：
+禁止：
+
+- 仅展示「Allowed tools」列表 + 表树、而不展示 tool×source 绑定关系。
+- 用 `(∪tools)×(∪sources)` 前端自行叉乘冒充合成结果。
+
+示例（示意）：
 
 ```text
-mysql-aliyun
-  dataforai
-    superstore_orders -> dataforai.superstore_orders
-    superstore_returns -> dataforai.superstore_returns
-
-Allowed tools:
+Capabilities:
+  lucy_query        × mysql-aliyun | dataforai | fact_fin | dataforai.fact_fin
+  lucy_query        × mysql-aliyun | dataforai | dim_account | dataforai.dim_account
+  lucy_read_source  × mysql-aliyun | dataforai | dim_vendor | dataforai.dim_vendor
+Meta tools:
   lucy_catalog
-  lucy_read_source
-  lucy_query
-  lucy_explain_query
+policyVersion: <hex>
 ```
 
 #### 变更预览 (Diff)
 
 目标行为：
 
-- 显示本次 patch 对 `webui/config/access.yaml` 的 YAML diff。
+- 显示本次 patch 对 `webui/config/access.yaml` 的 YAML diff（含 `roles` / 单 `role` 迁移为 `roles` 的变更）。
+- 若保存路径触发关联 Role 的 v1→v2 / `prefix`→`names` 展开，diff 中必须可见（或明确提示需先在 Role Admin 完成迁移）。
 - 无 diff 时提示先在其他 tab 编辑并预览。
 - 保存按钮只在已生成 diff 时出现。
 - 保持 version conflict 保护。
+- 确认保存后按 §0.3 解释 `runtimeAck`。
 
 ## 6. API 与数据约束
 
@@ -282,8 +285,9 @@ Allowed tools:
 - 不保存 token 明文。
 - 不复制历史 token 明文。
 - 不绕过 dryRun 写入 `access.yaml`。
-- 不新增第二套权限解析。
+- 不新增第二套权限解析（preview / effective-permissions 必须复用 Spec 98 同一合成器）。
 - 不读取 `.ktx/secrets`。
+- 保存成功 UI 依赖 `runtimeAck: true`；禁止「仅写盘成功」即提示权限已收窄。
 
 ## 7. 可访问性与交互细节
 
@@ -298,9 +302,9 @@ Allowed tools:
 前端测试：
 
 - AgentList：最近访问空态、复制 MCP 配置、日志跳转。
-- NewAgentModal：role 权限卡片、invalid role、dryRun -> confirm。
+- NewAgentModal：Role Set、capability 卡片（非双并集）、invalid role、dryRun -> confirm。
 - NewToken：一次性 token 明文、配置 tabs、复制配置。
-- AgentDetail：sticky 保存 bar、diff tab、Token list、Effective Tree。
+- AgentDetail：sticky 保存 bar、diff tab、Token list、Data Capability Preview、`runtimeAck` 成功路径。
 
 后端测试：
 
@@ -322,7 +326,7 @@ npm run build
 - UI 不出现 `最近访问 -` 类破折号空态。
 - 列表复制配置不包含历史明文 token。
 - Token 首秀配置包含本次生成的明文 token。
-- Agent 编辑必须经过 diff 预览才能保存。
-- Effective Permissions tree 能按 connection/schema/source 解释实际权限。
+- Agent 编辑必须经过 diff 预览才能保存；成功仅当 `runtimeAck: true`。
+- Data Capability Preview 按 tool × 规范源键解释实际权限；不得仅双并集。
 - 相关用户文档或管理员指南在后续文档 pass 中同步。
 

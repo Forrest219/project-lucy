@@ -12,9 +12,10 @@ roles:
             - superstore_returns
             - superstore_people
       tools:
-        - kx_catalog
-        - sl_query
-        - sl_read_source
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
         - wiki_search
         - wiki_read
         - connection_list
@@ -36,9 +37,14 @@ defaults:
     - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
-  known_tools:
     - sl_query
     - sl_read_source
+  known_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_catalog
+    - lucy_freshness
     - wiki_search
     - wiki_read
     - entity_details
@@ -46,14 +52,22 @@ defaults:
     - discover_data
     - connection_list
     - kx_catalog
+    - sl_query
+    - sl_read_source
+    - sl_validate
     - sql_execution
     - sql_dialect_notes
     - memory_ingest
     - memory_ingest_status
   table_touching_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_freshness
+    - entity_details
+    - sl_validate
     - sl_query
     - sl_read_source
-    - entity_details
   sensitive_metadata_tools:
     - dictionary_search
     - discover_data

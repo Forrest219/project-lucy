@@ -93,7 +93,7 @@ const ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三
@@ -106,7 +106,7 @@ users:
       tables:
         - dataforai.superstore_orders
       tools:
-        - sl_query
+        - lucy_query
   - id: lisi
     name: 李四
     enabled: false
@@ -433,7 +433,7 @@ describe("Access Governance Gate — Agent endpoints", () => {
           names:
             - kx_fact_financial_amount
       tools:
-        - sl_query
+        - lucy_query
   analyst:
     description: Analyst role
     allow:
@@ -445,7 +445,7 @@ describe("Access Governance Gate — Agent endpoints", () => {
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三
@@ -598,6 +598,277 @@ defaults:
       .delete("/api/admin/agents/zhangsan")
       .expect(200);
     expect(res.body.data.gate).toBeDefined();
+    await app.close();
+  });
+});
+
+const CONSTRAINTS_ACCESS_YAML = `roles:
+  ledger_all:
+    permission_model_version: 2
+    allow:
+      connections: [warehouse]
+      tableSelectors:
+        - connection: warehouse
+          schema: fin
+          names: [fin_ledger]
+          row_access: all
+      tools:
+        - lucy_query
+        - lucy_read_source
+users:
+  - id: alice
+    name: Alice
+    enabled: true
+    role: ledger_all
+    tokens: []
+defaults:
+  deny_tools: []
+`;
+
+const FIN_SCHEMA_YAML = `tables:
+  fin_ledger:
+    table: fin.fin_ledger
+    columns:
+      - name: region
+      - name: department
+`;
+
+const FIN_LEDGER_OVERLAY_YAML = `columns:
+  - name: region
+  - name: department
+measures:
+  - name: total_sales
+`;
+
+async function makeConstraintsProject() {
+  await rm(projectRoot, { recursive: true, force: true });
+  projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-admin-agents-constr-"));
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
+  await mkdir(path.join(projectRoot, "semantic-layer", "warehouse", "_schema"), { recursive: true });
+  await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), CONSTRAINTS_ACCESS_YAML, "utf8");
+  await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA_YAML, "utf8");
+  await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "fin_ledger.yaml"), FIN_LEDGER_OVERLAY_YAML, "utf8");
+}
+
+describe("AC-P1.5 Agent Admin constraints (WP-I4)", () => {
+  it("dryRun preview includes FinalRows digest / protected / constraints summary", async () => {
+    await makeConstraintsProject();
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .patch("/api/admin/agents/alice")
+      .send({
+        dryRun: true,
+        patch: {
+          constraints: {
+            sources: [
+              {
+                connection: "warehouse",
+                schema: "fin",
+                names: ["fin_ledger"],
+                predicates: [{ field: "region", op: "eq", value: "East" }]
+              }
+            ]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data.diff).toContain("constraints:");
+    const caps = res.body.data.effectivePermissions?.capabilities ?? [];
+    expect(caps.length).toBeGreaterThan(0);
+    const ledger = caps.find((cap: { sourceName: string }) => cap.sourceName === "fin_ledger");
+    expect(ledger).toBeTruthy();
+    expect(ledger.protected).toBe(true);
+    expect(ledger.finalRows).toMatchObject({ kind: "scoped", digest: expect.any(String) });
+    expect(ledger.constraintsSummary).toMatch(/region=East/);
+    expect(JSON.stringify(res.body.data)).not.toMatch(/行级取数已生效/);
+    await app.close();
+  });
+
+  it("saves legal constraints with runtimeAck and persists YAML", async () => {
+    await makeConstraintsProject();
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .patch("/api/admin/agents/alice")
+      .send({
+        dryRun: false,
+        patch: {
+          constraints: {
+            sources: [
+              {
+                connection: "warehouse",
+                schema: "fin",
+                names: ["fin_ledger"],
+                predicates: [{ field: "region", op: "in", values: ["East", "West"] }]
+              }
+            ]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data.runtimeAck).toBe(true);
+    expect(res.body.data.policyVersion).toBeTruthy();
+    expect(res.body.data.agent.constraints).toMatchObject({
+      sources: [
+        expect.objectContaining({
+          connection: "warehouse",
+          names: ["fin_ledger"]
+        })
+      ]
+    });
+    const raw = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(raw).toContain("constraints:");
+    expect(raw).toContain("region");
+    await app.close();
+  });
+
+  it("rejects illegal constraints before write (invalid op)", async () => {
+    await makeConstraintsProject();
+    const app = buildServer();
+    await app.ready();
+    const before = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    const res = await request(app.server)
+      .patch("/api/admin/agents/alice")
+      .send({
+        dryRun: false,
+        patch: {
+          constraints: {
+            sources: [
+              {
+                connection: "warehouse",
+                schema: "fin",
+                names: ["fin_ledger"],
+                predicates: [{ field: "region", op: "ne", value: "East" }]
+              }
+            ]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.ok).toBe(false);
+    expect(String(res.body.error?.code ?? "")).toMatch(/constraints_invalid_shape|row_policy_op_forbidden/);
+    const after = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(after).toBe(before);
+    await app.close();
+  });
+
+  it("dryRun rejects mixed valid+invalid constraints.names", async () => {
+    await makeConstraintsProject();
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .patch("/api/admin/agents/alice")
+      .send({
+        dryRun: true,
+        patch: {
+          constraints: {
+            sources: [
+              {
+                connection: "warehouse",
+                schema: "fin",
+                names: ["fin_ledger", "typo_or_unauthorized"],
+                predicates: [{ field: "region", op: "eq", value: "East" }]
+              }
+            ]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error?.code).toBe("constraints_source_not_in_capability");
+    await app.close();
+  });
+
+  it("rejects unsatisfiable constraints with final_rows_unsatisfiable", async () => {
+    await makeConstraintsProject();
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .patch("/api/admin/agents/alice")
+      .send({
+        dryRun: true,
+        patch: {
+          constraints: {
+            sources: [
+              {
+                connection: "warehouse",
+                schema: "fin",
+                names: ["fin_ledger"],
+                predicates: [
+                  { field: "region", op: "eq", value: "East" },
+                  { field: "region", op: "eq", value: "West" }
+                ]
+              }
+            ]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error?.code).toBe("final_rows_unsatisfiable");
+    await app.close();
+  });
+
+  it("GET returns constraints on agent detail", async () => {
+    await makeConstraintsProject();
+    const seeded = CONSTRAINTS_ACCESS_YAML.replace(
+      "tokens: []",
+      `tokens: []
+    constraints:
+      sources:
+        - connection: warehouse
+          schema: fin
+          names: [fin_ledger]
+          predicates:
+            - field: region
+              op: eq
+              value: East`
+    );
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), seeded, "utf8");
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents/alice").expect(200);
+    expect(res.body.data.agent.constraints?.sources?.[0]?.predicates?.[0]).toMatchObject({
+      field: "region",
+      op: "eq",
+      value: "East"
+    });
+    const cap = res.body.data.agent.effectivePermissions?.capabilities?.[0];
+    expect(cap?.finalRows?.kind).toBe("scoped");
+    expect(cap?.protected).toBe(true);
+    await app.close();
+  });
+
+  it("PATCH constraints:null clears Agent constraints with runtimeAck", async () => {
+    await makeConstraintsProject();
+    const seeded = CONSTRAINTS_ACCESS_YAML.replace(
+      "tokens: []",
+      `tokens: []
+    constraints:
+      sources:
+        - connection: warehouse
+          schema: fin
+          names: [fin_ledger]
+          predicates:
+            - field: region
+              op: eq
+              value: East`
+    );
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), seeded, "utf8");
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .patch("/api/admin/agents/alice")
+      .send({ dryRun: false, patch: { constraints: null } })
+      .expect(200);
+    expect(res.body.data.runtimeAck).toBe(true);
+    expect(res.body.data.agent.constraints).toBeUndefined();
+    const raw = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(raw).not.toContain("constraints:");
     await app.close();
   });
 });

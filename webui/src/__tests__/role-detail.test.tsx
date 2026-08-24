@@ -377,6 +377,180 @@ describe("RoleDetail", () => {
     expect(screen.getByText(/dataforai/)).toBeInTheDocument();
   });
 
+  it("Data Capability Preview shows scoped digest, not hardcoded TRUE", async () => {
+    stubSingleRole(
+      makeYamlRole({
+        effectivePermissions: {
+          roleIds: ["analyst"],
+          snapshotHash: "abc",
+          sourceMapVersion: "v1",
+          tools: ["lucy_query"],
+          connections: ["mysql-aliyun"],
+          sources: [
+            {
+              connectionId: "mysql-aliyun",
+              schema: "dataforai",
+              sourceName: "superstore_orders",
+              table: "dataforai.superstore_orders"
+            }
+          ],
+          legacyAllow: false,
+          capabilityDigest: "ae0a470dc0ca9931",
+          capabilities: [
+            {
+              tool: "lucy_query",
+              connectionId: "mysql-aliyun",
+              schema: "dataforai",
+              sourceName: "superstore_orders",
+              physicalTable: "dataforai.superstore_orders",
+              sourceKey: "mysql-aliyun|dataforai|superstore_orders|dataforai.superstore_orders",
+              rowGrant: {
+                kind: "scoped",
+                digest: "883501db707ba111",
+                predicates: [{ field: "region", op: "eq", value: "East" }]
+              }
+            }
+          ]
+        }
+      })
+    );
+    renderAt("/admin/roles/analyst");
+    fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
+    const preview = await screen.findByTestId("capability-preview");
+    expect(preview).toHaveTextContent("rowGrant=scoped:883501db707ba111 · region=East");
+    expect(preview.textContent ?? "").not.toMatch(/rowGrant=TRUE/);
+    expect(preview.textContent ?? "").not.toMatch(/行级已生效/);
+  });
+
+  it("loads scoped selectors into 行级策略 editor and round-trips on dryRun", async () => {
+    const scopedRole = makeYamlRole({
+      id: "scoped_east",
+      role: {
+        description: "Scoped east",
+        allow: {
+          connections: ["mysql-aliyun"],
+          tools: ["lucy_query"],
+          tableSelectors: [
+            {
+              connection: "mysql-aliyun",
+              schema: "dataforai",
+              names: ["superstore_orders"],
+              row_access: "scoped",
+              row_policy: {
+                predicates: [{ field: "region", op: "eq", value: "East" }]
+              }
+            }
+          ]
+        }
+      }
+    });
+    const fetchMock = stubCatalogApis(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/admin/roles/scoped_east" && !init) {
+        return new Response(JSON.stringify({ ok: true, data: scopedRole }));
+      }
+      if (url === "/api/admin/roles/scoped_east" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        if (body.dryRun) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: { diff: "+ row_access: scoped", proposedYaml: "yaml", version: "v-scoped" }
+            })
+          );
+        }
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), {
+        status: 404
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt("/admin/roles/scoped_east");
+    fireEvent.click(await screen.findByRole("button", { name: "权限配置" }));
+    const range = await screen.findByTestId("role-table-range-1");
+    expect(within(range).getByRole("radio", { name: /限定行/ })).toBeChecked();
+    expect(within(range).getByDisplayValue("region")).toBeInTheDocument();
+    expect(within(range).getByDisplayValue("East")).toBeInTheDocument();
+
+    fireEvent.change(within(range).getByLabelText(/表范围 1 条件 1 取值/), {
+      target: { value: "West" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: /预览并保存/ }));
+
+    await waitFor(() => {
+      const dryRunCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === true
+      );
+      expect(dryRunCall).toBeTruthy();
+      const body = JSON.parse(String((dryRunCall![1] as RequestInit).body));
+      const selector = body.patch.allow.tableSelectors[0];
+      expect(selector.row_access).toBe("scoped");
+      expect(selector.row_policy.predicates).toEqual([{ field: "region", op: "eq", value: "West" }]);
+    });
+  });
+
+  it("create flow can write scoped + row_policy via 行级策略 editor", async () => {
+    const fetchMock = stubCatalogApis(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/admin/roles" && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        if (body.dryRun) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                diff: "+ row_access: scoped",
+                proposedYaml: "roles:\n  scoped_new: {}\n"
+              }
+            })
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { written: true, role: makeYamlRole({ id: "scoped_new" }) }
+          })
+        );
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), {
+        status: 404
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt("/admin/roles/new");
+    fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "scoped_new" } });
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /lucy_query/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /mysql-aliyun/ }));
+    fireEvent.click(screen.getByRole("button", { name: "+ 添加表范围" }));
+    const range = await screen.findByTestId("role-table-range-1");
+    fireEvent.change(within(range).getByLabelText(/表范围 1 连接/), { target: { value: "mysql-aliyun" } });
+    fireEvent.change(within(range).getByLabelText(/表范围 1 Schema/), { target: { value: "dataforai" } });
+    fireEvent.click(await within(range).findByRole("checkbox", { name: /superstore_orders/ }));
+    fireEvent.click(within(range).getByRole("radio", { name: /限定行/ }));
+    fireEvent.change(within(range).getByLabelText(/表范围 1 条件 1 字段/), {
+      target: { value: "region" }
+    });
+    fireEvent.change(within(range).getByLabelText(/表范围 1 条件 1 取值/), {
+      target: { value: "East" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: /预览保存/ }));
+
+    await waitFor(() => {
+      const dryRunCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "POST" && JSON.parse(String(call[1].body)).dryRun === true
+      );
+      expect(dryRunCall).toBeTruthy();
+      const body = JSON.parse(String((dryRunCall![1] as RequestInit).body));
+      const selector = body.role.allow.tableSelectors[0];
+      expect(selector.row_access).toBe("scoped");
+      expect(selector.row_policy.predicates).toEqual([{ field: "region", op: "eq", value: "East" }]);
+      expect(selector.names).toContain("superstore_orders");
+    });
+  });
+
   it("M55: 生效边界 explains that allowed MCP tools filter tools/list and intercept tools/call", async () => {
     stubSingleRole(makeYamlRole());
     renderAt("/admin/roles/analyst");

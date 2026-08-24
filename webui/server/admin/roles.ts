@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
-import { previewRolePermissionsForAdmin, type EffectivePermissions } from "../proxy/acl.js";
+import {
+  expandSelectorSourceNames,
+  normalizePermissionModelVersion,
+  previewRolePermissionsForAdmin,
+  type EffectivePermissions
+} from "../proxy/acl.js";
+import { parseRowPolicyShape } from "../proxy/row-policy.js";
 import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   ACCESS_YAML_REL,
@@ -11,7 +17,11 @@ import {
   readAccessYamlVersion,
   writeAccessYaml,
   type YamlAccessConfig,
-  type YamlRole
+  type YamlPermissionModelVersion,
+  type YamlRole,
+  type YamlRowAccess,
+  type YamlRowPolicy,
+  type YamlTableSelector
 } from "./access-config.js";
 import {
   evaluateAccessGovernanceGate,
@@ -60,7 +70,17 @@ function effectivePermissionsToPreview(permissions: EffectivePermissions) {
     tools: permissions.tools,
     connections: permissions.connections,
     sources: permissions.sources,
-    legacyAllow: permissions.legacyAllow
+    legacyAllow: permissions.legacyAllow,
+    capabilityDigest: permissions.capabilityDigest,
+    capabilities: permissions.capabilities.map((capability) => ({
+      tool: capability.tool,
+      connectionId: capability.connectionId,
+      schema: capability.schema,
+      sourceName: capability.sourceName,
+      physicalTable: capability.physicalTable,
+      sourceKey: `${capability.connectionId}|${capability.schema}|${capability.sourceName}|${capability.physicalTable}`,
+      rowGrant: capability.rowGrant
+    }))
   };
 }
 
@@ -235,15 +255,23 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
   }
   const obj = role as Record<string, unknown>;
   for (const key of Object.keys(obj)) {
-    if (key !== "description" && key !== "allow") {
+    if (key !== "description" && key !== "allow" && key !== "permission_model_version") {
       return { ok: false, reason: `role.${key} is not allowed` };
     }
   }
   if (obj.description !== undefined && typeof obj.description !== "string") {
     return { ok: false, reason: "role.description must be a string" };
   }
+  const modelVersion = normalizePermissionModelVersion(obj);
+  if (!modelVersion.ok) {
+    return { ok: false, reason: "role.permission_model_version must be 1 or 2" };
+  }
+  const permissionModelVersion = modelVersion.assumed ? undefined : modelVersion.version;
   if (obj.allow === undefined) {
-    return { ok: true, value: { description: obj.description as string | undefined } };
+    return {
+      ok: true,
+      value: { description: obj.description as string | undefined, permission_model_version: permissionModelVersion }
+    };
   }
   if (!obj.allow || typeof obj.allow !== "object" || Array.isArray(obj.allow)) {
     return { ok: false, reason: "role.allow must be an object" };
@@ -272,7 +300,14 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
         return { ok: false, reason: "table selector must be an object" };
       }
       for (const key of Object.keys(raw)) {
-        if (key !== "connection" && key !== "schema" && key !== "names" && key !== "prefix") {
+        if (
+          key !== "connection"
+          && key !== "schema"
+          && key !== "names"
+          && key !== "prefix"
+          && key !== "row_access"
+          && key !== "row_policy"
+        ) {
           return { ok: false, reason: `table selector ${key} is not allowed` };
         }
       }
@@ -281,6 +316,31 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
       }
       if (typeof raw.schema !== "string" || !raw.schema.trim()) {
         return { ok: false, reason: "table selector schema is required" };
+      }
+      if (raw.row_access !== undefined && raw.row_access !== "all" && raw.row_access !== "scoped") {
+        return { ok: false, reason: "table selector row_access must be 'all' or 'scoped'" };
+      }
+      const rowAccess = raw.row_access as YamlRowAccess | undefined;
+      if (rowAccess !== "scoped" && raw.row_policy !== undefined) {
+        return { ok: false, reason: "table selector row_policy is only valid with row_access 'scoped'" };
+      }
+      // Spec 99 §7 — generation 1 (incl. missing version) has no scoped / row_policy.
+      if (
+        modelVersion.version === 1 &&
+        (rowAccess === "scoped" || raw.row_policy !== undefined)
+      ) {
+        return {
+          ok: false,
+          reason: "permission_model_version 1 forbids scoped/row_policy (v1_scoped_forbidden)"
+        };
+      }
+      let rowPolicy: YamlRowPolicy | undefined;
+      if (rowAccess === "scoped") {
+        const parsed = parseRowPolicyShape(raw.row_policy);
+        if (!parsed.ok) {
+          return { ok: false, reason: `table selector scoped requires valid row_policy (${parsed.reason})` };
+        }
+        rowPolicy = { predicates: parsed.predicates };
       }
       const hasNames = raw.names !== undefined;
       const hasPrefix = raw.prefix !== undefined;
@@ -297,7 +357,9 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
         built.push({
           connection: typeof raw.connection === "string" ? raw.connection.trim() || undefined : undefined,
           schema: raw.schema.trim(),
-          names: (raw.names as string[]).map((item) => item.trim()).filter(Boolean)
+          names: (raw.names as string[]).map((item) => item.trim()).filter(Boolean),
+          row_access: rowAccess,
+          row_policy: rowPolicy
         });
       } else {
         if (typeof raw.prefix !== "string" || !raw.prefix.trim()) {
@@ -306,7 +368,9 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
         built.push({
           connection: typeof raw.connection === "string" ? raw.connection.trim() || undefined : undefined,
           schema: raw.schema.trim(),
-          prefix: (raw.prefix as string).trim()
+          prefix: (raw.prefix as string).trim(),
+          row_access: rowAccess,
+          row_policy: rowPolicy
         });
       }
     }
@@ -335,6 +399,7 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     ok: true,
     value: {
       description: obj.description as string | undefined,
+      permission_model_version: permissionModelVersion,
       allow: {
         connections,
         tableSelectors,
@@ -344,11 +409,107 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
   };
 }
 
+export interface RoleMigration {
+  fromVersion: YamlPermissionModelVersion;
+  toVersion: 2;
+  /** True when the stored shape actually changes (version bump / row_access / prefix). */
+  changed: boolean;
+  expandedPrefixes: Array<{ prefix: string; names: string[] }>;
+}
+
+/**
+ * Spec 98 §7 / ADR-AC-04 — every Admin write persists generation 2:
+ * explicit `row_access: all` per selector and `prefix` expanded to concrete
+ * `names` against the current source map. A prefix that expands to 0 sources
+ * fails the save rather than silently narrowing the Role.
+ */
+export async function migrateRoleToV2(
+  role: YamlRole
+): Promise<{ ok: true; value: YamlRole; migration: RoleMigration } | { ok: false; reason: string }> {
+  const before = normalizePermissionModelVersion(role);
+  if (!before.ok) return { ok: false, reason: "role.permission_model_version must be 1 or 2" };
+
+  const selectors = role.allow?.tableSelectors;
+  const expandedPrefixes: RoleMigration["expandedPrefixes"] = [];
+  let selectorsChanged = false;
+  let nextSelectors: YamlTableSelector[] | undefined;
+
+  if (selectors) {
+    nextSelectors = [];
+    for (const selector of selectors) {
+      if (selector.row_access === "scoped") {
+        const parsed = parseRowPolicyShape(selector.row_policy);
+        if (!parsed.ok) {
+          return {
+            ok: false,
+            reason: `table selector row_access 'scoped' requires valid row_policy (${parsed.reason})`
+          };
+        }
+        if ("prefix" in selector && selector.prefix !== undefined) {
+          const names = await expandSelectorSourceNames(selector);
+          if (names.length === 0) {
+            return { ok: false, reason: `table selector prefix '${selector.prefix}' expands to 0 source` };
+          }
+          expandedPrefixes.push({ prefix: selector.prefix, names });
+          nextSelectors.push({
+            connection: selector.connection,
+            schema: selector.schema,
+            names,
+            row_access: "scoped",
+            row_policy: { predicates: parsed.predicates }
+          });
+          selectorsChanged = true;
+          continue;
+        }
+        nextSelectors.push({
+          ...selector,
+          row_access: "scoped",
+          row_policy: { predicates: parsed.predicates }
+        });
+        continue;
+      }
+      if (selector.row_policy !== undefined) {
+        return { ok: false, reason: "table selector row_policy is only valid with row_access 'scoped'" };
+      }
+      if ("prefix" in selector && selector.prefix !== undefined) {
+        const names = await expandSelectorSourceNames(selector);
+        if (names.length === 0) {
+          return { ok: false, reason: `table selector prefix '${selector.prefix}' expands to 0 source` };
+        }
+        expandedPrefixes.push({ prefix: selector.prefix, names });
+        nextSelectors.push({ connection: selector.connection, schema: selector.schema, names, row_access: "all" });
+        selectorsChanged = true;
+        continue;
+      }
+      if (selector.row_access !== "all") selectorsChanged = true;
+      nextSelectors.push({ ...selector, row_access: "all" });
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...role,
+      permission_model_version: 2,
+      allow: role.allow ? { ...role.allow, tableSelectors: nextSelectors } : role.allow
+    },
+    migration: {
+      fromVersion: before.version,
+      toVersion: 2,
+      changed: selectorsChanged || before.assumed || before.version !== 2,
+      expandedPrefixes
+    }
+  };
+}
+
 async function resolveRoleForWrite(
   roleId: string,
   role: YamlRole,
   options: { allowTemplateId?: boolean } = {}
-): Promise<{ ok: true } | { ok: false; code: string; message: string; status: number }> {
+): Promise<
+  { ok: true; value: YamlRole; migration: RoleMigration }
+  | { ok: false; code: string; message: string; status: number }
+> {
   if (!ROLE_ID_RE.test(roleId)) {
     return {
       ok: false,
@@ -364,14 +525,18 @@ async function resolveRoleForWrite(
   if (!options.allowTemplateId && ROLE_TEMPLATES[roleId]) {
     return { ok: false, code: "ROLE_ID_TAKEN", message: `role id '${roleId}' conflicts with built-in template`, status: 409 };
   }
-  const resolved = await previewRolePermissionsForAdmin(roleId, { role: shape.value });
+  const migrated = await migrateRoleToV2(shape.value);
+  if (!migrated.ok) {
+    return { ok: false, code: "INVALID_ROLE", message: migrated.reason, status: 400 };
+  }
+  const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated.value });
   if (!resolved.ok) {
     return { ok: false, code: "INVALID_ROLE", message: resolved.reason, status: 400 };
   }
-  if (resolved.permissions.sources.length === 0 && (shape.value.allow?.tableSelectors?.length ?? 0) > 0) {
+  if (resolved.permissions.sources.length === 0 && (migrated.value.allow?.tableSelectors?.length ?? 0) > 0) {
     return { ok: false, code: "INVALID_ROLE", message: "role resolves to 0 source", status: 400 };
   }
-  return { ok: true };
+  return { ok: true, value: migrated.value, migration: migrated.migration };
 }
 
 export function registerRoleRoutes(app: FastifyInstance) {
@@ -493,15 +658,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (config.roles?.[roleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
     }
-    const shape = validateRoleShape(role);
-    if (!shape.ok) {
-      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: shape.reason } });
-    }
     const newConfig: YamlAccessConfig = {
       ...config,
       roles: {
         ...(config.roles ?? {}),
-        [roleId]: shape.value
+        [roleId]: validated.value
       }
     };
     // re-stringify via the same stringify used by write
@@ -513,12 +674,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
       targetKind: "role",
       targetId: roleId,
       oldRole: undefined,
-      newRole: shape.value
+      newRole: validated.value
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate } };
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration } };
     }
 
     if (gate.decision === "block") {
@@ -551,12 +712,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "role_create",
       targetId: roleId,
       oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
-      newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: shape.value.description },
+      newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: validated.value.description },
       diff,
       requestId: request.id,
       source: "admin_roles_api"
@@ -573,6 +734,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
       data: {
         written: true,
         version: detail.version,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
         gate,
         role: {
           ...summary,
@@ -638,13 +801,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
     }
-    const shape = validateRoleShape(next);
-    if (!shape.ok) {
-      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: shape.reason } });
-    }
     const newConfig: YamlAccessConfig = {
       ...config,
-      roles: { ...(config.roles ?? {}), [request.params.roleId]: shape.value }
+      roles: { ...(config.roles ?? {}), [request.params.roleId]: validated.value }
     };
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
@@ -654,12 +813,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
       targetKind: "role",
       targetId: request.params.roleId,
       oldRole: existing,
-      newRole: shape.value
+      newRole: validated.value
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate } };
+      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate, migration: validated.migration } };
     }
 
     if (gate.decision === "block") {
@@ -692,18 +851,27 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "role_patch",
       targetId: request.params.roleId,
       oldSummary: { description: existing.description, allow: existing.allow },
-      newSummary: { description: shape.value.description, allow: shape.value.allow },
+      newSummary: { description: validated.value.description, allow: validated.value.allow },
       diff,
       requestId: request.id,
       source: "admin_roles_api"
     });
     const detail = await readAccessYaml(projectRoot);
-    return { ok: true, data: { written: true, version: detail.version, gate } };
+    return {
+      ok: true,
+      data: {
+        written: true,
+        version: detail.version,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
+        gate
+      }
+    };
   });
 
   // DELETE /api/admin/roles/:roleId — delete yaml role, blocked if in use
@@ -792,7 +960,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       }
 
-      await writeAccessYaml(projectRoot, newConfig, {
+      const writeResult = await writeAccessYaml(projectRoot, newConfig, {
         enabled: true,
         changeType: "role_delete",
         targetId: request.params.roleId,
@@ -802,7 +970,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
         requestId: request.id,
         source: "admin_roles_api"
       });
-      return { ok: true, data: { written: true, version: (await readAccessYaml(projectRoot)).version, gate } };
+      return {
+        ok: true,
+        data: {
+          written: true,
+          version: (await readAccessYaml(projectRoot)).version,
+          policyVersion: writeResult.policyVersion,
+          runtimeAck: writeResult.runtimeAck,
+          gate
+        }
+      };
     }
   );
 
@@ -841,13 +1018,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (config.roles?.[newRoleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${newRoleId}' already exists` } });
     }
-    const shape = validateRoleShape(clonedRole);
-    if (!shape.ok) {
-      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: shape.reason } });
-    }
     const newConfig: YamlAccessConfig = {
       ...config,
-      roles: { ...(config.roles ?? {}), [newRoleId]: shape.value }
+      roles: { ...(config.roles ?? {}), [newRoleId]: validated.value }
     };
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
@@ -859,12 +1032,12 @@ export function registerRoleRoutes(app: FastifyInstance) {
       targetKind: "role",
       targetId: newRoleId,
       oldRole: source.role,
-      newRole: shape.value
+      newRole: validated.value
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate } };
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration } };
     }
 
     if (gate.decision === "block") {
@@ -897,7 +1070,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
-    await writeAccessYaml(projectRoot, newConfig, {
+    const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
       changeType: "role_create",
       targetId: newRoleId,
@@ -919,6 +1092,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
       data: {
         written: true,
         version: detail.version,
+        policyVersion: writeResult.policyVersion,
+        runtimeAck: writeResult.runtimeAck,
         gate,
         role: {
           ...summary,

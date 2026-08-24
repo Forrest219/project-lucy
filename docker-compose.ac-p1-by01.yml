@@ -1,0 +1,17 @@
+# AC-P1 BY-01 integration UAT override.
+# Usage:
+#   LUCY_DEMO_WEBUI_HOST_PORT=55176 \
+#   LUCY_DEMO_PROXY_HOST_PORT=57881 \
+#   LUCY_DEMO_MYSQL_HOST_PORT=53306 \
+#   docker compose -f docker-compose.demo.yml \
+#     -f docker-compose.gate-c-uat.yml \
+#     -f docker-compose.ac-p1-by01.yml \
+#     -p lucy-ac-p1-by01 up -d --build
+#
+# TEMPORARY: proven=true only for BY-01 rowset sampling. Turn off after evidence.
+services:
+  lucy:
+    environment:
+      LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN: "true"
+      KTX_VERSION: "0.16.0"
+      POSTHOG_DISABLED: "1"
