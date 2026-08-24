@@ -4,16 +4,23 @@
 |---|---|
 | 文档名称 | Trace / Evidence Kernel API Spec |
 | 文档类型 | Architecture / API / Data Contract Spec |
-| 版本 | v0.4 |
-| 撰写日期 | 2026-08-03；v0.2 更新 2026-08-03（补充 SQLite 并发与测试数据库隔离要求）；v0.3 更新 2026-08-03（补充 retention、auto_vacuum 与热库数据黑白名单）；v0.4 更新 2026-08-03（对齐 202608 Governance & Observability 主线） |
+| 版本 | v0.5.1 |
+| 撰写日期 | 2026-08-03；v0.2 更新 2026-08-03（补充 SQLite 并发与测试数据库隔离要求）；v0.3 更新 2026-08-03（补充 retention、auto_vacuum 与热库数据黑白名单）；v0.4 更新 2026-08-03（对齐 202608 Governance & Observability 主线）；v0.5 更新 2026-08-20（钉死 P0 最低充分条件、Implementation Status、Kernel Landed / P0 Closed 两档验收；明确 AC-P0 `policyVersion` 不进本 P0）；v0.5.1 更新 2026-08-20（增补与完整性 P0 / IP0 关系小节；交叉引用 `docs/access-control/integrity-p0-decision.md`） |
 | 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
-| 关联工单 | `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md` |
+| 关联完整性口径 | `docs/access-control/integrity-p0-decision.md` |
+| 关联 P0 计划 | `docs/plans/2026-08-20-trace-evidence-p0-plan.md` |
+| 关联工单 | `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`（Kernel Landed）；P0 Closure 见上述 P0 计划 T2–T4 |
 | 适用范围 | append-only trace / evidence event store、MCP Proxy 基础写入、ACL policy decision trace、Admin Audit Trace read model、Access Governance Gate 与 Security Eval 共用数据契约 |
 
 ## 1. Background
 
-Lucy 已有 `access_log`、`access_log_sources`、`conversation_turns`、`inferred_turns` 等审计与问题追踪能力，但 202608 Governance & Observability 主线需要把这些能力收敛成统一 `Trace / Evidence Kernel`。本 spec 不废弃既有审计表，而是新增一套 append-only event contract，让 MCP Proxy、Access Governance Gate、Security Eval、Admin Observability 和 Release Readiness Evidence Package 能写入或引用同一语义。
+Trace / Evidence **不是**访问日志 UI 换皮（「审计 2.0 皮肤」），而是 Lucy 从「有访问控制与访问日志的 MCP」升级为「可解释、可复核、可门禁的企业 data agent 平台」的 **最低充分条件**。
+
+- **没有它**：权限系统有裁决，但无案卷；有运营，但无答辩；有发布，但无统一证据。
+- **有了它**：每一次 allow / deny 都能钉到身份、策略版本、触达范围与结果规模，且不把敏感业务数据二次落库。
+
+Lucy 已有 `access_log`、`access_log_sources`、`conversation_turns`、`inferred_turns`、`permission_snapshots` 等审计与问题追踪能力。本 spec **不废弃**既有审计表，而是新增一套 append-only event contract，让 MCP Proxy、Access Governance Gate、Security Eval、Admin Observability 和 Release Readiness Evidence Package 能写入或引用同一语义。`access_log` 仍是调用流水事实源；Trace / Evidence 是其上的统一证据层。
 
 ## 2. Goals
 
@@ -22,6 +29,7 @@ Lucy 已有 `access_log`、`access_log_sources`、`conversation_turns`、`inferr
 3. MCP Proxy 在 `tools/call`、policy decision、error / denied 路径写入基础 trace event。
 4. 事件只存 hash / metadata；不默认保存原始结果样本。
 5. 提供非浏览器自检脚本证明事件不可覆盖、policy decision 可追溯。
+6. 在 `/admin/audit` 提供只读 Trace Read Model，使管理员能从访问日志行进入有序 Span、策略裁决与 Evidence Ref。
 
 ## 3. Non-goals
 
@@ -30,10 +38,110 @@ Lucy 已有 `access_log`、`access_log_sources`、`conversation_turns`、`inferr
 - 不替代现有 `access_log` 查询页面。
 - 不引入 Kafka、OpenTelemetry collector 或外部 Event Store。
 - 不改变 MCP Proxy ACL 判定结果。
+- 不实施 Access Control AC-P0 的 `policyVersion` / capability digest（见 `docs/access-control/plans/wo-202608-59-access-control-p0.md`）；本 P0 以 `permissionSnapshotHash` 作为策略可解释绑定。
+- 不把 P1 Access Governance Gate、Safe Log-to-Security-Eval、Admin Observability Dashboard，或 P2 Risk Review / Release Readiness Evidence Package 计入本 Spec 的 P0 Closed 条件（它们可消费 Kernel，但不是本 P0 Done 条件）。
+- 不对齐「完整性 P0」全集（IP0-3 / IP0-4 等）为本 Spec 的 P0 Closed 条件；完整性扩展口径见 §4.1 与 `docs/access-control/integrity-p0-decision.md`。
+- 已知限制与对外不得口头扩大的清单以完整性决策备忘 §2 为准（含：不保证 100% 原话、不托管 Agent 最终自然语言答案、默认不存明文全量 SQL、无行/列级 RLS、无 SSO 作为完整性底线前置、无完整 Visual Debugger）。
 
-## 4. Data Contract
+## 4. P0 Minimum Sufficient Condition
 
-### 4.1 `trace_events`
+P0 MVP = **Governance Evidence Kernel**，三件套不可拆：
+
+1. **Trace / Evidence Kernel** — append-only `trace_events` / `evidence_events` + helper。
+2. **ACL Policy Decision Trace** — 每次业务 `tools/call` 的 allow / deny → `policy_decision` + evidence。
+3. **Admin Audit Trace Read Model** — `/admin/audit` 只读链式核查（非 Visual Debugger）。
+
+一次 allow / deny 必须能钉到以下五元组，且敏感业务数据不二次落库：
+
+| 钉点 | P0 必须落什么 |
+|---|---|
+| 身份 | `actor` / `userId` + `tokenHashPrefix`（无明文 Token） |
+| 策略版本 | `permissionSnapshotHash`（+ `roleIds`）；**不要求** `policyVersion` |
+| 触达范围 | `decision_reason`、tools / tables / sources refs、`effectiveTablesCount` |
+| 结果规模 | `access_log` 的 `response_*`；Trace 侧在已知行 / 列数时写 `result_snapshot_hash` |
+| 不二次落库 | hot-store 黑名单：结果行 / SQL AST 原文 / 完整问题 / Token / 凭据 / 客户样本 |
+
+Join keys（必须可互查）：
+
+```text
+access_log.trace_id  ↔  trace_events.trace_id  ↔  turn_id / request_id
+```
+
+可选证据关联：`evidence_events` 可引用 `access_log` 行、`permission_snapshots` hash、source / semantic 节点 ref。
+
+```mermaid
+flowchart LR
+  mcp["MCP tools/call"] --> acl["ACL check"]
+  acl --> accessLog["access_log + snapshot"]
+  acl --> kernel["trace_events + evidence_events"]
+  accessLog --> join["trace_id join"]
+  kernel --> join
+  join --> auditUI["Admin Audit Trace Read Model"]
+```
+
+### 4.1 与完整性 P0（IP0）关系
+
+权威决策备忘：[`docs/access-control/integrity-p0-decision.md`](../../docs/access-control/integrity-p0-decision.md)。
+
+| 口径 | 主张 | 本 Spec 角色 |
+|---|---|---|
+| **工程 P0（GOV-01）** | Trace / Evidence 三件套 + 本 Spec 的 Kernel Landed / P0 Closed | **本文件范围** |
+| **完整性 P0（IP0）** | 对外宣称「访问可完整答辩」时的承诺最小集；**扩展且不替代**工程 P0 | 本文件只覆盖其中的 **IP0-1**，并承载部分契约钩子 |
+
+完整性判别链（决策备忘）：
+
+```text
+问了什么 → 谁问的 → 凭什么查 → 实际怎么查 → 触达什么 → 规模如何
+```
+
+与本 Spec / Closure 的映射：
+
+| IP0 | 能力 | 与本 Spec | 本任务是否计入 P0 Closed |
+|---|---|---|---|
+| **IP0-1** | Trace / Evidence 内核 + Admin 证据链 | **等同**本 Spec 工程 P0（含 Closure T2–T4） | **是** |
+| **IP0-2** | 问询稳定绑定 + 覆盖率披露 | Join keys 已含 `turn_id`；漏报不阻断查询。覆盖率指标 / 完整性报告披露为可选增强，不改变 MCP 语义 | **否**（契约已具备；覆盖率指标另增补，不阻塞本 Spec Closed） |
+| **IP0-3** | 受控查询指纹（hash + 脱敏结构预览 + 触达源清单） | 热库白名单已允许 AST hash / 脱敏结构 metadata；可预留 evidence kind（如 `query_fingerprint`）。**默认不存明文全量 SQL** | **否**（须另批实现 Spec + WO；不得写成已交付） |
+| **IP0-4** | 授权集合 ↔ 实际触达对账 | 依赖 IP0-3 或等价上游可观测契约；Closure 的 source / `semantic_yaml_node` evidence 仅为弱前驱 | **否**（须另批；可预留 `warn` / `denied_by` 对账 evidence） |
+| **IP0-5** | 配置变更可答辩 | 允许 evidence 引用 `config_change_log`；高危门禁属工程 P1 | **否**（挂钩允许；Gate 不进本 Closed） |
+| **IP0-6** | 对外口径固化 | 售前 / 发布材料引用决策备忘 §1–§2 | **否**（流程项） |
+
+依赖顺序（摘自决策备忘，实施时不得颠倒）：
+
+```text
+IP0-1 Trace/Evidence          ← 本 Spec（地基）
+    ├─ IP0-5 变更证据挂钩
+    ├─ IP0-2 问询绑定 + 覆盖率
+    └─ IP0-3 查询指纹 / 结构预览
+         └─ IP0-4 授权 ↔ 触达对账
+IP0-6 口径表随发布冻结
+```
+
+**对外口径硬约束：** 仅完成工程 P0（本 Spec）**不得**单独对外宣称已满足完整性 P0 全集。完整性承诺表与已知限制表以决策备忘 §1–§2 为准。
+
+## 5. Implementation Status（相对仓库现状）
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| Schema + helper（`writeTraceEvent` / `writeEvidenceEvents` / `listTraceEvents` / `hashArtifact`） | Implemented | `webui/server/trace/evidence.ts` |
+| WAL、`busyTimeout: 5000`、新库 `auto_vacuum = INCREMENTAL` | Implemented | |
+| Retention 常量 `365 / 500000 / 1GiB` | Implemented | |
+| MCP `tools/call` → `mcp_tools_call` + `policy_decision` + `access_policy` evidence | Implemented | best-effort；失败不打断 MCP |
+| Admin `GET /api/admin/trace/events` + Audit Trace Drawer | Implemented | |
+| Hot-store payload blacklist / sanitize | Implemented | |
+| Self-validation `webui/scripts/verify-202608-trace-evidence.mjs` | Implemented | |
+| `result_snapshot_hash` evidence（已知行 / 列数时） | Implemented | P0 Closure |
+| `semantic_yaml_node` / source evidence（有 `access_log_sources` 时） | Implemented | P0 Closure |
+| Retention purge / archive worker + 引用保护 + `incremental_vacuum` | Implemented | `purgeTraceEvidence`；Proxy 采样懒触发 |
+| Admin Trace UI 术语对齐标准（中文主术语 + `translate="no"`） | Implemented | P0 Closure |
+| `mcp_initialize` / `mcp_tools_list` spans | Deferred | 类型已有；**非** P0 Closed 阻塞项 |
+| AC-P0 `policyVersion` | Out of scope | 见 Non-goals |
+
+**Kernel Landed** = 上表 Implemented 行全部成立。  
+**P0 Closed** = Kernel Landed + 全部 P0 Closure（Missing / Partial 中标为 P0 Closure 的项）完成。
+
+## 6. Data Contract
+
+### 6.1 `trace_events`
 
 ```sql
 CREATE TABLE IF NOT EXISTS trace_events (
@@ -63,7 +171,7 @@ Indexes:
 - `idx_trace_events_turn` on `(turn_id, created_at)`
 - `idx_trace_events_type_status` on `(span_type, status, created_at)`
 
-### 4.2 `evidence_events`
+### 6.2 `evidence_events`
 
 ```sql
 CREATE TABLE IF NOT EXISTS evidence_events (
@@ -91,7 +199,7 @@ CREATE TABLE IF NOT EXISTS evidence_events (
 - `reviewer_override`
 - `promoted`
 
-### 4.3 TypeScript Contract
+### 6.3 TypeScript Contract
 
 ```ts
 export type LucySpanType =
@@ -108,7 +216,7 @@ export type LucySpanType =
   | "copilot_candidate";
 ```
 
-## 5. Storage Decision
+## 7. Storage Decision
 
 MVP 使用现有 `.ktx-ui/audit.sqlite`，开启 WAL。不得新建第二套审计数据库。若未来迁移到独立 event store，迁移必须保持 event append-only 语义。
 
@@ -126,6 +234,11 @@ Retention rule:
 - `max_rows`、`max_bytes` 任一先到即触发归档 / purge / incremental vacuum。
 - Purge 必须先按时间和容量选择候选事件，再保留 reviewer / override evidence 的可追溯摘要。
 - Purge 不能删除仍被 active release、formal Eval Case 或 reviewer decision 引用的 evidence，除非已有归档证明。
+
+**P0 分档：**
+
+- **Kernel Landed**：retention 常量暴露于代码 / 配置，自检断言默认值。
+- **P0 Closed**：实现 purge / archive worker，含引用保护与 purge 后 `PRAGMA incremental_vacuum(N)`。
 
 SQLite 并发约束：
 
@@ -153,7 +266,7 @@ Hot store data boundary:
 | redacted metadata | 客户行级样本 |
 | SQL AST hash / normalized summary / redacted structural metadata | SQL AST 原文 |
 
-## 6. API And Helper Surface
+## 8. API And Helper Surface
 
 Create `webui/server/trace/evidence.ts`:
 
@@ -163,25 +276,36 @@ Create `webui/server/trace/evidence.ts`:
 - `listTraceEvents(filter)`
 - `hashArtifact(value)`
 
-Optional admin API:
+Admin read API（只读）：
 
-- `GET /api/trace/events?traceId=<id>`
-- `GET /api/trace/events?turnId=<id>`
+- `GET /api/admin/trace/events?traceId=<id>`
+- `GET /api/admin/trace/events?turnId=<id>`
 
-The admin API is read-only in MVP.
+（历史草案中的 `/api/trace/events` 路径以已落地的 `/api/admin/trace/events` 为准。）
 
-## 7. MCP Proxy Integration
+## 9. MCP Proxy Integration
 
 `webui/server/proxy/mcp-proxy.ts` must write:
 
-- `mcp_tools_call` span for each `tools/call`.
+### 9.1 Kernel Landed（必达，已落地）
+
+- `mcp_tools_call` span for each business `tools/call`.
 - `policy_decision` event when ACL allows / denies / warns.
-- Evidence refs for `access_policy`, `semantic_yaml_node` when already available through `access_log_sources`.
-- `result_snapshot_hash` metadata only when response row / column count is known.
+- Evidence refs for `access_policy`（permission snapshot hash + reason / matchedRule metadata）.
+- Failure to write trace must not break MCP request handling, but must be logged server-side and counted by self-validation / ops metrics.
 
-Failure to write trace must not break MCP request handling, but must be logged server-side and counted by self-validation script.
+### 9.2 P0 Closure（P0 Closed 前必做）
 
-## 8. Safety Rules
+- Evidence refs for `semantic_yaml_node`（或等价 source kind）when already available through `access_log_sources`.
+- `result_snapshot_hash` evidence / artifact metadata only when response row / column count is known（hash of bounded size summary，不得写入行内容）.
+
+### 9.3 Non-blocking for P0 Closed
+
+- `mcp_initialize` / `mcp_tools_list` spans（类型已在 union 中；可后续补写）.
+
+Denied P0 paths that must remain representable as policy decision events include：`tool_forbidden_global`、`table_forbidden:*`、`raw_query_forbidden`、`unknown_or_forbidden_connection:*`、`sensitive_metadata_forbidden:*`.
+
+## 10. Safety Rules
 
 - Do not store token plaintext.
 - Do not store full result rows by default.
@@ -189,7 +313,9 @@ Failure to write trace must not break MCP request handling, but must be logged s
 - Do not update event rows except SQLite internal indexes; correction uses new `superseded` or `reviewer_override` event.
 - Do not expose raw args containing secrets through `metadata_json`.
 
-## 9. Acceptance Criteria
+## 11. Acceptance Criteria
+
+### 11.1 Kernel Landed
 
 - Schema migration is idempotent.
 - WAL mode is enabled.
@@ -201,14 +327,25 @@ Failure to write trace must not break MCP request handling, but must be logged s
 - Default retention parameters are exposed through code constants or config with `365 / 500000 / 1073741824` defaults.
 - New temp DB self-validation proves `PRAGMA auto_vacuum = INCREMENTAL`.
 - Hot store blacklisted payloads are rejected or hashed before write.
+- Admin Audit can open Trace Detail from a resolvable `traceId` / `turnId` / `requestId` without mutating events.
 
-## 10. Self-validation Script
+### 11.2 P0 Closed（在 11.1 之上）
 
-The work order must create:
+- When row / column counts are known, Trace carries `result_snapshot_hash` evidence（no row payloads）.
+- When `access_log_sources` (or equivalent) is available for the call, Trace carries source / `semantic_yaml_node` evidence refs.
+- Retention purge / archive worker runs against retention limits, preserves referenced reviewer / override / formal-eval evidence (or archives first), and may call `incremental_vacuum`.
+- Admin Trace Read Model UI 主术语与 `webui/docs/00-product-terminology-standard.md` §4.7 Trace 子表一致；专业英文术语节点带 `translate="no"` + `notranslate`.
+- Terminology lint passes for touched UI / docs.
+
+## 12. Self-validation Script
+
+The work order created:
 
 ```text
-scripts/verify-202608-trace-evidence.mjs
+webui/scripts/verify-202608-trace-evidence.mjs
 ```
+
+（根目录 `scripts/verify-202608-trace-evidence.mjs` 若存在则为兼容跳转；以 `webui/scripts/` 为准。）
 
 The script must:
 
@@ -223,13 +360,33 @@ The script must:
 9. Assert new DB setup uses `PRAGMA auto_vacuum = INCREMENTAL`.
 10. Assert raw SQL AST, raw token, raw result row, and full question payload are rejected or absent.
 
-## 11. Terminology Compliance
+P0 Closure 追加验证（随 T2–T3 落地扩展 verifier 或独立测试）：
 
-This feature follows `webui/docs/00-product-terminology-standard.md`.
+- Proxy / helper path writes `result_snapshot_hash` when size meta present.
+- Purge respects retention caps and referenced-evidence protection.
 
-New terms:
+## 13. Terminology Compliance
 
-- `Trace Event`: append-only event row for a platform operation span.
-- `Evidence Event`: append-only evidence ref attached to a trace.
+This feature follows `webui/docs/00-product-terminology-standard.md`（§4.7 Trace Read Model 子表）。
 
-Protected terms: `Trace`、`Evidence`、`Agent`、`MCP`、`KTX`、`Eval`、`SQL AST`、`Token`、`access.yaml`、`semantic-layer`。
+New / registered terms:
+
+| Canonical Term | UI 主术语 | 说明 |
+|---|---|---|
+| Trace Detail | Trace 详情 / 核查链路 | `/admin/audit` 内只读 Drawer / 面板 |
+| Trace Event | Trace Event | append-only span 行 |
+| Evidence Event | Evidence Event | 挂在 Trace 上的证据行 |
+| Evidence Ref | Evidence Ref | 证据引用（kind + ref + hash） |
+| Ordered Spans | 有序 Span | Trace 详情内按时间 / 父子排序的 span 列表 |
+| Policy Decision | 策略裁决 | `policy_decision` span；与「裁决原因」（Decision Reason 展示）区分 |
+
+**消歧（禁止混用）：**
+
+| 概念 | 含义 | 不得称为 |
+|---|---|---|
+| Kernel Evidence（本 Spec） | Trace / Evidence 热库中的证据事件 | Action Evidence、发布证据包 |
+| Action Evidence | 运维待办「证据来源」（Spec 100） | Trace Evidence |
+| Release Readiness Evidence Package | P2 统一发布证据包 | Trace Detail |
+| Access Governance Gate | P1 访问治理门禁 | 发布门禁（Publish Workbench）或 Eval 质量门禁 |
+
+Protected terms: `Trace`、`Evidence`、`Span`、`Agent`、`MCP`、`KTX`、`Eval`、`SQL AST`、`Token`、`access.yaml`、`semantic-layer`、`trace_id`。

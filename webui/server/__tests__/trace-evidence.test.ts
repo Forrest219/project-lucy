@@ -12,6 +12,7 @@ import {
   hashArtifact,
   listTraceEvents,
   prepareTraceDatabase,
+  purgeTraceEvidence,
   recordMcpToolsCall,
   writeEvidenceEvents,
   writeTraceEvent
@@ -310,5 +311,191 @@ describe("trace/evidence — hashArtifact", () => {
   it("accepts Buffer input", () => {
     const hex = hashArtifact(Buffer.from("lucy-buffer", "utf8"));
     expect(hex).toMatch(/^[a-f0-9]{32}$/);
+  });
+});
+
+describe("trace/evidence — P0 Closure evidence completeness", () => {
+  let db: Database.Database;
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    ({ db, cleanup } = createTempDb());
+    ensureTraceEvidenceSchema(db);
+  });
+  afterEach(() => cleanup());
+
+  it("writes result_snapshot_hash when row/column counts are known", () => {
+    recordMcpToolsCall(db, {
+      traceId: "trace-result",
+      spanId: "span-result",
+      actorId: "agent-1",
+      toolName: "lucy_query",
+      startedAt: "2026-08-03T00:00:00.000Z",
+      endedAt: "2026-08-03T00:00:01.000Z",
+      status: "ok",
+      policyDecision: {
+        allowed: true,
+        toolName: "lucy_query",
+        source: "access_policy",
+        permissionSnapshotHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      resultSnapshot: {
+        rowCount: 12,
+        columnCount: 4,
+        responseBytes: 2048,
+        truncated: false
+      }
+    });
+    const { evidence } = listTraceEvents(db, { traceId: "trace-result" });
+    const resultEv = evidence.find((item) => item.evidenceKind === "result_snapshot_hash");
+    expect(resultEv).toBeTruthy();
+    expect(resultEv?.relation).toBe("observed");
+    expect(resultEv?.evidenceHash).toMatch(/^[a-f0-9]{32}$/);
+    expect(resultEv?.metadata).toMatchObject({ rowCount: 12, columnCount: 4, responseBytes: 2048 });
+  });
+
+  it("skips result_snapshot_hash when size meta is absent", () => {
+    recordMcpToolsCall(db, {
+      traceId: "trace-no-result",
+      spanId: "span-no-result",
+      actorId: "agent-1",
+      toolName: "lucy_query",
+      startedAt: "2026-08-03T00:00:00.000Z",
+      endedAt: "2026-08-03T00:00:01.000Z",
+      status: "ok",
+      policyDecision: { allowed: true, toolName: "lucy_query", source: "access_policy" },
+      resultSnapshot: { responseBytes: 100 }
+    });
+    const { evidence } = listTraceEvents(db, { traceId: "trace-no-result" });
+    expect(evidence.some((item) => item.evidenceKind === "result_snapshot_hash")).toBe(false);
+  });
+
+  it("writes semantic_yaml_node evidence for source refs", () => {
+    recordMcpToolsCall(db, {
+      traceId: "trace-sources",
+      spanId: "span-sources",
+      actorId: "agent-1",
+      toolName: "lucy_query",
+      startedAt: "2026-08-03T00:00:00.000Z",
+      endedAt: "2026-08-03T00:00:01.000Z",
+      status: "ok",
+      policyDecision: { allowed: true, toolName: "lucy_query", source: "access_policy" },
+      sourceRefs: [
+        {
+          connectionId: "dataforai",
+          schema: "public",
+          sourceName: "superstore_orders",
+          physicalTable: "dataforai.superstore_orders",
+          confidence: "high"
+        },
+        {
+          connectionId: "dataforai",
+          schema: "public",
+          sourceName: "superstore_orders",
+          physicalTable: "dataforai.superstore_orders",
+          confidence: "high"
+        }
+      ]
+    });
+    const { evidence } = listTraceEvents(db, { traceId: "trace-sources" });
+    const sourceEv = evidence.filter((item) => item.evidenceKind === "semantic_yaml_node");
+    expect(sourceEv).toHaveLength(1);
+    expect(sourceEv[0]?.evidenceRef).toBe("dataforai/public/superstore_orders");
+    expect(sourceEv[0]?.relation).toBe("used");
+    expect(sourceEv[0]?.metadata).toMatchObject({
+      physicalTable: "dataforai.superstore_orders",
+      sourceName: "superstore_orders"
+    });
+  });
+});
+
+describe("trace/evidence — retention purge", () => {
+  let db: Database.Database;
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    ({ db, cleanup } = createTempDb());
+    ensureTraceEvidenceSchema(db);
+  });
+  afterEach(() => cleanup());
+
+  it("purges aged traces but preserves reviewer_override / promoted evidence traces", () => {
+    const oldTs = "2020-01-01T00:00:00.000Z";
+    writeTraceEvent(db, {
+      traceId: "trace-old",
+      spanId: "span-old",
+      spanType: "mcp_tools_call",
+      actorKind: "agent",
+      actorId: "a1",
+      status: "ok",
+      startedAt: oldTs
+    });
+    db.prepare(`UPDATE trace_events SET created_at = ? WHERE trace_id = ?`).run(oldTs, "trace-old");
+
+    writeTraceEvent(db, {
+      traceId: "trace-protected",
+      spanId: "span-prot",
+      spanType: "publish_gate",
+      actorKind: "admin",
+      actorId: "admin-1",
+      status: "ok",
+      startedAt: oldTs
+    });
+    db.prepare(`UPDATE trace_events SET created_at = ? WHERE trace_id = ?`).run(oldTs, "trace-protected");
+    writeEvidenceEvents(db, [
+      {
+        traceId: "trace-protected",
+        evidenceKind: "access_policy",
+        evidenceRef: "override-1",
+        relation: "reviewer_override",
+        metadata: { note: "keep" }
+      }
+    ]);
+    db.prepare(`UPDATE evidence_events SET created_at = ? WHERE trace_id = ?`).run(oldTs, "trace-protected");
+
+    writeTraceEvent(db, {
+      traceId: "trace-fresh",
+      spanId: "span-fresh",
+      spanType: "mcp_tools_call",
+      actorKind: "agent",
+      actorId: "a1",
+      status: "ok",
+      startedAt: new Date().toISOString()
+    });
+
+    const result = purgeTraceEvidence(db, {
+      now: new Date("2026-08-20T00:00:00.000Z"),
+      retentionDays: 30,
+      incrementalVacuumPages: 8
+    });
+    expect(result.deletedTraceEvents).toBeGreaterThan(0);
+    expect(result.protectedTraceCount).toBeGreaterThanOrEqual(1);
+
+    const remaining = db
+      .prepare(`SELECT DISTINCT trace_id AS id FROM trace_events ORDER BY id`)
+      .all() as Array<{ id: string }>;
+    const ids = remaining.map((row) => row.id);
+    expect(ids).toContain("trace-protected");
+    expect(ids).toContain("trace-fresh");
+    expect(ids).not.toContain("trace-old");
+  });
+
+  it("is a noop when under retention caps", () => {
+    writeTraceEvent(db, {
+      traceId: "trace-recent",
+      spanId: "span-recent",
+      spanType: "mcp_tools_call",
+      actorKind: "agent",
+      actorId: "a1",
+      status: "ok",
+      startedAt: new Date().toISOString()
+    });
+    const result = purgeTraceEvidence(db, {
+      now: new Date(),
+      retentionDays: 365,
+      maxRows: 500_000
+    });
+    expect(result.reason).toBe("noop");
+    expect(result.deletedTraceEvents).toBe(0);
   });
 });

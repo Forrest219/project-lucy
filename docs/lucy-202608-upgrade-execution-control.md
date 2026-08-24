@@ -4,9 +4,9 @@
 |---|---|
 | Document name | Lucy 202608 Enterprise Governance & Observability Execution Control |
 | Document type | Master Plan / Execution Control |
-| Version | v0.6 |
-| Written date | 2026-08-03；v0.3 更新 2026-08-03（收窄 202608 为访问治理与可观测性迭代，移出 FDE Copilot 与通用 Static Lint / Reindex）；v0.4 更新 2026-08-03（删除 Dynamic RLS / CLS POC active task，P2 收敛为只读风险复核与统一发布证据包）；v0.5 更新 2026-08-03（修正 Trace / Gate verifier 路径与 runner 口径）；v0.6 更新 2026-08-03（将 GOV-02 拆为 Dashboard 专项 work order，显式声明 GOV-04 为 P1 Active 缺口并允许 GOV-02 / GOV-04 并行启动） |
-| Source | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` v0.5 |
+| Version | v0.7 |
+| Written date | 2026-08-03；v0.3 更新 2026-08-03（收窄 202608 为访问治理与可观测性迭代，移出 FDE Copilot 与通用 Static Lint / Reindex）；v0.4 更新 2026-08-03（删除 Dynamic RLS / CLS POC active task，P2 收敛为只读风险复核与统一发布证据包）；v0.5 更新 2026-08-03（修正 Trace / Gate verifier 路径与 runner 口径）；v0.6 更新 2026-08-03（将 GOV-02 拆为 Dashboard 专项 work order，显式声明 GOV-04 为 P1 Active 缺口并允许 GOV-02 / GOV-04 并行启动）；v0.7 更新 2026-08-20（GOV-01 Kernel Landed；P0 Closure 指向 `docs/plans/2026-08-20-trace-evidence-p0-plan.md`） |
+| Source | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` v0.6 |
 | Scope | 202608 governance / observability specs, execution waves, minimax handoff, verification matrix |
 
 ---
@@ -32,7 +32,7 @@ Deferred out of 202608:
 
 | Wave | Order | Parallel | Content | Dependency | Completion condition |
 |---|---:|---|---|---|---|
-| A | 1 | No | P0 Trace / Evidence Kernel + ACL policy decision trace | Frozen v0.4 spec | append-only store, policy decision events, SQLite safety, P0 self-validation pass |
+| A | 1 | No | P0 Trace / Evidence Kernel + ACL policy decision trace | Spec 62 v0.5 | **Kernel Landed**；P0 Closed 见 Closure plan T2–T4 |
 | B | 2 | Yes | Admin Audit Trace read model；Tiered Access Governance Gate；Safe Log-to-Security-Eval | Wave A event contract | read model can inspect evidence; gate writes events; security candidates are isolated |
 | C | 3 | Yes | Admin Observability Dashboard | Wave A/B governance events | dashboard aggregates governance signals |
 | D | 4 | No | Agent / Role Risk Review Candidates；Release Readiness Evidence Package；cross-wave review | A-C | release readiness evidence produced, non-browser verification pass |
@@ -41,7 +41,7 @@ Deferred out of 202608:
 
 | ID | Spec | Plan / Task | Owner mode | Status | Notes |
 |---|---|---|---|---|---|
-| 202608-GOV-01 | `webui/docs/62-trace-evidence-kernel-spec.md` | `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md` | minimax backend agent | Ready for execution | P0 serial foundation |
+| 202608-GOV-01 | `webui/docs/62-trace-evidence-kernel-spec.md` v0.5.1 | Kernel WO: `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`；P0 Closure: `docs/plans/2026-08-20-trace-evidence-p0-plan.md` | minimax backend agent | **P0 Closed** | Foundation + Closure（evidence 完整度 / purge / Trace UI 术语）已落地 |
 | 202608-GOV-02 | `webui/docs/69-admin-governance-observability-spec.md` | `webui/docs/plans/wo-202608-GOV-02-admin-governance-observability-dashboard.md` | minimax admin observability agent | Ready for execution | Dashboard aggregation only (GOV-02 专项 work order; trace read model / risk review / release package 已完成，本单不要重做) |
 | 202608-GOV-03 | `webui/docs/64-tiered-publish-gate-spec.md` | `webui/docs/plans/wo-202608-03-tiered-publish-gate.md` | minimax governance gate agent | Ready after GOV-01 | Access Governance Gate, not generic publish gate |
 | 202608-GOV-04 | `webui/docs/65-safe-log-to-eval-spec.md` | `webui/docs/plans/wo-202608-04-safe-log-to-eval.md` | minimax security eval agent | Ready for execution | Safe Log-to-Security-Eval only; **no implementation exists yet** — minimax 必须从零实现并补 verifier |
@@ -60,12 +60,14 @@ Parallel-start note (v0.6)：
 
 Execution handoff rule:
 
-- Give minimax the matching Work Order for GOV-01 / GOV-03 / GOV-04.
+- GOV-01 Kernel 已落地；后续 P0 Closure（T2–T4）以 `docs/plans/2026-08-20-trace-evidence-p0-plan.md` + Spec 62 v0.5 §11.2 为准，不要重做 append-only schema / 基础 helper。
+- Give minimax the matching Work Order for GOV-03 / GOV-04（GOV-01 仅在领取 Closure 任务时使用上述 P0 plan）。
 - For GOV-02, use `webui/docs/plans/wo-202608-GOV-02-admin-governance-observability-dashboard.md`（**Dashboard 专项**，已与 Trace Detail / Risk Review / Release Package 拆分）。**不要**让 GOV-02 重做 Trace Detail Drawer、`/api/admin/governance/risk-review`、`/api/admin/governance/release-readiness-package`。
 - For GOV-04, use `webui/docs/plans/wo-202608-04-safe-log-to-eval.md`；该工单**当前没有实现**，minimax 必须从零补齐 `server/eval/security-candidates.ts`、测试、`scripts/verify-202608-safe-log-to-security-eval.mjs` 与 `/api/eval/security-candidates*` 五个路由。
 - For GOV-06, use `docs/plans/wo-202608-06-governance-review-release-evidence.md` plus `webui/docs/69-admin-governance-observability-spec.md`.
 - Do not hand minimax Deferred work orders unless the product owner explicitly reopens them.
 - GOV-02 与 GOV-04 可以并行执行：两者文件边界互不重叠（见 §4 File Ownership）；不要在并行时把对方的文件一起改。
+- AC-P0 `policyVersion`（`docs/access-control/plans/wo-202608-59-access-control-p0.md`）**不是** GOV-01 / Trace P0 Closure 范围。
 
 ## 4. File Ownership
 
@@ -102,7 +104,7 @@ Execution handoff rule:
 
 | ID | Required self-validation |
 |---|---|
-| 202608-GOV-01 | `cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__tests__/trace-evidence.test.ts server/__tests__/mcp-proxy-trace.test.ts`；`cd /Users/zhangxingchen/Projects/project-lucy && node webui/scripts/verify-202608-trace-evidence.mjs` |
+| 202608-GOV-01 | `cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__tests__/trace-evidence.test.ts server/__tests__/mcp-proxy-trace.test.ts server/__tests__/admin-trace-events.test.ts src/__tests__/admin-audit-trace-drawer.test.tsx src/__tests__/admin-audit-trace-link.test.tsx`；`cd /Users/zhangxingchen/Projects/project-lucy && node webui/scripts/verify-202608-trace-evidence.mjs`；P0 Closure 另见 `docs/plans/2026-08-20-trace-evidence-p0-plan.md` 验证节 |
 | 202608-GOV-02 | `cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__tests__/admin-trace-events.test.ts src/__tests__/admin-trace-events.test.tsx server/__tests__/admin-governance-observability.test.ts src/__tests__/admin-governance-observability.test.tsx`；`cd /Users/zhangxingchen/Projects/project-lucy/webui && npm run lint:terminology && npm run lint:ia-boundary`。**不做浏览器验证。** |
 | 202608-GOV-03 | `cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__tests__/access-governance-gate.test.ts server/__tests__/admin-roles.test.ts server/__tests__/admin-agents.test.ts server/__tests__/admin-tokens.test.ts`；`cd /Users/zhangxingchen/Projects/project-lucy/webui && npm run verify:gate -- --strict` |
 | 202608-GOV-04 | `cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__tests__/security-eval-candidates.test.ts src/__tests__/security-eval-candidates.test.tsx`；`cd /Users/zhangxingchen/Projects/project-lucy && node scripts/verify-202608-safe-log-to-security-eval.mjs`；`cd /Users/zhangxingchen/Projects/project-lucy && npm run lint:terminology`。**不做浏览器验证。** |
