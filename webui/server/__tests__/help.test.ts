@@ -522,6 +522,56 @@ describe("Help handbook", () => {
     expect(byTitle["KTX 官方延伸阅读"]).toBe("ktx-further-reading");
   });
 
+  it("maps admin audit hot/cold store sub-section to a stable alias id", () => {
+    const toc = parseHelpToc(
+      [
+        "### 3.5 访问治理 Admin",
+        "",
+        "#### 审计热库与冷库（SQL 留存边界）",
+        "",
+        "### 3.6 质量评测 Eval"
+      ].join("\n")
+    );
+    const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
+    expect(byTitle["3.5 访问治理 Admin"]).toBe("admin-governance");
+    expect(byTitle["审计热库与冷库（SQL 留存边界）"]).toBe("admin-audit-hot-cold-store");
+    expect(byTitle["3.6 质量评测 Eval"]).toBe("eval");
+    expect(toc).toEqual(
+      expect.arrayContaining([
+        {
+          id: "admin-audit-hot-cold-store",
+          level: 4,
+          title: "审计热库与冷库（SQL 留存边界）"
+        }
+      ])
+    );
+  });
+
+  it("the bundled handbook documents audit hot/cold store and SQL retention boundaries", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toContain("#### 审计热库与冷库（SQL 留存边界）");
+    expect(handbook.markdown).toContain("/help?section=admin-audit-hot-cold-store");
+    expect(handbook.markdown).toContain("query_hash");
+    expect(handbook.markdown).toContain("query_preview");
+    expect(handbook.markdown).toMatch(/哈希.*加密|加密.*哈希/u);
+    expect(handbook.markdown).toContain("为什么 `/admin/audit` 看不到完整 `SQL`？");
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        { id: "admin-governance", level: 3, title: "3.5 访问治理 Admin" },
+        {
+          id: "admin-audit-hot-cold-store",
+          level: 4,
+          title: "审计热库与冷库（SQL 留存边界）"
+        }
+      ])
+    );
+  });
+
   it("maps FAQ §6.10–6.14 semantic query troubleshooting to stable alias ids", () => {
     const toc = parseHelpToc(
       [
