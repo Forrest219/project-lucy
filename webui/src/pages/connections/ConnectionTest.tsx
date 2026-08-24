@@ -94,8 +94,8 @@ export function ConnectionTest() {
 
       <section className="pl-panel">
         {connections.length === 0 && (
-          <div className="pl-empty-state">
-            暂无连接配置。请先在 <Link to="/connections">连接概览</Link> 添加连接。
+          <div className="pl-empty-state" data-testid="connection-test-empty">
+            暂无连接配置。请先在 <Link to="/connections">连接概览</Link> 新建连接。
           </div>
         )}
 

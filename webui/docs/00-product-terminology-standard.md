@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 Spec 124 增补 Create Connection / 连接 ID / 数据库密码 / 密码文件引用 / 新建预览术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -130,6 +130,11 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
 | Connection | 连接 | 数据库连接 | 链接、联接 | 数据库连接配置对象 |
+| Create Connection | 新建连接 | — | 新建链接、添加联接、创建数据源（作主按钮） | 在 WebUI 创建 `ktx.yaml` 连接配置（Spec 124）；持久密码仅为 `file:` 引用 |
+| Connection ID | 连接 ID | — | 连接名（作主标签）、Connection Name（作主标签） | `connections.<id>` 键 |
+| Connection Password | 数据库密码 | — | 密钥、Token（作连接表单主标签） | 仅新建表单一次性输入；写入后不可回显（Spec 124） |
+| Password File Reference | 密码文件引用 | — | 明文密码（配置态主标签） | `ktx.yaml` 中 `password: file:…` |
+| Connection Create Preview | 新建预览 | — | — | dryRun：脱敏 diff + 将写入的 secret 相对路径（Spec 124） |
 | Connection Test | 连通测试 | 按钮可用“测试连接” | 替代测试 | 验证凭据、网络、驱动配置是否可用 |
 | Connection Health Summary | 连通健康 | 健康摘要 | 数据库健康度（作主标签）、DB Health | `/connections` 卡右侧摘要（Spec 108） |
 | Connectivity Probe | 连通探测 | 进页探测 | 心跳、Ping（作主标签） | 打开连接概览时自动 `connection test` |
@@ -243,6 +248,11 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Canonical Term | UI 主术语 | 禁止文案 | 说明 |
 |---|---|---|---|
 | Connection Overview | 连接概览 | 连接总览混用 | 数据库接入主工作台 |
+| Create Connection | 新建连接 | 新建链接、添加联接、创建数据源（作主按钮） | `/connections` 创建连接配置；非「添加 Schema」（Spec 124） |
+| Connection ID | 连接 ID | 连接名（作主标签） | `connections.<id>` 键；受标识符规则约束 |
+| Connection Password | 数据库密码 | 密钥、Token（作主标签） | 新建表单一次性输入；写入 `.ktx/secrets/<id>-password` 后不可回显 |
+| Password File Reference | 密码文件引用 | 明文密码（配置态） | `password: file:…`；API 只暴露 `passwordSource` |
+| Connection Create Preview | 新建预览 | — | dryRun 脱敏 diff 与 secret 路径预告 |
 | Table Whitelist | 启用表范围 | 白表、表白、表白名单（主导航禁用） | `enabled_tables` 的 UI 管理入口 |
 | Add Schema | 添加 Schema | 添加架构、添加模式 | 向连接配置追加 Schema |
 | Target Schema | 目标 Schema | 目标架构、目标模式 | 上传或添加流程中的目标 Schema |
@@ -311,6 +321,7 @@ Connection (连接)
 | 能力 | 数据接入 | 语义建模 | 语义资产交付 |
 |---|---|---|---|
 | 查看 Connection | Owner | Consumer | Consumer |
+| 新建连接（含一次性密码落盘） | Owner | 不负责 | 不负责 |
 | 添加 Schema 到 `ktx.yaml` | Owner | 不负责 | 不负责 |
 | 连通测试 | Owner | 不负责 | 不负责 |
 | 启用表范围 / `enabled_tables` | Owner | Consumer | Consumer |

@@ -1,0 +1,260 @@
+// @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CreateConnectionDrawer } from "../components/CreateConnectionDrawer";
+
+const toastMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn()
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: toastMocks.success,
+    error: toastMocks.error
+  }
+}));
+
+function renderDrawer(existingIds: string[] = [], onClose = vi.fn()) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <CreateConnectionDrawer open onClose={onClose} existingIds={existingIds} />
+    </QueryClientProvider>
+  );
+  return { client, onClose };
+}
+
+function fillRequiredFields(overrides: Partial<Record<string, string>> = {}) {
+  const values = {
+    id: "demo-mysql",
+    host: "127.0.0.1",
+    port: "3306",
+    database: "analytics",
+    username: "lucy_ro",
+    password: "s3cret",
+    ...overrides
+  };
+  fireEvent.change(screen.getByTestId("create-connection-id"), { target: { value: values.id } });
+  fireEvent.change(screen.getByTestId("create-connection-host"), { target: { value: values.host } });
+  fireEvent.change(screen.getByTestId("create-connection-port"), { target: { value: values.port } });
+  fireEvent.change(screen.getByTestId("create-connection-database"), {
+    target: { value: values.database }
+  });
+  fireEvent.change(screen.getByTestId("create-connection-username"), {
+    target: { value: values.username }
+  });
+  fireEvent.change(screen.getByTestId("create-connection-password"), {
+    target: { value: values.password }
+  });
+}
+
+function stubFetch(handlers: Record<string, (body: unknown) => Response>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      let body: unknown = undefined;
+      if (typeof init?.body === "string") {
+        try {
+          body = JSON.parse(init.body);
+        } catch {
+          body = init.body;
+        }
+      }
+      const key = `${method} ${url}`;
+      const handler =
+        handlers[key] ??
+        handlers[url] ??
+        handlers[`${method} ${url.replace(/^http:\/\/[^/]+/, "")}`];
+      if (!handler) {
+        return new Response(
+          JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: key } }),
+          { status: 404 }
+        );
+      }
+      return handler(body);
+    })
+  );
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  toastMocks.success.mockReset();
+  toastMocks.error.mockReset();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("CreateConnectionDrawer", () => {
+  it("blocks preview until required fields are filled", () => {
+    renderDrawer();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    expect(screen.getByText("连接 ID 为必填项")).toBeInTheDocument();
+    expect(screen.getByText("host 为必填项")).toBeInTheDocument();
+    expect(screen.getByText("数据库密码为必填项")).toBeInTheDocument();
+  });
+
+  it("rejects a duplicate connection id client-side", () => {
+    renderDrawer(["demo-mysql"]);
+    fillRequiredFields({ id: "demo-mysql" });
+    fireEvent.blur(screen.getByTestId("create-connection-id"));
+    expect(screen.getByText("连接 ID 已存在")).toBeInTheDocument();
+  });
+
+  it("defaults postgres port when switching driver", () => {
+    renderDrawer();
+    expect(screen.getByTestId("create-connection-port")).toHaveValue("3306");
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "postgres" }
+    });
+    expect(screen.getByTestId("create-connection-port")).toHaveValue("5432");
+  });
+
+  it("shows dryRun preview without sending password, then confirms create", async () => {
+    const bodies: unknown[] = [];
+    stubFetch({
+      "POST /api/connections": (body) => {
+        bodies.push(body);
+        const payload = body as { dryRun?: boolean; password?: string; id?: string };
+        if (payload.dryRun === false) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                written: true,
+                secretRelPath: ".ktx/secrets/demo-mysql-password",
+                connection: {
+                  id: "demo-mysql",
+                  driver: "mysql",
+                  schemas: [],
+                  enabledTables: []
+                },
+                test: { status: "ok", durationMs: 12 }
+              }
+            })
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              diff: "@@ -0,0 +1 @@\n+  demo-mysql:\n+    password: file:.ktx/secrets/demo-mysql-password\n",
+              proposedYaml: "connections:\n  demo-mysql:\n    password: file:.ktx/secrets/demo-mysql-password\n",
+              secretRelPath: ".ktx/secrets/demo-mysql-password",
+              connection: {
+                id: "demo-mysql",
+                driver: "mysql",
+                schemas: [],
+                enabledTables: []
+              }
+            }
+          })
+        );
+      }
+    });
+
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-confirm-btn")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/file:\.ktx\/secrets\/demo-mysql-password/)).toBeInTheDocument();
+    expect(screen.getByText(".ktx/secrets/demo-mysql-password")).toBeInTheDocument();
+    expect(bodies[0]).toMatchObject({ dryRun: true, id: "demo-mysql" });
+    expect(bodies[0]).not.toHaveProperty("password");
+
+    fireEvent.click(screen.getByTestId("create-connection-confirm-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-success")).toBeInTheDocument();
+    });
+    expect(bodies[1]).toMatchObject({
+      dryRun: false,
+      id: "demo-mysql",
+      password: "s3cret"
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("连接已创建：demo-mysql");
+  });
+
+  it("maps CONNECTION_ALREADY_EXISTS on dryRun", async () => {
+    stubFetch({
+      "POST /api/connections": () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "CONNECTION_ALREADY_EXISTS", message: "exists" }
+          }),
+          { status: 409 }
+        )
+    });
+
+    renderDrawer();
+    fillRequiredFields({ id: "other-mysql" });
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-error")).toHaveTextContent("连接 ID 已存在");
+    });
+    expect(toastMocks.error).toHaveBeenCalledWith("连接 ID 已存在");
+    expect(screen.queryByTestId("create-connection-confirm-btn")).not.toBeInTheDocument();
+  });
+
+  it("returns to preview with rollback copy when connection test fails", async () => {
+    stubFetch({
+      "POST /api/connections": (body) => {
+        if ((body as { dryRun?: boolean }).dryRun === false) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: {
+                code: "CONNECTION_TEST_FAILED",
+                message: "ktx connection test failed"
+              }
+            }),
+            { status: 400 }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              diff: "+ demo-mysql\n",
+              proposedYaml: "connections: {}\n",
+              secretRelPath: ".ktx/secrets/demo-mysql-password",
+              connection: {
+                id: "demo-mysql",
+                driver: "mysql",
+                schemas: [],
+                enabledTables: []
+              }
+            }
+          })
+        );
+      }
+    });
+
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    await waitFor(() => screen.getByTestId("create-connection-confirm-btn"));
+    fireEvent.click(screen.getByTestId("create-connection-confirm-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-error")).toHaveTextContent(
+        /已回滚连接配置与密码文件/
+      );
+    });
+    expect(screen.getByTestId("create-connection-confirm-btn")).toBeInTheDocument();
+  });
+});

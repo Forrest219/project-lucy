@@ -1,5 +1,7 @@
 # Database Connection Operations Runbook Spec
 
+> **产品边界更新（Spec 124 · 2026-08-24）**：WebUI **新建连接**设计见 `webui/docs/124-connection-create-admin-spec.md`；Phase A（`POST /api/connections`）与 Phase B（`CreateConnectionDrawer` / 概览 CTA）可已落地。本文档下文「WebUI 不负责新建物理数据库连接 / 不在 WebUI 实现新建连接表单」等 Non-Goal **正文仍待 Phase C 按 §5.5 / §8.3 翻转**——在此之前以 Spec 124 与实现为准。密码持久态仍为 `file:` 引用；手工 `ktx.yaml` + secrets 路径保留为高级 / 灾备路径。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Database Connection Operations Runbook Spec |

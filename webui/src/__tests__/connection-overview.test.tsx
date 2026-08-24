@@ -686,9 +686,21 @@ describe("ConnectionOverview", () => {
     stubOverviewFetch({ connections: [], tables: [] });
     renderOverview();
 
-    expect(await screen.findByText("暂无连接配置，请在 ktx.yaml 中添加 connections。")).toBeInTheDocument();
+    expect(await screen.findByTestId("connections-empty-state")).toHaveTextContent("暂无连接配置。");
+    expect(screen.getByTestId("create-connection-empty-btn")).toHaveTextContent("新建连接");
+    expect(screen.getByTestId("create-connection-btn")).toHaveTextContent("新建连接");
+    expect(screen.getByText(/也可在/)).toBeInTheDocument();
     expect(screen.getByText("数据连接")).toBeInTheDocument();
     expect(screen.getByText("服务器目录已发现表")).toBeInTheDocument();
+  });
+
+  it("opens Create Connection drawer from the header CTA", async () => {
+    stubOverviewFetch();
+    renderOverview();
+
+    fireEvent.click(await screen.findByTestId("create-connection-btn"));
+    expect(await screen.findByTestId("create-connection-drawer")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "新建连接" })).toBeInTheDocument();
   });
 
   it("shows project API errors", async () => {
