@@ -1185,10 +1185,42 @@ function instructionsInjectionEnabled(): boolean {
   return process.env.LUCY_ENABLE_INSTRUCTIONS_INJECTION !== "false";
 }
 
-function decodeSseMessage(body: string): unknown | undefined {
-  const line = body.split(/\r?\n/).find((item) => item.startsWith("data: "));
-  if (!line) return undefined;
-  return JSON.parse(line.slice("data: ".length));
+function decodeSseMessages(body: string): unknown[] {
+  const messages: unknown[] = [];
+  for (const line of body.split(/\r?\n/)) {
+    if (!line.startsWith("data: ")) continue;
+    try {
+      messages.push(JSON.parse(line.slice("data: ".length)));
+    } catch {
+      // skip malformed SSE data lines
+    }
+  }
+  return messages;
+}
+
+/**
+ * Pick the JSON-RPC *response* frame from a buffered SSE body.
+ * Cursor / Claude Code Streamable HTTP clients often send progressToken;
+ * KTX may emit notifications/progress before the id-matched result. Taking the
+ * first `data:` line rewrites progress as the final response and clients wait
+ * forever for an id-matched frame → MCP -32001 Request timed out.
+ */
+function decodeSseJsonRpcResponse(body: string, requestId?: string | number): unknown | undefined {
+  const messages = decodeSseMessages(body);
+  const responses = messages.filter((msg) => {
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) return false;
+    const record = msg as Record<string, unknown>;
+    return "id" in record && ("result" in record || "error" in record);
+  });
+  if (requestId !== undefined) {
+    const matched = responses.find((msg) => (msg as Record<string, unknown>).id === requestId);
+    if (matched) return matched;
+  }
+  return responses.length > 0 ? responses[responses.length - 1] : undefined;
+}
+
+function decodeSseMessage(body: string, requestId?: string | number): unknown | undefined {
+  return decodeSseJsonRpcResponse(body, requestId) ?? decodeSseMessages(body).at(-1);
 }
 
 /** Headers for a fully-buffered application/json MCP response.
@@ -1542,13 +1574,13 @@ async function writeLucySemanticResponse(
   let metaFailed: string | undefined;
   // Buffered tools/call responses are always normalized to application/json when
   // rewrite succeeds. Re-emitting a finite SSE frame with Content-Length +
-  // keep-alive causes some Streamable HTTP clients (notably Cursor) to wait for
+  // keep-alive causes Streamable HTTP clients (Cursor / Claude Code) to wait for
   // stream end and surface MCP -32001 Request timed out even though KTX finished.
   let forceJson = false;
 
   try {
     if (contentType.includes("text/event-stream")) {
-      const payload = decodeSseMessage(originalBody);
+      const payload = decodeSseMessage(originalBody, requestId);
       if (!payload) throw new Error("missing SSE data frame");
       body = JSON.stringify(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
       forceJson = true;
@@ -1574,7 +1606,7 @@ async function writeLucySemanticResponse(
   try {
     const parsed = (!metaFailed || contentType.includes("application/json"))
       ? JSON.parse(body) as Record<string, unknown>
-      : decodeSseMessage(body) as Record<string, unknown> | undefined;
+      : decodeSseMessage(body, requestId) as Record<string, unknown> | undefined;
     const parsedError = parsed?.error;
     const parsedResult = parsed?.result as Record<string, unknown> | undefined;
     if (parsedError || parsedResult?.isError) {
@@ -1681,7 +1713,7 @@ async function writeToolsListResponse(
   let forceJson = false;
   try {
     if (contentType.includes("text/event-stream")) {
-      const payload = decodeSseMessage(originalBody);
+      const payload = decodeSseMessage(originalBody, requestId);
       if (!payload) throw new Error("missing SSE data frame");
       body = JSON.stringify(filterAndAddAllowedTools(payload, visibleTools, requestId));
       forceJson = true;
@@ -1738,7 +1770,7 @@ async function writeInitializeResponse(
   } else {
     try {
       if (isSse) {
-        const payload = decodeSseMessage(originalBody);
+        const payload = decodeSseMessage(originalBody, requestId);
         if (!payload) throw new Error("missing SSE data frame");
         const record = payload as Record<string, unknown>;
         const result = record.result as Record<string, unknown> | undefined;
@@ -2468,7 +2500,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
     try {
       if (contentType.includes("text/event-stream")) {
-        const payload = decodeSseMessage(originalBody);
+        const payload = decodeSseMessage(originalBody, requestId);
         if (!payload) throw new Error("missing SSE data frame");
         const filtered = await filterWikiSearchPayload(identity, payload);
         if (filtered.failed) {
@@ -2543,29 +2575,56 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
 
-  // For tool calls: sniff the response to detect errors; for others: pipe directly
+  // For tool calls: buffer then normalize finite SSE to JSON (Streamable HTTP
+  // clients such as Cursor / Claude Code hang on Content-Length + keep-alive SSE).
+  // Non-SSE JSON still passes through with original headers.
   if (rpcMethod === "tools/call") {
-    const responseHeaders: Record<string, string | string[] | number> = {};
-    for (const [k, v] of Object.entries(upstream.headers)) {
-      if (v !== undefined) responseHeaders[k] = v;
-    }
-    res.writeHead(upstream.statusCode ?? 200, responseHeaders);
-
     const chunks: Buffer[] = [];
     for await (const chunk of upstream as AsyncIterable<Buffer>) {
       chunks.push(chunk);
-      res.write(chunk);
     }
-    res.end();
     const responseBody = Buffer.concat(chunks);
+    const contentType = String(upstream.headers["content-type"] ?? "");
+
+    let outBody = responseBody;
+    let headers: Record<string, string | string[] | number>;
+    let forceJson = false;
+
+    if (contentType.includes("text/event-stream")) {
+      try {
+        const payload = decodeSseMessage(responseBody.toString(), requestId);
+        if (!payload) throw new Error("missing SSE data frame");
+        outBody = Buffer.from(JSON.stringify(ensureJsonRpcEnvelope(payload, requestId)));
+        forceJson = true;
+      } catch {
+        // Keep original body if we cannot decode; still prefer JSON headers when
+        // we successfully rewrite below. On decode failure, pass through as-is.
+        forceJson = false;
+      }
+    }
+
+    if (forceJson) {
+      headers = bufferedJsonHeaders(upstream);
+    } else {
+      headers = {};
+      for (const [k, v] of Object.entries(upstream.headers)) {
+        if (v !== undefined) headers[k] = v;
+      }
+    }
+    // Full body is buffered; never emit Content-Length together with chunked TE.
+    delete headers["transfer-encoding"];
+    if (forceJson) delete headers["connection"];
+    headers["content-length"] = outBody.byteLength;
+    res.writeHead(upstream.statusCode ?? 200, headers);
+    res.end(outBody);
 
     let outcome: "ok" | "error" = "ok";
     let errorDetail: string | undefined;
     let tables: string[] | undefined;
     try {
-      const contentType = upstream.headers["content-type"] ?? "";
-      if (contentType.includes("application/json")) {
-        const parsed = JSON.parse(responseBody.toString()) as Record<string, unknown>;
+      const sniffType = forceJson ? "application/json" : contentType;
+      if (sniffType.includes("application/json")) {
+        const parsed = JSON.parse(outBody.toString()) as Record<string, unknown>;
         if (parsed.error || (parsed.result as Record<string, unknown> | undefined)?.isError) {
           outcome = "error";
           errorDetail = JSON.stringify(parsed.error ?? (parsed.result as Record<string, unknown>)?.content);
@@ -2611,7 +2670,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       outcome,
       errorDetail,
       durationMs: Date.now() - start,
-      ...responseAuditMeta(responseBody, upstream.headers["content-type"]),
+      ...responseAuditMeta(outBody, forceJson ? "application/json" : upstream.headers["content-type"]),
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, outcome === "ok" ? "allowed" : "upstream_error")),

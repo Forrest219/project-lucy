@@ -66,11 +66,11 @@
 | Client | Status | Notes |
 |---|---|---|
 | Generic HTTP MCP client | verified by script | `scripts/p0-demo-docker-smoke.mjs` uses JSON-RPC over HTTP |
-| Claude Code | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Claude Code | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用。2026-08-20：Streamable HTTP 有限 SSE / progress 帧选择与 Cursor 同类问题，见 Spec 07 §4.3 / §6.1.0 |
 | Codex | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
-| Openclaw | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Openclaw | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用（对有限 SSE / progressToken 较宽松，不易复现 Cursor/Claude Code 超时） |
 | Hermes | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
-| Cursor | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Cursor | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用。后续实锤：有限 SSE + progress 首帧误判 → `-32001`；修复见 Spec 07 §4.3 / §6.1.0 |
 | Claude Desktop stdio | documented for local KTX in development docs | Not a Docker P0 customer path |
 | Cloud-hosted agent | not verified | Requires public URL, TLS, and access control |
 
