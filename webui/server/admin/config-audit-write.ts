@@ -15,6 +15,7 @@ type AuditIntent = {
   operation?: string;
   actor?: string;
   actorType?: ConfigAuditActorType;
+  actorIp?: string;
   source?: string;
   targetId?: string;
   oldSummary?: unknown;
@@ -51,6 +52,7 @@ export async function auditedWriteFile(
     changeType: auditIntent.changeType,
     actor: auditIntent.actor,
     actorType: auditIntent.actorType ?? "ui_admin",
+    actorIp: auditIntent.actorIp,
     source: auditIntent.source,
     assetKind: auditIntent.assetKind,
     operation: auditIntent.operation,
@@ -105,6 +107,7 @@ export async function auditedRemoveFile(
     changeType: auditIntent.changeType,
     actor: auditIntent.actor,
     actorType: auditIntent.actorType ?? "ui_admin",
+    actorIp: auditIntent.actorIp,
     source: auditIntent.source,
     assetKind: auditIntent.assetKind,
     operation: auditIntent.operation,

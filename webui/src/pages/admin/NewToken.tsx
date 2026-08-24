@@ -56,6 +56,7 @@ export function NewToken() {
   const queryClient = useQueryClient();
 
   const [label, setLabel] = useState("");
+  const [deviceName, setDeviceName] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   // plaintext token is only held in memory, never stored
   const [generatedToken, setGeneratedToken] = useState<CreateTokenResponse | null>(null);
@@ -71,7 +72,7 @@ export function NewToken() {
   const endpoint = endpointInfo?.url ?? null;
 
   const mutation = useMutation({
-    mutationFn: (body: { label: string; expires_at?: string | null }) =>
+    mutationFn: (body: { label: string; device_name?: string | null; expires_at?: string | null }) =>
       apiPost<CreateTokenResponse>(`/api/admin/agents/${userId}/tokens`, body),
     onSuccess: (data) => {
       setGeneratedToken(data);
@@ -88,6 +89,7 @@ export function NewToken() {
     }
     mutation.mutate({
       label: label.trim(),
+      device_name: deviceName.trim() || null,
       expires_at: expiresAt || null
     });
   }
@@ -159,6 +161,15 @@ export function NewToken() {
           </div>
           <div className="text-xs text-fg-muted">
             <span>标签：{generatedToken.label}</span>
+            {generatedToken.device_name ? (
+              <>
+                {" · "}
+                <span>
+                  设备名备注：
+                  <span className="notranslate" translate="no">{generatedToken.device_name}</span>
+                </span>
+              </>
+            ) : null}
             {" · "}
             <span>创建：{generatedToken.created}</span>
             {generatedToken.expires_at && <><span>{" · 过期："}{generatedToken.expires_at}</span></>}
@@ -290,7 +301,13 @@ export function NewToken() {
             </Link>
           )
         }
-        description="一旦关闭生成页面，将无法再看到 token 明文。请立即复制保存。"
+        description={
+          <>
+            推荐一台客户端安装使用一个 <span className="notranslate" translate="no">Token</span>
+            。一旦关闭生成页面，将无法再看到 <span className="notranslate" translate="no">token</span>{" "}
+            明文。请立即复制保存。
+          </>
+        }
       />
 
       <div className="pl-card grid gap-4">
@@ -298,13 +315,29 @@ export function NewToken() {
           <span className="text-sm font-medium"><span className="notranslate" translate="no">Token</span> 标签 <span className="text-danger">*</span></span>
           <input
             className="pl-input"
-            placeholder="例：hermes-laptop"
+            placeholder="例：cursor-laptop-xingchen"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
           />
         </label>
         <label className="grid gap-1">
-          <span className="text-sm font-medium">过期时间（可选，留空 = 永不过期）</span>
+          <span className="text-sm font-medium">设备名备注（可选）</span>
+          <input
+            className="pl-input notranslate"
+            translate="no"
+            placeholder="例：xingchen-mbp（仅备注，不参与鉴权）"
+            value={deviceName}
+            onChange={(e) => setDeviceName(e.target.value)}
+            aria-label="设备名备注"
+          />
+          <span className="text-xs text-fg-muted">
+            真正的设备归因来自运行时请求头 <code className="notranslate" translate="no">x-lucy-device-name</code>
+            与 <span className="notranslate" translate="no">MCP</span>{" "}
+            <span className="notranslate" translate="no">clientInfo</span>；本字段可留空。
+          </span>
+        </label>
+        <label className="grid gap-1">
+          <span className="text-sm font-medium">过期时间（可选；到期后 Proxy 立即拒绝）</span>
           <input
             className="pl-input"
             type="date"

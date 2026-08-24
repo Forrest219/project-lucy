@@ -111,6 +111,7 @@
 | [121-publish-workbench-cta-confirm-spec.md](121-publish-workbench-cta-confirm-spec.md) | `/publish/workbench` Header「发布并重建索引」确认侧栏（非上传）；路径与「上传语义资产」分离（Implemented v1.0；`UX-PUBLISH-WORKBENCH-006`） | 产品 / UX / IA / Frontend |
 | [122-list-history-time-filter-parity-spec.md](122-list-history-time-filter-parity-spec.md) | 配置审计时间筛选对齐发布记录；访问日志补「时间」标签 + since 整点（Implemented v1.0；`UX-ADMIN-CONFIG-AUDIT-009`、`UX-ADMIN-AUDIT-026`） | 产品 / UX / Frontend |
 | [123-publish-workbench-activation-ia-spec.md](123-publish-workbench-activation-ia-spec.md) | `/publish/workbench` 语义生效台：去上传/导出；「生效准备」；同步索引并生效；更多全量重建（Implemented v1.0；修订 Spec 35；`UX-PUBLISH-WORKBENCH-007`） | 产品 / UX / IA / Frontend |
+| [124-token-device-security-and-audit-context-spec.md](124-token-device-security-and-audit-context-spec.md) | Token 设备安全：审计 IP/UA/设备名；设备视角清单与定向吊销；`expires_at` 强制与 revoke 即时生效（Implemented v1.0） | 产品 / API / 安全 / Frontend |
 | [111-help-center-search-and-connection-kpi-glossary-spec.md](111-help-center-search-and-connection-kpi-glossary-spec.md) | `/help` 手册关键词搜索 + 连接概览「已发现表数」等 KPI 术语写入手册并可搜索命中（Planned → Implemented） | 产品 / UX / Frontend / Docs |
 
 ## 与原 README 的关键校正

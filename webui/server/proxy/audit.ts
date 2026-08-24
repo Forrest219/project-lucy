@@ -15,6 +15,10 @@ export interface AccessLogEntry {
   lucyTurnId?: string;
   lucyPlatform?: string;
   client?: string;
+  clientVersion?: string;
+  clientIp?: string;
+  userAgent?: string;
+  deviceName?: string;
   tool: string;
   tables?: string[];
   argsSummary?: Record<string, unknown>;
@@ -40,6 +44,23 @@ export interface AccessLogEntry {
     rolesJson: unknown;
     resolvedJson: unknown;
   };
+}
+
+export type AuthFailureReason =
+  | "missing_bearer"
+  | "token_unrecognized"
+  | "token_revoked"
+  | "token_expired";
+
+export interface AuthFailureLogEntry {
+  ts: string;
+  reason: AuthFailureReason;
+  clientIp?: string;
+  userAgent?: string;
+  tokenHashPrefix?: string;
+  userId?: string;
+  tokenLabel?: string;
+  requestId?: string | number;
 }
 
 export interface AccessLogSourceRecord {
@@ -70,7 +91,11 @@ const ACCESS_LOG_COLUMNS = [
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
   ["response_truncated", "INTEGER"],
-  ["trace_id", "TEXT"]
+  ["trace_id", "TEXT"],
+  ["client_ip", "TEXT"],
+  ["user_agent", "TEXT"],
+  ["client_version", "TEXT"],
+  ["device_name", "TEXT"]
 ] as const;
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
@@ -187,6 +212,19 @@ async function getDb(): Promise<Database.Database> {
       PRIMARY KEY(inferred_turn_id, access_log_id)
     );
     CREATE INDEX IF NOT EXISTS idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
+    CREATE TABLE IF NOT EXISTS auth_failure_log (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts                 TEXT    NOT NULL,
+      reason             TEXT    NOT NULL,
+      client_ip          TEXT,
+      user_agent         TEXT,
+      token_hash_prefix  TEXT,
+      user_id            TEXT,
+      token_label        TEXT,
+      request_id         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_afl_ts ON auth_failure_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_afl_reason_ts ON auth_failure_log(reason, ts);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -194,6 +232,7 @@ async function getDb(): Promise<Database.Database> {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
   `);
   return db;
 }
@@ -236,9 +275,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
     `);
   }
   const result = insertStmt.run({
@@ -250,6 +289,10 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     lucyTurnId: entry.lucyTurnId ?? null,
     lucyPlatform: entry.lucyPlatform ?? null,
     client: entry.client ?? null,
+    clientVersion: entry.clientVersion ?? null,
+    clientIp: entry.clientIp ?? null,
+    userAgent: entry.userAgent ?? null,
+    deviceName: entry.deviceName ?? null,
     tool: entry.tool,
     tables: entry.tables ? JSON.stringify(entry.tables) : null,
     argsSummary: entry.argsSummary ? JSON.stringify(entry.argsSummary) : null,
@@ -271,6 +314,28 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     effectiveTablesCount: entry.effectiveTablesCount ?? null,
     decisionReason: entry.decisionReason ?? null,
   });
+  return Number(result.lastInsertRowid);
+}
+
+export async function writeAuthFailureLog(entry: AuthFailureLogEntry): Promise<number> {
+  const database = await getDb();
+  const result = database
+    .prepare(
+      `INSERT INTO auth_failure_log
+        (ts, reason, client_ip, user_agent, token_hash_prefix, user_id, token_label, request_id)
+       VALUES
+        (@ts, @reason, @clientIp, @userAgent, @tokenHashPrefix, @userId, @tokenLabel, @requestId)`
+    )
+    .run({
+      ts: entry.ts,
+      reason: entry.reason,
+      clientIp: entry.clientIp ?? null,
+      userAgent: entry.userAgent ?? null,
+      tokenHashPrefix: entry.tokenHashPrefix ?? null,
+      userId: entry.userId ?? null,
+      tokenLabel: entry.tokenLabel ?? null,
+      requestId: entry.requestId === undefined ? null : String(entry.requestId)
+    });
   return Number(result.lastInsertRowid);
 }
 

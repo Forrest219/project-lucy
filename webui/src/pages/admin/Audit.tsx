@@ -725,7 +725,9 @@ const FILTER_PERSIST_FIELDS = [
   "turnId",
   "platform",
   "turnSource",
-  "callSource"
+  "callSource",
+  "clientIp",
+  "deviceName"
 ] as const;
 /** Reserved lucy_platform value for MCP 调试台受控试调 (must match server MCP_PLAYGROUND_PLATFORM). */
 const MCP_PLAYGROUND_PLATFORM = "mcp-playground";
@@ -966,7 +968,28 @@ function EntryRow({
               {entry.client && (
                 <div>
                   <span className="font-medium">客户端：</span>
-                  <span className="ml-2 text-fg-muted">{entry.client}</span>
+                  <span className="ml-2 text-fg-muted notranslate" translate="no">
+                    {entry.client}
+                    {entry.clientVersion ? ` ${entry.clientVersion}` : ""}
+                  </span>
+                </div>
+              )}
+              {entry.clientIp && (
+                <div>
+                  <span className="font-medium">访问 IP：</span>
+                  <span className="ml-2 text-fg-muted font-mono notranslate" translate="no">{entry.clientIp}</span>
+                </div>
+              )}
+              {entry.deviceName && (
+                <div>
+                  <span className="font-medium">最近设备名：</span>
+                  <span className="ml-2 text-fg-muted notranslate" translate="no">{entry.deviceName}</span>
+                </div>
+              )}
+              {entry.userAgent && (
+                <div>
+                  <span className="font-medium notranslate" translate="no">User-Agent</span>：
+                  <span className="ml-2 text-fg-muted notranslate" translate="no">{entry.userAgent}</span>
                 </div>
               )}
               {(entry.lucySessionId || entry.lucyTurnId || entry.lucyPlatform) && (
@@ -1032,6 +1055,8 @@ export function Audit() {
   const outcome = searchParams.get("outcome") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
+  const clientIp = searchParams.get("clientIp") ?? "";
+  const deviceNameFilter = searchParams.get("deviceName") ?? "";
   const keySearch = searchParams.get("key") ?? searchParams.get("turnIdFilter") ?? "";
   const platform = searchParams.get("platform") ?? "";
   const callSource = searchParams.get("callSource") ?? "";
@@ -1182,6 +1207,8 @@ export function Audit() {
     until: until || undefined,
     tableSearch: tableSearch || undefined,
     sessionId: sessionId || undefined,
+    clientIp: clientIp || undefined,
+    deviceName: deviceNameFilter || undefined,
     key: keySearch || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
@@ -1236,6 +1263,8 @@ export function Audit() {
     until: until || undefined,
     tableSearch: tableSearch || undefined,
     sessionId: sessionId || undefined,
+    clientIp: clientIp || undefined,
+    deviceName: deviceNameFilter || undefined,
     key: keySearch || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
@@ -1460,6 +1489,22 @@ export function Audit() {
             placeholder="Session ID"
             value={sessionId}
             onChange={(e) => updateParam("sessionId", e.target.value)}
+          />
+          <input
+            className="pl-input w-36 notranslate"
+            translate="no"
+            placeholder="访问 IP"
+            value={clientIp}
+            aria-label="访问 IP"
+            onChange={(e) => updateParam("clientIp", e.target.value)}
+          />
+          <input
+            className="pl-input w-36 notranslate"
+            translate="no"
+            placeholder="最近设备名"
+            value={deviceNameFilter}
+            aria-label="最近设备名"
+            onChange={(e) => updateParam("deviceName", e.target.value)}
           />
           <label className="flex items-center gap-2 text-sm text-fg-muted">
             <input type="checkbox" checked={includeProtocol} onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")} />

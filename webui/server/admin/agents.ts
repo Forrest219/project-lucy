@@ -16,8 +16,7 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
-import { actorIdFromRequest } from "../auth/guard.js";
-import type { FastifyRequest } from "fastify";
+import { invalidateAccessConfigCache } from "../proxy/identity.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -27,6 +26,7 @@ export interface YamlToken {
   label: string;
   created: string;
   expires_at?: string | null;
+  device_name?: string | null;
 }
 
 export interface YamlUser {
@@ -202,18 +202,30 @@ async function getStats(userId: string, configuredTokenCount: number): Promise<A
   }
 }
 
+type TokenUsageSnapshot = {
+  lastUsed: string;
+  lastTool: string;
+  lastOutcome: string;
+  lastIp?: string | null;
+  lastUserAgent?: string | null;
+  lastClient?: string | null;
+  lastClientVersion?: string | null;
+  lastDeviceNameSeen?: string | null;
+  distinctIps7d?: number;
+};
+
 async function getLastUsedMap(
   userIds: string[]
-): Promise<Map<string, Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>>> {
+): Promise<Map<string, Map<string, TokenUsageSnapshot>>> {
   // Returns: userId -> (token hash prefix -> last usage snapshot)
-  const result = new Map<string, Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>>();
+  const result = new Map<string, Map<string, TokenUsageSnapshot>>();
   if (userIds.length === 0) return result;
   try {
     const db = await getAuditDb();
     const placeholders = userIds.map(() => "?").join(", ");
     const rows = db
       .prepare(
-        `SELECT user_id, token_hash_prefix, ts, tool, outcome
+        `SELECT user_id, token_hash_prefix, ts, tool, outcome, client_ip, user_agent, client, client_version, device_name
          FROM (
            SELECT
              user_id,
@@ -221,13 +233,29 @@ async function getLastUsedMap(
              ts,
              tool,
              outcome,
+             client_ip,
+             user_agent,
+             client,
+             client_version,
+             device_name,
              ROW_NUMBER() OVER (PARTITION BY user_id, token_hash_prefix ORDER BY ts DESC, id DESC) AS rn
            FROM access_log
            WHERE user_id IN (${placeholders}) AND token_hash_prefix IS NOT NULL
          )
          WHERE rn = 1`
       )
-      .all(...userIds) as Array<{ user_id: string; token_hash_prefix: string; ts: string; tool: string; outcome: string }>;
+      .all(...userIds) as Array<{
+      user_id: string;
+      token_hash_prefix: string;
+      ts: string;
+      tool: string;
+      outcome: string;
+      client_ip: string | null;
+      user_agent: string | null;
+      client: string | null;
+      client_version: string | null;
+      device_name: string | null;
+    }>;
 
     for (const row of rows) {
       if (!result.has(row.user_id)) result.set(row.user_id, new Map());
@@ -236,8 +264,35 @@ async function getLastUsedMap(
       byToken.set(row.token_hash_prefix, {
         lastUsed: row.ts,
         lastTool: row.tool,
-        lastOutcome: row.outcome
+        lastOutcome: row.outcome,
+        lastIp: row.client_ip,
+        lastUserAgent: row.user_agent,
+        lastClient: row.client,
+        lastClientVersion: row.client_version,
+        lastDeviceNameSeen: row.device_name
       });
+    }
+
+    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const ipRows = db
+      .prepare(
+        `SELECT user_id, token_hash_prefix, COUNT(DISTINCT client_ip) AS distinct_ips
+         FROM access_log
+         WHERE user_id IN (${placeholders})
+           AND token_hash_prefix IS NOT NULL
+           AND client_ip IS NOT NULL
+           AND ts >= ?
+         GROUP BY user_id, token_hash_prefix`
+      )
+      .all(...userIds, since7d) as Array<{
+      user_id: string;
+      token_hash_prefix: string;
+      distinct_ips: number;
+    }>;
+    for (const row of ipRows) {
+      const byToken = result.get(row.user_id);
+      const snap = byToken?.get(row.token_hash_prefix);
+      if (snap) snap.distinctIps7d = row.distinct_ips;
     }
   } catch {
     return result;
@@ -248,7 +303,7 @@ async function getLastUsedMap(
 function userToAgent(
   user: YamlUser,
   stats?: Awaited<ReturnType<typeof getStats>>,
-  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>,
+  tokenUsage?: Map<string, TokenUsageSnapshot>,
   timeline?: AgentConfigTimeline
 ) {
   return {
@@ -262,9 +317,16 @@ function userToAgent(
       label: t.label,
       created: t.created,
       expires_at: t.expires_at ?? null,
+      device_name: t.device_name ?? null,
       last_used: tokenUsage?.get(t.hash.slice(0, 19))?.lastUsed,
       last_tool: tokenUsage?.get(t.hash.slice(0, 19))?.lastTool,
-      last_outcome: tokenUsage?.get(t.hash.slice(0, 19))?.lastOutcome
+      last_outcome: tokenUsage?.get(t.hash.slice(0, 19))?.lastOutcome,
+      last_ip: tokenUsage?.get(t.hash.slice(0, 19))?.lastIp ?? null,
+      last_user_agent: tokenUsage?.get(t.hash.slice(0, 19))?.lastUserAgent ?? null,
+      last_client: tokenUsage?.get(t.hash.slice(0, 19))?.lastClient ?? null,
+      last_client_version: tokenUsage?.get(t.hash.slice(0, 19))?.lastClientVersion ?? null,
+      last_device_name_seen: tokenUsage?.get(t.hash.slice(0, 19))?.lastDeviceNameSeen ?? null,
+      distinct_ips_7d: tokenUsage?.get(t.hash.slice(0, 19))?.distinctIps7d
     })),
     allow: user.allow ? {
       tables: user.allow?.tables ?? [],
@@ -483,7 +545,7 @@ function buildAgentsSummary(
 async function userToAgentWithPermissions(
   user: YamlUser,
   stats?: Awaited<ReturnType<typeof getStats>>,
-  tokenUsage?: Map<string, { lastUsed: string; lastTool: string; lastOutcome: string }>,
+  tokenUsage?: Map<string, TokenUsageSnapshot>,
   timeline?: AgentConfigTimeline
 ) {
   const agent = userToAgent(user, stats, tokenUsage, timeline);
@@ -917,6 +979,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       newSummary: { userIds: newConfig.users.map((item) => item.id) },
       requestId: request.id
     });
+    invalidateAccessConfigCache();
     return { ok: true, data: { written: true, gate } };
   });
 }

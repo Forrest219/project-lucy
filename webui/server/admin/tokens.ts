@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { stringify, parse } from "yaml";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
@@ -15,9 +15,7 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
-import { actorIdFromRequest } from "../auth/guard.js";
-import { normalizeExpiresAtInput } from "../proxy/identity.js";
-import type { FastifyRequest } from "fastify";
+import { invalidateAccessConfigCache } from "../proxy/identity.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -31,6 +29,18 @@ function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
     actorId: request ? actorIdFromRequest(request) : "local-admin",
     identityProvider: "webui-local"
   };
+}
+
+function actorIpFromRequest(request: FastifyRequest): string | undefined {
+  const trust = (process.env.LUCY_TRUST_PROXY ?? "").trim().toLowerCase();
+  const trustProxy = trust === "1" || trust === "true" || trust === "yes";
+  if (trustProxy) {
+    const xff = request.headers["x-forwarded-for"];
+    const raw = Array.isArray(xff) ? xff[0] : xff;
+    const first = raw?.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return request.ip || undefined;
 }
 
 async function writeGateTrace(
@@ -87,10 +97,17 @@ export function registerTokenRoutes(app: FastifyInstance) {
   // POST /api/admin/agents/:userId/tokens
   app.post<{
     Params: { userId: string };
-    Body: { dryRun?: boolean; label: string; expires_at?: string | null; override?: AccessGovernanceOverrideRequest };
+    Body: {
+      dryRun?: boolean;
+      label: string;
+      device_name?: string | null;
+      expires_at?: string | null;
+      override?: AccessGovernanceOverrideRequest;
+    };
   }>("/api/admin/agents/:userId/tokens", async (request, reply) => {
     const { userId } = request.params;
-    const { label } = request.body ?? {};
+    const { label, expires_at } = request.body ?? {};
+    const deviceNameRaw = request.body?.device_name;
     const dryRun = request.body?.dryRun === true;
     let expires_at: string | null = null;
     try {
@@ -108,6 +125,11 @@ export function registerTokenRoutes(app: FastifyInstance) {
     if (!label || typeof label !== "string" || label.trim().length === 0) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "label is required" } });
     }
+
+    const deviceName =
+      typeof deviceNameRaw === "string" && deviceNameRaw.trim().length > 0
+        ? deviceNameRaw.trim().slice(0, 128)
+        : null;
 
     const projectRoot = await resolveProjectRoot();
     const filePath = path.join(projectRoot, ACCESS_YAML_REL);
@@ -146,6 +168,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
           proposed: {
             userId,
             label,
+            device_name: deviceName,
             expires_at: expires_at ?? null
           }
         }
@@ -191,7 +214,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
       hash: tokenHash,
       label,
       created,
-      expires_at
+      ...(deviceName ? { device_name: deviceName } : {}),
+      ...(expires_at !== undefined ? { expires_at: expires_at ?? null } : {})
     };
 
     const updatedUser = { ...user, tokens: [...user.tokens, newToken] };
@@ -204,13 +228,20 @@ export function registerTokenRoutes(app: FastifyInstance) {
       changeType: "token_create",
       assetKind: "governance",
       actorType: "ui_admin",
+      actorIp: actorIpFromRequest(request),
       source: "admin_tokens_api",
       targetId: userId,
       oldSummary: { tokenCount: user.tokens.length },
-      actor: actorIdFromRequest(request),
-      newSummary: { tokenCount: updatedUser.tokens.length, label, hashPrefix: tokenHash.slice(0, 19), expires_at },
+      newSummary: {
+        tokenCount: updatedUser.tokens.length,
+        label,
+        device_name: deviceName,
+        hashPrefix: tokenHash.slice(0, 19),
+        expires_at: expires_at ?? null
+      },
       requestId: request.id
     });
+    invalidateAccessConfigCache();
 
     return {
       ok: true,
@@ -218,6 +249,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
         token: plainToken,
         hash: tokenHash,
         label,
+        device_name: deviceName,
         created,
         expires_at: expires_at ?? null,
         gate
@@ -303,12 +335,14 @@ export function registerTokenRoutes(app: FastifyInstance) {
       changeType: "token_revoke",
       assetKind: "governance",
       actorType: "ui_admin",
+      actorIp: actorIpFromRequest(request),
       source: "admin_tokens_api",
       targetId: userId,
       oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
       newSummary: { tokenCount: updatedUser.tokens.length, label },
       requestId: request.id
     });
+    invalidateAccessConfigCache();
 
     return { ok: true, data: { written: true, revokedAt, gate } };
   });

@@ -84,6 +84,7 @@ export function AgentDetail() {
   const [editRole, setEditRole] = useState<string | null>(null);
   const [diffPreview, setDiffPreview] = useState<DiffPreview | null>(null);
   const [confirmSave, setConfirmSave] = useState<DiffPreview | null>(null);
+  const [selectedTokenLabels, setSelectedTokenLabels] = useState<string[]>([]);
 
   const agent = data?.agent;
   const version = data?.version;
@@ -197,7 +198,25 @@ export function AgentDetail() {
   const revokeTokenMutation = useMutation({
     mutationFn: (label: string) => apiDelete<{ written: boolean; revokedAt: string }>(`/api/admin/agents/${userId}/tokens/${encodeURIComponent(label)}`),
     onSuccess: (_, label) => {
-      toast.success(`Token "${label}" 已撤销。代理可能在 30 秒内仍接受该 token。`);
+      toast.success(`Token "${label}" 已撤销，新请求将立即拒绝。`);
+      setSelectedTokenLabels((prev) => prev.filter((item) => item !== label));
+      void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+    },
+    onError: (err: Error) => toast.error(err.message)
+  });
+
+  const bulkRevokeMutation = useMutation({
+    mutationFn: async (labels: string[]) => {
+      for (const label of labels) {
+        await apiDelete<{ written: boolean; revokedAt: string }>(
+          `/api/admin/agents/${userId}/tokens/${encodeURIComponent(label)}`
+        );
+      }
+      return labels;
+    },
+    onSuccess: (labels) => {
+      toast.success(`已撤销 ${labels.length} 个 Token，新请求将立即拒绝。`);
+      setSelectedTokenLabels([]);
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
     },
     onError: (err: Error) => toast.error(err.message)
@@ -211,6 +230,18 @@ export function AgentDetail() {
   function handleRevokeToken(label: string) {
     if (!confirm(`确定要撤销 token "${label}" 吗？`)) return;
     revokeTokenMutation.mutate(label);
+  }
+
+  function handleBulkRevoke() {
+    if (selectedTokenLabels.length === 0) return;
+    if (!confirm(`确定要撤销选中的 ${selectedTokenLabels.length} 个 Token 吗？`)) return;
+    bulkRevokeMutation.mutate(selectedTokenLabels);
+  }
+
+  function toggleTokenSelection(label: string) {
+    setSelectedTokenLabels((prev) =>
+      prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]
+    );
   }
 
   function handleDiscardEdits() {
@@ -406,16 +437,30 @@ export function AgentDetail() {
           <div className="grid gap-4 max-w-3xl">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-fg-muted">
-                当前活跃 token：{agent.tokens.length} 个。已撤销的 token 在此版本不展示历史，可在变更历史中查询。
+                当前活跃 token：{agent.tokens.length} 个。按设备/客户端定向吊销；已撤销的 token 在此版本不展示历史，可在变更历史中查询。
               </p>
-              <Link
-                to={`/admin/agents/${userId}/tokens/new`}
-                className="pl-btn pl-btn--primary text-sm notranslate"
-                translate="no"
-                aria-label="生成新 Token"
-              >
-                + 生成新 <span className="notranslate" translate="no">Token</span>
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                {selectedTokenLabels.length > 0 ? (
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--danger text-sm notranslate"
+                    translate="no"
+                    onClick={handleBulkRevoke}
+                    disabled={bulkRevokeMutation.isPending}
+                    aria-label={`批量撤销 ${selectedTokenLabels.length} 个 Token`}
+                  >
+                    撤销选中（{selectedTokenLabels.length}）
+                  </button>
+                ) : null}
+                <Link
+                  to={`/admin/agents/${userId}/tokens/new`}
+                  className="pl-btn pl-btn--primary text-sm notranslate"
+                  translate="no"
+                  aria-label="生成新 Token"
+                >
+                  + 生成新 <span className="notranslate" translate="no">Token</span>
+                </Link>
+              </div>
             </div>
             {agent.tokens.length === 0 ? (
               <p className="text-sm text-fg-muted">暂无 token，点「生成新 <span className="notranslate" translate="no">Token</span>」创建。</p>
@@ -423,23 +468,71 @@ export function AgentDetail() {
               <div className="grid gap-2">
                 {agent.tokens.map((token) => (
                   <div key={token.hash} className="pl-card flex items-start justify-between gap-4">
-                    <div className="grid gap-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm">{token.label}</span>
-                        <span className="pl-status-badge pl-status-done">活跃</span>
-                      </div>
-                      <div className="text-xs text-fg-muted">
-                        <span>创建 {token.created}</span>
-                        {token.expires_at && <span> · 过期 {token.expires_at}</span>}
-                      </div>
-                      <div className="text-xs text-fg-muted">
-                        最近使用：
-                        {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "—"}
-                        {token.last_tool ? ` · ${token.last_tool}` : ""}
-                        {token.last_outcome ? ` · ${token.last_outcome}` : ""}
-                      </div>
-                      <div className="text-xs text-fg-muted font-mono">
-                        hash: {token.hash.slice(0, 24)}…
+                    <div className="flex items-start gap-3 min-w-0">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={selectedTokenLabels.includes(token.label)}
+                        onChange={() => toggleTokenSelection(token.label)}
+                        aria-label={`选择 ${token.label}`}
+                      />
+                      <div className="grid gap-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{token.label}</span>
+                          <span className="pl-status-badge pl-status-done">活跃</span>
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          <span>创建 {token.created}</span>
+                          {token.expires_at && <span> · 过期 {token.expires_at}</span>}
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          备注：
+                          {token.device_name ? (
+                            <span className="notranslate" translate="no">{token.device_name}</span>
+                          ) : (
+                            "—"
+                          )}
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          <span className="notranslate" translate="no">Agent</span> 类型：
+                          <span className="notranslate" translate="no">
+                            {token.last_client
+                              ? `${token.last_client}${token.last_client_version ? ` ${token.last_client_version}` : ""}`
+                              : "—"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          最近设备名：
+                          {token.last_device_name_seen ? (
+                            <span className="notranslate" translate="no">{token.last_device_name_seen}</span>
+                          ) : (
+                            "—"
+                          )}
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          最近使用：
+                          {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "—"}
+                          {token.last_tool ? ` · ${token.last_tool}` : ""}
+                          {token.last_outcome ? ` · ${token.last_outcome}` : ""}
+                        </div>
+                        <div className="text-xs text-fg-muted">
+                          访问 IP：
+                          <span className="notranslate font-mono" translate="no">
+                            {token.last_ip ?? "—"}
+                          </span>
+                          {token.distinct_ips_7d != null && token.distinct_ips_7d > 1 ? (
+                            <span className="text-warning"> · 近 7 日 {token.distinct_ips_7d} 个 IP</span>
+                          ) : null}
+                        </div>
+                        {token.last_user_agent ? (
+                          <div className="text-xs text-fg-muted truncate" title={token.last_user_agent}>
+                            <span className="notranslate" translate="no">User-Agent</span>：
+                            <span className="notranslate" translate="no">{token.last_user_agent}</span>
+                          </div>
+                        ) : null}
+                        <div className="text-xs text-fg-muted font-mono">
+                          hash: {token.hash.slice(0, 24)}…
+                        </div>
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">

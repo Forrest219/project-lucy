@@ -98,6 +98,36 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.close();
   });
 
+  it("stores device_name when explicitly provided", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "cursor-desk", device_name: "xingchen-mbp" })
+      .expect(200);
+
+    expect(res.body.data.device_name).toBe("xingchen-mbp");
+    const yamlContent = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yamlContent).toContain("device_name: xingchen-mbp");
+    expect(yamlContent).toContain("label: cursor-desk");
+    await app.close();
+  });
+
+  it("omits device_name from yaml when not provided", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "hermes-only" })
+      .expect(200);
+
+    expect(res.body.data.device_name).toBeNull();
+    const yamlContent = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yamlContent).toContain("label: hermes-only");
+    expect(yamlContent).not.toContain("device_name");
+    await app.close();
+  });
+
   it("does not write plaintext token to yaml", async () => {
     const app = buildServer();
     await app.ready();

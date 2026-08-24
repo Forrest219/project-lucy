@@ -67,8 +67,7 @@
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |
-| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
-| 忘记 `WebUI` 管理员账号或密码怎么办？ | 自托管**不提供邮箱找回**。有其他所有者时由其重置；否则由能读写部署配置的人按 `break-glass` 清空 `admins.yaml` 后重新引导。 | [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass) |
+| `expires_at` 到期后 `token` 会自动失效吗？ | 会。Proxy 身份校验会拒绝已过期的 token（401 / `token_expired`）。仍建议到期后在 Admin 撤销，避免 YAML 残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
 | 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |
 
 ### 0.3 面向接入协作者
@@ -1096,7 +1095,7 @@ Token 发行规则：
 | 复制 MCP 配置 | 只复制 `${LUCY_AGENT_TOKEN}` 占位符，不复制明文 |
 | 过期 | `expires_at` 到期或不可解析时，`MCP` Proxy 鉴权失败（401）；也可在 Admin 提前撤销 |
 
-注意：`expires_at` 由 Proxy 强制校验；下线 token 也可在 Admin 执行撤销，或调用 `DELETE /api/admin/agents/:userId/tokens/:label`。
+注意：`expires_at` 由 Proxy 身份校验强制拒绝已过期 token。到期后仍建议在 Admin 执行撤销，或调用 `DELETE /api/admin/agents/:userId/tokens/:label`，避免配置残留。
 
 权限裁决机制：
 
@@ -1852,7 +1851,7 @@ defaults:
 | `tableSelectors` | `names` 与 `prefix` 二选一；匹配 0 个 source 会 fail-closed |
 | `users[].allow` | legacy，只读兼容；新 Agent 必须选择 role |
 | `users[].tokens[].hash` | 只存 hash，不存明文 |
-| `users[].tokens[].expires_at` | 当前仅作 metadata，不参与 Proxy 鉴权；过期下线必须撤销 token |
+| `users[].tokens[].expires_at` | Proxy 鉴权强制拒绝已过期 token；建议到期后仍撤销以清理 YAML |
 | `defaults.deny_tools` | 全局拒绝优先于 role allow |
 
 ### 5.2 `ktx.yaml`
@@ -2032,7 +2031,7 @@ ktx sl read <source-name> --connection-id <connection-id>
 
 | 改动 | 生效机制 |
 | --- | --- |
-| `webui/config/access.yaml` role/user/token | MCP 身份识别/token hash 匹配路径可能缓存最多 30 秒；Admin 管理接口通常直接读文件或 fresh 解析；新 token 立即验证可等待 30 秒或重启 WebUI/Proxy |
+| `webui/config/access.yaml` role/user/token | Admin 创建/撤销 Token 与删除 Agent 会立即清 Proxy access 配置缓存；其余热更新路径仍可能有最多 30 秒缓存 |
 | `semantic-layer/**/*.yaml` | WebUI 下次 API 读取文件即可看到；KTX/MCP 检索需要 `ktx admin reindex` |
 | `wiki/**/*.md` | WebUI 下次读取文件即可看到；KTX/MCP 检索需要 `ktx admin reindex` |
 | `ktx.yaml enabled_tables` | WebUI 保存后立即写文件；运行静态 `POST /api/catalog/reload` 检查 manifest 对齐 |
@@ -2066,6 +2065,7 @@ curl -fsS http://127.0.0.1:5174/api/health
 | `expires_at` 已到期或不可解析 | 重新生成 token，或修正 `access.yaml` 中的过期时间 |
 | `LUCY_ACCESS_CONFIG_PATH` 指向了另一份配置 | 检查 WebUI/Proxy 进程环境 |
 | 客户端环境变量未展开 | 确认 `${LUCY_AGENT_TOKEN}` 在启动客户端前已 export |
+| 误以为撤销后仍有 30 秒窗口 | Token 撤销 / Agent 删除会立即清 Proxy 缓存；新请求应立即 401 |
 
 ### 6.6 KTX upstream 不可用
 
