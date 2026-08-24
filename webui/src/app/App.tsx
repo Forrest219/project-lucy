@@ -48,6 +48,7 @@ import { RoleDetail } from "../pages/admin/RoleDetail";
 import { AdminAccounts } from "../pages/admin/AdminAccounts";
 import { LoginPage } from "../pages/Login";
 import { AuthProvider, useAuth, useAuthOptional } from "../lib/auth";
+import { isPublicUiPath } from "../lib/publicAccess";
 import { CaseList } from "../pages/eval/CaseList";
 import { CaseEditor } from "../pages/eval/CaseEditor";
 import { RunList } from "../pages/eval/RunList";
@@ -467,10 +468,15 @@ function RequireAuth({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (status?.mode === "required" && !status.me && location.pathname !== "/login") {
+  // /help stays reachable without a session so login failures can still open
+  // the handbook (break-glass / MCP 401). Pair with public GET /api/help/*.
+  if (isPublicUiPath(location.pathname)) {
+    return <>{children}</>;
+  }
+  if (status?.mode === "required" && !status.me) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  if (status?.mode === "bootstrap" && location.pathname !== "/login") {
+  if (status?.mode === "bootstrap") {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;

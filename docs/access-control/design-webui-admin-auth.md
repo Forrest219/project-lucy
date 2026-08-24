@@ -82,6 +82,18 @@ admins:
 | `required` | 至少一名启用管理员 | 除公开路由外需有效 Session |
 | 强制关闭 | `LUCY_WEBUI_AUTH=off` | 始终 open（CI / 特殊调试） |
 
+#### 5.2.1 公开路由（无需登录）
+
+启用登录后，下列路径必须保持匿名可读，避免「无法登录 → 看不到手册」死循环：
+
+| 层 | 路径 | 说明 |
+|---|---|---|
+| UI | `/login` | 登录 / bootstrap |
+| UI | `/help` | 系统手册全文；登录页提供深链到 break-glass |
+| API | `GET /api/help/handbook`、`GET /api/help/search` | 手册只读 |
+| API | `GET /api/health`、`GET /api/auth/status`、`POST /api/auth/login`、`POST /api/auth/bootstrap`、`POST /api/auth/logout` | 健康检查与鉴权引导 |
+
+实现落点：`webui/server/auth/guard.ts` `isPublicApi`；`webui/src/lib/publicAccess.ts` `isPublicUiPath`（`RequireAuth` 放行）。
 ### 5.3 Session
 
 - Cookie 名：`lucy_admin_session`
@@ -157,5 +169,6 @@ Protected DOM：`Token`、`MCP`、账户 id、`expires_at` 值。
 4. Owner 可创建运维账户；运维不可调用登录账户管理 API；不可删除最后 Owner。
 5. 无 `admins.yaml` / 空列表时现有 vitest 套件无需改登录样板即可通过。
 6. `npm run lint:terminology` 通过。
+7. `required` / `bootstrap` 模式下未登录仍可打开 `/help` 与 `GET /api/help/*`；登录页提供「查看系统手册」入口（可深链 break-glass）。
 
 — 完

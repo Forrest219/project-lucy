@@ -19,7 +19,12 @@ declare module "fastify" {
   }
 }
 
-function isPublicApi(method: string, url: string): boolean {
+/**
+ * API paths that stay reachable without a WebUI admin session.
+ * Help handbook/search must stay public so login failures can still open
+ * recovery docs (pair with `isPublicUiPath` → `/help` on the SPA).
+ */
+export function isPublicApi(method: string, url: string): boolean {
   const pathOnly = url.split("?")[0] ?? url;
   if (!pathOnly.startsWith("/api/")) return true;
   const m = method.toUpperCase();

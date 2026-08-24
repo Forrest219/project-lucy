@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { ApiError } from "../lib/apiClient";
 
@@ -109,6 +109,17 @@ export function LoginPage() {
             {pending ? "提交中…" : isBootstrap ? "创建并登录" : "登录"}
           </button>
         </form>
+
+        <p className="text-sm text-fg-muted">
+          无法登录时仍可{" "}
+          <Link
+            className="underline underline-offset-2"
+            to="/help?section=webui-admin-break-glass"
+          >
+            查看系统手册
+          </Link>
+          （无需登录），含凭据丢失时的 break-glass 恢复说明。
+        </p>
       </div>
     </div>
   );

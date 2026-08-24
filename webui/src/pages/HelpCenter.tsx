@@ -293,6 +293,7 @@ export function HelpCenter() {
         description={handbook.title}
         badges={
           <>
+            <span>无需登录即可查看</span>
             <span>
               来源 <code className="notranslate" translate="no">{handbook.sourcePath}</code>
             </span>
