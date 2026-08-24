@@ -105,7 +105,13 @@ const ACCESS_LOG_COLUMNS = [
   ["client_ip", "TEXT"],
   ["user_agent", "TEXT"],
   ["client_version", "TEXT"],
-  ["device_name", "TEXT"]
+  ["device_name", "TEXT"],
+  ["policy_version", "TEXT"],
+  ["capability_digest", "TEXT"]
+] as const;
+const PERMISSION_SNAPSHOT_COLUMNS = [
+  ["capability_digest", "TEXT"],
+  ["tool_classification_version", "TEXT"]
 ] as const;
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {

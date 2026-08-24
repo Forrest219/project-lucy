@@ -67,7 +67,7 @@ const ACCESS_YAML = `users:
       tables:
         - dataforai.superstore_orders
       tools:
-        - sl_read_source
+        - lucy_read_source
   - id: kx_agent
     name: KX Agent
     enabled: true
@@ -297,7 +297,7 @@ describe("MCP proxy smoke", () => {
           id: "proxy-smoke-allowed",
           method: "tools/call",
           params: {
-            name: "sl_read_source",
+            name: "lucy_read_source",
             arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" }
           }
         })
@@ -321,7 +321,7 @@ describe("MCP proxy smoke", () => {
       expect(audit.user_id).toBe("smoke_agent");
       expect(audit.token_label).toBe("smoke-token");
       expect(audit.token_hash_prefix).toBe(tokenHash(TOKEN).slice(0, 19));
-      expect(audit.tool).toBe("sl_read_source");
+      expect(audit.tool).toBe("lucy_read_source");
       expect(audit.outcome).toBe("ok");
       expect(audit.decision_reason).toBe("allowed");
       expect(audit.permission_snapshot_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -339,7 +339,7 @@ describe("MCP proxy smoke", () => {
     }
   });
 
-  it("writes structured access_log_sources for a successful sl_read_source call", async () => {
+  it("writes structured access_log_sources for a successful lucy_read_source call", async () => {
     const upstream = createServer(async (req, res) => {
       await readRequestBody(req);
       res.writeHead(200, { "content-type": "application/json" });
@@ -372,7 +372,7 @@ describe("MCP proxy smoke", () => {
           id: "proxy-smoke-sources",
           method: "tools/call",
           params: {
-            name: "sl_read_source",
+            name: "lucy_read_source",
             arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" }
           }
         })
@@ -385,7 +385,7 @@ describe("MCP proxy smoke", () => {
       expect(sources[0]).toMatchObject({
         access_log_id: audit.id,
         user_id: "smoke_agent",
-        tool: "sl_read_source",
+        tool: "lucy_read_source",
         connection_id: "mysql-aliyun",
         schema_name: "dataforai",
         source_name: "superstore_orders",
@@ -444,7 +444,6 @@ describe("MCP proxy smoke", () => {
       expect(listBody.result.tools.map((tool) => tool.name)).toContain("kx_catalog");
       expect(listBody.result.tools.find((tool) => tool.name === "connection_list")).not.toHaveProperty("outputSchema");
       expect(listBody.result.tools.map((tool) => tool.name)).toEqual([
-        "sl_read_source",
         "connection_list",
         "lucy_catalog",
         "lucy_read_source",
@@ -944,18 +943,16 @@ describe("MCP proxy smoke", () => {
           }
         })
       });
+      // Spec 98 AbsoluteDeny: direct sl_* tools/call never reaches upstream SSE normalize.
       expect(res.status).toBe(200);
-      expect(res.headers.get("content-type") ?? "").toContain("application/json");
-      expect(res.headers.get("content-type") ?? "").not.toContain("text/event-stream");
       const text = await res.text();
-      expect(text.startsWith("event:")).toBe(false);
-      expect(text).not.toContain("notifications/progress");
       const parsed = JSON.parse(text) as {
         id: string;
-        result: { content: Array<{ text: string }> };
+        result: { isError?: boolean; content: Array<{ text: string }> };
       };
       expect(parsed.id).toBe("sse-legacy-sl-query");
-      expect(parsed.result.content[0]?.text ?? "").toContain("West");
+      expect(parsed.result.isError).toBe(true);
+      expect(parsed.result.content[0]?.text ?? "").toContain("tool_absolute_deny:sl_query");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -1534,7 +1531,7 @@ describe("MCP proxy smoke", () => {
           jsonrpc: "2.0",
           id: "after-begin-1",
           method: "tools/call",
-          params: { name: "sl_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } }
+          params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } }
         })
       });
       expect(followUpRes.status).toBe(200);
@@ -1800,7 +1797,7 @@ describe("MCP proxy smoke", () => {
       res.end(JSON.stringify({
         jsonrpc: "2.0",
         id: "tools-list-restricted",
-        result: { tools: [{ name: "sl_read_source", inputSchema: { type: "object" } }] }
+        result: { tools: [{ name: "lucy_read_source", inputSchema: { type: "object" } }, { name: "sl_read_source", inputSchema: { type: "object" } }] }
       }));
     });
 
@@ -1822,7 +1819,7 @@ describe("MCP proxy smoke", () => {
       });
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
       const names = listBody.result.tools.map((tool) => tool.name);
-      expect(names).toEqual(["sl_read_source"]);
+      expect(names).toEqual(["lucy_read_source"]);
       expect(names).not.toContain("lucy_begin_question");
       expect(names).not.toContain("kx_catalog");
     } finally {
@@ -1878,7 +1875,7 @@ describe("MCP proxy smoke", () => {
           id: "query-audit",
           method: "tools/call",
           params: {
-            name: "sl_read_source",
+            name: "lucy_read_source",
             arguments: {
               connectionId: "mysql-aliyun",
               sourceName: "superstore_orders",

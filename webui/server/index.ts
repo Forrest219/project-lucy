@@ -83,6 +83,7 @@ import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { registerPolicyRuntimeRoutes } from "./admin/policy-runtime.js";
+import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy } from "./proxy/acl.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";

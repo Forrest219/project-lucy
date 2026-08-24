@@ -20,7 +20,8 @@ vi.mock("../project.js", () => ({
 vi.mock("../proxy/audit.js", () => ({
   isTokenRevoked: testState.isTokenRevokedMock,
   writeLog: testState.writeLogMock,
-  writeAccessLogSources: testState.writeAccessLogSourcesMock
+  writeAccessLogSources: testState.writeAccessLogSourcesMock,
+  writeAuthFailureLog: vi.fn(() => Promise.resolve())
 }));
 
 vi.mock("../admin/audit.js", () => ({

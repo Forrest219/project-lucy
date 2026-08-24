@@ -69,7 +69,13 @@ const ACCESS_LOG_COLUMNS = [
   ["client_ip", "TEXT"],
   ["user_agent", "TEXT"],
   ["client_version", "TEXT"],
-  ["device_name", "TEXT"]
+  ["device_name", "TEXT"],
+  ["policy_version", "TEXT"],
+  ["capability_digest", "TEXT"]
+] as const;
+const PERMISSION_SNAPSHOT_COLUMNS = [
+  ["capability_digest", "TEXT"],
+  ["tool_classification_version", "TEXT"]
 ] as const;
 const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");

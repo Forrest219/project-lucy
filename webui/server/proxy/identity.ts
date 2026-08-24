@@ -147,6 +147,13 @@ export function invalidateAccessConfigCache(): void {
   configLoadedAt = 0;
 }
 
+/** Test / runtime helper: seed the in-memory access.yaml cache without disk I/O. */
+export function primeAccessConfigCache(config: AccessConfig, configPath?: string): void {
+  configCache = config;
+  if (configPath) configCachePath = configPath;
+  configLoadedAt = Date.now();
+}
+
 function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
