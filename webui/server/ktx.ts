@@ -1,5 +1,6 @@
 import { execFile, type ExecFileException } from "node:child_process";
 import { scrubSemanticLayerJunk } from "./semantic-layer-junk";
+import { relocateTableYamlHistoryOutOfSemanticLayer } from "./table-yaml-history";
 
 export type Issue = {
   message: string;
@@ -125,6 +126,13 @@ export async function runIngest(
   });
 }
 
+async function prepareSemanticLayerForKtx(projectRoot: string): Promise<void> {
+  // Spec 115: remove AppleDouble / .DS_Store before ktx walks semantic-layer.
+  await scrubSemanticLayerJunk(projectRoot);
+  // M54 leftover history under semantic-layer/ is not a connection; KTX rejects it.
+  await relocateTableYamlHistoryOutOfSemanticLayer(projectRoot);
+}
+
 export async function validateSource(
   projectRoot: string,
   conn: string,
@@ -132,8 +140,7 @@ export async function validateSource(
   table: string,
   execFileImpl: ExecFileImpl = execFile
 ): Promise<ValidationResult> {
-  // Spec 115: remove AppleDouble / .DS_Store before ktx walks semantic-layer.
-  await scrubSemanticLayerJunk(projectRoot);
+  await prepareSemanticLayerForKtx(projectRoot);
 
   return new Promise((resolve, reject) => {
     execFileImpl(
@@ -174,6 +181,7 @@ export async function reindexProject(
   projectRoot: string,
   options: { force?: boolean; execFileImpl?: ExecFileImpl } = {}
 ): Promise<IngestResult> {
+  await prepareSemanticLayerForKtx(projectRoot);
   const execFileImpl = options.execFileImpl ?? execFile;
   const args = ["admin", "reindex"];
   if (options.force) {

@@ -103,14 +103,21 @@ GET    /api/eval/monitor/config
 PUT    /api/eval/monitor/config
 GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
+GET    /api/eval/security-candidates
+POST   /api/eval/security-candidates/extract
+POST   /api/eval/security-candidates/:id/review
+POST   /api/eval/security-candidates/:id/promote/preview
+POST   /api/eval/security-candidates/:id/promote
 
 GET    /api/r1/observability
 GET    /api/help/handbook
+GET    /api/help/search
 
 POST   /api/semantic-assets/validate
 POST   /api/semantic-assets/publish
 GET    /api/semantic-assets/releases
 GET    /api/semantic-assets/releases/:id/status
+GET    /api/semantic-assets/releases/export.csv
 POST   /api/semantic-assets/export
 GET    /api/semantic-assets/exports/:exportId/download
 POST   /api/semantic-assets/reindex
@@ -138,6 +145,13 @@ GET    /api/admin/audit/turns/:turnId
 POST   /api/admin/audit/conversation-turns/purge
 GET    /api/admin/trace/events
 GET    /api/admin/mcp-tools
+POST   /api/admin/mcp-playground/acl-preview
+POST   /api/admin/mcp-playground/live-smoke
+GET    /api/admin/governance/overview
+GET    /api/admin/governance/agents
+GET    /api/admin/governance/roles
+GET    /api/admin/governance/tokens
+GET    /api/admin/governance/denials
 GET    /api/admin/governance/risk-review
 POST   /api/admin/governance/risk-review/:id/review
 GET    /api/admin/governance/release-readiness-package
@@ -264,7 +278,9 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 
 ### Table YAML 版本记录与恢复（M54）
 
-`PUT /api/sources/:conn/:schema/:table` 和 `POST /api/sources/:conn/:schema/:table/import` 在 `dryRun:false` 落盘后，会先把写完后的 YAML 快照追加到 `semantic-layer/.lucy-history/`，再返回新版快照摘要。保留最近 5 个版本，按 `versionId` 倒序，最新写入的版本即 cover current state。
+`PUT /api/sources/:conn/:schema/:table` 和 `POST /api/sources/:conn/:schema/:table/import` 在 `dryRun:false` 落盘后，会先把写完后的 YAML 快照追加到 `.ktx-ui/table-yaml-history/`，再返回新版快照摘要。保留最近 5 个版本，按 `versionId` 倒序，最新写入的版本即 cover current state。
+
+> 历史目录故意不放在 `semantic-layer/` 下：KTX `admin reindex` 会把 `semantic-layer/` 顶层目录当成 connection id，`.lucy-history` 会触发 `Unsafe connection id`。启动 validate/reindex 前若仍发现遗留的 `semantic-layer/.lucy-history`，会自动迁到 `.ktx-ui/table-yaml-history/`。
 
 `GET /api/sources/:conn/:schema/:table/versions` 返回最近 5 个版本的摘要列表：
 

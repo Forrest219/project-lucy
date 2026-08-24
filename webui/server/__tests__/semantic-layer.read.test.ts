@@ -122,8 +122,12 @@ describe("semantic-layer read", () => {
       relationship: "one_to_many"
     });
     expect(result.model.unknownKeys).toContain("x_custom");
+    expect(result.rawYaml).toContain("name: superstore_orders");
+    expect(result.rawYaml).toContain("table: dataforai.superstore_orders");
     expect(result.rawYaml).toContain("x_custom");
     expect(result.rawYaml).toContain("on:");
+    expect(result.rawYaml).not.toMatch(/\bpk:/);
+    expect(result.rawYaml).not.toMatch(/\bnullable:/);
   });
 
   it("raises not found for missing tables", async () => {

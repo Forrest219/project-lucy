@@ -155,7 +155,7 @@ Manifest 单文件也可走 Catalog 上传：`POST /api/catalog/assets/upload`�
 ### 6.2 步骤
 
 1. 准备 overlay 文件（standalone：含 `table:` + columns + measures/segments）。
-2. **KTX 兼容清洗（必做检查）**：列上若含 `pk` / `nullable` 等不被当前 KTX contract 接受的键，发布前剥离；否则 `lucy_query` 可能报 `violates the TS/Python contract`。
+2. **KTX 兼容清洗**：列上若含 `pk` / `nullable` 等不被当前 KTX contract 接受的键，发布校验会自动剥离（警告 `STRIPPED_MANIFEST_COLUMN_KEYS`）；Schema Manifest 中的同名字段保留不动。
 3. `validate`（`defaultConnectionId=CONN_ID`，`defaultSchema=SCHEMA`）→ 记录 `validationId`。
 4. `publish`（目标已存在则 `confirmOverwrite: true`）→ 等待 release `published` / reindex OK。
 5. 浏览器打开 `/publish/workbench`：无脏文件时可点 **同步索引**；CLI/覆盖后可用「更多 → 全量重建索引」`force:true`。

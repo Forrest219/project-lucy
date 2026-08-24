@@ -432,6 +432,45 @@ describe("POST /api/semantic-assets/validate", () => {
     await app.close();
   });
 
+  it("strips pk/nullable from overlay columns during validate", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/semantic-assets/validate")
+      .send({
+        defaultConnectionId: "customer-db",
+        files: [
+          {
+            filename: "overlay-with-nullable.yaml",
+            content: `name: international_country_metrics
+table: chatbi.ai_metric_international_country_daily
+columns:
+  - name: date
+    type: time
+    nullable: false
+  - name: country
+    type: string
+    pk: false
+grain:
+  - date
+  - country
+`
+          }
+        ]
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(true);
+    const warnings = res.body.data.warnings as Array<{ code: string; message: string }>;
+    expect(warnings.some((w) => w.code === "STRIPPED_MANIFEST_COLUMN_KEYS")).toBe(true);
+    expect(res.body.data.diff).not.toMatch(/\bnullable:/);
+    expect(res.body.data.diff).not.toMatch(/\bpk:/);
+    await app.close();
+  });
+
   it("returns YAML_PARSE_FAILED with line/column when the YAML is malformed", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;

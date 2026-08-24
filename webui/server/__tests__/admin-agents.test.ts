@@ -70,12 +70,13 @@ vi.mock("../admin/audit.js", () => ({
           })
         };
       }
-      return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() };
+      return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn(() => ({ lastInsertRowid: 1 })) };
     }),
     exec: vi.fn(),
     pragma: vi.fn()
   })),
   recordConfigChange: vi.fn(async () => 1),
+  updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAuditRoutes: vi.fn()
 }));
 
