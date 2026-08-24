@@ -1193,6 +1193,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     const total = filtered.length;
     const paged = filtered.slice(offset, offset + limit);
+    const reportedCount = filtered.filter((entry) => entry.source === "reported").length;
+    const inferredCount = filtered.filter((entry) => entry.source === "inferred").length;
+    const reportedShare = total > 0 ? reportedCount / total : 0;
     const slowCallsInFilter = countSlowCallsForFilter(database, q.since ?? sinceDefault, p95Ms, q.user ?? null);
     const totalCallsRow = database
       .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ts >= ?`)
@@ -1203,6 +1206,11 @@ export function registerAuditRoutes(app: FastifyInstance) {
       data: {
         total,
         entries: paged,
+        summary: {
+          reportedCount,
+          inferredCount,
+          reportedShare
+        },
         referenceLatency: {
           windowHours,
           p95Ms,

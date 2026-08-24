@@ -1198,6 +1198,7 @@ export function Audit() {
 
   const turnEntries = turnsQuery.data?.entries ?? [];
   const turnTotal = turnsQuery.data?.total ?? 0;
+  const turnSummary = turnsQuery.data?.summary;
   const referenceLatency = turnsQuery.data?.referenceLatency;
   const p95Ms = referenceLatency?.p95Ms ?? 0;
 
@@ -1477,8 +1478,23 @@ export function Audit() {
         <div className="pl-notice">加载失败：{(turnsQuery.error as Error).message}</div>
       ) : (
         <>
-          <div className="text-sm text-fg-muted">
-            {turnTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, turnTotal)} / 共 ${turnTotal} 条`}
+          <div className="space-y-1">
+            <div className="text-sm text-fg-muted">
+              {turnTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, turnTotal)} / 共 ${turnTotal} 条`}
+            </div>
+            {turnSummary ? (
+              <div className="text-sm text-fg-muted" data-testid="audit-turns-coverage-summary">
+                当前筛选：已上报问询 {turnSummary.reportedCount} · 推断问询 {turnSummary.inferredCount}
+                {turnTotal > 0
+                  ? ` · 上报占比 ${Math.round(turnSummary.reportedShare * 100)}%`
+                  : null}
+              </div>
+            ) : null}
+            {turnTotal === 0 || (turnSummary && turnSummary.reportedCount === 0) ? (
+              <div className="text-xs text-fg-muted" data-testid="audit-turns-coverage-hint">
+                用户原文依赖客户端可选上报；未上报时仅显示推断问询。
+              </div>
+            ) : null}
           </div>
           <div className="overflow-x-auto">
             <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-turns-table">

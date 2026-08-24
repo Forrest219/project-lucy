@@ -51,6 +51,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
               ok: true,
               data: {
                 total: 1,
+                summary: { reportedCount: 0, inferredCount: 1, reportedShare: 0 },
                 referenceLatency: { windowHours: 168, p95Ms: 120, totalCallsInWindow: 10, slowCallsInFilter: 1 },
                 entries: [
                   {
@@ -103,6 +104,9 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByText("Demo Agent (demo_agent)")).toBeInTheDocument();
     expect(screen.getByText("含 1 次慢调用")).toBeInTheDocument();
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
+    expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("已上报问询 0");
+    expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("推断问询 1");
+    expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("用户原文依赖客户端可选上报");
   });
 
   it("shows primary export on both tabs (Spec 106 header parity)", async () => {
@@ -111,7 +115,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes("/api/admin/audit/turns")) {
-          return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
+          return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 }, referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
         }
         if (url.startsWith("/api/admin/audit?")) {
           return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [] } }));
@@ -155,6 +159,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
               ok: true,
               data: {
                 total: 1,
+                summary: { reportedCount: 0, inferredCount: 1, reportedShare: 0 },
                 referenceLatency: { windowHours: 168, p95Ms: 120, totalCallsInWindow: 10, slowCallsInFilter: 0 },
                 entries: [
                   {
@@ -230,7 +235,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes("/api/admin/audit/turns")) {
-          return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
+          return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 }, referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
         }
         if (url.startsWith("/api/admin/audit?")) {
           return new Response(JSON.stringify({
@@ -310,6 +315,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
               ok: true,
               data: {
                 total: 1,
+                summary: { reportedCount: 0, inferredCount: 1, reportedShare: 0 },
                 referenceLatency: { windowHours: 168, p95Ms: 120, totalCallsInWindow: 1, slowCallsInFilter: 1 },
                 entries: [
                   {

@@ -390,6 +390,21 @@ describe("GET /api/admin/audit/turns", () => {
       const allRes = await request(app.server).get("/api/admin/audit/turns?user=turns-user&source=all").expect(200);
       expect(allRes.body.data.total).toBe(2);
       expect(allRes.body.data.entries.map((e: { source: string }) => e.source).sort()).toEqual(["inferred", "reported"]);
+      expect(allRes.body.data.summary).toEqual({
+        reportedCount: 1,
+        inferredCount: 1,
+        reportedShare: 0.5
+      });
+      expect(inferredRes.body.data.summary).toEqual({
+        reportedCount: 0,
+        inferredCount: 1,
+        reportedShare: 0
+      });
+      expect(reportedRes.body.data.summary).toEqual({
+        reportedCount: 1,
+        inferredCount: 0,
+        reportedShare: 1
+      });
     } finally {
       await app.close();
     }

@@ -638,7 +638,8 @@ function lucyFreshnessTool() {
 function lucyBeginQuestionTool() {
   return {
     name: "lucy_begin_question",
-    description: "Optional. Call once at the beginning of a user business question to record the user's natural-language question for Lucy audit. Do not call for protocol checks or tool discovery only.",
+    description:
+      "Optional but recommended. Call once at the start of each new user business question to help Lucy audit. Prefer passing the user's original wording in `question` when available; always provide `intentSummary`. Skipping this tool never blocks catalog or query tools. Do not call for protocol checks or tool discovery only.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1146,6 +1147,12 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`
     ));
     const exampleLines = catalog.examples.map((example) => `- ${example}`);
+    const questionReportingLines = visibleTools.has("lucy_begin_question")
+      ? [
+          "- Optional but recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping this call never blocks catalog or query tools. Do not call it for protocol checks or tool discovery only.",
+          ""
+        ]
+      : [];
     return [
       "# Lucy Data QA Runtime Instructions",
       "",
@@ -1154,6 +1161,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "- Only use connections and sources listed in this session's visible scope.",
       "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
       "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
+      ...questionReportingLines,
       "- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.",
       "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
       "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",

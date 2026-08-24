@@ -31,7 +31,7 @@ describe("Audit", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/api/admin/audit/turns")) {
-        return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
+        return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 }, referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
       }
       if (url.startsWith("/api/admin/audit")) {
         return new Response(
@@ -125,6 +125,7 @@ describe("Audit", () => {
             data: {
               total: 0,
               entries: [],
+              summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
               referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
             }
           })

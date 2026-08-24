@@ -14,6 +14,12 @@
 - 对日期字段按可见 source / wiki 的业务时区说明解释；POC 日期通常是 `Asia/Shanghai` 业务自然日。
 - Fallback instructions 不自动加载 Skill；如需复用 `skills/**/SKILL.md` 的分析路径，必须由客户端/agent 显式读取可见 Skill 或等待后续 lucy-skills MCP server 提供路由。
 
+## 可选问询上报（锦上添花）
+
+- 若当前 session 的 `tools/list` 可见 `lucy_begin_question`：每个新的业务问询开始时可先调用一次。
+- 能拿到用户原话时填 `question`；至少填 `intentSummary`。
+- **漏调不影响查数**；协议探测或纯 tools 发现不要调用。
+
 ## 查询顺序
 
 1. 用当前可见 catalog 工具确认连接和 source。

@@ -826,6 +826,11 @@ export type AuditTurnsResponse = {
   total: number;
   entries: AuditTurnEntry[];
   referenceLatency: AuditTurnReferenceLatency;
+  summary: {
+    reportedCount: number;
+    inferredCount: number;
+    reportedShare: number;
+  };
 };
 
 export type AuditTurnCallLog = {
