@@ -14,7 +14,8 @@ vi.mock("../admin/audit.js", () => ({
       run: vi.fn(() => ({ lastInsertRowid: 1 }))
     })),
     exec: vi.fn(),
-    pragma: vi.fn()
+    pragma: vi.fn(),
+    transaction: vi.fn((fn: (...args: unknown[]) => unknown) => fn)
   })),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => undefined),

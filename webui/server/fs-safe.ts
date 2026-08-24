@@ -251,3 +251,135 @@ export async function assertReadable(projectRoot: string, relPath: string): Prom
 
   return target;
 }
+
+/**
+ * Spec 124 Phase A: narrow write exception for one-shot connection passwords.
+ *
+ * General `safeWrite` / `assertReadable` still DENY `.ktx/secrets/**`.
+ * Only this helper may create a brand-new file matching:
+ * `.ktx/secrets/<connId>-password` where connId is `[a-z][a-z0-9_-]{1,63}`.
+ *
+ * Refuses: read APIs, listing, overwrite, symlinks, path traversal, other names.
+ */
+export const SECRET_PASSWORD_REL_PATH_PATTERN =
+  "^\\.ktx/secrets/([a-z][a-z0-9_-]{1,63})-password$";
+const SECRET_PASSWORD_REL_PATH_RE = new RegExp(SECRET_PASSWORD_REL_PATH_PATTERN);
+
+export class SecretAlreadyExistsError extends Error {
+  code = "SECRET_ALREADY_EXISTS";
+  statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "SecretAlreadyExistsError";
+  }
+}
+
+export function assertSecretPasswordRelPath(relPath: string): string {
+  if (typeof relPath !== "string" || relPath.includes("..")) {
+    throw new ForbiddenPathError("Path traversal is not allowed");
+  }
+  const normalized = normalizeRelative(relPath);
+  if (!SECRET_PASSWORD_REL_PATH_RE.test(normalized)) {
+    throw new ForbiddenPathError(
+      `Secret path '${normalized}' is not an allowed connection password file`
+    );
+  }
+  return normalized;
+}
+
+async function resolveNewSecretPasswordTarget(
+  projectRoot: string,
+  relPath: string
+): Promise<{ rootReal: string; secretsDirReal: string; target: string; normalized: string }> {
+  const normalized = assertSecretPasswordRelPath(relPath);
+  const rootReal = await realpath(projectRoot);
+  const ktxDir = path.join(rootReal, ".ktx");
+  await mkdir(ktxDir, { recursive: true });
+  const secretsDir = path.join(ktxDir, "secrets");
+  await mkdir(secretsDir, { recursive: true });
+
+  let secretsDirReal: string;
+  try {
+    const secretsStat = await lstat(secretsDir);
+    if (secretsStat.isSymbolicLink()) {
+      throw new ForbiddenPathError("Writing through a symlinked .ktx/secrets directory is forbidden");
+    }
+    secretsDirReal = await realpath(secretsDir);
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    throw error;
+  }
+
+  if (!isWithin(secretsDirReal, rootReal)) {
+    throw new ForbiddenPathError("Secrets directory escapes the project root");
+  }
+  const expectedSecretsRel = path.relative(rootReal, secretsDirReal).replaceAll(path.sep, "/");
+  if (expectedSecretsRel !== ".ktx/secrets") {
+    throw new ForbiddenPathError(`Resolved secrets directory ${expectedSecretsRel} is not writable`);
+  }
+
+  const fileName = path.basename(normalized);
+  const target = path.join(secretsDirReal, fileName);
+  if (!isWithin(target, secretsDirReal)) {
+    throw new ForbiddenPathError("Secret path escapes the secrets directory");
+  }
+  return { rootReal, secretsDirReal, target, normalized };
+}
+
+export async function safeWriteNewSecretPassword(
+  projectRoot: string,
+  relPath: string,
+  passwordPlaintext: string
+): Promise<{ relPath: string }> {
+  if (typeof passwordPlaintext !== "string" || passwordPlaintext.length === 0) {
+    throw new ForbiddenPathError("Connection password must be a non-empty string");
+  }
+
+  const { target, normalized } = await resolveNewSecretPasswordTarget(projectRoot, relPath);
+
+  try {
+    const existing = await lstat(target);
+    if (existing.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a symlink`);
+    }
+    throw new SecretAlreadyExistsError(`Password file '${normalized}' already exists`);
+  } catch (error) {
+    if (error instanceof ForbiddenPathError || error instanceof SecretAlreadyExistsError) {
+      throw error;
+    }
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  await writeFile(target, passwordPlaintext, { encoding: "utf8", mode: 0o600 });
+  return { relPath: normalized };
+}
+
+/**
+ * Rollback helper for Spec 124 create-connection. Only deletes the exact
+ * allowed password filename; no-ops on ENOENT. Never follows symlinks.
+ */
+export async function safeRemoveSecretPasswordIfExists(
+  projectRoot: string,
+  relPath: string
+): Promise<void> {
+  const { target, normalized } = await resolveNewSecretPasswordTarget(projectRoot, relPath);
+  try {
+    const existing = await lstat(target);
+    if (existing.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Removing symlinked secret ${normalized} is forbidden`);
+    }
+    if (existing.isDirectory()) {
+      throw new ForbiddenPathError(`Secret path ${normalized} is a directory`);
+    }
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  await rm(target, { force: true });
+}

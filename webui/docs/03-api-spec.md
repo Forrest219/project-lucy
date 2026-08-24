@@ -62,6 +62,7 @@ GET  /api/joins/candidates                       # .ktx-ui sidecar
 PUT  /api/joins/candidates
 
 GET  /api/connections
+POST /api/connections                            # Spec 124 Phase A: create connection (dryRun:true default; one-shot secret write)
 GET  /api/connections/:connId/tables
 GET  /api/connections/:connId/live-schemas       # Owner on-demand read-only DB catalog (Spec 107)
 PUT  /api/connections/:connId/enabled-tables     # default dryRun
@@ -116,6 +117,7 @@ GET    /api/help/search
 POST   /api/semantic-assets/validate
 POST   /api/semantic-assets/publish
 GET    /api/semantic-assets/releases
+GET    /api/semantic-assets/releases/export.csv
 GET    /api/semantic-assets/releases/:id/status
 GET    /api/semantic-assets/releases/export.csv
 POST   /api/semantic-assets/export
@@ -390,6 +392,8 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 ### 数据库连接
 
 `GET /api/connections` 返回 `ConnectionInfo[]`，字段见 `04-data-model.md`。
+
+`POST /api/connections`（Spec 124 Phase A）新建连接配置：默认 `dryRun:true`；确认写入时创建 `.ktx/secrets/<id>-password`（0600，拒绝覆盖），并在 `ktx.yaml` 追加 `connections.<id>`（`password` 仅 `file:` 引用）与 `setup.database_connection_ids`。写入后执行 `ktx connection test`；失败则回滚 yaml 与 secret。响应与审计 diff **永不包含明文密码**。通用 `fs-safe` 对 `.ktx/secrets/**` 仍 DENY；仅专用写通道可创建约定文件名。本 Phase **无 UI**。
 
 `GET /api/connections/:connId/live-schemas`（Spec 107）经 `ktx sql --json` 只读聚合账号可见 Schema 及 BASE TABLE 数量。Query `refresh=1` 跳过进程内 TTL（默认 10 分钟）。成功 / 连通失败均返回 HTTP 200 + `data.status`（与 connection test 同构，便于分连接 UI）；连接不存在返回 404。字段见 Spec 107 §6。
 

@@ -639,7 +639,9 @@ export function TableWhitelist() {
 
       <section className="pl-panel">
         {connections.length === 0 && (
-          <p className="text-sm text-fg-muted">暂无连接配置。</p>
+          <p className="text-sm text-fg-muted" data-testid="enabled-tables-empty">
+            暂无连接配置。请先在 <Link to="/connections">连接概览</Link> 新建连接。
+          </p>
         )}
 
         {connections.length > 0 && (

@@ -18,7 +18,7 @@ vi.mock("../admin/audit.js", () => ({
         return {
           run: vi.fn((hash: string, revokedAt: string, reason: string) => {
             revokedRows.push({ token_hash: hash, revoked_at: revokedAt, reason });
-            return { lastInsertRowid: 1 };
+            return { lastInsertRowid: revokedRows.length };
           })
         };
       }
@@ -29,7 +29,8 @@ vi.mock("../admin/audit.js", () => ({
       };
     }),
     exec: vi.fn(),
-    pragma: vi.fn()
+    pragma: vi.fn(),
+    transaction: vi.fn((fn: (...args: unknown[]) => unknown) => fn)
   })),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => undefined),

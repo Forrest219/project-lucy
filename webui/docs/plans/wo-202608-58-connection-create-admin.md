@@ -14,7 +14,7 @@
 
 **Goal:** 设计并（后续）实现 WebUI **新建连接**：一次性密码写入 `.ktx/secrets/<id>-password`，`ktx.yaml` 仅存 `file:`；门禁沿用现状 local-admin 信任。
 
-**本轮状态:** **仅设计**（Spec + 本 Plan）。不改 server/UI 代码。
+**本轮状态:** Phase A（API）与 Phase B（UI）已实现；Phase C（手册翻转）未开工。
 
 **Architecture:** `CreateConnectionDrawer` → `POST /api/connections`（dryRun 默认 true）→ `safeWriteNewSecretPassword` + YAML Document 插入 `connections.<id>` / `setup.database_connection_ids` → `ktx connection test` → 失败整单回滚。
 
@@ -25,6 +25,7 @@
 | 版本 | 变更 |
 |---|---|
 | v0.1 | 设计轮：对齐 Spec 124；列出实现工作包 |
+| v0.2 | Phase A/B 落地：勾选 WP；手册翻转仍属 Phase C |
 
 ---
 
@@ -39,25 +40,25 @@
 
 ## Scope
 
-### 本轮（Design only）
+### 设计
 
 - [x] Spec 124
 - [x] 术语标准登记 Create Connection 相关词
 - [x] 本 Plan（工作包与验收指针）
 
-### 后续实现（未开工）
+### 实现
 
-#### Phase A — Server
+#### Phase A — Server（见 `wo-202608-58a-…`）
 
-- [ ] `safeWriteNewSecretPassword` / 回滚删除 + 单测
-- [ ] `createConnection()` YAML 补丁 + dryRun 脱敏
-- [ ] `POST /api/connections` + test 失败回滚 + audit
+- [x] `safeWriteNewSecretPassword` / 回滚删除 + 单测
+- [x] `createConnection()` YAML 补丁 + dryRun 脱敏
+- [x] `POST /api/connections` + test 失败回滚 + audit
 
-#### Phase B — UI
+#### Phase B — UI（见 `wo-202608-58b-…`）
 
-- [ ] `CreateConnectionDrawer`
-- [ ] `/connections` PageHeader / 空态 CTA
-- [ ] enabled-tables / test 空态文案
+- [x] `CreateConnectionDrawer`
+- [x] `/connections` PageHeader / 空态 CTA
+- [x] enabled-tables / test 空态文案
 
 #### Phase C — Docs flip
 

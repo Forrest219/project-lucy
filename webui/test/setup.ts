@@ -2,8 +2,21 @@
 // Radix UI primitives (Tooltip / Select / etc.) call ResizeObserver
 // during mount via @radix-ui/react-use-size; jsdom doesn't ship one.
 
+import { mkdtempSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
+
+// Many server tests call auditedWriteFile → getAuditDb without setting
+// KTX_PROJECT_ROOT / creating ktx.yaml (gitignored in CI). Provide a
+// process-wide default audit sqlite so those paths do not depend on a
+// resolvable project root. Individual suites may still override
+// LUCY_AUDIT_DB and reset modules as needed.
+if (!process.env.LUCY_AUDIT_DB || process.env.LUCY_AUDIT_DB.trim().length === 0) {
+  const auditDir = mkdtempSync(path.join(os.tmpdir(), "lucy-vitest-audit-"));
+  process.env.LUCY_AUDIT_DB = path.join(auditDir, "audit.sqlite");
+}
 
 class ResizeObserverMock {
   observe(): void {}

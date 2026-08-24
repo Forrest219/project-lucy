@@ -25,6 +25,7 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
+import { CreateConnectionDrawer } from "../../components/CreateConnectionDrawer";
 import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
 import {
   CatalogAssetManifestDrawer,
@@ -428,6 +429,7 @@ export function ConnectionOverview() {
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [reloadRunsByConnection, setReloadRunsByConnection] = useState<Record<string, CatalogReloadRun>>({});
   const [reloadErrorsByConnection, setReloadErrorsByConnection] = useState<Record<string, Error | null>>({});
@@ -507,6 +509,16 @@ export function ConnectionOverview() {
         description={
           <span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与配置同步状态。</span>
         }
+        actions={
+          <button
+            type="button"
+            className="pl-btn pl-btn--primary"
+            onClick={() => setCreateOpen(true)}
+            data-testid="create-connection-btn"
+          >
+            新建连接
+          </button>
+        }
       />
 
       <div className="pl-metric-grid">
@@ -535,7 +547,20 @@ export function ConnectionOverview() {
 
       <div className="pl-overview-grid pl-overview-grid--flat">
         {connections.length === 0 && (
-          <p className="text-sm text-fg-muted py-4 notranslate" translate="no">暂无连接配置，请在 ktx.yaml 中添加 connections。</p>
+          <div className="py-6 space-y-3" data-testid="connections-empty-state">
+            <p className="text-sm text-fg-muted">暂无连接配置。</p>
+            <p className="text-xs text-fg-muted notranslate" translate="no">
+              也可在 <code className="notranslate" translate="no">ktx.yaml</code> 中手工添加。
+            </p>
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary"
+              onClick={() => setCreateOpen(true)}
+              data-testid="create-connection-empty-btn"
+            >
+              新建连接
+            </button>
+          </div>
         )}
         {connections.map((conn) => {
             const lastRun =
@@ -1113,6 +1138,13 @@ export function ConnectionOverview() {
           })}
       </div>
 
+      {createOpen ? (
+        <CreateConnectionDrawer
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          existingIds={connections.map((conn) => conn.id)}
+        />
+      ) : null}
       {addTarget && (
         <AddSchemaDrawer
           connection={addTarget}
