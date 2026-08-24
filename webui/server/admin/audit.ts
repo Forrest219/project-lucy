@@ -60,6 +60,7 @@ const ACCESS_LOG_COLUMNS = [
   ["query_operation", "TEXT"],
   ["query_preview", "TEXT"],
   ["query_artifact_ref", "TEXT"],
+  ["generated_sql", "TEXT"],
   ["response_bytes", "INTEGER"],
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
@@ -531,6 +532,7 @@ interface QueryRow {
   query_operation: string | null;
   query_preview: string | null;
   query_artifact_ref: string | null;
+  generated_sql: string | null;
   outcome: string;
   error_detail: string | null;
   duration_ms: number;
@@ -1081,6 +1083,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       queryOperation: row.query_operation ?? undefined,
       queryPreview: row.query_preview ?? undefined,
       queryArtifactRef: row.query_artifact_ref ?? undefined,
+      generatedSql: row.generated_sql ?? undefined,
       outcome: row.outcome as "ok" | "error" | "denied",
       errorDetail: row.error_detail ? redactJsonString(row.error_detail) ?? undefined : undefined,
       durationMs: row.duration_ms,
@@ -1146,6 +1149,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       "query_length",
       "query_operation",
       "query_preview",
+      "generated_sql",
       "outcome",
       "error_detail",
       "duration_ms",
@@ -1184,6 +1188,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
           row.query_length ?? "",
           csvCell(row.query_operation),
           csvCell(row.query_preview),
+          csvCell(row.generated_sql),
           csvCell(row.outcome),
           csvCell(redactJsonString(row.error_detail)),
           row.duration_ms,

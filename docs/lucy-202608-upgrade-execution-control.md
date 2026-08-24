@@ -129,7 +129,7 @@ feat(202608): strengthen governance observability evidence loop
 ## 9. Known Failure Patterns To Prevent
 
 - Treating SQLite as the access configuration source.
-- Storing raw SQL AST, result rows, full original question, Token plaintext, DB credentials, or customer samples.
+- Storing raw SQL AST / raw query attack payloads, result rows, full original question, Token plaintext, DB credentials, or customer samples. (Compiled **generated SQL** from `lucy_query` may be stored in the audit hot store per Spec 125.)
 - Letting unreviewed security candidates enter formal Eval.
 - Running Deferred FDE Copilot / Static Lint tasks as part of this iteration.
 - Reintroducing Dynamic RLS / CLS POC or multi-tenant isolation work into 202608.

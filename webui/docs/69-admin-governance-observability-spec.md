@@ -27,7 +27,7 @@
 - Do not build a full Visual Debugger.
 - Do not introduce a new Admin design system.
 - Do not auto-remediate Role / Token risks.
-- Do not expose raw SQL AST, result rows, full original question, Token plaintext, DB credentials, or customer samples.
+- Do not expose raw SQL AST / raw query attack payloads, result rows, full original question, Token plaintext, DB credentials, or customer samples. Compiled **generated SQL** may appear on the audit call log (Spec 125).
 - Do not implement SSO / OIDC.
 
 ## 4. API Surface
@@ -83,7 +83,7 @@ The detail should show:
 It must not show:
 
 - Token plaintext.
-- raw SQL AST.
+- raw SQL AST / raw query attack payloads（compiled generated SQL is allowed on the call log per Spec 125）.
 - raw result rows.
 - full original question.
 - DB credentials.

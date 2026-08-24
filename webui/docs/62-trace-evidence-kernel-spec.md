@@ -259,12 +259,13 @@ Hot store data boundary:
 | Allowed in SQLite hot store | Forbidden in SQLite hot store |
 |---|---|
 | Trace Envelope | 物理结果集明细 |
-| Evidence Ref | 原始 SQL AST |
+| Evidence Ref | 原始 SQL AST / raw query 攻击载荷 |
 | Policy Decision | 未脱敏 Token / secret |
 | Artifact Hashes | 完整原始问题 |
 | Reviewer / Override signatures | 数据库凭据 |
 | redacted metadata | 客户行级样本 |
-| SQL AST hash / normalized summary / redacted structural metadata | SQL AST 原文 |
+| SQL AST hash / normalized summary / redacted structural metadata | — |
+| **Generated SQL plaintext**（仅 `lucy_query` / `sl_query` 编译结果；见 Spec 125） | 把 args 中的 raw `sql`/`query` 当作 generated 落库 |
 
 ## 8. API And Helper Surface
 
