@@ -26,6 +26,7 @@ export interface AccessLogEntry {
   queryLength?: number;
   queryOperation?: string;
   queryPreview?: string;
+  queryArtifactRef?: string;
   outcome: "ok" | "error" | "denied";
   errorDetail?: string;
   durationMs: number;
@@ -87,6 +88,7 @@ const ACCESS_LOG_COLUMNS = [
   ["query_length", "INTEGER"],
   ["query_operation", "TEXT"],
   ["query_preview", "TEXT"],
+  ["query_artifact_ref", "TEXT"],
   ["response_bytes", "INTEGER"],
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
@@ -275,9 +277,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
     `);
   }
   const result = insertStmt.run({
@@ -300,6 +302,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     queryLength: entry.queryLength ?? null,
     queryOperation: entry.queryOperation ?? null,
     queryPreview: entry.queryPreview ?? null,
+    queryArtifactRef: entry.queryArtifactRef ?? null,
     outcome: entry.outcome,
     errorDetail: entry.errorDetail ? truncateErrorDetail(entry.errorDetail) : null,
     durationMs: entry.durationMs,

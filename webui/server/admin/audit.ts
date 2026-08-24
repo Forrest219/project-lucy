@@ -26,6 +26,7 @@ import {
   type TraceEventRow,
   type EvidenceEventRow
 } from "../trace/evidence.js";
+import { readQueryArtifact } from "../audit/query-artifact-store.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
@@ -58,6 +59,7 @@ const ACCESS_LOG_COLUMNS = [
   ["query_length", "INTEGER"],
   ["query_operation", "TEXT"],
   ["query_preview", "TEXT"],
+  ["query_artifact_ref", "TEXT"],
   ["response_bytes", "INTEGER"],
   ["response_row_count", "INTEGER"],
   ["response_column_count", "INTEGER"],
@@ -370,6 +372,21 @@ export async function getAuditDb(): Promise<Database.Database> {
   // policy decisions, and reviewer evidence refs. Schema is idempotent so
   // first-touch and existing databases both end up with the same shape.
   ensureTraceEvidenceSchema(db);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS query_artifact_access_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      artifact_ref TEXT NOT NULL,
+      request_id TEXT,
+      query_hash TEXT,
+      access_log_id INTEGER,
+      outcome TEXT NOT NULL,
+      error_detail TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_qaal_ts ON query_artifact_access_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_qaal_ref ON query_artifact_access_log(artifact_ref, ts);
+  `);
   return db;
 }
 
@@ -513,6 +530,7 @@ interface QueryRow {
   query_length: number | null;
   query_operation: string | null;
   query_preview: string | null;
+  query_artifact_ref: string | null;
   outcome: string;
   error_detail: string | null;
   duration_ms: number;
@@ -652,6 +670,113 @@ function countSlowCallsForFilter(
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
+  app.get<{
+    Querystring: {
+      requestId?: string;
+      ref?: string;
+    };
+  }>("/api/admin/audit/query-artifacts", async (request, reply) => {
+    const requestId = request.query.requestId?.trim();
+    const refParam = request.query.ref?.trim();
+    if (!requestId && !refParam) {
+      reply.code(400);
+      return { ok: false, error: { code: "ERR_INVALID_QUERY", message: "requestId or ref is required" } };
+    }
+
+    const database = await getAuditDb();
+    let artifactRef = refParam ?? "";
+    let accessLogId: number | null = null;
+    let queryHash: string | null = null;
+    let tool: string | null = null;
+
+    if (requestId) {
+      const row = database
+        .prepare(
+          `SELECT id, query_artifact_ref, query_hash, tool
+           FROM access_log
+           WHERE request_id = ?
+           ORDER BY id DESC
+           LIMIT 1`
+        )
+        .get(requestId) as
+        | {
+            id: number;
+            query_artifact_ref: string | null;
+            query_hash: string | null;
+            tool: string;
+          }
+        | undefined;
+      if (!row?.query_artifact_ref) {
+        reply.code(404);
+        return {
+          ok: false,
+          error: { code: "ERR_QUERY_ARTIFACT_NOT_FOUND", message: "no query artifact for requestId" }
+        };
+      }
+      artifactRef = row.query_artifact_ref;
+      accessLogId = row.id;
+      queryHash = row.query_hash;
+      tool = row.tool;
+    }
+
+    const actor = "local-admin";
+    const ts = new Date().toISOString();
+    const insertAccess = database.prepare(`
+      INSERT INTO query_artifact_access_log
+        (ts, actor, artifact_ref, request_id, query_hash, access_log_id, outcome, error_detail)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    try {
+      const loaded = await readQueryArtifact(artifactRef);
+      if (!loaded) {
+        insertAccess.run(ts, actor, artifactRef, requestId ?? null, queryHash, accessLogId, "not_found", null);
+        reply.code(404);
+        return {
+          ok: false,
+          error: { code: "ERR_QUERY_ARTIFACT_NOT_FOUND", message: "query artifact file missing" }
+        };
+      }
+      insertAccess.run(
+        ts,
+        actor,
+        artifactRef,
+        loaded.record.requestId,
+        loaded.record.queryHash,
+        accessLogId,
+        "ok",
+        null
+      );
+      return {
+        ok: true,
+        data: {
+          ref: loaded.record.ref,
+          kind: loaded.record.kind,
+          tool: loaded.record.tool ?? tool,
+          requestId: loaded.record.requestId,
+          traceId: loaded.record.traceId,
+          queryHash: loaded.record.queryHash,
+          createdAt: loaded.record.createdAt,
+          plaintext: loaded.plaintext,
+          accessLogId
+        }
+      };
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      const message = error instanceof Error ? error.message : String(error);
+      insertAccess.run(ts, actor, artifactRef, requestId ?? null, queryHash, accessLogId, "error", message.slice(0, 300));
+      reply.code(statusCode);
+      return {
+        ok: false,
+        error: {
+          code: code ?? "ERR_QUERY_ARTIFACT_READ",
+          message
+        }
+      };
+    }
+  });
+
   app.get<{
     Querystring: {
       targetId?: string;
@@ -955,6 +1080,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       queryLength: row.query_length ?? undefined,
       queryOperation: row.query_operation ?? undefined,
       queryPreview: row.query_preview ?? undefined,
+      queryArtifactRef: row.query_artifact_ref ?? undefined,
       outcome: row.outcome as "ok" | "error" | "denied",
       errorDetail: row.error_detail ? redactJsonString(row.error_detail) ?? undefined : undefined,
       durationMs: row.duration_ms,

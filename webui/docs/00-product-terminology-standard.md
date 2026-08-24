@@ -464,39 +464,13 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
-| Client IP | 访问 IP | 最近访问 IP | remoteAddress（裸露） | 调用流水 / Drawer；Spec 124 |
-| Last Seen Device Name | 最近设备名 | 运行时设备名 | Device（裸露作主标签）；与「设备名备注」混用 | 可选头观测值；Spec 124 |
-| Device Name Remark | 设备名备注 | 备注 | 绑定设备 | 仅签发 YAML；不进 access_log |
-| User-Agent | User-Agent | UA | — | 调用流水高级区；值 `notranslate` |
-| Client Version | 客户端版本 | — | — | 与 `client`（产品名）成对 |
-| Agent Client Type | Agent 类型 | 客户端 | — | Token 清单运行时列 |
+| Query Artifact | 查询原文（加密） | 加密查询原文 | 冷库明文 SQL、热库 SQL 原文 | Spec 124：冷存 AES-GCM 密文；按需解密 |
+| Query Artifact Ref | 查询原文引用 | artifact ref | 把 ref 当明文 SQL 展示 | 热库 `query_artifact_ref` 指针 |
+| View Query Artifact | 查看查询原文 | — | 解密（无授权语境作主按钮） | 调用流水展开行受控动作；必留 forensic 审计 |
 
 #### 4.7.1 Trace Read Model（Spec 62）
 
-`/admin/audit` 内只读 Trace 核查链路（非 Visual Debugger）。术语来自 Spec 62 v0.5：
-
-| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
-|---|---|---|---|---|
-| Trace Detail | Trace 详情 | 核查链路 | 调试器、Visual Debugger、审计 2.0 | 从访问日志行打开的只读 Drawer / 面板 |
-| Trace Event | Trace Event | — | 审计行（与事件 ID 混淆）、log event（裸露作主标签） | append-only span 行 |
-| Evidence Event | Evidence Event | — | Action Evidence、发布证据 | 挂在 Trace 上的证据行 |
-| Evidence Ref | Evidence Ref | — | 证据来源（Action Evidence 挪用）、附件 | kind + ref + hash 引用 |
-| Ordered Spans | 有序 Span | — | Timeline（无说明）、调用树（过宽） | 按时间 / 父子排序的 span 列表 |
-| Policy Decision | 策略裁决 | — | 裁决原因（单独指 Decision Reason 展示）、ACL dump | `policy_decision` span；展示时可同时含裁决原因双行 |
-| Trace ID | Trace ID | — | trace id（裸露作唯一主标签且无保护） | 与 `access_log.trace_id` 对齐；可复制 |
-
-**消歧（禁止混用）：**
-
-| 概念 | UI / 文档应使用 | 不得称为 |
-|---|---|---|
-| Kernel Evidence（Spec 62） | Evidence Event / Evidence Ref | Action Evidence、发布证据包 |
-| Action Evidence（Spec 100） | 证据来源 | Trace Evidence、Evidence Ref |
-| Release Readiness Evidence Package（P2） | 发布就绪证据包（若产品化） | Trace 详情 |
-| Access Governance Gate（P1） | 访问治理门禁 | 发布门禁、Eval 质量门禁 |
-
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Trace`、`Evidence`、`Span`、`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID / Trace ID 值、裁决原因码、`trace_id`。
-
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 62** 要求 Trace Read Model 术语与热库证据消歧。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 124** 要求查询原文加密冷存与受控查看。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 

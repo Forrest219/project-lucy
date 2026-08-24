@@ -558,6 +558,8 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("/help?section=admin-audit-hot-cold-store");
     expect(handbook.markdown).toContain("query_hash");
     expect(handbook.markdown).toContain("query_preview");
+    expect(handbook.markdown).toContain("LUCY_AUDIT_QUERY_KEY");
+    expect(handbook.markdown).toContain("query_artifact_ref");
     expect(handbook.markdown).toMatch(/哈希.*加密|加密.*哈希/u);
     expect(handbook.markdown).toContain("为什么 `/admin/audit` 看不到完整 `SQL`？");
     expect(handbook.toc).toEqual(
