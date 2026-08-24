@@ -417,7 +417,7 @@ v1.2 增加连接裁决：
 | `role_resolution_failed:<role>` | role selector / tool / connection 解析失败 |
 | `user_disabled` | user disabled |
 | `token_revoked` | token 已撤销 |
-| `token_expired` | token 已过期 |
+| `token_expired` | token 已过期（`expires_at` 到期或不可解析；Proxy `identifyRequest` 强制校验，见 WO-202608-62） |
 | `tools_list_rewrite_failed` | `tools/list` 改写失败，拒绝透传 |
 
 ### 6.2 `kx_catalog` 返回合同

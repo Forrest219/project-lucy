@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
@@ -24,6 +24,7 @@ import {
   KeyRound,
   ScrollText,
   Terminal,
+  Users,
   type LucideIcon
 } from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
@@ -44,6 +45,9 @@ import { ConfigAudit } from "../pages/admin/ConfigAudit";
 import { AuditSources } from "../pages/admin/AuditSources";
 import { RoleList } from "../pages/admin/RoleList";
 import { RoleDetail } from "../pages/admin/RoleDetail";
+import { AdminAccounts } from "../pages/admin/AdminAccounts";
+import { LoginPage } from "../pages/Login";
+import { AuthProvider, useAuth, useAuthOptional } from "../lib/auth";
 import { CaseList } from "../pages/eval/CaseList";
 import { CaseEditor } from "../pages/eval/CaseEditor";
 import { RunList } from "../pages/eval/RunList";
@@ -128,7 +132,8 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   roles: KeyRound,
   audit: ScrollText,
   mcpPlayground: Terminal,
-  configAudit: ShieldCheck
+  configAudit: ShieldCheck,
+  admins: Users
 };
 
 const GROUP_ICONS: Record<string, LucideIcon> = {
@@ -355,6 +360,7 @@ export function AppFrame() {
           })}
         </nav>
         <div className="pl-sidebar-footer" data-testid="sidebar-footer">
+          <SidebarAuthFooter />
           <div className="pl-sidebar-utility" data-testid="sidebar-utility">
             <HelpButton className="pl-sidebar-help-link">
               <CircleHelp aria-hidden="true" className="size-4" />
@@ -401,6 +407,7 @@ export function AppFrame() {
             <Route path="/admin/audit-sources" element={<AuditSources />} />
             <Route path="/admin/mcp-playground" element={<McpPlayground />} />
             <Route path="/admin/config-audit" element={<ConfigAudit />} />
+            <Route path="/admin/admins" element={<AdminAccounts />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />
             <Route path="/eval/cases/:domain/new" element={<CaseEditor />} />
@@ -427,12 +434,66 @@ export function AppFrame() {
   );
 }
 
+function SidebarAuthFooter() {
+  const auth = useAuthOptional();
+  if (!auth?.status || auth.status.mode === "open") return null;
+  if (!auth.status.me) return null;
+  return (
+    <div className="px-3 pb-2 text-xs text-fg-muted grid gap-1" data-testid="sidebar-auth">
+      <div>
+        <span>当前管理员：</span>
+        <span className="notranslate font-mono" translate="no">
+          {auth.status.me.id}
+        </span>
+      </div>
+      <button
+        type="button"
+        className="pl-btn pl-btn--ghost text-left"
+        onClick={() => void auth.logout()}
+      >
+        退出登录
+      </button>
+    </div>
+  );
+}
+
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { status, loading } = useAuth();
+  const location = useLocation();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-fg-muted">
+        加载中…
+      </div>
+    );
+  }
+  if (status?.mode === "required" && !status.me && location.pathname !== "/login") {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  if (status?.mode === "bootstrap" && location.pathname !== "/login") {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+}
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppFrame />
-        <Toaster richColors position="bottom-right" />
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/*"
+              element={
+                <RequireAuth>
+                  <AppFrame />
+                </RequireAuth>
+              }
+            />
+          </Routes>
+          <Toaster richColors position="bottom-right" />
+        </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

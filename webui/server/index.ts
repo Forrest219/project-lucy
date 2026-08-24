@@ -89,6 +89,8 @@ import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
+import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
+import { requireWebuiAuthHook } from "./auth/guard.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
 import { registerSuiteImportRoutes } from "./eval/suite-import.js";
@@ -385,6 +387,8 @@ export function buildServer() {
   const app = Fastify({ logger: true });
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
+
+  app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, _request, reply) => {
     const statusCode = error.statusCode ?? 500;
@@ -1484,6 +1488,8 @@ export function buildServer() {
     return reply.send(createReadStream(zipPath));
   });
 
+  registerAuthRoutes(app);
+  registerAdminAccountRoutes(app);
   registerAgentRoutes(app);
   registerRoleRoutes(app);
   registerTokenRoutes(app);

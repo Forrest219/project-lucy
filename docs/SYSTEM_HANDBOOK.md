@@ -24,6 +24,8 @@
     - [KTX 官方延伸阅读](#ktx-官方延伸阅读)
   - [3.4 业务文档 Wiki](#34-业务文档-wiki)
   - [3.5 访问治理 Admin](#35-访问治理-admin)
+    - [WebUI 管理员登录](#webui-管理员登录)
+    - [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass)
   - [3.6 质量评测 Eval](#36-质量评测-eval)
   - [3.7 YAML 文件规范与交付验收](#37-yaml-文件规范与交付验收)
     - [3.7.0 overlay 字段速查（编写辅导）](#370-overlay-字段速查编写辅导)
@@ -65,14 +67,15 @@
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |
-| `expires_at` 到期后 `token` 会自动失效吗？ | 不会。`expires_at` 当前只是 `metadata`；要下线 `token` 必须在 `Admin` 撤销或调用删除 `token` `API`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
+| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
+| 忘记 `WebUI` 管理员账号或密码怎么办？ | 自托管**不提供邮箱找回**。有其他所有者时由其重置；否则由能读写部署配置的人按 `break-glass` 清空 `admins.yaml` 后重新引导。 | [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass) |
 | 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |
 
 ### 0.3 面向接入协作者
 
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
-| `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |
+| `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、`expires_at` 已到期、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |
 | 本地开发应该访问哪个端口？ | 页面端口以启动日志为准；常见开发入口是 `Vite 5173`，`API 5174`，`Lucy MCP Proxy 7879`。`Docker` / demo 宿主端口可能是 `55176` 等映射端口。 | [2.2 本地启动](#22-本地启动)、[4.1 接入地址](#41-接入地址) |
 | 为什么 Visible Scope 没有我刚启用的表？ | 检查 `enabled_tables`、`role` 的 `tableSelectors`、以及是否**新开** MCP session；扩权后旧 session 不会自动刷新 Scope。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查) |
 | `order_by` 为什么没按我想的降序？ | 结构化参数请用 `direction: desc|asc`；仅写 `dir` 可能被忽略，导致默认升序。 | [6.12 `order_by` 排序无效或排反](#612-order_by-排序无效或排反) |
@@ -185,7 +188,8 @@ KTX CLI / MCP daemon
 | 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |
 | 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调 |
-| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |
+| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史；多管理员模式下 actor 为登录管理员 id |
+| 访问治理 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户（所有者 / 运维）；丢密码见 break-glass |
 
 > 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
 
@@ -956,9 +960,90 @@ PUT /api/wiki/:key
 | 访问日志 | `/admin/audit` | 按用户、工具、source、trace、outcome 查询 |
 | MCP 调试台 | `/admin/mcp-playground` | ACL 裁决预览与受控 `tools/list` 试调 |
 | 数据源热力 | `/admin/audit-sources` | 查看 source/table 调用和拒绝分布 |
-| 配置变更 | `/admin/config-audit` | 查看 `access.yaml`、`ktx.yaml` 等配置变更 |
+| 配置变更 | `/admin/config-audit` | 查看 `access.yaml`、`ktx.yaml`、`admins.yaml` 等配置变更 |
+| 管理员 | `/admin/admins` | WebUI 登录账户（所有者 / 运维）；仅所有者可增删账户 |
 
-权威配置：`webui/config/access.yaml`。
+权威配置：
+
+| 文件 | 用途 |
+| --- | --- |
+| `webui/config/access.yaml` | Agent / Role / MCP `Token` ACL（数据面） |
+| `webui/config/admins.yaml` | WebUI 登录账户（控制面；scrypt 密码哈希；无明文） |
+
+#### WebUI 管理员登录
+
+Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找回」不同。控制面账户只有两级（与 MCP Agent Role 无关）：
+
+| 角色 id | UI 主术语 | 日常职责 | 不能做 |
+| --- | --- | --- | --- |
+| `owner` | 所有者 | 全部 WebUI 日常工作 + **登录账户治理**（增删改其他登录账户、指定所有者） | — |
+| `operator` | 运维 | 连接、语义 / Wiki / 发布、Eval、Agent / Role / Token、访问日志与配置审计 | 管理其他 WebUI 登录账户 |
+
+权限矩阵（控制面）：
+
+| 能力 | 所有者 | 运维 |
+| --- | --- | --- |
+| 数据库连接 / 启用表 / ingest | ✓ | ✓ |
+| 语义层 / Wiki / 发布工作台 | ✓ | ✓ |
+| Eval case / run / monitor | ✓ | ✓ |
+| Agent、Role（`access.yaml`）、Token 发行与撤销 | ✓ | ✓ |
+| 访问日志 / 配置审计 / MCP 调试台 | ✓ | ✓ |
+| `/admin/admins` 登录账户增删改 | ✓ | ✗ |
+
+说明：运维即可完成「连接、配置语义、Eval、添加和管理 Agent Role」等日常工作；所有者额外负责控制面账户与 break-glass 相关治理。旧配置里的 `role: admin` 读入时等价于 `operator`。
+
+| 模式 | 条件 | 行为 |
+| --- | --- | --- |
+| 开放（`open`） | 无启用中的登录账户，且未设 `LUCY_WEBUI_AUTH=required` | 不强制登录；配置审计 actor 为「本机管理员」 |
+| 引导（`bootstrap`） | 无启用中的登录账户，且 `LUCY_WEBUI_AUTH=required` | 打开 `/login` 创建首个**所有者** |
+| 需登录（`required`） | 至少一名启用登录账户 | 除公开路由外需有效会话 Cookie |
+
+推荐正式部署：
+
+1. 设置 `LUCY_WEBUI_AUTH=required`（可选同时设置 `LUCY_WEBUI_SESSION_SECRET`）。
+2. 打开 `/login`，创建首个所有者（账户 id + 密码，至少 10 字符）。
+3. 在「登录账户」页添加运维账户（默认角色为运维）；按需再添加备用所有者。
+
+密码只存 `password_hash`（`scrypt:<salt>:<hash>`），**不能从配置反推明文**，也**没有邮箱找回**。
+
+#### 丢失管理员账号或密码时如何恢复（break-glass）
+
+适用：全部 WebUI 管理员凭据丢失、或只剩无法登录的账户。这是**运维 break-glass**，依赖能读写部署配置卷 / 主机的人；完成后应记入变更审计。
+
+**优先路径 A — 仍有可登录的所有者**
+
+1. 用其他所有者登录 WebUI。
+2. 打开 `/admin/admins`，为遗忘账户重置密码，或禁用后新建。
+3. 确认配置审计里出现 `admin_patch` / `admin_create` 记录。
+
+**路径 B — 无人可登录（配置卷恢复）**
+
+1. 在部署机上备份当前文件：
+   ```bash
+   cp webui/config/admins.yaml webui/config/admins.yaml.bak.$(date +%Y%m%d%H%M%S)
+   ```
+2. 清空启用中的管理员。任选其一：
+   - 将 `admins:` 改为空列表：
+     ```yaml
+     version: "1"
+     admins: []
+     ```
+   - 或临时移走 / 删除 `webui/config/admins.yaml`（进程会按空配置处理）。
+3. 确认 `LUCY_WEBUI_AUTH=required`（正式环境建议保持），重启 WebUI 进程 / Pod。
+4. 打开 `/login`，重新 **创建首个所有者**（bootstrap）。
+5. 立即再创建至少一名备用所有者；轮换相关会话（可选：删除 `.ktx-ui/webui-session-secret` 使旧 Cookie 失效，需同步重启）。
+6. 在工单 / 变更记录中写明：操作人、时间、备份路径、新所有者 id（**不要**写密码）。
+
+**不要做的事**
+
+| 错误做法 | 原因 |
+| --- | --- |
+| 期待邮箱验证码 / 「忘记密码」链接 | 产品不提供；自托管默认无出网 SMTP 契约 |
+| 手改 `password_hash` 为明文 | 校验只认 `scrypt:…`；明文无效 |
+| 把 `LUCY_WEBUI_AUTH=off` 当作长期方案 | 仅调试；会重新开放匿名管理面 |
+| 与 MCP Agent `Token` 混用 | Agent `Token` 不能登录 WebUI；WebUI 会话不能当 MCP Bearer |
+
+保护建议：限制谁能读写 `webui/config/admins.yaml` 与 customer-config 卷；break-glass 按双人 / 变更单执行。
 
 Role-first 模型：
 
@@ -1009,19 +1094,21 @@ Token 发行规则：
 | 撤销 token | 先写 `.ktx-ui/audit.sqlite.revoked_tokens`，再从 YAML 删除 |
 | 删除 Agent | 先撤销该 Agent 所有 token，再删除 YAML user |
 | 复制 MCP 配置 | 只复制 `${LUCY_AGENT_TOKEN}` 占位符，不复制明文 |
+| 过期 | `expires_at` 到期或不可解析时，`MCP` Proxy 鉴权失败（401）；也可在 Admin 提前撤销 |
 
-注意：`expires_at` 当前仅作为配置 metadata；Proxy 身份校验不会按该字段自动拒绝过期 token。下线 token 必须在 Admin 执行撤销，或调用 `DELETE /api/admin/agents/:userId/tokens/:label`。
+注意：`expires_at` 由 Proxy 强制校验；下线 token 也可在 Admin 执行撤销，或调用 `DELETE /api/admin/agents/:userId/tokens/:label`。
 
 权限裁决机制：
 
 1. Bearer token 现场 `sha256`。
 2. 与 `access.yaml` 中 token hash 匹配。
 3. 检查 token 是否在 `revoked_tokens`。
-4. 解析 user 的 role。
-5. role 通过 `connections` + `tableSelectors` 解析成 effective sources/tables。
-6. `tools/list` 只展示允许工具。
-7. `tools/call` 再次做工具、连接、表、raw query、敏感 metadata、并发等裁决。
-8. 允许/拒绝/错误全部写审计，包含 `decision_reason`。
+4. 检查 `expires_at`（缺省则永不过期）。
+5. 解析 user 的 role。
+6. role 通过 `connections` + `tableSelectors` 解析成 effective sources/tables。
+7. `tools/list` 只展示允许工具。
+8. `tools/call` 再次做工具、连接、表、raw query、敏感 metadata、并发等裁决。
+9. 允许/拒绝/错误全部写审计，包含 `decision_reason`。
 
 常见 `decision_reason`：
 
@@ -1039,6 +1126,7 @@ Token 发行规则：
 | `sensitive_metadata_forbidden:kx` | 敏感元数据工具未获得完整敏感表授权 |
 | `role_resolution_failed:<role>` | role 配置无法解析 |
 | `query_concurrency_exceeded` | 单 token 并发 `lucy_query` 超限 |
+| `token_expired` | token 已过期或 `expires_at` 不可解析 |
 
 问题簇审计：
 
@@ -1844,6 +1932,9 @@ setup:
 | `LUCY_PROXY_MAX_BODY_BYTES` | `1048576` | Proxy 请求体上限 |
 | `LUCY_PROXY_UPSTREAM_TIMEOUT_MS` | `30000` | 上游超时 |
 | `LUCY_ACCESS_CONFIG_PATH` | `webui/config/access.yaml` | 覆盖 access 配置路径 |
+| `LUCY_ADMINS_CONFIG_PATH` | `webui/config/admins.yaml` | 覆盖 WebUI 管理员配置路径 |
+| `LUCY_WEBUI_AUTH` | （空） | `required`：无管理员时进入 bootstrap；`off`：强制开放（仅调试） |
+| `LUCY_WEBUI_SESSION_SECRET` | 自动落到 `.ktx-ui/webui-session-secret` | WebUI 登录会话 HMAC 密钥 |
 | `LUCY_AUDIT_DB` | `.ktx-ui/audit.sqlite` | 覆盖 MCP 审计库 |
 | `LUCY_EVAL_DB` | `.ktx-ui/eval/runs.sqlite` | 覆盖 Eval 运行库 |
 | `LUCY_ENABLE_INSTRUCTIONS_INJECTION` | 开启 | `false` 时关闭 initialize instructions 注入 |
@@ -1972,9 +2063,9 @@ curl -fsS http://127.0.0.1:5174/api/health
 | 未带 `Authorization` | 客户端配置加 `Bearer ${LUCY_AGENT_TOKEN}` |
 | token 明文与 YAML hash 不匹配 | 重新在 Admin 生成 token |
 | token 已撤销 | 新建 token |
+| `expires_at` 已到期或不可解析 | 重新生成 token，或修正 `access.yaml` 中的过期时间 |
 | `LUCY_ACCESS_CONFIG_PATH` 指向了另一份配置 | 检查 WebUI/Proxy 进程环境 |
 | 客户端环境变量未展开 | 确认 `${LUCY_AGENT_TOKEN}` 在启动客户端前已 export |
-| 误以为 `expires_at` 会自动下线 token | 当前 `expires_at` 仅作 metadata；请撤销 token，或调用 `DELETE /api/admin/agents/:userId/tokens/:label` |
 
 ### 6.6 KTX upstream 不可用
 

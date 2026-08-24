@@ -16,6 +16,8 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
+import { actorIdFromRequest } from "../auth/guard.js";
+import type { FastifyRequest } from "fastify";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
@@ -421,10 +423,14 @@ async function writeGateTrace(
   }
 }
 
-function defaultActor(): AccessGovernanceApprover {
-  // local-admin is the deployment-local identity, never an enterprise
-  // personal identity (per `webui/docs/64-tiered-publish-gate-spec.md` §7).
-  return { actorKind: "admin", actorId: "local-admin" };
+function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
+  // Prefer the logged-in WebUI admin id; fall back to deployment-local
+  // `local-admin` in open mode (per `webui/docs/64-tiered-publish-gate-spec.md` §7).
+  return {
+    actorKind: "admin",
+    actorId: request ? actorIdFromRequest(request) : "local-admin",
+    identityProvider: "webui-local"
+  };
 }
 
 /**
@@ -629,7 +635,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     if (gate.decision === "block") {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       return reply.status(409).send({
         ok: false,
         error: {
@@ -643,7 +649,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (gate.decision === "override_required") {
       const override = evaluateGovernanceOverride(request.body?.override, gate);
       if (!override.ok) {
-        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
         return reply.status(409).send({
           ok: false,
           error: {
@@ -653,9 +659,9 @@ export function registerAgentRoutes(app: FastifyInstance) {
           }
         });
       }
-      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+      await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
     } else {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
     await writeAccessYaml(projectRoot, newConfig, {
@@ -798,7 +804,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     if (gate.decision === "block") {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       return reply.status(409).send({
         ok: false,
         error: {
@@ -812,7 +818,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (gate.decision === "override_required") {
       const override = evaluateGovernanceOverride(request.body?.override, gate);
       if (!override.ok) {
-        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
         return reply.status(409).send({
           ok: false,
           error: {
@@ -822,9 +828,9 @@ export function registerAgentRoutes(app: FastifyInstance) {
           }
         });
       }
-      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+      await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
     } else {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
     await writeAccessYaml(projectRoot, newConfig, {
@@ -864,7 +870,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (gate.decision === "block") {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       return reply.status(409).send({
         ok: false,
         error: {
@@ -878,7 +884,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (gate.decision === "override_required") {
       const override = evaluateGovernanceOverride(request.body?.override, gate);
       if (!override.ok) {
-        await writeGateTrace(gate, override, request.body?.override, defaultActor());
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
         return reply.status(409).send({
           ok: false,
           error: {
@@ -888,9 +894,9 @@ export function registerAgentRoutes(app: FastifyInstance) {
           }
         });
       }
-      await writeGateTrace(gate, override, request.body?.override, defaultActor());
+      await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
     } else {
-      await writeGateTrace(gate, undefined, undefined, defaultActor());
+      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
     // Revoke all tokens in sqlite — must succeed before yaml is updated

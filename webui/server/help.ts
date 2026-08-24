@@ -40,6 +40,8 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/^Agent$/, "admin-agents"],
   [/Role 权限模板|角色配置/, "admin-roles"],
   [/Bearer Token|Token 发行/, "admin-tokens"],
+  [/WebUI 管理员登录/, "webui-admin-login"],
+  [/丢失管理员账号或密码时如何恢复|break-glass/i, "webui-admin-break-glass"],
   [/MCP 访问日志|问题簇|审计/, "admin-audit"],
   [/质量评测 Eval/, "eval"],
   [/Eval Case|Case 维护/, "eval-cases"],
