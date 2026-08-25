@@ -527,6 +527,8 @@ describe("Help handbook", () => {
       [
         "### 3.5 访问治理 Admin",
         "",
+        "#### 什么时候配置角色、Agent 和 Token",
+        "",
         "#### 审计热库与冷库（SQL 留存边界）",
         "",
         "### 3.6 质量评测 Eval"
@@ -534,10 +536,16 @@ describe("Help handbook", () => {
     );
     const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
     expect(byTitle["3.5 访问治理 Admin"]).toBe("admin-governance");
+    expect(byTitle["什么时候配置角色、Agent 和 Token"]).toBe("admin-role-agent-token-guide");
     expect(byTitle["审计热库与冷库（SQL 留存边界）"]).toBe("admin-audit-hot-cold-store");
     expect(byTitle["3.6 质量评测 Eval"]).toBe("eval");
     expect(toc).toEqual(
       expect.arrayContaining([
+        {
+          id: "admin-role-agent-token-guide",
+          level: 4,
+          title: "什么时候配置角色、Agent 和 Token"
+        },
         {
           id: "admin-audit-hot-cold-store",
           level: 4,
@@ -566,6 +574,33 @@ describe("Help handbook", () => {
           id: "admin-audit-hot-cold-store",
           level: 4,
           title: "审计热库与冷库（SQL 留存边界）"
+        }
+      ])
+    );
+  });
+
+  it("the bundled handbook documents Role / Agent / Token user guidance", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toContain("#### 什么时候配置角色、Agent 和 Token");
+    expect(handbook.markdown).toContain("/help?section=admin-role-agent-token-guide");
+    expect(handbook.markdown).toContain("一人一 `Agent`");
+    expect(handbook.markdown).toContain("什么时候该建角色，什么时候该建 `Agent` / `Token`？");
+    expect(handbook.markdown).toContain("同一人多台电脑要建几个 `Agent`？");
+    expect(handbook.markdown).toContain(
+      "会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）"
+    );
+    expect(handbook.markdown).not.toContain("要下线 `token` 必须在 `Admin` 撤销或调用删除 `token` `API`");
+    expect(handbook.toc).toEqual(
+      expect.arrayContaining([
+        {
+          id: "admin-role-agent-token-guide",
+          level: 4,
+          title: "什么时候配置角色、Agent 和 Token"
         }
       ])
     );
@@ -735,6 +770,22 @@ describe("Help search", () => {
     );
     const hit = result.items.find((item) => item.sectionId === "connection-overview-metrics");
     expect(hit?.snippet).toContain("已发现表数");
+  });
+
+  it("finds Role/Agent/Token guidance in the bundled handbook", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const byPhrase = await searchHelpHandbook("什么时候配置角色", { appRoot: realAppRoot });
+    expect(
+      byPhrase.items.some((item) => item.sectionId === "admin-role-agent-token-guide")
+    ).toBe(true);
+
+    const byDecision = await searchHelpHandbook("一人一", { appRoot: realAppRoot });
+    expect(
+      byDecision.items.some((item) => item.sectionId === "admin-role-agent-token-guide")
+    ).toBe(true);
   });
 
   it("serves GET /api/help/search with the designed envelope", async () => {

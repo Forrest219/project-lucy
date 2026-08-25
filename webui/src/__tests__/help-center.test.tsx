@@ -59,6 +59,11 @@ function renderHelp(path = "/help") {
               { id: "semantic-layer", level: 3, title: "3.3 语义层维护" },
               { id: "admin-governance", level: 3, title: "3.5 访问治理 Admin" },
               {
+                id: "admin-role-agent-token-guide",
+                level: 4,
+                title: "什么时候配置角色、Agent 和 Token"
+              },
+              {
                 id: "webui-admin-break-glass",
                 level: 4,
                 title: "丢失管理员账号或密码时如何恢复（break-glass）"
@@ -114,8 +119,10 @@ function renderHelp(path = "/help") {
               "",
               "| 问题 | 快速答案 | 详见 |",
               "| --- | --- | --- |",
+              "| 什么时候该建角色，什么时候该建 `Agent` / `Token`？ | 角色 = 可复用的权限边界；`Agent` = 要对审计负责的人/机器人；`Token` = 某台设备或某个客户端的接入凭证。先角色、再 `Agent`、最后签发 `Token`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |",
+              "| 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |",
               "| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |",
-              "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
+              "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
               "| 忘记 `WebUI` 管理员账号或密码怎么办？ | 自托管**不提供邮箱找回**。有其他所有者时由其重置；否则由能读写部署配置的人按 `break-glass` 清空 `admins.yaml` 后重新引导。 | [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass) |",
               "| 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |",
               "",
@@ -210,6 +217,10 @@ function renderHelp(path = "/help") {
               "### 3.5 访问治理 Admin",
               "",
               "在 `/admin` 维护 Agent / Role / Token / 审计。",
+              "",
+              "#### 什么时候配置角色、Agent 和 Token",
+              "",
+              "角色管权限边界，`Agent` 管审计身份，`Token` 管接入凭证。一人一 `Agent`，多 `Token` 同权。",
               "",
               "#### 丢失管理员账号或密码时如何恢复（break-glass）",
               "",
