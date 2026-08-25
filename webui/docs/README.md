@@ -115,6 +115,7 @@
 | [111-help-center-search-and-connection-kpi-glossary-spec.md](111-help-center-search-and-connection-kpi-glossary-spec.md) | `/help` 手册关键词搜索 + 连接概览「已发现表数」等 KPI 术语写入手册并可搜索命中（Planned → Implemented） | 产品 / UX / Frontend / Docs |
 | [124-audit-query-artifact-cold-store-spec.md](124-audit-query-artifact-cold-store-spec.md) | 查询原文加密冷存（Superseded / legacy；主路径见 Spec 125） | 产品 / 安全 / Audit |
 | [125-audit-generated-sql-hot-store-spec.md](125-audit-generated-sql-hot-store-spec.md) | 热库明文 `generated_sql` + 调用流水列表/CSV 直展（Implemented） | 产品 / 安全 / Audit / Backend / Frontend |
+| [126-customer-branding-logo-config-spec.md](126-customer-branding-logo-config-spec.md) | 客户品牌外观：Logo / 产品名称 / 副标题配置页（Spec 126；对齐 Tableau Server Logo 约束） | 产品 / UX / Frontend / Backend |
 
 ## 与原 README 的关键校正
 

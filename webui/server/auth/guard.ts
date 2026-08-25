@@ -34,6 +34,9 @@ export function isPublicApi(method: string, url: string): boolean {
   if (m === "POST" && pathOnly === "/api/auth/bootstrap") return true;
   if (m === "POST" && pathOnly === "/api/auth/logout") return true;
   if (m === "GET" && pathOnly.startsWith("/api/help")) return true;
+  // Spec 126: login + shell brand mark need branding before auth.
+  if (m === "GET" && pathOnly === "/api/branding") return true;
+  if (m === "GET" && pathOnly === "/api/branding/logo") return true;
   return false;
 }
 

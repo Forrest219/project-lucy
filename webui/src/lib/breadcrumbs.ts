@@ -88,6 +88,12 @@ export function breadcrumbItems(pathname: string): string[] {
     if (parts[1] === "config-audit") {
       return ["访问治理", "配置审计"];
     }
+    if (parts[1] === "branding") {
+      return ["访问治理", "品牌外观"];
+    }
+    if (parts[1] === "admins") {
+      return ["访问治理", "登录账户"];
+    }
     if (parts[1] === "audit-sources") {
       return ["访问治理", "数据热力"];
     }

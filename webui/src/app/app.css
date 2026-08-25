@@ -227,6 +227,10 @@
     line-height: 1;
     letter-spacing: -0.02em;
   }
+  .pl-brand-mark--image {
+    @apply object-contain p-0.5;
+    background: transparent;
+  }
   /* Single-column brand text: tagline `Data Agent MCP` sizes the track;
      16px `Lucy WebUI` uses mild letter-spacing so both lines share the
      same left/right edges without splitting the wordmark. */

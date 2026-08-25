@@ -57,6 +57,7 @@ vi.mock("../pages/admin/Audit", () => ({ Audit: () => <StubPage name="Audit" /> 
 vi.mock("../pages/admin/AuditSources", () => ({ AuditSources: () => <StubPage name="AuditSources" /> }));
 vi.mock("../pages/admin/McpPlayground", () => ({ McpPlayground: () => <StubPage name="McpPlayground" /> }));
 vi.mock("../pages/admin/ConfigAudit", () => ({ ConfigAudit: () => <StubPage name="ConfigAudit" /> }));
+vi.mock("../pages/admin/BrandingSettings", () => ({ BrandingSettings: () => <StubPage name="BrandingSettings" /> }));
 vi.mock("../pages/admin/RoleList", () => ({ RoleList: () => <StubPage name="RoleList" /> }));
 vi.mock("../pages/admin/RoleDetail", () => ({ RoleDetail: () => <StubPage name="RoleDetail" /> }));
 vi.mock("../pages/eval/CaseList", () => ({ CaseList: () => <StubPage name="CaseList" /> }));
@@ -87,6 +88,26 @@ function renderAt(path: string) {
     }
     if (url === "/api/connections") {
       return new Response(JSON.stringify({ ok: true, data: { connections: [] } }));
+    }
+    if (url.startsWith("/api/branding")) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            productTitle: "Lucy WebUI",
+            tagline: "Data Agent MCP",
+            productTitleOverride: "",
+            taglineOverride: "",
+            hasCustomLogo: false,
+            logoUrl: null,
+            logoContentType: null,
+            logoWidth: null,
+            logoHeight: null,
+            updatedAt: null,
+            defaults: { productTitle: "Lucy WebUI", tagline: "Data Agent MCP" }
+          }
+        })
+      );
     }
     if (url.startsWith("/api/sources/mysql-aliyun/dataforai/superstore_orders")) {
       return new Response(

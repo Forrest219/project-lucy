@@ -92,6 +92,7 @@ import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
+import { registerBrandingRoutes } from "./branding.js";
 import { requireWebuiAuthHook } from "./auth/guard.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
@@ -1580,6 +1581,7 @@ export function buildServer() {
 
   registerAuthRoutes(app);
   registerAdminAccountRoutes(app);
+  registerBrandingRoutes(app);
   registerAgentRoutes(app);
   registerRoleRoutes(app);
   registerTokenRoutes(app);

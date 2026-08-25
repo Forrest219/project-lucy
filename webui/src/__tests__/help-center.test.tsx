@@ -156,6 +156,8 @@ function renderHelp(path = "/help") {
               "| 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |",
               "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 tools/list 试调 |",
               "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |",
+              "| 访问治理 | 品牌外观 | `/admin/branding` | 配置客户 Logo、产品名称与副标题（侧栏与登录页） |",
+              "| 访问治理 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户（所有者 / 运维） |",
               "",
               "> 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。",
               "",
@@ -816,7 +818,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 17 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 19 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（5\+1 侧栏地图）/ })
@@ -835,7 +837,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(17);
+    expect(bodyRows.length).toBe(19);
 
     // Group column (1st cell of each body row) must match navGroups[*].title
     // for rows 2–14, plus topLevelEntry.label for row 1. Use the shared

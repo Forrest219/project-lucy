@@ -189,6 +189,7 @@ KTX CLI / MCP daemon
 | 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调 |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史；多管理员模式下 actor 为登录管理员 id |
+| 访问治理 | 品牌外观 | `/admin/branding` | 配置客户 Logo、产品名称与副标题（侧栏与登录页） |
 | 访问治理 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户（所有者 / 运维）；丢密码见 break-glass |
 
 > 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。

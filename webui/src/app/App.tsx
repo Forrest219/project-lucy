@@ -25,6 +25,7 @@ import {
   ScrollText,
   Terminal,
   Users,
+  Image,
   type LucideIcon
 } from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
@@ -46,8 +47,11 @@ import { AuditSources } from "../pages/admin/AuditSources";
 import { RoleList } from "../pages/admin/RoleList";
 import { RoleDetail } from "../pages/admin/RoleDetail";
 import { AdminAccounts } from "../pages/admin/AdminAccounts";
+import { BrandingSettings } from "../pages/admin/BrandingSettings";
 import { LoginPage } from "../pages/Login";
 import { AuthProvider, useAuth, useAuthOptional } from "../lib/auth";
+import { BrandMark } from "../components/BrandMark";
+import { useBranding } from "../lib/useBranding";
 import { isPublicUiPath } from "../lib/publicAccess";
 import { CaseList } from "../pages/eval/CaseList";
 import { CaseEditor } from "../pages/eval/CaseEditor";
@@ -135,7 +139,8 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   audit: ScrollText,
   mcpPlayground: Terminal,
   configAudit: ShieldCheck,
-  admins: Users
+  admins: Users,
+  branding: Image
 };
 
 const GROUP_ICONS: Record<string, LucideIcon> = {
@@ -176,11 +181,15 @@ function writeCollapsedGroups(ids: Set<string>) {
 
 export function AppFrame() {
   const location = useLocation();
+  const { data: branding } = useBranding();
   const isHelpRoute = location.pathname === "/help";
   const appShellClass = [
     "pl-app-shell",
     isHelpRoute ? "pl-app-shell--help" : ""
   ].filter(Boolean).join(" ");
+  const productTitle = branding?.productTitle ?? "Lucy WebUI";
+  const tagline = branding?.tagline ?? "Data Agent MCP";
+  const logoUrl = branding?.logoUrl ?? null;
 
   // M60: collapsible group state. We seed the Set from localStorage so the
   // user's last manual choice survives a reload, but we always force the
@@ -252,23 +261,21 @@ export function AppFrame() {
           aria-label="返回系统概览"
           title="返回系统概览"
         >
-          <span className="pl-brand-mark" aria-hidden="true">
-            L
-          </span>
+          <BrandMark productTitle={productTitle} logoUrl={logoUrl} />
           <div className="pl-brand-text">
             <strong className="pl-brand-title" data-testid="brand-title">
-              Lucy WebUI
+              {productTitle}
             </strong>
             {/* Brand caption shortened to `Data Agent MCP` so the natural
-                width matches the 16px `Lucy WebUI` wordmark without splitting
-                the title into spaced-apart tokens. Keep notranslate so
-                browsers don't rewrite `Data Agent` / `MCP`. */}
+                width matches the 16px wordmark without splitting the title
+                into spaced-apart tokens. Keep notranslate so browsers don't
+                rewrite professional English in the tagline. */}
             <span
               className="pl-brand-tagline notranslate"
               translate="no"
               data-testid="brand-tagline"
             >
-              Data Agent MCP
+              {tagline}
             </span>
           </div>
         </Link>
@@ -410,6 +417,7 @@ export function AppFrame() {
             <Route path="/admin/audit-sources" element={<AuditSources />} />
             <Route path="/admin/mcp-playground" element={<McpPlayground />} />
             <Route path="/admin/config-audit" element={<ConfigAudit />} />
+            <Route path="/admin/branding" element={<BrandingSettings />} />
             <Route path="/admin/admins" element={<AdminAccounts />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />

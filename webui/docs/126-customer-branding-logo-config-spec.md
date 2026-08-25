@@ -1,217 +1,150 @@
-# Customer Branding / Logo — Requirements & Design (Tableau-aligned)
+# Customer Branding / Logo Config Spec
 
 | 元数据 | 内容 |
 |---|---|
-| 文档名称 | Customer Branding / Logo Requirements & Design |
-| 文档类型 | 需求 / 设计方案（本轮不落地代码） |
-| 版本 | v0.1 |
+| 文档名称 | Customer Branding / Logo Config Spec |
+| 文档类型 | Product / UX / API Spec（实现依据） |
+| 版本 | v0.2 |
 | 撰写日期 | 2026-08-25 |
 | 委托人 | xingchen |
-| 参考 | [Tableau Server `tsm customize`](https://help.tableau.com/current/server/en-us/cli_customize.htm)；Tableau Cloud Site Logo；Lucy 现有侧栏品牌区（Spec 67/68，mark ≈ 36×36） |
+| 参考 | [Tableau Server `tsm customize`](https://help.tableau.com/current/server/en-us/cli_customize.htm)；Tableau Cloud Site Logo；Lucy Spec 67/68 |
 | 输出位置 | `webui/docs/126-customer-branding-logo-config-spec.md` |
-| 状态 | Designed（待确认后再实现） |
+| 状态 | Approved for implementation（v0.2） |
+
+### Changelog
+
+| 版本 | 变更 |
+|---|---|
+| v0.1 | 对照 Tableau 起草需求与设计；决策点待确认 |
+| v0.2 | 拍板五项决策并进入实现：禁 SVG、v1 不做 WebP、超限拒绝、副标题进 v1、登录分槽延后 v1.1 |
+
+## 0. 已批准决策（v0.2）
+
+| # | 决策 | 结论 | 理由 |
+|---|---|---|---|
+| 1 | SVG | **禁止** | XSS 面；客户交付素材以位图为主；与 Tableau 保守一致 |
+| 2 | WebP | **v1 不做** | 运维素材仍以 PNG 为主；解码/验收成本不值 |
+| 3 | 超限 | **拒绝上传** | 不静默 clip；错误可预期 |
+| 4 | 副标题 | **v1 做** | 侧栏已有第二行；字段成本低 |
+| 5 | 登录独立 Logo | **v1.1** | v1 侧栏+登录共用一张正方形 mark |
 
 ## 1. Tableau Server 对照摘要
 
-Tableau 用 `tsm customize`（历史为 `tabadmin customize`）做浏览器端品牌外观，不改产品内核。要点如下。
+Tableau 用 `tsm customize` 定制浏览器品牌外观。Header Logo：**32–160 px**，推荐 **48×48**；格式 **GIF / JPEG / PNG**；超限 clip；可分槽（header / signin / compact）；可恢复默认。
 
-### 1.1 可定制项
+Lucy v1 对齐像素与格式，改用 WebUI 配置页 + 热生效，超限改为拒绝。
 
-| 位置 | Tableau 选项 | 尺寸（像素） | 推荐 |
-|---|---|---|---|
-| Header / 导航区 Logo | `--header-logo` 或 `--logo` | 最小 32×32，最大 160×160 | 48×48 |
-| 登录页 Logo | `--signin-logo` 或 `--logo` | 最大 3000×3000 | 可与 Header 共用或单独更大图 |
-| 导航收起时的小 Logo | `--compact-logo` | 最大（亦为最佳）32×32 | 32×32 |
-| 服务器显示名 | `--server-name` | 文案 | 出现在浏览器 Tab、tooltip、部分消息 |
-| 浏览器 Tab 图标 | 不可改 | — | — |
-| 一键恢复默认 | `--restore-defaults` | — | — |
+## 2. 产品目标
 
-### 1.2 资产与运维约束（Tableau）
+客户交付实例可在不改源码的前提下，替换侧栏与登录页的品牌 mark / 产品名称 / 副标题。
 
-- **格式**：GIF / JPEG / PNG（官方文档未列 SVG / WebP）。
-- **路径**：文件路径与文件名**不能含空格**。
-- **超限行为**：Header Logo 大于 160×160 会被 **clip**，不是等比缩放后完整展示。
-- **背景差异**：Header 与登录页背景色不同；同一张图在两处观感可能不同，因此提供「共用 `--logo`」与「分槽上传」两套路径。
-- **生效**：改完后需 `tsm pending-changes apply`（历史上需 restart）；不是纯热更新。
-- **备份**：官方建议在 Server 外保留定制图备份；节点间会分发，但**不是可恢复格式**。
-- **管理入口**：Server 以 CLI 为主；Tableau Cloud 在 Site Settings 用上传 + 预览 + Save / Reset to Default / Revert。
+成功标准：配置页可上传与恢复；约束清晰；登录前可见；变更可审计。
 
-### 1.3 对 Lucy 的启示（采纳 / 裁剪）
+## Terminology Compliance
 
-| Tableau 做法 | Lucy 建议 |
-|---|---|
-| Header + Sign-in 分槽 + 共用一键 | **v1 先共用一张 Logo**（侧栏 + 登录）；预留分槽为 v1.1 |
-| Compact 32×32 | Lucy 侧栏无真正「收起只留 icon」产品形态时 **v1 不做 compact 槽**；若后续加折叠，再补 32×32 |
-| 32–160 / 推荐 48 | 对齐：上传约束 + UI 展示槽约 **36×36（现有 `.pl-brand-mark`）**，推荐源图 **48×48**，上限 **160×160** |
-| 超限 clip | Lucy **拒绝超限文件**（上传失败 + 明确文案），避免静默裁切导致客户以为「坏图」 |
-| GIF/JPEG/PNG | v1 同三格式；**WebP 可选允许**；**SVG 默认禁止**（安全面，与 Tableau 一致偏保守） |
-| server-name | 对应 Lucy「产品名称」覆盖（侧栏 wordmark / 登录标题）；浏览器 `<title>` / favicon **v1 不做**（Tableau 也改不了 favicon） |
-| CLI + apply | Lucy 走 **WebUI 配置页**（客户交付更友好）；落盘可审计；保存后 **热生效**（无需重启进程） |
-| Restore defaults | 必须有「恢复默认 Logo / 恢复默认文案」 |
+This feature follows `webui/docs/00-product-terminology-standard.md`.
 
-## 2. Lucy 产品目标
+New terms:
 
-客户交付实例可在不改源码的前提下，把侧栏与登录页的品牌 mark / 名称换成客户资产，形成「这是客户的数据 Agent 控制台」的第一眼认知。
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Customer Branding | 品牌外观 | 客户品牌 | 白标、换皮、皮肤（作导航/标题） | `/admin/branding` |
+| Customer Logo | 客户 Logo | Logo | 头像、图标（作主标签） | 侧栏 mark / 登录页共用 |
+| Product Title | 产品名称 | wordmark | 站点名、系统名（作主标签） | 默认 `Lucy WebUI` |
+| Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `Data Agent MCP` |
 
-成功标准：
+## 3. 需求
 
-1. 运维可在配置页上传 Logo、改产品名称（可选副标题），并预览侧栏与登录效果。
-2. 约束清晰（格式、像素、体积），不合规直接拒绝并说明原因。
-3. 可一键恢复 Lucy 默认品牌。
-4. 未登录也能看到客户 Logo / 名称（登录页）。
-5. 变更可审计、可备份（配置文件在项目目录内，随交付包/备份走）。
-
-## 3. 需求（Requirements）
-
-### 3.1 功能需求
+### 3.1 功能
 
 | ID | 需求 | 优先级 |
 |---|---|---|
-| BR-1 | 提供配置页「品牌外观」，入口挂在访问治理（与登录账户同级） | P0 |
-| BR-2 | 上传**一张**客户 Logo，同时用于侧栏品牌 mark 与登录页 | P0 |
-| BR-3 | 可配置「产品名称」；留空回退默认 `Lucy WebUI` | P0 |
-| BR-4 | 可配置「副标题」；留空回退默认 `Data Agent MCP` | P0 |
-| BR-5 | 配置页提供侧栏 + 登录缩略预览 | P0 |
-| BR-6 | 「恢复默认 Logo」「恢复默认文案」（或分别操作） | P0 |
-| BR-7 | 公开读取品牌元数据与 Logo 字节（供登录页） | P0 |
-| BR-8 | 写操作需 WebUI 登录会话（开放模式下与其他本地写配置一致） | P0 |
-| BR-9 | 写入进入配置审计 | P1 |
-| BR-10 | 侧栏 / 登录分槽 Logo（对齐 Tableau header vs signin） | P2 / v1.1 |
-| BR-11 | Compact / 折叠侧栏专用 32×32 Logo | P2（有折叠 IA 后再做） |
-| BR-12 | Favicon / 浏览器 Tab 标题客户化 | Out of scope v1 |
+| BR-1 | 配置页「品牌外观」`/admin/branding`，访问治理导航 | P0 |
+| BR-2 | 一张客户 Logo → 侧栏 + 登录共用 | P0 |
+| BR-3 | 产品名称；空 → `Lucy WebUI` | P0 |
+| BR-4 | 副标题；空 → `Data Agent MCP` | P0 |
+| BR-5 | 侧栏 + 登录预览 | P0 |
+| BR-6 | 恢复默认 Logo；文案可清空回默认后保存 | P0 |
+| BR-7 | 公开 `GET` 品牌元数据与 Logo | P0 |
+| BR-8 | 写操作需 WebUI 会话（开放模式与其他本地写配置一致） | P0 |
+| BR-9 | 配置审计 | P1 |
+| BR-10 | 登录独立 Logo 槽 | P2 / v1.1 |
+| BR-11 | Compact 32×32 | P2 |
+| BR-12 | Favicon / document title | Out |
 
-### 3.2 Logo 资产要求（对齐 Tableau，贴合 Lucy 槽位）
+### 3.2 Logo 资产
 
-| 项 | Lucy v1 要求 | 说明 |
-|---|---|---|
-| 格式 | **PNG / JPEG / GIF** | 与 Tableau 一致；禁止 SVG（XSS）；WebP 可作为 v1 可选扩展 |
-| 像素 | **最小 32×32，最大 160×160** | 与 Tableau Header Logo 相同 |
-| 推荐 | **48×48** | 与 Tableau / Tableau Cloud 推荐一致 |
-| 展示槽 | 侧栏 / 登录 mark：**36×36 CSS**（`h-9 w-9`） | 源图按 `object-fit: contain` 装入，不拉伸变形 |
-| 宽高比 | 允许非正方形；槽内 contain + 透明底优先 | 超宽 wordmark 图不适合此槽，应引导客户用正方形 mark |
-| 文件体积 | ≤ **512 KB** | Tableau 未强调体积；Lucy 补上限防误传 |
-| 超限 | **拒绝上传**，不静默 clip | 与 Tableau「clip」不同，对运维更可预期 |
-| 文件名 | 服务端规范化为 `logo.<ext>`；客户端原名仅用于校验扩展名 | 不要求客户路径无空格（Web 上传无 CLI 路径问题） |
-| 透明底 | 推荐 PNG 透明底 | Lucy 浅色侧栏 / 登录底；深色前景 Logo 更清晰 |
-| 颜色提示 | 配置页说明：侧栏与登录背景可能略有差异，建议在预览中确认 | 吸收 Tableau 背景差提示 |
-
-### 3.3 文案要求
-
-| 字段 | UI 主术语 | 默认 | 约束 |
-|---|---|---|---|
-| 产品名称 | 产品名称 | `Lucy WebUI` | trim 后 ≤ 64 字符；禁控制字符 |
-| 副标题 | 副标题 | `Data Agent MCP` | 同上；侧栏第二行 |
-| 页面名 | 品牌外观 | — | 禁止「白标 / 换皮」作主术语 |
-
-侧栏品牌链接的 accessible name 仍为「返回系统概览」；Logo `<img>` 用空 alt（装饰性）。
-
-### 3.4 非目标（v1）
-
-- 多租户 / 按 Host 切换品牌
-- 主题色、字体、CSS 变量客户化
-- Favicon / document title
-- 邮件、导出 PDF、MCP 客户端内嵌品牌
-- 移动窄屏专用品牌布局
-
-## 4. 设计方案
-
-### 4.1 信息架构
-
-```
-访问治理
-  … 既有项 …
-  品牌外观     →  /admin/branding
-  登录账户     →  /admin/admins
-```
-
-配置页结构（单页三区，非 dashboard）：
-
-1. **客户 Logo**：当前图 / 上传 / 恢复默认 + 格式与像素说明  
-2. **产品名称与副标题**：表单 + 保存  
-3. **预览**：侧栏品牌块 + 登录标题示意（只读）
-
-### 4.2 展示模型（消费面）
-
-| 表面 | Logo | 文案 |
-|---|---|---|
-| 侧栏 `.pl-brand-block` | 有自定义 → `<img>` contain 于 36×36；否则字母 mark（产品名称首字或 `L`） | 生效产品名称 + 副标题 |
-| 登录页顶栏 | 同上 | 产品名称 |
-| 浏览器 Tab | 不变 | 不变 |
-
-v1 共用一张图；若客户登录页需要更大展示，v1.1 再加「登录页 Logo」槽（对齐 `--signin-logo`，上限可放宽到更大尺寸，但展示仍受登录卡宽度约束）。
-
-### 4.3 数据与存储（设计级）
-
-建议落盘（实现时再定精确 schema）：
-
-- `webui/config/branding.yaml`：文案覆盖 + logo 元数据（contentType、updatedAt、像素校验结果）  
-- `webui/config/branding/logo.<ext>`：单一二进制文件  
-
-公开读：`GET` 品牌 JSON + `GET` logo 字节（登录前可用）。  
-写入：`PUT` 文案 / `PUT` logo / `DELETE` logo；进配置审计。
-
-### 4.4 上传校验流水线（设计级）
-
-1. 扩展名 ∈ {png, jpg, jpeg, gif}（+ 可选 webp）  
-2. MIME 与扩展名一致  
-3. 解码后读取宽高；不在 [32,160] 任一边 → 拒绝  
-4. 字节数 > 512KB → 拒绝  
-5. 通过后覆盖写入，旧扩展名文件删除  
-6. 前端预览用返回的 `logoUrl?v=updatedAt` 防缓存
-
-### 4.5 UX 文案要点（配置页帮助）
-
-建议固定说明（中英术语按标准）：
-
-- 推荐 **48×48** PNG（透明底）；允许 32–160。  
-- 同一张图用于侧栏与登录页。  
-- 超尺寸请缩小后再传（本系统不会自动裁切）。  
-- 横向长条 wordmark 不适合此槽，请提供正方形品牌 mark。
-
-### 4.6 权限与安全
-
-- 读：公开（仅品牌元数据与 logo 图，无 secrets）。  
-- 写：WebUI 会话；所有者与运维均可（属交付外观，非账户治理）。  
-- 禁止 SVG / HTML 伪装；图片按二进制存、按 Content-Type 输出。  
-- 配置审计记录 upload / delete / text update。
-
-### 4.7 与现有品牌规范的关系
-
-- Spec 67/68 的「可点击回 `/overview`、accessible name、两行文案节奏」继续有效。  
-- 默认无客户 Logo 时，视觉与现网一致（字母 mark + `Lucy WebUI` / `Data Agent MCP`）。  
-- 客户化后仍不得破坏 home affordance 与翻译防御（`notranslate` 包产品名称 / 副标题中的专业英文）。
-
-## 5. 术语（待写入术语标准）
-
-| Canonical | UI 主术语 | 禁止 |
-|---|---|---|
-| Customer Branding | 品牌外观 | 白标、换皮、皮肤（作导航/标题） |
-| Customer Logo | 客户 Logo | 头像、图标（作主标签） |
-| Product Title | 产品名称 | 站点名、系统名（作主标签） |
-| Brand Tagline | 副标题 | 口号、Slogan（作主标签） |
-
-## 6. 分阶段
-
-| 阶段 | 内容 |
+| 项 | v1 |
 |---|---|
-| **v1（本方案）** | 共用 Logo + 产品名称 + 副标题 + 配置页 + 公开读 + 恢复默认 + Tableau 对齐的像素/格式约束 |
-| **v1.1** | 登录页独立 Logo 槽；可选 WebP；配置审计筛选项 |
-| **v2** | 侧栏折叠 compact 32×32；可选 server 显示名进更多系统消息 |
+| 格式 | PNG / JPEG / GIF（**禁 SVG、禁 WebP**） |
+| 像素 | 宽高均在 **[32, 160]**；任一边越界 → 拒绝 |
+| 推荐 | **48×48** PNG（透明底） |
+| 展示槽 | 36×36 CSS，`object-fit: contain` |
+| 体积 | ≤ **512 KB** |
+| 超限 | **拒绝**，不 clip |
+| 落盘名 | `webui/config/branding/logo.<ext>` |
 
-## 7. 待你确认的决策点
+### 3.3 文案
 
-1. **SVG**：默认禁止（推荐）还是允许并做严格消毒？  
-2. **WebP**：v1 是否允许？  
-3. **超限策略**：确认采用「拒绝」而非 Tableau 式「clip」？  
-4. **副标题**：客户交付是否常改？若很少改，v1 可只做 Logo + 产品名称。  
-5. **分槽**：是否接受 v1 共用一张图，登录页大图放到 v1.1？
+产品名称 / 副标题：trim 后 ≤ 64 Unicode 字符；禁控制字符。侧栏品牌链接 accessible name 仍为「返回系统概览」；Logo `alt=""`。
 
-## 8. Design System Compliance（设计声明）
+### 3.4 非目标
 
-- 配置页模式：`design-system/20-patterns-page-layout.md`  
-- 不把配置页做成营销 landing / 多 KPI dashboard  
-- Toast / 按钮遵循既有组件规范；预览为轻量示意，非新卡片体系  
+多租户、主题色、favicon、title、邮件/PDF 品牌、移动窄屏专用布局。
 
----
+## 4. 设计
 
-确认上述决策点后，再开实现工单（API + `/admin/branding` + 侧栏/登录消费 + 测试）。本轮不写代码。
+### 4.1 IA
+
+访问治理 → 品牌外观 `/admin/branding`（在登录账户之上或同级相邻）。
+
+页面三区：客户 Logo | 产品名称与副标题 | 预览。
+
+### 4.2 API
+
+| 方法 | 路径 | 鉴权 |
+|---|---|---|
+| GET | `/api/branding` | 公开 |
+| GET | `/api/branding/logo` | 公开 |
+| PUT | `/api/branding` | 需会话（开放模式可写） |
+| PUT | `/api/branding/logo` | 同上 |
+| DELETE | `/api/branding/logo` | 同上 |
+
+`GET /api/branding` 返回生效文案 + `productTitleOverride` / `taglineOverride`（空=默认）+ `hasCustomLogo` + `logoUrl`。
+
+`PUT /api/branding/logo` body：`{ filename, contentBase64 }`。
+
+### 4.3 存储
+
+- `webui/config/branding.yaml`
+- `webui/config/branding/logo.<ext>`
+
+审计：`assetKind=governance`；`branding.update` / `branding.logo.upload` / `branding.logo.delete`。
+
+### 4.4 上传校验
+
+1. 扩展名 ∈ png/jpg/jpeg/gif  
+2. 魔数与扩展名一致  
+3. 解码宽高；任一边 ∉ [32,160] → 拒绝  
+4. 体积 > 512KB → 拒绝  
+5. 覆盖写入并删旧扩展名文件  
+
+### 4.5 消费面
+
+侧栏与登录：有 Logo 用 `<img>`，否则字母 mark；文案用生效值。
+
+## 5. 验收
+
+1. 无配置时与现网默认一致  
+2. 上传合规 PNG 后侧栏/登录立即显示；刷新仍在  
+3. 改产品名称 / 副标题生效；清空保存后回默认  
+4. 恢复默认 Logo → 字母 mark  
+5. 超尺寸 / SVG / WebP / 过大文件 → 明确错误  
+6. 未登录可读 GET；required 模式未登录不可写  
+7. 导航 / Handbook §1.5 / 术语标准同步  
+8. 相关单元测试通过  
+
+## 6. Design System Compliance
+
+- 配置页：`20-patterns-page-layout.md`  
+- 按钮 / Toast 既有规范；预览为轻量示意  

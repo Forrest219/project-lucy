@@ -197,6 +197,10 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | WebUI Admin Owner | 所有者 | 所有者 | 超管（主术语）、管理者（可用作叙述同义） | 可管理其他登录账户 |
 | WebUI Admin Operator | 运维 | 运维人员 | 管理员（易与所有者混淆）、普通用户 | 日常连接 / 语义 / Eval / Agent Role；不可管登录账户 |
 | WebUI Login | 登录 | 控制面登录 | Sign in 裸用 | `/login` |
+| Customer Branding | 品牌外观 | 客户品牌 | 白标、换皮、皮肤（作导航/标题） | Spec 126：`/admin/branding` |
+| Customer Logo | 客户 Logo | Logo | 头像、图标（作主标签） | 侧栏 mark 与登录页共用；PNG/JPEG/GIF，32–160px |
+| Product Title | 产品名称 | wordmark | 站点名、系统名（作主标签） | 默认 `Lucy WebUI` |
+| Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `Data Agent MCP` |
 | Token Expiry | 过期时间 | Token 失效时间 | 失效日期（可作为说明同义） | `expires_at`；到期后 Proxy 拒绝 |
 | Config Audit Change Type | 变更类型 | 配置变更类型 | 类型（过宽）、changeType（裸露） | Spec 96 表头与筛选 |
 | Config Audit Asset Kind | 资产域 | 配置资产域 | assetKind、资产类型（与 Semantic Asset Kind 混淆） | Spec 90/96：governance/semantic/wiki/eval/publish |

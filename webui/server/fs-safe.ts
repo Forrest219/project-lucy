@@ -109,6 +109,17 @@ export async function safeWrite(projectRoot: string, relPath: string, content: s
   await writeFile(target, content, "utf8");
 }
 
+/** Binary-safe write under the same allow-list as `safeWrite` (e.g. customer logo). */
+export async function safeWriteBinary(
+  projectRoot: string,
+  relPath: string,
+  content: Buffer
+): Promise<void> {
+  const target = await resolveWritable(projectRoot, relPath);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, content);
+}
+
 export async function safeMkdir(projectRoot: string, relPath: string): Promise<void> {
   const target = await resolveWritable(projectRoot, relPath);
   await mkdir(target, { recursive: true });
