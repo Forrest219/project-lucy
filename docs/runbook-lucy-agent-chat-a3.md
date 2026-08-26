@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy 可选 Agent Chat（A3）联调 Runbook |
 | 文档类型 | Runbook |
-| 版本 | v0.1 |
+| 版本 | v0.2 |
 | 撰写日期 | 2026-08-26 |
 | 适用范围 | 单租户（M0）验证；**非**客户 headless 默认交付 |
 | 设计事实源 | [`docs/design-lucy-agent-chat-a3.md`](design-lucy-agent-chat-a3.md) |
@@ -13,10 +13,11 @@
 
 ## 0. 底线（每次联调前确认）
 
-1. **先有 Lucy**：本 Runbook 不替代 Lucy 独立部署；Agent Chat 是旁路叠加。
+1. **先有 Lucy**：本 Runbook 不替代 Lucy 独立部署。
 2. **默认 compose 不含 Chat**：勿把 `docker-compose.agent-chat.yml` 并进客户默认 `docker compose up`。
-3. **单租户 M0**：一个 Hermes home、一个 Lucy Agent token；Open WebUI 多账号共享同一 `lucy-data-agent`。
-4. **Hermes `:8642` 不对宿主公网映射**（compose 已不发布该端口）。
+3. **M0 单账号串行**：一个 Open WebUI 验证账号、一个 Hermes home、一个 Lucy Agent token；禁止并发提问。
+4. **Hermes `:8642` 无宿主 ports**；Open WebUI 默认绑定 `127.0.0.1`。
+5. **Lucy Admin 凭据独立**：证据链只用 `LUCY_ADMIN_*`，禁止用 `WEBUI_ADMIN_*` 冒充。
 
 ---
 
@@ -24,12 +25,13 @@
 
 | 项 | 要求 |
 |---|---|
-| Lucy | MCP Proxy 可达；已配置 `LUCY_PUBLIC_MCP_URL`（或本机验证用宿主映射端口） |
-| Token | Admin 为只读 role 的 Agent 生成 Bearer；明文只出现一次 |
-| Docker | 可拉取 `nousresearch/hermes-agent` 与 `ghcr.io/open-webui/open-webui` |
-| LLM | Hermes 可用的 provider key（如 OpenRouter / OpenAI / Anthropic） |
+| Lucy | MCP 可达；Lucy Admin 可登录 |
+| Token | 只读 Agent Bearer（L3） |
+| Images | `HERMES_IMAGE` / `OPEN_WEBUI_IMAGE` = `repository:tag@sha256:<64 hex>` |
+| LLM | Hermes provider key |
+| 数据 | 默认 `A3_DATA_CLASS=nonprod`；真实客户数据须 `A3_DATA_APPROVAL_ID` |
 
-建议旁证（非阻塞）：本机已能跑通 `npm run e2e:agent:local-hermes` 时，说明 Hermes→Lucy 数据面健康。
+旁证（非阻塞）：`npm run e2e:agent:local-hermes`。
 
 ---
 
@@ -40,117 +42,106 @@ cp agent-chat/.env.example agent-chat/.env
 cp -R agent-chat/hermes-home.example agent-chat/hermes-home
 ```
 
-编辑 `agent-chat/.env`：
+编辑 `agent-chat/.env`：填入真实 pin digest（勿用 example 中的占位 0）、`API_SERVER_KEY`、`LUCY_*`、`WEBUI_ADMIN_*`、`LUCY_ADMIN_*`、LLM key。
 
-| 变量 | 说明 |
-|---|---|
-| `API_SERVER_KEY` | L2；`openssl rand -hex 32`；**必须**与 `LUCY_AGENT_TOKEN` 不同 |
-| `LUCY_PUBLIC_MCP_URL` | 从 Hermes 容器可达的 Lucy MCP URL（本机常见 `http://host.docker.internal:7879/mcp`） |
-| `LUCY_AGENT_TOKEN` | L3 Lucy Bearer |
-| `OPENROUTER_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | 按 Hermes model 配置任选 |
+### `WEBUI_ADMIN_*` 含义
 
-检查 `agent-chat/hermes-home/config.yaml`：
+仅在 **fresh volume**（Open WebUI DB 尚无用户）时创建管理员，之后**不会**更新已有账号。这是首次初始化，不是持续账号收敛。existing volume 必须读运行时用户数/注册开关；不合规时 **fail/blocked**，**不得**自动 `down -v`。
 
-- `platform_toolsets.api_server` 仅含 `mcp-lucy`（V-5）
-- `mcp_servers.lucy` 使用 `${LUCY_PUBLIC_MCP_URL}` / `${LUCY_AGENT_TOKEN}`
-
-首次启动后若 Hermes 改写了 model 段，用 `docker compose ... exec hermes hermes model` 指向真实模型。
+检查 `agent-chat/hermes-home/config.yaml`：`memory_enabled: false`、`platform_toolsets.api_server` 仅 `mcp-lucy`。
 
 ---
 
-## 3. 启动 / 停止
+## 3. Pause vs Destroy
+
+### Pause（保留验证数据）
 
 ```bash
-# Start (profile required)
-docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env up -d
-
-# Logs
-docker compose -f docker-compose.agent-chat.yml --profile agent-chat logs -f hermes open-webui
-
-# Stop
 docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env down
 ```
 
-浏览器打开 `http://localhost:3000`（或 `AGENT_CHAT_WEBUI_HOST_PORT`）。
+保留 Open WebUI volume 与 `agent-chat/hermes-home`。
 
-**V-1 对照**：在不启动上述 profile 时，原 Lucy `docker compose up` 仍应独立可用。
+### Destroy validation data（不可恢复；人工确认）
 
----
+1. 导出需要保留的 evidence JSON。
+2. 确认 compose project 名为 `lucy-agent-chat`。
+3. `docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env down -v`
+4. 删除明确路径 `agent-chat/hermes-home`（需人工确认）。
+5. 轮换 `LUCY_AGENT_TOKEN` / `API_SERVER_KEY` / Provider key / 视需要轮换 Open WebUI 与 Lucy Admin 密码。
 
-## 4. Open WebUI 连接核对
-
-Compose 已注入：
-
-- `OPENAI_API_BASE_URL=http://hermes:8642/v1`（必须含 `/v1`）
-- `OPENAI_API_KEY=<API_SERVER_KEY>`
-- `ENABLE_OLLAMA_API=false`
-
-若模型列表为空：
-
-1. 确认 URL 含 `/v1`。
-2. 确认 key 与 `API_SERVER_KEY` 一致。
-3. Open WebUI 可能把 connection 写进自有 DB——改 `.env` 后仍 401 时，到 Admin → Connections 修正，或删 volume `lucy-agent-chat-open-webui-data` 后重建。
-
-模型下拉应出现 **`lucy-data-agent`**（或你覆盖的 `API_SERVER_MODEL_NAME`）。
+Smoke **不得**自动执行 Destroy。
 
 ---
 
-## 5. 验证清单（Spec §7）
+## 4. 启动
+
+```bash
+docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env up -d
+```
+
+浏览器：`http://127.0.0.1:3000`（或 `AGENT_CHAT_WEBUI_BIND_HOST`/`PORT`）。
+
+启动后设 `A3_VOLUME_MODE=fresh` 或 `existing`，供 live smoke 使用。live smoke 会登录 Open WebUI，读取运行时注册开关和用户列表；该值只记录卷的操作上下文，不代替运行时取证。
+
+---
+
+## 5. 验证清单（与 Design §7 对齐）
 
 | ID | 操作 | 通过 |
 |---|---|---|
-| V-1 | 不启 agent-chat profile，Lucy 仍健康 | 既有 P0 / health 通过 |
-| V-2 | 在 Open WebUI 对 `lucy-data-agent` 提问 | 可见流式或最终回复 |
-| V-3 | 同一次提问查 Lucy audit / trace | 至少一次允许的 `lucy_*`（或兼容面）`tools/call` |
-| V-4 | 核对 `.env` | `API_SERVER_KEY` ≠ `LUCY_AGENT_TOKEN`；Chat UI 不展示 L3 |
-| V-5 | 读 `hermes-home/config.yaml` 的 `platform_toolsets.api_server` | 仅 `mcp-lucy`（无 terminal/browser） |
+| V-1 | 不启 A3；跑 `npm run smoke:p0:delivery-isolation` | Lucy 隔离 PASS |
+| V-2 | live smoke 经 Open WebUI `/api/chat/completions` 提问（串行） | SSE + completed + ≥1 非空 content delta |
+| V-3 | 问题后缀 `A3_CASE:<uuid>`；Lucy Admin 两段式 turns API | `total===1` + accessLogs 允许数据调用 |
+| V-4 | 核对 `.env` | L2≠L3；Admin 凭据不混用 |
+| V-5 | 模型可调用工具探针（pin 后固化命令） | exact allow-list；不可探测 → blocked |
+| V-6 | image inspect | immutable ref + Id + RepoDigests |
+| V-7 | fresh/existing volume | 见 §2；不合规不自动清卷 |
 
-可选 API 抽查（在 compose 网络内）：
+### V-3 两段式（冻结）
 
-```bash
-docker compose -f docker-compose.agent-chat.yml --profile agent-chat exec hermes \
-  python -c "import os,urllib.request; req=urllib.request.Request('http://127.0.0.1:8642/health'); print(urllib.request.urlopen(req).read())"
-```
+1. `GET /api/auth/status`；required 模式再 `POST /api/auth/login`（JSON 字段 `adminId`/`password`，取值 `LUCY_ADMIN_ID`/`LUCY_ADMIN_PASSWORD`）
+2. `GET /api/admin/audit/turns?source=reported&q=A3_CASE:<uuid>&limit=2` → `total === 1`
+3. `GET /api/admin/audit/turns/:turnId` → `accessLogs`
 
-宿主默认**没有** `localhost:8642` 映射属预期。
+判定：Lucy 不可达 / 缺 Admin 凭据 → `blocked`；登录失败或 401/403 → `fail`。
+
+### V-5 工具探针
+
+live smoke 在 Hermes 容器内认证请求 `GET http://127.0.0.1:8642/v1/toolsets`，从已启用 toolset 的 `tools` 字段提取工具集。只有 pinned 版本能完整返回 MCP 派生工具时，结果才可用于 exact allow-list 判定：缺工具、多余 `lucy_*` 或任何其他工具均 `fail`。已知部分 Hermes 版本会从该端点省略 MCP 派生工具；空结果、容器/端点不可用或无法证明结果完整时必须 `blocked`，不得假 PASS。`API_SERVER_KEY` 只从容器环境读取，不写入命令输出或 evidence。
 
 ---
 
-## 6. 排障
+## 6. 传输与数据分级
+
+- `http://` 仅 loopback、`host.docker.internal` 或明确隔离 bridge。
+- 其他 `LUCY_PUBLIC_MCP_URL` 必须 `https://`。
+- `A3_DATA_CLASS=approved-customer` 时必须提供 `A3_DATA_APPROVAL_ID`（及建议的 Provider 区域）。
+
+---
+
+## 7. 排障
 
 | 现象 | 方向 |
 |---|---|
-| Hermes unhealthy | `logs hermes`；检查 volume 权限与 `API_SERVER_KEY` 长度（≥8） |
-| Open WebUI 无模型 | `/v1` 后缀、key、Ollama 干扰、Connections DB 缓存 |
-| 有回复但无 Lucy 调用 | MCP URL 从容器不可达；token/role；`mcp_servers.lucy` 未加载 |
-| 权限拒绝 | Lucy ACL / role；换只读可访问表范围内的问题 |
-| 首包很慢 | 多轮 MCP 正常；以 audit 为准，勿仅用 UI 延迟判失败 |
-| 改 env 不生效 | Open WebUI 自有 DB；或需 `compose up -d --force-recreate` |
+| compose 拒绝启动 | 未设置 pin：`${HERMES_IMAGE:?pinned image required}` |
+| Open WebUI 无模型 | `/v1`、key、Connections DB |
+| existing volume 多账号 | 人工 Destroy 或清用户；勿只改 env |
+| 有回复无 Lucy 调用 | MCP URL/token；begin_question 未带原问题 → 证据链 fail |
+| Admin 401 | 检查 `LUCY_ADMIN_*`，勿用 WebUI admin |
 
 ---
 
-## 7. 安全提醒
-
-- 勿把 `agent-chat/.env` / `agent-chat/hermes-home/` 提交 git（已在 `agent-chat/.gitignore`）。
-- 公网暴露 Open WebUI 时自行加 HTTPS、强管理员密码、关闭公开注册。
-- 验证结束后轮换演示用 `LUCY_AGENT_TOKEN`。
-
----
-
-## 8. 仓库烟测（静态 + 可选 live）
+## 8. 仓库烟测
 
 ```bash
-npm run smoke:agent-chat:a3
+npm run smoke:agent-chat:a3          # 静态
+npm run smoke:agent-chat:a3 -- --live
 ```
 
-- 默认：校验 compose / 模板 / gitignore 等**包装完整性**（不要求 stack 已启动）。
-- `--live`：若 Hermes/Open WebUI 可达则做健康探测；不可达则 **blocked**（exit 2），不充当 headless 硬门禁失败。
+- 静态：包装完整性。
+- live：登录 Open WebUI，核验 `ENABLE_SIGNUP=false` 与唯一管理员账号，经 Open WebUI 发出带自动生成 `A3_CASE:<uuid>` 的问题，校验 SSE，再用 Lucy Admin 审计 API 关联同一 case；缺依赖 → exit 2 `blocked`。
+- **不得**加入 headless / SOW 硬门禁。
+- Lucy 镜像隔离硬门禁：`npm run smoke:p0:delivery-isolation`。
 
-本命令**不得**加入 `smoke:p0:headless-config` / SOW trust 必跑集。
-
----
-
-## Terminology Compliance
-
-This runbook follows `webui/docs/00-product-terminology-standard.md`（§4.9 Agent Chat）。  
-主术语：Agent Chat、`lucy-data-agent`、Open WebUI、Hermes、API Server、MCP、SSE。
+维护者脚本可保留在仓库根 `package.json`；**客户 source bundle** 不含这些命令入口。

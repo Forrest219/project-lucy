@@ -32,8 +32,9 @@ Lucy 的测试分三层，不能互相替代：
 |---|---|---|
 | `npm run lint:spec` | platform | spec drift checks for routes/API/skills/evals/access roles |
 | `npm run security:baseline` | security + platform | token hash, wildcard ACL, deny tools, audit hooks, secrets exclusion baseline |
-| `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke |
-| `npm run smoke:p0:docker` | runtime + platform | Docker image build, compose up, `/api/health`, MCP proxy port, bundled KTX version |
+| `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke（含 delivery-isolation 静态门禁） |
+| `npm run smoke:p0:delivery-isolation` | platform（Lucy 硬门禁） | `.dockerignore` 排除 A3 路径；可选 `--check-images` 对 Lucy 镜像做 denylist；与 A3 是否启用无关 |
+| `npm run smoke:p0:docker` | runtime + platform | Docker image build, compose up, `/api/health`, MCP proxy port, bundled KTX version；并检查 `project-lucy:p0-smoke` 与 `project-lucy:local` 无 A3 路径 |
 | `npm run smoke:p0:headless-config` | customer config | verifies the recommended `/data/lucy` config package shape, secret references, semantic-layer/wiki/eval/access parseability, and compose override |
 | `npm run smoke:p0:demo` | runtime + platform + customer path | demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
@@ -174,13 +175,7 @@ npm run smoke:p0
 npm run audit:ktx-diff
 ```
 
-Optional Agent Chat (A3) packaging smoke — **not** a headless / SOW hard gate:
-
-```bash
-npm run smoke:agent-chat:a3
-npm run smoke:agent-chat:a3:test
-```
-
+Optional Agent Chat (A3) is **not** part of this customer source bundle. Packaging and live smokes live in the Lucy repository for maintainers only; they are **not** headless / SOW hard gates and are **not** runnable from the customer bundle. Obtain A3 as a separate optional add-on if needed.
 `npm run smoke:p0` includes WebUI build/test/static SPA checks. Those checks protect repository quality and future governance UI work; they do not mean WebUI is a customer standard entry point for this release.
 
 Required before changing bundled KTX version:
@@ -260,7 +255,8 @@ Recommended CI jobs:
 |---|---|
 | spec-and-unit | `npm run lint:spec`; `cd webui && npm test` |
 | security-baseline | `npm run security:baseline` |
-| docker-smoke | `npm run smoke:p0:docker` |
+| docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |
+| delivery-isolation | `npm run smoke:p0:delivery-isolation`（Lucy 硬门禁；亦由 `smoke:p0` 调用） |
 | headless-config | `npm run smoke:p0:headless-config` |
 | demo-e2e | `npm run smoke:p0:demo` |
 | postgres-demo-e2e | `npm run smoke:p0:postgres-demo` |
@@ -280,4 +276,4 @@ Recommended CI jobs:
 
 GitHub Actions implementation: `.github/workflows/lucy-release.yml`.
 
-For customer signoff, treat `security-baseline`, `docker-smoke`, `headless-config`, `demo-e2e`, `postgres-demo-e2e`, and `business-eval-catalog` as the headless gate set. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.
+For customer signoff, treat `security-baseline`, `docker-smoke`（含 delivery-isolation）、`headless-config`, `demo-e2e`, `postgres-demo-e2e`, and `business-eval-catalog` as the headless gate set. Optional Agent Chat smokes are maintainer-only and are stripped from the customer source bundle. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.

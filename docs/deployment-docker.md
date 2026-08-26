@@ -276,7 +276,7 @@ Compose 宿主端口映射变量：
 - Demo 数据库尚未内置；正式 CI/release 不应依赖生产或个人可访问数据库。
 - 业务 eval 仍依赖可访问的目标数据库和 agent CLI 环境。
 - Skill Editor / Skill 版本化 UI、MCP endpoint 生命周期管理 UI、系统 metrics/告警/日志聚合、对象存储归档均不属于首版客户 headless 交付范围。
-- 可选 Agent Chat（A3：Open WebUI + Hermes）使用旁路文件 `docker-compose.agent-chat.yml` + `--profile agent-chat`，**不是**默认 `docker compose up` 的一部分；联调见 `docs/runbook-lucy-agent-chat-a3.md`。
+- 可选 Agent Chat（A3：Open WebUI + Hermes）**不是**本客户 source bundle 或默认 `docker compose up` 的一部分。如需验证附包，请另行获取；本包内不含 A3 compose、Runbook 或 smoke 命令入口。
 
 ## 11. P0 Smoke
 

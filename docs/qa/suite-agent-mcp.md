@@ -44,6 +44,7 @@
 | 人工/脚本主题接入并对 gold（未要求 Agent harness） | [`suite-semantic-onboard-mcp-eval.md`](suite-semantic-onboard-mcp-eval.md) |
 | Spider2 装载 / catalog / datapath / MCP vs gold（无 Agent） | [`suite-semantic-onboard-mcp-eval.md`](suite-semantic-onboard-mcp-eval.md) §14 |
 | 只验证 Docker / health / demo smoke | `test-layers` 的 `smoke:p0*` |
+| 可选 Agent Chat（Open WebUI + Hermes）UI 验证 | `docs/design-lucy-agent-chat-a3.md` / `npm run smoke:agent-chat:a3`（非本分表、非 SOW/headless 硬门禁；证据链为 Lucy Admin 两段式 turns + SSE≥1；镜像隔离用 `smoke:p0:delivery-isolation`） |
 
 ---
 

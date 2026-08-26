@@ -2,6 +2,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ---- arg parsing ----
 // Allowed flags: --out <dir>, --tag <tag>, --help / -h.
@@ -79,6 +80,7 @@ const SOURCE_BUNDLE_ENTRIES = [
   "examples",
   "evals/superstore",
   "scripts/headless-config-smoke.mjs",
+  "scripts/lucy-delivery-isolation-smoke.mjs",
   "scripts/docker-entrypoint.sh",
   "scripts/docker-healthcheck.sh",
   "webui/package.json",
@@ -210,6 +212,32 @@ function shouldCopySourceBundlePath(src) {
   return true;
 }
 
+const A3_NPM_SCRIPTS = ["smoke:agent-chat:a3", "smoke:agent-chat:a3:test"];
+const SOURCE_BUNDLE_STRIPPED_NPM_SCRIPTS = [
+  ...A3_NPM_SCRIPTS,
+  // The customer bundle keeps the production isolation command, but does not
+  // ship maintainer-only node:test sources.
+  "smoke:p0:delivery-isolation:test"
+];
+
+/**
+ * Strip optional A3 npm scripts from a staging package.json copy only.
+ * Never mutate the repository root package.json.
+ */
+function stripSourceBundleScriptsFromPackageJson(pkg) {
+  const next = structuredClone(pkg);
+  if (next.scripts && typeof next.scripts === "object") {
+    for (const key of SOURCE_BUNDLE_STRIPPED_NPM_SCRIPTS) {
+      delete next.scripts[key];
+    }
+  }
+  return next;
+}
+
+// Backwards-compatible export for existing callers; source-bundle hygiene now
+// also removes maintainer-only commands whose implementation is not shipped.
+const stripA3ScriptsFromPackageJson = stripSourceBundleScriptsFromPackageJson;
+
 async function createSourceBundle(outDir) {
   const stagingRoot = path.join(outDir, `.${SOURCE_BUNDLE_ROOT}-${process.pid}`);
   const bundleRoot = path.join(stagingRoot, SOURCE_BUNDLE_ROOT);
@@ -225,6 +253,10 @@ async function createSourceBundle(outDir) {
         filter: shouldCopySourceBundlePath
       });
     }
+    const stagedPkgPath = path.join(bundleRoot, "package.json");
+    const stagedPkg = JSON.parse(await readFile(stagedPkgPath, "utf8"));
+    await writeFile(stagedPkgPath, `${JSON.stringify(stripSourceBundleScriptsFromPackageJson(stagedPkg), null, 2)}\n`, "utf8");
+
     const result = spawnSync("tar", ["-czf", bundlePath, "-C", stagingRoot, SOURCE_BUNDLE_ROOT], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"]
@@ -276,6 +308,7 @@ async function main() {
   const repoQualityGates = [
     "npm run lint:spec",
     "npm run smoke:p0",
+    "npm run smoke:p0:delivery-isolation",
     "npm run security:baseline",
     "npm audit --json (root, webui)",
     "npm run audit:ktx-diff"
@@ -283,6 +316,7 @@ async function main() {
   const customerHeadlessGates = [
     "npm run security:baseline",
     "npm run smoke:p0:docker",
+    "npm run smoke:p0:delivery-isolation",
     "npm run smoke:p0:headless-config",
     "npm run smoke:p0:demo",
     "npm run smoke:p0:postgres-demo",
@@ -415,7 +449,20 @@ This release does not deliver a WebUI management console as the customer entry p
   console.log(`[release-artifacts] wrote ${FINAL_OUT_DIR}`);
 }
 
-main().catch((error) => {
-  console.error(`[release-artifacts] FAIL: ${error.message}`);
-  process.exit(1);
-});
+export {
+  A3_NPM_SCRIPTS,
+  createSourceBundle,
+  SOURCE_BUNDLE_NAME,
+  SOURCE_BUNDLE_STRIPPED_NPM_SCRIPTS,
+  stripA3ScriptsFromPackageJson,
+  stripSourceBundleScriptsFromPackageJson
+};
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main().catch((error) => {
+    console.error(`[release-artifacts] FAIL: ${error.message}`);
+    process.exit(1);
+  });
+}

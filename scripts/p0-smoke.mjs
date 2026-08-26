@@ -74,6 +74,7 @@ async function waitFor(url, options = {}) {
 
 async function localSmoke() {
   await run("npm", ["run", "lint:spec"]);
+  await run("npm", ["run", "smoke:p0:delivery-isolation"]);
   await run("npm", ["run", "build"], { cwd: "webui" });
   await run("npm", ["test"], { cwd: "webui" });
   await run("bash", ["-n", "scripts/docker-entrypoint.sh", "scripts/docker-healthcheck.sh"]);
@@ -142,6 +143,16 @@ async function dockerSmoke() {
     "."
   ], { env: buildEnv });
   await run("docker", ["compose", "-p", "lucy-p0-smoke", "up", "-d", "--build"], { env: composeEnv });
+  await run("npm", [
+    "run",
+    "smoke:p0:delivery-isolation",
+    "--",
+    "--check-images",
+    "--image",
+    "project-lucy:p0-smoke",
+    "--image",
+    "project-lucy:local"
+  ]);
   try {
     const health = await waitFor(`http://127.0.0.1:${dockerWebPort}/api/health`, { timeoutMs: 120_000 });
     if (health?.ok !== true) throw new Error("docker /api/health envelope was not ok");

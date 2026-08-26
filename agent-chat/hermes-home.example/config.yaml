@@ -11,11 +11,27 @@
 model:
   default: openrouter/auto
 
+# A3 — explicit memory off (not relying on upstream defaults).
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
 # A3 §4.2 — api_server only gets Lucy MCP tools (no terminal/browser/file).
 # MCP server name "lucy" → runtime toolset id "mcp-lucy".
 platform_toolsets:
   api_server:
     - mcp-lucy
+
+agent:
+  disabled_toolsets:
+    - memory
+    - terminal
+    - browser
+    - file
+    - code_execution
+    - delegation
+    - cron
+    - skills
 
 mcp_servers:
   lucy:

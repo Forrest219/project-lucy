@@ -3,21 +3,29 @@
 Lucy remains independently deliverable. This directory only supports the optional
 **Agent Chat** validation stack (Open WebUI + Hermes → Lucy MCP).
 
+M0: one Open WebUI account, one Hermes home, one Lucy Agent token, serial questions.
+Lucy Admin credentials for audit evidence are separate from Open WebUI admin.
+
 ## Quick start
 
-1. Ensure Lucy MCP Proxy is already running (default compose or your deploy).
-2. Create a Lucy Agent token (Admin → Agents) with a read-only role; copy Hermes MCP snippet fields.
+1. Ensure Lucy MCP Proxy is already running.
+2. Create a read-only Lucy Agent token; prepare Lucy Admin credentials for evidence checks.
 3. Follow **`docs/runbook-lucy-agent-chat-a3.md`**.
 
 ```bash
 cp agent-chat/.env.example agent-chat/.env
 cp -R agent-chat/hermes-home.example agent-chat/hermes-home
-# edit agent-chat/.env — set API_SERVER_KEY, LUCY_PUBLIC_MCP_URL, LUCY_AGENT_TOKEN, LLM key
+# edit agent-chat/.env — pin images as repository:tag@sha256:<64 hex>, keys, admins
 
 docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env up -d
 ```
 
-Open http://localhost:3000 (or `AGENT_CHAT_WEBUI_HOST_PORT`).
+Open `http://127.0.0.1:3000` (loopback by default).
+
+### Pause vs Destroy
+
+- **Pause:** `docker compose ... down` (keeps volume + hermes-home).
+- **Destroy:** see Runbook (manual `down -v` + delete hermes-home + rotate secrets). Never automated by smoke.
 
 ## Design
 

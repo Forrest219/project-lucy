@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 可选 Agent Chat（A3）设计 |
 | 文档类型 | Design |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-08-26；v0.2 同步可选 compose / Runbook / 烟测出口落地 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-08-26；v0.2 同步可选 compose / Runbook / 烟测出口落地；v0.3 对齐 A3 优化审阅修正（单账号、证据链、pin、隔离门禁） |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
 | 基于材料 | 既有架构评估结论（Open WebUI + Hermes API Server → Lucy MCP）；`docs/vision.md`；`docs/agent-integration-guide.md`；`docs/lucy-platform-goal-checklist.md`；Hermes API Server / Open WebUI 官方集成文档 |
@@ -119,8 +119,8 @@ BusinessUser
 
 | 服务 | 端口 | 对外暴露（验证部署） |
 |---|---|---|
-| Open WebUI | 3000 | 可（或经 Ingress） |
-| Hermes API Server | 8642 | **否**；仅 Open WebUI 容器/进程可达 |
+| Open WebUI | 3000 | **默认仅 `127.0.0.1`**；公网须经明确 HTTPS Ingress 且 opt-in |
+| Hermes API Server | 8642 | **否**（无宿主 `ports`）；仅 compose 网络内 Open WebUI → `hermes:8642` |
 | Lucy MCP Proxy | 7879 或 `LUCY_PUBLIC_MCP_URL` | 按现有 Lucy 部署；Hermes 必须能访问 |
 | Lucy WebUI | 既有端口 | 治理用；与 Agent Chat **分离** |
 | KTX | 7878 | 仅 Proxy 可达 |
@@ -135,17 +135,19 @@ Open WebUI 以 **server-to-server** 调用 Hermes，验证部署**不**为浏览
 
 | 维度 | M0 约定 |
 |---|---|
-| Hermes | 单一 profile，建议名 `lucy-chat` |
-| Lucy Agent | 单一 `access.yaml` 用户 + 单一 Bearer token；role 为明确只读模板（验证环境自选，如 `kx_readonly` / POC 只读 role） |
-| Open WebUI | 可创建多个登录账号；模型下拉仅暴露同一 `lucy-data-agent` |
-| 记忆 | **默认关闭** Hermes 跨会话持久 memory 写入；接受「无长期共享大脑」。若验证需要开启 memory，必须在验证记录中显式接受「所有 Chat 用户共享同一 Hermes 记忆」 |
-| 隔离目标 | 验证「流式对话 → Lucy MCP → 审计可见」；**不**验证用户间数据权限隔离 |
+| Hermes | 单一 profile / home，建议名 `lucy-chat` |
+| Lucy Agent | 单一 `access.yaml` 用户 + 单一 Bearer token；role 为明确只读模板 |
+| Open WebUI | **恰好一个**验证账号；禁止并发提问 |
+| Lucy Admin | **独立**管理员凭据，仅用于 audit 证据链；**禁止**与 Open WebUI 管理员凭据混用 |
+| 记忆 | Hermes `memory_enabled` / `user_profile_enabled` **显式 false**；`disabled_toolsets` 含 memory |
+| 隔离目标 | 验证「流式对话 → Lucy MCP → 唯一 turn/accessLogs」；**不**验证用户间数据权限隔离 |
 
 ### 3.2 明确不做（本 Spec）
 
-- M1：多 Hermes profile × 多 Lucy role  
+- M1：多 Open WebUI 账号、多 Hermes profile × 多 Lucy role
 - M2：每业务用户独立 Hermes profile  
 - Open WebUI 用户与 Lucy Agent / WebUI Admin 的身份联邦  
+- 修改 Lucy `lucy_begin_question` 可选语义或 near-neighbor 关联契约
 
 ---
 
@@ -189,7 +191,7 @@ Lucy 侧既有 `defaults.deny_tools`（如 `sql_execution`、`memory_ingest`）�
 | 项 | M0 约定 |
 |---|---|
 | `API_SERVER_ENABLED` | `true` |
-| `API_SERVER_HOST` | `127.0.0.1` 或 compose 内网服务名 |
+| `API_SERVER_HOST` | compose 网络内绑定 `0.0.0.0`（供 `hermes` 服务名访问）；**不**发布到宿主 |
 | `API_SERVER_PORT` | `8642` |
 | `API_SERVER_KEY` | 强随机；注入 Open WebUI `OPENAI_API_KEY` |
 | `API_SERVER_MODEL_NAME` | **`lucy-data-agent`**（Open WebUI 模型下拉展示名） |
@@ -250,11 +252,13 @@ LLM provider 密钥只存在于 Hermes；Open WebUI 只配置指向 Hermes `/v1`
 
 | ID | 检查项 | 通过标准 |
 |---|---|---|
-| V-1 | Lucy 独立 | 不启 Open WebUI / Hermes Chat 时，既有 Lucy compose / headless 路径仍可启动并通过既有 P0 健康检查 |
-| V-2 | 流式对话 | Open WebUI 对 `lucy-data-agent` 提问后可见流式（或最终）文本回复 |
-| V-3 | 数据面落地 | 同一次提问在 Lucy audit（或 trace）中出现至少一次允许的 `lucy_*`（或兼容面）`tools/call` |
-| V-4 | 密钥分离 | 验证记录确认 L2 / L3 为不同密钥；Chat 用户流程中不出现 L3 明文 |
-| V-5 | 能力面收窄 | Hermes 验证 profile 未启用 terminal/browser（配置检查或等价证据） |
+| V-1 | Lucy 独立 | 不启 Agent Chat；`smoke:p0:delivery-isolation` 与既有 Lucy P0 仍通过 |
+| V-2 | 真实流式 | SSE 帧存在 + completed + **≥1** 非空 content delta（不得仅凭最终 JSON 文本 pass） |
+| V-3 | 唯一证据链 | 提问含 `A3_CASE:<uuid>`；Lucy Admin 登录后两段式：`GET .../turns?source=reported&q=...&limit=2` 且 `total===1`，再 `GET .../turns/:turnId`，`accessLogs` 含 ≥1 允许的 `lucy_*` 数据调用 |
+| V-4 | 密钥分离 | L2≠L3；Chat 流程无 L3 明文；Lucy Admin ≠ Open WebUI Admin |
+| V-5 | 可调用工具面 | 模型实际可调用工具集合 = Lucy MCP allow-list（非仅配置文本；探针不可用 → blocked） |
+| V-6 | 镜像 pin | `HERMES_IMAGE` / `OPEN_WEBUI_IMAGE` 为 `repository:tag@sha256:<64 hex>`；evidence 含 immutable ref、inspect `.Id`、可用时 `.RepoDigests` |
+| V-7 | 管理员/volume | fresh：`WEBUI_ADMIN_*` 首次创建、注册关、1 账号；existing：读运行时状态，不合规 fail/blocked，不得自动 `down -v` |
 
 ### 7.2 明确不测
 
@@ -270,12 +274,14 @@ LLM provider 密钥只存在于 Hermes；Open WebUI 只配置指向 Hermes `/v1`
 
 ## 8. 安全基线（验证部署）
 
-1. Hermes toolset 按 §4.2 收窄。  
+1. Hermes toolset 按 §4.2 收窄；验收模型可调用集合。
 2. Lucy deny_tools / role ACL 保持现网。  
-3. `:8642` 不对公网暴露。  
-4. 若 Open WebUI 临时对公网：HTTPS、强管理员密码、按需关闭公开注册。  
-5. L3 token 可轮换；泄露影响面限于该只读 Agent。  
-6. 不在 Chat UI 中主动展示密钥或完整内部 token。
+3. `:8642` 不对宿主暴露；Open WebUI 默认 loopback。
+4. `WEBUI_ADMIN_*` 仅 **fresh volume 首次初始化**；创建后关注册；existing volume 须读运行时状态。
+5. 远程 `LUCY_PUBLIC_MCP_URL` 必须 HTTPS；loopback / `host.docker.internal` / 隔离 bridge 可用 http。
+6. 默认非生产/脱敏数据；真实客户数据须批准编号与 Provider 区域记录。
+7. L3 token 可轮换；Pause 与 Destroy 分开（见 Runbook）；Destroy 不由 smoke 自动执行。
+8. 不在 Chat UI 中展示密钥；不用 Open WebUI 凭据冒充 Lucy Admin。
 
 ---
 

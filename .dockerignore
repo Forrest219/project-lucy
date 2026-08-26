@@ -13,3 +13,11 @@ ktx.yaml
 *.log
 coverage
 webui/coverage
+
+# A3 optional Agent Chat — must never enter Lucy image build context
+agent-chat
+docker-compose.agent-chat.yml
+docs/design-lucy-agent-chat-a3.md
+docs/runbook-lucy-agent-chat-a3.md
+scripts/agent-chat-a3-smoke.mjs
+scripts/agent-chat-a3-smoke.test.mjs

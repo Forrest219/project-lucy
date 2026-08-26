@@ -3,20 +3,26 @@
 # Hard constraints (docs/design-lucy-agent-chat-a3.md):
 # - Default `docker compose up` (docker-compose.yml) is unchanged and must stay Lucy-only.
 # - This file only adds Hermes + Open WebUI as a sidecar stack for single-tenant validation.
-# - Hermes API (:8642) is NOT published to the host; only Open WebUI (:3000) is.
+# - Hermes API (:8642) is NOT published to the host; Open WebUI defaults to 127.0.0.1 only.
 #
-# Start (requires agent-chat/.env and agent-chat/hermes-home — see runbook):
+# Images MUST be pinned: repository:tag@sha256:<64 hex> via agent-chat/.env
+#   HERMES_IMAGE=...
+#   OPEN_WEBUI_IMAGE=...
+#
+# Start:
 #   docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env up -d
 #
-# Stop:
+# Pause (keep volumes/home):
 #   docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env down
+#
+# Destroy validation data: see docs/runbook-lucy-agent-chat-a3.md (manual confirmation only).
 
 name: lucy-agent-chat
 
 services:
   hermes:
     profiles: ["agent-chat"]
-    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+    image: ${HERMES_IMAGE:?pinned image required}
     container_name: lucy-agent-chat-hermes
     restart: unless-stopped
     command: ["gateway", "run"]
@@ -55,7 +61,7 @@ services:
 
   open-webui:
     profiles: ["agent-chat"]
-    image: ${OPEN_WEBUI_IMAGE:-ghcr.io/open-webui/open-webui:main}
+    image: ${OPEN_WEBUI_IMAGE:?pinned image required}
     container_name: lucy-agent-chat-open-webui
     restart: unless-stopped
     depends_on:
@@ -65,9 +71,13 @@ services:
       OPENAI_API_BASE_URL: http://hermes:8642/v1
       OPENAI_API_KEY: ${API_SERVER_KEY}
       ENABLE_OLLAMA_API: "false"
+      ENABLE_SIGNUP: "false"
       WEBUI_NAME: ${OPEN_WEBUI_NAME:-Lucy Agent Chat}
+      WEBUI_ADMIN_EMAIL: ${WEBUI_ADMIN_EMAIL}
+      WEBUI_ADMIN_PASSWORD: ${WEBUI_ADMIN_PASSWORD}
+      WEBUI_ADMIN_NAME: ${WEBUI_ADMIN_NAME:-Lucy Agent Chat Admin}
     ports:
-      - "${AGENT_CHAT_WEBUI_HOST_PORT:-3000}:8080"
+      - "${AGENT_CHAT_WEBUI_BIND_HOST:-127.0.0.1}:${AGENT_CHAT_WEBUI_HOST_PORT:-3000}:8080"
     volumes:
       - agent-chat-open-webui-data:/app/backend/data
     networks:
