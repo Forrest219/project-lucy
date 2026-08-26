@@ -165,7 +165,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 管理员指南 | `docs/admin-guide.md` |
 | 用户指南 | `docs/user-guide.md` |
 | Agent 接入指南 | `docs/agent-integration-guide.md` |
-| 可选 Agent Chat（A3，非默认交付） | `docs/design-lucy-agent-chat-a3.md` |
+| 可选 Agent Chat（A3，非默认交付） | `docs/design-lucy-agent-chat-a3.md`、`docs/runbook-lucy-agent-chat-a3.md`、`docker-compose.agent-chat.yml`、`agent-chat/` |
 | 安全指南 | `docs/security-guide.md` |
 | 排障指南 | `docs/troubleshooting-guide.md` |
 | 开发治理 | `docs/DEVELOPMENT.md` |

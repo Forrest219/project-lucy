@@ -65,7 +65,9 @@
     "smoke:p1:business-eval-full": "node scripts/p1-business-eval-full.mjs --require-mcp-token",
     "smoke:p1:starrocks-certification": "node scripts/p1-starrocks-certification.mjs",
     "smoke:p1:release-readiness": "node scripts/p1-release-readiness.mjs",
-    "smoke:p1:release-readiness:test": "node --test scripts/p1-release-readiness.test.mjs"
+    "smoke:p1:release-readiness:test": "node --test scripts/p1-release-readiness.test.mjs",
+    "smoke:agent-chat:a3": "node scripts/agent-chat-a3-smoke.mjs",
+    "smoke:agent-chat:a3:test": "node --test scripts/agent-chat-a3-smoke.test.mjs"
   },
   "dependencies": {
     "yaml": "^2.6.0"

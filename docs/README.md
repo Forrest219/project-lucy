@@ -33,6 +33,7 @@
 | `design-eval-tool-budget.md` | Eval Tool-Budget 设计：把"少重复调用"做成可测回归约束 |
 | `design-webui-ui-refresh.md` | WebUI UI Refresh 与工作台化改造 Spec |
 | `design-lucy-agent-chat-a3.md` | 可选 Agent Chat（A3）：Open WebUI + Hermes API Server 旁路叠加 Lucy MCP；Lucy 独立交付、单租户验证；非默认 headless 交付 |
+| `runbook-lucy-agent-chat-a3.md` | A3 手工联调 / 排障 Runbook（compose profile `agent-chat`） |
 | `access-governance-design.md` | **跳转桩** → `access-control/design-governance-baseline.md` |
 
 ## 3. 复核（Review — 已实现代码的审查报告）

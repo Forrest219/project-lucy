@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 可选 Agent Chat（A3）设计 |
 | 文档类型 | Design |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-08-26 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-08-26；v0.2 同步可选 compose / Runbook / 烟测出口落地 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
 | 基于材料 | 既有架构评估结论（Open WebUI + Hermes API Server → Lucy MCP）；`docs/vision.md`；`docs/agent-integration-guide.md`；`docs/lucy-platform-goal-checklist.md`；Hermes API Server / Open WebUI 官方集成文档 |
@@ -27,8 +27,8 @@
 3. **只做单租户验证（M0）**  
    一个 Hermes profile、一个 Lucy Agent token；Open WebUI 可有多登录账号，但共享同一 data agent。本 Spec **不**设计多 profile / 多 Lucy role 隔离（M1/M2）。
 
-4. **本 Spec 轮次只落盘设计**  
-   本文档冻结架构与验证口径。不附带 compose overlay 实现、不改 `access.yaml` 运行时样例密钥、不改 Proxy / WebUI 代码。compose / CI 烟测属后续出口（见 §9）。
+4. **实现不得破坏 Lucy 独立交付**  
+   架构口径以本文为准。可选实现（compose overlay / Runbook / 包装烟测）必须保持旁路：`docker-compose.yml` 与 Proxy / `access.yaml` 运行时默认路径不变；Agent Chat **永不**进入 headless / SOW trust 硬门禁。
 
 ---
 
@@ -57,7 +57,8 @@ Lucy 是 **data agent context compiler + governed MCP runtime**：编译语义 /
 - 不默认开放 Hermes `terminal` / `browser` / `file` / `delegation` / `cronjob` / `code_execution`。
 - 不做多租户记忆隔离、不做企业 SSO 与 Open WebUI 账户打通。
 - 不将本能力纳入 `smoke:p0:headless-config`、`e2e:sow-trust-standard` 或客户默认镜像。
-- 本 Spec 不交付 compose overlay、Admin「启动 Chat」按钮、Eval runner 的 Open WebUI 适配器。
+- 不交付 Admin「启动 Chat」按钮、Eval runner 的 Open WebUI 适配器、多租户（M1/M2）。
+- Compose overlay / Runbook / 可选烟测见 §9（已落地为旁路交付物，非默认 compose）。
 
 ---
 
@@ -278,17 +279,17 @@ LLM provider 密钥只存在于 Hermes；Open WebUI 只配置指向 Hermes `/v1`
 
 ---
 
-## 9. 后续出口（非本 Spec 范围）
+## 9. 实现出口与状态
 
-以下仅作后续工单入口，**本 Spec 不实施**：
-
-| 出口 | 说明 |
-|---|---|
-| Compose overlay | 例如概念名 `docker-compose.agent-chat.yml` / profile `agent-chat`，默认不随主路径启动 |
-| 短 Runbook | 手工联调步骤与排障（`/v1` 后缀、DB 缓存 connection 等） |
-| CI 可选烟测 | 「提问 → audit 有 `lucy_*`」gated job；永不默认绑 headless P0 |
-| M1 | 多 profile / 多 Lucy role |
-| Responses API | 待 Open WebUI 对 function_call 事件成熟后再评 |
+| 出口 | 状态 | 说明 |
+|---|---|---|
+| Compose overlay | **已落地** | [`docker-compose.agent-chat.yml`](../docker-compose.agent-chat.yml) + [`agent-chat/`](../agent-chat/)；`--profile agent-chat`；默认 `docker compose up` 不启动 |
+| 短 Runbook | **已落地** | [`docs/runbook-lucy-agent-chat-a3.md`](runbook-lucy-agent-chat-a3.md) |
+| 可选包装烟测 | **已落地** | `npm run smoke:agent-chat:a3`（静态）；`--live` 可达则探测，否则 blocked；**不**进 headless P0 |
+| 端到端「提问 → audit `lucy_*`」CI | 未做 | 需运行中的 LLM + Lucy + Chat；保持手工 / gated |
+| M1 | 未做 | 多 profile / 多 Lucy role |
+| Responses API | 未做 | 待 Open WebUI 对 function_call 事件成熟后再评 |
+| Admin「启动 Chat」 | 未做 | 不在本能力范围 |
 
 ---
 
