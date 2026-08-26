@@ -26,6 +26,12 @@ describe("isPublicApi", () => {
     expect(isPublicApi("POST", "/api/help/handbook")).toBe(false);
     expect(isPublicApi("GET", "/api/admin/agents")).toBe(false);
   });
+
+  it("allows branding GET without a session (Spec 126)", () => {
+    expect(isPublicApi("GET", "/api/branding")).toBe(true);
+    expect(isPublicApi("GET", "/api/branding/logo")).toBe(true);
+    expect(isPublicApi("PUT", "/api/branding")).toBe(false);
+  });
 });
 
 describe("isTokenExpired / normalizeExpiresAtInput", () => {

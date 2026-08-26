@@ -76,6 +76,8 @@ KTX WebUI
 | 访问治理 | 访问日志 | `/admin/audit` | 按 Agent 问询与 MCP 调用流水审计；内含 `turns` / `calls` 两个 Tab（Spec 89；`?tab=` 切换） |
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调（Spec 99） |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看 WebUI 写配置的审计记录 |
+| 访问治理 | 品牌外观 | `/admin/branding` | 配置客户 Logo、产品名称与副标题（Spec 126） |
+| 访问治理 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户（所有者 / 运维） |
 
 > 兼容入口：`/admin/audit-sources` 重定向到 `/admin/audit`，保留为外部链接兼容（M35 → Spec 89 移除 heatmap Tab）。
 
@@ -105,6 +107,8 @@ KTX WebUI
 | 访问日志（调用流水 tab） | `访问治理 / 访问日志` |
 | MCP 调试台 | `访问治理 / MCP 调试台` |
 | 配置审计 | `访问治理 / 配置审计` |
+| 品牌外观 | `访问治理 / 品牌外观` |
+| 登录账户 | `访问治理 / 登录账户` |
 
 ## 5. 页面标题与说明
 

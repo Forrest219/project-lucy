@@ -53,7 +53,8 @@ export type NavIconKey =
   | "audit"
   | "mcpPlayground"
   | "configAudit"
-  | "admins";
+  | "admins"
+  | "branding";
 
 export const topLevelEntry: NavItem = {
   id: "overview",
@@ -249,6 +250,15 @@ export const navGroups: Array<{
         active: (path) => path === "/admin/config-audit",
         description: "审阅配置变更、发布影响和治理证据。",
         keywords: ["配置变更", "影响", "治理"]
+      },
+      {
+        id: "admin-branding",
+        label: "品牌外观",
+        to: "/admin/branding",
+        iconKey: "branding",
+        active: (path) => path === "/admin/branding" || path.startsWith("/admin/branding/"),
+        description: "配置客户 Logo、产品名称与副标题。",
+        keywords: ["Logo", "品牌", "外观"]
       },
       {
         id: "admin-accounts",

@@ -2,15 +2,20 @@ import { FormEvent, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { ApiError } from "../lib/apiClient";
+import { BrandMark } from "../components/BrandMark";
+import { useBranding } from "../lib/useBranding";
 
 export function LoginPage() {
   const { status, loading, login, bootstrap } = useAuth();
+  const { data: branding } = useBranding();
   const location = useLocation();
   const [adminId, setAdminId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const productTitle = branding?.productTitle ?? "Lucy WebUI";
+  const logoUrl = branding?.logoUrl ?? null;
 
   if (!loading && status?.mode === "open") {
     return <Navigate to="/overview" replace />;
@@ -44,11 +49,9 @@ export function LoginPage() {
       <div className="w-full max-w-md pl-card grid gap-5 p-6">
         <div className="grid gap-1">
           <div className="flex items-center gap-2">
-            <span className="pl-brand-mark" aria-hidden="true">
-              L
-            </span>
-            <strong className="text-lg notranslate" translate="no">
-              Lucy WebUI
+            <BrandMark productTitle={productTitle} logoUrl={logoUrl} />
+            <strong className="text-lg notranslate" translate="no" data-testid="login-brand-title">
+              {productTitle}
             </strong>
           </div>
           <h1 className="text-xl font-semibold">
