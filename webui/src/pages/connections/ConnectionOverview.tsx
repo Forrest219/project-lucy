@@ -509,7 +509,10 @@ export function ConnectionOverview() {
       <PageHeader
         title="连接概览"
         description={
-          <span className="notranslate" translate="no">维护每个连接的 Schema、YAML 资产与配置同步状态。</span>
+          <>
+            管理数据库连接、<span className="notranslate" translate="no">Schema</span> 与{" "}
+            <span className="notranslate" translate="no">Schema Manifest</span>，并查看连通性和本地目录同步状态。
+          </>
         }
         actions={
           <button

@@ -1328,7 +1328,7 @@ export function WikiEditor() {
         }
         description={
           uiMode === "read"
-            ? "管理业务口径、指标说明和分析 Playbook 的 Markdown 文档。"
+            ? "管理业务口径、指标说明与分析指引等业务文档。"
             : "粘贴或撰写 Markdown；保存前通过保存预检查看 Diff 与校验。"
         }
         badges={null}

@@ -136,14 +136,13 @@ export function McpPlayground() {
         description={
           <>
             预览 <span className="notranslate" translate="no">Agent</span> 的{" "}
-            <span className="notranslate" translate="no">MCP</span> 工具 ACL 裁决；可选对本机 Proxy 做{" "}
-            <span className="notranslate" translate="no">tools/list</span> 受控试调。
+            <span className="notranslate" translate="no">MCP</span> 工具权限裁决，并执行受控接入试调。
           </>
         }
       />
 
       <section className="pl-panel">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 grid-cols-3">
           <label className="grid gap-1.5 text-sm">
             <span className="notranslate" translate="no">Agent</span>
             <select

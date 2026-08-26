@@ -242,7 +242,7 @@ export function ConfigAudit() {
     <div className="pl-page-stack">
       <PageHeader
         title="配置审计"
-        description="查看治理配置与语义资产的写入历史。"
+        description="查看各类配置与内容资产的写入记录、变更内容和操作者。"
         actions={<a href={exportUrl} className="pl-btn pl-btn--secondary text-sm">导出 CSV</a>}
       />
 

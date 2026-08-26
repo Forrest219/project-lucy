@@ -72,7 +72,7 @@ Protected terms（`notranslate`）：`Agent`、`MCP`、`Role`、role id、connec
 | 项 | 调整后 |
 |---|---|
 | title | 角色权限（不变） |
-| description | 管理每个 Role 的连接、表范围与 MCP 工具授权。 |
+| description | 管理角色的数据库连接、数据表与 MCP 工具授权范围。 |
 | actions | 新建 Role（不变） |
 
 ### 5.2 `/admin/roles` KPI 网格（`data-testid="role-metric-grid"`）

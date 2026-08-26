@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { navGroups, topLevelEntry } from "../../src/app/navigation";
 import { handbookPathForTests, parseHelpToc, readHelpHandbook, searchHelpHandbook, searchHelpMarkdown, HelpQueryTooLongError } from "../help";
 
 let projectRoot: string | undefined;
@@ -179,7 +180,7 @@ describe("Help handbook", () => {
       "",
       "### 1.4 目录与事实源地图",
       "",
-      "### 1.5 WebUI 入口速查（5+1 侧栏地图）",
+      "### 1.5 WebUI 入口速查（6+1 侧栏地图）",
       "",
       "| 分组 | 二级菜单 | 路径 | 一句话用途 |",
       "| --- | --- | --- | --- |",
@@ -189,7 +190,7 @@ describe("Help handbook", () => {
     const entry = toc.find((t) => t.id === "webui-entry-map");
     expect(entry).toBeDefined();
     expect(entry?.level).toBe(3);
-    expect(entry?.title).toBe("1.5 WebUI 入口速查（5+1 侧栏地图）");
+    expect(entry?.title).toBe("1.5 WebUI 入口速查（6+1 侧栏地图）");
   });
 
   it("does not regress the §0 / §3 / §6 anchor set when §1.5 is added", () => {
@@ -225,7 +226,7 @@ describe("Help handbook", () => {
       "",
       "### 1.1 Lucy 是什么",
       "",
-      "### 1.5 WebUI 入口速查（5+1 侧栏地图）",
+      "### 1.5 WebUI 入口速查（6+1 侧栏地图）",
       "",
       "## 3. 功能模块操作指南",
       "",
@@ -409,6 +410,39 @@ describe("Help handbook", () => {
     );
   });
 
+  it("the bundled handbook entry map mirrors the current navigation directory", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+    const lines = handbook.markdown.split("\n");
+    const tableHeaderIndex = lines.indexOf("| 分组 | 二级菜单 | 路径 | 一句话用途 |");
+    expect(tableHeaderIndex).toBeGreaterThanOrEqual(0);
+
+    const rows = lines.slice(tableHeaderIndex + 2, tableHeaderIndex + 21).map((line) =>
+      line
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.replaceAll("`", "").trim())
+    );
+    const expectedItems = [topLevelEntry, ...navGroups.flatMap((group) => group.items)];
+    const expectedGroups = [
+      topLevelEntry.label,
+      ...navGroups.flatMap((group) => group.items.map(() => group.title))
+    ];
+
+    expect(rows).toHaveLength(expectedItems.length);
+    rows.forEach((cells, index) => {
+      expect(cells).toEqual([
+        expectedGroups[index],
+        expectedItems[index]?.label,
+        expectedItems[index]?.to,
+        expectedItems[index]?.description
+      ]);
+    });
+  });
+
   it("the bundled handbook documents the database connection operations runbook", async () => {
     const realAppRoot = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
@@ -487,7 +521,8 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("#### 系统概览待处理事项");
     expect(handbook.markdown).toContain("N 张表待补语义");
     expect(handbook.markdown).toContain("当前实现与「待补语义」使用同一公式");
-    expect(handbook.markdown).toContain("未按 30 天时间窗过滤");
+    // Task 4: old limit=1 limitation removed; handbook now documents the real 30-day contract
+    expect(handbook.markdown).toContain("GET /api/eval/runs/summary?days=30");
     expect(handbook.markdown).toContain(
       "`/overview`「待处理事项」里「N 张表待补语义」怎么算？"
     );

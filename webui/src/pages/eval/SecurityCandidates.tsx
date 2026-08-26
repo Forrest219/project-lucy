@@ -98,8 +98,8 @@ export function SecurityCandidates() {
   return (
     <div className="pl-page-stack">
       <PageHeader
-        title="安全候选"
-        description="从访问拒绝日志中沉淀权限与隔离类 Eval 候选，必须人工审定后才能入库。"
+        title="安全评测候选"
+        description="从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。"
         actions={
           <button
             className="pl-btn pl-btn--primary text-sm"
@@ -112,7 +112,7 @@ export function SecurityCandidates() {
         }
       />
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mt-6 grid gap-4 grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-md border border-border-default bg-bg-surface">
           <div className="border-b border-border-default px-4 py-3 text-sm text-fg-muted">
             {isLoading ? "加载中" : `${candidates.length} 个候选`}
@@ -140,7 +140,7 @@ export function SecurityCandidates() {
               </button>
             ))}
             {candidates.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-fg-muted">暂无安全候选</div>
+              <div className="px-4 py-10 text-center text-sm text-fg-muted">暂无安全评测候选</div>
             ) : null}
           </div>
         </section>

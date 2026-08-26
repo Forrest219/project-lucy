@@ -127,8 +127,13 @@ describe("CommandPalette", () => {
     fireEvent.change(input, { target: { value: "wiki" } });
     const list = screen.getByTestId("command-palette-list");
     const options = within(list).getAllByRole("option");
-    expect(options.length).toBe(1);
-    expect(options[0]).toHaveTextContent("业务 Wiki");
+    expect(options).toHaveLength(2);
+    expect(options.map((option) => option.textContent)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("业务 Wiki"),
+        expect.stringContaining("发布工作台")
+      ])
+    );
   });
 
   it("supports Chinese substring filtering against the label or group title", () => {
@@ -141,11 +146,12 @@ describe("CommandPalette", () => {
     const options = within(list).getAllByRole("option");
     // The 评测 group has 4 entries after the 202608 security candidate
     // workflow joined the quality surface, and the
-    // search term "评测" matches the group title "质量评测" rather than any
-    // individual label.
+    // search term "评测" matches the group title "质量评测"; the renamed
+    // 安全评测候选 is also a direct label hit, so it ranks ahead of the two
+    // group-title-only matches.
     expect(options.length).toBe(4);
     const labels = options.map((option) => option.querySelector(".pl-command-palette-item-label")?.textContent);
-    expect(labels).toEqual(["评测用例", "运行历史", "趋势监控", "安全候选"]);
+    expect(labels).toEqual(["评测用例", "安全评测候选", "运行历史", "趋势监控"]);
     // M70: the matching group title now lives inside the breadcrumb line.
     // Use a regex match because the highlight helper may split the matched
     // substring ("评测") into its own <mark> node while leaving the rest
@@ -194,7 +200,7 @@ describe("CommandPalette", () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
-      target: { value: "wiki" }
+      target: { value: "分析指引" }
     });
     const option = screen.getByTestId("command-palette-option-semantic-wiki");
     const accessibleName = option.getAttribute("aria-label") ?? "";
@@ -223,11 +229,11 @@ describe("CommandPalette", () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
-      target: { value: "wiki" }
+      target: { value: "分析指引" }
     });
     const input = screen.getByTestId("command-palette-input");
 
-    // With the test query `wiki` only one entry matches, so Enter can commit
+    // With the test query `分析指引` only one entry matches, so Enter can commit
     // without an explicit arrow confirmation. ArrowDown still wraps on the
     // single row after the first keypress locks the preview.
     const wikiOption = screen.getByTestId("command-palette-option-semantic-wiki");
@@ -371,11 +377,11 @@ describe("CommandPalette", () => {
     // 语义资产's breadcrumb must reference its owning group so users see
     // why a 语义 modeling entry shows up.
     expect(semanticCatalog.textContent).toContain("语义建模");
-    expect(semanticCatalog.textContent).toContain("维护表级语义资产");
+    expect(semanticCatalog.textContent).toContain("管理表、字段、指标、分群与关联等结构化语义资产");
     // 业务 Wiki lives in the same group, so its breadcrumb must also surface.
     const wikiOption = screen.getByTestId("command-palette-option-semantic-wiki");
     expect(wikiOption.querySelector(".pl-command-palette-breadcrumb")).not.toBeNull();
-    expect(wikiOption.textContent).toContain("管理业务 Markdown 文档");
+    expect(wikiOption.textContent).toContain("管理业务口径、指标说明与分析指引等业务文档");
     // No result row may render the legacy right-side group label as the
     // primary visual (M61's `.pl-command-palette-item-meta` was promoted to
     // the secondary breadcrumb line in M70).
@@ -441,7 +447,6 @@ describe("CommandPalette", () => {
       }));
     expect(protectedTerms).toEqual(
       expect.arrayContaining([
-        { text: "Connection", translate: "no" },
         { text: "Schema", translate: "no" },
         { text: "Manifest", translate: "no" }
       ])

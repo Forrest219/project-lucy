@@ -259,12 +259,12 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("exposes each 5+1 navigation group heading exactly once", () => {
+  it("exposes each 6+1 navigation group heading exactly once", () => {
     // M60 Sidebar Brand Navigation Polish: group titles are now collapsible
     // <button>s with `aria-expanded`, not <h2>s. There must still be one
-    // titled button per group so the sidebar reads as 5 sections.
+    // titled button per group so the sidebar reads as 6 sections.
     renderAt("/overview");
-    const groupTitles = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理"];
+    const groupTitles = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理", "系统设置"];
     for (const title of groupTitles) {
       expect(screen.getAllByRole("button", { name: title })).toHaveLength(1);
     }
@@ -336,11 +336,11 @@ describe("AppFrame shell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders the M34 5+1 lifecycle sidebar shape with renamed second-level items", () => {
+  it("renders the M34 6+1 lifecycle sidebar shape with renamed second-level items", () => {
     renderAt("/");
 
     // M60: group titles are buttons, not headings.
-    const groups = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理"];
+    const groups = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理", "系统设置"];
     for (const group of groups) {
       expect(screen.getByRole("button", { name: group })).toBeInTheDocument();
     }
@@ -356,7 +356,7 @@ describe("AppFrame shell", () => {
       expect(screen.queryByRole("heading", { name: title })).not.toBeInTheDocument();
     }
 
-    for (const label of ["启用表范围", "业务 Wiki", "评测用例", "角色权限", "配置审计"]) {
+    for (const label of ["启用表范围", "业务 Wiki", "评测用例", "角色权限", "配置审计", "品牌外观", "登录账户"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
 
@@ -442,6 +442,29 @@ describe("AppFrame shell", () => {
     expect(css).toMatch(/html\s*\{[^}]*overflow-x:\s*auto/s);
     const shellRule = css.match(/\.pl-app-shell\s*\{[^}]*\}/s)?.[0] ?? "";
     expect(shellRule).toContain("min-width: var(--layout-min-readable-width)");
+  });
+
+  it("forbids max-width layout stacks below 1200px for shell, PageHeader, and wiki (Design System 02)", () => {
+    const css = readFileSync("src/app/app.css", "utf8");
+    // Help must keep desktop shell + TOC; no max-width collapse of --help shell.
+    expect(css).not.toMatch(
+      /@media\s*\(\s*max-width:\s*900px\s*\)\s*\{[^}]*\.pl-app-shell--help/s
+    );
+    expect(css).not.toMatch(
+      /@media\s*\(\s*max-width:\s*900px\s*\)\s*\{[^}]*\.pl-help-layout/s
+    );
+    // PageHeader stays two-column; no mobile left-align stack.
+    expect(css).not.toMatch(
+      /@media\s*\(\s*max-width:\s*767px\s*\)\s*\{[^}]*\.pl-page-header/s
+    );
+    const pageHeaderGrid = css.match(/\.pl-page-header-grid\s*\{[^}]*\}/s)?.[0] ?? "";
+    expect(pageHeaderGrid).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(pageHeaderGrid).not.toContain("grid-cols-1");
+    expect(pageHeaderGrid).not.toContain("md:grid-cols-");
+    // Wiki workbench must not single-column stack below 768.
+    expect(css).not.toMatch(
+      /@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*\.pl-wiki-layout/s
+    );
   });
 
   it("mounts global Toaster at bottom-right away from PageHeader actions (Spec 120)", () => {

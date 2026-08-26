@@ -261,19 +261,7 @@ export function Catalog() {
     <div className="pl-page-stack">
       <PageHeader
         title="语义资产"
-        description={
-          <span>
-            维护已进入语义层的结构化{" "}
-            <span className="notranslate" translate="no">
-              semantic-layer YAML
-            </span>{" "}
-            模型。默认只展示已启用表；可切换启用范围查看{" "}
-            <span className="notranslate" translate="no">
-              Manifest
-            </span>{" "}
-            全量。
-          </span>
-        }
+        description="管理表、字段、指标、分群与关联等结构化语义资产。"
       />
 
       <section className="pl-panel">

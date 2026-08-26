@@ -57,7 +57,9 @@ describe("ConfigAudit Spec 96 polish", () => {
 
     expect(await screen.findByRole("heading", { name: "配置审计" })).toBeInTheDocument();
     expect(screen.queryByText(/不具备多人问责语义/)).not.toBeInTheDocument();
-    expect(screen.getByText("查看治理配置与语义资产的写入历史。")).toBeInTheDocument();
+    expect(
+      screen.getByText("查看各类配置与内容资产的写入记录、变更内容和操作者。")
+    ).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "导出 CSV" })).toHaveClass("pl-btn--secondary");

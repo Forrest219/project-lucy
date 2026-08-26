@@ -20,7 +20,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   wiki_api: "业务 Wiki",
   eval_cases_api: "评测用例",
   eval_suite_import_api: "评测套件导入",
-  security_candidates_api: "安全候选",
+  security_candidates_api: "安全评测候选",
   publish_workbench_api: "发布工作台"
 };
 
@@ -54,7 +54,7 @@ export const CHANGE_TYPE_OPTIONS: ChangeTypeOption[] = [
   { value: "wiki_move", label: "移动 Wiki", assetKinds: ["wiki"] },
   { value: "eval_case_save", label: "评测用例保存", assetKinds: ["eval"] },
   { value: "eval_suite_import", label: "评测套件导入", assetKinds: ["eval"] },
-  { value: "eval_security_candidate_promote", label: "安全候选晋级", assetKinds: ["eval"] },
+  { value: "eval_security_candidate_promote", label: "安全评测候选晋级", assetKinds: ["eval"] },
   { value: "semantic_publish", label: "语义资产发布", assetKinds: ["publish"] }
 ];
 

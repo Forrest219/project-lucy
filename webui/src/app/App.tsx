@@ -23,6 +23,7 @@ import {
   BookOpen,
   KeyRound,
   ScrollText,
+  Settings,
   Terminal,
   Users,
   Image,
@@ -148,7 +149,8 @@ const GROUP_ICONS: Record<string, LucideIcon> = {
   "semantic-modeling": Share2,
   publish: Rocket,
   evaluation: ChartNoAxesCombined,
-  governance: ShieldCheck
+  governance: ShieldCheck,
+  "system-settings": Settings
 };
 
 const COLLAPSED_GROUPS_STORAGE_KEY = "lucy.sidebar.collapsedGroups.v1";

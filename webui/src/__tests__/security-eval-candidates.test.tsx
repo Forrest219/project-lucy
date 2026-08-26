@@ -76,7 +76,10 @@ describe("SecurityCandidates", () => {
     const fetchMock = stubFetch();
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "安全候选" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "安全评测候选" })).toBeInTheDocument();
+    expect(
+      screen.getByText("从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。")
+    ).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "抽取候选" })).toHaveClass("pl-btn--primary");
     expect(await screen.findByText(/展示 Token 消耗最高的表/)).toBeInTheDocument();

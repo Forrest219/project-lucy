@@ -71,7 +71,7 @@ Protected：`KTX`、`MCP`、`Agent`、路径与表名。
 
 ### 5.1 PageHeader
 
-说明：`同步 KTX 索引，让 Agent 检索到磁盘上的最新语义与 Wiki。`
+说明：`审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。`
 
 | 状态 | 动作 |
 |---|---|

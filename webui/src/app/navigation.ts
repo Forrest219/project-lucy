@@ -1,6 +1,6 @@
 // Single source of truth for the WebUI sidebar IA. Help Center §1.5 (Handbook) and
 // `webui/src/__tests__/navigation.test.ts` both import from this module so the
-// 5+1 structure cannot drift without breaking the test.
+// 6+1 structure cannot drift without breaking the test.
 //
 // Extracted in M59 to satisfy Help Sidebar Entry Map spec v0.2 §4.1.
 // M60 Sidebar Brand Navigation Polish: added stable `id` fields + `iconKey`
@@ -62,7 +62,7 @@ export const topLevelEntry: NavItem = {
   to: "/overview",
   iconKey: "overview",
   active: (path) => path === "/overview",
-  description: "查看 Lucy MCP、语义资产与 Agent 接入的健康状态和待处理事项。",
+  description: "查看 Lucy MCP、KTX Runtime、语义资产和 Agent 接入状态，集中处理异常与待办。",
   keywords: ["控制台", "Dashboard", "健康", "巡检"]
 };
 
@@ -82,7 +82,7 @@ export const navGroups: Array<{
         to: "/connections",
         iconKey: "connections",
         active: (path) => path === "/connections",
-        description: "维护每个 Connection 的 Schema、Manifest 和本地目录刷新状态。",
+        description: "管理数据库连接、Schema 与 Schema Manifest，并查看连通性和本地目录同步状态。",
         keywords: ["Connection", "Schema", "Manifest"]
       },
       {
@@ -91,7 +91,7 @@ export const navGroups: Array<{
         to: "/connections/enabled-tables",
         iconKey: "whitelist",
         active: (path) => path === "/connections/enabled-tables" || path === "/connections/whitelist",
-        description: "配置 Agent 可访问的表范围，并审阅保存前 YAML 变更。",
+        description: "配置各连接进入语义层的表范围，并审阅保存前变更。",
         keywords: ["白名单", "Whitelist", "Schema", "Table"]
       }
       // v1.9.0: 连通测试（兼容）从主导航移除；连接卡内测试 Drawer（M25）成为唯一入口。
@@ -113,7 +113,7 @@ export const navGroups: Array<{
           path.startsWith("/catalog/") ||
           path.startsWith("/sources/") ||
           path.startsWith("/joins/"),
-        description: "维护表级语义资产、字段、指标、分群和发布前审阅。",
+        description: "管理表、字段、指标、分群与关联等结构化语义资产。",
         keywords: ["指标", "字段", "分群", "Catalog", "Metric"]
       },
       {
@@ -122,7 +122,7 @@ export const navGroups: Array<{
         to: "/wiki",
         iconKey: "wiki",
         active: (path) => path === "/wiki",
-        description: "管理业务 Markdown 文档、目录、版本记录和恢复流程。",
+        description: "管理业务口径、指标说明与分析指引等业务文档。",
         keywords: ["文档", "Markdown", "Wiki"]
       }
     ]
@@ -137,7 +137,7 @@ export const navGroups: Array<{
         to: "/publish/workbench",
         iconKey: "publish",
         active: (path) => path.startsWith("/publish/workbench"),
-        description: "审阅待发布语义变更，执行校验、导出和发布前检查。",
+        description: "审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。",
         keywords: ["Workbench", "校验", "导出"]
       },
       {
@@ -146,7 +146,7 @@ export const navGroups: Array<{
         to: "/publish/history",
         iconKey: "history",
         active: (path) => path.startsWith("/publish/history"),
-        description: "查看语义发布历史、归档状态和最近交付记录。",
+        description: "查看历次语义发布的变更范围、执行结果与操作记录。",
         keywords: ["历史", "归档", "交付"]
       }
     ]
@@ -161,7 +161,7 @@ export const navGroups: Array<{
         to: "/eval/cases",
         iconKey: "evalCases",
         active: (path) => path.startsWith("/eval/cases"),
-        description: "维护质量评测用例和 YAML 交换入口。",
+        description: "管理数据问答与语义质量的评测用例及预期结果。",
         keywords: ["Case", "YAML"]
       },
       {
@@ -170,7 +170,7 @@ export const navGroups: Array<{
         to: "/eval/runs",
         iconKey: "evalRuns",
         active: (path) => path.startsWith("/eval/runs"),
-        description: "查看评测运行记录、结果详情和失败诊断。",
+        description: "查看评测运行记录、通过率、结果明细与失败诊断。",
         keywords: ["Run", "失败", "诊断"]
       },
       {
@@ -179,16 +179,16 @@ export const navGroups: Array<{
         to: "/eval/monitor",
         iconKey: "monitor",
         active: (path) => path === "/eval/monitor",
-        description: "观察近 30 天评测趋势、缺口和质量基线。",
+        description: "监控评测通过率、失败集中度与质量漂移趋势。",
         keywords: ["Monitor", "趋势", "基线"]
       },
       {
         id: "eval-security-candidates",
-        label: "安全候选",
+        label: "安全评测候选",
         to: "/eval/security-candidates",
         iconKey: "securityEval",
         active: (path) => path === "/eval/security-candidates",
-        description: "从拒绝日志沉淀权限隔离 Eval 候选，人工审定后入库。",
+        description: "从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。",
         keywords: ["Security Eval", "权限", "候选"]
       }
     ]
@@ -203,7 +203,7 @@ export const navGroups: Array<{
         to: "/admin/usage",
         iconKey: "governanceOverview",
         active: (path) => path === "/admin/usage" || path === "/admin/governance",
-        description: "查看 Agent、Token 和表的访问使用情况与调用量。",
+        description: "查看 Agent、Token 和数据表的活跃度、调用量与响应耗时。",
         keywords: ["Governance", "Dashboard", "使用概况"]
       },
       {
@@ -212,7 +212,7 @@ export const navGroups: Array<{
         to: "/admin/agents",
         iconKey: "agents",
         active: (path) => path.startsWith("/admin/agents"),
-        description: "管理 Agent、Token、最近访问和权限预览入口。",
+        description: "管理 Agent 身份、角色、Token 及数据访问边界。",
         keywords: ["Agent", "Token", "访问"]
       },
       {
@@ -221,7 +221,7 @@ export const navGroups: Array<{
         to: "/admin/roles",
         iconKey: "roles",
         active: (path) => path.startsWith("/admin/roles"),
-        description: "管理 Role、参考模板、MCP 工具范围和待修复状态。",
+        description: "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
         keywords: ["Role", "权限", "MCP 工具"]
       },
       {
@@ -230,7 +230,7 @@ export const navGroups: Array<{
         to: "/admin/audit",
         iconKey: "audit",
         active: (path) => path === "/admin/audit" || path.startsWith("/admin/audit/"),
-        description: "查看 ACL 判定、访问审计和风险排查记录。",
+        description: "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
         keywords: ["ACL", "审计", "日志"]
       },
       {
@@ -239,7 +239,7 @@ export const navGroups: Array<{
         to: "/admin/mcp-playground",
         iconKey: "mcpPlayground",
         active: (path) => path === "/admin/mcp-playground" || path.startsWith("/admin/mcp-playground"),
-        description: "预览 Agent 的 MCP 工具 ACL 裁决，并可做受控试调。",
+        description: "预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调。",
         keywords: ["MCP", "Playground", "ACL", "调试"]
       },
       {
@@ -248,16 +248,22 @@ export const navGroups: Array<{
         to: "/admin/config-audit",
         iconKey: "configAudit",
         active: (path) => path === "/admin/config-audit",
-        description: "审阅配置变更、发布影响和治理证据。",
+        description: "查看各类配置与内容资产的写入记录、变更内容和操作者。",
         keywords: ["配置变更", "影响", "治理"]
-      },
+      }
+    ]
+  },
+  {
+    id: "system-settings",
+    title: "系统设置",
+    items: [
       {
         id: "admin-branding",
         label: "品牌外观",
         to: "/admin/branding",
         iconKey: "branding",
         active: (path) => path === "/admin/branding" || path.startsWith("/admin/branding/"),
-        description: "配置客户 Logo、产品名称与副标题。",
+        description: "配置客户 Logo、产品名称与品牌副标题。",
         keywords: ["Logo", "品牌", "外观"]
       },
       {
@@ -266,7 +272,7 @@ export const navGroups: Array<{
         to: "/admin/admins",
         iconKey: "admins",
         active: (path) => path === "/admin/admins" || path.startsWith("/admin/admins/"),
-        description: "管理 WebUI 登录账户：所有者与运维。",
+        description: "管理 WebUI 登录账户，并配置所有者或运维角色。",
         keywords: ["登录", "Owner", "运维", "管理员账户"]
       }
     ]

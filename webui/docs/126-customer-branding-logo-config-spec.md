@@ -59,7 +59,7 @@ New terms:
 
 | ID | 需求 | 优先级 |
 |---|---|---|
-| BR-1 | 配置页「品牌外观」`/admin/branding`，访问治理导航 | P0 |
+| BR-1 | 配置页「品牌外观」`/admin/branding`，系统设置导航 | P0 |
 | BR-2 | 一张客户 Logo → 侧栏 + 登录共用 | P0 |
 | BR-3 | 产品名称；空 → `Lucy WebUI` | P0 |
 | BR-4 | 副标题；空 → `Data Agent MCP` | P0 |
@@ -96,7 +96,7 @@ New terms:
 
 ### 4.1 IA
 
-访问治理 → 品牌外观 `/admin/branding`（在登录账户之上或同级相邻）。
+系统设置 → 品牌外观 `/admin/branding`（与登录账户同组，顺序在上）。
 
 页面三区：客户 Logo | 产品名称与副标题 | 预览。
 

@@ -89,9 +89,9 @@ describe("PublishWorkbench", () => {
     expect(
       screen.getByRole("heading", { name: "发布工作台" })
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("同步 KTX 索引，让 Agent 检索到磁盘上的最新语义与 Wiki。")
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("page-header")).toHaveTextContent(
+      "审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。"
+    );
     expect(screen.getByTestId("workbench-sync-index")).toHaveTextContent("同步索引");
     expect(screen.getByTestId("workbench-more-menu")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上传语义资产" })).not.toBeInTheDocument();

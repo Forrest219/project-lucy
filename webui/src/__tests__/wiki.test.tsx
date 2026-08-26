@@ -881,7 +881,11 @@ describe("WikiEditor Read Mode default (P0)", () => {
     // first-viewport regression.
     const css = readFileSync("src/app/app.css", "utf8");
     expect(css).toContain("grid-template-columns: 260px minmax(0, 1fr);");
-    expect(css).toContain("@media (max-width: 768px)");
+    // Desktop-only: wiki must not collapse to a single column below 1200px;
+    // narrow viewports rely on --layout-min-readable-width horizontal scroll.
+    expect(css).not.toMatch(
+      /@media\s*\(\s*max-width:\s*768px\s*\)\s*\{[^}]*\.pl-wiki-layout/s
+    );
   });
 
   it("gives the wiki sidebar an explorer panel border and directory text-sm (Spec 105)", () => {

@@ -130,7 +130,7 @@ Response：
 
 | 区域 | 调整 |
 |---|---|
-| PageHeader description | 「查看历史发布批次的变更范围与结果。」 |
+| PageHeader description | 「查看历次语义发布的变更范围、执行结果与操作记录。」 |
 | PageHeader actions | `<a href={exportUrl}>导出 CSV</a>` |
 | 筛选栏 | 新建，见 §6；时间组前可见标签「时间」；默认近 24 小时 |
 | 表头 | `#` → **序号** |

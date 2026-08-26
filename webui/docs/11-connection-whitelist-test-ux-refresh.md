@@ -73,7 +73,7 @@ Use this page header:
 ```text
 数据库接入 / 表白名单
 表白名单
-维护进入语义层的表范围，保存后写入 ktx.yaml 的 enabled_tables 字段。
+配置各连接进入语义层的表范围，并审阅保存前变更。
 ```
 
 Primary layout:
@@ -358,4 +358,3 @@ npm test -- --run src/__tests__/app-shell.test.tsx src/__tests__/connection-over
 - No production database writes.
 - No new persisted connection-health history.
 - No fake table descriptions when the API does not provide description text.
-

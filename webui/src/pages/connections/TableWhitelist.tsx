@@ -630,11 +630,7 @@ export function TableWhitelist() {
     >
       <PageHeader
         title="启用表范围"
-        description={
-          <>
-            维护进入语义层的表范围，保存后写入 <code>ktx.yaml</code> 的 <code>enabled_tables</code> 字段。
-          </>
-        }
+        description="配置各连接进入语义层的表范围，并审阅保存前变更。"
       />
 
       <section className="pl-panel">

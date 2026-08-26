@@ -1,6 +1,6 @@
 // M59 Help Sidebar Entry Map — shared nav config invariants.
 // Imports `topLevelEntry` / `navGroups` / `NavItem` from the production module
-// so the 5+1 IA cannot drift without breaking these tests. Handbook §1.5 and
+// so the 6+1 IA cannot drift without breaking these tests. Handbook §1.5 and
 // `help-center.test.tsx` consume the same module.
 //
 // M60 Sidebar Brand Navigation Polish: extended to cover stable `id` fields,
@@ -27,17 +27,24 @@ describe("navigation (shared sidebar config)", () => {
     expect(topLevelEntry.active("/connections")).toBe(false);
   });
 
-  it("navGroups has exactly 5 first-level groups in canonical order", () => {
-    expect(navGroups.length).toBe(5);
+  it("navGroups has exactly 6 first-level groups in canonical order", () => {
+    expect(navGroups.length).toBe(6);
     const titles = navGroups.map((g) => g.title);
-    expect(titles).toEqual(["数据接入", "语义建模", "语义发布", "质量评测", "访问治理"]);
+    expect(titles).toEqual(["数据接入", "语义建模", "语义发布", "质量评测", "访问治理", "系统设置"]);
   });
 
   it("every group has a unique stable id", () => {
     const ids = navGroups.map((g) => g.id);
     expect(new Set(ids).size).toBe(ids.length);
     // Spot-check the canonical ids; the AppFrame and command palette rely on these strings.
-    expect(ids).toEqual(["connections", "semantic-modeling", "publish", "evaluation", "governance"]);
+    expect(ids).toEqual([
+      "connections",
+      "semantic-modeling",
+      "publish",
+      "evaluation",
+      "governance",
+      "system-settings"
+    ]);
   });
 
   it("every nav item has a unique stable id across topLevelEntry + navGroups", () => {
@@ -63,7 +70,7 @@ describe("navigation (shared sidebar config)", () => {
   });
 
   it("flat sidebar entries match Handbook §1.5 rows (top + second-level)", () => {
-    // 顶部 1 + 5 组共 18 项二级菜单 = 19 个侧栏可见入口
+    // 顶部 1 + 6 组共 18 项二级菜单 = 19 个侧栏可见入口
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = [
       { group: topLevelEntry.label, id: topLevelEntry.id, label: topLevelEntry.label, to: topLevelEntry.to },
       ...navGroups.flatMap((g) =>
@@ -84,15 +91,15 @@ describe("navigation (shared sidebar config)", () => {
       { group: "质量评测", id: "eval-cases", label: "评测用例", to: "/eval/cases" },
       { group: "质量评测", id: "eval-runs", label: "运行历史", to: "/eval/runs" },
       { group: "质量评测", id: "eval-monitor", label: "趋势监控", to: "/eval/monitor" },
-      { group: "质量评测", id: "eval-security-candidates", label: "安全候选", to: "/eval/security-candidates" },
+      { group: "质量评测", id: "eval-security-candidates", label: "安全评测候选", to: "/eval/security-candidates" },
       { group: "访问治理", id: "admin-governance", label: "使用概况", to: "/admin/usage" },
       { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
       { group: "访问治理", id: "admin-roles", label: "角色权限", to: "/admin/roles" },
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
-      { group: "访问治理", id: "admin-branding", label: "品牌外观", to: "/admin/branding" },
-      { group: "访问治理", id: "admin-accounts", label: "登录账户", to: "/admin/admins" }
+      { group: "系统设置", id: "admin-branding", label: "品牌外观", to: "/admin/branding" },
+      { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/admins" }
     ]);
   });
 
@@ -122,6 +129,36 @@ describe("navigation (shared sidebar config)", () => {
     for (const group of navGroups) {
       for (const item of group.items) collectItem(item, group.title);
     }
+  });
+
+  it("keeps command palette descriptions aligned with the approved PageHeader copy", () => {
+    const descriptions = new Map(
+      [topLevelEntry, ...navGroups.flatMap((group) => group.items)].map((item) => [
+        item.id,
+        item.description
+      ])
+    );
+    expect(Object.fromEntries(descriptions)).toEqual({
+      overview: "查看 Lucy MCP、KTX Runtime、语义资产和 Agent 接入状态，集中处理异常与待办。",
+      "connections-overview": "管理数据库连接、Schema 与 Schema Manifest，并查看连通性和本地目录同步状态。",
+      "connections-enabled-tables": "配置各连接进入语义层的表范围，并审阅保存前变更。",
+      "semantic-catalog": "管理表、字段、指标、分群与关联等结构化语义资产。",
+      "semantic-wiki": "管理业务口径、指标说明与分析指引等业务文档。",
+      "publish-workbench": "审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。",
+      "publish-history": "查看历次语义发布的变更范围、执行结果与操作记录。",
+      "eval-cases": "管理数据问答与语义质量的评测用例及预期结果。",
+      "eval-runs": "查看评测运行记录、通过率、结果明细与失败诊断。",
+      "eval-monitor": "监控评测通过率、失败集中度与质量漂移趋势。",
+      "eval-security-candidates": "从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。",
+      "admin-governance": "查看 Agent、Token 和数据表的活跃度、调用量与响应耗时。",
+      "admin-agents": "管理 Agent 身份、角色、Token 及数据访问边界。",
+      "admin-roles": "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
+      "admin-audit": "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
+      "admin-mcp-playground": "预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调。",
+      "admin-config-audit": "查看各类配置与内容资产的写入记录、变更内容和操作者。",
+      "admin-branding": "配置客户 Logo、产品名称与品牌副标题。",
+      "admin-accounts": "管理 WebUI 登录账户，并配置所有者或运维角色。"
+    });
   });
 
   // M70: keyword aliases help the user find a page by short terms that are
@@ -193,6 +230,8 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/admin/audit")).toBe("governance");
       expect(findGroupIdForPathname("/admin/mcp-playground")).toBe("governance");
       expect(findGroupIdForPathname("/admin/config-audit")).toBe("governance");
+      expect(findGroupIdForPathname("/admin/branding")).toBe("system-settings");
+      expect(findGroupIdForPathname("/admin/admins")).toBe("system-settings");
     });
   });
 });

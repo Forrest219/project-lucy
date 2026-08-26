@@ -420,6 +420,7 @@ Connection (连接)
 | Evaluation Case | 评测用例 / 评测集 | Case 管理、案例管理 | 单条测试问题或评测样例 |
 | Evaluation Run | 评测运行 | 评价运行 | 一次批量评测执行 |
 | Trend Monitoring | 趋势监控 | 趋势监管 | 质量指标随时间变化 |
+| Security Evaluation Candidate | 安全评测候选 | 安全候选（含义不完整） | 从访问拒绝日志提取、待人工审定并转为安全评测用例的权限与数据隔离场景 |
 | Pass Rate | 通过率 | 成功率混用 | 评测通过比例 |
 
 ### 4.5 访问治理 / 使用概况
@@ -468,7 +469,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Runtime Status | 运行状态 | 运行时间状态 | 服务运行健康情况 |
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
-| Sidebar Group | 系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 | 5+1 主导航混用其它分组名 | Lucy WebUI 侧边栏固定 IA |
+| Sidebar Group | 系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 / 系统设置 | 6+1 主导航混用其它分组名 | Lucy WebUI 侧边栏固定 IA |
 | Semantic Completion Incomplete | 未完成 | partial / not_started（作用户主文案）、status=partial | Catalog / overview 深链 value=`incomplete`（`!== done`）；见 Spec 100 |
 | Action Impact | 影响 | impact（裸露） | 待办行必填次级文案；Spec 100 |
 | Action Evidence | 证据来源 | evidence（裸露） | 待办行必填；Spec 100 |

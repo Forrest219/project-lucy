@@ -77,7 +77,7 @@ function renderHelp(path = "/help") {
               { id: "configuration-reference", level: 2, title: "5. 配置与环境变量速查" },
               { id: "troubleshooting", level: 2, title: "6. FAQ 与排障指南" },
               { id: "mcp-401", level: 3, title: "6.5 MCP 返回 401" },
-              { id: "webui-entry-map", level: 3, title: "1.5 WebUI 入口速查（5+1 侧栏地图）" }
+              { id: "webui-entry-map", level: 3, title: "1.5 WebUI 入口速查（6+1 侧栏地图）" }
             ],
             markdown: [
               "# Project Lucy 系统使用与运维手册",
@@ -139,7 +139,7 @@ function renderHelp(path = "/help") {
               "",
               "Lucy 是本地语义补充工作台。",
               "",
-              "### 1.5 WebUI 入口速查（5+1 侧栏地图）",
+              "### 1.5 WebUI 入口速查（6+1 侧栏地图）",
               "",
               "本节是侧栏可见入口的镜像视图。",
               "事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（v0.2 起由 `webui/src/app/navigation.ts` 导出）。",
@@ -148,25 +148,25 @@ function renderHelp(path = "/help") {
               "",
               "| 分组 | 二级菜单 | 路径 | 一句话用途 |",
               "| --- | --- | --- | --- |",
-              "| 系统概览 | 系统概览 | `/overview` | 聚合 Lucy MCP、KTX Runtime、语义资产与 `Agent` 接入的当前健康状态 |",
-              "| 数据接入 | 连接概览 | `/connections` | 查看每个连接的 `Schema`、`YAML` 资产与本地目录刷新状态 |",
-              "| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 维护进入语义层的表范围，保存后写入 `ktx.yaml` 的 `enabled_tables` 字段 |",
-              "| 语义建模 | 语义资产 | `/catalog` | 维护当前 KTX 项目的结构化 semantic-layer `YAML` 模型，按搜索 / 连接 / `Schema` / 语义状态定位对象 |",
-              "| 语义建模 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明和分析 Playbook 的 Markdown 文档 |",
-              "| 语义发布 | 发布工作台 | `/publish/workbench` | 查看并发布当前待生效的语义资产；发布后自动重建 `KTX` 索引 |",
-              "| 语义发布 | 发布记录 | `/publish/history` | 查看历史发布批次、Reindex 执行结果及当前版本快照 |",
-              "| 质量评测 | 评测用例 | `/eval/cases` | 管理各 domain 的 `Eval` case 定义（`YAML` 源文件） |",
-              "| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行历史与单次运行的详情 |",
-              "| 质量评测 | 趋势监控 | `/eval/monitor` | 查看 `Eval` 质量趋势、失败集中度与 drift 分布 |",
-              "| 质量评测 | 安全候选 | `/eval/security-candidates` | 从访问拒绝日志中沉淀权限与隔离类 Eval 候选，必须人工审定后才能入库 |",
-              "| 访问治理 | 使用概况 | `/admin/usage` | 查看 Agent、Token 和表的访问使用情况与调用量 |",
-              "| 访问治理 | Agent | `/admin/agents` | 配置每个 Agent 能用哪些 MCP 工具和访问哪些表 |",
-              "| 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |",
-              "| 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |",
-              "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 tools/list 试调 |",
-              "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史，当前 actor 为单管理员本机语义 |",
-              "| 访问治理 | 品牌外观 | `/admin/branding` | 配置客户 Logo、产品名称与副标题（侧栏与登录页） |",
-              "| 访问治理 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户（所有者 / 运维） |",
+              "| 系统概览 | 系统概览 | `/overview` | 查看 Lucy MCP、KTX Runtime、语义资产和 `Agent` 接入状态，集中处理异常与待办。 |",
+              "| 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |",
+              "| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |",
+              "| 语义建模 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |",
+              "| 语义建模 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明与分析指引等业务文档。 |",
+              "| 语义发布 | 发布工作台 | `/publish/workbench` | 审阅并校验语义与 `Wiki` 变更，同步索引后使其对 `Agent` 生效。 |",
+              "| 语义发布 | 发布记录 | `/publish/history` | 查看历次语义发布的变更范围、执行结果与操作记录。 |",
+              "| 质量评测 | 评测用例 | `/eval/cases` | 管理数据问答与语义质量的评测用例及预期结果。 |",
+              "| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行记录、通过率、结果明细与失败诊断。 |",
+              "| 质量评测 | 趋势监控 | `/eval/monitor` | 监控评测通过率、失败集中度与质量漂移趋势。 |",
+              "| 质量评测 | 安全评测候选 | `/eval/security-candidates` | 从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。 |",
+              "| 访问治理 | 使用概况 | `/admin/usage` | 查看 `Agent`、`Token` 和数据表的活跃度、调用量与响应耗时。 |",
+              "| 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |",
+              "| 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |",
+              "| 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |",
+              "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 `Agent` 的 `MCP` 工具权限裁决，并执行受控接入试调。 |",
+              "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |",
+              "| 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |",
+              "| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |",
               "",
               "> 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。",
               "",
@@ -827,10 +827,10 @@ describe("HelpCenter", () => {
     }
   });
 
-  it("§1.5 renders the 5+1 WebUI Entry Map heading and section id", async () => {
+  it("§1.5 renders the 6+1 WebUI Entry Map heading and section id", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（5\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
     );
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
@@ -838,7 +838,7 @@ describe("HelpCenter", () => {
   it("§1.5 table has 4 columns and 19 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（5\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
     );
 
     const section = document.querySelector("section#webui-entry-map");
@@ -856,18 +856,21 @@ describe("HelpCenter", () => {
     const bodyRows = table.querySelectorAll("tbody tr");
     expect(bodyRows.length).toBe(19);
 
-    // Group column (1st cell of each body row) must match navGroups[*].title
-    // for rows 2–14, plus topLevelEntry.label for row 1. Use the shared
-    // navigation module — no hardcoded expectations.
+    // Every visible column must mirror the shared navigation module so the
+    // handbook cannot drift from the current menu labels, paths, or copy.
+    const expectedItems = [topLevelEntry, ...navGroups.flatMap((g) => g.items)];
     const expectedGroups = [
       topLevelEntry.label,
       ...navGroups.flatMap((g) => g.items.map(() => g.title))
     ];
     bodyRows.forEach((tr, idx) => {
-      expect(tr.querySelector("td")?.textContent).toBe(expectedGroups[idx]);
+      const cells = tr.querySelectorAll("td");
+      expect(cells[0]?.textContent).toBe(expectedGroups[idx]);
+      expect(cells[1]?.textContent).toBe(expectedItems[idx]?.label);
+      expect(cells[3]?.textContent).toBe(expectedItems[idx]?.description);
     });
 
-    // Path column (3rd cell) must be wrapped in <code> for each of the 17
+    // Path column (3rd cell) must be wrapped in <code> for each of the 19
     // sidebar-visible entries — translation defense contract.
     const expectedPaths = [
       topLevelEntry.to,
@@ -882,7 +885,7 @@ describe("HelpCenter", () => {
   it("§1.5 blockquote cites the single source of truth (App.tsx + navigation.ts)", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（5\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
     );
     const section = document.querySelector("section#webui-entry-map");
     if (!section) throw new Error("section#webui-entry-map missing");
@@ -900,7 +903,7 @@ describe("HelpCenter", () => {
   it("§1.5 contains no forbidden terms", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（5\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
     );
     const section = document.querySelector("section#webui-entry-map");
     const text = section?.textContent ?? "";

@@ -403,7 +403,12 @@ export function PublishWorkbench() {
     <div className="pl-page-stack">
       <PageHeader
         title="发布工作台"
-        description="同步 KTX 索引，让 Agent 检索到磁盘上的最新语义与 Wiki。"
+        description={
+          <>
+            审阅并校验语义与 <span className="notranslate" translate="no">Wiki</span> 变更，同步索引后使其对{" "}
+            <span className="notranslate" translate="no">Agent</span> 生效。
+          </>
+        }
         badges={
           <>
             <span data-testid="workbench-pending-count">

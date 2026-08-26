@@ -93,7 +93,7 @@
 
 ### 5.3 Header / Notice
 
-- PageHeader description：`查看治理配置与语义资产的写入历史。`
+- PageHeader description：`查看各类配置与内容资产的写入记录、变更内容和操作者。`
 - **不渲染** `data.actorNotice`。
 
 ### 5.4 筛选栏（与表头对齐）

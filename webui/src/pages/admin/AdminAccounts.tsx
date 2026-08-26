@@ -88,11 +88,10 @@ export function AdminAccounts() {
     <div className="pl-page">
       <PageHeader
         title="登录账户"
-        description="管理 WebUI 登录账户。所有者负责账户治理；运维负责连接、语义、Eval、Agent Role 等日常工作。Agent Token 与此无关。"
-        backAction={
-          <Link to="/admin/agents" className="pl-page-header-back">
-            ‹ 返回访问治理
-          </Link>
+        description={
+          <>
+            管理 <span className="notranslate" translate="no">WebUI</span> 登录账户，并配置所有者或运维角色。
+          </>
         }
       />
 

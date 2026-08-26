@@ -205,7 +205,7 @@ overview 根级另含：`tableStatsSource`（见 §7.3）。
 ### 9.1 Header
 
 - `title`：使用概况
-- `description`：查看 Agent / Token 与表的访问使用情况（专业词保留 `notranslate`）
+- `description`：查看 Agent、Token 和数据表的活跃度、调用量与响应耗时（专业词保留 `notranslate`）
 - `badges`：删除窗口 badge
 - `actions`：仅保留窗口切换；「管理角色」可选保留为次级；**删除「访问日志」**
 
