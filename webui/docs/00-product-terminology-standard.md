@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5） |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -541,6 +541,21 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_access`、`forced_filters`、`constraints`、`FinalRows`、`AgentConstraints`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
 
 与既有 Role Admin 术语（§3 `Role Permission` / `Role Table Selector` / `Table Name Prefix` 等）并存：升级后「权限摘要」主展示改为 Data Capability Preview，不得回退为仅工具并集+表并集。
+
+### 4.9 可选 Agent Chat（A3）
+
+可选用户侧流式对话端设计见 `docs/design-lucy-agent-chat-a3.md`。该能力为 Lucy MCP 之上的附属验证层，**不是** Lucy WebUI 治理台的一部分，也不得写成 Lucy 自身回答业务问题。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Agent Chat | Agent Chat | 可选对话端、流式对话端 | Lucy 问答内核、Lucy 聊天（暗示内嵌 WebUI）、Lucy 自己回答问题 | Open WebUI + Hermes API Server 组成的可选附属对话层；默认不随 headless 交付 |
+| lucy-data-agent | lucy-data-agent | Hermes 模型名 | 随意改名的展示名（与 Spec 不一致） | Hermes `API_SERVER_MODEL_NAME`；Open WebUI 模型下拉展示 |
+| Open WebUI | Open WebUI | Chat UI | 开源网页界面（作唯一主标签） | 第三方 Chat 前端；保留英文专名 |
+| Hermes | Hermes | Hermes Agent、Hermes API Server | 爱马仕（误译） | 外部 Agent Runtime；保留英文专名 |
+| API Server | API Server | OpenAI 兼容 API | API 伺服器（作主标签） | Hermes 对 Open WebUI 暴露的 `/v1` 端点角色 |
+| SSE | SSE | 流式（叙述） | 服务器推送事件（作唯一主标签） | Chat Completions streaming 传输 |
+
+Protected terms（若未来任何 Lucy WebUI / 文档用户可见 DOM 提及本能力，须 `translate="no"` + `notranslate`）：`Agent Chat`、`lucy-data-agent`、`Open WebUI`、`Hermes`、`API Server`、`MCP`、`SSE`。
 
 ## 5. 新术语登记流程
 
