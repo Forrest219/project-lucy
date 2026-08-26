@@ -150,6 +150,20 @@ async function rpc(sessionId, method, params) {
   return { res, body: parseRpcBody(text), text };
 }
 
+async function verifyAdvertisedMcpEndpoint() {
+  const expectedUrl = `http://127.0.0.1:${proxyPort}/mcp`;
+  const project = await fetchJson(`http://127.0.0.1:${webPort}/api/project`);
+  const endpoint = project?.data?.mcpEndpoint;
+  if (!endpoint) throw new Error("GET /api/project missing mcpEndpoint");
+  if (endpoint.status !== "configured") {
+    throw new Error(`mcpEndpoint.status expected configured, got ${endpoint.status}`);
+  }
+  if (endpoint.url !== expectedUrl) {
+    throw new Error(`mcpEndpoint.url expected ${expectedUrl}, got ${endpoint.url}`);
+  }
+  console.log(`[p0-demo-smoke] advertised MCP endpoint matches host publish: ${endpoint.url}`);
+}
+
 async function verifyProxyAgentPath(baseline) {
   const init = await rpc("", "initialize", {
     protocolVersion: "2025-03-26",
@@ -216,7 +230,9 @@ async function main() {
   const baseline = await loadBaseline();
   const env = {
     LUCY_DEMO_WEBUI_HOST_PORT: webPort,
-    LUCY_DEMO_PROXY_HOST_PORT: proxyPort
+    LUCY_DEMO_PROXY_HOST_PORT: proxyPort,
+    // Keep Advertise aligned with Publish when smoke remaps host ports.
+    LUCY_PUBLIC_MCP_URL: process.env.LUCY_PUBLIC_MCP_URL ?? `http://127.0.0.1:${proxyPort}/mcp`
   };
   if (!process.env.DOCKER_CONFIG) {
     tempDockerConfig = await mkdtemp(path.join(tmpdir(), "lucy-demo-docker-config-"));
@@ -231,6 +247,7 @@ async function main() {
       throw new Error(`demo bundledKtxVersion expected ${expectedKtxVersion}, got ${health?.data?.bundledKtxVersion}`);
     }
     await verifyDemoCounts(baseline);
+    await verifyAdvertisedMcpEndpoint();
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "connection", "test", "demo-mysql"]));
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "admin", "reindex", "--force", "--output", "json"]), { capture: true });
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "superstore_orders", "--connection-id", "demo-mysql"]));

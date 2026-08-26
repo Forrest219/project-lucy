@@ -26,6 +26,8 @@ const schemaYaml = `tables:
     columns:
       - name: id
         type: number
+        pk: true
+        nullable: false
         descriptions:
           ai: Machine text.
     descriptions:
@@ -39,14 +41,31 @@ const schemaYaml = `tables:
       ai: Demo people table.
 `;
 
-const importedTableYaml = `table: dataforai.superstore_orders
-grain:
-  - id
+/** Structure-only Manifest table snippet (no grain/measures/segments). */
+const importedSchemaSnippetYaml = `table: dataforai.superstore_orders
 columns:
   - name: id
     type: number
 descriptions:
   human: Imported table description.
+`;
+
+/** Flat standalone/source: grain + columns without pk (normal Lucy delivery shape). */
+const importedStandaloneSourceYaml = `name: superstore_orders
+table: dataforai.superstore_orders
+grain:
+  - id
+columns:
+  - name: id
+    type: number
+    descriptions:
+      ai: Overlay column text.
+descriptions:
+  human: Standalone source description.
+measures:
+  - name: order_count
+    expr: count(*)
+    description: Count of orders.
 `;
 
 async function makeProject() {
@@ -95,31 +114,37 @@ describe("source YAML import API", () => {
       })
       .expect(200);
 
+    // rawYaml is export-shaped (may include columns + descriptions without business keys).
+    // Structure-only re-import may still touch Manifest; pk/nullable must survive (P1).
     expect(importResponse.body.data.diff).toContain("Re-imported table description.");
+    const schemaText = await readFile(path.join(projectRoot, schemaRelPath), "utf8");
+    // dry-run default: disk unchanged
+    expect(schemaText).toContain("pk: true");
     await app.close();
   });
 
-  it("previews imported table YAML by default without writing disk files", async () => {
+  it("previews structure-only table YAML against Schema Manifest without writing disk", async () => {
     const app = buildServer();
     await app.ready();
     const response = await request(app.server)
       .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
-      .send({ yaml: importedTableYaml })
+      .send({ yaml: importedSchemaSnippetYaml })
       .expect(200);
 
     expect(response.body.data.diff).toContain("+      human: Imported table description.");
     expect(response.body.data.files[0].filePath).toBe(schemaRelPath);
+    expect(response.body.data.files[0].proposedYaml).toMatch(/\bpk:\s*true\b/);
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toBe(schemaYaml);
     expect(validateSource).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("writes imported table YAML only when dryRun:false and validates the source", async () => {
+  it("writes structure-only table YAML only when dryRun:false and preserves Manifest pk", async () => {
     const app = buildServer();
     await app.ready();
     const response = await request(app.server)
       .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
-      .send({ dryRun: false, yaml: importedTableYaml, sourceFileName: "superstore_orders.yaml" })
+      .send({ dryRun: false, yaml: importedSchemaSnippetYaml, sourceFileName: "superstore_orders.yaml" })
       .expect(200);
 
     expect(response.body.data.written).toBe(true);
@@ -129,8 +154,10 @@ describe("source YAML import API", () => {
       sourceFileName: "superstore_orders.yaml"
     });
     expect(validateSource).toHaveBeenCalledWith(projectRoot, "mysql-aliyun", "dataforai", "superstore_orders");
-    await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toContain("human: Imported table description.");
-    await expect(readFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"), "utf8")).resolves.toContain("grain:");
+    const written = await readFile(path.join(projectRoot, schemaRelPath), "utf8");
+    expect(written).toContain("human: Imported table description.");
+    expect(written).toMatch(/\bpk:\s*true\b/);
+    expect(written).toMatch(/\bnullable:\s*false\b/);
     await app.close();
   });
 
@@ -160,6 +187,65 @@ measures:
     );
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toBe(schemaYaml);
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toContain("columns:");
+    await app.close();
+  });
+
+  it("P0: standalone source with columns+grain does not patch Manifest (keeps pk)", async () => {
+    const app = buildServer();
+    await app.ready();
+    const preview = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: true, yaml: importedStandaloneSourceYaml })
+      .expect(200);
+
+    const schemaFiles = (preview.body.data.files as { filePath: string }[]).filter(
+      (file) => file.filePath === schemaRelPath
+    );
+    expect(schemaFiles).toHaveLength(0);
+    expect(
+      (preview.body.data.files as { filePath: string }[]).some((file) =>
+        file.filePath.includes("superstore_orders.yaml")
+      )
+    ).toBe(true);
+
+    const response = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: false, yaml: importedStandaloneSourceYaml })
+      .expect(200);
+
+    expect(response.body.data.written).toBe(true);
+    const schemaText = await readFile(path.join(projectRoot, schemaRelPath), "utf8");
+    expect(schemaText).toBe(schemaYaml);
+    expect(schemaText).toMatch(/\bpk:\s*true\b/);
+    const overlayText = await readFile(
+      path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"),
+      "utf8"
+    );
+    expect(overlayText).toContain("grain:");
+    expect(overlayText).toContain("order_count");
+    await app.close();
+  });
+
+  it("P1: structure-only columns omit pk but merge keeps existing Manifest pk", async () => {
+    const app = buildServer();
+    await app.ready();
+    const yaml = `table: dataforai.superstore_orders
+columns:
+  - name: id
+    type: number
+    descriptions:
+      human: Updated id.
+`;
+    const response = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: false, yaml })
+      .expect(200);
+
+    expect(response.body.data.written).toBe(true);
+    const written = await readFile(path.join(projectRoot, schemaRelPath), "utf8");
+    expect(written).toContain("human: Updated id.");
+    expect(written).toMatch(/\bpk:\s*true\b/);
+    expect(written).toMatch(/\bnullable:\s*false\b/);
     await app.close();
   });
 });

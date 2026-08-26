@@ -92,7 +92,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubCatalogApis(fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> | Response) {
+function stubCatalogApis(
+  fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> | Response,
+  overrides?: {
+    tools?: Array<{ name: string; description?: string; globalDenied?: boolean }>;
+    tables?: string[];
+  }
+) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/connections") {
@@ -116,7 +122,7 @@ function stubCatalogApis(fetchImpl?: (input: RequestInfo | URL, init?: RequestIn
         JSON.stringify({
           ok: true,
           data: {
-            tools: [
+            tools: overrides?.tools ?? [
               { name: "lucy_query", description: "query", globalDenied: false },
               { name: "lucy_read_source", description: "read", globalDenied: false },
               { name: "wiki_search", description: "wiki", globalDenied: false },
@@ -131,7 +137,9 @@ function stubCatalogApis(fetchImpl?: (input: RequestInfo | URL, init?: RequestIn
       return new Response(
         JSON.stringify({
           ok: true,
-          data: { tables: ["dataforai.superstore_orders", "dataforai.superstore_returns"] }
+          data: {
+            tables: overrides?.tables ?? ["dataforai.superstore_orders", "dataforai.superstore_returns"]
+          }
         })
       );
     }
@@ -305,7 +313,7 @@ describe("RoleDetail", () => {
   it("copy flow calls POST /api/admin/roles/:roleId/copy dryRun first then dryRun:false", async () => {
     const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
-      if (url === "/api/admin/roles/wiki_only" && !init) {
+      if (url === "/api/admin/roles/wiki_only" && (!init?.method || init.method === "GET")) {
         return new Response(JSON.stringify({ ok: true, data: makeTemplateRole() }));
       }
       if (url === "/api/admin/roles/wiki_only/copy" && init?.method === "POST") {
@@ -446,7 +454,7 @@ describe("RoleDetail", () => {
     });
     const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
-      if (url === "/api/admin/roles/scoped_east" && !init) {
+      if (url === "/api/admin/roles/scoped_east" && (!init?.method || init.method === "GET")) {
         return new Response(JSON.stringify({ ok: true, data: scopedRole }));
       }
       if (url === "/api/admin/roles/scoped_east" && init?.method === "PATCH") {
@@ -586,7 +594,7 @@ describe("RoleDetail", () => {
   it("editing after preview clears stale diff and save uses the preview version", async () => {
     const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
-      if (url === "/api/admin/roles/analyst" && !init) {
+      if (url === "/api/admin/roles/analyst" && (!init?.method || init.method === "GET")) {
         return new Response(JSON.stringify({ ok: true, data: makeYamlRole() }));
       }
       if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
@@ -640,7 +648,7 @@ describe("RoleDetail", () => {
   it("delete flow sends dryRun false in the DELETE body on confirm", async () => {
     const fetchMock = stubCatalogApis(async (input, init) => {
       const url = String(input);
-      if (url === "/api/admin/roles/analyst" && !init) {
+      if (url === "/api/admin/roles/analyst" && (!init?.method || init.method === "GET")) {
         return new Response(JSON.stringify({ ok: true, data: makeYamlRole() }));
       }
       if (url === "/api/admin/roles/analyst" && init?.method === "DELETE") {
@@ -691,5 +699,78 @@ describe("RoleDetail", () => {
     expect(technical.getAttribute("translate")).toBe("no");
     expect(technical.className).toContain("notranslate");
     expect(screen.queryByText(/该 role 当前无法解析：role_resolution_failed/)).not.toBeInTheDocument();
+  });
+
+  it("MCP tools picker supports 全选 / 取消全选 without selecting globalDenied", async () => {
+    vi.stubGlobal("fetch", stubCatalogApis());
+    renderAt("/admin/roles/new");
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
+    const toolsField = await screen.findByTestId("role-tools-field");
+    expect(await within(toolsField).findByTestId("role-tools-batch-actions")).toBeInTheDocument();
+    expect(within(toolsField).getByTestId("role-tools-selection-summary")).toHaveTextContent("已选 0/4");
+
+    fireEvent.click(within(toolsField).getByRole("button", { name: "全选" }));
+    expect(await within(toolsField).findByRole("checkbox", { name: /lucy_query/ })).toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /lucy_read_source/ })).toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /wiki_search/ })).toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /wiki_read/ })).toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /sql_execution/ })).not.toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /sql_execution/ })).toBeDisabled();
+    expect(within(toolsField).getByTestId("role-tools-selection-summary")).toHaveTextContent("已选 4/4");
+
+    fireEvent.click(within(toolsField).getByRole("button", { name: "取消全选" }));
+    expect(within(toolsField).getByRole("checkbox", { name: /lucy_query/ })).not.toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /wiki_read/ })).not.toBeChecked();
+    expect(within(toolsField).getByTestId("role-tools-selection-summary")).toHaveTextContent("已选 0/4");
+  });
+
+  it("MCP tools filter limits 全选 to visible candidates when tools >= 10", async () => {
+    const manyTools = Array.from({ length: 12 }, (_, i) => ({
+      name: i < 3 ? `lucy_tool_${i}` : `other_tool_${i}`,
+      description: i < 3 ? "lucy family" : "other",
+      globalDenied: false
+    }));
+    manyTools.push({ name: "sql_execution", description: "raw sql", globalDenied: true });
+
+    vi.stubGlobal("fetch", stubCatalogApis(undefined, { tools: manyTools }));
+    renderAt("/admin/roles/new");
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
+    const toolsField = await screen.findByTestId("role-tools-field");
+    const filter = await within(toolsField).findByTestId("role-tools-filter");
+    fireEvent.change(filter, { target: { value: "lucy" } });
+
+    expect(within(toolsField).getByRole("checkbox", { name: /lucy_tool_0/ })).toBeInTheDocument();
+    expect(within(toolsField).queryByRole("checkbox", { name: /other_tool_3/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(toolsField).getByRole("button", { name: "全选" }));
+    expect(within(toolsField).getByRole("checkbox", { name: /lucy_tool_0/ })).toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /lucy_tool_2/ })).toBeChecked();
+
+    fireEvent.change(filter, { target: { value: "" } });
+    expect(within(toolsField).getByRole("checkbox", { name: /other_tool_3/ })).not.toBeChecked();
+    expect(within(toolsField).getByRole("checkbox", { name: /sql_execution/ })).not.toBeChecked();
+  });
+
+  it("table names picker supports 全选 / 取消全选", async () => {
+    vi.stubGlobal("fetch", stubCatalogApis());
+    renderAt("/admin/roles/new");
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /mysql-aliyun/ }));
+    fireEvent.click(screen.getByRole("button", { name: "+ 添加表范围" }));
+    const range = await screen.findByTestId("role-table-range-1");
+    fireEvent.change(within(range).getByLabelText(/表范围 1 连接/), { target: { value: "mysql-aliyun" } });
+    fireEvent.change(within(range).getByLabelText(/表范围 1 Schema/), { target: { value: "dataforai" } });
+
+    expect(await within(range).findByTestId("role-table-names-1-batch-actions")).toBeInTheDocument();
+    expect(within(range).getByTestId("role-table-names-1-selection-summary")).toHaveTextContent("已选 0/2");
+
+    fireEvent.click(within(range).getByRole("button", { name: "全选" }));
+    expect(within(range).getByRole("checkbox", { name: /superstore_orders/ })).toBeChecked();
+    expect(within(range).getByRole("checkbox", { name: /superstore_returns/ })).toBeChecked();
+    expect(within(range).getByTestId("role-table-names-1-selection-summary")).toHaveTextContent("已选 2/2");
+
+    fireEvent.click(within(range).getByRole("button", { name: "取消全选" }));
+    expect(within(range).getByRole("checkbox", { name: /superstore_orders/ })).not.toBeChecked();
+    expect(within(range).getByRole("checkbox", { name: /superstore_returns/ })).not.toBeChecked();
   });
 });

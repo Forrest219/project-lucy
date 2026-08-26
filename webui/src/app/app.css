@@ -1474,6 +1474,19 @@
   .pl-inline-grid { @apply grid gap-2; }
   .pl-measure-grid { @apply grid gap-3 md:grid-cols-4; }
   .pl-segment-grid { @apply grid gap-3 md:grid-cols-3; }
+  .pl-segment-editor { @apply grid gap-0; }
+  .pl-segment-card-list { @apply grid gap-3; }
+  .pl-segment-card {
+    @apply grid gap-3 rounded-md border border-border-default bg-bg-surface p-3;
+  }
+  .pl-segment-card-header { @apply flex items-start justify-between gap-3; }
+  .pl-segment-card-fields { @apply grid gap-3 md:grid-cols-2; }
+  .pl-segment-card-preview {
+    @apply rounded-sm bg-bg-muted px-2.5 py-1.5 text-xs text-fg-muted;
+  }
+  .pl-segment-card-preview code {
+    @apply font-mono text-[12px] text-fg-default;
+  }
 
   /* 编辑器布局 */
   .pl-editor-layout { @apply grid grid-cols-[240px_minmax(0,1fr)] gap-6; }
@@ -1671,7 +1684,47 @@
   .pl-drawer-panel { @apply flex h-full w-full max-w-xl flex-col gap-4 overflow-auto bg-bg-surface p-6 shadow-lg; }
   .pl-drawer-header { @apply flex items-start justify-between gap-3; }
   .pl-drawer-body { @apply grid gap-3; }
+  /* 新建连接：两列 Field 共享标签 / 控件 / 说明行轨，避免一侧 hint 把另一侧 input 拉高。 */
+  .pl-connection-field-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    column-gap: 0.75rem; /* gap-3 */
+    row-gap: 0.375rem;   /* gap-1.5 */
+  }
+  .pl-connection-field {
+    display: grid;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+  }
+  .pl-connection-field--pair {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 3;
+    gap: 0; /* 行距由 pair 的 row-gap 统一，避免双计 */
+    min-width: 0;
+  }
+  .pl-connection-field-control {
+    display: flex;
+    min-height: 38px;
+    align-items: center;
+  }
+  .pl-connection-field-control > * {
+    width: 100%;
+    min-width: 0;
+  }
+  .pl-connection-field-control .pl-input,
+  .pl-connection-field-control select.pl-input {
+    height: 38px;
+    min-height: 38px;
+  }
+  .pl-connection-field-message {
+    min-height: 1rem;
+    font-size: 0.75rem;
+  }
   .pl-drawer-footer { @apply flex flex-wrap items-center justify-end gap-2 pt-2; }
+  .pl-secret-banner { @apply flex items-start gap-2 rounded-md border border-border-default bg-bg-muted px-3 py-2 text-sm text-fg-muted; }
+  .pl-secret-banner code { @apply text-xs; }
   /* M21: stable 32x32 close button. `whitespace-nowrap` keeps the two glyphs of
      "关闭" on one line so it never stacks vertically. */
   .pl-drawer-close { @apply inline-flex h-8 w-8 shrink-0 items-center justify-center whitespace-nowrap rounded-sm; }

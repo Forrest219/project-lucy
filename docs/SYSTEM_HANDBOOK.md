@@ -5,7 +5,7 @@
 | 文档类型 | System Handbook |
 | 适用对象 | 使用者、管理员、运维人员、接入 Agent 的协作者、开发者 |
 | 事实来源 | `webui/server/`、`webui/src/`、`semantic-layer/`、`webui/config/`、`ktx.yaml.example`、`webui/docs/01-17` |
-| 当前日期 | 2026-08-25 |
+| 当前日期 | 2026-08-26 |
 
 ## 目录
 
@@ -18,6 +18,7 @@
     - [系统概览待处理事项](#系统概览待处理事项)
   - [3.2 数据库接入](#32-数据库接入)
   - [3.3 语义层维护](#33-语义层维护)
+    - [语义状态与启用表范围状态](#语义状态与启用表范围状态)
     - [为什么要编写语义 YAML](#为什么要编写语义-yaml)
     - [推荐编写工作流](#推荐编写工作流)
     - [grain、join 与 fanout](#grainjoin-与-fanout)
@@ -28,6 +29,7 @@
     - [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界)
   - [3.6 质量评测 Eval](#36-质量评测-eval)
   - [3.7 YAML 文件规范与交付验收](#37-yaml-文件规范与交付验收)
+    - [配置作者 Skills](#配置作者-skills)
     - [3.7.0 overlay 字段速查（编写辅导）](#370-overlay-字段速查编写辅导)
 - [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)
 - [5. 配置与环境变量速查](#5-配置与环境变量速查)
@@ -56,9 +58,11 @@
 | `YAML` 改完后为什么 `Agent` 仍然搜不到新口径？ | `WebUI` 读文件即可看到；`KTX` / `MCP` 检索需要 `ktx admin reindex`，并且还要用 `sl read` 确认 `overlay` 已合并到目标 `source`。 | [6.3 配置文件改动后什么时候生效？](#63-配置文件改动后什么时候生效)、[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查) |
 | 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |
 | 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |
+| 可以用编码代理自动生成语义 / Wiki / Eval 吗？ | 可以。用**配置作者 Skills**（Claude Code / Codex / Cursor）生成产物；生成后仍须过全包门禁与 [3.7.6 GO / NO-GO](#376-go--no-go-交付-checklist)。这不是 MCP 问答运行时 Skill。 | [配置作者 Skills](#配置作者-skills) |
 | `lucy_query` 报 `No join path`？ | 跨 source 查询需要 Manifest/overlay 声明 `joins` + `relationship`，并完成索引重建；有物理外键不等于语义层已连通。 | [6.10 `lucy_query` 报 No join path / 跨表失败](#610-lucy_query-报-no-join-path--跨表失败)、[grain、join 与 fanout](#grainjoin-与-fanout) |
 | 查询被 fanout / Aggregate locality 拒绝？ | measure 源与 filter/dimension 路径不能靠 `one_to_many` 扇出聚合；换 measure 源、改维度，或拆成多步半连接式查询。 | [6.11 fanout / Aggregate locality 拒绝查询](#611-fanout--aggregate-locality-拒绝查询) |
 | 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
+| `/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」有什么关系？ | 共用 `GET /api/sources` 的 `completion`。`/catalog` 展示四态完成度；启用表范围页先看 `enabled_tables`，再把非 `done` 收成「已启用，待补语义」。 | [语义状态与启用表范围状态](#语义状态与启用表范围状态)、[系统概览待处理事项](#系统概览待处理事项) |
 | `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |
 | 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录。近 7 天 `ACL` 拒绝只在「访问风险」指标卡展示，不进入待处理事项。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |
 
@@ -229,7 +233,8 @@ npm run dev
 | --- | --- |
 | `http://127.0.0.1:5173/onboarding` | 开发态 WebUI 上线检查 |
 | `http://127.0.0.1:5174/api/health` | Fastify 健康检查 |
-| `http://127.0.0.1:7879/mcp` | 本地开发 MCP fallback；客户部署以 `LUCY_PUBLIC_MCP_URL` / WebUI 展示值为准 |
+| `http://127.0.0.1:7879/mcp` | 本地 npm 开发 MCP fallback（未设 `LUCY_PUBLIC_MCP_URL`）；**不计**部署就绪。Docker demo 默认 Advertise 为 `http://127.0.0.1:57881/mcp`；客户部署以 `LUCY_PUBLIC_MCP_URL` / WebUI 展示值为准 |
+
 
 如果当前 KTX CLI 已支持 `ktx ui`，可用它作为封装入口；仍以启动日志中的 WebUI/API/Proxy 地址为准。
 
@@ -299,7 +304,9 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | 2. 限定表范围 | `enabled_tables` 数量大于 0 | `/connections/whitelist` |
 | 3. 配置语义层 | 至少 1 张 semantic table 进入 `done` | `/` 表目录 |
 | 4. 校验并审阅变更 | 当前无未审阅 changed files | `/review` |
-| 5. 配置 Agent MCP | 存在启用 Agent，且至少 1 个可用 token；非全 legacy allow | `/admin/agents` |
+| 5. 配置 Agent MCP | 存在启用 Agent，且至少 1 个可用 token；非全 legacy allow；且 `GET /api/project.mcpEndpoint.status === configured`（已设置合法 `LUCY_PUBLIC_MCP_URL`）。`fallback` / `invalid` **不计**就绪 | `/admin/agents`；部署包装设置 `LUCY_PUBLIC_MCP_URL` |
+
+系统概览 `/overview` 的 Lucy MCP 就绪同样要求 `mcpEndpoint.status === configured`。未设置 public URL 时显示本地 fallback 并可复制（仅本地 npm 便利），但文案标明不可用于客户交付，且计入系统异常 / 未就绪。
 
 当 `Deployment readiness = 5/5` 时，WebUI 会给出 MCP 配置模板；未完成时会指出下一项阻塞原因。
 
@@ -326,7 +333,7 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 4. 全部非 `hidden` 列都有描述
 5. 至少一个 `measure`
 
-缺任一项则为 `partial` 或 `not_started`，都计入「待补语义」。补语义入口见 [3.3 语义层维护](#33-语义层维护)；发布入口见 `/publish/workbench`。
+缺任一项则为 `partial` 或 `not_started`，都计入「待补语义」。补语义入口见 [3.3 语义层维护](#33-语义层维护)；发布入口见 `/publish/workbench`。`/catalog`「语义状态」与启用表范围「状态」的对照见 [语义状态与启用表范围状态](#语义状态与启用表范围状态)。
 
 ### 3.2 数据库接入
 
@@ -761,6 +768,28 @@ ktx --project-dir <PROJECT_ROOT> admin reindex
 ```
 
 说明：编辑 YAML 后，`MCP` / `KTX` 检索通常读本地 SQLite 索引；需要让 Agent 搜到新口径时，执行 `ktx admin reindex`。
+
+#### 语义状态与启用表范围状态
+
+`/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」共用 `GET /api/sources` 的 `completion`，但列名回答的问题不同。
+
+| 页面与列 | 回答的问题 | 取值 |
+| --- | --- | --- |
+| `/catalog`「语义状态」 | 这张表的语义 `YAML` 写到哪了 | `not_started` 未开始、`partial` 部分完成、`done` 已完成、`validation_failed` 校验失败 |
+| `/connections/enabled-tables`「状态」 | 有没有进入启用表范围，再叠上完成度 | 先看 `enabled_tables` 勾选 / 草稿 / 无效启用；已启用后再看是否 `done` |
+
+「有没有启用」在语义资产页是另一枚徽章：未进 `enabled_tables` 的表，表名旁标「未启用」，不改「语义状态」列。默认列表只展示已启用表。
+
+同一张已启用且出现在本地 `Manifest` 的表：
+
+| `/catalog` 语义状态 | `/connections/enabled-tables` 状态 |
+| --- | --- |
+| 未开始 / 部分完成 / 校验失败 | 已启用，待补语义 |
+| 已完成 | 已启用，语义完成 |
+
+启用表范围页还会出现草稿与异常态：「待启用」「待禁用」「无效启用」（在 `enabled_tables` 里但本地没有 `Manifest`）。未启用行不展示完成度。
+
+`/overview`「语义覆盖 / N 张表待补语义」用启用表范围这套口径：已启用 ∩ `Manifest`，且 `completion !== done`。`done` 门槛见 [系统概览待处理事项](#系统概览待处理事项)。
 
 #### 为什么要编写语义 YAML
 
@@ -1347,7 +1376,76 @@ POST /api/eval/runs
 
 本节为人工配置人员、运维人员、Claude Code / Codex 等 Agent 检查者提供统一可执行的 YAML 交付 runbook。事故教训：分析师上传的语义 YAML 文件结构不符合 KTX/Lucy 的 manifest / overlay 合并模型，会让 MCP 侧无法提供正确问答。**`reindex` 成功、单个 `sl validate` 成功都不能单独作为交付成功依据。**
 
-编写动机、推荐工作流、grain / fanout 说明见 [为什么要编写语义 YAML](#为什么要编写语义-yaml)、[推荐编写工作流](#推荐编写工作流)、[grain、join 与 fanout](#grainjoin-与-fanout)；本节聚焦**交付分型与验收**。
+编写动机、推荐工作流、grain / fanout 说明见 [为什么要编写语义 YAML](#为什么要编写语义-yaml)、[推荐编写工作流](#推荐编写工作流)、[grain、join 与 fanout](#grainjoin-与-fanout)；本节聚焦**交付分型与验收**。若用编码代理批量生成配置，先看 [配置作者 Skills](#配置作者-skills)，再回到本节做验收。
+
+#### 配置作者 Skills
+
+面向分析师与交付侧：用 Claude Code / Codex / Cursor 等**编码代理**生成可导入 Lucy 的语义 YAML、业务 Wiki 与评测用例。本节只做发现入口与边界说明；完整 `SKILL.md`、模板与 lint 脚本以**配置作者 Skills 交付包**为准，不在系统手册内粘贴全文。
+
+| 边界 | 说明 |
+| --- | --- |
+| 是什么 | 编码代理读取的作者工具包（`SKILL.md` + references + 校验脚本） |
+| 不是什么 | 不是 Lucy MCP 问答运行时自动加载的 Skill；也不是 WebUI Skill Editor |
+| 权威正文 | 交付包内各 Skill 的 `SKILL.md`；本手册只索引 |
+| 验收仍看本章 | 生成成功 ≠ 可交付；必须过 [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |
+
+**落位（客户配置工程）**
+
+把配置作者 Skills 文件夹放到 Lucy 工程根，与 `semantic-layer/` 平级（交付包 README 通常记为 `skills/`）。将交付包内的 `AGENTS.md` / `CLAUDE.md` 复制到工程根，供编码代理自动读取。开发仓内的对照实现常见于 `.cursor/skills/lucy-*-author`；勿与 MCP 问答运行时 Skill 混为一谈——按当次交付包 README 的目录约定放置。
+
+```text
+<lucy-project>/
+  semantic-layer/
+  wiki/
+  evals/
+  skills/                 ← 配置作者 Skills 包（以交付 README 为准）
+    lucy-semantic-layer/
+    lucy-semantic-author/
+    lucy-wiki-author/
+    lucy-eval-author/
+    lucy-config-package/
+```
+
+**Skill 与产物**
+
+| Skill | 写出 |
+| --- | --- |
+| `lucy-semantic-layer` | `semantic-layer/<connection>/` |
+| `lucy-semantic-author` | 语义 YAML 契约细则（常与上一行一起用） |
+| `lucy-wiki-author` | `wiki/global/`（或交付约定的 Wiki 目录） |
+| `lucy-eval-author` | `evals/<domain>/eval/` |
+| `lucy-config-package` | 上述全部的一键编排 |
+
+**调用示例**
+
+在工程根打开编码代理后：
+
+```text
+读取 skills/lucy-config-package/SKILL.md，
+按 Lucy 规范一次生成语义 + Wiki + Eval，写完跑全包门禁。
+```
+
+只改语义层时：
+
+```text
+读取 skills/lucy-semantic-layer/SKILL.md，
+按 Lucy 规范生成/更新 semantic-layer/<连接名>/ 下的 YAML，写完跑 lint。
+```
+
+**生成后必跑门禁（退出码非 0 不得声称完成）**
+
+```bash
+python3 skills/lucy-semantic-author/scripts/lint-semantic-yaml.py semantic-layer/<connectionId>
+```
+
+一次生成完整配置包时：
+
+```bash
+python3 skills/lucy-config-package/scripts/validate-lucy-package.py \
+  --project-root . --connection-id <connectionId> --domain <domain>
+```
+
+门禁通过后，仍须按 [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) 完成 `sl read`、真实 query、`MCP smoke` 等运行时验收。禁止把密码写入任何 YAML；`semantic-layer/`、`wiki/`、`evals/` 是产物目录，不要塞进 Skills 包本身。
 
 #### 3.7.0 overlay 字段速查（编写辅导）
 
@@ -1838,8 +1936,16 @@ Agent **不得**：
 
 ### 4.1 接入地址
 
-接入地址以 WebUI 展示的 Public MCP endpoint 为准。部署方通过
-`LUCY_PUBLIC_MCP_URL` 配置该值；未配置时 WebUI 只会显示本地开发 fallback。
+接入地址以 WebUI 展示的 Public MCP endpoint（Advertise）为准。部署方通过
+`LUCY_PUBLIC_MCP_URL` 配置该值。
+
+| 层 | 含义 | 勿混淆 |
+| --- | --- | --- |
+| Listen | `LUCY_PROXY_HOST`:`LUCY_PROXY_PORT`（容器内默认 `7879`） | 勿写给 Agent |
+| Publish | compose 宿主端口 / Ingress | remap 宿主端口时须同步 Advertise |
+| Advertise | `LUCY_PUBLIC_MCP_URL` | WebUI / Agent 唯一事实源 |
+
+未配置时 WebUI 显示本地开发 fallback，状态为 `fallback`，**不计** MCP 就绪。
 
 ```text
 <LUCY_PUBLIC_MCP_URL>

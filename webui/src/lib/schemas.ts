@@ -4,6 +4,8 @@ import { z } from "zod";
 // the regex is the source of truth that decides what can be appended to a
 // connection's `schemas` list in ktx.yaml.
 export const SCHEMA_NAME_PATTERN = "^[a-zA-Z_][a-zA-Z0-9_]{0,62}$";
+export const SCHEMA_NAME_RULE_HINT =
+  "字母或下划线开头，仅含字母、数字、下划线，最多 63 个字符";
 
 export const schemaNameSchema = z
   .string()

@@ -37,6 +37,16 @@ The smoke test validates:
 | Lucy MCP Proxy | `57881` | `LUCY_DEMO_PROXY_HOST_PORT` |
 | Demo MySQL | `53306` | `LUCY_DEMO_MYSQL_HOST_PORT` |
 
+### Listen / Publish / Advertise
+
+| 层 | Demo 默认 | 说明 |
+|---|---|---|
+| Listen | 容器内 `7879` (`LUCY_PROXY_PORT`) | Proxy 绑定；勿写给 Agent |
+| Publish | 宿主 `57881→7879` | `LUCY_DEMO_PROXY_HOST_PORT` |
+| Advertise | `http://127.0.0.1:57881/mcp` (`LUCY_PUBLIC_MCP_URL`) | WebUI `/overview` 与 Agent 复制的唯一 URL |
+
+`docker-compose.demo.yml` 默认注入的 `LUCY_PUBLIC_MCP_URL` 与宿主 `57881` 对齐。若改 `LUCY_DEMO_PROXY_HOST_PORT`，必须同时设置 `LUCY_PUBLIC_MCP_URL=http://127.0.0.1:<新端口>/mcp`（或你的反代 URL）。`npm run smoke:p0:demo` 会断言 `GET /api/project.mcpEndpoint` 与宿主 proxy 端口一致。
+
 ## Template Root
 
 `LUCY_TEMPLATE_ROOT` points Lucy at the demo project template baked into the

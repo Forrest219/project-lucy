@@ -12,7 +12,15 @@
 
 Agents consume Lucy as a governed MCP runtime. Lucy compiles customer data context into semantic, knowledge, query, quality, and access assets, then exposes only the tools allowed for the agent's token/role.
 
-> 🔑 **M18 起，Agent 实际配置的 endpoint 统一从 Lucy WebUI 复制。** 部署方通过 `LUCY_PUBLIC_MCP_URL` 把对外可访问的 MCP URL 注入到运行实例（`GET /api/project.mcpEndpoint.url`），WebUI 的 `/onboarding`、`/connections`、`/admin/agents`、Token 首秀页面会展示并允许复制这个值。前端不再根据浏览器 host、容器端口或 `localhost` 推断 endpoint。
+> 🔑 **M18 起，Agent 实际配置的 endpoint 统一从 Lucy WebUI 复制。** 部署方通过 `LUCY_PUBLIC_MCP_URL`（Advertise）把对外可访问的 MCP URL 注入到运行实例（`GET /api/project.mcpEndpoint.url`），WebUI 的 `/onboarding`、`/connections`、`/admin/agents`、Token 首秀页面会展示并允许复制这个值。前端不再根据浏览器 host、容器端口或 `localhost` 推断 endpoint。
+
+三层地址：
+
+| 层 | 变量 | 说明 |
+|---|---|---|
+| Listen | `LUCY_PROXY_*` | 容器/进程绑定；勿给 Agent |
+| Publish | compose `ports` / Ingress | 网络可达 |
+| Advertise | `LUCY_PUBLIC_MCP_URL` | WebUI / Agent 唯一事实源 |
 
 客户部署里 Agent 实际配置的 URL：
 
@@ -20,14 +28,16 @@ Agents consume Lucy as a governed MCP runtime. Lucy compiles customer data conte
 <LUCY_PUBLIC_MCP_URL>      # 例如 https://lucy.example.com/mcp
 ```
 
-本地开发与 Docker demo 仍可使用容器内监听地址作为示例，但**不能**作为生产环境给 Agent 的接入点：
+Compose 默认 Advertise（直连宿主端口时与 Publish 对齐）：
 
 ```text
-http://127.0.0.1:7879/mcp        # 本地开发 / 容器内 listen
-http://127.0.0.1:57881/mcp       # Docker demo 烟测端口（仅烟测）
+http://127.0.0.1:7879/mcp        # docker-compose.yml 默认
+http://127.0.0.1:57881/mcp       # docker-compose.demo.yml 默认
 ```
 
-> `LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 只控制容器内/主机内的 MCP Proxy 监听地址。客户/Agent 真正访问的 URL 必须由 `LUCY_PUBLIC_MCP_URL` 单独指定，两者**不能**互相替代。
+本地 npm 未设 env 时的 fallback 仍是 `http://127.0.0.1:7879/mcp`，但 WebUI 标记为 `fallback`，不计部署就绪。
+
+> `LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 只控制 Listen。客户/Agent 真正访问的 URL 必须由 `LUCY_PUBLIC_MCP_URL` 单独指定。直连 remap 宿主端口时 Publish 与 Advertise **必须同改**；反代/域名只改 Advertise。
 
 ## 2. Authentication
 
@@ -44,7 +54,7 @@ Token rules:
 - Rotate if leaked or unused.
 - Do not use `KTX_INTERNAL_TOKEN`.
 
-## 3. Generic MCP Config
+## 3. 通用客户端（MCP Config）
 
 ```json
 {

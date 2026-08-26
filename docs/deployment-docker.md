@@ -58,20 +58,36 @@ ktx admin runtime install --yes --feature core
 | `7879` | Lucy MCP Proxy customer endpoint | `LUCY_PROXY_PORT` |
 | `7878` | Internal KTX MCP upstream | not exposed by compose |
 
-默认客户入口：
+### Listen / Publish / Advertise
+
+这三层不能混用。WebUI 与 Agent 配置只认 **Advertise**：
+
+| 层 | 变量 / 位置 | 默认（customer compose） | 给谁用 |
+|---|---|---|---|
+| Listen | `LUCY_PROXY_HOST`:`LUCY_PROXY_PORT` | 容器内 `0.0.0.0:7879` | Proxy 进程绑定；**勿**写给 Agent |
+| Publish | compose `ports` / Ingress | 宿主 `7879→7879`（可用 `LUCY_PROXY_HOST_PORT` remap） | 网络可达 |
+| Advertise | `LUCY_PUBLIC_MCP_URL` | compose 默认 `http://127.0.0.1:7879/mcp`（与默认 Publish 对齐） | WebUI 展示与 Agent 复制的**唯一**事实源 |
+
+规则：
+
+- **直连宿主端口**：remap `LUCY_PROXY_HOST_PORT` 时，**必须同步**改 `LUCY_PUBLIC_MCP_URL`（见仓库根 `.env.example`）。
+- **反向代理 / 域名 / Ingress**：只改 Advertise 为对外 URL（如 `https://lucy.example.com/mcp`）；Listen/Publish 可保持内部端口。
+- 未设置 `LUCY_PUBLIC_MCP_URL` 时，WebUI 走本地 fallback `http://127.0.0.1:7879/mcp`，状态为 `fallback`，**不计** MCP / 部署就绪（仅本地 npm 开发便利；仍可复制，但不可用于客户交付）。
+
+默认客户入口（Advertise）：
 
 ```text
-MCP: http://localhost:7879/mcp
+MCP: <LUCY_PUBLIC_MCP_URL>
+# customer compose 未覆盖时：http://127.0.0.1:7879/mcp
 ```
 
-> ⚠ `http://localhost:7879/mcp` 是容器内/本机的内部监听地址，**不**是客户部署里 Agent 实际应该配置的 URL。客户部署（域名、反向代理、内网网关、K8s、PaaS 等）必须显式设置 `LUCY_PUBLIC_MCP_URL`，例如 `https://lucy.example.com/mcp`；WebUI 与生成的 `.mcp.json` / Codex TOML 都会展示这个值。
-> - `LUCY_PROXY_HOST` / `LUCY_PROXY_PORT`：容器内监听，**不应**直接写给 Agent。
-> - `LUCY_PUBLIC_MCP_URL`：对外可访问的 URL，**唯一**展示/复制给 Agent 的事实源。
-
-如宿主机端口冲突，可只改 compose 的宿主映射端口，容器内端口保持不变：
+如宿主机端口冲突，宿主映射与 Advertise **一起改**：
 
 ```bash
-LUCY_WEBUI_HOST_PORT=55175 LUCY_PROXY_HOST_PORT=57880 docker compose up --build
+LUCY_WEBUI_HOST_PORT=55175 \
+LUCY_PROXY_HOST_PORT=57880 \
+LUCY_PUBLIC_MCP_URL=http://127.0.0.1:57880/mcp \
+  docker compose up --build
 ```
 
 `http://localhost:5174/api/health` 是运维健康检查端点，不是客户业务入口。KTX upstream 默认只绑定容器内 `127.0.0.1:7878`。外部 agents 应接入 Lucy MCP Proxy，不直接接入 KTX upstream。
@@ -239,7 +255,7 @@ Agent 平台应接入 Lucy MCP Proxy：
 | `LUCY_PROXY_PORT` | `7879` | MCP Proxy port |
 | `LUCY_PROXY_UPSTREAM_HOST` | `127.0.0.1` | KTX upstream host for proxy forwarding |
 | `LUCY_PROXY_UPSTREAM_PORT` | `7878` | KTX upstream port for proxy forwarding |
-| `LUCY_PUBLIC_MCP_URL` | unset | **Public MCP endpoint** advertised by WebUI and embedded in agent config snippets. This is the runtime-configured URL that Agent platforms actually call (e.g. `https://lucy.example.com/mcp`). Distinct from `LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` (which only control the internal listen address). When unset, WebUI shows the local development fallback `http://127.0.0.1:7879/mcp` and marks the state as `fallback`. |
+| `LUCY_PUBLIC_MCP_URL` | compose default `http://127.0.0.1:7879/mcp` (customer) / `http://127.0.0.1:57881/mcp` (demo); unset in bare npm → fallback | **Advertise**：Public MCP endpoint shown by WebUI and copied into agent configs. Distinct from Listen (`LUCY_PROXY_*`) and Publish (host `ports` / Ingress). Remap host proxy port → update this URL too; reverse-proxy deployments set the external https URL instead. Unset → `fallback` (local npm only; not deployment-ready). |
 | `KTX_TELEMETRY_DISABLED` | `1` | 禁用 KTX telemetry |
 
 Compose 宿主端口映射变量：

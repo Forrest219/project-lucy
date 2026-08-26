@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | docs/qa 文档地图 |
 | 文档类型 | Other |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-08-08 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-08-08；v1.3 2026-08-25 |
 | 撰写人 | Cursor Agent |
 
 ## 结构
@@ -16,6 +16,7 @@ docs/qa/
   suite-webui-browser.md             ← 分表 E2E-WEBUI
   suite-semantic-onboard-mcp-eval.md ← 分表 E2E-ONBOARD-EVAL（含 KSC / Spider2 §14）
   suite-agent-mcp.md                 ← 分表 E2E-AGENT（含 Spider2 §5 可选）
+  suite-user-journey.md              ← 分表 E2E-USER-JOURNEY（用户逐步操作剧本）
   lucy-webui-e2e-test-suite.md       ← WebUI 用例活文档（被分表引用）
   selector-contract.md / impact-map.json / changelog.md
 ```
@@ -28,6 +29,7 @@ docs/qa/
 | [`suite-webui-browser.md`](suite-webui-browser.md) | 分表 `E2E-WEBUI` |
 | [`suite-semantic-onboard-mcp-eval.md`](suite-semantic-onboard-mcp-eval.md) | 分表 `E2E-ONBOARD-EVAL`（主题实例含 Spider2 Pilot §14） |
 | [`suite-agent-mcp.md`](suite-agent-mcp.md) | 分表 `E2E-AGENT`（Spider2 Agent 抽样见 §5） |
+| [`suite-user-journey.md`](suite-user-journey.md) | 分表 `E2E-USER-JOURNEY`（用户逐步操作剧本；Agent 可执行） |
 | [`lucy-webui-e2e-test-suite.md`](lucy-webui-e2e-test-suite.md) | WebUI 用例正文（活文档） |
 | [`selector-contract.md`](selector-contract.md) | Selector 契约 |
 | [`changelog.md`](changelog.md) | 变更日志 |

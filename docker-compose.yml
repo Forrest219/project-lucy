@@ -16,6 +16,10 @@ services:
       LUCY_PROXY_PORT: "7879"
       LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
       LUCY_PROXY_UPSTREAM_PORT: "7878"
+      # Advertise URL for Agent / WebUI copy. Default matches host publish port
+      # below (7879). Remap LUCY_PROXY_HOST_PORT → also update this URL; for
+      # Ingress / reverse proxy set the public https://…/mcp URL instead.
+      LUCY_PUBLIC_MCP_URL: "${LUCY_PUBLIC_MCP_URL:-http://127.0.0.1:7879/mcp}"
       LUCY_ALLOW_PLACEHOLDER_KTX: "${LUCY_ALLOW_PLACEHOLDER_KTX:-}"
       POSTHOG_DISABLED: "1"
     ports:

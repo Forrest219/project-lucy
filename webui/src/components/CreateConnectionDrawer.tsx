@@ -1,15 +1,20 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError, apiPost } from "../lib/apiClient";
 import {
-  CONNECTION_ID_PATTERN,
+  CONNECTION_ID_RULE_HINT,
   defaultPortForDriver,
   validateConnectionId
 } from "../lib/connectionId";
 import { queryKeys } from "../lib/queryKeys";
-import { SCHEMA_NAME_PATTERN, validateSchemaName } from "../lib/schemas";
-import type { CreateConnectionPreview, CreateConnectionResult } from "../lib/types";
+import { SCHEMA_NAME_RULE_HINT, validateSchemaName } from "../lib/schemas";
+import type {
+  CreateConnectionPreview,
+  CreateConnectionResult,
+  ProbeConnectionResult
+} from "../lib/types";
 import { DiffViewer } from "./DiffViewer";
 
 type Step = "input" | "preview" | "submitting" | "success" | "fatal";
@@ -79,7 +84,7 @@ function mapCreateErrorMessage(err: unknown): string {
     case "SECRET_ALREADY_EXISTS":
       return "密码文件已存在，请更换连接 ID 或由运维清理后重试";
     case "CONNECTION_TEST_FAILED":
-      return `${err.message}（已回滚连接配置与密码文件）`;
+      return err.message;
     case "CONNECTION_PASSWORD_REQUIRED":
       return "数据库密码为必填项";
     case "FORBIDDEN_PATH":
@@ -98,8 +103,12 @@ export function CreateConnectionDrawer({
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewAttempted, setPreviewAttempted] = useState(false);
+  const [probeAttempted, setProbeAttempted] = useState(false);
+  const [probeResult, setProbeResult] = useState<ProbeConnectionResult | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<Step>("input");
   const [preview, setPreview] = useState<CreateConnectionPreview | null>(null);
+  const [created, setCreated] = useState<CreateConnectionResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const idIssue = useMemo(
@@ -112,9 +121,9 @@ export function CreateConnectionDrawer({
     !Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535
       ? "端口须为 1–65535 的整数"
       : null;
-  const hostIssue = form.host.trim() ? null : "host 为必填项";
-  const databaseIssue = form.database.trim() ? null : "database 为必填项";
-  const usernameIssue = form.username.trim() ? null : "username 为必填项";
+  const hostIssue = form.host.trim() ? null : "主机为必填项";
+  const databaseIssue = form.database.trim() ? null : "数据库为必填项";
+  const usernameIssue = form.username.trim() ? null : "用户名为必填项";
   const passwordIssue = form.password.length > 0 ? null : "数据库密码为必填项";
 
   const canPreview =
@@ -125,8 +134,10 @@ export function CreateConnectionDrawer({
     !usernameIssue &&
     !passwordIssue &&
     !schemasParsed.issue;
+  const canProbe =
+    !hostIssue && !portIssue && !databaseIssue && !usernameIssue && !passwordIssue;
 
-  const show = (field: string) => Boolean(touched[field] || previewAttempted);
+  const show = (field: string) => Boolean(touched[field] || previewAttempted || probeAttempted);
 
   const previewMutation = useMutation({
     mutationFn: () =>
@@ -154,6 +165,30 @@ export function CreateConnectionDrawer({
     }
   });
 
+  const probeMutation = useMutation({
+    mutationFn: () =>
+      apiPost<ProbeConnectionResult>("/api/connections/probe", {
+        driver: form.driver,
+        ...(form.engine.trim() ? { engine: form.engine.trim() } : {}),
+        ...(form.wireProtocol.trim() ? { wireProtocol: form.wireProtocol.trim() } : {}),
+        readonly: form.readonly,
+        host: form.host.trim(),
+        port: portNumber,
+        database: form.database.trim(),
+        username: form.username.trim(),
+        password: form.password
+      }),
+    onSuccess: (data) => {
+      setProbeResult(data);
+    },
+    onError: (err) => {
+      setProbeResult({
+        status: "error",
+        message: mapCreateErrorMessage(err)
+      });
+    }
+  });
+
   const writeMutation = useMutation({
     mutationFn: () =>
       apiPost<CreateConnectionResult>("/api/connections", {
@@ -171,6 +206,7 @@ export function CreateConnectionDrawer({
         dryRun: false
       }),
     onSuccess: (data) => {
+      setCreated(data);
       setStep("success");
       setSubmitError(null);
       setForm((prev) => ({ ...prev, password: "" }));
@@ -178,7 +214,11 @@ export function CreateConnectionDrawer({
       void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
       void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
-      toast.success(`连接已创建：${data.connection.id}`);
+      toast.success(
+        data.test.status === "error"
+          ? `连接已创建：${data.connection.id}（连通测试未通过，配置已保存）`
+          : `连接已创建：${data.connection.id}`
+      );
     },
     onError: (err) => {
       const message = mapCreateErrorMessage(err);
@@ -192,17 +232,48 @@ export function CreateConnectionDrawer({
     setForm(INITIAL_FORM);
     setTouched({});
     setPreviewAttempted(false);
+    setProbeAttempted(false);
+    setProbeResult(null);
+    setShowPassword(false);
     setStep("input");
     setPreview(null);
+    setCreated(null);
     setSubmitError(null);
     previewMutation.reset();
     writeMutation.reset();
+    probeMutation.reset();
   }
 
   function close() {
     reset();
     onClose();
   }
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        close();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // close() is recreated each render; bind to the current open/onClose pair.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, onClose]);
+
+  useEffect(() => {
+    setProbeResult(null);
+  }, [
+    form.driver,
+    form.engine,
+    form.wireProtocol,
+    form.host,
+    form.port,
+    form.database,
+    form.username,
+    form.password
+  ]);
 
   function patchForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => {
@@ -234,17 +305,25 @@ export function CreateConnectionDrawer({
             <h2 className="pl-panel-title notranslate" translate="no">
               新建连接
             </h2>
-            <p className="pl-notice notranslate" translate="no">
-              密码仅提交一次，写入{" "}
-              <code className="notranslate" translate="no">
-                .ktx/secrets/&lt;连接 ID&gt;-password
-              </code>
-              ；<code className="notranslate" translate="no">ktx.yaml</code> 只保存{" "}
-              <code className="notranslate" translate="no">
-                file:
-              </code>{" "}
-              引用。
-            </p>
+            <div
+              className="pl-secret-banner notranslate"
+              role="note"
+              data-testid="create-connection-secret-banner"
+              translate="no"
+            >
+              <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <p>
+                密码仅提交一次，写入{" "}
+                <code className="notranslate" translate="no">
+                  .ktx/secrets/&lt;连接 ID&gt;-password
+                </code>
+                ；<code className="notranslate" translate="no">ktx.yaml</code> 只保存{" "}
+                <code className="notranslate" translate="no">
+                  file:
+                </code>{" "}
+                引用。
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -282,7 +361,7 @@ export function CreateConnectionDrawer({
               <Field
                 label="连接 ID"
                 error={show("id") ? idIssue?.message : null}
-                hint={`须匹配 ${CONNECTION_ID_PATTERN}`}
+                hint={CONNECTION_ID_RULE_HINT}
               >
                 <input
                   className="pl-input notranslate"
@@ -296,8 +375,8 @@ export function CreateConnectionDrawer({
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="driver">
+              <FieldPair>
+                <Field label="驱动" pair>
                   <select
                     className="pl-input notranslate"
                     translate="no"
@@ -311,42 +390,21 @@ export function CreateConnectionDrawer({
                     <option value="postgres">postgres</option>
                   </select>
                 </Field>
-                <Field label="只读账号意图">
-                  <label className="flex items-center gap-2 text-sm py-2">
+                <Field label="只读账号意图" pair>
+                  <span className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={form.readonly}
                       onChange={(e) => patchForm("readonly", e.target.checked)}
                       data-testid="create-connection-readonly"
                     />
-                    <span>readonly（默认开启）</span>
-                  </label>
+                    <span>默认开启</span>
+                  </span>
                 </Field>
-              </div>
+              </FieldPair>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="engine（可选）" hint="如 doris / starrocks">
-                  <input
-                    className="pl-input notranslate"
-                    translate="no"
-                    value={form.engine}
-                    onChange={(e) => patchForm("engine", e.target.value)}
-                    data-testid="create-connection-engine"
-                  />
-                </Field>
-                <Field label="wire_protocol（可选）" hint="OLAP MySQL wire 填 mysql">
-                  <input
-                    className="pl-input notranslate"
-                    translate="no"
-                    value={form.wireProtocol}
-                    onChange={(e) => patchForm("wireProtocol", e.target.value)}
-                    data-testid="create-connection-wire-protocol"
-                  />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="host" error={show("host") ? hostIssue : null}>
+              <FieldPair>
+                <Field label="主机" error={show("host") ? hostIssue : null} pair>
                   <input
                     className="pl-input notranslate"
                     translate="no"
@@ -356,7 +414,7 @@ export function CreateConnectionDrawer({
                     data-testid="create-connection-host"
                   />
                 </Field>
-                <Field label="port" error={show("port") ? portIssue : null}>
+                <Field label="端口" error={show("port") ? portIssue : null} pair>
                   <input
                     className="pl-input notranslate"
                     translate="no"
@@ -366,20 +424,25 @@ export function CreateConnectionDrawer({
                     data-testid="create-connection-port"
                   />
                 </Field>
-              </div>
+              </FieldPair>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="database" error={show("database") ? databaseIssue : null}>
-                  <input
-                    className="pl-input notranslate"
-                    translate="no"
-                    value={form.database}
-                    onChange={(e) => patchForm("database", e.target.value)}
-                    onBlur={() => setTouched((t) => ({ ...t, database: true }))}
-                    data-testid="create-connection-database"
-                  />
-                </Field>
-                <Field label="username" error={show("username") ? usernameIssue : null}>
+              <Field
+                label="数据库"
+                error={show("database") ? databaseIssue : null}
+                hint="驱动连接时使用的默认库，与下方初始 Schema 不是同一项"
+              >
+                <input
+                  className="pl-input notranslate"
+                  translate="no"
+                  value={form.database}
+                  onChange={(e) => patchForm("database", e.target.value)}
+                  onBlur={() => setTouched((t) => ({ ...t, database: true }))}
+                  data-testid="create-connection-database"
+                />
+              </Field>
+
+              <FieldPair>
+                <Field label="用户名" error={show("username") ? usernameIssue : null} pair>
                   <input
                     className="pl-input notranslate"
                     translate="no"
@@ -389,28 +452,40 @@ export function CreateConnectionDrawer({
                     data-testid="create-connection-username"
                   />
                 </Field>
-              </div>
-
-              <Field
-                label="数据库密码"
-                error={show("password") ? passwordIssue : null}
-                hint="仅本次提交使用；成功后不会回显"
-              >
-                <input
-                  type="password"
-                  className="pl-input"
-                  value={form.password}
-                  onChange={(e) => patchForm("password", e.target.value)}
-                  onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-                  autoComplete="new-password"
-                  data-testid="create-connection-password"
-                />
-              </Field>
+                <Field
+                  label="数据库密码"
+                  error={show("password") ? passwordIssue : null}
+                  hint="仅本次提交使用；成功后不会回显"
+                  pair
+                >
+                  <div className="relative w-full">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      className="pl-input pr-10"
+                      value={form.password}
+                      onChange={(e) => patchForm("password", e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+                      autoComplete="new-password"
+                      data-testid="create-connection-password"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-fg-muted hover:text-fg-default"
+                      onClick={() => setShowPassword((value) => !value)}
+                      aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                      aria-pressed={showPassword}
+                      data-testid="create-connection-password-toggle"
+                    >
+                      {showPassword ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+                    </button>
+                  </div>
+                </Field>
+              </FieldPair>
 
               <Field
                 label="初始 Schema（可选）"
                 error={schemasParsed.issue}
-                hint={`多个用逗号或空格分隔；须匹配 ${SCHEMA_NAME_PATTERN}`}
+                hint={`多个用逗号或空格分隔；${SCHEMA_NAME_RULE_HINT}`}
               >
                 <input
                   className="pl-input notranslate"
@@ -421,9 +496,51 @@ export function CreateConnectionDrawer({
                   data-testid="create-connection-schemas"
                 />
               </Field>
+
+              <details
+                className="rounded-md border border-border-default bg-bg-base px-3 py-2"
+                data-testid="create-connection-advanced"
+              >
+                <summary className="cursor-pointer text-sm text-fg-muted">高级配置（可选）</summary>
+                <div className="pt-3">
+                  <FieldPair>
+                    <Field label="引擎（可选）" hint="如 doris / starrocks" pair>
+                      <input
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={form.engine}
+                        onChange={(e) => patchForm("engine", e.target.value)}
+                        data-testid="create-connection-engine"
+                      />
+                    </Field>
+                    <Field label="传输协议（可选）" hint="OLAP MySQL wire 填 mysql" pair>
+                      <input
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={form.wireProtocol}
+                        onChange={(e) => patchForm("wireProtocol", e.target.value)}
+                        data-testid="create-connection-wire-protocol"
+                      />
+                    </Field>
+                  </FieldPair>
+                </div>
+              </details>
             </div>
 
             <div className="pl-drawer-footer">
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost mr-auto"
+                disabled={probeMutation.isPending}
+                onClick={() => {
+                  setProbeAttempted(true);
+                  if (!canProbe) return;
+                  probeMutation.mutate();
+                }}
+                data-testid="create-connection-test-btn"
+              >
+                {probeMutation.isPending ? "测试中..." : "测试连接"}
+              </button>
               <button type="button" className="pl-btn pl-btn--ghost" onClick={close}>
                 取消
               </button>
@@ -441,6 +558,25 @@ export function CreateConnectionDrawer({
                 {previewMutation.isPending ? "生成预览..." : "下一步：新建预览"}
               </button>
             </div>
+            {probeMutation.isPending ? (
+              <p className="text-xs text-fg-muted" role="status" data-testid="create-connection-probe-result">
+                正在测试连接...
+              </p>
+            ) : probeResult ? (
+              <p
+                className={
+                  probeResult.status === "ok" ? "text-sm text-success-strong" : "text-sm text-danger"
+                }
+                role="status"
+                data-testid="create-connection-probe-result"
+              >
+                {probeResult.status === "ok"
+                  ? `连接成功${probeResult.latencyMs != null ? `，${probeResult.latencyMs} ms` : ""}`
+                  : `连接失败：${probeResult.message}`}
+              </p>
+            ) : (
+              <p className="text-xs text-fg-muted">可选。未测试或不通过也可以进入下一步。</p>
+            )}
             {submitError ? (
               <p className="text-sm text-danger" role="alert" data-testid="create-connection-error">
                 {submitError}
@@ -508,6 +644,12 @@ export function CreateConnectionDrawer({
               </code>{" "}
               已创建。可在连接卡片中继续添加 Schema、维护启用表范围。
             </p>
+            {created?.test.status === "error" ? (
+              <p className="text-sm text-danger" role="status" data-testid="create-connection-test-warning">
+                连通测试未通过
+                {created.test.message ? `：${created.test.message}` : ""}。配置已保存，库恢复后可在连接卡片里再测。
+              </p>
+            ) : null}
             <div className="pl-drawer-footer">
               <button type="button" className="pl-btn pl-btn--primary" onClick={close}>
                 完成
@@ -533,23 +675,35 @@ export function CreateConnectionDrawer({
   );
 }
 
+function FieldPair({ children }: { children: ReactNode }) {
+  return <div className="pl-connection-field-pair">{children}</div>;
+}
+
 function Field({
   label,
   children,
   error,
-  hint
+  hint,
+  pair = false
 }: {
   label: string;
   children: ReactNode;
   error?: string | null;
   hint?: string;
+  pair?: boolean;
 }) {
+  const message = error ? (
+    <span className="text-danger">{error}</span>
+  ) : hint ? (
+    <span className="text-fg-muted notranslate" translate="no">
+      {hint}
+    </span>
+  ) : null;
   return (
-    <label className="grid gap-1.5 text-sm">
+    <label className={pair ? "pl-connection-field pl-connection-field--pair" : "pl-connection-field"}>
       <span>{label}</span>
-      {children}
-      {error ? <span className="text-xs text-danger">{error}</span> : null}
-      {!error && hint ? <span className="text-xs text-fg-muted notranslate" translate="no">{hint}</span> : null}
+      <div className="pl-connection-field-control">{children}</div>
+      <span className="pl-connection-field-message">{message}</span>
     </label>
   );
 }

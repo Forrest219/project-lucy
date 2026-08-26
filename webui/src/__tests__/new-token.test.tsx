@@ -115,7 +115,7 @@ describe("NewToken", () => {
     expect(screen.queryByText("lucy_oneshot_token")).not.toBeInTheDocument();
   });
 
-  it("renders delivery tabs for Hermes, Claude Code, Codex, and Generic MCP", async () => {
+  it("renders delivery tabs for Hermes, Claude Code, Codex, and 通用客户端", async () => {
     stubNewTokenFetch();
 
     renderNewToken();
@@ -126,7 +126,7 @@ describe("NewToken", () => {
     const tabbar = screen.getByRole("tablist", { name: "客户端接入配置" });
     const tabs = within(tabbar).getAllByRole("tab");
     const tabNames = tabs.map((tab) => tab.textContent);
-    expect(tabNames).toEqual(expect.arrayContaining(["Hermes", "Claude Code", "Codex", "Generic MCP"]));
+    expect(tabNames).toEqual(expect.arrayContaining(["Hermes", "Claude Code", "Codex", "通用客户端"]));
   });
 
   it("default active snippet is Hermes and includes the generated token", async () => {
@@ -167,7 +167,7 @@ describe("NewToken", () => {
     expect(payload).not.toContain("http://localhost:7879/mcp");
   });
 
-  it("switching to Generic MCP updates the snippet to JSON config", async () => {
+  it("switching to 通用客户端 updates the snippet to JSON config", async () => {
     stubNewTokenFetch();
 
     renderNewToken();
@@ -175,7 +175,7 @@ describe("NewToken", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
     expect(await screen.findByText("lucy_oneshot_token")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Generic MCP" }));
+    fireEvent.click(screen.getByRole("tab", { name: "通用客户端" }));
     const snippet = screen.getByTestId("snippet-active");
     expect(snippet.textContent).toContain("mcpServers");
     expect(snippet.textContent).toContain("Bearer lucy_oneshot_token");
@@ -266,7 +266,7 @@ describe("NewToken", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
 
     expect(await screen.findByText("lucy_oneshot_token")).toBeInTheDocument();
-    expect(screen.getByText(/当前使用本地默认/)).toBeInTheDocument();
+    expect(screen.getByText(/不可用于客户交付/)).toBeInTheDocument();
     expect(screen.getByTestId("snippet-active")).toHaveTextContent("http://127.0.0.1:7879/mcp");
   });
 });

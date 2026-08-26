@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
+import { parse } from "yaml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 import { validateSource } from "../ktx";
@@ -418,6 +419,37 @@ schemas:
 
     // dryRun and write should produce the same body (modulo final newline).
     expect(written.replace(/\s+$/g, "")).toBe(proposed.replace(/\s+$/g, ""));
+    await app.close();
+  });
+
+  it("converts flow-style connection maps before writing enabled_tables", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  {
+    mysql-aliyun:
+      {
+        driver: mysql,
+        enabled_tables: [],
+        schemas: [ dataforai ]
+      }
+  }
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ dryRun: false, enabledTables: ["dataforai.superstore_orders"] })
+      .expect(200);
+
+    expect(response.body.data.written).toBe(true);
+    const written = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(written).toContain("- dataforai.superstore_orders");
+    expect(written).not.toMatch(/connections:\s*\n\s*\{/);
+    expect(() => parse(written)).not.toThrow();
+    await request(app.server).get("/api/project").expect(200);
     await app.close();
   });
 });

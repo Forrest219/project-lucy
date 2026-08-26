@@ -174,6 +174,13 @@ export type AddSchemaResult = {
   newSchemas: string[];
 };
 
+/** Optional pre-create connectivity probe; never writes the real project. */
+export type ProbeConnectionResult = {
+  status: "ok" | "error";
+  latencyMs?: number;
+  message: string;
+};
+
 /** Spec 124 Phase A: dryRun preview for POST /api/connections. */
 export type CreateConnectionPreview = {
   diff: string;
@@ -218,6 +225,32 @@ export type RemoveSchemaResult = {
   oldSchemas: string[];
   newSchemas: string[];
   removedEnabledTables: string[];
+  deletedFiles: string[];
+};
+
+/** Spec 127: dryRun preview for POST /api/connections/:connId/remove. */
+export type DeleteConnectionImpact = {
+  canDeleteSecret: boolean;
+  secretRelPath: string | null;
+  yamlAssetPaths: string[];
+  aclRoleIds: string[];
+  wikiRefCount: number;
+  wikiSamplePaths: string[];
+};
+
+export type DeleteConnectionPreview = {
+  diff: string;
+  proposedYaml: string;
+  connectionId: string;
+  schemas: string[];
+  enabledTables: string[];
+  impact: DeleteConnectionImpact;
+};
+
+export type DeleteConnectionResult = {
+  written: true;
+  auditId?: number;
+  connectionId: string;
   deletedFiles: string[];
 };
 

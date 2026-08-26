@@ -163,7 +163,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(yaml).toMatch(/password:\s*file:/);
   });
 
-  it("rolls back when connection test fails", async () => {
+  it("commits secret + yaml when connection test fails", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_AUDIT_DB = auditDbPath;
@@ -182,7 +182,6 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     const app = await buildFreshServer();
     await app.ready();
-    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
 
     const response = await request(app.server)
       .post("/api/connections")
@@ -196,16 +195,20 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
         password: "wrong-password",
         dryRun: false
       })
-      .expect(400);
+      .expect(200);
 
-    expect(response.body.ok).toBe(false);
-    expect(response.body.error.code).toBe("CONNECTION_TEST_FAILED");
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.written).toBe(true);
+    expect(response.body.data.test.status).toBe("error");
+    expect(response.body.data.test.message).toContain("Access denied");
     expect(JSON.stringify(response.body)).not.toContain("wrong-password");
 
-    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
     await expect(
-      access(path.join(projectRoot, ".ktx", "secrets", "bad-mysql-password"))
-    ).rejects.toMatchObject({ code: "ENOENT" });
+      readFile(path.join(projectRoot, ".ktx", "secrets", "bad-mysql-password"), "utf8")
+    ).resolves.toBe("wrong-password");
+    const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("bad-mysql:");
+    expect(yaml).not.toContain("wrong-password");
   });
 
   it("returns 409 when connection id already exists", async () => {
@@ -255,5 +258,73 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.error.code).toBe("CONNECTION_ID_INVALID");
     expect(response.body.error.detail.pattern).toMatch(/a-z/);
+  });
+
+  it("POST /api/connections/probe tests without writing yaml or secret", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+
+    const response = await request(app.server)
+      .post("/api/connections/probe")
+      .send({
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro",
+        password: "plain-secret-should-not-persist"
+      })
+      .expect(200);
+
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.status).toBe("ok");
+    expect(JSON.stringify(response.body)).not.toContain("plain-secret-should-not-persist");
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "probe-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("POST /api/connections/probe returns 200 with status error when test fails", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const ktx = await import("../ktx");
+    vi.mocked(ktx.testConnection).mockResolvedValueOnce({
+      status: "error",
+      latencyMs: 3,
+      reason: "Access denied for user",
+      command: "ktx connection test probe",
+      args: ["connection", "test", "probe"],
+      exitCode: 1,
+      stdout: "",
+      stderr: "Access denied for user"
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const response = await request(app.server)
+      .post("/api/connections/probe")
+      .send({
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro",
+        password: "wrong-password"
+      })
+      .expect(200);
+
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.status).toBe("error");
+    expect(response.body.data.message).toContain("Access denied");
+    expect(JSON.stringify(response.body)).not.toContain("wrong-password");
   });
 });

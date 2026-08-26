@@ -26,6 +26,7 @@ import type {
 } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
 import { CreateConnectionDrawer } from "../../components/CreateConnectionDrawer";
+import { DeleteConnectionDrawer } from "../../components/DeleteConnectionDrawer";
 import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
 import {
   CatalogAssetManifestDrawer,
@@ -431,6 +432,7 @@ export function ConnectionOverview() {
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ConnectionInfo | null>(null);
   const [reloadRunsByConnection, setReloadRunsByConnection] = useState<Record<string, CatalogReloadRun>>({});
   const [reloadErrorsByConnection, setReloadErrorsByConnection] = useState<Record<string, Error | null>>({});
   const [reloadingConnections, setReloadingConnections] = useState<Record<string, boolean>>({});
@@ -1131,6 +1133,15 @@ export function ConnectionOverview() {
                       onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
                       onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
                     />
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--secondary notranslate"
+                      onClick={() => setDeleteTarget(conn)}
+                      data-testid={`delete-connection-${conn.id}`}
+                      translate="no"
+                    >
+                      删除连接
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1160,6 +1171,13 @@ export function ConnectionOverview() {
           onClose={() => setRemoveTarget(null)}
         />
       )}
+      {deleteTarget ? (
+        <DeleteConnectionDrawer
+          connection={deleteTarget}
+          open={Boolean(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+        />
+      ) : null}
       {manifestViewTarget ? (
         <CatalogAssetManifestDrawer
           open={Boolean(manifestViewTarget)}

@@ -503,6 +503,8 @@ describe("Help handbook", () => {
     const toc = parseHelpToc([
       "### 3.3 语义层维护",
       "",
+      "#### 语义状态与启用表范围状态",
+      "",
       "#### 为什么要编写语义 YAML",
       "",
       "#### 推荐编写工作流",
@@ -515,6 +517,7 @@ describe("Help handbook", () => {
     ].join("\n"));
 
     const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
+    expect(byTitle["语义状态与启用表范围状态"]).toBe("semantic-status-and-enabled-status");
     expect(byTitle["为什么要编写语义 YAML"]).toBe("semantic-yaml-why");
     expect(byTitle["推荐编写工作流"]).toBe("semantic-authoring-workflow");
     expect(byTitle["grain、join 与 fanout"]).toBe("semantic-grain-fanout");
@@ -649,6 +652,23 @@ describe("Help handbook", () => {
     );
   });
 
+  it("maps 配置作者 Skills to config-author-skills", () => {
+    const toc = parseHelpToc([
+      "### 3.7 YAML 文件规范与交付验收",
+      "",
+      "#### 配置作者 Skills",
+      "",
+      "#### 3.7.0 overlay 字段速查（编写辅导）"
+    ].join("\n"));
+
+    expect(toc).toEqual(
+      expect.arrayContaining([
+        { id: "config-author-skills", level: 4, title: "配置作者 Skills" },
+        { id: "yaml-overlay-field-guide", level: 3, title: "3.7.0 overlay 字段速查（编写辅导）" }
+      ])
+    );
+  });
+
   it("the bundled handbook documents semantic YAML authoring guidance", async () => {
     const realAppRoot = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
@@ -656,11 +676,14 @@ describe("Help handbook", () => {
     );
     const handbook = await readHelpHandbook(realAppRoot);
 
+    expect(handbook.markdown).toContain("#### 语义状态与启用表范围状态");
     expect(handbook.markdown).toContain("#### 为什么要编写语义 YAML");
     expect(handbook.markdown).toContain("#### 推荐编写工作流");
     expect(handbook.markdown).toContain("#### grain、join 与 fanout");
     expect(handbook.markdown).toContain("#### KTX 官方延伸阅读");
     expect(handbook.markdown).toContain("#### 3.7.0 overlay 字段速查（编写辅导）");
+    expect(handbook.markdown).toContain("#### 配置作者 Skills");
+    expect(handbook.markdown).toContain("lucy-config-package");
     expect(handbook.markdown).toContain("### 6.10 `lucy_query` 报 No join path / 跨表失败");
     expect(handbook.markdown).toContain("### 6.11 fanout / Aggregate locality 拒绝查询");
     expect(handbook.markdown).toContain("direction: desc");
@@ -672,6 +695,7 @@ describe("Help handbook", () => {
     );
     expect(handbook.toc).toEqual(
       expect.arrayContaining([
+        { id: "semantic-status-and-enabled-status", level: 4, title: "语义状态与启用表范围状态" },
         { id: "semantic-authoring-workflow", level: 4, title: "推荐编写工作流" },
         { id: "semantic-grain-fanout", level: 4, title: "grain、join 与 fanout" },
         { id: "ktx-further-reading", level: 4, title: "KTX 官方延伸阅读" },
@@ -679,7 +703,8 @@ describe("Help handbook", () => {
           id: "yaml-overlay-field-guide",
           level: 3,
           title: "3.7.0 overlay 字段速查（编写辅导）"
-        }
+        },
+        { id: "config-author-skills", level: 4, title: "配置作者 Skills" }
       ])
     );
   });
@@ -697,18 +722,24 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("`Agent` 返回 `Access denied` 时先查哪里？");
     expect(handbook.markdown).toContain("`expires_at` 到期后 `token` 会自动失效吗？");
     expect(handbook.markdown).toContain(
+      "`/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」有什么关系？"
+    );
+    expect(handbook.markdown).toContain(
       "`/overview`「待处理事项」里「N 张表待补语义」怎么算？"
     );
     expect(handbook.markdown).toContain("连接概览上的「已发现表数」是什么？");
     expect(handbook.markdown).toContain("#### 连接概览指标说明");
     expect(handbook.markdown).toContain("已发现表数 / 服务器目录已发现表");
     expect(handbook.markdown).toContain("[系统概览待处理事项](#系统概览待处理事项)");
+    expect(handbook.markdown).toContain("可以用编码代理自动生成语义 / Wiki / Eval 吗？");
+    expect(handbook.markdown).toContain("[配置作者 Skills](#配置作者-skills)");
     expect(handbook.markdown).toContain("[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查)");
     expect(handbook.toc).toEqual(
       expect.arrayContaining([
         { id: "faq-quick-reference", level: 2, title: "0. 常见问题速查" },
         { id: "overview-action-required", level: 4, title: "系统概览待处理事项" },
-        { id: "connection-overview-metrics", level: 4, title: "连接概览指标说明" }
+        { id: "connection-overview-metrics", level: 4, title: "连接概览指标说明" },
+        { id: "semantic-status-and-enabled-status", level: 4, title: "语义状态与启用表范围状态" }
       ])
     );
   });

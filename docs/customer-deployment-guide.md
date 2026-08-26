@@ -32,13 +32,20 @@ Lucy 客户交付支持两条并行的形态：
 MCP: <LUCY_PUBLIC_MCP_URL>
 ```
 
-> 🔑 **客户部署必须显式设置 `LUCY_PUBLIC_MCP_URL`**（例如 `https://lucy.example.com/mcp`）。`LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` 只控制 Lucy 容器内 MCP Proxy 的监听地址，**不是**给 Agent 复制的 URL；WebUI 与生成的 `.mcp.json` / Codex TOML 始终读取 `LUCY_PUBLIC_MCP_URL` 字段。
-> - Docker Compose：`services.lucy.environment` 增加 `LUCY_PUBLIC_MCP_URL: "https://lucy.example.com/mcp"`。
-> - Kubernetes / Helm：`env:` 或 `values.yaml` 注入同名变量。
-> - 裸机 systemd / 裸进程：服务启动前 `export LUCY_PUBLIC_MCP_URL=...`。
-> - 本地开发 / 验收：可不设，WebUI 走 fallback `http://127.0.0.1:7879/mcp` 并在 `/onboarding` / token 页面提示。
+> 🔑 **客户部署必须显式设置 `LUCY_PUBLIC_MCP_URL`（Advertise）**。不要把 Listen（容器内 `LUCY_PROXY_PORT`）或未对齐的宿主端口抄给 Agent。
 >
-> 部署方式只决定怎么注入这个值，Lucy 内部只关心最终的 public MCP URL。
+> | 层 | 含义 | 示例 |
+> |---|---|---|
+> | Listen | Proxy 进程绑定 | `0.0.0.0:7879` |
+> | Publish | 宿主映射 / Ingress | `7879→7879` 或网关 |
+> | Advertise | WebUI / Agent 唯一事实源 | `LUCY_PUBLIC_MCP_URL` |
+>
+> - Docker Compose：`docker-compose.yml` 默认注入 `http://127.0.0.1:7879/mcp`（与默认宿主映射对齐）。上域名时在 `.env` 覆盖为 `https://lucy.example.com/mcp`。直连 remap `LUCY_PROXY_HOST_PORT` 时必须同步改 `LUCY_PUBLIC_MCP_URL`（见 `.env.example`）。
+> - Kubernetes / Helm：`env:` 或 `values.yaml` 注入同名变量（无 compose 默认时须手写对外 URL）。
+> - 裸机 systemd / 裸进程：服务启动前 `export LUCY_PUBLIC_MCP_URL=...`。
+> - 本地 npm 开发：可不设；WebUI 走 fallback `http://127.0.0.1:7879/mcp`，状态为 `fallback`，**不计** MCP 就绪，文案标明不可用于客户交付。
+>
+> 部署方式只决定怎么注入这个值，Lucy 内部只关心最终的 public MCP URL。应用**不会**根据浏览器 Host 或容器端口推断 Advertise。
 
 本次客户交付不是 BI 可视化工具，也不是完整企业数据平台替代品；它提供受治理的数据上下文编译与 MCP 访问运行时。
 

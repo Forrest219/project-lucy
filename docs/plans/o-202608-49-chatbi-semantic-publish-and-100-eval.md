@@ -142,7 +142,7 @@ export LUCY_DEMO_AGENT_TOKEN=lucy-demo-agent-token
 
 若 Cursor 当前版本不支持 `${env:…}` 展开，则使用 **用户级** `~/.cursor/mcp.json` 写 Bearer（不进仓库）。
 
-对齐文档：`docs/agent-integration-guide.md` §3 Generic MCP Config。
+对齐文档：`docs/agent-integration-guide.md` §3 通用客户端（MCP Config）。
 
 ### 3.2 前置条件（已部分完成）
 

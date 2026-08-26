@@ -38,14 +38,18 @@ const CLIENT_TABS: Array<{ id: ClientId; label: string; description: string }> =
   { id: "hermes", label: "Hermes", description: "MCP JSON 配置（兼容 OpenAI Hermes）" },
   { id: "claude-code", label: "Claude Code", description: ".mcp.json，可直接放入 ~/.claude.json" },
   { id: "codex", label: "Codex", description: "config.toml 片段，配合环境变量使用" },
-  { id: "generic", label: "Generic MCP", description: "通用 MCP over HTTP 客户端" }
+  { id: "generic", label: "通用客户端", description: "任意支持 MCP over HTTP 的客户端（标准 JSON 配置）" }
 ];
 
 function EndpointFallbackNotice({ endpointInfo }: { endpointInfo?: McpEndpointInfo }) {
   if (endpointInfo?.status !== "fallback") return null;
   return (
     <div className="pl-notice" data-testid="mcp-fallback-notice">
-      当前使用本地默认 <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span>。客户部署请配置 <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code>，避免 <span className="notranslate" translate="no">Agent</span> 复制到只能在本机访问的地址。
+      当前为本地开发 <span className="notranslate" translate="no">fallback</span>，不可用于客户交付。请配置{" "}
+      <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code> 为{" "}
+      <span className="notranslate" translate="no">Agent</span> 可达的对外{" "}
+      <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span>
+      （须与宿主发布端口或反向代理 URL 一致）。
     </div>
   );
 }

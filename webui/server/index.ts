@@ -12,7 +12,18 @@ import {
   listLiveSchemas,
   LiveCatalogConnectionNotFoundError
 } from "./live-catalog";
-import { addSchema, createConnection, readConnections, readProject, resolveProjectRoot, removeSchema } from "./project";
+import {
+  addSchema,
+  createConnection,
+  ktxYamlWithBlockConnections,
+  KtxYamlParseError,
+  probeConnection,
+  readConnections,
+  readProject,
+  resolveProjectRoot,
+  removeConnection,
+  removeSchema
+} from "./project";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -250,11 +261,24 @@ function enabledTablesBlock(indent: number, enabledTables: string[]): string[] {
   return [`${pad}enabled_tables:`, ...enabledTables.map((table) => `${pad}  - ${table}`)];
 }
 
+function assertProposedKtxYaml(proposedYaml: string): { proposedYaml: string } {
+  const check = parseDocument(proposedYaml);
+  if (check.errors.length > 0) {
+    throw new KtxYamlParseError(
+      `Failed to patch ktx.yaml enabled_tables: ${check.errors[0]?.message ?? "unknown error"}`
+    );
+  }
+  return { proposedYaml };
+}
+
 function patchConnectionEnabledTablesYaml(
-  yamlText: string,
+  rawYamlText: string,
   connId: string,
   newEnabledTables: string[]
 ): { proposedYaml: string } {
+  // Flow mappings cannot host a block `enabled_tables` list. Convert first so
+  // the line-level patch never emits illegal YAML.
+  const yamlText = ktxYamlWithBlockConnections(rawYamlText);
   const doc = parseDocument(yamlText, { keepSourceTokens: true });
   const connections = doc.get("connections", true);
   if (!connections || typeof connections !== "object") {
@@ -301,7 +325,7 @@ function patchConnectionEnabledTablesYaml(
       .find((line) => isStructuralYamlLine(line) && lineIndent(line) > connIndent);
     const fieldIndent = firstFieldLine ? lineIndent(firstFieldLine) : connIndent + 2;
     lines.splice(connEnd, 0, ...enabledTablesBlock(fieldIndent, newEnabledTables));
-    return { proposedYaml: lines.join("\n") };
+    return assertProposedKtxYaml(lines.join("\n"));
   }
 
   const fieldIndent = lineIndent(lines[enabledTablesLine]);
@@ -311,7 +335,7 @@ function patchConnectionEnabledTablesYaml(
     enabledTablesEnd - enabledTablesLine,
     ...enabledTablesBlock(fieldIndent, newEnabledTables)
   );
-  return { proposedYaml: lines.join("\n") };
+  return assertProposedKtxYaml(lines.join("\n"));
 }
 
 function makeDiff(oldText: string, newText: string): string {
@@ -983,6 +1007,52 @@ export function buildServer() {
     return { ok: true, data: result };
   });
 
+  app.post<{
+    Body: {
+      driver?: string;
+      engine?: string;
+      wireProtocol?: string;
+      readonly?: boolean;
+      host?: string;
+      port?: number;
+      database?: string;
+      username?: string;
+      password?: string;
+    };
+  }>("/api/connections/probe", async (request) => {
+    const body = request.body ?? {};
+    if (body.driver !== "mysql" && body.driver !== "postgres") {
+      throw enabledTableError("BAD_REQUEST", "driver must be mysql or postgres");
+    }
+    if (typeof body.host !== "string") {
+      throw enabledTableError("BAD_REQUEST", "host is required");
+    }
+    if (typeof body.port !== "number") {
+      throw enabledTableError("BAD_REQUEST", "port is required");
+    }
+    if (typeof body.database !== "string") {
+      throw enabledTableError("BAD_REQUEST", "database is required");
+    }
+    if (typeof body.username !== "string") {
+      throw enabledTableError("BAD_REQUEST", "username is required");
+    }
+    if (typeof body.password !== "string" || body.password.length === 0) {
+      throw enabledTableError("CONNECTION_PASSWORD_REQUIRED", "数据库密码为必填项");
+    }
+    const data = await probeConnection({
+      driver: body.driver,
+      ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
+      ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
+      readonly: body.readonly,
+      host: body.host,
+      port: body.port,
+      database: body.database,
+      username: body.username,
+      password: body.password
+    });
+    return { ok: true, data };
+  });
+
   app.get<{
     Params: { connId: string };
   }>("/api/connections/:connId/tables", async (request) => {
@@ -1084,6 +1154,30 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
     const result = await testConnection(projectRoot, connId);
+    return { ok: true, data: result };
+  });
+
+  app.post<{
+    Params: { connId: string };
+    Body: { dryRun?: boolean; deleteSecret?: boolean; deleteAssets?: boolean };
+  }>("/api/connections/:connId/remove", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const { connId } = request.params;
+    const body = request.body ?? {};
+    const dryRun = body.dryRun !== false;
+    const result = await removeConnection(projectRoot, connId, dryRun, {
+      recordConfigChange,
+      deleteSecret: body.deleteSecret,
+      deleteAssets: body.deleteAssets
+    });
+    if (!dryRun) {
+      writtenFiles.push({ filePath: "ktx.yaml" });
+      if ("deletedFiles" in result) {
+        for (const filePath of result.deletedFiles) {
+          writtenFiles.push({ filePath });
+        }
+      }
+    }
     return { ok: true, data: result };
   });
 

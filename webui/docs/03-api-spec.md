@@ -66,6 +66,7 @@ POST /api/connections                            # Spec 124 Phase A: create conn
 GET  /api/connections/:connId/tables
 GET  /api/connections/:connId/live-schemas       # Owner on-demand read-only DB catalog (Spec 107)
 PUT  /api/connections/:connId/enabled-tables     # default dryRun
+POST /api/connections/:connId/remove             # Spec 127: delete connection (dryRun:true default; optional deleteSecret/deleteAssets)
 POST /api/connections/:connId/schemas            # add schema metadata to existing connection
 POST /api/connections/:connId/schemas/remove     # remove schema from connection (dryRun:true default; prunes enabled_tables prefix; optional deleteManifest/deleteOverlays)
 POST /api/connections/:connId/test
@@ -197,7 +198,7 @@ POST /mcp                                      # MCP proxy, port 7879
 | `status` | 含义 | `url` | UI 表现 |
 |---|---|---|---|
 | `configured` | `LUCY_PUBLIC_MCP_URL` 存在且合法（http/https，可解析） | 配置值 | 正常展示，允许复制 endpoint 与 MCP config；可选带 `MCP_PATH_RECOMMENDED` diagnostic（pathname 不以 `/mcp` 结尾） |
-| `fallback` | 未设置 `LUCY_PUBLIC_MCP_URL` | `http://127.0.0.1:7879/mcp`（本地开发默认） | 展示本地默认，附带 `MISSING_PUBLIC_MCP_URL` diagnostic；onboarding 与 token 页面提示客户部署需要配置 `LUCY_PUBLIC_MCP_URL` |
+| `fallback` | 未设置 `LUCY_PUBLIC_MCP_URL` | `http://127.0.0.1:7879/mcp`（本地开发默认） | 展示本地默认，附带 `MISSING_PUBLIC_MCP_URL` diagnostic；允许复制供本地 npm 开发，但 **不计** MCP / 部署就绪；onboarding 与 token 页面标明不可用于客户交付 |
 | `invalid` | `LUCY_PUBLIC_MCP_URL` 存在但非法（非绝对 URL / 非 http/https） | `null` | 不生成可复制 MCP config；展示 diagnostic 提示修复 runtime 配置 |
 
 `diagnostics` 是诊断数组，元素结构为 `{ code, message }`。常见 code：
@@ -406,6 +407,8 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 `GET /api/connections` 返回 `ConnectionInfo[]`，字段见 `04-data-model.md`。
 
 `POST /api/connections`（Spec 124 Phase A）新建连接配置：默认 `dryRun:true`；确认写入时创建 `.ktx/secrets/<id>-password`（0600，拒绝覆盖），并在 `ktx.yaml` 追加 `connections.<id>`（`password` 仅 `file:` 引用）与 `setup.database_connection_ids`。写入后执行 `ktx connection test`；失败则回滚 yaml 与 secret。响应与审计 diff **永不包含明文密码**。通用 `fs-safe` 对 `.ktx/secrets/**` 仍 DENY；仅专用写通道可创建约定文件名。本 Phase **无 UI**。
+
+`POST /api/connections/:connId/remove`（Spec 127）删除连接配置：默认 `dryRun:true`；确认写入时删除 `connections.<id>` 并从 `setup.database_connection_ids` prune。可选 `deleteSecret`（仅约定 `.ktx/secrets/<id>-password`）与 `deleteAssets`（`semantic-layer/<id>/` 下 YAML）。**不**改 `access.yaml`、**不**删 Wiki、**不**触碰物理库。响应与审计 diff 脱敏。
 
 `GET /api/connections/:connId/live-schemas`（Spec 107）经 `ktx sql --json` 只读聚合账号可见 Schema 及 BASE TABLE 数量。Query `refresh=1` 跳过进程内 TTL（默认 10 分钟）。成功 / 连通失败均返回 HTTP 200 + `data.status`（与 connection test 同构，便于分连接 UI）；连接不存在返回 404。字段见 Spec 107 §6。
 

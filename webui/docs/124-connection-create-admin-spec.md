@@ -20,7 +20,7 @@
 | 上游 Spec / 设计 | `docs/design-db-connection.md`；Spec 26；ADR-05；ADR-11；Spec 107 / 117（Schema 抽屉模式） |
 | 状态 | Designed（未实现） |
 | 日期 | 2026-08-20 |
-| 范围 | WebUI 新建物理连接配置（host/port/user + 一次性密码落盘）；**不**做编辑凭据、**不**做删除连接、**不**引入 WebUI 登录鉴权 |
+| 范围 | WebUI 新建物理连接配置（host/port/user + 一次性密码落盘）；**不**做编辑凭据、**不**引入 WebUI 登录鉴权。删除连接见 Spec 127。 |
 
 ### Changelog
 
@@ -58,7 +58,7 @@
 |---|---|
 | 不引入 WebUI 登录 / SSO / Admin token 门禁 | Q1=B；单独立项 |
 | 不编辑已有连接的 host/port/user/password | 降低半成品与凭据漂移风险；本单仅 Create |
-| 不删除连接 | 需单独设计级联（Schema / Manifest / ACL / enabled_tables） |
+| 不删除连接 | 已由 Spec 127 交付；本单仍不包含删除 |
 | 不提供 secrets 列表 / 读取 / 轮换 UI | 只允许本单约定路径的一次性写入 |
 | 不自动 ingest / 不自动改 `access.yaml` ACL | 保持与 Spec 26 runbook 后半段人工闭环 |
 | 不支持列级 / 行级权限 | 既有边界不变 |
@@ -99,7 +99,7 @@ Protected DOM：`Connection ID`、driver/engine、host、`file:` 路径、`.ktx/
 | 列出连接 | WebUI | WebUI |
 | 新建连接（host/凭据） | 仅 `ktx.yaml` + secrets / `ktx setup` | **WebUI + 仍保留手工路径** |
 | 编辑连接凭据 | 手工 | 仍手工（本单不做） |
-| 删除连接 | 手工 | 仍手工（本单不做） |
+| 删除连接 | 手工 | **Spec 127**：WebUI + 仍保留手工路径 |
 | 添加 / 移除 Schema | WebUI | 不变 |
 | 启用表范围 | WebUI | 不变 |
 | 连通测试 | WebUI | 新建成功后强制测一次；卡内测试不变 |
@@ -369,5 +369,5 @@ safeRemoveSecretPasswordIfExists(projectRoot, connId): Promise<void> // 仅回�
 ## 12. 开放依赖（不阻塞本设计，阻塞生产加固）
 
 1. WebUI Admin 鉴权（登录或 mTLS / 反向代理鉴权）——Q1=B 明确外包。
-2. 编辑连接 / 轮换密码 / 删除连接——后续独立 Spec。
+2. 编辑连接 / 轮换密码——后续独立 Spec。删除连接见 Spec 127。
 3. 创建后一键同步 `access.yaml` role allow.connections——可选增强，默认仍手工。

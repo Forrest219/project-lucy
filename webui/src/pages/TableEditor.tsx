@@ -907,7 +907,8 @@ function ImportYamlDrawer({
             translate="no"
             data-testid="table-editor-import-guidance"
           >
-            本页可导入当前表的 Schema Manifest 表片段（含字段）或表级 semantic overlay（指标 / 分群 / 行粒度）。
+            本页可导入：表级 semantic overlay / standalone（含指标、分群或行粒度）只更新 overlay，不会改 Schema Manifest
+            的主键声明；仅结构向的 Schema Manifest 表片段（含字段、无指标/分群/行粒度）才会合并进 Manifest。
             完整 Schema Manifest 与多表 overlay 请到发布工作台使用「上传语义资产」。
           </p>
           <button className="pl-btn pl-btn--secondary" onClick={onOpenFile} type="button">
@@ -1975,20 +1976,21 @@ export function TableEditor() {
                     ) : null}
 
                     {activeSection === "segments" ? (
-                      <section className="pl-panel">
+                      <section className="pl-panel" data-testid="segments-panel">
                         <div className="flex items-center gap-2 mb-2">
                           <p className="pl-panel-title mb-0">分群</p>
                           <OverlayBadge source={source} />
                         </div>
                         <p className="pl-notice mb-3">
-                          分群是可复用的筛选条件，定义后可保证跨场景口径一致。修改将写入{" "}
+                          分群是命名好的筛选条件。问答与查询时可直接套用，保证跨场景口径一致。落盘位置见{" "}
                           <span className="notranslate" translate="no">
-                            semantic-layer/&lt;conn&gt;/&lt;table&gt;.yaml
+                            Overlay
                           </span>{" "}
-                          的分群段，与基础表定义分离。
+                          徽章提示。
                         </p>
                         <SegmentForm
                           segments={form.segments}
+                          tableName={source.model.table}
                           onChange={(segments) => setForm({ ...form, segments })}
                         />
                       </section>

@@ -152,7 +152,7 @@ git commit -m "feat(webui): explain role permissions when creating agents"
 Cover:
 
 - Generated token page shows plaintext token once.
-- Tabs or segmented controls exist for Hermes, Claude Code, Codex, and Generic MCP.
+- Tabs or segmented controls exist for Hermes, Claude Code, Codex, and 通用客户端.
 - Copy config writes a snippet containing `Bearer <generatedToken>`.
 - Closing returns to `/admin/agents/:userId`.
 

@@ -1,0 +1,16 @@
+---
+description: 缓存重建 Docker lucy 时同步最新代码，并清空运行时配置供从零测试
+alwaysApply: true
+---
+
+# Lucy Docker 缓存重建约定
+
+当用户要求「用缓存重建 docker 里的 lucy / 让最新代码生效」时，默认按以下流程执行，**不要用 `--no-cache`**（除非用户明确要求无缓存）：
+
+1. 缓存构建镜像（补 `BUILDPLATFORM=linux/arm64`，避免 macOS buildx 空平台 bug）：
+   `docker compose -f docker-compose.demo.yml build --build-arg BUILDPLATFORM=linux/arm64 lucy`
+2. **清空运行时配置（每次必做）**：停掉并删除 `lucy` 容器后，删除 named volume `project-lucy_lucy-demo-data`，让 entrypoint 从 demo template 重新 seed。不要保留旧 `ktx.yaml` / ACL / WebUI 状态。
+3. 重新拉起：`docker compose -f docker-compose.demo.yml up -d lucy`
+4. 校验：容器 `healthy`；host 与容器 `/app` 关键源码哈希一致；确认 `/data/lucy` 已重新播种（如存在 `.lucy-seed` 与 `ktx.yaml`）。
+
+默认**不** `down -v` 整个 stack（避免无故清掉 `demo-db`），只清 `lucy-demo-data`。若用户明确要求数据库也从零开始，再对 demo-db 做额外重置。

@@ -677,7 +677,13 @@ export async function writeSourcePatch(
   return preview;
 }
 
-function importedTableValue(importedYaml: string, table: string): unknown {
+type ParsedImportedTable = {
+  value: Record<string, unknown>;
+  /** True when the YAML root is a Schema Manifest (`tables:`), not a flat source/overlay. */
+  fromSchemaManifest: boolean;
+};
+
+function parseImportedTable(importedYaml: string, table: string): ParsedImportedTable {
   const doc = parseYaml(importedYaml, "imported table YAML");
   const json = doc.toJSON();
   const root = valueAsRecord(json);
@@ -686,15 +692,17 @@ function importedTableValue(importedYaml: string, table: string): unknown {
     if (!value) {
       throw new SourceNotFoundError(`Imported YAML does not contain table ${table}`);
     }
-    return value;
+    return { value: valueAsRecord(value), fromSchemaManifest: true };
   }
   if ("table" in root || "descriptions" in root || "columns" in root || "grain" in root) {
-    return root;
+    return { value: root, fromSchemaManifest: false };
   }
   throw new YamlParseError("Imported YAML must be a table YAML snippet or a schema YAML with tables");
 }
 
 const SCHEMA_IMPORT_KEYS = ["table", "descriptions", "columns", "joins"] as const;
+/** Manifest-only column keys that standalone/source YAML must not wipe on merge (P1). */
+const MANIFEST_ONLY_COLUMN_KEYS = ["pk", "nullable"] as const;
 
 function hasMeaningfulSchemaImport(imported: Record<string, unknown>): boolean {
   return (
@@ -702,6 +710,48 @@ function hasMeaningfulSchemaImport(imported: Record<string, unknown>): boolean {
     Object.prototype.hasOwnProperty.call(imported, "descriptions") ||
     Object.prototype.hasOwnProperty.call(imported, "joins")
   );
+}
+
+/** Flat source/standalone with business keys — table-page import must not patch Manifest (P0). */
+function isBusinessSourceImport(imported: Record<string, unknown>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(imported, "grain") ||
+    Object.prototype.hasOwnProperty.call(imported, "measures") ||
+    Object.prototype.hasOwnProperty.call(imported, "segments")
+  );
+}
+
+function mergeManifestColumns(existing: unknown, incoming: unknown): unknown {
+  if (!Array.isArray(incoming)) {
+    return incoming;
+  }
+  const existingByName = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(existing)) {
+    for (const column of existing) {
+      const record = valueAsRecord(column);
+      if (typeof record.name === "string" && record.name.length > 0) {
+        existingByName.set(record.name, record);
+      }
+    }
+  }
+  return incoming.map((column) => {
+    const record = valueAsRecord(column);
+    const name = record.name;
+    if (typeof name !== "string" || name.length === 0) {
+      return column;
+    }
+    const previous = existingByName.get(name);
+    if (!previous) {
+      return column;
+    }
+    const merged: Record<string, unknown> = { ...record };
+    for (const key of MANIFEST_ONLY_COLUMN_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(merged, key) && Object.prototype.hasOwnProperty.call(previous, key)) {
+        merged[key] = previous[key];
+      }
+    }
+    return merged;
+  });
 }
 
 export async function previewSourceYamlImport(
@@ -720,18 +770,26 @@ export async function previewSourceYamlImport(
     throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
   }
 
-  const importedValue = valueAsRecord(importedTableValue(yaml, table));
-  // Spec 114: never replace the whole schema table node with overlay leftovers
-  // ({ name, table } after stripping grain/measures/segments). Only merge when
-  // the import carries meaningful Schema Manifest fields.
+  const { value: importedValue, fromSchemaManifest } = parseImportedTable(yaml, table);
+  // Spec 114 + P0/P1 (2026-08-25):
+  // - Overlay-only: never touch Manifest.
+  // - Flat business source/standalone (grain|measures|segments): overlay only; do not
+  //   patch Manifest columns (avoids wiping pk after a normal Manifest-then-source upload).
+  // - Schema Manifest doc or structure-only snippet: merge into Manifest; P1 keeps
+  //   existing pk/nullable when the incoming column omits them.
   let proposedYaml = text;
   let diff = "";
-  if (hasMeaningfulSchemaImport(importedValue)) {
+  const shouldPatchManifest =
+    hasMeaningfulSchemaImport(importedValue) && (fromSchemaManifest || !isBusinessSourceImport(importedValue));
+  if (shouldPatchManifest) {
     const schemaPatch: Record<string, unknown> = {};
     for (const key of SCHEMA_IMPORT_KEYS) {
       if (Object.prototype.hasOwnProperty.call(importedValue, key)) {
         schemaPatch[key] = importedValue[key];
       }
+    }
+    if (Object.prototype.hasOwnProperty.call(schemaPatch, "columns")) {
+      schemaPatch.columns = mergeManifestColumns(existingTable.columns, schemaPatch.columns);
     }
     const merged: Record<string, unknown> = { ...existingTable, ...schemaPatch };
     delete merged.name;

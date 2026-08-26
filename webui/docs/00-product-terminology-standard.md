@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -131,6 +131,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 |---|---|---|---|---|
 | Connection | 连接 | 数据库连接 | 链接、联接 | 数据库连接配置对象 |
 | Create Connection | 新建连接 | — | 新建链接、添加联接、创建数据源（作主按钮） | 在 WebUI 创建 `ktx.yaml` 连接配置（Spec 124）；持久密码仅为 `file:` 引用 |
+| Delete Connection | 删除连接 | — | 删除链接、删除联接、删除数据库、删库 | 从 `ktx.yaml` 卸载整条连接配置；不触碰物理库（Spec 127） |
 | Connection ID | 连接 ID | — | 连接名（作主标签）、Connection Name（作主标签） | `connections.<id>` 键 |
 | Connection Password | 数据库密码 | — | 密钥、Token（作连接表单主标签） | 仅新建表单一次性输入；写入后不可回显（Spec 124） |
 | Password File Reference | 密码文件引用 | — | 明文密码（配置态主标签） | `ktx.yaml` 中 `password: file:…` |
@@ -281,6 +282,11 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 |---|---|---|---|
 | Connection Overview | 连接概览 | 连接总览混用 | 数据库接入主工作台 |
 | Create Connection | 新建连接 | 新建链接、添加联接、创建数据源（作主按钮） | `/connections` 创建连接配置；非「添加 Schema」（Spec 124） |
+| Delete Connection | 删除连接 | 删除链接、删除联接、删除数据库、删库 | 从 `ktx.yaml` 卸载整条连接配置；不触碰物理库（Spec 127） |
+| Connection Delete Impact | 删除影响 | — | dryRun 摘要：Schema、已启用表、secret、YAML 资产、Role、Wiki（Spec 127） |
+| Confirm Connection ID | 输入连接 ID 以确认 | — | 删除连接确认前须原样输入目标连接 ID（Spec 127） |
+| Delete Password File (optional) | 同时删除密码文件 | 默认级联删除密钥 | 仅约定 `.ktx/secrets/<connId>-password`（Spec 127） |
+| Delete Connection YAML Assets (optional) | 同时删除本地 YAML 资产 | 默认级联删除 | `semantic-layer/<connId>/` 下 Manifest / overlay（Spec 127） |
 | Connection ID | 连接 ID | 连接名（作主标签） | `connections.<id>` 键；受标识符规则约束 |
 | Connection Password | 数据库密码 | 密钥、Token（作主标签） | 新建表单一次性输入；写入 `.ktx/secrets/<id>-password` 后不可回显 |
 | Password File Reference | 密码文件引用 | 明文密码（配置态） | `password: file:…`；API 只暴露 `passwordSource` |

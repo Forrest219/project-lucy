@@ -16,6 +16,7 @@ import type {
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { TagInput } from "../../components/TagInput";
+import { CheckboxCandidatePicker } from "../../components/CheckboxCandidatePicker";
 import { formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 
 type Tab = "identity" | "permissions" | "effective" | "usage" | "diff";
@@ -874,42 +875,32 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 </p>
               ) : null}
               {!toolsFallback && showToolPicker ? (
-                <div
-                  className="grid max-h-56 gap-1 overflow-auto rounded-md border border-border-default bg-bg-base p-3 notranslate"
-                  role="group"
-                  aria-label="允许的 MCP 工具"
-                  translate="no"
-                >
-                  {mcpTools.map((tool) => (
-                    <label
-                      key={tool.name}
-                      className={`flex items-start gap-2 text-sm ${tool.globalDenied ? "opacity-60" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-0.5"
-                        checked={form.tools.includes(tool.name)}
-                        disabled={isReadOnlyTemplate || tool.globalDenied}
-                        onChange={(e) =>
-                          updateForm({
-                            ...form,
-                            tools: toggleInList(form.tools, tool.name, e.target.checked)
-                          })
-                        }
-                      />
-                      <span>
-                        <span className="notranslate font-mono text-xs" translate="no">
-                          {tool.name}
-                        </span>
-                        {tool.globalDenied ? (
-                          <span className="ml-2 text-xs text-danger">全局禁止</span>
-                        ) : null}
-                        {tool.description ? (
-                          <span className="mt-0.5 block text-xs text-fg-muted">{tool.description}</span>
-                        ) : null}
-                      </span>
-                    </label>
-                  ))}
+                <div className="notranslate" translate="no">
+                  <CheckboxCandidatePicker
+                    items={mcpTools.map((tool) => ({
+                      id: tool.name,
+                      disabled: tool.globalDenied,
+                      description: tool.description,
+                      filterText: tool.description,
+                      label: (
+                        <>
+                          <span className="notranslate font-mono text-xs" translate="no">
+                            {tool.name}
+                          </span>
+                          {tool.globalDenied ? (
+                            <span className="ml-2 text-xs text-danger">全局禁止</span>
+                          ) : null}
+                        </>
+                      )
+                    }))}
+                    value={form.tools}
+                    onChange={(tools) => updateForm({ ...form, tools })}
+                    ariaLabel="允许的 MCP 工具"
+                    testIdPrefix="role-tools"
+                    disabled={isReadOnlyTemplate}
+                    filterPlaceholder="筛选工具名…"
+                    listClassName="grid max-h-72 gap-1 overflow-auto rounded-md border border-border-default bg-bg-base p-3 notranslate"
+                  />
                 </div>
               ) : null}
               <div id="role-tools-input">
@@ -1110,32 +1101,28 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                               </p>
                             ) : null}
                             {!tablesFallback && tableCandidates.length > 0 ? (
-                              <div
-                                className="grid max-h-40 gap-1 overflow-auto rounded-md border border-border-subtle p-2"
-                                role="group"
-                                aria-label={`表范围 ${idx + 1} 指定表名`}
-                              >
-                                {tableCandidates.map((tableName) => (
-                                  <label key={tableName} className="flex items-center gap-2 text-xs">
-                                    <input
-                                      type="checkbox"
-                                      checked={row.names.includes(tableName)}
-                                      disabled={isReadOnlyTemplate}
-                                      onChange={(e) => {
-                                        const next = [...form.selectors];
-                                        next[idx] = {
-                                          ...row,
-                                          names: toggleInList(row.names, tableName, e.target.checked)
-                                        };
-                                        updateForm({ ...form, selectors: next });
-                                      }}
-                                    />
+                              <CheckboxCandidatePicker
+                                items={tableCandidates.map((tableName) => ({
+                                  id: tableName,
+                                  label: (
                                     <span className="notranslate font-mono" translate="no">
                                       {tableName}
                                     </span>
-                                  </label>
-                                ))}
-                              </div>
+                                  )
+                                }))}
+                                value={row.names}
+                                onChange={(names) => {
+                                  const next = [...form.selectors];
+                                  next[idx] = { ...row, names };
+                                  updateForm({ ...form, selectors: next });
+                                }}
+                                ariaLabel={`表范围 ${idx + 1} 指定表名`}
+                                testIdPrefix={`role-table-names-${idx + 1}`}
+                                disabled={isReadOnlyTemplate}
+                                filterPlaceholder="筛选表名…"
+                                listClassName="grid max-h-72 gap-1 overflow-auto rounded-md border border-border-subtle p-2"
+                                itemClassName="flex items-center gap-2 text-xs"
+                              />
                             ) : null}
                             <TagInput
                               value={row.names}

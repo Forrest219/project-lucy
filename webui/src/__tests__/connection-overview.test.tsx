@@ -753,6 +753,27 @@ describe("ConnectionOverview", () => {
     expect(screen.queryByRole("button", { name: "重新加载资产" })).not.toBeInTheDocument();
   });
 
+  it("renders 删除连接 on each connection card footer", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")]
+    });
+    renderOverview();
+
+    const button = await screen.findByTestId("delete-connection-mysql-aliyun");
+    expect(button).toHaveTextContent("删除连接");
+    expect(button).toHaveClass("pl-btn--secondary");
+    expect(button).not.toHaveClass("pl-btn--ghost");
+    expect(button).not.toHaveClass("pl-btn--primary");
+  });
+
   it("renders 移除 Schema button for each schema row in the mysql-aliyun card", async () => {
     stubOverviewFetch({
       connections: [
@@ -1277,7 +1298,7 @@ describe("ConnectionOverview", () => {
     expect(within(footerActions).getByRole("button", { name: "重新拉取库内目录" })).toBeInTheDocument();
     expect(
       within(footerActions).getAllByRole("button").map((button) => button.textContent?.trim())
-    ).toEqual(["+ 添加 Schema", "重新拉取库内目录", "同步配置变更"]);
+    ).toEqual(["+ 添加 Schema", "重新拉取库内目录", "同步配置变更", "删除连接"]);
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toHaveClass("pl-btn--secondary");
     const liveRefreshButton = within(footerActions).getByRole("button", { name: "重新拉取库内目录" });
     expect(liveRefreshButton).toHaveClass("pl-btn--secondary");
@@ -1285,6 +1306,10 @@ describe("ConnectionOverview", () => {
     expect(liveRefreshButton).not.toHaveClass("pl-btn--primary");
     const refreshButton = within(footerActions).getByRole("button", { name: "同步配置变更" });
     expect(refreshButton).toHaveClass("pl-btn--secondary");
+    const deleteButton = within(footerActions).getByRole("button", { name: "删除连接" });
+    expect(deleteButton).toHaveClass("pl-btn--secondary");
+    expect(deleteButton).not.toHaveClass("pl-btn--ghost");
+    expect(deleteButton).not.toHaveClass("pl-btn--primary");
     expect(within(footerActions).queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "上传 YAML" })).not.toBeInTheDocument();
     expect(within(footerActions).queryByRole("button", { name: "测试连接" })).not.toBeInTheDocument();

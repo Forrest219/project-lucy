@@ -1,5 +1,7 @@
 // Mirror of server CONNECTION_ID_PATTERN in `server/project.ts`. Keep in sync.
 export const CONNECTION_ID_PATTERN = "^[a-z][a-z0-9_-]{1,63}$";
+export const CONNECTION_ID_RULE_HINT =
+  "小写字母开头，仅小写字母、数字、下划线和短横线，2–64 个字符";
 
 const CONNECTION_ID_RE = new RegExp(CONNECTION_ID_PATTERN);
 
@@ -19,7 +21,7 @@ export function validateConnectionId(
   if (!CONNECTION_ID_RE.test(trimmed)) {
     return {
       code: "pattern",
-      message: `连接 ID 不符合命名规则（${CONNECTION_ID_PATTERN}）`
+      message: "连接 ID 不符合命名规则"
     };
   }
   const existing = new Set(

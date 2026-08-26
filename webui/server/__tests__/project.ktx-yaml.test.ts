@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { writeKtxYaml } from "../project";
+import { ktxYamlWithBlockConnections, writeKtxYaml } from "../project";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const exampleYamlPath = path.join(repoRoot, "ktx.yaml.example");
@@ -111,5 +111,26 @@ describe("writeKtxYaml round-trip", () => {
     await expect(
       writeKtxYaml(root, () => undefined, { dryRun: true })
     ).rejects.toMatchObject({ code: "KTX_YAML_PARSE_ERROR" });
+  });
+
+  it("rewrites flow connection mappings to block style", () => {
+    const flow = `connections:
+  {
+    demo-mysql:
+      {
+        driver: mysql,
+        enabled_tables: []
+      }
+  }
+`;
+    const rewritten = ktxYamlWithBlockConnections(flow);
+    expect(rewritten).toContain("  demo-mysql:\n    driver: mysql");
+    expect(rewritten).not.toMatch(/connections:\s*\n\s*\{/);
+    expect(rewritten).toContain("enabled_tables: []");
+  });
+
+  it("keeps already-block ktx.yaml byte-identical", async () => {
+    const original = await readFile(exampleYamlPath, "utf8");
+    expect(ktxYamlWithBlockConnections(original)).toBe(original);
   });
 });

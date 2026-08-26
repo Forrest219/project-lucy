@@ -8,9 +8,9 @@ import {
   ConnectionAlreadyExistsError,
   ConnectionIdInvalidError,
   ConnectionPasswordRequiredError,
-  ConnectionTestFailedError,
   createConnection,
-  connectionSecretRelPath
+  connectionSecretRelPath,
+  probeConnection
 } from "../project";
 import type { ConnectionTestResult } from "../ktx";
 
@@ -159,31 +159,35 @@ describe("createConnection (Spec 124 Phase A)", () => {
     expect(parsed.setup.database_connection_ids).toEqual(["mysql-aliyun", "demo-mysql"]);
   });
 
-  it("rolls back secret and yaml when connection test fails", async () => {
-    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+  it("keeps secret and yaml when connection test fails", async () => {
     const testFn = vi.fn(async () => failTest("bad-mysql"));
+    const result = await createConnection(
+      projectRoot,
+      {
+        id: "bad-mysql",
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro",
+        password: "wrong-password"
+      },
+      false,
+      { testConnectionFn: testFn }
+    );
+
+    expect(result.written).toBe(true);
+    expect(result.test.status).toBe("error");
+    expect(result.test.message).toContain("Access denied");
+    expect(testFn).toHaveBeenCalledOnce();
+    expect(JSON.stringify(result)).not.toContain("wrong-password");
 
     await expect(
-      createConnection(
-        projectRoot,
-        {
-          id: "bad-mysql",
-          driver: "mysql",
-          host: "db.internal",
-          port: 3306,
-          database: "analytics",
-          username: "lucy_ro",
-          password: "wrong-password"
-        },
-        false,
-        { testConnectionFn: testFn }
-      )
-    ).rejects.toBeInstanceOf(ConnectionTestFailedError);
-
-    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
-    await expect(
-      access(path.join(projectRoot, ".ktx", "secrets", "bad-mysql-password"))
-    ).rejects.toMatchObject({ code: "ENOENT" });
+      readFile(path.join(projectRoot, ".ktx", "secrets", "bad-mysql-password"), "utf8")
+    ).resolves.toBe("wrong-password");
+    const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yamlText).toContain("bad-mysql:");
+    expect(yamlText).not.toContain("wrong-password");
   });
 
   it("rejects duplicate connection id before writing secret", async () => {
@@ -277,5 +281,85 @@ describe("createConnection (Spec 124 Phase A)", () => {
     await expect(
       readFile(path.join(projectRoot, ".ktx", "secrets", "demo-mysql-password"), "utf8")
     ).resolves.toBe("preexisting");
+  });
+
+  it("writes block-style YAML when starting from empty flow connections: {}", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      "connections: {}\nsetup:\n  database_connection_ids: []\n",
+      "utf8"
+    );
+    await createConnection(
+      projectRoot,
+      {
+        id: "demo-mysql",
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro",
+        password: "s3cret-value",
+        schemas: ["analytics"]
+      },
+      false,
+      { testConnectionFn: vi.fn(async () => okTest("demo-mysql")) }
+    );
+
+    const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yamlText).not.toMatch(/connections:\s*\n\s*\{/);
+    expect(yamlText).toContain("  demo-mysql:\n    driver: mysql");
+    expect(yamlText).toContain("    enabled_tables: []");
+    expect(() => parse(yamlText)).not.toThrow();
+    const parsed = parse(yamlText) as {
+      connections: Record<string, { schemas: string[] }>;
+    };
+    expect(parsed.connections["demo-mysql"].schemas).toEqual(["analytics"]);
+  });
+});
+
+describe("probeConnection", () => {
+  const probeInput = {
+    driver: "mysql" as const,
+    host: "db.internal",
+    port: 3306,
+    database: "analytics",
+    username: "lucy_ro",
+    password: "s3cret"
+  };
+
+  it("runs ktx against a temp project and does not write the real project", async () => {
+    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    let seenRoot = "";
+    const result = await probeConnection(probeInput, {
+      testConnectionFn: async (root, connId) => {
+        seenRoot = root;
+        expect(connId).toBe("probe");
+        expect(root).not.toBe(projectRoot);
+        const yaml = await readFile(path.join(root, "ktx.yaml"), "utf8");
+        expect(yaml).toContain("host: db.internal");
+        expect(yaml).not.toContain("s3cret");
+        expect(await readFile(path.join(root, ".ktx", "secrets", "probe-password"), "utf8")).toBe(
+          "s3cret"
+        );
+        return okTest(connId);
+      }
+    });
+
+    expect(result).toMatchObject({ status: "ok", message: "连接成功" });
+    expect(JSON.stringify(result)).not.toContain("s3cret");
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "probe-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(access(seenRoot)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("returns status error without throwing when the probe test fails", async () => {
+    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    const result = await probeConnection(probeInput, {
+      testConnectionFn: async (_root, connId) => failTest(connId)
+    });
+    expect(result).toMatchObject({ status: "error", message: "Access denied" });
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
   });
 });

@@ -38,6 +38,10 @@ services:
       LUCY_PROXY_PORT: "7879"
       LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
       LUCY_PROXY_UPSTREAM_PORT: "7878"
+      # Advertise URL for Agent / WebUI copy. Default matches host publish port
+      # below (57881). If you override LUCY_DEMO_PROXY_HOST_PORT, also set
+      # LUCY_PUBLIC_MCP_URL to the same host:port (or your reverse-proxy URL).
+      LUCY_PUBLIC_MCP_URL: "${LUCY_PUBLIC_MCP_URL:-http://127.0.0.1:57881/mcp}"
       POSTHOG_DISABLED: "1"
     ports:
       - "${LUCY_DEMO_WEBUI_HOST_PORT:-55176}:5174"

@@ -5,6 +5,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Cursor skill packaging artifacts (keep skill dirs; ignore zip exports)
+.cursor/skills/*.zip
+
 # KTX runtime state (daemon pid, ports, logs, transient config)
 ktx.yaml
 !customer-config.example/ktx.yaml

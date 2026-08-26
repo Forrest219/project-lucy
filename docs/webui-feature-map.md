@@ -76,6 +76,8 @@ Eval 管理已经从 CLI-only 发展为 WebUI 模块，但完整 LLM/agent eval 
 | MCP config 复制入口 | 已实现 | 降低 Agent 接入配置错误 | `/onboarding` |
 | 连接概览 | 已实现 | 查看当前项目连接和安全剥离后的配置 | `/connections`, `GET /api/connections` |
 | 给已有连接添加 schema | ✅ M6 已实现 | 在 webui 内给连接加 schema(database)，不接管新建连接 | `POST /api/connections/:connId/schemas`，详见 [`docs/design-schema-onboarding.md`](design-schema-onboarding.md) |
+| 新建连接 | Spec 124 已实现 | 在 WebUI 创建 `ktx.yaml` 连接配置与约定密码文件 | `POST /api/connections`，详见 [`webui/docs/124-connection-create-admin-spec.md`](../webui/docs/124-connection-create-admin-spec.md) |
+| 删除连接 | Spec 127 已实现 | 从 `ktx.yaml` 卸载连接；可选清约定 secret 与本地 YAML 资产 | `POST /api/connections/:connId/remove`，详见 [`webui/docs/127-connection-delete-spec.md`](../webui/docs/127-connection-delete-spec.md) |
 | 表白名单配置 | 已实现 | 控制连接启用表范围 | `PUT /api/connections/:connId/enabled-tables` |
 | 连接测试与 ingest | 已实现 | 验证 DB 可用并触发 schema 扫描 | `POST /api/connections/:connId/test`, `POST /api/connections/:connId/ingest` |
 | Lucy MCP Proxy | 已实现 | Bearer token、ACL、audit、tool forwarding | `POST /mcp` on 7879 |

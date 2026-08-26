@@ -229,7 +229,7 @@ describe("Onboarding", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Bearer <LUCY_AGENT_TOKEN>"));
   });
 
-  it("surfaces the local fallback URL without deployment guidance when LUCY_PUBLIC_MCP_URL is unset", async () => {
+  it("surfaces the local fallback URL as not deployment-ready when LUCY_PUBLIC_MCP_URL is unset", async () => {
     renderPage({
       mcpEndpoint: {
         url: "http://127.0.0.1:7879/mcp",
@@ -246,7 +246,12 @@ describe("Onboarding", () => {
     });
 
     expect(await screen.findByText("http://127.0.0.1:7879/mcp")).toBeInTheDocument();
-    expect(screen.queryByText(/当前使用本地默认|本地默认 MCP Endpoint|客户部署请配置/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("mcp-fallback-notice")).toHaveTextContent(/不可用于客户交付/);
+    expect(screen.getByTestId("mcp-fallback-notice")).toHaveTextContent("LUCY_PUBLIC_MCP_URL");
+    // Fallback is copyable for local npm-run-dev, but MCP is not "ready".
+    expect(screen.getByRole("button", { name: "复制 MCP 配置" })).not.toBeDisabled();
+    expect(screen.getByTestId("ops-service-health-critical")).toBeInTheDocument();
+    expect(screen.getByText(/Lucy MCP 未就绪|Endpoint 配置/)).toBeInTheDocument();
   });
 
   it("disables the MCP copy button when the runtime endpoint is invalid", async () => {

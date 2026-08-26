@@ -123,7 +123,11 @@ function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
   if (endpointInfo.status === "fallback") {
     return (
       <div className="pl-notice" data-testid="mcp-fallback-notice">
-        当前使用本地默认 <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span>。客户部署请配置 <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code>，避免 <span className="notranslate" translate="no">Agent</span> 复制到只能在本机访问的地址。
+        当前为本地开发 <span className="notranslate" translate="no">fallback</span>，不可用于客户交付。请配置{" "}
+        <code className="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code> 为{" "}
+        <span className="notranslate" translate="no">Agent</span> 可达的对外{" "}
+        <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span>
+        （须与宿主发布端口或反向代理 URL 一致）。本地开发仍可复制下方配置，但部署就绪不计完成。
       </div>
     );
   }
@@ -637,7 +641,9 @@ export function Onboarding() {
   const tableScopeReady = enabledTables > 0;
   const semanticReady = coverageTotal > 0 && doneSources > 0;
   const validationReady = changedFiles.length === 0;
-  const mcpEndpointReady = endpointInfo?.status !== "invalid";
+  // Only a configured LUCY_PUBLIC_MCP_URL counts as MCP-ready for deployment.
+  // Local fallback remains copyable for npm-run-dev, but is not "ready".
+  const mcpEndpointReady = endpointInfo?.status === "configured";
   const mcpAccessReady = !mcpNotReadyReason && mcpEndpointReady;
   const semanticPendingCount = coverageTotal - doneSources;
   const semanticTone: HealthTone =
@@ -1098,7 +1104,9 @@ export function Onboarding() {
               打开 MCP 调试台
             </Link>
           </div>
-          {endpointInfo?.status === "invalid" ? fallbackNotice(endpointInfo) : null}
+          {endpointInfo?.status === "invalid" || endpointInfo?.status === "fallback"
+            ? fallbackNotice(endpointInfo)
+            : null}
         </div>
       </section>
 

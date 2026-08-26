@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy E2E SOP 指引 |
 | 文档类型 | Checklist / Runbook |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-08-08 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-08-08；v1.2 2026-08-25 |
 | 撰写人 | Cursor Agent |
 | 委托人 | zhangxingchen |
 | 基于材料 | `docs/test-layers-and-release-gates.md`；`docs/qa/lucy-webui-e2e-test-suite.md`；KSC Financial 主题接入实跑；Spider2-lite Pilot（`evals/spider2_lite_sqlite/`）；`docs/DEVELOPMENT.md` |
@@ -45,6 +45,7 @@ New terms:
 | `E2E-WEBUI` | [`suite-webui-browser.md`](suite-webui-browser.md) | WebUI 交互、术语、selector、主链路点击 | Platform（浏览器） | 改导航 / 按钮 / 连接 / 发布页文案 |
 | `E2E-ONBOARD-EVAL` | [`suite-semantic-onboard-mcp-eval.md`](suite-semantic-onboard-mcp-eval.md) | 上传包接入后 MCP 可答，且对得上 gold | Platform + Business eval | 新 domain / 主题首跑或复跑 |
 | `E2E-AGENT` | [`suite-agent-mcp.md`](suite-agent-mcp.md) | Agent + Lucy MCP 最终答案与证据包 | Business eval / Agent | release / SOW 可信门禁、`e2e:agent*` |
+| `E2E-USER-JOURNEY` | [`suite-user-journey.md`](suite-user-journey.md) | 按真实用户逐步操作（WebUI 点击 / MCP 问数）；Agent 可执行剧本 | Platform + 人工/Agent 走查 | 要模拟用户操作、交付 Agent 自动化回归 |
 
 配套（非独立测试集，被分表引用）：
 
@@ -63,6 +64,7 @@ flowchart TB
   guide --> webui[E2E-WEBUI]
   guide --> onboard[E2E-ONBOARD-EVAL]
   guide --> agent[E2E-AGENT]
+  guide --> journey[E2E-USER-JOURNEY]
   layers[test-layers_and_gates]
   guide -.-> layers
   webui --> selector[selector-contract]
@@ -81,6 +83,7 @@ flowchart TB
 | StarRocks `sandbox.s2_*` / Spider2-lite Pilot 接入与 MCP vs gold | `E2E-ONBOARD-EVAL`（实例见分表 §14） |
 | 要证明真实 Agent 端到端答案 + 证据包 / SOW | `E2E-AGENT` |
 | Spider2-lite Pilot **Agent 抽样**（`e2e:spider2-lite:sample`） | `E2E-AGENT`（可选扩展，见分表 §5） |
+| 要按真实用户逐步点 WebUI / 用 MCP 问数，并交给 Agent 复跑 | `E2E-USER-JOURNEY` |
 | 只要 CI smoke / Docker 健康 | 不要用本 E2E 指引；直接看 `test-layers` 的 `smoke:p0*` |
 
 可组合：例如主题首跑先 `E2E-ONBOARD-EVAL` 冒烟，release 再跑 `E2E-AGENT`。Spider2 Pilot 默认组合：**ONBOARD-EVAL（含 G-cat/G-rt/datapath）→ 可选 AGENT sample**；不进客户 headless / SOW Trust 硬门禁。

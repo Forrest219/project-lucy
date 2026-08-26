@@ -1,8 +1,9 @@
-import { access, readFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
-import { isMap, isScalar, isSeq, parse, parseDocument, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
+import { isMap, isScalar, isSeq, parse, parseDocument, stringify, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
 import { execFile } from "node:child_process";
-import { testConnection } from "./ktx";
+import { KtxCliError, testConnection } from "./ktx";
 import {
   ForbiddenPathError,
   safeRemove,
@@ -17,6 +18,9 @@ import type {
   ConnectionInfo,
   CreateConnectionPreview,
   CreateConnectionResult,
+  DeleteConnectionPreview,
+  DeleteConnectionResult,
+  ProbeConnectionResult,
   ProjectInfo,
   RemoveSchemaPreview,
   RemoveSchemaResult
@@ -39,6 +43,64 @@ export class KtxYamlParseError extends Error {
     super(message);
     this.name = "KtxYamlParseError";
   }
+}
+
+/**
+ * Flow mappings (`{ key: value }`) cannot contain block lists. Lucy writers
+ * must keep `connections.*` as block maps so later `enabled_tables` patches
+ * stay valid YAML. Empty `connections: {}` is a flow map; children inherit it.
+ */
+function forceBlockYamlMaps(node: unknown): void {
+  if (isMap(node)) {
+    node.flow = false;
+    for (const pair of node.items) {
+      forceBlockYamlMaps(pair.value);
+    }
+    return;
+  }
+  if (isSeq(node)) {
+    for (const item of node.items) {
+      forceBlockYamlMaps(item);
+    }
+  }
+}
+
+function assertKtxYamlParses(text: string, context: string): void {
+  const check = parseDocument(text);
+  if (check.errors.length > 0) {
+    throw new KtxYamlParseError(`${context}: ${check.errors[0]?.message ?? "unknown error"}`);
+  }
+}
+
+function connectionsHaveFlowMap(node: unknown): boolean {
+  if (isMap(node)) {
+    if (node.flow) return true;
+    return node.items.some((pair) => connectionsHaveFlowMap(pair.value));
+  }
+  if (isSeq(node)) {
+    return node.items.some((item) => connectionsHaveFlowMap(item));
+  }
+  return false;
+}
+
+/**
+ * Convert flow-style `connections` mappings to block style.
+ * Already-block files are returned unchanged so enabled_tables line patches
+ * stay byte-local.
+ */
+export function ktxYamlWithBlockConnections(yamlText: string): string {
+  const doc = parseDocument(yamlText, { keepSourceTokens: true });
+  if (doc.errors.length > 0) {
+    throw new KtxYamlParseError(`Failed to parse ktx.yaml: ${doc.errors[0]?.message ?? "unknown error"}`);
+  }
+  const conns = doc.get("connections", true);
+  if (!isMap(conns) || !connectionsHaveFlowMap(conns)) {
+    return yamlText;
+  }
+  forceBlockYamlMaps(conns);
+  const serialized = doc.toString();
+  assertKtxYamlParses(serialized, "Failed to serialize ktx.yaml");
+  return serialized;
 }
 
 export class ProjectError extends Error {
@@ -147,6 +209,17 @@ export class ConnectionCreateValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ConnectionCreateValidationError";
+  }
+}
+
+/** Spec 127: deleteSecret requested but password is not the conventional file. */
+export class ConnectionDeleteSecretNotEligibleError extends Error {
+  code = "CONNECTION_DELETE_SECRET_NOT_ELIGIBLE";
+  statusCode = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ConnectionDeleteSecretNotEligibleError";
   }
 }
 
@@ -341,7 +414,10 @@ export async function writeKtxYaml(
     throw new KtxYamlParseError(`Failed to parse ktx.yaml: ${first?.message ?? "unknown error"}`);
   }
   mutator(doc);
+  const conns = doc.get("connections", true);
+  if (isMap(conns)) forceBlockYamlMaps(conns);
   const serialized = doc.toString();
+  assertKtxYamlParses(serialized, "Failed to serialize ktx.yaml");
   if (!opts.dryRun) {
     await safeWrite(root, "ktx.yaml", serialized);
   }
@@ -830,6 +906,289 @@ export async function removeSchema(
   };
 }
 
+// ─── removeConnection (Spec 127) ──────────────────────────────────────────────
+
+export type RemoveConnectionOptions = {
+  recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
+  listWikiFn?: typeof import("./wiki").listWiki;
+  deleteSecret?: boolean;
+  deleteAssets?: boolean;
+};
+
+function yamlScalarString(item: unknown): string | null {
+  if (typeof item === "string") return item;
+  if (isScalar(item) && typeof item.value === "string") return item.value;
+  return null;
+}
+
+function locateConnectionMap(
+  doc: ReturnType<typeof parseDocument>,
+  connId: string
+): import("yaml").YAMLMap {
+  const conns = doc.get("connections", true);
+  if (!isMap(conns)) {
+    throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+  }
+  const conn = conns.get(connId, true);
+  if (!isMap(conn)) {
+    throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+  }
+  return conn;
+}
+
+function conventionalSecretRelPathIfEligible(
+  root: string,
+  connId: string,
+  passwordValue: string | null
+): string | null {
+  if (!passwordValue || !passwordValue.startsWith("file:")) return null;
+  const expectedRel = connectionSecretRelPath(connId);
+  const expectedAbs = path.resolve(path.join(root, expectedRel));
+  const referencedAbs = path.resolve(passwordValue.slice("file:".length));
+  return referencedAbs === expectedAbs ? expectedRel : null;
+}
+
+async function listConnectionYamlAssets(root: string, connId: string): Promise<string[]> {
+  if (!isSafePathSegment(connId)) return [];
+  const relDir = `semantic-layer/${connId}`;
+  return walkYamlFiles(path.join(root, relDir), relDir);
+}
+
+async function walkYamlFiles(absDir: string, relDir: string): Promise<string[]> {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await readdir(absDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const out: string[] = [];
+  for (const entry of entries) {
+    if (entry.name === "." || entry.name === ".." || entry.name.includes("..") || entry.name.includes("/") || entry.name.includes("\\")) {
+      continue;
+    }
+    const relPath = `${relDir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (!isSafePathSegment(entry.name)) continue;
+      out.push(...(await walkYamlFiles(path.join(absDir, entry.name), relPath)));
+      continue;
+    }
+    if (!entry.isFile() || !/\.ya?ml$/i.test(entry.name)) continue;
+    out.push(relPath);
+  }
+  return out;
+}
+
+async function collectAclRoleIds(root: string, connId: string): Promise<string[]> {
+  let raw: string;
+  try {
+    raw = await readFile(path.join(root, "webui", "config", "access.yaml"), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = parse(raw);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const roles = (parsed as Record<string, unknown>).roles;
+  if (!roles || typeof roles !== "object" || Array.isArray(roles)) return [];
+  const ids: string[] = [];
+  for (const [roleId, roleValue] of Object.entries(roles as Record<string, unknown>)) {
+    if (!roleValue || typeof roleValue !== "object" || Array.isArray(roleValue)) continue;
+    const allow = (roleValue as Record<string, unknown>).allow;
+    if (!allow || typeof allow !== "object" || Array.isArray(allow)) continue;
+    const connections = (allow as Record<string, unknown>).connections;
+    const listed = Array.isArray(connections)
+      ? connections.some((item) => item === connId)
+      : false;
+    const selectors = (allow as Record<string, unknown>).tableSelectors;
+    const inSelectors = Array.isArray(selectors)
+      ? selectors.some(
+          (row) =>
+            row &&
+            typeof row === "object" &&
+            !Array.isArray(row) &&
+            (row as Record<string, unknown>).connection === connId
+        )
+      : false;
+    if (listed || inSelectors) ids.push(roleId);
+  }
+  return ids;
+}
+
+function connectionDeleteMutatorFactory(connId: string) {
+  return (doc: ReturnType<typeof parseDocument>) => {
+    const conns = doc.get("connections", true);
+    if (!isMap(conns) || !conns.has(connId)) {
+      throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+    }
+    conns.delete(connId);
+
+    const setup = doc.get("setup", true);
+    if (!isMap(setup)) return;
+    const ids = setup.get("database_connection_ids", true);
+    if (!isSeq(ids)) return;
+    for (let i = ids.items.length - 1; i >= 0; i--) {
+      if (yamlScalarString(ids.items[i]) === connId) {
+        ids.items.splice(i, 1);
+      }
+    }
+  };
+}
+
+export function removeConnection(
+  root: string,
+  connId: string,
+  dryRun: true,
+  options?: RemoveConnectionOptions
+): Promise<DeleteConnectionPreview>;
+export function removeConnection(
+  root: string,
+  connId: string,
+  dryRun: false,
+  options?: RemoveConnectionOptions
+): Promise<DeleteConnectionResult>;
+export function removeConnection(
+  root: string,
+  connId: string,
+  dryRun: boolean,
+  options?: RemoveConnectionOptions
+): Promise<DeleteConnectionPreview | DeleteConnectionResult>;
+export async function removeConnection(
+  root: string,
+  connId: string,
+  dryRun: boolean,
+  options: RemoveConnectionOptions = {}
+): Promise<DeleteConnectionPreview | DeleteConnectionResult> {
+  if (!CONNECTION_ID_RE.test(connId)) {
+    throw new ConnectionIdInvalidError(
+      `Connection ID '${connId}' does not match pattern ${CONNECTION_ID_PATTERN}`
+    );
+  }
+
+  const ktxPath = path.join(root, "ktx.yaml");
+  const currentText = await readFile(ktxPath, "utf8");
+  const currentDoc = parseDocument(currentText, { keepSourceTokens: true });
+  if (currentDoc.errors.length > 0) {
+    throw new KtxYamlParseError(
+      `Failed to parse ktx.yaml: ${currentDoc.errors[0]?.message ?? "unknown error"}`
+    );
+  }
+
+  const conn = locateConnectionMap(currentDoc, connId);
+  const { oldSchemas } = locateSchemas(currentDoc, connId);
+  const enabledTables = enabledTablesList(locateEnabledTables(currentDoc, connId));
+  const passwordValue = yamlScalarString(conn.get("password"));
+  const secretRelPath = conventionalSecretRelPathIfEligible(root, connId, passwordValue);
+  const canDeleteSecret = secretRelPath !== null;
+
+  const mutator = connectionDeleteMutatorFactory(connId);
+  const preview = await writeKtxYaml(root, mutator, { dryRun: true });
+  const safeOldText = redactKtxYamlForPreview(preview.oldText);
+  const safeProposedYaml = redactKtxYamlForPreview(preview.serialized);
+  const diff = previewDiff(safeOldText, safeProposedYaml, "ktx.yaml");
+
+  const yamlAssetPaths = await listConnectionYamlAssets(root, connId);
+  const aclRoleIds = await collectAclRoleIds(root, connId);
+
+  let wikiRefCount = 0;
+  let wikiSamplePaths: string[] = [];
+  try {
+    const listWikiFn = options.listWikiFn ?? (await import("./wiki")).listWiki;
+    const wikiPages = await listWikiFn(root);
+    const slRefPrefix = `${connId}/`;
+    const matching = wikiPages.filter((page) =>
+      page.slRefs.some((ref) => ref === connId || ref.startsWith(slRefPrefix))
+    );
+    wikiRefCount = matching.length;
+    wikiSamplePaths = matching.slice(0, 5).map((page) =>
+      page.key.startsWith("wiki/") ? page.key : `wiki/${page.key}`
+    );
+  } catch {
+    wikiRefCount = 0;
+    wikiSamplePaths = [];
+  }
+
+  const impact = {
+    canDeleteSecret,
+    secretRelPath,
+    yamlAssetPaths,
+    aclRoleIds,
+    wikiRefCount,
+    wikiSamplePaths
+  };
+
+  if (dryRun) {
+    return {
+      diff,
+      proposedYaml: safeProposedYaml,
+      connectionId: connId,
+      schemas: oldSchemas,
+      enabledTables,
+      impact
+    };
+  }
+
+  if (options.deleteSecret && !canDeleteSecret) {
+    throw new ConnectionDeleteSecretNotEligibleError(
+      `Password for '${connId}' is not the conventional .ktx/secrets/${connId}-password file`
+    );
+  }
+
+  if (options.deleteAssets) {
+    for (const assetPath of yamlAssetPaths) {
+      if (assetPath.includes("..") || !assetPath.startsWith(`semantic-layer/${connId}/`)) {
+        throw new ForbiddenPathError(`Refusing to delete unsafe YAML asset path ${assetPath}`);
+      }
+    }
+  }
+
+  await writeKtxYaml(root, mutator, { dryRun: false });
+
+  const deletedFiles: string[] = [];
+  if (options.deleteSecret && secretRelPath) {
+    try {
+      await safeRemoveSecretPasswordIfExists(root, secretRelPath);
+      deletedFiles.push(secretRelPath);
+    } catch {
+      // yaml already committed; leftover secret is recoverable by hand
+    }
+  }
+  if (options.deleteAssets) {
+    for (const assetPath of yamlAssetPaths) {
+      try {
+        await safeRemove(root, assetPath);
+        deletedFiles.push(assetPath);
+      } catch {
+        // leftover YAML assets are recoverable by hand
+      }
+    }
+  }
+
+  let auditId: number | undefined;
+  if (options.recordConfigChange) {
+    auditId = await options.recordConfigChange({
+      filePath: "ktx.yaml",
+      changeType: "connection_delete",
+      targetId: connId,
+      oldSummary: { connectionId: connId, schemas: oldSchemas, enabledTables },
+      newSummary: { connectionId: connId, deleted: true, deletedFiles },
+      diff
+    });
+  }
+
+  return {
+    written: true,
+    auditId,
+    connectionId: connId,
+    deletedFiles
+  };
+}
+
 // ─── createConnection (Spec 124 Phase A) ──────────────────────────────────────
 
 export type CreateConnectionInput = {
@@ -919,11 +1278,13 @@ function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRe
     if (!isMap(conns)) {
       throw new KtxYamlParseError("connections is not a mapping in ktx.yaml");
     }
+    forceBlockYamlMaps(conns);
     if (conns.has(input.id)) {
       throw new ConnectionAlreadyExistsError(`Connection '${input.id}' already exists in ktx.yaml`);
     }
 
     const conn = new YAMLMap();
+    conn.flow = false;
     conn.set("driver", input.driver);
     if (input.engine) {
       conn.set("engine", input.engine);
@@ -1045,63 +1406,15 @@ export async function createConnection(
     throw new ConnectionPasswordRequiredError("password is required when dryRun is false");
   }
 
-  // Phase write: secret first, then yaml, then connection test. Any failure after
-  // the secret write must roll back both artifacts.
+  // Write secret then yaml. Connectivity is best-effort: a failed test must not
+  // roll back a successfully written connection (ops may save while the DB is down).
   let secretWritten = false;
   let yamlWritten = false;
   try {
     await safeWriteNewSecretPassword(root, secretRelPath, input.password);
     secretWritten = true;
-
     await writeKtxYaml(root, mutator, { dryRun: false });
     yamlWritten = true;
-
-    const testFn = options.testConnectionFn ?? testConnection;
-    const execFileImpl = options.execFileImpl ?? execFile;
-    const testResult: ConnectionTestResult = await testFn(root, input.id, execFileImpl);
-    if (testResult.status !== "ok") {
-      throw new ConnectionTestFailedError(
-        `ktx connection test failed for '${input.id}': ${testResult.reason ?? "unknown error"}`,
-        {
-          stdout: testResult.stdout ?? testResult.detail ?? "",
-          stderr: testResult.stderr ?? testResult.reason ?? "",
-          reason: testResult.reason ?? "Connection test failed"
-        }
-      );
-    }
-
-    let auditId: number | undefined;
-    if (options.recordConfigChange) {
-      auditId = await options.recordConfigChange({
-        filePath: "ktx.yaml",
-        changeType: "connection_create",
-        targetId: input.id,
-        oldSummary: { connections: "unchanged" },
-        newSummary: {
-          connectionId: input.id,
-          secretRelPath,
-          passwordBytes: Buffer.byteLength(input.password, "utf8"),
-          driver: input.driver,
-          host: input.host,
-          port: input.port,
-          database: input.database,
-          username: input.username
-        },
-        diff
-      });
-    }
-
-    return {
-      written: true,
-      auditId,
-      secretRelPath,
-      connection,
-      test: {
-        status: "ok",
-        message: testResult.detail,
-        durationMs: testResult.latencyMs
-      }
-    };
   } catch (error) {
     if (yamlWritten) {
       await safeWrite(root, "ktx.yaml", preview.oldText);
@@ -1110,5 +1423,133 @@ export async function createConnection(
       await safeRemoveSecretPasswordIfExists(root, secretRelPath);
     }
     throw error;
+  }
+
+  const testFn = options.testConnectionFn ?? testConnection;
+  const execFileImpl = options.execFileImpl ?? execFile;
+  let testStatus: "ok" | "error" = "ok";
+  let testMessage: string | undefined;
+  let durationMs: number | undefined;
+  try {
+    const testResult: ConnectionTestResult = await testFn(root, input.id, execFileImpl);
+    durationMs = testResult.latencyMs;
+    if (testResult.status === "ok") {
+      testMessage = testResult.detail;
+    } else {
+      testStatus = "error";
+      testMessage = testResult.reason?.trim() || "连接失败";
+    }
+  } catch (error) {
+    testStatus = "error";
+    testMessage =
+      error instanceof KtxCliError
+        ? "无法执行连通测试：未找到 ktx CLI"
+        : error instanceof Error
+          ? error.message
+          : "连通测试失败";
+  }
+
+  let auditId: number | undefined;
+  if (options.recordConfigChange) {
+    auditId = await options.recordConfigChange({
+      filePath: "ktx.yaml",
+      changeType: "connection_create",
+      targetId: input.id,
+      oldSummary: { connections: "unchanged" },
+      newSummary: {
+        connectionId: input.id,
+        secretRelPath,
+        passwordBytes: Buffer.byteLength(input.password, "utf8"),
+        driver: input.driver,
+        host: input.host,
+        port: input.port,
+        database: input.database,
+        username: input.username,
+        testStatus
+      },
+      diff
+    });
+  }
+
+  return {
+    written: true,
+    auditId,
+    secretRelPath,
+    connection,
+    test: {
+      status: testStatus,
+      message: testMessage,
+      durationMs
+    }
+  };
+}
+
+const PROBE_CONNECTION_ID = "probe";
+
+export async function probeConnection(
+  rawInput: Omit<CreateConnectionInput, "id" | "schemas">,
+  options: CreateConnectionOptions = {}
+): Promise<ProbeConnectionResult> {
+  const input = validateCreateConnectionInput({
+    ...rawInput,
+    id: PROBE_CONNECTION_ID,
+    schemas: []
+  });
+  if (typeof input.password !== "string" || input.password.length === 0) {
+    throw new ConnectionPasswordRequiredError("password is required to test the connection");
+  }
+
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-conn-probe-"));
+  try {
+    const secretRelPath = connectionSecretRelPath(PROBE_CONNECTION_ID);
+    const secretAbs = path.join(tmpRoot, secretRelPath);
+    await mkdir(path.dirname(secretAbs), { recursive: true });
+    await writeFile(secretAbs, input.password, { encoding: "utf8", mode: 0o600 });
+
+    const conn: Record<string, unknown> = {
+      driver: input.driver,
+      readonly: input.readonly !== false,
+      host: input.host,
+      port: input.port,
+      database: input.database,
+      username: input.username,
+      password: `file:${secretAbs}`,
+      schemas: [],
+      enabled_tables: []
+    };
+    if (input.engine) conn.engine = input.engine;
+    if (input.wireProtocol) conn.wire_protocol = input.wireProtocol;
+
+    await writeFile(
+      path.join(tmpRoot, "ktx.yaml"),
+      stringify({ connections: { [PROBE_CONNECTION_ID]: conn } }),
+      "utf8"
+    );
+
+    const testFn = options.testConnectionFn ?? testConnection;
+    const execFileImpl = options.execFileImpl ?? execFile;
+    const testResult: ConnectionTestResult = await testFn(tmpRoot, PROBE_CONNECTION_ID, execFileImpl);
+    if (testResult.status === "ok") {
+      return {
+        status: "ok",
+        latencyMs: testResult.latencyMs,
+        message: "连接成功"
+      };
+    }
+    return {
+      status: "error",
+      latencyMs: testResult.latencyMs,
+      message: testResult.reason?.trim() || "连接失败"
+    };
+  } catch (error) {
+    if (error instanceof KtxCliError) {
+      return {
+        status: "error",
+        message: "无法执行连通测试：未找到 ktx CLI"
+      };
+    }
+    throw error;
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
   }
 }

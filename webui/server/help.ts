@@ -27,6 +27,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/刷新本地目录|静态 Catalog reload|Catalog Reload|Reload Catalog/i, "catalog-reload"],
   [/连接概览指标说明/, "connection-overview-metrics"],
   [/语义层维护/, "semantic-layer"],
+  [/语义状态与启用表范围状态/, "semantic-status-and-enabled-status"],
   [/为什么要编写语义 YAML|编写语义 YAML/, "semantic-yaml-why"],
   [/推荐编写工作流|语义编写工作流/, "semantic-authoring-workflow"],
   [/grain、join 与 fanout|grain.*fanout/i, "semantic-grain-fanout"],
@@ -48,6 +49,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/Run 试跑|运行历史/, "eval-runs"],
   [/趋势监控/, "eval-monitor"],
   [/YAML 文件规范与交付验收|YAML Delivery/i, "yaml-delivery-runbook"],
+  [/配置作者 Skills/, "config-author-skills"],
   [/^overlay 字段速查（编写辅导）$/, "yaml-overlay-field-guide"],
   [/YAML 类型总览/, "yaml-type-overview"],
   [/Schema manifest 规范|Schema Manifest/i, "yaml-schema-manifest"],
@@ -94,12 +96,15 @@ const ADMIN_GOVERNANCE_HEADING_TITLES = new Set([
 ]);
 
 const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
+  "语义状态与启用表范围状态",
   "为什么要编写语义 YAML",
   "推荐编写工作流",
   "grain、join 与 fanout",
   "overlay 常见字段速查",
   "KTX 官方延伸阅读"
 ]);
+
+const YAML_DELIVERY_EXTRA_HEADING_TITLES = new Set(["配置作者 Skills"]);
 
 export type HelpTocItem = {
   id: string;
@@ -196,6 +201,8 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
       rawLevel === 4 && ADMIN_GOVERNANCE_HEADING_TITLES.has(cleanTitle);
     const semanticAuthoringSubheading =
       rawLevel === 4 && SEMANTIC_AUTHORING_HEADING_TITLES.has(cleanTitle);
+    const yamlDeliveryExtraSubheading =
+      rawLevel === 4 && YAML_DELIVERY_EXTRA_HEADING_TITLES.has(cleanTitle);
     if (
       !match ||
       rawLevel < 2 ||
@@ -204,7 +211,8 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
         !databaseOpsSubheading &&
         !deploymentChecklistSubheading &&
         !adminGovernanceSubheading &&
-        !semanticAuthoringSubheading)
+        !semanticAuthoringSubheading &&
+        !yamlDeliveryExtraSubheading)
     )
       continue;
     // 3.7.x 子标题为兼容性保留 level 3；3.2.x 运维 Runbook 子标题按真实 level 4 输出。

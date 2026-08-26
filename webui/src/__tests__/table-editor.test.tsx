@@ -85,7 +85,18 @@ function buildSourceDetail() {
         }
       ],
       measures: [{ name: "total_sales", expr: "sum(sales)", description: "Total sales" }],
-      segments: [],
+      segments: [
+        {
+          name: "active_rows",
+          expr: "is_deleted = 0",
+          description: "排除逻辑删除行。所有分析查询的基础过滤条件。"
+        },
+        {
+          name: "loss_rows",
+          expr: "profit < 0",
+          description: "亏损明细行（profit 为负值）。"
+        }
+      ],
       joins: [],
       unknownKeys: []
     },
@@ -141,10 +152,10 @@ function stubEditorFetch({
         })
       );
     }
-    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders" && !init) {
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders" && (!init?.method || init.method === "GET")) {
       return new Response(JSON.stringify({ ok: true, data: buildSourceDetail() }));
     }
-    if (url === "/api/joins/candidates" && (!init || init.method === undefined)) {
+    if (url === "/api/joins/candidates" && (!init || init.method === undefined || init.method === "GET")) {
       return new Response(
         JSON.stringify({
           ok: true,
@@ -229,7 +240,7 @@ function stubEditorFetch({
         })
       );
     }
-    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/versions" && !init) {
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/versions" && (!init?.method || init.method === "GET")) {
       return new Response(
         JSON.stringify({
           ok: true,
@@ -250,7 +261,7 @@ function stubEditorFetch({
         })
       );
     }
-    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/versions/20260615T000000000Z-abcd1234" && !init) {
+    if (url === "/api/sources/mysql-aliyun/dataforai/superstore_orders/versions/20260615T000000000Z-abcd1234" && (!init?.method || init.method === "GET")) {
       return new Response(
         JSON.stringify({
           ok: true,
@@ -868,7 +879,28 @@ describe("TableEditor", () => {
     fireEvent.click(screen.getByRole("tab", { name: /^指标/ }));
     expect(await screen.findByText(/可复用的聚合口径/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /^分群/ }));
-    expect(await screen.findByText(/可复用的筛选条件/)).toBeInTheDocument();
+    expect(await screen.findByText(/命名好的筛选条件/)).toBeInTheDocument();
+    expect(screen.getByText(/命名筛选 \/ 可复用过滤器/)).toBeInTheDocument();
+    expect(screen.getByText(/segments: \["superstore_orders\.active_rows"\]/)).toBeInTheDocument();
+  });
+
+  it("renders segment cards with description-first hierarchy and delete", async () => {
+    stubEditorFetch();
+    renderEditor();
+
+    await openManualSemanticEditor();
+    fireEvent.click(screen.getByRole("tab", { name: /^分群/ }));
+
+    const editor = await screen.findByTestId("segment-editor");
+    const firstCard = within(editor).getByTestId("segment-card-0");
+    expect(within(firstCard).getByDisplayValue("排除逻辑删除行。所有分析查询的基础过滤条件。")).toBeInTheDocument();
+    expect(within(firstCard).getByDisplayValue("active_rows")).toBeInTheDocument();
+    expect(within(firstCard).getByText(/等价于 WHERE/)).toBeInTheDocument();
+    expect(within(firstCard).getByText("is_deleted = 0")).toBeInTheDocument();
+
+    fireEvent.click(within(firstCard).getByTestId("segment-remove-0"));
+    expect(within(editor).queryByDisplayValue("active_rows")).not.toBeInTheDocument();
+    expect(within(editor).getByDisplayValue("loss_rows")).toBeInTheDocument();
   });
 
   it("renders fields as a data grid with batch-select affordance", async () => {

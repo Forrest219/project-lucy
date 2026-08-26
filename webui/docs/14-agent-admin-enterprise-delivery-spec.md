@@ -145,11 +145,11 @@
   - Hermes
   - Claude Code
   - Codex
-  - Generic MCP
+  - 通用客户端
 - 各配置片段可一键复制。因为这是 token 明文首秀，配置片段允许包含 `Bearer <generatedToken>`。
 - 关闭前提示 `关闭后无法再次查看 token 明文`。
 
-Generic MCP 配置示例：
+通用客户端配置示例：
 
 ```json
 {

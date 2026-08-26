@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-08-25 · docs/qa · 新增用户旅程剧本分表
+
+### 新增
+- 测试集 `E2E-USER-JOURNEY`：[`suite-user-journey.md`](suite-user-journey.md)（分析师 5 条 P0 已齐；客户部署 3 条已齐）
+- 设计：[`../plans/2026-08-25-user-journey-playbook-design.md`](../plans/2026-08-25-user-journey-playbook-design.md)
+- `e2e-sop.md` §2 / §3 登记该测试集
+
+### 影响映射更新
+- 无（非 WebUI selector；不新增 `E2E-*` Playwright ID）
+
+---
+
 ## 2026-08-08 · docs/runtime · Spider2 G-sample 改 MCP-direct（Cursor lucy-demo）
 
 ### 修改
