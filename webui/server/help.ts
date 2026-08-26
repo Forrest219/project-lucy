@@ -37,6 +37,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/关联关系|Joins/i, "semantic-joins"],
   [/业务文档 Wiki|业务 Wiki/, "business-wiki"],
   [/访问治理 Admin/, "admin-governance"],
+  [/什么时候配置角色、Agent 和 Token|Role \/ Agent \/ Token 怎么选/, "admin-role-agent-token-guide"],
   [/^Agent$/, "admin-agents"],
   [/Role 权限模板|角色配置/, "admin-roles"],
   [/Bearer Token|Token 发行/, "admin-tokens"],
@@ -87,7 +88,10 @@ const HELP_SEARCH_SNIPPET_RADIUS = 72;
 
 const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事项"]);
 
-const ADMIN_GOVERNANCE_HEADING_TITLES = new Set(["审计热库与冷库（SQL 留存边界）"]);
+const ADMIN_GOVERNANCE_HEADING_TITLES = new Set([
+  "什么时候配置角色、Agent 和 Token",
+  "审计热库与冷库（SQL 留存边界）"
+]);
 
 const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
   "为什么要编写语义 YAML",

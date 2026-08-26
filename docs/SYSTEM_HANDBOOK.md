@@ -5,7 +5,7 @@
 | 文档类型 | System Handbook |
 | 适用对象 | 使用者、管理员、运维人员、接入 Agent 的协作者、开发者 |
 | 事实来源 | `webui/server/`、`webui/src/`、`semantic-layer/`、`webui/config/`、`ktx.yaml.example`、`webui/docs/01-17` |
-| 当前日期 | 2026-08-20 |
+| 当前日期 | 2026-08-25 |
 
 ## 目录
 
@@ -24,6 +24,7 @@
     - [KTX 官方延伸阅读](#ktx-官方延伸阅读)
   - [3.4 业务文档 Wiki](#34-业务文档-wiki)
   - [3.5 访问治理 Admin](#35-访问治理-admin)
+    - [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token)
     - [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界)
   - [3.6 质量评测 Eval](#36-质量评测-eval)
   - [3.7 YAML 文件规范与交付验收](#37-yaml-文件规范与交付验收)
@@ -65,8 +66,10 @@
 
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
+| 什么时候该建角色，什么时候该建 `Agent` / `Token`？ | 角色 = 可复用的权限边界；`Agent` = 要对审计负责的人/机器人；`Token` = 某台设备或某个客户端的接入凭证。先角色、再 `Agent`、最后签发 `Token`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |
+| 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |
-| `expires_at` 到期后 `token` 会自动失效吗？ | 不会。`expires_at` 当前只是 `metadata`；要下线 `token` 必须在 `Admin` 撤销或调用删除 `token` `API`。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
+| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
 | 调用流水里的「生成 SQL」从哪来？ | `lucy_query` 经语义层编译后的 SQL；热库字段 `generated_sql` 明文保存，调用流水列表与 CSV 可直接 review。不存 deny 路径的 raw `sql`/`query` 攻击载荷。 | [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界)、[3.5 访问治理 Admin](#35-访问治理-admin) |
 | 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |
 
@@ -970,6 +973,113 @@ PUT /api/wiki/:key
 | `webui/config/access.yaml` | Agent / Role / MCP `Token` ACL（数据面） |
 | `webui/config/admins.yaml` | WebUI 登录账户（控制面；scrypt 密码哈希；无明文） |
 
+#### 什么时候配置角色、Agent 和 Token
+
+深链：`/help?section=admin-role-agent-token-guide`。
+
+访问治理最容易踩的坑，不是「页面在哪」，而是**把三层对象配错层**：该改权限边界时却去发凭证，或同一人每换一台电脑就新建一个 `Agent`。本节按管理员日常决策写：先选对对象，再打开对应页面。
+
+##### 先建立三层心智
+
+| 你要解决的问题 | 配什么 | 打开哪里 | 一句话 |
+| --- | --- | --- | --- |
+| 「这一类人/机器人，能看哪些连接和表、能调哪些 `MCP` 工具？」 | **角色权限**（`Role`） | `/admin/roles` | 可复用的权限边界；被多个 `Agent` 引用 |
+| 「张三 / 评测机器人，要对哪次调用负责？」 | **`Agent`** | `/admin/agents` | 接入主体与审计身份；绑定一个或多个角色 |
+| 「这台电脑 / 这个 Codex，拿什么密钥连上 Lucy？」 | **`Token`** | `Agent` 详情 → Token | 接入凭证；同一 `Agent` 下多个 `Token` **权限相同** |
+
+产品口径：**一人一 `Agent`、一 `MCP`；多 `Token` 只负责鉴权，不改变权限。**  
+`WebUI` 登录账户（所有者 / 运维）与 `MCP` `Agent` / `Token` 是两套体系，不要混用。
+
+##### 什么时候该配角色
+
+在「权限边界要复用，或要对一类职责做统一收紧/放开」时配角色。
+
+**适合：**
+
+- 新业务域或新连接要对一类使用者开放（如财务只读、评测只读）
+- 多个人 / 多个 `Agent` 应共享同一套表范围与工具清单
+- 要统一改权：改一次角色，所有引用它的 `Agent` 一起生效
+- 需要行级策略时：写在角色上（不要试图用 `Token` 区分行域）
+
+**不适合：**
+
+- 仅为某台笔记本单独开权限 → 发 `Token`，不要为设备造角色
+- 把角色当成「某个人」或「`WebUI` 登录名」 → 那是 `Agent` / 登录账户的事
+
+**做法建议：** 角色标识用业务含义（如 `kx_readonly`），写清说明；工具显式列举，禁止 `*`；表尽量精确到表名。正式角色优先；参考模板只用于「复制后改成正式角色」，不要直接当线上权限源。有 `Agent` 引用时先改绑定再删角色。
+
+##### 什么时候该配 Agent
+
+在「有一个要对审计负责的接入主体」时配 `Agent`。
+
+**适合：**
+
+- 新同事或新团队开始用 Lucy 做数据问答
+- 独立业务机器人（评测、值班）需要单独身份与日志
+- 同一人需要两套互斥权限边界（如日常只读 vs 含敏感表）→ **两个 `Agent`**，各绑不同角色
+
+**不适合：**
+
+- 同一人多设备 / 多客户端（笔记本、台式机、Cursor、Codex）→ **一个 `Agent`，多个 `Token`**
+- 只想临时试调 `MCP` → 优先用 `/admin/mcp-playground` 受控试调；正式交付再为负责人建 `Agent`
+
+**做法建议：** 新建时必须先选好角色，并看清权限预览再保存。人级再收紧用 `Agent` 强制约束（与角色行授予做交集），不要把「只给张三更严」写进全组共用角色。离职或下线：先禁用 → 撤销全部 `Token` → 再删除。
+
+##### 什么时候该配 Token
+
+在「某个客户端要真正连上 `MCP`」时配 `Token`。
+
+**适合：**
+
+- 新设备或新客户端首次接入
+- 怀疑泄露、长期未用、人员交接 → 新建并撤销旧 `Token`（轮换）
+- 需要到期自动失效 → 设置 `expires_at`
+
+**不适合：**
+
+- 用不同 `Token` 表达不同权限（当前模型下同 `Agent` 同权；需要隔离就拆 `Agent`）
+- 把 `Token` 当 `WebUI` 登录密码，或把 `KTX_INTERNAL_TOKEN` 发给外部客户端
+
+**做法建议：** 明文只在创建时出现一次，立刻放进客户端密钥库，不要进仓库或长期聊天记录。一设备（或一客户端）一个 `Token`，用标签 / 设备名备注区分。列表页「复制 `MCP` 配置」只含占位符，不要二次粘贴历史明文。到期后 Proxy 会 401；仍建议在 Admin 显式撤销，避免配置残留。
+
+##### 场景速查
+
+| 你遇到的情况 | 配 / 改什么 |
+| --- | --- |
+| 「财务只读能查哪些表、哪些工具」变了 | 改 **角色** |
+| 「张三要开始用 Lucy」 | 建 **`Agent`**（绑已有角色）+ 签发 **`Token`** |
+| 「张三换了电脑 / 新开 Cursor」 | 只加 **`Token`** |
+| 「张三比同组其他人少看一张敏感表」 | 用更窄角色，或在该 `Agent` 上加强制约束；**不是**发特殊 `Token` |
+| 「这台机器的密钥可能泄露」 | **撤销**该 `Token` 并重发 |
+| 「评测机器人整体下线」 | **禁用** `Agent` 并撤光其 `Token` |
+
+##### 推荐操作顺序
+
+```text
+连接 / 语义 / 启用表已就绪
+        ↓
+① 配置角色（权限边界）     →  /admin/roles
+        ↓
+② 创建 Agent 并绑定角色     →  /admin/agents
+        ↓
+③ 为 Agent 签发 Token      →  Agent 详情 → Token
+        ↓
+④ 客户端配置 MCP URL + Bearer →  smoke；在 /admin/audit 确认 allow
+```
+
+日常扩权：改角色（或给 `Agent` 加角色）→ 用权限预览 / `MCP` 调试台确认 → **新开** `MCP` session（旧 session 不会自动刷新 Visible Scope）。  
+日常新电脑：只新建 `Token`，不要新建角色或 `Agent`。
+
+##### 常见误区
+
+1. 每个设备建一个 `Agent` → 审计碎片化；应一 `Agent` 多 `Token`。
+2. 每个 `Agent` 手搓一份私有权限、从不建角色 → 改权成本高、边界易漂移。
+3. 指望 `Token` 做表级 / 行级差异 → 当前不支持；需要隔离就拆 `Agent`。
+4. 改完角色后旧客户端仍拒访 → 扩权后需新开 session。
+5. 把 `WebUI` 登录与 `MCP` `Bearer` 混用 → 两套凭证，互不登录对方系统。
+
+YAML 结构、签发规则与裁决链路见下文「Role-first 模型」「Token 发行规则」「权限裁决机制」。客户端粘贴配置见 [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)。
+
 #### WebUI 管理员登录
 
 Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找回」不同。控制面账户只有两级（与 MCP Agent Role 无关）：
@@ -1860,7 +1970,7 @@ users:
         label: <token-label>
         created: 2026-07-29
         expires_at: 2026-08-29T00:00:00Z
-        # 当前仅作 metadata；Proxy 不会自动按过期时间拒绝请求。
+        # Proxy 鉴权强制拒绝已过期或不可解析的 expires_at；缺省则永不过期。
 
 defaults:
   deny_tools:
