@@ -479,33 +479,15 @@
   .pl-help-section .pl-markdown-preview h5,
   .pl-help-section .pl-markdown-preview h6 { @apply text-sm font-semibold; }
   .pl-help-section .pl-markdown-preview pre { @apply max-w-full overflow-auto; }
-  @media (max-width: 900px) {
-    .pl-app-shell--help {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .pl-app-shell--help .pl-sidebar {
-      @apply static h-auto max-h-80;
-    }
-    .pl-app-shell--help .pl-workspace-body {
-      @apply p-4;
-    }
-    .pl-help-layout {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .pl-help-toc {
-      @apply static max-h-none;
-    }
-    .pl-help-content {
-      @apply w-full max-w-none p-4;
-    }
-  }
+  /* Help keeps desktop shell + TOC | content. Narrow viewports rely on
+     --layout-min-readable-width horizontal scroll (Design System 02). */
 
   /* 统一 PageHeader (M40)：自然顶部 + 稳定两栏网格，消除全站 H1/分类名重复 */
   .pl-page-header {
     @apply mb-4 border-b border-border-default pb-3;
   }
   .pl-page-header-grid {
-    @apply grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-start;
+    @apply grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2;
   }
   .pl-page-header-cell {
     @apply min-w-0;
@@ -588,14 +570,6 @@
   .pl-page-header-actions--stacked {
     @apply flex flex-col items-end gap-1.5;
   }
-  @media (max-width: 767px) {
-    .pl-page-header-cell--aside {
-      @apply items-start;
-    }
-    .pl-page-header-badges { @apply justify-start; }
-    .pl-page-header-actions { @apply justify-start; }
-    .pl-page-header-actions--stacked { @apply items-start; }
-  }
 
   /* 面板/卡片 */
   .pl-panel { @apply mb-4 rounded-lg border border-border-default bg-bg-surface p-4 shadow-card; }
@@ -610,8 +584,9 @@
   .pl-section-heading > div > .pl-notice { @apply mt-1 text-[13px] leading-5; }
   .pl-page-intro { @apply mb-4 text-sm text-fg-muted; }
   .pl-eyebrow { @apply mb-1 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
-  .pl-metric-grid { @apply grid gap-3 md:grid-cols-2 xl:grid-cols-4; }
-  .pl-metric-grid--three { @apply md:grid-cols-3 xl:grid-cols-3; }
+  .pl-metric-grid { @apply grid grid-cols-2 gap-3 xl:grid-cols-4; }
+  .pl-metric-grid--three { @apply grid-cols-3; }
+  .pl-usage-metric-groups { @apply grid gap-3; }
   .pl-metric-card { @apply grid gap-1 rounded-lg border border-border-default bg-bg-subtle p-3 shadow-card; }
   .pl-metric-card--button {
     @apply w-full cursor-pointer text-left;
@@ -766,6 +741,46 @@
   .pl-data-grid thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
   .pl-data-grid tbody td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-default; }
   .pl-data-grid tbody tr:hover { @apply bg-bg-muted; }
+  /* Shared L1 data-grid frame + ordinary horizontal scroll (admin agents / config-audit / audit). */
+  .pl-data-grid-frame {
+    @apply rounded-md border border-border-default bg-bg-surface p-4;
+  }
+  .pl-data-grid-scroll {
+    @apply max-w-full overflow-x-auto;
+  }
+  .pl-data-grid-scroll:focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2;
+  }
+  .pl-audit-grid-scroll {
+    max-height: clamp(20rem, calc(100vh - 20rem), 44rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .pl-audit-grid-scroll .pl-data-grid thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .pl-audit-grid-scroll .pl-data-grid thead th {
+    @apply bg-bg-base;
+  }
+  .pl-config-audit-table {
+    min-width: 56rem;
+    table-layout: fixed;
+  }
+  .pl-config-audit-col-index { width: 3rem; }
+  .pl-config-audit-col-time { width: 8.5rem; }
+  .pl-config-audit-col-actor { width: 4.5rem; }
+  .pl-config-audit-col-source { width: 4.5rem; }
+  .pl-config-audit-col-asset { width: 4.5rem; }
+  .pl-config-audit-col-change { width: 5.5rem; }
+  .pl-config-audit-col-target { width: 12.5rem; }
+  .pl-config-audit-col-path { width: 13rem; }
+  .pl-config-audit-table-target,
+  .pl-config-audit-table-path {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
   /* Spec 85: publish history — light pl-data-grid conformance (business scope + scale). */
   .pl-publish-history-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-publish-history-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
@@ -871,7 +886,7 @@
      consecutive connections. */
   .pl-overview-grid--flat { @apply gap-3; }
   .pl-connection-row { @apply overflow-hidden rounded-lg border border-border-default bg-bg-surface; }
-  .pl-connection-card-header { @apply grid gap-3 border-b border-border-default bg-bg-subtle px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start; }
+  .pl-connection-card-header { @apply grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-border-default bg-bg-subtle px-4 py-3; }
   .pl-connection-card-title { @apply flex min-w-0 items-center gap-3; }
   .pl-connection-card-title strong { @apply text-base font-semibold leading-5 text-fg-default; }
   .pl-connection-title-copy { @apply flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5; }
@@ -884,7 +899,7 @@
   .pl-connection-engine-icon[data-engine="postgres"] { @apply border-border-strong bg-bg-surface text-fg-default; }
   .pl-connection-engine-icon-svg { @apply h-5 w-5; }
   .pl-connection-card-badges { @apply hidden; }
-  .pl-connection-card-meta { @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted md:col-start-2 md:row-start-1 md:justify-self-end md:justify-end; }
+  .pl-connection-card-meta { @apply col-start-2 row-start-1 flex flex-wrap items-center justify-end justify-self-end gap-x-3 gap-y-1 text-xs text-fg-muted; }
   /* Spec 108: compact connectivity health on card header right. */
   .pl-connection-health {
     @apply inline-flex max-w-full flex-wrap items-baseline gap-x-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-xs font-medium text-fg-muted transition-colors;
@@ -1204,11 +1219,6 @@
       max-width: 22.5rem;
     }
   }
-  @media (max-width: 640px) {
-    .pl-whitelist-search-input {
-      min-width: 0;
-    }
-  }
   .pl-whitelist-batch-actions {
     @apply inline-flex flex-wrap items-center gap-2;
   }
@@ -1270,11 +1280,11 @@
     animation: pl-floating-dock-in 180ms ease-out;
   }
   /* Align the dock with the main content column on desktop widths where the
-     216px sidebar is sticky. Without this, the dock centers on the viewport
+     248px sidebar is sticky. Without this, the dock centers on the viewport
      and feels detached from the table it modifies. */
   @media (min-width: 901px) {
     .pl-floating-dock {
-      left: calc(216px + 2rem);
+      left: calc(248px + 2rem);
       right: 2rem;
       max-width: none;
     }
@@ -1590,8 +1600,8 @@
   .pl-monitor-controls { @apply flex flex-wrap items-end gap-3; }
   .pl-monitor-controls label { @apply grid min-w-40 gap-1.5 text-sm; }
   .pl-monitor-controls label > span { @apply text-xs font-medium text-fg-muted; }
-  .pl-monitor-grid { @apply grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]; }
-  .pl-monitor-trend { @apply xl:row-span-2; }
+  .pl-monitor-grid { @apply grid grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] gap-4; }
+  .pl-monitor-trend { @apply row-span-2; }
   .pl-distribution-row { @apply grid grid-cols-[120px_minmax(0,1fr)_48px] items-center gap-3 text-sm; }
   .pl-distribution-row span { @apply truncate font-mono text-xs; }
   .pl-distribution-row div {
@@ -1642,9 +1652,7 @@
   .pl-yaml-preview { @apply rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed overflow-auto whitespace-pre-wrap; }
 
   /* 发布工作台：本次将同步的变更 | 生效准备（Spec 123；变更详情走 Drawer） */
-  .pl-review-layout { @apply grid grid-cols-1 gap-4 items-stretch; }
-  .pl-review-layout { @apply md:grid-cols-[minmax(280px,2fr)_minmax(0,3fr)]; }
-  .pl-review-layout { @apply xl:grid-cols-[minmax(280px,2fr)_minmax(0,3fr)]; }
+  .pl-review-layout { @apply grid grid-cols-[minmax(280px,2fr)_minmax(0,3fr)] items-stretch gap-4; }
   .pl-review-sidebar,
   .pl-review-main { @apply rounded-md border border-border-default bg-bg-surface p-4; }
   .pl-review-main { @apply min-w-0; }
@@ -1783,6 +1791,20 @@
   .pl-audit-detail { @apply border-b border-border-default bg-bg-muted; }
   .pl-audit-detail-grid { @apply grid gap-2 text-xs; }
   .pl-audit-detail-grid code { @apply break-all rounded bg-bg-base px-2 py-1 font-mono; }
+  .pl-audit-access-context { @apply grid gap-0.5 text-xs leading-snug; }
+  .pl-audit-access-context-ip { @apply text-fg-default; }
+  .pl-audit-access-context-ua { @apply max-w-[12rem] truncate text-fg-muted; }
+  .pl-audit-detail-panels { @apply grid gap-3 md:grid-cols-2; }
+  .pl-audit-detail-section {
+    @apply grid gap-2 rounded-md border border-border-default bg-bg-base p-3 text-xs;
+  }
+  .pl-audit-detail-section--wide { @apply md:col-span-2; }
+  .pl-audit-detail-section-title { @apply text-xs font-semibold text-fg-muted; }
+  .pl-audit-detail-section-body { @apply grid gap-2; }
+  .pl-audit-detail-field { @apply grid gap-0.5; }
+  .pl-audit-detail-label { @apply font-medium text-fg-default; }
+  .pl-audit-detail-value { @apply text-fg-muted; }
+  .pl-audit-detail-value code { @apply break-all rounded bg-bg-muted px-2 py-1 font-mono text-fg-default; }
   .pl-trace-detail-overlay { @apply fixed inset-0 z-40 bg-fg-default/40 backdrop-blur-sm; }
   .pl-trace-detail-content {
     @apply fixed right-0 top-0 z-50 grid h-full w-[min(640px,90vw)] gap-4 overflow-auto border-l border-border-default bg-bg-surface p-5 shadow-card;
@@ -1920,13 +1942,13 @@
   .pl-wiki-filter { @apply text-xs; }
   .pl-wiki-context-hint { @apply rounded-md border border-border-default bg-bg-base p-2 text-xs; }
   .pl-wiki-context-hint code { @apply break-all font-mono; }
-  /* M33 Wiki workbench: read-mode-first layout. Desktop keeps the
+  /* M33 Wiki workbench: read-mode-first layout. Desktop locks the
      sidebar + main two-column grid (inheriting `.pl-editor-layout`)
-     so the article stays in the first viewport on 1280x720. The
-     single-column stack is reserved for the mobile media query
-     further down. The persistent Diff / Raw inspector was removed
-     from the daily surface and lives inside the Save Preflight
-     modal instead. */
+     so the article stays in the first viewport on 1280x720. Narrow
+     viewports keep this desktop hierarchy and scroll horizontally via
+     --layout-min-readable-width. The persistent Diff / Raw inspector
+     was removed from the daily surface and lives inside the Save
+     Preflight modal instead. */
   .pl-wiki-layout--read,
   .pl-wiki-layout--edit {
     /* Spec 105: slightly wider explorer panel; gap kept for breathing room
@@ -2458,7 +2480,7 @@
 
   /* M36: Ops Dashboard layout. Stays within the existing token system; do not
      introduce new radii or decorative gradients. */
-  .pl-ops-grid { @apply grid gap-4 lg:grid-cols-2; }
+  .pl-ops-grid { @apply grid grid-cols-2 gap-4; }
   .pl-ops-grid > .pl-panel { @apply mb-0; }
   .pl-service-health-strip { @apply grid gap-2 sm:grid-cols-2 xl:grid-cols-4; }
   .pl-service-health-item { @apply grid grid-cols-[10px_minmax(0,1fr)] items-start gap-3 rounded-md border border-border-default bg-bg-surface p-3; }
@@ -2595,32 +2617,31 @@
 }
 
 /*
- * lg+: 质量快照 / 访问风险左右三卡逐行对齐。
+ * 质量快照 / 访问风险左右三卡逐行对齐（桌面双栏已是默认）。
  * 语义覆盖率含 progress，高度常大于右侧同行；用 subgrid 共享行轨，
- * 避免左侧把第 2/3 行整体顶偏。窄屏单列时不启用。
+ * 避免左侧把第 2/3 行整体顶偏。
  * 注意：面板不要写 gap:0，否则会覆盖父级 row-gap，卡与卡贴死。
  */
-@media (min-width: 1024px) {
-  .pl-ops-grid {
-    grid-template-rows: auto repeat(3, auto);
-    column-gap: 1rem;
-    row-gap: 0.5rem;
-  }
-  .pl-ops-grid > .pl-panel {
-    display: grid;
-    grid-template-rows: subgrid;
-    grid-row: span 4;
-  }
-  .pl-ops-grid > .pl-panel > .pl-section-heading {
-    margin-bottom: 0;
-    padding-bottom: 0.25rem;
-  }
-  .pl-ops-grid > .pl-panel > .pl-snapshot-list,
-  .pl-ops-grid > .pl-panel > .pl-risk-list {
-    display: contents;
-  }
+.pl-ops-grid {
+  grid-template-rows: auto repeat(3, auto);
+  column-gap: 1rem;
+  row-gap: 0.5rem;
+}
+.pl-ops-grid > .pl-panel {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 4;
+}
+.pl-ops-grid > .pl-panel > .pl-section-heading {
+  margin-bottom: 0;
+  padding-bottom: 0.25rem;
+}
+.pl-ops-grid > .pl-panel > .pl-snapshot-list,
+.pl-ops-grid > .pl-panel > .pl-risk-list {
+  display: contents;
 }
 
+/* 1280 desktop density band: workbench stacks inspector under main. */
 @media (max-width: 1280px) {
   .pl-table-workbench {
     grid-template-columns: minmax(0, 1fr);
@@ -2638,34 +2659,5 @@
 
   .pl-source-metadata-grid {
     grid-template-columns: minmax(0, 1fr) minmax(96px, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .pl-source-metadata-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .pl-wiki-layout--read,
-  .pl-wiki-layout--edit {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .pl-wiki-sidebar,
-  .pl-wiki-inspector {
-    position: static;
-    height: auto;
-  }
-
-  .pl-frontmatter-grid,
-  .pl-wiki-read-layout,
-  .pl-wiki-edit-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .pl-wiki-read-toc { position: static; }
-
-  .pl-frontmatter-cell--wide {
-    grid-column: 1;
   }
 }

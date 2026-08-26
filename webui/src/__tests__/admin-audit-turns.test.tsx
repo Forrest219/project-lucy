@@ -91,6 +91,13 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.queryByRole("tab", { name: "数据热力" })).not.toBeInTheDocument();
     const turnsTable = await screen.findByTestId("audit-turns-table");
     expect(turnsTable).toHaveClass("pl-data-grid", "pl-audit-table");
+    const turnsFrame = screen.getByTestId("audit-turns-grid-frame");
+    expect(turnsFrame).toHaveClass("pl-data-grid-frame");
+    const turnsRegion = screen.getByRole("region", {
+      name: "问询记录表格，可横向和纵向滚动"
+    });
+    expect(turnsRegion).toHaveClass("pl-data-grid-scroll", "pl-audit-grid-scroll");
+    expect(turnsRegion).toHaveAttribute("tabindex", "0");
     expect(turnsTable.querySelector("td.pl-audit-table-muted")).not.toBeNull();
     expect(screen.getByText("开始时间")).toBeInTheDocument();
     expect(screen.getByText("结束时间")).toBeInTheDocument();
@@ -107,6 +114,82 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("已上报问询 0");
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("推断问询 1");
     expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("用户原文依赖客户端可选上报");
+  });
+
+  it("wraps 调用流水 in the shared bounded scroll frame with investigation column order", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+        }
+        if (url.includes("/api/admin/audit/turns")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 0,
+                entries: [],
+                summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+                referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+              }
+            })
+          );
+        }
+        if (url.startsWith("/api/admin/audit?")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 1,
+                summary: { businessCalls: 1, protocolCalls: 0, deniedCalls: 0, dataBearingCalls: 1 },
+                entries: [
+                  {
+                    id: 42,
+                    ts: "2026-08-26T06:00:00.000Z",
+                    userId: "demo_agent",
+                    clientIp: "203.0.113.9",
+                    userAgent: "Cursor/1.0",
+                    tool: "lucy_query",
+                    outcome: "ok",
+                    durationMs: 12,
+                    requestId: "req-42",
+                    decisionReason: "allowed"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderAudit("/admin/audit?view=calls&range=7d");
+
+    const callsFrame = await screen.findByTestId("audit-calls-grid-frame");
+    expect(callsFrame).toHaveClass("pl-data-grid-frame");
+    const callsRegion = screen.getByRole("region", {
+      name: "调用流水表格，可横向和纵向滚动"
+    });
+    expect(callsRegion).toHaveClass("pl-data-grid-scroll", "pl-audit-grid-scroll");
+    expect(callsRegion).toHaveAttribute("tabindex", "0");
+
+    const table = screen.getByTestId("audit-calls-table");
+    const headers = Array.from(table.querySelectorAll("thead th")).map((th) => th.textContent?.trim());
+    expect(headers.slice(0, 7)).toEqual([
+      "序号",
+      "时间",
+      "事件 ID",
+      "问询 ID",
+      "Agent",
+      "访问上下文",
+      "状态"
+    ]);
+    expect(headers).toContain("涉及数据表");
+    expect(headers).toContain("访问上下文");
+    expect(screen.getByTestId("audit-access-context-42")).toHaveTextContent("203.0.113.9");
   });
 
   it("shows primary export on both tabs (Spec 106 header parity)", async () => {

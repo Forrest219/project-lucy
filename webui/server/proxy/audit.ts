@@ -307,9 +307,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest)
     `);
   }
   const result = insertStmt.run({

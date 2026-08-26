@@ -39,6 +39,18 @@
 - 语义扩展类：按页面职责追加（如 `pl-catalog-table`、`pl-data-table`、`pl-schema-asset-table`）
 - 禁止跳过基础类另起一套独立表格基线
 
+## 3.1 Frame and Overflow
+
+L1 页面数据网格外框与滚动层：
+
+- `pl-data-grid-frame`：边框、圆角、surface 背景与 padding 的视觉容器；不设置固定高度。
+- `pl-data-grid-scroll`：唯一普通横向滚动层；不得在其外层再包一层 `overflow-x-auto`。
+- 高列数 / 高行数的访问日志网格可叠加 `pl-audit-grid-scroll`（有界双向滚动 + sticky 表头），但禁止嵌套第二层滚动元素。
+- 宽表允许横向滚动；禁止为了单屏展示牺牲完整 ID、调查列或可读性。
+- 确实可能滚动的区域（配置审计、访问日志）必须可聚焦（`tabIndex={0}`）并具备业务化 `aria-label`；普通不滚动表格不增加无意义 tab stop。
+
+桌面验收基线：1440×900、1280×800。移动端 / 窄于 1280 不在本契约范围内。配置审计的关键字段允许换行完整保留；访问日志保留宽表滚动（含「访问上下文」等调查列）。
+
 ## 4. Typography 与密度
 
 ### 4.1 表头

@@ -53,6 +53,8 @@ describe("Audit", () => {
                   tokenLabel: "hermes-laptop",
                   tokenHashPrefix: "sha256:feedbeef456",
                   client: "hermes",
+                  clientIp: "203.0.113.10",
+                  userAgent: "Hermes/1.2.3 (test-agent)",
                   tool: "sl_query",
                   tables: ["superstore_orders"],
                   argsSummary: { query: "sales", token: "super-secret", nested: { api_key: "api-key-secret-value", private_key: "private123" } },
@@ -89,21 +91,27 @@ describe("Audit", () => {
     expect(await screen.findByText("tool_denied")).toBeInTheDocument();
     await waitFor(() => expect(String(fetchMock.mock.calls.find((call) => String(call[0]).startsWith("/api/admin/audit?"))?.[0] ?? "")).toContain("includeProtocol=false"));
 
+    expect(screen.getByRole("columnheader", { name: "访问上下文" })).toBeInTheDocument();
+    expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("203.0.113.10");
+    expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("Hermes/1.2.3 (test-agent)");
+
     fireEvent.click(await screen.findByText("zhangsan"));
-    expect(await screen.findByText("Args：")).toBeInTheDocument();
-    // M39 polish: the "Token" word is wrapped in a notranslate span for
-    // translation defense, which splits the text node. Use a custom
-    // matcher to assert the text content across the wrapping span.
-    expect(
-      screen.getByText((_content, element) => {
-        return element?.textContent?.trim() === "Token：";
-      })
-    ).toBeInTheDocument();
+    expect(await screen.findByTestId("audit-detail-panels-1")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("调用方");
+    expect(screen.getByTestId("audit-detail-decision-1")).toHaveTextContent("裁决与权限");
+    expect(screen.getByTestId("audit-detail-request-1")).toHaveTextContent("请求与结果");
+    expect(screen.getByTestId("audit-detail-forensics-1")).toHaveTextContent("关联取证");
+    expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("访问 IP");
+    expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("203.0.113.10");
+    expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("User-Agent");
+    expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("Hermes/1.2.3 (test-agent)");
+    expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("Token");
     expect(document.body).toHaveTextContent("hermes-laptop");
-    expect(screen.getByText("角色：")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-detail-decision-1")).toHaveTextContent("角色");
     expect(document.body).toHaveTextContent("kx_readonly");
-    expect(screen.getByText("权限快照：")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-detail-decision-1")).toHaveTextContent("权限快照");
     expect(document.body).toHaveTextContent("7 张有效表");
+    expect(screen.getByTestId("audit-detail-request-1")).toHaveTextContent("Args");
     expect(document.body).toHaveTextContent("[REDACTED]");
     expect(document.body).not.toHaveTextContent("super-secret");
     expect(document.body).not.toHaveTextContent("api-key-secret-value");

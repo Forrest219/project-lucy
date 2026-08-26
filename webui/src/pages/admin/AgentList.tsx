@@ -594,10 +594,10 @@ export function AgentList() {
         </div>
       ) : (
         <section
-          className="rounded-md border border-border-default bg-bg-surface p-4"
+          className="pl-data-grid-frame"
           data-testid="agent-list-section"
         >
-          <div className="overflow-x-auto">
+          <div className="pl-data-grid-scroll" data-testid="agent-list-grid-scroll">
             <table
               className="pl-data-grid pl-data-table pl-agent-list-table"
               data-testid="agent-list-table"

@@ -41,10 +41,16 @@ describe("ConfigAudit Spec 96 polish", () => {
               actor: "local-admin",
               actorType: "ui_admin",
               source: "admin_agents_api",
-              filePath: "webui/config/access.yaml",
+              filePath:
+                index === 0
+                  ? "webui/config/customers/acme-corp/deeply/nested/governance/access.yaml"
+                  : "webui/config/access.yaml",
               assetKind: "governance",
               changeType: "agent_patch",
-              targetId: `agent-${index + 1}`,
+              targetId:
+                index === 0
+                  ? "agent-with-very-long-target-identifier-for-wrap-check-001"
+                  : `agent-${index + 1}`,
               writeStatus: "committed"
             }))
           }
@@ -68,6 +74,22 @@ describe("ConfigAudit Spec 96 polish", () => {
     const table = await screen.findByTestId("config-audit-table");
     expect(table).toHaveClass("pl-data-grid");
     expect(table).toHaveClass("pl-audit-table");
+    const frame = screen.getByTestId("config-audit-grid-frame");
+    expect(frame).toHaveClass("pl-data-grid-frame");
+    const region = screen.getByRole("region", {
+      name: "配置审计表格，可横向滚动"
+    });
+    expect(region).toHaveClass("pl-data-grid-scroll");
+    expect(region).toHaveAttribute("tabindex", "0");
+    expect(table.querySelector("colgroup")).not.toBeNull();
+    expect(table.querySelector(".pl-config-audit-col-target")).not.toBeNull();
+    expect(table.querySelector(".pl-config-audit-col-path")).not.toBeNull();
+    expect(table.querySelector("td.pl-config-audit-table-target")).not.toBeNull();
+    expect(table.querySelector("td.pl-config-audit-table-path")).not.toBeNull();
+    expect(table).toHaveTextContent("agent-with-very-long-target-identifier-for-wrap-check-001");
+    expect(table).toHaveTextContent(
+      "webui/config/customers/acme-corp/deeply/nested/governance/access.yaml"
+    );
     const indexHeader = within(table).getByRole("columnheader", { name: "序号" });
     expect(indexHeader).toHaveClass("whitespace-nowrap");
     expect(within(table).getByRole("columnheader", { name: "操作者" })).toBeInTheDocument();

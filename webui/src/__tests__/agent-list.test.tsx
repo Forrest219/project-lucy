@@ -176,6 +176,13 @@ describe("AgentList", () => {
     renderAgentList();
     await waitFor(() => expect(screen.getByText("张三")).toBeInTheDocument());
     expect(screen.getByTestId("agent-list-table")).toHaveClass("pl-data-grid");
+    const section = screen.getByTestId("agent-list-section");
+    expect(section).toHaveClass("pl-data-grid-frame");
+    expect(section).not.toHaveClass("rounded-md");
+    expect(section).not.toHaveClass("border");
+    expect(section).not.toHaveClass("p-4");
+    const scroll = screen.getByTestId("agent-list-grid-scroll");
+    expect(scroll).toHaveClass("pl-data-grid-scroll");
     expect(screen.queryByRole("button", { name: /MCP 配置/ })).not.toBeInTheDocument();
   });
 

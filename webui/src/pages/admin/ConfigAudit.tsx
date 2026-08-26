@@ -104,7 +104,7 @@ function ChangeRow({ entry, index }: { entry: ConfigAuditEntry; index: number })
         <td>{sourceLabel(entry.source)}</td>
         <td>{assetKindLabel(entry.assetKind)}</td>
         <td>{changeTypeLabel(entry.changeType)}</td>
-        <td className="font-mono">
+        <td className="pl-config-audit-table-target font-mono">
           {targetLink ? (
             <Link
               to={targetLink}
@@ -118,7 +118,7 @@ function ChangeRow({ entry, index }: { entry: ConfigAuditEntry; index: number })
             entry.targetId ?? "—"
           )}
         </td>
-        <td className="font-mono">{entry.filePath}</td>
+        <td className="pl-config-audit-table-path font-mono">{entry.filePath}</td>
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
@@ -346,31 +346,52 @@ export function ConfigAudit() {
           <div className="text-sm text-fg-muted" data-testid="config-audit-page-range">
             {total === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} / 共 ${total} 条`}
           </div>
-          <div className="overflow-x-auto">
-            <table className="pl-data-grid pl-data-table pl-config-audit-table pl-audit-table w-full" data-testid="config-audit-table">
-              <thead>
-                <tr>
-                  <th className="w-12 whitespace-nowrap">序号</th>
-                  <th>时间</th>
-                  <th>操作者</th>
-                  <th>来源</th>
-                  <th>资产域</th>
-                  <th>变更类型</th>
-                  <th>目标</th>
-                  <th>文件路径</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.entries ?? []).length === 0 ? (
-                  <tr><td colSpan={8} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
-                ) : (
-                  data?.entries.map((entry, index) => (
-                    <ChangeRow key={entry.id} entry={entry} index={page * PAGE_SIZE + index + 1} />
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <section className="pl-data-grid-frame" data-testid="config-audit-grid-frame">
+            <div
+              className="pl-data-grid-scroll"
+              role="region"
+              aria-label="配置审计表格，可横向滚动"
+              tabIndex={0}
+              data-testid="config-audit-grid-scroll"
+            >
+              <table
+                className="pl-data-grid pl-data-table pl-config-audit-table pl-audit-table w-full"
+                data-testid="config-audit-table"
+              >
+                <colgroup>
+                  <col className="pl-config-audit-col-index" />
+                  <col className="pl-config-audit-col-time" />
+                  <col className="pl-config-audit-col-actor" />
+                  <col className="pl-config-audit-col-source" />
+                  <col className="pl-config-audit-col-asset" />
+                  <col className="pl-config-audit-col-change" />
+                  <col className="pl-config-audit-col-target" />
+                  <col className="pl-config-audit-col-path" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="w-12 whitespace-nowrap">序号</th>
+                    <th>时间</th>
+                    <th>操作者</th>
+                    <th>来源</th>
+                    <th>资产域</th>
+                    <th>变更类型</th>
+                    <th>目标</th>
+                    <th>文件路径</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data?.entries ?? []).length === 0 ? (
+                    <tr><td colSpan={8} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  ) : (
+                    data?.entries.map((entry, index) => (
+                      <ChangeRow key={entry.id} entry={entry} index={page * PAGE_SIZE + index + 1} />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
           <div className="flex justify-between items-center">
             <button type="button" className="pl-btn pl-btn--ghost text-sm" disabled={page === 0} onClick={() => setPage(page - 1)}>‹ 上一页</button>
             <span className="text-sm text-fg-muted" data-testid="config-audit-page-index">{page + 1} / {totalPages || 1}</span>

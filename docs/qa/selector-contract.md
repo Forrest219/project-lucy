@@ -385,6 +385,25 @@
 
 ---
 
+## 7.1 Admin data grid frame（L1 列表外框）
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `agent-list-section` | Agent 列表外框 | `pages/admin/AgentList.tsx` |
+| `agent-list-grid-scroll` | Agent 列表滚动层 | `pages/admin/AgentList.tsx` |
+| `agent-list-table` | Agent 列表表 | `pages/admin/AgentList.tsx` |
+| `config-audit-grid-frame` | 配置审计外框 | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-grid-scroll` | 配置审计滚动区 | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-table` | 配置审计表 | `pages/admin/ConfigAudit.tsx` |
+| `audit-turns-grid-frame` | 问询记录外框 | `pages/admin/Audit.tsx` |
+| `audit-turns-grid-scroll` | 问询记录有界滚动区 | `pages/admin/Audit.tsx` |
+| `audit-turns-table` | 问询记录表 | `pages/admin/Audit.tsx` |
+| `audit-calls-grid-frame` | 调用流水外框 | `pages/admin/Audit.tsx` |
+| `audit-calls-grid-scroll` | 调用流水有界滚动区 | `pages/admin/Audit.tsx` |
+| `audit-calls-table` | 调用流水表 | `pages/admin/Audit.tsx` |
+
+---
+
 ## 8. Rename History
 
 | 日期 | PR | Old | New | 原因 |
