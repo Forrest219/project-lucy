@@ -864,30 +864,27 @@ describe("GET /api/admin/mcp-tools", () => {
 });
 
 describe("POST /api/admin/agents with role templates", () => {
-  it("expands a template into access.yaml without writing template pointer fields", async () => {
+  it("rejects template assignment per Spec 129 (must copy to formal Role first)", async () => {
     const app = buildServer();
     await app.ready();
+    const before = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+
     const preview = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: true, agent: { id: "wangwu", name: "王五", role: "dev_superstore" } })
-      .expect(200);
+      .expect(400);
 
-    expect(preview.body.data.proposedYaml).toContain("dev_superstore:");
-    expect(preview.body.data.proposedYaml).toContain("role: dev_superstore");
-    expect(preview.body.data.proposedYaml).not.toMatch(/role-template|templateId|templateRef|_template/);
-    let yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
-    expect(yaml).not.toContain("wangwu");
+    expect(preview.body.ok).toBe(false);
+    expect(preview.body.error.code).toBe("REFERENCE_TEMPLATE_NOT_ASSIGNABLE");
 
-    await request(app.server)
+    const write = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: false, agent: { id: "wangwu", name: "王五", role: "dev_superstore" } })
-      .expect(200);
+      .expect(400);
+    expect(write.body.error.code).toBe("REFERENCE_TEMPLATE_NOT_ASSIGNABLE");
 
-    yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
-    expect(yaml).toContain("dev_superstore:");
-    expect(yaml).toContain("superstore_orders");
-    expect(yaml).toContain("role: dev_superstore");
-    expect(yaml).not.toMatch(/role-template|templateId|templateRef|_template/);
+    const after = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(after).toBe(before);
     await app.close();
   });
 });

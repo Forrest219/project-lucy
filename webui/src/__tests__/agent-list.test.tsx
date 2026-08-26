@@ -97,7 +97,7 @@ function stubAgentsEndpoints(
     if (url === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
       return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1" } }));
     }
-    if (url === "/api/admin/roles") {
+    if (url.startsWith("/api/admin/roles")) {
       return new Response(JSON.stringify({ ok: true, data: { roles } }));
     }
     if (url === "/api/admin/agents" && init?.method === "POST") {
@@ -191,15 +191,17 @@ describe("AgentList", () => {
 
     renderAgentList();
     await waitFor(() => expect(screen.getByText("张三")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "查看日志" }));
+    fireEvent.click(screen.getByRole("button", { name: "张三 更多操作" }));
+    await waitFor(() => expect(screen.getByTestId("row-more-menu")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("menuitem", { name: "查看日志" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("audit-page")).toBeInTheDocument();
     });
   });
 
-  it("new agent modal role select labels templates/invalid with 中文业务 terms instead of bare English", async () => {
-    stubAgentsEndpoints([], [
+  it("new agent modal filters out template roles and marks invalid roles as disabled", async () => {
+    const fetchMock = stubAgentsEndpoints([], [
       {
         ...analystRole,
         id: "demo_template",
@@ -218,15 +220,31 @@ describe("AgentList", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument()
     );
+    // roles endpoint must be called with includeTemplates=false
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/admin/roles?includeTemplates=false"),
+        expect.anything()
+      );
+    });
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
-    const select = await screen.findByDisplayValue(/demo_template/);
-    const optionTexts = Array.from((select as HTMLSelectElement).options).map((opt) => opt.textContent);
-    // 模板不能裸露 "template"，应展示「参考模板」；invalid 角色展示「待修复」。
-    expect(optionTexts.some((text) => text?.includes("参考模板"))).toBe(true);
-    expect(optionTexts.some((text) => text?.includes("待修复"))).toBe(true);
-    expect(optionTexts.some((text) => /\(template\)/.test(text ?? ""))).toBe(false);
-    expect(optionTexts.some((text) => /\(invalid\)/.test(text ?? ""))).toBe(false);
+    // template role must NOT appear in the select
+    // getAllByRole returns [filter-bar select, modal select] — take the last (modal)
+    const allRoleSelects = await screen.findAllByRole("combobox", { name: /角色/ });
+    const select = allRoleSelects.at(-1) as HTMLSelectElement;
+    const optionTexts = Array.from(select.options).map((opt) => opt.textContent ?? "");
+    expect(optionTexts.some((text) => text.includes("demo_template"))).toBe(false);
+    // no "参考模板" label anywhere in the select
+    expect(optionTexts.some((text) => text.includes("参考模板"))).toBe(false);
+    // invalid role is present but labeled 待修复
+    expect(optionTexts.some((text) => text.includes("broken_role") && text.includes("待修复"))).toBe(true);
+    // invalid option is disabled
+    const brokenOption = select.options[Array.from(select.options).findIndex((o) => o.value === "broken_role")];
+    expect(brokenOption?.disabled).toBe(true);
+    // no raw "(template)" or "(invalid)" English parens
+    expect(optionTexts.some((text) => /\(template\)/.test(text))).toBe(false);
+    expect(optionTexts.some((text) => /\(invalid\)/.test(text))).toBe(false);
   });
 
   it("new agent modal shows role summary card with source count, connections, tools and warnings", async () => {
@@ -391,7 +409,7 @@ describe("AgentList", () => {
     expect(screen.queryByTestId("badge-agent-total")).not.toBeInTheDocument();
   });
 
-  it("agent table row links role id to role detail and exposes 查看权限 link", async () => {
+  it("agent table row links role id to role detail and exposes 查看权限 in RowMoreMenu", async () => {
     stubAgentsEndpoints([
       makeAgent({
         id: "demo_agent",
@@ -415,6 +433,9 @@ describe("AgentList", () => {
     expect(roleLink).toHaveAttribute("href", "/admin/roles/demo_readonly");
     expect(roleLink.getAttribute("aria-label") ?? "").toContain("demo_readonly");
 
+    // 查看权限 is inside RowMoreMenu — open it first
+    fireEvent.click(screen.getByRole("button", { name: "Demo Agent 更多操作" }));
+    await waitFor(() => expect(screen.getByTestId("row-more-menu")).toBeInTheDocument());
     const permissionsLink = screen.getByTestId("agent-permissions-link-demo_agent");
     expect(permissionsLink.getAttribute("href")).toBe("/admin/agents/demo_agent?tab=permissions");
 
@@ -465,6 +486,52 @@ describe("AgentList", () => {
     expect(screen.queryByLabelText("按配置Token数筛选")).not.toBeInTheDocument();
     expect(screen.getByTestId("agent-list-result-count")).toHaveTextContent("1 条结果");
     expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
+  });
+
+  it("shows 清除筛选 button only when a filter is active and clears all filters", async () => {
+    stubAgentsEndpoints([
+      makeAgent({ id: "a1", name: "Alpha" }),
+      makeAgent({ id: "a2", name: "Beta" })
+    ]);
+    renderAgentList();
+    await screen.findByTestId("agent-list-table");
+
+    // No active filter — button must not be visible
+    expect(screen.queryByTestId("clear-filters-btn")).not.toBeInTheDocument();
+
+    // Activate a filter
+    fireEvent.change(screen.getByLabelText("搜索显示名或用户 ID"), { target: { value: "Alpha" } });
+    expect(screen.getByTestId("clear-filters-btn")).toBeInTheDocument();
+
+    // Clicking it resets everything
+    fireEvent.click(screen.getByTestId("clear-filters-btn"));
+    expect(screen.queryByTestId("clear-filters-btn")).not.toBeInTheDocument();
+    expect((screen.getByLabelText("搜索显示名或用户 ID") as HTMLInputElement).value).toBe("");
+  });
+
+  it("shows empty filtered message with clear-filters button when agents exist but none match", async () => {
+    stubAgentsEndpoints([makeAgent({ id: "a1", name: "Alpha" })]);
+    renderAgentList();
+    await screen.findByTestId("agent-list-table");
+
+    fireEvent.change(screen.getByLabelText("搜索显示名或用户 ID"), { target: { value: "zzz_no_match" } });
+
+    expect(await screen.findByText(/未找到符合条件的/)).toBeInTheDocument();
+    expect(screen.getByTestId("clear-filters-btn-empty")).toBeInTheDocument();
+
+    // clicking it restores the list
+    fireEvent.click(screen.getByTestId("clear-filters-btn-empty"));
+    await waitFor(() => expect(screen.getByTestId("agent-row-a1")).toBeInTheDocument());
+  });
+
+  it("agent name cell is a link to object detail search", async () => {
+    stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三" })]);
+    renderAgentList();
+    await screen.findByTestId("agent-row-zhangsan");
+    const nameLink = screen.getByTestId("agent-name-link-zhangsan");
+    expect(nameLink).toBeInTheDocument();
+    expect(nameLink.getAttribute("href")).toContain("agent");
+    expect(nameLink).toHaveAttribute("aria-label", expect.stringContaining("张三"));
   });
 
   it("uses backend summary when present and falls back to client-side aggregate when absent", async () => {
@@ -523,7 +590,7 @@ describe("AgentList", () => {
           })
         );
       }
-      if (url === "/api/admin/roles") {
+      if (url.startsWith("/api/admin/roles")) {
         return new Response(
           JSON.stringify({
             ok: true,
@@ -567,7 +634,7 @@ describe("AgentList", () => {
             })
           );
         }
-        if (url === "/api/admin/roles") {
+        if (url.startsWith("/api/admin/roles")) {
           return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
         }
         return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
@@ -611,8 +678,8 @@ describe("AgentList", () => {
     expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "当前状态" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "配置最后变更时间" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "创建日期" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "配置最后变更时间" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "创建日期" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "近 7 天拒绝" })).not.toBeInTheDocument();
 
     const headers = [...document.querySelectorAll("[data-testid='agent-list-table'] thead th")].map(
@@ -626,8 +693,6 @@ describe("AgentList", () => {
       "配置 Token",
       "近 7 天活跃 Token",
       "近 7 天调用量",
-      "创建日期",
-      "配置最后变更时间",
       "最近访问时间",
       "操作"
     ]);

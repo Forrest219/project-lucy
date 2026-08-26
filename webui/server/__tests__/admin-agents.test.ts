@@ -557,30 +557,45 @@ defaults:
     await app.close();
   });
 
-  it("P0 permission expansion through built-in KX template is blocked in Agent create and patch dryRun", async () => {
+  it("P0 permission expansion through built-in KX template is rejected before governance gate (Spec 129)", async () => {
     await makeSensitiveProject();
     const app = buildServer();
     await app.ready();
+    const before = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
 
     const createPreview = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: true, agent: { id: "kx_bot", name: "KX Bot", role: "kx_readonly" } })
-      .expect(200);
-    expect(createPreview.body.data.gate.decision).toBe("override_required");
-    expect(createPreview.body.data.gate.tierSummary.P0.count).toBeGreaterThan(0);
-    expect(createPreview.body.data.gate.evidenceRefs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "sensitive_source", ref: KX_FACT })
-    ]));
+      .expect(400);
+    expect(createPreview.body.ok).toBe(false);
+    expect(createPreview.body.error.code).toBe("REFERENCE_TEMPLATE_NOT_ASSIGNABLE");
+    expect(createPreview.body.data?.gate).toBeUndefined();
 
     const patchPreview = await request(app.server)
       .patch("/api/admin/agents/zhangsan")
       .send({ dryRun: true, patch: { role: "kx_readonly" } })
-      .expect(200);
-    expect(patchPreview.body.data.gate.decision).toBe("override_required");
-    expect(patchPreview.body.data.gate.tierSummary.P0.count).toBeGreaterThan(0);
-    expect(patchPreview.body.data.gate.evidenceRefs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "sensitive_source", ref: KX_FACT })
-    ]));
+      .expect(400);
+    expect(patchPreview.body.ok).toBe(false);
+    expect(patchPreview.body.error.code).toBe("REFERENCE_TEMPLATE_NOT_ASSIGNABLE");
+
+    const after = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(after).toBe(before);
+
+    await app.close();
+  });
+
+  it("rejects template role assignment without mutating access.yaml (Spec 129)", async () => {
+    const app = buildServer();
+    await app.ready();
+    const accessPath = path.join(projectRoot, "webui/config/access.yaml");
+    const before = await readFile(accessPath, "utf8");
+
+    const res = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: false, agent: { id: "tmpl_bot", name: "Tmpl Bot", role: "kx_readonly" } })
+      .expect(400);
+    expect(res.body.error.code).toBe("REFERENCE_TEMPLATE_NOT_ASSIGNABLE");
+    expect(await readFile(accessPath, "utf8")).toBe(before);
 
     await app.close();
   });

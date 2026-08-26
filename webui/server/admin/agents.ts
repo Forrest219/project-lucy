@@ -5,12 +5,11 @@ import { stringify, parse } from "yaml";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
+import { previewDiff } from "../diff.js";
 import { getAuditDb } from "./audit.js";
 import { build7dWindow } from "./metric-window.js";
-import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
+import { expandTemplate } from "./role-templates.js";
 import {
-  expandSelectorSourceNames,
-  normalizePermissionModelVersion,
   previewAgentPermissionsForAdmin,
   previewRolePermissionsForAdmin,
   resolveEffectivePermissionsForAdmin,
@@ -34,41 +33,20 @@ import {
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 
-/** Persist template Roles as generation 2 (Spec 98 §7) when Agent Admin materializes them. */
-async function materializeTemplateRoleForWrite(roleId: string, role: YamlRole): Promise<
-  { ok: true; role: YamlRole } | { ok: false; reason: string }
-> {
-  const before = normalizePermissionModelVersion(role);
-  if (!before.ok) return { ok: false, reason: "role.permission_model_version must be 1 or 2" };
-  const selectors = role.allow?.tableSelectors;
-  const nextSelectors: NonNullable<YamlRole["allow"]>["tableSelectors"] = [];
-  if (selectors) {
-    for (const selector of selectors) {
-      if (selector.row_access === "scoped") {
-        return { ok: false, reason: "table selector row_access 'scoped' is not supported in AC-P0" };
-      }
-      if ("prefix" in selector && selector.prefix !== undefined) {
-        const names = await expandSelectorSourceNames(selector);
-        if (names.length === 0) {
-          return { ok: false, reason: `table selector prefix '${selector.prefix}' expands to 0 source` };
-        }
-        nextSelectors.push({ connection: selector.connection, schema: selector.schema, names, row_access: "all" });
-        continue;
-      }
-      nextSelectors.push({ ...selector, row_access: "all" });
-    }
-  }
-  const migrated: YamlRole = {
-    ...role,
-    permission_model_version: 2,
-    allow: role.allow ? { ...role.allow, tableSelectors: selectors ? nextSelectors : role.allow.tableSelectors } : role.allow
-  };
-  const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated });
-  if (!resolved.ok) return { ok: false, reason: resolved.reason };
-  return { ok: true, role: migrated };
-}
+/** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
+const REFERENCE_TEMPLATE_NOT_ASSIGNABLE = "REFERENCE_TEMPLATE_NOT_ASSIGNABLE";
+
+function rejectTemplateRole(roleId: string) {
+  return {
+    ok: false as const,
+    error: {
+      code: REFERENCE_TEMPLATE_NOT_ASSIGNABLE,
+      message: `Reference template '${roleId}' must be copied to a formal Role before assignment.`
+    }
+  };
+}
 const AGENT_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
 export interface YamlToken {
@@ -824,26 +802,20 @@ async function validateRoleForWrite(roleId: string, role: YamlRole): Promise<str
   return resolved.ok ? undefined : resolved.reason;
 }
 
-function makeDiff(oldYaml: string, newYaml: string): string {
-  const oldLines = oldYaml.split("\n");
-  const newLines = newYaml.split("\n");
-  const lines: string[] = [];
-  const maxLen = Math.max(oldLines.length, newLines.length);
-  for (let i = 0; i < maxLen; i++) {
-    const o = oldLines[i];
-    const n = newLines[i];
-    if (o === undefined) {
-      lines.push(`+${n}`);
-    } else if (n === undefined) {
-      lines.push(`-${o}`);
-    } else if (o !== n) {
-      lines.push(`-${o}`);
-      lines.push(`+${n}`);
-    } else {
-      lines.push(` ${o}`);
-    }
-  }
-  return lines.join("\n");
+function redactAccessYamlSecrets(text: string): string {
+  return text
+    .replace(/^([ \t]*hash:[ \t]*)(["']?)([^"'\n#]+)\2(.*)$/gm, "$1$2[REDACTED]$2$4")
+    .replace(/sha256:[a-fA-F0-9]+/g, "[REDACTED]");
+}
+
+function agentWritePreview(raw: string, newConfig: YamlAccessConfig): { diff: string; proposedYaml: string } {
+  const proposedYamlRaw = stringify(newConfig, { lineWidth: 0 });
+  const safeOld = redactAccessYamlSecrets(raw);
+  const safeNew = redactAccessYamlSecrets(proposedYamlRaw);
+  return {
+    diff: previewDiff(safeOld, safeNew, ACCESS_YAML_REL),
+    proposedYaml: safeNew
+  };
 }
 
 export function registerAgentRoutes(app: FastifyInstance) {
@@ -897,6 +869,9 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (!resolvedRole) {
       return reply.status(400).send({ ok: false, error: { code: agentInput.role ? "INVALID_ROLE" : "ROLE_REQUIRED", message: "agent.role is required and must reference an existing role" } });
     }
+    if (resolvedRole.source === "template") {
+      return reply.status(400).send(rejectTemplateRole(resolvedRole.id));
+    }
     const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
     if (invalidReason) {
       return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
@@ -914,27 +889,12 @@ export function registerAgentRoutes(app: FastifyInstance) {
       tokens: [],
       role: resolvedRole.id
     };
-    let rolesForWrite = config.roles;
-    if (resolvedRole.source === "template") {
-      const materialized = await materializeTemplateRoleForWrite(resolvedRole.id, resolvedRole.role);
-      if (!materialized.ok) {
-        return reply.status(400).send({
-          ok: false,
-          error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${materialized.reason}` }
-        });
-      }
-      rolesForWrite = {
-        ...(config.roles ?? {}),
-        [resolvedRole.id]: materialized.role
-      };
-    }
     const newConfig: YamlAccessConfig = {
       ...config,
-      roles: rolesForWrite,
+      roles: config.roles,
       users: [...config.users, newUser]
     };
-    const proposedYaml = stringify(newConfig, { lineWidth: 0 });
-    const diff = makeDiff(raw, proposedYaml);
+    const { diff, proposedYaml } = agentWritePreview(raw, newConfig);
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
     const gateInput = await buildAgentGateInput({
@@ -1085,22 +1045,12 @@ export function registerAgentRoutes(app: FastifyInstance) {
       if (!resolvedRole) {
         return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
       }
+      if (resolvedRole.source === "template") {
+        return reply.status(400).send(rejectTemplateRole(resolvedRole.id));
+      }
       const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
       if (invalidReason) {
         return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
-      }
-      if (resolvedRole.source === "template") {
-        const materialized = await materializeTemplateRoleForWrite(resolvedRole.id, resolvedRole.role);
-        if (!materialized.ok) {
-          return reply.status(400).send({
-            ok: false,
-            error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${materialized.reason}` }
-          });
-        }
-        config.roles = {
-          ...(config.roles ?? {}),
-          [resolvedRole.id]: materialized.role
-        };
       }
     }
     if (patch.role !== undefined && !assertRoleExists(config, patch.role)) {
@@ -1140,8 +1090,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const newUsers = [...config.users];
     newUsers[userIndex] = updatedUser;
     const newConfig: YamlAccessConfig = { ...config, users: newUsers };
-    const proposedYaml = stringify(newConfig, { lineWidth: 0 });
-    const diff = makeDiff(raw, proposedYaml);
+    const { diff, proposedYaml } = agentWritePreview(raw, newConfig);
 
     // Spec 100 §10 — illegal / unsatisfiable / over-limit constraints must fail before write.
     let proposedEffectivePermissions: ReturnType<typeof effectivePermissionsToPreview> | undefined;

@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentDetail, constraintsFromAgent, serializeConstraints } from "../pages/admin/AgentDetail";
 import type { Agent } from "../lib/types";
@@ -163,7 +163,7 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
         })
       );
     }
-    if (url === "/api/admin/roles") {
+    if (url.startsWith("/api/admin/roles")) {
       return new Response(JSON.stringify({ ok: true, data: { roles } }));
     }
     return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
@@ -243,9 +243,9 @@ describe("AgentDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "查看变更 diff" }));
     expect(await screen.findByText(/\+ name: 张三编辑/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
+    fireEvent.click(screen.getByRole("tab", { name: "基本信息" }));
     fireEvent.change(screen.getByDisplayValue("预览名"), { target: { value: "预览后又改名" } });
-    fireEvent.click(screen.getByRole("button", { name: "变更预览" }));
+    fireEvent.click(screen.getByRole("tab", { name: "变更预览" }));
     expect(screen.queryByText(/\+ name: 张三编辑/)).not.toBeInTheDocument();
     expect(screen.getByText(/可点「查看变更 diff」审阅/)).toBeInTheDocument();
   });
@@ -308,7 +308,7 @@ describe("AgentDetail", () => {
       if (url === "/api/admin/agents/zhangsan" && (!init || !init.method || init.method === "GET")) {
         return new Response(JSON.stringify(makeAgentDetailResponse()));
       }
-      if (url === "/api/admin/roles") {
+      if (url.startsWith("/api/admin/roles")) {
         return new Response(
           JSON.stringify({
             ok: true,
@@ -339,14 +339,15 @@ describe("AgentDetail", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderAgentDetail();
-    fireEvent.click(await screen.findByRole("button", { name: "Token" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Token" }));
 
     const tokenCard = await screen.findByText("hermes-laptop");
     const card = tokenCard.closest("div")?.parentElement?.parentElement;
     expect(card).not.toBeNull();
     const cardText = card?.textContent ?? "";
     expect(cardText).toContain("2026-06-18");
-    expect(cardText).toContain("sha256:aaaa0000bbbb1111");
+    expect(cardText).toContain("[REDACTED]");
+    expect(cardText).not.toContain("sha256:aaaa0000bbbb1111");
     expect(cardText).toContain("sl_query");
     expect(cardText).toContain("ok");
 
@@ -361,13 +362,13 @@ describe("AgentDetail", () => {
     renderAgentDetail("/admin/agents/zhangsan?tab=tokens");
 
     expect(await screen.findByText(/当前活跃 token/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Token" })).toHaveClass("pl-admin-tab--active");
+    expect(screen.getByRole("tab", { name: "Token" })).toHaveClass("pl-admin-tab--active");
   });
 
   it("Effective Permissions tree groups sources by connection then schema and shows tools", async () => {
     stubAgentEndpoints();
     renderAgentDetail();
-    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "权限预览" }));
     const tree = await screen.findByTestId("permissions-tree");
     expect(tree).toHaveTextContent("mysql-aliyun");
     expect(tree).toHaveTextContent("dataforai");
@@ -417,15 +418,16 @@ describe("AgentDetail", () => {
           )
         );
       }
-      if (url === "/api/admin/roles") {
+      if (url.startsWith("/api/admin/roles")) {
         return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
       }
       return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
     renderAgentDetail();
-    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "权限预览" }));
     const preview = await screen.findByTestId("capability-preview");
+    // rowGrant/FinalRows detail lives inside <details> but still accessible via textContent
     expect(preview).toHaveTextContent("rowGrant=scoped:883501db707ba111");
     expect(preview).toHaveTextContent("FinalRows=scoped:aabbccddeeff0011");
     expect(preview).toHaveTextContent("protected");
@@ -538,7 +540,7 @@ describe("AgentDetail", () => {
           )
         );
       }
-      if (url === "/api/admin/roles") {
+      if (url.startsWith("/api/admin/roles")) {
         return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
       }
       return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
@@ -546,7 +548,7 @@ describe("AgentDetail", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderAgentDetail();
-    fireEvent.click(await screen.findByRole("button", { name: "权限预览" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "权限预览" }));
 
     expect(await screen.findByText(/legacy wildcard 仍在使用/)).toBeInTheDocument();
   });
@@ -565,5 +567,127 @@ describe("AgentDetail", () => {
     await screen.findByDisplayValue("张三");
     expect(document.body).toHaveTextContent("1");
     expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
+  });
+
+  // Spec 129 tests
+  it("clicking a tab writes ?tab= to URL search", async () => {
+    stubAgentEndpoints();
+    const locationRef = { current: "" };
+    function LocationCapture() {
+      const loc = useLocation();
+      locationRef.current = loc.search;
+      return null;
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/admin/agents/zhangsan"]}>
+          <LocationCapture />
+          <Routes>
+            <Route path="/admin/agents/:userId" element={<AgentDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await screen.findByDisplayValue("张三");
+    fireEvent.click(screen.getByRole("tab", { name: "Token" }));
+    expect(locationRef.current).toContain("tab=tokens");
+
+    fireEvent.click(screen.getByRole("tab", { name: "权限预览" }));
+    expect(locationRef.current).toContain("tab=permissions");
+  });
+
+  it("roles API is called with includeTemplates=false and templates are absent from select", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/admin/agents/zhangsan" && (!init?.method || init.method === "GET")) {
+        return new Response(JSON.stringify(makeAgentDetailResponse()));
+      }
+      if (url.startsWith("/api/admin/roles")) {
+        // Verify includeTemplates=false is in the URL
+        expect(url).toContain("includeTemplates=false");
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              roles: [
+                { id: "analyst", description: "Analyst", source: "yaml", tools: [], connections: [], sourceNames: [], sourceCount: 0, invalid: false, warnings: [] },
+                { id: "ref-template", description: "Template", source: "template", tools: [], connections: [], sourceNames: [], sourceCount: 0, invalid: false, warnings: [] }
+              ]
+            }
+          })
+        );
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderAgentDetail();
+    await screen.findByDisplayValue("张三");
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    expect(optionValues).toContain("analyst");
+    expect(optionValues).not.toContain("ref-template");
+  });
+
+  it("Permissions tab: 数据能力 label present; capabilityDigest in details only", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/agents/zhangsan") {
+        return new Response(
+          JSON.stringify(
+            makeAgentDetailResponse({
+              effectivePermissions: {
+                roleIds: ["analyst"],
+                snapshotHash: "snap-1234",
+                sourceMapVersion: "v1",
+                tools: ["lucy_query"],
+                connections: ["mysql-aliyun"],
+                sources: [],
+                legacyAllow: false,
+                capabilityDigest: "ae0a470dc0ca9931",
+                capabilities: [
+                  {
+                    tool: "lucy_query",
+                    connectionId: "mysql-aliyun",
+                    schema: "dataforai",
+                    sourceName: "superstore_orders",
+                    physicalTable: "dataforai.superstore_orders",
+                    sourceKey: "mysql-aliyun|dataforai|superstore_orders|dataforai.superstore_orders",
+                    rowGrant: "all",
+                    finalRows: { kind: "scoped", digest: "ae0a470dc0ca9931" },
+                    protected: false,
+                    constraintsSummary: null
+                  }
+                ]
+              }
+            })
+          )
+        );
+      }
+      if (url.startsWith("/api/admin/roles")) {
+        return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderAgentDetail();
+    fireEvent.click(await screen.findByRole("tab", { name: "权限预览" }));
+    const preview = await screen.findByTestId("capability-preview");
+
+    // Main label must be 「数据能力」
+    expect(preview).toHaveTextContent("数据能力");
+
+    // capabilityDigest must be inside a <details> element, not in the top-level visible text
+    const detailsEl = preview.querySelector("details");
+    expect(detailsEl).not.toBeNull();
+    expect(detailsEl?.textContent ?? "").toContain("ae0a470dc0ca9931");
+
+    // The text outside <details> must NOT contain the digest
+    const mainText = Array.from(preview.childNodes)
+      .filter((n) => n !== detailsEl)
+      .map((n) => (n as Element).textContent ?? "")
+      .join("");
+    expect(mainText).not.toContain("ae0a470dc0ca9931");
   });
 });

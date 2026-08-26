@@ -392,6 +392,40 @@
 | `agent-list-section` | Agent 列表外框 | `pages/admin/AgentList.tsx` |
 | `agent-list-grid-scroll` | Agent 列表滚动层 | `pages/admin/AgentList.tsx` |
 | `agent-list-table` | Agent 列表表 | `pages/admin/AgentList.tsx` |
+| `agent-metric-grid` | Agent 列表 KPI 网格 | `pages/admin/AgentList.tsx` |
+| `agent-list-result-count` | 筛选结果计数 | `pages/admin/AgentList.tsx` |
+| `clear-filters-btn` | 清除筛选（工具栏） | `pages/admin/AgentList.tsx` |
+| `clear-filters-btn-empty` | 清除筛选（空态） | `pages/admin/AgentList.tsx` |
+| `agent-name-link-${agent.id}` | Agent 显示名 → 对象抽屉 | `pages/admin/AgentList.tsx` |
+| `agent-row-${agent.id}` | Agent 表行 | `pages/admin/AgentList.tsx` |
+| `agent-row-index-${agent.id}` | 行序号 | `pages/admin/AgentList.tsx` |
+| `agent-role-line-${agent.id}` | 角色单元格 | `pages/admin/AgentList.tsx` |
+| `agent-role-link-${agent.id}` | 角色链接 | `pages/admin/AgentList.tsx` |
+| `agent-active-tokens-${agent.id}` | 近 7 天活跃 Token | `pages/admin/AgentList.tsx` |
+| `agent-calls-7d-${agent.id}` | 近 7 天调用量 | `pages/admin/AgentList.tsx` |
+| `agent-leave-confirm-modal` | 未保存离开确认 | `pages/admin/AgentDetail.tsx` |
+| `agent-detail-mcp-playground` | 跳转 MCP 调试台 | `pages/admin/AgentDetail.tsx` |
+| `agent-constraints-editor` | 强制约束编辑器 | `pages/admin/AgentDetail.tsx` |
+| `capability-preview` | 数据能力预览 | `pages/admin/AgentDetail.tsx` |
+| `diff-change-summary` | 变更字段摘要 | `pages/admin/AgentDetail.tsx` |
+| `dryrun-finalrows-preview` | dry-run 技术预览 | `pages/admin/AgentDetail.tsx` |
+| `agent-save-confirm-modal` | 保存确认模态 | `pages/admin/AgentDetail.tsx` |
+| `agent-save-confirm-submit` | 确认保存按钮 | `pages/admin/AgentDetail.tsx` |
+| `confirm-finalrows-preview` | 确认框技术预览 | `pages/admin/AgentDetail.tsx` |
+| `object-detail-drawer` | 对象详情抽屉 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-title` | 抽屉标题 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-close` | 抽屉关闭 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-deep-link` | 打开完整页面 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-return-audit` | 返回审计上下文 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-agent-body` | Agent 抽屉正文 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-agent-audit-link` | Agent 抽屉访问日志 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-agent-not-found` | Agent 未找到 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-table-body` | 表抽屉正文 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-table-not-found` | 表未找到 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-run-body` | Eval Run 抽屉正文 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-run-not-found` | Eval Run 未找到 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-audit-body` | 审计事件抽屉正文 | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-audit-not-found` | 审计事件未找到 | `components/ObjectDetailDrawer.tsx` |
 | `config-audit-grid-frame` | 配置审计外框 | `pages/admin/ConfigAudit.tsx` |
 | `config-audit-grid-scroll` | 配置审计滚动区 | `pages/admin/ConfigAudit.tsx` |
 | `config-audit-table` | 配置审计表 | `pages/admin/ConfigAudit.tsx` |

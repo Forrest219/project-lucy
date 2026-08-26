@@ -129,7 +129,7 @@
 - invalid role 置灰或明确展示警告，不允许保存。
 - 创建 Agent 不接受 `allow` 字段；写入 `roles`（或兼容单 `role` 展开为单元素数组）。
 - 权限卡片不得仅展示工具并集 + 表并集。
-- 使用 template role 创建后，落盘 YAML 展开为普通 role，不出现 `role-template`、`templateId` 等指针字段。
+- ~~使用 template role 创建后，落盘 YAML 展开为普通 role，不出现 `role-template`、`templateId` 等指针字段。~~ **Superseded by Spec 129：** Agent 不得直接绑定参考模板；须先在 Role 管理创建正式 Role 再绑定。`REFERENCE_TEMPLATE_NOT_ASSIGNABLE`。
 - 保存成功 UI 仅在 `runtimeAck: true` 时出现。
 
 ### 5.3 Token 首秀交付
@@ -308,7 +308,7 @@ policyVersion: <hex>
 
 后端测试：
 
-- `admin-agents.test.ts`：create/patch dryRun、安全字段拒绝、role template 展开不留指针。
+- `admin-agents.test.ts`：create/patch dryRun、安全字段拒绝；**Spec 129：** 参考模板绑定返回 `REFERENCE_TEMPLATE_NOT_ASSIGNABLE`（不再 materialize）。
 - `admin-tokens.test.ts`：token 明文只在 create 响应中出现、撤销优先写 revoked_tokens。
 
 建议命令：

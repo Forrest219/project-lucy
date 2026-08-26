@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { DiffViewer } from "../../components/DiffViewer";
@@ -214,12 +214,42 @@ export function groupSourcesByConnectionAndSchema(
   }));
 }
 
+function buildChangeSummary(
+  patch: AgentPatch,
+  currentAgent: Agent
+): Array<{ field: string; from: string; to: string }> {
+  const items: Array<{ field: string; from: string; to: string }> = [];
+  if (patch.name !== undefined) items.push({ field: "名称", from: currentAgent.name, to: patch.name });
+  if (patch.note !== undefined) items.push({ field: "备注", from: currentAgent.note ?? "—", to: patch.note || "—" });
+  if (patch.enabled !== undefined) {
+    items.push({ field: "状态", from: currentAgent.enabled ? "已启用" : "已禁用", to: patch.enabled ? "已启用" : "已禁用" });
+  }
+  if (patch.role !== undefined) items.push({ field: "角色", from: currentAgent.role ?? "旧ACL", to: patch.role });
+  if (patch.constraints !== undefined) items.push({ field: "强制约束", from: "—", to: "已变更" });
+  return items;
+}
+
 export function AgentDetail() {
   const { userId } = useParams<{ userId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<Tab>(() => tabFromSearch(location.search));
+  const [, setSearchParams] = useSearchParams();
+  const activeTab: Tab = tabFromSearch(location.search);
+  const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
+  const [pendingNavTarget, setPendingNavTarget] = useState<string | null>(null);
+
+  function goToTab(tab: Tab) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === "info") next.delete("tab");
+        else next.set("tab", tab);
+        return next;
+      },
+      { replace: false }
+    );
+  }
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "agent", userId],
@@ -227,8 +257,8 @@ export function AgentDetail() {
   });
 
   const { data: rolesData } = useQuery({
-    queryKey: ["admin", "roles"],
-    queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
+    queryKey: ["admin", "roles", "formal"],
+    queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
   });
 
   const [editName, setEditName] = useState<string | null>(null);
@@ -243,6 +273,15 @@ export function AgentDetail() {
 
   const agent = data?.agent;
   const version = data?.version;
+  const constraintsDirty =
+    editConstraints !== null
+    && (!agent || !sameConstraints(editConstraints, constraintsFromAgent(agent)));
+  const hasEdits =
+    editName !== null
+    || editNote !== null
+    || editEnabled !== null
+    || editRole !== null
+    || constraintsDirty;
 
   function buildPatch(): AgentPatch {
     const patch: AgentPatch = {};
@@ -307,7 +346,7 @@ export function AgentDetail() {
     },
     onSuccess: (data) => {
       setDiffPreview(data);
-      setActiveTab("diff");
+      goToTab("diff");
     },
     onError: (err: Error) => toast.error(err.message)
   });
@@ -322,7 +361,7 @@ export function AgentDetail() {
       void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
       setDiffPreview(null);
       setConfirmSave(null);
-      setActiveTab("info");
+      goToTab("info");
       clearEditForm();
     },
     onError: (err: Error) => toast.error(err.message)
@@ -452,9 +491,52 @@ export function AgentDetail() {
     previewMutation.mutate(buildPatch());
   }
 
+  // Normalize unknown ?tab= values to info via URL replace.
   useEffect(() => {
-    setActiveTab(tabFromSearch(location.search));
-  }, [location.search]);
+    const rawTab = new URLSearchParams(location.search).get("tab");
+    if (rawTab && !["info", "tokens", "permissions", "diff"].includes(rawTab)) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("tab");
+        return next;
+      }, { replace: true });
+    }
+  }, [location.search, setSearchParams]);
+
+  // beforeunload guard when there are unsaved edits.
+  useEffect(() => {
+    if (!hasEdits) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasEdits]);
+
+  // Capture-phase <a> intercept: prompt when navigating away from this agent's page.
+  useEffect(() => {
+    if (!hasEdits) return;
+    const agentPathname = `/admin/agents/${userId}`;
+    function onCapture(e: MouseEvent) {
+      const anchor = (e.target as Element).closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href) return;
+      try {
+        const url = new URL(href, window.location.href);
+        if (url.pathname === agentPathname) return;
+      } catch {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingNavTarget(href);
+      setLeaveConfirmVisible(true);
+    }
+    document.addEventListener("click", onCapture, true);
+    return () => document.removeEventListener("click", onCapture, true);
+  }, [hasEdits, userId]);
 
   // Cmd+S / Ctrl+S mirrors the sticky-bar save action (low-risk one-step or role confirm).
   useEffect(() => {
@@ -481,18 +563,12 @@ export function AgentDetail() {
   if (error || !agent) return <div className="pl-notice">加载失败：{error ? (error as Error).message : "Agent 不存在"}</div>;
 
   const roles = rolesData?.roles ?? [];
+  const formalRoles = roles.filter((r) => r.source !== "template");
+  const currentRoleInFormalList = !agent.role || formalRoles.some((r) => r.id === agent.role);
   const currentRole = editRole !== null ? editRole : agent.role;
   const effective = agent.effectivePermissions;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
   const constraintRows = editConstraints !== null ? editConstraints : constraintsFromAgent(agent);
-  const constraintsDirty =
-    editConstraints !== null && !sameConstraints(editConstraints, constraintsFromAgent(agent));
-  const hasEdits =
-    editName !== null
-    || editNote !== null
-    || editEnabled !== null
-    || editRole !== null
-    || constraintsDirty;
   const groupedSources = effective ? groupSourcesByConnectionAndSchema(effective.sources) : [];
   const dryRunEffective = diffPreview?.effectivePermissions ?? confirmSave?.effectivePermissions;
 
@@ -545,13 +621,17 @@ export function AgentDetail() {
         }
       />
 
-      <div className="pl-admin-tabbar">
+      <div className="pl-admin-tabbar" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`tab-panel-${tab.key}`}
+            id={`tab-${tab.key}`}
             className={`pl-admin-tab ${activeTab === tab.key ? "pl-admin-tab--active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => goToTab(tab.key)}
           >
             {tab.label}
             {tab.key === "diff" && diffPreview && (
@@ -563,7 +643,7 @@ export function AgentDetail() {
         ))}
       </div>
 
-      <div className="pl-admin-tab-panel">
+      <div className="pl-admin-tab-panel" role="tabpanel" id={`tab-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
         {activeTab === "info" && (
           <div className="grid gap-4 max-w-3xl pb-32">
             <div className="grid gap-4 max-w-md">
@@ -612,23 +692,30 @@ export function AgentDetail() {
                   onChange={(e) => updateEditRole(e.target.value)}
                 >
                   <option value="" disabled>选择角色</option>
-                  {roles.map((role) => {
-                    const tags: string[] = [];
-                    if (role.source === "template") tags.push("参考模板");
-                    if (role.invalid) tags.push("待修复");
-                    const suffix = tags.length > 0 ? ` · ${tags.join(" · ")}` : "";
-                    return (
-                      <option key={role.id} value={role.id} disabled={role.invalid}>
-                        {role.id}
-                        {suffix}
-                      </option>
-                    );
-                  })}
+                  {!currentRoleInFormalList && agent.role && (
+                    <option value={agent.role} disabled>
+                      {agent.role} · 当前绑定（已失效）
+                    </option>
+                  )}
+                  {formalRoles.map((role) => (
+                    <option key={role.id} value={role.id} disabled={role.invalid}>
+                      {role.id}
+                      {role.invalid ? " · 待修复" : ""}
+                    </option>
+                  ))}
                 </select>
                 {!agent.role && agent.allow && (
                   <span className="text-xs text-fg-muted">
                     旧 ACL 只读兼容；保存角色后会移除该 <span className="notranslate" translate="no">Agent</span> 的 legacy allow。
                   </span>
+                )}
+                {!currentRoleInFormalList && agent.role && (
+                  <div className="flex items-center gap-1 text-xs text-warning">
+                    当前角色不在正式列表中；
+                    <Link to={`/admin/roles/${agent.role}`} className="text-accent underline">
+                      前往修复 →
+                    </Link>
+                  </div>
                 )}
               </label>
             </div>
@@ -897,63 +984,74 @@ export function AgentDetail() {
                         onChange={() => toggleTokenSelection(token.label)}
                         aria-label={`选择 ${token.label}`}
                       />
-                      <div className="grid gap-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <div className="grid gap-2 min-w-0">
+                        <div className="grid gap-1">
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">身份</div>
+                          <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{token.label}</span>
                           <span className="pl-status-badge pl-status-done">活跃</span>
-                        </div>
-                        <div className="text-xs text-fg-muted">
-                          <span>创建 {token.created}</span>
-                          {token.expires_at && <span> · 过期 {token.expires_at}</span>}
-                        </div>
-                        <div className="text-xs text-fg-muted">
-                          备注：
-                          {token.device_name ? (
-                            <span className="notranslate" translate="no">{token.device_name}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </div>
-                        <div className="text-xs text-fg-muted">
-                          <span className="notranslate" translate="no">Agent</span> 类型：
-                          <span className="notranslate" translate="no">
-                            {token.last_client
-                              ? `${token.last_client}${token.last_client_version ? ` ${token.last_client_version}` : ""}`
-                              : "—"}
-                          </span>
-                        </div>
-                        <div className="text-xs text-fg-muted">
-                          最近设备名：
-                          {token.last_device_name_seen ? (
-                            <span className="notranslate" translate="no">{token.last_device_name_seen}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </div>
-                        <div className="text-xs text-fg-muted">
-                          最近使用：
-                          {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "—"}
-                          {token.last_tool ? ` · ${token.last_tool}` : ""}
-                          {token.last_outcome ? ` · ${token.last_outcome}` : ""}
-                        </div>
-                        <div className="text-xs text-fg-muted">
-                          访问 IP：
-                          <span className="notranslate font-mono" translate="no">
-                            {token.last_ip ?? "—"}
-                          </span>
-                          {token.distinct_ips_7d != null && token.distinct_ips_7d > 1 ? (
-                            <span className="text-warning"> · 近 7 日 {token.distinct_ips_7d} 个 IP</span>
-                          ) : null}
-                        </div>
-                        {token.last_user_agent ? (
-                          <div className="text-xs text-fg-muted truncate" title={token.last_user_agent}>
-                            <span className="notranslate" translate="no">User-Agent</span>：
-                            <span className="notranslate" translate="no">{token.last_user_agent}</span>
                           </div>
-                        ) : null}
-                        <div className="text-xs text-fg-muted font-mono">
-                          hash: {token.hash.slice(0, 24)}…
+                          <div className="text-xs text-fg-muted">
+                            <span>创建 {token.created}</span>
+                            {token.expires_at && <span> · 过期 {token.expires_at}</span>}
+                          </div>
+                          <div className="text-xs text-fg-muted">
+                            备注：
+                            {token.device_name ? (
+                              <span className="notranslate" translate="no">{token.device_name}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </div>
                         </div>
+                        <div className="grid gap-1">
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">最近使用</div>
+                          <div className="text-xs text-fg-muted">
+                            <span className="notranslate" translate="no">Agent</span> 类型：
+                            <span className="notranslate" translate="no">
+                              {token.last_client
+                                ? `${token.last_client}${token.last_client_version ? ` ${token.last_client_version}` : ""}`
+                                : "—"}
+                            </span>
+                          </div>
+                          <div className="text-xs text-fg-muted">
+                            最近设备名：
+                            {token.last_device_name_seen ? (
+                              <span className="notranslate" translate="no">{token.last_device_name_seen}</span>
+                            ) : (
+                              "—"
+                            )}
+                          </div>
+                          <div className="text-xs text-fg-muted">
+                            最近使用：
+                            {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "—"}
+                            {token.last_tool ? ` · ${token.last_tool}` : ""}
+                            {token.last_outcome ? ` · ${token.last_outcome}` : ""}
+                          </div>
+                        </div>
+                        <details className="text-xs text-fg-muted">
+                          <summary className="cursor-pointer select-none">安全信息 / 技术详情</summary>
+                          <div className="grid gap-1 mt-1 pl-2">
+                            <div>
+                              访问 IP：
+                              <span className="notranslate font-mono" translate="no">
+                                {token.last_ip ?? "—"}
+                              </span>
+                              {token.distinct_ips_7d != null && token.distinct_ips_7d > 1 ? (
+                                <span className="text-warning"> · 近 7 日 {token.distinct_ips_7d} 个 IP</span>
+                              ) : null}
+                            </div>
+                            {token.last_user_agent ? (
+                              <div className="truncate" title={token.last_user_agent}>
+                                <span className="notranslate" translate="no">User-Agent</span>：
+                                <span className="notranslate" translate="no">{token.last_user_agent}</span>
+                              </div>
+                            ) : null}
+                            <div className="font-mono notranslate" translate="no">
+                              hash: [REDACTED]
+                            </div>
+                          </div>
+                        </details>
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
@@ -1064,19 +1162,7 @@ export function AgentDetail() {
                   </div>
                 </div>
                 <div className="grid gap-2" data-testid="capability-preview">
-                  <div className="text-sm font-medium">
-                    Data Capability Preview
-                    {effective.capabilityDigest ? (
-                      <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
-                        digest={effective.capabilityDigest}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-fg-muted">
-                    展示编译态
-                    <span className="mx-1 font-mono notranslate" translate="no">FinalRows</span>
-                    摘要与是否受保护；不表示行级取数已在上游注入生效。
-                  </p>
+                  <div className="text-sm font-medium">数据能力</div>
                   {(effective.capabilities?.length ?? 0) === 0 ? (
                     <p className="text-sm text-fg-muted">
                       {legacyWildcard
@@ -1084,19 +1170,44 @@ export function AgentDetail() {
                         : "无 DataPlane capability。"}
                     </p>
                   ) : (
-                    <ul className="grid gap-1 font-mono text-xs">
-                      {effective.capabilities!.map((cap) => (
-                        <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
-                          {cap.tool} × {cap.sourceKey}
-                          {" · rowGrant="}
-                          {formatRowGrantPreviewLabel(cap.rowGrant)}
-                          {" · FinalRows="}
-                          {formatFinalRowsPreviewLabel(cap.finalRows, cap.rowGrant)}
-                          {cap.protected ? " · protected" : ""}
-                          {cap.constraintsSummary ? ` · constraints=${cap.constraintsSummary}` : ""}
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      <ul className="grid gap-1 text-sm">
+                        {effective.capabilities!.map((cap) => (
+                          <li key={`${cap.tool}:${cap.sourceKey}`}>
+                            <span className="notranslate" translate="no">{cap.tool}</span>
+                            {" × "}
+                            <span className="notranslate" translate="no">{cap.sourceKey}</span>
+                            {cap.constraintsSummary ? (
+                              <span className="notranslate" translate="no">{` · constraints=${cap.constraintsSummary}`}</span>
+                            ) : null}
+                            {cap.protected ? " · protected" : ""}
+                          </li>
+                        ))}
+                      </ul>
+                      <details>
+                        <summary className="text-xs text-fg-muted cursor-pointer select-none">技术详情</summary>
+                        <div className="mt-2 grid gap-1">
+                          {effective.capabilityDigest ? (
+                            <div className="font-mono text-xs notranslate" translate="no">
+                              {`digest=${effective.capabilityDigest}`}
+                            </div>
+                          ) : null}
+                          <ul className="grid gap-1 font-mono text-xs">
+                            {effective.capabilities!.map((cap) => (
+                              <li key={`tech:${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
+                                {cap.tool} × {cap.sourceKey}
+                                {" · rowGrant="}
+                                {formatRowGrantPreviewLabel(cap.rowGrant)}
+                                {" · FinalRows="}
+                                {formatFinalRowsPreviewLabel(cap.finalRows, cap.rowGrant)}
+                                {cap.protected ? " · protected" : ""}
+                                {cap.constraintsSummary ? ` · constraints=${cap.constraintsSummary}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </details>
+                    </>
                   )}
                 </div>
               </div>
@@ -1112,8 +1223,30 @@ export function AgentDetail() {
           <div className="grid gap-4 pb-32">
             {diffPreview ? (
               <>
-                <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml，确认后才会落盘。</p>
-                <DiffViewer diff={diffPreview.diff} />
+                {(() => {
+                  const summary = buildChangeSummary(diffPreview.patch, agent);
+                  return summary.length > 0 ? (
+                    <div className="pl-card grid gap-2" data-testid="diff-change-summary">
+                      <div className="text-sm font-medium">变更摘要</div>
+                      <ul className="grid gap-1 text-sm">
+                        {summary.map(({ field, from, to }) => (
+                          <li key={field} className="flex flex-wrap items-center gap-1">
+                            <span className="font-medium">{field}</span>
+                            <span className="text-fg-muted">{from}</span>
+                            <span>→</span>
+                            <span>{to}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null;
+                })()}
+                <details>
+                  <summary className="text-xs text-fg-muted cursor-pointer select-none mb-2 notranslate" translate="no">
+                    技术详情（access.yaml diff）
+                  </summary>
+                  <DiffViewer diff={diffPreview.diff} />
+                </details>
                 {dryRunEffective?.capabilities && dryRunEffective.capabilities.length > 0 && (
                   <div className="pl-card grid gap-2" data-testid="dryrun-finalrows-preview">
                     <div className="text-sm font-medium">
@@ -1141,7 +1274,7 @@ export function AgentDetail() {
                     className="pl-btn pl-btn--ghost"
                     onClick={() => {
                       setDiffPreview(null);
-                      setActiveTab("info");
+                      goToTab("info");
                     }}
                   >
                     取消
@@ -1198,6 +1331,39 @@ export function AgentDetail() {
             >
               {directSaveMutation.isPending || confirmPreviewMutation.isPending ? "保存中…" : "保存"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {leaveConfirmVisible && (
+        <div className="pl-modal-backdrop z-[70]" data-testid="agent-leave-confirm-modal">
+          <div className="pl-modal-panel max-w-sm">
+            <h2 className="text-lg font-semibold mb-2">确认离开</h2>
+            <p className="text-sm text-fg-muted mb-4">您有未保存的修改，离开后将丢失。</p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost"
+                onClick={() => {
+                  setLeaveConfirmVisible(false);
+                  setPendingNavTarget(null);
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="pl-btn pl-btn--danger"
+                onClick={() => {
+                  const target = pendingNavTarget;
+                  setLeaveConfirmVisible(false);
+                  setPendingNavTarget(null);
+                  if (target) navigate(target);
+                }}
+              >
+                确认离开
+              </button>
+            </div>
           </div>
         </div>
       )}

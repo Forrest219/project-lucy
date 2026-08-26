@@ -8,6 +8,7 @@ import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import { RowMoreMenu } from "../../components/RowMoreMenu";
 
 type AgentsResponse = {
   agents: Agent[];
@@ -176,19 +177,6 @@ function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
   );
 }
 
-function formatDateTimeCell(value?: string): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
 function RoleSummaryCard({ role }: { role: Role | undefined }) {
   if (!role) {
     return (
@@ -279,10 +267,11 @@ function RoleSummaryCard({ role }: { role: Role | undefined }) {
 }
 
 function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: () => void; onCreated: (id: string) => void }) {
+  const formalRoles = roles.filter((item) => item.source !== "template");
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [role, setRole] = useState(roles.find((item) => !item.invalid)?.id ?? roles[0]?.id ?? "");
+  const [role, setRole] = useState(formalRoles.find((item) => !item.invalid)?.id ?? formalRoles[0]?.id ?? "");
   const [preview, setPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
   const [step, setStep] = useState<"form" | "diff">("form");
 
@@ -313,7 +302,7 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
     };
   }
 
-  const selectedRole = roles.find((item) => item.id === role);
+  const selectedRole = formalRoles.find((item) => item.id === role);
   const isInvalid = !!selectedRole?.invalid;
   const canSubmit = !!id.trim() && !!name.trim() && !!role && !isInvalid;
 
@@ -356,12 +345,9 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                 </Link>
               </div>
               <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
-                {roles.length === 0 && <option value="" disabled>暂无可用角色</option>}
-                {roles.map((item) => {
-                  const tags: string[] = [];
-                  if (item.source === "template") tags.push("参考模板");
-                  if (item.invalid) tags.push("待修复");
-                  const suffix = tags.length > 0 ? ` · ${tags.join(" · ")}` : "";
+                {formalRoles.length === 0 && <option value="" disabled>暂无可用角色</option>}
+                {formalRoles.map((item) => {
+                  const suffix = item.invalid ? " · 待修复" : "";
                   return (
                     <option key={item.id} value={item.id} disabled={item.invalid}>
                       {item.id}
@@ -370,7 +356,7 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                   );
                 })}
               </select>
-              {roles.length === 0 && (
+              {formalRoles.length === 0 && (
                 <span className="text-xs text-warning-strong">
                   还没有可用角色。请先创建角色。
                   <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
@@ -420,8 +406,8 @@ export function AgentList() {
     queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
   });
   const { data: rolesData } = useQuery({
-    queryKey: ["admin", "roles"],
-    queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
+    queryKey: ["admin", "roles", { includeTemplates: false }],
+    queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
   });
 
   const agents = data?.agents ?? [];
@@ -431,6 +417,14 @@ export function AgentList() {
   const activeAgentCountLast7d = summary.activeAgentCountLast7d ?? agents.filter((agent) => (agent.stats?.callsLast7d ?? 0) > 0).length;
   const activeTokenTotal = summary.activeTokenCountLast7d;
   const callsLast7dTotal = summary.callsLast7d;
+  const isFilterActive = search !== "" || filterEnabled !== "all" || filterRole !== "all" || filterActivity !== "all";
+  function clearFilters() {
+    setSearch("");
+    setFilterEnabled("all");
+    setFilterRole("all");
+    setFilterActivity("all");
+  }
+
   const roleOptions = Array.from(
     new Set(agents.map((agent) => agent.role).filter((role): role is string => Boolean(role)))
   ).sort((a, b) => a.localeCompare(b, "zh-CN"));
@@ -576,6 +570,16 @@ export function AgentList() {
             </label>
           </div>
           <div className="pl-whitelist-toolbar-actions">
+            {isFilterActive && (
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost"
+                onClick={clearFilters}
+                data-testid="clear-filters-btn"
+              >
+                清除筛选
+              </button>
+            )}
             <span className="pl-catalog-result-count" data-testid="agent-list-result-count">
               {filtered.length} 条结果
             </span>
@@ -590,7 +594,12 @@ export function AgentList() {
               <p className="text-fg-muted mb-4">还没有任何 <span className="notranslate" translate="no">Agent</span>。创建第一个 <span className="notranslate" translate="no">Agent</span> 以开始管理访问权限。</p>
               <button type="button" className="pl-btn pl-btn--primary notranslate" translate="no" onClick={() => setShowNew(true)}>新建第一个 <span className="notranslate" translate="no">Agent</span></button>
             </div>
-          ) : "没有匹配的 Agent"}
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-fg-muted mb-4">未找到符合条件的 <span className="notranslate" translate="no">Agent</span></p>
+              <button type="button" className="pl-btn pl-btn--ghost" onClick={clearFilters} data-testid="clear-filters-btn-empty">清除筛选</button>
+            </div>
+          )}
         </div>
       ) : (
         <section
@@ -615,8 +624,6 @@ export function AgentList() {
                     近 7 天活跃 <span className="notranslate" translate="no">Token</span>
                   </th>
                   <th scope="col">近 7 天调用量</th>
-                  <th scope="col">创建日期</th>
-                  <th scope="col">配置最后变更时间</th>
                   <th scope="col">最近访问时间</th>
                   <th scope="col">操作</th>
                 </tr>
@@ -634,7 +641,14 @@ export function AgentList() {
                       <td className="pl-agent-list-table-num" data-testid={`agent-row-index-${agent.id}`}>{index + 1}</td>
                       <td>
                         <div className="pl-agent-list-table-name">
-                          <span className="font-medium">{agent.name}</span>
+                          <Link
+                            to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
+                            className="font-medium pl-agent-list-table-name-link"
+                            aria-label={`查看 ${agent.name} 的对象详情`}
+                            data-testid={`agent-name-link-${agent.id}`}
+                          >
+                            {agent.name}
+                          </Link>
                           <span className="pl-agent-list-table-meta notranslate" translate="no">
                             {agent.id}
                           </span>
@@ -681,43 +695,33 @@ export function AgentList() {
                       >
                         {callsLast7d}
                       </td>
-                      <td>{formatDateTimeCell(agent.createdAt)}</td>
-                      <td>{formatDateTimeCell(agent.configUpdatedAt)}</td>
                       <td>
                         <LastSeen lastSeen={agent.stats?.lastSeen} />
                       </td>
                       <td>
                         <div className="pl-agent-list-row-actions">
                           <Link
-                            to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
-                            className="pl-row-action-link notranslate"
-                            translate="no"
-                            aria-label={`查看 ${agent.name} 的对象详情`}
-                            data-testid={`agent-row-detail-${agent.id}`}
-                          >
-                            查看详情
-                          </Link>
-                          <Link
                             to={`/admin/agents/${agent.id}`}
                             className="pl-row-action-link"
                           >
                             编辑
                           </Link>
-                          <Link
-                            to={`/admin/agents/${encodeURIComponent(agent.id)}?tab=permissions`}
-                            className="pl-row-action-link"
-                            aria-label={`查看 ${agent.name} 的权限`}
-                            data-testid={`agent-permissions-link-${agent.id}`}
-                          >
-                            查看权限
-                          </Link>
-                          <button
-                            type="button"
-                            className="pl-row-action-link"
-                            onClick={() => navigate(`/admin/audit?user=${agent.id}`)}
-                          >
-                            查看日志
-                          </button>
+                          <RowMoreMenu
+                            ariaLabel={`${agent.name} 更多操作`}
+                            items={[
+                              {
+                                kind: "link",
+                                label: "查看权限",
+                                href: `/admin/agents/${encodeURIComponent(agent.id)}?tab=permissions`,
+                                testId: `agent-permissions-link-${agent.id}`
+                              },
+                              {
+                                kind: "action",
+                                label: "查看日志",
+                                onSelect: () => navigate(`/admin/audit?user=${agent.id}`)
+                              }
+                            ]}
+                          />
                         </div>
                       </td>
                     </tr>
