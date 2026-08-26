@@ -279,7 +279,7 @@ export function Monitor() {
     <div className="pl-page-stack">
       <PageHeader
         title="趋势监控"
-        description="查看 eval 质量趋势、失败集中度与 drift 分布。"
+        description="监控评测通过率、失败集中度与质量漂移趋势。"
         badges={
           <>
             <span>{activeDomain}</span>
@@ -324,7 +324,7 @@ export function Monitor() {
         <MetricCard
           label="最新通过率"
           value={pct(lastPoint?.passRate)}
-          help="所选时间窗内最后一个统计点的评测通过率。"
+          help="所选时间窗内最后一个统计点的评测通过率。通过率 = PASS / total_cases（PASS + FAIL + SKIP 均计入分母，D2）；仅统计 status='succeeded' 运行。"
           subValue={lastPoint?.date ?? "暂无趋势数据"}
           tone={statusTone}
           helpId="latest-pass-rate"
@@ -337,12 +337,12 @@ export function Monitor() {
           helpId="latest-runs"
         />
         <MetricCard
-          label="失败 case"
+          label="Top 失败用例数"
           value={topFails.length}
-          help="时间窗内失败次数靠前的用例集中项数量；详见下方 Top failures。"
-          subValue={topFails.length > 0 ? "见 Top failures" : "暂无失败集中项"}
+          help="时间窗内 status='succeeded' 运行中失败次数靠前的用例数量（最多返回服务端配置上限条）；详见下方 Top 失败用例数列表。"
+          subValue={topFails.length > 0 ? "见下方 Top 失败用例数" : "暂无失败集中项"}
           tone={failTone}
-          helpId="fail-cases"
+          helpId="top-failures"
         />
         <MetricCard
           label="红线状态"
@@ -447,9 +447,9 @@ export function Monitor() {
         </section>
 
         <section className="pl-panel">
-          <p className="pl-panel-title">失败 Top-{topFails.length}</p>
+          <p className="pl-panel-title">Top 失败用例数</p>
           {topFails.length === 0 ? (
-            <div className="pl-empty-state">暂无失败 case</div>
+            <div className="pl-empty-state">暂无失败用例集中项</div>
           ) : (
             <table className="w-full text-sm">
             <thead>

@@ -526,14 +526,31 @@ export function Onboarding() {
     queryFn: () => apiGet<AgentsResponse>("/api/admin/agents"),
     refetchOnMount: "always"
   });
-  // M36 review follow-up: query the latest eval run so the "近 30 天无评测数据"
-  // item is honest. We only fetch the head of the list (limit=1); the API
-  // already supports this filter. If the call fails (older deployments,
-  // missing endpoint) we silently fall back to 0 so the dashboard never
-  // fabricates a critical alert.
+  // Spec 128 Task 4: query bounded 30-day eval summary; never use limit=1 count.
+  // API returns MetricResult-style { runCount: { state, value }, latestSucceededRunAt }.
+  // On failure, state='unavailable' keeps evalRunsLast30d=null so dashboard
+  // never fabricates a "近 30 天无评测数据" item.
   const evalLastRunQuery = useQuery({
-    queryKey: ["eval", "runs", "last"],
-    queryFn: () => apiGet<{ total: number; runs: unknown[] }>("/api/eval/runs?limit=1"),
+    queryKey: ["eval", "runs", "summary", 30],
+    queryFn: () => apiGet<{
+      runCount: { metricId: string; state: string; value: number | null };
+      latestSucceededRunAt: string | null;
+    }>("/api/eval/runs/summary?days=30"),
+    retry: false,
+    staleTime: 60_000,
+    refetchOnMount: "always"
+  });
+
+  // Spec 128 Task 7: ACL denials come from audit DB via governance overview, not per-Agent stats sum.
+  const aclOverviewQuery = useQuery({
+    queryKey: ["admin", "governance", "overview", 168],
+    queryFn: () =>
+      apiGet<{
+        usageOverview: {
+          denied?: number | null;
+          metricsState?: "ok" | "unavailable";
+        };
+      }>("/api/admin/governance/overview?hours=168"),
     retry: false,
     staleTime: 60_000,
     refetchOnMount: "always"
@@ -662,22 +679,29 @@ export function Onboarding() {
   // M36: Ops Dashboard view-model inputs.
   // Spec 104: catalog-pending stays same formula as semantic gap, on enabled set.
   const pendingCatalogItems = Math.max(0, coverageTotal - doneSources);
-  const aclDenied7d = agents.reduce(
-    (sum, agent) => sum + (agent.stats?.deniedLast7d ?? 0),
-    0
-  );
+  const aclDeniedState = !aclOverviewQuery.isSuccess
+    ? aclOverviewQuery.isError
+      ? "unavailable"
+      : "loading"
+    : aclOverviewQuery.data?.usageOverview?.metricsState === "unavailable"
+      ? "unavailable"
+      : aclOverviewQuery.data?.usageOverview
+        ? "ok"
+        : "unavailable";
+  const aclDenied7d =
+    aclDeniedState === "ok" ? (aclOverviewQuery.data?.usageOverview?.denied ?? 0) : null;
   const actionItems = useMemo(
     () =>
       buildActionRequiredItems({
         semanticCoverage: { done: doneSources, total: coverageTotal },
         pendingCatalogItems,
         pendingPublishFiles: changedFiles.length,
-        // M39 review follow-up (P2-B): pass `null` while the eval probe is
-        // still loading or has errored so the dashboard never fabricates
-        // a misleading "近 30 天无评测数据" item against unknown data.
-        // Only an explicit `0` from the eval API surfaces the item.
+        // Spec 128 Task 4: only confirmed 0 triggers the eval-gap item.
+        // state='unavailable' or still loading → null (no fabricated alert).
+        // state='no_data' → value=0 (confirmed zero runs) → surfaces item.
         evalRunsLast30d: evalLastRunQuery.isSuccess
-          ? (evalLastRunQuery.data?.runs.length ?? 0)
+          && evalLastRunQuery.data?.runCount.state !== "unavailable"
+          ? (evalLastRunQuery.data?.runCount.value ?? 0)
           : null
       }),
     [
@@ -774,7 +798,8 @@ export function Onboarding() {
       sourcesQuery.refetch(),
       diffQuery.refetch(),
       agentsQuery.refetch(),
-      evalLastRunQuery.refetch()
+      evalLastRunQuery.refetch(),
+      aclOverviewQuery.refetch()
     ]);
     const failed = settled.find((result) => result.status === "rejected");
     if (failed) {
@@ -845,7 +870,7 @@ export function Onboarding() {
         description={
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span>
-              查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产与 <span className="notranslate" translate="no">Agent</span> 接入的当前健康状态。
+              查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产和 <span className="notranslate" translate="no">Agent</span> 接入状态，集中处理异常与待办。
             </span>
             {/*
               A11y announce channel (UX-OVERVIEW-003): writes only when status
@@ -969,16 +994,18 @@ export function Onboarding() {
             <OpsMetricRow
               testId="ops-metric-eval"
               icon={<Activity className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-eval" />}
-              title="评测数据"
+              title="近 30 天评测运行"
               value={
                 <span className="notranslate" translate="no">
-                  {evalLastRunQuery.isSuccess ? (evalLastRunQuery.data?.runs.length ?? 0) : "—"}
+                  {evalLastRunQuery.isSuccess && evalLastRunQuery.data?.runCount.state !== "unavailable"
+                    ? (evalLastRunQuery.data?.runCount.value ?? 0)
+                    : "—"}
                 </span>
               }
               hint={
-                evalLastRunQuery.isSuccess
-                  ? (evalLastRunQuery.data?.runs.length ?? 0) > 0
-                    ? "近 30 天已有评测记录"
+                evalLastRunQuery.isSuccess && evalLastRunQuery.data?.runCount.state !== "unavailable"
+                  ? (evalLastRunQuery.data?.runCount.value ?? 0) > 0
+                    ? "近 30 天已成功完成的评测运行数"
                     : "近 30 天无评测数据"
                   : "评测状态待刷新"
               }
@@ -1025,11 +1052,21 @@ export function Onboarding() {
             />
             <OpsMetricRow
               testId="ops-metric-acl"
-              tone={aclDenied7d > 0 ? "danger" : "default"}
+              tone={aclDenied7d != null && aclDenied7d > 0 ? "danger" : "default"}
               icon={<ShieldAlert className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-acl" />}
               title="近 7 天 ACL 拒绝"
-              value={<span className="notranslate" translate="no">{aclDenied7d}</span>}
-              hint="次拒绝"
+              value={
+                <span className="notranslate" translate="no">
+                  {aclDeniedState === "ok" ? (aclDenied7d ?? 0) : "—"}
+                </span>
+              }
+              hint={
+                aclDeniedState === "unavailable"
+                  ? "数据源不可用"
+                  : aclDeniedState === "loading"
+                    ? "统计加载中"
+                    : "次拒绝（审计库直查）"
+              }
               cta={{ to: DEEP_LINKS.auditDenied, label: "查看访问日志 ↗" }}
             />
             <OpsMetricRow

@@ -780,21 +780,26 @@ export type TokenSummary = {
 };
 
 export type AgentStats = {
-  callsLast7d: number;
-  deniedLast7d: number;
+  /** Spec 128 HR-1: null when metricsState=unavailable; do not coerce to 0 */
+  callsLast7d: number | null;
+  /** Spec 128 HR-1: null when metricsState=unavailable */
+  deniedLast7d: number | null;
   lastSeen?: string;
   /**
    * Distinct tokens that have appeared in `access_log` for this user
    * inside the last 7 days. May be `undefined` for legacy backends
    * (pre-M55) that do not emit the metric; callers must fall back to
    * `token.last_used` based bookkeeping in that case.
+   * Spec 128 HR-1: null when metricsState=unavailable.
    */
-  activeTokensLast7d?: number;
+  activeTokensLast7d?: number | null;
   /**
    * Number of token rows still present in `access.yaml` for this agent
    * (regardless of expiry). Mirrors `Agent.tokens.length`.
    */
   configuredTokens?: number;
+  /** Spec 128 §3.1: ok or unavailable */
+  metricsState?: "ok" | "unavailable";
   topTables: Array<{ table: string; calls: number }>;
 };
 
@@ -807,11 +812,18 @@ export type AgentStats = {
 export type AgentsResponseSummary = {
   agentCount: number;
   enabledAgentCount: number;
-  activeAgentCountLast7d?: number;
+  activeAgentCountLast7d?: number | null;
   configuredTokenCount: number;
-  activeTokenCountLast7d: number;
-  callsLast7d: number;
-  deniedLast7d: number;
+  /** Spec 128 HR-1: null when metricsState=unavailable */
+  activeTokenCountLast7d: number | null;
+  /** Spec 128 HR-1: null when metricsState=unavailable */
+  callsLast7d: number | null;
+  /** Spec 128 HR-1: null when metricsState=unavailable */
+  deniedLast7d: number | null;
+  /** Spec 128 §3.1: ok or unavailable */
+  metricsState?: "ok" | "unavailable";
+  windowStart?: string;
+  windowEnd?: string;
 };
 
 export type AgentPatch = {

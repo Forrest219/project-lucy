@@ -104,7 +104,9 @@ export function isTokenRecentlyActive(token: Agent["tokens"][number], now: Date 
  */
 export function activeTokenCount(agent: Agent, now: Date = new Date()): number {
   const backend = agent.stats?.activeTokensLast7d;
+  // null means unavailable; undefined means legacy backend (pre-M55) — use fallback
   if (typeof backend === "number") return backend;
+  if (backend === null) return 0; // unavailable; caller checks metricsState separately
   return agent.tokens.filter((token) => isTokenRecentlyActive(token, now)).length;
 }
 
@@ -124,13 +126,30 @@ export function summarizeAgents(
   let activeTokenCountLast7d = 0;
   let callsLast7d = 0;
   let deniedLast7d = 0;
+  let anyUnavailable = false;
   for (const agent of agents) {
     if (agent.enabled) enabledAgentCount += 1;
-    if ((agent.stats?.callsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
     configuredTokens += configuredTokenCount(agent);
+    if (agent.stats?.metricsState === "unavailable") {
+      anyUnavailable = true;
+      continue;
+    }
+    if ((agent.stats?.callsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
     activeTokenCountLast7d += activeTokenCount(agent, now);
     callsLast7d += agent.stats?.callsLast7d ?? 0;
     deniedLast7d += agent.stats?.deniedLast7d ?? 0;
+  }
+  if (anyUnavailable) {
+    return {
+      agentCount: agents.length,
+      enabledAgentCount,
+      activeAgentCountLast7d: null,
+      configuredTokenCount: configuredTokens,
+      activeTokenCountLast7d: null,
+      callsLast7d: null,
+      deniedLast7d: null,
+      metricsState: "unavailable"
+    };
   }
   return {
     agentCount: agents.length,
@@ -139,7 +158,8 @@ export function summarizeAgents(
     configuredTokenCount: configuredTokens,
     activeTokenCountLast7d,
     callsLast7d,
-    deniedLast7d
+    deniedLast7d,
+    metricsState: "ok"
   };
 }
 
@@ -406,6 +426,8 @@ export function AgentList() {
 
   const agents = data?.agents ?? [];
   const summary = data?.summary ?? summarizeAgents(agents);
+  // Spec 128 HR-1: metricsState=unavailable means null values; do not coerce to 0
+  const auditMetricsState: "ok" | "unavailable" = summary.metricsState === "unavailable" ? "unavailable" : "ok";
   const activeAgentCountLast7d = summary.activeAgentCountLast7d ?? agents.filter((agent) => (agent.stats?.callsLast7d ?? 0) > 0).length;
   const activeTokenTotal = summary.activeTokenCountLast7d;
   const callsLast7dTotal = summary.callsLast7d;
@@ -442,7 +464,7 @@ export function AgentList() {
         title={<span className="notranslate" translate="no">Agent</span>}
         description={
           <>
-            管理每个 <span className="notranslate" translate="no">Agent</span> 的角色、<span className="notranslate" translate="no">Token</span> 与数据访问边界。
+            管理 <span className="notranslate" translate="no">Agent</span> 身份、角色、<span className="notranslate" translate="no">Token</span> 及数据访问边界。
           </>
         }
         actions={
@@ -451,6 +473,7 @@ export function AgentList() {
       />
 
       <div className="pl-metric-grid" data-testid="agent-metric-grid">
+        {/* D1: config-class — always ok, reads directly from config response */}
         <MetricCard
           label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
           labelText="Agent 总数"
@@ -463,9 +486,10 @@ export function AgentList() {
         <MetricCard
           label={<span>近 7 天活跃 <span className="notranslate" translate="no">Agent</span></span>}
           labelText="近 7 天活跃 Agent"
-          value={activeAgentCountLast7d}
+          value={activeAgentCountLast7d ?? 0}
           help="近 7 天访问日志中至少出现过一次的去重 Agent 数。"
-          subValue="近 7 天有访问记录"
+          subValue={auditMetricsState === "ok" ? "近 7 天有访问记录" : undefined}
+          state={auditMetricsState}
           helpId="active-agent-count"
           testId="metric-active-agent-count"
         />
@@ -476,17 +500,19 @@ export function AgentList() {
             </span>
           }
           labelText="近 7 天活跃 Token"
-          value={activeTokenTotal}
+          value={activeTokenTotal ?? 0}
           help="近 7 天访问日志中出现过的去重 Token 数，不代表配置 Token 总数。"
-          subValue="访问日志中去重 token"
+          subValue={auditMetricsState === "ok" ? "访问日志中去重 token" : undefined}
+          state={auditMetricsState}
           helpId="active-token-count"
           testId="metric-active-token-count"
         />
         <MetricCard
           label="近 7 天调用量"
-          value={callsLast7dTotal}
+          value={callsLast7dTotal ?? 0}
           help="近 7 天经 MCP Proxy 记录的调用次数合计。"
-          subValue={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
+          subValue={auditMetricsState === "ok" ? <span><span className="notranslate" translate="no">MCP</span> 调用</span> : undefined}
+          state={auditMetricsState}
           helpId="calls"
           testId="metric-calls"
         />

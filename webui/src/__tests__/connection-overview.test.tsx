@@ -554,7 +554,7 @@ describe("ConnectionOverview", () => {
     // Radix Tooltip 1.x renders a visual popper plus a visually-hidden a11y
     // mirror, so the hint shows up twice. Assert on the first occurrence.
     const hints = await screen.findAllByTestId("metric-tooltip-hint");
-    expect(hints[0]).toHaveTextContent("统计 ktx.yaml 中已声明的连接，可在下方连接卡片逐一核对。");
+    expect(hints[0]).toHaveTextContent("分子：ktx.yaml connections[] 声明数；分母：无（绝对计数）。可在下方连接卡片逐一核对。");
     expect(screen.queryByText("关注问题：")).not.toBeInTheDocument();
     expect(screen.queryByText("定义：")).not.toBeInTheDocument();
     expect(screen.queryByText("健康标准：")).not.toBeInTheDocument();
@@ -716,7 +716,9 @@ describe("ConnectionOverview", () => {
 
     const header = await screen.findByTestId("page-header");
     expect(header.querySelector(".pl-page-header-badges")).toBeNull();
-    expect(header).toHaveTextContent("维护每个连接的 Schema、YAML 资产与配置同步状态。");
+    expect(header).toHaveTextContent(
+      "管理数据库连接、Schema 与 Schema Manifest，并查看连通性和本地目录同步状态。"
+    );
     expect(within(header).queryByText("工作目录：")).not.toBeInTheDocument();
     expect(within(header).queryByText("/tmp/project-lucy")).not.toBeInTheDocument();
     expect(within(header).queryByText("KTX 不可用")).not.toBeInTheDocument();

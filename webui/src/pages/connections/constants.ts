@@ -10,19 +10,19 @@ export interface MetricMeta {
 export const METRIC_METADATA = {
   connections: {
     title: "数据连接",
-    hint: "统计 ktx.yaml 中已声明的连接，可在下方连接卡片逐一核对。"
+    hint: "分子：ktx.yaml connections[] 声明数；分母：无（绝对计数）。可在下方连接卡片逐一核对。"
   },
   missingManifestSchemas: {
     title: "缺 Manifest 的 Schema",
-    hint: "统计已配置但还没有本地 Manifest 的 Schema，可在下方 Schema 行查看。"
+    hint: "分子：已声明 Schema 中本地无对应 Manifest 文件的数量；分母：所有已声明 Schema 数。可在下方 Schema 行查看。"
   },
   localCatalogTables: {
     title: "服务器目录已发现表",
-    hint: "统计服务器目录中 Schema Manifest 已读到的表，可对应下方已发现表数。"
+    hint: "分子：当前所有 Schema Manifest 中 tables[] 条目数之和；分母：无（绝对计数，取决于已读取的 Manifest 范围）。"
   },
   unenabledTables: {
     title: "未启用表",
-    hint: "统计本地表目录里尚未加入 enabled_tables 的表，缺 Manifest 的未知表不计入。"
+    hint: "分子：本地表目录中未加入 enabled_tables 的表数；分母：本地表目录中已知表总数（缺 Manifest 的未知表不计入分子也不计入分母）。"
   }
 } satisfies Record<string, MetricMeta>;
 

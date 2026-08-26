@@ -11,7 +11,7 @@
 
 - [0. 常见问题速查](#0-常见问题速查)
 - [1. 系统概述与架构拓扑](#1-系统概述与架构拓扑)
-  - [1.5 WebUI 入口速查（5+1 侧栏地图）](#15-webui-入口速查5+1-侧栏地图)
+  - [1.5 WebUI 入口速查（6+1 侧栏地图）](#15-webui-入口速查6+1-侧栏地图)
 - [2. 快速上手](#2-快速上手)
 - [3. 功能模块操作指南](#3-功能模块操作指南)
   - [3.1 部署向导与上线检查](#31-部署向导与上线检查)
@@ -170,7 +170,7 @@ KTX CLI / MCP daemon
 | `.ktx-ui/catalog-reloads.json` | 最近静态 Catalog reload 记录 | 系统生成 |
 | `.ktx-ui/eval/runs.sqlite`（或 `LUCY_EVAL_DB`） | Eval run 历史 | 系统生成 |
 
-### 1.5 WebUI 入口速查（5+1 侧栏地图）
+### 1.5 WebUI 入口速查（6+1 侧栏地图）
 
 本节是侧栏可见入口的镜像视图。
 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（v0.2 起由 `webui/src/app/navigation.ts` 导出）。
@@ -179,25 +179,25 @@ KTX CLI / MCP daemon
 
 | 分组 | 二级菜单 | 路径 | 一句话用途 |
 | --- | --- | --- | --- |
-| 系统概览 | 系统概览 | `/overview` | 聚合 Lucy `MCP`、`KTX` `Runtime`、语义资产与 `Agent` 接入的当前健康状态；「待处理事项」统计口径见 [系统概览待处理事项](#系统概览待处理事项) |
-| 数据接入 | 连接概览 | `/connections` | 查看每个连接的 `Schema`、`YAML` 资产与本地目录刷新状态 |
-| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 维护进入语义层的表范围，保存后写入 `ktx.yaml` 的 `enabled_tables` 字段 |
-| 语义建模 | 语义资产 | `/catalog` | 维护当前 `KTX` 项目的结构化 semantic-layer `YAML` 模型，按搜索 / 连接 / `Schema` / 语义状态定位对象 |
-| 语义建模 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明和分析 Playbook 的 Markdown 文档 |
-| 语义发布 | 发布工作台 | `/publish/workbench` | 查看并发布当前待生效的语义资产；发布后自动重建 `KTX` 索引 |
-| 语义发布 | 发布记录 | `/publish/history` | 查看历史发布批次、Reindex 执行结果及当前版本快照 |
-| 质量评测 | 评测用例 | `/eval/cases` | 管理各 domain 的 `Eval` case 定义（`YAML` 源文件） |
-| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行历史与单次运行的详情 |
-| 质量评测 | 趋势监控 | `/eval/monitor` | 查看 `Eval` 质量趋势、失败集中度与 drift 分布 |
-| 质量评测 | 安全候选 | `/eval/security-candidates` | 审阅安全评测候选与风险样本 |
-| 访问治理 | 使用概况 | `/admin/usage` | 查看 Agent、Token 和表的访问使用情况与调用量 |
-| 访问治理 | Agent | `/admin/agents` | 配置每个 `Agent` 实例能用哪些 `MCP` 工具和访问哪些表 |
-| 访问治理 | 角色权限 | `/admin/roles` | 管理 `access.yaml` 中的 `Role` 模板：新建 / 编辑 / 删除 / 复制 |
-| 访问治理 | 访问日志 | `/admin/audit` | 查看 `MCP` Proxy 记录的工具调用，可按用户 / 工具 / 状态过滤 |
-| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具 ACL 裁决，并可做受控 `tools/list` 试调 |
-| 访问治理 | 配置审计 | `/admin/config-audit` | 查看访问配置写入历史；多管理员模式下 actor 为登录管理员 id |
-| 访问治理 | 品牌外观 | `/admin/branding` | 配置客户 Logo、产品名称与副标题（侧栏与登录页） |
-| 访问治理 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户（所有者 / 运维）；丢密码见 break-glass |
+| 系统概览 | 系统概览 | `/overview` | 查看 Lucy `MCP`、`KTX` `Runtime`、语义资产和 `Agent` 接入状态，集中处理异常与待办。 |
+| 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |
+| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |
+| 语义建模 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |
+| 语义建模 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明与分析指引等业务文档。 |
+| 语义发布 | 发布工作台 | `/publish/workbench` | 审阅并校验语义与 `Wiki` 变更，同步索引后使其对 `Agent` 生效。 |
+| 语义发布 | 发布记录 | `/publish/history` | 查看历次语义发布的变更范围、执行结果与操作记录。 |
+| 质量评测 | 评测用例 | `/eval/cases` | 管理数据问答与语义质量的评测用例及预期结果。 |
+| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行记录、通过率、结果明细与失败诊断。 |
+| 质量评测 | 趋势监控 | `/eval/monitor` | 监控评测通过率、失败集中度与质量漂移趋势。 |
+| 质量评测 | 安全评测候选 | `/eval/security-candidates` | 从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。 |
+| 访问治理 | 使用概况 | `/admin/usage` | 查看 `Agent`、`Token` 和数据表的活跃度、调用量与响应耗时。 |
+| 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |
+| 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |
+| 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |
+| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 `Agent` 的 `MCP` 工具权限裁决，并执行受控接入试调。 |
+| 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |
+| 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |
+| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
 
 > 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
 
@@ -321,7 +321,7 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | N 张表待补语义 | `GET /api/sources`（`enabled === true`） | **已启用 ∩ `Manifest`** 中 `completion !== done` 的表数。按**表**计数；未启用 `Manifest` 表不计入。 |
 | N 个 Catalog 对象待处理 | 同上 | **当前实现与「待补语义」使用同一公式**（已启用集上的 `total − done`）；文案写 Catalog 同步不完整，但数字并非独立 Catalog 同步指标。 |
 | 存在 N 个待发布文件 | `GET /api/diff` | 返回的可审阅变更文件数（`files.length`）。 |
-| 近 30 天无评测数据 | `GET /api/eval/runs?limit=1` | 仅在接口成功且确认 **0 条**评测运行记录时出现。探测实现是「是否已有至少 1 条 run」，**未按 30 天时间窗过滤**；加载中或接口失败时不展示该项。 |
+| 近 30 天无评测数据 | `GET /api/eval/runs/summary?days=30` | 仅在接口成功且返回 `state='no_data'`（确认 **0 条** `status='succeeded'` 运行）时出现。时间窗为 `[started_at ≥ windowStart, started_at < windowEnd]`（30 天半开区间）；加载中、接口失败或 `state='unavailable'` 时均不展示该项。 |
 
 近 7 天 ACL 拒绝（各 `Agent` 的 `stats.deniedLast7d` 求和）只在「访问风险」指标卡展示，**不进入**「待处理事项」——滚动窗口无法通过「查看访问日志」闭环消除。
 
@@ -1310,7 +1310,7 @@ Token 发行规则：
 | --- | --- | --- |
 | `.ktx-ui/audit.sqlite` | 是（仅 generated） | Spec 125 运维 review |
 | `.ktx-ui/eval/runs.sqlite` | 是（runner 捕获时） | 与审计库隔离 |
-| `/eval/security-candidates` | 否（仍基于脱敏摘要） | 安全候选不依赖全文 SQL |
+| `/eval/security-candidates` | 否（仍基于脱敏摘要） | 安全评测候选不依赖全文 SQL |
 
 Admin API 示例：
 

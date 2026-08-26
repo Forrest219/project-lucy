@@ -94,9 +94,11 @@ export function CaseList() {
 
   const cases = casesData?.cases ?? [];
 
+  // Spec 128 D2/Task 5: latest RUN KPI is latest SUCCEEDED run.
+  // Running/failed runs must not overwrite the completed KPI.
   const { data: latestRunsData } = useQuery({
-    queryKey: ["eval", "runs", activeDomain, "latest"],
-    queryFn: () => apiGet<RunsResponse>(`/api/eval/runs?domain=${activeDomain}&limit=1`),
+    queryKey: ["eval", "runs", activeDomain, "latest-succeeded"],
+    queryFn: () => apiGet<RunsResponse>(`/api/eval/runs?domain=${activeDomain}&limit=1&status=succeeded`),
     enabled: Boolean(activeDomain)
   });
 
@@ -206,7 +208,7 @@ export function CaseList() {
       <div className="pl-page-stack">
         <PageHeader
           title="评测用例"
-          description="管理各 domain 的 eval case 定义（YAML 源文件）。"
+          description="管理数据问答与语义质量的评测用例及预期结果。"
         />
         <div className="pl-notice">未找到 eval domain，请确认 evals/ 目录下有对应的 cases yaml 文件。</div>
       </div>
@@ -217,12 +219,14 @@ export function CaseList() {
     <div className="pl-page-stack">
       <PageHeader
         title="评测用例"
-        description="管理各 domain 的 eval case 定义（YAML 源文件）。"
-        badges={
-          <span data-testid="case-list-coverage">
-            {latestRun ? `最近一次 Run #${latestRun.id} 通过率 ${Math.round((latestRun.passRate ?? 0) * 100)}%` : "尚未运行"}
-          </span>
-        }
+        description="管理数据问答与语义质量的评测用例及预期结果。"
+          badges={
+            <span data-testid="case-list-coverage">
+              {latestRun
+                ? `最近完成 Run #${latestRun.id} 通过率 ${Math.round(((latestRun.totalCases ?? 0) > 0 ? latestRun.passCount / latestRun.totalCases : 0) * 100)}%`
+                : "尚未运行"}
+            </span>
+          }
         actions={
           <div className="relative flex gap-2">
             <button
@@ -388,21 +392,22 @@ export function CaseList() {
           subValue={<span className="notranslate" translate="no">{activeDomain} domain</span>}
           helpId="case-total"
         />
+        {/* Spec 128 D2/Task 5: labels say "最近完成 Run"; formula is pass/total_cases */}
         <MetricCard
-          label="最近 Run 通过率"
-          value={latestRun ? `${Math.round((latestRun.passRate ?? 0) * 100)}%` : "—"}
-          help="该 domain 最近一次评测运行的通过用例占比。"
+          label="最近完成 Run 通过率"
+          value={latestRun ? `${Math.round(((latestRun.totalCases ?? 0) > 0 ? latestRun.passCount / latestRun.totalCases : 0) * 100)}%` : "—"}
+          help="该 domain 最近一次已完成（succeeded）评测运行的通过率，分母为 total_cases（含 SKIP）。"
           subValue={
             latestRun
-              ? `${latestRun.passCount}/${latestRun.totalCases}`
+              ? `PASS ${latestRun.passCount} / total ${latestRun.totalCases}`
               : "运行后才会出现"
           }
           helpId="latest-pass-rate"
         />
         <MetricCard
-          label="最近 Run 失败数"
+          label="最近完成 Run 失败数"
           value={latestRun?.failCount ?? 0}
-          help="该 domain 最近一次评测运行中失败的用例数。"
+          help="该 domain 最近一次已完成（succeeded）评测运行中失败的用例数。"
           subValue={
             latestRun
               ? `Run #${latestRun.id} · ${new Date(latestRun.startedAt).toLocaleString("zh-CN")}`

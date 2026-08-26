@@ -83,9 +83,28 @@
 
 不得把 overview 快照卡改成 List KPI，也不得把 List KPI 加上 CTA 冒充 overview。
 
-## 9. 验收
+## 9. 四状态规则（Spec 128 Gate A）
+
+从 Spec 128 起，`MetricCard` 增加 `state?: MetricState` prop。
+
+| state | 主值渲染 | subValue 渲染 |
+|---|---|---|
+| `ok`（默认） | `value` prop 原样渲染 | 正常口径说明 |
+| `no_data` | `—` | "所选范围内无数据" |
+| `unavailable` | `—` | `unavailableReason` 或 "数据源不可用" |
+| `partial` | `—` | ⚠ + `unavailableReason`（D3：永远不渲染数值估算） |
+
+**硬规则**：
+
+- 动态审计 KPI（windowed=true）当 `state=unavailable` 时，`value` 必须为 `null`，UI 不得用 `?? 0` 强制归零（HR-1）。
+- `state=partial` 时主值只能是 `—`，永远不展示数字作为主值（HR-2）。
+- Config 类 KPI（windowed=false）不受上述约束，可保持默认 `state="ok"`。
+- `help` 现在接受 `ReactNode`（保持 string 向后兼容）。
+
+## 10. 验收
 
 - [ ] 新 KPI 使用共享组件，不复制本地三层结构
 - [ ] 每卡有 help 触发器与非空说明
 - [ ] tone 符合 §6
 - [ ] 网格数量符合 Spec 103 §5.3
+- [ ] 动态审计 KPI 不使用 `?? 0` 掩盖 unavailable（Spec 128 HR-1）

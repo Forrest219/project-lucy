@@ -47,13 +47,15 @@ export function registerMonitorRoutes(app: FastifyInstance) {
 
     const config = await readMonitorConfig(projectRoot);
 
-    let rows: Array<{ date: string; pass_count: number; fail_count: number; runs: number; lowest_pass_rate: number }>;
+    // Spec 128 D2: SUM(total_cases) is denominator so SKIP is included.
+    let rows: Array<{ date: string; pass_count: number; fail_count: number; total_cases: number; runs: number; lowest_pass_rate: number }>;
     if (domain) {
       rows = db.prepare(`
         SELECT DATE(started_at) AS date,
-               SUM(pass_count)  AS pass_count,
-               SUM(fail_count)  AS fail_count,
-               COUNT(*)         AS runs,
+               SUM(pass_count)   AS pass_count,
+               SUM(fail_count)   AS fail_count,
+               SUM(total_cases)  AS total_cases,
+               COUNT(*)          AS runs,
                MIN(CASE WHEN total_cases > 0 THEN CAST(pass_count AS REAL) / total_cases ELSE 0 END) AS lowest_pass_rate
         FROM eval_run
         WHERE domain = ? AND DATE(started_at) >= ? AND status = 'succeeded'
@@ -63,9 +65,10 @@ export function registerMonitorRoutes(app: FastifyInstance) {
     } else {
       rows = db.prepare(`
         SELECT DATE(started_at) AS date,
-               SUM(pass_count)  AS pass_count,
-               SUM(fail_count)  AS fail_count,
-               COUNT(*)         AS runs,
+               SUM(pass_count)   AS pass_count,
+               SUM(fail_count)   AS fail_count,
+               SUM(total_cases)  AS total_cases,
+               COUNT(*)          AS runs,
                MIN(CASE WHEN total_cases > 0 THEN CAST(pass_count AS REAL) / total_cases ELSE 0 END) AS lowest_pass_rate
         FROM eval_run
         WHERE DATE(started_at) >= ? AND status = 'succeeded'
@@ -74,16 +77,14 @@ export function registerMonitorRoutes(app: FastifyInstance) {
       `).all(since) as typeof rows;
     }
 
-    const points = rows.map((r) => {
-      const total = r.pass_count + r.fail_count;
-      return {
-        date: r.date,
-        passRate: total > 0 ? r.pass_count / total : 0,
-        runs: r.runs,
-        lowestPassRate: r.lowest_pass_rate,
-        totalRuns: r.runs
-      };
-    });
+    // Spec 128 D2: denominator is total_cases (PASS + FAIL + SKIP), not pass+fail only.
+    const points = rows.map((r) => ({
+      date: r.date,
+      passRate: r.total_cases > 0 ? r.pass_count / r.total_cases : 0,
+      runs: r.runs,
+      lowestPassRate: r.lowest_pass_rate,
+      totalRuns: r.runs
+    }));
 
     const domainConfig = domain ? config.domains[domain] : undefined;
     const thresholds = {
@@ -104,6 +105,7 @@ export function registerMonitorRoutes(app: FastifyInstance) {
     const limit = parseInt(limitStr, 10) || 10;
     const since = new Date(Date.now() - days * 86400_000).toISOString();
 
+    // Spec 128 D2/Task 5: only succeeded runs count toward top failures.
     let rows: Array<{ case_id: string; fail_count: number; last_fail_at: string }>;
     if (domain) {
       rows = db.prepare(`
@@ -112,7 +114,10 @@ export function registerMonitorRoutes(app: FastifyInstance) {
                MAX(er.started_at) AS last_fail_at
         FROM eval_run_case erc
         JOIN eval_run er ON er.id = erc.run_id
-        WHERE erc.status = 'FAIL' AND er.domain = ? AND er.started_at >= ?
+        WHERE erc.status = 'FAIL'
+          AND er.status = 'succeeded'
+          AND er.domain = ?
+          AND er.started_at >= ?
         GROUP BY erc.case_id
         ORDER BY fail_count DESC
         LIMIT ?
@@ -124,7 +129,9 @@ export function registerMonitorRoutes(app: FastifyInstance) {
                MAX(er.started_at) AS last_fail_at
         FROM eval_run_case erc
         JOIN eval_run er ON er.id = erc.run_id
-        WHERE erc.status = 'FAIL' AND er.started_at >= ?
+        WHERE erc.status = 'FAIL'
+          AND er.status = 'succeeded'
+          AND er.started_at >= ?
         GROUP BY erc.case_id
         ORDER BY fail_count DESC
         LIMIT ?
@@ -137,7 +144,8 @@ export function registerMonitorRoutes(app: FastifyInstance) {
       lastFailAt: r.last_fail_at
     }));
 
-    return { ok: true, data: { items } };
+    // Spec 128 Task 5: expose configured limit so UI help text can state it.
+    return { ok: true, data: { items, limit } };
   });
 
   // GET /api/eval/monitor/drift-distribution

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
@@ -20,7 +20,7 @@ const FILTER_OPTIONS: Array<{ value: SourceFilter; label: string }> = [
 
 const METRIC_ITEMS: Array<{
   label: string;
-  help: string;
+  help: ReactNode;
   hint: string;
   valueKey: keyof RoleSummary;
   testId: string;
@@ -28,7 +28,7 @@ const METRIC_ITEMS: Array<{
 }> = [
   {
     label: "Role 总数",
-    help: "统计正式 Role（写入 access 配置、非参考模板）的数量。",
+    help: <>统计正式 <span className="notranslate" translate="no">Role</span>（写入 access 配置、非参考模板）的数量。</>,
     hint: "正式 Role（不含参考模板）",
     valueKey: "formalCount",
     testId: "metric-role-count",
@@ -36,7 +36,7 @@ const METRIC_ITEMS: Array<{
   },
   {
     label: "使用中",
-    help: "至少被 1 个 Agent 引用的正式 Role 数量。",
+    help: <>至少被 1 个 <span className="notranslate" translate="no">Agent</span> 引用的正式 <span className="notranslate" translate="no">Role</span> 数量。</>,
     hint: "至少 1 个 Agent 引用",
     valueKey: "inUseCount",
     testId: "metric-in-use",
@@ -44,7 +44,7 @@ const METRIC_ITEMS: Array<{
   },
   {
     label: "未引用",
-    help: "正式 Role 中尚未绑定任何 Agent 的数量。",
+    help: <>正式 <span className="notranslate" translate="no">Role</span> 中尚未绑定任何 <span className="notranslate" translate="no">Agent</span> 的数量。</>,
     hint: "正式 Role 暂无 Agent 绑定",
     valueKey: "unusedFormalCount",
     testId: "metric-unused",
@@ -52,7 +52,7 @@ const METRIC_ITEMS: Array<{
   },
   {
     label: "解析异常",
-    help: "正式 Role 权限解析失败的数量；请用筛选「待修复」查看，不在此卡点击筛选。",
+    help: <>正式 <span className="notranslate" translate="no">Role</span> 权限解析失败的数量；请用筛选「待修复」查看，不在此卡点击筛选。</>,
     hint: "正式 Role 权限解析失败",
     valueKey: "needsRepairCount",
     testId: "metric-invalid",
@@ -415,7 +415,7 @@ export function RoleList() {
         title="角色权限"
         description={
           <>
-            管理每个 Role 的连接、表范围与 <span className="notranslate" translate="no">MCP</span> 工具授权。
+            管理角色的数据库连接、数据表与 <span className="notranslate" translate="no">MCP</span> 工具授权范围。
           </>
         }
         actions={

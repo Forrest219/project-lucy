@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { parse } from "yaml";
 import { getAuditDb } from "./audit.js";
 import { resolveProjectRoot } from "../project.js";
+import { buildMetricWindow, WINDOW_7D_HOURS } from "./metric-window.js";
 
 type RoleConfig = {
   description?: string;
@@ -69,7 +70,7 @@ type TokenLastUsedRow = {
   last_used: string;
 };
 
-const DEFAULT_HOURS = 168;
+const DEFAULT_HOURS = WINDOW_7D_HOURS;
 const MAX_HOURS = 720;
 /**
  * Bound for legacy roles/denials paths that still materialize audit rows.
@@ -82,19 +83,76 @@ const DEFAULT_SENSITIVE_PREFIXES = ["dataforai.kx_", "finance", "salary"];
 const POPULAR_TABLES_LIMIT = 10;
 const TOKEN_SUMMARY_LIMIT = 20;
 
+/** Spec 128 §3.1 — server-side metric state */
+type MetricState = "ok" | "no_data" | "unavailable" | "partial";
+
+/** Spec 128 §3.2 — server-side MetricResult */
+interface MetricResult {
+  metricId: string;
+  state: MetricState;
+  value: number | null;
+  asOf: string;
+  windowStart?: string;
+  windowEnd?: string;
+  unavailableReason?: string;
+}
+
 function boundedHours(value: unknown): number {
   const parsed = typeof value === "string" ? Number(value) : typeof value === "number" ? value : DEFAULT_HOURS;
   if (!Number.isFinite(parsed)) return DEFAULT_HOURS;
   return Math.min(Math.max(Math.floor(parsed), 1), MAX_HOURS);
 }
 
+/**
+ * Spec 128 HR-5: build window from centralized helper; do NOT inline sinceIso for KPI queries.
+ * `sinceIso` is kept only for legacy denials/roles paths that can't be migrated in Gate A.
+ */
 function sinceIso(hours: number): string {
-  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  return buildMetricWindow(hours).startIso;
 }
 
+/**
+ * Spec 128 HR-4: rate must not exceed 100%.
+ * If numerator > denominator (active > configured), returns partial sentinel (-1).
+ * Callers must check for -1 and emit state=partial.
+ */
 function pct(numerator: number, denominator: number): number {
   if (!denominator) return 0;
+  if (numerator > denominator) return -1; // sentinel: active > configured
   return Math.round((numerator / denominator) * 1000) / 10;
+}
+
+/** Build an unavailable MetricResult for a given metricId and window. */
+function unavailableResult(
+  metricId: string,
+  win: { startIso: string; endIso: string; asOf: string },
+  reason?: string
+): MetricResult {
+  return {
+    metricId,
+    state: "unavailable",
+    value: null,
+    asOf: win.asOf,
+    windowStart: win.startIso,
+    windowEnd: win.endIso,
+    unavailableReason: reason
+  };
+}
+
+/** Build an ok MetricResult. */
+function okResult(
+  metricId: string,
+  value: number,
+  win: { startIso: string; endIso: string; asOf: string }
+): MetricResult {
+  return {
+    metricId,
+    state: value === 0 ? "no_data" : "ok",
+    value,
+    asOf: win.asOf,
+    windowStart: win.startIso,
+    windowEnd: win.endIso
+  };
 }
 
 function safeJsonArray(value: string | null): string[] {
@@ -161,7 +219,10 @@ async function configChangeByAssetKind(hours: number): Promise<Record<string, nu
   }
 }
 
-async function queryCallStats(hours: number): Promise<{ calls: number; avgLatencyMs: number; denied: number; errors: number }> {
+async function queryCallStats(
+  hours: number
+): Promise<{ calls: number | null; avgLatencyMs: number | null; denied: number | null; errors: number | null; metricsState: "ok" | "unavailable" }> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const row = db.prepare(`
@@ -171,8 +232,8 @@ async function queryCallStats(hours: number): Promise<{ calls: number; avgLatenc
         SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) AS denied,
         SUM(CASE WHEN outcome = 'error' THEN 1 ELSE 0 END) AS errors
       FROM access_log
-      WHERE ts >= ?
-    `).get(sinceIso(hours)) as {
+      WHERE ts >= ? AND ts < ?
+    `).get(win.startIso, win.endIso) as {
       calls: number;
       avg_latency_ms: number | null;
       denied: number | null;
@@ -183,98 +244,103 @@ async function queryCallStats(hours: number): Promise<{ calls: number; avgLatenc
       calls: row?.calls ?? 0,
       avgLatencyMs: row?.avg_latency_ms ?? 0,
       denied: row?.denied ?? 0,
-      errors: row?.errors ?? 0
+      errors: row?.errors ?? 0,
+      metricsState: "ok"
     };
   } catch {
-    return { calls: 0, avgLatencyMs: 0, denied: 0, errors: 0 };
+    // Spec 128 HR-1: DB failure must not silently zero metrics
+    return { calls: null, avgLatencyMs: null, denied: null, errors: null, metricsState: "unavailable" };
   }
 }
 
 /** True p95 over all window rows (matches prior JS ceil(n*0.95)-1 index). */
-async function queryP95LatencyMs(hours: number): Promise<number> {
+async function queryP95LatencyMs(hours: number): Promise<number | null> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
-    const since = sinceIso(hours);
     const countRow = db.prepare(`
-      SELECT COUNT(*) AS count FROM access_log WHERE ts >= ?
-    `).get(since) as CountRow | undefined;
+      SELECT COUNT(*) AS count FROM access_log WHERE ts >= ? AND ts < ?
+    `).get(win.startIso, win.endIso) as CountRow | undefined;
     const count = countRow?.count ?? 0;
     if (count <= 0) return 0;
     const offset = Math.min(count - 1, Math.ceil(count * 0.95) - 1);
     const row = db.prepare(`
       SELECT duration_ms
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
       ORDER BY duration_ms ASC
       LIMIT 1 OFFSET ?
-    `).get(since, offset) as { duration_ms: number } | undefined;
+    `).get(win.startIso, win.endIso, offset) as { duration_ms: number } | undefined;
     return row?.duration_ms ?? 0;
   } catch {
-    return 0;
+    return null;
   }
 }
 
-async function queryActiveAgentCount(hours: number): Promise<number> {
+async function queryActiveAgentCount(hours: number): Promise<number | null> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const row = db.prepare(`
       SELECT COUNT(DISTINCT user_id) AS count
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND user_id IS NOT NULL
         AND user_id != ''
-    `).get(sinceIso(hours)) as CountRow | undefined;
+    `).get(win.startIso, win.endIso) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
-    return 0;
+    return null;
   }
 }
 
-async function queryActiveTokenCount(hours: number): Promise<number> {
+async function queryActiveTokenCount(hours: number): Promise<number | null> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const row = db.prepare(`
       SELECT COUNT(DISTINCT token_hash_prefix) AS count
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND token_hash_prefix IS NOT NULL
-    `).get(sinceIso(hours)) as CountRow | undefined;
+    `).get(win.startIso, win.endIso) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
-    return 0;
+    return null;
   }
 }
 
 /** Two-source union (access_log_sources.physical_table ∪ access_log.tables JSON) to avoid undercounting when only one source has rows. */
-async function queryActiveTableCount(hours: number): Promise<number> {
+async function queryActiveTableCount(hours: number): Promise<number | null> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
-    const since = sinceIso(hours);
     const row = db.prepare(`
       SELECT COUNT(*) AS count FROM (
         SELECT physical_table AS t
         FROM access_log_sources
-        WHERE ts >= ?
+        WHERE ts >= ? AND ts < ?
           AND physical_table IS NOT NULL
           AND physical_table != ''
         UNION
         SELECT j.value AS t
         FROM access_log a, json_each(a.tables) j
-        WHERE a.ts >= ?
+        WHERE a.ts >= ? AND a.ts < ?
           AND a.tables IS NOT NULL
           AND a.tables != ''
           AND a.tables != '[]'
           AND typeof(j.value) = 'text'
           AND j.value != ''
       )
-    `).get(since, since) as CountRow | undefined;
+    `).get(win.startIso, win.endIso, win.startIso, win.endIso) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
-    return 0;
+    return null;
   }
 }
 
 async function queryHighDenialAgentCount(hours: number): Promise<number> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const row = db.prepare(`
@@ -282,14 +348,14 @@ async function queryHighDenialAgentCount(hours: number): Promise<number> {
       FROM (
         SELECT user_id
         FROM access_log
-        WHERE ts >= ?
+        WHERE ts >= ? AND ts < ?
           AND user_id IS NOT NULL
           AND user_id != ''
         GROUP BY user_id
         HAVING COUNT(*) >= 3
           AND (100.0 * SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) / COUNT(*)) >= 50
       )
-    `).get(sinceIso(hours)) as CountRow | undefined;
+    `).get(win.startIso, win.endIso) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
     return 0;
@@ -297,6 +363,7 @@ async function queryHighDenialAgentCount(hours: number): Promise<number> {
 }
 
 async function queryPopularTablesFromSources(hours: number): Promise<PopularTableRow[]> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     return db.prepare(`
@@ -305,19 +372,20 @@ async function queryPopularTablesFromSources(hours: number): Promise<PopularTabl
         COUNT(*) AS calls,
         MAX(ts) AS lastSeen
       FROM access_log_sources
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND physical_table IS NOT NULL
         AND physical_table != ''
       GROUP BY physical_table
       ORDER BY calls DESC, lastSeen DESC
       LIMIT ?
-    `).all(sinceIso(hours), POPULAR_TABLES_LIMIT) as PopularTableRow[];
+    `).all(win.startIso, win.endIso, POPULAR_TABLES_LIMIT) as PopularTableRow[];
   } catch {
     return [];
   }
 }
 
 async function queryPopularTablesFromAccessLogTables(hours: number): Promise<PopularTableRow[]> {
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     return db.prepare(`
@@ -326,7 +394,7 @@ async function queryPopularTablesFromAccessLogTables(hours: number): Promise<Pop
         COUNT(*) AS calls,
         MAX(a.ts) AS lastSeen
       FROM access_log a, json_each(a.tables) j
-      WHERE a.ts >= ?
+      WHERE a.ts >= ? AND a.ts < ?
         AND a.tables IS NOT NULL
         AND a.tables != ''
         AND a.tables != '[]'
@@ -335,7 +403,7 @@ async function queryPopularTablesFromAccessLogTables(hours: number): Promise<Pop
       GROUP BY j.value
       ORDER BY calls DESC, lastSeen DESC
       LIMIT ?
-    `).all(sinceIso(hours), POPULAR_TABLES_LIMIT) as PopularTableRow[];
+    `).all(win.startIso, win.endIso, POPULAR_TABLES_LIMIT) as PopularTableRow[];
   } catch {
     return [];
   }
@@ -352,6 +420,7 @@ async function queryPopularTables(hours: number): Promise<{ rows: PopularTableRo
 
 async function queryAgentWindowStats(hours: number): Promise<Map<string, AgentWindowStats>> {
   const result = new Map<string, AgentWindowStats>();
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const rows = db.prepare(`
@@ -363,11 +432,11 @@ async function queryAgentWindowStats(hours: number): Promise<Map<string, AgentWi
         ROUND(AVG(duration_ms), 1) AS avg_latency_ms,
         MAX(ts) AS last_seen
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND user_id IS NOT NULL
         AND user_id != ''
       GROUP BY user_id
-    `).all(sinceIso(hours)) as AgentWindowStats[];
+    `).all(win.startIso, win.endIso) as AgentWindowStats[];
     for (const row of rows) {
       result.set(row.user_id, row);
     }
@@ -380,38 +449,38 @@ async function queryAgentWindowStats(hours: number): Promise<Map<string, AgentWi
 /** Per-agent p95 over ALL calls in the window (not denied-only). */
 async function queryAgentP95LatencyMs(hours: number): Promise<Map<string, number>> {
   const result = new Map<string, number>();
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
-    const since = sinceIso(hours);
     const users = db.prepare(`
       SELECT DISTINCT user_id
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND user_id IS NOT NULL
         AND user_id != ''
-    `).all(since) as Array<{ user_id: string }>;
+    `).all(win.startIso, win.endIso) as Array<{ user_id: string }>;
 
     const countStmt = db.prepare(`
       SELECT COUNT(*) AS count
       FROM access_log
-      WHERE ts >= ? AND user_id = ?
+      WHERE ts >= ? AND ts < ? AND user_id = ?
     `);
     const p95Stmt = db.prepare(`
       SELECT duration_ms
       FROM access_log
-      WHERE ts >= ? AND user_id = ?
+      WHERE ts >= ? AND ts < ? AND user_id = ?
       ORDER BY duration_ms ASC
       LIMIT 1 OFFSET ?
     `);
 
     for (const { user_id } of users) {
-      const count = (countStmt.get(since, user_id) as CountRow | undefined)?.count ?? 0;
+      const count = (countStmt.get(win.startIso, win.endIso, user_id) as CountRow | undefined)?.count ?? 0;
       if (count <= 0) {
         result.set(user_id, 0);
         continue;
       }
       const offset = Math.min(count - 1, Math.ceil(count * 0.95) - 1);
-      const row = p95Stmt.get(since, user_id, offset) as { duration_ms: number } | undefined;
+      const row = p95Stmt.get(win.startIso, win.endIso, user_id, offset) as { duration_ms: number } | undefined;
       result.set(user_id, row?.duration_ms ?? 0);
     }
   } catch {
@@ -422,6 +491,7 @@ async function queryAgentP95LatencyMs(hours: number): Promise<Map<string, number
 
 async function queryAgentTopDeniedReasons(hours: number): Promise<Map<string, string>> {
   const result = new Map<string, string>();
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const rows = db.prepare(`
@@ -436,14 +506,14 @@ async function queryAgentTopDeniedReasons(hours: number): Promise<Map<string, st
             ORDER BY COUNT(*) DESC, COALESCE(decision_reason, 'denied_access') ASC
           ) AS rn
         FROM access_log
-        WHERE ts >= ?
+        WHERE ts >= ? AND ts < ?
           AND outcome = 'denied'
           AND user_id IS NOT NULL
           AND user_id != ''
         GROUP BY user_id, COALESCE(decision_reason, 'denied_access')
       )
       WHERE rn = 1
-    `).all(sinceIso(hours)) as Array<{ user_id: string; reason: string; cnt: number }>;
+    `).all(win.startIso, win.endIso) as Array<{ user_id: string; reason: string; cnt: number }>;
     for (const row of rows) {
       result.set(row.user_id, row.reason);
     }
@@ -455,6 +525,7 @@ async function queryAgentTopDeniedReasons(hours: number): Promise<Map<string, st
 
 async function queryAgentActiveTokenCounts(hours: number): Promise<Map<string, number>> {
   const result = new Map<string, number>();
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const rows = db.prepare(`
@@ -462,12 +533,12 @@ async function queryAgentActiveTokenCounts(hours: number): Promise<Map<string, n
         user_id,
         COUNT(DISTINCT token_hash_prefix) AS active_tokens
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND user_id IS NOT NULL
         AND user_id != ''
         AND token_hash_prefix IS NOT NULL
       GROUP BY user_id
-    `).all(sinceIso(hours)) as AgentActiveTokenRow[];
+    `).all(win.startIso, win.endIso) as AgentActiveTokenRow[];
     for (const row of rows) {
       result.set(row.user_id, row.active_tokens);
     }
@@ -498,14 +569,15 @@ async function queryTokenLastUsedMap(): Promise<Map<string, string>> {
 
 async function queryActiveTokenPrefixes(hours: number): Promise<Set<string>> {
   const result = new Set<string>();
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const rows = db.prepare(`
       SELECT DISTINCT token_hash_prefix
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND token_hash_prefix IS NOT NULL
-    `).all(sinceIso(hours)) as Array<{ token_hash_prefix: string }>;
+    `).all(win.startIso, win.endIso) as Array<{ token_hash_prefix: string }>;
     for (const row of rows) result.add(row.token_hash_prefix);
   } catch {
     // empty set
@@ -515,15 +587,16 @@ async function queryActiveTokenPrefixes(hours: number): Promise<Set<string>> {
 
 async function queryTokenCallCounts(hours: number): Promise<Map<string, number>> {
   const result = new Map<string, number>();
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
     const rows = db.prepare(`
       SELECT token_hash_prefix, COUNT(*) AS calls
       FROM access_log
-      WHERE ts >= ?
+      WHERE ts >= ? AND ts < ?
         AND token_hash_prefix IS NOT NULL
       GROUP BY token_hash_prefix
-    `).all(sinceIso(hours)) as Array<{ token_hash_prefix: string; calls: number }>;
+    `).all(win.startIso, win.endIso) as Array<{ token_hash_prefix: string; calls: number }>;
     for (const row of rows) {
       result.set(row.token_hash_prefix, row.calls);
     }
@@ -577,6 +650,23 @@ function isActivePrefix(activePrefixes: Set<string>, hash: string | undefined): 
 
 function configuredTokenCount(config: AccessConfig): number {
   return (config.users ?? []).reduce((sum, user) => sum + (user.tokens?.length ?? 0), 0);
+}
+
+/**
+ * Spec 128 D4: Detect if any two configured tokens share the same audit prefix
+ * (first 19 chars of hash). When colliding, active-token KPI is ambiguous → partial.
+ */
+function hasTokenPrefixCollision(config: AccessConfig): boolean {
+  const seen = new Set<string>();
+  for (const user of config.users ?? []) {
+    for (const token of user.tokens ?? []) {
+      const prefix = canonicalTokenPrefix(token.hash);
+      if (!prefix) continue;
+      if (seen.has(prefix)) return true;
+      seen.add(prefix);
+    }
+  }
+  return false;
 }
 
 function tableSelectorCount(role: RoleConfig): number {
@@ -738,22 +828,57 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
     const agentCount = agents.length;
     const configuredTokens = configuredTokenCount(config);
     const { configuredTableCount, hasOpenEndedTableScope } = configuredTableStats(config);
+    // Spec 128 D4: prefix collision makes active-token count ambiguous.
+    const tokenPrefixAmbiguous = hasTokenPrefixCollision(config);
     // Status flags are config-derived; skip truncated audit rows for overview cards.
     const roles = governanceRoles(config, []);
 
+    const metricsUnavailable = callStats.metricsState === "unavailable"
+      || activeAgentCount === null
+      || activeTokenCount === null
+      || activeTableCount === null
+      || p95LatencyMs === null;
+
+    // Spec 128 HR-4: agentActiveRate and tokenActiveRate must not exceed 100%.
+    // If active > configured, rate is partial (-1 sentinel from pct()).
+    const rawAgentActiveRate = (activeAgentCount !== null) ? pct(activeAgentCount, agentCount) : null;
+    const rawTokenActiveRate = (activeTokenCount !== null) ? pct(activeTokenCount, configuredTokens) : null;
+
+    const agentRatePartial = rawAgentActiveRate === -1;
+    // Spec 128 D4: token prefix collision makes active-token count ambiguous → partial.
+    const tokenRatePartial = rawTokenActiveRate === -1 || tokenPrefixAmbiguous;
+    const agentActiveRate = agentRatePartial ? null : rawAgentActiveRate;
+    const tokenActiveRate = tokenRatePartial ? null : rawTokenActiveRate;
+
+    // Spec 128 Task 6: table coverage rate is only valid when scope is fully resolved.
+    // Open-ended scopes (prefix/wildcard) make the denominator incomplete → partial.
+    // Also: active > configured is impossible for same-population coverage → HR-4.
+    const tableRateRaw = (activeTableCount !== null && configuredTableCount > 0 && !hasOpenEndedTableScope)
+      ? pct(activeTableCount, configuredTableCount)
+      : null;
+    const tableRatePartial = hasOpenEndedTableScope || tableRateRaw === -1;
+    const tableRate = tableRatePartial ? null : tableRateRaw;
+
     const usageOverview = {
       agentCount,
-      activeAgentCount,
-      agentActiveRate: pct(activeAgentCount, agentCount),
+      activeAgentCount: activeAgentCount ?? null,
+      agentActiveRate,
+      agentActiveRatePartial: agentRatePartial,
       configuredTokenCount: configuredTokens,
-      activeTokenCount,
-      tokenActiveRate: pct(activeTokenCount, configuredTokens),
+      activeTokenCount: tokenRatePartial ? null : (activeTokenCount ?? null),
+      tokenActiveRate,
+      tokenActiveRatePartial: tokenRatePartial,
+      tokenPrefixAmbiguous,
       configuredTableCount,
-      activeTableCount,
+      activeTableCount: activeTableCount ?? null,
       hasOpenEndedTableScope,
-      calls: callStats.calls,
-      p95LatencyMs,
-      avgLatencyMs: callStats.avgLatencyMs
+      tableRate,
+      tableRatePartial,
+      calls: callStats.calls ?? null,
+      denied: callStats.denied ?? null,
+      p95LatencyMs: p95LatencyMs ?? null,
+      avgLatencyMs: callStats.avgLatencyMs ?? null,
+      metricsState: metricsUnavailable ? "unavailable" as const : "ok" as const
     };
 
     return {
@@ -770,23 +895,23 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
           calls: callStats.calls,
           denied: callStats.denied,
           errors: callStats.errors,
-          deniedRate: pct(callStats.denied, callStats.calls),
-          errorRate: pct(callStats.errors, callStats.calls),
-          p95LatencyMs,
+          deniedRate: (callStats.denied !== null && callStats.calls !== null) ? pct(callStats.denied, callStats.calls) : null,
+          errorRate: (callStats.errors !== null && callStats.calls !== null) ? pct(callStats.errors, callStats.calls) : null,
+          p95LatencyMs: p95LatencyMs ?? null,
           configuredAgentCount: agentCount,
-          activeTokenCount,
-          staleTokenCount: Math.max(0, configuredTokens - activeTokenCount),
+          activeTokenCount: activeTokenCount ?? null,
+          staleTokenCount: activeTokenCount !== null ? Math.max(0, configuredTokens - activeTokenCount) : null,
           highDenialAgentCount,
           brokenRoleCount: roles.filter((role) => role.status === "broken").length,
           overBroadRoleCount: roles.filter((role) => role.status === "over_broad").length,
           configChangeCount: changes,
           configChangesByAssetKind: configChangeByAssetKindMap,
-          avgLatencyMs: callStats.avgLatencyMs,
+          avgLatencyMs: callStats.avgLatencyMs ?? null,
           agentCount,
-          activeAgentCount,
-          agentActiveRate: usageOverview.agentActiveRate,
+          activeAgentCount: activeAgentCount ?? null,
+          agentActiveRate,
           configuredTokenCount: configuredTokens,
-          tokenActiveRate: usageOverview.tokenActiveRate
+          tokenActiveRate
         }
       }
     };

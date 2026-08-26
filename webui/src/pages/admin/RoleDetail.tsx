@@ -1395,10 +1395,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="pl-metric-card"><span>工具</span><strong>{detail.effectivePermissions?.tools.length ?? 0}</strong><small>{detail.id}</small></div>
-                  <div className="pl-metric-card"><span>连接</span><strong>{detail.effectivePermissions?.connections.length ?? 0}</strong><small>{detail.effectivePermissions?.connections.join(", ") || "—"}</small></div>
-                  <div className="pl-metric-card"><span>Source</span><strong>{detail.effectivePermissions?.sources.length ?? 0}</strong><small>{detail.effectivePermissions?.snapshotHash.slice(0, 12)}</small></div>
+                <div>
+                  <p className="text-xs font-semibold tracking-wider text-fg-muted uppercase mb-2">权限摘要</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="pl-metric-card"><span>工具</span><strong>{detail.effectivePermissions?.tools.length ?? 0}</strong><small>{detail.id}</small></div>
+                    <div className="pl-metric-card"><span>连接</span><strong>{detail.effectivePermissions?.connections.length ?? 0}</strong><small>{detail.effectivePermissions?.connections.join(", ") || "—"}</small></div>
+                    <div className="pl-metric-card"><span className="notranslate" translate="no">Source</span><strong>{detail.effectivePermissions?.sources.length ?? 0}</strong><small>{detail.effectivePermissions?.snapshotHash.slice(0, 12)}</small></div>
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <div

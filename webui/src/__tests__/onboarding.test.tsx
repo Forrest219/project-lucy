@@ -62,6 +62,11 @@ const readySource: SourceSummary = {
   semanticUpdatedAtSource: "manifest"
 };
 
+type EvalSummaryFixture = {
+  runCount: { metricId: string; state: string; value: number | null };
+  latestSucceededRunAt: string | null;
+};
+
 function renderPage(options: {
   agents?: Agent[];
   sources?: SourceSummary[];
@@ -72,12 +77,16 @@ function renderPage(options: {
     configured: boolean;
     diagnostics: Array<{ code: string; message: string }>;
   };
-  evalRuns?: { total: number; runs: unknown[] };
+  evalSummary?: EvalSummaryFixture;
   project?: { ktxAvailable?: boolean };
+  aclDenied7d?: number;
 } = {}) {
   const agents = options.agents ?? [readyAgent];
   const sources = options.sources ?? [readySource];
-  const evalRuns = options.evalRuns ?? { total: 1, runs: [{ id: 1 }] };
+  const evalSummary: EvalSummaryFixture = options.evalSummary ?? {
+    runCount: { metricId: "eval-runs-30d", state: "ok", value: 1 },
+    latestSucceededRunAt: "2026-08-26T00:00:00.000Z"
+  };
   const mcpEndpoint = options.mcpEndpoint ?? {
     url: "https://lucy.example.com/mcp",
     status: "configured" as const,
@@ -125,11 +134,22 @@ function renderPage(options: {
         }
       }));
     }
-    // M36 review follow-up: the dashboard now asks the eval API whether
-    // any run has happened. Default fixture says "yes, one run" so the
-    // "近 30 天无评测数据" item is not falsely surfaced.
-    if (url === "/api/eval/runs?limit=1") {
-      return new Response(JSON.stringify({ ok: true, data: evalRuns }));
+    // Spec 128 Task 4: bounded 30-day summary endpoint replaces limit=1 probe.
+    if (url === "/api/eval/runs/summary?days=30") {
+      return new Response(JSON.stringify({ ok: true, data: evalSummary }));
+    }
+    // Spec 128 Task 7: Overview ACL denials from governance audit aggregate.
+    if (url.startsWith("/api/admin/governance/overview")) {
+      return new Response(JSON.stringify({
+        ok: true,
+        data: {
+          windowHours: 168,
+          usageOverview: {
+            denied: options.aclDenied7d ?? 0,
+            metricsState: "ok"
+          }
+        }
+      }));
     }
     return new Response(JSON.stringify({ ok: true, data: {} }));
   });
@@ -375,7 +395,7 @@ describe("Onboarding", () => {
     const accessRisk = screen.getByTestId("ops-access-risk");
     expect(qualitySnapshot.textContent ?? "").toContain("语义覆盖率");
     expect(qualitySnapshot.textContent ?? "").toContain("待发布变更");
-    expect(qualitySnapshot.textContent ?? "").toContain("评测数据");
+    expect(qualitySnapshot.textContent ?? "").toContain("近 30 天评测运行");
     expect(qualitySnapshot.textContent ?? "").not.toContain("Agent 启用");
     expect(qualitySnapshot.textContent ?? "").not.toContain("ACL 拒绝");
     expect(accessRisk.textContent ?? "").toContain("Agent 启用与禁用");
@@ -400,7 +420,7 @@ describe("Onboarding", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/eval/runs?limit=1") {
+      if (url === "/api/eval/runs/summary?days=30") {
         await slowRefetch;
       }
       return realFetch(input);
@@ -570,8 +590,8 @@ describe("Onboarding", () => {
       if (url === "/api/admin/agents") {
         return Promise.resolve(new Response(JSON.stringify({ ok: true, data: { agents: [readyAgent] } })));
       }
-      if (url === "/api/eval/runs?limit=1") {
-        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: { total: 1, runs: [{ id: 1 }] } })));
+      if (url === "/api/eval/runs/summary?days=30") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, data: { runCount: { metricId: "eval-runs-30d", state: "ok", value: 1 }, latestSucceededRunAt: "2026-08-26T00:00:00.000Z" } })));
       }
       return Promise.resolve(new Response(JSON.stringify({ ok: true, data: {} })));
     }
@@ -721,7 +741,8 @@ describe("Onboarding", () => {
 
   it("shows ACL denials on access risk only, not in action-required", async () => {
     renderPage({
-      agents: [{ ...readyAgent, stats: { callsLast7d: 10, deniedLast7d: 3, topTables: [] } }]
+      agents: [{ ...readyAgent, stats: { callsLast7d: 10, deniedLast7d: 0, topTables: [] } }],
+      aclDenied7d: 3
     });
 
     const queue = await screen.findByTestId("ops-action-required");
@@ -745,7 +766,7 @@ describe("Onboarding", () => {
         { ...readySource, table: "products", completion: "not_started" }
       ],
       agents: [{ ...readyAgent, stats: { callsLast7d: 1, deniedLast7d: 3, topTables: [] } }],
-      evalRuns: { total: 0, runs: [] }
+      evalSummary: { runCount: { metricId: "eval-runs-30d", state: "no_data", value: 0 }, latestSucceededRunAt: null }
     });
 
     const queue = await screen.findByTestId("ops-action-required");
@@ -954,15 +975,14 @@ describe("Onboarding", () => {
   });
 
   it("shows the eval monitor entry link inside the eval-gap action item", async () => {
-    renderPage({ evalRuns: { total: 0, runs: [] } });
+    renderPage({ evalSummary: { runCount: { metricId: "eval-runs-30d", state: "no_data", value: 0 }, latestSucceededRunAt: null } });
     const actionRequired = await screen.findByTestId("ops-action-required");
     const link = within(actionRequired).getByRole("link", { name: /查看趋势监控/ });
     expect(link).toHaveAttribute("href", "/eval/monitor");
   });
 
   it("suppresses the eval-gap queue item once any eval run exists", async () => {
-    // Default fixture stubs /api/eval/runs?limit=1 to return one run, so
-    // the "近 30 天无评测数据" item must NOT appear in the queue.
+    // Default fixture returns state=ok value=1, so "近 30 天无评测数据" must NOT appear.
     renderPage();
 
     const actionRequired = await screen.findByTestId("ops-action-required");
@@ -970,7 +990,7 @@ describe("Onboarding", () => {
   });
 
   it("shows the eval-gap queue item when no eval run has happened", async () => {
-    renderPage({ evalRuns: { total: 0, runs: [] } });
+    renderPage({ evalSummary: { runCount: { metricId: "eval-runs-30d", state: "no_data", value: 0 }, latestSucceededRunAt: null } });
 
     const actionRequired = await screen.findByTestId("ops-action-required");
     expect(actionRequired).toHaveTextContent("近 30 天无评测数据");
@@ -991,7 +1011,7 @@ describe("Onboarding", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/eval/runs?limit=1") {
+      if (url === "/api/eval/runs/summary?days=30") {
         // Hang forever — never let the eval query settle.
         return new Promise(() => {});
       }
@@ -1044,7 +1064,7 @@ describe("Onboarding", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/eval/runs?limit=1") {
+      if (url === "/api/eval/runs/summary?days=30") {
         // Hard-error the eval probe. TanStack's `retry: false` keeps it
         // in `error` state so the dashboard can confirm gating.
         return new Response(JSON.stringify({ ok: false, error: "boom" }), { status: 500 });
@@ -1100,11 +1120,14 @@ describe("Onboarding", () => {
     // item must NOT appear until the user clicks 刷新状态 — only then
     // does the manual refresh touch the eval endpoint and surface the
     // item.
-    let evalRuns: { total: number; runs: unknown[] } = { total: 1, runs: [{ id: 1 }] };
+    let evalSummaryData: EvalSummaryFixture = {
+      runCount: { metricId: "eval-runs-30d", state: "ok", value: 1 },
+      latestSucceededRunAt: "2026-08-26T00:00:00.000Z"
+    };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === "/api/eval/runs?limit=1") {
-        return new Response(JSON.stringify({ ok: true, data: evalRuns }));
+      if (url === "/api/eval/runs/summary?days=30") {
+        return new Response(JSON.stringify({ ok: true, data: evalSummaryData }));
       }
       if (url === "/api/project") {
         return new Response(
@@ -1153,11 +1176,14 @@ describe("Onboarding", () => {
     expect(actionRequired).not.toHaveTextContent("近 30 天无评测数据");
 
     // Flip the upstream stub to no runs.
-    evalRuns = { total: 0, runs: [] };
+    evalSummaryData = {
+      runCount: { metricId: "eval-runs-30d", state: "no_data", value: 0 },
+      latestSucceededRunAt: null
+    };
 
     // Record how many times the eval endpoint has been hit so far
     // (initial settle + any auto-refresh handshakes).
-    const evalCallsBefore = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs?limit=1").length;
+    const evalCallsBefore = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs/summary?days=30").length;
 
     // Click the single 刷新 button and let the Promise.allSettled chain flush.
     // M41: there is no longer a dropdown menu — the button itself triggers the
@@ -1165,7 +1191,7 @@ describe("Onboarding", () => {
     fireEvent.click(screen.getByTestId("onboarding-refresh-button"));
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    const evalCallsAfter = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs?limit=1").length;
+    const evalCallsAfter = fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/eval/runs/summary?days=30").length;
     // The manual refresh must have re-hit the eval endpoint at least
     // once. (Earlier M39 implementations dropped `evalLastRunQuery`
     // from the refresh promise — this test pins the new contract.)

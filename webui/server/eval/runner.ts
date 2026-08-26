@@ -461,6 +461,67 @@ export async function spawnEvalRun(
 // ─── route registration ──────────────────────────────────────────────────────
 
 export function registerRunnerRoutes(app: FastifyInstance) {
+  // GET /api/eval/runs/summary — Spec 128 Task 4: bounded 30-day KPI
+  // Returns MetricResult-style summary counting only status='succeeded' runs.
+  // MUST be registered before GET /api/eval/runs/:runId to avoid path collision.
+  app.get<{
+    Querystring: { days?: string; domain?: string };
+  }>("/api/eval/runs/summary", async (request) => {
+    const days = Math.min(Math.max(parseInt(request.query.days ?? "30", 10) || 30, 1), 365);
+    const { domain } = request.query;
+
+    const nowMs = Date.now();
+    const windowStart = new Date(nowMs - days * 86_400_000).toISOString();
+    const windowEnd = new Date(nowMs).toISOString();
+    const asOf = windowEnd;
+
+    try {
+      const db = await getEvalDb();
+      const params: unknown[] = [windowStart, windowEnd];
+      const domainClause = domain ? " AND domain = ?" : "";
+      if (domain) params.push(domain);
+
+      const row = db.prepare(`
+        SELECT COUNT(*) AS run_count, MAX(started_at) AS latest_succeeded_at
+        FROM eval_run
+        WHERE status = 'succeeded'
+          AND started_at >= ? AND started_at < ?${domainClause}
+      `).get(...params) as { run_count: number; latest_succeeded_at: string | null } | undefined;
+
+      const runCount = row?.run_count ?? 0;
+      return {
+        ok: true,
+        data: {
+          runCount: {
+            metricId: "eval-runs-30d",
+            state: runCount === 0 ? "no_data" : "ok",
+            value: runCount,
+            asOf,
+            windowStart,
+            windowEnd
+          },
+          latestSucceededRunAt: row?.latest_succeeded_at ?? null
+        }
+      };
+    } catch (err) {
+      return {
+        ok: true,
+        data: {
+          runCount: {
+            metricId: "eval-runs-30d",
+            state: "unavailable",
+            value: null,
+            asOf,
+            windowStart,
+            windowEnd,
+            unavailableReason: err instanceof Error ? err.message : "db_error"
+          },
+          latestSucceededRunAt: null
+        }
+      };
+    }
+  });
+
   // POST /api/eval/runs
   app.post<{
     Body: {
@@ -480,24 +541,28 @@ export function registerRunnerRoutes(app: FastifyInstance) {
 
   // GET /api/eval/runs
   app.get<{
-    Querystring: { domain?: string; limit?: string; offset?: string };
+    Querystring: { domain?: string; limit?: string; offset?: string; status?: string };
   }>("/api/eval/runs", async (request) => {
     const db = await getEvalDb();
-    const { domain, limit: limitStr = "20", offset: offsetStr = "0" } = request.query;
+    // Spec 128 D2/Task 5: status filter allows callers to request only succeeded runs.
+    const { domain, limit: limitStr = "20", offset: offsetStr = "0", status } = request.query;
     const limit = Math.min(parseInt(limitStr, 10) || 20, 100);
     const offset = parseInt(offsetStr, 10) || 0;
+
+    const statusClause = status ? " AND status = ?" : "";
+    const statusParams = status ? [status] : [];
 
     let rows: EvalRunRow[];
     let total: number;
 
     if (domain) {
-      const countRow = db.prepare("SELECT COUNT(*) AS cnt FROM eval_run WHERE domain = ?").get(domain) as { cnt: number };
+      const countRow = db.prepare(`SELECT COUNT(*) AS cnt FROM eval_run WHERE domain = ?${statusClause}`).get(domain, ...statusParams) as { cnt: number };
       total = countRow.cnt;
-      rows = db.prepare("SELECT * FROM eval_run WHERE domain = ? ORDER BY started_at DESC LIMIT ? OFFSET ?").all(domain, limit, offset) as EvalRunRow[];
+      rows = db.prepare(`SELECT * FROM eval_run WHERE domain = ?${statusClause} ORDER BY started_at DESC LIMIT ? OFFSET ?`).all(domain, ...statusParams, limit, offset) as EvalRunRow[];
     } else {
-      const countRow = db.prepare("SELECT COUNT(*) AS cnt FROM eval_run").get() as { cnt: number };
+      const countRow = db.prepare(`SELECT COUNT(*) AS cnt FROM eval_run WHERE 1=1${statusClause}`).get(...statusParams) as { cnt: number };
       total = countRow.cnt;
-      rows = db.prepare("SELECT * FROM eval_run ORDER BY started_at DESC LIMIT ? OFFSET ?").all(limit, offset) as EvalRunRow[];
+      rows = db.prepare(`SELECT * FROM eval_run WHERE 1=1${statusClause} ORDER BY started_at DESC LIMIT ? OFFSET ?`).all(...statusParams, limit, offset) as EvalRunRow[];
     }
 
     const runs = rows.map(rowToRun);

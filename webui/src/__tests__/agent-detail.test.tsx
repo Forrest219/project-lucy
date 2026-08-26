@@ -96,7 +96,7 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
   ];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url === "/api/admin/agents/zhangsan" && !init) {
+    if (url === "/api/admin/agents/zhangsan" && (!init || !init.method || init.method === "GET")) {
       return new Response(JSON.stringify(makeAgentDetailResponse()));
     }
     if (url === "/api/admin/agents/zhangsan" && init?.method === "PATCH") {
@@ -305,7 +305,7 @@ describe("AgentDetail", () => {
   it("Token tab exposes all required fields including hash prefix and revokes the token", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url === "/api/admin/agents/zhangsan" && !init) {
+      if (url === "/api/admin/agents/zhangsan" && (!init || !init.method || init.method === "GET")) {
         return new Response(JSON.stringify(makeAgentDetailResponse()));
       }
       if (url === "/api/admin/roles") {

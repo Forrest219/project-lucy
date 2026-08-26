@@ -81,7 +81,7 @@ describe("CaseList M43 Eval YAML exchange", () => {
           data: { cases: [{ id: "kx-income-001", case_type: "single_turn", question: "查询收入", expected_measures: ["operating_revenue"] }] }
         }));
       }
-      if (url === "/api/eval/runs?domain=kx_financial&limit=1") {
+      if (url === "/api/eval/runs?domain=kx_financial&limit=1&status=succeeded") {
         return new Response(JSON.stringify({ ok: true, data: { total: 0, runs: [] } }));
       }
       if (url === "/api/eval/suites/kx_financial/download") {
@@ -140,7 +140,7 @@ describe("CaseList M43 Eval YAML exchange", () => {
           data: { cases: [{ id: "kx-income-001", case_type: "single_turn", question: "查询收入", expected_measures: ["operating_revenue"] }] }
         }));
       }
-      if (url === "/api/eval/runs?domain=kx_financial&limit=1") {
+      if (url === "/api/eval/runs?domain=kx_financial&limit=1&status=succeeded") {
         return new Response(JSON.stringify({ ok: true, data: { total: 0, runs: [] } }));
       }
       if (url === "/api/eval/results/import") {

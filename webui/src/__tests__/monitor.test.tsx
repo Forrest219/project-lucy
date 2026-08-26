@@ -103,8 +103,8 @@ describe("Monitor", () => {
     expect(await screen.findByText("75%")).toBeInTheDocument();
     expect(screen.getByText("红线状态")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-latest-pass-rate")).toBeInTheDocument();
-    expect(screen.getByTestId("metric-help-fail-cases")).toBeInTheDocument();
-    const failCard = screen.getByTestId("metric-help-fail-cases").closest(".pl-metric-card");
+    expect(screen.getByTestId("metric-help-top-failures")).toBeInTheDocument();
+    const failCard = screen.getByTestId("metric-help-top-failures").closest(".pl-metric-card");
     expect(failCard?.className).not.toMatch(/pl-metric-card--success/);
     expect(failCard?.className).not.toMatch(/pl-metric-card--default/);
     expect(screen.getByText("sql_changed")).toBeInTheDocument();
@@ -146,7 +146,7 @@ describe("Monitor", () => {
     expect(importLink.getAttribute("href") ?? "").toMatch(/^\/eval\/cases($|\/|\?)/);
     expect(screen.getByTestId("monitor-empty-action-配置阈值")).toBeInTheDocument();
     expect(screen.getByText("暂无 drift 数据")).toBeInTheDocument();
-    expect(screen.getByText("暂无失败 case")).toBeInTheDocument();
+    expect(screen.getByText("暂无失败用例集中项")).toBeInTheDocument();
   });
 
   it("uses segmented day control to refetch dashboard data", async () => {

@@ -999,10 +999,13 @@ export function AgentDetail() {
             </div>
             {effective ? (
               <div data-testid="permissions-tree" className="grid gap-4">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="pl-metric-card"><span>工具</span><strong>{effective.tools.length}</strong><small>{effective.roleIds.join(", ") || "legacy"}</small></div>
-                  <div className="pl-metric-card"><span>连接</span><strong>{effective.connections.length}</strong><small>{effective.connections.join(", ") || "—"}</small></div>
-                  <div className="pl-metric-card"><span>Source</span><strong>{effective.sources.length}</strong><small>{effective.snapshotHash.slice(0, 12)}</small></div>
+                <div>
+                  <p className="text-xs font-semibold tracking-wider text-fg-muted uppercase mb-2">权限摘要</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="pl-metric-card"><span>工具</span><strong>{effective.tools.length}</strong><small>{effective.roleIds.join(", ") || "legacy"}</small></div>
+                    <div className="pl-metric-card"><span>连接</span><strong>{effective.connections.length}</strong><small>{effective.connections.join(", ") || "—"}</small></div>
+                    <div className="pl-metric-card"><span className="notranslate" translate="no">Source</span><strong>{effective.sources.length}</strong><small>{effective.snapshotHash.slice(0, 12)}</small></div>
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <div className="text-sm font-medium notranslate" translate="no">连接 / Schema / Source / Table</div>

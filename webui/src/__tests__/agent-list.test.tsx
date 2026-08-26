@@ -94,7 +94,7 @@ function stubAgentsEndpoints(
         })
       );
     }
-    if (url === "/api/admin/agents" && !init) {
+    if (url === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
       return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1" } }));
     }
     if (url === "/api/admin/roles") {
@@ -694,7 +694,8 @@ describe("agentList helpers", () => {
       configuredTokenCount: 1,
       activeTokenCountLast7d: 1,
       callsLast7d: 8,
-      deniedLast7d: 1
+      deniedLast7d: 1,
+      metricsState: "ok"
     });
   });
 });

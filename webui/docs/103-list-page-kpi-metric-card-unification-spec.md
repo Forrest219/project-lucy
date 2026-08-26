@@ -153,3 +153,16 @@ Follows `webui/docs/00-product-terminology-standard.md`.
 - 引用：`design-system/12-components-metric-card.md`（本单新增）、`02-foundations-grid-spacing.md`、`01-foundations-color.md`。
 - 遵循：Connections 基准壳与 help 交互；tone 语义；网格数量例外。
 - 例外：无。
+
+## 10. 四状态规则补充（Spec 128 Gate A）
+
+从 Spec 128 起，所有 List KPI 的动态审计指标（windowed=true）必须遵守四状态渲染规则：
+
+| state | 主值 | 含义 |
+|---|---|---|
+| `ok` | 数字 | 正常 |
+| `no_data` | `—` | 窗口内无数据 |
+| `unavailable` | `—` | 数据源故障，不得用 `?? 0` 归零 |
+| `partial` | `—` | 数据不完整/歧义，不得渲染数值估算 |
+
+详细口径与硬规则见 `128-enterprise-kpi-contract-spec.md`。

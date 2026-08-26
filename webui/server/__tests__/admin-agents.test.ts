@@ -33,20 +33,30 @@ vi.mock("../admin/audit.js", () => ({
             .sort((a, b) => b.ts.localeCompare(a.ts)))
         };
       }
-      // M55: active-token SQL is COUNT(DISTINCT token_hash_prefix)
-      // restricted to the last 7 days for the supplied user_id. The mock
-      // exercises the same shape so we can assert the helper emits
-      // distinct-token counts (not raw row counts).
+      // M55 + Spec 128 Task 7: COUNT(DISTINCT token_hash_prefix) can be called
+      // per-agent (args: userId, startIso, endIso) or globally (args: startIso, endIso).
       if (sql.includes("COUNT(DISTINCT token_hash_prefix)")) {
         const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const isGlobal = !sql.includes("user_id = ?");
         return {
-          get: vi.fn((userId: string) => {
+          get: vi.fn((...args: unknown[]) => {
             const seen = new Set<string>();
-            for (const row of auditRows) {
-              if (row.user_id !== userId) continue;
-              if (!row.token_hash_prefix) continue;
-              if (new Date(row.ts).getTime() < CUTOFF) continue;
-              seen.add(row.token_hash_prefix);
+            if (isGlobal) {
+              // Global: (startIso, endIso) — no userId filter.
+              for (const row of auditRows) {
+                if (!row.token_hash_prefix) continue;
+                if (new Date(row.ts).getTime() < CUTOFF) continue;
+                seen.add(row.token_hash_prefix);
+              }
+            } else {
+              // Per-agent: (userId, startIso, endIso)
+              const userId = args[0] as string;
+              for (const row of auditRows) {
+                if (row.user_id !== userId) continue;
+                if (!row.token_hash_prefix) continue;
+                if (new Date(row.ts).getTime() < CUTOFF) continue;
+                seen.add(row.token_hash_prefix);
+              }
             }
             return { active_tokens: seen.size };
           })

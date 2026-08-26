@@ -7,17 +7,24 @@ import { MetricCard } from "../../components/MetricCard";
 
 type UsageOverview = {
   agentCount: number;
-  activeAgentCount: number;
-  agentActiveRate: number;
+  activeAgentCount: number | null;
+  agentActiveRate: number | null;
+  agentActiveRatePartial?: boolean;
   configuredTokenCount: number;
-  activeTokenCount: number;
-  tokenActiveRate: number;
+  activeTokenCount: number | null;
+  tokenActiveRate: number | null;
+  tokenActiveRatePartial?: boolean;
+  tokenPrefixAmbiguous?: boolean;
   configuredTableCount: number;
-  activeTableCount: number;
+  activeTableCount: number | null;
   hasOpenEndedTableScope: boolean;
-  calls: number;
-  p95LatencyMs: number;
-  avgLatencyMs: number;
+  tableRate?: number | null;
+  tableRatePartial?: boolean;
+  calls: number | null;
+  denied?: number | null;
+  p95LatencyMs: number | null;
+  avgLatencyMs: number | null;
+  metricsState?: "ok" | "unavailable";
 };
 
 type PopularTable = {
@@ -164,6 +171,10 @@ export function GovernanceOverview() {
 
   const usage = overview?.usageOverview;
   const popularTables = overview?.popularTables ?? [];
+
+  // Spec 128 HR-1: unavailable when server reports metricsState=unavailable
+  const auditMetricsState = usage?.metricsState === "unavailable" ? "unavailable" as const : "ok" as const;
+
   const agents = useMemo(() => {
     const rows = [...(agentsData?.agents ?? [])];
     rows.sort((a, b) => {
@@ -186,8 +197,13 @@ export function GovernanceOverview() {
   );
 
   const windowText = windowLabel(hours);
-  const p95Value = (usage?.calls ?? 0) > 0 ? `${usage?.p95LatencyMs ?? 0} ms` : "—";
-  const p95Hint = (usage?.calls ?? 0) > 0 ? (
+
+  // p95 is unavailable or no_data based on calls
+  const p95MetricState = auditMetricsState === "unavailable"
+    ? "unavailable" as const
+    : ((usage?.calls ?? 0) > 0 ? "ok" as const : "no_data" as const);
+  const p95Value = p95MetricState === "ok" ? `${usage?.p95LatencyMs ?? 0} ms` : "—";
+  const p95Hint = p95MetricState === "ok" ? (
     <span>95% 的请求在此时间内完成（<span className="notranslate" translate="no">P95</span>）</span>
   ) : (
     "当前窗口无调用"
@@ -195,11 +211,25 @@ export function GovernanceOverview() {
   const authorizedTableHint = (
     <span>角色权限中已明确授权的表{usage?.hasOpenEndedTableScope ? "（含前缀授权）" : ""}</span>
   );
-  const activeTableRate = usage
-    ? usage.configuredTableCount > 0
-      ? formatRate(Math.round((usage.activeTableCount / usage.configuredTableCount) * 1000) / 10)
-      : formatRate(0)
-    : formatRate(0);
+
+  // Spec 128 HR-4 + Task 6: table rate is partial when open-ended scope or HR-4 violation.
+  const tableRateState = auditMetricsState === "unavailable"
+    ? "unavailable" as const
+    : usage?.tableRatePartial
+      ? "partial" as const
+      : ((usage?.calls ?? 0) === 0 && (usage?.activeTableCount ?? 0) === 0 ? "no_data" as const : "ok" as const);
+  const activeTableRate = tableRateState === "ok" && usage?.tableRate != null
+    ? formatRate(usage.tableRate)
+    : null;
+
+  // Spec 128 HR-4: partial when active > configured
+  const agentRateState = usage?.agentActiveRatePartial ? "partial" as const : auditMetricsState;
+  // Spec 128 D4: partial when token prefixes are ambiguous
+  const tokenRateState = (usage?.tokenActiveRatePartial || usage?.tokenPrefixAmbiguous) ? "partial" as const : auditMetricsState;
+
+  // Spec 128 Task 7: denied count from audit DB, exposed in usageOverview.
+  const deniedCount = usage?.denied ?? null;
+  const deniedState = auditMetricsState;
 
   const agentRankRows = agents.map((agent) => ({
     key: agent.id,
@@ -243,7 +273,7 @@ export function GovernanceOverview() {
         title="使用概况"
         description={
           <span>
-            查看 <span className="notranslate" translate="no">Agent</span> / <span className="notranslate" translate="no">Token</span> 与表的访问使用情况。
+            查看 <span className="notranslate" translate="no">Agent</span>、<span className="notranslate" translate="no">Token</span> 和数据表的活跃度、调用量与响应耗时。
           </span>
         }
         actions={
@@ -289,6 +319,7 @@ export function GovernanceOverview() {
       />
 
       <div className="pl-metric-grid" data-testid="governance-usage-metrics">
+        {/* D1: config-class — always ok, no state needed */}
         <MetricCard
           label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
           labelText="Agent 总数"
@@ -303,10 +334,13 @@ export function GovernanceOverview() {
           labelText={`${windowText}活跃 Agent`}
           value={usage?.activeAgentCount ?? 0}
           help={`当前时间窗（${windowText}）内访问日志出现过的去重 Agent 数。`}
-          subValue={<span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span>}
+          subValue={agentRateState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span> : undefined}
+          state={agentRateState}
+          unavailableReason={agentRateState === "partial" ? "活跃数超过配置数，数据异常" : undefined}
           helpId="active-agent-count"
           testId="metric-active-agent-count"
         />
+        {/* D1: config-class — always ok */}
         <MetricCard
           label={<span>配置 <span className="notranslate" translate="no">Token</span></span>}
           labelText="配置 Token"
@@ -320,11 +354,22 @@ export function GovernanceOverview() {
           label={<span>{windowText}活跃 <span className="notranslate" translate="no">Token</span></span>}
           labelText={`${windowText}活跃 Token`}
           value={usage?.activeTokenCount ?? 0}
-          help={`当前时间窗（${windowText}）内访问日志出现过的去重 Token 数。`}
-          subValue={<span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span>}
+          help={
+            <span>
+              当前时间窗内访问日志出现的去重 <span className="notranslate" translate="no">Token</span> 前缀数（D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义，显示 <span className="notranslate" translate="no">partial</span>）。
+            </span>
+          }
+          subValue={tokenRateState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span> : undefined}
+          state={tokenRateState}
+          unavailableReason={
+            tokenRateState === "partial"
+              ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
+              : undefined
+          }
           helpId="active-token-count"
           testId="metric-active-token-count"
         />
+        {/* D1: config-class — always ok */}
         <MetricCard
           label="授权表"
           value={usage?.configuredTableCount ?? 0}
@@ -337,8 +382,17 @@ export function GovernanceOverview() {
           label={<span>{windowText}活跃表</span>}
           labelText={`${windowText}活跃表`}
           value={usage?.activeTableCount ?? 0}
-          help={`当前时间窗（${windowText}）内被访问过的去重表数（配置授权与访问日志并集口径）。`}
-          subValue={<span>活跃率 {activeTableRate}</span>}
+          help={
+            <span>
+              当前时间窗内被访问的去重表数。活跃率 = 活跃授权表 / 已解析授权表，仅在显式授权（无前缀/通配符）时可计算；
+              存在前缀授权时显示 <span className="notranslate" translate="no">partial</span>（口径未完全解析）。
+            </span>
+          }
+          subValue={tableRateState === "ok" && activeTableRate != null
+            ? <span>活跃率 {activeTableRate}</span>
+            : undefined}
+          state={tableRateState}
+          unavailableReason={tableRateState === "partial" ? "含前缀/通配符授权，活跃率无法精确计算" : undefined}
           helpId="active-table-count"
           testId="metric-active-table-count"
         />
@@ -346,16 +400,32 @@ export function GovernanceOverview() {
           label={<span>{windowText}调用量</span>}
           labelText={`${windowText}调用量`}
           value={usage?.calls ?? 0}
-          help={`当前时间窗（${windowText}）内经 MCP Proxy 记录的调用次数。`}
-          subValue={<span><span className="notranslate" translate="no">MCP</span> 调用</span>}
+          help={`当前时间窗（${windowText}）内经 MCP Proxy 记录的所有调用次数（含成功、拒绝、错误）。`}
+          subValue={auditMetricsState === "ok" ? <span><span className="notranslate" translate="no">MCP</span> 调用</span> : undefined}
+          state={auditMetricsState}
           helpId="calls"
           testId="metric-calls"
+        />
+        <MetricCard
+          label={<span>{windowText}ACL 拒绝</span>}
+          labelText={`${windowText}ACL 拒绝`}
+          value={deniedCount ?? 0}
+          help={
+            <span>
+              当前时间窗内访问日志中 <span className="notranslate" translate="no">outcome='denied'</span> 的记录数，直接查询审计库（Task 7），不含认证失败（<span className="notranslate" translate="no">auth_error</span>）。
+            </span>
+          }
+          subValue={deniedState === "ok" ? <span>来自审计库直查</span> : undefined}
+          state={deniedState}
+          helpId="acl-denied"
+          testId="metric-acl-denied"
         />
         <MetricCard
           label="多数请求耗时"
           value={p95Value}
           help="当前时间窗内 95% 的请求完成耗时上限（P95），用于感知尾部延迟。"
-          subValue={p95Hint}
+          subValue={p95MetricState === "ok" ? p95Hint : undefined}
+          state={p95MetricState}
           helpId="p95-latency"
           testId="metric-p95-latency"
         />
