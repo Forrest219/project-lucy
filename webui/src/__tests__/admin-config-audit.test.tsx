@@ -87,6 +87,9 @@ describe("ConfigAudit Spec 96 polish", () => {
     expect(table.querySelector("td.pl-config-audit-table-target")).not.toBeNull();
     expect(table.querySelector("td.pl-config-audit-table-path")).not.toBeNull();
     expect(table).toHaveTextContent("agent-with-very-long-target-identifier-for-wrap-check-001");
+    expect(screen.getByTestId("config-audit-target-link-1")).toHaveClass(
+      "pl-config-audit-target-link"
+    );
     expect(table).toHaveTextContent(
       "webui/config/customers/acme-corp/deeply/nested/governance/access.yaml"
     );

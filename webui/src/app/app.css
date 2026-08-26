@@ -781,6 +781,12 @@
     overflow-wrap: anywhere;
     word-break: break-word;
   }
+  .pl-config-audit-target-link {
+    display: inline;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
   /* Spec 85: publish history — light pl-data-grid conformance (business scope + scale). */
   .pl-publish-history-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-publish-history-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }

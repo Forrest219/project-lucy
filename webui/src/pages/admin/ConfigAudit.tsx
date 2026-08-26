@@ -108,7 +108,7 @@ function ChangeRow({ entry, index }: { entry: ConfigAuditEntry; index: number })
           {targetLink ? (
             <Link
               to={targetLink}
-              className="pl-inline-link notranslate"
+              className="pl-inline-link pl-config-audit-target-link notranslate"
               translate="no"
               data-testid={`config-audit-target-link-${entry.id}`}
             >

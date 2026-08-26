@@ -56,3 +56,67 @@ test("@pr-impacted grid geometry is usable at the project desktop viewport", asy
   expect(auditGeometry.bottom).toBeLessThanOrEqual(auditGeometry.viewportHeight);
   expect(auditGeometry.clientHeight).toBeLessThanOrEqual(auditGeometry.scrollHeight);
 });
+
+test("@pr-impacted config audit wraps long target links inside their column", async ({ page }) => {
+  const entryId = "long-semantic-target";
+  await page.route("**/api/admin/config-audit**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          total: 1,
+          entries: [
+            {
+              id: entryId,
+              ts: "2026-08-26T07:38:52.000Z",
+              actor: "local-admin",
+              actorType: "ui_admin",
+              source: "semantic_layer_import_api",
+              filePath:
+                "semantic-layer/mysql-aliyun/ai_intl_user_active_30d_uv_daily.yaml",
+              assetKind: "semantic",
+              changeType: "semantic_table_import",
+              targetId: "mysql-aliyun:chatbi:ai_intl_user_active_30d_uv_daily",
+              writeStatus: "committed"
+            }
+          ]
+        }
+      })
+    });
+  });
+
+  await page.goto("/admin/config-audit");
+  const targetLink = page.getByTestId(`config-audit-target-link-${entryId}`);
+  await expect(targetLink).toBeVisible();
+
+  const geometry = await targetLink.evaluate((node) => {
+    const cell = node.closest("td");
+    if (!cell) throw new Error("Target link is not inside a table cell");
+    const cellRect = cell.getBoundingClientRect();
+    const linkFragments = Array.from(node.getClientRects());
+    const style = getComputedStyle(node);
+    return {
+      cellRight: cellRect.right,
+      maxLinkRight: Math.max(...linkFragments.map((rect) => rect.right)),
+      display: style.display,
+      whiteSpace: style.whiteSpace
+    };
+  });
+  expect(geometry.display).toBe("inline");
+  expect(geometry.whiteSpace).toBe("normal");
+  expect(geometry.maxLinkRight).toBeLessThanOrEqual(geometry.cellRight + 1);
+
+  const scrollGeometry = await page.getByTestId("config-audit-grid-scroll").evaluate((node) => ({
+    clientWidth: node.clientWidth,
+    scrollWidth: node.scrollWidth
+  }));
+  expect(scrollGeometry.scrollWidth).toBeLessThanOrEqual(scrollGeometry.clientWidth + 1);
+
+  await targetLink.focus();
+  await expect(targetLink).toBeFocused();
+  await targetLink.click();
+  await expect(page).toHaveURL(
+    /\/catalog\/mysql-aliyun\/chatbi\/ai_intl_user_active_30d_uv_daily$/
+  );
+});
