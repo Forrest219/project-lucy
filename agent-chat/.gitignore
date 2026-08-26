@@ -1,0 +1,5 @@
+# Local Agent Chat secrets and runtime state — never commit.
+.env
+hermes-home/
+!hermes-home.example/
+!hermes-home.example/**

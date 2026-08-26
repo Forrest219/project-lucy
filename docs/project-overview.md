@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.13 |
-| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位）；v1.8 更新 2026-07-27（新增 Agent Admin 企业级交付 spec 索引）；v1.9 更新 2026-08-03（新增 Lucy 202608 可靠性交付系统升级蓝图索引）；v1.10 更新 2026-08-03（新增 Lucy 202608 执行总控与 Dynamic RLS POC 索引）；v1.11 更新 2026-08-03（同步 Kubernetes / Helm 单副本 baseline：`deploy/k8s/helm/lucy/`）；v1.12 更新 2026-08-03（将 202608 主线收窄为 Enterprise Governance & Observability）；v1.13 更新 2026-08-03（删除 Dynamic RLS / CLS POC spec / work order，移出 202608 active scope） |
+| 版本 | v1.14 |
+| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位）；v1.8 更新 2026-07-27（新增 Agent Admin 企业级交付 spec 索引）；v1.9 更新 2026-08-03（新增 Lucy 202608 可靠性交付系统升级蓝图索引）；v1.10 更新 2026-08-03（新增 Lucy 202608 执行总控与 Dynamic RLS POC 索引）；v1.11 更新 2026-08-03（同步 Kubernetes / Helm 单副本 baseline：`deploy/k8s/helm/lucy/`）；v1.12 更新 2026-08-03（将 202608 主线收窄为 Enterprise Governance & Observability）；v1.13 更新 2026-08-03（删除 Dynamic RLS / CLS POC spec / work order，移出 202608 active scope）；v1.14 更新 2026-08-26（索引可选 Agent Chat A3 Design Spec；非默认交付） |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
 project-lucy 是面向中小企业的 **data agent context compiler + governed MCP runtime**。它把数据库、BI、文档、人工口径编译成 Agent 可安全使用、可审计、可回归的数据服务；底座为 KTX 语义层、wiki、eval cases、skills、Lucy MCP Proxy 和 Lucy WebUI 治理工作台。
@@ -165,6 +165,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 管理员指南 | `docs/admin-guide.md` |
 | 用户指南 | `docs/user-guide.md` |
 | Agent 接入指南 | `docs/agent-integration-guide.md` |
+| 可选 Agent Chat（A3，非默认交付） | `docs/design-lucy-agent-chat-a3.md`、`docs/runbook-lucy-agent-chat-a3.md`、`docker-compose.agent-chat.yml`、`agent-chat/` |
 | 安全指南 | `docs/security-guide.md` |
 | 排障指南 | `docs/troubleshooting-guide.md` |
 | 开发治理 | `docs/DEVELOPMENT.md` |

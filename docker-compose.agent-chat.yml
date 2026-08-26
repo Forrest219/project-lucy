@@ -1,0 +1,83 @@
+# Optional Agent Chat (A3) — NOT part of default Lucy delivery.
+#
+# Hard constraints (docs/design-lucy-agent-chat-a3.md):
+# - Default `docker compose up` (docker-compose.yml) is unchanged and must stay Lucy-only.
+# - This file only adds Hermes + Open WebUI as a sidecar stack for single-tenant validation.
+# - Hermes API (:8642) is NOT published to the host; only Open WebUI (:3000) is.
+#
+# Start (requires agent-chat/.env and agent-chat/hermes-home — see runbook):
+#   docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env up -d
+#
+# Stop:
+#   docker compose -f docker-compose.agent-chat.yml --profile agent-chat --env-file agent-chat/.env down
+
+name: lucy-agent-chat
+
+services:
+  hermes:
+    profiles: ["agent-chat"]
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent:latest}
+    container_name: lucy-agent-chat-hermes
+    restart: unless-stopped
+    command: ["gateway", "run"]
+    env_file:
+      - ./agent-chat/.env
+    environment:
+      API_SERVER_ENABLED: "true"
+      # Bind on the compose network so Open WebUI can reach Hermes; do not publish this port.
+      API_SERVER_HOST: "0.0.0.0"
+      API_SERVER_PORT: "8642"
+      API_SERVER_KEY: ${API_SERVER_KEY}
+      API_SERVER_MODEL_NAME: ${API_SERVER_MODEL_NAME:-lucy-data-agent}
+      LUCY_PUBLIC_MCP_URL: ${LUCY_PUBLIC_MCP_URL}
+      LUCY_AGENT_TOKEN: ${LUCY_AGENT_TOKEN}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HERMES_HOME: /opt/data
+    volumes:
+      - ./agent-chat/hermes-home:/opt/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Intentionally no `ports:` for 8642 — Spec §2.4 / §8.
+    networks:
+      - agent-chat
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/health', timeout=3)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
+
+  open-webui:
+    profiles: ["agent-chat"]
+    image: ${OPEN_WEBUI_IMAGE:-ghcr.io/open-webui/open-webui:main}
+    container_name: lucy-agent-chat-open-webui
+    restart: unless-stopped
+    depends_on:
+      hermes:
+        condition: service_healthy
+    environment:
+      OPENAI_API_BASE_URL: http://hermes:8642/v1
+      OPENAI_API_KEY: ${API_SERVER_KEY}
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_NAME: ${OPEN_WEBUI_NAME:-Lucy Agent Chat}
+    ports:
+      - "${AGENT_CHAT_WEBUI_HOST_PORT:-3000}:8080"
+    volumes:
+      - agent-chat-open-webui-data:/app/backend/data
+    networks:
+      - agent-chat
+
+networks:
+  agent-chat:
+    name: lucy-agent-chat
+    driver: bridge
+
+volumes:
+  agent-chat-open-webui-data:
+    name: lucy-agent-chat-open-webui-data

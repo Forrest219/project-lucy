@@ -1,0 +1,31 @@
+# Hermes home seed for Lucy Agent Chat (A3 / M0).
+# Copy this directory to agent-chat/hermes-home before first `docker compose ... up`.
+#
+#   cp -R agent-chat/hermes-home.example agent-chat/hermes-home
+#
+# Secrets belong in agent-chat/.env (compose injects them). Prefer ${VAR} below
+# so LUCY_AGENT_TOKEN never lands in git.
+
+# Model: operator must point Hermes at a real provider after first boot
+# (hermes model / edit this file). Placeholder keeps the seed valid YAML.
+model:
+  default: openrouter/auto
+
+# A3 §4.2 — api_server only gets Lucy MCP tools (no terminal/browser/file).
+# MCP server name "lucy" → runtime toolset id "mcp-lucy".
+platform_toolsets:
+  api_server:
+    - mcp-lucy
+
+mcp_servers:
+  lucy:
+    url: "${LUCY_PUBLIC_MCP_URL}"
+    headers:
+      Authorization: "Bearer ${LUCY_AGENT_TOKEN}"
+    tools:
+      prompts: false
+      resources: false
+
+# Unattended gateway: stop runaway tool loops.
+tool_loop_guardrails:
+  hard_stop_enabled: true

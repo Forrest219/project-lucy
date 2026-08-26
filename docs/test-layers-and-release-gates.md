@@ -174,6 +174,13 @@ npm run smoke:p0
 npm run audit:ktx-diff
 ```
 
+Optional Agent Chat (A3) packaging smoke — **not** a headless / SOW hard gate:
+
+```bash
+npm run smoke:agent-chat:a3
+npm run smoke:agent-chat:a3:test
+```
+
 `npm run smoke:p0` includes WebUI build/test/static SPA checks. Those checks protect repository quality and future governance UI work; they do not mean WebUI is a customer standard entry point for this release.
 
 Required before changing bundled KTX version:
