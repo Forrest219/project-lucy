@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { PageHeader } from "../../components/PageHeader";
 import { BrandMark } from "../../components/BrandMark";
@@ -86,6 +85,22 @@ export function BrandingSettings() {
   const previewTitle = productTitle.trim() || branding?.defaults.productTitle || "Lucy WebUI";
   const previewTagline = tagline.trim() || branding?.defaults.tagline || "Data Agent MCP";
   const previewLogoUrl = branding?.logoUrl ?? null;
+  const defaultProductTitle = branding?.defaults.productTitle ?? "Lucy WebUI";
+  const defaultTagline = branding?.defaults.tagline ?? "Data Agent MCP";
+  const isTextDirty = Boolean(
+    branding &&
+      (productTitle !== branding.productTitleOverride || tagline !== branding.taglineOverride)
+  );
+  const saveStatus = saveTextMutation.isPending
+    ? "正在保存更改…"
+    : isTextDirty
+      ? "有未保存的更改"
+      : "当前没有待保存的更改";
+  const logoStatus = !branding
+    ? "正在加载 Logo 状态…"
+    : branding.hasCustomLogo
+      ? `自定义 Logo${branding.logoWidth && branding.logoHeight ? ` · ${branding.logoWidth} × ${branding.logoHeight} 像素` : ""}`
+      : "当前使用默认字母标识";
 
   function onSaveText(event: FormEvent) {
     event.preventDefault();
@@ -102,13 +117,12 @@ export function BrandingSettings() {
     <div className="pl-page">
       <PageHeader
         title="品牌外观"
-        description="配置客户 Logo、产品名称与副标题。同一张 Logo 用于侧栏与登录页；推荐 48×48 PNG（透明底），宽高须在 32–160 像素。"
-        breadcrumbs={["访问治理", "品牌外观"]}
-        backAction={
-          <Link to="/admin/usage" className="pl-page-header-back">
-            ‹ 返回使用概况
-          </Link>
+        description={
+          <>
+            配置客户 <span className="notranslate" translate="no">Logo</span>、产品名称与品牌副标题。
+          </>
         }
+        breadcrumbs={["系统设置"]}
       />
 
       {query.isError && (
@@ -128,7 +142,7 @@ export function BrandingSettings() {
           <section className="pl-card grid gap-4 p-5" data-testid="branding-logo-section">
             <div className="grid gap-1">
               <h2 className="text-base font-semibold">客户 Logo</h2>
-              <p className="text-sm text-fg-muted">
+              <p className="text-sm text-fg-muted" id="branding-logo-help">
                 支持{" "}
                 <span translate="no" className="notranslate">
                   PNG / JPEG / GIF
@@ -140,29 +154,54 @@ export function BrandingSettings() {
                 。超尺寸不会自动裁切，请缩小后再传。
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border-default bg-bg-subtle p-4">
               <BrandMark productTitle={previewTitle} logoUrl={previewLogoUrl} />
-              <div className="grid gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">当前 Logo</p>
+                <p
+                  className="text-xs text-fg-muted notranslate"
+                  translate="no"
+                  id="branding-logo-status"
+                >
+                  {logoStatus}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="sr-only" htmlFor="branding-logo-input">
+                  选择客户 Logo 文件
+                </label>
                 <input
+                  id="branding-logo-input"
                   ref={fileInputRef}
                   type="file"
                   accept="image/png,image/jpeg,image/gif,.png,.jpg,.jpeg,.gif"
                   className="sr-only"
                   data-testid="branding-logo-input"
+                  aria-describedby="branding-logo-help branding-logo-status"
                   onChange={onPickFile}
                 />
                 <button
                   type="button"
-                  className="pl-btn pl-btn-primary"
+                  className="pl-btn pl-btn--primary"
                   disabled={uploadMutation.isPending}
+                  data-loading={uploadMutation.isPending ? "true" : undefined}
+                  aria-busy={uploadMutation.isPending}
+                  aria-describedby="branding-logo-help"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  {uploadMutation.isPending ? "上传中…" : "上传 Logo"}
+                  {uploadMutation.isPending
+                    ? "上传中…"
+                    : branding?.hasCustomLogo
+                      ? "更换 Logo"
+                      : "上传 Logo"}
                 </button>
                 <button
                   type="button"
-                  className="pl-btn pl-btn-secondary"
+                  className="pl-btn pl-btn--secondary"
                   disabled={!branding?.hasCustomLogo || deleteMutation.isPending}
+                  data-loading={deleteMutation.isPending ? "true" : undefined}
+                  aria-busy={deleteMutation.isPending}
+                  aria-describedby="branding-logo-status"
                   onClick={() => deleteMutation.mutate()}
                 >
                   恢复默认 Logo
@@ -184,10 +223,21 @@ export function BrandingSettings() {
                   translate="no"
                   value={productTitle}
                   onChange={(e) => setProductTitle(e.target.value)}
-                  placeholder={branding?.defaults.productTitle ?? "Lucy WebUI"}
+                  placeholder="输入自定义产品名称"
                   maxLength={64}
+                  aria-describedby="branding-product-title-help"
                   data-testid="branding-product-title"
                 />
+                <p
+                  className="text-xs text-fg-muted"
+                  id="branding-product-title-help"
+                  data-testid="branding-product-title-help"
+                >
+                  默认值：
+                  <span className="notranslate" translate="no">
+                    {defaultProductTitle}
+                  </span>
+                </p>
               </label>
               <label className="grid gap-1">
                 <span className="text-sm font-medium">副标题</span>
@@ -196,42 +246,90 @@ export function BrandingSettings() {
                   translate="no"
                   value={tagline}
                   onChange={(e) => setTagline(e.target.value)}
-                  placeholder={branding?.defaults.tagline ?? "Data Agent MCP"}
+                  placeholder="输入自定义副标题"
                   maxLength={64}
+                  aria-describedby="branding-tagline-help"
                   data-testid="branding-tagline"
                 />
+                <p
+                  className="text-xs text-fg-muted"
+                  id="branding-tagline-help"
+                  data-testid="branding-tagline-help"
+                >
+                  默认值：
+                  <span className="notranslate" translate="no">
+                    {defaultTagline}
+                  </span>
+                </p>
               </label>
-              <div>
+              <div className="flex items-center justify-between gap-3 border-t border-border-default pt-4">
+                <p className="text-xs text-fg-muted" id="branding-save-status" aria-live="polite">
+                  {saveStatus}
+                </p>
                 <button
                   type="submit"
-                  className="pl-btn pl-btn-primary"
-                  disabled={saveTextMutation.isPending}
+                  className="pl-btn pl-btn--primary"
+                  disabled={!isTextDirty || saveTextMutation.isPending}
+                  data-loading={saveTextMutation.isPending ? "true" : undefined}
+                  aria-busy={saveTextMutation.isPending}
+                  aria-describedby="branding-save-status"
                 >
-                  {saveTextMutation.isPending ? "保存中…" : "保存"}
+                  {saveTextMutation.isPending ? "保存中…" : "保存更改"}
                 </button>
               </div>
             </form>
           </section>
         </div>
 
-        <aside className="pl-card grid gap-4 p-5 h-fit" data-testid="branding-preview">
-          <h2 className="text-base font-semibold">预览</h2>
-          <div className="grid gap-3">
-            <p className="text-xs text-fg-muted">侧栏品牌区</p>
-            <div className="pl-brand-block pointer-events-none notranslate" translate="no">
-              <BrandMark productTitle={previewTitle} logoUrl={previewLogoUrl} />
-              <div className="pl-brand-text">
-                <strong className="pl-brand-title">{previewTitle}</strong>
-                <span className="pl-brand-tagline notranslate" translate="no">
-                  {previewTagline}
-                </span>
+        <aside className="pl-card grid h-fit gap-4 p-5" data-testid="branding-preview">
+          <div className="grid gap-1">
+            <h2 className="text-base font-semibold">预览</h2>
+            <p className="text-sm text-fg-muted">输入时实时更新，保存后应用到实际界面。</p>
+          </div>
+          <div className="grid gap-4">
+            <figure className="grid gap-2">
+              <figcaption className="text-xs font-medium text-fg-muted">侧栏品牌区</figcaption>
+              <div
+                className="rounded-lg border border-border-default bg-bg-surface p-3 shadow-card"
+                data-testid="branding-sidebar-preview"
+                aria-label="侧栏品牌区预览"
+              >
+                <div className="flex items-center gap-2 notranslate" translate="no">
+                  <BrandMark productTitle={previewTitle} logoUrl={previewLogoUrl} />
+                  <div className="pl-brand-text">
+                    <strong className="pl-brand-title">{previewTitle}</strong>
+                    <span className="pl-brand-tagline notranslate" translate="no">
+                      {previewTagline}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-2" aria-hidden="true">
+                  <span className="h-2 w-3/4 rounded-pill bg-bg-muted" />
+                  <span className="h-2 w-1/2 rounded-pill bg-bg-muted" />
+                </div>
               </div>
-            </div>
-            <p className="text-xs text-fg-muted mt-2">登录页</p>
-            <div className="flex items-center gap-2 notranslate" translate="no">
-              <BrandMark productTitle={previewTitle} logoUrl={previewLogoUrl} />
-              <strong className="text-lg">{previewTitle}</strong>
-            </div>
+            </figure>
+
+            <figure className="grid gap-2">
+              <figcaption className="text-xs font-medium text-fg-muted">登录页</figcaption>
+              <div
+                className="rounded-lg border border-border-default bg-bg-muted p-4"
+                data-testid="branding-login-preview"
+                aria-label="登录页预览"
+              >
+                <div className="rounded-md border border-border-default bg-bg-surface p-4 shadow-card">
+                  <div className="flex items-center gap-2 notranslate" translate="no">
+                    <BrandMark productTitle={previewTitle} logoUrl={previewLogoUrl} />
+                    <strong className="min-w-0 truncate text-lg">{previewTitle}</strong>
+                  </div>
+                  <div className="mt-3 grid gap-2" aria-hidden="true">
+                    <span className="text-sm font-semibold">登录</span>
+                    <span className="h-2 w-full rounded-pill bg-bg-muted" />
+                    <span className="h-7 w-full rounded-md border border-border-default bg-bg-surface" />
+                  </div>
+                </div>
+              </div>
+            </figure>
           </div>
         </aside>
       </div>
