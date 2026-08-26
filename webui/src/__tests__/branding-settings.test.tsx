@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -73,6 +74,12 @@ describe("BrandingSettings", () => {
     expect(screen.getByTestId("branding-text-section")).toBeInTheDocument();
     expect(screen.getByTestId("branding-preview")).toBeInTheDocument();
     expect(screen.getAllByTestId("brand-mark-letter")[0]).toHaveTextContent("L");
+  });
+
+  it("keeps the editor and preview in the default desktop two-column layout", () => {
+    const source = readFileSync("src/pages/admin/BrandingSettings.tsx", "utf8");
+    expect(source).toContain("grid-cols-[minmax(0,1fr)_minmax(280px,360px)]");
+    expect(source).not.toContain("lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]");
   });
 
   it("saves product title override", async () => {

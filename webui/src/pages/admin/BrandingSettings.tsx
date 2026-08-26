@@ -123,7 +123,7 @@ export function BrandingSettings() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(280px,360px)] gap-6">
         <div className="grid gap-6">
           <section className="pl-card grid gap-4 p-5" data-testid="branding-logo-section">
             <div className="grid gap-1">
