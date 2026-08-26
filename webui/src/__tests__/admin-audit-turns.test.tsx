@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Audit } from "../pages/admin/Audit";
+
+const toastMock = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn()
+}));
+
+vi.mock("sonner", () => ({
+  toast: toastMock
+}));
 
 function renderAudit(initialEntry = "/admin/audit") {
   const client = new QueryClient({
@@ -21,10 +30,70 @@ function renderAudit(initialEntry = "/admin/audit") {
   );
 }
 
+function renderAuditWithProbe(initialEntry: string) {
+  function Probe() {
+    const location = useLocation();
+    return <div data-testid="probe-location" data-search={location.search} />;
+  }
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route
+            path="/admin/audit"
+            element={
+              <>
+                <Audit />
+                <Probe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+function stubEmptyAuditApis() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+      }
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+              referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+            }
+          })
+        );
+      }
+      if (url.startsWith("/api/admin/audit")) {
+        return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [] } }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    })
+  );
+}
+
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  toastMock.success.mockReset();
+  toastMock.error.mockReset();
+  window.localStorage.clear();
 });
 
 describe("Admin / Audit turns tab (Spec 89)", () => {
@@ -434,5 +503,238 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       expect(screen.getByText("demo-mysql")).toBeInTheDocument();
       expect(screen.getByText("慢于多数请求")).toBeInTheDocument();
     });
+  });
+
+  it("uses local datetime-local values and sends UTC ISO on the wire", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-26T05:03:00.000Z"));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+      }
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+              referenceLatency: { windowHours: 24, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+            }
+          })
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [] } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAudit("/admin/audit?range=24h");
+    const sinceInput = await screen.findByTestId("audit-since");
+    const offsetMinutes = new Date("2026-08-26T05:03:00.000Z").getTimezoneOffset();
+    // Only assert the Shanghai-shaped local display when the host TZ matches.
+    if (offsetMinutes === -480) {
+      expect(sinceInput).toHaveValue("2026-08-25T13:00");
+    }
+    await waitFor(() => {
+      const turnCall = fetchMock.mock.calls.map((c) => String(c[0])).find((u) => u.includes("/api/admin/audit/turns"));
+      expect(turnCall).toBeTruthy();
+      expect(turnCall!).toMatch(/since=2026-08-25T05%3A00%3A00\.000Z|since=2026-08-25T05:00:00\.000Z/);
+    });
+
+    fireEvent.change(sinceInput, { target: { value: "2026-08-25T14:30" } });
+    await waitFor(() => {
+      const turnCalls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/api/admin/audit/turns"));
+      const latest = turnCalls.at(-1) ?? "";
+      expect(latest).toMatch(/since=/);
+      if (offsetMinutes === -480) {
+        expect(latest).toMatch(/since=2026-08-25T06%3A30%3A00\.000Z|since=2026-08-25T06:30:00\.000Z/);
+      }
+    });
+    const exportLink = screen.getByTestId("audit-export-csv");
+    expect(exportLink.getAttribute("href")).toMatch(/since=/);
+  });
+
+  it("seeds key from turnId on calls deep-link and keeps key after drawer close", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+      }
+      if (url.includes("/api/admin/audit/turns/lucy_test")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              id: "lucy_test",
+              source: "reported",
+              userId: "demo_agent",
+              accessLogs: [],
+              referenceLatency: { windowHours: 24, p95Ms: 0 }
+            }
+          })
+        );
+      }
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              total: 0,
+              entries: [],
+              summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+              referenceLatency: { windowHours: 24, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+            }
+          })
+        );
+      }
+      if (url.startsWith("/api/admin/audit?")) {
+        return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [] } }));
+      }
+      return new Response(JSON.stringify({ ok: true, data: { entries: [], total: 0 } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAuditWithProbe("/admin/audit?range=24h&view=calls&turnId=lucy_test");
+
+    await waitFor(() => {
+      const search = screen.getByTestId("probe-location").getAttribute("data-search") ?? "";
+      expect(search).toContain("key=lucy_test");
+      expect(search).toContain("turnId=lucy_test");
+      expect(search).toContain("view=calls");
+      expect(search).toContain("range=24h");
+    });
+
+    await waitFor(() => {
+      const callUrls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith("/api/admin/audit?"));
+      expect(callUrls.some((u) => u.includes("key=lucy_test"))).toBe(true);
+    });
+
+    const exportHref = screen.getByTestId("audit-export-csv").getAttribute("href") ?? "";
+    expect(exportHref).toContain("key=lucy_test");
+
+    fireEvent.click(await screen.findByTestId("audit-turn-drawer-close"));
+    await waitFor(() => {
+      const search = screen.getByTestId("probe-location").getAttribute("data-search") ?? "";
+      expect(search).not.toContain("turnId=");
+      expect(search).toContain("key=lucy_test");
+      expect(search).toContain("view=calls");
+    });
+  });
+
+  it("does not overwrite an explicit key with turnId", async () => {
+    stubEmptyAuditApis();
+    renderAuditWithProbe("/admin/audit?range=24h&view=calls&turnId=lucy_test&key=manual");
+    await waitFor(() => {
+      const search = screen.getByTestId("probe-location").getAttribute("data-search") ?? "";
+      expect(search).toContain("key=manual");
+      expect(search).not.toMatch(/key=lucy_test/);
+    });
+    expect(screen.getByTestId("audit-key-search")).toHaveValue("manual");
+  });
+
+  it("exposes keyboard open action, pressed range state, and copy toast", async () => {
+    stubEmptyAuditApis();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                agents: [{ id: "demo_agent", name: "Demo Agent", enabled: true, tokenCount: 1 }],
+                version: 1,
+                summary: {}
+              }
+            })
+          );
+        }
+        if (url.includes("/api/admin/audit/turns/inf_test_1")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                id: "inf_test_1",
+                source: "reported",
+                userId: "demo_agent",
+                accessLogs: [],
+                referenceLatency: { windowHours: 168, p95Ms: 0 }
+              }
+            })
+          );
+        }
+        if (url.includes("/api/admin/audit/turns")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 1,
+                summary: { reportedCount: 1, inferredCount: 0, reportedShare: 1 },
+                referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 },
+                entries: [
+                  {
+                    id: "inf_test_1",
+                    source: "reported",
+                    userId: "demo_agent",
+                    startedAt: "2026-08-04T08:00:00.000Z",
+                    endedAt: "2026-08-04T08:00:16.000Z",
+                    businessCallCount: 1,
+                    confidence: "high",
+                    tools: ["sl_query"],
+                    sources: [],
+                    turnSpanMs: 16000,
+                    totalCallDurationMs: 100,
+                    slowCallCount: 0,
+                    outcomeSummary: { ok: 1, denied: 0, error: 0 }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, data: { entries: [], total: 0 } }));
+      })
+    );
+
+    renderAudit("/admin/audit?range=7d");
+
+    const windowControl = await screen.findByTestId("audit-window-control");
+    expect(windowControl).toHaveAttribute("role", "group");
+    expect(screen.getByRole("button", { name: "7 天" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "24 小时" })).toHaveAttribute("aria-pressed", "false");
+
+    const openBtn = await screen.findByTestId("audit-turn-open-inf_test_1");
+    fireEvent.click(openBtn);
+    expect(await screen.findByTestId("audit-turn-drawer")).toBeInTheDocument();
+
+    const idCell = screen.getByTestId("audit-turn-id-inf_test_1").closest("td");
+    expect(idCell).toHaveClass("pl-audit-turn-id-cell");
+    const startCell = within(screen.getByTestId("audit-turns-table")).getAllByText((_, node) => {
+      return node?.getAttribute?.("data-part") === "date";
+    });
+    expect(startCell.length).toBeGreaterThanOrEqual(1);
+
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: { writeText: vi.fn(async () => undefined) }
+    });
+    fireEvent.click(screen.getByTestId("audit-turn-id-inf_test_1"));
+    await waitFor(() => {
+      expect(toastMock.success).toHaveBeenCalledWith("已复制问询 ID");
+    });
+  });
+
+  it("shows clear-filters when a non-default filter is active", async () => {
+    stubEmptyAuditApis();
+    renderAudit("/admin/audit?range=24h&user=demo_agent");
+    expect(await screen.findByTestId("audit-clear-filters")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("audit-clear-filters"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("audit-clear-filters")).not.toBeInTheDocument();
+    });
+    expect(screen.getByPlaceholderText("Agent 名称或 ID")).toHaveValue("");
   });
 });

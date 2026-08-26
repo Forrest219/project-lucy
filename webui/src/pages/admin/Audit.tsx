@@ -1343,11 +1343,34 @@ export function Audit() {
     updateParam("range", nextRange);
   }
 
+  const drawerTurnId = searchParams.get("turnId") ?? "";
+
+  // Spec 129: on calls view, seed key from turnId once when key is absent.
+  useEffect(() => {
+    if (tab !== "calls") return;
+    if (!drawerTurnId || keySearch) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("key", drawerTurnId);
+    next.delete("turnIdFilter");
+    setSearchParams(next, { replace: true });
+    const snapshot = readFilterSnapshot();
+    snapshot.key = drawerTurnId;
+    writeFilterSnapshot(snapshot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, drawerTurnId, keySearch]);
+
   function openTurnDrawer(turnId: string) {
     setSelectedTurnId(turnId);
     setTurnDrawerOpen(true);
     const next = new URLSearchParams(searchParams);
     next.set("turnId", turnId);
+    if (tab === "calls" && !(searchParams.get("key") ?? searchParams.get("turnIdFilter"))) {
+      next.set("key", turnId);
+      next.delete("turnIdFilter");
+      const snapshot = readFilterSnapshot();
+      snapshot.key = turnId;
+      writeFilterSnapshot(snapshot);
+    }
     setSearchParams(next);
   }
 
@@ -1359,6 +1382,53 @@ export function Audit() {
       next.delete("turnId");
       setSearchParams(next, { replace: true });
     }
+  }
+
+  const rangeDefaultSince = sinceLocalFromHours(hours);
+  const hasNonDefaultFilters = Boolean(
+    user
+      || tool
+      || outcome
+      || decisionReasonPrefix
+      || tableSearch
+      || keySearch
+      || sessionId
+      || clientIp
+      || deviceNameFilter
+      || platform
+      || callSource
+      || turnSource
+      || turnSearch
+      || until
+      || (since && since !== rangeDefaultSince)
+      || slowOnly
+      || (includeProtocol && callSource !== "playground")
+  );
+
+  function clearFilters() {
+    setUntil("");
+    setSince(sinceLocalFromHours(hours));
+    setPage(0);
+    setAdvancedOpen(false);
+    const next = new URLSearchParams();
+    if (range) next.set("range", range);
+    if (tab === "calls") next.set("view", "calls");
+    const keepTurnId = searchParams.get("turnId");
+    const keepObject = searchParams.get("object");
+    const keepEventId = searchParams.get("eventId");
+    if (keepTurnId) next.set("turnId", keepTurnId);
+    if (keepObject) next.set("object", keepObject);
+    if (keepEventId) next.set("eventId", keepEventId);
+    setSearchParams(next);
+    const snapshot = readFilterSnapshot();
+    for (const field of FILTER_PERSIST_FIELDS) {
+      if (field === "view" || field === "range" || field === "turnId") continue;
+      delete snapshot[field];
+    }
+    if (tab === "calls") snapshot.view = "calls";
+    else delete snapshot.view;
+    snapshot.range = range;
+    writeFilterSnapshot(snapshot);
   }
 
   const agentsQuery = useQuery({
@@ -1496,13 +1566,14 @@ export function Audit() {
             </span>
             <div
               className="pl-segmented-control pl-segmented-control--cols-2"
-              role="tablist"
+              role="group"
               aria-label="统计窗口"
               data-testid="audit-window-control"
             >
               <button
                 type="button"
                 className={range === "24h" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                aria-pressed={range === "24h"}
                 onClick={() => setRange("24h")}
               >
                 24 小时
@@ -1510,6 +1581,7 @@ export function Audit() {
               <button
                 type="button"
                 className={range === "7d" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+                aria-pressed={range === "7d"}
                 onClick={() => setRange("7d")}
               >
                 7 天
@@ -1644,6 +1716,7 @@ export function Audit() {
             <input
               className="pl-input flex-1 min-w-[12rem]"
               placeholder="搜索摘要"
+              aria-label="搜索摘要"
               value={turnSearch}
               onChange={(e) => updateParam("turnSearch", e.target.value)}
             />
@@ -1669,6 +1742,7 @@ export function Audit() {
               className="pl-input w-36 notranslate"
               translate="no"
               placeholder="工具名"
+              aria-label="按工具名筛选"
               value={tool}
               onChange={(e) => updateParam("tool", e.target.value)}
             />
@@ -1676,20 +1750,37 @@ export function Audit() {
               type="button"
               className="pl-btn pl-btn--ghost text-sm"
               data-testid="audit-advanced-filters-toggle"
+              aria-expanded={advancedOpen}
+              aria-controls="audit-advanced-filters"
               onClick={() => setAdvancedOpen((v) => !v)}
             >
               {advancedOpen ? "收起高级" : "高级筛选"}
             </button>
           </>
         )}
+        {hasNonDefaultFilters ? (
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost text-sm"
+            data-testid="audit-clear-filters"
+            onClick={clearFilters}
+          >
+            清除筛选
+          </button>
+        ) : null}
       </div>
 
       {tab === "calls" && advancedOpen ? (
-        <div className="pl-admin-filterbar" data-testid="audit-advanced-filters">
+        <div
+          id="audit-advanced-filters"
+          className="pl-admin-filterbar"
+          data-testid="audit-advanced-filters"
+        >
           <input
             className="pl-input w-40 notranslate"
             translate="no"
             placeholder="Session ID"
+            aria-label="按 Session ID 筛选"
             value={sessionId}
             onChange={(e) => updateParam("sessionId", e.target.value)}
           />
@@ -1766,12 +1857,13 @@ export function Audit() {
                   <th>涉及数据表</th>
                   <th>耗时</th>
                   <th>结果</th>
-                  <th>来源</th>
+                  <th className="pl-audit-turn-source-cell">来源</th>
+                  <th className="whitespace-nowrap">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={13} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
                     const denied = entry.outcomeSummary?.denied ?? 0;
@@ -1784,11 +1876,15 @@ export function Audit() {
                         onClick={() => openTurnDrawer(entry.id)}
                       >
                         <td className="pl-audit-table-num">{page * PAGE_SIZE + index + 1}</td>
-                        <td className="pl-audit-table-mono whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <td className="pl-audit-table-mono pl-audit-turn-id-cell" onClick={(e) => e.stopPropagation()}>
                           <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
                         </td>
-                        <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.startedAt)}</td>
-                        <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(entry.endedAt)}</td>
+                        <td className="pl-audit-table-muted">
+                          <AuditDateTime value={entry.startedAt} />
+                        </td>
+                        <td className="pl-audit-table-muted">
+                          <AuditDateTime value={entry.endedAt} />
+                        </td>
                         <td>
                           <div>{formatDurationMs(entry.turnSpanMs ?? 0)}</div>
                           {(entry.totalCallDurationMs ?? 0) > 0 ? (
@@ -1811,7 +1907,17 @@ export function Audit() {
                           {errors > 0 ? <span className="pl-status-badge pl-status-validation_failed">{errors} 错误</span> : null}
                           {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
                         </td>
-                        <td><TurnSourceBadge source={entry.source} /></td>
+                        <td className="pl-audit-turn-source-cell"><TurnSourceBadge source={entry.source} /></td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="pl-btn pl-btn--ghost text-xs"
+                            data-testid={`audit-turn-open-${entry.id}`}
+                            onClick={() => openTurnDrawer(entry.id)}
+                          >
+                            查看详情
+                          </button>
+                        </td>
                       </tr>
                     );
                   })

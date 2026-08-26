@@ -829,6 +829,29 @@
   .pl-audit-id-copy {
     @apply inline max-w-[14rem] truncate rounded-sm px-0.5 text-left hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
   }
+  .pl-audit-turn-id-cell {
+    width: 14rem;
+    min-width: 11rem;
+    max-width: 14rem;
+  }
+  .pl-audit-turn-id-cell .pl-audit-id-copy {
+    @apply block max-w-none whitespace-normal break-all leading-4;
+  }
+  .pl-audit-date-time {
+    @apply grid min-w-[5.5rem] whitespace-nowrap tabular-nums leading-4;
+  }
+  .pl-audit-date-time [data-part="time"] {
+    @apply text-fg-muted;
+  }
+  .pl-audit-turn-source-cell {
+    min-width: 6.5rem;
+  }
+  .pl-audit-turn-source-cell .pl-status-badge {
+    @apply whitespace-nowrap;
+  }
+  .pl-audit-drawer-empty {
+    @apply rounded-md border border-border-default bg-bg-muted px-3 py-3 text-sm text-fg-muted;
+  }
   /* Spec 88: agent admin list table — light pl-data-grid conformance. */
   .pl-agent-list-table tbody td { @apply text-xs font-medium leading-4; }
   .pl-agent-list-table-num { @apply whitespace-nowrap font-normal tabular-nums text-fg-body; }
@@ -1689,7 +1712,10 @@
   .pl-admin-tab-panel { @apply min-h-[400px]; }
   /* Slide-over Drawer (right-anchored, replaces centered modal for Add Schema) */
   .pl-drawer-backdrop { @apply fixed inset-0 z-50 flex justify-end bg-fg-default/40; }
-  .pl-drawer-panel { @apply flex h-full w-full max-w-xl flex-col gap-4 overflow-auto bg-bg-surface p-6 shadow-lg; }
+  /* Radix-portal overlay (ObjectDetailDrawer and future Radix-backed drawers) */
+  .pl-drawer-overlay { @apply fixed inset-0 z-50 bg-fg-default/40; }
+  /* Fixed panel supports both legacy (inside backdrop) and Radix portal (standalone) */
+  .pl-drawer-panel { @apply fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col gap-4 overflow-auto bg-bg-surface p-6 shadow-lg; }
   .pl-drawer-header { @apply flex items-start justify-between gap-3; }
   .pl-drawer-body { @apply grid gap-3; }
   /* 新建连接：两列 Field 共享标签 / 控件 / 说明行轨，避免一侧 hint 把另一侧 input 拉高。 */

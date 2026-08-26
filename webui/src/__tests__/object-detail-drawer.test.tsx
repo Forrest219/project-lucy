@@ -73,6 +73,8 @@ function stubDrawerFetch() {
                 enabled: true,
                 role: "analyst",
                 tokens: [],
+                createdAt: "2026-01-01T00:00:00.000Z",
+                configUpdatedAt: "2026-06-15T00:00:00.000Z",
                 stats: { callsLast7d: 1, deniedLast7d: 0, topTables: [] }
               }
             ]
@@ -187,6 +189,23 @@ describe("ObjectDetailDrawer", () => {
     expect(body).toHaveTextContent("启用");
   });
 
+  it("renders agent created date and config updated time when provided", async () => {
+    stubDrawerFetch();
+    renderAt("/?object=agent&agentId=zhangsan");
+
+    const body = await screen.findByTestId("object-detail-agent-body");
+    // Both dates are present; just assert the year as locale formatting varies
+    expect(body).toHaveTextContent("2026");
+  });
+
+  it("renders audit log link in agent body pointing to the agent's audit page", async () => {
+    stubDrawerFetch();
+    renderAt("/?object=agent&agentId=zhangsan");
+
+    const link = await screen.findByTestId("object-detail-agent-audit-link");
+    expect(link).toHaveAttribute("href", "/admin/audit?user=zhangsan");
+  });
+
   it("renders a run drawer with the recent failed case list", async () => {
     stubDrawerFetch();
     renderAt("/?object=evalRun&runId=42");
@@ -218,6 +237,33 @@ describe("ObjectDetailDrawer", () => {
       expect(probe.getAttribute("data-pathname")).toBe("/onboarding");
       expect(probe.getAttribute("data-search")).toBe("");
     });
+  });
+
+  it("Esc key closes the drawer and clears the search params", async () => {
+    stubDrawerFetch();
+    renderAtWithLocation("/?object=table&conn=mysql-aliyun&schema=dataforai&table=superstore_orders");
+
+    await screen.findByTestId("object-detail-drawer");
+    fireEvent.keyDown(document.body, { key: "Escape", bubbles: true });
+
+    await waitFor(() => {
+      const probe = screen.getByTestId("probe-location");
+      expect(probe.getAttribute("data-search")).toBe("");
+    });
+  });
+
+  it("does not show close source debug text", async () => {
+    stubDrawerFetch();
+    renderAt("/?object=table&conn=mysql-aliyun&schema=dataforai&table=superstore_orders");
+    await screen.findByTestId("object-detail-drawer");
+    expect(screen.queryByText(/关闭方式/)).not.toBeInTheDocument();
+  });
+
+  it("has dialog role for accessibility (Radix provides)", async () => {
+    stubDrawerFetch();
+    renderAt("/?object=table&conn=mysql-aliyun&schema=dataforai&table=superstore_orders");
+    await screen.findByTestId("object-detail-drawer");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("does not render the drawer when no object query is present", () => {

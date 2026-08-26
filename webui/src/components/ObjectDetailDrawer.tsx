@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useRef } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../lib/apiClient";
@@ -26,8 +27,6 @@ const AGENT_NOT_FOUND_TITLE = "未找到该 Agent";
 const RUN_NOT_FOUND_TITLE = "未找到该 Run";
 const EVENT_NOT_FOUND_TITLE = "未找到该审计事件";
 
-type CloseSource = "button" | "backdrop" | "esc" | "unknown";
-
 /**
  * M36 review follow-up: callers (notably the Audit page) can pass an
  * initial entry via `location.state` so the drawer renders immediately
@@ -49,91 +48,87 @@ export function ObjectDetailDrawer() {
   const navigate = useNavigate();
   const target = parseObjectDetailSearch(location.search);
   const locationState = readLocationState(location);
-  const [closeSource, setCloseSource] = useState<CloseSource>("unknown");
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   function close() {
-    if (closeSource === "unknown") setCloseSource("button");
     const nextSearch = clearObjectDetailSearch(location.search);
     navigate(nextSearch ? `${location.pathname}${nextSearch}` : location.pathname, { replace: true });
   }
 
-  useEffect(() => {
-    if (!target) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setCloseSource("esc");
-        close();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-    // close() reads from location/navigate but is stable for our purposes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, location.pathname, location.search]);
-
-  if (!target) return null;
-
   return (
-    <div
-      className="pl-drawer-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="对象详情"
-      data-testid="object-detail-drawer"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          setCloseSource("backdrop");
-          close();
-        }
-      }}
-    >
-      <div className="pl-drawer-panel" role="document">
-        <header className="pl-drawer-header">
-          <div className="grid gap-1 min-w-0">
-            <span className="pl-eyebrow">{drawerEyebrow(target.kind)}</span>
-            <h2 className="pl-panel-title mb-0" data-testid="object-detail-title">
-              <span className="notranslate" translate="no">{objectDetailTitle(target)}</span>
-            </h2>
-          </div>
-          <button
-            type="button"
-            className="pl-drawer-close"
-            onClick={() => {
-              setCloseSource("button");
-              close();
-            }}
-            aria-label="关闭对象详情抽屉"
-            data-testid="object-detail-close"
-          >
-            关闭
-          </button>
-        </header>
-        <div className="pl-drawer-body">
-          {target.kind === "table" ? (
-            <TableDetailBody target={target} />
-          ) : target.kind === "agent" ? (
-            <AgentDetailBody target={target} />
-          ) : target.kind === "evalRun" ? (
-            <EvalRunDetailBody target={target} />
-          ) : (
-            <AuditEventDetailBody target={target} initialEntry={locationState.initialAuditEntry} />
+    <Dialog.Root open={!!target} onOpenChange={(open) => { if (!open) close(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="pl-drawer-overlay" />
+        <Dialog.Content
+          className="pl-drawer-panel"
+          data-testid="object-detail-drawer"
+          aria-describedby="object-detail-description"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            closeButtonRef.current?.focus();
+          }}
+        >
+          {target && (
+            <>
+              <header className="pl-drawer-header">
+                <div className="grid gap-1 min-w-0">
+                  <span className="pl-eyebrow">{drawerEyebrow(target.kind)}</span>
+                  <Dialog.Title asChild>
+                    <h2 className="pl-panel-title mb-0" data-testid="object-detail-title">
+                      <span className="notranslate" translate="no">{objectDetailTitle(target)}</span>
+                    </h2>
+                  </Dialog.Title>
+                  <Dialog.Description id="object-detail-description" className="sr-only">
+                    {drawerEyebrow(target.kind)} 详情面板
+                  </Dialog.Description>
+                </div>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  className="pl-drawer-close"
+                  onClick={close}
+                  aria-label="关闭对象详情抽屉"
+                  data-testid="object-detail-close"
+                >
+                  关闭
+                </button>
+              </header>
+              <div className="pl-drawer-body">
+                {target.kind === "table" ? (
+                  <TableDetailBody target={target} />
+                ) : target.kind === "agent" ? (
+                  <AgentDetailBody target={target} />
+                ) : target.kind === "evalRun" ? (
+                  <EvalRunDetailBody target={target} />
+                ) : (
+                  <AuditEventDetailBody target={target} initialEntry={locationState.initialAuditEntry} />
+                )}
+              </div>
+              <footer className="pl-drawer-footer pl-drawer-footer-border-t">
+                {target.kind === "auditEvent" ? (
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost text-sm"
+                    data-testid="object-detail-return-audit"
+                    onClick={close}
+                  >
+                    返回调用流水
+                  </button>
+                ) : (
+                  <Link
+                    className="pl-btn pl-btn--ghost text-sm"
+                    to={deepLinkHref(target)}
+                    data-testid="object-detail-deep-link"
+                  >
+                    打开完整页面 →
+                  </Link>
+                )}
+              </footer>
+            </>
           )}
-        </div>
-        <footer className="pl-drawer-footer pl-drawer-footer-border-t">
-          <span className="text-xs text-fg-muted" data-testid="object-detail-close-source">
-            关闭方式：{closeSourceLabel(closeSource)}
-          </span>
-          <Link
-            className="pl-btn pl-btn--ghost text-sm"
-            to={deepLinkHref(target)}
-            onClick={() => setCloseSource("button")}
-            data-testid="object-detail-deep-link"
-          >
-            打开完整页面 →
-          </Link>
-        </footer>
-      </div>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -147,19 +142,6 @@ function drawerEyebrow(kind: "table" | "agent" | "evalRun" | "auditEvent"): stri
       return "Eval Run · 对象详情";
     case "auditEvent":
       return "Audit Event · 对象详情";
-  }
-}
-
-function closeSourceLabel(source: CloseSource): string {
-  switch (source) {
-    case "button":
-      return "按钮";
-    case "backdrop":
-      return "点击空白";
-    case "esc":
-      return "Esc 键";
-    default:
-      return "尚未关闭";
   }
 }
 
@@ -253,7 +235,23 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
       <DetailRow label="Token 数" value={`${match.tokens.length}`} />
       <DetailRow label="近 7 天调用" value={`${match.stats?.callsLast7d ?? 0}`} />
       <DetailRow label="近 7 天拒绝" value={`${match.stats?.deniedLast7d ?? 0}`} />
+      {match.createdAt ? (
+        <DetailRow label="创建日期" value={new Date(match.createdAt).toLocaleString("zh-CN")} />
+      ) : null}
+      {match.configUpdatedAt ? (
+        <DetailRow label="配置最后变更时间" value={new Date(match.configUpdatedAt).toLocaleString("zh-CN")} />
+      ) : null}
       {match.note ? <DetailRow label="备注" value={match.note} /> : null}
+      <div className="grid grid-cols-[120px_minmax(0,1fr)] items-baseline gap-3">
+        <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">访问日志</span>
+        <Link
+          className="text-sm text-accent hover:underline notranslate"
+          to={`/admin/audit?user=${encodeURIComponent(target.agentId)}`}
+          data-testid="object-detail-agent-audit-link"
+        >
+          查看审计记录 →
+        </Link>
+      </div>
     </div>
   );
 }

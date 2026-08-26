@@ -212,4 +212,20 @@ describe("TraceLink — Drawer (P0-CLOSE-01)", () => {
     const err = await within(drawer).findByTestId("trace-detail-error");
     expect(err.textContent).toMatch(/Trace 加载失败.*kernel offline/);
   });
+
+  it("uses toolbar header and compact empty state when Trace has no spans or evidence", async () => {
+    mockedApiGet.mockResolvedValue({
+      ok: true,
+      data: { events: [], evidence: [] }
+    });
+    renderLink("trace-empty-1");
+    fireEvent.click(screen.getByRole("button", { name: /查看 Trace/ }));
+    const drawer = await screen.findByTestId("audit-trace-drawer-trace-empty-1");
+    const header = drawer.querySelector(".pl-trace-detail-header--toolbar");
+    expect(header).not.toBeNull();
+    expect(within(drawer).getByTestId("trace-detail-close")).toBeTruthy();
+    expect((await within(drawer).findByTestId("trace-detail-empty")).textContent).toMatch(
+      /该 Trace 暂无 Span 或 Evidence 记录/
+    );
+  });
 });
