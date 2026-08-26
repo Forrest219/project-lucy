@@ -58,6 +58,56 @@ Lucy 项目默认不做移动窄屏测试。除非用户、当前任务说明或
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
 - eval cases（YAML，agent 测）与 quiz HTML（人类测）的设计原则、命名约定、数据获取路径见 `docs/eval-quiz-conventions.md`；新增 dataset 的 eval/quiz 前必读
 
+## Spec 内容规格：重要功能必含伪代码
+
+**落位规则管「放哪里」；本节管「写什么」。** 术语必填见下方「Terminology Compliance」；本节约束**有决策 / 状态 / 管线**的重要功能 Spec。
+
+### 触发条件（必须写）
+
+新增或重大更新的功能 Spec，若包含下列任一语义，必须包含**可直接指导实现与验收**的核心流程伪代码（或等价 Normative 步骤 / 代数）：
+
+- 权限 / ACL / 编译 / 裁决 / deny 码路径
+- 多步状态机、门禁、发布 / 生效 / 索引管线
+- 跨模块数据流、匹配 / 归一化 / digest / 合并算法
+- 其他「分支顺序决定正确性」的核心行为（实现者不能只靠散文猜）
+
+### 豁免（可不写）
+
+- 纯文案、术语、IA 标签、视觉 polish、单字段改名
+- 无分支的布局 / 间距 / 颜色调整
+- 仅引用既有 Spec 算法且本 Spec **不改变**该流程语义（须在正文显式指向权威小节）
+
+不确定时：**偏重要则写**；Review 可要求补齐后再批 Gate B / 开工。
+
+### 必填小节形态
+
+每个命中触发条件的 Spec 必须包含以下小节之一（标题固定，便于扫读）：
+
+```md
+## 核心流程（伪代码）
+```
+
+或英文 Spec：
+
+```md
+## Core Algorithm
+```
+
+内容要求：
+
+- 使用 `text` / `ts` 代码块、编号步骤，或已有的 Normative 代数（如 AC-P1 `FinalRows` / DNF）；**禁止**只有「系统应当正确处理」类空话
+- 覆盖主成功路径与关键失败 / deny / 降级分支的**顺序**
+- 足以让实现者写出代码、让验收写出断言；细节类型签名可指向 API / Data Model 小节，但控制流不得省略
+- 与 Acceptance / SC-\* 可对上：伪代码里出现的关键分支应能映射到至少一条验收项
+
+参考（已有写法，非穷尽）：`webui/docs/99-access-control-p1-row-policy-spec.md`、`webui/docs/100-access-control-p15-agent-constraints-spec.md`、`webui/docs/13-business-wiki-ux-refactor.md`（Wiki Auto-Match Algorithm）、`webui/docs/62-trace-evidence-kernel-spec.md`。
+
+### Review 要求
+
+- Spec / Gate B 评审必须检查：命中触发条件时是否存在上述小节，且伪代码可执行地描述控制流
+- WO「必含章节」列表（若该域使用）应包含「核心流程（伪代码）/ Core Algorithm」；**不替代**本文件为本规则的事实源
+- **不**要求立刻用 `lint:spec` 机械检测伪代码质量；稳定后再考虑弱 warn（例如仅检查小节标题是否存在）
+
 ## 全系统术语规范
 
 Lucy 的系统级术语事实源是

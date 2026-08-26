@@ -7,7 +7,7 @@
 
 | 文档 | 用途 |
 |---|---|
-| `DEVELOPMENT.md` | 开发治理总纲：Plan Mode 强制场景、红线、spec 落位规则 |
+| `DEVELOPMENT.md` | 开发治理总纲：Plan Mode 强制场景、红线、Spec 落位与内容规格（重要功能伪代码）、术语合规 |
 | `project-overview.md` | 项目总览：onboarding、模块索引、当前能力边界（v1.4，持续更新） |
 | `vision.md` | Lucy 产品愿景 |
 | `lucy-platform-goal-checklist.md` | POC → 可部署 MCP 平台的产品化验收清单 |
