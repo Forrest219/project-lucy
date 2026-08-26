@@ -125,7 +125,15 @@ describe("GovernanceOverview", () => {
     expect(await screen.findByText("Agent A")).toBeInTheDocument();
 
     expect(screen.getByTestId("governance-usage-overview")).toHaveClass("pl-page-stack");
-    expect(screen.getByTestId("governance-usage-metrics")).toHaveClass("pl-metric-grid");
+    expect(screen.getByTestId("governance-usage-metrics")).toHaveClass("pl-usage-metric-groups");
+    for (const groupTestId of [
+      "governance-usage-metrics-config",
+      "governance-usage-metrics-active",
+      "governance-usage-metrics-operations"
+    ] as const) {
+      expect(screen.getByTestId(groupTestId)).toHaveClass("pl-metric-grid", "pl-metric-grid--three");
+      expect(screen.getByTestId(groupTestId).querySelectorAll(":scope > .pl-metric-card")).toHaveLength(3);
+    }
     expect(screen.getByTestId("governance-usage-rank-grid")).toHaveClass("pl-usage-rank-grid");
     expect(screen.getByTestId("governance-agent-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-token-usage")).toHaveClass("pl-panel");
@@ -139,7 +147,23 @@ describe("GovernanceOverview", () => {
     expect(screen.getByTestId("metric-configured-table-count")).toHaveTextContent("授权表");
     expect(screen.getByTestId("metric-active-table-count")).toHaveTextContent("近 7 天活跃表");
     expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
+    expect(screen.getByTestId("metric-acl-denied")).toHaveTextContent("近 7 天 ACL 拒绝次数");
     expect(screen.getByTestId("metric-p95-latency")).toHaveTextContent("多数请求耗时");
+
+    const metricOrder = Array.from(
+      screen.getByTestId("governance-usage-metrics").querySelectorAll(":scope .pl-metric-card")
+    ).map((card) => card.getAttribute("data-testid"));
+    expect(metricOrder).toEqual([
+      "metric-agent-count",
+      "metric-configured-token-count",
+      "metric-configured-table-count",
+      "metric-active-agent-count",
+      "metric-active-token-count",
+      "metric-active-table-count",
+      "metric-calls",
+      "metric-acl-denied",
+      "metric-p95-latency"
+    ]);
     expect(within(screen.getByTestId("metric-configured-token-count")).getByText("Token")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-agent-count")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-p95-latency")).toBeInTheDocument();

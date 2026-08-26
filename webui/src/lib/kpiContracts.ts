@@ -131,7 +131,7 @@ export const KPI_REGISTRY: MetricContract[] = [
     id: "acl-denied",
     kind: "list_kpi",
     // Task 7: query audit DB directly; explicitly exclude auth_error outcomes.
-    label: "ACL 拒绝",
+    label: "ACL 拒绝次数",
     help: "当前时间窗内访问日志中 outcome='denied' 的记录数，直接查询审计库，不含认证失败（auth_error）。",
     pages: ["/admin/governance/overview"],
     windowed: true

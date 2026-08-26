@@ -318,117 +318,125 @@ export function GovernanceOverview() {
         }
       />
 
-      <div className="pl-metric-grid" data-testid="governance-usage-metrics">
-        {/* D1: config-class — always ok, no state needed */}
-        <MetricCard
-          label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
-          labelText="Agent 总数"
-          value={usage?.agentCount ?? 0}
-          help="统计已配置的全部 Agent 实例，含未启用。"
-          subValue="已配置实例（含未启用）"
-          helpId="agent-count"
-          testId="metric-agent-count"
-        />
-        <MetricCard
-          label={<span>{windowText}活跃 <span className="notranslate" translate="no">Agent</span></span>}
-          labelText={`${windowText}活跃 Agent`}
-          value={usage?.activeAgentCount ?? 0}
-          help={`当前时间窗（${windowText}）内访问日志出现过的去重 Agent 数。`}
-          subValue={agentRateState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span> : undefined}
-          state={agentRateState}
-          unavailableReason={agentRateState === "partial" ? "活跃数超过配置数，数据异常" : undefined}
-          helpId="active-agent-count"
-          testId="metric-active-agent-count"
-        />
-        {/* D1: config-class — always ok */}
-        <MetricCard
-          label={<span>配置 <span className="notranslate" translate="no">Token</span></span>}
-          labelText="配置 Token"
-          value={usage?.configuredTokenCount ?? 0}
-          help="已下发给 Agent 的凭证数量，含未启用 Agent 的 Token。"
-          subValue="已下发凭证（含未启用 Agent）"
-          helpId="configured-token-count"
-          testId="metric-configured-token-count"
-        />
-        <MetricCard
-          label={<span>{windowText}活跃 <span className="notranslate" translate="no">Token</span></span>}
-          labelText={`${windowText}活跃 Token`}
-          value={usage?.activeTokenCount ?? 0}
-          help={
-            <span>
-              当前时间窗内访问日志出现的去重 <span className="notranslate" translate="no">Token</span> 前缀数（D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义，显示 <span className="notranslate" translate="no">partial</span>）。
-            </span>
-          }
-          subValue={tokenRateState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span> : undefined}
-          state={tokenRateState}
-          unavailableReason={
-            tokenRateState === "partial"
-              ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
-              : undefined
-          }
-          helpId="active-token-count"
-          testId="metric-active-token-count"
-        />
-        {/* D1: config-class — always ok */}
-        <MetricCard
-          label="授权表"
-          value={usage?.configuredTableCount ?? 0}
-          help="角色权限中已明确授权的表数量；前缀授权会扩大可达范围。"
-          subValue={authorizedTableHint}
-          helpId="configured-table-count"
-          testId="metric-configured-table-count"
-        />
-        <MetricCard
-          label={<span>{windowText}活跃表</span>}
-          labelText={`${windowText}活跃表`}
-          value={usage?.activeTableCount ?? 0}
-          help={
-            <span>
-              当前时间窗内被访问的去重表数。活跃率 = 活跃授权表 / 已解析授权表，仅在显式授权（无前缀/通配符）时可计算；
-              存在前缀授权时显示 <span className="notranslate" translate="no">partial</span>（口径未完全解析）。
-            </span>
-          }
-          subValue={tableRateState === "ok" && activeTableRate != null
-            ? <span>活跃率 {activeTableRate}</span>
-            : undefined}
-          state={tableRateState}
-          unavailableReason={tableRateState === "partial" ? "含前缀/通配符授权，活跃率无法精确计算" : undefined}
-          helpId="active-table-count"
-          testId="metric-active-table-count"
-        />
-        <MetricCard
-          label={<span>{windowText}调用量</span>}
-          labelText={`${windowText}调用量`}
-          value={usage?.calls ?? 0}
-          help={`当前时间窗（${windowText}）内经 MCP Proxy 记录的所有调用次数（含成功、拒绝、错误）。`}
-          subValue={auditMetricsState === "ok" ? <span><span className="notranslate" translate="no">MCP</span> 调用</span> : undefined}
-          state={auditMetricsState}
-          helpId="calls"
-          testId="metric-calls"
-        />
-        <MetricCard
-          label={<span>{windowText}ACL 拒绝</span>}
-          labelText={`${windowText}ACL 拒绝`}
-          value={deniedCount ?? 0}
-          help={
-            <span>
-              当前时间窗内访问日志中 <span className="notranslate" translate="no">outcome='denied'</span> 的记录数，直接查询审计库（Task 7），不含认证失败（<span className="notranslate" translate="no">auth_error</span>）。
-            </span>
-          }
-          subValue={deniedState === "ok" ? <span>来自审计库直查</span> : undefined}
-          state={deniedState}
-          helpId="acl-denied"
-          testId="metric-acl-denied"
-        />
-        <MetricCard
-          label="多数请求耗时"
-          value={p95Value}
-          help="当前时间窗内 95% 的请求完成耗时上限（P95），用于感知尾部延迟。"
-          subValue={p95MetricState === "ok" ? p95Hint : undefined}
-          state={p95MetricState}
-          helpId="p95-latency"
-          testId="metric-p95-latency"
-        />
+      <div className="pl-usage-metric-groups" data-testid="governance-usage-metrics">
+        <div className="pl-metric-grid pl-metric-grid--three" aria-label="配置规模" data-testid="governance-usage-metrics-config">
+          {/* D1: config-class — always ok, no state needed */}
+          <MetricCard
+            label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
+            labelText="Agent 总数"
+            value={usage?.agentCount ?? 0}
+            help="统计已配置的全部 Agent 实例，含未启用。"
+            subValue="已配置实例（含未启用）"
+            helpId="agent-count"
+            testId="metric-agent-count"
+          />
+          {/* D1: config-class — always ok */}
+          <MetricCard
+            label={<span>配置 <span className="notranslate" translate="no">Token</span></span>}
+            labelText="配置 Token"
+            value={usage?.configuredTokenCount ?? 0}
+            help="已下发给 Agent 的凭证数量，含未启用 Agent 的 Token。"
+            subValue="已下发凭证（含未启用 Agent）"
+            helpId="configured-token-count"
+            testId="metric-configured-token-count"
+          />
+          {/* D1: config-class — always ok */}
+          <MetricCard
+            label="授权表"
+            value={usage?.configuredTableCount ?? 0}
+            help="角色权限中已明确授权的表数量；前缀授权会扩大可达范围。"
+            subValue={authorizedTableHint}
+            helpId="configured-table-count"
+            testId="metric-configured-table-count"
+          />
+        </div>
+
+        <div className="pl-metric-grid pl-metric-grid--three" aria-label="窗口活跃" data-testid="governance-usage-metrics-active">
+          <MetricCard
+            label={<span>{windowText}活跃 <span className="notranslate" translate="no">Agent</span></span>}
+            labelText={`${windowText}活跃 Agent`}
+            value={usage?.activeAgentCount ?? 0}
+            help={`当前时间窗（${windowText}）内访问日志出现过的去重 Agent 数。`}
+            subValue={agentRateState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span> : undefined}
+            state={agentRateState}
+            unavailableReason={agentRateState === "partial" ? "活跃数超过配置数，数据异常" : undefined}
+            helpId="active-agent-count"
+            testId="metric-active-agent-count"
+          />
+          <MetricCard
+            label={<span>{windowText}活跃 <span className="notranslate" translate="no">Token</span></span>}
+            labelText={`${windowText}活跃 Token`}
+            value={usage?.activeTokenCount ?? 0}
+            help={
+              <span>
+                当前时间窗内访问日志出现的去重 <span className="notranslate" translate="no">Token</span> 前缀数（D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义，显示 <span className="notranslate" translate="no">partial</span>）。
+              </span>
+            }
+            subValue={tokenRateState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span> : undefined}
+            state={tokenRateState}
+            unavailableReason={
+              tokenRateState === "partial"
+                ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
+                : undefined
+            }
+            helpId="active-token-count"
+            testId="metric-active-token-count"
+          />
+          <MetricCard
+            label={<span>{windowText}活跃表</span>}
+            labelText={`${windowText}活跃表`}
+            value={usage?.activeTableCount ?? 0}
+            help={
+              <span>
+                当前时间窗内被访问的去重表数。活跃率 = 活跃授权表 / 已解析授权表，仅在显式授权（无前缀/通配符）时可计算；
+                存在前缀授权时显示 <span className="notranslate" translate="no">partial</span>（口径未完全解析）。
+              </span>
+            }
+            subValue={tableRateState === "ok" && activeTableRate != null
+              ? <span>活跃率 {activeTableRate}</span>
+              : undefined}
+            state={tableRateState}
+            unavailableReason={tableRateState === "partial" ? "含前缀/通配符授权，活跃率无法精确计算" : undefined}
+            helpId="active-table-count"
+            testId="metric-active-table-count"
+          />
+        </div>
+
+        <div className="pl-metric-grid pl-metric-grid--three" aria-label="运行治理" data-testid="governance-usage-metrics-operations">
+          <MetricCard
+            label={<span>{windowText}调用量</span>}
+            labelText={`${windowText}调用量`}
+            value={usage?.calls ?? 0}
+            help={`当前时间窗（${windowText}）内经 MCP Proxy 记录的所有调用次数（含成功、拒绝、错误）。`}
+            subValue={auditMetricsState === "ok" ? <span><span className="notranslate" translate="no">MCP</span> 调用</span> : undefined}
+            state={auditMetricsState}
+            helpId="calls"
+            testId="metric-calls"
+          />
+          <MetricCard
+            label={<span>{windowText} <span className="notranslate" translate="no">ACL</span> 拒绝次数</span>}
+            labelText={`${windowText} ACL 拒绝次数`}
+            value={deniedCount ?? 0}
+            help={
+              <span>
+                当前时间窗内访问日志中 <span className="notranslate" translate="no">outcome='denied'</span> 的记录数，直接查询审计库（Task 7），不含认证失败（<span className="notranslate" translate="no">auth_error</span>）。
+              </span>
+            }
+            subValue={deniedState === "ok" ? <span>来自审计库直查</span> : undefined}
+            state={deniedState}
+            helpId="acl-denied"
+            testId="metric-acl-denied"
+          />
+          <MetricCard
+            label="多数请求耗时"
+            value={p95Value}
+            help="当前时间窗内 95% 的请求完成耗时上限（P95），用于感知尾部延迟。"
+            subValue={p95MetricState === "ok" ? p95Hint : undefined}
+            state={p95MetricState}
+            helpId="p95-latency"
+            testId="metric-p95-latency"
+          />
+        </div>
       </div>
 
       <div className="pl-usage-rank-grid" data-testid="governance-usage-rank-grid">
