@@ -16,7 +16,7 @@ import {
 } from "../trace/evidence.js";
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
-import { extractRequestClientMeta } from "./request-client-meta.js";
+import { assertLicenseAllowsMcp, loadLicenseSnapshot } from "../license/entitlement.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -2032,6 +2032,57 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       policySource: "other"
     });
     return;
+  }
+
+  // Deployment license check for tool calls (before data ACL)
+  if (rpcMethod === "tools/call" && toolName) {
+    const licenseSnapshot = await loadLicenseSnapshot();
+    const licenseDecision = assertLicenseAllowsMcp(licenseSnapshot);
+    if (!licenseDecision.allowed) {
+      const errorMsg = licenseDecision.decisionReason ?? licenseDecision.code.toLowerCase();
+      const meta = await auditMeta(identity, errorMsg);
+      const responseBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: `Access denied: ${errorMsg}` }]
+        }
+      });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: queryTables.length > 0 ? queryTables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "denied",
+        errorDetail: errorMsg,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...meta
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "denied",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason: errorMsg,
+        matchedRule: errorMsg
+      });
+      return;
+    }
   }
 
   // ACL check for tool calls

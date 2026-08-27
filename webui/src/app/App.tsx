@@ -27,6 +27,7 @@ import {
   Terminal,
   Users,
   Image,
+  BadgeCheck,
   type LucideIcon
 } from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
@@ -49,6 +50,7 @@ import { RoleList } from "../pages/admin/RoleList";
 import { RoleDetail } from "../pages/admin/RoleDetail";
 import { AdminAccounts } from "../pages/admin/AdminAccounts";
 import { BrandingSettings } from "../pages/admin/BrandingSettings";
+import { LicenseSettings } from "../pages/admin/LicenseSettings";
 import { LoginPage } from "../pages/Login";
 import { AuthProvider, useAuth, useAuthOptional } from "../lib/auth";
 import { BrandMark } from "../components/BrandMark";
@@ -141,7 +143,8 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   mcpPlayground: Terminal,
   configAudit: ShieldCheck,
   admins: Users,
-  branding: Image
+  branding: Image,
+  license: BadgeCheck
 };
 
 const GROUP_ICONS: Record<string, LucideIcon> = {
@@ -420,6 +423,7 @@ export function AppFrame() {
             <Route path="/admin/mcp-playground" element={<McpPlayground />} />
             <Route path="/admin/config-audit" element={<ConfigAudit />} />
             <Route path="/admin/branding" element={<BrandingSettings />} />
+            <Route path="/admin/license" element={<LicenseSettings />} />
             <Route path="/admin/admins" element={<AdminAccounts />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />

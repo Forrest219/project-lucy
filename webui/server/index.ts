@@ -101,6 +101,7 @@ import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
+import { registerLicenseRoutes } from "./license/routes.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
@@ -1692,6 +1693,7 @@ export function buildServer() {
   registerR1ObservabilityRoutes(app);
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
+  registerLicenseRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith("/api/")) {
