@@ -1,0 +1,76 @@
+# Copy to access.yaml for local runtime (gitignored). Do not commit access.yaml.
+# Shared git only keeps this example + customer-config.example / demo templates.
+roles:
+  demo_readonly:
+    description: Demo Superstore readonly agent
+    allow:
+      connections:
+        - demo-mysql
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names:
+            - superstore_orders
+            - superstore_returns
+            - superstore_people
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+users:
+  - id: demo_agent
+    name: Demo Agent
+    enabled: true
+    note: "Local smoke stub. Replace with your private agents; never commit access.yaml."
+    tokens:
+      - hash: "sha256:8ccee2d00afbe164425d51333fe42a3e5a7381955e555a69c185edb8783018f7"
+        label: p0-demo
+        created: 2026-06-21
+    role: demo_readonly
+
+defaults:
+  deny_tools:
+    - sql_execution
+    - sql_dialect_notes
+    - memory_ingest
+    - memory_ingest_status
+    - sl_query
+    - sl_read_source
+  known_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_catalog
+    - lucy_freshness
+    - wiki_search
+    - wiki_read
+    - entity_details
+    - dictionary_search
+    - discover_data
+    - connection_list
+    - kx_catalog
+    - sl_query
+    - sl_read_source
+    - sl_validate
+    - sql_execution
+    - sql_dialect_notes
+    - memory_ingest
+    - memory_ingest_status
+  table_touching_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_freshness
+    - entity_details
+    - sl_validate
+    - sl_query
+    - sl_read_source
+  sensitive_metadata_tools:
+    - dictionary_search
+    - discover_data
+  sensitive_table_prefixes: []

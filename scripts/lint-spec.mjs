@@ -193,6 +193,11 @@ function normalize(value) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function accessConfigRelPath() {
+  if (existsSync(rel("webui/config/access.yaml"))) return "webui/config/access.yaml";
+  return "webui/config/access.yaml.example";
+}
+
 function loadSourceEntries() {
   const entries = [];
   const files = walk("semantic-layer", (file) => file.includes("/_schema/") && file.endsWith(".yaml"));
@@ -237,7 +242,8 @@ function checkAllowedKeys(check, object, allowed, location) {
 
 function accessRolePolicy() {
   const check = "access-role-policy";
-  const config = parse(read("webui/config/access.yaml")) ?? {};
+  const accessPath = accessConfigRelPath();
+  const config = parse(read(accessPath)) ?? {};
   const roles = config.roles ?? {};
   const users = Array.isArray(config.users) ? config.users : [];
   const denyTools = new Set(config.defaults?.deny_tools ?? []);

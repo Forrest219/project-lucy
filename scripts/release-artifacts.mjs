@@ -63,22 +63,17 @@ const REQUIRED_DOCS = [
 ];
 const SOURCE_BUNDLE_NAME = "lucy-docker-source-bundle.tar.gz";
 const SOURCE_BUNDLE_ROOT = "lucy-docker-source-bundle";
-// Customer bundle allow-list. Intentionally excludes dev-only paths such as
-// webui/scripts, tests, webui docs, inbox, local secrets, and generated output.
+// Customer bundle allow-list. Intentionally excludes demo stacks, examples,
+// eval suites, ktx.yaml.example, and private webui/config/access.yaml.
 const SOURCE_BUNDLE_ENTRIES = [
   ".dockerignore",
   "Dockerfile",
   "docker-compose.yml",
   "docker-compose.customer-config.yml",
-  "docker-compose.demo.yml",
-  "docker-compose.postgres-demo.yml",
   "docker-compose.secrets.yml",
   "customer-config.example",
   "package.json",
   "package-lock.json",
-  "ktx.yaml.example",
-  "examples",
-  "evals/superstore",
   "scripts/headless-config-smoke.mjs",
   "scripts/lucy-delivery-isolation-smoke.mjs",
   "scripts/docker-entrypoint.sh",
@@ -91,7 +86,8 @@ const SOURCE_BUNDLE_ENTRIES = [
   "webui/vite.config.ts",
   "webui/src",
   "webui/server",
-  "webui/config",
+  "webui/config/data-qa-instructions.md",
+  "webui/config/admins.yaml.example",
   ...REQUIRED_DOCS.map((entry) => entry.src)
 ];
 
@@ -209,6 +205,10 @@ function shouldCopySourceBundlePath(src) {
   if (base === "__tests__") return false;
   if (base.endsWith(".test.ts") || base.endsWith(".test.tsx") || base.endsWith(".test.mjs")) return false;
   if (parts.includes("docs") && !REQUIRED_DOCS.some((entry) => src.endsWith(entry.src))) return false;
+  // Never ship private ACL / local admin files even if present on the builder host.
+  if (parts[0] === "webui" && parts[1] === "config" && (base === "access.yaml" || base === "admins.yaml")) {
+    return false;
+  }
   return true;
 }
 

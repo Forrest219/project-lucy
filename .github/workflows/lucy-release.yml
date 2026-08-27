@@ -37,6 +37,12 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm run smoke:p0:delivery-isolation
+      - name: Materialize private access.yaml stub for lint
+        run: |
+          if [ ! -f webui/config/access.yaml ]; then
+            cp webui/config/access.yaml.example webui/config/access.yaml
+          fi
       - run: npm run lint:spec
       - run: npm run security:baseline
       - uses: actions/setup-node@v4

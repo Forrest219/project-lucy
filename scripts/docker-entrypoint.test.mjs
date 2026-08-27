@@ -125,6 +125,38 @@ test("entrypoint refreshes changed semantic context for an existing volume", asy
   await rm(root, { recursive: true, force: true });
 });
 
+test("entrypoint skips template sync when LUCY_DISABLE_TEMPLATE_SYNC=1", async () => {
+  const root = await makeRoot("lucy-entrypoint-nosync-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(path.join(templateRoot, "semantic-layer/customer-db/_schema"), { recursive: true });
+  await mkdir(path.join(projectRoot, "semantic-layer/customer-db/_schema"), { recursive: true });
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/customer-db/_schema/analytics.yaml"), "tables: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/customer-db/extra.yaml"), "grain: row\n");
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(projectRoot, "semantic-layer/customer-db/_schema/analytics.yaml"), "tables: {}\n");
+
+  const result = spawnSync("bash", [entrypoint], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      LUCY_APP_ROOT: repoRoot,
+      LUCY_TEMPLATE_ROOT: templateRoot,
+      KTX_PROJECT_ROOT: projectRoot,
+      LUCY_BUNDLED_KTX_VERSION: "test-version",
+      LUCY_ENTRYPOINT_SEED_ONLY: "1",
+      LUCY_DISABLE_TEMPLATE_SYNC: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /template sync disabled/);
+  await assert.rejects(readFile(path.join(projectRoot, "semantic-layer/customer-db/extra.yaml"), "utf8"));
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("entrypoint refuses to start when the template and project have no schema files", async () => {
   const root = await makeRoot("lucy-entrypoint-empty-");
   const templateRoot = path.join(root, "template");

@@ -1,8 +1,0 @@
-# WO-202608-58 Phase 2 thin overlay (measures only; physical cols in Manifest)
-name: s2_ecommerce_orders
-grain:
-- order_id
-measures:
-- name: order_count
-  expr: count(order_id)
-  description: Order count.

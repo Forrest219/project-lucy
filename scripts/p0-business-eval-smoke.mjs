@@ -6,11 +6,6 @@ const suites = [
     name: "superstore",
     path: "evals/superstore/eval/superstore-eval-cases.yaml",
     minCases: 1
-  },
-  {
-    name: "kx_financial",
-    path: "evals/kx_financial/eval/kx_financial-eval-cases.yaml",
-    minCases: 1
   }
 ];
 

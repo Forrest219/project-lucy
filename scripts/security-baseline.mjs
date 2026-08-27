@@ -24,46 +24,49 @@ function hasWildcard(list) {
 }
 
 async function checkAccessConfig() {
-  const config = parse(await read("webui/config/access.yaml")) ?? {};
+  const accessRel = existsSync(rel("webui/config/access.yaml"))
+    ? "webui/config/access.yaml"
+    : "webui/config/access.yaml.example";
+  const config = parse(await read(accessRel)) ?? {};
   const users = Array.isArray(config.users) ? config.users : [];
   const roles = config.roles && typeof config.roles === "object" ? config.roles : {};
   const defaults = config.defaults ?? {};
 
-  if (Object.keys(roles).length === 0) add("fail", "webui/config/access.yaml: roles must not be empty");
-  if (users.length === 0) add("fail", "webui/config/access.yaml: users must not be empty");
+  if (Object.keys(roles).length === 0) add("fail", `${accessRel}: roles must not be empty`);
+  if (users.length === 0) add("fail", `${accessRel}: users must not be empty`);
 
   for (const user of users) {
     const id = user?.id ?? "<missing>";
     for (const token of Array.isArray(user?.tokens) ? user.tokens : []) {
       if (!/^sha256:[a-f0-9]{64}$/.test(String(token?.hash ?? ""))) {
-        add("fail", `webui/config/access.yaml: user ${id} has invalid token hash`);
+        add("fail", `${accessRel}: user ${id} has invalid token hash`);
       }
       for (const key of ["token", "secret", "value", "plaintext"]) {
-        if (token?.[key] !== undefined) add("fail", `webui/config/access.yaml: user ${id} token stores forbidden plaintext field ${key}`);
+        if (token?.[key] !== undefined) add("fail", `${accessRel}: user ${id} token stores forbidden plaintext field ${key}`);
       }
     }
     if (user?.enabled !== false && (hasWildcard(user?.allow?.tables) || hasWildcard(user?.allow?.tools))) {
-      add("fail", `webui/config/access.yaml: enabled user ${id} must not use wildcard legacy allow`);
+      add("fail", `${accessRel}: enabled user ${id} must not use wildcard legacy allow`);
     }
     if (user?.enabled !== false && !user?.role && !user?.allow) {
-      add("fail", `webui/config/access.yaml: enabled user ${id} has neither role nor allow policy`);
+      add("fail", `${accessRel}: enabled user ${id} has neither role nor allow policy`);
     }
   }
 
   for (const [roleId, role] of Object.entries(roles)) {
     const allow = role?.allow ?? {};
-    if (!Array.isArray(allow.tools) || allow.tools.length === 0) add("fail", `webui/config/access.yaml: role ${roleId} must declare allow.tools`);
-    if (!Array.isArray(allow.connections) || allow.connections.length === 0) add("fail", `webui/config/access.yaml: role ${roleId} must declare allow.connections`);
-    if (!Array.isArray(allow.tableSelectors) || allow.tableSelectors.length === 0) add("fail", `webui/config/access.yaml: role ${roleId} must declare allow.tableSelectors`);
+    if (!Array.isArray(allow.tools) || allow.tools.length === 0) add("fail", `${accessRel}: role ${roleId} must declare allow.tools`);
+    if (!Array.isArray(allow.connections) || allow.connections.length === 0) add("fail", `${accessRel}: role ${roleId} must declare allow.connections`);
+    if (!Array.isArray(allow.tableSelectors) || allow.tableSelectors.length === 0) add("fail", `${accessRel}: role ${roleId} must declare allow.tableSelectors`);
   }
 
   const denyTools = new Set(Array.isArray(defaults.deny_tools) ? defaults.deny_tools : []);
   for (const tool of ["sql_execution", "sql_dialect_notes", "memory_ingest", "memory_ingest_status"]) {
-    if (!denyTools.has(tool)) add("fail", `webui/config/access.yaml: defaults.deny_tools must include ${tool}`);
+    if (!denyTools.has(tool)) add("fail", `${accessRel}: defaults.deny_tools must include ${tool}`);
   }
-  if (!Array.isArray(defaults.known_tools) || defaults.known_tools.length === 0) add("fail", "webui/config/access.yaml: defaults.known_tools must be explicit");
-  if (!Array.isArray(defaults.table_touching_tools) || defaults.table_touching_tools.length === 0) add("fail", "webui/config/access.yaml: defaults.table_touching_tools must be explicit");
-  if (!Array.isArray(defaults.sensitive_table_prefixes) || defaults.sensitive_table_prefixes.length === 0) add("warn", "webui/config/access.yaml: defaults.sensitive_table_prefixes is empty");
+  if (!Array.isArray(defaults.known_tools) || defaults.known_tools.length === 0) add("fail", `${accessRel}: defaults.known_tools must be explicit`);
+  if (!Array.isArray(defaults.table_touching_tools) || defaults.table_touching_tools.length === 0) add("fail", `${accessRel}: defaults.table_touching_tools must be explicit`);
+  if (!Array.isArray(defaults.sensitive_table_prefixes) || defaults.sensitive_table_prefixes.length === 0) add("warn", `${accessRel}: defaults.sensitive_table_prefixes is empty`);
 }
 
 async function checkProxySecurityHooks() {

@@ -152,15 +152,18 @@ Lucy WebUI 的设计规范事实源在
 
 ## Onboarding（首次拉取本仓库）
 
-1. `cp ktx.yaml.example ktx.yaml`（如已存在 `ktx.yaml` 则跳过；当前 `ktx.yaml` 仍 tracked，新机器可以直接用）
-2. 替换 `ktx.yaml` 中的 `<CHANGE-ME-*>` 占位符为本地实际值（host / db / username / 密码文件绝对路径）
-3. `mkdir -p .ktx/secrets && echo '<your-mysql-password>' > .ktx/secrets/mysql-aliyun-password`（该目录已在 `.ktx/.gitignore` 排除）
-4. 安装 KTX CLI：`npm install -g @kaelio/ktx@latest`（或在 `/Users/zhangxingchen/Projects/ktx` 跑 `pnpm install && pnpm run link:dev` 链入开发版本）
-5. 启动本地 MCP daemon：`ktx mcp start --project-dir /Users/zhangxingchen/Projects/project-lucy`
-6. 验证：`ktx status` 报告 `Agent integration ready: yes`，并跑一次 `ktx sl "<keyword>"` 看连接是否通
-7. 启动 Lucy MCP Proxy（`:7879`，对外发 token，承担鉴权 + 数据问答 instructions 注入；KTX daemon 本身的 `:7878` 不对外暴露、不带鉴权）：`cd webui && npm run dev` 或走已有的 `com.project-lucy.webui` launchd 服务。
-8. 申请本地开发 token：找仓库维护者（或走 `webui/server/admin/tokens.ts` 的 token 生成流程）在 `webui/config/access.yaml` 里建一个用户 + token，参考 `local_dev_full_access` role 的范围。token 明文只在生成时出现一次，存到 `.ktx/secrets/<自定义文件名>`（该目录已在 `.gitignore`），不要写进任何会被提交的文件。
-9. 配置 `.mcp.json`，指向 Lucy MCP Proxy 而不是直连 KTX daemon：
+本地测试配置（连接、ACL、内网语义层）**完全私有**，不进共享 git。仓库只提供 `.example` / demo stub / `customer-config.example`。
+
+1. `cp ktx.yaml.example ktx.yaml`（`ktx.yaml` 已 gitignore；每人/每机私有）
+2. 替换 `ktx.yaml` 中的 `<CHANGE-ME-*>` 占位符为**你自己的**本地实际值（host / db / username / 密码文件绝对路径）
+3. `mkdir -p .ktx/secrets && echo '<your-db-password>' > .ktx/secrets/<connection>-password`（该目录已在 `.gitignore` 排除）
+4. `cp webui/config/access.yaml.example webui/config/access.yaml`（`access.yaml` 已 gitignore；按需改成你的私有 Agent / token）
+5. 私有语义层 / wiki / eval：自行维护在本机（例如 `semantic-layer/<your-connection>/`），**不要 commit**；仓库仅跟踪 `semantic-layer/demo-mysql/`（CI stub）与 `examples/*/project-template/`
+6. 安装 KTX CLI：`npm install -g @kaelio/ktx@latest`（或在本地 ktx 仓跑 `pnpm install && pnpm run link:dev`）
+7. 启动本地 MCP daemon：`ktx mcp start --project-dir <本仓库绝对路径>`
+8. 验证：`ktx status` 报告 `Agent integration ready: yes`，并跑一次 `ktx sl "<keyword>"` 看连接是否通
+9. 启动 Lucy MCP Proxy（`:7879`）：`cd webui && npm run dev`
+10. 配置 `.mcp.json`，指向 Lucy MCP Proxy：
    ```json
    {
      "mcpServers": {
@@ -172,11 +175,9 @@ Lucy WebUI 的设计规范事实源在
      }
    }
    ```
-   `${LUCY_LOCAL_TOKEN}` 用环境变量插值（已验证 Claude Code 支持，见 `webui/docs/07-mcp-auth-proxy-spec.md` §10 Phase 4 实测结论），本机 shell 配置（如 `~/.zshrc`）里从 `.ktx/secrets/` 下的文件读取后 `export`，不要把明文写进 `.mcp.json`。
-   - 如果你日常通过某个 shell 函数/alias 启动 `claude`（比如强制 `cd` 到某个固定工作目录再启动），要注意 Claude Code 实际加载的 `.mcp.json` 是那个固定目录下的文件，不一定是本仓库根目录这份——遇到这种情况，把 `lucy` 这个 server 条目同时配置到该固定目录的 `.mcp.json` 里，否则切换不会在日常会话里生效。
-   - Claude Desktop 走 stdio 接入 KTX daemon（不经过 Lucy MCP Proxy），详见下方 §Claude Desktop / 云端 Claude 接入；该路径目前还没有鉴权/审计层，仅建议本机调试用。
+   `${LUCY_LOCAL_TOKEN}` 用环境变量插值，本机 shell 从 `.ktx/secrets/` 读取后 `export`，不要把明文写进 `.mcp.json`。
 
-> **凭据/路径漂移防护**：`ktx.yaml.example` 由 M3.4 维护；当 `ktx.yaml` 中的 host/user/路径字段发生变化时，请同步更新 `.example`。
+> **凭据/路径漂移防护**：`ktx.yaml.example` / `access.yaml.example` 仅作模板；真实连接与 ACL 永不提交。
 
 ### 本地 Docker demo 重建
 
@@ -186,6 +187,7 @@ Lucy WebUI 的设计规范事实源在
 - 等价手写：`BUILDX_BUILDER=default docker compose -f docker-compose.demo.yml up -d --build lucy`。
 - amd64 开发者覆盖：脚本已按 host 自动选择；若直接 compose，传 `TARGETPLATFORM=linux/amd64 TARGETARCH=amd64`。
 - 客户 amd64 离线包：只用 `docker buildx build --builder lucy-amd64 ...`，并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建时**不要** `--use`，结束后 `docker buildx use default`）；交付前必须 `bash scripts/assert-image-elf-arch.sh <image> amd64`。详见 `docs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
+- Demo 使用 `LUCY_TEMPLATE_ROOT=examples/docker-demo/project-template`（本地 `demo-mysql`），**不会**把内网测试库打进客户默认 seed。
 
 ## 语义层（semantic-layer）分层
 

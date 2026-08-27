@@ -26,6 +26,24 @@ customer-config/
 !customer-config.example/.ktx/secrets/
 !customer-config.example/.ktx/secrets/.gitignore
 
+# Per-developer local test config (never share via git)
+webui/config/access.yaml
+webui/config/admins.yaml
+semantic-layer/mysql-aliyun/
+semantic-layer/poc-mysql-aliyun/
+semantic-layer/starrocks-r1/
+raw-sources/mysql-aliyun/
+raw-sources/poc-mysql-aliyun/
+wiki/global/*
+!wiki/global/demo-superstore.md
+evals/kx_financial/
+evals/ksc_financial/
+evals/data_agent_poc/
+evals/demo_ad/
+evals/spider2_lite_sqlite/
+.cursor/skills/moji-intl-ops-dashboard/
+.cursor/skills/moji-intl-weekly-brief/
+
 # temp scratch space
 temp/
 dev-inbox/

@@ -1,4 +1,7 @@
 services:
   lucy:
+    environment:
+      # Customer bind-mount owns /data/lucy; do not merge image template context.
+      LUCY_DISABLE_TEMPLATE_SYNC: "1"
     volumes:
       - ./customer-config:/data/lucy

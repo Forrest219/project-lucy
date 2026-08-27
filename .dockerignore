@@ -21,3 +21,13 @@ docs/design-lucy-agent-chat-a3.md
 docs/runbook-lucy-agent-chat-a3.md
 scripts/agent-chat-a3-smoke.mjs
 scripts/agent-chat-a3-smoke.test.mjs
+
+# Internal / per-developer test context — never enter customer image seed path.
+# Demo stacks use examples/*/project-template (still copied). Customer seed uses
+# customer-config.example only (assembled in Dockerfile into project-template).
+raw-sources/
+semantic-layer/
+wiki/
+skills/
+evals/
+ktx.yaml.example

@@ -60,6 +60,15 @@ describe("release-artifacts A3 customer-bundle hygiene", () => {
       assert.doesNotMatch(listing.stdout, /agent-chat\//);
       assert.doesNotMatch(listing.stdout, /agent-chat-a3/);
       assert.doesNotMatch(listing.stdout, /docker-compose\.agent-chat\.yml/);
+      assert.doesNotMatch(listing.stdout, /docker-compose\.demo\.yml/);
+      assert.doesNotMatch(listing.stdout, /docker-compose\.postgres-demo\.yml/);
+      assert.doesNotMatch(listing.stdout, /ktx\.yaml\.example/);
+      assert.doesNotMatch(listing.stdout, /lucy-docker-source-bundle\/examples\//);
+      assert.doesNotMatch(listing.stdout, /lucy-docker-source-bundle\/evals\//);
+      assert.doesNotMatch(listing.stdout, /lucy-docker-source-bundle\/webui\/config\/access\.yaml(?:\n|$)/);
+      assert.match(listing.stdout, /customer-config\.example\/webui\/config\/access\.yaml/);
+      assert.match(listing.stdout, /customer-config\.example\//);
+      assert.match(listing.stdout, /webui\/config\/data-qa-instructions\.md/);
       assert.match(listing.stdout, /scripts\/lucy-delivery-isolation-smoke\.mjs/);
 
       const stagedPkg = JSON.parse(

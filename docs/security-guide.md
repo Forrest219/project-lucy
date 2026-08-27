@@ -95,7 +95,8 @@ Do:
 - For Docker Compose environments that standardize on Docker secrets, mount `docker-compose.secrets.yml` and reference `/run/secrets/<name>` from `ktx.yaml`.
 - Use read-only database users where possible.
 - Rotate tokens through WebUI/Admin API when an agent is retired.
-- Keep `semantic-layer/`, `wiki/`, `evals/`, and `webui/config/access.yaml` versioned in the customer config repository or controlled change process.
+- Keep customer `semantic-layer/`, `wiki/`, `evals/`, and `webui/config/access.yaml` versioned in the **customer config repository** (or controlled change process for `/data/lucy`), not in the Lucy product git checkout.
+- Developer-local test connections, ACL, and internal semantic layers stay **private per machine** (`ktx.yaml`, `webui/config/access.yaml`, private `semantic-layer/*` are gitignored in this repo).
 
 Do not:
 

@@ -98,16 +98,17 @@ LUCY_PUBLIC_MCP_URL=http://127.0.0.1:57880/mcp \
 docker compose up --build
 ```
 
-首次启动时，entrypoint 会将镜像内的模板文件 seed 到 `/data/lucy`：
+首次启动时，entrypoint 会将镜像内 **`/app/project-template`**（由 `customer-config.example` 组装）seed 到 `/data/lucy`：
 
-- `ktx.yaml`
-- `semantic-layer/`
+- `ktx.yaml`（customer-db 占位）
+- `semantic-layer/`（customer-db 示例）
 - `wiki/`
-- `skills/`
-- `evals/`
-- `webui/config/access.yaml`
+- `skills/`（空目录）
+- `webui/config/access.yaml`（customer_agent 示例）
 - `.ktx/`
 - `.ktx-ui/`
+
+不会 seed 仓库根上的内网测试语义层或开发者私有 ACL。本地 demo 请使用 `docker-compose.demo.yml`。
 
 默认 compose 使用 named volume：
 
@@ -166,7 +167,7 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 
 首版仍需要编辑 `/data/lucy/ktx.yaml` 和挂载密码文件。若使用 §5 推荐的 bind mount 模式，实际编辑宿主机 `customer-config/ktx.yaml`；容器内路径仍是 `/data/lucy/ktx.yaml`。
 
-默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换连接信息和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 Lucy runtime 启动。
+默认镜像首次启动时会从 **`customer-config.example`** 组装的 template seed 出 `/data/lucy/ktx.yaml`（`customer-db` 占位）。客户生产部署必须编辑 volume（或 bind-mount `customer-config/`）中的连接信息与密码文件路径。`docker-compose.customer-config.yml` 会设置 `LUCY_DISABLE_TEMPLATE_SYNC=1`，避免 template 再次合并进客户目录。
 
 推荐做法：
 

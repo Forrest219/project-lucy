@@ -57,6 +57,10 @@ sync_template_tree() {
 }
 
 sync_context_from_template() {
+  if [[ "${LUCY_DISABLE_TEMPLATE_SYNC:-0}" == "1" ]]; then
+    echo "[lucy] template sync disabled (LUCY_DISABLE_TEMPLATE_SYNC=1)"
+    return 0
+  fi
   sync_template_tree "${TEMPLATE_ROOT}/semantic-layer" "${PROJECT_ROOT}/semantic-layer" "semantic-layer"
   sync_template_tree "${TEMPLATE_ROOT}/wiki" "${PROJECT_ROOT}/wiki" "wiki"
   sync_template_tree "${TEMPLATE_ROOT}/skills" "${PROJECT_ROOT}/skills" "skills"

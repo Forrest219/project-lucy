@@ -194,7 +194,7 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 
 首版客户部署通过编辑 `/data/lucy/ktx.yaml` 接入数据库。若使用 §5 推荐的 bind mount 模式，实际编辑宿主机 `customer-config/ktx.yaml`；容器内路径仍是 `/data/lucy/ktx.yaml`。
 
-默认镜像首次启动时会从 `ktx.yaml.example` seed 出 `/data/lucy/ktx.yaml`。该文件包含 `<CHANGE-ME-*>` 占位符，只用于初始化 volume；客户生产部署必须在首次启动后编辑 volume 中的 `/data/lucy/ktx.yaml`，替换数据库 host、用户和密码文件路径。容器会对仍含 `CHANGE-ME` 的配置打印 warning，但不会阻止 Lucy runtime 启动。
+默认镜像首次启动时会从镜像内 **`customer-config.example`** 组装的 `/app/project-template` seed 到 `/data/lucy`（单连接 `customer-db` 占位，无内网测试库 / 无内部 Agent）。客户生产部署必须替换 `ktx.yaml` 与 `access.yaml`，或改用 `docker-compose.customer-config.yml` bind-mount 自己的 `customer-config/`（该路径设置 `LUCY_DISABLE_TEMPLATE_SYNC=1`，不会再从镜像 template 合并文件）。本地 demo 栈（`docker-compose.demo.yml`）使用 `examples/docker-demo/project-template`，仅供内部验证，不进入客户默认 seed。
 
 推荐流程：
 

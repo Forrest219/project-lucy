@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import {
   A3_DOCKERIGNORE_PATTERNS,
+  INTERNAL_TEST_DOCKERIGNORE_PATTERNS,
   assertDockerignoreCoversA3,
+  assertDockerignoreCoversInternalTest,
   isIgnoredByDockerignore,
   parseDockerignore,
   runFixtureSentinelCheck
@@ -17,28 +19,31 @@ const SCRIPT = path.join(ROOT, "scripts/lucy-delivery-isolation-smoke.mjs");
 
 describe("lucy-delivery-isolation-smoke", () => {
   it("parses dockerignore and matches directory prefixes", () => {
-    const patterns = parseDockerignore("agent-chat\n# comment\ndocker-compose.agent-chat.yml\n");
-    assert.deepEqual(patterns, ["agent-chat", "docker-compose.agent-chat.yml"]);
+    const patterns = parseDockerignore("agent-chat\n# comment\nsemantic-layer\n");
+    assert.deepEqual(patterns, ["agent-chat", "semantic-layer"]);
     assert.equal(isIgnoredByDockerignore("agent-chat/.env", patterns), true);
+    assert.equal(isIgnoredByDockerignore("semantic-layer/mysql-aliyun/x.yaml", patterns), true);
     assert.equal(isIgnoredByDockerignore("webui/src/app.tsx", patterns), false);
+    assert.equal(isIgnoredByDockerignore("customer-config.example/ktx.yaml", patterns), false);
   });
 
-  it("requires A3 patterns in repo .dockerignore", async () => {
+  it("requires A3 and internal-test patterns in repo .dockerignore", async () => {
     const text = await readFile(path.join(ROOT, ".dockerignore"), "utf8");
     assert.doesNotThrow(() => assertDockerignoreCoversA3(text));
-    for (const p of A3_DOCKERIGNORE_PATTERNS) {
-      assert.match(text, new RegExp(`^${p.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}$`, "m"));
+    assert.doesNotThrow(() => assertDockerignoreCoversInternalTest(text));
+    for (const p of [...A3_DOCKERIGNORE_PATTERNS, ...INTERNAL_TEST_DOCKERIGNORE_PATTERNS]) {
+      assert.match(text, new RegExp(`^${p.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}/?$`, "m"));
     }
   });
 
-  it("fixture sentinel paths are ignored without touching real agent-chat/", async () => {
+  it("fixture sentinel paths are ignored without touching real private trees", async () => {
     const text = await readFile(path.join(ROOT, ".dockerignore"), "utf8");
-    const patterns = assertDockerignoreCoversA3(text);
+    const patterns = parseDockerignore(text);
     const result = await runFixtureSentinelCheck(patterns);
-    assert.ok(result.samplesChecked >= 5);
+    assert.ok(result.samplesChecked >= 10);
   });
 
-  it("CLI static gate passes (A3 may be present or absent)", () => {
+  it("CLI static gate passes", () => {
     const out = path.join(ROOT, "inbox/lucy-delivery-isolation-smoke-test.json");
     const result = spawnSync(process.execPath, [SCRIPT, "--out", out], {
       cwd: ROOT,
@@ -48,7 +53,11 @@ describe("lucy-delivery-isolation-smoke", () => {
     assert.match(result.stdout, /"status": "pass"/);
   });
 
-  it("fails when .dockerignore omits A3 patterns", () => {
+  it("fails when .dockerignore omits required patterns", () => {
     assert.throws(() => assertDockerignoreCoversA3(".git\nnode_modules\n"), /missing A3 isolation/);
+    assert.throws(
+      () => assertDockerignoreCoversInternalTest(".git\nagent-chat\n"),
+      /missing internal-test isolation/
+    );
   });
 });

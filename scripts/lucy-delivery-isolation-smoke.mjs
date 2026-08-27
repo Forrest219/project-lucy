@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
- * Lucy delivery isolation gate (hard): A3 paths must not enter the Lucy image
- * build context. Does not require A3 files to exist in the checkout.
+ * Lucy delivery isolation gate (hard):
+ * - A3 Agent Chat paths must not enter the Lucy image build context
+ * - Internal test DB contexts (mysql-aliyun / poc / starrocks) must not enter
+ *   /app/project-template (customer seed)
+ * Does not require private local files to exist in the checkout.
  */
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
@@ -21,7 +24,17 @@ export const A3_DOCKERIGNORE_PATTERNS = [
   "scripts/agent-chat-a3-smoke.test.mjs"
 ];
 
-/** Absolute paths inside the Lucy image that must not exist. */
+/** Repo-root internal test context that must stay out of the Docker build context. */
+export const INTERNAL_TEST_DOCKERIGNORE_PATTERNS = [
+  "raw-sources",
+  "semantic-layer",
+  "wiki",
+  "skills",
+  "evals",
+  "ktx.yaml.example"
+];
+
+/** Absolute paths inside the Lucy image that must not exist (A3). */
 export const A3_IMAGE_DENYLIST = [
   "/app/agent-chat",
   "/app/docker-compose.agent-chat.yml",
@@ -29,6 +42,22 @@ export const A3_IMAGE_DENYLIST = [
   "/app/docs/runbook-lucy-agent-chat-a3.md",
   "/app/scripts/agent-chat-a3-smoke.mjs",
   "/app/scripts/agent-chat-a3-smoke.test.mjs"
+];
+
+/** Paths that must not appear under the customer seed template. */
+export const PROJECT_TEMPLATE_DENY_DIRS = [
+  "/app/project-template/semantic-layer/mysql-aliyun",
+  "/app/project-template/semantic-layer/poc-mysql-aliyun",
+  "/app/project-template/semantic-layer/starrocks-r1"
+];
+
+/** Agent ids that must not appear in the seeded access.yaml. */
+export const PROJECT_TEMPLATE_DENIED_AGENT_IDS = [
+  "poc_demo",
+  "forrest_local",
+  "kx_guard_tester",
+  "zhangsan",
+  "workhorse"
 ];
 
 const DEFAULT_IMAGES = ["project-lucy:p0-smoke", "project-lucy:local"];
@@ -85,20 +114,28 @@ export function isIgnoredByDockerignore(relPath, patterns) {
   return false;
 }
 
-export function assertDockerignoreCoversA3(dockerignoreText) {
+function assertDockerignoreCovers(dockerignoreText, required, label) {
   const patterns = parseDockerignore(dockerignoreText);
   const missing = [];
-  for (const required of A3_DOCKERIGNORE_PATTERNS) {
+  for (const req of required) {
     const covered = patterns.some((p) => {
       const n = p.replace(/^\//, "").replace(/\/$/, "");
-      return n === required || required.startsWith(n + "/");
+      return n === req || req.startsWith(n + "/");
     });
-    if (!covered) missing.push(required);
+    if (!covered) missing.push(req);
   }
   if (missing.length) {
-    throw new Error(`.dockerignore missing A3 isolation patterns: ${missing.join(", ")}`);
+    throw new Error(`.dockerignore missing ${label} isolation patterns: ${missing.join(", ")}`);
   }
   return patterns;
+}
+
+export function assertDockerignoreCoversA3(dockerignoreText) {
+  return assertDockerignoreCovers(dockerignoreText, A3_DOCKERIGNORE_PATTERNS, "A3");
+}
+
+export function assertDockerignoreCoversInternalTest(dockerignoreText) {
+  return assertDockerignoreCovers(dockerignoreText, INTERNAL_TEST_DOCKERIGNORE_PATTERNS, "internal-test");
 }
 
 export async function runFixtureSentinelCheck(patterns) {
@@ -112,7 +149,13 @@ export async function runFixtureSentinelCheck(patterns) {
       `docs/design-lucy-agent-chat-a3.md`,
       `docs/runbook-lucy-agent-chat-a3.md`,
       `scripts/agent-chat-a3-smoke.mjs`,
-      `scripts/agent-chat-a3-smoke.test.mjs`
+      `scripts/agent-chat-a3-smoke.test.mjs`,
+      `semantic-layer/mysql-aliyun/_schema/dataforai.yaml`,
+      `wiki/global/poc-playbook.md`,
+      `skills/domains/superstore/x.md`,
+      `evals/kx_financial/eval/cases.yaml`,
+      `raw-sources/mysql-aliyun/connection.json`,
+      `ktx.yaml.example`
     ];
     for (const rel of samples) {
       const full = path.join(dir, rel);
@@ -122,10 +165,12 @@ export async function runFixtureSentinelCheck(patterns) {
         throw new Error(`fixture path not ignored by .dockerignore patterns: ${rel}`);
       }
     }
-    // A non-A3 path must not be ignored solely by our A3 patterns
-    const keep = "webui/package.json";
-    if (isIgnoredByDockerignore(keep, A3_DOCKERIGNORE_PATTERNS)) {
-      throw new Error(`A3 patterns incorrectly ignore ${keep}`);
+    const keep = "customer-config.example/ktx.yaml";
+    if (isIgnoredByDockerignore(keep, [...A3_DOCKERIGNORE_PATTERNS, ...INTERNAL_TEST_DOCKERIGNORE_PATTERNS])) {
+      throw new Error(`isolation patterns incorrectly ignore ${keep}`);
+    }
+    if (isIgnoredByDockerignore("webui/package.json", A3_DOCKERIGNORE_PATTERNS)) {
+      throw new Error(`A3 patterns incorrectly ignore webui/package.json`);
     }
     return { fixtureDir: dir, samplesChecked: samples.length, sentinelValueLength: sentinel.length };
   } finally {
@@ -134,7 +179,16 @@ export async function runFixtureSentinelCheck(patterns) {
 }
 
 export function checkImageDenylist(imageTag) {
-  const script = A3_IMAGE_DENYLIST.map((p) => `test ! -e '${p.replace(/'/g, `'\\''`)}'`).join(" && ");
+  const a3Checks = A3_IMAGE_DENYLIST.map((p) => `test ! -e '${p.replace(/'/g, `'\\''`)}'`).join(" && ");
+  const templateDirChecks = PROJECT_TEMPLATE_DENY_DIRS.map(
+    (p) => `test ! -e '${p.replace(/'/g, `'\\''`)}'`
+  ).join(" && ");
+  const agentPattern = PROJECT_TEMPLATE_DENIED_AGENT_IDS.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(
+    "|"
+  );
+  const accessPath = "/app/project-template/webui/config/access.yaml";
+  const agentCheck = `if [ -f '${accessPath}' ]; then ! grep -Eq '(^|[[:space:]])id:[[:space:]]*(${agentPattern})([[:space:]]|$)' '${accessPath}'; else true; fi`;
+  const script = [a3Checks, templateDirChecks, agentCheck].filter(Boolean).join(" && ");
   const result = spawnSync(
     "docker",
     ["run", "--rm", "--entrypoint", "sh", imageTag, "-c", script],
@@ -142,7 +196,7 @@ export function checkImageDenylist(imageTag) {
   );
   if (result.status !== 0) {
     throw new Error(
-      `image ${imageTag} contains denied A3 paths (exit ${result.status}): ${result.stderr || result.stdout || ""}`
+      `image ${imageTag} failed delivery denylist (exit ${result.status}): ${result.stderr || result.stdout || ""}`
     );
   }
   return { image: imageTag, denylistOk: true };
@@ -152,7 +206,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(`Usage: node scripts/lucy-delivery-isolation-smoke.mjs [--check-images] [--image tag]... [--out path]
-Lucy hard gate: .dockerignore must exclude A3 paths; optional docker image denylist.`);
+Lucy hard gate: .dockerignore must exclude A3 + internal test paths; optional docker image denylist.`);
     process.exit(0);
   }
 
@@ -167,9 +221,12 @@ Lucy hard gate: .dockerignore must exclude A3 paths; optional docker image denyl
 
   try {
     const dockerignoreText = await readFile(path.join(ROOT, ".dockerignore"), "utf8");
-    const patterns = assertDockerignoreCoversA3(dockerignoreText);
+    assertDockerignoreCoversA3(dockerignoreText);
     record("dockerignoreCoversA3", true, { patterns: A3_DOCKERIGNORE_PATTERNS });
+    assertDockerignoreCoversInternalTest(dockerignoreText);
+    record("dockerignoreCoversInternalTest", true, { patterns: INTERNAL_TEST_DOCKERIGNORE_PATTERNS });
 
+    const patterns = parseDockerignore(dockerignoreText);
     const fixture = await runFixtureSentinelCheck(patterns);
     record("fixtureSentinelIgnored", true, fixture);
 
@@ -191,7 +248,7 @@ Lucy hard gate: .dockerignore must exclude A3 paths; optional docker image denyl
     contract: "lucy-delivery-isolation",
     status: ok ? "pass" : "fail",
     checks,
-    note: "A3 checkout may be absent; gate still passes when ignore rules and (optional) images are clean"
+    note: "Private local assets may be absent; gate passes when ignore rules and (optional) images are clean"
   };
   const line = JSON.stringify(evidence, null, 2);
   console.log(line);

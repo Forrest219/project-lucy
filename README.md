@@ -33,15 +33,18 @@
 
 | 路径 | 说明 |
 |---|---|
-| `ktx.yaml` | KTX MCP Server 配置入口，包含连接（Aliyun RDS MySQL）、存储、模型、扫描和 agent 运行设置。数据库连接可按环境替换；`ktx.yaml.example` 存放脱敏模板。 |
-| `semantic-layer/` | 语义层定义，`mysql-aliyun/` 下含 `_schema/`（KTX 扫描生成）与手工 overlay YAML（measures / segments / joins）。 |
-| `skills/` | lucy 增量 skill 库，当前由 LLM 通过 Read 工具主动读取 `SKILL.md`；未来由 `lucy-skills` MCP server 暴露。包含 4 个子目录：`warehouse/`（路由器 Skill）、`reviewer/`（高风险审查 Skill）、`analysis/`（折扣与利润分析 Skill）、`domains/`（超市领域 Reference）。 |
+| `ktx.yaml` | **本机私有**（gitignore）。从 `ktx.yaml.example` 复制后填写自己的连接；勿提交。 |
+| `ktx.yaml.example` | 脱敏连接模板（占位符），供开发者复制。 |
+| `semantic-layer/` | 本机可放私有连接目录（gitignore：`mysql-aliyun/` 等）。仓库仅跟踪 `demo-mysql/` CI stub；客户交付 seed 用 `customer-config.example/semantic-layer/`。 |
+| `skills/` | lucy 增量 skill 库（产品通用技能）。本机域名/内网专用 skill 勿提交。 |
 | `lucy-skills/` | 独立 MCP server，用于将 `skills/` 以标准 MCP Resource 形式暴露给 data agent（P1.5 立项中，spec 见 `lucy-skills/docs/01-spec.md`，尚未实现）。 |
 | `.ktx/prompts/` | KTX 运行时 prompt 目录，用于承载产品运行时上下文。 |
-| `wiki/` | 业务知识库目录（`global/`），沉淀跨数据表、跨场景的解释性知识（折扣策略、利润规则、退货语义）。 |
-| `evals/` | Eval Case 目录（`superstore/eval/superstore-eval-cases.yaml`），7 条覆盖折扣 / 订单数 / 利润率 / is_deleted 的发布前门禁测试。 |
-| `webui/` | 治理工作台（React 19 + Vite + Fastify），提供 Catalog / TableEditor / JoinEditor / WikiEditor / Review 五个页面，M0–M5 全部完成。 |
-| `raw-sources/` | 数据源扫描与抽取产生的原始材料，作为语义层建设和回溯的输入。 |
+| `wiki/` | 业务知识库。仓库仅跟踪 `wiki/global/demo-superstore.md` stub；其余本机私有。 |
+| `evals/` | 仓库跟踪 `evals/superstore/`（demo 可跑）；内网绑定套件本机私有。 |
+| `webui/` | 治理工作台（React 19 + Vite + Fastify）。`webui/config/access.yaml` 本机私有；提交的是 `access.yaml.example`。 |
+| `raw-sources/` | 本机扫描材料（gitignore 内网连接目录）；勿提交含真实 host 的快照。 |
+| `customer-config.example/` | 客户交付空壳模板；默认 Docker seed 与离线包均以此为准。 |
+| `examples/docker-demo/` | 本地 compose 测试库（`demo-mysql`）；仅 demo 栈使用，不进客户默认 seed。 |
 | `docs/` | 开发治理与项目概览。`docs/DEVELOPMENT.md` 是开发规则权威源；`docs/project-overview.md` 是全组件索引。 |
 | `AGENTS.md` | AI coding agent 的开发入口，指向本仓库治理规则。 |
 | `CLAUDE.md` | 开发/运行入口指引，不承载数据问答规则正文。 |
@@ -63,10 +66,11 @@
 
 | 路径 | 是否手动维护 | 触发时机 |
 |------|------------|---------|
-| `semantic-layer/mysql-aliyun/_schema/` | **否**，`ktx ingest` 自动生成，手动改会被覆盖 | 跑 `ktx ingest mysql-aliyun` 后自动更新 |
-| `semantic-layer/mysql-aliyun/superstore_orders.yaml` | **是**，手工 overlay | 数据库表结构变化、measures / joins / segments 定义调整时 |
-| `wiki/global/` | **是**，全部手写 | 业务口径变化、发现新 Gotcha、折扣 / 利润 / 退货规则更新时 |
-| `evals/superstore/eval/` | **是**，手写 eval 用例 | 扩充测试覆盖、发现新边界场景、发布前门禁不足时 |
+| `semantic-layer/<your-connection>/_schema/` | **否**（本机私有），`ktx ingest` 自动生成 | 对本机连接跑 ingest 后更新 |
+| `semantic-layer/demo-mysql/` | **是**，仓库 CI stub | 仅维护 demo 门禁所需最小 schema/overlay |
+| `examples/*/project-template/semantic-layer/` | **是** | demo compose 模板变更时 |
+| `wiki/global/demo-superstore.md` | **是**，仓库 stub | demo 知识变更时；其余 wiki 本机私有 |
+| `evals/superstore/eval/` | **是** | 扩充 demo 可跑的发布前门禁 |
 
 ### 运行时（daemon 维护，不直接对外暴露）
 
@@ -99,23 +103,25 @@
 **首次 Onboarding**（详见 `docs/DEVELOPMENT.md §Onboarding`）：
 
 ```bash
-# 1. 如尚未存在 ktx.yaml，从模板复制后替换 <CHANGE-ME-*> 占位符
+# 1. 私有运行时配置（均不进 git）
 cp ktx.yaml.example ktx.yaml
+cp webui/config/access.yaml.example webui/config/access.yaml
+# 编辑 ktx.yaml / access.yaml 为你自己的连接与 Agent
 
-# 2. 创建密钥目录并写入 MySQL 密码（该目录已在 .gitignore 排除）
-mkdir -p .ktx/secrets && echo '<your-mysql-password>' > .ktx/secrets/mysql-aliyun-password
+# 2. 创建密钥目录并写入数据库密码
+mkdir -p .ktx/secrets && echo '<your-db-password>' > .ktx/secrets/<connection>-password
 
 # 3. 安装 KTX CLI（或使用本机 dev 版本）
 npm install -g @kaelio/ktx@latest
 
 # 4. 启动 KTX MCP daemon；外部客户端应通过 Lucy MCP Proxy :7879 接入
-ktx mcp start --project-dir /Users/zhangxingchen/Projects/project-lucy
+ktx mcp start --project-dir "$(pwd)"
 
 # 5. 验证连接
 ktx status
 ```
 
-仓库已附带 `.mcp.json` 示例；客户端应配置到 Lucy MCP Proxy，而不是直接暴露 KTX upstream。daemon / proxy 未运行则连接失败。
+本地 Docker 验证用 `docker compose -f docker-compose.demo.yml up`（仅 `demo-mysql`）。客户交付默认 seed 来自 `customer-config.example`，与开发者私有测试库分离。
 
 **治理工作台（WebUI）**：
 
