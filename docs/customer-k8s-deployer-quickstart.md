@@ -36,8 +36,11 @@ Lucy exposes:
 > manifest list containing both `linux/amd64` (primary; x86_64 customer
 > hardware) and `linux/arm64` (secondary; Apple Silicon / AWS Graviton
 > developers). If you build on an `arm64` Mac and forget to set
-> `--platform linux/amd64`, you will push an `arm64`-only image and your
-> customer AMD nodes will pull with `ImagePullBackOff` or fail at exec.
+> `--platform linux/amd64` **and** `TARGETPLATFORM`/`TARGETARCH`, you may
+> push a mislabeled image: OCI metadata says `amd64` while `/usr/bin/tini`
+> (ENTRYPOINT) is still `aarch64`. On AMD nodes that fails immediately with
+> `exec /usr/bin/tini: exec format error` (CrashLoopBackOff), not always
+> `ImagePullBackOff`.
 
 Check the architecture of your **build host** and your **target K8s nodes**:
 
@@ -61,12 +64,17 @@ tag always contains the customer architecture:
 docker buildx build \
   --platform linux/amd64 \
   --build-arg KTX_VERSION=0.16.0 \
+  --build-arg TARGETPLATFORM=linux/amd64 \
+  --build-arg TARGETARCH=amd64 \
   -t registry.example.com/data-team/project-lucy:0.16.0 \
   --push .
 ```
 
 If your cluster also serves `arm64` workloads, add the second platform and
-push a multi-arch manifest list in one command:
+push a multi-arch manifest list in one command. Do **not** hard-code a single
+`TARGETPLATFORM` when building both platforms in one `buildx` invocation —
+let buildx inject per-platform `TARGETPLATFORM`/`TARGETARCH`, and keep the
+Dockerfile `FROM --platform=$TARGETPLATFORM` contract:
 
 ```bash
 docker buildx build \
@@ -76,11 +84,18 @@ docker buildx build \
   --push .
 ```
 
-After pushing, verify the manifest list really contains `linux/amd64`:
+After pushing, verify the manifest list **and** the amd64 layer ELF:
 
 ```bash
 docker manifest inspect registry.example.com/data-team/project-lucy:0.16.0
 # Look for `manifests[].platform.architecture == "amd64"`.
+
+# Metadata alone is not enough — also gate ENTRYPOINT + node ELFs:
+docker pull --platform linux/amd64 registry.example.com/data-team/project-lucy:0.16.0
+test "$(docker image inspect registry.example.com/data-team/project-lucy:0.16.0 \
+  --format '{{.Os}}/{{.Architecture}}')" = "linux/amd64"
+bash scripts/assert-image-elf-arch.sh \
+  registry.example.com/data-team/project-lucy:0.16.0 amd64
 ```
 
 ### 2.2 Local kind / k3d verification (optional)
@@ -100,8 +115,12 @@ kind load docker-image project-lucy:0.16.0 --name <kind-cluster>
 >
 > ```bash
 > docker buildx build --platform linux/amd64 \
->   -t project-lucy:0.16.0 --build-arg KTX_VERSION=0.16.0 \
+>   -t project-lucy:0.16.0 \
+>   --build-arg KTX_VERSION=0.16.0 \
+>   --build-arg TARGETPLATFORM=linux/amd64 \
+>   --build-arg TARGETARCH=amd64 \
 >   --load .
+> bash scripts/assert-image-elf-arch.sh project-lucy:0.16.0 amd64
 > kind load docker-image project-lucy:0.16.0 --name <kind-cluster>
 > ```
 
@@ -318,6 +337,7 @@ kubectl delete pvc -n lucy -l app.kubernetes.io/name=lucy,app.kubernetes.io/inst
 
 | Symptom | Likely cause | Action |
 |---|---|---|
+| `exec /usr/bin/tini: exec format error` / Pod `CrashLoopBackOff` before any Lucy logs | Image layer ELF arch ≠ node CPU (often: Apple Silicon build labeled `amd64` but shipping aarch64 `tini`, or an amd64-only image scheduled onto an arm64 node) | On the node / with the same image: `uname -m`; `docker/nerdctl image inspect --format '{{.Os}}/{{.Architecture}}'`; `bash scripts/assert-image-elf-arch.sh <image> amd64`. Rebuild on amd64 native (or correct `--platform` + `FROM --platform=$TARGETPLATFORM`), re-push, and roll the Deployment. Discard any `customer-amd64-0.16.0` package produced under the old `BUILDPLATFORM` Dockerfile. |
 | Pod `CrashLoopBackOff` | Image pull failure, placeholder `ktx.yaml`, or invalid context files | `kubectl describe pod` and `kubectl logs`; confirm `LUCY_ALLOW_PLACEHOLDER_KTX` is only used for local tests |
 | `/api/health` works but agents cannot connect | `LUCY_PUBLIC_MCP_URL` points to an internal URL | Fix DNS / Ingress and set `env.LUCY_PUBLIC_MCP_URL` to the external MCP URL |
 | `ktx connection test` fails | DB network, credentials, or `file:` secret path is wrong | Check `/data/lucy/.ktx/secrets`, network policy, VPC routing, and DB allowlist |

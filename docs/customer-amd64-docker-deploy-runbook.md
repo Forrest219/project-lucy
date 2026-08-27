@@ -210,6 +210,7 @@ curl -sf -X POST http://localhost:7879/mcp \
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | `docker load` 报 `unexpected EOF` | image tar 损坏 / 下载不全 | 重新下载，重新 `sha256sum -c SHA256SUMS` |
+| `exec /usr/bin/tini: exec format error`（`nerdctl/docker run` 或 compose 立刻失败） | **层内 ELF 架构与宿主机不一致**。常见于：① 作废的跨架构坏包（元数据写 `amd64`，`tini`/`node` 实为 aarch64）；② 在 arm64 主机上直接跑正确的 amd64 镜像且无 QEMU | `uname -m` 确认宿主机；`docker image inspect … '{{.Os}}/{{.Architecture}}'`；`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64`。宿主机必须是 x86_64；若 ELF 断言失败 → 当前包作废，按 `docs/lucy-customer-amd64-offline-delivery-spec.md` 在 **amd64 native** 重建 |
 | `architecture mismatch` | 宿主机非 x86_64 | 本交付包只支持 AMD x86_64；如需 arm64，重新索要 arm64 包 |
 | 容器启动后立刻退出，看 `ktx.yaml contains CHANGE-ME placeholders` | 没改 `customer-config/ktx.yaml` | 编辑 ktx.yaml，把 `<CHANGE-ME-*>` 全部替换 |
 | 容器启动后退出，看 `no YAML files` / `no _schema YAML files` | `customer-config/semantic-layer/` 为空或只有占位 | 按 §5.3 补齐；或拷贝 `customer-config.example/semantic-layer/` 后再改 |

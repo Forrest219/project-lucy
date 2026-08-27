@@ -24,6 +24,7 @@ npm run security:baseline
 | Symptom | First Check | Likely Fix |
 |---|---|---|
 | WebUI unavailable | host port mapping | change `LUCY_WEBUI_HOST_PORT` |
+| `exec /usr/bin/tini: exec format error` | Image ELF arch ≠ host (mislabeled cross-build, or wrong node arch) | `uname -m`; `bash scripts/assert-image-elf-arch.sh <image> amd64`; rebuild per `docs/lucy-customer-amd64-offline-delivery-spec.md` / k8s quickstart |
 | MCP returns 401 | bearer token missing or revoked | create a new Agent token |
 | MCP returns 403 | role/table/tool ACL | update role table selectors or tools |
 | KTX version mismatch | `/api/health.data.bundledKtxVersion` | rebuild image with intended `KTX_VERSION` |

@@ -95,7 +95,7 @@ WO-202608-05 的 `BUILDX_BUILDER=default` 与拒绝 `lucy-amd64`/`lucy-builder` 
    --build-arg KTX_VERSION=0.16.0
    ```
 2. **元数据门禁**（已有）：`docker image inspect … '{{.Os}}/{{.Architecture}}'` = `linux/amd64`。
-3. **新增 ELF 门禁**：用脚本从镜像取出 `/usr/local/bin/node`，`file` 输出必须匹配 `x86-64` / `x86_64`，**不得**出现 `ARM` / `aarch64`。
+3. **新增 ELF 门禁**：用脚本从镜像取出 `/usr/bin/tini`（ENTRYPOINT）与 `/usr/local/bin/node`，`file` 输出必须匹配 `x86-64` / `x86_64`，**不得**出现 `ARM` / `aarch64`。现场典型失败：`exec /usr/bin/tini: exec format error`。
 4. 明确：2026-08-04 前后基于 `FROM --platform=$BUILDPLATFORM` 打出的 `customer-amd64-0.16.0` 离线包**作废**，不得交付客户。
 
 新增脚本：`scripts/assert-image-elf-arch.sh`
@@ -105,7 +105,7 @@ WO-202608-05 的 `BUILDX_BUILDER=default` 与拒绝 `lucy-amd64`/`lucy-builder` 
 expected-arch: amd64 | arm64
 ```
 
-行为：`docker create` → `docker cp …:/usr/local/bin/node` → `file` 断言 → `docker rm`；失败非零退出。
+行为：`docker create` → `docker cp` `/usr/bin/tini` 与 `/usr/local/bin/node` → `file` 断言 → `docker rm`；失败非零退出。
 
 ### 4.5 文档同步
 

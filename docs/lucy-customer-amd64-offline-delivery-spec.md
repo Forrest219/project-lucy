@@ -77,7 +77,7 @@ docker buildx use default
 构建完后做四层校验：
 
 1. **元数据架构校验**：`docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}'` 必须输出 `linux/amd64`。
-2. **ELF 二进制门禁**（必做）：`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64` 必须通过。仅检查 metadata **不够**——历史上出现过「元数据 amd64、`/usr/local/bin/node` 实为 aarch64」的坏包。
+2. **ELF 二进制门禁**（必做）：`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64` 必须通过。脚本检查 `/usr/bin/tini`（ENTRYPOINT）与 `/usr/local/bin/node`。仅检查 metadata **不够**——历史上出现过「元数据 amd64、层内 aarch64」的坏包，现场症状是 `exec /usr/bin/tini: exec format error`。
 3. **冒烟**：`npm run smoke:p0:docker` 必须全绿。
 4. **客户配置包冒烟**：`npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` 必须全绿。
 
