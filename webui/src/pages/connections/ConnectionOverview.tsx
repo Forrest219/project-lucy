@@ -205,8 +205,8 @@ function catalogRunState(
   }
   if (!run) {
     return {
-      label: "尚未同步配置变更",
-      detail: "尚未读取最新本地 YAML",
+      label: "本地目录未刷新",
+      detail: "尚未读取本地 YAML",
       tone: "muted",
       badgeLabel: "未刷新",
       tableCount: 0,
@@ -781,14 +781,14 @@ export function ConnectionOverview() {
                       translate="no"
                     >
                       <p className="pl-connection-refresh-warning-text">
-                        <span>尚未同步配置变更：</span>
-                        <span>上传或修改配置文件后，请同步以读取最新资产。</span>
+                        <span>本地目录未刷新：</span>
+                        <span>首次接入或修改本地 YAML 后，可刷新以读取最新资产。</span>
                       </p>
                       <CatalogReloadButton
                         connectionId={conn.id}
-                        label="立即同步"
-                        pendingLabel="同步中..."
-                        title="上传或修改配置文件后，点击立即同步让页面读取最新资产；不会连接数据库，也不会执行 ingest。"
+                        label="刷新本地目录"
+                        pendingLabel="刷新中..."
+                        title="首次接入或修改本地 YAML 后，点击刷新本地目录让页面读取最新资产；不会连接数据库，也不会执行 ingest。"
                         variant="ghost"
                         size="sm"
                         testId={`connection-refresh-warning-action-${conn.id}`}

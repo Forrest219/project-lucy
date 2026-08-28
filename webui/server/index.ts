@@ -1727,6 +1727,14 @@ async function start() {
   const { commitEffectivePolicy } = await import("./proxy/acl.js");
   await commitEffectivePolicy();
 
+  // Perform initial catalog scan so local YAML assets are ready on cold boot
+  try {
+    const projectRoot = await resolveProjectRoot();
+    await reloadCatalog(projectRoot);
+  } catch (error) {
+    console.warn("[catalog-reload] initial scan failed on startup:", error);
+  }
+
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);

@@ -1054,11 +1054,11 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
-    expect(banner).toHaveTextContent("尚未同步配置变更：上传或修改配置文件后，请同步以读取最新资产。");
+    expect(banner).toHaveTextContent("本地目录未刷新：首次接入或修改本地 YAML 后，可刷新以读取最新资产。");
     // M44: when a Banner is shown, the body no longer renders the legacy
     // `本地目录未刷新 · 尚未读取本地 YAML` muted status row.
     expect(within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun")).toHaveTextContent(
-      "立即同步"
+      "刷新本地目录"
     );
     const card = await screen.findByTestId("connection-card-mysql-aliyun");
     expect(within(card).queryByTestId("catalog-reload-status-mysql-aliyun")).not.toBeInTheDocument();
@@ -1066,7 +1066,7 @@ describe("ConnectionOverview", () => {
     expect(within(card).queryByTestId("connection-last-reload-mysql-aliyun")).not.toBeInTheDocument();
   });
 
-  it("M44: surfaces an amber refresh warning banner with 立即同步 for never-run connections", async () => {
+  it("M44: surfaces an amber refresh warning banner with 刷新本地目录 for never-run connections", async () => {
     stubOverviewFetch({
       connections: [
         {
@@ -1082,10 +1082,10 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     const banner = await screen.findByTestId("connection-refresh-warning-mysql-aliyun");
-    expect(banner).toHaveTextContent("尚未同步配置变更：上传或修改配置文件后，请同步以读取最新资产。");
+    expect(banner).toHaveTextContent("本地目录未刷新：首次接入或修改本地 YAML 后，可刷新以读取最新资产。");
     expect(banner).toHaveClass("pl-connection-refresh-warning");
     const refreshAction = within(banner).getByTestId("connection-refresh-warning-action-mysql-aliyun");
-    expect(refreshAction).toHaveTextContent("立即同步");
+    expect(refreshAction).toHaveTextContent("刷新本地目录");
     expect(refreshAction.textContent ?? "").not.toMatch(/[↗→]/);
     expect(refreshAction).toHaveClass("pl-btn--ghost");
     expect(refreshAction).not.toHaveClass("pl-btn--primary");
