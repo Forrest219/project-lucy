@@ -1,0 +1,49 @@
+services:
+  demo-exec-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: lucy_exec_root
+      MYSQL_DATABASE: dataforai
+      MYSQL_USER: lucy
+      MYSQL_PASSWORD: lucy_exec_demo
+    ports:
+      - "${LUCY_EXEC_MYSQL_HOST_PORT:-53307}:3306"
+    volumes:
+      - ./examples/executive-poc/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -ulucy -plucy_exec_demo --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  lucy:
+    build:
+      context: .
+      args:
+        KTX_VERSION: "${KTX_VERSION:-0.16.0}"
+        TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
+        TARGETARCH: "${TARGETARCH:-arm64}"
+    image: project-lucy:executive-poc
+    environment:
+      KTX_PROJECT_ROOT: /data/lucy
+      LUCY_TEMPLATE_ROOT: /app/examples/executive-poc/project-template
+      LUCY_WEBUI_HOST: 0.0.0.0
+      LUCY_WEBUI_PORT: "5174"
+      LUCY_PROXY_HOST: 0.0.0.0
+      LUCY_PROXY_PORT: "7879"
+      LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
+      LUCY_PROXY_UPSTREAM_PORT: "7878"
+      LUCY_PUBLIC_MCP_URL: "${LUCY_PUBLIC_MCP_URL:-http://127.0.0.1:57883/mcp}"
+      POSTHOG_DISABLED: "1"
+    ports:
+      - "${LUCY_EXEC_WEBUI_HOST_PORT:-55178}:5174"
+      - "${LUCY_EXEC_PROXY_HOST_PORT:-57883}:7879"
+    volumes:
+      - lucy-exec-poc-data:/data/lucy
+      - ./examples/executive-poc/project-template/evals:/data/lucy/evals:ro
+    depends_on:
+      demo-exec-db:
+        condition: service_healthy
+
+volumes:
+  lucy-exec-poc-data:

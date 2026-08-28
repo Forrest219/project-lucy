@@ -1,0 +1,15 @@
+name: mv_order_quarterly_rollup
+grain:
+- year_quarter
+- region
+- category
+descriptions:
+  human: 季度预聚合（等价 MV 命中层）。
+  ai: Quarterly rollup; prefer for region×category×quarter queries.
+measures:
+- name: total_sales
+  expr: sum(sales)
+  description: 销售额。
+- name: total_qty
+  expr: sum(qty)
+  description: 销量。

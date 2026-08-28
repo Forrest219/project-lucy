@@ -1,0 +1,15 @@
+name: fct_fulfillment_order
+grain:
+- order_id
+measures:
+- name: order_count
+  expr: count(distinct order_id)
+  description: 订单数。
+- name: avg_fulfill_days
+  expr: avg(fulfill_days)
+  description: 平均履约时长（天）。
+joins:
+- to: dim_channel
+  'on': fct_fulfillment_order.channel_id = dim_channel.channel_id
+  relationship: many_to_one
+  source: formal

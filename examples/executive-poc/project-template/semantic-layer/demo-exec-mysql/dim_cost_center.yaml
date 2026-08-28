@@ -1,0 +1,3 @@
+name: dim_cost_center
+grain:
+- cost_center_id

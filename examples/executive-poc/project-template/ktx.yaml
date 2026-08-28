@@ -1,0 +1,60 @@
+connections:
+  demo-exec-mysql:
+    driver: mysql
+    host: demo-exec-db
+    port: 3306
+    database: dataforai
+    username: lucy
+    password: lucy_exec_demo
+    schemas:
+      - dataforai
+    enabled_tables:
+      - dataforai.dim_legal_entity
+      - dataforai.dim_cost_center
+      - dataforai.dim_fx_rate
+      - dataforai.dim_warehouse
+      - dataforai.dim_sku
+      - dataforai.dim_channel
+      - dataforai.dim_customer
+      - dataforai.dim_sales_team
+      - dataforai.fct_daily_cash_balance
+      - dataforai.fct_ar_aging_detail
+      - dataforai.fct_pl_monthly
+      - dataforai.fct_cashflow_monthly
+      - dataforai.fct_collection_monthly
+      - dataforai.fct_budget_actual
+      - dataforai.fct_inventory_health_daily
+      - dataforai.fct_acquisition_monthly
+      - dataforai.fct_fulfillment_order
+      - dataforai.fct_sales_margin
+      - dataforai.fct_sales_margin_regional
+      - dataforai.fct_order_line_daily
+      - dataforai.mv_order_quarterly_rollup
+      - dataforai.fct_ai_token_consumption
+      - dataforai.fct_business_ticket_closed
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    author: ktx <ktx@example.com>
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: sonnet
+    reconcile: sonnet
+    repair: sonnet
+agent:
+  run_research:
+    enabled: false
+    max_iterations: 20
+    default_toolset:
+      - sl_query
+      - wiki_search
+      - sl_read_source
+setup:
+  database_connection_ids:
+    - demo-exec-mysql

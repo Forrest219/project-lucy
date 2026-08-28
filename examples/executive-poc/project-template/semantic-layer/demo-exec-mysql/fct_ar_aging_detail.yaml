@@ -1,0 +1,26 @@
+name: fct_ar_aging_detail
+grain:
+- entity_id
+- as_of_date
+- customer_id
+- aging_bucket
+measures:
+- name: ar_balance
+  expr: sum(ar_balance)
+  description: 应收账款余额。
+- name: ar_balance_over_90
+  expr: sum(case when aging_bucket = '90+' then ar_balance else 0 end)
+  description: 90+ 账龄应收。
+- name: ar_over_90_ratio
+  expr: sum(case when aging_bucket = '90+' then ar_balance else 0 end) / nullif(sum(ar_balance),
+    0)
+  description: 90+ 占比；SUM/SUM。
+segments:
+- name: latest_month_end
+  expr: is_month_end = 1
+  description: 最新月末截面。
+joins:
+- to: dim_legal_entity
+  'on': fct_ar_aging_detail.entity_id = dim_legal_entity.entity_id
+  relationship: many_to_one
+  source: formal

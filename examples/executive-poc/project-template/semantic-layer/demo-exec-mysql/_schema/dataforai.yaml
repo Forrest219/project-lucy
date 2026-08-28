@@ -1,0 +1,879 @@
+# Auto-generated manifest for executive POC
+tables:
+  dim_legal_entity:
+    table: dataforai.dim_legal_entity
+    columns:
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: dim_legal_entity.entity_id
+    - name: entity_code
+      type: string
+      descriptions:
+        db: entity_code
+        ai: dim_legal_entity.entity_code
+    - name: entity_name
+      type: string
+      descriptions:
+        db: entity_name
+        ai: dim_legal_entity.entity_name
+  dim_cost_center:
+    table: dataforai.dim_cost_center
+    columns:
+    - name: cost_center_id
+      type: string
+      descriptions:
+        db: cost_center_id
+        ai: dim_cost_center.cost_center_id
+    - name: parent_id
+      type: number
+      descriptions:
+        db: parent_id
+        ai: dim_cost_center.parent_id
+    - name: level
+      type: number
+      descriptions:
+        db: level
+        ai: dim_cost_center.level
+    - name: cost_center_name
+      type: string
+      descriptions:
+        db: cost_center_name
+        ai: dim_cost_center.cost_center_name
+    - name: business_line
+      type: string
+      descriptions:
+        db: business_line
+        ai: dim_cost_center.business_line
+  dim_fx_rate:
+    table: dataforai.dim_fx_rate
+    columns:
+    - name: id
+      type: number
+      descriptions:
+        db: id
+        ai: dim_fx_rate.id
+    - name: rate_date
+      type: time
+      descriptions:
+        db: rate_date
+        ai: dim_fx_rate.rate_date
+    - name: from_ccy
+      type: string
+      descriptions:
+        db: from_ccy
+        ai: dim_fx_rate.from_ccy
+    - name: to_ccy
+      type: string
+      descriptions:
+        db: to_ccy
+        ai: dim_fx_rate.to_ccy
+    - name: rate_type
+      type: string
+      descriptions:
+        db: rate_type
+        ai: dim_fx_rate.rate_type
+    - name: rate
+      type: number
+      descriptions:
+        db: rate
+        ai: dim_fx_rate.rate
+  dim_warehouse:
+    table: dataforai.dim_warehouse
+    columns:
+    - name: warehouse_id
+      type: number
+      descriptions:
+        db: warehouse_id
+        ai: dim_warehouse.warehouse_id
+    - name: warehouse_code
+      type: string
+      descriptions:
+        db: warehouse_code
+        ai: dim_warehouse.warehouse_code
+    - name: warehouse_name
+      type: string
+      descriptions:
+        db: warehouse_name
+        ai: dim_warehouse.warehouse_name
+    - name: region
+      type: string
+      descriptions:
+        db: region
+        ai: dim_warehouse.region
+  dim_sku:
+    table: dataforai.dim_sku
+    columns:
+    - name: sku_id
+      type: string
+      descriptions:
+        db: sku_id
+        ai: dim_sku.sku_id
+    - name: category
+      type: string
+      descriptions:
+        db: category
+        ai: dim_sku.category
+    - name: sku_name
+      type: string
+      descriptions:
+        db: sku_name
+        ai: dim_sku.sku_name
+  dim_channel:
+    table: dataforai.dim_channel
+    columns:
+    - name: channel_id
+      type: string
+      descriptions:
+        db: channel_id
+        ai: dim_channel.channel_id
+    - name: channel_name
+      type: string
+      descriptions:
+        db: channel_name
+        ai: dim_channel.channel_name
+    - name: channel_mode
+      type: string
+      descriptions:
+        db: channel_mode
+        ai: dim_channel.channel_mode
+  dim_gl_account:
+    table: dataforai.dim_gl_account
+    columns:
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: dim_gl_account.account_id
+    - name: account_code
+      type: string
+      descriptions:
+        db: account_code
+        ai: dim_gl_account.account_code
+    - name: account_name
+      type: string
+      descriptions:
+        db: account_name
+        ai: dim_gl_account.account_name
+    - name: account_type
+      type: string
+      descriptions:
+        db: account_type
+        ai: dim_gl_account.account_type
+    - name: parent_account_id
+      type: number
+      descriptions:
+        db: parent_account_id
+        ai: dim_gl_account.parent_account_id
+    - name: level
+      type: number
+      descriptions:
+        db: level
+        ai: dim_gl_account.level
+  dim_customer:
+    table: dataforai.dim_customer
+    columns:
+    - name: customer_id
+      type: string
+      descriptions:
+        db: customer_id
+        ai: dim_customer.customer_id
+    - name: region
+      type: string
+      descriptions:
+        db: region
+        ai: dim_customer.region
+    - name: team_id
+      type: number
+      descriptions:
+        db: team_id
+        ai: dim_customer.team_id
+    - name: customer_phone
+      type: string
+      descriptions:
+        db: customer_phone
+        ai: dim_customer.customer_phone
+  dim_sales_team:
+    table: dataforai.dim_sales_team
+    columns:
+    - name: team_id
+      type: number
+      descriptions:
+        db: team_id
+        ai: dim_sales_team.team_id
+    - name: team_name
+      type: string
+      descriptions:
+        db: team_name
+        ai: dim_sales_team.team_name
+    - name: region
+      type: string
+      descriptions:
+        db: region
+        ai: dim_sales_team.region
+  fct_daily_cash_balance:
+    table: dataforai.fct_daily_cash_balance
+    columns:
+    - name: id
+      type: number
+      descriptions:
+        db: id
+        ai: fct_daily_cash_balance.id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_daily_cash_balance.entity_id
+    - name: as_of_date
+      type: time
+      descriptions:
+        db: as_of_date
+        ai: fct_daily_cash_balance.as_of_date
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: fct_daily_cash_balance.currency
+    - name: cash_balance
+      type: number
+      descriptions:
+        db: cash_balance
+        ai: fct_daily_cash_balance.cash_balance
+    - name: is_month_end
+      type: number
+      descriptions:
+        db: is_month_end
+        ai: fct_daily_cash_balance.is_month_end
+  fct_ar_aging_detail:
+    table: dataforai.fct_ar_aging_detail
+    columns:
+    - name: id
+      type: number
+      descriptions:
+        db: id
+        ai: fct_ar_aging_detail.id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_ar_aging_detail.entity_id
+    - name: as_of_date
+      type: time
+      descriptions:
+        db: as_of_date
+        ai: fct_ar_aging_detail.as_of_date
+    - name: customer_id
+      type: string
+      descriptions:
+        db: customer_id
+        ai: fct_ar_aging_detail.customer_id
+    - name: aging_bucket
+      type: string
+      descriptions:
+        db: aging_bucket
+        ai: fct_ar_aging_detail.aging_bucket
+    - name: ar_balance
+      type: number
+      descriptions:
+        db: ar_balance
+        ai: fct_ar_aging_detail.ar_balance
+    - name: is_month_end
+      type: number
+      descriptions:
+        db: is_month_end
+        ai: fct_ar_aging_detail.is_month_end
+  fct_pl_monthly:
+    table: dataforai.fct_pl_monthly
+    columns:
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_pl_monthly.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_pl_monthly.period_month
+    - name: revenue
+      type: number
+      descriptions:
+        db: revenue
+        ai: fct_pl_monthly.revenue
+    - name: net_profit
+      type: number
+      descriptions:
+        db: net_profit
+        ai: fct_pl_monthly.net_profit
+  fct_cashflow_monthly:
+    table: dataforai.fct_cashflow_monthly
+    columns:
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_cashflow_monthly.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_cashflow_monthly.period_month
+    - name: operating_cf
+      type: number
+      descriptions:
+        db: operating_cf
+        ai: fct_cashflow_monthly.operating_cf
+  fct_collection_monthly:
+    table: dataforai.fct_collection_monthly
+    columns:
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_collection_monthly.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_collection_monthly.period_month
+    - name: collection_amt
+      type: number
+      descriptions:
+        db: collection_amt
+        ai: fct_collection_monthly.collection_amt
+    - name: inventory_delta
+      type: number
+      descriptions:
+        db: inventory_delta
+        ai: fct_collection_monthly.inventory_delta
+    - name: tax_refund_lag_days
+      type: number
+      descriptions:
+        db: tax_refund_lag_days
+        ai: fct_collection_monthly.tax_refund_lag_days
+  fct_budget_actual:
+    table: dataforai.fct_budget_actual
+    columns:
+    - name: cost_center_id
+      type: string
+      descriptions:
+        db: cost_center_id
+        ai: fct_budget_actual.cost_center_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_budget_actual.period_month
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: fct_budget_actual.currency
+    - name: budget_amt
+      type: number
+      descriptions:
+        db: budget_amt
+        ai: fct_budget_actual.budget_amt
+    - name: actual_amt
+      type: number
+      descriptions:
+        db: actual_amt
+        ai: fct_budget_actual.actual_amt
+    - name: forecast_amt
+      type: number
+      descriptions:
+        db: forecast_amt
+        ai: fct_budget_actual.forecast_amt
+  fct_inventory_health_daily:
+    table: dataforai.fct_inventory_health_daily
+    columns:
+    - name: id
+      type: number
+      descriptions:
+        db: id
+        ai: fct_inventory_health_daily.id
+    - name: warehouse_id
+      type: number
+      descriptions:
+        db: warehouse_id
+        ai: fct_inventory_health_daily.warehouse_id
+    - name: sku_id
+      type: string
+      descriptions:
+        db: sku_id
+        ai: fct_inventory_health_daily.sku_id
+    - name: snapshot_date
+      type: time
+      descriptions:
+        db: snapshot_date
+        ai: fct_inventory_health_daily.snapshot_date
+    - name: qty_on_hand
+      type: number
+      descriptions:
+        db: qty_on_hand
+        ai: fct_inventory_health_daily.qty_on_hand
+    - name: avg_daily_outbound_30d
+      type: number
+      descriptions:
+        db: avg_daily_outbound_30d
+        ai: fct_inventory_health_daily.avg_daily_outbound_30d
+    - name: days_of_supply
+      type: number
+      descriptions:
+        db: days_of_supply
+        ai: fct_inventory_health_daily.days_of_supply
+    - name: qty_in_transit
+      type: number
+      descriptions:
+        db: qty_in_transit
+        ai: fct_inventory_health_daily.qty_in_transit
+  fct_acquisition_monthly:
+    table: dataforai.fct_acquisition_monthly
+    columns:
+    - name: channel_id
+      type: string
+      descriptions:
+        db: channel_id
+        ai: fct_acquisition_monthly.channel_id
+    - name: cohort_month
+      type: time
+      descriptions:
+        db: cohort_month
+        ai: fct_acquisition_monthly.cohort_month
+    - name: spend
+      type: number
+      descriptions:
+        db: spend
+        ai: fct_acquisition_monthly.spend
+    - name: new_users
+      type: number
+      descriptions:
+        db: new_users
+        ai: fct_acquisition_monthly.new_users
+    - name: cac
+      type: number
+      descriptions:
+        db: cac
+        ai: fct_acquisition_monthly.cac
+  fct_fulfillment_order:
+    table: dataforai.fct_fulfillment_order
+    columns:
+    - name: order_id
+      type: string
+      descriptions:
+        db: order_id
+        ai: fct_fulfillment_order.order_id
+    - name: channel_id
+      type: string
+      descriptions:
+        db: channel_id
+        ai: fct_fulfillment_order.channel_id
+    - name: order_date
+      type: time
+      descriptions:
+        db: order_date
+        ai: fct_fulfillment_order.order_date
+    - name: fulfill_days
+      type: number
+      descriptions:
+        db: fulfill_days
+        ai: fct_fulfillment_order.fulfill_days
+    - name: returned
+      type: number
+      descriptions:
+        db: returned
+        ai: fct_fulfillment_order.returned
+  fct_sales_margin:
+    table: dataforai.fct_sales_margin
+    columns:
+    - name: team_id
+      type: number
+      descriptions:
+        db: team_id
+        ai: fct_sales_margin.team_id
+    - name: customer_id
+      type: string
+      descriptions:
+        db: customer_id
+        ai: fct_sales_margin.customer_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_sales_margin.period_month
+    - name: region
+      type: string
+      descriptions:
+        db: region
+        ai: fct_sales_margin.region
+    - name: customer_phone
+      type: string
+      descriptions:
+        db: customer_phone
+        ai: fct_sales_margin.customer_phone
+    - name: sales
+      type: number
+      descriptions:
+        db: sales
+        ai: fct_sales_margin.sales
+    - name: gross_margin
+      type: number
+      descriptions:
+        db: gross_margin
+        ai: fct_sales_margin.gross_margin
+  fct_sales_margin_regional:
+    table: dataforai.fct_sales_margin_regional
+    columns:
+    - name: team_id
+      type: number
+      descriptions:
+        db: team_id
+        ai: fct_sales_margin_regional.team_id
+    - name: customer_id
+      type: string
+      descriptions:
+        db: customer_id
+        ai: fct_sales_margin_regional.customer_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_sales_margin_regional.period_month
+    - name: region
+      type: string
+      descriptions:
+        db: region
+        ai: fct_sales_margin_regional.region
+    - name: customer_phone_masked
+      type: string
+      descriptions:
+        db: customer_phone_masked
+        ai: fct_sales_margin_regional.customer_phone_masked
+    - name: sales
+      type: number
+      descriptions:
+        db: sales
+        ai: fct_sales_margin_regional.sales
+    - name: gross_margin
+      type: number
+      descriptions:
+        db: gross_margin
+        ai: fct_sales_margin_regional.gross_margin
+  fct_order_line_daily:
+    table: dataforai.fct_order_line_daily
+    columns:
+    - name: id
+      type: number
+      descriptions:
+        db: id
+        ai: fct_order_line_daily.id
+    - name: order_date
+      type: time
+      descriptions:
+        db: order_date
+        ai: fct_order_line_daily.order_date
+    - name: region
+      type: string
+      descriptions:
+        db: region
+        ai: fct_order_line_daily.region
+    - name: category
+      type: string
+      descriptions:
+        db: category
+        ai: fct_order_line_daily.category
+    - name: sku_id
+      type: string
+      descriptions:
+        db: sku_id
+        ai: fct_order_line_daily.sku_id
+    - name: sales
+      type: number
+      descriptions:
+        db: sales
+        ai: fct_order_line_daily.sales
+    - name: qty
+      type: number
+      descriptions:
+        db: qty
+        ai: fct_order_line_daily.qty
+  mv_order_quarterly_rollup:
+    table: dataforai.mv_order_quarterly_rollup
+    columns:
+    - name: year_quarter
+      type: string
+      descriptions:
+        db: year_quarter
+        ai: mv_order_quarterly_rollup.year_quarter
+    - name: region
+      type: string
+      descriptions:
+        db: region
+        ai: mv_order_quarterly_rollup.region
+    - name: category
+      type: string
+      descriptions:
+        db: category
+        ai: mv_order_quarterly_rollup.category
+    - name: sales
+      type: number
+      descriptions:
+        db: sales
+        ai: mv_order_quarterly_rollup.sales
+    - name: qty
+      type: number
+      descriptions:
+        db: qty
+        ai: mv_order_quarterly_rollup.qty
+  fct_ai_token_consumption:
+    table: dataforai.fct_ai_token_consumption
+    columns:
+    - name: dept
+      type: string
+      descriptions:
+        db: dept
+        ai: fct_ai_token_consumption.dept
+    - name: model
+      type: string
+      descriptions:
+        db: model
+        ai: fct_ai_token_consumption.model
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_ai_token_consumption.period_month
+    - name: tokens
+      type: number
+      descriptions:
+        db: tokens
+        ai: fct_ai_token_consumption.tokens
+  fct_business_ticket_closed:
+    table: dataforai.fct_business_ticket_closed
+    columns:
+    - name: dept
+      type: string
+      descriptions:
+        db: dept
+        ai: fct_business_ticket_closed.dept
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_business_ticket_closed.period_month
+    - name: tickets_closed
+      type: number
+      descriptions:
+        db: tickets_closed
+        ai: fct_business_ticket_closed.tickets_closed
+  fct_channel_pl_monthly:
+    table: dataforai.fct_channel_pl_monthly
+    columns:
+    - name: channel_id
+      type: string
+      descriptions:
+        db: channel_id
+        ai: fct_channel_pl_monthly.channel_id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_channel_pl_monthly.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_channel_pl_monthly.period_month
+    - name: revenue
+      type: number
+      descriptions:
+        db: revenue
+        ai: fct_channel_pl_monthly.revenue
+    - name: platform_fee
+      type: number
+      descriptions:
+        db: platform_fee
+        ai: fct_channel_pl_monthly.platform_fee
+    - name: cogs
+      type: number
+      descriptions:
+        db: cogs
+        ai: fct_channel_pl_monthly.cogs
+    - name: gross_margin
+      type: number
+      descriptions:
+        db: gross_margin
+        ai: fct_channel_pl_monthly.gross_margin
+  fct_gl_account_balance:
+    table: dataforai.fct_gl_account_balance
+    columns:
+    - name: id
+      type: number
+      descriptions:
+        db: id
+        ai: fct_gl_account_balance.id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_gl_account_balance.entity_id
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: fct_gl_account_balance.account_id
+    - name: as_of_date
+      type: time
+      descriptions:
+        db: as_of_date
+        ai: fct_gl_account_balance.as_of_date
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: fct_gl_account_balance.currency
+    - name: end_balance
+      type: number
+      descriptions:
+        db: end_balance
+        ai: fct_gl_account_balance.end_balance
+    - name: is_month_end
+      type: number
+      descriptions:
+        db: is_month_end
+        ai: fct_gl_account_balance.is_month_end
+  fct_gl_journal_line:
+    table: dataforai.fct_gl_journal_line
+    columns:
+    - name: journal_id
+      type: string
+      descriptions:
+        db: journal_id
+        ai: fct_gl_journal_line.journal_id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_gl_journal_line.entity_id
+    - name: posting_date
+      type: time
+      descriptions:
+        db: posting_date
+        ai: fct_gl_journal_line.posting_date
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: fct_gl_journal_line.account_id
+    - name: debit_amt
+      type: number
+      descriptions:
+        db: debit_amt
+        ai: fct_gl_journal_line.debit_amt
+    - name: credit_amt
+      type: number
+      descriptions:
+        db: credit_amt
+        ai: fct_gl_journal_line.credit_amt
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: fct_gl_journal_line.currency
+    - name: cost_center_id
+      type: number
+      descriptions:
+        db: cost_center_id
+        ai: fct_gl_journal_line.cost_center_id
+  vw_gl_trial_balance_summary:
+    table: dataforai.vw_gl_trial_balance_summary
+    columns:
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: vw_gl_trial_balance_summary.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: vw_gl_trial_balance_summary.period_month
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: vw_gl_trial_balance_summary.account_id
+    - name: account_code
+      type: string
+      descriptions:
+        db: account_code
+        ai: vw_gl_trial_balance_summary.account_code
+    - name: account_name
+      type: string
+      descriptions:
+        db: account_name
+        ai: vw_gl_trial_balance_summary.account_name
+    - name: account_type
+      type: string
+      descriptions:
+        db: account_type
+        ai: vw_gl_trial_balance_summary.account_type
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: vw_gl_trial_balance_summary.currency
+    - name: end_balance_month_end
+      type: number
+      descriptions:
+        db: end_balance_month_end
+        ai: vw_gl_trial_balance_summary.end_balance_month_end
+  vw_channel_pl_consumer:
+    table: dataforai.vw_channel_pl_consumer
+    columns:
+    - name: channel_id
+      type: string
+      descriptions:
+        db: channel_id
+        ai: vw_channel_pl_consumer.channel_id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: vw_channel_pl_consumer.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: vw_channel_pl_consumer.period_month
+    - name: revenue
+      type: number
+      descriptions:
+        db: revenue
+        ai: vw_channel_pl_consumer.revenue
+    - name: platform_fee
+      type: number
+      descriptions:
+        db: platform_fee
+        ai: vw_channel_pl_consumer.platform_fee
+    - name: cogs
+      type: number
+      descriptions:
+        db: cogs
+        ai: vw_channel_pl_consumer.cogs
+    - name: gross_margin
+      type: number
+      descriptions:
+        db: gross_margin
+        ai: vw_channel_pl_consumer.gross_margin
+    - name: channel_name
+      type: string
+      descriptions:
+        db: channel_name
+        ai: vw_channel_pl_consumer.channel_name
+    - name: channel_mode
+      type: string
+      descriptions:
+        db: channel_mode
+        ai: vw_channel_pl_consumer.channel_mode

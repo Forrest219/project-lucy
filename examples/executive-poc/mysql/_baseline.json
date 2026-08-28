@@ -1,0 +1,100 @@
+{
+  "seed": 42,
+  "order_rows": 50000,
+  "generated_at": "2026-08-28T02:19:48.749Z",
+  "cfo1": {
+    "month_end_cash_by_entity": {
+      "1": {
+        "2026-01": 1273152,
+        "2026-02": 1313632,
+        "2026-03": 1374655,
+        "2026-04": 1413744,
+        "2026-05": 1448205,
+        "2026-06": 1481555
+      },
+      "2": {
+        "2026-01": 1559649,
+        "2026-02": 1614972,
+        "2026-03": 1704430,
+        "2026-04": 1734975,
+        "2026-05": 1768280,
+        "2026-06": 1858704
+      },
+      "3": {
+        "2026-01": 1814740,
+        "2026-02": 1839093,
+        "2026-03": 1923678,
+        "2026-04": 1972032,
+        "2026-05": 2002096,
+        "2026-06": 2055428
+      }
+    },
+    "ar_over_90_ratio_by_entity": {
+      "1": 0.234812,
+      "2": 0.581666,
+      "3": 0.299999
+    },
+    "highest_ar_over_90_entity_id": 2
+  },
+  "cfo2": {
+    "q2_net_profit_yoy_pct": 0.15,
+    "q2_operating_cf_yoy_pct": -0.28,
+    "q2_2026_net_profit_total": 1035000,
+    "q2_2026_operating_cf_total": 518400
+  },
+  "cfo3": {
+    "consumer_ecommerce_q3_budget_achievement": 1.12,
+    "cost_center_id": 4
+  },
+  "cfo4": {
+    "q2_sc_gross_margin_rate": 0.33,
+    "q2_vc_gross_margin_rate": 0.2,
+    "higher_margin_channel_id": "SC",
+    "q2_sc_revenue_total": 4500000,
+    "q2_vc_revenue_total": 6750000
+  },
+  "cfo5": {
+    "q2_revenue_total": 3105000,
+    "sample_account_code": "6001",
+    "revenue_account_id": 20,
+    "journal_line_count": 24
+  },
+  "cfo6": {
+    "ecommerce_q3_usd_budget_achievement_cny": 1.12,
+    "fx_rate_used": 7.18,
+    "cost_center_id": 4
+  },
+  "cfo1_usd": {
+    "entity_2_june_cash_cny_combined": 3398971.96
+  },
+  "coo4": {
+    "south_china_slow_moving_sku_count": 24,
+    "east_china_stockout_risk_sku_count": 17,
+    "snapshot_date": "2026-06-30"
+  },
+  "coo5": {
+    "avg_fulfill_days_channel_sc": 5,
+    "avg_fulfill_days_channel_vc": 9.8,
+    "fulfill_days_gap_pct": 0.96
+  },
+  "cio7": {
+    "sample_rollup_key": "2026Q2|East_China|Electronics",
+    "mv_sales": 105969.24,
+    "detail_sales": 105969.24
+  },
+  "cio8": {
+    "engineering_token_per_ticket": 6671.6246,
+    "engineering_tokens": 4336556,
+    "engineering_tickets": 650
+  },
+  "counts": {
+    "cash_balance_rows": 724,
+    "ar_rows": 60,
+    "inventory_rows": 360,
+    "order_line_rows": 50000,
+    "mv_rollup_rows": 120,
+    "channel_pl_rows": 162,
+    "gl_balance_rows": 13104,
+    "gl_journal_rows": 24
+  }
+}

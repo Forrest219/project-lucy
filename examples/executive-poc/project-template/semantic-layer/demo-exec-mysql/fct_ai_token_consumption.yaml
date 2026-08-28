@@ -1,0 +1,9 @@
+name: fct_ai_token_consumption
+grain:
+- dept
+- model
+- period_month
+measures:
+- name: total_tokens
+  expr: sum(tokens)
+  description: Token 消耗。

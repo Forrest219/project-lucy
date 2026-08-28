@@ -1,0 +1,239 @@
+roles:
+  exec_cfo_readonly:
+    description: Executive POC CFO readonly
+    allow:
+      connections:
+        - demo-exec-mysql
+      tableSelectors:
+        - connection: demo-exec-mysql
+          schema: dataforai
+          names:
+            - dim_legal_entity
+            - dim_cost_center
+            - dim_fx_rate
+            - dim_channel
+            - dim_gl_account
+            - fct_daily_cash_balance
+            - fct_ar_aging_detail
+            - fct_pl_monthly
+            - fct_cashflow_monthly
+            - fct_collection_monthly
+            - fct_budget_actual
+            - fct_channel_pl_monthly
+            - fct_gl_account_balance
+            - fct_gl_journal_line
+            - vw_gl_trial_balance_summary
+            - fct_sales_margin
+            - mv_order_quarterly_rollup
+            - fct_order_line_daily
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+  exec_bp_consumer_readonly:
+    description: Executive POC finance BP — Consumer business line channel P&L only
+    allow:
+      connections:
+        - demo-exec-mysql
+      tableSelectors:
+        - connection: demo-exec-mysql
+          schema: dataforai
+          names:
+            - vw_channel_pl_consumer
+            - dim_channel
+            - dim_cost_center
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+  exec_coo_readonly:
+    description: Executive POC COO readonly
+    allow:
+      connections:
+        - demo-exec-mysql
+      tableSelectors:
+        - connection: demo-exec-mysql
+          schema: dataforai
+          names:
+            - dim_warehouse
+            - dim_sku
+            - dim_channel
+            - fct_inventory_health_daily
+            - fct_acquisition_monthly
+            - fct_fulfillment_order
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+  exec_sales_regional:
+    description: Executive POC regional sales (South China VIEW only)
+    allow:
+      connections:
+        - demo-exec-mysql
+      tableSelectors:
+        - connection: demo-exec-mysql
+          schema: dataforai
+          names:
+            - fct_sales_margin_regional
+            - dim_sales_team
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+  exec_demo_full:
+    description: Internal smoke — full executive POC catalog
+    allow:
+      connections:
+        - demo-exec-mysql
+      tableSelectors:
+        - connection: demo-exec-mysql
+          schema: dataforai
+          names:
+            - dim_legal_entity
+            - dim_cost_center
+            - dim_fx_rate
+            - dim_warehouse
+            - dim_sku
+            - dim_channel
+            - dim_gl_account
+            - dim_customer
+            - dim_sales_team
+            - fct_daily_cash_balance
+            - fct_ar_aging_detail
+            - fct_pl_monthly
+            - fct_cashflow_monthly
+            - fct_collection_monthly
+            - fct_budget_actual
+            - fct_channel_pl_monthly
+            - fct_gl_account_balance
+            - fct_gl_journal_line
+            - vw_gl_trial_balance_summary
+            - vw_channel_pl_consumer
+            - fct_inventory_health_daily
+            - fct_acquisition_monthly
+            - fct_fulfillment_order
+            - fct_sales_margin
+            - fct_sales_margin_regional
+            - fct_order_line_daily
+            - mv_order_quarterly_rollup
+            - fct_ai_token_consumption
+            - fct_business_ticket_closed
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+users:
+  - id: exec_demo_full
+    name: Executive POC Full
+    enabled: true
+    note: Internal smoke only. Token exec-demo-full-token
+    tokens:
+      - hash: "sha256:bd1dc2fe1cfa799fc73ec6ba21b89338b24c6979aac7660f8146e4dd4a8f7b81"
+        label: exec-p0-smoke
+        created: 2026-08-28
+    role: exec_demo_full
+
+  - id: exec_cfo_agent
+    name: Executive POC CFO
+    enabled: true
+    note: Internal demo. Token exec-cfo-token
+    tokens:
+      - hash: "sha256:2e97e70b9ad6b9c907a9b459b8fd4a73db3873e7739dfab555cf80ee335d3caa"
+        label: exec-cfo
+        created: 2026-08-28
+    role: exec_cfo_readonly
+
+  - id: exec_bp_consumer_agent
+    name: Executive POC Finance BP Consumer
+    enabled: true
+    note: Internal demo. Token exec-bp-consumer-token
+    tokens:
+      - hash: "sha256:c9114f8999ead39d4bbad4d55605fdcd76d2c9162d5da5498df72676e4a653b3"
+        label: exec-bp-consumer
+        created: 2026-08-28
+    role: exec_bp_consumer_readonly
+
+  - id: exec_coo_agent
+    name: Executive POC COO
+    enabled: true
+    note: Internal demo. Token exec-coo-token
+    tokens:
+      - hash: "sha256:84eed7cd54e8a22bc55f351fbb0d75a27ef266312453068f845c01208f9b93a7"
+        label: exec-coo
+        created: 2026-08-28
+    role: exec_coo_readonly
+
+  - id: exec_sales_regional_agent
+    name: Executive POC Regional Sales
+    enabled: true
+    note: Internal demo. Token exec-sales-regional-token
+    tokens:
+      - hash: "sha256:db37ca02e8b87f79c82255e2a6e78d89f3856680df9b850e5699c844b8dedbb0"
+        label: exec-regional
+        created: 2026-08-28
+    role: exec_sales_regional
+
+defaults:
+  deny_tools:
+    - sql_execution
+    - sql_dialect_notes
+    - memory_ingest
+    - memory_ingest_status
+    - sl_query
+    - sl_read_source
+  known_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_catalog
+    - lucy_freshness
+    - wiki_search
+    - wiki_read
+    - entity_details
+    - dictionary_search
+    - discover_data
+    - connection_list
+    - kx_catalog
+    - sl_query
+    - sl_read_source
+    - sl_validate
+    - sql_execution
+    - sql_dialect_notes
+    - memory_ingest
+    - memory_ingest_status
+  table_touching_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_freshness
+    - entity_details
+    - sl_validate
+    - sl_query
+    - sl_read_source
+  sensitive_metadata_tools:
+    - dictionary_search
+    - discover_data
+  sensitive_table_prefixes: []

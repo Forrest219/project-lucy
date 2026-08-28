@@ -1,0 +1,18 @@
+name: fct_collection_monthly
+grain:
+- entity_id
+- period_month
+measures:
+- name: collection_amt
+  expr: sum(collection_amt)
+  description: 销售回款。
+- name: inventory_delta
+  expr: sum(inventory_delta)
+  description: 存货占用变动。
+- name: avg_tax_refund_lag_days
+  expr: avg(tax_refund_lag_days)
+  description: 退税周期（天）。
+segments:
+- name: q2_2026
+  expr: period_month in ('2026-04','2026-05','2026-06')
+  description: 2026 Q2。
