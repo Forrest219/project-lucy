@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { CreateTokenResponse, McpEndpointInfo, ProjectInfo } from "../../lib/types";
+import type { Agent, CreateTokenResponse, McpEndpointInfo, ProjectInfo } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
 
@@ -18,13 +18,6 @@ type ClientSnippet = {
   build: (token: string) => string;
 };
 
-/**
- * Build the four canonical client snippets for a freshly generated token.
- * This helper is pure: callers pass the resolved MCP endpoint and the
- * plaintext token to render the corresponding ready-to-paste configuration
- * fragment. The endpoint is required; the caller is responsible for
- * checking that the runtime configuration supplied a usable URL.
- */
 export function buildClientSnippets(token: string, endpoint: string): Record<ClientId, string> {
   return {
     hermes: buildMcpConfig(endpoint, token),
@@ -35,8 +28,8 @@ export function buildClientSnippets(token: string, endpoint: string): Record<Cli
 }
 
 const CLIENT_TABS: Array<{ id: ClientId; label: string; description: string }> = [
-  { id: "hermes", label: "Hermes", description: "MCP JSON 配置（兼容 OpenAI Hermes）" },
-  { id: "claude-code", label: "Claude Code", description: ".mcp.json，可直接放入 ~/.claude.json" },
+  { id: "hermes", label: "Hermes", description: "MCP JSON 配置（兼容 OpenAI Hermes），放入 ~/.hermes/config.json 或项目 mcp.json" },
+  { id: "claude-code", label: "Claude Code", description: ".mcp.json，可直接放入项目根目录或 ~/.claude.json" },
   { id: "codex", label: "Codex", description: "config.toml 片段，配合环境变量使用" },
   { id: "generic", label: "通用客户端", description: "任意支持 MCP over HTTP 的客户端（标准 JSON 配置）" }
 ];
@@ -54,19 +47,33 @@ function EndpointFallbackNotice({ endpointInfo }: { endpointInfo?: McpEndpointIn
   );
 }
 
+function computePresetDate(days: number): string {
+  const target = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return target.toISOString().slice(0, 10);
+}
+
 export function NewToken() {
-  const { userId } = useParams<{ userId: string }>();
+  const { userId: routeUserId } = useParams<{ userId?: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const [selectedUserId, setSelectedUserId] = useState(routeUserId ?? "");
   const [label, setLabel] = useState("");
   const [deviceName, setDeviceName] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
-  // plaintext token is only held in memory, never stored
   const [generatedToken, setGeneratedToken] = useState<CreateTokenResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeSnippet, setActiveSnippet] = useState<ClientId>("hermes");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+
+  const targetUserId = routeUserId || selectedUserId;
+
+  const agentsQuery = useQuery({
+    queryKey: ["admin", "agents"],
+    queryFn: () => apiGet<{ agents: Agent[] }>("/api/admin/agents"),
+    enabled: !routeUserId
+  });
+  const agents = agentsQuery.data?.agents ?? [];
 
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
@@ -77,16 +84,23 @@ export function NewToken() {
 
   const mutation = useMutation({
     mutationFn: (body: { label: string; device_name?: string | null; expires_at?: string | null }) =>
-      apiPost<CreateTokenResponse>(`/api/admin/agents/${userId}/tokens`, body),
+      apiPost<CreateTokenResponse>(`/api/admin/agents/${encodeURIComponent(targetUserId)}/tokens`, body),
     onSuccess: (data) => {
       setGeneratedToken(data);
       void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "tokens"] });
+      if (targetUserId) {
+        void queryClient.invalidateQueries({ queryKey: ["admin", "agent", targetUserId] });
+      }
     },
     onError: (err: Error) => toast.error(err.message)
   });
 
   function handleGenerate() {
+    if (!targetUserId) {
+      toast.error("请先选择所属 Agent");
+      return;
+    }
     if (!label.trim()) {
       toast.error("Token 标签不能为空");
       return;
@@ -108,7 +122,11 @@ export function NewToken() {
 
   function handleClose() {
     setGeneratedToken(null);
-    navigate(`/admin/agents/${userId}`);
+    if (routeUserId) {
+      navigate(`/admin/agents/${routeUserId}`);
+    } else {
+      navigate("/admin/tokens");
+    }
   }
 
   const snippets = generatedToken && endpoint ? buildClientSnippets(generatedToken.token, endpoint) : null;
@@ -129,13 +147,13 @@ export function NewToken() {
         <PageHeader
           title="Token 已生成"
           backAction={
-            userId ? (
-              <Link to={`/admin/agents/${userId}`} className="pl-page-header-back">
+            targetUserId ? (
+              <Link to={`/admin/agents/${targetUserId}`} className="pl-page-header-back">
                 ‹ 返回 Agent 详情
               </Link>
             ) : (
-              <Link to="/admin/agents" className="pl-page-header-back">
-                ‹ 返回 Agent
+              <Link to="/admin/tokens" className="pl-page-header-back">
+                ‹ 返回 Token 凭据
               </Link>
             )
           }
@@ -164,12 +182,14 @@ export function NewToken() {
             </button>
           </div>
           <div className="text-xs text-fg-muted">
+            <span>所属 <span className="notranslate" translate="no">Agent</span>：<span className="font-mono notranslate" translate="no">{targetUserId}</span></span>
+            {" · "}
             <span>标签：{generatedToken.label}</span>
             {generatedToken.device_name ? (
               <>
                 {" · "}
                 <span>
-                  设备名备注：
+                  设备备注：
                   <span className="notranslate" translate="no">{generatedToken.device_name}</span>
                 </span>
               </>
@@ -252,13 +272,13 @@ export function NewToken() {
         <PageHeader
           title="Token 已生成"
           backAction={
-            userId ? (
-              <Link to={`/admin/agents/${userId}`} className="pl-page-header-back">
+            targetUserId ? (
+              <Link to={`/admin/agents/${targetUserId}`} className="pl-page-header-back">
                 ‹ 返回 Agent 详情
               </Link>
             ) : (
-              <Link to="/admin/agents" className="pl-page-header-back">
-                ‹ 返回 Agent
+              <Link to="/admin/tokens" className="pl-page-header-back">
+                ‹ 返回 Token 凭据
               </Link>
             )
           }
@@ -293,15 +313,15 @@ export function NewToken() {
   return (
     <div className="pl-page-stack max-w-xl">
       <PageHeader
-        title={<>为 {userId} 创建新 <span className="notranslate" translate="no">Token</span></>}
+        title={routeUserId ? <>为 {routeUserId} 创建新 <span className="notranslate" translate="no">Token</span></> : <>签发新 <span className="notranslate" translate="no">Token</span></>}
         backAction={
-          userId ? (
-            <Link to={`/admin/agents/${userId}`} className="pl-page-header-back">
+          routeUserId ? (
+            <Link to={`/admin/agents/${routeUserId}`} className="pl-page-header-back">
               ‹ 返回 Agent 详情
             </Link>
           ) : (
-            <Link to="/admin/agents" className="pl-page-header-back">
-              ‹ 返回 Agent
+            <Link to="/admin/tokens" className="pl-page-header-back">
+              ‹ 返回 Token 凭据
             </Link>
           )
         }
@@ -315,10 +335,32 @@ export function NewToken() {
       />
 
       <div className="pl-card grid gap-4">
+        {!routeUserId && (
+          <label className="grid gap-1">
+            <span className="text-sm font-medium">所属 <span className="notranslate" translate="no">Agent</span> <span className="text-danger">*</span></span>
+            <select
+              className="pl-input notranslate"
+              translate="no"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              aria-label="选择所属 Agent"
+            >
+              <option value="" disabled className="notranslate" translate="no">请选择 Agent</option>
+              {agents.map((ag) => (
+                <option key={ag.id} value={ag.id}>
+                  {ag.name} ({ag.id})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <label className="grid gap-1">
           <span className="text-sm font-medium"><span className="notranslate" translate="no">Token</span> 标签 <span className="text-danger">*</span></span>
           <input
-            className="pl-input"
+            className="pl-input notranslate"
+            translate="no"
+            aria-label="Token 标签"
             placeholder="例：cursor-laptop-xingchen"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -335,31 +377,75 @@ export function NewToken() {
             aria-label="设备名备注"
           />
           <span className="text-xs text-fg-muted">
-            真正的设备归因来自运行时请求头 <code className="notranslate" translate="no">x-lucy-device-name</code>
-            与 <span className="notranslate" translate="no">MCP</span>{" "}
-            <span className="notranslate" translate="no">clientInfo</span>；本字段可留空。
+            仅用于管理员标识设备或用途（如：张三的 MacBook），不参与权限校验。可留空。
           </span>
         </label>
         <label className="grid gap-1">
           <span className="text-sm font-medium">过期时间（可选；到期后 Proxy 立即拒绝）</span>
           <input
             className="pl-input"
+            aria-label="过期时间"
             type="date"
             value={expiresAt}
             onChange={(e) => setExpiresAt(e.target.value)}
           />
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-xs text-fg-muted mr-1">快捷预设：</span>
+            <button
+              type="button"
+              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
+              onClick={() => setExpiresAt(computePresetDate(30))}
+            >
+              30 天
+            </button>
+            <button
+              type="button"
+              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
+              onClick={() => setExpiresAt(computePresetDate(90))}
+            >
+              90 天
+            </button>
+            <button
+              type="button"
+              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
+              onClick={() => setExpiresAt(computePresetDate(180))}
+            >
+              180 天
+            </button>
+            <button
+              type="button"
+              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
+              onClick={() => setExpiresAt(computePresetDate(365))}
+            >
+              1 年
+            </button>
+            <button
+              type="button"
+              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
+              onClick={() => setExpiresAt("")}
+            >
+              永不过期
+            </button>
+          </div>
         </label>
       </div>
 
       <div className="flex justify-end gap-2">
-        <button type="button" className="pl-btn pl-btn--ghost" onClick={() => navigate(`/admin/agents/${userId}`)}>
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost"
+          onClick={() => {
+            if (routeUserId) navigate(`/admin/agents/${routeUserId}`);
+            else navigate("/admin/tokens");
+          }}
+        >
           取消
         </button>
         <button
           type="button"
           className="pl-btn pl-btn--primary"
           onClick={handleGenerate}
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || (!routeUserId && !selectedUserId)}
         >
           {mutation.isPending ? "生成中…" : "生成 Token"}
         </button>

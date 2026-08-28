@@ -269,4 +269,59 @@ describe("NewToken", () => {
     expect(screen.getByText(/不可用于客户交付/)).toBeInTheDocument();
     expect(screen.getByTestId("snippet-active")).toHaveTextContent("http://127.0.0.1:7879/mcp");
   });
+
+  it("updates expiry date when clicking expiry preset buttons", async () => {
+    stubNewTokenFetch();
+    renderNewToken();
+
+    const dateInput = screen.getByLabelText(/过期时间/) as HTMLInputElement;
+    expect(dateInput.value).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "30 天" }));
+    expect(dateInput.value).not.toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "永不过期" }));
+    expect(dateInput.value).toBe("");
+  });
+
+  it("supports standalone agent selection when accessed from /admin/tokens/new", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/project") {
+          return new Response(JSON.stringify({ ok: true, data: { mcpEndpoint: DEFAULT_MCP_ENDPOINT } }));
+        }
+        if (url === "/api/admin/agents") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                agents: [
+                  { id: "agent1", name: "Agent 1", enabled: true, tokens: [] },
+                  { id: "agent2", name: "Agent 2", enabled: true, tokens: [] }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false }), { status: 404 });
+      })
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/admin/tokens/new"]}>
+          <Routes>
+            <Route path="/admin/tokens/new" element={<NewToken />} />
+            <Route path="/admin/tokens" element={<div>Tokens Table</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(await screen.findByRole("heading", { name: /签发新 Token/ })).toBeInTheDocument();
+    expect(await screen.findByLabelText("选择所属 Agent")).toBeInTheDocument();
+  });
 });

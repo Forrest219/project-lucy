@@ -7,6 +7,7 @@ import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import type { YamlAccessConfig } from "./agents.js";
+import { getLastUsedMap } from "./agents.js";
 import {
   evaluateAccessGovernanceGate,
   evaluateGovernanceOverride,
@@ -15,7 +16,7 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
-import { invalidateAccessConfigCache, normalizeExpiresAtInput } from "../proxy/identity.js";
+import { invalidateAccessConfigCache, isTokenExpired, normalizeExpiresAtInput } from "../proxy/identity.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
@@ -95,6 +96,154 @@ async function agentCallsLast7d(userId: string): Promise<number> {
 }
 
 export function registerTokenRoutes(app: FastifyInstance) {
+  // GET /api/admin/tokens
+  app.get<{
+    Querystring: {
+      userId?: string;
+      search?: string;
+      status?: "all" | "available" | "expired" | "agent_disabled";
+    };
+  }>("/api/admin/tokens", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const filePath = path.join(projectRoot, ACCESS_YAML_REL);
+    let config: YamlAccessConfig = { users: [] };
+    try {
+      const raw = await readFile(filePath, "utf-8");
+      config = parse(raw) as YamlAccessConfig;
+      if (!config.users) config.users = [];
+    } catch {
+      config = { users: [] };
+    }
+
+    const users = config.users || [];
+    const userIds = users.map((u) => u.id);
+    const lastUsedMap = await getLastUsedMap(userIds);
+
+    const now = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+    type TokenInventoryItem = {
+      hashPrefix: string;
+      label: string;
+      created: string;
+      expires_at: string | null;
+      device_name: string | null;
+      agent: {
+        id: string;
+        name: string;
+        enabled: boolean;
+        roles: string[];
+      };
+      last_used?: string;
+      last_tool?: string;
+      last_outcome?: string;
+      last_ip?: string | null;
+      last_user_agent?: string | null;
+      last_client?: string | null;
+      last_client_version?: string | null;
+      last_device_name_seen?: string | null;
+      distinct_ips_7d?: number;
+      status: "available" | "expired" | "agent_disabled";
+    };
+
+    const allTokens: TokenInventoryItem[] = [];
+
+    for (const user of users) {
+      const userUsage = lastUsedMap.get(user.id);
+      const isAgentEnabled = user.enabled !== false;
+      const roles = user.roles && Array.isArray(user.roles) ? user.roles : user.role ? [user.role] : [];
+
+      for (const t of user.tokens || []) {
+        const hashPrefix = t.hash ? t.hash.slice(0, 19) : "";
+        const usage = hashPrefix ? userUsage?.get(hashPrefix) : undefined;
+        const expired = isTokenExpired(t.expires_at, now);
+
+        let status: "available" | "expired" | "agent_disabled" = "available";
+        if (!isAgentEnabled) {
+          status = "agent_disabled";
+        } else if (expired) {
+          status = "expired";
+        }
+
+        allTokens.push({
+          hashPrefix,
+          label: t.label,
+          created: t.created,
+          expires_at: t.expires_at ?? null,
+          device_name: t.device_name ?? null,
+          agent: {
+            id: user.id,
+            name: user.name || user.id,
+            enabled: isAgentEnabled,
+            roles
+          },
+          last_used: usage?.lastUsed,
+          last_tool: usage?.lastTool,
+          last_outcome: usage?.lastOutcome,
+          last_ip: usage?.lastIp ?? null,
+          last_user_agent: usage?.lastUserAgent ?? null,
+          last_client: usage?.lastClient ?? null,
+          last_client_version: usage?.lastClientVersion ?? null,
+          last_device_name_seen: usage?.lastDeviceNameSeen ?? null,
+          distinct_ips_7d: usage?.distinctIps7d,
+          status
+        });
+      }
+    }
+
+    const totalTokens = allTokens.length;
+    const availableTokens = allTokens.filter((t) => t.status === "available").length;
+    const activeLast7dTokens = allTokens.filter((t) => {
+      if (!t.last_used) return false;
+      const ts = Date.parse(t.last_used);
+      return !Number.isNaN(ts) && now - ts <= sevenDaysMs;
+    }).length;
+    const expiringSoonTokens = allTokens.filter((t) => {
+      if (t.status !== "available" || !t.expires_at) return false;
+      const ts = Date.parse(t.expires_at);
+      return !Number.isNaN(ts) && ts > now && ts - now <= thirtyDaysMs;
+    }).length;
+    const expiredTokens = allTokens.filter((t) => t.status === "expired").length;
+
+    let filtered = allTokens;
+    const { userId, search, status } = request.query || {};
+
+    if (userId) {
+      filtered = filtered.filter((t) => t.agent.id === userId);
+    }
+    if (status && status !== "all") {
+      filtered = filtered.filter((t) => t.status === status);
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filtered = filtered.filter(
+        (t) =>
+          t.label.toLowerCase().includes(q) ||
+          (t.device_name && t.device_name.toLowerCase().includes(q)) ||
+          t.agent.id.toLowerCase().includes(q) ||
+          t.agent.name.toLowerCase().includes(q) ||
+          t.agent.roles.some((r) => r.toLowerCase().includes(q)) ||
+          (t.last_device_name_seen && t.last_device_name_seen.toLowerCase().includes(q)) ||
+          (t.last_client && t.last_client.toLowerCase().includes(q))
+      );
+    }
+
+    return {
+      ok: true,
+      data: {
+        tokens: filtered,
+        stats: {
+          totalTokens,
+          availableTokens,
+          activeLast7dTokens,
+          expiringSoonTokens,
+          expiredTokens
+        }
+      }
+    };
+  });
+
   // POST /api/admin/agents/:userId/tokens
   app.post<{
     Params: { userId: string };

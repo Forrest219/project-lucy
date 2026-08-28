@@ -21,6 +21,7 @@ import {
   ClipboardList,
   Activity,
   BookOpen,
+  Key,
   KeyRound,
   ScrollText,
   Settings,
@@ -40,6 +41,7 @@ import { TableEditor } from "../pages/TableEditor";
 import { WikiEditor } from "../pages/WikiEditor";
 import { AgentList } from "../pages/admin/AgentList";
 import { AgentDetail } from "../pages/admin/AgentDetail";
+import { Tokens } from "../pages/admin/Tokens";
 import { NewToken } from "../pages/admin/NewToken";
 import { GovernanceOverview } from "../pages/admin/GovernanceOverview";
 import { Audit } from "../pages/admin/Audit";
@@ -138,6 +140,7 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   securityEval: ShieldAlert,
   governanceOverview: Gauge,
   agents: Bot,
+  tokens: Key,
   roles: KeyRound,
   audit: ScrollText,
   mcpPlayground: Terminal,
@@ -415,6 +418,8 @@ export function AppFrame() {
             <Route path="/admin/agents" element={<AgentList />} />
             <Route path="/admin/agents/:userId" element={<AgentDetail />} />
             <Route path="/admin/agents/:userId/tokens/new" element={<NewToken />} />
+            <Route path="/admin/tokens" element={<Tokens />} />
+            <Route path="/admin/tokens/new" element={<NewToken />} />
             <Route path="/admin/roles" element={<RoleList />} />
             <Route path="/admin/roles/new" element={<RoleDetail mode="create" />} />
             <Route path="/admin/roles/:roleId" element={<RoleDetail />} />

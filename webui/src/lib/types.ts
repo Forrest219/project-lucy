@@ -853,6 +853,43 @@ export type CreateTokenResponse = {
   expires_at?: string | null;
 };
 
+export type TokenInventoryItem = {
+  hashPrefix: string;
+  label: string;
+  created: string;
+  expires_at: string | null;
+  device_name: string | null;
+  agent: {
+    id: string;
+    name: string;
+    enabled: boolean;
+    roles: string[];
+  };
+  last_used?: string;
+  last_tool?: string;
+  last_outcome?: string;
+  last_ip?: string | null;
+  last_user_agent?: string | null;
+  last_client?: string | null;
+  last_client_version?: string | null;
+  last_device_name_seen?: string | null;
+  distinct_ips_7d?: number;
+  status: "available" | "expired" | "agent_disabled";
+};
+
+export type TokenInventoryStats = {
+  totalTokens: number;
+  availableTokens: number;
+  activeLast7dTokens: number;
+  expiringSoonTokens: number;
+  expiredTokens: number;
+};
+
+export type TokensResponse = {
+  tokens: TokenInventoryItem[];
+  stats: TokenInventoryStats;
+};
+
 export type AuditLogEntry = {
   id: number;
   ts: string;

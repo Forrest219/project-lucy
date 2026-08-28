@@ -272,3 +272,44 @@ describe("Access Governance Gate — Token endpoints", () => {
     await app.close();
   });
 });
+
+describe("GET /api/admin/tokens", () => {
+  it("returns aggregated tokens across agents with stats", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/admin/tokens")
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data.tokens).toHaveLength(1);
+    const token = res.body.data.tokens[0];
+    expect(token.label).toBe("hermes-laptop");
+    expect(token.agent.id).toBe("zhangsan");
+    expect(token.agent.name).toBe("张三");
+    expect(token.status).toBe("available");
+    expect(res.body.data.stats).toEqual({
+      totalTokens: 1,
+      availableTokens: 1,
+      activeLast7dTokens: 0,
+      expiringSoonTokens: 0,
+      expiredTokens: 0
+    });
+    await app.close();
+  });
+
+  it("filters tokens by search query", async () => {
+    const app = buildServer();
+    await app.ready();
+    const resMatch = await request(app.server)
+      .get("/api/admin/tokens?search=hermes")
+      .expect(200);
+    expect(resMatch.body.data.tokens).toHaveLength(1);
+
+    const resNone = await request(app.server)
+      .get("/api/admin/tokens?search=nonexistent")
+      .expect(200);
+    expect(resNone.body.data.tokens).toHaveLength(0);
+    await app.close();
+  });
+});

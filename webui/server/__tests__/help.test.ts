@@ -420,17 +420,18 @@ describe("Help handbook", () => {
     const tableHeaderIndex = lines.indexOf("| 分组 | 二级菜单 | 路径 | 一句话用途 |");
     expect(tableHeaderIndex).toBeGreaterThanOrEqual(0);
 
-    const rows = lines.slice(tableHeaderIndex + 2, tableHeaderIndex + 21).map((line) =>
-      line
-        .split("|")
-        .slice(1, -1)
-        .map((cell) => cell.replaceAll("`", "").trim())
-    );
     const expectedItems = [topLevelEntry, ...navGroups.flatMap((group) => group.items)];
     const expectedGroups = [
       topLevelEntry.label,
       ...navGroups.flatMap((group) => group.items.map(() => group.title))
     ];
+
+    const rows = lines.slice(tableHeaderIndex + 2, tableHeaderIndex + 2 + expectedItems.length).map((line) =>
+      line
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.replaceAll("`", "").trim())
+    );
 
     expect(rows).toHaveLength(expectedItems.length);
     rows.forEach((cells, index) => {

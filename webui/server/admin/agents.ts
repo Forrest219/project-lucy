@@ -307,7 +307,7 @@ async function getStats(userId: string, configuredTokenCount: number): Promise<A
   }
 }
 
-type TokenUsageSnapshot = {
+export type TokenUsageSnapshot = {
   lastUsed: string;
   lastTool: string;
   lastOutcome: string;
@@ -319,7 +319,7 @@ type TokenUsageSnapshot = {
   distinctIps7d?: number;
 };
 
-async function getLastUsedMap(
+export async function getLastUsedMap(
   userIds: string[]
 ): Promise<Map<string, Map<string, TokenUsageSnapshot>>> {
   // Returns: userId -> (token hash prefix -> last usage snapshot)
