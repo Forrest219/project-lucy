@@ -1,3 +1,15 @@
 name: dim_channel
 grain:
 - channel_id
+columns:
+- name: channel_mode
+  type: string
+  role: dimension
+  description: 渠道模式 SC/VC/DTC。
+segments:
+- name: sc_only
+  expr: channel_mode = 'SC'
+  description: 亚马逊 SC 自营。
+- name: vc_only
+  expr: channel_mode = 'VC'
+  description: 亚马逊 VC 寄售。

@@ -63,10 +63,25 @@ const WAREHOUSES = [
 ];
 
 const CHANNELS = [
-  { channel_id: "A", channel_name: "渠道A-品牌" },
-  { channel_id: "B", channel_name: "渠道B-投放" },
-  { channel_id: "C", channel_name: "渠道C-自然" }
+  { channel_id: "SC", channel_name: "亚马逊-SC自营", channel_mode: "SC" },
+  { channel_id: "VC", channel_name: "亚马逊-VC寄售", channel_mode: "VC" },
+  { channel_id: "DTC", channel_name: "独立站-DTC", channel_mode: "DTC" }
 ];
+
+const FX_CLOSING = 7.18;
+const FX_AVERAGE = 7.12;
+
+const GL_ACCOUNTS = [
+  { account_id: 1, account_code: "1000", account_name: "货币资金", account_type: "asset", parent_account_id: null, level: 1 },
+  { account_id: 2, account_code: "1122", account_name: "应收账款", account_type: "asset", parent_account_id: null, level: 1 },
+  { account_id: 3, account_code: "1403", account_name: "原材料", account_type: "asset", parent_account_id: null, level: 1 },
+  { account_id: 10, account_code: "2001", account_name: "短期借款", account_type: "liability", parent_account_id: null, level: 1 },
+  { account_id: 20, account_code: "6001", account_name: "营业收入", account_type: "revenue", parent_account_id: null, level: 1 },
+  { account_id: 21, account_code: "6401", account_name: "营业成本", account_type: "expense", parent_account_id: null, level: 1 },
+  { account_id: 22, account_code: "6601", account_name: "销售费用", account_type: "expense", parent_account_id: null, level: 1 },
+  { account_id: 23, account_code: "6602", account_name: "管理费用", account_type: "expense", parent_account_id: null, level: 1 }
+];
+const REVENUE_ACCOUNT_ID = 20;
 
 const CATEGORIES = ["Electronics", "Apparel", "Home"];
 const REGIONS = ["East_China", "South_China", "North_China", "West_China"];
@@ -103,28 +118,41 @@ async function main() {
   const monthEnds = monthEndDates();
   const monthEndSet = new Set(monthEnds);
 
-  // --- CFO-1: cash balance daily (6 months x 3 entities x ~30 days) ---
+  // --- CFO-1: cash balance daily (CNY all entities; entity 2 also USD) ---
   const cashRows = [];
   let cashId = 1;
   const monthEndCashByEntity = {};
+  const monthEndCashCnyCombined = {};
   for (const entity of ENTITIES) {
     monthEndCashByEntity[entity.entity_id] = {};
-    let balance = 1_000_000 + entity.entity_id * 250_000;
+    monthEndCashCnyCombined[entity.entity_id] = {};
+    let balanceCny = 1_000_000 + entity.entity_id * 250_000;
+    let balanceUsd = entity.entity_id === 2 ? 180_000 : 0;
+    const currencies = entity.entity_id === 2 ? ["CNY", "USD"] : ["CNY"];
     for (const m of MONTHS.slice(-6)) {
       const [y, mo] = m.split("-").map(Number);
       const daysInMonth = new Date(y, mo, 0).getDate();
       for (let d = 1; d <= daysInMonth; d++) {
         const asOf = `${m}-${String(d).padStart(2, "0")}`;
-        balance += intBetween(-5000, 8000);
+        balanceCny += intBetween(-5000, 8000);
+        if (entity.entity_id === 2) balanceUsd += intBetween(-800, 1200);
         const isMonthEnd = monthEndSet.has(asOf) ? 1 : 0;
-        if (isMonthEnd) monthEndCashByEntity[entity.entity_id][m] = balance;
-        cashRows.push({
-          id: cashId++,
-          entity_id: entity.entity_id,
-          as_of_date: asOf,
-          cash_balance: roundN(balance, 2),
-          is_month_end: isMonthEnd
-        });
+        for (const currency of currencies) {
+          const bal = currency === "CNY" ? balanceCny : balanceUsd;
+          if (isMonthEnd && currency === "CNY") {
+            monthEndCashByEntity[entity.entity_id][m] = roundN(balanceCny, 2);
+            const usdCny = entity.entity_id === 2 ? balanceUsd * FX_CLOSING : 0;
+            monthEndCashCnyCombined[entity.entity_id][m] = roundN(balanceCny + usdCny, 2);
+          }
+          cashRows.push({
+            id: cashId++,
+            entity_id: entity.entity_id,
+            as_of_date: asOf,
+            currency,
+            cash_balance: roundN(bal, 2),
+            is_month_end: isMonthEnd
+          });
+        }
       }
     }
   }
@@ -217,8 +245,8 @@ async function main() {
   ];
   const fxRates = [];
   for (const m of [...Q3_2026, "2026-06"]) {
-    fxRates.push({ rate_date: `${m}-30`, from_ccy: "USD", to_ccy: "CNY", rate_type: "closing", rate: 7.18 });
-    fxRates.push({ rate_date: `${m}-30`, from_ccy: "USD", to_ccy: "CNY", rate_type: "average", rate: 7.12 });
+    fxRates.push({ rate_date: `${m}-30`, from_ccy: "USD", to_ccy: "CNY", rate_type: "closing", rate: FX_CLOSING });
+    fxRates.push({ rate_date: `${m}-30`, from_ccy: "USD", to_ccy: "CNY", rate_type: "average", rate: FX_AVERAGE });
   }
   const budgetRows = [];
   for (const cc of costCenters.filter((c) => c.level >= 3)) {
@@ -235,11 +263,131 @@ async function main() {
       });
     }
   }
+  // CFO-6: USD budget rows for ecommerce agile team (cost_center_id=4)
+  let usdBudgetTotal = 0;
+  let usdActualTotal = 0;
+  for (const m of Q3_2026) {
+    const budgetUsd = 50_000;
+    const actualUsd = 56_000; // 1.12 achievement
+    usdBudgetTotal += budgetUsd;
+    usdActualTotal += actualUsd;
+    budgetRows.push({
+      cost_center_id: 4,
+      period_month: m,
+      currency: "USD",
+      budget_amt: roundN(budgetUsd, 2),
+      actual_amt: roundN(actualUsd, 2),
+      forecast_amt: roundN(budgetUsd * 1.05, 2)
+    });
+  }
   const q3ConsumerAchievement = roundN(
-    budgetRows.filter((r) => r.cost_center_id === 4).reduce((s, r) => s + r.actual_amt, 0)
-      / budgetRows.filter((r) => r.cost_center_id === 4).reduce((s, r) => s + r.budget_amt, 0),
+    budgetRows.filter((r) => r.cost_center_id === 4 && r.currency === "CNY").reduce((s, r) => s + r.actual_amt, 0)
+      / budgetRows.filter((r) => r.cost_center_id === 4 && r.currency === "CNY").reduce((s, r) => s + r.budget_amt, 0),
     6
   );
+  const q3UsdBudgetAchievementCny = roundN(
+    (usdActualTotal * FX_CLOSING) / (usdBudgetTotal * FX_CLOSING),
+    6
+  );
+
+  // --- CFO-4: channel P&L monthly (SC vs VC margin story) ---
+  const channelPlRows = [];
+  const channelPlProfile = {
+    SC: { revenue: 500_000, feeRate: 0.12, cogsRate: 0.55 },
+    VC: { revenue: 750_000, feeRate: 0.32, cogsRate: 0.48 },
+    DTC: { revenue: 280_000, feeRate: 0.05, cogsRate: 0.52 }
+  };
+  let q2ScRevenue = 0;
+  let q2ScMargin = 0;
+  let q2VcRevenue = 0;
+  let q2VcMargin = 0;
+  for (const entity of ENTITIES) {
+    for (const ch of CHANNELS) {
+      for (const m of MONTHS) {
+        const profile = channelPlProfile[ch.channel_id];
+        const isQ2_26 = Q2_2026.includes(m);
+        const revenue = isQ2_26
+          ? profile.revenue
+          : roundN(between(profile.revenue * 0.7, profile.revenue * 1.1), 2);
+        const platformFee = roundN(revenue * profile.feeRate, 2);
+        const cogs = roundN(revenue * profile.cogsRate, 2);
+        const grossMargin = roundN(revenue - platformFee - cogs, 2);
+        channelPlRows.push({
+          channel_id: ch.channel_id,
+          entity_id: entity.entity_id,
+          period_month: m,
+          revenue,
+          platform_fee: platformFee,
+          cogs,
+          gross_margin: grossMargin
+        });
+        if (isQ2_26 && ch.channel_id === "SC") {
+          q2ScRevenue += revenue;
+          q2ScMargin += grossMargin;
+        }
+        if (isQ2_26 && ch.channel_id === "VC") {
+          q2VcRevenue += revenue;
+          q2VcMargin += grossMargin;
+        }
+      }
+    }
+  }
+  const q2ScGrossMarginRate = roundN(q2ScMargin / q2ScRevenue, 6);
+  const q2VcGrossMarginRate = roundN(q2VcMargin / q2VcRevenue, 6);
+  const higherMarginChannelId = q2ScGrossMarginRate >= q2VcGrossMarginRate ? "SC" : "VC";
+
+  // --- CFO-5: GL accounts, balances, journal lines ---
+  const glBalanceRows = [];
+  let glBalId = 1;
+  let q2RevenueTotal = 0;
+  for (const entity of ENTITIES) {
+    for (const m of MONTHS) {
+      const isQ2_26 = Q2_2026.includes(m);
+      for (const acct of GL_ACCOUNTS) {
+        let endBal = between(50_000, 200_000);
+        if (acct.account_type === "revenue") {
+          endBal = isQ2_26 ? 345_000 : between(200_000, 400_000);
+          if (isQ2_26 && acct.account_id === REVENUE_ACCOUNT_ID) q2RevenueTotal += endBal;
+        }
+        if (acct.account_type === "expense") endBal = between(80_000, 150_000);
+        const [y, mo] = m.split("-").map(Number);
+        const daysInMonth = new Date(y, mo, 0).getDate();
+        for (let d = 1; d <= daysInMonth; d++) {
+          const asOf = `${m}-${String(d).padStart(2, "0")}`;
+          const isMonthEnd = monthEndSet.has(asOf) ? 1 : 0;
+          glBalanceRows.push({
+            id: glBalId++,
+            entity_id: entity.entity_id,
+            account_id: acct.account_id,
+            as_of_date: asOf,
+            currency: "CNY",
+            end_balance: roundN(endBal + intBetween(-1000, 1000), 2),
+            is_month_end: isMonthEnd
+          });
+        }
+      }
+    }
+  }
+  const journalRows = [];
+  let journalId = 1;
+  for (const entity of ENTITIES) {
+    for (let j = 0; j < 8; j++) {
+      const m = Q2_2026[j % Q2_2026.length];
+      const postingDate = `${m}-${String(10 + j).padStart(2, "0")}`;
+      const amt = roundN(between(20_000, 80_000), 2);
+      journalRows.push({
+        journal_id: `J-${entity.entity_id}-${String(journalId).padStart(4, "0")}`,
+        entity_id: entity.entity_id,
+        posting_date: postingDate,
+        account_id: REVENUE_ACCOUNT_ID,
+        debit_amt: 0,
+        credit_amt: amt,
+        currency: "CNY",
+        cost_center_id: j % 2 === 0 ? 4 : 5
+      });
+      journalId++;
+    }
+  }
 
   // --- COO-4: inventory health ---
   const skus = Array.from({ length: 120 }, (_, i) => ({
@@ -292,20 +440,20 @@ async function main() {
       });
     }
     for (let i = 0; i < 200; i++) {
-      const baseDays = ch.channel_id === "B" ? 7 : 5;
+      const baseDays = ch.channel_id === "VC" ? 7 : 5;
       fulfillRows.push({
         order_id: `ORD-${orderSeq++}`,
         channel_id: ch.channel_id,
         order_date: `2026-0${intBetween(1, 6)}-${String(intBetween(1, 28)).padStart(2, "0")}`,
-        fulfill_days: ch.channel_id === "B" ? roundN(baseDays * 1.4, 2) : baseDays,
-        returned: ch.channel_id === "B" && i % 20 === 0 ? 1 : 0
+        fulfill_days: ch.channel_id === "VC" ? roundN(baseDays * 1.4, 2) : baseDays,
+        returned: ch.channel_id === "VC" && i % 20 === 0 ? 1 : 0
       });
     }
   }
-  const avgFulfillA = roundN(fulfillRows.filter((r) => r.channel_id === "A").reduce((s, r) => s + r.fulfill_days, 0)
-    / fulfillRows.filter((r) => r.channel_id === "A").length, 4);
-  const avgFulfillB = roundN(fulfillRows.filter((r) => r.channel_id === "B").reduce((s, r) => s + r.fulfill_days, 0)
-    / fulfillRows.filter((r) => r.channel_id === "B").length, 4);
+  const avgFulfillSc = roundN(fulfillRows.filter((r) => r.channel_id === "SC").reduce((s, r) => s + r.fulfill_days, 0)
+    / fulfillRows.filter((r) => r.channel_id === "SC").length, 4);
+  const avgFulfillVc = roundN(fulfillRows.filter((r) => r.channel_id === "VC").reduce((s, r) => s + r.fulfill_days, 0)
+    / fulfillRows.filter((r) => r.channel_id === "VC").length, 4);
 
   // --- CIO-6: sales margin ---
   const teams = [
@@ -425,15 +573,36 @@ async function main() {
       consumer_ecommerce_q3_budget_achievement: q3ConsumerAchievement,
       cost_center_id: 4
     },
+    cfo4: {
+      q2_sc_gross_margin_rate: q2ScGrossMarginRate,
+      q2_vc_gross_margin_rate: q2VcGrossMarginRate,
+      higher_margin_channel_id: higherMarginChannelId,
+      q2_sc_revenue_total: roundN(q2ScRevenue, 2),
+      q2_vc_revenue_total: roundN(q2VcRevenue, 2)
+    },
+    cfo5: {
+      q2_revenue_total: roundN(q2RevenueTotal, 2),
+      sample_account_code: "6001",
+      revenue_account_id: REVENUE_ACCOUNT_ID,
+      journal_line_count: journalRows.length
+    },
+    cfo6: {
+      ecommerce_q3_usd_budget_achievement_cny: q3UsdBudgetAchievementCny,
+      fx_rate_used: FX_CLOSING,
+      cost_center_id: 4
+    },
+    cfo1_usd: {
+      entity_2_june_cash_cny_combined: monthEndCashCnyCombined[2]?.["2026-06"] ?? null
+    },
     coo4: {
       south_china_slow_moving_sku_count: southSlow,
       east_china_stockout_risk_sku_count: eastStockout,
       snapshot_date: snapDate
     },
     coo5: {
-      avg_fulfill_days_channel_a: avgFulfillA,
-      avg_fulfill_days_channel_b: avgFulfillB,
-      fulfill_days_gap_pct: roundN((avgFulfillB - avgFulfillA) / avgFulfillA, 6)
+      avg_fulfill_days_channel_sc: avgFulfillSc,
+      avg_fulfill_days_channel_vc: avgFulfillVc,
+      fulfill_days_gap_pct: roundN((avgFulfillVc - avgFulfillSc) / avgFulfillSc, 6)
     },
     cio7: {
       sample_rollup_key: "2026Q2|East_China|Electronics",
@@ -450,7 +619,10 @@ async function main() {
       ar_rows: arRows.length,
       inventory_rows: invRows.length,
       order_line_rows: orderLines.length,
-      mv_rollup_rows: mvRows.length
+      mv_rollup_rows: mvRows.length,
+      channel_pl_rows: channelPlRows.length,
+      gl_balance_rows: glBalanceRows.length,
+      gl_journal_rows: journalRows.length
     }
   };
 
@@ -497,7 +669,8 @@ CREATE TABLE dim_sku (
 );
 CREATE TABLE dim_channel (
   channel_id VARCHAR(8) PRIMARY KEY,
-  channel_name VARCHAR(128) NOT NULL
+  channel_name VARCHAR(128) NOT NULL,
+  channel_mode VARCHAR(8) NOT NULL
 );
 CREATE TABLE dim_sales_team (
   team_id INT PRIMARY KEY,
@@ -510,10 +683,48 @@ CREATE TABLE dim_customer (
   team_id INT NOT NULL,
   customer_phone VARCHAR(32) NOT NULL
 );
+CREATE TABLE dim_gl_account (
+  account_id INT PRIMARY KEY,
+  account_code VARCHAR(32) NOT NULL,
+  account_name VARCHAR(128) NOT NULL,
+  account_type VARCHAR(16) NOT NULL,
+  parent_account_id INT NULL,
+  level INT NOT NULL
+);
+CREATE TABLE fct_gl_account_balance (
+  id INT PRIMARY KEY,
+  entity_id INT NOT NULL,
+  account_id INT NOT NULL,
+  as_of_date DATE NOT NULL,
+  currency CHAR(3) NOT NULL,
+  end_balance DECIMAL(18,2) NOT NULL,
+  is_month_end TINYINT NOT NULL
+);
+CREATE TABLE fct_gl_journal_line (
+  journal_id VARCHAR(32) PRIMARY KEY,
+  entity_id INT NOT NULL,
+  posting_date DATE NOT NULL,
+  account_id INT NOT NULL,
+  debit_amt DECIMAL(18,2) NOT NULL,
+  credit_amt DECIMAL(18,2) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  cost_center_id INT NOT NULL
+);
+CREATE TABLE fct_channel_pl_monthly (
+  channel_id VARCHAR(8) NOT NULL,
+  entity_id INT NOT NULL,
+  period_month CHAR(7) NOT NULL,
+  revenue DECIMAL(18,2) NOT NULL,
+  platform_fee DECIMAL(18,2) NOT NULL,
+  cogs DECIMAL(18,2) NOT NULL,
+  gross_margin DECIMAL(18,2) NOT NULL,
+  PRIMARY KEY (channel_id, entity_id, period_month)
+);
 CREATE TABLE fct_daily_cash_balance (
   id INT PRIMARY KEY,
   entity_id INT NOT NULL,
   as_of_date DATE NOT NULL,
+  currency CHAR(3) NOT NULL,
   cash_balance DECIMAL(18,2) NOT NULL,
   is_month_end TINYINT NOT NULL
 );
@@ -626,12 +837,16 @@ CREATE TABLE fct_business_ticket_closed (
 `;
   lines.push("DROP TABLE IF EXISTS fct_sales_margin_regional;");
   lines.push("DROP VIEW IF EXISTS fct_sales_margin_regional;");
+  lines.push("DROP VIEW IF EXISTS vw_channel_pl_consumer;");
+  lines.push("DROP VIEW IF EXISTS vw_gl_trial_balance_summary;");
   for (const t of [
     "fct_business_ticket_closed", "fct_ai_token_consumption", "mv_order_quarterly_rollup",
     "fct_order_line_daily", "fct_sales_margin", "fct_fulfillment_order", "fct_acquisition_monthly",
     "fct_inventory_health_daily", "fct_budget_actual", "fct_collection_monthly", "fct_cashflow_monthly",
-    "fct_pl_monthly", "fct_ar_aging_detail", "fct_daily_cash_balance", "dim_customer", "dim_sales_team",
-    "dim_channel", "dim_sku", "dim_warehouse", "dim_fx_rate", "dim_cost_center", "dim_legal_entity"
+    "fct_pl_monthly", "fct_ar_aging_detail", "fct_daily_cash_balance", "fct_channel_pl_monthly",
+    "fct_gl_journal_line", "fct_gl_account_balance", "dim_gl_account",
+    "dim_customer", "dim_sales_team", "dim_channel", "dim_sku", "dim_warehouse", "dim_fx_rate",
+    "dim_cost_center", "dim_legal_entity"
   ]) {
     lines.push(`DROP TABLE IF EXISTS ${t};`);
   }
@@ -642,15 +857,19 @@ CREATE TABLE fct_business_ticket_closed (
   lines.push(...emitInsert("dim_fx_rate", ["rate_date", "from_ccy", "to_ccy", "rate_type", "rate"], fxRates));
   lines.push(...emitInsert("dim_warehouse", ["warehouse_id", "warehouse_code", "warehouse_name", "region"], WAREHOUSES));
   lines.push(...emitInsert("dim_sku", ["sku_id", "category", "sku_name"], skus));
-  lines.push(...emitInsert("dim_channel", ["channel_id", "channel_name"], CHANNELS));
+  lines.push(...emitInsert("dim_channel", ["channel_id", "channel_name", "channel_mode"], CHANNELS));
+  lines.push(...emitInsert("dim_gl_account", ["account_id", "account_code", "account_name", "account_type", "parent_account_id", "level"], GL_ACCOUNTS));
   lines.push(...emitInsert("dim_sales_team", ["team_id", "team_name", "region"], teams));
   lines.push(...emitInsert("dim_customer", ["customer_id", "region", "team_id", "customer_phone"], customers));
-  lines.push(...emitInsert("fct_daily_cash_balance", ["id", "entity_id", "as_of_date", "cash_balance", "is_month_end"], cashRows));
+  lines.push(...emitInsert("fct_daily_cash_balance", ["id", "entity_id", "as_of_date", "currency", "cash_balance", "is_month_end"], cashRows));
   lines.push(...emitInsert("fct_ar_aging_detail", ["id", "entity_id", "as_of_date", "customer_id", "aging_bucket", "ar_balance", "is_month_end"], arRows));
   lines.push(...emitInsert("fct_pl_monthly", ["entity_id", "period_month", "revenue", "net_profit"], plRows));
   lines.push(...emitInsert("fct_cashflow_monthly", ["entity_id", "period_month", "operating_cf"], cfRows));
   lines.push(...emitInsert("fct_collection_monthly", ["entity_id", "period_month", "collection_amt", "inventory_delta", "tax_refund_lag_days"], collRows));
   lines.push(...emitInsert("fct_budget_actual", ["cost_center_id", "period_month", "currency", "budget_amt", "actual_amt", "forecast_amt"], budgetRows));
+  lines.push(...emitInsert("fct_channel_pl_monthly", ["channel_id", "entity_id", "period_month", "revenue", "platform_fee", "cogs", "gross_margin"], channelPlRows));
+  lines.push(...emitInsert("fct_gl_account_balance", ["id", "entity_id", "account_id", "as_of_date", "currency", "end_balance", "is_month_end"], glBalanceRows, 500));
+  lines.push(...emitInsert("fct_gl_journal_line", ["journal_id", "entity_id", "posting_date", "account_id", "debit_amt", "credit_amt", "currency", "cost_center_id"], journalRows));
   lines.push(...emitInsert("fct_inventory_health_daily", ["id", "warehouse_id", "sku_id", "snapshot_date", "qty_on_hand", "avg_daily_outbound_30d", "days_of_supply", "qty_in_transit"], invRows));
   lines.push(...emitInsert("fct_acquisition_monthly", ["channel_id", "cohort_month", "spend", "new_users", "cac"], acqRows));
   lines.push(...emitInsert("fct_fulfillment_order", ["order_id", "channel_id", "order_date", "fulfill_days", "returned"], fulfillRows));
@@ -671,6 +890,35 @@ SELECT
   gross_margin
 FROM fct_sales_margin
 WHERE region = 'South_China';
+
+CREATE VIEW vw_channel_pl_consumer AS
+SELECT
+  p.channel_id,
+  p.entity_id,
+  p.period_month,
+  p.revenue,
+  p.platform_fee,
+  p.cogs,
+  p.gross_margin,
+  c.channel_name,
+  c.channel_mode
+FROM fct_channel_pl_monthly p
+JOIN dim_channel c ON p.channel_id = c.channel_id
+WHERE c.channel_id IN ('SC', 'VC', 'DTC');
+
+CREATE VIEW vw_gl_trial_balance_summary AS
+SELECT
+  b.entity_id,
+  DATE_FORMAT(b.as_of_date, '%Y-%m') AS period_month,
+  a.account_id,
+  a.account_code,
+  a.account_name,
+  a.account_type,
+  b.currency,
+  SUM(CASE WHEN b.is_month_end = 1 THEN b.end_balance ELSE 0 END) AS end_balance_month_end
+FROM fct_gl_account_balance b
+JOIN dim_gl_account a ON b.account_id = a.account_id
+GROUP BY b.entity_id, DATE_FORMAT(b.as_of_date, '%Y-%m'), a.account_id, a.account_code, a.account_name, a.account_type, b.currency;
 `);
 
   await mkdir(FINAL_OUT_DIR, { recursive: true });

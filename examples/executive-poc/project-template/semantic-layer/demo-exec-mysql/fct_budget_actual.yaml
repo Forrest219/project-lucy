@@ -13,10 +13,16 @@ measures:
 - name: budget_achievement_rate
   expr: sum(actual_amt) / nullif(sum(budget_amt), 0)
   description: 预算达成率 SUM/SUM。
+- name: budget_achievement_rate_cny
+  expr: sum(case when currency = 'CNY' then actual_amt when currency = 'USD' then actual_amt * 7.18 else 0 end) / nullif(sum(case when currency = 'CNY' then budget_amt when currency = 'USD' then budget_amt * 7.18 else 0 end), 0)
+  description: 多币种折算 CNY 后达成率；USD 用 closing 7.18。
 segments:
 - name: q3_2026
   expr: period_month in ('2026-07','2026-08','2026-09')
   description: 2026 Q3。
+- name: usd_only
+  expr: currency = 'USD'
+  description: 美元预算行。
 joins:
 - to: dim_cost_center
   'on': fct_budget_actual.cost_center_id = dim_cost_center.cost_center_id

@@ -2,6 +2,7 @@ name: fct_daily_cash_balance
 grain:
 - entity_id
 - as_of_date
+- currency
 columns:
 - name: period_month
   type: string
@@ -13,11 +14,20 @@ measures:
   description: 日终结存；跨日趋势禁止 SUM(cash_balance)。
 - name: cash_balance_month_end
   expr: max(case when is_month_end = 1 then cash_balance else null end)
-  description: 月末资金存量；按 period_month 聚合时使用。
+  description: 月末资金存量（原币）；按 period_month 聚合时使用。
+- name: cash_balance_month_end_cny
+  expr: max(case when is_month_end = 1 and currency = 'CNY' then cash_balance when is_month_end = 1 and currency = 'USD' then cash_balance * 7.18 else null end)
+  description: 月末资金存量折算 CNY（USD 用 closing 7.18）；跨境实体汇总用。
 segments:
 - name: month_end_only
   expr: is_month_end = 1
   description: 仅月末快照行。
+- name: cny_only
+  expr: currency = 'CNY'
+  description: 人民币余额。
+- name: usd_only
+  expr: currency = 'USD'
+  description: 美元余额。
 joins:
 - to: dim_legal_entity
   'on': fct_daily_cash_balance.entity_id = dim_legal_entity.entity_id

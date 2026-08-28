@@ -30,7 +30,7 @@ POC 使用 **独立语境包**：独立数据库、独立 `ktx.yaml` / semantic 
 路径：[`examples/executive-poc/`](../examples/executive-poc/README.md)
 
 - MySQL 8.4 自包含（不绑定 StarRocks）
-- 8 场景：半可加、现金流 bridge、预算、库存、获客、ACL、MV 等价层、Token ROI
+- CFO-first v2：半可加、现金流 bridge、渠道 P&L（SC/VC）、GL 汇总/明细路由、多币种预算、BP ACL；附录 COO 库存/履约、CIO MV
 - Gold：`examples/executive-poc/mysql/_baseline.json`
 - **Internal-only**；不进 release gate
 

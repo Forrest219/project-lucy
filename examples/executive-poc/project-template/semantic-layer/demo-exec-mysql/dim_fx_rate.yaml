@@ -1,0 +1,19 @@
+name: dim_fx_rate
+grain:
+- id
+columns:
+- name: period_month
+  type: string
+  role: time
+  expr: DATE_FORMAT(rate_date, '%Y-%m')
+measures:
+- name: fx_rate
+  expr: max(rate)
+  description: 汇率快照值。
+segments:
+- name: closing
+  expr: rate_type = 'closing'
+  description: 期末 closing 汇率，预算/余额折算默认。
+- name: average
+  expr: rate_type = 'average'
+  description: 期间 average 汇率。

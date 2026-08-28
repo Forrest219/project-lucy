@@ -133,6 +133,44 @@ tables:
       descriptions:
         db: channel_name
         ai: dim_channel.channel_name
+    - name: channel_mode
+      type: string
+      descriptions:
+        db: channel_mode
+        ai: dim_channel.channel_mode
+  dim_gl_account:
+    table: dataforai.dim_gl_account
+    columns:
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: dim_gl_account.account_id
+    - name: account_code
+      type: string
+      descriptions:
+        db: account_code
+        ai: dim_gl_account.account_code
+    - name: account_name
+      type: string
+      descriptions:
+        db: account_name
+        ai: dim_gl_account.account_name
+    - name: account_type
+      type: string
+      descriptions:
+        db: account_type
+        ai: dim_gl_account.account_type
+    - name: parent_account_id
+      type: number
+      descriptions:
+        db: parent_account_id
+        ai: dim_gl_account.parent_account_id
+    - name: level
+      type: number
+      descriptions:
+        db: level
+        ai: dim_gl_account.level
   dim_customer:
     table: dataforai.dim_customer
     columns:
@@ -192,6 +230,11 @@ tables:
       descriptions:
         db: as_of_date
         ai: fct_daily_cash_balance.as_of_date
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: fct_daily_cash_balance.currency
     - name: cash_balance
       type: number
       descriptions:
@@ -624,3 +667,213 @@ tables:
       descriptions:
         db: tickets_closed
         ai: fct_business_ticket_closed.tickets_closed
+  fct_channel_pl_monthly:
+    table: dataforai.fct_channel_pl_monthly
+    columns:
+    - name: channel_id
+      type: string
+      descriptions:
+        db: channel_id
+        ai: fct_channel_pl_monthly.channel_id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_channel_pl_monthly.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: fct_channel_pl_monthly.period_month
+    - name: revenue
+      type: number
+      descriptions:
+        db: revenue
+        ai: fct_channel_pl_monthly.revenue
+    - name: platform_fee
+      type: number
+      descriptions:
+        db: platform_fee
+        ai: fct_channel_pl_monthly.platform_fee
+    - name: cogs
+      type: number
+      descriptions:
+        db: cogs
+        ai: fct_channel_pl_monthly.cogs
+    - name: gross_margin
+      type: number
+      descriptions:
+        db: gross_margin
+        ai: fct_channel_pl_monthly.gross_margin
+  fct_gl_account_balance:
+    table: dataforai.fct_gl_account_balance
+    columns:
+    - name: id
+      type: number
+      descriptions:
+        db: id
+        ai: fct_gl_account_balance.id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_gl_account_balance.entity_id
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: fct_gl_account_balance.account_id
+    - name: as_of_date
+      type: time
+      descriptions:
+        db: as_of_date
+        ai: fct_gl_account_balance.as_of_date
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: fct_gl_account_balance.currency
+    - name: end_balance
+      type: number
+      descriptions:
+        db: end_balance
+        ai: fct_gl_account_balance.end_balance
+    - name: is_month_end
+      type: number
+      descriptions:
+        db: is_month_end
+        ai: fct_gl_account_balance.is_month_end
+  fct_gl_journal_line:
+    table: dataforai.fct_gl_journal_line
+    columns:
+    - name: journal_id
+      type: string
+      descriptions:
+        db: journal_id
+        ai: fct_gl_journal_line.journal_id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: fct_gl_journal_line.entity_id
+    - name: posting_date
+      type: time
+      descriptions:
+        db: posting_date
+        ai: fct_gl_journal_line.posting_date
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: fct_gl_journal_line.account_id
+    - name: debit_amt
+      type: number
+      descriptions:
+        db: debit_amt
+        ai: fct_gl_journal_line.debit_amt
+    - name: credit_amt
+      type: number
+      descriptions:
+        db: credit_amt
+        ai: fct_gl_journal_line.credit_amt
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: fct_gl_journal_line.currency
+    - name: cost_center_id
+      type: number
+      descriptions:
+        db: cost_center_id
+        ai: fct_gl_journal_line.cost_center_id
+  vw_gl_trial_balance_summary:
+    table: dataforai.vw_gl_trial_balance_summary
+    columns:
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: vw_gl_trial_balance_summary.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: vw_gl_trial_balance_summary.period_month
+    - name: account_id
+      type: number
+      descriptions:
+        db: account_id
+        ai: vw_gl_trial_balance_summary.account_id
+    - name: account_code
+      type: string
+      descriptions:
+        db: account_code
+        ai: vw_gl_trial_balance_summary.account_code
+    - name: account_name
+      type: string
+      descriptions:
+        db: account_name
+        ai: vw_gl_trial_balance_summary.account_name
+    - name: account_type
+      type: string
+      descriptions:
+        db: account_type
+        ai: vw_gl_trial_balance_summary.account_type
+    - name: currency
+      type: string
+      descriptions:
+        db: currency
+        ai: vw_gl_trial_balance_summary.currency
+    - name: end_balance_month_end
+      type: number
+      descriptions:
+        db: end_balance_month_end
+        ai: vw_gl_trial_balance_summary.end_balance_month_end
+  vw_channel_pl_consumer:
+    table: dataforai.vw_channel_pl_consumer
+    columns:
+    - name: channel_id
+      type: string
+      descriptions:
+        db: channel_id
+        ai: vw_channel_pl_consumer.channel_id
+    - name: entity_id
+      type: number
+      descriptions:
+        db: entity_id
+        ai: vw_channel_pl_consumer.entity_id
+    - name: period_month
+      type: time
+      descriptions:
+        db: period_month
+        ai: vw_channel_pl_consumer.period_month
+    - name: revenue
+      type: number
+      descriptions:
+        db: revenue
+        ai: vw_channel_pl_consumer.revenue
+    - name: platform_fee
+      type: number
+      descriptions:
+        db: platform_fee
+        ai: vw_channel_pl_consumer.platform_fee
+    - name: cogs
+      type: number
+      descriptions:
+        db: cogs
+        ai: vw_channel_pl_consumer.cogs
+    - name: gross_margin
+      type: number
+      descriptions:
+        db: gross_margin
+        ai: vw_channel_pl_consumer.gross_margin
+    - name: channel_name
+      type: string
+      descriptions:
+        db: channel_name
+        ai: vw_channel_pl_consumer.channel_name
+    - name: channel_mode
+      type: string
+      descriptions:
+        db: channel_mode
+        ai: vw_channel_pl_consumer.channel_mode

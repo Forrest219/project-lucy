@@ -1,0 +1,27 @@
+name: vw_channel_pl_consumer
+grain:
+- channel_id
+- entity_id
+- period_month
+measures:
+- name: revenue
+  expr: sum(revenue)
+  description: 消费事业群渠道收入。
+- name: gross_margin
+  expr: sum(gross_margin)
+  description: 消费事业群渠道毛利。
+- name: gross_margin_rate
+  expr: sum(gross_margin) / nullif(sum(revenue), 0)
+  description: 毛利率 SUM/SUM。
+segments:
+- name: q2_2026
+  expr: period_month in ('2026-04','2026-05','2026-06')
+  description: 2026 Q2。
+- name: sc_only
+  expr: channel_mode = 'SC'
+  description: SC 自营渠道。
+joins:
+- to: dim_channel
+  'on': vw_channel_pl_consumer.channel_id = dim_channel.channel_id
+  relationship: many_to_one
+  source: formal

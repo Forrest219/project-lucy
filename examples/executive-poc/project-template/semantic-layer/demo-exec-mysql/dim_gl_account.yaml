@@ -1,0 +1,20 @@
+name: dim_gl_account
+grain:
+- account_id
+columns:
+- name: account_code
+  type: string
+  role: dimension
+  description: 科目编码，如 6001 营业收入。
+- name: account_name
+  type: string
+  role: dimension
+  description: 科目名称。
+- name: account_type
+  type: string
+  role: dimension
+  description: asset/liability/revenue/expense。
+segments:
+- name: revenue_accounts
+  expr: account_type = 'revenue'
+  description: 损益类收入科目。

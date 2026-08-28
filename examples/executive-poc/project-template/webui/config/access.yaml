@@ -11,12 +11,18 @@ roles:
             - dim_legal_entity
             - dim_cost_center
             - dim_fx_rate
+            - dim_channel
+            - dim_gl_account
             - fct_daily_cash_balance
             - fct_ar_aging_detail
             - fct_pl_monthly
             - fct_cashflow_monthly
             - fct_collection_monthly
             - fct_budget_actual
+            - fct_channel_pl_monthly
+            - fct_gl_account_balance
+            - fct_gl_journal_line
+            - vw_gl_trial_balance_summary
             - fct_sales_margin
             - mv_order_quarterly_rollup
             - fct_order_line_daily
@@ -25,6 +31,26 @@ roles:
         - lucy_query
         - lucy_read_source
         - lucy_explain_query
+        - wiki_search
+        - wiki_read
+        - connection_list
+
+  exec_bp_consumer_readonly:
+    description: Executive POC finance BP — Consumer business line channel P&L only
+    allow:
+      connections:
+        - demo-exec-mysql
+      tableSelectors:
+        - connection: demo-exec-mysql
+          schema: dataforai
+          names:
+            - vw_channel_pl_consumer
+            - dim_channel
+            - dim_cost_center
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
         - wiki_search
         - wiki_read
         - connection_list
@@ -87,6 +113,7 @@ roles:
             - dim_warehouse
             - dim_sku
             - dim_channel
+            - dim_gl_account
             - dim_customer
             - dim_sales_team
             - fct_daily_cash_balance
@@ -95,6 +122,11 @@ roles:
             - fct_cashflow_monthly
             - fct_collection_monthly
             - fct_budget_actual
+            - fct_channel_pl_monthly
+            - fct_gl_account_balance
+            - fct_gl_journal_line
+            - vw_gl_trial_balance_summary
+            - vw_channel_pl_consumer
             - fct_inventory_health_daily
             - fct_acquisition_monthly
             - fct_fulfillment_order
@@ -133,6 +165,16 @@ users:
         label: exec-cfo
         created: 2026-08-28
     role: exec_cfo_readonly
+
+  - id: exec_bp_consumer_agent
+    name: Executive POC Finance BP Consumer
+    enabled: true
+    note: Internal demo. Token exec-bp-consumer-token
+    tokens:
+      - hash: "sha256:c9114f8999ead39d4bbad4d55605fdcd76d2c9162d5da5498df72676e4a653b3"
+        label: exec-bp-consumer
+        created: 2026-08-28
+    role: exec_bp_consumer_readonly
 
   - id: exec_coo_agent
     name: Executive POC COO

@@ -19,4 +19,4 @@ sl_refs:
 | 渠道 CAC | fct_acquisition_monthly | cac |
 | 平均履约天数 | fct_fulfillment_order | avg_fulfill_days |
 
-Demo：渠道 B 履约时长比渠道 A 长约 40%（见 baseline `coo5.fulfill_days_gap_pct`）。
+Demo：VC 履约时长比 SC 长约 96%（见 baseline `coo5.fulfill_days_gap_pct`）。

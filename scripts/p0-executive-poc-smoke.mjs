@@ -85,7 +85,10 @@ async function verifyCounts(baseline) {
   const sql = [
     "SELECT 'order_lines', COUNT(*) FROM fct_order_line_daily",
     "UNION ALL SELECT 'mv_rollup', COUNT(*) FROM mv_order_quarterly_rollup",
-    "UNION ALL SELECT 'inventory', COUNT(*) FROM fct_inventory_health_daily"
+    "UNION ALL SELECT 'inventory', COUNT(*) FROM fct_inventory_health_daily",
+    "UNION ALL SELECT 'channel_pl', COUNT(*) FROM fct_channel_pl_monthly",
+    "UNION ALL SELECT 'gl_balance', COUNT(*) FROM fct_gl_account_balance",
+    "UNION ALL SELECT 'gl_journal', COUNT(*) FROM fct_gl_journal_line"
   ].join(" ");
   const result = await run("docker", composeArgs([
     "exec", "-T", "demo-exec-db",
@@ -98,7 +101,22 @@ async function verifyCounts(baseline) {
   if (counts.order_lines !== baseline.counts.order_line_rows) {
     throw new Error(`order_lines expected ${baseline.counts.order_line_rows}, got ${counts.order_lines}`);
   }
-  console.log(`[p0-executive-poc-smoke] counts ok: order_lines=${counts.order_lines}, mv=${counts.mv_rollup}`);
+  if (counts.mv_rollup !== baseline.counts.mv_rollup_rows) {
+    throw new Error(`mv_rollup expected ${baseline.counts.mv_rollup_rows}, got ${counts.mv_rollup}`);
+  }
+  if (counts.inventory !== baseline.counts.inventory_rows) {
+    throw new Error(`inventory expected ${baseline.counts.inventory_rows}, got ${counts.inventory}`);
+  }
+  if (counts.channel_pl !== baseline.counts.channel_pl_rows) {
+    throw new Error(`channel_pl expected ${baseline.counts.channel_pl_rows}, got ${counts.channel_pl}`);
+  }
+  if (counts.gl_balance !== baseline.counts.gl_balance_rows) {
+    throw new Error(`gl_balance expected ${baseline.counts.gl_balance_rows}, got ${counts.gl_balance}`);
+  }
+  if (counts.gl_journal !== baseline.counts.gl_journal_rows) {
+    throw new Error(`gl_journal expected ${baseline.counts.gl_journal_rows}, got ${counts.gl_journal}`);
+  }
+  console.log(`[p0-executive-poc-smoke] counts ok: order_lines=${counts.order_lines}, mv=${counts.mv_rollup}, channel_pl=${counts.channel_pl}`);
 }
 
 async function rpc(sessionId, method, params) {
@@ -157,6 +175,56 @@ async function verifyProxyPath(baseline) {
   console.log("[p0-executive-poc-smoke] proxy sl_query month-end cash matches baseline");
 }
 
+async function verifyCfoV2Gold(baseline) {
+  const channelSql = `
+SELECT channel_id,
+  SUM(gross_margin)/SUM(revenue) AS margin_rate
+FROM fct_channel_pl_monthly
+WHERE period_month IN ('2026-04','2026-05','2026-06')
+GROUP BY channel_id;
+`;
+  const channelResult = await run("docker", composeArgs([
+    "exec", "-T", "demo-exec-db",
+    "mysql", "-u", "lucy", "-plucy_exec_demo", "-N", "-B", "dataforai", "-e", channelSql
+  ]), { capture: true });
+  const channelRates = Object.fromEntries(channelResult.stdout.trim().split("\n").map((line) => {
+    const [id, rate] = line.split("\t");
+    return [id, Number(rate)];
+  }));
+  assertClose("SC gross margin rate", channelRates.SC, baseline.cfo4.q2_sc_gross_margin_rate, 0.001);
+  assertClose("VC gross margin rate", channelRates.VC, baseline.cfo4.q2_vc_gross_margin_rate, 0.001);
+  if (baseline.cfo4.higher_margin_channel_id !== "SC") {
+    throw new Error(`expected SC higher margin, got ${baseline.cfo4.higher_margin_channel_id}`);
+  }
+
+  const glSql = `
+SELECT SUM(end_balance_month_end)
+FROM vw_gl_trial_balance_summary
+WHERE period_month IN ('2026-04','2026-05','2026-06')
+  AND account_code = '6001';
+`;
+  const glResult = await run("docker", composeArgs([
+    "exec", "-T", "demo-exec-db",
+    "mysql", "-u", "lucy", "-plucy_exec_demo", "-N", "-B", "dataforai", "-e", glSql
+  ]), { capture: true });
+  const glRevenue = Number(glResult.stdout.trim());
+  assertClose("Q2 GL 6001 revenue total", glRevenue, baseline.cfo5.q2_revenue_total, 1);
+
+  const usdBudgetSql = `
+SELECT SUM(actual_amt)/SUM(budget_amt)
+FROM fct_budget_actual
+WHERE cost_center_id = 4 AND currency = 'USD'
+  AND period_month IN ('2026-07','2026-08','2026-09');
+`;
+  const usdResult = await run("docker", composeArgs([
+    "exec", "-T", "demo-exec-db",
+    "mysql", "-u", "lucy", "-plucy_exec_demo", "-N", "-B", "dataforai", "-e", usdBudgetSql
+  ]), { capture: true });
+  const usdAch = Number(usdResult.stdout.trim());
+  assertClose("USD budget achievement", usdAch, baseline.cfo6.ecommerce_q3_usd_budget_achievement_cny, 0.001);
+  console.log("[p0-executive-poc-smoke] CFO v2 channel/GL/USD budget gold matches baseline");
+}
+
 async function main() {
   const baseline = await loadBaseline();
   const env = {
@@ -176,9 +244,12 @@ async function main() {
       throw new Error(`bundledKtxVersion expected ${expectedKtxVersion}, got ${health?.data?.bundledKtxVersion}`);
     }
     await verifyCounts(baseline);
+    await verifyCfoV2Gold(baseline);
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "connection", "test", "demo-exec-mysql"]));
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "admin", "reindex", "--force", "--output", "json"]), { capture: true });
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "fct_daily_cash_balance", "--connection-id", "demo-exec-mysql"]));
+    await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "fct_channel_pl_monthly", "--connection-id", "demo-exec-mysql"]));
+    await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "vw_gl_trial_balance_summary", "--connection-id", "demo-exec-mysql"]));
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "mv_order_quarterly_rollup", "--connection-id", "demo-exec-mysql"]));
     const mvQuery = await run("docker", composeArgs([
       "exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy",
