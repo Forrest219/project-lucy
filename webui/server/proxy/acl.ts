@@ -69,7 +69,9 @@ export const META_TOOLS = [
   "connection_list",
   "wiki_search",
   "wiki_read",
-  "lucy_begin_question"
+  "lucy_begin_question",
+  "lucy_skill_search",
+  "lucy_skill_read"
 ] as const;
 
 const ABSOLUTE_DENY_TOOL_SET = new Set<string>(ABSOLUTE_DENY_TOOLS);

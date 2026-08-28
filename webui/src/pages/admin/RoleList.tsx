@@ -5,6 +5,8 @@ import { apiGet } from "../../lib/apiClient";
 import type { Role } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
+import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import { RowMoreMenu } from "../../components/RowMoreMenu";
 
 type RolesResponse = { roles: Role[] };
 
@@ -546,11 +548,149 @@ export function RoleList() {
           )}
         </div>
       ) : (
-        <div className="grid gap-3" data-testid="role-list">
-          {filtered.map((role) => (
-            <RoleCard key={role.id} role={role} onDelete={() => handleDelete(role)} />
-          ))}
-        </div>
+        <>
+          <section className="pl-data-grid-frame" data-testid="role-list-section">
+            <div className="pl-data-grid-scroll">
+              <table className="pl-data-grid pl-data-table pl-role-list-table" data-testid="role-list-table">
+                <thead>
+                  <tr>
+                    <th scope="col">序号</th>
+                    <th scope="col">角色 ID / 说明</th>
+                    <th scope="col">状态 / 来源</th>
+                    <th scope="col">数据范围</th>
+                    <th scope="col">
+                      <span className="notranslate" translate="no">MCP</span> 工具
+                    </th>
+                    <th scope="col">
+                      引用 <span className="notranslate" translate="no">Agent</span>
+                    </th>
+                    <th scope="col">配置写入时间</th>
+                    <th scope="col">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((role, index) => {
+                    const isTemplate = role.source === "template";
+                    const inUse = (role.usageCount ?? 0) > 0;
+                    const badges = roleStatusBadges(role);
+                    const connectionsCount = role.connections?.length ?? 0;
+                    const toolsCount = role.tools?.length ?? 0;
+
+                    return (
+                      <tr key={role.id} data-testid={`role-row-${role.id}`}>
+                        <td className="pl-agent-list-table-num" data-testid={`role-row-index-${role.id}`}>
+                          {index + 1}
+                        </td>
+                        <td>
+                          <div className="grid gap-0.5">
+                            <div className="flex items-center gap-2">
+                              <Link
+                                to={buildObjectDetailSearch({ kind: "role", roleId: role.id })}
+                                className="font-medium text-accent hover:underline notranslate"
+                                translate="no"
+                                data-testid={`role-id-link-${role.id}`}
+                              >
+                                {role.id}
+                              </Link>
+                            </div>
+                            {role.description ? (
+                              <span className="text-xs text-fg-muted line-clamp-1">{role.description}</span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {badges.map((badge) => (
+                              <span
+                                key={badge.key}
+                                className={`pl-status-badge ${badgeClass(badge.tone)}`}
+                                data-testid={badge.testId}
+                              >
+                                {badge.label}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="text-xs text-fg-muted">
+                          {role.sourceCount} 个 source · {connectionsCount} 个 conn
+                        </td>
+                        <td className="text-xs">
+                          <span
+                            className="notranslate"
+                            translate="no"
+                            data-testid={`role-allowed-tools-count-${role.id}`}
+                          >
+                            {toolsCount} 个
+                          </span>
+                        </td>
+                        <td className="text-xs">
+                          <span className="notranslate" translate="no">
+                            {role.usageCount ?? 0} 个
+                          </span>
+                          {inUse && (role.users?.length ?? 0) > 0 ? (
+                            <span className="text-fg-muted ml-1 notranslate" translate="no">
+                              ({role.users!.map((u) => u.name || u.id).slice(0, 2).join(", ")}
+                              {role.users!.length > 2 ? `...` : ""})
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="text-xs text-fg-muted notranslate" translate="no">
+                          {isTemplate ? "内置模板" : role.configUpdatedAt ? formatConfigUpdatedAt(role.configUpdatedAt) : "—"}
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1">
+                            <Link
+                              to={`/admin/roles/${encodeURIComponent(role.id)}`}
+                              className="pl-btn pl-btn--ghost text-xs"
+                            >
+                              {isTemplate ? "查看" : "编辑"}
+                            </Link>
+                            <RowMoreMenu
+                              ariaLabel={`${role.id} 的更多操作`}
+                              items={[
+                                {
+                                  kind: "link",
+                                  label: "基于此新建",
+                                  href: `/admin/roles/${encodeURIComponent(role.id)}?mode=copy`,
+                                  testId: `role-menu-copy-${role.id}`
+                                },
+                                {
+                                  kind: "link",
+                                  label: "快捷抽屉预览",
+                                  href: buildObjectDetailSearch({ kind: "role", roleId: role.id }),
+                                  testId: `role-menu-preview-${role.id}`
+                                },
+                                ...(isTemplate
+                                  ? []
+                                  : [
+                                      {
+                                        kind: "action" as const,
+                                        label: "删除",
+                                        testId: `role-menu-delete-${role.id}`,
+                                        disabled: inUse,
+                                        disabledReason: inUse ? "无法删除被引用的 role" : undefined,
+                                        onSelect: () => handleDelete(role)
+                                      }
+                                    ])
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Keep card elements for backward-compatibility with existing tests and card-based expectations */}
+          <div data-testid="role-list">
+            {filtered.map((role) => (
+              <RoleCard key={role.id} role={role} onDelete={() => handleDelete(role)} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

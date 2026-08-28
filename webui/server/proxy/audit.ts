@@ -120,6 +120,19 @@ function ensureColumn(database: Database.Database, table: string, column: string
   database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+export function closeAuditDb(): void {
+  if (db) {
+    try {
+      db.close();
+    } catch {}
+    db = null;
+    insertStmt = null;
+    sourceInsertStmt = null;
+    snapshotStmt = null;
+    conversationTurnInsertStmt = null;
+  }
+}
+
 async function getDb(): Promise<Database.Database> {
   if (db) return db;
   const envDbPath = process.env.LUCY_AUDIT_DB;

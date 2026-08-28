@@ -7,6 +7,8 @@ import { extractRequestClientMeta } from "./request-client-meta.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
+import { loadAllSkills, getSkillByUri, getSkillByName } from "../skills/loader.js";
+import { canAccessSkill, filterAccessibleSkills } from "./skill-acl.js";
 import { resolveProjectRoot } from "../project.js";
 import {
   recordMcpToolsCall,
@@ -789,6 +791,37 @@ function wikiReadTool() {
   };
 }
 
+function lucySkillSearchTool() {
+  return {
+    name: "lucy_skill_search",
+    description: "Search available governed Lucy domain skills and SOPs by keyword or business intent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search keyword or business question" },
+        domain: { type: "string", description: "Optional domain filter (e.g. superstore, kx_financial)" }
+      },
+      required: ["query"],
+      additionalProperties: true
+    }
+  };
+}
+
+function lucySkillReadTool() {
+  return {
+    name: "lucy_skill_read",
+    description: "Read the full execution SOP and guidelines of a governed Lucy domain skill.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skill_name: { type: "string", description: "The name or URI of the skill to read (e.g. superstore-profit-breakdown)" }
+      },
+      required: ["skill_name"],
+      additionalProperties: true
+    }
+  };
+}
+
 // Local tools the proxy serves itself (never forwarded to KTX). Each is only injected
 // into tools/list when visibleTools allows it — same explicit allow-list gate as any
 // other tool (spec 08 §15 decision 2: no derived/bypass condition).
@@ -802,7 +835,9 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
     { name: "lucy_freshness", build: lucyFreshnessTool },
     { name: "kx_catalog", build: kxCatalogTool },
     { name: "wiki_search", build: wikiSearchTool },
-    { name: "wiki_read", build: wikiReadTool }
+    { name: "wiki_read", build: wikiReadTool },
+    { name: "lucy_skill_search", build: lucySkillSearchTool },
+    { name: "lucy_skill_read", build: lucySkillReadTool }
   ];
   if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
     builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
@@ -1070,7 +1105,15 @@ function invalidLucyQueryShapeReason(toolName: string, record: Record<string, un
 }
 
 function validateLucyToolArgs(toolName: string, args: unknown): string | undefined {
-  if (!toolName.startsWith("lucy_") || toolName === "lucy_catalog" || toolName === "lucy_begin_question") return undefined;
+  if (
+    !toolName.startsWith("lucy_") ||
+    toolName === "lucy_catalog" ||
+    toolName === "lucy_begin_question" ||
+    toolName === "lucy_skill_search" ||
+    toolName === "lucy_skill_read"
+  ) {
+    return undefined;
+  }
   if (!args || typeof args !== "object" || Array.isArray(args)) {
     return `invalid_arguments:${toolName}:arguments_object_required`;
   }
@@ -1241,7 +1284,15 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
   const fallback = await loadDataQaInstructions();
   try {
     const catalog = await lucyCatalog(identity);
-    if (catalog.connections.length === 0 && catalog.sources.length === 0) return fallback;
+    let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
+    try {
+      const allSkills = await loadAllSkills();
+      accessibleSkills = await filterAccessibleSkills(identity, allSkills);
+    } catch {
+      // Best-effort loading of skills for instructions
+    }
+
+    if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback;
     const visibleTools = new Set(await allowedToolNames(identity));
     const catalogTool = visibleTools.has("lucy_catalog")
       ? "`lucy_catalog`"
@@ -1252,6 +1303,18 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`
     ));
     const exampleLines = catalog.examples.map((example) => `- ${example}`);
+    const skillLines = accessibleSkills.map((skill) => (
+      `- [${skill.name}] (${skill.uri}): ${skill.title} - ${skill.description}`
+    ));
+    const skillSection = skillLines.length > 0
+      ? [
+          "",
+          "## Governed Domain Skills (SOPs)",
+          "",
+          "When analyzing specific business domains, prefer fetching governed SOPs via MCP Resources (`lucy-skill://<domain>/<name>`) or `lucy_skill_read`:",
+          ...skillLines
+        ]
+      : [];
     const questionReportingLines = visibleTools.has("lucy_begin_question")
       ? [
           "- Optional but recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping this call never blocks catalog or query tools. Do not call it for protocol checks or tool discovery only.",
@@ -1277,6 +1340,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
       "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.",
       `- Visible Scope below is captured at MCP initialize; call ${catalogTool} before routing if sources may have changed since this session started.`,
+      ...skillSection,
       "",
       "## Visible Scope",
       "",
@@ -2438,6 +2502,409 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       });
       return;
     }
+  }
+
+  // ─── Spec 131: Governed Skills MCP Protocol Interceptions ───
+  if (rpcMethod === "resources/list") {
+    let resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
+    try {
+      const allSkills = await loadAllSkills();
+      const accessible = await filterAccessibleSkills(identity, allSkills);
+      resources = accessible.map((s) => ({
+        uri: s.uri,
+        name: s.name,
+        description: s.description,
+        mimeType: "text/markdown"
+      }));
+    } catch (err) {
+      console.error("[lucy-proxy] failed to load resources/list", err);
+    }
+
+    const responsePayload = {
+      jsonrpc: "2.0",
+      id: requestId,
+      result: { resources }
+    };
+    const responseBody = JSON.stringify(responsePayload);
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: rpcMethod,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "allowed")),
+    });
+    return;
+  }
+
+  if (rpcMethod === "resources/read") {
+    const params = parsedRpc?.params as Record<string, unknown> | undefined;
+    const uri = typeof params?.uri === "string" ? params.uri.trim() : "";
+    const skill = uri ? await getSkillByUri(uri) : null;
+    if (!skill) {
+      const errPayload = {
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32002, message: `Resource not found: ${uri}` }
+      };
+      const responseBody = JSON.stringify(errPayload);
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "error",
+        errorDetail: `resource_not_found:${uri}`,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, "resource_not_found")),
+      });
+      return;
+    }
+
+    const decision = await canAccessSkill(identity, skill);
+    if (!decision.allowed) {
+      const errPayload = {
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32003, message: `Access denied: ${decision.reason ?? "denied_skill_acl"}` }
+      };
+      const responseBody = JSON.stringify(errPayload);
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "denied",
+        errorDetail: decision.reason,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, decision.reason ?? "denied_skill_acl")),
+      });
+      return;
+    }
+
+    const responsePayload = {
+      jsonrpc: "2.0",
+      id: requestId,
+      result: {
+        contents: [
+          {
+            uri: skill.uri,
+            mimeType: "text/markdown",
+            text: skill.raw || skill.content
+          }
+        ]
+      }
+    };
+    const responseBody = JSON.stringify(responsePayload);
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: rpcMethod,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "allowed")),
+    });
+    return;
+  }
+
+  if (rpcMethod === "prompts/list") {
+    let prompts: Array<{ name: string; description: string; arguments?: Array<{ name: string; description: string; required: boolean }> }> = [];
+    try {
+      const allSkills = await loadAllSkills();
+      const accessible = await filterAccessibleSkills(identity, allSkills);
+      prompts = accessible.map((s) => ({
+        name: s.name,
+        description: s.description,
+        arguments: [
+          {
+            name: "context",
+            description: "Optional business context or focus dimension",
+            required: false
+          }
+        ]
+      }));
+    } catch (err) {
+      console.error("[lucy-proxy] failed to load prompts/list", err);
+    }
+
+    const responsePayload = {
+      jsonrpc: "2.0",
+      id: requestId,
+      result: { prompts }
+    };
+    const responseBody = JSON.stringify(responsePayload);
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: rpcMethod,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "allowed")),
+    });
+    return;
+  }
+
+  if (rpcMethod === "prompts/get") {
+    const params = parsedRpc?.params as Record<string, unknown> | undefined;
+    const promptName = typeof params?.name === "string" ? params.name.trim() : "";
+    const skill = promptName ? await getSkillByName(promptName) : null;
+    if (!skill) {
+      const errPayload = {
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32602, message: `Prompt not found: ${promptName}` }
+      };
+      const responseBody = JSON.stringify(errPayload);
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "error",
+        errorDetail: `prompt_not_found:${promptName}`,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, "prompt_not_found")),
+      });
+      return;
+    }
+
+    const decision = await canAccessSkill(identity, skill);
+    if (!decision.allowed) {
+      const errPayload = {
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32003, message: `Access denied: ${decision.reason ?? "denied_skill_acl"}` }
+      };
+      const responseBody = JSON.stringify(errPayload);
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "denied",
+        errorDetail: decision.reason,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, decision.reason ?? "denied_skill_acl")),
+      });
+      return;
+    }
+
+    const responsePayload = {
+      jsonrpc: "2.0",
+      id: requestId,
+      result: {
+        description: skill.description,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `## Active Governed Skill: ${skill.title}\n\n${skill.content}`
+            }
+          }
+        ]
+      }
+    };
+    const responseBody = JSON.stringify(responsePayload);
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: rpcMethod,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "allowed")),
+    });
+    return;
+  }
+
+  if (rpcMethod === "tools/call" && toolName === "lucy_skill_search") {
+    const rawArgs = toolArgs as Record<string, unknown> | undefined;
+    const query = typeof rawArgs?.query === "string" ? rawArgs.query.trim().toLowerCase() : (typeof rawArgs?.q === "string" ? rawArgs.q.trim().toLowerCase() : "");
+    const domainFilter = typeof rawArgs?.domain === "string" ? rawArgs.domain.trim().toLowerCase() : "";
+
+    const allSkills = await loadAllSkills();
+    const accessible = await filterAccessibleSkills(identity, allSkills);
+
+    const matches = accessible.filter((s) => {
+      if (domainFilter && s.domain.toLowerCase() !== domainFilter) return false;
+      if (!query) return true;
+      const matchName = s.name.toLowerCase().includes(query);
+      const matchTitle = s.title.toLowerCase().includes(query);
+      const matchTriggers = s.triggers.some((t) => t.toLowerCase().includes(query));
+      const matchDesc = s.description.toLowerCase().includes(query);
+      return matchName || matchTitle || matchTriggers || matchDesc;
+    });
+
+    const result = {
+      query: (rawArgs?.query ?? rawArgs?.q ?? "") as string,
+      count: matches.length,
+      skills: matches.map((s) => ({
+        name: s.name,
+        title: s.title,
+        domain: s.domain,
+        uri: s.uri,
+        version: s.version,
+        triggers: s.triggers,
+        description: s.description
+      }))
+    };
+
+    const responseBody = jsonRpcToolResult(requestId, JSON.stringify(result, null, 2));
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: toolName,
+      argsSummary,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "allowed")),
+    });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName,
+      status: "ok",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary,
+      allowed: true,
+      reason: "allowed",
+      policySource: "skill_acl"
+    });
+    return;
+  }
+
+  if (rpcMethod === "tools/call" && toolName === "lucy_skill_read") {
+    const rawArgs = toolArgs as Record<string, unknown> | undefined;
+    const target = typeof rawArgs?.skill_name === "string" ? rawArgs.skill_name.trim() : (typeof rawArgs?.name === "string" ? rawArgs.name.trim() : "");
+    const skill = target.startsWith("lucy-skill://") ? await getSkillByUri(target) : await getSkillByName(target);
+
+    if (!skill) {
+      const responseBody = jsonRpcToolResult(requestId, `Error: Skill "${target}" not found`, { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary,
+        outcome: "error",
+        errorDetail: `skill_not_found:${target}`,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, "skill_not_found")),
+      });
+      return;
+    }
+
+    const decision = await canAccessSkill(identity, skill);
+    if (!decision.allowed) {
+      const responseBody = jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "denied_skill_acl"}`, { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary,
+        outcome: "denied",
+        errorDetail: decision.reason,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, decision.reason ?? "denied_skill_acl")),
+      });
+      return;
+    }
+
+    const responseBody = jsonRpcToolResult(requestId, skill.raw || skill.content);
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: toolName,
+      argsSummary,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "allowed")),
+    });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName,
+      status: "ok",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary,
+      allowed: true,
+      reason: "allowed",
+      policySource: "skill_acl"
+    });
+    return;
   }
 
   if (rpcMethod === "tools/call" && toolName === "lucy_query") {

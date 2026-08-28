@@ -1,15 +1,16 @@
-// M36: Object Detail Drawer URL state.
+// M36 / Spec 133: Object Detail Drawer URL state.
 //
 // The drawer is URL-driven so any module can open the same drawer by
 // updating query params. Keeping parsing / building in one place lets
-// callers (Catalog, AgentList, RunList, Audit, ...) share a stable contract
+// callers (Catalog, AgentList, RunList, Audit, RoleList, ...) share a stable contract
 // without re-implementing the param layout.
 
-export type ObjectDetailKind = "table" | "agent" | "evalRun" | "auditEvent";
+export type ObjectDetailKind = "table" | "agent" | "role" | "evalRun" | "auditEvent";
 
 export const SUPPORTED_OBJECT_KINDS: ObjectDetailKind[] = [
   "table",
   "agent",
+  "role",
   "evalRun",
   "auditEvent"
 ];
@@ -17,6 +18,7 @@ export const SUPPORTED_OBJECT_KINDS: ObjectDetailKind[] = [
 export type ObjectDetailTarget =
   | { kind: "table"; conn: string; schema: string; table: string }
   | { kind: "agent"; agentId: string }
+  | { kind: "role"; roleId: string }
   | { kind: "evalRun"; runId: number }
   | { kind: "auditEvent"; eventId: number };
 
@@ -25,6 +27,7 @@ const QUERY_CONN = "conn";
 const QUERY_SCHEMA = "schema";
 const QUERY_TABLE = "table";
 const QUERY_AGENT = "agentId";
+const QUERY_ROLE = "roleId";
 const QUERY_RUN = "runId";
 const QUERY_EVENT = "eventId";
 
@@ -50,6 +53,11 @@ export function parseObjectDetailSearch(search: string): ObjectDetailTarget | nu
       const agentId = params.get(QUERY_AGENT);
       if (!agentId) return null;
       return { kind: "agent", agentId };
+    }
+    case "role": {
+      const roleId = params.get(QUERY_ROLE);
+      if (!roleId) return null;
+      return { kind: "role", roleId };
     }
     case "evalRun": {
       const raw = params.get(QUERY_RUN);
@@ -82,6 +90,9 @@ function buildObjectDetailParams(target: ObjectDetailTarget): URLSearchParams {
     case "agent":
       params.set(QUERY_AGENT, target.agentId);
       break;
+    case "role":
+      params.set(QUERY_ROLE, target.roleId);
+      break;
     case "evalRun":
       params.set(QUERY_RUN, String(target.runId));
       break;
@@ -111,7 +122,7 @@ export function mergeObjectDetailSearch(
   target: ObjectDetailTarget
 ): URLSearchParams {
   const next = new URLSearchParams(existing.toString());
-  for (const key of [QUERY_OBJECT, QUERY_CONN, QUERY_SCHEMA, QUERY_TABLE, QUERY_AGENT, QUERY_RUN, QUERY_EVENT]) {
+  for (const key of [QUERY_OBJECT, QUERY_CONN, QUERY_SCHEMA, QUERY_TABLE, QUERY_AGENT, QUERY_ROLE, QUERY_RUN, QUERY_EVENT]) {
     next.delete(key);
   }
   for (const [key, value] of buildObjectDetailParams(target).entries()) {
@@ -128,7 +139,7 @@ export function mergeObjectDetailSearch(
 export function clearObjectDetailSearch(search: string): string {
   if (!search) return "";
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  for (const key of [QUERY_OBJECT, QUERY_CONN, QUERY_SCHEMA, QUERY_TABLE, QUERY_AGENT, QUERY_RUN, QUERY_EVENT]) {
+  for (const key of [QUERY_OBJECT, QUERY_CONN, QUERY_SCHEMA, QUERY_TABLE, QUERY_AGENT, QUERY_ROLE, QUERY_RUN, QUERY_EVENT]) {
     params.delete(key);
   }
   const result = params.toString();
@@ -146,6 +157,8 @@ export function objectDetailTitle(target: ObjectDetailTarget): string {
       return target.table;
     case "agent":
       return target.agentId;
+    case "role":
+      return target.roleId;
     case "evalRun":
       return `Run #${target.runId}`;
     case "auditEvent":

@@ -106,6 +106,7 @@ import { registerGovernanceObservabilityRoutes } from "./admin/governance-observ
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { requireWebuiAuthHook } from "./auth/guard.js";
+import { registerSkillsRoutes } from "./admin/skills.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
 import { registerSuiteImportRoutes } from "./eval/suite-import.js";
@@ -1702,6 +1703,7 @@ export function buildServer() {
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
   registerLicenseRoutes(app);
+  registerSkillsRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith("/api/")) {

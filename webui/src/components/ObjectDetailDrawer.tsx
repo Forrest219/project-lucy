@@ -16,14 +16,17 @@ import type {
   AuditResponse,
   EvalRun,
   EvalRunWithResults,
+  RoleDetail as RoleDetailType,
   SourceSummary,
   SourcesResponse
 } from "../lib/types";
 
 type AgentsResponse = { agents: Agent[]; version?: string };
+type RoleDetailResponse = { role: RoleDetailType };
 
 const TABLE_NOT_FOUND_TITLE = "未找到该表";
 const AGENT_NOT_FOUND_TITLE = "未找到该 Agent";
+const ROLE_NOT_FOUND_TITLE = "未找到该角色";
 const RUN_NOT_FOUND_TITLE = "未找到该 Run";
 const EVENT_NOT_FOUND_TITLE = "未找到该审计事件";
 
@@ -98,6 +101,8 @@ export function ObjectDetailDrawer() {
                   <TableDetailBody target={target} />
                 ) : target.kind === "agent" ? (
                   <AgentDetailBody target={target} />
+                ) : target.kind === "role" ? (
+                  <RoleDetailBody target={target} />
                 ) : target.kind === "evalRun" ? (
                   <EvalRunDetailBody target={target} />
                 ) : (
@@ -132,12 +137,14 @@ export function ObjectDetailDrawer() {
   );
 }
 
-function drawerEyebrow(kind: "table" | "agent" | "evalRun" | "auditEvent"): string {
+function drawerEyebrow(kind: "table" | "agent" | "role" | "evalRun" | "auditEvent"): string {
   switch (kind) {
     case "table":
       return "Table · 对象详情";
     case "agent":
       return "Agent · 对象详情";
+    case "role":
+      return "Role · 对象详情";
     case "evalRun":
       return "Eval Run · 对象详情";
     case "auditEvent":
@@ -151,6 +158,8 @@ function deepLinkHref(target: NonNullable<ReturnType<typeof parseObjectDetailSea
       return `/catalog/${encodeURIComponent(target.conn)}/${encodeURIComponent(target.schema)}/${encodeURIComponent(target.table)}`;
     case "agent":
       return `/admin/agents/${encodeURIComponent(target.agentId)}`;
+    case "role":
+      return `/admin/roles/${encodeURIComponent(target.roleId)}`;
     case "evalRun":
       return `/eval/runs/${target.runId}`;
     case "auditEvent":
@@ -252,6 +261,83 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
           查看审计记录 →
         </Link>
       </div>
+    </div>
+  );
+}
+
+type RoleTarget = Extract<NonNullable<ReturnType<typeof parseObjectDetailSearch>>, { kind: "role" }>;
+
+function RoleDetailBody({ target }: { target: RoleTarget }) {
+  const roleQuery = useQuery({
+    queryKey: ["admin", "roles", target.roleId],
+    queryFn: () => apiGet<RoleDetailResponse>(`/api/admin/roles/${encodeURIComponent(target.roleId)}`),
+    retry: false
+  });
+
+  if (roleQuery.isLoading) {
+    return <p className="pl-notice">加载中…</p>;
+  }
+  if (roleQuery.error) {
+    return (
+      <div className="pl-drawer-error" data-testid="object-detail-role-not-found">
+        <strong>{ROLE_NOT_FOUND_TITLE}</strong>
+        <p className="mt-2">
+          Role <code className="notranslate" translate="no">{target.roleId}</code> 拉取失败。
+        </p>
+        <pre className="mt-2">
+          {roleQuery.error instanceof Error ? roleQuery.error.message : "未知错误"}
+        </pre>
+      </div>
+    );
+  }
+  const role = roleQuery.data?.role;
+  if (!role) {
+    return (
+      <div className="pl-drawer-error" data-testid="object-detail-role-not-found">
+        <strong>{ROLE_NOT_FOUND_TITLE}</strong>
+        <p className="mt-2">
+          Role <code className="notranslate" translate="no">{target.roleId}</code> 不存在。
+        </p>
+      </div>
+    );
+  }
+
+  const effective = role.effectivePermissions;
+  const isTemplate = role.source === "template";
+
+  return (
+    <div className="grid gap-3" data-testid="object-detail-role-body">
+      <DetailRow label="角色标识" value={role.id} notranslate />
+      <DetailRow label="类型" value={isTemplate ? "参考模板" : "正式 Role"} />
+      {role.description ? <DetailRow label="说明" value={role.description} /> : null}
+      <DetailRow
+        label="引用 Agent"
+        value={`${role.usageCount ?? 0} 个 Agent 引用${(role.users?.length ?? 0) > 0 ? ` (${role.users!.map((u) => u.name || u.id).join(", ")})` : ""}`}
+      />
+      <DetailRow
+        label="数据连接"
+        value={role.connections.length > 0 ? role.connections.join(", ") : "无"}
+        notranslate
+      />
+      <DetailRow
+        label="MCP 工具"
+        value={role.tools.length > 0 ? `${role.tools.length} 个 (${role.tools.join(", ")})` : "无"}
+        notranslate
+      />
+      <DetailRow
+        label="生效数据源"
+        value={`${effective?.sources?.length ?? role.sourceCount ?? 0} 个 source`}
+      />
+      {role.warnings && role.warnings.length > 0 ? (
+        <div className="grid gap-1">
+          <span className="pl-eyebrow text-danger">警告 / 诊断</span>
+          <ul className="grid gap-1 text-xs text-danger">
+            {role.warnings.map((w, idx) => (
+              <li key={idx}>⚠ {w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
