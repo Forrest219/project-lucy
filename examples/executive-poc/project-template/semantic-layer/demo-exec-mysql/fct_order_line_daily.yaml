@@ -1,0 +1,13 @@
+name: fct_order_line_daily
+grain:
+- id
+descriptions:
+  human: 订单明细层；大表聚合优先 mv_order_quarterly_rollup。
+  ai: Detail order lines; prefer MV for quarterly aggregates.
+measures:
+- name: total_sales
+  expr: sum(sales)
+  description: 销售额。
+- name: total_qty
+  expr: sum(qty)
+  description: 销量。

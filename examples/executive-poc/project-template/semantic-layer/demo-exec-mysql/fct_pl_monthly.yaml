@@ -1,0 +1,15 @@
+name: fct_pl_monthly
+grain:
+- entity_id
+- period_month
+measures:
+- name: net_profit
+  expr: sum(net_profit)
+  description: 净利润。
+- name: revenue
+  expr: sum(revenue)
+  description: 营业收入。
+segments:
+- name: q2_2026
+  expr: period_month in ('2026-04','2026-05','2026-06')
+  description: 2026 Q2。

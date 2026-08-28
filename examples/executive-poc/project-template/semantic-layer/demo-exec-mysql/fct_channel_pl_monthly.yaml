@@ -1,0 +1,37 @@
+name: fct_channel_pl_monthly
+grain:
+- channel_id
+- entity_id
+- period_month
+measures:
+- name: revenue
+  expr: sum(revenue)
+  description: 渠道收入。
+- name: platform_fee
+  expr: sum(platform_fee)
+  description: 平台费。
+- name: cogs
+  expr: sum(cogs)
+  description: 销售成本。
+- name: gross_margin
+  expr: sum(gross_margin)
+  description: 毛利 = revenue - platform_fee - cogs。
+- name: gross_margin_rate
+  expr: sum(gross_margin) / nullif(sum(revenue), 0)
+  description: 毛利率 SUM/SUM。
+- name: platform_fee_ratio
+  expr: sum(platform_fee) / nullif(sum(revenue), 0)
+  description: 平台费占收入比 SUM/SUM。
+segments:
+- name: q2_2026
+  expr: period_month in ('2026-04','2026-05','2026-06')
+  description: 2026 Q2。
+joins:
+- to: dim_channel
+  'on': fct_channel_pl_monthly.channel_id = dim_channel.channel_id
+  relationship: many_to_one
+  source: formal
+- to: dim_legal_entity
+  'on': fct_channel_pl_monthly.entity_id = dim_legal_entity.entity_id
+  relationship: many_to_one
+  source: formal

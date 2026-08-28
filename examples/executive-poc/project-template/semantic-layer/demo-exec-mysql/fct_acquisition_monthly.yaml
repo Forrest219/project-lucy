@@ -1,0 +1,19 @@
+name: fct_acquisition_monthly
+grain:
+- channel_id
+- cohort_month
+measures:
+- name: spend
+  expr: sum(spend)
+  description: 投放花费。
+- name: new_users
+  expr: sum(new_users)
+  description: 新增用户。
+- name: cac
+  expr: sum(spend) / nullif(sum(new_users), 0)
+  description: 获客成本 SUM/SUM。
+joins:
+- to: dim_channel
+  'on': fct_acquisition_monthly.channel_id = dim_channel.channel_id
+  relationship: many_to_one
+  source: formal

@@ -1,0 +1,24 @@
+name: fct_inventory_health_daily
+grain:
+- warehouse_id
+- sku_id
+- snapshot_date
+measures:
+- name: sku_count
+  expr: count(distinct sku_id)
+  description: SKU 数。
+- name: avg_days_of_supply
+  expr: avg(days_of_supply)
+  description: 平均周转天数（预计算）。
+segments:
+- name: slow_moving
+  expr: days_of_supply > 60
+  description: 滞销 DOS>60。
+- name: stockout_risk
+  expr: days_of_supply < 7 and qty_in_transit = 0
+  description: 断货风险。
+joins:
+- to: dim_warehouse
+  'on': fct_inventory_health_daily.warehouse_id = dim_warehouse.warehouse_id
+  relationship: many_to_one
+  source: formal

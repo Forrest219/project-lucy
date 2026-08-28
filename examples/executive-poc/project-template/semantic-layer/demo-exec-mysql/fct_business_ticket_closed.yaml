@@ -1,0 +1,8 @@
+name: fct_business_ticket_closed
+grain:
+- dept
+- period_month
+measures:
+- name: tickets_closed
+  expr: sum(tickets_closed)
+  description: 关闭工单数。

@@ -1,0 +1,25 @@
+name: vw_gl_trial_balance_summary
+grain:
+- entity_id
+- period_month
+- account_id
+- currency
+measures:
+- name: end_balance_month_end
+  expr: sum(end_balance_month_end)
+  description: 汇总层月末科目余额。
+- name: revenue_total
+  expr: sum(case when account_type = 'revenue' then end_balance_month_end else 0 end)
+  description: 收入类科目月末余额合计。
+segments:
+- name: q2_2026
+  expr: period_month in ('2026-04','2026-05','2026-06')
+  description: 2026 Q2。
+- name: revenue_6001
+  expr: account_code = '6001'
+  description: 6001 营业收入科目。
+joins:
+- to: dim_legal_entity
+  'on': vw_gl_trial_balance_summary.entity_id = dim_legal_entity.entity_id
+  relationship: many_to_one
+  source: formal

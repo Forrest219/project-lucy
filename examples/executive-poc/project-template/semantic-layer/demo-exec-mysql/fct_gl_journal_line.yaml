@@ -1,0 +1,35 @@
+name: fct_gl_journal_line
+grain:
+- journal_id
+measures:
+- name: debit_amt
+  expr: sum(debit_amt)
+  description: 借方金额。
+- name: credit_amt
+  expr: sum(credit_amt)
+  description: 贷方金额。
+- name: net_amt
+  expr: sum(debit_amt) - sum(credit_amt)
+  description: 净额。
+columns:
+- name: period_month
+  type: string
+  role: time
+  expr: DATE_FORMAT(posting_date, '%Y-%m')
+segments:
+- name: q2_2026
+  expr: DATE_FORMAT(posting_date, '%Y-%m') in ('2026-04','2026-05','2026-06')
+  description: 2026 Q2 分录。
+joins:
+- to: dim_gl_account
+  'on': fct_gl_journal_line.account_id = dim_gl_account.account_id
+  relationship: many_to_one
+  source: formal
+- to: dim_legal_entity
+  'on': fct_gl_journal_line.entity_id = dim_legal_entity.entity_id
+  relationship: many_to_one
+  source: formal
+- to: dim_cost_center
+  'on': fct_gl_journal_line.cost_center_id = dim_cost_center.cost_center_id
+  relationship: many_to_one
+  source: formal
