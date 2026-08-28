@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Troubleshooting Guide |
 | 文档类型 | Product / Troubleshooting Guide |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-06-22；2026-07-06 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-08-28 增补内网 uv / MCP 未就绪 |
 | 适用范围 | Docker deployment、WebUI、KTX runtime、MCP Proxy、agent access |
 
 ## 1. Fast Checks
@@ -27,7 +27,9 @@ npm run security:baseline
 | MCP returns 401 | bearer token missing or revoked | create a new Agent token |
 | MCP returns 403 | role/table/tool ACL | update role table selectors or tools |
 | KTX version mismatch | `/api/health.data.bundledKtxVersion` | rebuild image with intended `KTX_VERSION` |
-| Query asks to install runtime | KTX Python runtime missing | rebuild image; Dockerfile should run runtime install |
+| Query asks to install runtime | KTX Python runtime missing | rebuild image; Dockerfile should run `ktx admin runtime install --yes --feature core` |
+| `ktx could not download uv`（客户内网查询失败） | 镜像未 bake-in Python/uv runtime，现场尝试公网下载失败 | **换用通过 G4b 的新交付镜像**；不要让客户开外网重试或在内网 `docker build`。出包机必须跑 `scripts/build-customer-amd64-image.sh`（含 G4b） |
+| WebUI「Lucy MCP 未就绪」/ `mcpEndpoint.status=fallback` | 未设置合法 `LUCY_PUBLIC_MCP_URL` | 在 values / 环境变量中配置外部可达 `https://…/mcp`；Helm 客户 registry 路径下空 URL 会 fail 渲染 |
 | Demo DB fails | MySQL healthcheck/logs | rerun `npm run smoke:p0:demo` after cleanup |
 | Semantic validate fails | source/table mismatch | run WebUI review and `ktx sl validate` |
 | Customer config not visible in container | bind mount path | run `docker compose -f docker-compose.yml -f docker-compose.customer-config.yml config` and confirm `./customer-config:/data/lucy` |

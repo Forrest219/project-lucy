@@ -66,6 +66,8 @@ test "$(docker image inspect project-lucy:customer-amd64-0.16.0 \
 
 bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
 
+docker run --rm --platform linux/amd64 --entrypoint /bin/sh project-lucy:customer-amd64-0.16.0 -c 'echo ok'
+
 docker image inspect project-lucy:customer-amd64-0.16.0 \
   --format '{{.Id}}' > inbox/customer-amd64-build/image-id.txt
 

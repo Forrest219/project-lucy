@@ -186,7 +186,7 @@ Lucy WebUI 的设计规范事实源在
 - 推荐：`npm run demo:rebuild`（或 `bash scripts/rebuild-demo-lucy.sh`；支持 `--no-cache`）。脚本固定 `BUILDX_BUILDER=default`，并按 `uname -m` 设置 `TARGETPLATFORM` / `TARGETARCH`，再跑 ELF 断言。
 - 等价手写：`BUILDX_BUILDER=default docker compose -f docker-compose.demo.yml up -d --build lucy`。
 - amd64 开发者覆盖：脚本已按 host 自动选择；若直接 compose，传 `TARGETPLATFORM=linux/amd64 TARGETARCH=amd64`。
-- 客户 amd64 离线包：只用 `docker buildx build --builder lucy-amd64 ...`，并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建时**不要** `--use`，结束后 `docker buildx use default`）；交付前必须 `bash scripts/assert-image-elf-arch.sh <image> amd64`。详见 `docs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
+- 客户 amd64 离线包 / K8s integration 大包：推荐 `bash scripts/build-customer-amd64-image.sh`（含 G1–G4 + G4b 门禁）；或 `docker buildx build --builder lucy-amd64 ...` 并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建 builder 时**不要** `--use`，结束后 `docker buildx use default`）。交付前**必须**完整走一遍 [`docs/customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) 与 [`docs/customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md)（含 `assert-image-elf-arch.sh` 对 **node+tini** 架构、Python runtime 离线预装 G4b、Helm MCP URL 守卫及现场验收命令）。详见 `docs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
 - Demo 使用 `LUCY_TEMPLATE_ROOT=examples/docker-demo/project-template`（本地 `demo-mysql`），**不会**把内网测试库打进客户默认 seed。
 
 ## 语义层（semantic-layer）分层

@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Customer amd64 Offline Delivery Spec |
 | 文档类型 | Customer Delivery / Packaging Spec |
-| 版本 | v0.1 |
+| 版本 | v0.2（2026-08-27：强制 G2–G4；作废坏包与盲复用） |
 | 撰写日期 | 2026-08-04 |
 | 适用范围 | 客户 IT 现场无公网 registry / 无 buildx，单机 x86_64 (AMD) 主机上的 Lucy 离线交付 |
 
@@ -74,14 +74,18 @@ docker buildx build \
 docker buildx use default
 ```
 
-构建完后做四层校验：
+构建完后做**六层校验**（G1–G4 为交付硬门禁，缺一则禁止 `docker save` / 禁止出包）：
 
-1. **元数据架构校验**：`docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}'` 必须输出 `linux/amd64`。
-2. **ELF 二进制门禁**（必做）：`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64` 必须通过。仅检查 metadata **不够**——历史上出现过「元数据 amd64、`/usr/local/bin/node` 实为 aarch64」的坏包。
-3. **冒烟**：`npm run smoke:p0:docker` 必须全绿。
-4. **客户配置包冒烟**：`npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` 必须全绿。
+1. **元数据架构校验（G1）**：`docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}'` 必须输出 `linux/amd64`。
+2. **ELF 二进制门禁（G2，必做）**：`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64` 必须通过；检查 **`/usr/local/bin/node` 与 `/usr/bin/tini`**。仅检查 metadata **不够**——历史上出现过「元数据 amd64、ELF 实为 aarch64」，客户报 `exec /usr/bin/tini: exec format error`。
+3. **运行时 smoke（G3，必做）**：`docker run --rm --platform linux/amd64 --entrypoint /bin/sh project-lucy:customer-amd64-0.16.0 -c 'echo ok'` 必须 exit 0。
+4. **KTX 版本（G4）**：`docker run --rm --platform linux/amd64 --entrypoint ktx project-lucy:customer-amd64-0.16.0 --version` 含 `@kaelio/ktx 0.16.0`。
+5. **冒烟**：`npm run smoke:p0:docker` 必须全绿。
+6. **客户配置包冒烟**：`npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` 必须全绿。
 
-> **作废声明**：2026-08-04 前后基于 `FROM --platform=$BUILDPLATFORM` 打出的 `project-lucy:customer-amd64-0.16.0` / `inbox/customer-amd64-offline-package` **不得交付客户**，须按本规格在 amd64 native 上重建。
+推荐一键入口：`bash scripts/build-customer-amd64-image.sh`（含 G1–G4）。完整清单见 [`docs/customer-amd64-image-build-checklist.md`](./customer-amd64-image-build-checklist.md)。
+
+> **作废声明**：2026-08-04 前后基于 `FROM --platform=$BUILDPLATFORM` 打出的 `project-lucy:customer-amd64-0.16.0` / `inbox/customer-amd64-offline-package` **不得交付客户**；GitHub Release `lucy-k8s-integration-20260827-v1` 亦因同因作废，须按本规格重建并通过 G2–G4 后再交付。
 
 ### 2.3 镜像导出
 

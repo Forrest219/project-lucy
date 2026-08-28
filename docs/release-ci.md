@@ -30,6 +30,8 @@ Manual inputs:
 
 ## 2. Required Gates
 
+> ⚡ **Customer Image / Package Delivery Gate**: Any release involving Docker or K8s delivery to customers must strictly follow [`docs/customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) and pass G0–G7 & K1–K4.
+
 | Job | Commands / Coverage |
 |---|---|
 | `spec-and-webui` | `npm run lint:spec`; `npm run security:baseline`; `webui npm test`; `webui npm run build` |

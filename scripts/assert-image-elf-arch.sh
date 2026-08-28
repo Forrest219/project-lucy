@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Assert that a local Docker image's /usr/local/bin/node ELF matches the
-# expected CPU architecture. Metadata-only checks (docker image inspect
-# Architecture) are not enough — BUILDPLATFORM-bound Dockerfiles previously
-# produced amd64-labeled images with aarch64 binaries.
+# Assert that a local Docker image's critical ELF binaries match the expected
+# CPU architecture. Checks BOTH:
+#   - /usr/local/bin/node
+#   - /usr/bin/tini   (ENTRYPOINT; customer "exec format error" usually hits here first)
+#
+# Metadata-only checks (docker image inspect Architecture) are NOT enough —
+# BUILDPLATFORM-bound Dockerfiles previously produced amd64-labeled images with
+# aarch64 binaries (see docs/customer-amd64-image-build-checklist.md).
 set -Eeuo pipefail
 
 usage() {
@@ -45,21 +49,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
+assert_elf() {
+  local label="$1"
+  local path="$2"
+  docker cp "${CID}:${path}" "${tmpdir}/$(basename "$path")" 2>/dev/null || {
+    echo "error: missing ${path} in image ${IMAGE}" >&2
+    return 1
+  }
+  file_out="$(file "${tmpdir}/$(basename "$path")")"
+  echo "[assert-image-elf-arch] ${label}: ${file_out}"
+  if echo "$file_out" | grep -Eiq "$FORBIDDEN_REGEX"; then
+    echo "error: ${label} ELF conflicts with expected ${EXPECTED}" >&2
+    return 1
+  fi
+  if ! echo "$file_out" | grep -Eiq "$MATCH_REGEX"; then
+    echo "error: ${label} ELF did not match expected ${EXPECTED}" >&2
+    return 1
+  fi
+}
+
 CID="$(docker create --entrypoint /bin/true "$IMAGE")"
-docker cp "${CID}:/usr/local/bin/node" "${tmpdir}/node"
-
-file_out="$(file "${tmpdir}/node")"
 echo "[assert-image-elf-arch] image=${IMAGE} expected=${EXPECTED}"
-echo "[assert-image-elf-arch] file: ${file_out}"
-
-if echo "$file_out" | grep -Eiq "$FORBIDDEN_REGEX"; then
-  echo "error: node ELF architecture conflicts with expected ${EXPECTED}" >&2
-  exit 1
-fi
-
-if ! echo "$file_out" | grep -Eiq "$MATCH_REGEX"; then
-  echo "error: node ELF did not match expected ${EXPECTED} pattern (${MATCH_REGEX})" >&2
-  exit 1
-fi
+assert_elf node /usr/local/bin/node
+assert_elf tini /usr/bin/tini
 
 echo "[assert-image-elf-arch] ok"

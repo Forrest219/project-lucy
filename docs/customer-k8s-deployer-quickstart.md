@@ -54,6 +54,8 @@ kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.architecture}'
 
 ### 2.1 Production build (recommended)
 
+> ⚡ **Delivery Checklist**: For all customer deliveries and offline installations, always follow the mandatory gates in [`docs/customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) and [`docs/customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md) (including G2 ELF check, G4b Python offline runtime check, and Helm MCP URL verification).
+
 Use `docker buildx` with explicit `--platform linux/amd64` so the published
 tag always contains the customer architecture:
 

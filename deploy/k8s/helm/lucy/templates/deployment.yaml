@@ -14,6 +14,14 @@ spec:
   {{- if hasPrefix "REPLACE-ME" .Values.image.repository }}
   {{- fail (printf "Lucy Helm chart requires image.repository to point at your customer registry (e.g. registry.example.com/data-team/project-lucy). The placeholder %q must be replaced before installing on any cluster." .Values.image.repository) }}
   {{- end }}
+  {{- /* Non-local installs (customer registry) must advertise a real MCP URL.
+       Local kind/demo keeps image.repository=project-lucy and may omit it. */}}
+  {{- if ne .Values.image.repository "project-lucy" }}
+  {{- $mcpUrl := .Values.env.LUCY_PUBLIC_MCP_URL | default "" | toString | trim }}
+  {{- if or (eq $mcpUrl "") (contains "REPLACE-ME" $mcpUrl) (hasPrefix "http://127.0.0.1" $mcpUrl) (hasPrefix "http://localhost" $mcpUrl) }}
+  {{- fail "Lucy Helm chart requires env.LUCY_PUBLIC_MCP_URL to be an externally reachable http(s) URL (e.g. https://lucy.example.com/mcp) when image.repository is a customer registry. Do not leave it empty, REPLACE-ME, or 127.0.0.1/localhost — otherwise WebUI reports MCP 未就绪 and agents get the wrong endpoint." }}
+  {{- end }}
+  {{- end }}
   # Single-replica only. HA is intentionally not supported yet.
   replicas: {{ .Values.replicaCount }}
   # Recreate is REQUIRED while we mount an RWO PVC at /data/lucy.

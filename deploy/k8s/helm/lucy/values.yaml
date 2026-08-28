@@ -104,6 +104,11 @@ env:
   # that agent platforms actually call. The chart does NOT default this to
   # the in-cluster service URL — using 127.0.0.1 / cluster-local URLs would
   # mislead external agents.
+  #
+  # When image.repository is NOT the local-dev value `project-lucy`, the chart
+  # fails to render if this is empty, still contains REPLACE-ME, or points at
+  # 127.0.0.1/localhost (see templates/deployment.yaml). Set the Ingress /
+  # gateway URL agents will call, e.g. https://lucy.example.com/mcp.
   LUCY_PUBLIC_MCP_URL: ""
 
   # Demo / template-only switches. Production must keep these empty / 0.
