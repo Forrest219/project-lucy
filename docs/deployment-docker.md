@@ -490,14 +490,22 @@ node scripts/release-artifacts.mjs --out release/
 
 发布产物中的 `lucy-docker-source-bundle.tar.gz` 是客户可安装包；metadata、SBOM 和单独的 Markdown 文档只用于发布说明。
 
-## 14. v0.2 增补：Demo Evals 挂载
+## 14. v0.3 增补：POC Demo Evals（独立语境）
 
-`docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 已挂载 `./evals:/data/lucy/evals:ro`，使 demo 容器内 KTX MCP 的 wiki_search / eval 工具能访问到仓库的 eval suites。
+POC 演示 **不在** 默认 `docker-compose.yml` 内提供 demo 数据库。完整边界见 `docs/lucy-poc-demo-isolation-spec.md`。
+
+`docker-compose.demo.yml` 与 `docker-compose.postgres-demo.yml` 挂载 **demo 专用** eval，与自包含 DB 基线对齐：
+
+| Compose | Eval mount |
+|---|---|
+| `docker-compose.demo.yml` | `./examples/docker-demo/project-template/evals` → `/data/lucy/evals:ro` |
+| `docker-compose.postgres-demo.yml` | `./examples/postgres-demo/project-template/evals` → `/data/lucy/evals:ro` |
 
 挂载要点：
 
 - read-only，不影响 demo-data volume 的运行时状态
-- 不挂 evals 时，KTX MCP 在 demo 容器内找不到 superstore eval
+- **禁止** 挂载仓库根 `./evals`（如 `evals/superstore/` 按 Aliyun 10194 行校准，与 demo 1000 行基线不一致）
+- demo eval gold 单一事实源：`examples/docker-demo/mysql/_baseline.json`（Postgres 同生成器输出）
 - 调整后无需重启 demo-db；只 `docker compose up -d lucy` 即可
 
 ## 15. v0.2 增补：大陆网络环境

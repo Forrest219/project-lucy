@@ -48,9 +48,9 @@ services:
       - "${LUCY_DEMO_PROXY_HOST_PORT:-57881}:7879"
     volumes:
       - lucy-demo-data:/data/lucy
-      # Mount the eval suites so wiki_search / KTX eval tools can reach them.
+      # POC-only evals aligned with demo DB baseline — not repo-root evals/superstore/.
       # Read-only; demo-data volume still owns runtime state.
-      - ./evals:/data/lucy/evals:ro
+      - ./examples/docker-demo/project-template/evals:/data/lucy/evals:ro
     depends_on:
       demo-db:
         condition: service_healthy

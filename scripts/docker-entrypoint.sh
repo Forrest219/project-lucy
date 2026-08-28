@@ -60,6 +60,7 @@ sync_context_from_template() {
   sync_template_tree "${TEMPLATE_ROOT}/semantic-layer" "${PROJECT_ROOT}/semantic-layer" "semantic-layer"
   sync_template_tree "${TEMPLATE_ROOT}/wiki" "${PROJECT_ROOT}/wiki" "wiki"
   sync_template_tree "${TEMPLATE_ROOT}/skills" "${PROJECT_ROOT}/skills" "skills"
+  sync_template_tree "${TEMPLATE_ROOT}/evals" "${PROJECT_ROOT}/evals" "evals"
 }
 
 seed_project() {
