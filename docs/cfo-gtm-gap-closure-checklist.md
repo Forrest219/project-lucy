@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy CFO GTM 差距 Closure Checklist |
 | 文档类型 | Gap Closure / Backlog |
-| 版本 | v0.1 |
+| 版本 | v0.2 |
 | 撰写日期 | 2026-08-28 |
 | 委托人 | xingchen |
 | 适用范围 | 「彻底征服 CFO」GTM 路线：P0 五项 closure、POC eval 1:1 backlog、SKU 路线 A/B/C 决策 |
@@ -21,7 +21,7 @@
 1. POC eval 密度与 wiki 场景对齐（≥15 machine cases，6 维覆盖矩阵达标）。
 2. Operating model 在 GTM / 交付文档中正面定义，不再被误读为「Lucy 自带 approval workflow」。
 3. SKU 路线（A/B/C）经决策并反映到 `customer-deployment-guide.md` / `admin-guide.md`。
-4. CEO snapshot 从 `mock_value` 升级为 owner 证据或明确 blocked 状态。
+4. CEO snapshot 从 `mock_value` 升级为 **已签字 benchmark 证据**（`owner_screenshot` 等）或 eval 明确 `blocked`。
 5. Release readiness evidence 可由非工程师自助导出（UI 或 documented CLI 一键路径）。
 
 ---
@@ -57,10 +57,10 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 | 维度 | 内容 |
 |---|---|
 | **定义** | 将 POC wiki + semantic + eval + access 打包为可售 vertical config package |
-| **必须补** | `customer-config.poc.example/`（或等价命名）；60+ eval cases；owner-signed benchmarks |
+| **必须补** | `customer-config.poc.example/`（或等价命名）；60+ eval cases；customer UAT 签字 benchmark |
 | **价值主张** | 「买的是已验证的 vertical operating model，不是空平台」 |
 | **适合客户** | 墨迹类 CEO 一眼报 / IDM 治理场景；垂直签单快于平台教育 |
-| **主要成本** | 垂直深度 > 平台广度；每 vertical 需重复 eval + owner 签字 |
+| **主要成本** | 垂直深度 > 平台广度；每 vertical 需重复 eval + 客户 UAT 签字 |
 | **解锁 P0** | #1（eval backlog）、#4（snapshot 升级） |
 
 ### 决策矩阵
@@ -90,7 +90,9 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 
 ### P0-1：POC eval 密度与 wiki 场景对齐
 
-**现状：** `evals/data_agent_poc/` 仅 **1** 条 machine case；wiki 覆盖 3 owner 场景 + 15+ 演示问题；`data_agent_poc-quiz-cases.html` metadata 引用但文件缺失。
+**现状：** `evals/data_agent_poc/` 仅 **1** 条 machine case；wiki 覆盖 3 个业务场景域 + 15+ 演示问题；`data_agent_poc-quiz-cases.html` metadata 引用但文件缺失。
+
+> **命名约定：** 本文档是产品研发 backlog，按 **场景域 / 表 / 治理主题** 组织。`wiki/global/poc-*.md` 中若出现客户项目叙事里的人名（历史 POC 素材），**不**作为产品研发分工或验收责任人；产品侧只认场景 id 与 eval case id。
 
 **目标：** ≥15 machine cases；6 维覆盖矩阵（`docs/eval-quiz-conventions.md` §3.1）在 `data_agent_poc` domain 达标；paired quiz HTML 可渲染。
 
@@ -119,8 +121,8 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 | 要素 | Lucy 负责 | 客户 / 外部 workflow 负责 |
 |---|---|---|
 | 数仓 / SAP 边界 | 只读已确认表/视图；enabled_tables 白名单 | 建仓、ETL、SAP 入账、mart 维护 |
-| 语义层 / Wiki 维护 | 提供 Catalog / WikiEditor / publish validate gate | Owner 定义口径、Review、Git 变更 |
-| 口径变更治理 | Validate Gate + Eval gate + config audit | CAB / owner 签字、生效日期、通知 |
+| 语义层 / Wiki 维护 | 提供 Catalog / WikiEditor / publish validate gate | 客户数据 Owner 定义口径、Review、Git 变更 |
+| 口径变更治理 | Validate Gate + Eval gate + config audit | 客户 CAB / UAT 签字、生效日期、通知 |
 | Agent 访问 | ACL + audit + trace | Token 生命周期、IdP（若未来 SSO） |
 
 **验收标准：**
@@ -154,18 +156,18 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 
 ### P0-4：CEO snapshot 从 mock_value 升级或明确 blocked
 
-**现状：** `poc_ceo_metric_snapshot.benchmark_type = 'mock_value'`；wiki 写「陶峙桦提供截图后升级 owner_screenshot」。
+**现状：** `poc_ceo_metric_snapshot.benchmark_type = 'mock_value'`；benchmark 仍为模拟值，未接入客户 UAT 签字证据。
 
-**目标：** 每条 snapshot 行 `benchmark_type` 为 `owner_screenshot` 或 eval case 标 `blocked` 并说明原因。
+**目标：** 每条 snapshot 行 `benchmark_type` 升级为 `owner_screenshot`（或等价已验证来源）；若客户 UAT 证据未到位，相关 eval case 标 `blocked` 并说明原因。
 
 **验收标准：**
 
 - [ ] `semantic-layer/poc-mysql-aliyun/poc_ceo_metric_snapshot.yaml`（或 overlay）benchmark 元数据更新
 - [ ] 至少 3 个 snapshot 日期（2026-01-31 / 03-31 / 05-31）各有 eval case 回归
 - [ ] wiki `poc-idm-governance.md` CEO 快照段与 semantic 一致
-- [ ] 若 owner 证据未到位：相关 eval 标 `blocked` + `notes` 说明，**不得**在 GTM 中宣称「board number 已签字」
+- [ ] 若客户 UAT 证据未到位：相关 eval 标 `blocked` + `notes` 说明，**不得**在 GTM 中宣称「board number 已签字」
 
-**负责域：** POC data / 业务 owner（陶峙桦）
+**负责域：** POC data + **客户 UAT / 数据治理流程**（产品不指定具体自然人）
 
 ---
 
@@ -212,7 +214,7 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 | security / ACL | 1 | 0 | 1 |
 | **合计** | **15** | **1** | **14** |
 
-### 4.2 场景一：用户活跃（牛玉婷 · `poc_app_active_daily`）
+### 4.2 场景域 A：用户活跃分析（`poc_app_active_daily`）
 
 | # | Case ID | 维度 | Wiki 来源 | 问题摘要 | 关键断言 |
 |---|---|---|---|---|---|
@@ -222,7 +224,7 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 | 4 | `data_agent_poc-anti-pattern-avg-start-check-001` | anti-pattern | poc-active-analysis L65 | 人均启动次数 | 禁止 `avg(avg_start_cnt_check)`；必须 sum/sum |
 | 5 | `data_agent_poc-boundary-dau-with-without-back-001` | boundary | poc-active-analysis L74 | 含刷新 vs 不含刷新差多少 | 两 measure 均引用；说明 iPhone 差异 |
 
-### 4.3 场景二：广告经营（何洲 · `poc_ad_revenue_daily`）
+### 4.3 场景域 B：广告经营分析（`poc_ad_revenue_daily`）
 
 | # | Case ID | 维度 | Wiki 来源 | 问题摘要 | 关键断言 |
 |---|---|---|---|---|---|
@@ -231,7 +233,7 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 | 8 | `data_agent_poc-basic-ad-revenue-trend-001` | basic | poc-ad-revenue L86 | 1-5 月广告收入趋势 | `sum(ad_revenue)` 跨月 |
 | 9 | `data_agent_poc-boundary-ad-vs-product-dau-001` | boundary | poc-ad-revenue L59 | 广告域 DAU vs 产品 DAU | 数值不同是预期；来源不同；不可混算 ARPU |
 
-### 4.4 场景三：IDM 治理（陶峙桦 · `poc_ad_revenue_by_type_daily`）
+### 4.4 场景域 C：IDM 治理层（`poc_ad_revenue_by_type_daily` + `poc_ceo_metric_snapshot`）
 
 | # | Case ID | 维度 | Wiki 来源 | 问题摘要 | 关键断言 |
 |---|---|---|---|---|---|
@@ -254,22 +256,22 @@ Lucy 当前处于「三条路各做开头、哪条都没走通」状态。必须
 
 **Quiz 配对：** 每个 anti-pattern / boundary / security case 至少 1 道 quiz（目标 quiz ≥12 题）；Q1（timezone）已有。
 
-### 4.3 依赖与顺序
+### 4.6 依赖与顺序
 
 ```text
 P0-2 文档（operating model） ──可并行──┐
 P0-3 SKU 决策 ─────────────────────────┼──► P0-5 export 路径选型
-P0-4 owner snapshot ──blocks──► case #11,#14 benchmark 断言
+P0-4 UAT benchmark ──blocks──► case #11,#14 benchmark 断言
 P0-1 eval backlog (#6-20) ──► quiz HTML ──► smoke:p1:business-eval-full
 ```
 
 **建议实施波次：**
 
-| 波次 | Cases | 理由 |
+| 波次 | Cases | 治理主题（产品语言） |
 |---|---|---|
-| Wave 1 | #7, #10, #11, #16 | CFO 最高风险：DAU 4×、一致性、ACL |
-| Wave 2 | #1, #2, #6, #15(已有), #17, #18 | 核心场景 + multi-turn |
-| Wave 3 | #3-5, #8-9, #12-14, #19-20 | 覆盖矩阵补全 |
+| Wave 1 | #7, #10, #11, #16 | DAU 重复存储 anti-pattern、跨表一致性、ACL deny |
+| Wave 2 | #1, #2, #6, #15(已有), #17, #18 | 三场景域核心查询 + multi-turn |
+| Wave 3 | #3-5, #8-9, #12-14, #19-20 | 6 维覆盖矩阵补全 |
 
 ---
 
@@ -293,7 +295,7 @@ P0-1 eval backlog (#6-20) ──► quiz HTML ──► smoke:p1:business-eval-f
 | P0-1 POC eval ≥15 | 🔲 Not started | | 当前 1/15 |
 | P0-2 Operating model 文档 | 🔲 Not started | | |
 | P0-3 SKU 决策 | 🔲 Not started | | §2 决策记录待填 |
-| P0-4 CEO snapshot | 🔲 Blocked on owner | | mock_value |
+| P0-4 CEO snapshot | 🔲 Blocked on UAT evidence | | mock_value |
 | P0-5 Release readiness export | 🔲 Not started | API: `release-readiness-package.ts` | UI 缺失 |
 
 **下次评审建议携带：**
@@ -309,3 +311,4 @@ P0-1 eval backlog (#6-20) ──► quiz HTML ──► smoke:p1:business-eval-f
 | 版本 | 日期 | 变更 |
 |---|---|---|
 | v0.1 | 2026-08-28 | 初稿：P0 五项、SKU A/B/C、POC eval 1:1 backlog（20 cases）、P1 六项 |
+| v0.2 | 2026-08-28 | 去除产品研发文档中的人名绑定；场景改为场景域 A/B/C；P0-4 改为客户 UAT 证据；补充命名约定 |
