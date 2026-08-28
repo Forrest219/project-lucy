@@ -192,6 +192,7 @@ KTX CLI / MCP daemon
 | 质量评测 | 安全评测候选 | `/eval/security-candidates` | 从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。 |
 | 访问治理 | 使用概况 | `/admin/usage` | 查看 `Agent`、`Token` 和数据表的活跃度、调用量与响应耗时。 |
 | 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |
+| 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |
 | 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |
 | 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 `Agent` 的 `MCP` 工具权限裁决，并执行受控接入试调。 |

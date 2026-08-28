@@ -854,7 +854,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(19);
+    expect(bodyRows.length).toBe(20);
 
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.

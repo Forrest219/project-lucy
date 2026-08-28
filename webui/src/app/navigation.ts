@@ -49,6 +49,7 @@ export type NavIconKey =
   | "securityEval"
   | "governanceOverview"
   | "agents"
+  | "tokens"
   | "roles"
   | "audit"
   | "mcpPlayground"
@@ -215,6 +216,15 @@ export const navGroups: Array<{
         active: (path) => path.startsWith("/admin/agents"),
         description: "管理 Agent 身份、角色、Token 及数据访问边界。",
         keywords: ["Agent", "Token", "访问"]
+      },
+      {
+        id: "admin-tokens",
+        label: "Token 凭据",
+        to: "/admin/tokens",
+        iconKey: "tokens",
+        active: (path) => path === "/admin/tokens" || path.startsWith("/admin/tokens/"),
+        description: "全局查看、签发与定向吊销 Agent 访问凭据。",
+        keywords: ["Token", "凭据", "Secret", "Key", "API Key"]
       },
       {
         id: "admin-roles",

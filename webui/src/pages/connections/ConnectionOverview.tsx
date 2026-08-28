@@ -28,6 +28,12 @@ import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
 import { CreateConnectionDrawer } from "../../components/CreateConnectionDrawer";
 import { DeleteConnectionDrawer } from "../../components/DeleteConnectionDrawer";
 import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
+import { SetupAssistantModal } from "../../components/onboarding";
+import {
+  inferCurrentStep,
+  formatAssistantProgressLabel,
+  type SetupStep
+} from "../../lib/setupAssistant";
 import {
   CatalogAssetManifestDrawer,
   CatalogAssetUploadButton,
@@ -353,7 +359,7 @@ function liveTableCountCell(
       state: "error"
     };
   }
-  const row = live.schemas.find((item) => item.schema === schema);
+  const row = live.schemas?.find((item) => item.schema === schema);
   if (!row) {
     return {
       text: "—",
@@ -431,6 +437,9 @@ export function ConnectionOverview() {
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantStep, setAssistantStep] = useState<SetupStep>(1);
+  const [assistantConnId, setAssistantConnId] = useState("");
   const [removeTarget, setRemoveTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ConnectionInfo | null>(null);
   const [reloadRunsByConnection, setReloadRunsByConnection] = useState<Record<string, CatalogReloadRun>>({});
@@ -515,14 +524,28 @@ export function ConnectionOverview() {
           </>
         }
         actions={
-          <button
-            type="button"
-            className="pl-btn pl-btn--primary"
-            onClick={() => setCreateOpen(true)}
-            data-testid="create-connection-btn"
-          >
-            新建连接
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="pl-btn pl-btn--primary"
+              onClick={() => {
+                setAssistantConnId("");
+                setAssistantStep(1);
+                setAssistantOpen(true);
+              }}
+              data-testid="start-onboarding-assistant-btn"
+            >
+              启动接入向导
+            </button>
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary"
+              onClick={() => setCreateOpen(true)}
+              data-testid="create-connection-btn"
+            >
+              新建连接
+            </button>
+          </div>
         }
       />
 
@@ -552,25 +575,45 @@ export function ConnectionOverview() {
 
       <div className="pl-overview-grid pl-overview-grid--flat">
         {connections.length === 0 && (
-          <div className="py-6 space-y-3" data-testid="connections-empty-state">
-            <p className="text-sm text-fg-muted">暂无连接配置。</p>
-            <p className="text-xs text-fg-muted notranslate" translate="no">
-              也可在 <code className="notranslate" translate="no">ktx.yaml</code> 中手工添加。
-            </p>
-            <button
-              type="button"
-              className="pl-btn pl-btn--primary"
-              onClick={() => setCreateOpen(true)}
-              data-testid="create-connection-empty-btn"
-            >
-              新建连接
-            </button>
+          <div className="py-8 px-6 text-center bg-bg-surface border border-border-default rounded-xl space-y-4" data-testid="connections-empty-state">
+            <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+              <Database className="w-6 h-6" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <p className="text-sm text-fg-muted">暂无连接配置。</p>
+              <h3 className="text-base font-bold text-fg-default">欢迎使用 Lucy 数据库接入向导</h3>
+              <p className="text-xs text-fg-muted notranslate" translate="no">
+                一步只做一件事：从物理连接、Schema Manifest 挂载、启用表配置到 AI 客户端 MCP 接入，轻松完成配置。也可在 <code className="notranslate" translate="no">ktx.yaml</code> 中手工添加。
+              </p>
+            </div>
+            <div className="flex justify-center gap-3">
+              <button
+                type="button"
+                className="pl-btn pl-btn--primary"
+                onClick={() => {
+                  setAssistantConnId("");
+                  setAssistantStep(1);
+                  setAssistantOpen(true);
+                }}
+                data-testid="start-assistant-empty-btn"
+              >
+                启动数据库接入向导
+              </button>
+              <button
+                type="button"
+                className="pl-btn pl-btn--secondary"
+                onClick={() => setCreateOpen(true)}
+                data-testid="create-connection-empty-btn"
+              >
+                新建连接
+              </button>
+            </div>
           </div>
         )}
         {connections.map((conn) => {
             const lastRun =
               reloadRunsByConnection[conn.id] ??
-              (catalogReloadHistoryReady ? catalogReloadsQuery.data.lastByConnection[conn.id] : undefined);
+              (catalogReloadHistoryReady ? catalogReloadsQuery.data?.lastByConnection?.[conn.id] : undefined);
             const reloadError = reloadErrorsByConnection[conn.id] ?? null;
             const catalogState = catalogRunState(
               lastRun,
@@ -623,6 +666,12 @@ export function ConnectionOverview() {
             const headerTimestampIso = lastRun?.startedAt ?? null;
             const engine = engineLabel(conn.engine ?? conn.driver);
             const engineTone = engineKey(conn.engine ?? conn.driver);
+            const cardAssistantStep = inferCurrentStep({
+              connection: conn,
+              hasManifest: schemaRows.some((r) => r.assetState.label === "已存在"),
+              enabledTableCount: conn.enabledTables.length
+            });
+            const isAssistantInProgress = cardAssistantStep < 6;
             const showCatalogRunStatus = shouldShowCatalogRunStatus(
               lastRun,
               Boolean(reloadingConnections[conn.id]),
@@ -649,6 +698,15 @@ export function ConnectionOverview() {
                     </span>
                   </div>
                   <div className="pl-connection-card-meta notranslate" translate="no">
+                    {isAssistantInProgress ? (
+                      <span
+                        className="pl-assistant-badge text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded font-medium notranslate"
+                        translate="no"
+                        data-testid={`assistant-progress-badge-${conn.id}`}
+                      >
+                        {formatAssistantProgressLabel(cardAssistantStep)}
+                      </span>
+                    ) : null}
                     {(() => {
                       const healthQuery = healthByConnectionId.get(conn.id);
                       const healthResult = healthQuery?.data;
@@ -773,6 +831,35 @@ export function ConnectionOverview() {
                   </dl>
                 </div>
                 <div className="pl-connection-card-body">
+                  {isAssistantInProgress ? (
+                    <div
+                      className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-lg mb-3 notranslate"
+                      translate="no"
+                      data-testid={`connection-assistant-banner-${conn.id}`}
+                    >
+                      <div className="text-xs text-fg-default">
+                        <span className="font-semibold text-primary mr-2">
+                          {formatAssistantProgressLabel(cardAssistantStep)}
+                        </span>
+                        <span className="text-fg-muted">
+                          可继续向导完成该连接的快速初始化配置。
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--outline text-xs text-primary border-primary/40 hover:bg-primary/10 notranslate"
+                        onClick={() => {
+                          setAssistantConnId(conn.id);
+                          setAssistantStep(cardAssistantStep);
+                          setAssistantOpen(true);
+                        }}
+                        data-testid={`resume-assistant-${conn.id}`}
+                        translate="no"
+                      >
+                        ⚡ 继续向导
+                      </button>
+                    </div>
+                  ) : null}
                   {showRefreshWarning ? (
                     <div
                       className="pl-connection-refresh-warning notranslate"
@@ -1227,6 +1314,17 @@ export function ConnectionOverview() {
           />
         );
       })()}
+      <SetupAssistantModal
+        open={assistantOpen}
+        onClose={() => {
+          setAssistantOpen(false);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.project });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
+        }}
+        initialStep={assistantStep}
+        initialConnectionId={assistantConnId}
+        existingIds={connections.map((c) => c.id)}
+      />
     </div>
   );
 }

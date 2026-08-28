@@ -64,20 +64,20 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 19 second-level items in total", () => {
+  it("navGroups contains 20 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(19);
+    expect(totalItems).toBe(20);
   });
 
   it("flat sidebar entries match Handbook §1.5 rows (top + second-level)", () => {
-    // 顶部 1 + 6 组共 19 项二级菜单 = 20 个侧栏可见入口
+    // 顶部 1 + 6 组共 20 项二级菜单 = 21 个侧栏可见入口
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = [
       { group: topLevelEntry.label, id: topLevelEntry.id, label: topLevelEntry.label, to: topLevelEntry.to },
       ...navGroups.flatMap((g) =>
         g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
       )
     ];
-    expect(flat.length).toBe(20);
+    expect(flat.length).toBe(21);
 
     // 顺序与侧栏自上而下严格一致
     expect(flat).toEqual([
@@ -94,6 +94,7 @@ describe("navigation (shared sidebar config)", () => {
       { group: "质量评测", id: "eval-security-candidates", label: "安全评测候选", to: "/eval/security-candidates" },
       { group: "访问治理", id: "admin-governance", label: "使用概况", to: "/admin/usage" },
       { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
+      { group: "访问治理", id: "admin-tokens", label: "Token 凭据", to: "/admin/tokens" },
       { group: "访问治理", id: "admin-roles", label: "角色权限", to: "/admin/roles" },
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
@@ -153,6 +154,7 @@ describe("navigation (shared sidebar config)", () => {
       "eval-security-candidates": "从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。",
       "admin-governance": "查看 Agent、Token 和数据表的活跃度、调用量与响应耗时。",
       "admin-agents": "管理 Agent 身份、角色、Token 及数据访问边界。",
+      "admin-tokens": "全局查看、签发与定向吊销 Agent 访问凭据。",
       "admin-roles": "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
       "admin-audit": "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
       "admin-mcp-playground": "预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调。",
@@ -228,6 +230,7 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/eval/monitor")).toBe("evaluation");
       expect(findGroupIdForPathname("/admin/usage")).toBe("governance");
       expect(findGroupIdForPathname("/admin/agents")).toBe("governance");
+      expect(findGroupIdForPathname("/admin/tokens")).toBe("governance");
       expect(findGroupIdForPathname("/admin/roles")).toBe("governance");
       expect(findGroupIdForPathname("/admin/audit")).toBe("governance");
       expect(findGroupIdForPathname("/admin/mcp-playground")).toBe("governance");

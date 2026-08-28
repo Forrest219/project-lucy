@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
+import { extractRequestClientMeta } from "./request-client-meta.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
@@ -20,6 +21,11 @@ import { assertLicenseAllowsMcp, loadLicenseSnapshot } from "../license/entitlem
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
+// V5 multi-upstream: lucy-skills is a parallel MCP server (skills catalog + SKILL.md content).
+// Routed under `/mcp/skills` to keep the existing `/mcp` KTX path unchanged.
+const LUCY_SKILLS_HOST = process.env.LUCY_PROXY_LUCY_SKILLS_HOST ?? "127.0.0.1";
+const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881);
+const LUCY_SKILLS_PATH_PREFIX = "/mcp/skills";
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
 const SENSITIVE_ARG_KEY_RE = /(?:sql|query|password|passwd|pwd|token|secret|api[-_]?key|authorization|credential)/i;
@@ -141,6 +147,17 @@ function forwardToKtx(
   incomingHeaders: IncomingMessage["headers"],
   body?: Buffer
 ): Promise<IncomingMessage> {
+  return forwardToUpstream({ host: KTX_HOST, port: KTX_PORT }, method, url, incomingHeaders, body, "KTX");
+}
+
+function forwardToUpstream(
+  target: { host: string; port: number },
+  method: string,
+  url: string,
+  incomingHeaders: IncomingMessage["headers"],
+  body: Buffer | undefined,
+  label: string
+): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const headers: Record<string, string | string[]> = {};
     for (const [k, v] of Object.entries(incomingHeaders)) {
@@ -155,11 +172,11 @@ function forwardToKtx(
     if (body) headers["content-length"] = String(body.byteLength);
 
     const upstream = httpRequest(
-      { hostname: KTX_HOST, port: KTX_PORT, path: url, method, headers },
+      { hostname: target.host, port: target.port, path: url, method, headers },
       resolve
     );
     upstream.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
-      upstream.destroy(new Error(`KTX upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
+      upstream.destroy(new Error(`${label} upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
     });
     upstream.on("error", reject);
     if (body) upstream.end(body);
@@ -2899,6 +2916,49 @@ async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Pro
   pipeResponse(upstream, res);
 }
 
+/**
+ * V5 — lucy-skills passthrough.
+ * Routes requests hitting `/mcp/skills*` to the lucy-skills upstream
+ * (default 127.0.0.1:7881). Strips the `/mcp/skills` prefix so the upstream
+ * sees a normal `/mcp` path. No KTX-specific post-processing (no
+ * instructions injection, no ACL, no audit/trace write — those are
+ * KTX-shaped and would produce noise for a read-only resources server).
+ *
+ * To be revisited: if skills need trace evidence or ACL, fold them in here.
+ */
+async function handleSkillsPassthrough(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
+  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
+  if (!identify.ok) {
+    recordAuthFailure(req, identify);
+    res.writeHead(401, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "Unauthorized" }));
+    return;
+  }
+  // Read body so we can forward POST content (MCP JSON-RPC envelope).
+  // GET / DELETE have no body; readBody returns empty Buffer either way.
+  const body = await readBody(req);
+  // /mcp/skills → /mcp, /mcp/skills/ → /mcp/, /mcp/skills/v1/foo → /mcp/v1/foo
+  const originalUrl = req.url ?? "/mcp/skills";
+  const upstreamUrl = originalUrl.replace(/^\/mcp\/skills(?=\/|$)/, "/mcp") || "/mcp";
+  const upstream = await forwardToUpstream(
+    { host: LUCY_SKILLS_HOST, port: LUCY_SKILLS_PORT },
+    req.method ?? "GET",
+    upstreamUrl,
+    req.headers,
+    body.byteLength > 0 ? body : undefined,
+    "lucy-skills"
+  );
+  pipeResponse(upstream, res);
+}
+
+function isSkillsPath(url: string | undefined): boolean {
+  if (!url) return false;
+  // Strip query string for the match
+  const path = url.split("?")[0];
+  return path === LUCY_SKILLS_PATH_PREFIX || path.startsWith(`${LUCY_SKILLS_PATH_PREFIX}/`);
+}
+
 function normalizeHeader(v: string | string[] | undefined): string | undefined {
   if (!v) return undefined;
   return Array.isArray(v) ? v[0] : v;
@@ -2910,7 +2970,9 @@ export function buildProxy() {
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
-      if (req.method === "POST") {
+      if (isSkillsPath(req.url)) {
+        await handleSkillsPassthrough(req, res);
+      } else if (req.method === "POST") {
         await handlePost(req, res);
       } else {
         await handlePassthrough(req, res);
