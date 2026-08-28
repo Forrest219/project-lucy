@@ -315,6 +315,52 @@ describe("createConnection (Spec 124 Phase A)", () => {
     };
     expect(parsed.connections["demo-mysql"].schemas).toEqual(["analytics"]);
   });
+
+  it("supports sqlite connections without host, port, username, or password", async () => {
+    const testFn = vi.fn(async () => okTest("local-sqlite"));
+    const result = await createConnection(
+      projectRoot,
+      {
+        id: "local-sqlite",
+        driver: "sqlite",
+        database: "data/app.sqlite",
+        schemas: ["main"]
+      },
+      false,
+      { testConnectionFn: testFn }
+    );
+
+    expect(result.written).toBe(true);
+    const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    const parsed = parse(yamlText) as {
+      connections: Record<string, { driver: string; database: string }>;
+    };
+    expect(parsed.connections["local-sqlite"]).toMatchObject({
+      driver: "sqlite",
+      database: "data/app.sqlite"
+    });
+  });
+
+  it("supports sqlserver and oracle drivers", async () => {
+    const testFn = vi.fn(async () => okTest("dw-sqlserver"));
+    const result = await createConnection(
+      projectRoot,
+      {
+        id: "dw-sqlserver",
+        driver: "sqlserver",
+        host: "sql.internal",
+        port: 1433,
+        database: "dw",
+        username: "sa",
+        password: "sa-password"
+      },
+      false,
+      { testConnectionFn: testFn }
+    );
+    expect(result.written).toBe(true);
+    const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yamlText).toContain("driver: sqlserver");
+  });
 });
 
 describe("probeConnection", () => {

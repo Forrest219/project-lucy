@@ -114,13 +114,42 @@ describe("CreateConnectionDrawer", () => {
     expect(screen.getByText("连接 ID 已存在")).toBeInTheDocument();
   });
 
-  it("defaults postgres port when switching driver", () => {
+  it("defaults port when switching database types and switches to sqlite file mode", () => {
     renderDrawer();
     expect(screen.getByTestId("create-connection-port")).toHaveValue("3306");
     fireEvent.change(screen.getByTestId("create-connection-driver"), {
       target: { value: "postgres" }
     });
     expect(screen.getByTestId("create-connection-port")).toHaveValue("5432");
+
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "starrocks" }
+    });
+    expect(screen.getByTestId("create-connection-port")).toHaveValue("9030");
+
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "doris" }
+    });
+    expect(screen.getByTestId("create-connection-port")).toHaveValue("9030");
+
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "sqlserver" }
+    });
+    expect(screen.getByTestId("create-connection-port")).toHaveValue("1433");
+
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "oracle" }
+    });
+    expect(screen.getByTestId("create-connection-port")).toHaveValue("1521");
+
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "sqlite" }
+    });
+    expect(screen.queryByTestId("create-connection-host")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-connection-port")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-connection-username")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-connection-password")).not.toBeInTheDocument();
+    expect(screen.getByText("数据库文件路径")).toBeInTheDocument();
   });
 
   it("shows dryRun preview without sending password, then confirms create", async () => {
@@ -268,6 +297,80 @@ describe("CreateConnectionDrawer", () => {
       "连接已创建：demo-mysql（连通测试未通过，配置已保存）"
     );
   });
+
+  it("creates a sqlite connection with file-based inputs", async () => {
+    const bodies: unknown[] = [];
+    stubFetch({
+      "POST /api/connections": (body) => {
+        bodies.push(body);
+        const payload = body as { dryRun?: boolean; id?: string };
+        if (payload.dryRun === false) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                written: true,
+                connection: {
+                  id: "local-sqlite",
+                  driver: "sqlite",
+                  database: "data/my.sqlite",
+                  schemas: [],
+                  enabledTables: []
+                },
+                test: { status: "ok", durationMs: 5 }
+              }
+            })
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              diff: "+  local-sqlite:\n+    driver: sqlite\n",
+              proposedYaml: "connections:\n  local-sqlite:\n    driver: sqlite\n",
+              connection: {
+                id: "local-sqlite",
+                driver: "sqlite",
+                database: "data/my.sqlite",
+                schemas: [],
+                enabledTables: []
+              }
+            }
+          })
+        );
+      }
+    });
+
+    renderDrawer();
+    fireEvent.change(screen.getByTestId("create-connection-id"), {
+      target: { value: "local-sqlite" }
+    });
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "sqlite" }
+    });
+    fireEvent.change(screen.getByTestId("create-connection-database"), {
+      target: { value: "data/my.sqlite" }
+    });
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-confirm-btn")).toBeInTheDocument();
+    });
+    expect(bodies[0]).toMatchObject({
+      dryRun: true,
+      id: "local-sqlite",
+      driver: "sqlite",
+      database: "data/my.sqlite"
+    });
+    expect(bodies[0]).not.toHaveProperty("host");
+    expect(bodies[0]).not.toHaveProperty("password");
+
+    fireEvent.click(screen.getByTestId("create-connection-confirm-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-success")).toBeInTheDocument();
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("连接已创建：local-sqlite");
+  });
 });
 
 function previewPayload() {
@@ -294,12 +397,13 @@ describe("CreateConnectionDrawer UX", () => {
     renderDrawer();
     expect(screen.getByText("小写字母开头，仅小写字母、数字、下划线和短横线，2–64 个字符")).toBeInTheDocument();
     expect(screen.queryByText(/\^\[a-z\]/)).not.toBeInTheDocument();
-    expect(screen.getByText("驱动")).toBeInTheDocument();
+    expect(screen.getByText("连接标识 (ID)")).toBeInTheDocument();
+    expect(screen.getByText("数据库类型")).toBeInTheDocument();
     expect(screen.getByText("主机")).toBeInTheDocument();
     expect(screen.getByText("数据库")).toBeInTheDocument();
     expect(screen.getByText("用户名")).toBeInTheDocument();
     expect(screen.getByText("数据库密码")).toBeInTheDocument();
-    expect(screen.getByText(/驱动连接时使用的默认库/)).toBeInTheDocument();
+    expect(screen.getByText(/连接时使用的默认数据库名称/)).toBeInTheDocument();
     expect(screen.getByTestId("create-connection-secret-banner")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "测试连接" })).toBeInTheDocument();
     expect(screen.getByTestId("create-connection-advanced")).not.toHaveAttribute("open");

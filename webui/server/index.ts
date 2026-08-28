@@ -942,6 +942,8 @@ export function buildServer() {
     return { ok: true, data: { connections } };
   });
 
+  const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite"]);
+
   // Spec 124 Phase A: create connection (secret one-shot write + ktx.yaml patch).
   // dryRun defaults to true. No UI in this spike — API + security tests only.
   app.post<{
@@ -966,26 +968,29 @@ export function buildServer() {
     if (typeof body.id !== "string") {
       throw enabledTableError("BAD_REQUEST", "id is required");
     }
-    if (body.driver !== "mysql" && body.driver !== "postgres") {
-      throw enabledTableError("BAD_REQUEST", "driver must be mysql or postgres");
+    if (!VALID_CREATE_DRIVERS.has(body.driver ?? "")) {
+      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite");
     }
-    if (typeof body.host !== "string") {
-      throw enabledTableError("BAD_REQUEST", "host is required");
-    }
-    if (typeof body.port !== "number") {
-      throw enabledTableError("BAD_REQUEST", "port is required");
-    }
-    if (typeof body.database !== "string") {
+    const isSqlite = body.driver === "sqlite";
+    if (typeof body.database !== "string" || !body.database.trim()) {
       throw enabledTableError("BAD_REQUEST", "database is required");
     }
-    if (typeof body.username !== "string") {
-      throw enabledTableError("BAD_REQUEST", "username is required");
+    if (!isSqlite) {
+      if (typeof body.host !== "string" || !body.host.trim()) {
+        throw enabledTableError("BAD_REQUEST", "host is required");
+      }
+      if (typeof body.port !== "number") {
+        throw enabledTableError("BAD_REQUEST", "port is required");
+      }
+      if (typeof body.username !== "string" || !body.username.trim()) {
+        throw enabledTableError("BAD_REQUEST", "username is required");
+      }
     }
     const result = await createConnection(
       projectRoot,
       {
         id: body.id,
-        driver: body.driver,
+        driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite",
         ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
         ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
         readonly: body.readonly,
@@ -1022,26 +1027,29 @@ export function buildServer() {
     };
   }>("/api/connections/probe", async (request) => {
     const body = request.body ?? {};
-    if (body.driver !== "mysql" && body.driver !== "postgres") {
-      throw enabledTableError("BAD_REQUEST", "driver must be mysql or postgres");
+    if (!VALID_CREATE_DRIVERS.has(body.driver ?? "")) {
+      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite");
     }
-    if (typeof body.host !== "string") {
-      throw enabledTableError("BAD_REQUEST", "host is required");
-    }
-    if (typeof body.port !== "number") {
-      throw enabledTableError("BAD_REQUEST", "port is required");
-    }
-    if (typeof body.database !== "string") {
+    const isSqlite = body.driver === "sqlite";
+    if (typeof body.database !== "string" || !body.database.trim()) {
       throw enabledTableError("BAD_REQUEST", "database is required");
     }
-    if (typeof body.username !== "string") {
-      throw enabledTableError("BAD_REQUEST", "username is required");
-    }
-    if (typeof body.password !== "string" || body.password.length === 0) {
-      throw enabledTableError("CONNECTION_PASSWORD_REQUIRED", "数据库密码为必填项");
+    if (!isSqlite) {
+      if (typeof body.host !== "string" || !body.host.trim()) {
+        throw enabledTableError("BAD_REQUEST", "host is required");
+      }
+      if (typeof body.port !== "number") {
+        throw enabledTableError("BAD_REQUEST", "port is required");
+      }
+      if (typeof body.username !== "string" || !body.username.trim()) {
+        throw enabledTableError("BAD_REQUEST", "username is required");
+      }
+      if (typeof body.password !== "string" || body.password.length === 0) {
+        throw enabledTableError("CONNECTION_PASSWORD_REQUIRED", "数据库密码为必填项");
+      }
     }
     const data = await probeConnection({
-      driver: body.driver,
+      driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite",
       ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
       ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
       readonly: body.readonly,

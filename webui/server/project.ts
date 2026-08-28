@@ -1193,15 +1193,15 @@ export async function removeConnection(
 
 export type CreateConnectionInput = {
   id: string;
-  driver: "mysql" | "postgres";
+  driver: "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite";
   engine?: string;
   wireProtocol?: string;
   readonly?: boolean;
-  host: string;
-  port: number;
+  host?: string;
+  port?: number;
   database: string;
-  username: string;
-  /** Required when dryRun is false; ignored for dryRun preview. */
+  username?: string;
+  /** Required when dryRun is false (except sqlite without password); ignored for dryRun preview. */
   password?: string;
   schemas?: string[];
 };
@@ -1219,6 +1219,8 @@ function requiredNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
+const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite"]);
+
 function validateCreateConnectionInput(input: CreateConnectionInput): CreateConnectionInput {
   const id = typeof input.id === "string" ? input.id.trim() : "";
   if (!CONNECTION_ID_RE.test(id)) {
@@ -1226,15 +1228,31 @@ function validateCreateConnectionInput(input: CreateConnectionInput): CreateConn
       `Connection ID '${id}' does not match pattern ${CONNECTION_ID_PATTERN}`
     );
   }
-  if (input.driver !== "mysql" && input.driver !== "postgres") {
-    throw new ConnectionCreateValidationError("driver must be mysql or postgres");
+  if (!VALID_CREATE_DRIVERS.has(input.driver)) {
+    throw new ConnectionCreateValidationError("driver must be mysql, postgres, sqlserver, oracle, or sqlite");
   }
-  const host = requiredNonEmptyString(input.host, "host");
+  const isSqlite = input.driver === "sqlite";
   const database = requiredNonEmptyString(input.database, "database");
-  const username = requiredNonEmptyString(input.username, "username");
-  if (typeof input.port !== "number" || !Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
-    throw new ConnectionCreateValidationError("port must be an integer between 1 and 65535");
+
+  let host = "";
+  let username = "";
+  let port: number | undefined;
+
+  if (!isSqlite) {
+    host = requiredNonEmptyString(input.host, "host");
+    username = requiredNonEmptyString(input.username, "username");
+    if (typeof input.port !== "number" || !Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
+      throw new ConnectionCreateValidationError("port must be an integer between 1 and 65535");
+    }
+    port = input.port;
+  } else {
+    host = typeof input.host === "string" ? input.host.trim() : "";
+    username = typeof input.username === "string" ? input.username.trim() : "";
+    if (typeof input.port === "number" && Number.isInteger(input.port) && input.port >= 1 && input.port <= 65535) {
+      port = input.port;
+    }
   }
+
   const schemas = Array.isArray(input.schemas) ? input.schemas : [];
   for (const schema of schemas) {
     if (typeof schema !== "string" || !SCHEMA_NAME_RE.test(schema)) {
@@ -1256,7 +1274,7 @@ function validateCreateConnectionInput(input: CreateConnectionInput): CreateConn
     ...(wireProtocol ? { wireProtocol } : {}),
     readonly: input.readonly !== false,
     host,
-    port: input.port,
+    ...(port != null ? { port } : {}),
     database,
     username,
     ...(typeof input.password === "string" ? { password: input.password } : {}),
@@ -1268,7 +1286,7 @@ function passwordFileRef(projectRoot: string, connId: string): string {
   return `file:${path.join(projectRoot, ".ktx", "secrets", `${connId}-password`)}`;
 }
 
-function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRef: string) {
+function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRef?: string) {
   return (doc: ReturnType<typeof parseDocument>) => {
     let conns = doc.get("connections", true);
     if (!conns) {
@@ -1295,11 +1313,19 @@ function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRe
     conn.set("readonly", input.readonly !== false);
     const enabledTables = new YAMLSeq();
     conn.set("enabled_tables", enabledTables);
-    conn.set("host", input.host);
-    conn.set("port", input.port);
+    if (input.host) {
+      conn.set("host", input.host);
+    }
+    if (input.port != null) {
+      conn.set("port", input.port);
+    }
     conn.set("database", input.database);
-    conn.set("username", input.username);
-    conn.set("password", passwordRef);
+    if (input.username) {
+      conn.set("username", input.username);
+    }
+    if (passwordRef) {
+      conn.set("password", passwordRef);
+    }
     const schemas = new YAMLSeq();
     for (const schema of input.schemas ?? []) {
       schemas.items.push(schema);
@@ -1330,7 +1356,7 @@ function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRe
 
 function connectionInfoFromInput(
   input: CreateConnectionInput,
-  passwordSource: ConnectionInfo["passwordSource"] = "file"
+  passwordSource?: ConnectionInfo["passwordSource"]
 ): ConnectionInfo {
   const engine = input.engine?.toLowerCase();
   let wireProtocol: ConnectionInfo["wireProtocol"] = "unknown";
@@ -1350,9 +1376,9 @@ function connectionInfoFromInput(
     wireProtocol,
     r1Target: engine === "doris",
     readOnlyExpected: input.readonly !== false,
-    passwordSource,
-    host: input.host,
-    port: String(input.port),
+    ...(passwordSource ? { passwordSource } : {}),
+    ...(input.host ? { host: input.host } : {}),
+    ...(input.port != null ? { port: String(input.port) } : {}),
     database: input.database,
     schemas: [...(input.schemas ?? [])].sort(),
     enabledTables: []
@@ -1384,14 +1410,16 @@ export async function createConnection(
   options: CreateConnectionOptions = {}
 ): Promise<CreateConnectionPreview | CreateConnectionResult> {
   const input = validateCreateConnectionInput(rawInput);
+  const isSqlite = input.driver === "sqlite";
+  const hasPasswordInput = typeof input.password === "string" && input.password.length > 0;
   const secretRelPath = connectionSecretRelPath(input.id);
-  const passwordRef = passwordFileRef(root, input.id);
+  const passwordRef = hasPasswordInput || !isSqlite ? passwordFileRef(root, input.id) : undefined;
   const mutator = connectionCreateMutatorFactory(input, passwordRef);
   const preview = await writeKtxYaml(root, mutator, { dryRun: true });
   const safeOldText = redactKtxYamlForPreview(preview.oldText);
   const safeProposedYaml = redactKtxYamlForPreview(preview.serialized);
   const diff = previewDiff(safeOldText, safeProposedYaml, "ktx.yaml");
-  const connection = connectionInfoFromInput(input, "file");
+  const connection = connectionInfoFromInput(input, passwordRef ? "file" : undefined);
 
   if (dryRun) {
     return {
@@ -1402,7 +1430,7 @@ export async function createConnection(
     };
   }
 
-  if (typeof input.password !== "string" || input.password.length === 0) {
+  if (!isSqlite && !hasPasswordInput) {
     throw new ConnectionPasswordRequiredError("password is required when dryRun is false");
   }
 
@@ -1411,8 +1439,10 @@ export async function createConnection(
   let secretWritten = false;
   let yamlWritten = false;
   try {
-    await safeWriteNewSecretPassword(root, secretRelPath, input.password);
-    secretWritten = true;
+    if (hasPasswordInput) {
+      await safeWriteNewSecretPassword(root, secretRelPath, input.password!);
+      secretWritten = true;
+    }
     await writeKtxYaml(root, mutator, { dryRun: false });
     yamlWritten = true;
   } catch (error) {
@@ -1495,7 +1525,9 @@ export async function probeConnection(
     id: PROBE_CONNECTION_ID,
     schemas: []
   });
-  if (typeof input.password !== "string" || input.password.length === 0) {
+  const isSqlite = input.driver === "sqlite";
+  const hasPasswordInput = typeof input.password === "string" && input.password.length > 0;
+  if (!isSqlite && !hasPasswordInput) {
     throw new ConnectionPasswordRequiredError("password is required to test the connection");
   }
 
@@ -1503,20 +1535,24 @@ export async function probeConnection(
   try {
     const secretRelPath = connectionSecretRelPath(PROBE_CONNECTION_ID);
     const secretAbs = path.join(tmpRoot, secretRelPath);
-    await mkdir(path.dirname(secretAbs), { recursive: true });
-    await writeFile(secretAbs, input.password, { encoding: "utf8", mode: 0o600 });
+    let passwordRef: string | undefined;
+    if (hasPasswordInput) {
+      await mkdir(path.dirname(secretAbs), { recursive: true });
+      await writeFile(secretAbs, input.password!, { encoding: "utf8", mode: 0o600 });
+      passwordRef = `file:${secretAbs}`;
+    }
 
     const conn: Record<string, unknown> = {
       driver: input.driver,
       readonly: input.readonly !== false,
-      host: input.host,
-      port: input.port,
       database: input.database,
-      username: input.username,
-      password: `file:${secretAbs}`,
       schemas: [],
       enabled_tables: []
     };
+    if (input.host) conn.host = input.host;
+    if (input.port != null) conn.port = input.port;
+    if (input.username) conn.username = input.username;
+    if (passwordRef) conn.password = passwordRef;
     if (input.engine) conn.engine = input.engine;
     if (input.wireProtocol) conn.wire_protocol = input.wireProtocol;
 
