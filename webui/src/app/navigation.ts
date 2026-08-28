@@ -54,7 +54,8 @@ export type NavIconKey =
   | "mcpPlayground"
   | "configAudit"
   | "admins"
-  | "branding";
+  | "branding"
+  | "license";
 
 export const topLevelEntry: NavItem = {
   id: "overview",
@@ -257,6 +258,15 @@ export const navGroups: Array<{
     id: "system-settings",
     title: "系统设置",
     items: [
+      {
+        id: "admin-license",
+        label: "部署许可",
+        to: "/admin/license",
+        iconKey: "license",
+        active: (path) => path === "/admin/license" || path.startsWith("/admin/license/"),
+        description: "输入激活码，管理本实例的 Agent 席位与部署许可有效期。",
+        keywords: ["激活码", "License", "席位", "付费"]
+      },
       {
         id: "admin-branding",
         label: "品牌外观",

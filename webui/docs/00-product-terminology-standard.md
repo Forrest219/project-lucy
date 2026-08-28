@@ -199,6 +199,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | WebUI Admin Operator | 运维 | 运维人员 | 管理员（易与所有者混淆）、普通用户 | 日常连接 / 语义 / Eval / Agent Role；不可管登录账户 |
 | WebUI Login | 登录 | 控制面登录 | Sign in 裸用 | `/login` |
 | Customer Branding | 品牌外观 | 客户品牌 | 白标、换皮、皮肤（作导航/标题） | Spec 126：`/admin/branding` |
+| Deployment License | 部署许可 | 软件许可、License | 授权（与数据 ACL 混淆）、激活（与语义生效混淆） | 客户付费后的实例级 entitlement；`/admin/license` |
+| Activation Code | 激活码 | 授权码、License Key | Token（与 MCP Agent Token 混淆）、激活（动词，指语义发布） | 厂商离线签发的部署许可凭证 |
+| License Seat | Agent 席位 | seat、席位上限 | 用户数、Token 数（作 seat 主标签） | 部署许可允许的启用 Agent 数量上限 |
 | Customer Logo | 客户 Logo | Logo | 头像、图标（作主标签） | 侧栏 mark 与登录页共用；PNG/JPEG/GIF，32–160px |
 | Product Title | 产品名称 | wordmark | 站点名、系统名（作主标签） | 默认 `Lucy WebUI` |
 | Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `Data Agent MCP` |

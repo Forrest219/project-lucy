@@ -11,6 +11,8 @@ export function decisionReasonLabel(code: string | null | undefined): string {
   if (code.startsWith("role_not_found:") || code.startsWith("role_resolution_failed:")) return "Role 配置异常";
   if (code === "user_disabled" || code === "agent_disabled") return "Agent 已禁用";
   if (code === "token_revoked" || code === "token_expired") return "Token 不可用";
+  if (code === "license_missing") return "部署许可未激活";
+  if (code === "license_expired") return "部署许可已过期";
   if (code.startsWith("sensitive_metadata_forbidden:")) return "敏感元数据工具未授权";
   if (code === "raw_query_forbidden") return "禁止原始 SQL 查询";
   if (code === "query_concurrency_exceeded") return "查询并发超限";

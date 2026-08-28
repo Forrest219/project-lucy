@@ -64,20 +64,20 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 18 second-level items in total", () => {
+  it("navGroups contains 19 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(18);
+    expect(totalItems).toBe(19);
   });
 
   it("flat sidebar entries match Handbook §1.5 rows (top + second-level)", () => {
-    // 顶部 1 + 6 组共 18 项二级菜单 = 19 个侧栏可见入口
+    // 顶部 1 + 6 组共 19 项二级菜单 = 20 个侧栏可见入口
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = [
       { group: topLevelEntry.label, id: topLevelEntry.id, label: topLevelEntry.label, to: topLevelEntry.to },
       ...navGroups.flatMap((g) =>
         g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
       )
     ];
-    expect(flat.length).toBe(19);
+    expect(flat.length).toBe(20);
 
     // 顺序与侧栏自上而下严格一致
     expect(flat).toEqual([
@@ -98,6 +98,7 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
+      { group: "系统设置", id: "admin-license", label: "部署许可", to: "/admin/license" },
       { group: "系统设置", id: "admin-branding", label: "品牌外观", to: "/admin/branding" },
       { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/admins" }
     ]);
@@ -156,6 +157,7 @@ describe("navigation (shared sidebar config)", () => {
       "admin-audit": "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
       "admin-mcp-playground": "预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调。",
       "admin-config-audit": "查看各类配置与内容资产的写入记录、变更内容和操作者。",
+      "admin-license": "输入激活码，管理本实例的 Agent 席位与部署许可有效期。",
       "admin-branding": "配置客户 Logo、产品名称与品牌副标题。",
       "admin-accounts": "管理 WebUI 登录账户，并配置所有者或运维角色。"
     });

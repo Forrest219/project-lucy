@@ -32,6 +32,7 @@ import {
 } from "../access-governance-gate.js";
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+import { enforceAgentSeatLimit } from "../license/routes.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
@@ -920,6 +921,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
           detail: { gate }
         }
       });
+    }
+
+    const enabledAgentCount = config.users.filter((user) => user.enabled !== false).length + 1;
+    if (!(await enforceAgentSeatLimit(request, reply, enabledAgentCount))) {
+      return;
     }
 
     if (gate.decision === "override_required") {
