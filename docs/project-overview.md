@@ -161,6 +161,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 测试分层与发布门禁 | `docs/test-layers-and-release-gates.md` |
 | Release CI | `docs/release-ci.md` |
 | Docker demo | `examples/docker-demo/README.md` |
+| Executive POC（内部 CFO/COO/CIO） | `examples/executive-poc/README.md`、`docs/lucy-poc-demo-isolation-spec.md` |
 | 产品文档索引 | `docs/product-docs-index.md` |
 | 管理员指南 | `docs/admin-guide.md` |
 | 用户指南 | `docs/user-guide.md` |

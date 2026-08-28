@@ -1,0 +1,76 @@
+{
+  "seed": 42,
+  "order_rows": 50000,
+  "generated_at": "2026-08-28T01:33:00.390Z",
+  "cfo1": {
+    "month_end_cash_by_entity": {
+      "1": {
+        "2026-01": 1273152,
+        "2026-02": 1313632,
+        "2026-03": 1374655,
+        "2026-04": 1413744,
+        "2026-05": 1448205,
+        "2026-06": 1481555
+      },
+      "2": {
+        "2026-01": 1583217,
+        "2026-02": 1613935,
+        "2026-03": 1639790,
+        "2026-04": 1692524,
+        "2026-05": 1788490,
+        "2026-06": 1829721
+      },
+      "3": {
+        "2026-01": 1782199,
+        "2026-02": 1826121,
+        "2026-03": 1867253,
+        "2026-04": 1889375,
+        "2026-05": 1976934,
+        "2026-06": 2039596
+      }
+    },
+    "ar_over_90_ratio_by_entity": {
+      "1": 0.210272,
+      "2": 0.60714,
+      "3": 0.243697
+    },
+    "highest_ar_over_90_entity_id": 2
+  },
+  "cfo2": {
+    "q2_net_profit_yoy_pct": 0.15,
+    "q2_operating_cf_yoy_pct": -0.28,
+    "q2_2026_net_profit_total": 1035000,
+    "q2_2026_operating_cf_total": 518400
+  },
+  "cfo3": {
+    "consumer_ecommerce_q3_budget_achievement": 1.12,
+    "cost_center_id": 4
+  },
+  "coo4": {
+    "south_china_slow_moving_sku_count": 24,
+    "east_china_stockout_risk_sku_count": 17,
+    "snapshot_date": "2026-06-30"
+  },
+  "coo5": {
+    "avg_fulfill_days_channel_a": 5,
+    "avg_fulfill_days_channel_b": 9.8,
+    "fulfill_days_gap_pct": 0.96
+  },
+  "cio7": {
+    "sample_rollup_key": "2026Q2|East_China|Electronics",
+    "mv_sales": 89370.4,
+    "detail_sales": 89370.4
+  },
+  "cio8": {
+    "engineering_token_per_ticket": 6916.1062,
+    "engineering_tokens": 4039006,
+    "engineering_tickets": 584
+  },
+  "counts": {
+    "cash_balance_rows": 543,
+    "ar_rows": 60,
+    "inventory_rows": 360,
+    "order_line_rows": 50000,
+    "mv_rollup_rows": 120
+  }
+}

@@ -1,0 +1,349 @@
+lucy_eval_schema_version: 1
+kind: lucy_eval_suite
+suite_id: executive_poc_v1
+domain: executive_poc
+title: Executive POC Eval Suite（CFO/COO/CIO）
+description: |
+  内部能力演示专用 eval，对齐 examples/executive-poc/mysql/_baseline.json。
+  MySQL 自包含；8 场景覆盖半可加、现金流 bridge、预算、库存、获客、ACL、MV、Token ROI。
+metadata:
+  document_name: Executive POC Eval Cases
+  document_type: Eval
+  version: v0.1
+  runner_schema_version: v1.4
+  written_date: '2026-08-28'
+  author: Cursor Agent
+  requester: xingchen
+  based_on:
+    - examples/executive-poc/mysql/_baseline.json
+    - docs/eval-quiz-conventions.md v1.4
+  scope: demo-exec-mysql 内部 Executive POC 8 场景
+  output_path: evals/executive_poc/eval/executive_poc-eval-cases.yaml
+  data_source: semantic_layer
+  connectionId: demo-exec-mysql
+  baseline_ref: examples/executive-poc/mysql/_baseline.json
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - .ktx/secrets/
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE
+      reason: eval 只能只读。
+
+quiz_cases:
+  - id: Q1
+    stem: 月末资金趋势应使用哪个 measure？
+    difficulty: 0.3
+    question_type: single
+    display_type: conceptual
+    eval_refs: [exec-cfo-month-end-cash-001]
+    options:
+      - key: A
+        text: cash_balance_month_end
+      - key: B
+        text: SUM(cash_balance) 跨日
+      - key: C
+        text: AVG(cash_balance)
+      - key: D
+        text: COUNT(*)
+    answer: A
+    explanation: 余额半可加；跨月必须用 month_end measure。
+
+  - id: Q2
+    stem: 季度区域销售额聚合应优先查哪张表？
+    difficulty: 0.4
+    question_type: single
+    display_type: conceptual
+    eval_refs: [exec-cio-mv-rollup-001]
+    options:
+      - key: A
+        text: mv_order_quarterly_rollup
+      - key: B
+        text: fct_order_line_daily 直接 SUM
+      - key: C
+        text: dim_warehouse
+      - key: D
+        text: fct_ai_token_consumption
+    answer: A
+    explanation: 预聚合层等价 MV 命中。
+
+  - id: Q3
+    stem: 华南销售总监查客户手机号应走哪条路径？
+    difficulty: 0.5
+    question_type: single
+    display_type: conceptual
+    eval_refs: [exec-cio-acl-deny-001]
+    options:
+      - key: A
+        text: fct_sales_margin_regional（掩码列）
+      - key: B
+        text: fct_sales_margin 全国明文
+      - key: C
+        text: raw SQL 绕过 ACL
+      - key: D
+        text: dim_customer 直连
+    answer: A
+    explanation: VIEW + table ACL，非 Dynamic RLS。
+
+  - id: Q4
+    stem: 预算达成率应如何计算？
+    difficulty: 0.4
+    question_type: single
+    display_type: conceptual
+    eval_refs: [exec-cfo-budget-fx-001]
+    options:
+      - key: A
+        text: sum(actual) / sum(budget)
+      - key: B
+        text: AVG(actual/budget)
+      - key: C
+        text: MAX(actual)
+      - key: D
+        text: COUNT(*)
+    answer: A
+    explanation: 比率必须 SUM/SUM 重算。
+
+  - id: Q5
+    stem: 库存周转天数 DOS 在本 POC 中如何获取？
+    difficulty: 0.4
+    question_type: single
+    display_type: conceptual
+    eval_refs: [exec-coo-dos-001]
+    options:
+      - key: A
+        text: 使用 days_of_supply 预计算列
+      - key: B
+        text: 现场写 30 日窗口函数
+      - key: C
+        text: SUM(qty_on_hand)
+      - key: D
+        text: AVG(qty) / SUM(qty)
+    answer: A
+    explanation: DOS 已在表内预计算。
+
+  - id: Q6
+    stem: Q2 利润与现金流背离应如何查表？
+    difficulty: 0.5
+    question_type: single
+    display_type: conceptual
+    eval_refs: [exec-cfo-bridge-q2-001]
+    options:
+      - key: A
+        text: 多轮单源 pl → cashflow → collection
+      - key: B
+        text: 一条 SQL cross join 三表
+      - key: C
+        text: 只查 collection
+      - key: D
+        text: 不必查数
+    answer: A
+    explanation: Bridge 按 Wiki 多轮单源。
+
+cases:
+
+- id: exec-cfo-semi-additive-deny-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 能否用 SUM(cash_balance) 计算各月月末资金趋势？
+  domain: executive_poc
+  trace_required: false
+  context_required:
+    keys: [global/exec-cfo-semi-additive-playbook.md]
+  expected_source: semantic_layer
+  comparison_mode: logic_only
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      data:
+        must_mention:
+          - 禁止
+          - month_end
+
+- id: exec-cfo-month-end-cash-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 2026年6月华东控股（entity_id=1）的月末资金存量是多少？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-cfo-semi-additive-playbook.md]
+  expected_source: semantic_layer
+  expected_measures: [cash_balance_month_end]
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-exec-mysql
+    measures: [fct_daily_cash_balance.cash_balance_month_end]
+    filters:
+      - fct_daily_cash_balance.entity_id = 1
+      - fct_daily_cash_balance.period_month = '2026-06'
+    segments: [fct_daily_cash_balance.month_end_only]
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数必须走语义层。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 1
+      data:
+        cash_balance_month_end: 1481555
+
+- id: exec-cfo-ar-90-ratio-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 哪家子公司（entity_id）的90天以上应收占比最高？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-cfo-semi-additive-playbook.md]
+  expected_source: semantic_layer
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-exec-mysql
+    measures: [fct_ar_aging_detail.ar_over_90_ratio]
+    dimensions: [fct_ar_aging_detail.entity_id]
+    segments: [fct_ar_aging_detail.latest_month_end]
+  result_assertions:
+    - value_type: scalar
+      compare_mode: exact
+      data:
+        entity_id: 2
+
+- id: exec-cfo-bridge-q2-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 2026年Q2全集团净利润合计与经营活动现金流净额合计分别是多少？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-cfo-cash-bridge-playbook.md]
+  expected_source: semantic_layer
+  comparison_mode: numeric
+  notes: 分两轮查 pl 与 cashflow；本 case 断言合并口径。
+  result_assertions:
+    - value_type: record
+      compare_mode: approx
+      numeric_tolerance: 1
+      data:
+        net_profit_q2_2026: 1035000
+        operating_cf_q2_2026: 518400
+
+- id: exec-cfo-budget-fx-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 电商敏捷组（cost_center_id=4）2026 Q3 预算达成率是多少？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-cfo-budget-fx-playbook.md]
+  expected_source: semantic_layer
+  lucy_query:
+    connectionId: demo-exec-mysql
+    measures: [fct_budget_actual.budget_achievement_rate]
+    filters:
+      - fct_budget_actual.cost_center_id = 4
+    segments: [fct_budget_actual.q3_2026]
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.001
+      data:
+        budget_achievement_rate: 1.12
+
+- id: exec-coo-dos-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 华南仓滞销SKU数（DOS>60）与华东仓断货风险SKU数（DOS<7且无在途）各是多少？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-coo-inventory-playbook.md]
+  expected_source: semantic_layer
+  comparison_mode: numeric
+  result_assertions:
+    - value_type: record
+      compare_mode: exact
+      data:
+        south_china_slow_moving_sku_count: 24
+        east_china_stockout_risk_sku_count: 17
+
+- id: exec-coo-cac-fulfill-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 渠道A与渠道B的平均履约天数各是多少？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-coo-acquisition-playbook.md]
+  expected_source: semantic_layer
+  lucy_query:
+    connectionId: demo-exec-mysql
+    measures: [fct_fulfillment_order.avg_fulfill_days]
+    dimensions: [fct_fulfillment_order.channel_id]
+  result_assertions:
+    - value_type: record
+      compare_mode: approx
+      numeric_tolerance: 0.1
+      data:
+        avg_fulfill_days_A: 5
+        avg_fulfill_days_B: 9.8
+
+- id: exec-cio-acl-deny-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 区域销售角色能否查询 fct_sales_margin 全国明文表？
+  domain: executive_poc
+  trace_required: false
+  context_required:
+    keys: [global/exec-cio-access-playbook.md]
+  expected_source: semantic_layer
+  comparison_mode: logic_only
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      data:
+        must_mention:
+          - 拒绝
+          - fct_sales_margin_regional
+
+- id: exec-cio-mv-rollup-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: 2026Q2 East_China Electronics 品类销售额（MV 层）是多少？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-cio-performance-playbook.md]
+  expected_source: semantic_layer
+  lucy_query:
+    connectionId: demo-exec-mysql
+    measures: [mv_order_quarterly_rollup.total_sales]
+    filters:
+      - mv_order_quarterly_rollup.year_quarter = '2026Q2'
+      - mv_order_quarterly_rollup.region = 'East_China'
+      - mv_order_quarterly_rollup.category = 'Electronics'
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        total_sales: 89370.4
+
+- id: exec-cio-token-roi-001
+  case_type: single_turn
+  skill_version: v0.1
+  question: Engineering 部门 Token 消耗合计除以关闭工单数（Token/工单）是多少？
+  domain: executive_poc
+  trace_required: true
+  context_required:
+    keys: [global/exec-cio-ai-governance-playbook.md]
+  expected_source: semantic_layer
+  comparison_mode: numeric
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 1
+      data:
+        token_per_ticket: 6916.1062

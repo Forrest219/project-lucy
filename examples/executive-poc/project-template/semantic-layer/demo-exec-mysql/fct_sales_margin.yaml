@@ -1,0 +1,15 @@
+name: fct_sales_margin
+grain:
+- team_id
+- customer_id
+- period_month
+measures:
+- name: total_sales
+  expr: sum(sales)
+  description: 销售额。
+- name: gross_margin
+  expr: sum(gross_margin)
+  description: 毛利额。
+- name: gross_margin_rate
+  expr: sum(gross_margin) / nullif(sum(sales), 0)
+  description: 毛利率 SUM/SUM。

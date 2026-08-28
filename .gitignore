@@ -11,6 +11,9 @@ Thumbs.db
 # KTX runtime state (daemon pid, ports, logs, transient config)
 ktx.yaml
 !customer-config.example/ktx.yaml
+!examples/docker-demo/project-template/ktx.yaml
+!examples/postgres-demo/project-template/ktx.yaml
+!examples/executive-poc/project-template/ktx.yaml
 .ktx/logs/
 .ktx/runtime/
 .ktx/mcp.json

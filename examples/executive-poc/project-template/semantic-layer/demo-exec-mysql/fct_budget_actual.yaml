@@ -1,0 +1,24 @@
+name: fct_budget_actual
+grain:
+- cost_center_id
+- period_month
+- currency
+measures:
+- name: budget_amt
+  expr: sum(budget_amt)
+  description: 预算金额。
+- name: actual_amt
+  expr: sum(actual_amt)
+  description: 实际金额。
+- name: budget_achievement_rate
+  expr: sum(actual_amt) / nullif(sum(budget_amt), 0)
+  description: 预算达成率 SUM/SUM。
+segments:
+- name: q3_2026
+  expr: period_month in ('2026-07','2026-08','2026-09')
+  description: 2026 Q3。
+joins:
+- to: dim_cost_center
+  'on': fct_budget_actual.cost_center_id = dim_cost_center.cost_center_id
+  relationship: many_to_one
+  source: formal

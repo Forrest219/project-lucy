@@ -1,0 +1,3 @@
+name: dim_legal_entity
+grain:
+- entity_id
