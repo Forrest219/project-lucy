@@ -111,6 +111,17 @@ POST   /api/eval/security-candidates/:id/review
 POST   /api/eval/security-candidates/:id/promote/preview
 POST   /api/eval/security-candidates/:id/promote
 
+POST   /api/connections/probe
+
+GET    /api/skills
+GET    /api/skills/:domain/:name
+POST   /api/skills/validate
+POST   /api/skills/reload
+POST   /api/skills/export
+
+GET    /api/admin/tokens
+GET    /api/admin/audit/query-artifacts
+GET    /api/eval/runs/summary
 GET    /api/r1/observability
 GET    /api/help/handbook
 GET    /api/help/search

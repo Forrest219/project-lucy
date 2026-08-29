@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
@@ -90,6 +91,29 @@ function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
   return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
+function TableNameLabel({ table }: { table: string }) {
+  return (
+    <Tooltip.Provider delayDuration={200} skipDelayDuration={0}>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <span className="notranslate block truncate" translate="no" title={table}>
+            {table}
+          </span>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            className="rounded bg-fg-default px-2 py-1 text-xs text-bg-base shadow-card max-w-xs break-all"
+            sideOffset={4}
+          >
+            {table}
+            <Tooltip.Arrow className="fill-fg-default" />
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
+  );
+}
+
 function RankingBarList({
   rows,
   emptyLabel,
@@ -100,6 +124,7 @@ function RankingBarList({
   testId: string;
 }) {
   const maxCalls = rows.reduce((max, row) => Math.max(max, row.calls), 0);
+  const totalCalls = rows.reduce((sum, row) => sum + row.calls, 0);
   if (rows.length === 0 || maxCalls <= 0) {
     return (
       <div className="pl-usage-rank-body" data-testid={`${testId}-body`}>
@@ -114,10 +139,14 @@ function RankingBarList({
       <ul className="pl-usage-rank-list" data-testid={testId}>
         {rows.map((row) => {
           const widthPct = Math.max(4, Math.round((row.calls / maxCalls) * 100));
+          const sharePct = totalCalls > 0 ? Math.round((row.calls / totalCalls) * 100) : 0;
           return (
             <li className="pl-usage-rank-row" key={row.key}>
               <div className="pl-usage-rank-label">{row.label}</div>
-              <div className="pl-usage-rank-value tabular-nums">{row.calls}</div>
+              <div className="pl-usage-rank-value tabular-nums">
+                {row.calls}
+                {totalCalls > 0 ? <span className="text-fg-muted"> ({sharePct}%)</span> : null}
+              </div>
               <div className="pl-usage-rank-track" aria-hidden="true">
                 <div className="pl-usage-rank-bar" style={{ width: `${widthPct}%` }} />
               </div>
@@ -208,9 +237,6 @@ export function GovernanceOverview() {
   ) : (
     "当前窗口无调用"
   );
-  const authorizedTableHint = (
-    <span>角色权限中已明确授权的表{usage?.hasOpenEndedTableScope ? "（含前缀授权）" : ""}</span>
-  );
 
   // Spec 128 HR-4 + Task 6: table rate is partial when open-ended scope or HR-4 violation.
   const tableRateState = auditMetricsState === "unavailable"
@@ -230,6 +256,32 @@ export function GovernanceOverview() {
   // Spec 128 Task 7: denied count from audit DB, exposed in usageOverview.
   const deniedCount = usage?.denied ?? null;
   const deniedState = auditMetricsState;
+  const deniedTone = (deniedCount ?? 0) > 0 ? "warning" as const : undefined;
+
+  // Compound card values for Tier 2
+  const agentCompoundValue = auditMetricsState !== "unavailable" ? (
+    <span className="tabular-nums">
+      <span className="text-fg-muted text-base font-normal">活跃 </span>
+      <span>{usage?.activeAgentCount ?? 0}</span>
+      <span className="text-fg-muted text-base font-normal"> / {usage?.agentCount ?? 0}</span>
+    </span>
+  ) : 0;
+
+  const tokenCompoundValue = auditMetricsState !== "unavailable" ? (
+    <span className="tabular-nums">
+      <span className="text-fg-muted text-base font-normal">活跃 </span>
+      <span>{usage?.activeTokenCount ?? 0}</span>
+      <span className="text-fg-muted text-base font-normal"> / {usage?.configuredTokenCount ?? 0}</span>
+    </span>
+  ) : 0;
+
+  const tableCompoundValue = auditMetricsState !== "unavailable" ? (
+    <span className="tabular-nums">
+      <span className="text-fg-muted text-base font-normal">活跃 </span>
+      <span>{usage?.activeTableCount ?? 0}</span>
+      <span className="text-fg-muted text-base font-normal"> / {usage?.configuredTableCount ?? 0}</span>
+    </span>
+  ) : 0;
 
   const agentRankRows = agents.map((agent) => ({
     key: agent.id,
@@ -260,11 +312,7 @@ export function GovernanceOverview() {
   const tableRankRows = tables.map((row) => ({
     key: row.table,
     calls: row.calls,
-    label: (
-      <span className="notranslate" translate="no">
-        {row.table}
-      </span>
-    )
+    label: <TableNameLabel table={row.table} />
   }));
 
   return (
@@ -319,90 +367,12 @@ export function GovernanceOverview() {
       />
 
       <div className="pl-usage-metric-groups" data-testid="governance-usage-metrics">
-        <div className="pl-metric-grid pl-metric-grid--three" aria-label="配置规模" data-testid="governance-usage-metrics-config">
-          {/* D1: config-class — always ok, no state needed */}
-          <MetricCard
-            label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
-            labelText="Agent 总数"
-            value={usage?.agentCount ?? 0}
-            help="统计已配置的全部 Agent 实例，含未启用。"
-            subValue="已配置实例（含未启用）"
-            helpId="agent-count"
-            testId="metric-agent-count"
-          />
-          {/* D1: config-class — always ok */}
-          <MetricCard
-            label={<span>配置 <span className="notranslate" translate="no">Token</span></span>}
-            labelText="配置 Token"
-            value={usage?.configuredTokenCount ?? 0}
-            help="已下发给 Agent 的凭证数量，含未启用 Agent 的 Token。"
-            subValue="已下发凭证（含未启用 Agent）"
-            helpId="configured-token-count"
-            testId="metric-configured-token-count"
-          />
-          {/* D1: config-class — always ok */}
-          <MetricCard
-            label="授权表"
-            value={usage?.configuredTableCount ?? 0}
-            help="角色权限中已明确授权的表数量；前缀授权会扩大可达范围。"
-            subValue={authorizedTableHint}
-            helpId="configured-table-count"
-            testId="metric-configured-table-count"
-          />
-        </div>
-
-        <div className="pl-metric-grid pl-metric-grid--three" aria-label="窗口活跃" data-testid="governance-usage-metrics-active">
-          <MetricCard
-            label={<span>{windowText}活跃 <span className="notranslate" translate="no">Agent</span></span>}
-            labelText={`${windowText}活跃 Agent`}
-            value={usage?.activeAgentCount ?? 0}
-            help={`当前时间窗（${windowText}）内访问日志出现过的去重 Agent 数。`}
-            subValue={agentRateState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)} · 共 {usage?.agentCount ?? 0} 个</span> : undefined}
-            state={agentRateState}
-            unavailableReason={agentRateState === "partial" ? "活跃数超过配置数，数据异常" : undefined}
-            helpId="active-agent-count"
-            testId="metric-active-agent-count"
-          />
-          <MetricCard
-            label={<span>{windowText}活跃 <span className="notranslate" translate="no">Token</span></span>}
-            labelText={`${windowText}活跃 Token`}
-            value={usage?.activeTokenCount ?? 0}
-            help={
-              <span>
-                当前时间窗内访问日志出现的去重 <span className="notranslate" translate="no">Token</span> 前缀数（D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义，显示 <span className="notranslate" translate="no">partial</span>）。
-              </span>
-            }
-            subValue={tokenRateState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)} · 共 {usage?.configuredTokenCount ?? 0} 个</span> : undefined}
-            state={tokenRateState}
-            unavailableReason={
-              tokenRateState === "partial"
-                ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
-                : undefined
-            }
-            helpId="active-token-count"
-            testId="metric-active-token-count"
-          />
-          <MetricCard
-            label={<span>{windowText}活跃表</span>}
-            labelText={`${windowText}活跃表`}
-            value={usage?.activeTableCount ?? 0}
-            help={
-              <span>
-                当前时间窗内被访问的去重表数。活跃率 = 活跃授权表 / 已解析授权表，仅在显式授权（无前缀/通配符）时可计算；
-                存在前缀授权时显示 <span className="notranslate" translate="no">partial</span>（口径未完全解析）。
-              </span>
-            }
-            subValue={tableRateState === "ok" && activeTableRate != null
-              ? <span>活跃率 {activeTableRate}</span>
-              : undefined}
-            state={tableRateState}
-            unavailableReason={tableRateState === "partial" ? "含前缀/通配符授权，活跃率无法精确计算" : undefined}
-            helpId="active-table-count"
-            testId="metric-active-table-count"
-          />
-        </div>
-
-        <div className="pl-metric-grid pl-metric-grid--three" aria-label="运行治理" data-testid="governance-usage-metrics-operations">
+        {/* ── Tier 1: 运行体征（Primary） ── */}
+        <div
+          className="pl-metric-grid pl-metric-grid--three"
+          aria-label="运行体征"
+          data-testid="governance-usage-metrics-primary"
+        >
           <MetricCard
             label={<span>{windowText}调用量</span>}
             labelText={`${windowText}调用量`}
@@ -417,6 +387,7 @@ export function GovernanceOverview() {
             label={<span>{windowText} <span className="notranslate" translate="no">ACL</span> 拒绝次数</span>}
             labelText={`${windowText} ACL 拒绝次数`}
             value={deniedCount ?? 0}
+            tone={deniedTone}
             help={
               <span>
                 当前时间窗内访问日志中 <span className="notranslate" translate="no">outcome='denied'</span> 的记录数，直接查询审计库（Task 7），不含认证失败（<span className="notranslate" translate="no">auth_error</span>）。
@@ -435,6 +406,65 @@ export function GovernanceOverview() {
             state={p95MetricState}
             helpId="p95-latency"
             testId="metric-p95-latency"
+          />
+        </div>
+
+        {/* ── Tier 2: 资产与活跃画像（Secondary Compound） ── */}
+        <div
+          className="pl-metric-grid pl-metric-grid--three"
+          aria-label="资产与活跃"
+          data-testid="governance-usage-metrics-secondary"
+        >
+          <MetricCard
+            label={<span><span className="notranslate" translate="no">Agent</span> 资产与活跃</span>}
+            labelText="Agent 资产与活跃"
+            value={agentCompoundValue}
+            help={
+              <span>
+                {windowText}活跃 <span className="notranslate" translate="no">Agent</span> / 已配置 <span className="notranslate" translate="no">Agent</span> 总数（含未启用）。活跃率 = 有访问记录的 <span className="notranslate" translate="no">Agent</span> / 总数。
+              </span>
+            }
+            subValue={agentRateState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)}</span> : undefined}
+            state={agentRateState}
+            unavailableReason={agentRateState === "partial" ? "活跃数超过配置数，数据异常" : undefined}
+            helpId="agent-asset"
+            testId="metric-agent-asset"
+          />
+          <MetricCard
+            label={<span><span className="notranslate" translate="no">Token</span> 凭证与活跃</span>}
+            labelText="Token 凭证与活跃"
+            value={tokenCompoundValue}
+            help={
+              <span>
+                {windowText}活跃 <span className="notranslate" translate="no">Token</span> / 已下发凭证总数（含未启用 <span className="notranslate" translate="no">Agent</span> 的 <span className="notranslate" translate="no">Token</span>）。D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义（<span className="notranslate" translate="no">partial</span>）。
+              </span>
+            }
+            subValue={tokenRateState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)}</span> : undefined}
+            state={tokenRateState}
+            unavailableReason={
+              tokenRateState === "partial"
+                ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
+                : undefined
+            }
+            helpId="token-asset"
+            testId="metric-token-asset"
+          />
+          <MetricCard
+            label="授权表与活跃"
+            labelText="授权表与活跃"
+            value={tableCompoundValue}
+            help={
+              <span>
+                {windowText}活跃授权表数 / 角色权限中明确授权的表数。活跃率 = 活跃授权表 / 已解析授权表；存在前缀授权时显示 <span className="notranslate" translate="no">partial</span>（口径未完全解析）。{usage?.hasOpenEndedTableScope ? "（含前缀授权）" : ""}
+              </span>
+            }
+            subValue={tableRateState === "ok" && activeTableRate != null
+              ? <span>活跃率 {activeTableRate}</span>
+              : undefined}
+            state={tableRateState}
+            unavailableReason={tableRateState === "partial" ? "含前缀/通配符授权，活跃率无法精确计算" : undefined}
+            helpId="table-asset"
+            testId="metric-table-asset"
           />
         </div>
       </div>

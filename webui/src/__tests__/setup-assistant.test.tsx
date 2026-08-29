@@ -179,6 +179,34 @@ describe("SetupAssistantModal Component", () => {
           return new Response(JSON.stringify({ ok: true, data: { ok: true } }));
         }
 
+        if (url === "/api/admin/agents" && method === "GET") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                agents: [
+                  { id: "admin", name: "System Admin", enabled: true, role: "admin", roles: ["admin"], tokens: [] }
+                ]
+              }
+            })
+          );
+        }
+
+        if (url.startsWith("/api/admin/agents/") && url.endsWith("/tokens") && method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                token: "lucy_live_admin_token_abcdef123456",
+                hash: "sha256:1234567890",
+                label: "onboard-admin-quick",
+                created: "2026-08-29",
+                expires_at: "2026-09-28"
+              }
+            })
+          );
+        }
+
         if (url === "/api/project" && method === "GET") {
           return new Response(
             JSON.stringify({
@@ -289,6 +317,58 @@ describe("SetupAssistantModal Component", () => {
     // Finish
     fireEvent.click(screen.getByTestId("setup-finish-btn"));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("supports one-click admin token generation in Step 6 and auto-injects token into MCP configs", async () => {
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SetupAssistantModal open onClose={onClose} initialStep={6} initialConnectionId="test-conn" />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("setup-step-6")).toBeInTheDocument();
+    });
+
+    // Before token generation, config snippet has placeholder
+    const configSnippet = screen.getByTestId("setup-mcp-config-snippet");
+    expect(configSnippet).toHaveTextContent("<YOUR_LUCY_AGENT_TOKEN>");
+
+    // Check token card is rendered in "待签发" state
+    expect(screen.getByTestId("setup-token-card")).toBeInTheDocument();
+    expect(screen.getByText("待签发")).toBeInTheDocument();
+
+    // Click "一键签发 Token"
+    const generateBtn = screen.getByTestId("setup-generate-token-btn");
+    expect(generateBtn).toBeInTheDocument();
+    await waitFor(() => {
+      expect(generateBtn).not.toBeDisabled();
+    });
+    fireEvent.click(generateBtn);
+
+    // After token generation
+    await waitFor(() => {
+      expect(screen.getByTestId("setup-active-token")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("setup-active-token")).toHaveTextContent("lucy_live_admin_token_abcdef123456");
+    expect(screen.getByText("✓ Token 已注入")).toBeInTheDocument();
+
+    // Config snippet is updated automatically with the real token!
+    expect(configSnippet).toHaveTextContent("Bearer lucy_live_admin_token_abcdef123456");
+
+    // Copy buttons
+    const copyTokenBtn = screen.getByTestId("setup-copy-token-btn");
+    expect(copyTokenBtn).toBeInTheDocument();
+    fireEvent.click(copyTokenBtn);
+
+    const copyConfigBtn = screen.getByTestId("setup-copy-config-btn");
+    fireEvent.click(copyConfigBtn);
+
+    // Regenerate button is available
+    expect(screen.getByTestId("setup-regenerate-token-btn")).toBeInTheDocument();
   });
 });
 

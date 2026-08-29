@@ -438,6 +438,595 @@
 
 ---
 
+
+
+## 7.9 升级功能补齐组件与页面（v2.0 自动对齐）
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `sidebar-brand` | sidebar-brand | `app/App.tsx` |
+| `brand-title` | brand-title | `app/App.tsx` |
+| `brand-tagline` | brand-tagline | `app/App.tsx` |
+| `sidebar-search-trigger` | sidebar-search-trigger | `app/App.tsx` |
+| `sidebar-version` | sidebar-version | `app/App.tsx` |
+| `sidebar-auth` | sidebar-auth | `app/App.tsx` |
+| `add-schema-select` | add-schema-select | `components/AddSchemaDrawer.tsx` |
+| `add-schema-live-loading` | add-schema-live-loading | `components/AddSchemaDrawer.tsx` |
+| `add-schema-live-fallback` | add-schema-live-fallback | `components/AddSchemaDrawer.tsx` |
+| `add-schema-live-empty` | add-schema-live-empty | `components/AddSchemaDrawer.tsx` |
+| `add-schema-manual-toggle` | add-schema-manual-toggle | `components/AddSchemaDrawer.tsx` |
+| `add-schema-select-toggle` | add-schema-select-toggle | `components/AddSchemaDrawer.tsx` |
+| `role-table-ranges-field` | role-table-ranges-field | `components/AssetHierarchyPicker.tsx` |
+| `brand-logo` | brand-logo | `components/BrandMark.tsx` |
+| `brand-mark-letter` | brand-mark-letter | `components/BrandMark.tsx` |
+| `command-palette` | command-palette | `components/CommandPalette.tsx` |
+| `command-palette-input` | command-palette-input | `components/CommandPalette.tsx` |
+| `command-palette-esc-keycap` | command-palette-esc-keycap | `components/CommandPalette.tsx` |
+| `command-palette-list` | command-palette-list | `components/CommandPalette.tsx` |
+| `command-palette-hint` | command-palette-hint | `components/CommandPalette.tsx` |
+| `command-palette-empty` | command-palette-empty | `components/CommandPalette.tsx` |
+| `command-palette-enter-hint` | command-palette-enter-hint | `components/CommandPalette.tsx` |
+| `command-palette-footer` | command-palette-footer | `components/CommandPalette.tsx` |
+| `create-connection-drawer-backdrop` | create-connection-drawer-backdrop | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-drawer` | create-connection-drawer | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-secret-banner` | create-connection-secret-banner | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-close` | create-connection-close | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-id` | create-connection-id | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-driver` | create-connection-driver | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-readonly` | create-connection-readonly | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-host` | create-connection-host | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-port` | create-connection-port | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-database` | create-connection-database | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-username` | create-connection-username | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-password` | create-connection-password | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-password-toggle` | create-connection-password-toggle | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-schemas` | create-connection-schemas | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-advanced` | create-connection-advanced | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-engine` | create-connection-engine | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-wire-protocol` | create-connection-wire-protocol | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-test-btn` | create-connection-test-btn | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-preview-btn` | create-connection-preview-btn | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-probe-result` | create-connection-probe-result | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-error` | create-connection-error | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-confirm-btn` | create-connection-confirm-btn | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-success` | create-connection-success | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-test-warning` | create-connection-test-warning | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-done-btn` | create-connection-done-btn | `components/CreateConnectionDrawer.tsx` |
+| `decision-reason-cell` | decision-reason-cell | `components/DecisionReasonCell.tsx` |
+| `decision-reason-label` | decision-reason-label | `components/DecisionReasonCell.tsx` |
+| `decision-reason-code` | decision-reason-code | `components/DecisionReasonCell.tsx` |
+| `delete-connection-drawer` | delete-connection-drawer | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-id` | delete-connection-id | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-close` | delete-connection-close | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-schema-count` | delete-connection-schema-count | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-enabled-count` | delete-connection-enabled-count | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-enabled-list` | delete-connection-enabled-list | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-asset-count` | delete-connection-asset-count | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-acl-count` | delete-connection-acl-count | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-wiki-count` | delete-connection-wiki-count | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-secret-checkbox` | delete-connection-secret-checkbox | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-assets-checkbox` | delete-connection-assets-checkbox | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-confirm-id` | delete-connection-confirm-id | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-confirm-btn` | delete-connection-confirm-btn | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-success-message` | delete-connection-success-message | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-done` | delete-connection-done | `components/DeleteConnectionDrawer.tsx` |
+| `wiki-meta-drawer` | wiki-meta-drawer | `components/FrontmatterDrawer.tsx` |
+| `wiki-meta-close` | wiki-meta-close | `components/FrontmatterDrawer.tsx` |
+| `wiki-read-refs-summary` | wiki-read-refs-summary | `components/LinkedSemanticObjects.tsx` |
+| `wiki-read-refs-summary-toggle` | wiki-read-refs-summary-toggle | `components/LinkedSemanticObjects.tsx` |
+| `metric-tooltip-hint` | metric-tooltip-hint | `components/MetricCard.tsx` |
+| `object-detail-role-not-found` | object-detail-role-not-found | `components/ObjectDetailDrawer.tsx` |
+| `object-detail-role-body` | object-detail-role-body | `components/ObjectDetailDrawer.tsx` |
+| `policy-degrade-banner` | policy-degrade-banner | `components/PolicyDegradeBanner.tsx` |
+| `remove-schema-drawer` | remove-schema-drawer | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-close` | remove-schema-close | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-enabled-count` | remove-schema-enabled-count | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-enabled-list` | remove-schema-enabled-list | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-overlay-count` | remove-schema-overlay-count | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-wiki-count` | remove-schema-wiki-count | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-delete-manifest-checkbox` | remove-schema-delete-manifest-checkbox | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-delete-overlays-checkbox` | remove-schema-delete-overlays-checkbox | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-enabled-warning` | remove-schema-enabled-warning | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-confirm-btn` | remove-schema-confirm-btn | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-success-message` | remove-schema-success-message | `components/RemoveSchemaDrawer.tsx` |
+| `row-more-trigger` | row-more-trigger | `components/RowMoreMenu.tsx` |
+| `row-more-menu` | row-more-menu | `components/RowMoreMenu.tsx` |
+| `segment-editor` | segment-editor | `components/SegmentForm.tsx` |
+| `segment-add` | segment-add | `components/SegmentForm.tsx` |
+| `segment-empty` | segment-empty | `components/SegmentForm.tsx` |
+| `wiki-template-picker` | wiki-template-picker | `components/TemplatePicker.tsx` |
+| `wiki-template-list` | wiki-template-list | `components/TemplatePicker.tsx` |
+| `wiki-template-cancel` | wiki-template-cancel | `components/TemplatePicker.tsx` |
+| `wiki-delete-directory-dialog` | wiki-delete-directory-dialog | `components/WikiDeleteDirectoryDialog.tsx` |
+| `wiki-delete-directory-target` | wiki-delete-directory-target | `components/WikiDeleteDirectoryDialog.tsx` |
+| `wiki-delete-directory-error` | wiki-delete-directory-error | `components/WikiDeleteDirectoryDialog.tsx` |
+| `wiki-delete-directory-cancel` | wiki-delete-directory-cancel | `components/WikiDeleteDirectoryDialog.tsx` |
+| `wiki-delete-directory-confirm` | wiki-delete-directory-confirm | `components/WikiDeleteDirectoryDialog.tsx` |
+| `wiki-delete-document-dialog` | wiki-delete-document-dialog | `components/WikiDeleteDocumentDialog.tsx` |
+| `wiki-delete-document-target` | wiki-delete-document-target | `components/WikiDeleteDocumentDialog.tsx` |
+| `wiki-delete-document-error` | wiki-delete-document-error | `components/WikiDeleteDocumentDialog.tsx` |
+| `wiki-delete-document-cancel` | wiki-delete-document-cancel | `components/WikiDeleteDocumentDialog.tsx` |
+| `wiki-delete-document-confirm` | wiki-delete-document-confirm | `components/WikiDeleteDocumentDialog.tsx` |
+| `wiki-edit-placeholder-hint` | wiki-edit-placeholder-hint | `components/WikiEditView.tsx` |
+| `wiki-edit-source-header` | wiki-edit-source-header | `components/WikiEditView.tsx` |
+| `wiki-edit-preview-header` | wiki-edit-preview-header | `components/WikiEditView.tsx` |
+| `wiki-edit-tab-toggle` | wiki-edit-tab-toggle | `components/WikiEditView.tsx` |
+| `wiki-edit-tab-markdown` | wiki-edit-tab-markdown | `components/WikiEditView.tsx` |
+| `wiki-edit-tab-preview` | wiki-edit-tab-preview | `components/WikiEditView.tsx` |
+| `wiki-library-home` | wiki-library-home | `components/WikiLibraryHome.tsx` |
+| `wiki-library-select-prompt` | wiki-library-select-prompt | `components/WikiLibraryHome.tsx` |
+| `wiki-library-summary` | wiki-library-summary | `components/WikiLibraryHome.tsx` |
+| `wiki-library-directory-empty` | wiki-library-directory-empty | `components/WikiLibraryHome.tsx` |
+| `wiki-library-documents` | wiki-library-documents | `components/WikiLibraryHome.tsx` |
+| `wiki-library-document` | wiki-library-document | `components/WikiLibraryHome.tsx` |
+| `wiki-library-document-title` | wiki-library-document-title | `components/WikiLibraryHome.tsx` |
+| `wiki-library-document-path` | wiki-library-document-path | `components/WikiLibraryHome.tsx` |
+| `wiki-move-document-dialog` | wiki-move-document-dialog | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-source` | wiki-move-source | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-source-key` | wiki-move-source-key | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-target` | wiki-move-target | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-target-directory-input` | wiki-move-target-directory-input | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-target-key-preview` | wiki-move-target-key-preview | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-target-exists` | wiki-move-target-exists | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-error` | wiki-move-error | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-warnings` | wiki-move-warnings | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-cancel` | wiki-move-cancel | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-move-confirm` | wiki-move-confirm | `components/WikiMoveDocumentDialog.tsx` |
+| `wiki-new-directory-dialog` | wiki-new-directory-dialog | `components/WikiNewDirectoryDialog.tsx` |
+| `wiki-new-directory-top-level-checkbox` | wiki-new-directory-top-level-checkbox | `components/WikiNewDirectoryDialog.tsx` |
+| `wiki-new-directory-parent-input` | wiki-new-directory-parent-input | `components/WikiNewDirectoryDialog.tsx` |
+| `wiki-new-directory-name-input` | wiki-new-directory-name-input | `components/WikiNewDirectoryDialog.tsx` |
+| `wiki-new-directory-target-preview` | wiki-new-directory-target-preview | `components/WikiNewDirectoryDialog.tsx` |
+| `wiki-new-directory-error` | wiki-new-directory-error | `components/WikiNewDirectoryDialog.tsx` |
+| `wiki-new-directory-confirm` | wiki-new-directory-confirm | `components/WikiNewDirectoryDialog.tsx` |
+| `wiki-new-document-dialog` | wiki-new-document-dialog | `components/WikiNewDocumentDialog.tsx` |
+| `wiki-new-document-open-directory` | wiki-new-document-open-directory | `components/WikiNewDocumentDialog.tsx` |
+| `wiki-new-directory-input` | wiki-new-directory-input | `components/WikiNewDocumentDialog.tsx` |
+| `wiki-new-file-input` | wiki-new-file-input | `components/WikiNewDocumentDialog.tsx` |
+| `wiki-new-target-preview` | wiki-new-target-preview | `components/WikiNewDocumentDialog.tsx` |
+| `wiki-new-document-error` | wiki-new-document-error | `components/WikiNewDocumentDialog.tsx` |
+| `wiki-new-confirm` | wiki-new-confirm | `components/WikiNewDocumentDialog.tsx` |
+| `wiki-read-placeholder-hint` | wiki-read-placeholder-hint | `components/WikiReadView.tsx` |
+| `wiki-read-placeholder-edit` | wiki-read-placeholder-edit | `components/WikiReadView.tsx` |
+| `wiki-read-empty-edit` | wiki-read-empty-edit | `components/WikiReadView.tsx` |
+| `wiki-read-empty-pick-template` | wiki-read-empty-pick-template | `components/WikiReadView.tsx` |
+| `wiki-read-empty-blank` | wiki-read-empty-blank | `components/WikiReadView.tsx` |
+| `wiki-rename-directory-dialog` | wiki-rename-directory-dialog | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-source` | wiki-rename-directory-source | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-name-input` | wiki-rename-directory-name-input | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-target` | wiki-rename-directory-target | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-impact` | wiki-rename-directory-impact | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-conflicts` | wiki-rename-directory-conflicts | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-error` | wiki-rename-directory-error | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-cancel` | wiki-rename-directory-cancel | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-rename-directory-confirm` | wiki-rename-directory-confirm | `components/WikiRenameDirectoryDialog.tsx` |
+| `wiki-restore-preflight` | wiki-restore-preflight | `components/WikiRestorePreflight.tsx` |
+| `wiki-restore-preflight-loading` | wiki-restore-preflight-loading | `components/WikiRestorePreflight.tsx` |
+| `wiki-restore-preflight-error` | wiki-restore-preflight-error | `components/WikiRestorePreflight.tsx` |
+| `wiki-restore-diff` | wiki-restore-diff | `components/WikiRestorePreflight.tsx` |
+| `wiki-restore-confirm` | wiki-restore-confirm | `components/WikiRestorePreflight.tsx` |
+| `wiki-tree-group-toggle` | wiki-tree-group-toggle | `components/WikiTree.tsx` |
+| `wiki-upload-preflight` | wiki-upload-preflight | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-preflight-loading` | wiki-upload-preflight-loading | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-preflight-error` | wiki-upload-preflight-error | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-target` | wiki-upload-target | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-directory-input` | wiki-upload-directory-input | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-target-path` | wiki-upload-target-path | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-target-status` | wiki-upload-target-status | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-summary` | wiki-upload-summary | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-summary-source` | wiki-upload-summary-source | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-summary-target` | wiki-upload-summary-target | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-summary-existing` | wiki-upload-summary-existing | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-summary-title` | wiki-upload-summary-title | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-summary-refs` | wiki-upload-summary-refs | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-warnings` | wiki-upload-warnings | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-diff` | wiki-upload-diff | `components/WikiUploadPreflight.tsx` |
+| `wiki-upload-confirm` | wiki-upload-confirm | `components/WikiUploadPreflight.tsx` |
+| `wiki-version-history-dialog` | wiki-version-history-dialog | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-history-error` | wiki-version-history-error | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-detail` | wiki-version-detail | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-back-to-list` | wiki-version-back-to-list | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-detail-meta` | wiki-version-detail-meta | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-markdown-preview` | wiki-version-markdown-preview | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-diff` | wiki-version-diff | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-list` | wiki-version-list | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-table` | wiki-version-table | `components/WikiVersionHistoryDialog.tsx` |
+| `catalog-asset-manifest-drawer` | catalog-asset-manifest-drawer | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-manifest-panel` | catalog-asset-manifest-panel | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-manifest-close` | catalog-asset-manifest-close | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-manifest-loading` | catalog-asset-manifest-loading | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-manifest-target-file` | catalog-asset-manifest-target-file | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-manifest-content` | catalog-asset-manifest-content | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-manifest-download` | catalog-asset-manifest-download | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-manifest-reupload` | catalog-asset-manifest-reupload | `components/catalog/CatalogAssetManifestDrawer.tsx` |
+| `catalog-asset-upload-overwrite-note` | catalog-asset-upload-overwrite-note | `components/catalog/CatalogAssetUploadDrawer.tsx` |
+| `setup-assistant-modal` | setup-assistant-modal | `components/onboarding/SetupAssistantModal.tsx` |
+| `setup-modal-close-btn` | setup-modal-close-btn | `components/onboarding/SetupAssistantModal.tsx` |
+| `setup-step-1` | setup-step-1 | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-conn-id` | setup-conn-id | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-host` | setup-host | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-port` | setup-port | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-database` | setup-database | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-schema` | setup-schema | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-username` | setup-username | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-password` | setup-password | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-probe-btn` | setup-probe-btn | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-step1-next` | setup-step1-next | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-step-2` | setup-step-2 | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-manifest-file-input` | setup-manifest-file-input | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-manifest-textarea` | setup-manifest-textarea | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-step2-skip` | setup-step2-skip | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-step2-next` | setup-step2-next | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-step-3` | setup-step-3 | `components/onboarding/Step3SelectTables.tsx` |
+| `setup-select-all` | setup-select-all | `components/onboarding/Step3SelectTables.tsx` |
+| `setup-select-none` | setup-select-none | `components/onboarding/Step3SelectTables.tsx` |
+| `setup-step3-next` | setup-step3-next | `components/onboarding/Step3SelectTables.tsx` |
+| `setup-step-4` | setup-step-4 | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-overlay-mode-auto` | setup-overlay-mode-auto | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-overlay-mode-custom` | setup-overlay-mode-custom | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-overlay-table-select` | setup-overlay-table-select | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-overlay-textarea` | setup-overlay-textarea | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-step4-skip` | setup-step4-skip | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-step4-next` | setup-step4-next | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-step-5` | setup-step-5 | `components/onboarding/Step5BusinessWiki.tsx` |
+| `setup-wiki-file-input` | setup-wiki-file-input | `components/onboarding/Step5BusinessWiki.tsx` |
+| `setup-wiki-path` | setup-wiki-path | `components/onboarding/Step5BusinessWiki.tsx` |
+| `setup-wiki-textarea` | setup-wiki-textarea | `components/onboarding/Step5BusinessWiki.tsx` |
+| `setup-step5-skip` | setup-step5-skip | `components/onboarding/Step5BusinessWiki.tsx` |
+| `setup-step5-next` | setup-step5-next | `components/onboarding/Step5BusinessWiki.tsx` |
+| `setup-step-6` | setup-step-6 | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-copy-config-btn` | setup-copy-config-btn | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-copy-prompt-btn` | setup-copy-prompt-btn | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-goto-playground` | setup-goto-playground | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-finish-btn` | setup-finish-btn | `components/onboarding/Step6ConnectAgent.tsx` |
+| `catalog-result-count` | catalog-result-count | `pages/Catalog.tsx` |
+| `catalog-empty-state` | catalog-empty-state | `pages/Catalog.tsx` |
+| `catalog-table` | catalog-table | `pages/Catalog.tsx` |
+| `help-search-results` | help-search-results | `pages/HelpCenter.tsx` |
+| `help-search-empty` | help-search-empty | `pages/HelpCenter.tsx` |
+| `login-brand-title` | login-brand-title | `pages/Login.tsx` |
+| `ops-service-health-summary` | ops-service-health-summary | `pages/Onboarding.tsx` |
+| `ops-service-health-summary-cta` | ops-service-health-summary-cta | `pages/Onboarding.tsx` |
+| `ops-service-health` | ops-service-health | `pages/Onboarding.tsx` |
+| `ops-service-health-log-link` | ops-service-health-log-link | `pages/Onboarding.tsx` |
+| `mcp-config-drawer` | mcp-config-drawer | `pages/Onboarding.tsx` |
+| `mcp-config-drawer-title` | mcp-config-drawer-title | `pages/Onboarding.tsx` |
+| `mcp-config-drawer-close` | mcp-config-drawer-close | `pages/Onboarding.tsx` |
+| `mcp-config-drawer-agent-link` | mcp-config-drawer-agent-link | `pages/Onboarding.tsx` |
+| `ops-metric-icon-semantic` | ops-metric-icon-semantic | `pages/Onboarding.tsx` |
+| `ops-semantic-percent` | ops-semantic-percent | `pages/Onboarding.tsx` |
+| `ops-semantic-progress` | ops-semantic-progress | `pages/Onboarding.tsx` |
+| `onboarding-last-updated-announce` | onboarding-last-updated-announce | `pages/Onboarding.tsx` |
+| `onboarding-refresh-controls` | onboarding-refresh-controls | `pages/Onboarding.tsx` |
+| `onboarding-last-updated` | onboarding-last-updated | `pages/Onboarding.tsx` |
+| `onboarding-refresh-button` | onboarding-refresh-button | `pages/Onboarding.tsx` |
+| `ops-service-health-critical` | ops-service-health-critical | `pages/Onboarding.tsx` |
+| `ops-service-health-critical-actions` | ops-service-health-critical-actions | `pages/Onboarding.tsx` |
+| `ops-action-required` | ops-action-required | `pages/Onboarding.tsx` |
+| `ops-action-required-count` | ops-action-required-count | `pages/Onboarding.tsx` |
+| `ops-action-required-empty` | ops-action-required-empty | `pages/Onboarding.tsx` |
+| `ops-quality-snapshot` | ops-quality-snapshot | `pages/Onboarding.tsx` |
+| `ops-metric-icon-publish` | ops-metric-icon-publish | `pages/Onboarding.tsx` |
+| `ops-metric-icon-eval` | ops-metric-icon-eval | `pages/Onboarding.tsx` |
+| `ops-access-risk` | ops-access-risk | `pages/Onboarding.tsx` |
+| `ops-metric-icon-agents` | ops-metric-icon-agents | `pages/Onboarding.tsx` |
+| `ops-metric-icon-acl` | ops-metric-icon-acl | `pages/Onboarding.tsx` |
+| `ops-metric-icon-token` | ops-metric-icon-token | `pages/Onboarding.tsx` |
+| `ops-mcp-access` | ops-mcp-access | `pages/Onboarding.tsx` |
+| `mcp-config-copy-button` | mcp-config-copy-button | `pages/Onboarding.tsx` |
+| `mcp-config-view-button` | mcp-config-view-button | `pages/Onboarding.tsx` |
+| `overview-mcp-playground-link` | overview-mcp-playground-link | `pages/Onboarding.tsx` |
+| `grain-picker` | grain-picker | `pages/TableEditor.tsx` |
+| `table-description-buckets` | table-description-buckets | `pages/TableEditor.tsx` |
+| `table-editor-validation-result` | table-editor-validation-result | `pages/TableEditor.tsx` |
+| `table-editor-validation-issues` | table-editor-validation-issues | `pages/TableEditor.tsx` |
+| `table-editor-change-review` | table-editor-change-review | `pages/TableEditor.tsx` |
+| `table-editor-imported-yaml-name` | table-editor-imported-yaml-name | `pages/TableEditor.tsx` |
+| `table-editor-import-drawer-backdrop` | table-editor-import-drawer-backdrop | `pages/TableEditor.tsx` |
+| `table-editor-import-drawer` | table-editor-import-drawer | `pages/TableEditor.tsx` |
+| `table-editor-import-guidance` | table-editor-import-guidance | `pages/TableEditor.tsx` |
+| `paste-yaml-textarea` | paste-yaml-textarea | `pages/TableEditor.tsx` |
+| `change-summary` | change-summary | `pages/TableEditor.tsx` |
+| `table-editor-version-panel` | table-editor-version-panel | `pages/TableEditor.tsx` |
+| `table-editor-header-context` | table-editor-header-context | `pages/TableEditor.tsx` |
+| `semantic-content` | semantic-content | `pages/TableEditor.tsx` |
+| `segments-panel` | segments-panel | `pages/TableEditor.tsx` |
+| `field-batch-toolbar` | field-batch-toolbar | `pages/TableEditor.tsx` |
+| `field-batch-selection-count` | field-batch-selection-count | `pages/TableEditor.tsx` |
+| `field-editor-table` | field-editor-table | `pages/TableEditor.tsx` |
+| `joins-inline-panel` | joins-inline-panel | `pages/TableEditor.tsx` |
+| `table-editor-import-input` | table-editor-import-input | `pages/TableEditor.tsx` |
+| `wiki-upload-button` | wiki-upload-button | `pages/WikiEditor.tsx` |
+| `wiki-download-button` | wiki-download-button | `pages/WikiEditor.tsx` |
+| `wiki-move-button` | wiki-move-button | `pages/WikiEditor.tsx` |
+| `wiki-version-button` | wiki-version-button | `pages/WikiEditor.tsx` |
+| `wiki-upload-replace-button` | wiki-upload-replace-button | `pages/WikiEditor.tsx` |
+| `wiki-delete-document-button` | wiki-delete-document-button | `pages/WikiEditor.tsx` |
+| `wiki-status-pill` | wiki-status-pill | `pages/WikiEditor.tsx` |
+| `wiki-sidebar-create-directory` | wiki-sidebar-create-directory | `pages/WikiEditor.tsx` |
+| `wiki-sidebar-create-document` | wiki-sidebar-create-document | `pages/WikiEditor.tsx` |
+| `wiki-upload-input` | wiki-upload-input | `pages/WikiEditor.tsx` |
+| `trace-span-policy` | trace-span-policy | `pages/admin/Audit.tsx` |
+| `trace-span-policy-allowed` | trace-span-policy-allowed | `pages/admin/Audit.tsx` |
+| `trace-span-policy-source` | trace-span-policy-source | `pages/admin/Audit.tsx` |
+| `trace-span-artifacts` | trace-span-artifacts | `pages/admin/Audit.tsx` |
+| `trace-detail-title` | trace-detail-title | `pages/admin/Audit.tsx` |
+| `trace-detail-trace-id` | trace-detail-trace-id | `pages/admin/Audit.tsx` |
+| `trace-detail-close` | trace-detail-close | `pages/admin/Audit.tsx` |
+| `trace-detail-loading` | trace-detail-loading | `pages/admin/Audit.tsx` |
+| `trace-detail-error` | trace-detail-error | `pages/admin/Audit.tsx` |
+| `trace-detail-empty` | trace-detail-empty | `pages/admin/Audit.tsx` |
+| `trace-detail-spans` | trace-detail-spans | `pages/admin/Audit.tsx` |
+| `trace-detail-evidence` | trace-detail-evidence | `pages/admin/Audit.tsx` |
+| `audit-turn-drawer` | audit-turn-drawer | `pages/admin/Audit.tsx` |
+| `audit-turn-drawer-close` | audit-turn-drawer-close | `pages/admin/Audit.tsx` |
+| `audit-turn-inferred-disclaimer` | audit-turn-inferred-disclaimer | `pages/admin/Audit.tsx` |
+| `audit-turn-summary-card` | audit-turn-summary-card | `pages/admin/Audit.tsx` |
+| `audit-turn-tables-inline` | audit-turn-tables-inline | `pages/admin/Audit.tsx` |
+| `audit-turn-tables-expand` | audit-turn-tables-expand | `pages/admin/Audit.tsx` |
+| `audit-turn-calls-card` | audit-turn-calls-card | `pages/admin/Audit.tsx` |
+| `audit-turn-calls-table` | audit-turn-calls-table | `pages/admin/Audit.tsx` |
+| `audit-stats-time` | audit-stats-time | `pages/admin/Audit.tsx` |
+| `audit-window-control` | audit-window-control | `pages/admin/Audit.tsx` |
+| `audit-export-csv` | audit-export-csv | `pages/admin/Audit.tsx` |
+| `audit-view-tabs` | audit-view-tabs | `pages/admin/Audit.tsx` |
+| `audit-tab-turns` | audit-tab-turns | `pages/admin/Audit.tsx` |
+| `audit-tab-calls` | audit-tab-calls | `pages/admin/Audit.tsx` |
+| `audit-time-presets` | audit-time-presets | `pages/admin/Audit.tsx` |
+| `audit-shared-filters` | audit-shared-filters | `pages/admin/Audit.tsx` |
+| `audit-key-search` | audit-key-search | `pages/admin/Audit.tsx` |
+| `audit-time-label` | audit-time-label | `pages/admin/Audit.tsx` |
+| `audit-since` | audit-since | `pages/admin/Audit.tsx` |
+| `audit-until` | audit-until | `pages/admin/Audit.tsx` |
+| `audit-advanced-filters-toggle` | audit-advanced-filters-toggle | `pages/admin/Audit.tsx` |
+| `audit-clear-filters` | audit-clear-filters | `pages/admin/Audit.tsx` |
+| `audit-advanced-filters` | audit-advanced-filters | `pages/admin/Audit.tsx` |
+| `audit-call-source-filter` | audit-call-source-filter | `pages/admin/Audit.tsx` |
+| `audit-turns-coverage-summary` | audit-turns-coverage-summary | `pages/admin/Audit.tsx` |
+| `audit-turns-coverage-hint` | audit-turns-coverage-hint | `pages/admin/Audit.tsx` |
+| `audit-calls-summary` | audit-calls-summary | `pages/admin/Audit.tsx` |
+| `audit-pagination-summary` | audit-pagination-summary | `pages/admin/Audit.tsx` |
+| `branding-form-error` | branding-form-error | `pages/admin/BrandingSettings.tsx` |
+| `branding-logo-section` | branding-logo-section | `pages/admin/BrandingSettings.tsx` |
+| `branding-logo-input` | branding-logo-input | `pages/admin/BrandingSettings.tsx` |
+| `branding-text-section` | branding-text-section | `pages/admin/BrandingSettings.tsx` |
+| `branding-product-title` | branding-product-title | `pages/admin/BrandingSettings.tsx` |
+| `branding-product-title-help` | branding-product-title-help | `pages/admin/BrandingSettings.tsx` |
+| `branding-tagline` | branding-tagline | `pages/admin/BrandingSettings.tsx` |
+| `branding-tagline-help` | branding-tagline-help | `pages/admin/BrandingSettings.tsx` |
+| `branding-preview` | branding-preview | `pages/admin/BrandingSettings.tsx` |
+| `branding-sidebar-preview` | branding-sidebar-preview | `pages/admin/BrandingSettings.tsx` |
+| `branding-login-preview` | branding-login-preview | `pages/admin/BrandingSettings.tsx` |
+| `config-audit-filterbar` | config-audit-filterbar | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-time-label` | config-audit-time-label | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-window` | config-audit-window | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-since` | config-audit-since | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-until` | config-audit-until | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-change-type` | config-audit-change-type | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-page-range` | config-audit-page-range | `pages/admin/ConfigAudit.tsx` |
+| `config-audit-page-index` | config-audit-page-index | `pages/admin/ConfigAudit.tsx` |
+| `governance-usage-overview` | governance-usage-overview | `pages/admin/GovernanceOverview.tsx` |
+| `governance-stats-time-controls` | governance-stats-time-controls | `pages/admin/GovernanceOverview.tsx` |
+| `governance-stats-time` | governance-stats-time | `pages/admin/GovernanceOverview.tsx` |
+| `governance-window-24h` | governance-window-24h | `pages/admin/GovernanceOverview.tsx` |
+| `governance-window-7d` | governance-window-7d | `pages/admin/GovernanceOverview.tsx` |
+| `governance-usage-metrics` | governance-usage-metrics | `pages/admin/GovernanceOverview.tsx` |
+| `governance-usage-metrics-primary` | governance-usage-metrics-primary | `pages/admin/GovernanceOverview.tsx` |
+| `governance-usage-metrics-secondary` | governance-usage-metrics-secondary | `pages/admin/GovernanceOverview.tsx` |
+| `governance-usage-rank-grid` | governance-usage-rank-grid | `pages/admin/GovernanceOverview.tsx` |
+| `governance-agent-usage` | governance-agent-usage | `pages/admin/GovernanceOverview.tsx` |
+| `governance-token-usage` | governance-token-usage | `pages/admin/GovernanceOverview.tsx` |
+| `governance-popular-tables` | governance-popular-tables | `pages/admin/GovernanceOverview.tsx` |
+| `license-form-error` | license-form-error | `pages/admin/LicenseSettings.tsx` |
+| `license-activation-section` | license-activation-section | `pages/admin/LicenseSettings.tsx` |
+| `license-activation-code` | license-activation-code | `pages/admin/LicenseSettings.tsx` |
+| `license-status-card` | license-status-card | `pages/admin/LicenseSettings.tsx` |
+| `license-status-label` | license-status-label | `pages/admin/LicenseSettings.tsx` |
+| `license-mode` | license-mode | `pages/admin/LicenseSettings.tsx` |
+| `license-customer-id` | license-customer-id | `pages/admin/LicenseSettings.tsx` |
+| `license-tier` | license-tier | `pages/admin/LicenseSettings.tsx` |
+| `license-seat-usage` | license-seat-usage | `pages/admin/LicenseSettings.tsx` |
+| `license-expires-at` | license-expires-at | `pages/admin/LicenseSettings.tsx` |
+| `license-days-remaining` | license-days-remaining | `pages/admin/LicenseSettings.tsx` |
+| `mcp-playground-page` | mcp-playground-page | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-agent` | mcp-playground-agent | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-mode` | mcp-playground-mode | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-role` | mcp-playground-role | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-tool` | mcp-playground-tool | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-args` | mcp-playground-args | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-run-preview` | mcp-playground-run-preview | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-token` | mcp-playground-token | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-run-live` | mcp-playground-run-live | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-preview-error` | mcp-playground-preview-error | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-preview-result` | mcp-playground-preview-result | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-live-result` | mcp-playground-live-result | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-live-confirm` | mcp-playground-live-confirm | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-confirm-live` | mcp-playground-confirm-live | `pages/admin/McpPlayground.tsx` |
+| `role-connections-field` | role-connections-field | `pages/admin/RoleDetail.tsx` |
+| `role-connections-fallback-hint` | role-connections-fallback-hint | `pages/admin/RoleDetail.tsx` |
+| `role-tools-field` | role-tools-field | `pages/admin/RoleDetail.tsx` |
+| `role-tools-fallback-hint` | role-tools-fallback-hint | `pages/admin/RoleDetail.tsx` |
+| `role-detail-invalid-warnings` | role-detail-invalid-warnings | `pages/admin/RoleDetail.tsx` |
+| `role-allowed-tools-label` | role-allowed-tools-label | `pages/admin/RoleDetail.tsx` |
+| `role-allowed-tools-list` | role-allowed-tools-list | `pages/admin/RoleDetail.tsx` |
+| `role-metric-grid` | role-metric-grid | `pages/admin/RoleList.tsx` |
+| `role-invalid-notice` | role-invalid-notice | `pages/admin/RoleList.tsx` |
+| `role-filter-connection` | role-filter-connection | `pages/admin/RoleList.tsx` |
+| `role-filter-tool` | role-filter-tool | `pages/admin/RoleList.tsx` |
+| `role-filter-table` | role-filter-table | `pages/admin/RoleList.tsx` |
+| `role-current-filter` | role-current-filter | `pages/admin/RoleList.tsx` |
+| `role-list-section` | role-list-section | `pages/admin/RoleList.tsx` |
+| `role-list-table` | role-list-table | `pages/admin/RoleList.tsx` |
+| `create-token-btn` | create-token-btn | `pages/admin/Tokens.tsx` |
+| `token-kpis` | token-kpis | `pages/admin/Tokens.tsx` |
+| `tokens-table` | tokens-table | `pages/admin/Tokens.tsx` |
+| `start-onboarding-assistant-btn` | start-onboarding-assistant-btn | `pages/connections/ConnectionOverview.tsx` |
+| `create-connection-btn` | create-connection-btn | `pages/connections/ConnectionOverview.tsx` |
+| `connections-empty-state` | connections-empty-state | `pages/connections/ConnectionOverview.tsx` |
+| `start-assistant-empty-btn` | start-assistant-empty-btn | `pages/connections/ConnectionOverview.tsx` |
+| `create-connection-empty-btn` | create-connection-empty-btn | `pages/connections/ConnectionOverview.tsx` |
+| `connection-test-empty` | connection-test-empty | `pages/connections/ConnectionTest.tsx` |
+| `whitelist-action-draft` | whitelist-action-draft | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-action-invalid-enabled` | whitelist-action-invalid-enabled | `pages/connections/TableWhitelist.tsx` |
+| `enabled-tables-empty` | enabled-tables-empty | `pages/connections/TableWhitelist.tsx` |
+| `pl-whitelist-toolbar-actions` | pl-whitelist-toolbar-actions | `pages/connections/TableWhitelist.tsx` |
+| `pl-whitelist-selection-summary` | pl-whitelist-selection-summary | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-remove-invalid-enabled` | whitelist-remove-invalid-enabled | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-batch-actions` | whitelist-batch-actions | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-select-all` | whitelist-select-all | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-invert` | whitelist-invert | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-hidden-invalid-enabled-banner` | whitelist-hidden-invalid-enabled-banner | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-show-invalid-enabled` | whitelist-show-invalid-enabled | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-remove-invalid-enabled-from-banner` | whitelist-remove-invalid-enabled-from-banner | `pages/connections/TableWhitelist.tsx` |
+| `pl-whitelist-table` | pl-whitelist-table | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-invalid-enabled-section` | whitelist-invalid-enabled-section | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-missing-manifest-summary` | whitelist-missing-manifest-summary | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-missing-manifest-summary-link` | whitelist-missing-manifest-summary-link | `pages/connections/TableWhitelist.tsx` |
+| `case-list-coverage` | case-list-coverage | `pages/eval/CaseList.tsx` |
+| `case-list-coverage-card` | case-list-coverage-card | `pages/eval/CaseList.tsx` |
+| `monitor-trend-chart` | monitor-trend-chart | `pages/eval/Monitor.tsx` |
+| `monitor-threshold-yellow-line` | monitor-threshold-yellow-line | `pages/eval/Monitor.tsx` |
+| `monitor-threshold-yellow-label` | monitor-threshold-yellow-label | `pages/eval/Monitor.tsx` |
+| `monitor-threshold-red-line` | monitor-threshold-red-line | `pages/eval/Monitor.tsx` |
+| `monitor-threshold-red-label` | monitor-threshold-red-label | `pages/eval/Monitor.tsx` |
+| `monitor-trend-panel` | monitor-trend-panel | `pages/eval/Monitor.tsx` |
+| `monitor-threshold-summary` | monitor-threshold-summary | `pages/eval/Monitor.tsx` |
+| `monitor-below-red-summary` | monitor-below-red-summary | `pages/eval/Monitor.tsx` |
+| `monitor-trend-empty` | monitor-trend-empty | `pages/eval/Monitor.tsx` |
+| `monitor-trend-empty-actions` | monitor-trend-empty-actions | `pages/eval/Monitor.tsx` |
+| `monitor-below-red-callout` | monitor-below-red-callout | `pages/eval/Monitor.tsx` |
+| `monitor-below-red-drilldown` | monitor-below-red-drilldown | `pages/eval/Monitor.tsx` |
+| `publish-history-scope` | publish-history-scope | `pages/publish/PublishHistory.tsx` |
+| `publish-history-scale` | publish-history-scale | `pages/publish/PublishHistory.tsx` |
+| `publish-history-export-csv` | publish-history-export-csv | `pages/publish/PublishHistory.tsx` |
+| `publish-history-filterbar` | publish-history-filterbar | `pages/publish/PublishHistory.tsx` |
+| `publish-history-time-label` | publish-history-time-label | `pages/publish/PublishHistory.tsx` |
+| `publish-history-window` | publish-history-window | `pages/publish/PublishHistory.tsx` |
+| `publish-history-since` | publish-history-since | `pages/publish/PublishHistory.tsx` |
+| `publish-history-until` | publish-history-until | `pages/publish/PublishHistory.tsx` |
+| `publish-history-trigger` | publish-history-trigger | `pages/publish/PublishHistory.tsx` |
+| `publish-history-reindex-filter` | publish-history-reindex-filter | `pages/publish/PublishHistory.tsx` |
+| `publish-history-actor` | publish-history-actor | `pages/publish/PublishHistory.tsx` |
+| `publish-history-page-range` | publish-history-page-range | `pages/publish/PublishHistory.tsx` |
+| `publish-history-table` | publish-history-table | `pages/publish/PublishHistory.tsx` |
+| `publish-history-serial` | publish-history-serial | `pages/publish/PublishHistory.tsx` |
+| `publish-history-prev` | publish-history-prev | `pages/publish/PublishHistory.tsx` |
+| `publish-history-page-index` | publish-history-page-index | `pages/publish/PublishHistory.tsx` |
+| `publish-history-next` | publish-history-next | `pages/publish/PublishHistory.tsx` |
+| `workbench-validation-issues` | workbench-validation-issues | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-validation-tech-details` | workbench-validation-tech-details | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-more-menu` | workbench-more-menu | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-sync-index` | workbench-sync-index | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-pending-panel` | workbench-pending-panel | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-batch-sync-hint` | workbench-batch-sync-hint | `pages/publish/PublishWorkbench.tsx` |
+| `publish-gate-panel` | publish-gate-panel | `pages/publish/PublishWorkbench.tsx` |
+| `publish-change-impact` | publish-change-impact | `pages/publish/PublishWorkbench.tsx` |
+| `publish-flow-steps` | publish-flow-steps | `pages/publish/PublishWorkbench.tsx` |
+| `publish-gate-next-step` | publish-gate-next-step | `pages/publish/PublishWorkbench.tsx` |
+| `publish-impact-schema-list` | publish-impact-schema-list | `pages/publish/PublishWorkbench.tsx` |
+| `publish-change-impact-list` | publish-change-impact-list | `pages/publish/PublishWorkbench.tsx` |
+| `publish-impact-other-count` | publish-impact-other-count | `pages/publish/PublishWorkbench.tsx` |
+| `publish-change-impact-blocked` | publish-change-impact-blocked | `pages/publish/PublishWorkbench.tsx` |
+| `publish-boundary-and-index` | publish-boundary-and-index | `pages/publish/PublishWorkbench.tsx` |
+| `publish-post-eval-prompt` | publish-post-eval-prompt | `pages/publish/PublishWorkbench.tsx` |
+| `publish-post-eval-blocked` | publish-post-eval-blocked | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-change-detail-drawer` | workbench-change-detail-drawer | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-file-status` | workbench-file-status | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-publish-confirm-drawer` | workbench-publish-confirm-drawer | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-publish-confirm-summary` | workbench-publish-confirm-summary | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-publish-confirm-submit` | workbench-publish-confirm-submit | `pages/publish/PublishWorkbench.tsx` |
+| `nav-link-${topLevelEntry.id}` | nav-link-${topLevelEntry.id} (template) | `app/App.tsx` |
+| `nav-group-${group.id}` | nav-group-${group.id} (template) | `app/App.tsx` |
+| `nav-group-toggle-${group.id}` | nav-group-toggle-${group.id} (template) | `app/App.tsx` |
+| `nav-group-items-${group.id}` | nav-group-items-${group.id} (template) | `app/App.tsx` |
+| `nav-link-${item.id}` | nav-link-${item.id} (template) | `app/App.tsx` |
+| `role-table-range-${idx + 1}` | role-table-range-${idx + 1} (template) | `components/AssetHierarchyPicker.tsx` |
+| `role-table-names-fallback-${idx + 1}` | role-table-names-fallback-${idx + 1} (template) | `components/AssetHierarchyPicker.tsx` |
+| `role-row-access-${idx + 1}` | role-row-access-${idx + 1} (template) | `components/AssetHierarchyPicker.tsx` |
+| `role-row-policy-${idx + 1}` | role-row-policy-${idx + 1} (template) | `components/AssetHierarchyPicker.tsx` |
+| `role-row-predicate-${idx + 1}-${predIdx + 1}` | role-row-predicate-${idx + 1}-${predIdx + 1} (template) | `components/AssetHierarchyPicker.tsx` |
+| `${testIdPrefix}-picker` | ${testIdPrefix}-picker (template) | `components/CheckboxCandidatePicker.tsx` |
+| `${testIdPrefix}-batch-actions` | ${testIdPrefix}-batch-actions (template) | `components/CheckboxCandidatePicker.tsx` |
+| `${testIdPrefix}-selection-summary` | ${testIdPrefix}-selection-summary (template) | `components/CheckboxCandidatePicker.tsx` |
+| `${testIdPrefix}-select-all` | ${testIdPrefix}-select-all (template) | `components/CheckboxCandidatePicker.tsx` |
+| `${testIdPrefix}-clear-all` | ${testIdPrefix}-clear-all (template) | `components/CheckboxCandidatePicker.tsx` |
+| `${testIdPrefix}-filter` | ${testIdPrefix}-filter (template) | `components/CheckboxCandidatePicker.tsx` |
+| `${testIdPrefix}-list` | ${testIdPrefix}-list (template) | `components/CheckboxCandidatePicker.tsx` |
+| `command-palette-option-${entry.id}` | command-palette-option-${entry.id} (template) | `components/CommandPalette.tsx` |
+| `metric-help-${helpId}` | metric-help-${helpId} (template) | `components/MetricCard.tsx` |
+| `segment-card-${index}` | segment-card-${index} (template) | `components/SegmentForm.tsx` |
+| `segment-description-${index}` | segment-description-${index} (template) | `components/SegmentForm.tsx` |
+| `segment-remove-${index}` | segment-remove-${index} (template) | `components/SegmentForm.tsx` |
+| `segment-name-${index}` | segment-name-${index} (template) | `components/SegmentForm.tsx` |
+| `segment-expr-${index}` | segment-expr-${index} (template) | `components/SegmentForm.tsx` |
+| `wiki-template-option-${template.label}` | wiki-template-option-${template.label} (template) | `components/TemplatePicker.tsx` |
+| `wiki-library-document-button-${page.key}` | wiki-library-document-button-${page.key} (template) | `components/WikiLibraryHome.tsx` |
+| `wiki-version-item-${version.versionId}` | wiki-version-item-${version.versionId} (template) | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-view-${version.versionId}` | wiki-version-view-${version.versionId} (template) | `components/WikiVersionHistoryDialog.tsx` |
+| `wiki-version-restore-${version.versionId}` | wiki-version-restore-${version.versionId} (template) | `components/WikiVersionHistoryDialog.tsx` |
+| `setup-table-item-${qualName}` | setup-table-item-${qualName} (template) | `components/onboarding/Step3SelectTables.tsx` |
+| `setup-mcp-tab-${type}` | setup-mcp-tab-${type} (template) | `components/onboarding/Step6ConnectAgent.tsx` |
+| `catalog-row-${table.table}` | catalog-row-${table.table} (template) | `pages/Catalog.tsx` |
+| `catalog-row-edit-${table.table}` | catalog-row-edit-${table.table} (template) | `pages/Catalog.tsx` |
+| `catalog-row-not-enabled-${table.table}` | catalog-row-not-enabled-${table.table} (template) | `pages/Catalog.tsx` |
+| `catalog-row-agents-${table.table}` | catalog-row-agents-${table.table} (template) | `pages/Catalog.tsx` |
+| `catalog-row-maintain-${table.table}` | catalog-row-maintain-${table.table} (template) | `pages/Catalog.tsx` |
+| `catalog-row-enable-scope-${table.table}` | catalog-row-enable-scope-${table.table} (template) | `pages/Catalog.tsx` |
+| `${testId}-meta` | ${testId}-meta (template) | `pages/Onboarding.tsx` |
+| `${testId}-link` | ${testId}-link (template) | `pages/Onboarding.tsx` |
+| `trace-meta-redacted-${keyName}` | trace-meta-redacted-${keyName} (template) | `pages/admin/Audit.tsx` |
+| `trace-meta-redacted-tooltip-${keyName}` | trace-meta-redacted-tooltip-${keyName} (template) | `pages/admin/Audit.tsx` |
+| `trace-span-${event.spanId}` | trace-span-${event.spanId} (template) | `pages/admin/Audit.tsx` |
+| `audit-trace-link-${traceId}` | audit-trace-link-${traceId} (template) | `pages/admin/Audit.tsx` |
+| `audit-trace-drawer-${traceId}` | audit-trace-drawer-${traceId} (template) | `pages/admin/Audit.tsx` |
+| `trace-evidence-${ev.id}` | trace-evidence-${ev.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-row-detail-${entry.id}` | audit-row-detail-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-call-turn-id-${entry.id}` | audit-call-turn-id-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-replay-playground-${entry.id}` | audit-replay-playground-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-call-source-playground-${entry.id}` | audit-call-source-playground-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-call-source-agent-${entry.id}` | audit-call-source-agent-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-generated-sql-${entry.id}` | audit-generated-sql-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-detail-panels-${entry.id}` | audit-detail-panels-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-related-agent-${entry.id}` | audit-related-agent-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-time-preset-${preset}` | audit-time-preset-${preset} (template) | `pages/admin/Audit.tsx` |
+| `audit-turn-row-${entry.id}` | audit-turn-row-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `audit-turn-open-${entry.id}` | audit-turn-open-${entry.id} (template) | `pages/admin/Audit.tsx` |
+| `config-audit-target-link-${entry.id}` | config-audit-target-link-${entry.id} (template) | `pages/admin/ConfigAudit.tsx` |
+| `${testId}-body` | ${testId}-body (template) | `pages/admin/GovernanceOverview.tsx` |
+| `role-detail-warning-diagnosis-${idx}` | role-detail-warning-diagnosis-${idx} (template) | `pages/admin/RoleDetail.tsx` |
+| `role-detail-warning-tech-${idx}` | role-detail-warning-tech-${idx} (template) | `pages/admin/RoleDetail.tsx` |
+| `role-allowed-tools-count-${role.id}` | role-allowed-tools-count-${role.id} (template) | `pages/admin/RoleList.tsx` |
+| `role-warnings-${role.id}` | role-warnings-${role.id} (template) | `pages/admin/RoleList.tsx` |
+| `role-warning-diagnosis-${role.id}-${idx}` | role-warning-diagnosis-${role.id}-${idx} (template) | `pages/admin/RoleList.tsx` |
+| `role-warning-template-note-${role.id}-${idx}` | role-warning-template-note-${role.id}-${idx} (template) | `pages/admin/RoleList.tsx` |
+| `role-warning-tech-${role.id}-${idx}` | role-warning-tech-${role.id}-${idx} (template) | `pages/admin/RoleList.tsx` |
+| `role-row-${role.id}` | role-row-${role.id} (template) | `pages/admin/RoleList.tsx` |
+| `role-row-index-${role.id}` | role-row-index-${role.id} (template) | `pages/admin/RoleList.tsx` |
+| `role-id-link-${role.id}` | role-id-link-${role.id} (template) | `pages/admin/RoleList.tsx` |
+| `token-row-${token.label}` | token-row-${token.label} (template) | `pages/admin/Tokens.tsx` |
+| `assistant-progress-badge-${conn.id}` | assistant-progress-badge-${conn.id} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `connection-health-${conn.id}` | connection-health-${conn.id} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `connection-assistant-banner-${conn.id}` | connection-assistant-banner-${conn.id} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `resume-assistant-${conn.id}` | resume-assistant-${conn.id} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `schema-live-count-${conn.id}-${schema}` | schema-live-count-${conn.id}-${schema} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `schema-local-count-${conn.id}-${schema}` | schema-local-count-${conn.id}-${schema} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `schema-source-drift-tag-${conn.id}-${schema}` | schema-source-drift-tag-${conn.id}-${schema} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `view-manifest-${conn.id}-${schema}` | view-manifest-${conn.id}-${schema} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `download-manifest-${conn.id}-${schema}` | download-manifest-${conn.id}-${schema} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `reupload-manifest-${conn.id}-${schema}` | reupload-manifest-${conn.id}-${schema} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `remove-schema-${conn.id}-${schema}` | remove-schema-${conn.id}-${schema} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `refresh-live-catalog-${conn.id}` | refresh-live-catalog-${conn.id} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `delete-connection-${conn.id}` | delete-connection-${conn.id} (template) | `pages/connections/ConnectionOverview.tsx` |
+| `whitelist-group-${conn.id}-${schema}` | whitelist-group-${conn.id}-${schema} (template) | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-invalid-group-${conn.id}` | whitelist-invalid-group-${conn.id} (template) | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-invalid-row-${row.qualifiedName}` | whitelist-invalid-row-${row.qualifiedName} (template) | `pages/connections/TableWhitelist.tsx` |
+| `preview-diff-${connId}` | preview-diff-${connId} (template) | `pages/connections/TableWhitelist.tsx` |
+| `monitor-empty-action-${action}` | monitor-empty-action-${action} (template) | `pages/eval/Monitor.tsx` |
+| `run-row-detail-${run.id}` | run-row-detail-${run.id} (template) | `pages/eval/RunList.tsx` |
+| `workbench-validation-row-${table}` | workbench-validation-row-${table} (template) | `pages/publish/PublishWorkbench.tsx` |
+| `publish-impact-table-${tableName}` | publish-impact-table-${tableName} (template) | `pages/publish/PublishWorkbench.tsx` |
+| `publish-post-eval-${domain}` | publish-post-eval-${domain} (template) | `pages/publish/PublishWorkbench.tsx` |
+
 ## 8. Rename History
 
 | 日期 | PR | Old | New | 原因 |

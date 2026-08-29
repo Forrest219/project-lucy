@@ -867,10 +867,10 @@
   .pl-agent-list-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
   .pl-agent-list-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
   .pl-usage-rank-grid { @apply grid gap-3 xl:grid-cols-3; }
-  /* Spec 86：固定 Top-10 槽位；行高随单行 Label|Value|Bar 布局（约 1.5rem） */
+  /* Spec 135: elastic rank body — collapses on sparse data, scrollable at ≥10 rows */
   .pl-usage-rank-body {
-    min-height: calc(10 * 1.5rem + 9 * 0.625rem);
-    max-height: calc(10 * 1.5rem + 9 * 0.625rem);
+    min-height: 7rem;
+    max-height: 22rem;
     @apply overflow-y-auto;
   }
   .pl-usage-rank-body:has(.pl-usage-rank-empty) {
@@ -1680,31 +1680,50 @@
   .pl-diff-hunk { @apply text-warning; }
   .pl-yaml-preview { @apply rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed overflow-auto whitespace-pre-wrap; }
 
-  /* 发布工作台：本次将同步的变更 | 生效准备（Spec 123；变更详情走 Drawer） */
-  .pl-review-layout { @apply grid grid-cols-[minmax(280px,2fr)_minmax(0,3fr)] items-stretch gap-4; }
+  /* 发布工作台：本次将同步的变更 | 生效准备（Spec 123 / Spec 136；双栏与流水线状态机） */
+  .pl-review-layout { @apply grid grid-cols-[minmax(300px,2fr)_minmax(0,3fr)] items-stretch gap-4; }
   .pl-review-sidebar,
   .pl-review-main { @apply rounded-md border border-border-default bg-bg-surface p-4; }
   .pl-review-main { @apply min-w-0; }
   .pl-review-main-header { @apply mb-3 flex flex-wrap items-start justify-between gap-3; }
   .pl-drawer-panel--change-detail { @apply max-w-3xl; }
-  .pl-file-list { @apply grid gap-1; }
-  .pl-file-button { @apply grid grid-cols-[auto_1fr] items-center gap-2 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm; }
-  .pl-file-button:hover { @apply bg-bg-muted; }
-  .pl-file-button--active { @apply bg-bg-muted border-border-default; }
+  .pl-file-list { @apply grid gap-1.5; }
+  .pl-file-button { @apply grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-md border border-border-default/40 bg-bg-base/40 px-2.5 py-2 text-left text-sm transition-colors; }
+  .pl-file-button:hover { @apply bg-bg-muted border-border-default; }
+  .pl-file-button--active { @apply bg-bg-muted border-border-strong ring-1 ring-border-strong; }
   .pl-file-button > span:first-child { @apply rounded bg-bg-elevated border border-border-default px-1.5 py-0.5 text-xs text-fg-muted font-mono; }
-  .pl-file-button small { @apply col-span-2 text-xs text-danger-strong; }
+  .pl-file-button small { @apply col-span-3 text-xs text-danger-strong; }
+  .pl-diff-stat { @apply text-xs font-mono font-medium px-1 py-0.5 rounded; }
+  .pl-diff-stat--add { @apply text-success-strong bg-success-soft/60; }
+  .pl-diff-stat--del { @apply text-danger-strong bg-danger-soft/60; }
+
+  /* 流水线状态机 Stepper */
+  .pl-pipeline-stepper { @apply grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 rounded-lg border border-border-default bg-bg-base/60 p-3 list-none m-0; }
+  .pl-pipeline-step { @apply flex items-center gap-2.5 min-w-0; }
+  .pl-pipeline-step__icon { @apply flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold font-mono transition-colors; }
+  .pl-pipeline-step--success .pl-pipeline-step__icon { @apply bg-success-soft text-success-strong border border-success-strong; }
+  .pl-pipeline-step--running .pl-pipeline-step__icon { @apply bg-accent/20 text-accent border border-accent animate-pulse; }
+  .pl-pipeline-step--failed .pl-pipeline-step__icon { @apply bg-danger-soft text-danger-strong border border-danger-strong; }
+  .pl-pipeline-step--pending .pl-pipeline-step__icon { @apply bg-bg-muted text-fg-muted border border-border-default; }
+  .pl-pipeline-step--ready .pl-pipeline-step__icon { @apply bg-accent/20 text-accent border border-accent; }
+  .pl-pipeline-step__text { @apply min-w-0 flex flex-col gap-0.5; }
+  .pl-pipeline-step__title { @apply text-xs font-medium text-fg-default truncate; }
+  .pl-pipeline-step__sub { @apply text-[11px] text-fg-muted truncate; }
+  .pl-pipeline-step__divider { @apply text-xs text-fg-muted/60 select-none; }
+
+  /* 校验行与 Calm UI */
   .pl-validation-row { @apply flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm; }
   .pl-validation-row div { @apply grid gap-0.5; }
   .pl-validation-row strong { @apply font-medium; }
   .pl-validation-row div span { @apply text-xs text-fg-muted; }
   .pl-validation-row > span { @apply text-xs font-semibold; }
-  .pl-validation-row--ok { @apply border-success-strong bg-success-soft; }
+  .pl-validation-row--ok { @apply border-border-default bg-bg-base/60; }
   .pl-validation-row--ok > span { @apply text-success-strong; }
   .pl-validation-row--failed { @apply border-danger-strong bg-danger-soft; }
   .pl-validation-row--failed > span { @apply text-danger-strong; }
   .pl-validation-banner { @apply rounded-md border px-3 py-2 text-sm font-medium; }
-  .pl-validation-banner--success { @apply border-success-strong bg-success-soft text-success-strong; }
-  .pl-validation-banner--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
+  .pl-validation-banner--success { @apply border-success-strong/40 bg-success-soft/50 text-success-strong; }
+  .pl-validation-banner--warning { @apply border-warning-strong/40 bg-warning-soft/50 text-warning-strong; }
   .pl-validation-banner--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-boundary-checklist { @apply grid gap-2 text-xs text-fg-muted; }
   .pl-boundary-checklist li { @apply rounded-md border border-border-default bg-bg-base px-3 py-2; }

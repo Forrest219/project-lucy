@@ -126,10 +126,11 @@ describe("GovernanceOverview", () => {
 
     expect(screen.getByTestId("governance-usage-overview")).toHaveClass("pl-page-stack");
     expect(screen.getByTestId("governance-usage-metrics")).toHaveClass("pl-usage-metric-groups");
+
+    // Spec 135: two-tier layout — primary (运行体征) and secondary (资产与活跃)
     for (const groupTestId of [
-      "governance-usage-metrics-config",
-      "governance-usage-metrics-active",
-      "governance-usage-metrics-operations"
+      "governance-usage-metrics-primary",
+      "governance-usage-metrics-secondary"
     ] as const) {
       expect(screen.getByTestId(groupTestId)).toHaveClass("pl-metric-grid", "pl-metric-grid--three");
       expect(screen.getByTestId(groupTestId).querySelectorAll(":scope > .pl-metric-card")).toHaveLength(3);
@@ -139,42 +140,45 @@ describe("GovernanceOverview", () => {
     expect(screen.getByTestId("governance-token-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-popular-tables")).toHaveClass("pl-panel");
 
-    expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("总数");
-    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃");
-    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("50%");
-    expect(screen.getByTestId("metric-configured-token-count")).toHaveTextContent("配置");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃");
-    expect(screen.getByTestId("metric-configured-table-count")).toHaveTextContent("授权表");
-    expect(screen.getByTestId("metric-active-table-count")).toHaveTextContent("近 7 天活跃表");
+    // Spec 135: Tier 1 primary metrics
     expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
     expect(screen.getByTestId("metric-acl-denied")).toHaveTextContent("近 7 天 ACL 拒绝次数");
     expect(screen.getByTestId("metric-p95-latency")).toHaveTextContent("多数请求耗时");
 
+    // Spec 135: Tier 2 compound asset cards
+    expect(screen.getByTestId("metric-agent-asset")).toHaveTextContent("Agent");
+    expect(screen.getByTestId("metric-token-asset")).toHaveTextContent("Token");
+    expect(screen.getByTestId("metric-table-asset")).toHaveTextContent("授权表");
+
+    // Active / total compound values visible in secondary cards
+    expect(within(screen.getByTestId("metric-agent-asset")).getByText("1")).toBeInTheDocument();
+    expect(within(screen.getByTestId("metric-agent-asset")).getByText(/50%/)).toBeInTheDocument();
+
+    // Metric order: primary (calls, denied, p95) then secondary (agent, token, table)
     const metricOrder = Array.from(
       screen.getByTestId("governance-usage-metrics").querySelectorAll(":scope .pl-metric-card")
     ).map((card) => card.getAttribute("data-testid"));
     expect(metricOrder).toEqual([
-      "metric-agent-count",
-      "metric-configured-token-count",
-      "metric-configured-table-count",
-      "metric-active-agent-count",
-      "metric-active-token-count",
-      "metric-active-table-count",
       "metric-calls",
       "metric-acl-denied",
-      "metric-p95-latency"
+      "metric-p95-latency",
+      "metric-agent-asset",
+      "metric-token-asset",
+      "metric-table-asset"
     ]);
-    expect(within(screen.getByTestId("metric-configured-token-count")).getByText("Token")).toBeInTheDocument();
-    expect(screen.getByTestId("metric-help-agent-count")).toBeInTheDocument();
+
+    expect(within(screen.getByTestId("metric-token-asset")).getByText("Token")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-agent-asset")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-p95-latency")).toBeInTheDocument();
-    expect(screen.getByTestId("metric-agent-count")).toHaveClass("pl-metric-card--with-help");
-    expect(screen.getByTestId("metric-active-agent-count").querySelectorAll(":scope > small")).toHaveLength(1);
+    expect(screen.getByTestId("metric-agent-asset")).toHaveClass("pl-metric-card--with-help");
+    // Compound card has subValue in <small>
+    expect(screen.getByTestId("metric-agent-asset").querySelectorAll(":scope > small")).toHaveLength(1);
 
     expect(screen.queryByTestId("metric-agent-active-rate")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-token-active-rate")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-avg-latency")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("governance-usage-metrics")).queryByText("平均响应时长")).not.toBeInTheDocument();
-    expect(within(screen.getByTestId("metric-active-agent-count")).queryByText(/有调用/)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("metric-agent-asset")).queryByText(/有调用/)).not.toBeInTheDocument();
     expect(within(screen.getByTestId("governance-usage-metrics")).queryByText("配置表")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("governance-usage-metrics")).queryByText("响应上限")).not.toBeInTheDocument();
 
@@ -244,7 +248,8 @@ describe("GovernanceOverview", () => {
       expect(within(screen.getByTestId("metric-calls")).getByText("3")).toBeInTheDocument();
       expect(within(screen.getByTestId("metric-p95-latency")).getByText("120 ms")).toBeInTheDocument();
     });
-    expect(within(screen.getByTestId("metric-active-agent-count")).getByText(/近 7 天/)).toBeInTheDocument();
+    // Compound agent asset card present in 7d window
+    expect(screen.getByTestId("metric-agent-asset")).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("governance-window-24h"));
 
@@ -252,7 +257,8 @@ describe("GovernanceOverview", () => {
       expect(within(screen.getByTestId("metric-calls")).getByText("1")).toBeInTheDocument();
       expect(within(screen.getByTestId("metric-p95-latency")).getByText("40 ms")).toBeInTheDocument();
     });
-    expect(within(screen.getByTestId("metric-active-agent-count")).getByText(/近 24 小时/)).toBeInTheDocument();
+    // Compound asset cards still present after window switch
+    expect(screen.getByTestId("metric-agent-asset")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Agent 调用排行 · 近 24 小时/ })).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : String(input);

@@ -39,8 +39,8 @@ for (const line of contractContent.split(/\r?\n/)) {
   const m = line.match(/^\|\s+`([^`]+)`\s*\|/);
   if (!m) continue;
   const id = m[1].trim();
-  // 合法 testid 字符：[a-z0-9-] + ${...} 模板段 + 路径分隔符 / .
-  if (!/^[a-z0-9./-]+(\$\{[^}]+\}[a-z0-9./-]*)*$/.test(id)) continue;
+  // 合法 testid 字符：[a-z0-9_-] + ${...} 模板段 + 路径分隔符 / .
+  if (!/^(\$\{[^}]+\}|[a-z0-9_./-])+$/.test(id)) continue;
   contracted.add(id);
 }
 

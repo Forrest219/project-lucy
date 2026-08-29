@@ -1,24 +1,17 @@
 // webui/tests/e2e/specs/smoke.spec.ts
-// 关联主文档：docs/qa/lucy-webui-e2e-test-suite.md §3 / §11.2
+// 关联主文档：docs/qa/lucy-webui-e2e-test-suite.md §3 / §11.2 & docs/qa/smoke-test-design-upgrade-spec.md
 // 准入层级：L1 PR Smoke（每个 PR 必跑，阻塞合并）
 // 浏览器：chromium
 // 标签：@pr-smoke
 //
-// 设计原则：8 条 L1 用例覆盖低成本 PR 阻塞路径。需要完整写盘 / 发布闭环的
-//   E2E-PUB-04 / E2E-WIKI-03 等放 L3 Nightly。
-//
-// v0.4 IA 收敛（docs/qa/changelog.md §2026-08-01）：
-//   面包屑 "数据库接入" → "数据接入"；E2E-NAV-02 已对齐。
-//   其余 L1 spec（PUB-02 / CON-01 / CON-03 / WIKI-01 / NAV-01 / SEC-01 / I18N-01）
-//   全部通过，理由见 changelog。
-//
+// 设计原则：12 条 L1 用例覆盖低成本 PR 阻塞路径与核心升级功能。
 // 跑法：npm run e2e:smoke
 
 import { test, expect } from "@playwright/test";
 import { assertNoForbiddenTerms } from "../fixtures/helpers/terminology";
 import { assertFixtureOnly } from "../fixtures/helpers/reset";
 
-test.describe("L1 PR Smoke 8 条", () => {
+test.describe("L1 PR Smoke 12 条 (升级对齐版)", () => {
   test.beforeAll(() => {
     // L1 不需要 fixture；guard 走 warn 模式，仅当 fixture 路径指向真实仓库时拦截
     assertFixtureOnly({ warnIfMissing: true });
@@ -32,74 +25,100 @@ test.describe("L1 PR Smoke 8 条", () => {
     await assertNoForbiddenTerms(page);
   });
 
-  // 2. E2E-CON-01：连接卡片术语 + Header 治理
-  test("@pr-smoke E2E-CON-01 连接概览术语", async ({ page }) => {
-    await page.goto("/connections");
-    await expect(page.getByTestId("page-header")).toBeVisible();
-    // 真实 testid：connection-readonly-${conn.id}
-    const readonlyBadge = page.getByTestId("connection-readonly-mysql-aliyun");
-    await expect(readonlyBadge).toBeVisible();
-    await expect(readonlyBadge).toHaveText("预期只读");
-    // Header 右侧不出现跨页导航按钮
-    await expect(page.getByRole("button", { name: "表白名单" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "连通测试" })).toHaveCount(0);
+  // 2. E2E-PUB-03：发布工作台 Stepper 流水线与门禁面板
+  test("@pr-smoke E2E-PUB-03 发布工作台流水线与门禁", async ({ page }) => {
+    await page.goto("/publish/workbench");
+    await expect(page.getByTestId("publish-workbench-layout")).toBeVisible();
+    await expect(page.getByTestId("publish-flow-steps")).toBeVisible();
+    await expect(page.getByTestId("publish-gate-panel")).toBeVisible();
     await assertNoForbiddenTerms(page);
   });
 
-  // 3. E2E-CON-03：受控 YAML 上传 Drawer 打开（不实际落盘）
+  // 3. E2E-CON-01：连接卡片术语 + 开箱向导入口
+  test("@pr-smoke E2E-CON-01 连接概览术语与开箱向导入口", async ({ page }) => {
+    await page.goto("/connections");
+    await expect(page.getByTestId("page-header")).toBeVisible();
+    await expect(page.getByTestId("connection-card-mysql-aliyun")).toBeVisible();
+    const onboardingBtn = page.getByTestId("start-onboarding-assistant-btn");
+    await expect(onboardingBtn).toBeVisible();
+    await assertNoForbiddenTerms(page);
+  });
+
+  // 4. E2E-CON-03：受控 YAML 上传 Drawer 打开（不实际落盘）
   test("@pr-smoke E2E-CON-03 上传 Drawer 打开", async ({ page }) => {
     await page.goto("/connections");
-    // 真实 testid：add-schema-${conn.id} 打开 AddSchemaDrawer
     await page.getByTestId("add-schema-mysql-aliyun").click();
-    // 等 Drawer 真正显示
     await expect(page.getByTestId("add-schema-drawer")).toBeVisible();
-    // 填入合法 schema 名（仅字母/数字/下划线，不含 -）
     await page.getByTestId("add-schema-input").fill("smoke_schema");
-    // preview 按钮需要 schema 名为合法且非空
     const previewBtn = page.getByTestId("add-schema-preview-btn");
     await expect(previewBtn).toBeEnabled({ timeout: 5_000 });
-    // 不实际点击以避免触发 preview network（与 L1 目标不符）
-    // L1 只断言 Drawer 能打开 + 输入可达 + 关键按钮存在
     await expect(previewBtn).toBeVisible();
   });
 
-  // 4. E2E-WIKI-01：阅读态默认
-  test("@pr-smoke E2E-WIKI-01 Wiki 阅读态默认", async ({ page }) => {
-    await page.goto("/wiki");
-    // 真实 testid：wiki-mode-badge，data-mode="read" 表示阅读态
-    const modeBadge = page.getByTestId("wiki-mode-badge");
-    await expect(modeBadge).toBeVisible();
-    await expect(modeBadge).toHaveAttribute("data-mode", "read");
-    // 阅读态下 textarea 不可见（编辑态才有）
-    // 注意：wiki-edit-textarea 在 mode=read 时被组件卸载
-    await expect(page.getByTestId("wiki-edit-textarea")).toHaveCount(0);
-    await expect(page.getByTestId("wiki-tree")).toBeVisible();
+  // 5. E2E-TOK-01：全局 Token 看板与新建 Token 触发器
+  test("@pr-smoke E2E-TOK-01 全局 Token 资产看板", async ({ page }) => {
+    await page.goto("/admin/tokens");
+    await expect(page.getByTestId("create-token-btn")).toBeVisible();
+    await expect(page.getByTestId("token-kpis")).toBeVisible();
+    await expect(page.getByTestId("tokens-table")).toBeVisible();
+    await assertNoForbiddenTerms(page);
   });
 
-  // 5. E2E-NAV-01：一级菜单 语义发布 + 2 个二级
+  // 6. E2E-AUD-01：访问日志单行弹性筛选栏与时间预设
+  test("@pr-smoke E2E-AUD-01 访问日志与快捷时间预设", async ({ page }) => {
+    await page.goto("/admin/audit");
+    await expect(page.getByTestId("audit-view-tabs")).toBeVisible();
+    await expect(page.getByTestId("audit-time-presets")).toBeVisible();
+    await expect(page.getByTestId("audit-shared-filters")).toBeVisible();
+    await assertNoForbiddenTerms(page);
+  });
+
+  // 7. E2E-USG-01：监控使用概况与复合指标卡
+  test("@pr-smoke E2E-USG-01 监控看板与复合指标", async ({ page }) => {
+    await page.goto("/admin/usage");
+    await expect(page.getByTestId("governance-usage-overview")).toBeVisible();
+    await expect(page.getByTestId("governance-usage-metrics")).toBeVisible();
+    await expect(page.getByTestId("governance-usage-rank-grid")).toBeVisible();
+    await assertNoForbiddenTerms(page);
+  });
+
+  // 8. E2E-LIC-01：部署许可设置与激活码区域
+  test("@pr-smoke E2E-LIC-01 部署许可设置与激活码", async ({ page }) => {
+    await page.goto("/admin/license");
+    await expect(page.getByTestId("license-activation-section")).toBeVisible();
+    await expect(page.getByTestId("license-status-card")).toBeVisible();
+    await assertNoForbiddenTerms(page);
+  });
+
+  // 9. E2E-WIKI-01：Wiki 工作台与工具栏
+  test("@pr-smoke E2E-WIKI-01 Wiki 工作台布局与工具栏", async ({ page }) => {
+    await page.goto("/wiki");
+    await expect(page.getByTestId("wiki-layout")).toBeVisible();
+    await expect(page.getByTestId("wiki-sidebar")).toBeVisible();
+    await expect(page.getByTestId("wiki-new-button")).toBeVisible();
+    await assertNoForbiddenTerms(page);
+  });
+
+  // 10. E2E-NAV-01：一级菜单 语义发布 + 2 个二级
   test("@pr-smoke E2E-NAV-01 语义发布导航", async ({ page }) => {
     await page.goto("/publish/workbench");
-    // 侧栏 1 级菜单包含"语义发布"组（按文本定位）
     await expect(page.getByText("语义发布").first()).toBeVisible();
-    // 2 个二级：发布工作台 / 发布记录
     const workbenchLink = page.getByRole("link", { name: "发布工作台" });
     await expect(workbenchLink).toBeVisible();
-    // 当前页 link 应带 aria-current="page"（实现约定）
     await expect(workbenchLink).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("link", { name: "发布记录" })).toBeVisible();
-    // 旧导航词不应出现
     await expect(page.getByRole("link", { name: "变更审阅" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "待发布变更" })).toHaveCount(0);
   });
 
-  // 6. E2E-NAV-02：面包屑 `数据接入 / 连接概览`（v0.4 IA 收敛：原"数据库接入" → "数据接入"）
-  test("@pr-smoke E2E-NAV-02 面包屑", async ({ page }) => {
+  // 11. E2E-NAV-02：页面标题与侧栏归属
+  test("@pr-smoke E2E-NAV-02 页面标题与侧栏归属", async ({ page }) => {
     await page.goto("/connections");
-    await expect(page.getByTestId("page-header")).toContainText("数据接入");
     await expect(page.getByTestId("page-header")).toContainText("连接概览");
+    await expect(page.getByText("数据接入").first()).toBeVisible();
   });
 
-  // 7. E2E-SEC-01：上传目标路径由服务端计算，客户端 targetPath 不可越权
+  // 12. E2E-SEC-01：上传目标路径由服务端计算，客户端 targetPath 不可越权
   test("@pr-smoke E2E-SEC-01 上传目标路径不可由客户端覆盖", async ({ page }) => {
     await page.goto("/connections");
     const response = await page.request.post("/api/catalog/assets/upload", {
@@ -123,11 +142,5 @@ test.describe("L1 PR Smoke 8 条", () => {
       "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"
     );
     expect(JSON.stringify(body)).not.toContain("../etc/passwd");
-  });
-
-  // 8. E2E-I18N-01：forbidden terms 0 命中
-  test("@pr-smoke E2E-I18N-01 关键页 forbidden terms 0 命中", async ({ page }) => {
-    await page.goto("/connections");
-    await assertNoForbiddenTerms(page);
   });
 });

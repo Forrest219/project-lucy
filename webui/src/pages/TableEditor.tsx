@@ -1291,7 +1291,7 @@ export function TableEditor() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.source(conn, schema, table) });
-      toast.success("已写入语义层");
+      toast.success("已写入语义层", { id: "semantic-layer-write" });
       navigate("/review");
     },
     onError: (error) => {
@@ -1319,7 +1319,7 @@ export function TableEditor() {
       setSaveError(null);
     },
     onSuccess: () => {
-      toast.success("已保存到语义层");
+      toast.success("已保存到语义层", { id: "semantic-layer-save" });
       navigate("/review");
     },
     onError: (error) => {

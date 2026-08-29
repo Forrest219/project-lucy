@@ -16,7 +16,7 @@ import type {
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { TagInput } from "../../components/TagInput";
-import { CheckboxCandidatePicker } from "../../components/CheckboxCandidatePicker";
+import { AssetHierarchyPicker } from "../../components/AssetHierarchyPicker";
 import { formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 
 type Tab = "identity" | "permissions" | "effective" | "usage" | "diff";

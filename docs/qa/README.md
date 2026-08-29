@@ -26,6 +26,7 @@ docs/qa/
 | 文档 | 角色 |
 |---|---|
 | [`e2e-sop.md`](e2e-sop.md) | **总指引**：测试集总表、选用决策、共同约定 |
+| [`smoke-test-design-upgrade-spec.md`](smoke-test-design-upgrade-spec.md) | **Fast / Full Smoke 自动化测试任务设计升级规范** |
 | [`suite-webui-browser.md`](suite-webui-browser.md) | 分表 `E2E-WEBUI` |
 | [`suite-semantic-onboard-mcp-eval.md`](suite-semantic-onboard-mcp-eval.md) | 分表 `E2E-ONBOARD-EVAL`（主题实例含 Spider2 Pilot §14） |
 | [`suite-agent-mcp.md`](suite-agent-mcp.md) | 分表 `E2E-AGENT`（Spider2 Agent 抽样见 §5） |

@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-08-29 · docs/qa · Fast Smoke 与 Full Smoke 升级对齐新特性
+
+### 新增
+- 规范：[`smoke-test-design-upgrade-spec.md`](smoke-test-design-upgrade-spec.md)（Fast Smoke Tier 0 与 Full Smoke Tier 1 升级方案）
+- Fast Smoke 自动化脚本：`scripts/fast-smoke.mjs`、`scripts/verify-license-baseline.mjs`
+- Full Smoke 闭环验证：`scripts/p1-governance-smoke.mjs`、`scripts/p1-publish-regression-smoke.mjs`
+- WebUI L1 E2E 扩充：`webui/tests/e2e/specs/smoke.spec.ts` 增补 Onboarding / Token 看板 / Audit 筛选 / Stepper
+
+### 影响映射更新
+- 新增 `E2E-ONB-01`、`E2E-TOK-01`、`E2E-AUD-01`、`E2E-USG-01`、`E2E-REG-01`
+
+---
+
 ## 2026-08-25 · docs/qa · 新增用户旅程剧本分表
 
 ### 新增

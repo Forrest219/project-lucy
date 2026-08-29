@@ -219,10 +219,25 @@ function gateNextStepCopy(gate: PublishGate, failedCount: number, hasValidate: b
   return "校验已通过，可使用顶部「同步索引并生效」。";
 }
 
+export function countDiffLines(diff?: string): { added: number; deleted: number } {
+  if (!diff) return { added: 0, deleted: 0 };
+  let added = 0;
+  let deleted = 0;
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      added++;
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      deleted++;
+    }
+  }
+  return { added, deleted };
+}
+
 export function PublishWorkbench() {
   const [selected, setSelected] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [confirmPublishOpen, setConfirmPublishOpen] = useState(false);
+  const [showValidationDetails, setShowValidationDetails] = useState(false);
   const autoValidatedSignature = useRef<string | null>(null);
 
   const diffQuery = useQuery({
@@ -235,9 +250,9 @@ export function PublishWorkbench() {
       const failed = data.results.filter((item) => !item.validation.ok).length;
       if (failed === 0) {
         if (data.results.length === 0) {
-          toast.message("校验完成：本次无可校验的表变更");
+          toast.message("校验完成：本次无可校验的表变更", { id: "workbench-validation" });
         } else {
-          toast.success(`校验通过：${data.results.length} 张表全部通过`);
+          toast.success(`校验通过：${data.results.length} 张表全部通过`, { id: "workbench-validation" });
         }
       } else {
         const firstFailed = data.results.find((item) => !item.validation.ok);
@@ -247,14 +262,14 @@ export function PublishWorkbench() {
             /^校验未通过：?/,
             ""
           );
-          toast.error(`校验未通过（${failed}/${data.results.length}）：${detail}`);
+          toast.error(`校验未通过（${failed}/${data.results.length}）：${detail}`, { id: "workbench-validation" });
         } else {
-          toast.error(`校验未通过：${failed} / ${data.results.length} 张表未通过`);
+          toast.error(`校验未通过：${failed} / ${data.results.length} 张表未通过`, { id: "workbench-validation" });
         }
       }
     },
     onError: (error) => {
-      toast.error(`校验失败：${error instanceof Error ? error.message : "未知错误"}`);
+      toast.error(`校验失败：${error instanceof Error ? error.message : "未知错误"}`, { id: "workbench-validation" });
     }
   });
   const reindexMutation = useMutation({
@@ -264,13 +279,13 @@ export function PublishWorkbench() {
       }),
     onSuccess: (data) => {
       if (data.reindex.ok) {
-        toast.success("KTX 索引重建完成");
+        toast.success("KTX 索引重建完成", { id: "workbench-reindex" });
       } else {
-        toast.error(`KTX 索引重建失败：exit ${data.reindex.exitCode}`);
+        toast.error(`KTX 索引重建失败：exit ${data.reindex.exitCode}`, { id: "workbench-reindex" });
       }
     },
     onError: (error) => {
-      toast.error(`KTX 索引重建失败：${error instanceof Error ? error.message : "未知错误"}`);
+      toast.error(`KTX 索引重建失败：${error instanceof Error ? error.message : "未知错误"}`, { id: "workbench-reindex" });
     }
   });
   const sourcesQuery = useQuery({
@@ -499,28 +514,39 @@ export function PublishWorkbench() {
             </p>
           ) : null}
           <div className="pl-file-list">
-            {files.map((file) => (
-              <button
-                className={clsx(
-                  "pl-file-button",
-                  detailOpen && active?.filePath === file.filePath && "pl-file-button--active"
-                )}
-                key={file.filePath}
-                type="button"
-                onClick={() => {
-                  setSelected(file.filePath);
-                  setDetailOpen(true);
-                }}
-              >
-                <span>{fileChangeStatusLabel(file.status)}</span>
-                <span className="truncate notranslate" translate="no">
-                  {file.filePath}
-                </span>
-                {validationForFile(file.filePath)?.ok === false ? (
-                  <small>校验失败</small>
-                ) : null}
-              </button>
-            ))}
+            {files.map((file) => {
+              const diffStats = countDiffLines(file.diff);
+              return (
+                <button
+                  className={clsx(
+                    "pl-file-button",
+                    detailOpen && active?.filePath === file.filePath && "pl-file-button--active"
+                  )}
+                  key={file.filePath}
+                  type="button"
+                  onClick={() => {
+                    setSelected(file.filePath);
+                    setDetailOpen(true);
+                  }}
+                >
+                  <span>{fileChangeStatusLabel(file.status)}</span>
+                  <span className="truncate notranslate font-mono text-xs" translate="no">
+                    {file.filePath}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs shrink-0">
+                    {diffStats.added > 0 ? (
+                      <span className="pl-diff-stat pl-diff-stat--add">+{diffStats.added}</span>
+                    ) : null}
+                    {diffStats.deleted > 0 ? (
+                      <span className="pl-diff-stat pl-diff-stat--del">-{diffStats.deleted}</span>
+                    ) : null}
+                  </span>
+                  {validationForFile(file.filePath)?.ok === false ? (
+                    <small>校验失败</small>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </aside>
 
@@ -544,22 +570,121 @@ export function PublishWorkbench() {
             <p className="pl-panel-title">生效准备</p>
 
             <ol
-              className="flex flex-wrap items-center gap-1 text-xs text-fg-muted"
+              className="pl-pipeline-stepper"
               data-testid="publish-flow-steps"
               aria-label="生效步骤"
             >
-              <li className={clsx(stepReviewDone && "text-fg-default font-medium")}>审阅变更</li>
-              <li aria-hidden="true">→</li>
+              {/* Step 1: 审阅变更 */}
               <li
                 className={clsx(
-                  (stepValidateActive || stepValidateDone) && "text-fg-default font-medium"
+                  "pl-pipeline-step",
+                  stepReviewDone ? "pl-pipeline-step--success" : "pl-pipeline-step--pending"
                 )}
               >
-                校验
+                <div className="pl-pipeline-step__icon">
+                  {stepReviewDone ? "✓" : "1"}
+                </div>
+                <div className="pl-pipeline-step__text">
+                  <span
+                    className={clsx(
+                      "pl-pipeline-step__title",
+                      stepReviewDone && "text-fg-default font-medium"
+                    )}
+                  >
+                    审阅变更
+                  </span>
+                  <span className="pl-pipeline-step__sub">
+                    {files.length > 0 ? `${files.length} 项待同步` : "当前无变更"}
+                  </span>
+                </div>
               </li>
-              <li aria-hidden="true">→</li>
-              <li className={clsx(stepPublishActive && "text-fg-default font-medium")}>
-                同步索引
+
+              <li className="pl-pipeline-step__divider" aria-hidden="true">
+                →
+              </li>
+
+              {/* Step 2: 校验 */}
+              <li
+                className={clsx(
+                  "pl-pipeline-step",
+                  validateMutation.isPending
+                    ? "pl-pipeline-step--running"
+                    : validateMutation.data
+                      ? failedCount > 0
+                        ? "pl-pipeline-step--failed"
+                        : "pl-pipeline-step--success"
+                      : stepValidateActive
+                        ? "pl-pipeline-step--ready"
+                        : "pl-pipeline-step--pending"
+                )}
+              >
+                <div className="pl-pipeline-step__icon">
+                  {validateMutation.isPending ? "⋯" : validateMutation.data ? (failedCount > 0 ? "✕" : "✓") : "2"}
+                </div>
+                <div className="pl-pipeline-step__text">
+                  <span
+                    className={clsx(
+                      "pl-pipeline-step__title",
+                      (stepValidateActive || stepValidateDone) && "text-fg-default font-medium"
+                    )}
+                  >
+                    校验
+                  </span>
+                  <span className="pl-pipeline-step__sub">
+                    {validateMutation.isPending
+                      ? "校验中…"
+                      : validateMutation.data
+                        ? failedCount > 0
+                          ? `${failedCount} 项阻断`
+                          : `${validateMutation.data.results.length}/${validateMutation.data.results.length} 通过`
+                        : "待校验"}
+                  </span>
+                </div>
+              </li>
+
+              <li className="pl-pipeline-step__divider" aria-hidden="true">
+                →
+              </li>
+
+              {/* Step 3: 同步索引 */}
+              <li
+                className={clsx(
+                  "pl-pipeline-step",
+                  reindexMutation.isPending
+                    ? "pl-pipeline-step--running"
+                    : reindexMutation.data?.reindex.ok
+                      ? "pl-pipeline-step--success"
+                      : reindexFailed
+                        ? "pl-pipeline-step--failed"
+                        : stepPublishActive
+                          ? "pl-pipeline-step--ready"
+                          : "pl-pipeline-step--pending"
+                )}
+              >
+                <div className="pl-pipeline-step__icon">
+                  {reindexMutation.isPending ? "⋯" : reindexMutation.data?.reindex.ok ? "✓" : "3"}
+                </div>
+                <div className="pl-pipeline-step__text">
+                  <span
+                    className={clsx(
+                      "pl-pipeline-step__title",
+                      stepPublishActive && "text-fg-default font-medium"
+                    )}
+                  >
+                    同步索引
+                  </span>
+                  <span className="pl-pipeline-step__sub">
+                    {reindexMutation.isPending
+                      ? "同步中…"
+                      : reindexMutation.data?.reindex.ok
+                        ? "已生效"
+                        : reindexFailed
+                          ? "同步失败"
+                          : stepPublishActive
+                            ? "可生效"
+                            : "待就绪"}
+                  </span>
+                </div>
               </li>
             </ol>
 
@@ -650,7 +775,18 @@ export function PublishWorkbench() {
           </section>
 
           <section className="grid gap-3">
-            <p className="pl-panel-title">校验摘要</p>
+            <div className="flex items-center justify-between">
+              <p className="pl-panel-title mb-0">校验摘要</p>
+              {validateMutation.data && validateMutation.data.results.length > 2 && failedCount === 0 ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost text-xs px-2 py-0.5"
+                  onClick={() => setShowValidationDetails((prev) => !prev)}
+                >
+                  {showValidationDetails ? "收起明细 ▲" : "展开明细 ▼"}
+                </button>
+              ) : null}
+            </div>
             {validateMutation.isPending && !validateMutation.data ? (
               <p className="pl-notice">正在校验变更…</p>
             ) : validateMutation.data ? (
@@ -661,24 +797,32 @@ export function PublishWorkbench() {
                       ? "pl-validation-banner pl-validation-banner--danger"
                       : validateMutation.data.results.length === 0
                         ? "pl-validation-banner"
-                        : "pl-validation-banner pl-validation-banner--success"
+                        : "pl-validation-banner pl-validation-banner--success flex items-center justify-between"
                   }
                 >
-                  {failedCount > 0
-                    ? `${failedCount} 张表未通过`
-                    : validateMutation.data.results.length === 0
-                      ? "无可校验的表变更"
-                      : `${validateMutation.data.results.length} 张表全部通过`}
+                  <div className="flex items-center gap-2">
+                    {failedCount === 0 && validateMutation.data.results.length > 0 ? (
+                      <span className="text-success-strong font-bold">✓</span>
+                    ) : null}
+                    <span>
+                      {failedCount > 0
+                        ? `${failedCount} 张表未通过`
+                        : validateMutation.data.results.length === 0
+                          ? "无可校验的表变更"
+                          : `${validateMutation.data.results.length} 张表全部通过`}
+                    </span>
+                  </div>
                 </div>
-                {validateMutation.data.results.map((item) => (
-                  <WorkbenchValidationRow
-                    key={`${item.conn}/${item.schema}/${item.table}`}
-                    conn={item.conn}
-                    schema={item.schema}
-                    table={item.table}
-                    validation={item.validation}
-                  />
-                ))}
+                {(failedCount > 0 || showValidationDetails || validateMutation.data.results.length <= 4) &&
+                  validateMutation.data.results.map((item) => (
+                    <WorkbenchValidationRow
+                      key={`${item.conn}/${item.schema}/${item.table}`}
+                      conn={item.conn}
+                      schema={item.schema}
+                      table={item.table}
+                      validation={item.validation}
+                    />
+                  ))}
               </div>
             ) : (
               <p className="pl-notice">校验结果将显示在这里。</p>

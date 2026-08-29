@@ -8,6 +8,7 @@ import {
   PublishWorkbench,
   boundaryChecklistForChangedFiles,
   classifyChangedSemanticFile,
+  countDiffLines,
   fileChangeStatusLabel,
   impactedTableNames
 } from "../pages/publish/PublishWorkbench";
@@ -66,6 +67,13 @@ describe("PublishWorkbench helpers", () => {
     expect(fileChangeStatusLabel("W")).toBe("已修改");
     expect(fileChangeStatusLabel("modified")).toBe("已修改");
     expect(fileChangeStatusLabel("A")).toBe("新增");
+  });
+
+  it("counts added and deleted diff lines accurately", () => {
+    const diff = "--- a/file.yaml\n+++ b/file.yaml\n@@ -1,3 +1,4 @@\n-old line\n+new line 1\n+new line 2\n context";
+    expect(countDiffLines(diff)).toEqual({ added: 2, deleted: 1 });
+    expect(countDiffLines("")).toEqual({ added: 0, deleted: 0 });
+    expect(countDiffLines(undefined)).toEqual({ added: 0, deleted: 0 });
   });
 });
 
@@ -768,5 +776,65 @@ describe("PublishWorkbench", () => {
     expect(screen.queryByTestId("workbench-upload-semantic-asset")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
     expect(screen.getByTestId("publish-flow-steps")).toHaveTextContent("审阅变更");
+  });
+
+  it("renders pipeline stepper with dynamic step indicators and line diff stats", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  {
+                    filePath: "semantic-layer/demo-mysql/superstore_orders.yaml",
+                    status: "modified",
+                    diff: "--- a/file\n+++ b/file\n+line 1\n+line 2\n-old line"
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  {
+                    conn: "demo-mysql",
+                    schema: "chatbi",
+                    table: "superstore_orders",
+                    validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    const stepper = await screen.findByTestId("publish-flow-steps");
+    expect(stepper).toHaveTextContent("审阅变更");
+    expect(stepper).toHaveTextContent("校验");
+    expect(stepper).toHaveTextContent("同步索引");
+
+    // Line diff stats badge
+    expect(await screen.findByText("+2")).toBeInTheDocument();
+    expect(screen.getByText("-1")).toBeInTheDocument();
+
+    // Calm UI all-pass banner
+    expect(await screen.findByText("1 张表全部通过")).toBeInTheDocument();
   });
 });

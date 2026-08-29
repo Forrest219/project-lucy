@@ -30,6 +30,8 @@ Lucy 的测试分三层，不能互相替代：
 
 | Command | Layer | Purpose |
 |---|---|---|
+| `npm run smoke:fast` | platform + tier 0 fast smoke | 快速静态规范、元数据契约、WebUI L1 及轻量握手（≤45s，PR 阻塞门禁） |
+| `npm run smoke:full` | aggregate + tier 1 full smoke | 全量多数据源容器、License、Token 资产、发布回归、监控审计与 Agent E2E 就绪门禁 |
 | `npm run lint:spec` | platform | spec drift checks for routes/API/skills/evals/access roles |
 | `npm run security:baseline` | security + platform | token hash, wildcard ACL, deny tools, audit hooks, secrets exclusion baseline |
 | `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke（含 delivery-isolation 静态门禁） |

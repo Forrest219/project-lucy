@@ -8,22 +8,27 @@ const args = new Set(process.argv.slice(2));
 const help = args.has("--help") || args.has("-h");
 const listOnly = args.has("--list");
 const dryRun = args.has("--dry-run");
-const includeP0 = args.has("--include-p0");
+const fullMode = args.has("--full");
+const includeP0 = args.has("--include-p0") || fullMode;
 const allowBlocked = args.has("--allow-blocked");
 const outArg = valueAfter("--out") ?? "inbox/p1-release-readiness-evidence.json";
 
 const P0_GATES = [
   ["lint-spec", ["run", "lint:spec"]],
   ["security-baseline", ["run", "security:baseline"]],
+  ["delivery-isolation", ["run", "smoke:p0:delivery-isolation"]],
   ["docker-smoke", ["run", "smoke:p0:docker"]],
   ["demo-e2e", ["run", "smoke:p0:demo"]],
-  ["postgres-demo-e2e", ["run", "smoke:p0:postgres-demo"]]
+  ["postgres-demo-e2e", ["run", "smoke:p0:postgres-demo"]],
+  ["executive-poc-e2e", ["run", "smoke:p0:executive-poc"]]
 ];
 
 const P1_GATES = [
   ["context", ["run", "smoke:p1:context"]],
   ["skills", ["run", "smoke:p1:skills"]],
   ["endpoint", ["run", "smoke:p1:endpoint"]],
+  ["governance", ["run", "smoke:p1:governance"]],
+  ["publish-regression", ["run", "smoke:p1:publish-regression"]],
   ["observability", ["run", "smoke:p1:observability"]],
   ["agent-e2e", ["run", "e2e:agent"], { kind: "e2e", runtime: "configured real agent commands" }],
   ["business-eval-full", ["run", "smoke:p1:business-eval-full"]],
@@ -31,18 +36,15 @@ const P1_GATES = [
 ];
 
 const USAGE = `Usage:
+  npm run smoke:full
   npm run smoke:p1:release-readiness
+  npm run smoke:p1:release-readiness -- --full
   npm run smoke:p1:release-readiness -- --include-p0
   npm run smoke:p1:release-readiness -- --allow-blocked
   npm run smoke:p1:release-readiness -- --dry-run
   npm run smoke:p1:release-readiness -- --list
 
-Aggregates P1上线达标 gates and writes evidence JSON.
-The agent-e2e gate is intentionally wired to npm run e2e:agent. Smoke/unit tests are not
-accepted as a substitute for real agent runtime validation.
-Exit behavior:
-  - failed gates always fail the run.
-  - blocked gates fail unless --allow-blocked is supplied.
+Aggregates P1上线达标 and Full Smoke gates and writes evidence JSON.
 `;
 
 function valueAfter(flag) {
@@ -101,66 +103,66 @@ function runGate(id, npmArgs, metadata = {}) {
         ...metadata,
         status: classifyOutput(exitCode, stdout, stderr),
         exitCode,
-        stdout: redact(stdout).slice(-4000),
-        stderr: redact(stderr).slice(-4000)
+        stdout: redact(stdout),
+        stderr: redact(stderr)
       });
     });
   });
 }
 
-async function writeEvidence(evidence) {
+async function main() {
+  if (help) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  const gates = includeP0 ? [...P0_GATES, ...P1_GATES] : P1_GATES;
+  if (listOnly) {
+    for (const [id, npmArgs] of gates) {
+      console.log(`${id}\tnpm ${npmArgs.join(" ")}`);
+    }
+    process.exit(0);
+  }
+
+  const results = [];
+  for (const [id, npmArgs, metadata] of gates) {
+    results.push(await runGate(id, npmArgs, metadata));
+  }
+
+  const passed = results.filter((item) => item.status === "passed" || item.status === "dry-run").length;
+  const blocked = results.filter((item) => item.status === "blocked").length;
+  const failed = results.filter((item) => item.status === "failed").length;
+
+  let overall = "passed";
+  if (failed > 0) overall = "failed";
+  else if (blocked > 0 && !allowBlocked) overall = "failed";
+  else if (blocked > 0) overall = "blocked";
+
+  const evidence = {
+    contract: "lucy-p1-release-readiness-v2",
+    version: "2.0.0",
+    checkedAt: new Date().toISOString(),
+    status: overall,
+    allowBlocked,
+    includeP0,
+    fullMode,
+    summary: { total: results.length, passed, blocked, failed },
+    gates: results.map(({ id, command, status, exitCode, stdout, stderr, ...meta }) => ({
+      id,
+      command,
+      status,
+      exitCode,
+      ...meta,
+      outputSnippet: (stdout + "\n" + stderr).trim().slice(-600)
+    }))
+  };
+
   const outPath = path.resolve(process.cwd(), outArg);
   await mkdir(path.dirname(outPath), { recursive: true });
-  await writeFile(outPath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
-  console.log(`[p1-release-readiness] wrote ${path.relative(process.cwd(), outPath)}`);
+  await writeFile(outPath, JSON.stringify(evidence, null, 2), "utf8");
+  console.log(`\n[p1-release-readiness] status=${overall} (${passed}/${results.length} passed, ${blocked} blocked, ${failed} failed)`);
+  console.log(`[p1-release-readiness] wrote ${outPath}`);
+
+  if (overall === "failed") process.exit(1);
 }
 
-if (help) {
-  console.log(USAGE);
-  process.exit(0);
-}
-
-const gates = [...(includeP0 ? P0_GATES : []), ...P1_GATES];
-
-if (listOnly) {
-  console.log(JSON.stringify({
-    includeP0,
-    allowBlocked,
-    count: gates.length,
-    gates: gates.map(([id, npmArgs, metadata = {}]) => ({ id, command: `npm ${npmArgs.join(" ")}`, ...metadata }))
-  }, null, 2));
-  process.exit(0);
-}
-
-const startedAt = new Date().toISOString();
-const results = [];
-for (const [id, npmArgs, metadata = {}] of gates) {
-  results.push(await runGate(id, npmArgs, metadata));
-}
-
-const summary = {
-  total: results.length,
-  passed: results.filter((item) => item.status === "passed").length,
-  blocked: results.filter((item) => item.status === "blocked").length,
-  failed: results.filter((item) => item.status === "failed").length,
-  dryRun: results.filter((item) => item.status === "dry-run").length
-};
-
-const evidence = {
-  generatedAt: new Date().toISOString(),
-  startedAt,
-  generatedBy: "scripts/p1-release-readiness.mjs",
-  includeP0,
-  allowBlocked,
-  summary,
-  results
-};
-
-await writeEvidence(evidence);
-
-if (summary.failed > 0 || (summary.blocked > 0 && !allowBlocked)) {
-  console.error(`[p1-release-readiness] FAIL ${JSON.stringify(summary)}`);
-  process.exit(1);
-}
-
-console.log(`[p1-release-readiness] PASS ${JSON.stringify(summary)}`);
+await main();

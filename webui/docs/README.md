@@ -120,6 +120,8 @@
 | [126-customer-branding-logo-config-spec.md](126-customer-branding-logo-config-spec.md) | 客户品牌外观：Logo / 产品名称 / 副标题配置页（Spec 126；对齐 Tableau Server Logo 约束） | 产品 / UX / Frontend / Backend |
 | [127-connection-delete-spec.md](127-connection-delete-spec.md) | 删除连接：从 `ktx.yaml` 卸载连接配置；dryRun 影响面；可选删约定 secret 与本地 YAML 资产；ACL/Wiki 只预览（Implemented v1.0） | 产品 / UX / API / Frontend |
 | [128-enterprise-kpi-contract-spec.md](128-enterprise-kpi-contract-spec.md) | Enterprise KPI 合规契约：四状态规则（ok/no_data/unavailable/partial）、D1–D4 锁定口径、HR-1–HR-7 硬规则、MetricCard 渲染规范；Gate A（状态规范化）与 Gate B（公式修正）实施指南 | 产品 / 前端 / Backend / API |
+| [135-admin-usage-and-audit-uiux-refinement-spec.md](135-admin-usage-and-audit-uiux-refinement-spec.md) | 使用概况与访问日志 UI/UX 重构：看板指标分层与复合卡片、排行榜弹性高与 Tooltip、抽屉排版坍塌根治与触达表内聚、主表高密降噪与状态语义解耦、快捷时间预设与单行弹性筛选栏 | 产品 / UX / Frontend |
+| [136-publish-workbench-uiux-refinement-spec.md](136-publish-workbench-uiux-refinement-spec.md) | 发布工作台 UI/UX 重构：Pipeline Stepper 流水线状态机、异常驱动静默校验展示与 Calm UI、左侧变更资产树 (+N/-M 统计) 与右侧双视图联动、全局 Toast 防抖去重 | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

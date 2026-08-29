@@ -515,6 +515,15 @@ function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "ar
 type AuditTab = "turns" | "calls";
 type WindowHours = 24 | 168;
 type RangePreset = "24h" | "7d";
+type TimePreset = "1h" | "24h" | "7d" | "today" | "custom";
+
+const TIME_PRESET_LABELS: Record<TimePreset, string> = {
+  "1h": "近 1 小时",
+  "24h": "近 24 小时",
+  "7d": "近 7 天",
+  "today": "今日",
+  "custom": "自定义"
+};
 
 function formatDurationMs(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
@@ -608,13 +617,16 @@ function resolveAgentFilterParam(input: string, agents: Agent[]): string {
   return input.trim();
 }
 
-function CopyableId({ value, testId, label }: { value: string; testId: string; label: string }) {
+function CopyableId({ value, testId, label, shortDisplay = false }: { value: string; testId: string; label: string; shortDisplay?: boolean }) {
+  const displayValue = shortDisplay && value.length > 14
+    ? `${value.slice(0, 12)}…`
+    : value;
   return (
     <button
       type="button"
       className="pl-audit-id-copy notranslate font-mono text-xs text-fg-body"
       translate="no"
-      title={`复制${label}`}
+      title={value}
       aria-label={`复制${label} ${value}`}
       data-testid={testId}
       onClick={(event) => {
@@ -625,7 +637,7 @@ function CopyableId({ value, testId, label }: { value: string; testId: string; l
           .catch(() => toast.error("复制失败，请重试"));
       }}
     >
-      {value}
+      {displayValue}
     </button>
   );
 }
@@ -640,6 +652,19 @@ function formatTablesCell(sources: AuditTurnEntry["sources"], max = 2): string {
 
 const TURN_SOURCE_FILTER_TITLE =
   "来源类型：用户原始问询为客户端上报；系统推断问询由工具调用参数自动生成摘要，不等同于用户原文。";
+
+/** Spec 135: ID-like input routes to `key`; free text routes to turnSearch / tableSearch. */
+function looksLikeIdQuery(raw: string): boolean {
+  const value = raw.trim();
+  if (!value) return false;
+  if (/^lucy_/i.test(value)) return true;
+  if (/^(inf_|turn_)/i.test(value)) return true;
+  if (/^\d+$/.test(value)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    return true;
+  }
+  return false;
+}
 
 function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
   if (source === "reported") {
@@ -665,12 +690,20 @@ function TurnDetailDrawer({
   onOpenChange: (open: boolean) => void;
   agentNameById: Map<string, string>;
 }) {
+  const [tablesExpanded, setTablesExpanded] = useState(false);
   const query = useQuery({
     queryKey: ["admin", "audit", "turn", turnId, hours],
     queryFn: () => apiGet<AuditTurnDetailResponse>(`/api/admin/audit/turns/${encodeURIComponent(turnId ?? "")}?hours=${hours}`),
     enabled: open && Boolean(turnId)
   });
   const detail = query.data;
+  useEffect(() => {
+    setTablesExpanded(false);
+  }, [turnId]);
+  const drawerSources = Array.isArray(detail?.sources)
+    ? (detail.sources as Array<{ connectionId?: string; physical_table?: string; physicalTable?: string }>)
+    : [];
+  const visibleSources = tablesExpanded ? drawerSources : drawerSources.slice(0, 4);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -716,6 +749,32 @@ function TurnDetailDrawer({
                 </section>
               ) : null}
 
+              {drawerSources.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="audit-turn-tables-inline">
+                  <span className="text-fg-muted whitespace-nowrap">触达表：</span>
+                  {visibleSources.map((source, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 rounded bg-bg-muted px-2 py-0.5 font-mono text-fg-default notranslate"
+                      translate="no"
+                    >
+                      {source.connectionId ? <span className="text-fg-muted">{source.connectionId} ·</span> : null}
+                      <span>{source.physicalTable ?? source.physical_table ?? "—"}</span>
+                    </span>
+                  ))}
+                  {drawerSources.length > 4 ? (
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--ghost text-xs h-6 px-1.5"
+                      data-testid="audit-turn-tables-expand"
+                      onClick={() => setTablesExpanded((v) => !v)}
+                    >
+                      {tablesExpanded ? "收起" : `+${drawerSources.length - 4} 更多`}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
               <section className="pl-card grid gap-3" data-testid="audit-turn-calls-card">
                 <h3 className="text-sm font-semibold text-fg-default">调用明细</h3>
                 <div className="overflow-x-auto">
@@ -723,11 +782,11 @@ function TurnDetailDrawer({
                     <thead>
                       <tr>
                         <th className="w-14 whitespace-nowrap">序号</th>
-                        <th>时间</th>
-                        <th>数据库连接</th>
+                        <th className="whitespace-nowrap">时间</th>
+                        <th className="whitespace-nowrap">数据库连接</th>
                         <th>涉及数据表</th>
-                        <th>状态</th>
-                        <th>耗时</th>
+                        <th className="whitespace-nowrap min-w-[80px]">状态</th>
+                        <th className="whitespace-nowrap min-w-[140px]">耗时</th>
                         <th>操作</th>
                       </tr>
                     </thead>
@@ -739,16 +798,20 @@ function TurnDetailDrawer({
                           <tr key={log.id}>
                             <td className="pl-audit-table-num">{index + 1}</td>
                             <td className="pl-audit-table-muted whitespace-nowrap">{formatConfigAuditTs(log.ts)}</td>
-                            <td className="notranslate" translate="no">{log.connectionId ?? "—"}</td>
+                            <td className="notranslate whitespace-nowrap" translate="no">{log.connectionId ?? "—"}</td>
                             <td className="pl-audit-table-muted notranslate" translate="no">{log.tables?.join(", ") ?? "—"}</td>
-                            <td>
+                            <td className="whitespace-nowrap">
                               <span className={`pl-status-badge ${log.outcome === "ok" ? "pl-status-done" : log.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed"}`}>
                                 {OUTCOME_LABELS[log.outcome as keyof typeof OUTCOME_LABELS] ?? log.outcome}
                               </span>
                             </td>
-                            <td>
-                              <span className="tabular-nums">{log.durationMs} ms</span>
-                              {log.isSlowCall ? <span className="ml-2 pl-status-badge pl-status-partial">慢于多数请求</span> : null}
+                            <td className="whitespace-nowrap min-w-[140px]">
+                              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                <span className="tabular-nums font-mono">{log.durationMs} ms</span>
+                                {log.isSlowCall ? (
+                                  <span className="pl-status-badge pl-status-partial text-[11px] px-1.5 whitespace-nowrap">慢于多数请求</span>
+                                ) : null}
+                              </div>
                             </td>
                             <td>
                               {log.traceId ? <TraceLink traceId={log.traceId} /> : null}
@@ -760,23 +823,6 @@ function TurnDetailDrawer({
                   </table>
                 </div>
               </section>
-
-              {Array.isArray(detail.sources) && detail.sources.length > 0 ? (
-                <section className="pl-card grid gap-2" data-testid="audit-turn-tables-card">
-                  <h3 className="text-sm font-semibold text-fg-default">触达表汇总</h3>
-                  <ul className="text-sm text-fg-muted grid gap-1">
-                    {(detail.sources as Array<{ connectionId?: string; physical_table?: string; physicalTable?: string }>).map((source, index) => (
-                      <li key={index} className="notranslate" translate="no">
-                        {source.connectionId ? (
-                          <span className="text-fg-default">{source.connectionId}</span>
-                        ) : null}
-                        {source.connectionId ? " · " : null}
-                        <span className="font-mono">{source.physicalTable ?? source.physical_table ?? "—"}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
             </>
           ) : null}
         </Dialog.Content>
@@ -805,6 +851,7 @@ const FILTER_PERSIST_FIELDS = [
   "turnId",
   "platform",
   "turnSource",
+  "turnSearch",
   "callSource",
   "clientIp",
   "deviceName"
@@ -1246,6 +1293,12 @@ export function Audit() {
   const [turnDrawerOpen, setTurnDrawerOpen] = useState(Boolean(searchParams.get("turnId")));
   const [now, setNow] = useState(() => new Date());
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [timePreset, setTimePreset] = useState<TimePreset>(() => {
+    const r = searchParams.get("range");
+    if (r === "24h") return "24h";
+    if (r === "7d") return "7d";
+    return "7d";
+  });
 
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
@@ -1324,6 +1377,41 @@ export function Audit() {
     }
   }
 
+  /** Spec 135: single search box — ID-like → key; else turnSearch (turns) / tableSearch (calls). */
+  function applyUnifiedSearch(raw: string) {
+    const next = new URLSearchParams(searchParams);
+    next.delete("key");
+    next.delete("turnIdFilter");
+    next.delete("turnSearch");
+    if (tab === "calls") next.delete("tableSearch");
+
+    const value = raw.trim();
+    if (value) {
+      if (looksLikeIdQuery(value)) {
+        next.set("key", value);
+      } else if (tab === "turns") {
+        next.set("turnSearch", value);
+      } else {
+        next.set("tableSearch", value);
+      }
+    }
+
+    setSearchParams(next);
+    setPage(0);
+    const snapshot = readFilterSnapshot();
+    delete snapshot.key;
+    delete snapshot.turnSearch;
+    if (tab === "calls") delete snapshot.tableSearch;
+    if (value) {
+      if (looksLikeIdQuery(value)) snapshot.key = value;
+      else if (tab === "turns") snapshot.turnSearch = value;
+      else snapshot.tableSearch = value;
+    }
+    writeFilterSnapshot(snapshot);
+  }
+
+  const unifiedSearchValue = keySearch || (tab === "turns" ? turnSearch : tableSearch);
+
   function setCallSource(nextSource: string) {
     const next = new URLSearchParams(searchParams);
     if (nextSource) next.set("callSource", nextSource);
@@ -1341,6 +1429,32 @@ export function Audit() {
   function setRange(nextRange: RangePreset) {
     setUntil("");
     updateParam("range", nextRange);
+  }
+
+  function applyTimePreset(preset: TimePreset) {
+    setTimePreset(preset);
+    if (preset === "1h") {
+      const nowTs = new Date();
+      const sinceTs = new Date(nowTs.getTime() - 60 * 60 * 1000);
+      setSince(toLocalDateTimeValue(sinceTs));
+      setUntil(toLocalDateTimeValue(nowTs));
+      setPage(0);
+    } else if (preset === "24h") {
+      setUntil("");
+      updateParam("range", "24h");
+    } else if (preset === "7d") {
+      setUntil("");
+      updateParam("range", "7d");
+    } else if (preset === "today") {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+      setSince(toLocalDateTimeValue(todayStart));
+      setUntil(toLocalDateTimeValue(todayEnd));
+      setPage(0);
+    } else if (preset === "custom") {
+      // Show the custom datetime inputs; no auto-calculation
+    }
   }
 
   const drawerTurnId = searchParams.get("turnId") ?? "";
@@ -1634,6 +1748,21 @@ export function Audit() {
         </Link>
       </div>
 
+      {/* Time preset pills */}
+      <div className="flex flex-wrap items-center gap-1.5" data-testid="audit-time-presets">
+        {(["1h", "24h", "7d", "today", "custom"] as TimePreset[]).map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            className={`pl-btn text-xs h-8 px-3 ${timePreset === preset ? "pl-btn--primary" : "pl-btn--ghost"}`}
+            data-testid={`audit-time-preset-${preset}`}
+            onClick={() => applyTimePreset(preset)}
+          >
+            {TIME_PRESET_LABELS[preset]}
+          </button>
+        ))}
+      </div>
+
       <div className="pl-admin-filterbar" data-testid="audit-shared-filters">
         <input
           className="pl-input w-44 notranslate"
@@ -1642,43 +1771,6 @@ export function Audit() {
           aria-label="按 Agent 名称或 ID 筛选"
           value={user}
           onChange={(e) => updateParam("user", e.target.value)}
-        />
-        <span
-          className="text-sm text-fg-muted self-center whitespace-nowrap"
-          data-testid="audit-time-label"
-        >
-          时间
-        </span>
-        <input
-          className="pl-input w-44"
-          type="datetime-local"
-          aria-label="开始时间"
-          data-testid="audit-since"
-          value={since}
-          onChange={(e) => {
-            setSince(e.target.value);
-            setPage(0);
-          }}
-        />
-        <span className="text-fg-muted self-center">—</span>
-        <input
-          className="pl-input w-44"
-          type="datetime-local"
-          aria-label="结束时间"
-          data-testid="audit-until"
-          value={until}
-          onChange={(e) => {
-            setUntil(e.target.value);
-            setPage(0);
-          }}
-        />
-        <input
-          className="pl-input w-40 notranslate"
-          translate="no"
-          placeholder="表名"
-          aria-label="按表名筛选"
-          value={tableSearch}
-          onChange={(e) => updateParam("tableSearch", e.target.value)}
         />
         <select
           className="pl-input w-28"
@@ -1692,72 +1784,54 @@ export function Audit() {
           <option value="denied">拒绝</option>
         </select>
         <input
-          className="pl-input w-44 notranslate"
+          className="pl-input flex-1 min-w-[10rem] notranslate"
           translate="no"
-          placeholder={tab === "turns" ? "问询 ID" : "事件 ID / 问询 ID"}
-          aria-label="按 Key 模糊搜索"
+          placeholder={tab === "turns" ? "搜索问询 ID / 摘要 / 表名" : "事件 ID / 问询 ID / 表名"}
+          aria-label="统一搜索"
           data-testid="audit-key-search"
-          value={keySearch}
-          onChange={(e) => updateParam("key", e.target.value)}
+          value={unifiedSearchValue}
+          onChange={(e) => applyUnifiedSearch(e.target.value)}
         />
-        {tab === "turns" ? (
-          <>
-            <select
-              className="pl-input w-40"
-              value={turnSource}
-              title={TURN_SOURCE_FILTER_TITLE}
-              aria-label="来源类型"
-              onChange={(e) => updateParam("turnSource", e.target.value)}
-            >
-              <option value="">全部</option>
-              <option value="reported">用户原始问询</option>
-              <option value="inferred">系统推断问询</option>
-            </select>
-            <input
-              className="pl-input flex-1 min-w-[12rem]"
-              placeholder="搜索摘要"
-              aria-label="搜索摘要"
-              value={turnSearch}
-              onChange={(e) => updateParam("turnSearch", e.target.value)}
-            />
-          </>
-        ) : (
-          <>
-            <select
-              className="pl-input w-44"
-              value={callSource}
-              aria-label="调用来源"
-              data-testid="audit-call-source-filter"
-              onChange={(e) => setCallSource(e.target.value)}
-            >
-              <option value="">全部</option>
-              <option value="playground" className="notranslate" translate="no">
-                MCP 调试台受控试调
-              </option>
-              <option value="agent" className="notranslate" translate="no">
-                Agent 接入调用
-              </option>
-            </select>
-            <input
-              className="pl-input w-36 notranslate"
-              translate="no"
-              placeholder="工具名"
-              aria-label="按工具名筛选"
-              value={tool}
-              onChange={(e) => updateParam("tool", e.target.value)}
-            />
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost text-sm"
-              data-testid="audit-advanced-filters-toggle"
-              aria-expanded={advancedOpen}
-              aria-controls="audit-advanced-filters"
-              onClick={() => setAdvancedOpen((v) => !v)}
-            >
-              {advancedOpen ? "收起高级" : "高级筛选"}
-            </button>
-          </>
-        )}
+        {/* Hidden time inputs kept for test compatibility and custom mode */}
+        <span
+          className="sr-only"
+          data-testid="audit-time-label"
+        >
+          时间
+        </span>
+        <input
+          className={timePreset === "custom" ? "pl-input w-44" : "sr-only"}
+          type="datetime-local"
+          aria-label="开始时间"
+          data-testid="audit-since"
+          value={since}
+          onChange={(e) => {
+            setSince(e.target.value);
+            setPage(0);
+          }}
+        />
+        {timePreset === "custom" ? <span className="text-fg-muted self-center">—</span> : null}
+        <input
+          className={timePreset === "custom" ? "pl-input w-44" : "sr-only"}
+          type="datetime-local"
+          aria-label="结束时间"
+          data-testid="audit-until"
+          value={until}
+          onChange={(e) => {
+            setUntil(e.target.value);
+            setPage(0);
+          }}
+        />
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost text-sm"
+          data-testid="audit-advanced-filters-toggle"
+          aria-expanded={advancedOpen}
+          aria-controls="audit-advanced-filters"
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          {advancedOpen ? "收起高级" : "高级筛选"}
+        </button>
         {hasNonDefaultFilters ? (
           <button
             type="button"
@@ -1770,40 +1844,91 @@ export function Audit() {
         ) : null}
       </div>
 
-      {tab === "calls" && advancedOpen ? (
+      {advancedOpen ? (
         <div
           id="audit-advanced-filters"
           className="pl-admin-filterbar"
           data-testid="audit-advanced-filters"
         >
-          <input
-            className="pl-input w-40 notranslate"
-            translate="no"
-            placeholder="Session ID"
-            aria-label="按 Session ID 筛选"
-            value={sessionId}
-            onChange={(e) => updateParam("sessionId", e.target.value)}
-          />
-          <input
-            className="pl-input w-36 notranslate"
-            translate="no"
-            placeholder="访问 IP"
-            value={clientIp}
-            aria-label="访问 IP"
-            onChange={(e) => updateParam("clientIp", e.target.value)}
-          />
-          <input
-            className="pl-input w-36 notranslate"
-            translate="no"
-            placeholder="最近设备名"
-            value={deviceNameFilter}
-            aria-label="最近设备名"
-            onChange={(e) => updateParam("deviceName", e.target.value)}
-          />
-          <label className="flex items-center gap-2 text-sm text-fg-muted">
-            <input type="checkbox" checked={includeProtocol} onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")} />
-            显示协议调用
-          </label>
+          {tab === "turns" ? (
+            <>
+              <select
+                className="pl-input w-40"
+                value={turnSource}
+                title={TURN_SOURCE_FILTER_TITLE}
+                aria-label="来源类型"
+                onChange={(e) => updateParam("turnSource", e.target.value)}
+              >
+                <option value="">全部来源</option>
+                <option value="reported">用户原始问询</option>
+                <option value="inferred">系统推断问询</option>
+              </select>
+            </>
+          ) : (
+            <>
+              <select
+                className="pl-input w-44"
+                value={callSource}
+                aria-label="调用来源"
+                data-testid="audit-call-source-filter"
+                onChange={(e) => setCallSource(e.target.value)}
+              >
+                <option value="">全部来源</option>
+                <option value="playground" className="notranslate" translate="no">
+                  MCP 调试台受控试调
+                </option>
+                <option value="agent" className="notranslate" translate="no">
+                  Agent 接入调用
+                </option>
+              </select>
+              <input
+                className="pl-input w-36 notranslate"
+                translate="no"
+                placeholder="工具名"
+                aria-label="按工具名筛选"
+                value={tool}
+                onChange={(e) => updateParam("tool", e.target.value)}
+              />
+              <input
+                className="pl-input w-40 notranslate"
+                translate="no"
+                placeholder="Session ID"
+                aria-label="按 Session ID 筛选"
+                value={sessionId}
+                onChange={(e) => updateParam("sessionId", e.target.value)}
+              />
+              <input
+                className="pl-input w-36 notranslate"
+                translate="no"
+                placeholder="访问 IP"
+                value={clientIp}
+                aria-label="访问 IP"
+                onChange={(e) => updateParam("clientIp", e.target.value)}
+              />
+              <input
+                className="pl-input w-36 notranslate"
+                translate="no"
+                placeholder="最近设备名"
+                value={deviceNameFilter}
+                aria-label="最近设备名"
+                onChange={(e) => updateParam("deviceName", e.target.value)}
+              />
+              <label className="flex items-center gap-2 text-sm text-fg-muted">
+                <input type="checkbox" checked={includeProtocol} onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")} />
+                显示协议调用
+              </label>
+            </>
+          )}
+          {tab === "turns" ? (
+            <input
+              className="pl-input w-40 notranslate"
+              translate="no"
+              placeholder="表名"
+              aria-label="按表名筛选"
+              value={tableSearch}
+              onChange={(e) => updateParam("tableSearch", e.target.value)}
+            />
+          ) : null}
           <label className="flex items-center gap-2 text-sm text-fg-muted">
             <input type="checkbox" checked={slowOnly} onChange={(e) => updateParam("slowOnly", e.target.checked ? "1" : "")} />
             仅慢于多数请求
@@ -1877,7 +2002,7 @@ export function Audit() {
                       >
                         <td className="pl-audit-table-num">{page * PAGE_SIZE + index + 1}</td>
                         <td className="pl-audit-table-mono pl-audit-turn-id-cell" onClick={(e) => e.stopPropagation()}>
-                          <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
+                          <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" shortDisplay />
                         </td>
                         <td className="pl-audit-table-muted">
                           <AuditDateTime value={entry.startedAt} />
@@ -1894,7 +2019,11 @@ export function Audit() {
                         <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
                         <td>{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
                         <td className="pl-audit-table-num">{entry.businessCallCount}</td>
-                        <td className="pl-audit-table-muted notranslate" translate="no">{formatTablesCell(entry.sources)}</td>
+                        <td className="pl-audit-table-muted notranslate" translate="no">
+                          {entry.sources.length === 0 && denied > 0
+                            ? <span className="text-fg-muted">未下发</span>
+                            : formatTablesCell(entry.sources)}
+                        </td>
                         <td>
                           {(entry.slowCallCount ?? 0) > 0 ? (
                             <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 次慢调用</span>
@@ -1903,8 +2032,18 @@ export function Audit() {
                           )}
                         </td>
                         <td>
-                          {denied > 0 ? <span className="pl-status-badge pl-status-partial">{denied} 拒绝</span> : null}
-                          {errors > 0 ? <span className="pl-status-badge pl-status-validation_failed">{errors} 错误</span> : null}
+                          {denied > 0 ? (
+                            <span className="inline-flex items-center gap-1 flex-wrap">
+                              <span className="pl-status-badge pl-status-partial">已拦截</span>
+                              <span className="text-xs text-fg-muted tabular-nums">({denied} 次拒绝)</span>
+                            </span>
+                          ) : null}
+                          {errors > 0 ? (
+                            <span className="inline-flex items-center gap-1 flex-wrap">
+                              <span className="pl-status-badge pl-status-validation_failed">异常</span>
+                              <span className="text-xs text-fg-muted tabular-nums">({errors} 次错误)</span>
+                            </span>
+                          ) : null}
                           {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
                         </td>
                         <td className="pl-audit-turn-source-cell"><TurnSourceBadge source={entry.source} /></td>

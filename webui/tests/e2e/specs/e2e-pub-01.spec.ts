@@ -109,8 +109,8 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     // —— 阶段 2：语义层维护 ——
     await test.step("4. 表目录 → fact_revenue 表详情", async () => {
       await page.goto("/");
-      // 真实 testid：catalog-count
-      await expect(page.getByTestId("catalog-count")).toBeVisible();
+      // 真实 testid：catalog-result-count
+      await expect(page.getByTestId("catalog-result-count")).toBeVisible();
       // 行内"维护语义"按钮（实际未在表目录行加 data-testid，按角色名定位）
       await page
         .getByRole("row")

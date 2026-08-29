@@ -169,6 +169,8 @@ describe("Audit", () => {
 
     renderAudit();
     fireEvent.click(await screen.findByRole("tab", { name: "调用流水" }));
+    // Spec 135: callSource filter is now in the advanced panel — open it first
+    fireEvent.click(await screen.findByTestId("audit-advanced-filters-toggle"));
     const sourceFilter = await screen.findByTestId("audit-call-source-filter");
     fireEvent.change(sourceFilter, { target: { value: "playground" } });
 
