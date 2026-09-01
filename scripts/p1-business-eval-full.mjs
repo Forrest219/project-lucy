@@ -15,6 +15,7 @@ const DEFAULT_MCP_URL =
   process.env.LUCY_PROXY_URL ||
   'http://localhost:7879/mcp';
 const DEFAULT_AGENT_CLI = process.env.EVAL_AGENT_CLI || 'claude';
+const DEFAULT_AGENT_ADAPTER = process.env.EVAL_AGENT_ADAPTER || process.env.LUCY_EVAL_AGENT_ADAPTER || 'claude-code';
 const MODEL_SECRET_ENVS = ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'];
 
 const EXIT_CODES = {
@@ -50,7 +51,8 @@ Options:
   --suite <id>             Run one suite id; repeatable. Defaults to all suites.
   --out <path>             Evidence output path (default: ${DEFAULT_OUT})
   --retries <n>            Pass through to scripts/eval-runner.mjs --retries
-  --cli <command>          Agent CLI command (default: ${DEFAULT_AGENT_CLI})
+  --adapter <name>         Agent adapter (default: ${DEFAULT_AGENT_ADAPTER})
+  --cli <command>          Agent CLI command override (sets EVAL_AGENT_CLI)
   --mcp-url <url>          KTX/Lucy MCP endpoint (default: ${DEFAULT_MCP_URL})
   --require-mcp-token      Block if no MCP bearer token env is present
   --help                   Show this help
@@ -61,6 +63,7 @@ Environment:
   LUCY_LOCAL_TOKEN         Fallback bearer token for Lucy MCP Proxy
   LUCY_MCP_PROXY_TOKEN     Fallback bearer token for Lucy MCP Proxy
   EVAL_AGENT_CLI           Default agent CLI command
+  EVAL_AGENT_ADAPTER       Default agent adapter id
   EVAL_RETRIES             Default retry count when --retries is omitted
 `;
 
@@ -70,6 +73,7 @@ function parseArgs(argv = process.argv) {
     out: DEFAULT_OUT,
     retries: parseNonNegativeInt(process.env.EVAL_RETRIES || '0', 'EVAL_RETRIES'),
     cli: DEFAULT_AGENT_CLI,
+    adapter: DEFAULT_AGENT_ADAPTER,
     mcpUrl: DEFAULT_MCP_URL,
     requireMcpToken: process.env.P1_BUSINESS_EVAL_REQUIRE_MCP_TOKEN === '1',
     help: false,
@@ -94,6 +98,9 @@ function parseArgs(argv = process.argv) {
       case '--cli':
         args.cli = argv[++i];
         break;
+      case '--adapter':
+        args.adapter = argv[++i];
+        break;
       case '--mcp-url':
         args.mcpUrl = argv[++i];
         break;
@@ -108,7 +115,19 @@ function parseArgs(argv = process.argv) {
   if (!args.out) throw new Error('--out requires a path');
   if (!args.cli) throw new Error('--cli requires a command');
   if (!args.mcpUrl) throw new Error('--mcp-url requires a URL');
+  if (!args.adapter) throw new Error('--adapter requires a value');
+  const explicitAdapter = argv.slice(2).includes('--adapter');
+  args.resolvedAdapter = explicitAdapter ? args.adapter : adapterFromCli(args.cli);
   return args;
+}
+
+function adapterFromCli(cli) {
+  if (cli === 'claude') return 'claude-code';
+  if (cli === 'hermes') return 'hermes';
+  if (cli === 'cursor-agent' || cli === 'cursor') return 'cursor';
+  if (cli === 'codex') return 'codex';
+  if (cli === 'openclaw') return 'openclaw';
+  return 'generic-cli';
 }
 
 function parseNonNegativeInt(value, label) {
@@ -183,6 +202,7 @@ function redactCommandOutput(value = '') {
 
 async function runPrecheck({
   suites = SUITES,
+  adapter = DEFAULT_AGENT_ADAPTER,
   cli = DEFAULT_AGENT_CLI,
   mcpUrl = DEFAULT_MCP_URL,
   env = process.env,
@@ -201,37 +221,35 @@ async function runPrecheck({
     }
   }
 
-  try {
-    const version = await run(cli, ['--version'], { cwd: REPO_ROOT, env, timeoutMs: 10000 });
-    if (version.code === 0) {
-      checks.push(okCheck('agent_cli', { command: cli, version: redactCommandOutput(version.stdout || version.stderr).trim() }));
-    } else {
-      checks.push(blockedCheck('agent_cli', `${cli} --version exited ${version.code}`, {
-        stderr: redactCommandOutput(version.stderr),
-      }));
-    }
-  } catch (error) {
-    checks.push(blockedCheck('agent_cli', `${cli} CLI is not executable`, { error: error.message }));
-  }
-
-  if (hasModelSecret(env)) {
-    checks.push(okCheck('model_secret', { source: 'environment', envNamesPresent: MODEL_SECRET_ENVS.filter((name) => Boolean(env[name])) }));
+  const childEnv = { ...env, EVAL_AGENT_CLI: cli, EVAL_AGENT_ADAPTER: adapter, LUCY_EVAL_AGENT_ADAPTER: adapter };
+  if (adapter === 'noop') {
+    checks.push(okCheck('agent_adapter', { adapter, skipped: true }));
   } else {
     try {
-      const auth = await run(cli, ['auth', 'status'], { cwd: REPO_ROOT, env, timeoutMs: 15000 });
-      const authText = `${auth.stdout}\n${auth.stderr}`;
-      if (auth.code === 0 && /loggedIn|apiProvider|authenticated|logged in|active/i.test(authText)) {
-        checks.push(okCheck('model_secret', { source: 'agent_cli_auth', command: `${cli} auth status` }));
+      const preflight = await run('node', ['scripts/eval/preflight-agent.mjs', '--adapter', adapter], {
+        cwd: REPO_ROOT,
+        env: childEnv,
+        timeoutMs: 20000,
+      });
+      if (preflight.code === 0) {
+        checks.push(okCheck('agent_adapter', {
+          adapter,
+          cli,
+          output: redactCommandOutput(preflight.stdout || preflight.stderr).trim(),
+        }));
       } else {
-        checks.push(blockedCheck('model_secret', 'no model secret env and agent CLI auth is not ready', {
-          command: `${cli} auth status`,
-          exitCode: auth.code,
-          output: redactCommandOutput(authText),
+        checks.push(blockedCheck('agent_adapter', `adapter ${adapter} preflight failed`, {
+          cli,
+          stderr: redactCommandOutput(preflight.stderr || preflight.stdout),
         }));
       }
     } catch (error) {
-      checks.push(blockedCheck('model_secret', 'no model secret env and agent CLI auth check failed', { error: error.message }));
+      checks.push(blockedCheck('agent_adapter', `adapter ${adapter} preflight failed`, { cli, error: error.message }));
     }
+  }
+
+  if (adapter === 'claude-code' && hasModelSecret(env)) {
+    checks.push(okCheck('model_secret', { source: 'environment', envNamesPresent: MODEL_SECRET_ENVS.filter((name) => Boolean(env[name])) }));
   }
 
   let parsedUrl;
@@ -308,6 +326,7 @@ function evidenceBase({ status, exitCode, args, suites, precheck }) {
       suites: suites.map((suite) => suite.id),
       retries: args.retries,
       agentCli: args.cli,
+      agentAdapter: args.resolvedAdapter || args.adapter,
       mcpUrl: args.mcpUrl,
       requireMcpToken: args.requireMcpToken,
     },
@@ -354,11 +373,16 @@ async function runSuite(suite, { args, env = process.env, run = runCommand } = {
     suite.casesPath,
     '--retries',
     String(args.retries),
+    '--adapter',
+    args.resolvedAdapter || args.adapter,
   ];
   const childEnv = {
     ...env,
     EVAL_KTX_MCP_URL: args.mcpUrl,
     EVAL_MCP_CONFIG: mcpConfigPath,
+    EVAL_AGENT_ADAPTER: args.resolvedAdapter || args.adapter,
+    LUCY_EVAL_AGENT_ADAPTER: args.resolvedAdapter || args.adapter,
+    EVAL_AGENT_CLI: args.cli,
   };
   const token = bearerTokenFromEnv(env);
   if (token) childEnv.EVAL_KTX_MCP_TOKEN = token;
@@ -409,6 +433,7 @@ async function runFullEval({ args, env = process.env, fetchImpl = globalThis.fet
   const suites = selectSuites(args.suites);
   const precheck = await runPrecheck({
     suites,
+    adapter: args.resolvedAdapter || args.adapter,
     cli: args.cli,
     mcpUrl: args.mcpUrl,
     env,

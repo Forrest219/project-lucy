@@ -83,7 +83,7 @@ export function RunList() {
       if (code === "RUNNER_BUSY") {
         toast.error("当前已有 run 正在执行，请等待完成后再触发");
       } else if (code === "RUNNER_PRECHECK_FAILED") {
-        toast.error(`Claude preflight 失败：${(err as Error).message}`);
+        toast.error(`Agent 预检失败：${(err as Error).message}`);
       } else if (code === "NO_CASES_SELECTED") {
         toast.error("上次成功运行中没有失败 case，未触发回归 run");
       } else {

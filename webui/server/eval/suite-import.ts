@@ -187,7 +187,9 @@ function suiteFromLegacy(text: string, filename?: string): { suite?: EvalSuite; 
       typeof parsed.metadata?.snapshot_date === "string"
         ? { mode: "live_readonly", snapshot_date: parsed.metadata.snapshot_date }
         : undefined,
-    runner_hints: { supported_runners: ["claude_code", "hermes"] },
+    runner_hints: {
+      supported_runners: ["claude_code", "hermes", "cursor", "openclaw", "codex", "generic_cli"]
+    },
     cases: parsed.cases.map((c) => normalizeLegacyCase(c, defaultExpectedSource))
   };
 
@@ -331,7 +333,7 @@ export async function downloadEvalSuiteYaml(projectRoot: string, domain: string)
   return {
     suite,
     yaml: suiteToYaml(suite),
-    runnerCommand: `node scripts/lucy-eval-runner.mjs --suite ${domain}-eval-suite.yaml --output result.json`
+    runnerCommand: `EVAL_AGENT_ADAPTER=hermes node scripts/lucy-eval-runner.mjs --suite ${domain}-eval-suite.yaml --output result.json --adapter hermes`
   };
 }
 

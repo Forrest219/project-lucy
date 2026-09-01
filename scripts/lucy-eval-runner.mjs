@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
 import { parse as parseYaml } from "yaml";
+import { listAdapters, normalizeAdapterName, resolveAdapter } from "./eval/adapters/index.mjs";
 
 const RESULT_VERSION = 1;
 const SUITE_VERSION = 1;
@@ -13,13 +13,19 @@ const USAGE = `Usage: node scripts/lucy-eval-runner.mjs --suite <eval.yaml> --ou
 Options:
   --suite <path>       Canonical Lucy Eval YAML suite
   --output <path>      Result JSON output path
-  --adapter <name>     noop | claude (default: noop)
+  --adapter <name>     Agent adapter (default: EVAL_AGENT_ADAPTER or noop)
   --model <name>       Optional model label for metadata
   --help              Show this help
+
+Supported adapters:
+  ${listAdapters().map((item) => item.id).join(", ")}
 `;
 
 function parseArgs(argv) {
-  const out = { adapter: process.env.LUCY_EVAL_RUNNER_ADAPTER || "noop", model: process.env.LUCY_EVAL_RUNNER_MODEL || "" };
+  const out = {
+    adapter: normalizeAdapterName(process.env.LUCY_EVAL_RUNNER_ADAPTER || process.env.EVAL_AGENT_ADAPTER || "noop"),
+    model: process.env.LUCY_EVAL_RUNNER_MODEL || process.env.EVAL_AGENT_MODEL || "",
+  };
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--help" || arg === "-h") out.help = true;
@@ -80,64 +86,51 @@ function promptForCase(evalCase) {
   return evalCase.question || "";
 }
 
-function runCli(cmd, args, { timeoutMs = 360000 } = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      resolve({ code: 124, stdout, stderr: `${stderr}\ntimeout after ${timeoutMs}ms` });
-    }, timeoutMs);
-    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ code: 127, stdout, stderr: error.message });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ code, stdout, stderr });
-    });
-  });
-}
-
 async function runCase(evalCase, adapter) {
   const start = Date.now();
-  if (adapter === "noop") {
+  if (adapter.id === "noop") {
     return {
       case_id: evalCase.id,
       status: "SKIPPED",
       duration_ms: Date.now() - start,
-      final_text: "Skipped by noop adapter. Re-run with --adapter claude to execute locally."
+      final_text: `Skipped by noop adapter. Re-run with --adapter <name> to execute locally. Supported: ${listAdapters().map((item) => item.id).join(", ")}`
     };
   }
-  if (adapter === "claude") {
+  try {
     const prompt = promptForCase(evalCase);
-    const res = await runCli("claude", ["-p", prompt], {});
+    const res = await adapter.invoke({ question: prompt, mcpConfigPath: process.env.EVAL_MCP_CONFIG || "", caseId: evalCase.id });
+    if (res.skipped) {
+      return {
+        case_id: evalCase.id,
+        status: "SKIPPED",
+        duration_ms: Date.now() - start,
+        final_text: "Skipped by adapter."
+      };
+    }
     if (res.code !== 0) {
       return {
         case_id: evalCase.id,
         status: "ERROR",
         duration_ms: Date.now() - start,
-        failures: [`claude exited with code ${res.code}`],
-        error_message: res.stderr.trim() || res.stdout.trim() || `claude exited with code ${res.code}`
+        failures: [`${adapter.id} exited with code ${res.code}`],
+        error_message: res.err?.trim() || res.out?.trim() || `${adapter.id} exited with code ${res.code}`
       };
     }
     return {
       case_id: evalCase.id,
       status: "PASS",
       duration_ms: Date.now() - start,
-      final_text: res.stdout.trim()
+      final_text: res.out?.trim() || res.err?.trim() || ""
+    };
+  } catch (error) {
+    return {
+      case_id: evalCase.id,
+      status: "ERROR",
+      duration_ms: Date.now() - start,
+      failures: [error.message || String(error)],
+      error_message: error.message || String(error)
     };
   }
-  return {
-    case_id: evalCase.id,
-    status: "ERROR",
-    duration_ms: Date.now() - start,
-    failures: [`unsupported adapter: ${adapter}`],
-    error_message: `unsupported adapter: ${adapter}`
-  };
 }
 
 async function main() {
@@ -148,6 +141,11 @@ async function main() {
   }
   if (!args.suite || !args.output) {
     throw new Error("--suite and --output are required");
+  }
+
+  const adapter = resolveAdapter(args.adapter);
+  if (adapter.id !== "noop") {
+    await adapter.preflight();
   }
 
   const suiteText = await readFile(args.suite, "utf8");
@@ -161,7 +159,7 @@ async function main() {
   const startedAt = new Date().toISOString();
   const results = [];
   for (const evalCase of suite.cases) {
-    results.push(await runCase(evalCase, args.adapter));
+    results.push(await runCase(evalCase, adapter));
   }
   const finishedAt = new Date().toISOString();
 
@@ -171,7 +169,7 @@ async function main() {
     suite_hash: suite.suite_hash || computedHash,
     domain: suite.domain,
     runner: {
-      kind: args.adapter,
+      kind: adapter.id,
       version: "lucy-eval-runner-v1",
       ...(args.model ? { model: args.model } : {})
     },
@@ -183,6 +181,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`${error.message}\n`);
-  process.exit(1);
+  console.error(`fatal: ${error.stack || error.message || error}`);
+  process.exit(2);
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RunnerPrecheckFailedError, mapSummaryCaseToRunCase, preflightClaude } from "../eval/runner";
+import { RunnerPrecheckFailedError, mapSummaryCaseToRunCase, preflightAgent, preflightClaude } from "../eval/runner";
 import type { EvalCase } from "../eval/cases";
 
 describe("eval runner summary mapping", () => {
@@ -98,18 +98,25 @@ describe("eval runner summary mapping", () => {
     ]);
   });
 
-  it("passes claude preflight only when auth status exits successfully", async () => {
-    await expect(preflightClaude("/tmp/project", async (cmd, args, cwd) => {
-      expect(cmd).toBe("claude");
-      expect(args).toEqual(["auth", "status"]);
+  it("passes agent preflight only when preflight script exits successfully", async () => {
+    await expect(preflightAgent("/tmp/project", "hermes", async (cmd, args, cwd) => {
+      expect(cmd).toBe("node");
+      expect(args).toEqual(["scripts/eval/preflight-agent.mjs", "--adapter", "hermes"]);
       expect(cwd).toBe("/tmp/project");
       return { code: 0, stdout: "ok", stderr: "" };
     })).resolves.toBeUndefined();
 
-    await expect(preflightClaude("/tmp/project", async () => ({
+    await expect(preflightAgent("/tmp/project", "hermes", async () => ({
       code: 1,
       stdout: "",
-      stderr: "not logged in"
+      stderr: "not ready"
     }))).rejects.toBeInstanceOf(RunnerPrecheckFailedError);
+  });
+
+  it("keeps preflightClaude as claude-code alias", async () => {
+    await expect(preflightClaude("/tmp/project", async (cmd, args) => {
+      expect(args).toEqual(["scripts/eval/preflight-agent.mjs", "--adapter", "claude-code"]);
+      return { code: 0, stdout: "ok", stderr: "" };
+    })).resolves.toBeUndefined();
   });
 });

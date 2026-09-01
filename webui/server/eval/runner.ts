@@ -188,20 +188,36 @@ async function runCliCapture(cmd: string, args: string[], cwd: string): Promise<
   });
 }
 
+function resolveEvalAgentAdapter(): string {
+  return process.env.LUCY_EVAL_AGENT_ADAPTER?.trim()
+    || process.env.EVAL_AGENT_ADAPTER?.trim()
+    || "claude-code";
+}
+
+export async function preflightAgent(
+  projectRoot: string,
+  adapter = resolveEvalAgentAdapter(),
+  run: typeof runCliCapture = runCliCapture
+): Promise<void> {
+  if (adapter === "noop") return;
+  let result: { code: number | null; stdout: string; stderr: string };
+  try {
+    result = await run("node", ["scripts/eval/preflight-agent.mjs", "--adapter", adapter], projectRoot);
+  } catch (error) {
+    throw new RunnerPrecheckFailedError(`agent preflight failed: ${(error as Error).message}`);
+  }
+  if (result.code !== 0) {
+    const detail = (result.stderr || result.stdout || `exit code ${result.code}`).trim();
+    throw new RunnerPrecheckFailedError(`agent preflight failed (${adapter}): ${detail}`);
+  }
+}
+
+/** @deprecated Use preflightAgent */
 export async function preflightClaude(
   projectRoot: string,
   run: typeof runCliCapture = runCliCapture
 ): Promise<void> {
-  let result: { code: number | null; stdout: string; stderr: string };
-  try {
-    result = await run("claude", ["auth", "status"], projectRoot);
-  } catch (error) {
-    throw new RunnerPrecheckFailedError(`claude auth status failed: ${(error as Error).message}`);
-  }
-  if (result.code !== 0) {
-    const detail = (result.stderr || result.stdout || `exit code ${result.code}`).trim();
-    throw new RunnerPrecheckFailedError(`claude auth status failed: ${detail}`);
-  }
+  return preflightAgent(projectRoot, "claude-code", run);
 }
 
 export function mapSummaryCaseToRunCase(
@@ -259,8 +275,9 @@ export async function spawnEvalRun(
     throw new RunnerBusyError();
   }
 
-  await preflightClaude(projectRoot);
+  await preflightAgent(projectRoot);
 
+  const agentAdapter = resolveEvalAgentAdapter();
   const startedAt = new Date().toISOString();
   const evalDir = path.join(projectRoot, ".ktx-ui", "eval", "runs");
   mkdirSync(evalDir, { recursive: true });
@@ -302,7 +319,7 @@ export async function spawnEvalRun(
 
   // Build runner args
   const casesPath = `evals/${domain}/eval/${domain}-eval-cases.yaml`;
-  const args: string[] = ["scripts/eval-runner.mjs", "--cases", casesPath, "--format", "json"];
+  const args: string[] = ["scripts/eval-runner.mjs", "--cases", casesPath, "--format", "json", "--adapter", agentAdapter];
   for (const id of caseIds) {
     args.push("--case", id);
   }
@@ -310,7 +327,9 @@ export async function spawnEvalRun(
   const env = {
     ...process.env,
     EVAL_KTX_MCP_URL: ktxMcpUrl,
-    EVAL_MCP_CONFIG: "/tmp/eval-mcp.json"
+    EVAL_MCP_CONFIG: "/tmp/eval-mcp.json",
+    EVAL_AGENT_ADAPTER: agentAdapter,
+    LUCY_EVAL_AGENT_ADAPTER: agentAdapter
   };
 
   const child = spawn("node", args, { cwd: projectRoot, env });

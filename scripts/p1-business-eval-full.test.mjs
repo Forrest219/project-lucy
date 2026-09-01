@@ -18,6 +18,9 @@ function okFetch(status = 404) {
 
 function cliReadyRun({ runnerStdout } = {}) {
   return async (command, args) => {
+    if (command === 'node' && args[0] === 'scripts/eval/preflight-agent.mjs') {
+      return { code: 0, stdout: '{"adapter":"generic-cli","cli":"fake-claude"}\n', stderr: '' };
+    }
     if (command === 'fake-claude' && args[0] === '--version') {
       return { code: 0, stdout: 'fake-claude 1.0.0\n', stderr: '' };
     }
@@ -57,6 +60,7 @@ test('parseArgs supports suite selection and explicit MCP token requirement', ()
   assert.equal(args.cli, 'fake-claude');
   assert.equal(args.mcpUrl, 'http://localhost:7879/mcp');
   assert.equal(args.requireMcpToken, true);
+  assert.equal(args.resolvedAdapter, 'generic-cli');
 });
 
 test('selectSuites rejects unknown suite ids', () => {
@@ -93,8 +97,7 @@ test('runPrecheck blocks when a required MCP token is absent', async () => {
 
   assert.equal(precheck.status, 'blocked');
   assert(precheck.blockedReasons.some((item) => item.name === 'mcp_token'));
-  assert(precheck.checks.some((item) => item.name === 'agent_cli' && item.status === 'ok'));
-  assert(precheck.checks.some((item) => item.name === 'model_secret' && item.status === 'ok'));
+  assert(precheck.checks.some((item) => item.name === 'agent_adapter' && item.status === 'ok'));
 });
 
 test('runPrecheck treats unauthenticated local MCP GET as usable when token is not required', async () => {

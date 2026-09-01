@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/eval-runner.mjs — Project Lucy eval runner (P3-A · path A: Claude Code subprocess)
+// scripts/eval-runner.mjs — Project Lucy eval runner with pluggable Agent adapters
 // T-A.2~T-A.8: MCP config gen · claude CLI spawn · output parsing · SQL pattern checks
 //              · 9-type result matchers · text response matcher · shell wrapper is sibling
 
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { parse as parseYaml } from 'yaml';
 import { createHash } from 'node:crypto';
+import { preflightAdapter, resolveAdapter } from './eval/adapters/index.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,7 +23,7 @@ const SHOULD_CLEANUP_EVAL_MCP_CONFIG = !process.env.EVAL_MCP_CONFIG;
 
 const USAGE = `Usage: node scripts/eval-runner.mjs [options]
 
-Project Lucy eval runner — drives Claude Code CLI against KTX MCP tools
+Project Lucy eval runner — drives a configurable Agent CLI against KTX MCP tools
 and checks the produced SQL / result / text against expected_result.
 
 Options:
@@ -30,11 +31,16 @@ Options:
   --case <id>             Run only the case with this id (repeatable)
   --format <md|json>      Output format (default: md)
   --cases <path>          Path to eval cases YAML (default: ${DEFAULT_CASES_PATH})
+  --adapter <name>        Agent adapter (default: EVAL_AGENT_ADAPTER or claude-code)
   --write-latest          Also write .ktx-ui/eval/latest.{md,json} (default: off)
   --retries <n>           Retry a failed case up to n times (default: EVAL_RETRIES or 0)
   --help                  Show this help
 
 Environment:
+  EVAL_AGENT_ADAPTER      Agent adapter id (claude-code, hermes, cursor, openclaw, codex, generic-cli, noop)
+  EVAL_AGENT_CLI          Override CLI binary for adapter/preset
+  EVAL_AGENT_ARGS         JSON argv template for generic-cli (supports {question}, {mcp_config})
+  EVAL_AGENT_OUTPUT_FORMAT  stream-json | plain (generic-cli)
   EVAL_MCP_CONFIG         Override path for generated MCP config file
                           (default: /tmp/eval-mcp.json)
   EVAL_KTX_MCP_URL        Override KTX MCP URL (default: ${KTX_MCP_URL})
@@ -51,6 +57,7 @@ function parseArgs(argv) {
     format: 'md',
     listCases: false,
     casesPath: DEFAULT_CASES_PATH,
+    adapter: process.env.EVAL_AGENT_ADAPTER || process.env.LUCY_EVAL_AGENT_ADAPTER || 'claude-code',
     writeLatest: false,
     retries: parseNonNegativeInt(process.env.EVAL_RETRIES || '0', 'EVAL_RETRIES'),
     help: false,
@@ -70,6 +77,9 @@ function parseArgs(argv) {
         break;
       case '--cases':
         args.casesPath = argv[++i];
+        break;
+      case '--adapter':
+        args.adapter = argv[++i];
         break;
       case '--format':
         args.format = argv[++i];
@@ -181,40 +191,70 @@ function runCliCapture(cmd, args, { timeoutMs = 30000 } = {}) {
   });
 }
 
-async function preflightClaude() {
-  const verRes = await runCliCapture('claude', ['--version'], { timeoutMs: 10000 });
-  if (verRes.code !== 0) {
-    throw new Error(`claude --version failed (code=${verRes.code}): ${verRes.err.trim()}`);
-  }
-  const authRes = await runCliCapture('claude', ['auth', 'status'], { timeoutMs: 15000 });
-  if (authRes.code !== 0) {
-    throw new Error(
-      `claude auth status failed (code=${authRes.code}). ` +
-        `Please run \`claude login\` first. stderr: ${authRes.err.trim()}`
-    );
-  }
-  // sanity: auth status must mention loggedIn or apiProvider
-  if (!/loggedIn|apiProvider/.test(authRes.out)) {
-    throw new Error(`claude auth status returned unexpected output: ${authRes.out.slice(0, 200)}`);
-  }
-  return { version: verRes.out.trim(), auth: authRes.out.trim() };
+async function preflightClaude(adapterName = process.env.EVAL_AGENT_ADAPTER || 'claude-code') {
+  return preflightAdapter(adapterName);
 }
 
-async function invokeClaudeCode(question, mcpConfigPath, { timeoutMs = 360000 } = {}) {
-  const args = [
-    '-p',
-    question,
-    '--output-format',
-    'stream-json',
-    '--verbose',
-    '--mcp-config',
-    mcpConfigPath,
-    '--strict-mcp-config',
-    '--permission-mode',
-    'bypassPermissions',
-  ];
-  const res = await runCliCapture('claude', args, { timeoutMs });
-  return { ...res, args };
+function parsePlainAgentOutput(stdout, stderr = '') {
+  const lines = String(stdout).split('\n').filter((line) => line.trim());
+  const textChunks = [];
+  for (const line of lines) {
+    try {
+      const event = JSON.parse(line);
+      if (event?.type === 'result' && typeof event.result === 'string') textChunks.push(event.result);
+      if (event?.type === 'assistant' && Array.isArray(event.message?.content)) {
+        for (const block of event.message.content) {
+          if (block?.type === 'text' && typeof block.text === 'string') textChunks.push(block.text);
+        }
+      }
+    } catch {
+      // Plain-text agents are allowed.
+    }
+  }
+  if (textChunks.length > 0) {
+    return {
+      sql: null,
+      sqlArgs: null,
+      result: null,
+      resultRaw: null,
+      finalText: textChunks.at(-1),
+      toolCalls: [],
+      toolCandidates: [],
+      lucyMeta: [],
+      wikiContextEvidence: [],
+      semanticQueries: [],
+    };
+  }
+  return {
+    sql: null,
+    sqlArgs: null,
+    result: null,
+    resultRaw: null,
+    finalText: `${stdout}\n${stderr}`.trim(),
+    toolCalls: [],
+    toolCandidates: [],
+    lucyMeta: [],
+    wikiContextEvidence: [],
+    semanticQueries: [],
+  };
+}
+
+function parseAgentOutput(stdout, stderr, outputFormat) {
+  if (outputFormat === 'stream-json') return parseClaudeOutput(stdout);
+  const plain = parsePlainAgentOutput(stdout, stderr);
+  if (plain.finalText || plain.toolCalls.length > 0) return plain;
+  try {
+    return parseClaudeOutput(stdout);
+  } catch {
+    return plain;
+  }
+}
+
+async function invokeAgentAdapter(adapter, question, mcpConfigPath, { timeoutMs = 360000, caseId = '' } = {}) {
+  if (adapter.id === 'noop') {
+    return { code: 0, out: '', err: '', args: ['noop'], skipped: true };
+  }
+  return adapter.invoke({ question, mcpConfigPath, timeoutMs, caseId });
 }
 
 // ─── T-A.3: parseClaudeOutput ──────────────────────────────────────────────
@@ -1570,19 +1610,24 @@ function collectTurnToolAssertions(turn) {
   ];
 }
 
-async function executePrompt(question) {
+async function executePrompt(question, { adapter, caseId = '' } = {}) {
   let raw;
   let parseErr = null;
   let parsed = { sql: null, sqlArgs: null, result: null, resultRaw: null, finalText: '', toolCandidates: [] };
   let cliErr = null;
+  const resolvedAdapter = adapter || resolveAdapter();
   try {
     buildEvalMcpConfig(EVAL_MCP_PATH);
-    raw = await invokeClaudeCode(question, EVAL_MCP_PATH, { timeoutMs: 360000 });
+    raw = await invokeAgentAdapter(resolvedAdapter, question, EVAL_MCP_PATH, { timeoutMs: 360000, caseId });
+    if (raw.skipped) {
+      parsed.finalText = 'Skipped by noop adapter.';
+      return { raw, parseErr, parsed, cliErr };
+    }
     if (raw.code !== 0) {
-      cliErr = `claude exited code=${raw.code}; stderr=${(raw.err || '').slice(0, 400)}`;
+      cliErr = `${resolvedAdapter.id} exited code=${raw.code}; stderr=${(raw.err || '').slice(0, 400)}`;
     } else {
       try {
-        parsed = parseClaudeOutput(raw.out);
+        parsed = parseAgentOutput(raw.out, raw.err, raw.outputFormat || resolvedAdapter.outputFormat);
       } catch (e) {
         parseErr = e.message;
       }
@@ -1703,9 +1748,9 @@ function isTextOnlyResultCase(c = {}) {
   return assertions.length > 0 && assertions.every((a) => a?.value_type === 'text');
 }
 
-async function runSingleTurnCase(c, { safetyContract = {}, priorTurns = [] } = {}) {
+async function runSingleTurnCase(c, { safetyContract = {}, priorTurns = [], adapter } = {}) {
   const question = composeQuestion(c, { priorTurns });
-  const { parseErr, parsed, cliErr } = await executePrompt(question);
+  const { parseErr, parsed, cliErr } = await executePrompt(question, { adapter, caseId: c.id });
   const selected = chooseBestCandidate(c, parsed, safetyContract);
   const traceInfo = traceInfoForCase(c, parsed);
 
@@ -1759,7 +1804,7 @@ async function runSingleTurnCase(c, { safetyContract = {}, priorTurns = [] } = {
   };
 }
 
-async function runMultiTurnCase(c, { safetyContract = {} } = {}) {
+async function runMultiTurnCase(c, { safetyContract = {}, adapter } = {}) {
   const turnEntries = [];
   const priorTurns = [];
   for (const turn of c.turns || []) {
@@ -1773,7 +1818,7 @@ async function runMultiTurnCase(c, { safetyContract = {} } = {}) {
       sql_assertions: collectTurnSqlAssertions(turn, {}),
       tool_assertions: collectTurnToolAssertions(turn),
     };
-    const entry = await runSingleTurnCase(turnCase, { safetyContract, priorTurns });
+    const entry = await runSingleTurnCase(turnCase, { safetyContract, priorTurns, adapter });
     entry.turnId = turn.turn_id;
     turnEntries.push(entry);
     priorTurns.push({
@@ -2020,20 +2065,24 @@ async function main() {
   process.stderr.write(`# eval runner: ${selected.length}/${cases.length} case(s) from ${casesAbs}\n`);
   if (args.retries > 0) process.stderr.write(`# retries enabled: ${args.retries} per failed case\n`);
 
-  // T-A.2: write MCP config and fail-fast on claude CLI
+  // T-A.2: write MCP config and fail-fast on agent adapter preflight
   buildEvalMcpConfig(EVAL_MCP_PATH);
   process.stderr.write(
     `# wrote MCP config → ${EVAL_MCP_PATH} (url=${KTX_MCP_URL}, auth=${KTX_MCP_TOKEN ? 'bearer' : 'none'})\n`
   );
   const mcp = await preflightKtxMcpEndpoint();
   process.stderr.write(`# KTX MCP endpoint ok: HTTP ${mcp.status}\n`);
-  const pre = await preflightClaude();
-  process.stderr.write(`# preflight ok: ${pre.version}\n`);
+  const adapter = resolveAdapter(args.adapter);
+  process.stderr.write(`# agent adapter: ${adapter.id}\n`);
+  if (adapter.id !== 'noop') {
+    const pre = await preflightAdapter(args.adapter);
+    process.stderr.write(`# agent preflight ok: ${pre.version || pre.cli || adapter.id}\n`);
+  }
 
   const entries = [];
   for (const c of selected) {
     process.stderr.write(`# running ${c.id}\n`);
-    const entry = await runCaseWithRetries(c, { safetyContract, retries: args.retries });
+    const entry = await runCaseWithRetries(c, { safetyContract, retries: args.retries, adapter });
     entries.push(entry);
     const attempts = entry.attempts ? ` (${entry.attempts} attempts)` : '';
     process.stderr.write(`#   ${c.id} → ${entry.pass ? 'PASS' : 'FAIL'}${attempts}\n`);
