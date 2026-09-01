@@ -5,12 +5,36 @@ alwaysApply: true
 
 # Lucy Docker 缓存重建约定
 
-当用户要求「用缓存重建 docker 里的 lucy / 让最新代码生效」时，默认按以下流程执行，**不要用 `--no-cache`**（除非用户明确要求无缓存）：
+当用户要求「用缓存重建 docker 里的 lucy / 让最新代码生效」时，先确认是否需要**保留**已有配置：
+
+## 平滑升级（默认：保留账号、ACL、audit 日志）
+
+用户未明确要求「从零 / 清空配置 / 重新 seed」时，使用平滑升级：
+
+```bash
+npm run demo:upgrade
+# 或：BUILDPLATFORM=linux/arm64 npm run demo:upgrade
+```
+
+脚本会缓存构建镜像、`--force-recreate` 容器，**不**删除 `lucy-demo-data` volume。保留 `ktx.yaml`、`access.yaml`、`admins.yaml`、`.ktx-ui/audit.sqlite` 等运行时状态。
+
+可选升级前备份：`npm run demo:upgrade -- --backup-dir inbox/backups`
+
+## 从零 reseed（仅当用户明确要求清空运行时配置）
+
+当用户要求「用缓存重建 docker 里的 lucy / 让最新代码生效」且**需要**从零测试、或明确要求清空 WebUI/ACL 状态时：
+
+```bash
+npm run demo:upgrade -- --fresh
+```
+
+或分步：
 
 1. 缓存构建镜像（补 `BUILDPLATFORM=linux/arm64`，避免 macOS buildx 空平台 bug）：
    `docker compose -f docker-compose.demo.yml build --build-arg BUILDPLATFORM=linux/arm64 lucy`
-2. **清空运行时配置（每次必做）**：停掉并删除 `lucy` 容器后，删除 named volume `project-lucy_lucy-demo-data`，让 entrypoint 从 demo template 重新 seed。不要保留旧 `ktx.yaml` / ACL / WebUI 状态。
-3. 重新拉起：`docker compose -f docker-compose.demo.yml up -d lucy`
-4. 校验：容器 `healthy`；host 与容器 `/app` 关键源码哈希一致；确认 `/data/lucy` 已重新播种（如存在 `.lucy-seed` 与 `ktx.yaml`）。
+2. **清空运行时配置（每次必做）**：`npm run demo:upgrade -- --fresh`（停容器并删除 named volume `project-lucy_lucy-demo-data` 或当前 compose project 对应的 `*_lucy-demo-data`），让 entrypoint 从 demo template 重新 seed。
+3. 校验：容器 `healthy`；host 与容器 `/app` 关键源码哈希一致；确认 `/data/lucy` 已重新播种（如存在 `.lucy-seed` 与 `ktx.yaml`）。
 
 默认**不** `down -v` 整个 stack（避免无故清掉 `demo-db`），只清 `lucy-demo-data`。若用户明确要求数据库也从零开始，再对 demo-db 做额外重置。
+
+**不要用 `--no-cache`**（除非用户明确要求无缓存）。
