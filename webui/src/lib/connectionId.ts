@@ -74,7 +74,7 @@ export const DATABASE_TYPES: DatabaseTypeConfig[] = [
   },
   {
     key: "starrocks",
-    label: "StarRocks",
+    label: "StarRocks（MySQL 协议）",
     driver: "mysql",
     engine: "starrocks",
     wireProtocol: "mysql",

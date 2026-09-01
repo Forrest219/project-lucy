@@ -42,6 +42,10 @@ RUN apt-get update \
 
 RUN npm install -g "@kaelio/ktx@${KTX_VERSION}"
 
+# StarRocks / MySQL-protocol engines may reject SET SESSION max_execution_time (P0-1/P0-2).
+COPY scripts/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
+RUN node /tmp/patch-ktx-mysql-starrocks-compat.js && rm /tmp/patch-ktx-mysql-starrocks-compat.js
+
 RUN ktx admin runtime install --yes --feature core
 
 COPY package.json package-lock.json ./

@@ -7,6 +7,8 @@ import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
+import { formatConnectionErrorMessage } from "./connection-errors";
+import { readKtxRuntimeStatus } from "./ktx-runtime";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
 import {
   listLiveSchemas,
@@ -450,7 +452,9 @@ export function buildServer() {
 
   app.get("/api/health", async () => {
     const policy = getPolicyRuntimeStatus();
-    const healthy = isPolicyRuntimeHealthy(policy);
+    const ktxRuntime = await readKtxRuntimeStatus();
+    const policyHealthy = isPolicyRuntimeHealthy(policy);
+    const healthy = policyHealthy && ktxRuntime.ready;
     return {
       ok: true,
       data: {
@@ -458,11 +462,16 @@ export function buildServer() {
         status: healthy ? "ok" : "degraded",
         lucyVersion: process.env.npm_package_version ?? "unknown",
         bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
+        ktxRuntime: {
+          ready: ktxRuntime.ready,
+          status: ktxRuntime.status,
+          ...(ktxRuntime.detail ? { detail: ktxRuntime.detail } : {})
+        },
         policy: {
           policyVersion: policy.policyVersion,
           degradedGlobal: policy.degradedGlobal,
           degradedAgents: policy.degradedAgents,
-          healthy
+          healthy: policyHealthy
         }
       }
     };

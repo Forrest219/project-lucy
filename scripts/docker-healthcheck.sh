@@ -8,6 +8,12 @@ PROXY_PORT="${LUCY_PROXY_PORT:-7879}"
 
 ktx --version >/dev/null
 
+# P0-3: runtime must be baked in (offline / air-gapped); do not rely on startup download.
+ktx admin runtime status 2>/dev/null | grep -q '^status: ready' || {
+  echo "ktx runtime not ready (uv/core missing — rebuild image with ktx admin runtime install)"
+  exit 1
+}
+
 node -e '
   const url = `http://${process.argv[1]}:${process.argv[2]}/api/health`;
   fetch(url)
@@ -15,6 +21,8 @@ node -e '
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await res.json();
       if (!body.ok) throw new Error("health envelope not ok");
+      const rt = body.data?.ktxRuntime;
+      if (rt && rt.ready === false) throw new Error("ktxRuntime not ready");
     })
     .then(() => process.exit(0), (err) => {
       console.error(err.message);

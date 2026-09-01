@@ -12,6 +12,7 @@ import {
 } from "../lib/connectionId";
 import { queryKeys } from "../lib/queryKeys";
 import { SCHEMA_NAME_RULE_HINT, validateSchemaName } from "../lib/schemas";
+import { formatConnectionProbeMessage, classifyConnectionError } from "../lib/connectionErrors";
 import type {
   CreateConnectionPreview,
   CreateConnectionResult,
@@ -108,6 +109,7 @@ export function CreateConnectionDrawer({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewAttempted, setPreviewAttempted] = useState(false);
   const [probeAttempted, setProbeAttempted] = useState(false);
+  const [probeOverride, setProbeOverride] = useState(false);
   const [probeResult, setProbeResult] = useState<ProbeConnectionResult | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<Step>("input");
@@ -149,6 +151,8 @@ export function CreateConnectionDrawer({
     !usernameIssue &&
     !passwordIssue &&
     !schemasParsed.issue;
+  const probeFailed = probeAttempted && probeResult?.status === "error";
+  const canPreviewWithProbe = canPreview && (!probeFailed || probeOverride);
   const canProbe = isSqlite
     ? !databaseIssue
     : !hostIssue && !portIssue && !databaseIssue && !usernameIssue && !passwordIssue;
@@ -203,12 +207,17 @@ export function CreateConnectionDrawer({
         ...(form.password ? { password: form.password } : {})
       }),
     onSuccess: (data) => {
-      setProbeResult(data);
+      setProbeResult(
+        data.status === "error"
+          ? { ...data, message: formatConnectionProbeMessage(data.message) }
+          : data
+      );
     },
     onError: (err) => {
+      const raw = err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err);
       setProbeResult({
         status: "error",
-        message: mapCreateErrorMessage(err)
+        message: formatConnectionProbeMessage(raw)
       });
     }
   });
@@ -261,6 +270,7 @@ export function CreateConnectionDrawer({
     setTouched({});
     setPreviewAttempted(false);
     setProbeAttempted(false);
+    setProbeOverride(false);
     setProbeResult(null);
     setShowPassword(false);
     setStep("input");
@@ -299,6 +309,7 @@ export function CreateConnectionDrawer({
 
   useEffect(() => {
     setProbeResult(null);
+    setProbeOverride(false);
   }, [
     form.driver,
     form.databaseType,
@@ -443,6 +454,11 @@ export function CreateConnectionDrawer({
                       </option>
                     ))}
                   </select>
+                  {form.databaseType === "starrocks" || form.databaseType === "doris" ? (
+                    <p className="mt-1 text-xs text-fg-muted" data-testid="create-connection-engine-hint">
+                      底层走 MySQL 协议；超时策略与原生 MySQL 不同，请优先选此类型而非 MySQL。
+                    </p>
+                  ) : null}
                 </Field>
                 {!isSqlite ? (
                   <Field label="只读账号意图（可选）" pair>
@@ -628,10 +644,10 @@ export function CreateConnectionDrawer({
               <button
                 type="button"
                 className="pl-btn pl-btn--primary"
-                disabled={previewMutation.isPending}
+                disabled={previewMutation.isPending || (probeFailed && !probeOverride)}
                 onClick={() => {
                   setPreviewAttempted(true);
-                  if (!canPreview) return;
+                  if (!canPreviewWithProbe) return;
                   previewMutation.mutate();
                 }}
                 data-testid="create-connection-preview-btn"
@@ -644,7 +660,7 @@ export function CreateConnectionDrawer({
                 正在测试连接...
               </p>
             ) : probeResult ? (
-              <p
+              <div
                 className={
                   probeResult.status === "ok" ? "text-sm text-success-strong" : "text-sm text-danger"
                 }
@@ -654,9 +670,24 @@ export function CreateConnectionDrawer({
                 {probeResult.status === "ok"
                   ? `连接成功${probeResult.latencyMs != null ? `，${probeResult.latencyMs} ms` : ""}`
                   : `连接失败：${probeResult.message}`}
-              </p>
+                {probeFailed ? (
+                  <label className="mt-2 flex items-start gap-2 text-fg-default">
+                    <input
+                      type="checkbox"
+                      checked={probeOverride}
+                      onChange={(e) => setProbeOverride(e.target.checked)}
+                      data-testid="create-connection-probe-override"
+                    />
+                    <span>
+                      我了解连通测试未通过，仍要创建（后续 catalog / 查数可能不可用）
+                    </span>
+                  </label>
+                ) : null}
+              </div>
             ) : (
-              <p className="text-xs text-fg-muted">可选。未测试或不通过也可以进入下一步。</p>
+              <p className="text-xs text-fg-muted">
+                建议先测试连接。未通过时将无法进入下一步，除非勾选确认仍要创建。
+              </p>
             )}
             {submitError ? (
               <p className="text-sm text-danger" role="alert" data-testid="create-connection-error">

@@ -1760,7 +1760,7 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
 
     expect(await screen.findByTestId("connection-health-mysql-aliyun")).toHaveTextContent("通");
     const bad = await screen.findByTestId("connection-health-bad-conn");
-    expect(bad).toHaveTextContent("不通");
+    expect(bad).toHaveTextContent("不可用");
     expect(bad).toHaveAttribute("data-tone", "danger");
     expect(bad).toHaveTextContent("1200 ms");
     // Local schema table still renders for the healthy connection.
@@ -1839,7 +1839,7 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     renderOverview();
 
     const health = await screen.findByTestId("connection-health-mysql-aliyun");
-    expect(health).toHaveTextContent("不通");
+    expect(health).toHaveTextContent("不可用");
     fireEvent.click(health);
     expect(await screen.findByTestId("connection-test-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("connection-test-banner")).not.toHaveTextContent("尚未测试");

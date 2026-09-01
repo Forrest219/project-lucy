@@ -4,6 +4,7 @@ import path from "node:path";
 import { isMap, isScalar, isSeq, parse, parseDocument, stringify, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
 import { execFile } from "node:child_process";
 import { KtxCliError, testConnection } from "./ktx";
+import { formatConnectionErrorMessage } from "./connection-errors";
 import {
   ForbiddenPathError,
   safeRemove,
@@ -1575,7 +1576,7 @@ export async function probeConnection(
     return {
       status: "error",
       latencyMs: testResult.latencyMs,
-      message: testResult.reason?.trim() || "连接失败"
+      message: formatConnectionErrorMessage(testResult.reason?.trim() || "连接失败")
     };
   } catch (error) {
     if (error instanceof KtxCliError) {

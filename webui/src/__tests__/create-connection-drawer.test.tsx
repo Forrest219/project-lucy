@@ -424,7 +424,29 @@ describe("CreateConnectionDrawer UX", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("lets preview proceed after a failed optional probe", async () => {
+  it("blocks preview after failed probe until override is checked", async () => {
+    stubFetch({
+      "POST /api/connections/probe": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: { status: "error", message: "Access denied" }
+          })
+        )
+    });
+
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-test-btn"));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-probe-result")).toHaveTextContent("连接失败");
+    });
+    expect(screen.getByTestId("create-connection-preview-btn")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("create-connection-probe-override"));
+    expect(screen.getByTestId("create-connection-preview-btn")).not.toBeDisabled();
+  });
+
+  it("lets preview proceed after failed probe when override is checked", async () => {
     const bodies: unknown[] = [];
     stubFetch({
       "POST /api/connections/probe": () =>
@@ -446,6 +468,7 @@ describe("CreateConnectionDrawer UX", () => {
     await waitFor(() => {
       expect(screen.getByTestId("create-connection-probe-result")).toHaveTextContent("连接失败");
     });
+    fireEvent.click(screen.getByTestId("create-connection-probe-override"));
     fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
     await waitFor(() => {
       expect(screen.getByTestId("create-connection-confirm-btn")).toBeInTheDocument();

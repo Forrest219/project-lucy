@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { latencyTone } from "../../lib/connectionHealth";
+import { classifyConnectionError } from "../../lib/connectionErrors";
 import type { ConnectionInfo, ConnectionTestResult } from "../../lib/types";
 
 function protocolLabel(protocol: ConnectionInfo["wireProtocol"]): string {
@@ -72,6 +73,10 @@ export function ConnectionTestResultPanel({
   const latency = latencyTone(result?.latencyMs);
   const logSections = result ? rawLogSections(result) : [];
   const command = result ? commandFor(connection, result) : `ktx connection test ${connection.id}`;
+  const errorGuidance =
+    result?.status === "error"
+      ? classifyConnectionError(result.reason ?? result.stderr ?? result.detail)
+      : null;
 
   async function copyText(text: string, message: string) {
     try {
@@ -118,6 +123,21 @@ export function ConnectionTestResultPanel({
           </span>
         )}
       </div>
+
+      {errorGuidance ? (
+        <div
+          className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm"
+          data-testid="connection-test-guidance"
+        >
+          <strong>{errorGuidance.title}</strong>
+          <p className="mt-1 text-fg-muted">{errorGuidance.summary}</p>
+          <ul className="mt-2 list-disc pl-5 text-fg-muted">
+            {errorGuidance.actions.map((action) => (
+              <li key={action}>{action}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {result && (
         <div className="pl-diagnostic-grid" data-testid="connection-test-metadata">

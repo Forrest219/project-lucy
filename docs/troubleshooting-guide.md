@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Troubleshooting Guide |
 | 文档类型 | Product / Troubleshooting Guide |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-06-22；2026-07-06；2026-08-28 增补内网 uv / MCP 未就绪 |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-08-28 增补内网 uv / MCP 未就绪；2026-09-01 增补 StarRocks max_execution_time |
 | 适用范围 | Docker deployment、WebUI、KTX runtime、MCP Proxy、agent access |
 
 ## 1. Fast Checks
@@ -29,6 +29,8 @@ npm run security:baseline
 | KTX version mismatch | `/api/health.data.bundledKtxVersion` | rebuild image with intended `KTX_VERSION` |
 | Query asks to install runtime | KTX Python runtime missing | rebuild image; Dockerfile should run `ktx admin runtime install --yes --feature core` |
 | `ktx could not download uv`（客户内网查询失败） | 镜像未 bake-in Python/uv runtime，现场尝试公网下载失败 | **换用通过 G4b 的新交付镜像**；不要让客户开外网重试或在内网 `docker build`。出包机必须跑 `scripts/build-customer-amd64-image.sh`（含 G4b） |
+| `Unknown system variable 'max_execution_time'`（StarRocks / MySQL 协议） | ktx MySQL 连接器设置 MySQL 5.7+ 会话变量，StarRocks 不支持 | 使用含 `scripts/patch-ktx-mysql-starrocks-compat.js` 的镜像；WebUI 建连选 **StarRocks（MySQL 协议）**；验证 `node scripts/verify-ktx-starrocks-patch.cjs` |
+| `/api/health` → `ktxRuntime.ready: false` | runtime 未 bake-in 或损坏 | 重建镜像（Dockerfile 含 `ktx admin runtime install` + healthcheck runtime gate） |
 | WebUI「Lucy MCP 未就绪」/ `mcpEndpoint.status=fallback` | 未设置合法 `LUCY_PUBLIC_MCP_URL` | 在 values / 环境变量中配置外部可达 `https://…/mcp`；Helm 客户 registry 路径下空 URL 会 fail 渲染 |
 | Demo DB fails | MySQL healthcheck/logs | rerun `npm run smoke:p0:demo` after cleanup |
 | Semantic validate fails | source/table mismatch | run WebUI review and `ktx sl validate` |

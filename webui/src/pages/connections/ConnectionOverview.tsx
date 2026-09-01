@@ -9,6 +9,7 @@ import { apiGet, apiPost } from "../../lib/apiClient";
 import {
   connectionHealthDrawerResult,
   connectionHealthStatusLabel,
+  connectionReadinessLabel,
   formatProbeClock
 } from "../../lib/connectionHealth";
 import { queryKeys } from "../../lib/queryKeys";
@@ -716,13 +717,16 @@ export function ConnectionOverview() {
                       // Prefer query error over stale ok cache after a failed refetch.
                       const healthFailed =
                         queryFailed || healthResult?.status === "error";
+                      const readiness = connectionReadinessLabel({
+                        healthPending,
+                        healthFailed,
+                        healthOk: !healthPending && !healthFailed && Boolean(healthResult),
+                        latencyMs: healthResult?.latencyMs
+                      });
                       const statusTone = healthPending
-                        ? { label: "探测中…", tone: "muted" as const }
+                        ? { label: readiness.label, tone: readiness.tone }
                         : healthFailed
-                          ? connectionHealthStatusLabel(
-                              "error",
-                              healthResult?.status === "error" ? healthResult.latencyMs : undefined
-                            )
+                          ? { label: readiness.label, tone: readiness.tone }
                           : connectionHealthStatusLabel("ok", healthResult?.latencyMs);
                       const displayLatencyMs =
                         !healthPending &&

@@ -4,6 +4,15 @@ import type { ConnectionTestResult } from "./types";
 
 export type LatencyTone = "muted" | "success" | "warning" | "danger";
 
+/** P1-4: readiness beyond raw probe latency. */
+export type ConnectionReadiness = "configured" | "probe_ok" | "probe_failed" | "probing";
+
+export type ConnectionReadinessResult = {
+  readiness: ConnectionReadiness;
+  label: string;
+  tone: LatencyTone;
+};
+
 export type LatencyToneResult = {
   label: string;
   tone: LatencyTone;
@@ -79,4 +88,30 @@ export function connectionHealthDrawerResult(
     return connectionHealthProbeErrorResult(connId, error);
   }
   return data ?? null;
+}
+
+/**
+ * Card-level readiness: 已配置 / 探测通过 / 探测失败 / 探测中.
+ * Distinguishes "connection saved" from "query path likely works".
+ */
+export function connectionReadinessLabel(input: {
+  healthPending: boolean;
+  healthFailed: boolean;
+  healthOk: boolean;
+  latencyMs?: number;
+}): ConnectionReadinessResult {
+  if (input.healthPending) {
+    return { readiness: "probing", label: "探测中…", tone: "muted" };
+  }
+  if (input.healthFailed) {
+    return { readiness: "probe_failed", label: "不可用", tone: "danger" };
+  }
+  if (input.healthOk) {
+    const panel = latencyTone(input.latencyMs);
+    if (panel.label === "正常") {
+      return { readiness: "probe_ok", label: "可用", tone: "success" };
+    }
+    return { readiness: "probe_ok", label: panel.label, tone: panel.tone };
+  }
+  return { readiness: "configured", label: "已配置", tone: "muted" };
 }
