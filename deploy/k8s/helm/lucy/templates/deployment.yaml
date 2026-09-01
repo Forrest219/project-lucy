@@ -55,15 +55,20 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: lucy
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          {{- $tag := .Values.image.tag | default .Chart.AppVersion }}
+          {{- if .Values.image.digest }}
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          {{- else }}
+          image: "{{ .Values.image.repository }}:{{ $tag }}"
+          {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           # Named ports so Service / probes stay aligned even if values change.
           ports:
             - name: webui
-              containerPort: {{ .Values.service.webuiPort }}
+              containerPort: {{ .Values.containerPorts.webui }}
               protocol: TCP
             - name: mcp
-              containerPort: {{ .Values.service.mcpPort }}
+              containerPort: {{ .Values.containerPorts.mcp }}
               protocol: TCP
           env:
             {{- include "lucy.composeEnv" . | nindent 12 }}

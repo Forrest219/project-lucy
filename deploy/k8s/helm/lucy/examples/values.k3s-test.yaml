@@ -1,0 +1,58 @@
+# values.k3s-test.yaml — lucy-test cluster integration profile.
+#
+# Use this profile when the test cluster exposes Lucy on host ports 8276 (WebUI)
+# and 8277 (MCP) while the container continues to listen on 5174 / 7879.
+#
+# NOT FOR PRODUCTION. Copy and adjust registry, MCP URL, secrets, and image
+# tag/digest for each environment.
+
+image:
+  repository: project-lucy
+  # Prefer immutable build tags; record digest in image-digest.txt at release time.
+  tag: "customer-amd64-0.16.0-20260901-b893a0c"
+  digest: "sha256:bfcb649a2fb9f472e1b58ed212a05bb27d70c30dc7273be13ebeb008fb20a0a5"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+containerPorts:
+  webui: 5174
+  mcp: 7879
+
+service:
+  type: ClusterIP
+  webuiPort: 8276
+  mcpPort: 8277
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 50Gi
+  storageClass: ""
+  existingClaim: lucy
+
+env:
+  LUCY_PUBLIC_MCP_URL: "http://10.69.95.109:8277/mcp"
+  LUCY_ALLOW_PLACEHOLDER_KTX: ""
+  KTX_PROJECT_ROOT: /data/lucy
+  POSTHOG_DISABLED: "1"
+
+existingSecret: lucy-starrocks
+extraSecretData: {}
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+lucy:
+  enabled: true
+  bundledKtxVersion: "0.16.0"
+
+serviceAccount:
+  create: true
+  name: ""

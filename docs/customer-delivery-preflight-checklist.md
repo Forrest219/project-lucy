@@ -45,7 +45,10 @@
 ### 1. Helm Chart 守卫验证
 - [ ] **空 URL 渲染阻断**：当 `image.repository != project-lucy` 且 `env.LUCY_PUBLIC_MCP_URL` 为空、含 `REPLACE-ME` 或 `127.0.0.1` 时，`helm template` 必须 fail 报错。
 - [ ] **合法配置放行**：配置合法公网/网关 URL 后，`helm template` 正常输出。
-- [ ] **端口守卫**：Service 仅暴露 `5174`（WebUI）与 `7879`（Proxy），**严禁暴露 7878**。
+- [ ] **端口守卫**：Service 仅暴露 WebUI 与 MCP Proxy；**严禁暴露 7878**（KTX upstream 仅 Pod 内）。
+- [ ] **容器/Service 端口分离**：容器固定监听 `5174`/`7879`；外部 `8276`/`8277` 等仅在 Service 层映射。
+- [ ] **探针守卫**：Startup/Readiness 使用 HTTP `GET /api/health`；渲染结果不得含 `runtime-preflight`、`k8s-preflight.sh` 或 exec `docker-healthcheck.sh`。
+- [ ] **静态门禁脚本**：`bash scripts/helm-lucy-gate.sh` 通过。
 - [ ] **单副本与 Recreate 约束**：`replicaCount=1`，`strategy.type=Recreate`。
 
 ### 2. 交付包封包与自检

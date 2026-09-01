@@ -227,8 +227,8 @@ lucy-k8s-integration-delivery-20260827-v1/
 | Pod-internal port | `7878/tcp`（KTX MCP upstream，`127.0.0.1` bind），**严禁**放进 Service | 安全红线 |
 | PVC | `ReadWriteOnce`；挂 `/data/lucy` | `deploy/k8s/helm/lucy/templates/pvc.yaml` |
 | Volume mounts | `/data/lucy`（PVC）；`/data/lucy/.ktx/secrets`（可选 Secret 映射） | 同上 |
-| Startup probe | `exec /app/scripts/docker-healthcheck.sh`；`failureThreshold ≥ 60`（覆盖首次 seed + reindex） | `values.yaml` |
-| Readiness probe | 同 startup（exec healthcheck） | 同上 |
+| Startup probe | HTTP `GET /api/health` on port `webui`；`failureThreshold ≥ 60`（覆盖首次 seed + reindex） | `values.yaml` |
+| Readiness probe | HTTP `GET /api/health` on port `webui` | 同上 |
 | Liveness probe | `httpGet /api/health` on port `webui` | 同上 |
 | Env（必须） | `KTX_PROJECT_ROOT=/data/lucy`、`POSTHOG_DISABLED=1`、`LUCY_PUBLIC_MCP_URL=<客户外部可达 URL>` | 客户填 `LUCY_PUBLIC_MCP_URL` |
 | Env（可选） | `LUCY_ALLOW_PLACEHOLDER_KTX=""`；仅首次 seed 时临时设 `"1"` | `请先阅读.md` 明示 |
@@ -284,9 +284,21 @@ ingress:
   enabled: false                              # 客户按自有 Ingress 现状决定；如已有 nginx-ingress / traefik，把 enabled=true + className + hosts + tls 补齐
 
 startupProbe:
-  exec:
-    command: [/app/scripts/docker-healthcheck.sh]
+  httpGet:
+    path: /api/health
+    port: webui
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
   failureThreshold: 60
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: webui
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
 
 livenessProbe:
   httpGet:
