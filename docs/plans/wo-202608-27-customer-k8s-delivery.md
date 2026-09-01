@@ -14,7 +14,9 @@
 
 > **v1.2 修订摘要**：用户澄清 —— **tar.gz 是单独给客户的**；**GitHub 仓库只是手册**。v1.1 仍把「发 GitHub Release + 上传 ~931MB Assets」当成主路径，现撤销。GitHub `main` 放/更新中文手册与参数示例；镜像大包在本地/inbox 打出后走飞书/网盘/邮件等另渠道。仓库里若仍留有旧 Release Assets，仅作历史痕迹，**不是**本轮必做步骤。
 
-> **v1.1 修订摘要（保留）**：不做可 `helm install` 的 Chart 主交付；`deploy/k8s/helm/lucy/` 最多作参考快照。
+> **v1.3 修订摘要（2026-09-01）**：战略决策 **选项 A** —— `deploy/k8s/helm/lucy/` 升级为**正式受支持 Chart**，随 K8s integration tar.gz 一起交付（chart 0.2.x）。撤销 v1.1「不做可 helm install 的 Chart 主交付」与「reference/helm-chart 仅供参考」定位。详见 [`wo-20260901-k8s-delivery-hardening.md`](wo-20260901-k8s-delivery-hardening.md)。
+
+> **v1.1 修订摘要（保留历史）**：v1.1 曾将 Chart 降为 reference 快照；v1.3 已撤销该决策。
 
 ---
 
@@ -33,8 +35,9 @@
 |---|---|
 | 面向对象 | 客户已有 Kubernetes / Helm，做**集成**（非从零装集群） |
 | CPU | `linux/amd64` |
-| **不包含** | 可直接 `helm install` 的 Chart；K3s 一键包；DB 密码 / MCP Token 明文 |
-| `values-example.yaml` | **参数示例**，不是可直接 `helm install` 的 values |
+| **不包含** | K3s 一键装集群；DB 密码 / MCP Token 明文 |
+| **包含（v1.3+）** | 正式受支持 Helm Chart（`helm/lucy/`，chart 0.2.x）+ 镜像 tar + 契约/验收脚本 |
+| `values-example.yaml` | 可基于 `examples/values.k3s-test.yaml` 等 profile 覆盖；Chart 可直接 `helm upgrade --install` |
 | 历史 GitHub Release Assets | 仓库上曾挂过 `lucy-k8s-integration-20260727-v2` 大包，**不代表**本轮仍要以 Release 上传大包；手册仓库与大包渠道分离 |
 
 ### 1.2 缺口 / 触发本轮的原因
@@ -54,7 +57,6 @@
 ### 1.4 Non-Goals（明确不做）
 
 - **不做**把 ~900MB tar.gz 作为本轮 GitHub Release 必传 Assets（除非委托人另行要求）
-- **不做**可直接 `helm install` 的 Chart 交付（客户继续用自己的 Chart / GitOps）
 - **不做** K3s / K8s 一键安装脚本
 - **不做** HA / 多副本 / HPA / VPA / PDB / Operator / CRD
 - **不做** cert-manager / sealed-secrets / NetworkPolicy / ServiceMonitor 模板
@@ -71,7 +73,7 @@
 | `Forrest219/lucy-customer-delivery` | **更新手册**：中文说明、契约、`values-example.yaml`、`验收命令.sh`、README / RELEASE_NOTES | GitHub = 手册渠道 |
 | 历史 GitHub Release `…20260727-v2` | **不动**；本轮**默认不**再 `gh release create` 上传大包 | 大包另渠道；旧 Release 仅历史痕迹 |
 | 单独发送的 tar.gz | **新产**到 `inbox/customer-k8s-integration-build/`，命名沿用 `lucy-k8s-integration-delivery-YYYYMMDD-vN.tar.gz` | 飞书/网盘/邮件等另送 |
-| `deploy/k8s/helm/lucy/` 正式 chart | **只读快照**放入 `reference/helm-chart/`；`请先阅读.md` 明示"**仅参考，客户仍用自有 Chart**" | 上次交付边界"不含可安装 Chart"不变；但快照能让客户对照契约 |
+| `deploy/k8s/helm/lucy/` 正式 chart | **作为 supported 主交付物**复制到包内 `helm/lucy/`（chart 0.2.x）；随镜像同版本门禁 | v1.3 决策：Chart 与镜像绑定交付，见 `K8S_CONTRACT.md` |
 | `docs/customer-k8s-deployer-quickstart.md` | **压缩翻译**为中文的 `集成说明.md`（保留端口 / 契约 / 验收 / 排障 5 项） | 长文档不适合客户 IT；本次改为中文精简版 |
 | `docs/customer-deployment-guide.md` / `admin-guide.md` / `security-guide.md` | **原样**放入 `reference/`（英文全文，供合作方 / 售前查阅） | 保留深度参考 |
 | `docs/lucy-customer-amd64-offline-delivery-spec.md` | **不动** | Docker Compose 交付路径，与本轮无关 |
@@ -227,8 +229,8 @@ lucy-k8s-integration-delivery-20260827-v1/
 | Pod-internal port | `7878/tcp`（KTX MCP upstream，`127.0.0.1` bind），**严禁**放进 Service | 安全红线 |
 | PVC | `ReadWriteOnce`；挂 `/data/lucy` | `deploy/k8s/helm/lucy/templates/pvc.yaml` |
 | Volume mounts | `/data/lucy`（PVC）；`/data/lucy/.ktx/secrets`（可选 Secret 映射） | 同上 |
-| Startup probe | `exec /app/scripts/docker-healthcheck.sh`；`failureThreshold ≥ 60`（覆盖首次 seed + reindex） | `values.yaml` |
-| Readiness probe | 同 startup（exec healthcheck） | 同上 |
+| Startup probe | HTTP `GET /api/health` on port `webui`；`failureThreshold ≥ 60`（覆盖首次 seed + reindex） | `values.yaml` |
+| Readiness probe | HTTP `GET /api/health` on port `webui` | 同上 |
 | Liveness probe | `httpGet /api/health` on port `webui` | 同上 |
 | Env（必须） | `KTX_PROJECT_ROOT=/data/lucy`、`POSTHOG_DISABLED=1`、`LUCY_PUBLIC_MCP_URL=<客户外部可达 URL>` | 客户填 `LUCY_PUBLIC_MCP_URL` |
 | Env（可选） | `LUCY_ALLOW_PLACEHOLDER_KTX=""`；仅首次 seed 时临时设 `"1"` | `请先阅读.md` 明示 |
@@ -284,9 +286,21 @@ ingress:
   enabled: false                              # 客户按自有 Ingress 现状决定；如已有 nginx-ingress / traefik，把 enabled=true + className + hosts + tls 补齐
 
 startupProbe:
-  exec:
-    command: [/app/scripts/docker-healthcheck.sh]
+  httpGet:
+    path: /api/health
+    port: webui
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
   failureThreshold: 60
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: webui
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
 
 livenessProbe:
   httpGet:

@@ -87,11 +87,11 @@ entry lands on its own line at the correct indent.
 - name: LUCY_WEBUI_HOST
   value: "0.0.0.0"
 - name: LUCY_WEBUI_PORT
-  value: {{ .Values.service.webuiPort | default 5174 | quote }}
+  value: {{ .Values.containerPorts.webui | default 5174 | quote }}
 - name: LUCY_PROXY_HOST
   value: "0.0.0.0"
 - name: LUCY_PROXY_PORT
-  value: {{ .Values.service.mcpPort | default 7879 | quote }}
+  value: {{ .Values.containerPorts.mcp | default 7879 | quote }}
 - name: LUCY_PROXY_UPSTREAM_HOST
   value: "127.0.0.1"
 - name: LUCY_PROXY_UPSTREAM_PORT

@@ -39,6 +39,9 @@ image:
   # Production must override to a customer registry path.
   repository: project-lucy
   tag: "0.16.0"
+  # Optional immutable digest (sha256:…). When set, the chart pins the image
+  # by digest and ignores tag for the rendered image reference.
+  digest: ""
   pullPolicy: IfNotPresent
 
 # -------------------------------------------------------------------
@@ -52,10 +55,19 @@ replicaCount: 1
 imagePullSecrets: []
 
 # -------------------------------------------------------------------
-# Service
+# Service + container ports
 # -------------------------------------------------------------------
-# Only 5174 (Lucy health/API) and 7879 (Lucy MCP Proxy — external agent entry)
-# are exposed. Port 7878 (KTX upstream) MUST stay inside the pod only.
+# Container ports (what Lucy listens on inside the pod) and Service ports
+# (what clients reach via ClusterIP / NodePort / LoadBalancer) are separate.
+# Do NOT remap container ports to match external Service ports — keep WebUI on
+# 5174 and MCP Proxy on 7879 inside the pod; map 8276/8277 (or any customer
+# choice) at the Service layer only.
+#
+# Port 7878 (KTX upstream) MUST stay inside the pod only.
+containerPorts:
+  webui: 5174
+  mcp: 7879
+
 service:
   type: ClusterIP
   webuiPort: 5174
@@ -141,25 +153,26 @@ extraSecretData: {}
 extraEnvFrom: []
 
 # -------------------------------------------------------------------
-# Probes — startup must allow seed + first reindex + KTX MCP boot.
+# Probes — lightweight HTTP only. StarRocks connectivity, reindex, and MCP
+# tools/list belong in post-deploy acceptance, not liveness/startup probes.
 # -------------------------------------------------------------------
 startupProbe:
-  exec:
-    command:
-      - /app/scripts/docker-healthcheck.sh
+  httpGet:
+    path: /api/health
+    port: webui
   initialDelaySeconds: 5
-  periodSeconds: 10
-  timeoutSeconds: 15
-  failureThreshold: 60   # ~10 minutes total
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 60   # ~5 minutes total
   successThreshold: 1
 
 readinessProbe:
-  exec:
-    command:
-      - /app/scripts/docker-healthcheck.sh
-  periodSeconds: 15
-  timeoutSeconds: 10
-  failureThreshold: 3
+  httpGet:
+    path: /api/health
+    port: webui
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
   successThreshold: 1
 
 livenessProbe:

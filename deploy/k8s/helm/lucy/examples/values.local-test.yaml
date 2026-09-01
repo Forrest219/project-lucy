@@ -39,6 +39,10 @@ image:
 
 replicaCount: 1
 
+containerPorts:
+  webui: 5174
+  mcp: 7879
+
 service:
   type: ClusterIP
   webuiPort: 5174
@@ -76,24 +80,24 @@ extraSecretData:
   demo-password: change-me
 
 # Relaxed probes — first-time image pull + KTX runtime install + reindex can
-# take a few minutes on a cold local cluster.
+# take a few minutes on a cold local cluster. Use lightweight HTTP probes only.
 startupProbe:
-  exec:
-    command:
-      - /app/scripts/docker-healthcheck.sh
+  httpGet:
+    path: /api/health
+    port: webui
   initialDelaySeconds: 5
-  periodSeconds: 10
-  timeoutSeconds: 15
+  periodSeconds: 5
+  timeoutSeconds: 3
   failureThreshold: 60
   successThreshold: 1
 
 readinessProbe:
-  exec:
-    command:
-      - /app/scripts/docker-healthcheck.sh
-  periodSeconds: 15
-  timeoutSeconds: 10
-  failureThreshold: 3
+  httpGet:
+    path: /api/health
+    port: webui
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
   successThreshold: 1
 
 livenessProbe:
