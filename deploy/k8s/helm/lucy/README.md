@@ -1,4 +1,13 @@
-# Lucy Helm Chart
+# Lucy Helm Chart (supported delivery artifact)
+
+This chart is the **supported** Kubernetes install package for Lucy. It ships with
+customer K8s integration deliveries and is versioned together with the container image.
+
+See also:
+
+- [`deploy/k8s/K8S_CONTRACT.md`](../../K8S_CONTRACT.md) — authoritative deployment contract
+- [`UPGRADE.md`](UPGRADE.md) — N-1 upgrade procedure
+- [`ROLLBACK.md`](ROLLBACK.md) — rollback and recovery
 
 This chart installs Lucy as a single-replica Kubernetes workload.
 
