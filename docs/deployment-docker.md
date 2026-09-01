@@ -116,6 +116,44 @@ docker compose up --build
 lucy-data:/data/lucy
 ```
 
+### 4.1 Smooth Upgrade（保留账号与日志）
+
+升级 Lucy 镜像时，**不要**删除 `/data/lucy` volume（或 bind mount 目录）。entrypoint 仅在缺少 `ktx.yaml` 时 seed，已有配置、账号与 audit 日志会被保留：
+
+| 路径 | 内容 |
+|---|---|
+| `webui/config/admins.yaml` | WebUI 管理员账号（首次 bootstrap 后写入） |
+| `webui/config/access.yaml` | MCP Agent / Token / ACL |
+| `.ktx-ui/audit.sqlite` | 访问审计、Trace、Eval 运行记录 |
+| `ktx.yaml`、`.ktx/secrets/` | 数据库连接与密码文件 |
+
+推荐命令：
+
+```bash
+# 生产 compose（named volume lucy-data）
+npm run lucy:upgrade
+
+# 客户 bind mount
+npm run lucy:upgrade:customer
+
+# 本地 demo（保留 lucy-demo-data 中的账号与 audit）
+npm run demo:upgrade
+```
+
+可选：升级前备份 named volume：
+
+```bash
+bash scripts/upgrade-lucy.sh -f docker-compose.yml --backup-dir inbox/backups
+```
+
+需要**从零 reseed**（清空 demo 配置与 WebUI 状态）时，显式使用 `--fresh`：
+
+```bash
+npm run demo:upgrade -- --fresh
+```
+
+`npm run demo:rebuild` 与 `demo:upgrade` 等价，均默认保留 volume；仅 dev 验收「干净模板」场景才用 `--fresh`。
+
 ## 5. Recommended Customer Config Mount
 
 客户 headless 部署推荐把业务配置维护为 `customer-config/`，并 bind mount 到 `/data/lucy`：

@@ -359,14 +359,22 @@ npm run smoke:p0:demo
 升级前：
 
 1. 记录当前 Lucy image tag、bundled KTX version 和 git commit。
-2. 备份 `/data/lucy` volume。
+2. 备份 `/data/lucy` volume（推荐 `bash scripts/upgrade-lucy.sh --backup-dir inbox/backups`）。
 3. 运行当前版本 smoke，确认基线健康。
 
-升级：
+升级（保留账号、ACL 与 audit 日志，不删除 volume）：
+
+```bash
+npm run lucy:upgrade
+# 客户 bind mount：
+npm run lucy:upgrade:customer
+```
+
+等价于：
 
 ```bash
 docker compose pull
-docker compose up -d --build
+docker compose up -d --build --force-recreate --no-deps lucy
 ```
 
 升级后，客户 Docker-only demo 验收按 §9 执行；仓库开发 / CI 环境可额外运行：
