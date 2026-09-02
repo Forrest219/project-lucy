@@ -159,6 +159,34 @@ shutdown() {
   exit "${status}"
 }
 
+report_git_init_failure() {
+  echo "[lucy] fatal: failed to initialize git repository at ${PROJECT_ROOT}" >&2
+  echo "[lucy]   uid=$(id -u) gid=$(id -g)" >&2
+  echo "[lucy]   pwd=$(pwd)" >&2
+  echo "[lucy]   KTX_PROJECT_ROOT=${KTX_PROJECT_ROOT}" >&2
+  if [[ -e "${PROJECT_ROOT}" ]]; then
+    ls -la "${PROJECT_ROOT}" >&2 || true
+    if [[ -e "${PROJECT_ROOT}/.git" ]]; then
+      ls -la "${PROJECT_ROOT}/.git" >&2 || true
+    fi
+  else
+    echo "[lucy]   ${PROJECT_ROOT} does not exist" >&2
+  fi
+}
+
+ensure_git_repo() {
+  mkdir -p "${PROJECT_ROOT}"
+  if [[ -d "${PROJECT_ROOT}/.git" ]]; then
+    return 0
+  fi
+  if ! git -C "${PROJECT_ROOT}" init; then
+    report_git_init_failure
+    return 1
+  fi
+  echo "[lucy] initialized git repository at ${PROJECT_ROOT}"
+}
+
+ensure_git_repo
 seed_project
 validate_project_context
 

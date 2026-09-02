@@ -46,7 +46,11 @@ RUN npm install -g "@kaelio/ktx@${KTX_VERSION}"
 COPY scripts/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
 RUN node /tmp/patch-ktx-mysql-starrocks-compat.js && rm /tmp/patch-ktx-mysql-starrocks-compat.js
 
-RUN ktx admin runtime install --yes --feature core
+# K8s upgrade contract: run as UID 10001 to match legacy PVC ownership (.git).
+RUN groupadd -g 10001 lucy \
+  && useradd -u 10001 -g 10001 -m -d /home/lucy -s /bin/bash lucy
+
+RUN su lucy -s /bin/bash -c 'ktx admin runtime install --yes --feature core'
 
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev
@@ -68,7 +72,12 @@ RUN cd webui && npm run build \
   && cp -R customer-config.example/wiki/. /app/project-template/wiki/ \
   && cp -R customer-config.example/webui/config /app/project-template/webui/config \
   && touch /app/project-template/skills/.gitkeep \
-  && mkdir -p /data/lucy
+  && mkdir -p /data/lucy \
+  && chown -R lucy:lucy /app /data/lucy /home/lucy
+
+ENV HOME=/home/lucy
+
+USER 10001:10001
 
 VOLUME ["/data/lucy"]
 

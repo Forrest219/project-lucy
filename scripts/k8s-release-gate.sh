@@ -2,8 +2,9 @@
 # Lucy K8s release gate orchestrator (H1–H5).
 #
 # Modes:
-#   bash scripts/k8s-release-gate.sh              # H1 static only (default, no cluster)
-#   bash scripts/k8s-release-gate.sh --with-cluster --namespace lucy-test --release lucy
+#   bash scripts/k8s-release-gate.sh                              # H1 static only
+#   bash scripts/k8s-release-gate.sh --with-cluster --namespace lucy-test --release lucy-starrocks
+#   bash scripts/k8s-release-gate.sh --with-cluster ... --test-upgrade -f examples/values.k3s-test.yaml
 #
 # Environment:
 #   K8S_GATE_SKIP_KIND=1   skip H2–H4 even when --with-cluster (acceptance only)
@@ -14,8 +15,11 @@ CHART="${ROOT}/deploy/k8s/helm/lucy"
 GATE_VALUES="${ROOT}/deploy/k8s/gate/values.gate-fresh.yaml"
 
 WITH_CLUSTER=0
+TEST_UPGRADE=0
+TEST_ROLLBACK=0
 NAMESPACE=""
 RELEASE="lucy"
+VALUES_FILE=""
 PUBLIC_MCP_URL=""
 TOKEN=""
 SKIP_MCP=1
@@ -28,6 +32,9 @@ Options:
   --with-cluster             Run H2–H5 against an existing cluster (requires kubectl)
   --namespace <ns>           Target namespace (required with --with-cluster)
   --release <name>           Helm release name (default: lucy)
+  --values-file <path>       Values for H3 upgrade (required with --test-upgrade)
+  --test-upgrade             Run H3 in-place upgrade gate (requires existing release + PVC)
+  --test-rollback            With --test-upgrade, also run H4 rollback digest check
   --public-mcp-url <url>     External MCP URL for H5 acceptance
   --token <bearer>           MCP bearer token for H5 acceptance
   --with-mcp                 Enable MCP checks in H5 (requires url + token)
@@ -38,8 +45,11 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-cluster) WITH_CLUSTER=1; shift ;;
+    --test-upgrade) TEST_UPGRADE=1; shift ;;
+    --test-rollback) TEST_ROLLBACK=1; shift ;;
     --namespace) NAMESPACE="$2"; shift 2 ;;
     --release) RELEASE="$2"; shift 2 ;;
+    --values-file|-f) VALUES_FILE="$2"; shift 2 ;;
     --public-mcp-url) PUBLIC_MCP_URL="$2"; shift 2 ;;
     --token) TOKEN="$2"; shift 2 ;;
     --with-mcp) SKIP_MCP=0; shift ;;
@@ -61,11 +71,21 @@ command -v kubectl >/dev/null 2>&1 || { echo "FAIL: kubectl required for --with-
 [[ -n "${NAMESPACE}" ]] || { echo "FAIL: --namespace required with --with-cluster" >&2; exit 1; }
 
 if [[ "${K8S_GATE_SKIP_KIND:-}" == "1" ]]; then
-  echo "[k8s-release-gate] K8S_GATE_SKIP_KIND=1 — skipping H2–H4 install/upgrade simulation"
+  echo "[k8s-release-gate] K8S_GATE_SKIP_KIND=1 — skipping H2 fresh install render"
 else
-  echo "[k8s-release-gate] H2 fresh install check (helm template + kubeconform optional)"
+  echo "[k8s-release-gate] H2 fresh install render check"
   helm template "${RELEASE}" "${CHART}" -f "${GATE_VALUES}" >/dev/null
-  echo "[k8s-release-gate] H2 render OK (apply/upgrade on live cluster is operator-driven; see UPGRADE.md)"
+  echo "[k8s-release-gate] H2 render OK (apply on live cluster: helm install … -f deploy/k8s/gate/values.gate-fresh.yaml)"
+fi
+
+if [[ "${TEST_UPGRADE}" -eq 1 ]]; then
+  [[ -n "${VALUES_FILE}" ]] || { echo "FAIL: --values-file required with --test-upgrade" >&2; exit 1; }
+  UPGRADE_ARGS=(--namespace "${NAMESPACE}" --release "${RELEASE}" -f "${VALUES_FILE}")
+  [[ "${TEST_ROLLBACK}" -eq 1 ]] && UPGRADE_ARGS+=(--test-rollback)
+  echo "[k8s-release-gate] H3/H4 upgrade gate"
+  bash "${ROOT}/scripts/k8s-upgrade-gate.sh" "${UPGRADE_ARGS[@]}"
+else
+  echo "[k8s-release-gate] skipping H3/H4 (no --test-upgrade)"
 fi
 
 echo "[k8s-release-gate] H5 post-deploy acceptance"

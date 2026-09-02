@@ -81,13 +81,14 @@ ver="$(docker run --rm --platform linux/amd64 --entrypoint ktx "$IMAGE" --versio
 echo "  ${ver}"
 echo "$ver" | grep -q '0.16.0'
 
+KTX_RUNTIME_PYTHON="/home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python"
+
 # G4b: KTX Python runtime must be baked in. Customer intranet cannot download uv.
-# Path confirmed by Dockerfile `ktx admin runtime install --yes --feature core` build logs.
 echo "[build-customer-amd64] gate G4b-1 baked Python runtime"
-docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -c '
-  test -x /root/.ktx/runtime/0.16.0/.venv/bin/python
-' || {
-  echo "FAIL G4b-1: missing /root/.ktx/runtime/0.16.0/.venv/bin/python" >&2
+docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -c "
+  test -x ${KTX_RUNTIME_PYTHON}
+" || {
+  echo "FAIL G4b-1: missing ${KTX_RUNTIME_PYTHON}" >&2
   echo "  Image is unsafe for offline/intranet: queries will try to download uv." >&2
   exit 1
 }
@@ -102,6 +103,9 @@ echo "$offline_ver" | grep -q '0.16.0' || {
 }
 echo "  ok offline ktx"
 
+echo "[build-customer-amd64] gate G8 image K8s contract (image-only, no Helm)"
+bash scripts/g8-image-k8s-contract-gate.sh "${IMAGE}"
+
 docker image inspect "$IMAGE" --format '{{.Id}}' > "${BUILD_DIR}/image-id.txt"
 echo "[build-customer-amd64] done image-id=$(cat "${BUILD_DIR}/image-id.txt")"
-echo "[build-customer-amd64] next: docker save + G7 load-recheck (include G4b); see docs/customer-amd64-image-build-checklist.md"
+echo "[build-customer-amd64] next: npm run gate:k8s-static + docker save + G7; see docs/customer-amd64-image-build-checklist.md"

@@ -204,18 +204,19 @@ tolerations: []
 affinity: {}
 
 # -------------------------------------------------------------------
-# Security context
+# Security context — UID 10001 matches legacy K8s PVC ownership (.git).
 # -------------------------------------------------------------------
 podSecurityContext:
-  fsGroup: 1000
+  fsGroup: 10001
 
 containerSecurityContext:
   allowPrivilegeEscalation: false
   capabilities:
     drop:
       - ALL
-  runAsNonRoot: false    # Lucy image's entrypoint runs as root for KTX runtime install; revisit with non-root image later.
-  runAsUser: 0
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
 
 # -------------------------------------------------------------------
 # Annotations / labels
@@ -240,3 +241,7 @@ lucy:
   enabled: true
   # Bundled KTX version baked into the image — must match the Dockerfile ARG.
   bundledKtxVersion: "0.16.0"
+  # One-shot PVC ownership migration for upgrades from root (runAsUser 0) builds.
+  # Git init is owned by the container entrypoint — init only chowns.
+  projectMigrate:
+    enabled: true

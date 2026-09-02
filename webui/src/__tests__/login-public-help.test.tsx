@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { LoginPage } from "../pages/Login";
 
@@ -29,10 +30,15 @@ afterEach(() => {
 
 describe("LoginPage public help link", () => {
   it("links to the handbook break-glass section without requiring login", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
     render(
-      <MemoryRouter>
-        <LoginPage />
-      </MemoryRouter>
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <LoginPage />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
 
     const helpLink = screen.getByRole("link", { name: "查看系统手册" });

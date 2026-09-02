@@ -3,8 +3,8 @@
 | Metadata | Value |
 |---|---|
 | Document | Lucy K8s Deployment Contract |
-| Version | 1.0 |
-| Date | 2026-09-01 |
+| Version | 1.1 |
+| Date | 2026-09-02 |
 | Scope | Supported Helm chart `deploy/k8s/helm/lucy/` and customer K8s integrations |
 
 This document is the **authoritative contract** for Lucy on Kubernetes. The Helm chart
@@ -15,7 +15,8 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | Chart version | App (KTX) | Probe model | Notes |
 |---|---|---|---|
 | `0.1.x` | `0.16.0` | startup/readiness exec `docker-healthcheck.sh` | **Deprecated** — do not use for new installs or upgrades |
-| `0.2.x` | `0.16.0` | HTTP `GET /api/health` on port `webui` | Current supported baseline |
+| `0.2.0` | `0.16.0` | HTTP `GET /api/health` on port `webui` | Supported; missing UID/git contract — superseded by 0.2.1 for upgrades |
+| `0.2.1` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Current** — use for v3 delivery and in-place upgrades |
 
 Image tags must be **immutable**. Recommended form:
 
@@ -101,8 +102,30 @@ livenessProbe:
 **Forbidden:**
 
 - `runtime-preflight` or any init container calling `/app/scripts/k8s-preflight.sh`
+- Init containers that connect to databases, run `ktx admin reindex`, or download artifacts
+
+**Allowed (chart 0.2.1+):**
+
+- `project-migrate`: `chown` `/data/lucy` to UID 10001 and `git init` if missing — no network/DB
 
 Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod startup path.
+
+## Git / project directory
+
+| Requirement | Value |
+|---|---|
+| Container `workingDir` | `/data/lucy` |
+| **Git init authority** | **Entrypoint only** (`docker-entrypoint.sh`) |
+| `project-migrate` init | **chown only** — must not run `git init` |
+| Forbidden | `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_*` env injection |
+
+### PVC UID migration matrix
+
+| Legacy `.git` owner | v3 behavior |
+|---|---|
+| UID 10001 | Compatible |
+| UID 0 (v1/v2 root) | `project-migrate` chown → 10001 |
+| Other UID | Not auto-supported — manual plan required |
 
 ## Required environment
 
@@ -118,18 +141,36 @@ after install (causes manifest drift and extra pod restarts).
 
 ## Security context
 
-Current image contract (root entrypoint):
+Chart 0.2.1+ / v3 image contract:
 
 ```yaml
+podSecurityContext:
+  fsGroup: 10001
 containerSecurityContext:
-  runAsUser: 0
-  runAsNonRoot: false
+  runAsUser: 10001
+  runAsGroup: 10001
+  runAsNonRoot: true
   allowPrivilegeEscalation: false
   capabilities:
     drop: [ALL]
 ```
 
-Long-term: ship a non-root image for PSA `restricted` / OpenShift SCC compatibility.
+KTX Python runtime path: `/home/lucy/.ktx/runtime/0.16.0/.venv/bin/python`
+
+The optional `project-migrate` init container runs as root **only** to `chown` legacy PVC data before the main container starts.
+
+## Upgrade contract
+
+In-place upgrades (N-1 → N) must succeed **without** operator `git init`, `chown`, `kubectl set env`, or Deployment patches.
+
+Standard path: see [`deploy/k8s/helm/lucy/UPGRADE.md`](helm/lucy/UPGRADE.md).
+
+**Deprecated delivery packages** (do not ship for in-place upgrade):
+
+- `lucy-k8s-integration-delivery-20260902-v1`
+- `lucy-k8s-integration-delivery-20260902-v2`
+
+Use `lucy-k8s-integration-delivery-20260902-v3` or later after H2–H5 gates pass.
 
 ## Persistence — do not destroy on upgrade
 
@@ -151,8 +192,11 @@ kubectl delete pvc lucy         # unless backed up and intentionally resetting
 
 Before any K8s delivery:
 
-1. `bash scripts/helm-lucy-gate.sh` (H1 static)
-2. `bash scripts/k8s-release-gate.sh` (H1–H5 when kind/cluster available)
-3. Post-deploy: `bash scripts/k8s-acceptance.sh`
+1. `bash scripts/build-customer-amd64-image.sh` (G1–G4b + **G8** image-only)
+2. `bash scripts/helm-lucy-gate.sh` (H1a universal + H1b k3s profile)
+3. `bash scripts/verify-k8s-package.sh` (K6 package integrity)
+4. `bash scripts/k8s-upgrade-gate.sh` (H3; `--test-rollback` for H4)
+5. `bash scripts/k8s-release-gate.sh --with-cluster --test-upgrade …` (orchestrator)
+6. Post-deploy: `bash scripts/k8s-acceptance.sh` (H5)
 
 See [`docs/customer-delivery-preflight-checklist.md`](../../docs/customer-delivery-preflight-checklist.md).

@@ -30,7 +30,7 @@ Manual inputs:
 
 ## 2. Required Gates
 
-> ⚡ **Customer Image / Package Delivery Gate**: Any release involving Docker or K8s delivery to customers must strictly follow [`docs/customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) and pass G0–G6, K1–K4, and **H1–H5** (K8s static gate minimum: `npm run gate:k8s-static`).
+> ⚡ **Customer Image / Package Delivery Gate**: Any release involving Docker or K8s delivery to customers must strictly follow [`docs/customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) and pass G0–G6, K1–K4, and **H1–H5**. CI enforces **H1** (`k8s-static`) and **H3/H4** (`k8s-upgrade-gate` on kind) on every PR and release; H5 still requires a live cluster profile (e.g. lucy-test) before shipping K8s integration packages to customers.
 
 | Job | Commands / Coverage |
 |---|---|
@@ -38,6 +38,8 @@ Manual inputs:
 | `business-eval-catalog` | `npm run smoke:p0:business-eval` |
 | `ktx-diff-audit` | clones upstream KTX and runs `npm run audit:ktx-diff` |
 | `docker-smoke` | `npm run smoke:p0:docker` |
+| `k8s-static` | **H1** — `npm run gate:k8s-static` (Helm lint + template contract guards; runs in parallel, not blocked by WebUI tests) |
+| `k8s-upgrade-gate` | **H3 + H4** — `npm run gate:k8s-kind-h3` (kind cluster: N-1 install → in-place upgrade → rollback digest check; runs in parallel, not blocked by WebUI tests) |
 | `headless-config` | `npm run smoke:p0:headless-config` |
 | `demo-e2e` | `npm run smoke:p0:demo` |
 | `postgres-demo-e2e` | `npm run smoke:p0:postgres-demo` |

@@ -105,6 +105,31 @@ jobs:
         working-directory: webui
       - run: npm run smoke:p0:docker
 
+  k8s-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - run: npm run gate:k8s-static
+
+  k8s-upgrade-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - name: H3/H4 kind in-place upgrade gate
+        env:
+          KTX_VERSION: ${{ env.KTX_VERSION }}
+        run: npm run gate:k8s-kind-h3
+
   headless-config:
     runs-on: ubuntu-latest
     needs: spec-and-webui
@@ -163,6 +188,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - docker-smoke
+      - k8s-static
+      - k8s-upgrade-gate
       - headless-config
       - demo-e2e
       - postgres-demo-e2e
