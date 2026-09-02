@@ -117,8 +117,8 @@ Fixes K8s in-place upgrade contract failures observed in v1/v2 deliveries (20260
 ## Changes
 
 - Image runs as UID/GID **10001** (matches legacy PVC \`.git\` ownership)
-- Entrypoint idempotently runs \`git init\` on \`/data/lucy\`
-- Helm Chart **0.2.1**: \`workingDir: /data/lucy\`, \`project-migrate\` init, LoadBalancer k3s example
+- Entrypoint idempotently runs `git init` on `/data/lucy` (**sole authority**)
+- `project-migrate` init: **chown only** (no git init)
 - Package \`examples/values.k3s-test.yaml\` tag/digest synced to bundled image
 
 ## Deprecated

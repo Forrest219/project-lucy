@@ -1,0 +1,85 @@
+# values.gate-ci.yaml — kind CI profile for H3 N-1 in-place upgrade gate.
+#
+# Used by scripts/k8s-kind-h3-gate.sh on GitHub Actions (kind + local image).
+# NOT for customer production clusters.
+
+image:
+  repository: project-lucy
+  tag: "ci-n-1"
+  pullPolicy: Never
+
+replicaCount: 1
+
+containerPorts:
+  webui: 5174
+  mcp: 7879
+
+service:
+  type: ClusterIP
+  webuiPort: 5174
+  mcpPort: 7879
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  storageClass: ""
+  existingClaim: ""
+
+env:
+  LUCY_PUBLIC_MCP_URL: "http://lucy.gate-ci.example.com/mcp"
+  LUCY_ALLOW_PLACEHOLDER_KTX: "1"
+  KTX_PROJECT_ROOT: /data/lucy
+  POSTHOG_DISABLED: "1"
+
+existingSecret: ""
+extraSecretData:
+  demo-password: change-me
+
+startupProbe:
+  httpGet:
+    path: /api/health
+    port: webui
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 60
+  successThreshold: 1
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: webui
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
+  successThreshold: 1
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: webui
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+lucy:
+  enabled: true
+  bundledKtxVersion: "0.16.0"
+  projectMigrate:
+    enabled: true
+
+serviceAccount:
+  create: true
+  name: ""

@@ -67,7 +67,7 @@
 |---|---|---|---|
 | **H1** | 静态渲染 | `npm run gate:k8s-static` | lint + template + 探针/端口/MCP URL 守卫 |
 | **H2** | 全新安装 | kind / 新 namespace `helm install` | Pod `1/1 Ready`；无 exec 探针超时 |
-| **H3** | N-1 升级 | `bash scripts/k8s-upgrade-gate.sh …` 或 `k8s-release-gate.sh --test-upgrade` | access.yaml hash 不变；`.git` UID 10001；`/api/health` 200 |
+| **H3** | N-1 升级 | `bash scripts/k8s-upgrade-gate.sh …` 或 `k8s-release-gate.sh --test-upgrade`；**CI**：`k8s-upgrade-gate` job（kind，`npm run gate:k8s-kind-h3`） | access.yaml hash 不变；`.git` UID 10001；`/api/health` 200 |
 | **H4** | 失败回滚 | `k8s-upgrade-gate.sh --test-rollback` | rollback 后 image digest 与升级前一致 |
 | **H5** | 业务验收 | `bash scripts/k8s-acceptance.sh …` | ktx test / reindex / MCP initialize / tools/list |
 
