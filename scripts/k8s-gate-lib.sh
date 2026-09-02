@@ -44,6 +44,13 @@ kubectl_exec() {
   kubectl -n "${namespace}" exec "${pod}" -- "$@"
 }
 
+kubectl_exec_deploy() {
+  local namespace="$1"
+  local release="$2"
+  shift 2
+  kubectl -n "${namespace}" exec "deploy/${release}" -- "$@"
+}
+
 webui_base_url() {
   local namespace="$1"
   local release="$2"
@@ -59,6 +66,22 @@ webui_base_url() {
 curl_health() {
   local base_url="$1"
   curl -fsS "${base_url}/api/health"
+}
+
+curl_health_in_pod() {
+  local namespace="$1"
+  local release="$2"
+  local webui_port="${3:-5174}"
+  local timeout="${4:-60}"
+  local deadline=$((SECONDS + timeout))
+  while (( SECONDS < deadline )); do
+    if kubectl_exec_deploy "${namespace}" "${release}" \
+      curl -fsS "http://127.0.0.1:${webui_port}/api/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
 }
 
 mcp_post() {

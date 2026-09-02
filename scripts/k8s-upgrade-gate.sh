@@ -97,8 +97,8 @@ log "  ok .git owned by UID 10001"
 log "H3-4 /api/health"
 WEBUI_PORT="$(kubectl -n "${NAMESPACE}" get svc "${RELEASE}" -o jsonpath='{.spec.ports[?(@.name=="webui")].port}')"
 [[ -n "${WEBUI_PORT}" ]] || fail "could not determine webui service port"
-BASE="$(webui_base_url "${NAMESPACE}" "${RELEASE}" "${WEBUI_PORT}")"
-curl_health "${BASE}" >/dev/null || fail "/api/health failed after upgrade"
+curl_health_in_pod "${NAMESPACE}" "${RELEASE}" "${WEBUI_PORT}" 60 || \
+  fail "/api/health failed after upgrade"
 log "  ok /api/health"
 
 POST_IMAGE="$(kubectl -n "${NAMESPACE}" get deploy "${RELEASE}" -o jsonpath='{.spec.template.spec.containers[0].image}')"
