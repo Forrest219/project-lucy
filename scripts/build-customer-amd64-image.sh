@@ -81,13 +81,14 @@ ver="$(docker run --rm --platform linux/amd64 --entrypoint ktx "$IMAGE" --versio
 echo "  ${ver}"
 echo "$ver" | grep -q '0.16.0'
 
+KTX_RUNTIME_PYTHON="/home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python"
+
 # G4b: KTX Python runtime must be baked in. Customer intranet cannot download uv.
-# Path confirmed by Dockerfile `ktx admin runtime install --yes --feature core` build logs.
 echo "[build-customer-amd64] gate G4b-1 baked Python runtime"
-docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -c '
-  test -x /root/.ktx/runtime/0.16.0/.venv/bin/python
-' || {
-  echo "FAIL G4b-1: missing /root/.ktx/runtime/0.16.0/.venv/bin/python" >&2
+docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -c "
+  test -x ${KTX_RUNTIME_PYTHON}
+" || {
+  echo "FAIL G4b-1: missing ${KTX_RUNTIME_PYTHON}" >&2
   echo "  Image is unsafe for offline/intranet: queries will try to download uv." >&2
   exit 1
 }
@@ -101,6 +102,33 @@ echo "$offline_ver" | grep -q '0.16.0' || {
   exit 1
 }
 echo "  ok offline ktx"
+
+echo "[build-customer-amd64] gate G8-1 empty volume git init (seed-only)"
+G8_VOL="$(mktemp -d)"
+chmod 1777 "${G8_VOL}"
+docker run --rm --platform linux/amd64 \
+  -e LUCY_ENTRYPOINT_SEED_ONLY=1 \
+  -e LUCY_ALLOW_PLACEHOLDER_KTX=1 \
+  -v "${G8_VOL}:/data/lucy" \
+  "$IMAGE" >/dev/null
+[[ -d "${G8_VOL}/.git" ]] || {
+  echo "FAIL G8-1: /data/lucy/.git was not created on empty volume" >&2
+  rm -rf "${G8_VOL}"
+  exit 1
+}
+rm -rf "${G8_VOL}"
+echo "  ok git init on empty volume"
+
+echo "[build-customer-amd64] gate G8-2 non-root UID 10001"
+docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -c \
+  'test "$(id -u)" -eq 10001 && test "$(id -g)" -eq 10001' || {
+  echo "FAIL G8-2: container must run as UID/GID 10001" >&2
+  exit 1
+}
+echo "  ok uid/gid 10001"
+
+echo "[build-customer-amd64] gate G8-3 helm static (no GIT_CONFIG_COUNT)"
+bash scripts/helm-lucy-gate.sh
 
 docker image inspect "$IMAGE" --format '{{.Id}}' > "${BUILD_DIR}/image-id.txt"
 echo "[build-customer-amd64] done image-id=$(cat "${BUILD_DIR}/image-id.txt")"

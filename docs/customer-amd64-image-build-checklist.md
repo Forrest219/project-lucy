@@ -4,11 +4,11 @@
 |---|---|
 | 文档名称 | Lucy Customer amd64 Image Build Checklist |
 | 文档类型 | Checklist |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b（KTX Python/uv runtime 离线预装） |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8（K8s 升级契约） |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
-| 基于材料 | 20260827 客户 `exec /usr/bin/tini: exec format error` 事故；`docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`；Release `lucy-k8s-integration-20260827-v1` 坏包复盘 |
+| 基于材料 | 20260827 客户 `exec /usr/bin/tini: exec format error` 事故；20260902 K8s v1/v2 原地升级契约事故；`docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`；Release `lucy-k8s-integration-20260827-v1` 坏包复盘 |
 | 适用范围 | 任何交付给客户的 `linux/amd64` Lucy 镜像（Docker Compose 离线包、K8s integration tar.gz、Release Assets） |
 | 输出位置 | `docs/customer-amd64-image-build-checklist.md` |
 
@@ -22,7 +22,19 @@ exec /usr/bin/tini: exec format error
 
 **2026-08-27 事故链**：K8s 出包时直接复用 `inbox/customer-amd64-offline-package/image/*.tar`（2026-08-04 产物），**未重跑 G2 ELF 门禁**，导致坏包进 GitHub Release。
 
-**铁律**：任何出包路径（含「复用旧 tar」）都必须**当场重跑 G1–G4 + G4b**；未通过则禁止复用、禁止 `docker save`、禁止更新 Release、禁止发给客户。构建失败（含 Docker Hub 超时）→ **不得**回退到旧坏包凑交付。
+**铁律**：任何出包路径（含「复用旧 tar」）都必须**当场重跑 G1–G4 + G4b + G8**；未通过则禁止复用、禁止 `docker save`、禁止更新 Release、禁止发给客户。构建失败（含 Docker Hub 超时）→ **不得**回退到旧坏包凑交付。
+
+### 20260902 K8s 升级契约事故
+
+`lucy-k8s-integration-delivery-20260902-v1/v2` 在 K3s 测试环境原地升级时暴露：**镜像 amd64 / KTX / Python runtime 正常**，但镜像入口、Helm Chart 与旧 PVC（UID 10001、已有 `.git`/ACL/Token）之间的升级契约不完整。典型现象包括：
+
+- `k8s-preflight.sh: No such file or directory`（旧 Chart init）
+- `Startup probe failed: command timed out`（exec `docker-healthcheck.sh`）
+- `fatal: detected dubious ownership in repository at '/data/lucy'`（root vs UID 10001）
+- 无 `.git` 时启动失败（删 preflight 后无人 `git init`）
+- Pod Running 但 8276/8277 不可达（ClusterIP + 错误 tag/digest）
+
+**v3 起**：镜像必须以 UID **10001** 运行；入口幂等 `git init`；KTX runtime 位于 `/home/lucy/.ktx/`；出 K8s 包前必须过 G8 + H3（N-1 旧 PVC 升级）。
 
 ## 强制流程（缺一步不得出包）
 
@@ -44,21 +56,41 @@ bash scripts/build-customer-amd64-image.sh
 | G4b | KTX Python runtime 离线预装 | 见下方 G4b 命令 | runtime python 存在，且 `--network=none` 下 `ktx --version` 成功 |
 | G5 | 仓库冒烟 | `npm run smoke:p0:docker` | 全绿（推荐） |
 | G6 | 配置包冒烟 | `npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` | 8/8 PASS |
-| G7 | 导出后复核 | `docker load -i <tar>` 后重跑 G1–G4 + **G4b** | tar 内镜像与本地 tag 一致 |
+| G7 | 导出后复核 | `docker load -i <tar>` 后重跑 G1–G4 + **G4b** + **G8** | tar 内镜像与本地 tag 一致 |
+| G8 | K8s 升级契约 | 见下方 G8 命令 | 非 root UID 10001；空 volume 自动 `git init`；无 `GIT_CONFIG_COUNT` |
 
-**G2–G4b 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`。
+**G2–G4b + G8 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`。缺 G8 的镜像/Chart 组合会导致 K8s 原地升级失败。
 
 ### G4b 命令（出包必跑）
 
 ```bash
-# G4b-1: bake-in 的 Python runtime 文件存在
+# G4b-1: bake-in 的 Python runtime 文件存在（lucy 用户，非 root）
 docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
   project-lucy:customer-amd64-0.16.0 -c \
-  'test -x /root/.ktx/runtime/0.16.0/.venv/bin/python'
+  'test -x /home/lucy/.ktx/runtime/0.16.0/.venv/bin/python'
 
 # G4b-2: 无公网仍可启动 ktx（证明不依赖现场下载 uv）
 docker run --rm --network=none --platform linux/amd64 \
   --entrypoint ktx project-lucy:customer-amd64-0.16.0 --version
+```
+
+### G8 命令（K8s 升级契约，出 K8s 包必跑）
+
+```bash
+TAG=project-lucy:customer-amd64-0.16.0
+
+# G8-1: 空 volume 下入口自动创建 .git
+docker run --rm --platform linux/amd64 \
+  -e LUCY_ENTRYPOINT_SEED_ONLY=1 \
+  -v /tmp/lucy-g8-empty:/data/lucy \
+  "$TAG" && test -d /tmp/lucy-g8-empty/.git
+
+# G8-2: 进程以 UID 10001 运行（非 root）
+docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$TAG" -c \
+  'test "$(id -u)" -eq 10001 && test "$(id -g)" -eq 10001'
+
+# G8-3: Chart 渲染不得含 GIT_CONFIG_COUNT（与 helm-lucy-gate 一并执行）
+bash scripts/helm-lucy-gate.sh
 ```
 
 ### 出包红线（禁止事项）
@@ -86,7 +118,7 @@ docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
   project-lucy:customer-amd64-0.16.0 -c 'echo ok'
 docker run --rm --platform linux/amd64 --entrypoint /bin/sh \
   project-lucy:customer-amd64-0.16.0 -c \
-  'test -x /root/.ktx/runtime/0.16.0/.venv/bin/python'
+  'test -x /home/lucy/.ktx/runtime/0.16.0/.venv/bin/python'
 docker run --rm --network=none --platform linux/amd64 \
   --entrypoint ktx project-lucy:customer-amd64-0.16.0 --version
 ```
@@ -104,7 +136,8 @@ docker run --rm --network=none --platform linux/amd64 \
 | K1 | 不得盲复用历史 tar | 禁止直接 copy 未过本轮 G2–G4b 的 `inbox/customer-amd64-offline-package/image/` |
 | K2 | 包内元数据 | 写入 `image/image-inspect.json` + `image-digest.txt` |
 | K3 | 包内自证 | 解压后 `docker load` + G2 + G3 + **G4b** 通过再打外层 tar.gz |
-| K4 | Release 前 | 对即将上传的 tar.gz 再抽检：load → G2 → G3 → G4b |
+| K4 | Release 前 | 对即将上传的 tar.gz 再抽检：load → G2 → G3 → G4b → G8 |
+| K5 | values 一致性 | 包内 `examples/values.k3s-test.yaml` 的 tag/digest 与 `image/image-digest.txt` 一致（由 `build-k8s-delivery-package.sh` 自动写入） |
 
 ## 作废规则
 
@@ -113,8 +146,9 @@ docker run --rm --network=none --platform linux/amd64 \
 - 2026-08-04 前后未过 ELF 门禁的 `project-lucy:customer-amd64-0.16.0`
 - `inbox/customer-amd64-offline-package/image/project-lucy-customer-amd64-0.16.0-image.tar`（同因，直至被本 checklist 重建产物替换）
 - GitHub Release `lucy-k8s-integration-20260827-v1` 中的 tar（已确认 arm64 ELF）
+- `lucy-k8s-integration-delivery-20260902-v1` / `v2`（升级契约不完整，不得标「可直接原地升级」）
 
-替换时：**升 Release tag**（如 `…20260827-v2`），旧 Release notes 标注作废，勿悄悄覆盖同名坏文件而不改说明。
+替换时：**升 Release tag**（如 `…20260902-v3`），旧 Release notes 标注作废，勿悄悄覆盖同名坏文件而不改说明。
 
 ## 构建 host 说明
 

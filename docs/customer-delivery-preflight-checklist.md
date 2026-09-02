@@ -4,21 +4,22 @@
 |---|---|
 | 文档名称 | Lucy Customer Delivery Preflight Checklist |
 | 文档类型 | Governance / Quality Gate / Runbook |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-08-28 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-08-28；2026-09-02 增补升级契约铁律、H3 场景、无日志排障表 |
 | 适用范围 | 所有交付给客户的 Docker Compose 离线包、Kubernetes / Helm 集成包及 Release Assets |
 | 关联文档 | [`docs/customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md)、[`docs/customer-k8s-deployer-quickstart.md`](customer-k8s-deployer-quickstart.md)、[`docs/customer-deployment-guide.md`](customer-deployment-guide.md) |
 
 ---
 
-## 核心复盘与四大铁律
+## 核心复盘与五大铁律
 
-在过往交付客户（尤其离线无外网环境）中，曾暴露四大致命故障。**后续任何发版出包，必须遵循四大铁律：**
+在过往交付客户（尤其离线无外网环境）中，曾暴露致命故障。**后续任何发版出包，必须遵循五大铁律：**
 
 1. **二进制架构铁律（防 `exec format error`）**：禁止仅凭 `docker inspect` 的 `Architecture=amd64` 结论出包。在 Apple Silicon / 多架构环境构建时，必须提取镜像内 `node` 和 `tini` 执行 ELF 校验（必须为 x86-64）。
 2. **离线运行时铁律（防 `could not download uv`）**：客户环境无法连公网。镜像必须完整预装 KTX Python runtime，出包前必须在 `--network=none` 下通过 `ktx --version` 启动与运行时文件存在性校验。
 3. **MCP Advertise 地址铁律（防「Lucy MCP 未就绪」）**：客户部署必须显式注入 `LUCY_PUBLIC_MCP_URL`（如 `https://lucy.example.com/mcp`）。禁止留空、保留占位符或填 `127.0.0.1`，避免 WebUI 产生 `fallback` 假象。
 4. **禁止盲复用铁律（防坏包扩散）**：禁止直接复制任何未过本轮全套门禁的历史 `*.tar`。每次升级或出包必须当场重跑全套 Gates，坏包必须原地作废并升 Release tag。
+5. **升级契约铁律（防 K8s 原地升级失败）**：禁止只修探针就发 K8s 升级包。必须证明 **N-1 旧 PVC（UID 10001 + 已有 ACL/Token/.git）** 可无人工干预 `helm upgrade --atomic` 成功，且 H4 回滚恢复旧 digest。禁止现场 `git init`、`chown`、`kubectl set env`、Deployment patch 作为交付方案的一部分。
 
 ---
 
@@ -33,8 +34,9 @@
 | **G2** | **ELF 二进制** | `bash scripts/assert-image-elf-arch.sh <tag> amd64` | `node` 与 `tini` 均为 x86-64，严禁含 aarch64 |
 | **G3** | 启动 Smoke | `docker run --rm --platform linux/amd64 --entrypoint /bin/sh <tag> -c 'echo ok'` | Exit 0 |
 | **G4** | KTX CLI 版本 | `docker run --rm --platform linux/amd64 --entrypoint ktx <tag> --version` | 包含指定版本（如 `@kaelio/ktx 0.16.0`） |
-| **G4b-1** | **Python 运行时** | `docker run --rm --platform linux/amd64 --entrypoint /bin/sh <tag> -c 'test -x /root/.ktx/runtime/0.16.0/.venv/bin/python'` | Exit 0，确认 runtime 完整落盘 |
+| **G4b-1** | **Python 运行时** | `docker run --rm --platform linux/amd64 --entrypoint /bin/sh <tag> -c 'test -x /home/lucy/.ktx/runtime/0.16.0/.venv/bin/python'` | Exit 0，确认 runtime 完整落盘（lucy 用户） |
 | **G4b-2** | **无网离线启动** | `docker run --rm --network=none --platform linux/amd64 --entrypoint ktx <tag> --version` | 退出码 0 且版本正确（证明不依赖实时下载 uv） |
+| **G8** | **K8s 升级契约** | 见 [`customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md) G8 | UID 10001；空 volume 自动 `.git`；helm-lucy-gate 无 `GIT_CONFIG_COUNT` |
 | **G5** | 仓库冒烟 | `npm run smoke:p0:docker` | 全绿（覆盖真实 DuckDB/KTX 查询链路） |
 | **G6** | 交付隔离门禁 | `npm run smoke:p0:delivery-isolation` | 确保客户镜像中不含开发态内部路径 |
 
@@ -48,6 +50,9 @@
 - [ ] **端口守卫**：Service 仅暴露 WebUI 与 MCP Proxy；**严禁暴露 7878**（KTX upstream 仅 Pod 内）。
 - [ ] **容器/Service 端口分离**：容器固定监听 `5174`/`7879`；外部 `8276`/`8277` 等仅在 Service 层映射。
 - [ ] **探针守卫**：Startup/Readiness 使用 HTTP `GET /api/health`；渲染结果不得含 `runtime-preflight`、`k8s-preflight.sh` 或 exec `docker-healthcheck.sh`。
+- [ ] **工作目录守卫**：渲染含 `workingDir: /data/lucy`。
+- [ ] **非 root 守卫**：`runAsUser: 10001`、`fsGroup: 10001`；不得含 `GIT_CONFIG_COUNT`。
+- [ ] **K3s 示例守卫**：`examples/values.k3s-test.yaml` 使用 `service.type: LoadBalancer`；tag/digest 与包内镜像一致。
 - [ ] **静态门禁脚本**：`npm run gate:k8s-static` 或 `bash scripts/helm-lucy-gate.sh` 通过。
 - [ ] **单副本与 Recreate 约束**：`replicaCount=1`，`strategy.type=Recreate`。
 
@@ -57,7 +62,15 @@
 |---|---|---|---|
 | **H1** | 静态渲染 | `npm run gate:k8s-static` | lint + template + 探针/端口/MCP URL 守卫 |
 | **H2** | 全新安装 | kind / 新 namespace `helm install` | Pod `1/1 Ready`；无 exec 探针超时 |
-| **H3** | N-1 升级 | 旧镜像+Chart → 新 Chart；复用 PVC/Secret | 数据不丢；Ready；`/api/health` 200 |
+| **H3** | N-1 升级 | 旧镜像+Chart → 新 Chart；复用 PVC/Secret | 数据不丢；Ready；`/api/health` 200；**禁止**现场 git init/chown/kubectl set env |
+
+**H3 标准复现环境**（无客户日志时内部必跑）：
+
+- PVC `lucy` 已存在，`.git` 属主 UID **10001**
+- 含 `semantic-layer/`、`wiki/`、`webui/config/access.yaml`、`.ktx/secrets/`、SQLite index
+- StarRocks 连接 `kc-starrocks` 已配置
+- 升级命令：`helm upgrade --atomic --wait` + 包内 `examples/values.k3s-test.yaml`
+
 | **H4** | 失败回滚 | 故意坏配置 → `helm rollback` | 恢复不可变 tag/digest；8276/8277 可用 |
 | **H5** | 业务验收 | `bash scripts/k8s-acceptance.sh …` | ktx test / reindex / MCP initialize / tools/list |
 
@@ -108,7 +121,21 @@ bash scripts/k8s-release-gate.sh --with-cluster \
 ### 3. 验收脚本执行
 运行包内 `bash 验收命令.sh`，确认以下全部通过：
 - [ ] **Pod Ready**：Pod 就绪探针通过（`1/1 Ready`）。
-- [ ] **Runtime 内置**：Pod 内 `/root/.ktx/runtime/0.16.0/.venv/bin/python` 存在。
+- [ ] **Runtime 内置**：Pod 内 `/home/lucy/.ktx/runtime/0.16.0/.venv/bin/python` 存在。
 - [ ] **服务健康**：`/api/health` 返回 200 且 `bundledKtxVersion` 为 `0.16.0`。
 - [ ] **MCP Configured**：`/api/project` 的 `mcpEndpoint.status` 为 `configured`（绝不能是 `fallback`）。
 - [ ] **业务端到端查询验证**：配置 Agent Token 后，在 Agent 侧发起真实业务指标问答（如“DAU 是多少”），确认不再报 Python/uv 错误，能正常返回查询结果。
+
+### 4. 无客户日志 Symptom → 根因对照（K8s 升级）
+
+| 现象 | 根因 | 交付经理动作 |
+|---|---|---|
+| `k8s-preflight.sh: No such file` | 旧 Chart init 仍引用已删脚本 | 确认 Helm revision 使用 Chart 0.2.x+；移除 `runtime-preflight` |
+| `Startup probe failed: command timed out` | exec `docker-healthcheck.sh` 探针 | 升级至 HTTP `/api/health` 探针 Chart |
+| `dubious ownership in repository at '/data/lucy'` | root 容器 vs UID 10001 的 `.git` | 使用 v3 镜像+Chart（UID 10001）；启用 `projectMigrate` init |
+| Pod CrashLoop，PVC 无 `.git` | 入口未 `git init` | 使用 v3 镜像；检查 init/entrypoint 日志 |
+| `GIT_CONFIG_COUNT ... not permitted` | 错误 Git 配置注入 | 从 values 移除；禁止 `allowUnsafeConfigEnvCount` |
+| Pod Running 但 8276/8277 不通 | Service 为 ClusterIP | 改用 LoadBalancer 或 NodePort；检查 K3s ServiceLB |
+| MCP fallback | `LUCY_PUBLIC_MCP_URL` 未在 Helm values 中 | 写入 values 后 `helm upgrade`；禁止 `kubectl set env` |
+| 行为与预期 build 不一致 | 包内 tag/digest 与镜像 tar 不一致 | 使用 v3 包；核对 `image/image-digest.txt` |
+| 升级后 Token/ACL 丢失 | 误删 PVC 或 Secret | 禁止 `kubectl delete pvc`；回滚并恢复备份 |

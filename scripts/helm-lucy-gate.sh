@@ -49,6 +49,10 @@ for render in "${LOCAL_RENDER}" "${K3S_RENDER}"; do
   assert_absent "${render}" "runtime-preflight"
   assert_absent "${render}" "k8s-preflight.sh"
   assert_absent "${render}" "docker-healthcheck.sh"
+  assert_absent "${render}" "GIT_CONFIG_COUNT"
+  assert_present "${render}" "workingDir: /data/lucy"
+  assert_present "${render}" "runAsUser: 10001"
+  assert_present "${render}" "fsGroup: 10001"
   if grep -E '^[[:space:]]+port: 7878' "${render}" >/dev/null; then
     echo "FAIL: Service must not expose port 7878" >&2
     exit 1
@@ -65,6 +69,8 @@ assert_present "${K3S_RENDER}" "containerPort: 5174"
 assert_present "${K3S_RENDER}" "containerPort: 7879"
 assert_present "${K3S_RENDER}" "port: 8276"
 assert_present "${K3S_RENDER}" "port: 8277"
+assert_present "${K3S_RENDER}" "type: LoadBalancer"
+assert_present "${K3S_RENDER}" "name: project-migrate"
 
 echo "[helm-lucy-gate] empty LUCY_PUBLIC_MCP_URL must fail for customer registry"
 if helm template lucy "${CHART}" \

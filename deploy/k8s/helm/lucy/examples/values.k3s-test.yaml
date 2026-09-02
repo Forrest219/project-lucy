@@ -5,12 +5,14 @@
 #
 # NOT FOR PRODUCTION. Copy and adjust registry, MCP URL, secrets, and image
 # tag/digest for each environment.
+#
+# NOTE: build-k8s-delivery-package.sh overwrites image.tag and image.digest
+# from the exported image at pack time — do not hand-edit after packaging.
 
 image:
   repository: project-lucy
-  # Prefer immutable build tags; record digest in image-digest.txt at release time.
-  tag: "customer-amd64-0.16.0-20260901-b893a0c"
-  digest: "sha256:bfcb649a2fb9f472e1b58ed212a05bb27d70c30dc7273be13ebeb008fb20a0a5"
+  tag: "REPLACE-ME-at-pack-time"
+  digest: "sha256:REPLACE-ME-at-pack-time"
   pullPolicy: IfNotPresent
 
 replicaCount: 1
@@ -20,7 +22,7 @@ containerPorts:
   mcp: 7879
 
 service:
-  type: ClusterIP
+  type: LoadBalancer
   webuiPort: 8276
   mcpPort: 8277
 
@@ -52,6 +54,8 @@ resources:
 lucy:
   enabled: true
   bundledKtxVersion: "0.16.0"
+  projectMigrate:
+    enabled: true
 
 serviceAccount:
   create: true

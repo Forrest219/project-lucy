@@ -16,7 +16,7 @@ description: |
 
   Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
 type: application
-version: 0.2.0
+version: 0.2.1
 appVersion: "0.16.0"
 kubeVersion: ">=1.24.0-0"
 home: https://github.com/kaelio/lucy
@@ -37,6 +37,8 @@ annotations:
   category: DataAgent
   licenses: Apache-2.0
   artifacthub.io/changes: |
+    - kind: changed
+      description: Run as UID 10001; workingDir /data/lucy; optional project-migrate init for PVC ownership.
     - kind: changed
       description: Startup/readiness probes use HTTP GET /api/health instead of exec docker-healthcheck.sh.
     - kind: added

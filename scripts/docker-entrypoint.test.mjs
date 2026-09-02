@@ -172,3 +172,42 @@ test("entrypoint refuses to start when the template and project have no schema f
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("entrypoint initializes git repository on empty project volume", async () => {
+  const root = await makeRoot("lucy-entrypoint-git-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(projectRoot, { recursive: true });
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+
+  const result = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /initialized git repository/);
+  await assert.doesNotReject(readFile(path.join(projectRoot, ".git", "HEAD"), "utf8"));
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("entrypoint does not re-init when .git already exists", async () => {
+  const root = await makeRoot("lucy-entrypoint-git-existing-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(projectRoot, { recursive: true });
+  await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(path.join(projectRoot, ".git"), { recursive: true });
+  await mkdir(path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await writeFile(path.join(projectRoot, ".git", "HEAD"), "ref: refs/heads/main\n");
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+
+  const result = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /initialized git repository/);
+  assert.equal(await readFile(path.join(projectRoot, ".git", "HEAD"), "utf8"), "ref: refs/heads/main\n");
+
+  await rm(root, { recursive: true, force: true });
+});
