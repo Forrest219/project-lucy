@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Release CI |
 | 文档类型 | Release / CI Spec |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-06-22；2026-07-06 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-09-02 v0.3 最终 digest 门禁与 Required checks |
 | 适用范围 | GitHub Actions release gates、Docker image build、KTX upgrade compatibility |
 
 ## 1. CI Workflow
@@ -30,7 +30,7 @@ Manual inputs:
 
 ## 2. Required Gates
 
-> ⚡ **Customer Image / Package Delivery Gate**: Any release involving Docker or K8s delivery to customers must strictly follow [`docs/customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) and pass G0–G6, K1–K4, and **H1–H5**. CI enforces **H1** (`k8s-static`) and **H3/H4** (`k8s-upgrade-gate` on kind) on every PR and release; H5 still requires a live cluster profile (e.g. lucy-test) before shipping K8s integration packages to customers.
+> ⚡ **Customer Image / Package Delivery Gate**: Any release involving Docker or K8s delivery to customers must strictly follow [`docs/customer-delivery-preflight-checklist.md`](customer-delivery-preflight-checklist.md) and pass G0–G8, K1–K6, and **H1–H5**. CI enforces **H1** (`k8s-static`)、**H3/H4**（真实 N-1 `k8s-upgrade-gate` on kind）、以及 release 路径上对**最终 registry digest** 的 G2/G4b/G8。H5 仍需在 lucy-test 或等价集群归档证据后才可发「可直接原地升级」包。
 
 | Job | Commands / Coverage |
 |---|---|
@@ -38,13 +38,20 @@ Manual inputs:
 | `business-eval-catalog` | `npm run smoke:p0:business-eval` |
 | `ktx-diff-audit` | clones upstream KTX and runs `npm run audit:ktx-diff` |
 | `docker-smoke` | `npm run smoke:p0:docker` |
-| `k8s-static` | **H1** — `npm run gate:k8s-static` (Helm lint + template contract guards; runs in parallel, not blocked by WebUI tests) |
-| `k8s-upgrade-gate` | **H3 + H4** — `npm run gate:k8s-kind-h3` (kind cluster: N-1 install → in-place upgrade → rollback digest check; runs in parallel, not blocked by WebUI tests) |
+| `k8s-static` | **H1** — `npm run gate:k8s-static`（含 MCP URL 负例矩阵） |
+| `k8s-upgrade-gate` | **H3 + H4** — `npm run gate:k8s-kind-h3`（N-1 baseline ref ≠ HEAD；Pod `imageID`；UID 0 / 10001 fixtures；sentinel 保留） |
 | `headless-config` | `npm run smoke:p0:headless-config` |
 | `demo-e2e` | `npm run smoke:p0:demo` |
 | `postgres-demo-e2e` | `npm run smoke:p0:postgres-demo` |
 | `ktx-upgrade-compat` | manual candidate version only; runs `npm run compat:ktx-upgrade` |
-| `release-package` | tag/manual only; builds tagged Docker image and uploads release metadata, notes, and SBOM |
+| `release-package` | tag/manual only；**单次** multi-arch build → push → 对 `${IMAGE}@${DIGEST}` 跑 G1/G2/G4b/G8 → 写 identity metadata；**禁止 gate 后再 build** |
+
+### Branch protection Required checks（建议）
+
+- `k8s-static`
+- `k8s-upgrade-gate`
+- `docker-smoke`
+- Release 路径额外要求：最终 digest 门禁步骤（`release-package` 内）与 `npm run gate:k8s-package`（offline 包）
 
 ## 3. KTX Upgrade Compatibility
 

@@ -120,4 +120,36 @@ if helm template lucy "${CHART}" \
   exit 1
 fi
 
+echo "[helm-lucy-gate] MCP URL negative matrix must fail for customer registry"
+MCP_BAD=(
+  "REPLACE-ME"
+  "not-a-url"
+  "ftp://lucy.example.com/mcp"
+  "http://localhost/mcp"
+  "https://localhost/mcp"
+  "http://127.0.0.1/mcp"
+  "https://127.0.0.1/mcp"
+  "http://[::1]/mcp"
+  "http://0.0.0.0/mcp"
+)
+for bad in "${MCP_BAD[@]}"; do
+  if helm template lucy "${CHART}" \
+    --set image.repository=registry.example.com/data-team/project-lucy \
+    --set-string "env.LUCY_PUBLIC_MCP_URL=${bad}" >/dev/null 2>&1; then
+    echo "FAIL: expected reject for MCP URL ${bad}" >&2
+    exit 1
+  fi
+done
+
+echo "[helm-lucy-gate] MCP URL positive matrix must render"
+MCP_GOOD=(
+  "https://lucy.example.com/mcp"
+  "https://gateway.example.com/lucy/mcp"
+)
+for good in "${MCP_GOOD[@]}"; do
+  helm template lucy "${CHART}" \
+    --set image.repository=registry.example.com/data-team/project-lucy \
+    --set-string "env.LUCY_PUBLIC_MCP_URL=${good}" >/dev/null
+done
+
 echo "[helm-lucy-gate] OK"

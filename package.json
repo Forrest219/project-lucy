@@ -48,6 +48,8 @@
     "gate:k8s-release": "bash scripts/k8s-release-gate.sh",
     "gate:k8s-acceptance": "bash scripts/k8s-acceptance.sh",
     "smoke:p0:docker-entrypoint:test": "node --test scripts/docker-entrypoint.test.mjs",
+    "test:k8s-delivery-package": "node --test scripts/build-k8s-delivery-package.test.mjs",
+    "test:k8s-gate-negative": "node --test scripts/k8s-gate-negative.test.mjs",
     "smoke:p0:docker": "node scripts/p0-smoke.mjs --docker",
     "smoke:p0:headless-config": "node scripts/headless-config-smoke.mjs",
     "smoke:p0:customer": "node scripts/p0-customer-path-smoke.mjs",

@@ -99,3 +99,116 @@ mcp_post() {
       -d "${body}"
   fi
 }
+
+# Actual runtime image identity (containerd/docker), not Deployment image string.
+pod_image_id() {
+  local namespace="$1"
+  local release="$2"
+  kubectl -n "${namespace}" get pod \
+    -l "app.kubernetes.io/instance=${release}" \
+    -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="lucy")].imageID}'
+}
+
+# Sentinel paths relative to /data/lucy that must survive in-place upgrade.
+# NOTE: /.ktx/secrets is a projected Secret mount (read-only) — fingerprint an
+# existing projected key instead of creating files there.
+K8S_SENTINEL_PATHS=(
+  ktx.yaml
+  webui/config/access.yaml
+  webui/config/admins.yaml
+  .ktx/secrets/demo-password
+  .ktx-ui/audit.sqlite
+  semantic-layer/_gate/sentinel.yaml
+  wiki/_gate/sentinel.md
+  skills/_gate/sentinel.md
+  .git/HEAD
+)
+
+seed_upgrade_sentinels() {
+  local namespace="$1"
+  local release="$2"
+  kubectl_exec_deploy "${namespace}" "${release}" /bin/sh -ec '
+    set -eu
+    mkdir -p /data/lucy/webui/config \
+      /data/lucy/.ktx-ui \
+      /data/lucy/semantic-layer/_gate \
+      /data/lucy/wiki/_gate \
+      /data/lucy/skills/_gate
+    printf "connections: {}\n# gate-sentinel-ktx\n" > /data/lucy/ktx.yaml
+    printf "users: []\n# gate-sentinel-access\n" > /data/lucy/webui/config/access.yaml
+    printf "admins: []\n# gate-sentinel-admins\n" > /data/lucy/webui/config/admins.yaml
+    # Projected secret mount is read-only; require the CI values key to exist.
+    test -f /data/lucy/.ktx/secrets/demo-password
+    printf "SQLite format 3\000gate-sentinel-audit\n" > /data/lucy/.ktx-ui/audit.sqlite
+    printf "name: gate_sentinel\n" > /data/lucy/semantic-layer/_gate/sentinel.yaml
+    printf "# gate wiki sentinel\n" > /data/lucy/wiki/_gate/sentinel.md
+    printf "# gate skill sentinel\n" > /data/lucy/skills/_gate/sentinel.md
+    if [ ! -d /data/lucy/.git ]; then
+      git init /data/lucy >/dev/null
+    fi
+    test -f /data/lucy/.git/HEAD
+  '
+}
+
+capture_sentinel_hashes() {
+  local namespace="$1"
+  local release="$2"
+  local out_file="$3"
+  : > "${out_file}"
+  local rel
+  for rel in "${K8S_SENTINEL_PATHS[@]}"; do
+    local hash
+    hash="$(kubectl_exec_deploy "${namespace}" "${release}" \
+      sha256sum "/data/lucy/${rel}" | awk '{print $1}')"
+    printf '%s %s\n' "${hash}" "${rel}" >> "${out_file}"
+  done
+}
+
+verify_sentinel_hashes() {
+  local namespace="$1"
+  local release="$2"
+  local expected_file="$3"
+  local tmp
+  tmp="$(mktemp)"
+  capture_sentinel_hashes "${namespace}" "${release}" "${tmp}"
+  if ! diff -u "${expected_file}" "${tmp}" >/dev/null; then
+    log "sentinel mismatch:"
+    diff -u "${expected_file}" "${tmp}" >&2 || true
+    rm -f "${tmp}"
+    fail "customer-owned sentinel hashes changed after upgrade/rollback"
+  fi
+  rm -f "${tmp}"
+  log "  ok sentinel hashes unchanged"
+}
+
+# Force PVC ownership for fixture A (UID 0) or B (UID 10001).
+chown_pvc_via_helper() {
+  local namespace="$1"
+  local pvc_name="$2"
+  local uid="$3"
+  local helper="lucy-chown-${uid}-$$"
+  kubectl -n "${namespace}" delete pod "${helper}" --ignore-not-found >/dev/null 2>&1 || true
+  cat <<EOF | kubectl -n "${namespace}" apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${helper}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: chown
+      image: busybox:1.36
+      command: ["sh", "-ec", "chown -R ${uid}:${uid} /data/lucy; ls -la /data/lucy"]
+      securityContext:
+        runAsUser: 0
+      volumeMounts:
+        - name: data
+          mountPath: /data/lucy
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: ${pvc_name}
+EOF
+  kubectl -n "${namespace}" wait --for=jsonpath='{.status.phase}'=Succeeded "pod/${helper}" --timeout=120s
+  kubectl -n "${namespace}" delete pod "${helper}" --ignore-not-found >/dev/null 2>&1 || true
+}

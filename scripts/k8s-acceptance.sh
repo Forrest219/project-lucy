@@ -89,9 +89,10 @@ printf '%s\n' "${HEALTH}" | grep -q '"ok":true' || fail "/api/health envelope no
 printf '%s\n' "${HEALTH}" | grep -q 'bundledKtxVersion' || fail "/api/health missing bundledKtxVersion"
 
 if [[ "${SKIP_KTX}" -eq 0 ]]; then
-  log "ktx --version"
+  EXPECTED_KTX="${KTX_VERSION:-${LUCY_EXPECTED_KTX_VERSION:-0.16.0}}"
+  log "ktx --version (expect ${EXPECTED_KTX})"
   KTX_VER="$(kubectl_exec "${NAMESPACE}" "${RELEASE}" ktx --version)"
-  printf '%s\n' "${KTX_VER}" | grep -q '0.16.0' || fail "unexpected ktx version: ${KTX_VER}"
+  printf '%s\n' "${KTX_VER}" | grep -q "${EXPECTED_KTX}" || fail "unexpected ktx version: ${KTX_VER}"
 
   log "ktx connection test ${CONNECTION}"
   kubectl_exec "${NAMESPACE}" "${RELEASE}" \

@@ -1,0 +1,4 @@
+# N-1 baseline for H3 kind upgrade gate.
+# Use a UID-10001-capable release so H4 rollback to N-1 remains Ready on migrated PVCs.
+# Override with K8S_GATE_N1_REF. N is always HEAD.
+3c4d06719bbc7803f81f861466da1b98fa45b4db

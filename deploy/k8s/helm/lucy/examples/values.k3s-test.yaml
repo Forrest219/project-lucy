@@ -6,14 +6,15 @@
 # NOT FOR PRODUCTION. Copy and adjust registry, MCP URL, secrets, and image
 # tag/digest for each environment.
 #
-# NOTE: build-k8s-delivery-package.sh overwrites image.tag and image.digest
-# from the exported image at pack time — do not hand-edit after packaging.
+# NOTE: build-k8s-delivery-package.sh overwrites repository/tag/digest/pullPolicy
+# at pack time. Offline packages clear digest and set pullPolicy: Never.
+# Never put a local image config ID into image.digest.
 
 image:
   repository: project-lucy
   tag: "REPLACE-ME-at-pack-time"
-  digest: "sha256:REPLACE-ME-at-pack-time"
-  pullPolicy: IfNotPresent
+  digest: ""
+  pullPolicy: Never
 
 replicaCount: 1
 

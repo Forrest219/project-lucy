@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Customer amd64 Image Build Checklist |
 | 文档类型 | Checklist |
-| 版本 | v1.4 |
-| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm、K6 包自证、Compose 联动 |
+| 版本 | v1.5 |
+| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm；2026-09-02 v1.5 身份闭环（最终 digest 门禁、G4b 功能性、Offline/Registry 语义） |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
 | 基于材料 | 20260827 客户 `exec /usr/bin/tini: exec format error` 事故；20260902 K8s v1/v2 原地升级契约事故；`docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`；Release `lucy-k8s-integration-20260827-v1` 坏包复盘 |

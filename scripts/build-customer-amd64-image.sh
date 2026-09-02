@@ -12,8 +12,8 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-IMAGE="${IMAGE:-project-lucy:customer-amd64-0.16.0}"
-KTX_VERSION="${KTX_VERSION:-0.16.0}"
+KTX_VERSION="${KTX_VERSION:-${LUCY_EXPECTED_KTX_VERSION:-0.16.0}}"
+IMAGE="${IMAGE:-project-lucy:customer-amd64-${KTX_VERSION}}"
 # Prefer docker-driver builders (desktop-linux/default) so local Hub cache is used.
 # docker-container builders (lucy-amd64) often re-fetch # syntax=docker/dockerfile:1.7
 # and fail on Hub/IPv6 flakes — then wrongly tempt people to reuse bad tars.
@@ -79,7 +79,10 @@ echo "  ok docker run sh"
 echo "[build-customer-amd64] gate G4 ktx --version"
 ver="$(docker run --rm --platform linux/amd64 --entrypoint ktx "$IMAGE" --version)"
 echo "  ${ver}"
-echo "$ver" | grep -q '0.16.0'
+echo "$ver" | grep -q "${KTX_VERSION}" || {
+  echo "FAIL G4: expected ktx version ${KTX_VERSION}, got: ${ver}" >&2
+  exit 1
+}
 
 KTX_RUNTIME_PYTHON="/home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python"
 
@@ -97,11 +100,23 @@ echo "  ok runtime python present"
 echo "[build-customer-amd64] gate G4b-2 ktx --version with --network=none"
 offline_ver="$(docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "$IMAGE" --version)"
 echo "  ${offline_ver}"
-echo "$offline_ver" | grep -q '0.16.0' || {
+echo "$offline_ver" | grep -q "${KTX_VERSION}" || {
   echo "FAIL G4b-2: ktx --version failed without network (runtime not fully baked)" >&2
   exit 1
 }
 echo "  ok offline ktx"
+
+echo "[build-customer-amd64] gate G4b-3 offline python + sl validate"
+docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -ec "
+  PY=${KTX_RUNTIME_PYTHON}
+  test -x \"\$PY\"
+  \"\$PY\" -c 'import platform; assert platform.machine() in (\"x86_64\", \"AMD64\")'
+  ktx --project-dir /app/project-template sl --connection-id customer-db validate ceo_metric_snapshot
+" || {
+  echo "FAIL G4b-3: offline Python/runtime functional check failed" >&2
+  exit 1
+}
+echo "  ok offline python + sl validate"
 
 echo "[build-customer-amd64] gate G8 image K8s contract (image-only, no Helm)"
 bash scripts/g8-image-k8s-contract-gate.sh "${IMAGE}"

@@ -30,11 +30,13 @@ sync_template_tree() {
   local dest="$2"
   local label="$3"
   local copied=0
-  local updated=0
+  local skipped=0
 
   [[ -d "${src}" ]] || return 0
   mkdir -p "${dest}"
 
+  # Customer-owned files must not be overwritten on upgrade (F-06).
+  # Only copy missing paths; bundled seed upgrades require an explicit migrate path.
   while IFS= read -r -d '' file; do
     local rel="${file#${src}/}"
     local target="${dest}/${rel}"
@@ -42,17 +44,16 @@ sync_template_tree() {
       mkdir -p "$(dirname "${target}")"
       cp "${file}" "${target}"
       copied=$((copied + 1))
-    elif ! cmp -s "${file}" "${target}"; then
-      cp "${file}" "${target}"
-      updated=$((updated + 1))
+    else
+      skipped=$((skipped + 1))
     fi
   done < <(find "${src}" -type f ! -name ".DS_Store" -print0)
 
   if [[ "${copied}" -gt 0 ]]; then
     echo "[lucy] synced ${copied} missing ${label} file(s) into ${dest}"
   fi
-  if [[ "${updated}" -gt 0 ]]; then
-    echo "[lucy] refreshed ${updated} changed ${label} file(s) in ${dest}"
+  if [[ "${skipped}" -gt 0 ]]; then
+    echo "[lucy] preserved ${skipped} existing ${label} file(s) in ${dest}"
   fi
 }
 

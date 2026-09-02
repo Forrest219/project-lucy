@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a clean Lucy K8s integration delivery tarball (v3 layout).
+# Build a clean Lucy K8s integration delivery tarball (v3+ layout).
 #
 # Prerequisites:
 #   - Image already built and passed G0–G8 (see docs/customer-amd64-image-build-checklist.md)
@@ -8,21 +8,30 @@
 # Usage:
 #   bash scripts/build-k8s-delivery-package.sh \
 #     --image-tag project-lucy:customer-amd64-0.16.0-20260902-b262798 \
-#     --output inbox/lucy-k8s-integration-delivery-20260902-v3.tar.gz
+#     --output inbox/lucy-k8s-integration-delivery-20260902-v3.tar.gz \
+#     [--delivery-mode offline|registry] \
+#     [--image-repository project-lucy] \
+#     [--manifest-digest sha256:...]
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_TAG=""
 OUTPUT=""
 VERSION_SUFFIX="20260902-v3"
+DELIVERY_MODE="offline"
+IMAGE_REPOSITORY=""
+MANIFEST_DIGEST=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --image-tag) IMAGE_TAG="$2"; shift 2 ;;
     --output) OUTPUT="$2"; shift 2 ;;
     --version-suffix) VERSION_SUFFIX="$2"; shift 2 ;;
+    --delivery-mode) DELIVERY_MODE="$2"; shift 2 ;;
+    --image-repository) IMAGE_REPOSITORY="$2"; shift 2 ;;
+    --manifest-digest) MANIFEST_DIGEST="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,12p' "$0"
+      sed -n '2,16p' "$0"
       exit 0
       ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
@@ -32,6 +41,11 @@ done
 [[ -n "${IMAGE_TAG}" ]] || { echo "FAIL: --image-tag required" >&2; exit 1; }
 [[ -n "${OUTPUT}" ]] || { echo "FAIL: --output required" >&2; exit 1; }
 
+case "${DELIVERY_MODE}" in
+  offline|registry) ;;
+  *) echo "FAIL: --delivery-mode must be offline or registry" >&2; exit 1 ;;
+esac
+
 if [[ "${VERSION_SUFFIX}" =~ -v1$ ]] || [[ "${VERSION_SUFFIX}" =~ -v2$ ]]; then
   echo "FAIL: refusing to build deprecated package suffix ${VERSION_SUFFIX} (use v3+)" >&2
   exit 1
@@ -40,10 +54,17 @@ fi
 command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required" >&2; exit 1; }
 docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || { echo "FAIL: image not found: ${IMAGE_TAG}" >&2; exit 1; }
 
-IMAGE_DIGEST="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
+IMAGE_CONFIG_ID="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
 IMAGE_REF_TAG="${IMAGE_TAG#*:}"
 if [[ "${IMAGE_REF_TAG}" == "${IMAGE_TAG}" ]]; then
   IMAGE_REF_TAG="latest"
+fi
+if [[ -z "${IMAGE_REPOSITORY}" ]]; then
+  if [[ "${IMAGE_TAG}" == *:* ]]; then
+    IMAGE_REPOSITORY="${IMAGE_TAG%:*}"
+  else
+    IMAGE_REPOSITORY="${IMAGE_TAG}"
+  fi
 fi
 
 STAGING="$(mktemp -d)"
@@ -51,32 +72,77 @@ PKG="lucy-k8s-integration-delivery-${VERSION_SUFFIX}"
 PKG_DIR="${STAGING}/${PKG}"
 mkdir -p "${PKG_DIR}/image" "${PKG_DIR}/helm" "${PKG_DIR}/examples" "${PKG_DIR}/scripts"
 
+cleanup_fail() {
+  local rc=$?
+  if [[ "${rc}" -ne 0 ]]; then
+    rm -f "${OUTPUT}" "${OUTPUT}.sha256" 2>/dev/null || true
+    echo "[build-k8s-delivery] FAIL — removed incomplete ${OUTPUT}" >&2
+  fi
+  rm -rf "${STAGING}"
+}
+trap cleanup_fail EXIT
+
 echo "[build-k8s-delivery] H1 static gate"
 bash "${ROOT}/scripts/helm-lucy-gate.sh"
 
 echo "[build-k8s-delivery] export image tar"
-docker save -o "${PKG_DIR}/image/$(echo "${IMAGE_TAG}" | tr '/:' '-').tar" "${IMAGE_TAG}"
+TAR_NAME="$(echo "${IMAGE_TAG}" | tr '/:' '-').tar"
+docker save -o "${PKG_DIR}/image/${TAR_NAME}" "${IMAGE_TAG}"
 docker image inspect "${IMAGE_TAG}" > "${PKG_DIR}/image/image-inspect.json"
-echo "${IMAGE_DIGEST}" > "${PKG_DIR}/image/image-digest.txt"
+echo "${IMAGE_CONFIG_ID}" > "${PKG_DIR}/image/image-config-id.txt"
+# Backward-compatible alias: NEVER treat as registry manifest digest.
+cp "${PKG_DIR}/image/image-config-id.txt" "${PKG_DIR}/image/image-digest.txt"
+sha256sum "${PKG_DIR}/image/${TAR_NAME}" | awk '{print $1}' > "${PKG_DIR}/image/image-tar.sha256"
+printf '%s\n' "${IMAGE_REPOSITORY}" > "${PKG_DIR}/image/image-repository.txt"
+printf '%s\n' "${IMAGE_REF_TAG}" > "${PKG_DIR}/image/image-tag.txt"
+printf '%s\n' "${DELIVERY_MODE}" > "${PKG_DIR}/image/delivery-mode.txt"
+
+HELM_DIGEST=""
+HELM_PULL_POLICY="IfNotPresent"
+if [[ "${DELIVERY_MODE}" == "offline" ]]; then
+  HELM_DIGEST=""
+  HELM_PULL_POLICY="Never"
+  echo "[build-k8s-delivery] offline mode: pullPolicy=Never, digest cleared (config ID is not a manifest digest)"
+else
+  [[ -n "${MANIFEST_DIGEST}" ]] || {
+    echo "FAIL: registry mode requires --manifest-digest sha256:..." >&2
+    exit 1
+  }
+  [[ "${MANIFEST_DIGEST}" == sha256:* ]] || {
+    echo "FAIL: --manifest-digest must start with sha256:" >&2
+    exit 1
+  }
+  [[ "${MANIFEST_DIGEST}" != "${IMAGE_CONFIG_ID}" ]] || {
+    echo "FAIL: manifest digest must not equal image config ID" >&2
+    exit 1
+  }
+  HELM_DIGEST="${MANIFEST_DIGEST}"
+  HELM_PULL_POLICY="IfNotPresent"
+  echo "${MANIFEST_DIGEST}" > "${PKG_DIR}/image/image-manifest-digest.txt"
+fi
 
 echo "[build-k8s-delivery] copy supported helm chart"
 cp -a "${ROOT}/deploy/k8s/helm/lucy/." "${PKG_DIR}/helm/lucy/"
 cp "${ROOT}/deploy/k8s/K8S_CONTRACT.md" "${PKG_DIR}/"
 cp "${ROOT}/deploy/k8s/helm/lucy/examples/values.k3s-test.yaml" "${PKG_DIR}/examples/values.k3s-test.yaml"
 
-echo "[build-k8s-delivery] sync image tag/digest into examples/values.k3s-test.yaml"
+echo "[build-k8s-delivery] sync image identity into examples/values.k3s-test.yaml"
 VALUES_FILE="${PKG_DIR}/examples/values.k3s-test.yaml"
-python3 - "${VALUES_FILE}" "${IMAGE_REF_TAG}" "${IMAGE_DIGEST}" <<'PY'
+python3 - "${VALUES_FILE}" "${IMAGE_REPOSITORY}" "${IMAGE_REF_TAG}" "${HELM_DIGEST}" "${HELM_PULL_POLICY}" <<'PY'
 import re
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
-tag = sys.argv[2]
-digest = sys.argv[3]
+repo, tag, digest, pull = sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 text = path.read_text(encoding="utf-8")
+text = re.sub(r'(?m)^  repository: .*$', f'  repository: {repo}', text, count=1)
 text = re.sub(r'(?m)^  tag: .*$', f'  tag: "{tag}"', text, count=1)
-text = re.sub(r'(?m)^  digest: .*$', f'  digest: "{digest}"', text, count=1)
+if digest:
+    text = re.sub(r'(?m)^  digest: .*$', f'  digest: "{digest}"', text, count=1)
+else:
+    text = re.sub(r'(?m)^  digest: .*$', '  digest: ""', text, count=1)
+text = re.sub(r'(?m)^  pullPolicy: .*$', f'  pullPolicy: {pull}', text, count=1)
 path.write_text(text, encoding="utf-8")
 PY
 
@@ -85,12 +151,13 @@ cp "${ROOT}/scripts/helm-lucy-gate.sh" "${PKG_DIR}/scripts/preflight-helm.sh"
 
 GIT_SHA="$(git -C "${ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
-cat > "${PKG_DIR}/README.md" <<EOF
-# Lucy K8s Integration Delivery (${VERSION_SUFFIX})
+{
+  printf '%s\n' "# Lucy K8s Integration Delivery (${VERSION_SUFFIX})"
+  cat <<'EOF'
 
-Supported Helm chart is included under \`helm/lucy/\` (not a reference snapshot).
+Supported Helm chart is included under `helm/lucy/` (not a reference snapshot).
 
-**Supersedes:** \`lucy-k8s-integration-delivery-20260902-v1\` and \`v2\` (incomplete upgrade contract — do not use).
+**Supersedes:** `lucy-k8s-integration-delivery-20260902-v1` and `v2` (incomplete upgrade contract — do not use).
 
 Read order:
 1. README.md (this file)
@@ -101,14 +168,24 @@ Read order:
 6. examples/values.k3s-test.yaml
 7. scripts/acceptance.sh
 
-Image: \`${IMAGE_TAG}\`
-Digest: \`${IMAGE_DIGEST}\`
-Chart: \`0.2.1\`
-Git: \`${GIT_SHA}\`
 EOF
+  printf 'Delivery mode: `%s`\n' "${DELIVERY_MODE}"
+  printf 'Image: `%s`\n' "${IMAGE_TAG}"
+  printf 'Repository: `%s`\n' "${IMAGE_REPOSITORY}"
+  printf 'Tag: `%s`\n' "${IMAGE_REF_TAG}"
+  printf 'Image config ID: `%s`\n' "${IMAGE_CONFIG_ID}"
+  if [[ -n "${HELM_DIGEST}" ]]; then
+    printf 'Registry manifest digest: `%s`\n' "${HELM_DIGEST}"
+  else
+    printf 'Registry manifest digest: _(none — offline tar; do not put config ID in image.digest)_\n'
+  fi
+  printf 'Chart: `0.2.1`\n'
+  printf 'Git: `%s`\n' "${GIT_SHA}"
+} > "${PKG_DIR}/README.md"
 
-cat > "${PKG_DIR}/RELEASE_NOTES.md" <<EOF
-# Release Notes — ${VERSION_SUFFIX}
+{
+  printf '%s\n' "# Release Notes — ${VERSION_SUFFIX}"
+  cat <<'EOF'
 
 ## Summary
 
@@ -116,35 +193,45 @@ Fixes K8s in-place upgrade contract failures observed in v1/v2 deliveries (20260
 
 ## Changes
 
-- Image runs as UID/GID **10001** (matches legacy PVC \`.git\` ownership)
+- Image runs as UID/GID **10001** (matches legacy PVC `.git` ownership)
 - Entrypoint idempotently runs `git init` on `/data/lucy` (**sole authority**)
 - `project-migrate` init: **chown only** (no git init)
-- Package \`examples/values.k3s-test.yaml\` tag/digest synced to bundled image
+- Package `examples/values.k3s-test.yaml` repository/tag/digest synced by delivery mode
+- Offline packages use `pullPolicy: Never` and leave `image.digest` empty
 
 ## Deprecated
 
-- \`lucy-k8s-integration-delivery-20260902-v1\`
-- \`lucy-k8s-integration-delivery-20260902-v2\`
+- `lucy-k8s-integration-delivery-20260902-v1`
+- `lucy-k8s-integration-delivery-20260902-v2`
 
 Do **not** use v1/v2 for customer in-place upgrades.
 
 ## Upgrade
 
-See \`helm/lucy/UPGRADE.md\`. Use \`helm upgrade --atomic --wait\` with package \`examples/values.k3s-test.yaml\`.
+See `helm/lucy/UPGRADE.md`. Use `helm upgrade --atomic --wait` with package `examples/values.k3s-test.yaml`.
 EOF
+} > "${PKG_DIR}/RELEASE_NOTES.md"
 
 (
   cd "${PKG_DIR}"
   find . -type f ! -name 'SHA256SUMS' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 )
 
+echo "[build-k8s-delivery] K6 package verify (before writing deliverable tar)"
+bash "${ROOT}/scripts/verify-k8s-package.sh" --dir "${PKG_DIR}" --skip-docker-load
+
 mkdir -p "$(dirname "${OUTPUT}")"
 tar -C "${STAGING}" -czf "${OUTPUT}" "${PKG}"
-sha256sum "${OUTPUT}" > "${OUTPUT}.sha256"
+(
+  cd "$(dirname "${OUTPUT}")"
+  sha256sum "$(basename "${OUTPUT}")" > "$(basename "${OUTPUT}").sha256"
+)
 
-echo "[build-k8s-delivery] K6 package verify"
-bash "${ROOT}/scripts/verify-k8s-package.sh" --dir "${PKG_DIR}"
+echo "[build-k8s-delivery] K6 outer tar verify (load + G gates)"
+bash "${ROOT}/scripts/verify-k8s-package.sh" --tar "${OUTPUT}" --outer-sha256 "${OUTPUT}.sha256"
+
+# Success: disarm fail cleanup of OUTPUT; still remove staging.
+trap 'rm -rf "${STAGING}"' EXIT
 
 echo "[build-k8s-delivery] wrote ${OUTPUT}"
 echo "[build-k8s-delivery] wrote ${OUTPUT}.sha256"
-rm -rf "${STAGING}"

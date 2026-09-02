@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Customer Delivery Preflight Checklist |
 | 文档类型 | Governance / Quality Gate / Runbook |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-08-28；2026-09-02 增补升级契约铁律；2026-09-02 v1.2 自动化 H3/H4、K6 包自证、H1a/H1b 拆分 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-08-28；2026-09-02 增补升级契约铁律；2026-09-02 v1.2 自动化 H3/H4；2026-09-02 v1.3 真实 N-1、Pod imageID、K6 load 重验、MCP URL 矩阵 |
 | 适用范围 | 所有交付给客户的 Docker Compose 离线包、Kubernetes / Helm 集成包及 Release Assets |
 | 关联文档 | [`docs/customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md)、[`docs/customer-k8s-deployer-quickstart.md`](customer-k8s-deployer-quickstart.md)、[`docs/customer-deployment-guide.md`](customer-deployment-guide.md) |
 
@@ -146,5 +146,26 @@ bash scripts/k8s-release-gate.sh --with-cluster \
 | `GIT_CONFIG_COUNT ... not permitted` | 错误 Git 配置注入 | 从 values 移除；禁止 `allowUnsafeConfigEnvCount` |
 | Pod Running 但 8276/8277 不通 | Service 为 ClusterIP | 改用 LoadBalancer 或 NodePort；检查 K3s ServiceLB |
 | MCP fallback | `LUCY_PUBLIC_MCP_URL` 未在 Helm values 中 | 写入 values 后 `helm upgrade`；禁止 `kubectl set env` |
-| 行为与预期 build 不一致 | 包内 tag/digest 与镜像 tar 不一致 | 使用 v3 包；核对 `image/image-digest.txt` |
+| 行为与预期 build 不一致 | 包内 tag/digest 与镜像 tar 不一致 | 使用 v3+ 包；Offline 核 `image-config-id.txt` + tar SHA；Registry 核 `image-manifest-digest.txt` |
 | 升级后 Token/ACL 丢失 | 误删 PVC 或 Secret | 禁止 `kubectl delete pvc`；回滚并恢复备份 |
+
+---
+
+## 放行条件（Go / No-Go）
+
+以下全部满足才可标注「可直接原地升级」并发放客户 K8s 包：
+
+- [ ] G1–G4b、G8 针对**最终交付镜像身份**执行（registry digest 或 offline load 后 config ID）
+- [ ] OCI manifest 含 `linux/amd64`；node/tini/Python ELF 为 x86-64
+- [ ] 无公网下 Python runtime 功能性命令通过（G4b-3）
+- [ ] H3 使用真实不同的 N-1/N image + Chart（`deploy/k8s/gate/n1-baseline.txt`）
+- [ ] UID 0 与 UID 10001 两类旧 PVC fixture 均升级成功
+- [ ] H4 使用 Pod 实际 `imageID` 验证失败升级与回滚
+- [ ] ACL/Token/Secret/audit/semantic/wiki/skills/`.git` sentinel 保留
+- [ ] K6 从外层 tar 校验并 `docker load` 重跑门禁
+- [ ] Offline / Registry digest 语义分离（禁止 config ID 填入 `image.digest`）
+- [ ] 打包脚本无 heredoc 命令替换副作用
+- [ ] H1 MCP URL 负例矩阵全部拒绝
+- [ ] H5 在 lucy-test 或等价集群执行并归档证据
+- [ ] Release metadata 含 git SHA、Chart version、KTX version、config ID、manifest digest（Registry）/ tar SHA256（Offline）、包 SHA256
+- [ ] 旧 v1/v2 包保持机器可读作废（打包脚本拒绝 `-v1`/`-v2` suffix）

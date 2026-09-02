@@ -100,8 +100,8 @@ test("entrypoint restores missing semantic context for an existing volume", asyn
   await rm(root, { recursive: true, force: true });
 });
 
-test("entrypoint refreshes changed semantic context for an existing volume", async () => {
-  const root = await makeRoot("lucy-entrypoint-refresh-");
+test("entrypoint does not overwrite existing customer semantic context", async () => {
+  const root = await makeRoot("lucy-entrypoint-preserve-");
   const templateRoot = path.join(root, "template");
   const projectRoot = path.join(root, "project");
   await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
@@ -115,10 +115,15 @@ test("entrypoint refreshes changed semantic context for an existing volume", asy
 
   const result = runSeedOnly(templateRoot, projectRoot);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /refreshed 2 changed semantic-layer file/);
+  assert.match(result.stdout, /preserved 2 existing semantic-layer file/);
+  assert.doesNotMatch(result.stdout, /refreshed .* changed/);
   assert.equal(
     await readFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/orders.yaml"), "utf8"),
-    "grain: order\nmeasures:\n  - name: new_metric\n"
+    "grain: order\n"
+  );
+  assert.equal(
+    await readFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "utf8"),
+    "tables: {}\n"
   );
   assert.equal(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8"), "connections: {}\n");
 

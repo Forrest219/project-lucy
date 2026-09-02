@@ -112,13 +112,23 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
       - run: npm run gate:k8s-static
+      - run: npm run test:k8s-delivery-package
+      - run: npm run test:k8s-gate-negative
+      - run: npm run smoke:p0:docker-entrypoint:test
 
   k8s-upgrade-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.4
@@ -129,6 +139,12 @@ jobs:
         env:
           KTX_VERSION: ${{ env.KTX_VERSION }}
         run: npm run gate:k8s-kind-h3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k8s-h3-evidence
+          path: inbox/k8s-h3-evidence-*
+          if-no-files-found: ignore
 
   headless-config:
     runs-on: ubuntu-latest
@@ -215,11 +231,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           platforms: linux/amd64,linux/arm64
-      # Multi-arch manifest list. Customer default is x86_64 (AMD); linux/amd64
-      # is therefore the primary platform. linux/arm64 is included so that
-      # Apple Silicon / AWS Graviton developers can `docker pull` the same tag
-      # without rebuilding locally.
-      - name: Build & push multi-arch image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Single build → push → gate the exact digest. Do not rebuild after gates.
+      - name: Build & push multi-arch image (once)
         id: build-push
         env:
           REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
@@ -231,15 +250,47 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --build-arg "KTX_VERSION=${KTX_VERSION}" \
+            --build-arg "TARGETPLATFORM=linux/amd64" \
+            --build-arg "TARGETARCH=amd64" \
             --tag "${IMAGE}" \
             --tag "${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy:${GITHUB_SHA}" \
             --metadata-file /tmp/buildx-metadata.json \
             --push .
+          DIGEST="$(python3 -c 'import json; print(json.load(open("/tmp/buildx-metadata.json"))["containerimage.digest"])')"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "ref=${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          mkdir -p release
+          {
+            echo "git_sha=${GITHUB_SHA}"
+            echo "image=${IMAGE}"
+            echo "manifest_digest=${DIGEST}"
+            echo "ktx_version=${KTX_VERSION}"
+            echo "platforms=linux/amd64,linux/arm64"
+          } > release/image-identity.txt
+      - name: Gate final registry amd64 digest (G1/G2/G4b/G8)
+        env:
+          IMAGE_REF: ${{ steps.build-push.outputs.ref }}
+          KTX_VERSION: ${{ env.KTX_VERSION }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "${IMAGE_REF}" | tee release/imagetools-inspect.txt
+          grep -q 'linux/amd64' release/imagetools-inspect.txt
+          docker pull --platform linux/amd64 "${IMAGE_REF}"
+          META="$(docker image inspect "${IMAGE_REF}" --format '{{.Os}}/{{.Architecture}}')"
+          test "${META}" = "linux/amd64"
+          bash scripts/assert-image-elf-arch.sh "${IMAGE_REF}" amd64
+          docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c \
+            "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python"
+          docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "${IMAGE_REF}" --version | tee release/ktx-version.txt
+          grep -q "${KTX_VERSION}" release/ktx-version.txt
+          bash scripts/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
+          docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
       - name: Write release notes
         env:
           LUCY_RELEASE_TAG: ${{ steps.release.outputs.tag }}
           LUCY_DOCKER_IMAGE: ${{ steps.build-push.outputs.image }}
+          LUCY_IMAGE_DIGEST: ${{ steps.build-push.outputs.digest }}
           LUCY_PLATFORMS: linux/amd64,linux/arm64
         run: npm run release:artifacts -- --tag "${{ steps.release.outputs.tag }}"
       - uses: actions/upload-artifact@v4
