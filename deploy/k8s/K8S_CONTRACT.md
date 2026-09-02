@@ -115,8 +115,17 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 | Requirement | Value |
 |---|---|
 | Container `workingDir` | `/data/lucy` |
-| Entrypoint | Idempotent `git -C /data/lucy init` when `.git` missing |
+| **Git init authority** | **Entrypoint only** (`docker-entrypoint.sh`) |
+| `project-migrate` init | **chown only** — must not run `git init` |
 | Forbidden | `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_*` env injection |
+
+### PVC UID migration matrix
+
+| Legacy `.git` owner | v3 behavior |
+|---|---|
+| UID 10001 | Compatible |
+| UID 0 (v1/v2 root) | `project-migrate` chown → 10001 |
+| Other UID | Not auto-supported — manual plan required |
 
 ## Required environment
 
@@ -183,9 +192,11 @@ kubectl delete pvc lucy         # unless backed up and intentionally resetting
 
 Before any K8s delivery:
 
-1. `bash scripts/build-customer-amd64-image.sh` (G1–G4b + **G8**)
-2. `bash scripts/helm-lucy-gate.sh` (H1 static)
-3. `bash scripts/k8s-release-gate.sh` (H1–H5 when kind/cluster available; **H3 N-1 upgrade required before customer release**)
-4. Post-deploy: `bash scripts/k8s-acceptance.sh`
+1. `bash scripts/build-customer-amd64-image.sh` (G1–G4b + **G8** image-only)
+2. `bash scripts/helm-lucy-gate.sh` (H1a universal + H1b k3s profile)
+3. `bash scripts/verify-k8s-package.sh` (K6 package integrity)
+4. `bash scripts/k8s-upgrade-gate.sh` (H3; `--test-rollback` for H4)
+5. `bash scripts/k8s-release-gate.sh --with-cluster --test-upgrade …` (orchestrator)
+6. Post-deploy: `bash scripts/k8s-acceptance.sh` (H5)
 
 See [`docs/customer-delivery-preflight-checklist.md`](../../docs/customer-delivery-preflight-checklist.md).

@@ -242,5 +242,6 @@ lucy:
   # Bundled KTX version baked into the image — must match the Dockerfile ARG.
   bundledKtxVersion: "0.16.0"
   # One-shot PVC ownership migration for upgrades from root (runAsUser 0) builds.
+  # Git init is owned by the container entrypoint — init only chowns.
   projectMigrate:
     enabled: true

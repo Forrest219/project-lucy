@@ -103,33 +103,9 @@ echo "$offline_ver" | grep -q '0.16.0' || {
 }
 echo "  ok offline ktx"
 
-echo "[build-customer-amd64] gate G8-1 empty volume git init (seed-only)"
-G8_VOL="$(mktemp -d)"
-chmod 1777 "${G8_VOL}"
-docker run --rm --platform linux/amd64 \
-  -e LUCY_ENTRYPOINT_SEED_ONLY=1 \
-  -e LUCY_ALLOW_PLACEHOLDER_KTX=1 \
-  -v "${G8_VOL}:/data/lucy" \
-  "$IMAGE" >/dev/null
-[[ -d "${G8_VOL}/.git" ]] || {
-  echo "FAIL G8-1: /data/lucy/.git was not created on empty volume" >&2
-  rm -rf "${G8_VOL}"
-  exit 1
-}
-rm -rf "${G8_VOL}"
-echo "  ok git init on empty volume"
-
-echo "[build-customer-amd64] gate G8-2 non-root UID 10001"
-docker run --rm --platform linux/amd64 --entrypoint /bin/sh "$IMAGE" -c \
-  'test "$(id -u)" -eq 10001 && test "$(id -g)" -eq 10001' || {
-  echo "FAIL G8-2: container must run as UID/GID 10001" >&2
-  exit 1
-}
-echo "  ok uid/gid 10001"
-
-echo "[build-customer-amd64] gate G8-3 helm static (no GIT_CONFIG_COUNT)"
-bash scripts/helm-lucy-gate.sh
+echo "[build-customer-amd64] gate G8 image K8s contract (image-only, no Helm)"
+bash scripts/g8-image-k8s-contract-gate.sh "${IMAGE}"
 
 docker image inspect "$IMAGE" --format '{{.Id}}' > "${BUILD_DIR}/image-id.txt"
 echo "[build-customer-amd64] done image-id=$(cat "${BUILD_DIR}/image-id.txt")"
-echo "[build-customer-amd64] next: docker save + G7 load-recheck (include G4b); see docs/customer-amd64-image-build-checklist.md"
+echo "[build-customer-amd64] next: npm run gate:k8s-static + docker save + G7; see docs/customer-amd64-image-build-checklist.md"

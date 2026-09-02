@@ -70,10 +70,6 @@ spec:
               set -eu
               mkdir -p /data/lucy
               chown -R 10001:10001 /data/lucy
-              if [ ! -d /data/lucy/.git ]; then
-                git init /data/lucy
-                chown -R 10001:10001 /data/lucy/.git
-              fi
           securityContext:
             runAsUser: 0
             runAsNonRoot: false

@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Customer Delivery Preflight Checklist |
 | 文档类型 | Governance / Quality Gate / Runbook |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-08-28；2026-09-02 增补升级契约铁律、H3 场景、无日志排障表 |
+| 版本 | v1.2 |
+| 撰写日期 | 2026-08-28；2026-09-02 增补升级契约铁律；2026-09-02 v1.2 自动化 H3/H4、K6 包自证、H1a/H1b 拆分 |
 | 适用范围 | 所有交付给客户的 Docker Compose 离线包、Kubernetes / Helm 集成包及 Release Assets |
 | 关联文档 | [`docs/customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md)、[`docs/customer-k8s-deployer-quickstart.md`](customer-k8s-deployer-quickstart.md)、[`docs/customer-deployment-guide.md`](customer-deployment-guide.md) |
 
@@ -19,7 +19,7 @@
 2. **离线运行时铁律（防 `could not download uv`）**：客户环境无法连公网。镜像必须完整预装 KTX Python runtime，出包前必须在 `--network=none` 下通过 `ktx --version` 启动与运行时文件存在性校验。
 3. **MCP Advertise 地址铁律（防「Lucy MCP 未就绪」）**：客户部署必须显式注入 `LUCY_PUBLIC_MCP_URL`（如 `https://lucy.example.com/mcp`）。禁止留空、保留占位符或填 `127.0.0.1`，避免 WebUI 产生 `fallback` 假象。
 4. **禁止盲复用铁律（防坏包扩散）**：禁止直接复制任何未过本轮全套门禁的历史 `*.tar`。每次升级或出包必须当场重跑全套 Gates，坏包必须原地作废并升 Release tag。
-5. **升级契约铁律（防 K8s 原地升级失败）**：禁止只修探针就发 K8s 升级包。必须证明 **N-1 旧 PVC（UID 10001 + 已有 ACL/Token/.git）** 可无人工干预 `helm upgrade --atomic` 成功，且 H4 回滚恢复旧 digest。禁止现场 `git init`、`chown`、`kubectl set env`、Deployment patch 作为交付方案的一部分。
+5. **升级契约铁律（防 K8s 原地升级失败）**：禁止只修探针就发 K8s 升级包。必须 **自动化** 证明 H3（N-1 旧 PVC 升级）与 H4（回滚 digest）— 见 `scripts/k8s-upgrade-gate.sh`。禁止现场 `git init`、`chown`、`kubectl set env`、Deployment patch。
 
 ---
 
@@ -36,7 +36,7 @@
 | **G4** | KTX CLI 版本 | `docker run --rm --platform linux/amd64 --entrypoint ktx <tag> --version` | 包含指定版本（如 `@kaelio/ktx 0.16.0`） |
 | **G4b-1** | **Python 运行时** | `docker run --rm --platform linux/amd64 --entrypoint /bin/sh <tag> -c 'test -x /home/lucy/.ktx/runtime/0.16.0/.venv/bin/python'` | Exit 0，确认 runtime 完整落盘（lucy 用户） |
 | **G4b-2** | **无网离线启动** | `docker run --rm --network=none --platform linux/amd64 --entrypoint ktx <tag> --version` | 退出码 0 且版本正确（证明不依赖实时下载 uv） |
-| **G8** | **K8s 升级契约** | 见 [`customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md) G8 | UID 10001；空 volume 自动 `.git`；helm-lucy-gate 无 `GIT_CONFIG_COUNT` |
+| **G8** | **K8s 镜像契约** | `bash scripts/g8-image-k8s-contract-gate.sh <tag>` | 与 Helm **解耦**；见镜像 checklist |
 | **G5** | 仓库冒烟 | `npm run smoke:p0:docker` | 全绿（覆盖真实 DuckDB/KTX 查询链路） |
 | **G6** | 交付隔离门禁 | `npm run smoke:p0:delivery-isolation` | 确保客户镜像中不含开发态内部路径 |
 
@@ -45,16 +45,21 @@
 ## 阶段二：Helm Chart 与交付包组装（K + H 门禁）
 
 ### 1. Helm Chart 守卫验证（H1 静态）
-- [ ] **空 URL 渲染阻断**：当 `image.repository != project-lucy` 且 `env.LUCY_PUBLIC_MCP_URL` 为空、含 `REPLACE-ME` 或 `127.0.0.1` 时，`helm template` 必须 fail 报错。
-- [ ] **合法配置放行**：配置合法公网/网关 URL 后，`helm template` 正常输出。
-- [ ] **端口守卫**：Service 仅暴露 WebUI 与 MCP Proxy；**严禁暴露 7878**（KTX upstream 仅 Pod 内）。
-- [ ] **容器/Service 端口分离**：容器固定监听 `5174`/`7879`；外部 `8276`/`8277` 等仅在 Service 层映射。
-- [ ] **探针守卫**：Startup/Readiness 使用 HTTP `GET /api/health`；渲染结果不得含 `runtime-preflight`、`k8s-preflight.sh` 或 exec `docker-healthcheck.sh`。
-- [ ] **工作目录守卫**：渲染含 `workingDir: /data/lucy`。
-- [ ] **非 root 守卫**：`runAsUser: 10001`、`fsGroup: 10001`；不得含 `GIT_CONFIG_COUNT`。
-- [ ] **K3s 示例守卫**：`examples/values.k3s-test.yaml` 使用 `service.type: LoadBalancer`；tag/digest 与包内镜像一致。
-- [ ] **静态门禁脚本**：`npm run gate:k8s-static` 或 `bash scripts/helm-lucy-gate.sh` 通过。
-- [ ] **单副本与 Recreate 约束**：`replicaCount=1`，`strategy.type=Recreate`。
+
+**H1a 通用 Chart 契约**（local-test / k3s-test / 生产 overlay 均必须满足）：
+
+- [ ] HTTP 探针 `/api/health`；无 preflight / exec healthcheck / `GIT_CONFIG_COUNT`
+- [ ] `workingDir: /data/lucy`；`runAsUser` / `fsGroup`: **10001**
+- [ ] Service 不暴露 **7878**；容器端口 5174/7879
+- [ ] `project-migrate` init **仅 chown**（不得 `git init` — 入口为唯一权威）
+
+**H1b k3s-test profile**（仅 `examples/values.k3s-test.yaml`，非 universal）：
+
+- [ ] `service.type: LoadBalancer`；外部 8276/8277
+- [ ] `LUCY_PUBLIC_MCP_URL` 为真实外部 URL
+- [ ] 包内 tag/digest 与 `image/image-digest.txt` 一致（K6）
+
+- [ ] **静态门禁**：`npm run gate:k8s-static`
 
 ### 1b. K8s 运行时门禁（H2–H5，发版前至少执行一次）
 
@@ -62,31 +67,35 @@
 |---|---|---|---|
 | **H1** | 静态渲染 | `npm run gate:k8s-static` | lint + template + 探针/端口/MCP URL 守卫 |
 | **H2** | 全新安装 | kind / 新 namespace `helm install` | Pod `1/1 Ready`；无 exec 探针超时 |
-| **H3** | N-1 升级 | 旧镜像+Chart → 新 Chart；复用 PVC/Secret | 数据不丢；Ready；`/api/health` 200；**禁止**现场 git init/chown/kubectl set env |
+| **H3** | N-1 升级 | `bash scripts/k8s-upgrade-gate.sh …` 或 `k8s-release-gate.sh --test-upgrade` | access.yaml hash 不变；`.git` UID 10001；`/api/health` 200 |
+| **H4** | 失败回滚 | `k8s-upgrade-gate.sh --test-rollback` | rollback 后 image digest 与升级前一致 |
+| **H5** | 业务验收 | `bash scripts/k8s-acceptance.sh …` | ktx test / reindex / MCP initialize / tools/list |
 
 **H3 标准复现环境**（无客户日志时内部必跑）：
 
-- PVC `lucy` 已存在，`.git` 属主 UID **10001**
-- 含 `semantic-layer/`、`wiki/`、`webui/config/access.yaml`、`.ktx/secrets/`、SQLite index
+- PVC `lucy` 已存在，`.git` 属主 UID **10001**（或 root 残留由 projectMigrate chown）
+- 含 semantic-layer / wiki / access.yaml / `.ktx/secrets/` / SQLite index
 - StarRocks 连接 `kc-starrocks` 已配置
-- 升级命令：`helm upgrade --atomic --wait` + 包内 `examples/values.k3s-test.yaml`
-
-| **H4** | 失败回滚 | 故意坏配置 → `helm rollback` | 恢复不可变 tag/digest；8276/8277 可用 |
-| **H5** | 业务验收 | `bash scripts/k8s-acceptance.sh …` | ktx test / reindex / MCP initialize / tools/list |
-
-快捷编排（集群可用时）：
 
 ```bash
 bash scripts/k8s-release-gate.sh --with-cluster \
-  --namespace lucy-test --release lucy \
+  --namespace lucy-test --release lucy-starrocks \
+  --test-upgrade -f deploy/k8s/helm/lucy/examples/values.k3s-test.yaml \
+  --test-rollback \
   --with-mcp --public-mcp-url http://10.69.95.109:8277/mcp --token "<bearer>"
 ```
 
 ### 2. 交付包封包与自检
-- [ ] **K1 现场导出**：G0–G6 全通过后执行 `docker save -o release/<name>.tar <tag>`。
-- [ ] **K2 元数据固化**：包内写入 `image-inspect.json`、`image-digest.txt`、`image-arch.txt`。
-- [ ] **K3 解压后重验**：解压出的镜像在本地执行 `docker load`，重跑 G2 + G3 + G4b。
-- [ ] **K4 校验和清单**：生成包内 `SHA256SUMS` 与外层 `*.tar.gz.sha256`。
+- [ ] **K1–K3**：镜像 tar 当场 G2–G8 复验
+- [ ] **K6 包自证**：`npm run gate:k8s-package -- --tar <pkg>` 或封包脚本自动执行
+- [ ] **K4 校验和**：包内 `SHA256SUMS` + 外层 `*.tar.gz.sha256`
+- [ ] **作废拦截**：不得构建 `-v1`/`-v2` suffix（脚本硬拒绝）
+
+### 2b. Docker Compose 同一镜像（联动）
+
+- [ ] runtime 验收路径 `/home/lucy/.ktx/…`（见 G8）
+- [ ] volume 权限：容器 UID 10001 可写 `/data/lucy`
+- [ ] 不要求 LoadBalancer / Helm values（K8s profile 专用）
 
 ---
 

@@ -32,6 +32,11 @@ done
 [[ -n "${IMAGE_TAG}" ]] || { echo "FAIL: --image-tag required" >&2; exit 1; }
 [[ -n "${OUTPUT}" ]] || { echo "FAIL: --output required" >&2; exit 1; }
 
+if [[ "${VERSION_SUFFIX}" =~ -v1$ ]] || [[ "${VERSION_SUFFIX}" =~ -v2$ ]]; then
+  echo "FAIL: refusing to build deprecated package suffix ${VERSION_SUFFIX} (use v3+)" >&2
+  exit 1
+fi
+
 command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required" >&2; exit 1; }
 docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || { echo "FAIL: image not found: ${IMAGE_TAG}" >&2; exit 1; }
 
@@ -136,6 +141,9 @@ EOF
 mkdir -p "$(dirname "${OUTPUT}")"
 tar -C "${STAGING}" -czf "${OUTPUT}" "${PKG}"
 sha256sum "${OUTPUT}" > "${OUTPUT}.sha256"
+
+echo "[build-k8s-delivery] K6 package verify"
+bash "${ROOT}/scripts/verify-k8s-package.sh" --dir "${PKG_DIR}"
 
 echo "[build-k8s-delivery] wrote ${OUTPUT}"
 echo "[build-k8s-delivery] wrote ${OUTPUT}.sha256"
