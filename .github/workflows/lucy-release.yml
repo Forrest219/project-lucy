@@ -107,7 +107,6 @@ jobs:
 
   k8s-static:
     runs-on: ubuntu-latest
-    needs: spec-and-webui
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
@@ -118,7 +117,6 @@ jobs:
   k8s-upgrade-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: spec-and-webui
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4

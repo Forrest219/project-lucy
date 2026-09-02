@@ -38,8 +38,8 @@ Manual inputs:
 | `business-eval-catalog` | `npm run smoke:p0:business-eval` |
 | `ktx-diff-audit` | clones upstream KTX and runs `npm run audit:ktx-diff` |
 | `docker-smoke` | `npm run smoke:p0:docker` |
-| `k8s-static` | **H1** — `npm run gate:k8s-static` (Helm lint + template contract guards) |
-| `k8s-upgrade-gate` | **H3 + H4** — `npm run gate:k8s-kind-h3` (kind cluster: N-1 install → in-place upgrade → rollback digest check) |
+| `k8s-static` | **H1** — `npm run gate:k8s-static` (Helm lint + template contract guards; runs in parallel, not blocked by WebUI tests) |
+| `k8s-upgrade-gate` | **H3 + H4** — `npm run gate:k8s-kind-h3` (kind cluster: N-1 install → in-place upgrade → rollback digest check; runs in parallel, not blocked by WebUI tests) |
 | `headless-config` | `npm run smoke:p0:headless-config` |
 | `demo-e2e` | `npm run smoke:p0:demo` |
 | `postgres-demo-e2e` | `npm run smoke:p0:postgres-demo` |
