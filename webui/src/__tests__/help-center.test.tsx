@@ -65,6 +65,11 @@ function renderHelp(path = "/help") {
                 title: "什么时候配置角色、Agent 和 Token"
               },
               {
+                id: "admin-audit-turns-vs-calls",
+                level: 4,
+                title: "问询记录与调用流水怎么选、怎么导出"
+              },
+              {
                 id: "webui-admin-break-glass",
                 level: 4,
                 title: "丢失管理员账号或密码时如何恢复（break-glass）"
@@ -125,6 +130,7 @@ function renderHelp(path = "/help") {
               "| 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |",
               "| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |",
               "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
+              "| 问询记录和调用流水都能导出吗？ | 可以。`/admin/audit` 的「导出问询记录」是一问一行，「导出调用流水」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#问询记录与调用流水怎么选怎么导出) |",
               "| 忘记 `WebUI` 管理员账号或密码怎么办？ | 自托管**不提供邮箱找回**。有其他所有者时由其重置；否则由能读写部署配置的人按 `break-glass` 清空 `admins.yaml` 后重新引导。 | [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass) |",
               "| 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |",
               "",
@@ -232,6 +238,13 @@ function renderHelp(path = "/help") {
               "",
               "角色管权限边界，`Agent` 管审计身份，`Token` 管接入凭证。一人一 `Agent`，多 `Token` 同权。",
               "",
+              "#### 问询记录与调用流水怎么选、怎么导出",
+              "",
+              "问询记录是一问一行；调用流水是一调用一行；两者通过「问询 ID」关联。",
+              "导出问询记录用于用户问询总览，导出调用流水用于工具调用明细。",
+              "CSV 文件名样式：`audit-calls-YYYYMMDD-HHmmss-000001.csv`。",
+              "本地时间用于 Excel 阅读，UTC 原始字段用于对账。字段说明解释每一列的含义、格式和触发条件。",
+              "",
               "#### 丢失管理员账号或密码时如何恢复（break-glass）",
               "",
               "自托管不提供邮箱找回。优先由其他所有者在 `/admin/admins` 重置；无人可登录时清空 `admins.yaml` 后以 `LUCY_WEBUI_AUTH=required` 重新 bootstrap。",
@@ -333,6 +346,24 @@ function renderHelp(path = "/help") {
                   sectionId: "connection-overview-metrics",
                   title: "连接概览指标说明",
                   snippet: "「已发现表数」统计本地 Schema Manifest 已读到的表…"
+                }
+              ]
+            }
+          }),
+          { status: 200 }
+        );
+      }
+      if (q.includes("导出问询记录")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              query: q,
+              items: [
+                {
+                  sectionId: "admin-audit-turns-vs-calls",
+                  title: "问询记录与调用流水怎么选、怎么导出",
+                  snippet: "导出问询记录用于用户问询总览，一问一行；字段说明解释每一列的含义、格式和触发条件。"
                 }
               ]
             }
@@ -941,6 +972,22 @@ describe("HelpCenter", () => {
       expect(screen.queryByTestId("help-search-results")).not.toBeInTheDocument();
     });
     expect(document.getElementById("connection-overview-metrics")).toBeInTheDocument();
+  });
+
+  it("finds the audit turn/call export guidance from search", async () => {
+    renderHelp();
+    const input = await screen.findByLabelText("搜索系统手册");
+
+    fireEvent.change(input, { target: { value: "导出问询记录" } });
+
+    expect(await screen.findByTestId("help-search-results")).toBeInTheDocument();
+    expect(await screen.findByText("问询记录与调用流水怎么选、怎么导出")).toBeInTheDocument();
+    expect(screen.getByText(/一问一行/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: /问询记录与调用流水怎么选、怎么导出/ }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("help-search-results")).not.toBeInTheDocument();
+    });
+    expect(document.getElementById("admin-audit-turns-vs-calls")).toBeInTheDocument();
   });
 
   it("shows an empty search state when nothing matches", async () => {

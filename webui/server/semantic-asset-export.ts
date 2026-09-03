@@ -16,6 +16,7 @@ import { mkdir, lstat, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseDocument, stringify as stringifyYaml, Scalar } from "yaml";
 import { isMap, isSeq, isScalar, type Document, type Node } from "yaml";
+import { buildStoredZip } from "./proxy/zip-store.js";
 
 const MAX_EXPORT_FILES = 200;
 const MAX_EXPORT_TOTAL_BYTES = 16 * 1024 * 1024;
@@ -272,113 +273,6 @@ function redactLine(line: string): string {
 
 // ─── Pure-JS minimal ZIP writer (STORED only, no compression) ────────────
 
-type ZipEntry = {
-  name: string;
-  data: Buffer;
-  crc32: number;
-  offset: number;
-};
-
-const CRC_TABLE: number[] = (() => {
-  const table: number[] = new Array(256);
-  for (let n = 0; n < 256; n += 1) {
-    let c = n;
-    for (let k = 0; k < 8; k += 1) {
-      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    }
-    table[n] = c >>> 0;
-  }
-  return table;
-})();
-
-function crc32(buf: Buffer): number {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i += 1) {
-    c = (c >>> 8) ^ CRC_TABLE[(c ^ buf[i]!) & 0xff]!;
-  }
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function writeDosTime(date: Date): { time: number; date: number } {
-  const time =
-    ((date.getHours() & 0x1f) << 11) |
-    ((date.getMinutes() & 0x3f) << 5) |
-    ((Math.floor(date.getSeconds() / 2)) & 0x1f);
-  const dosDate =
-    (((date.getFullYear() - 1980) & 0x7f) << 9) |
-    (((date.getMonth() + 1) & 0x0f) << 5) |
-    (date.getDate() & 0x1f);
-  return { time, date: dosDate };
-}
-
-function buildZip(entries: { name: string; data: Buffer }[]): Buffer {
-  const localParts: Buffer[] = [];
-  const centralParts: Buffer[] = [];
-  let offset = 0;
-  const zipEntries: ZipEntry[] = [];
-
-  for (const entry of entries) {
-    const nameBytes = Buffer.from(entry.name, "utf8");
-    const data = entry.data;
-    const crc = crc32(data);
-    const { time, date } = writeDosTime(new Date());
-
-    // Local file header (30 bytes + name + extra + data).
-    const localHeader = Buffer.alloc(30);
-    localHeader.writeUInt32LE(0x04034b50, 0); // signature
-    localHeader.writeUInt16LE(20, 4); // version needed
-    localHeader.writeUInt16LE(0, 6); // flags
-    localHeader.writeUInt16LE(0, 8); // method = STORED
-    localHeader.writeUInt16LE(time, 10);
-    localHeader.writeUInt16LE(date, 12);
-    localHeader.writeUInt32LE(crc, 14);
-    localHeader.writeUInt32LE(data.length, 18); // compressed size
-    localHeader.writeUInt32LE(data.length, 22); // uncompressed size
-    localHeader.writeUInt16LE(nameBytes.length, 26);
-    localHeader.writeUInt16LE(0, 28); // extra field length
-    localParts.push(localHeader, nameBytes, data);
-
-    // Central directory header (46 bytes + name).
-    const centralHeader = Buffer.alloc(46);
-    centralHeader.writeUInt32LE(0x02014b50, 0);
-    centralHeader.writeUInt16LE(20, 4); // version made by
-    centralHeader.writeUInt16LE(20, 6); // version needed
-    centralHeader.writeUInt16LE(0, 8); // flags
-    centralHeader.writeUInt16LE(0, 10); // method
-    centralHeader.writeUInt16LE(time, 12);
-    centralHeader.writeUInt16LE(date, 14);
-    centralHeader.writeUInt32LE(crc, 16);
-    centralHeader.writeUInt32LE(data.length, 20);
-    centralHeader.writeUInt32LE(data.length, 24);
-    centralHeader.writeUInt16LE(nameBytes.length, 28);
-    centralHeader.writeUInt16LE(0, 30); // extra
-    centralHeader.writeUInt16LE(0, 32); // comment
-    centralHeader.writeUInt16LE(0, 34); // disk number
-    centralHeader.writeUInt16LE(0, 36); // internal attrs
-    centralHeader.writeUInt32LE(0, 38); // external attrs
-    centralHeader.writeUInt32LE(offset, 42); // local header offset
-    centralParts.push(centralHeader, nameBytes);
-
-    zipEntries.push({ name: entry.name, data, crc32: crc, offset });
-    offset += localHeader.length + nameBytes.length + data.length;
-  }
-
-  const centralStart = offset;
-  let centralSize = 0;
-  for (const part of centralParts) centralSize += part.length;
-  const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054b50, 0);
-  eocd.writeUInt16LE(0, 4); // disk number
-  eocd.writeUInt16LE(0, 6); // disk where central directory starts
-  eocd.writeUInt16LE(zipEntries.length, 8);
-  eocd.writeUInt16LE(zipEntries.length, 10);
-  eocd.writeUInt32LE(centralSize, 12);
-  eocd.writeUInt32LE(centralStart, 16);
-  eocd.writeUInt16LE(0, 20); // comment length
-
-  return Buffer.concat([...localParts, ...centralParts, eocd]);
-}
-
 // ─── Public export entry ──────────────────────────────────────────────────
 
 export async function exportSemanticAssetPackage(
@@ -464,7 +358,7 @@ export async function exportSemanticAssetPackage(
       zipEntries.push({ name: entry.relPath.split(path.sep).join("/"), data });
     }
   }
-  const zipBuffer = buildZip(zipEntries);
+  const zipBuffer = buildStoredZip(zipEntries);
   const zipSha = sha256(zipBuffer);
 
   const exportId = newExportId();

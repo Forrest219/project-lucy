@@ -5,6 +5,7 @@ import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
 import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
+import { scrubArgsSummaryJson } from "./audit-privacy.js";
 
 export interface AccessLogEntry {
   ts: string;
@@ -13,6 +14,9 @@ export interface AccessLogEntry {
   tokenHashPrefix?: string;
   lucySessionId?: string;
   lucyTurnId?: string;
+  turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
+  turnAttributionConfidence?: "high" | "low" | "none";
+  turnAttributionReason?: "turn_attribution_rejected";
   lucyPlatform?: string;
   client?: string;
   clientVersion?: string;
@@ -90,6 +94,9 @@ const ACCESS_LOG_COLUMNS = [
   ["token_hash_prefix", "TEXT"],
   ["lucy_session_id", "TEXT"],
   ["lucy_turn_id", "TEXT"],
+  ["turn_attribution_mode", "TEXT"],
+  ["turn_attribution_confidence", "TEXT"],
+  ["turn_attribution_reason", "TEXT"],
   ["lucy_platform", "TEXT"],
   ["query_hash", "TEXT"],
   ["query_length", "INTEGER"],
@@ -263,6 +270,21 @@ async function getDb(): Promise<Database.Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_afl_ts ON auth_failure_log(ts);
     CREATE INDEX IF NOT EXISTS idx_afl_reason_ts ON auth_failure_log(reason, ts);
+    CREATE TABLE IF NOT EXISTS audit_maintenance_log (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts                 TEXT    NOT NULL,
+      event_type         TEXT    NOT NULL,
+      actor              TEXT    NOT NULL,
+      reason             TEXT    NOT NULL,
+      request_id         TEXT,
+      algorithm_version  TEXT    NOT NULL,
+      scanned            INTEGER NOT NULL,
+      matched            INTEGER NOT NULL,
+      updated            INTEGER NOT NULL,
+      before_digest      TEXT    NOT NULL,
+      after_digest       TEXT    NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_aml_ts ON audit_maintenance_log(ts);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -270,6 +292,7 @@ async function getDb(): Promise<Database.Database> {
   for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
+  ensureColumn(db, "conversation_turns", "session_id", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
@@ -320,9 +343,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest)
     `);
   }
   const result = insertStmt.run({
@@ -332,6 +355,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     tokenHashPrefix: entry.tokenHashPrefix ?? null,
     lucySessionId: entry.lucySessionId ?? null,
     lucyTurnId: entry.lucyTurnId ?? null,
+    turnAttributionMode: entry.turnAttributionMode ?? null,
+    turnAttributionConfidence: entry.turnAttributionConfidence ?? null,
+    turnAttributionReason: entry.turnAttributionReason ?? null,
     lucyPlatform: entry.lucyPlatform ?? null,
     client: entry.client ?? null,
     clientVersion: entry.clientVersion ?? null,
@@ -859,6 +885,77 @@ export async function purgeExpiredConversationTurns(
   }
 
   return { scanned: rows.length, purged: dryRun ? 0 : rows.length };
+}
+
+/** Spec 137: remove raw `question` from historical access_log.args_summary. */
+export async function scrubAccessLogArgsSummaries(
+  options: { dryRun?: boolean; actor?: string; reason?: string; requestId?: string } = {}
+): Promise<{
+  scanned: number;
+  matched: number;
+  updated: number;
+  algorithmVersion: string;
+  beforeDigest: string;
+  afterDigest: string;
+  maintenanceEventId?: number;
+}> {
+  const dryRun = options.dryRun !== false;
+  const algorithmVersion = "audit-args-summary-scrub/v2";
+  const database = await getDb();
+  const rows = database
+    .prepare(`SELECT id, args_summary FROM access_log WHERE args_summary IS NOT NULL ORDER BY id`)
+    .all() as Array<{ id: number; args_summary: string }>;
+
+  const updates: Array<{ id: number; before: string; next: string }> = [];
+  for (const row of rows) {
+    const result = scrubArgsSummaryJson(row.args_summary);
+    if (!result.changed || result.nextJson == null) continue;
+    updates.push({ id: row.id, before: row.args_summary, next: result.nextJson });
+  }
+  const digest = (values: Array<{ id: number; value: string }>) => createHash("sha256")
+    .update(JSON.stringify(values))
+    .digest("hex");
+  const beforeDigest = digest(updates.map((item) => ({ id: item.id, value: item.before })));
+  const afterDigest = digest(updates.map((item) => ({ id: item.id, value: item.next })));
+
+  let maintenanceEventId: number | undefined;
+  if (!dryRun && updates.length > 0) {
+    const stmt = database.prepare(`UPDATE access_log SET args_summary = ? WHERE id = ?`);
+    const maintenance = database.prepare(`
+      INSERT INTO audit_maintenance_log
+        (ts, event_type, actor, reason, request_id, algorithm_version, scanned, matched, updated, before_digest, after_digest)
+      VALUES
+        (@ts, @eventType, @actor, @reason, @requestId, @algorithmVersion, @scanned, @matched, @updated, @beforeDigest, @afterDigest)
+    `);
+    const apply = database.transaction((items: Array<{ id: number; before: string; next: string }>) => {
+      for (const item of items) stmt.run(item.next, item.id);
+      return maintenance.run({
+        ts: new Date().toISOString(),
+        eventType: "access_log_args_summary_scrub",
+        actor: options.actor?.trim() || "system",
+        reason: options.reason?.trim() || "privacy_hardening",
+        requestId: options.requestId?.trim() || null,
+        algorithmVersion,
+        scanned: rows.length,
+        matched: items.length,
+        updated: items.length,
+        beforeDigest,
+        afterDigest
+      });
+    });
+    const result = apply(updates);
+    maintenanceEventId = Number(result.lastInsertRowid);
+  }
+
+  return {
+    scanned: rows.length,
+    matched: updates.length,
+    updated: dryRun ? 0 : updates.length,
+    algorithmVersion,
+    beforeDigest,
+    afterDigest,
+    ...(maintenanceEventId === undefined ? {} : { maintenanceEventId })
+  };
 }
 
 // ─── Phase 2: inferred_turns (lazy-rebuilt call clustering) ──────────────────

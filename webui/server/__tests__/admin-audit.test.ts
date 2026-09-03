@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
@@ -8,6 +9,46 @@ let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
 let previousAuditDb: string | undefined;
+
+function parseStoredZipEntries(zip: Buffer): Map<string, Buffer> {
+  const entries = new Map<string, Buffer>();
+  let offset = 0;
+  while (offset + 30 <= zip.length && zip.readUInt32LE(offset) === 0x04034b50) {
+    const size = zip.readUInt32LE(offset + 18);
+    const nameLength = zip.readUInt16LE(offset + 26);
+    const extraLength = zip.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const name = zip.subarray(nameStart, nameStart + nameLength).toString("utf8");
+    entries.set(name, zip.subarray(dataStart, dataStart + size));
+    offset = dataStart + size;
+  }
+  return entries;
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === "," && !quoted) {
+      cells.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
 
 beforeEach(async () => {
   vi.resetModules();
@@ -26,6 +67,8 @@ afterEach(async () => {
   else process.env.KTX_PROJECT_ROOT = previousRoot;
   if (previousAuditDb === undefined) delete process.env.LUCY_AUDIT_DB;
   else process.env.LUCY_AUDIT_DB = previousAuditDb;
+  delete process.env.LUCY_AUDIT_EXPORT_MAX_ROWS;
+  delete process.env.LUCY_AUDIT_EXPORT_MAX_BYTES;
   await rm(projectRoot, { recursive: true, force: true });
 });
 
@@ -54,6 +97,8 @@ describe("GET /api/admin/audit", () => {
       tokenHashPrefix: "sha256:111122223333",
       lucySessionId: "session-1",
       lucyTurnId: "turn-1",
+      turnAttributionMode: "session_bound",
+      turnAttributionConfidence: "high",
       lucyPlatform: "telegram",
       client: "=hermes",
       tool: "sl_query",
@@ -71,7 +116,7 @@ describe("GET /api/admin/audit", () => {
       queryOperation: "select",
       queryPreview: "select * from dataforai.kx_fact_financial_amount where id = ?",
       responseBytes: 512,
-      responseRowCount: 3,
+      responseRowCount: 0,
       responseColumnCount: 2,
       responseTruncated: false,
       requestId: "business-1",
@@ -118,6 +163,8 @@ describe("GET /api/admin/audit", () => {
         tokenHashPrefix: "sha256:111122223333",
         lucySessionId: "session-1",
         lucyTurnId: "turn-1",
+        turnAttributionMode: "session_bound",
+        turnAttributionConfidence: "high",
         lucyPlatform: "telegram",
         roleIds: ["kx_readonly"],
         effectiveTablesCount: 7,
@@ -126,7 +173,7 @@ describe("GET /api/admin/audit", () => {
         queryLength: 76,
         queryOperation: "select",
         responseBytes: 512,
-        responseRowCount: 3,
+        responseRowCount: 0,
         responseColumnCount: 2,
         responseTruncated: false,
         argsSummary: {
@@ -140,10 +187,19 @@ describe("GET /api/admin/audit", () => {
       const withProtocol = await request(app.server).get("/api/admin/audit?includeProtocol=true&limit=10").expect(200);
       expect(withProtocol.body.data.total).toBe(3);
       expect(withProtocol.body.data.entries.map((entry: { tool: string }) => entry.tool)).toContain("tools/list");
+      const protocol = withProtocol.body.data.entries.find((entry: { requestId: string }) => entry.requestId === "protocol-1");
+      expect(protocol.responseRowCount).toBeUndefined();
+      expect(protocol.responseColumnCount).toBeUndefined();
+      expect(protocol.responseTruncated).toBeUndefined();
 
       const csvRes = await request(app.server).get("/api/admin/audit/export").expect(200);
       const csv = csvRes.text;
+      expect(csvRes.headers["content-disposition"]).toMatch(/audit-calls-\d{8}-\d{6}-\d{6}\.csv/);
       expect(csv).toContain("token_label");
+      expect(csv).toContain("turn_attribution_mode");
+      expect(csv).toContain("turn_attribution_confidence");
+      expect(csv).toContain("turn_attribution_reason");
+      expect(csv).toContain('"session_bound","high"');
       expect(csv).toContain("token_hash_prefix");
       expect(csv).toContain("lucy_session_id");
       expect(csv).toContain("query_hash");
@@ -152,6 +208,36 @@ describe("GET /api/admin/audit", () => {
       expect(csv).toContain("decision_reason");
       expect(csv).toContain("[REDACTED]");
       expect(csv).toContain("'=hermes");
+      const [csvHeaderLine, ...csvDataLines] = csv.trimEnd().split("\n");
+      const csvHeaders = parseCsvLine(csvHeaderLine);
+      const csvRows = csvDataLines.map(parseCsvLine);
+      expect(csvHeaders.slice(0, 4)).toEqual(["id", "ts", "ts_local", "user_id"]);
+      const tsIndex = csvHeaders.indexOf("ts");
+      const tsLocalIndex = csvHeaders.indexOf("ts_local");
+      const requestIdIndex = csvHeaders.indexOf("request_id");
+      const rowCountIndex = csvHeaders.indexOf("response_row_count");
+      const columnCountIndex = csvHeaders.indexOf("response_column_count");
+      const truncatedIndex = csvHeaders.indexOf("response_truncated");
+      const businessCsv = csvRows.find((row) => row[requestIdIndex] === "business-1");
+      expect(businessCsv?.[tsIndex]).toBe("2026-06-21T09:01:00.000Z");
+      expect(businessCsv?.[tsLocalIndex]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+      expect(businessCsv?.[rowCountIndex]).toBe("0");
+      expect(businessCsv?.[columnCountIndex]).toBe("2");
+      expect(businessCsv?.[truncatedIndex]).toBe("0");
+      const csvWithProtocol = (await request(app.server)
+        .get("/api/admin/audit/export?includeProtocol=true")
+        .expect(200)).text;
+      const [protocolHeaderLine, ...protocolDataLines] = csvWithProtocol.trimEnd().split("\n");
+      const protocolHeaders = parseCsvLine(protocolHeaderLine);
+      const protocolRows = protocolDataLines.map(parseCsvLine);
+      const protocolRequestIdIndex = protocolHeaders.indexOf("request_id");
+      const protocolRowCountIndex = protocolHeaders.indexOf("response_row_count");
+      const protocolColumnCountIndex = protocolHeaders.indexOf("response_column_count");
+      const protocolTruncatedIndex = protocolHeaders.indexOf("response_truncated");
+      const protocolCsv = protocolRows.find((row) => row[protocolRequestIdIndex] === "protocol-1");
+      expect(protocolCsv?.[protocolRowCountIndex]).toBe("");
+      expect(protocolCsv?.[protocolColumnCountIndex]).toBe("");
+      expect(protocolCsv?.[protocolTruncatedIndex]).toBe("");
       expect(csv).not.toContain("tools/list");
       expect(csv).not.toContain("super-secret");
       expect(csv).not.toContain("private123");
@@ -339,6 +425,136 @@ describe("GET /api/admin/audit/:id/sources", () => {
 });
 
 describe("GET /api/admin/audit/turns", () => {
+  it("exports reported turn inquiries as CSV with matching filters and formula escaping", async () => {
+    const { writeConversationTurn, writeAccessLogSources, writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+    await writeConversationTurn({
+      turnId: "lucy_turn_export_1",
+      userId: "turn-export-user",
+      questionPreview: "=SUM(A1:A2)",
+      questionSummary: "export test",
+      questionSource: "reported_tool"
+    });
+    const linkedLogId = await writeLog({
+      ts: at(10_000),
+      userId: "turn-export-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 15,
+      requestId: "turn-export-call-1",
+      lucyTurnId: "lucy_turn_export_1"
+    });
+    await writeAccessLogSources(linkedLogId, at(10_000), "turn-export-user", "lucy_query", [{
+      connectionId: "demo-mysql",
+      schemaName: "dataforai",
+      sourceName: "superstore_orders",
+      physicalTable: "dataforai.superstore_orders",
+      extractionMethod: "args_source_name",
+      confidence: "high"
+    }]);
+    await writeConversationTurn({
+      turnId: "lucy_turn_export_other",
+      userId: "other-user",
+      questionSummary: "should not export",
+      questionSource: "reported_tool"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const listRes = await request(app.server)
+        .get("/api/admin/audit/turns?user=turn-export-user&source=reported")
+        .expect(200);
+      expect(listRes.body.data.total).toBe(1);
+      expect(listRes.body.data.entries[0]).toMatchObject({
+        id: "lucy_turn_export_1",
+        source: "reported",
+        businessCallCount: 1
+      });
+
+      const csvRes = await request(app.server)
+        .get("/api/admin/audit/turns/export?user=turn-export-user&source=reported&bom=1")
+        .expect(200);
+      expect(csvRes.headers["content-type"]).toContain("text/csv");
+      expect(csvRes.headers["content-disposition"]).toMatch(/audit-turns-\d{8}-\d{6}-\d{6}\.csv/);
+      expect(csvRes.headers["cache-control"]).toContain("no-store");
+      expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
+      const csvBody = csvRes.text.replace(/^\uFEFF/, "");
+      const [headerLine, firstDataLine] = csvBody.split("\n");
+      expect(headerLine).toBe("问询 ID,来源,Agent,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数");
+      const turnHeaders = parseCsvLine(headerLine);
+      const turnCells = parseCsvLine(firstDataLine);
+      expect(turnCells[turnHeaders.indexOf("开始时间")]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+      expect(turnCells[turnHeaders.indexOf("开始时间 UTC")]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(turnCells[turnHeaders.indexOf("结束时间")]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+      expect(turnCells[turnHeaders.indexOf("结束时间 UTC")]).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(csvBody).toContain("lucy_turn_export_1");
+      expect(csvBody).toContain("用户原始问询");
+      expect(csvBody).toContain("lucy_query");
+      expect(csvBody).toContain("dataforai.superstore_orders");
+      expect(csvBody).toContain("\"'=SUM(A1:A2)\"");
+      expect(csvBody).not.toContain("other-user");
+      expect(csvBody).not.toContain("should not export");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("exports CSV field metadata for access calls and turn inquiries", async () => {
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const calls = await request(app.server)
+        .get("/api/admin/audit/export-metadata?kind=calls")
+        .expect(200);
+      expect(calls.headers["content-type"]).toContain("application/json");
+      expect(calls.headers["content-disposition"]).toMatch(/audit-calls-fields-\d{8}-\d{6}-\d{6}\.json/);
+      expect(calls.body).toMatchObject({
+        schemaVersion: "audit-csv-field-metadata/v1",
+        kind: "calls",
+        timezone: "Asia/Shanghai",
+        filenamePattern: "audit-calls-YYYYMMDD-HHmmss-000001.csv"
+      });
+      expect(calls.body.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "ts", trigger: expect.stringContaining("每条") }),
+          expect.objectContaining({ name: "ts_local", format: "YYYY-MM-DD HH:mm:ss" }),
+          expect.objectContaining({ name: "generated_sql", trigger: expect.stringContaining("lucy_query") })
+        ])
+      );
+
+      const turns = await request(app.server)
+        .get("/api/admin/audit/export-metadata?kind=turns")
+        .expect(200);
+      expect(turns.headers["content-disposition"]).toMatch(/audit-turns-fields-\d{8}-\d{6}-\d{6}\.json/);
+      expect(turns.body).toMatchObject({
+        schemaVersion: "audit-csv-field-metadata/v1",
+        kind: "turns",
+        timezone: "Asia/Shanghai",
+        filenamePattern: "audit-turns-YYYYMMDD-HHmmss-000001.csv"
+      });
+      expect(turns.body.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: "开始时间", format: "YYYY-MM-DD HH:mm:ss" }),
+          expect.objectContaining({ name: "开始时间 UTC", description: expect.stringContaining("UTC") }),
+          expect.objectContaining({ name: "来源", trigger: expect.stringContaining("reported") })
+        ])
+      );
+
+      const bad = await request(app.server)
+        .get("/api/admin/audit/export-metadata?kind=bad")
+        .expect(400);
+      expect(bad.body.error.code).toBe("ERR_INVALID_AUDIT_METADATA_KIND");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("surfaces inferred and reported question clusters, individually and merged via source=all", async () => {
     const { writeLog, writeAccessLogSources, writeConversationTurn } = await import("../proxy/audit");
     const now = Date.now();
@@ -654,6 +870,210 @@ describe("Spec 125 generated_sql hot store", () => {
       const csv = await request(app.server).get("/api/admin/audit/export?includeProtocol=1").expect(200);
       expect(csv.text).toContain("generated_sql");
       expect(csv.text).toContain("SELECT SUM(sales) AS total FROM dataforai.superstore_orders");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("Spec 137 audit evidence pack", () => {
+  it("exports normalized filters, completeness evidence, maintenance events, and valid SHA-256 values", async () => {
+    const { writeAccessLogSources, writeAuthFailureLog, writeLog } = await import("../proxy/audit");
+    const snapshotHash = "c".repeat(64);
+    const logId = await writeLog({
+      ts: "2026-09-02T10:00:00.000Z",
+      userId: "audit-user",
+      lucySessionId: "pack-session-1",
+      lucyTurnId: "pack-turn-1",
+      turnAttributionMode: "session_bound",
+      turnAttributionConfidence: "high",
+      lucyPlatform: "mcp-playground",
+      clientIp: "10.0.0.8",
+      deviceName: "audit-mac",
+      tool: "lucy_query",
+      argsSummary: { question: "legacy question", intentSummary: "legacy summary" },
+      outcome: "ok",
+      durationMs: 12,
+      requestId: "pack-query-1",
+      generatedSql: "SELECT 1 AS n",
+      responseRowCount: 0,
+      responseColumnCount: 1,
+      responseTruncated: false,
+      policyVersion: "d".repeat(64),
+      capabilityDigest: "e".repeat(64),
+      permissionSnapshotHash: snapshotHash,
+      permissionSnapshot: {
+        hash: snapshotHash,
+        rolesJson: [{ id: "audit-role" }],
+        resolvedJson: { tools: ["lucy_query"] },
+        capabilityDigest: "e".repeat(64),
+        toolClassificationVersion: "v1"
+      }
+    });
+    const unknownLogId = await writeLog({
+      ts: "2026-09-02T10:00:30.000Z",
+      userId: "audit-user",
+      lucySessionId: "pack-session-1",
+      turnAttributionMode: "unassigned",
+      turnAttributionConfidence: "none",
+      turnAttributionReason: "turn_attribution_rejected",
+      lucyPlatform: "mcp-playground",
+      clientIp: "10.0.0.8",
+      deviceName: "audit-mac",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "pack-query-unknown",
+      permissionSnapshotHash: snapshotHash
+    });
+    await writeAccessLogSources(logId, "2026-09-02T10:00:00.000Z", "audit-user", "lucy_query", [{
+      connectionId: "warehouse",
+      schemaName: "fin",
+      sourceName: "ledger",
+      physicalTable: "fin.ledger",
+      extractionMethod: "explicit",
+      confidence: "high"
+    }]);
+    await writeAccessLogSources(unknownLogId, "2026-09-02T10:00:30.000Z", "audit-user", "lucy_query", [{
+      connectionId: "warehouse",
+      schemaName: "fin",
+      sourceName: "ledger",
+      physicalTable: "fin.ledger",
+      extractionMethod: "explicit",
+      confidence: "high"
+    }]);
+    await writeAuthFailureLog({
+      ts: "2026-09-02T10:01:00.000Z",
+      reason: "token_unrecognized",
+      userId: "audit-user",
+      clientIp: "10.0.0.8",
+      requestId: "auth-fail-1"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      await request(app.server)
+        .post("/api/admin/audit/args-summary/scrub")
+        .send({ dryRun: false, reason: "remove legacy question copies" })
+        .expect(200);
+
+      const exportUntil = new Date(Date.now() + 60_000).toISOString();
+      const response = await request(app.server)
+        .get("/api/admin/audit/export-pack")
+        .query({
+          user: "audit-user",
+          callSource: "playground",
+          clientIp: "10.0.0.8",
+          deviceName: "audit-mac",
+          since: "2026-09-02T00:00:00.000Z",
+          until: exportUntil
+        })
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on("end", () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+
+      expect(response.headers["content-type"]).toContain("application/zip");
+      expect(response.headers["cache-control"]).toContain("no-store");
+      const entries = parseStoredZipEntries(response.body as Buffer);
+      expect([...entries.keys()]).toEqual(expect.arrayContaining([
+        "access_log.csv",
+        "access_log_sources.csv",
+        "permission_snapshots.jsonl",
+        "auth_failure_log.csv",
+        "audit_maintenance_log.jsonl",
+        "manifest.json"
+      ]));
+      const manifest = JSON.parse(entries.get("manifest.json")!.toString("utf8")) as {
+        appVersion: string;
+        includeProtocol: boolean;
+        filter: Record<string, unknown>;
+        completeness: { complete: boolean };
+        files: Array<{ name: string; sha256: string; filterScope: string }>;
+      };
+      expect(manifest.appVersion).toBe("0.17.0");
+      expect(manifest.includeProtocol).toBe(true);
+      expect(manifest.filter).toMatchObject({
+        user: "audit-user",
+        callSource: "playground",
+        clientIp: "10.0.0.8",
+        deviceName: "audit-mac",
+        includeProtocol: true
+      });
+      expect(manifest.completeness.complete).toBe(true);
+      for (const file of manifest.files) {
+        expect(file.filterScope).toBeTruthy();
+        expect(createHash("sha256").update(entries.get(file.name)!).digest("hex")).toBe(file.sha256);
+      }
+      expect(entries.get("auth_failure_log.csv")!.toString("utf8")).toContain("auth-fail-1");
+      expect(entries.get("audit_maintenance_log.jsonl")!.toString("utf8")).toContain("access_log_args_summary_scrub");
+      expect(entries.get("access_log.csv")!.toString("utf8")).not.toContain("legacy question");
+      expect(entries.get("access_log.csv")!.toString("utf8")).not.toContain("legacy summary");
+      const accessCsv = entries.get("access_log.csv")!.toString("utf8");
+      const [accessHeaderLine, ...accessDataLines] = accessCsv.trimEnd().split("\n");
+      const accessHeaders = parseCsvLine(accessHeaderLine);
+      const accessRows = accessDataLines.map(parseCsvLine);
+      const accessRequestIdIndex = accessHeaders.indexOf("request_id");
+      const modeIndex = accessHeaders.indexOf("turn_attribution_mode");
+      const confidenceIndex = accessHeaders.indexOf("turn_attribution_confidence");
+      const reasonIndex = accessHeaders.indexOf("turn_attribution_reason");
+      const accessRowCountIndex = accessHeaders.indexOf("response_row_count");
+      const accessTruncatedIndex = accessHeaders.indexOf("response_truncated");
+      const attributedRow = accessRows.find((row) => row[accessRequestIdIndex] === "pack-query-1");
+      const unknownRow = accessRows.find((row) => row[accessRequestIdIndex] === "pack-query-unknown");
+      expect(attributedRow?.[modeIndex]).toBe("session_bound");
+      expect(attributedRow?.[confidenceIndex]).toBe("high");
+      expect(attributedRow?.[accessRowCountIndex]).toBe("0");
+      expect(attributedRow?.[accessTruncatedIndex]).toBe("0");
+      expect(unknownRow?.[modeIndex]).toBe("unassigned");
+      expect(unknownRow?.[confidenceIndex]).toBe("none");
+      expect(unknownRow?.[reasonIndex]).toBe("turn_attribution_rejected");
+      expect(unknownRow?.[accessTruncatedIndex]).toBe("");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects an export that exceeds the configured row limit", async () => {
+    process.env.LUCY_AUDIT_EXPORT_MAX_ROWS = "1";
+    const { writeLog } = await import("../proxy/audit");
+    for (const requestId of ["limit-1", "limit-2"]) {
+      await writeLog({
+        ts: "2026-09-02T10:00:00.000Z",
+        userId: "limit-user",
+        tool: "lucy_read_source",
+        outcome: "ok",
+        durationMs: 1,
+        requestId
+      });
+    }
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const response = await request(app.server).get("/api/admin/audit/export-pack").expect(413);
+      expect(response.body.error.code).toBe("ERR_AUDIT_EXPORT_TOO_LARGE");
+      expect(response.headers["cache-control"]).toContain("no-store");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("requires a reason before applying historical scrub", async () => {
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const response = await request(app.server)
+        .post("/api/admin/audit/args-summary/scrub")
+        .send({ dryRun: false })
+        .expect(400);
+      expect(response.body.error.code).toBe("ERR_SCRUB_REASON_REQUIRED");
     } finally {
       await app.close();
     }

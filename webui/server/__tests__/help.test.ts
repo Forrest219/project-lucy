@@ -568,6 +568,8 @@ describe("Help handbook", () => {
         "",
         "#### 什么时候配置角色、Agent 和 Token",
         "",
+        "#### 问询记录与调用流水怎么选、怎么导出",
+        "",
         "#### 审计热库与冷库（SQL 留存边界）",
         "",
         "### 3.6 质量评测 Eval"
@@ -576,6 +578,7 @@ describe("Help handbook", () => {
     const byTitle = Object.fromEntries(toc.map((t) => [t.title, t.id]));
     expect(byTitle["3.5 访问治理 Admin"]).toBe("admin-governance");
     expect(byTitle["什么时候配置角色、Agent 和 Token"]).toBe("admin-role-agent-token-guide");
+    expect(byTitle["问询记录与调用流水怎么选、怎么导出"]).toBe("admin-audit-turns-vs-calls");
     expect(byTitle["审计热库与冷库（SQL 留存边界）"]).toBe("admin-audit-hot-cold-store");
     expect(byTitle["3.6 质量评测 Eval"]).toBe("eval");
     expect(toc).toEqual(
@@ -584,6 +587,11 @@ describe("Help handbook", () => {
           id: "admin-role-agent-token-guide",
           level: 4,
           title: "什么时候配置角色、Agent 和 Token"
+        },
+        {
+          id: "admin-audit-turns-vs-calls",
+          level: 4,
+          title: "问询记录与调用流水怎么选、怎么导出"
         },
         {
           id: "admin-audit-hot-cold-store",
@@ -606,9 +614,21 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("generated_sql");
     expect(handbook.markdown).toContain("生成 SQL");
     expect(handbook.markdown).toContain("调用流水里的「生成 SQL」从哪来？");
+    expect(handbook.markdown).toContain("#### 问询记录与调用流水怎么选、怎么导出");
+    expect(handbook.markdown).toContain("/help?section=admin-audit-turns-vs-calls");
+    expect(handbook.markdown).toContain("导出问询记录");
+    expect(handbook.markdown).toContain("导出调用流水");
+    expect(handbook.markdown).toContain("audit-calls-YYYYMMDD-HHmmss-000001.csv");
+    expect(handbook.markdown).toContain("字段说明");
+    expect(handbook.markdown).toContain("ts_local");
     expect(handbook.toc).toEqual(
       expect.arrayContaining([
         { id: "admin-governance", level: 3, title: "3.5 访问治理 Admin" },
+        {
+          id: "admin-audit-turns-vs-calls",
+          level: 4,
+          title: "问询记录与调用流水怎么选、怎么导出"
+        },
         {
           id: "admin-audit-hot-cold-store",
           level: 4,
@@ -757,6 +777,7 @@ describe("Help handbook", () => {
     expect(handbook.markdown).toContain("`YAML` 改完后为什么 `Agent` 仍然搜不到新口径？");
     expect(handbook.markdown).toContain("`Agent` 返回 `Access denied` 时先查哪里？");
     expect(handbook.markdown).toContain("`expires_at` 到期后 `token` 会自动失效吗？");
+    expect(handbook.markdown).toContain("问询记录和调用流水都能导出吗？");
     expect(handbook.markdown).toContain(
       "`/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」有什么关系？"
     );

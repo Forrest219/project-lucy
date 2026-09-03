@@ -154,9 +154,13 @@ GET    /api/admin/audit
 GET    /api/admin/audit/sources
 GET    /api/admin/audit/:id/sources
 GET    /api/admin/audit/export
+GET    /api/admin/audit/export-metadata
+GET    /api/admin/audit/export-pack
 GET    /api/admin/audit/turns
+GET    /api/admin/audit/turns/export
 GET    /api/admin/audit/turns/:turnId
 POST   /api/admin/audit/conversation-turns/purge
+POST   /api/admin/audit/args-summary/scrub
 GET    /api/admin/trace/events
 GET    /api/admin/mcp-tools
 POST   /api/admin/mcp-playground/acl-preview
@@ -709,9 +713,13 @@ Audit：
 - `GET /api/admin/audit/sources`
 - `GET /api/admin/audit/:id/sources`
 - `GET /api/admin/audit/export`
+- `GET /api/admin/audit/export-metadata`
+- `GET /api/admin/audit/export-pack`
 - `GET /api/admin/audit/turns`
+- `GET /api/admin/audit/turns/export`
 - `GET /api/admin/audit/turns/:turnId`
 - `POST /api/admin/audit/conversation-turns/purge`
+- `POST /api/admin/audit/args-summary/scrub`
 - `GET /api/admin/mcp-tools`
 
 `GET /api/admin/config-audit` 查询 `config_change_log`，用于追踪 WebUI 对 `ktx.yaml`、`webui/config/access.yaml` 等治理配置的写入记录。
@@ -786,9 +794,17 @@ Query：
 
 `GET /api/admin/audit` 查询 MCP access log；支持按 user、tool、outcome、时间范围、tableSearch、sessionId、turnId、platform 过滤。默认不包含协议类工具调用；传 `includeProtocol=true` 可包含 `tools/list`、`initialize`、`notifications/initialized`。
 
-`GET /api/admin/audit/export` 使用与 `/api/admin/audit` 相同过滤条件导出 CSV，并对 spreadsheet formula 前缀做转义。
+`GET /api/admin/audit/export` 使用与 `/api/admin/audit` 相同过滤条件导出**调用流水** CSV，并对 spreadsheet formula 前缀做转义。可选 `bom=1` 前缀 UTF-8 BOM。文件名为 `audit-calls-YYYYMMDD-HHmmss-000001.csv`，按 `Asia/Shanghai` 精确到秒并带流水号；CSV 保留原始 `ts`（UTC），并新增 `ts_local`（`YYYY-MM-DD HH:mm:ss`）用于人工阅读和 Excel 解析。用户可见名称不得称为「审计证据」。权威契约见 Spec 137 与 Spec 141。
+
+`GET /api/admin/audit/export-metadata?kind=calls|turns` 下载 CSV 字段说明 JSON。响应 `schemaVersion="audit-csv-field-metadata/v1"`，包含 `timezone`、`filenamePattern`、`generatedAt` 与按 CSV 列顺序排列的 `fields[]`，每个字段说明 `name` / `label` / `format` / `description` / `trigger`。非法 `kind` 返回 `400 ERR_INVALID_AUDIT_METADATA_KIND`。
+
+`GET /api/admin/audit/export-pack` 导出**审计证据包** zip（文件名 `audit-pack-YYYYMMDDTHHMMSSZ-<8hex>.zip`）。包内含 `access_log.csv`、`access_log_sources.csv`、`permission_snapshots.jsonl`、`auth_failure_log.csv`、`audit_maintenance_log.jsonl` 与 `manifest.json`。Manifest 记录标准化后的有效筛选、逐文件 `filterScope`、产品 VERSION、rowCount/SHA-256、容量上限和 snapshot/source 完整性缺口。默认最多 10000 行/64 MiB，超限返回 `413 ERR_AUDIT_EXPORT_TOO_LARGE`；下载响应 `Cache-Control: private, no-store`。SHA 仅用于完整性自检，不是防篡改签名。见 Spec 137。
+
+`POST /api/admin/audit/args-summary/scrub` 删除历史 `access_log.args_summary` 中的 `question` / `questionPreview` / `intentSummary`。请求体 `{ dryRun?: boolean, reason?: string }`，默认 dry-run；apply 时 reason 必填，并在同一事务追加不含原文的 maintenance 事件。见 Spec 137 §7。
 
 `GET /api/admin/audit/turns` 返回问答轮次视图，合并 inferred turns 与客户端显式上报的 conversation turns。支持 `user`、`since`、`until`、`source=inferred|reported|all`、`lookbackHours`、`limit`、`offset`；默认 `source=all`、`limit=50`，最大 `500`。响应额外包含当前筛选窗口的 `summary`：`reportedCount` / `inferredCount` / `reportedShare`（上报占比，0–1），便于观察可选原文上报覆盖率；漏报不是错误。
+
+`GET /api/admin/audit/turns/export` 使用同一轮次筛选契约导出访问问询 CSV；可选 `bom=1`。文件名为 `audit-turns-YYYYMMDD-HHmmss-000001.csv`。导出保持 inferred/reported 来源标签，不把推断问题当作已上报原文；「开始时间」「结束时间」为本地时间，「开始时间 UTC」「结束时间 UTC」保留原始值。
 
 响应：
 

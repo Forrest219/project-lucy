@@ -14,8 +14,10 @@ import {
   targetLabel
 } from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns } from "../proxy/audit.js";
+import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries } from "../proxy/audit.js";
+import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
+import { resolveLucyVersion } from "../lucy-version.js";
 import {
   ensureTraceEvidenceSchema,
   listTraceEvents,
@@ -54,6 +56,9 @@ const ACCESS_LOG_COLUMNS = [
   ["token_hash_prefix", "TEXT"],
   ["lucy_session_id", "TEXT"],
   ["lucy_turn_id", "TEXT"],
+  ["turn_attribution_mode", "TEXT"],
+  ["turn_attribution_confidence", "TEXT"],
+  ["turn_attribution_reason", "TEXT"],
   ["lucy_platform", "TEXT"],
   ["query_hash", "TEXT"],
   ["query_length", "INTEGER"],
@@ -99,6 +104,22 @@ type AccessLogFilterQuery = {
   clientIp?: string;
   deviceName?: string;
 };
+
+function auditExportMaxRows(): number {
+  const configured = Number(process.env.LUCY_AUDIT_EXPORT_MAX_ROWS ?? 10_000);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 10_000;
+}
+
+function auditExportMaxBytes(): number {
+  const configured = Number(process.env.LUCY_AUDIT_EXPORT_MAX_BYTES ?? 64 * 1024 * 1024);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 64 * 1024 * 1024;
+}
+
+function chunksOf<T>(items: T[], size = 400): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
+}
 
 function buildAccessLogFilter(q: AccessLogFilterQuery): {
   conditions: string[];
@@ -164,6 +185,8 @@ const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|author
 const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
 const CSV_FORMULA_RE = /^[=+\-@]/;
 const CONFIG_AUDIT_DIFF_MAX_BYTES = 256 * 1024;
+const AUDIT_EXPORT_TIMEZONE = "Asia/Shanghai";
+let auditExportSequence = 0;
 
 export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish";
 export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system";
@@ -173,6 +196,31 @@ function ensureColumn(database: Database.Database, table: string, column: string
   const rows = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (rows.some((row) => row.name === column)) return;
   database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+function formatAuditLocalTimestamp(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: AUDIT_EXPORT_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
+function auditExportFilename(kind: string, ext: "csv" | "json", now = new Date()): string {
+  auditExportSequence = (auditExportSequence % 999_999) + 1;
+  const seq = String(auditExportSequence).padStart(6, "0");
+  return `audit-${kind}-${formatConfigAuditExportFilenameStamp(now)}-${seq}.${ext}`;
 }
 
 function csvCell(value: unknown): string {
@@ -356,6 +404,21 @@ export async function getAuditDb(): Promise<Database.Database> {
     );
     CREATE INDEX IF NOT EXISTS idx_afl_ts ON auth_failure_log(ts);
     CREATE INDEX IF NOT EXISTS idx_afl_reason_ts ON auth_failure_log(reason, ts);
+    CREATE TABLE IF NOT EXISTS audit_maintenance_log (
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts                 TEXT    NOT NULL,
+      event_type         TEXT    NOT NULL,
+      actor              TEXT    NOT NULL,
+      reason             TEXT    NOT NULL,
+      request_id         TEXT,
+      algorithm_version  TEXT    NOT NULL,
+      scanned            INTEGER NOT NULL,
+      matched            INTEGER NOT NULL,
+      updated            INTEGER NOT NULL,
+      before_digest      TEXT    NOT NULL,
+      after_digest       TEXT    NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_aml_ts ON audit_maintenance_log(ts);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -363,6 +426,7 @@ export async function getAuditDb(): Promise<Database.Database> {
   for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
+  ensureColumn(db, "conversation_turns", "session_id", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
@@ -529,6 +593,9 @@ interface QueryRow {
   token_hash_prefix: string | null;
   lucy_session_id: string | null;
   lucy_turn_id: string | null;
+  turn_attribution_mode: string | null;
+  turn_attribution_confidence: string | null;
+  turn_attribution_reason: string | null;
   lucy_platform: string | null;
   client: string | null;
   client_version: string | null;
@@ -561,6 +628,380 @@ interface QueryRow {
   capability_digest: string | null;
 }
 
+const ACCESS_LOG_CSV_HEADERS = [
+  "id",
+  "ts",
+  "ts_local",
+  "user_id",
+  "token_label",
+  "token_hash_prefix",
+  "lucy_session_id",
+  "lucy_turn_id",
+  "turn_attribution_mode",
+  "turn_attribution_confidence",
+  "turn_attribution_reason",
+  "lucy_platform",
+  "client",
+  "client_version",
+  "client_ip",
+  "user_agent",
+  "device_name",
+  "tool",
+  "tables",
+  "args_summary",
+  "query_hash",
+  "query_length",
+  "query_operation",
+  "query_preview",
+  "generated_sql",
+  "outcome",
+  "error_detail",
+  "duration_ms",
+  "response_bytes",
+  "response_row_count",
+  "response_column_count",
+  "response_truncated",
+  "request_id",
+  "trace_id",
+  "role_ids",
+  "permission_snapshot_hash",
+  "effective_tables_count",
+  "decision_reason",
+  "policy_version",
+  "capability_digest"
+] as const;
+
+type CsvFieldMetadata = {
+  name: string;
+  label: string;
+  format: string;
+  description: string;
+  trigger: string;
+};
+
+const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number], Omit<CsvFieldMetadata, "name">> = {
+  id: {
+    label: "事件 ID",
+    format: "integer",
+    description: "调用流水事件的自增 ID。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  ts: {
+    label: "UTC 时间",
+    format: "ISO 8601 UTC",
+    description: "访问事件写入时的原始 UTC 时间，用于机器对账和跨时区复核。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  ts_local: {
+    label: "本地时间",
+    format: "YYYY-MM-DD HH:mm:ss",
+    description: "按 Asia/Shanghai 转换后的访问事件时间，便于人工阅读和 Excel 解析。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  user_id: {
+    label: "Agent",
+    format: "string",
+    description: "触发调用的 Agent 用户 ID。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  token_label: {
+    label: "Token 标签",
+    format: "string|null",
+    description: "发起调用的 Token 标签。",
+    trigger: "请求鉴权成功且 Token 配置含 label 时输出。"
+  },
+  token_hash_prefix: {
+    label: "Token 哈希前缀",
+    format: "string|null",
+    description: "Token 哈希的安全前缀，用于定位凭证但不暴露明文。",
+    trigger: "请求携带 Bearer Token 且鉴权链路可识别时输出。"
+  },
+  lucy_session_id: {
+    label: "会话 ID",
+    format: "string|null",
+    description: "客户端上报或服务端归因的 Lucy 会话 ID。",
+    trigger: "客户端上报会话或服务端从上下文推断到会话时输出。"
+  },
+  lucy_turn_id: {
+    label: "问询 ID",
+    format: "string|null",
+    description: "关联问询记录的 ID，用于从调用流水回溯到一次用户问询。",
+    trigger: "客户端上报问询或服务端完成问询归因时输出。"
+  },
+  turn_attribution_mode: {
+    label: "问询归因方式",
+    format: "string|null",
+    description: "说明调用流水如何关联到问询 ID。",
+    trigger: "服务端写入或修复问询归因时输出。"
+  },
+  turn_attribution_confidence: {
+    label: "问询归因可信度",
+    format: "high|medium|low|null",
+    description: "问询归因结果的可信度。",
+    trigger: "服务端写入或修复问询归因时输出。"
+  },
+  turn_attribution_reason: {
+    label: "问询归因原因",
+    format: "string|null",
+    description: "问询归因方式的补充原因。",
+    trigger: "归因逻辑需要记录解释时输出。"
+  },
+  lucy_platform: {
+    label: "调用平台",
+    format: "string|null",
+    description: "客户端平台或 MCP 调试台标记。",
+    trigger: "客户端上报平台或调用来自 MCP 调试台时输出。"
+  },
+  client: {
+    label: "客户端",
+    format: "string|null",
+    description: "发起调用的客户端名称。",
+    trigger: "客户端上报 client 时输出。"
+  },
+  client_version: {
+    label: "客户端版本",
+    format: "string|null",
+    description: "发起调用的客户端版本。",
+    trigger: "客户端上报版本时输出。"
+  },
+  client_ip: {
+    label: "客户端 IP",
+    format: "string|null",
+    description: "服务端看到的客户端 IP。",
+    trigger: "HTTP 请求可解析客户端地址时输出。"
+  },
+  user_agent: {
+    label: "User-Agent",
+    format: "string|null",
+    description: "HTTP User-Agent 原文。",
+    trigger: "请求携带 User-Agent 时输出。"
+  },
+  device_name: {
+    label: "设备名",
+    format: "string|null",
+    description: "客户端上报的设备名。",
+    trigger: "客户端上报设备名时输出。"
+  },
+  tool: {
+    label: "工具",
+    format: "string",
+    description: "本次访问调用的 MCP 工具名或协议工具名。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  tables: {
+    label: "数据表",
+    format: "JSON string|null",
+    description: "本次调用触达或声明的物理表列表。",
+    trigger: "调用触达数据表或参数中可识别表名时输出。"
+  },
+  args_summary: {
+    label: "参数摘要",
+    format: "JSON string|null",
+    description: "脱敏后的调用参数摘要。",
+    trigger: "调用参数存在且可安全摘要时输出。"
+  },
+  query_hash: {
+    label: "查询哈希",
+    format: "sha256|null",
+    description: "查询文本或问题文本的哈希。",
+    trigger: "调用含查询类参数时输出。"
+  },
+  query_length: {
+    label: "查询长度",
+    format: "integer|null",
+    description: "查询文本或问题文本长度。",
+    trigger: "调用含查询类参数时输出。"
+  },
+  query_operation: {
+    label: "查询操作",
+    format: "select|unknown|null",
+    description: "查询操作类型摘要。",
+    trigger: "查询类工具可识别操作类型时输出。"
+  },
+  query_preview: {
+    label: "查询预览",
+    format: "string|null",
+    description: "脱敏后的查询预览，不作为完整 SQL 证据。",
+    trigger: "查询类工具可生成安全预览时输出。"
+  },
+  generated_sql: {
+    label: "生成 SQL",
+    format: "string|null",
+    description: "lucy_query 经语义层编译后的 SQL。",
+    trigger: "lucy_query 成功编译出 SQL 时输出。"
+  },
+  outcome: {
+    label: "结果",
+    format: "ok|denied|error",
+    description: "本次工具调用的执行结果。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  error_detail: {
+    label: "错误详情",
+    format: "JSON string|string|null",
+    description: "脱敏后的错误详情。",
+    trigger: "调用失败或被拒且存在错误上下文时输出。"
+  },
+  duration_ms: {
+    label: "耗时",
+    format: "integer milliseconds",
+    description: "本次调用服务端记录的耗时。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  response_bytes: {
+    label: "响应字节数",
+    format: "integer|null",
+    description: "响应体大小。",
+    trigger: "调用返回响应且服务端可统计大小时输出。"
+  },
+  response_row_count: {
+    label: "响应行数",
+    format: "integer|null",
+    description: "数据查询响应行数。",
+    trigger: "数据查询工具返回结构化行结果时输出。"
+  },
+  response_column_count: {
+    label: "响应列数",
+    format: "integer|null",
+    description: "数据查询响应列数。",
+    trigger: "数据查询工具返回结构化列结果时输出。"
+  },
+  response_truncated: {
+    label: "响应是否截断",
+    format: "0|1|null",
+    description: "响应是否被服务端截断。",
+    trigger: "响应截断状态可判定时输出。"
+  },
+  request_id: {
+    label: "请求 ID",
+    format: "string",
+    description: "服务端请求 ID，用于日志串联。",
+    trigger: "每条 access_log 行均输出。"
+  },
+  trace_id: {
+    label: "Trace ID",
+    format: "string|null",
+    description: "跨组件追踪 ID。",
+    trigger: "请求上下文存在 trace_id 时输出。"
+  },
+  role_ids: {
+    label: "Role",
+    format: "JSON string|null",
+    description: "本次调用生效的 Role ID 列表。",
+    trigger: "鉴权成功并完成 Role 解析时输出。"
+  },
+  permission_snapshot_hash: {
+    label: "权限快照哈希",
+    format: "sha256|null",
+    description: "本次调用使用的权限快照哈希。",
+    trigger: "权限裁决保存快照时输出。"
+  },
+  effective_tables_count: {
+    label: "生效表数",
+    format: "integer|null",
+    description: "本次权限边界中生效的数据表数量。",
+    trigger: "权限裁决可计算表范围时输出。"
+  },
+  decision_reason: {
+    label: "裁决原因",
+    format: "string|null",
+    description: "访问允许、拒绝或过滤的机器原因码。",
+    trigger: "权限裁决链路产出原因码时输出。"
+  },
+  policy_version: {
+    label: "策略版本",
+    format: "string|null",
+    description: "参与本次裁决的策略版本。",
+    trigger: "权限策略编译结果可提供版本时输出。"
+  },
+  capability_digest: {
+    label: "能力摘要",
+    format: "sha256|null",
+    description: "Agent 可用能力边界的摘要。",
+    trigger: "权限策略编译结果可提供能力摘要时输出。"
+  }
+};
+
+function renderAccessLogCsv(rows: QueryRow[]): string {
+  const lines = [
+    ACCESS_LOG_CSV_HEADERS.join(","),
+    ...rows.map((row) =>
+      [
+        row.id,
+        csvCell(row.ts),
+        csvCell(formatAuditLocalTimestamp(row.ts)),
+        csvCell(row.user_id),
+        csvCell(row.token_label),
+        csvCell(row.token_hash_prefix),
+        csvCell(row.lucy_session_id),
+        csvCell(row.lucy_turn_id),
+        csvCell(row.turn_attribution_mode),
+        csvCell(row.turn_attribution_confidence),
+        csvCell(row.turn_attribution_reason),
+        csvCell(row.lucy_platform),
+        csvCell(row.client),
+        csvCell(row.client_version),
+        csvCell(row.client_ip),
+        csvCell(row.user_agent),
+        csvCell(row.device_name),
+        csvCell(row.tool),
+        csvCell(row.tables),
+        csvCell(redactJsonString(row.args_summary)),
+        csvCell(row.query_hash),
+        row.query_length ?? "",
+        csvCell(row.query_operation),
+        csvCell(row.query_preview),
+        csvCell(row.generated_sql),
+        csvCell(row.outcome),
+        csvCell(redactJsonString(row.error_detail)),
+        row.duration_ms,
+        row.response_bytes ?? "",
+        row.response_row_count ?? "",
+        row.response_column_count ?? "",
+        row.response_truncated === null ? "" : row.response_truncated,
+        csvCell(row.request_id),
+        csvCell(row.trace_id),
+        csvCell(row.role_ids),
+        csvCell(row.permission_snapshot_hash),
+        row.effective_tables_count ?? "",
+        csvCell(row.decision_reason),
+        csvCell(row.policy_version),
+        csvCell(row.capability_digest)
+      ].join(",")
+    )
+  ];
+  return lines.join("\n");
+}
+
+function filterSnapshotForManifest(
+  q: AccessLogFilterQuery & { includeProtocol?: string },
+  includeProtocol: boolean
+): Record<string, unknown> {
+  return {
+    user: q.user ?? null,
+    tool: q.tool ?? null,
+    outcome: q.outcome ?? null,
+    since: q.since ?? null,
+    until: q.until ?? null,
+    tableSearch: q.tableSearch ?? null,
+    sessionId: q.sessionId ?? null,
+    turnId: q.turnId ?? null,
+    eventId: q.eventId ?? null,
+    key: q.key ?? null,
+    platform: q.platform ?? null,
+    callSource: q.callSource ?? null,
+    clientIp: q.clientIp ?? null,
+    deviceName: q.deviceName ?? null,
+    includeProtocol
+  };
+}
+
+function packFilenameStamp(now = new Date()): string {
+  const iso = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const hex = createHash("sha256").update(`${iso}:${Math.random()}`).digest("hex").slice(0, 8);
+  return `audit-pack-${iso}-${hex}.zip`;
+}
+
 interface TurnOutcomeSummary {
   ok: number;
   denied: number;
@@ -585,6 +1026,36 @@ interface TurnEntry {
   slowCallCount?: number;
   outcomeSummary?: TurnOutcomeSummary;
 }
+
+type TurnFilterQuery = {
+  user?: string;
+  since?: string;
+  until?: string;
+  source?: string;
+  turnId?: string;
+  tableSearch?: string;
+  outcome?: string;
+  q?: string;
+  lookbackHours?: string;
+  hours?: string;
+  bom?: string;
+};
+
+type TurnListResult = {
+  total: number;
+  entries: TurnEntry[];
+  summary: {
+    reportedCount: number;
+    inferredCount: number;
+    reportedShare: number;
+  };
+  referenceLatency: {
+    windowHours: 24 | 168;
+    p95Ms: number;
+    totalCallsInWindow: number;
+    slowCallsInFilter: number;
+  };
+};
 
 function sinceIsoFromHours(hours: number): string {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
@@ -682,6 +1153,376 @@ function countSlowCallsForFilter(
     .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ${conditions.join(" AND ")}`)
     .get(...params) as { cnt: number };
   return row?.cnt ?? 0;
+}
+
+async function listAuditTurnEntries(
+  database: Database.Database,
+  q: TurnFilterQuery,
+  options: { limit?: number; offset?: number; paginate: boolean }
+): Promise<TurnListResult> {
+  const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
+  const windowHours = parseWindowHours(q.hours);
+  const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : windowHours;
+  const turnIdNeedle = (q.turnId ?? "").trim().toLowerCase();
+  const tableNeedle = (q.tableSearch ?? "").trim().toLowerCase();
+  const summaryNeedle = (q.q ?? "").trim().toLowerCase();
+  const outcomeFilter = q.outcome === "ok" || q.outcome === "error" || q.outcome === "denied" ? q.outcome : "";
+  const p95Ms = queryP95LatencyMs(database, windowHours);
+  const sinceDefault = sinceIsoFromHours(windowHours);
+
+  if (source !== "reported") {
+    const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+    const targetUsers = q.user
+      ? [q.user]
+      : (database.prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`).all(cutoff) as Array<{ user_id: string }>).map((row) => row.user_id);
+    for (const userId of targetUsers) {
+      await rebuildInferredTurnsDebounced(userId, lookbackHours ? { lookbackHours } : undefined);
+    }
+  }
+
+  const entries: TurnEntry[] = [];
+
+  if (source === "inferred" || source === "all") {
+    const conditions: string[] = [];
+    const params: Record<string, string | null> = {
+      user: q.user ?? null,
+      since: q.since ?? sinceDefault,
+      until: q.until ?? null
+    };
+    if (params.user) conditions.push("user_id = @user");
+    if (params.since) conditions.push("started_at >= @since");
+    if (params.until) conditions.push("started_at <= @until");
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const rows = database.prepare(`SELECT * FROM inferred_turns ${where} ORDER BY started_at DESC`).all(params) as Array<{
+      inferred_turn_id: string;
+      user_id: string;
+      started_at: string;
+      ended_at: string;
+      business_call_count: number;
+      tool_summary: string;
+      source_summary: string;
+      question_summary: string | null;
+      confidence: string;
+    }>;
+    for (const row of rows) {
+      entries.push(
+        enrichTurnEntry(database, {
+          id: row.inferred_turn_id,
+          source: "inferred",
+          userId: row.user_id,
+          startedAt: row.started_at,
+          endedAt: row.ended_at,
+          businessCallCount: row.business_call_count,
+          questionSummary: row.question_summary ?? undefined,
+          confidence: row.confidence,
+          tools: JSON.parse(row.tool_summary) as string[],
+          sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
+        }, p95Ms)
+      );
+    }
+  }
+
+  if (source === "reported" || source === "all") {
+    const conditions: string[] = [];
+    const params: Record<string, string | null> = {
+      user: q.user ?? null,
+      since: q.since ?? sinceDefault,
+      until: q.until ?? null
+    };
+    if (params.user) conditions.push("user_id = @user");
+    if (params.since) conditions.push("created_at >= @since");
+    if (params.until) conditions.push("created_at <= @until");
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const rows = database.prepare(`SELECT * FROM conversation_turns ${where} ORDER BY created_at DESC`).all(params) as Array<{
+      turn_id: string;
+      user_id: string;
+      created_at: string;
+      question_summary: string | null;
+      question_preview: string | null;
+    }>;
+    for (const row of rows) {
+      const linked = database.prepare(`
+        SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC
+      `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
+      const accessLogIds = linked.map((l) => l.id);
+      const sourceRows = accessLogIds.length > 0
+        ? database.prepare(`
+            SELECT DISTINCT connection_id, schema_name, source_name, physical_table
+            FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
+          `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
+        : [];
+      entries.push(
+        enrichTurnEntry(database, {
+          id: row.turn_id,
+          source: "reported",
+          userId: row.user_id,
+          startedAt: row.created_at,
+          endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
+          businessCallCount: linked.length,
+          questionSummary: row.question_summary ?? undefined,
+          questionPreview: row.question_preview ?? undefined,
+          confidence: "high",
+          tools: [...new Set(linked.map((l) => l.tool))],
+          sources: sourceRows.map((s) => ({
+            connectionId: s.connection_id ?? undefined,
+            schema: s.schema_name ?? undefined,
+            sourceName: s.source_name ?? undefined,
+            physicalTable: s.physical_table
+          }))
+        }, p95Ms)
+      );
+    }
+  }
+
+  entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
+
+  const filtered = entries.filter((entry) => {
+    if (turnIdNeedle && !entry.id.toLowerCase().includes(turnIdNeedle)) return false;
+    if (tableNeedle) {
+      const hay = entry.sources.map((s) => s.physicalTable).join(" ").toLowerCase();
+      if (!hay.includes(tableNeedle)) return false;
+    }
+    if (summaryNeedle) {
+      const hay = [entry.questionSummary, entry.questionPreview, entry.userId, entry.sources.map((s) => s.physicalTable).join(" ")]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!hay.includes(summaryNeedle)) return false;
+    }
+    if (outcomeFilter === "ok") {
+      const denied = entry.outcomeSummary?.denied ?? 0;
+      const errors = entry.outcomeSummary?.error ?? 0;
+      if (denied > 0 || errors > 0) return false;
+    } else if (outcomeFilter === "denied") {
+      if ((entry.outcomeSummary?.denied ?? 0) <= 0) return false;
+    } else if (outcomeFilter === "error") {
+      if ((entry.outcomeSummary?.error ?? 0) <= 0) return false;
+    }
+    return true;
+  });
+
+  const total = filtered.length;
+  const reportedCount = filtered.filter((entry) => entry.source === "reported").length;
+  const inferredCount = filtered.filter((entry) => entry.source === "inferred").length;
+  const reportedShare = total > 0 ? reportedCount / total : 0;
+  const slowCallsInFilter = countSlowCallsForFilter(database, q.since ?? sinceDefault, p95Ms, q.user ?? null);
+  const totalCallsRow = database
+    .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ts >= ?`)
+    .get(sinceDefault) as { cnt: number };
+  const offset = options.offset ?? 0;
+  const limit = options.limit ?? filtered.length;
+  const paged = options.paginate ? filtered.slice(offset, offset + limit) : filtered;
+
+  return {
+    total,
+    entries: paged,
+    summary: {
+      reportedCount,
+      inferredCount,
+      reportedShare
+    },
+    referenceLatency: {
+      windowHours,
+      p95Ms,
+      totalCallsInWindow: totalCallsRow?.cnt ?? 0,
+      slowCallsInFilter
+    }
+  };
+}
+
+const TURN_CSV_HEADERS = [
+  "问询 ID",
+  "来源",
+  "Agent",
+  "开始时间",
+  "开始时间 UTC",
+  "结束时间",
+  "结束时间 UTC",
+  "问询时长",
+  "问询摘要",
+  "工具调用数",
+  "涉及工具",
+  "涉及数据表",
+  "总调用耗时",
+  "最大调用耗时",
+  "慢调用数",
+  "成功次数",
+  "拒绝次数",
+  "错误次数"
+] as const;
+
+const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFieldMetadata, "name">> = {
+  "问询 ID": {
+    label: "问询 ID",
+    format: "string",
+    description: "一次用户问询的唯一 ID，可用于关联调用流水。",
+    trigger: "用户原始问询或系统推断问询均输出。"
+  },
+  "来源": {
+    label: "来源",
+    format: "用户原始问询|系统推断问询",
+    description: "问询记录来自客户端上报还是系统推断。",
+    trigger: "reported 问询输出用户原始问询；inferred 问询输出系统推断问询。"
+  },
+  "Agent": {
+    label: "Agent",
+    format: "string",
+    description: "触发该问询的 Agent 用户 ID。",
+    trigger: "每条问询记录均输出。"
+  },
+  "开始时间": {
+    label: "开始时间",
+    format: "YYYY-MM-DD HH:mm:ss",
+    description: "按 Asia/Shanghai 转换后的问询开始时间，便于人工阅读和 Excel 解析。",
+    trigger: "每条问询记录均输出。"
+  },
+  "开始时间 UTC": {
+    label: "开始时间 UTC",
+    format: "ISO 8601 UTC",
+    description: "问询开始时间的 UTC 原始值，用于机器对账和跨时区复核。",
+    trigger: "每条问询记录均输出。"
+  },
+  "结束时间": {
+    label: "结束时间",
+    format: "YYYY-MM-DD HH:mm:ss",
+    description: "按 Asia/Shanghai 转换后的问询结束时间，便于人工阅读和 Excel 解析。",
+    trigger: "每条问询记录均输出。"
+  },
+  "结束时间 UTC": {
+    label: "结束时间 UTC",
+    format: "ISO 8601 UTC",
+    description: "问询结束时间的 UTC 原始值，用于机器对账和跨时区复核。",
+    trigger: "每条问询记录均输出。"
+  },
+  "问询时长": {
+    label: "问询时长",
+    format: "integer milliseconds",
+    description: "从开始时间到结束时间的 wall-clock 时长。",
+    trigger: "每条问询记录均输出。"
+  },
+  "问询摘要": {
+    label: "问询摘要",
+    format: "string|null",
+    description: "用户问询预览或系统推断摘要。",
+    trigger: "客户端上报问题预览或系统可推断摘要时输出。"
+  },
+  "工具调用数": {
+    label: "工具调用数",
+    format: "integer",
+    description: "该问询关联的业务工具调用数量。",
+    trigger: "每条问询记录均输出。"
+  },
+  "涉及工具": {
+    label: "涉及工具",
+    format: "comma-separated string",
+    description: "该问询关联的工具调用名称。",
+    trigger: "问询存在关联业务调用时输出。"
+  },
+  "涉及数据表": {
+    label: "涉及数据表",
+    format: "comma-separated string",
+    description: "该问询关联调用触达的数据表。",
+    trigger: "关联调用可识别物理表时输出。"
+  },
+  "总调用耗时": {
+    label: "总调用耗时",
+    format: "integer milliseconds",
+    description: "该问询内所有关联调用的耗时总和。",
+    trigger: "每条问询记录均输出。"
+  },
+  "最大调用耗时": {
+    label: "最大调用耗时",
+    format: "integer milliseconds",
+    description: "该问询内最慢单次调用耗时。",
+    trigger: "每条问询记录均输出。"
+  },
+  "慢调用数": {
+    label: "慢调用数",
+    format: "integer",
+    description: "该问询内慢于参考 P95 的调用数量。",
+    trigger: "存在 P95 参考值时统计输出。"
+  },
+  "成功次数": {
+    label: "成功次数",
+    format: "integer",
+    description: "该问询内 outcome=ok 的调用数量。",
+    trigger: "每条问询记录均输出。"
+  },
+  "拒绝次数": {
+    label: "拒绝次数",
+    format: "integer",
+    description: "该问询内 outcome=denied 的调用数量。",
+    trigger: "每条问询记录均输出。"
+  },
+  "错误次数": {
+    label: "错误次数",
+    format: "integer",
+    description: "该问询内 outcome=error 的调用数量。",
+    trigger: "每条问询记录均输出。"
+  }
+};
+
+function turnSourceLabel(source: TurnEntry["source"]): string {
+  return source === "reported" ? "用户原始问询" : "系统推断问询";
+}
+
+function renderTurnCsv(rows: TurnEntry[]): string {
+  const lines = [
+    TURN_CSV_HEADERS.join(","),
+    ...rows.map((row) =>
+      [
+        csvCell(row.id),
+        csvCell(turnSourceLabel(row.source)),
+        csvCell(row.userId),
+        csvCell(formatAuditLocalTimestamp(row.startedAt)),
+        csvCell(row.startedAt),
+        csvCell(formatAuditLocalTimestamp(row.endedAt)),
+        csvCell(row.endedAt),
+        row.turnSpanMs ?? "",
+        csvCell(row.questionPreview ?? row.questionSummary ?? ""),
+        row.businessCallCount,
+        csvCell(row.tools.join(", ")),
+        csvCell(row.sources.map((source) => source.physicalTable).join(", ")),
+        row.totalCallDurationMs ?? "",
+        row.maxCallDurationMs ?? "",
+        row.slowCallCount ?? "",
+        row.outcomeSummary?.ok ?? 0,
+        row.outcomeSummary?.denied ?? 0,
+        row.outcomeSummary?.error ?? 0
+      ].join(",")
+    )
+  ];
+  return lines.join("\n");
+}
+
+function csvFieldMetadataFields<T extends readonly string[]>(
+  headers: T,
+  metadata: Record<T[number], Omit<CsvFieldMetadata, "name">>
+): CsvFieldMetadata[] {
+  return headers.map((name) => ({ name, ...metadata[name] }));
+}
+
+function buildAuditCsvFieldMetadata(kind: "calls" | "turns", generatedAt = new Date()) {
+  if (kind === "calls") {
+    return {
+      schemaVersion: "audit-csv-field-metadata/v1",
+      kind,
+      title: "调用流水 CSV 字段说明",
+      timezone: AUDIT_EXPORT_TIMEZONE,
+      filenamePattern: "audit-calls-YYYYMMDD-HHmmss-000001.csv",
+      generatedAt: generatedAt.toISOString(),
+      fields: csvFieldMetadataFields(ACCESS_LOG_CSV_HEADERS, ACCESS_LOG_FIELD_METADATA)
+    };
+  }
+  return {
+    schemaVersion: "audit-csv-field-metadata/v1",
+    kind,
+    title: "问询记录 CSV 字段说明",
+    timezone: AUDIT_EXPORT_TIMEZONE,
+    filenamePattern: "audit-turns-YYYYMMDD-HHmmss-000001.csv",
+    generatedAt: generatedAt.toISOString(),
+    fields: csvFieldMetadataFields(TURN_CSV_HEADERS, TURN_FIELD_METADATA)
+  };
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
@@ -1082,6 +1923,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tokenHashPrefix: row.token_hash_prefix ?? undefined,
       lucySessionId: row.lucy_session_id ?? undefined,
       lucyTurnId: row.lucy_turn_id ?? undefined,
+      turnAttributionMode: row.turn_attribution_mode ?? undefined,
+      turnAttributionConfidence: row.turn_attribution_confidence ?? undefined,
+      turnAttributionReason: row.turn_attribution_reason ?? undefined,
       lucyPlatform: row.lucy_platform ?? undefined,
       client: row.client ?? undefined,
       clientVersion: row.client_version ?? undefined,
@@ -1129,23 +1973,34 @@ export function registerAuditRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /api/admin/audit/export
+  // GET /api/admin/audit/export-metadata — CSV 字段说明 (Spec 141)
   app.get<{
-    Querystring: AccessLogFilterQuery;
+    Querystring: { kind?: string };
+  }>("/api/admin/audit/export-metadata", async (request, reply) => {
+    const kind = request.query.kind ?? "calls";
+    if (kind !== "calls" && kind !== "turns") {
+      reply.code(400);
+      reply.header("Cache-Control", "private, no-store");
+      return {
+        ok: false,
+        error: {
+          code: "ERR_INVALID_AUDIT_METADATA_KIND",
+          message: "字段说明类型仅支持 calls 或 turns"
+        }
+      };
+    }
+    const body = buildAuditCsvFieldMetadata(kind);
+    reply.header("Content-Type", "application/json; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename(`${kind}-fields`, "json")}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(body);
+  });
+
+  // GET /api/admin/audit/export — 调用流水 CSV (Spec 137 / 141)
+  app.get<{
+    Querystring: AccessLogFilterQuery & { bom?: string };
   }>("/api/admin/audit/export", async (request, reply) => {
-    const q = request.query as {
-      user?: string;
-      tool?: string;
-      outcome?: string;
-      since?: string;
-      until?: string;
-      tableSearch?: string;
-      sessionId?: string;
-      turnId?: string;
-      platform?: string;
-      includeProtocol?: string;
-      decisionReasonPrefix?: string;
-    };
+    const q = request.query;
     const database = await getAuditDb();
     const { conditions, params } = buildAccessLogFilter(q);
 
@@ -1154,286 +2009,281 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC`)
       .all(params) as QueryRow[];
 
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const headers = [
-      "id",
-      "ts",
-      "user_id",
-      "token_label",
-      "token_hash_prefix",
-      "lucy_session_id",
-      "lucy_turn_id",
-      "lucy_platform",
-      "client",
-      "client_version",
-      "client_ip",
-      "user_agent",
-      "device_name",
-      "tool",
-      "tables",
-      "args_summary",
-      "query_hash",
-      "query_length",
-      "query_operation",
-      "query_preview",
-      "generated_sql",
-      "outcome",
-      "error_detail",
-      "duration_ms",
-      "response_bytes",
-      "response_row_count",
-      "response_column_count",
-      "response_truncated",
-      "request_id",
-      "trace_id",
-      "role_ids",
-      "permission_snapshot_hash",
-      "effective_tables_count",
-      "decision_reason",
-      "policy_version",
-      "capability_digest"
-    ];
-    const csvLines = [
-      headers.join(","),
-      ...rows.map((row) =>
-        [
-          row.id,
-          csvCell(row.ts),
-          csvCell(row.user_id),
-          csvCell(row.token_label),
-          csvCell(row.token_hash_prefix),
-          csvCell(row.lucy_session_id),
-          csvCell(row.lucy_turn_id),
-          csvCell(row.lucy_platform),
-          csvCell(row.client),
-          csvCell(row.client_version),
-          csvCell(row.client_ip),
-          csvCell(row.user_agent),
-          csvCell(row.device_name),
-          csvCell(row.tool),
-          csvCell(row.tables),
-          csvCell(redactJsonString(row.args_summary)),
-          csvCell(row.query_hash),
-          row.query_length ?? "",
-          csvCell(row.query_operation),
-          csvCell(row.query_preview),
-          csvCell(row.generated_sql),
-          csvCell(row.outcome),
-          csvCell(redactJsonString(row.error_detail)),
-          row.duration_ms,
-          row.response_bytes ?? "",
-          row.response_row_count ?? "",
-          row.response_column_count ?? "",
-          row.response_truncated === null ? "" : row.response_truncated,
-          csvCell(row.request_id),
-          csvCell(row.trace_id),
-          csvCell(row.role_ids),
-          csvCell(row.permission_snapshot_hash),
-          row.effective_tables_count ?? "",
-          csvCell(row.decision_reason),
-          csvCell(row.policy_version),
-          csvCell(row.capability_digest)
-        ].join(",")
-      )
-    ];
+    const body = renderAccessLogCsv(rows);
+    const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(withBom);
+  });
 
-    reply.header("Content-Type", "text/csv");
-    reply.header("Content-Disposition", `attachment; filename="audit-${dateStr}.csv"`);
-    return reply.send(csvLines.join("\n"));
+  // GET /api/admin/audit/export-pack — 审计证据包 zip (Spec 137)
+  app.get<{
+    Querystring: AccessLogFilterQuery;
+  }>("/api/admin/audit/export-pack", async (request, reply) => {
+    const q = request.query;
+    const database = await getAuditDb();
+    const { conditions, params, includeProtocol } = buildAccessLogFilter(q);
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const maxRows = auditExportMaxRows();
+    const rows = database
+      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT @exportLimit`)
+      .all({ ...params, exportLimit: maxRows + 1 }) as QueryRow[];
+    if (rows.length > maxRows) {
+      reply.code(413);
+      reply.header("Cache-Control", "private, no-store");
+      return {
+        ok: false,
+        error: {
+          code: "ERR_AUDIT_EXPORT_TOO_LARGE",
+          message: `导出范围超过 ${maxRows} 行上限，请缩小筛选范围`
+        }
+      };
+    }
+
+    const accessCsv = `\uFEFF${renderAccessLogCsv(rows)}`;
+    const accessBuf = Buffer.from(accessCsv, "utf8");
+
+    const ids = rows.map((r) => r.id);
+    let sourcesCsv = "id,access_log_id,ts,user_id,tool,connection_id,schema_name,source_name,physical_table,extraction_method,confidence\n";
+    let sourcesCount = 0;
+    const sourceRows: Array<Record<string, unknown>> = [];
+    if (ids.length > 0) {
+      for (const idChunk of chunksOf(ids)) {
+        const placeholders = idChunk.map(() => "?").join(",");
+        sourceRows.push(...database
+          .prepare(
+          `SELECT id, access_log_id, ts, user_id, tool, connection_id, schema_name, source_name, physical_table, extraction_method, confidence
+           FROM access_log_sources WHERE access_log_id IN (${placeholders}) ORDER BY access_log_id, id`
+          )
+          .all(...idChunk) as Array<Record<string, unknown>>);
+      }
+      sourcesCount = sourceRows.length;
+      for (const s of sourceRows) {
+        sourcesCsv +=
+          [
+            s.id,
+            s.access_log_id,
+            csvCell(String(s.ts ?? "")),
+            csvCell(String(s.user_id ?? "")),
+            csvCell(String(s.tool ?? "")),
+            csvCell(s.connection_id == null ? "" : String(s.connection_id)),
+            csvCell(s.schema_name == null ? "" : String(s.schema_name)),
+            csvCell(s.source_name == null ? "" : String(s.source_name)),
+            csvCell(String(s.physical_table ?? "")),
+            csvCell(String(s.extraction_method ?? "")),
+            csvCell(String(s.confidence ?? ""))
+          ].join(",") + "\n";
+      }
+    }
+    const sourcesBuf = Buffer.from(`\uFEFF${sourcesCsv}`, "utf8");
+
+    const hashes = [
+      ...new Set(rows.map((r) => r.permission_snapshot_hash).filter((h): h is string => Boolean(h)))
+    ];
+    let snapshotsJsonl = "";
+    let snapshotsCount = 0;
+    const snapRows: Array<Record<string, unknown>> = [];
+    if (hashes.length > 0) {
+      for (const hashChunk of chunksOf(hashes)) {
+        const placeholders = hashChunk.map(() => "?").join(",");
+        snapRows.push(...database
+          .prepare(
+          `SELECT hash, created_at, roles_json, resolved_json, capability_digest, tool_classification_version
+           FROM permission_snapshots WHERE hash IN (${placeholders})`
+          )
+          .all(...hashChunk) as Array<Record<string, unknown>>);
+      }
+      snapshotsCount = snapRows.length;
+      for (const snap of snapRows) {
+        snapshotsJsonl += `${JSON.stringify(snap)}\n`;
+      }
+    }
+    const snapshotsBuf = Buffer.from(snapshotsJsonl, "utf8");
+
+    const since = q.since ?? null;
+    const until = q.until ?? null;
+    const authParams: string[] = [];
+    const authConds: string[] = [];
+    if (since) {
+      authConds.push("ts >= ?");
+      authParams.push(since);
+    }
+    if (until) {
+      authConds.push("ts <= ?");
+      authParams.push(until);
+    }
+    if (q.user) {
+      authConds.push("user_id = ?");
+      authParams.push(q.user);
+    }
+    if (q.clientIp) {
+      authConds.push("IFNULL(client_ip, '') LIKE ?");
+      authParams.push(`%${q.clientIp}%`);
+    }
+    const authWhere = authConds.length > 0 ? `WHERE ${authConds.join(" AND ")}` : "";
+    const authRows = database
+      .prepare(
+        `SELECT id, ts, reason, client_ip, user_agent, token_hash_prefix, user_id, token_label, request_id
+         FROM auth_failure_log ${authWhere} ORDER BY ts DESC`
+      )
+      .all(...authParams) as Array<Record<string, unknown>>;
+    let authCsv =
+      "id,ts,reason,client_ip,user_agent,token_hash_prefix,user_id,token_label,request_id\n";
+    for (const a of authRows) {
+      authCsv +=
+        [
+          a.id,
+          csvCell(String(a.ts ?? "")),
+          csvCell(String(a.reason ?? "")),
+          csvCell(a.client_ip == null ? "" : String(a.client_ip)),
+          csvCell(a.user_agent == null ? "" : String(a.user_agent)),
+          csvCell(a.token_hash_prefix == null ? "" : String(a.token_hash_prefix)),
+          csvCell(a.user_id == null ? "" : String(a.user_id)),
+          csvCell(a.token_label == null ? "" : String(a.token_label)),
+          csvCell(a.request_id == null ? "" : String(a.request_id))
+        ].join(",") + "\n";
+    }
+    const authBuf = Buffer.from(`\uFEFF${authCsv}`, "utf8");
+
+    const maintenanceConds: string[] = [];
+    const maintenanceParams: string[] = [];
+    if (since) {
+      maintenanceConds.push("ts >= ?");
+      maintenanceParams.push(since);
+    }
+    if (until) {
+      maintenanceConds.push("ts <= ?");
+      maintenanceParams.push(until);
+    }
+    const maintenanceWhere = maintenanceConds.length > 0 ? `WHERE ${maintenanceConds.join(" AND ")}` : "";
+    const maintenanceRows = database
+      .prepare(
+        `SELECT id, ts, event_type, actor, reason, request_id, algorithm_version,
+                scanned, matched, updated, before_digest, after_digest
+         FROM audit_maintenance_log ${maintenanceWhere} ORDER BY ts DESC`
+      )
+      .all(...maintenanceParams) as Array<Record<string, unknown>>;
+    const maintenanceBuf = Buffer.from(
+      maintenanceRows.map((row) => JSON.stringify(row)).join("\n") + (maintenanceRows.length > 0 ? "\n" : ""),
+      "utf8"
+    );
+
+    const sourceAccessLogIds = new Set(sourceRows.map((row) => Number(row.access_log_id)));
+    const missingSourceAccessLogIds = rows
+      .filter((row) => row.tool === "lucy_query" && row.outcome === "ok" && !sourceAccessLogIds.has(row.id))
+      .map((row) => row.id);
+    const foundSnapshotHashes = new Set(snapRows.map((row) => String(row.hash)));
+    const missingPermissionSnapshotHashes = hashes.filter((hash) => !foundSnapshotHashes.has(hash));
+    const rowsWithoutPermissionSnapshot = rows.filter((row) => !row.permission_snapshot_hash).length;
+
+    const filesMeta = [
+      { name: "access_log.csv", rowCount: rows.length, data: accessBuf, filterScope: "normalized_access_log_filter" },
+      { name: "access_log_sources.csv", rowCount: sourcesCount, data: sourcesBuf, filterScope: "selected_access_log_ids" },
+      { name: "permission_snapshots.jsonl", rowCount: snapshotsCount, data: snapshotsBuf, filterScope: "selected_permission_snapshot_hashes" },
+      { name: "auth_failure_log.csv", rowCount: authRows.length, data: authBuf, filterScope: "time_user_client_ip" },
+      { name: "audit_maintenance_log.jsonl", rowCount: maintenanceRows.length, data: maintenanceBuf, filterScope: "time_window" }
+    ];
+    const totalUncompressedBytes = filesMeta.reduce((sum, file) => sum + file.data.byteLength, 0);
+    const maxBytes = auditExportMaxBytes();
+    if (totalUncompressedBytes > maxBytes) {
+      reply.code(413);
+      reply.header("Cache-Control", "private, no-store");
+      return {
+        ok: false,
+        error: {
+          code: "ERR_AUDIT_EXPORT_TOO_LARGE",
+          message: `导出内容超过 ${maxBytes} 字节上限，请缩小筛选范围`
+        }
+      };
+    }
+    const manifest = {
+      schemaVersion: "audit-export-manifest/v1",
+      generatedAt: new Date().toISOString(),
+      timezone: "UTC",
+      appVersion: resolveLucyVersion(),
+      filter: filterSnapshotForManifest(q, includeProtocol),
+      includeProtocol,
+      limits: { maxRows, maxBytes, exportedUncompressedBytes: totalUncompressedBytes },
+      completeness: {
+        rowsWithoutPermissionSnapshot,
+        missingPermissionSnapshotHashes,
+        missingSourceAccessLogIds,
+        complete:
+          rowsWithoutPermissionSnapshot === 0 &&
+          missingPermissionSnapshotHashes.length === 0 &&
+          missingSourceAccessLogIds.length === 0
+      },
+      files: filesMeta.map((f) => ({
+        name: f.name,
+        rowCount: f.rowCount,
+        filterScope: f.filterScope,
+        sha256: sha256Hex(f.data)
+      }))
+    };
+    const manifestBuf = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    const zip = buildStoredZip([
+      ...filesMeta.map((f) => ({ name: f.name, data: f.data })),
+      { name: "manifest.json", data: manifestBuf }
+    ]);
+
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${packFilenameStamp()}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(zip);
+  });
+
+  // POST /api/admin/audit/args-summary/scrub — Spec 137
+  app.post<{ Body: { dryRun?: boolean; reason?: string } }>("/api/admin/audit/args-summary/scrub", async (request, reply) => {
+    const body = request.body ?? {};
+    const dryRun = body.dryRun !== false;
+    if (!dryRun && !body.reason?.trim()) {
+      reply.code(400);
+      return { ok: false, error: { code: "ERR_SCRUB_REASON_REQUIRED", message: "执行历史清理时必须填写原因" } };
+    }
+    const result = await scrubAccessLogArgsSummaries({
+      dryRun,
+      actor: "local-admin",
+      reason: body.reason,
+      requestId: String(request.id)
+    });
+    return { ok: true, data: { ...result, dryRun } };
   });
 
   // GET /api/admin/audit/turns — unified "question cluster" view: inferred (Phase 2)
   // + reported (Phase 3), per spec 08 §9.1.
   app.get<{
-    Querystring: {
-      user?: string;
-      since?: string;
-      until?: string;
-      source?: string;
-      turnId?: string;
-      tableSearch?: string;
-      outcome?: string;
-      q?: string;
-      lookbackHours?: string;
-      hours?: string;
+    Querystring: TurnFilterQuery & {
       limit?: string;
       offset?: string;
     };
   }>("/api/admin/audit/turns", async (request) => {
     const q = request.query;
-    const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
     const limit = Math.min(parseInt(q.limit ?? "50", 10) || 50, 500);
     const offset = parseInt(q.offset ?? "0", 10) || 0;
-    const windowHours = parseWindowHours(q.hours);
-    const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : windowHours;
-    const turnIdNeedle = (q.turnId ?? "").trim().toLowerCase();
-    const tableNeedle = (q.tableSearch ?? "").trim().toLowerCase();
-    const summaryNeedle = (q.q ?? "").trim().toLowerCase();
-    const outcomeFilter = q.outcome === "ok" || q.outcome === "error" || q.outcome === "denied" ? q.outcome : "";
 
     const database = await getAuditDb();
-    const p95Ms = queryP95LatencyMs(database, windowHours);
-    const sinceDefault = sinceIsoFromHours(windowHours);
-
-    if (source !== "reported") {
-      const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-      const targetUsers = q.user
-        ? [q.user]
-        : (database.prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`).all(cutoff) as Array<{ user_id: string }>).map((row) => row.user_id);
-      for (const userId of targetUsers) {
-        await rebuildInferredTurnsDebounced(userId, lookbackHours ? { lookbackHours } : undefined);
-      }
-    }
-
-    const entries: TurnEntry[] = [];
-
-    if (source === "inferred" || source === "all") {
-      const conditions: string[] = [];
-      const params: Record<string, string | null> = {
-        user: q.user ?? null,
-        since: q.since ?? sinceDefault,
-        until: q.until ?? null
-      };
-      if (params.user) conditions.push("user_id = @user");
-      if (params.since) conditions.push("started_at >= @since");
-      if (params.until) conditions.push("started_at <= @until");
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const rows = database.prepare(`SELECT * FROM inferred_turns ${where} ORDER BY started_at DESC`).all(params) as Array<{
-        inferred_turn_id: string;
-        user_id: string;
-        started_at: string;
-        ended_at: string;
-        business_call_count: number;
-        tool_summary: string;
-        source_summary: string;
-        question_summary: string | null;
-        confidence: string;
-      }>;
-      for (const row of rows) {
-        entries.push(
-          enrichTurnEntry(database, {
-            id: row.inferred_turn_id,
-            source: "inferred",
-            userId: row.user_id,
-            startedAt: row.started_at,
-            endedAt: row.ended_at,
-            businessCallCount: row.business_call_count,
-            questionSummary: row.question_summary ?? undefined,
-            confidence: row.confidence,
-            tools: JSON.parse(row.tool_summary) as string[],
-            sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
-          }, p95Ms)
-        );
-      }
-    }
-
-    if (source === "reported" || source === "all") {
-      const conditions: string[] = [];
-      const params: Record<string, string | null> = {
-        user: q.user ?? null,
-        since: q.since ?? sinceDefault,
-        until: q.until ?? null
-      };
-      if (params.user) conditions.push("user_id = @user");
-      if (params.since) conditions.push("created_at >= @since");
-      if (params.until) conditions.push("created_at <= @until");
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const rows = database.prepare(`SELECT * FROM conversation_turns ${where} ORDER BY created_at DESC`).all(params) as Array<{
-        turn_id: string;
-        user_id: string;
-        created_at: string;
-        question_summary: string | null;
-        question_preview: string | null;
-      }>;
-      for (const row of rows) {
-        const linked = database.prepare(`
-          SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC
-        `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
-        const accessLogIds = linked.map((l) => l.id);
-        const sourceRows = accessLogIds.length > 0
-          ? database.prepare(`
-              SELECT DISTINCT connection_id, schema_name, source_name, physical_table
-              FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
-            `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
-          : [];
-        entries.push(
-          enrichTurnEntry(database, {
-            id: row.turn_id,
-            source: "reported",
-            userId: row.user_id,
-            startedAt: row.created_at,
-            endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
-            businessCallCount: linked.length,
-            questionSummary: row.question_summary ?? undefined,
-            questionPreview: row.question_preview ?? undefined,
-            confidence: "high",
-            tools: [...new Set(linked.map((l) => l.tool))],
-            sources: sourceRows.map((s) => ({
-              connectionId: s.connection_id ?? undefined,
-              schema: s.schema_name ?? undefined,
-              sourceName: s.source_name ?? undefined,
-              physicalTable: s.physical_table
-            }))
-          }, p95Ms)
-        );
-      }
-    }
-
-    entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
-
-    const filtered = entries.filter((entry) => {
-      if (turnIdNeedle && !entry.id.toLowerCase().includes(turnIdNeedle)) return false;
-      if (tableNeedle) {
-        const hay = entry.sources.map((s) => s.physicalTable).join(" ").toLowerCase();
-        if (!hay.includes(tableNeedle)) return false;
-      }
-      if (summaryNeedle) {
-        const hay = [entry.questionSummary, entry.questionPreview, entry.userId, entry.sources.map((s) => s.physicalTable).join(" ")]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!hay.includes(summaryNeedle)) return false;
-      }
-      if (outcomeFilter === "ok") {
-        const denied = entry.outcomeSummary?.denied ?? 0;
-        const errors = entry.outcomeSummary?.error ?? 0;
-        if (denied > 0 || errors > 0) return false;
-      } else if (outcomeFilter === "denied") {
-        if ((entry.outcomeSummary?.denied ?? 0) <= 0) return false;
-      } else if (outcomeFilter === "error") {
-        if ((entry.outcomeSummary?.error ?? 0) <= 0) return false;
-      }
-      return true;
-    });
-
-    const total = filtered.length;
-    const paged = filtered.slice(offset, offset + limit);
-    const reportedCount = filtered.filter((entry) => entry.source === "reported").length;
-    const inferredCount = filtered.filter((entry) => entry.source === "inferred").length;
-    const reportedShare = total > 0 ? reportedCount / total : 0;
-    const slowCallsInFilter = countSlowCallsForFilter(database, q.since ?? sinceDefault, p95Ms, q.user ?? null);
-    const totalCallsRow = database
-      .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ts >= ?`)
-      .get(sinceDefault) as { cnt: number };
+    const result = await listAuditTurnEntries(database, q, { limit, offset, paginate: true });
 
     return {
       ok: true,
-      data: {
-        total,
-        entries: paged,
-        summary: {
-          reportedCount,
-          inferredCount,
-          reportedShare
-        },
-        referenceLatency: {
-          windowHours,
-          p95Ms,
-          totalCallsInWindow: totalCallsRow?.cnt ?? 0,
-          slowCallsInFilter
-        }
-      }
+      data: result
     };
+  });
+
+  // GET /api/admin/audit/turns/export — 问询记录 CSV (Spec 140 / 141)
+  app.get<{
+    Querystring: TurnFilterQuery;
+  }>("/api/admin/audit/turns/export", async (request, reply) => {
+    const q = request.query;
+    const database = await getAuditDb();
+    const result = await listAuditTurnEntries(database, q, { paginate: false });
+    const body = renderTurnCsv(result.entries);
+    const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("turns", "csv")}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(withBom);
   });
 
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).

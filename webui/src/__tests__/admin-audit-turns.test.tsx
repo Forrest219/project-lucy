@@ -261,11 +261,14 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-access-context-42")).toHaveTextContent("203.0.113.9");
   });
 
-  it("shows primary export on both tabs (Spec 106 header parity)", async () => {
+  it("shows tab-aware primary and secondary exports on both tabs (Spec 140)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+        }
         if (url.includes("/api/admin/audit/turns")) {
           return new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [], summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 }, referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 } } }));
         }
@@ -279,12 +282,25 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     renderAudit("/admin/audit?view=calls&range=7d");
 
     expect(await screen.findByTestId("audit-tab-calls")).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByTestId("audit-export-csv")).toHaveClass("pl-btn--primary");
+    expect(screen.getByTestId("audit-export-primary")).toHaveClass("pl-btn--primary");
+    expect(screen.getByTestId("audit-export-primary")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-primary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
+    expect(screen.getByTestId("audit-export-secondary")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-secondary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
+    expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("调用流水按一次工具调用展开");
+    expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=calls");
+    expect(screen.getByRole("link", { name: "查看审计口径" })).toHaveAttribute("href", "/help?section=admin-audit-turns-vs-calls");
 
     cleanup();
     renderAudit("/admin/audit?range=7d");
     expect(await screen.findByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByTestId("audit-export-csv")).toHaveClass("pl-btn--primary");
+    expect(screen.getByTestId("audit-export-primary")).toHaveClass("pl-btn--primary");
+    expect(screen.getByTestId("audit-export-primary")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-primary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
+    expect(screen.getByTestId("audit-export-secondary")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-secondary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
+    expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("问询记录按一次用户问询聚合");
+    expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=turns");
   });
 
   it("exposes identity columns, shared filters, and accepts legacy hours URL (Spec 106)", async () => {
@@ -370,7 +386,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByRole("columnheader", { name: "问询 ID" })).toBeInTheDocument();
     expect(turnsTable.querySelector("th.w-14.whitespace-nowrap")).not.toBeNull();
     expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("inf_test_1");
-    expect(screen.getByTestId("audit-export-csv")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-primary")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-secondary")).toHaveTextContent("导出调用流水");
 
     cleanup();
     renderAudit("/admin/audit?tab=calls&hours=168");
@@ -552,7 +569,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
         expect(latest).toMatch(/since=2026-08-25T06%3A30%3A00\.000Z|since=2026-08-25T06:30:00\.000Z/);
       }
     });
-    const exportLink = screen.getByTestId("audit-export-csv");
+    const exportLink = screen.getByTestId("audit-export-primary");
     expect(exportLink.getAttribute("href")).toMatch(/since=/);
   });
 
@@ -611,7 +628,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       expect(callUrls.some((u) => u.includes("key=lucy_test"))).toBe(true);
     });
 
-    const exportHref = screen.getByTestId("audit-export-csv").getAttribute("href") ?? "";
+    const exportHref = screen.getByTestId("audit-export-primary").getAttribute("href") ?? "";
     expect(exportHref).toContain("key=lucy_test");
 
     fireEvent.click(await screen.findByTestId("audit-turn-drawer-close"));

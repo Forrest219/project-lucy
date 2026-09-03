@@ -1638,7 +1638,18 @@ export function Audit() {
   const statsUpdatedAtMs = tab === "turns" ? turnsQuery.dataUpdatedAt : callsQuery.dataUpdatedAt;
   const statsTimeLabel = formatStatsTimeLabel(statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null, now);
 
-  const exportUrl = `/api/admin/audit/export${buildQuery({
+  const turnExportFilterQuery = buildQuery({
+    user: resolvedUserFilter || undefined,
+    source: turnSource === "inferred" || turnSource === "reported" ? turnSource : "all",
+    hours,
+    since: localDateTimeValueToIso(since),
+    until: localDateTimeValueToIso(until),
+    tableSearch: tableSearch || undefined,
+    turnId: keySearch || undefined,
+    outcome: outcome || undefined,
+    q: turnSearch || undefined
+  });
+  const callExportFilterQuery = buildQuery({
     user: resolvedUserFilter || user || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
@@ -1652,7 +1663,33 @@ export function Audit() {
     platform: platform || undefined,
     callSource: callSource || undefined,
     includeProtocol
-  })}`;
+  });
+  const turnExportUrl = `/api/admin/audit/turns/export${turnExportFilterQuery}`;
+  const callExportUrl = `/api/admin/audit/export${callExportFilterQuery}`;
+  const exportPackUrl = `/api/admin/audit/export-pack${callExportFilterQuery}`;
+  const metadataUrl = `/api/admin/audit/export-metadata?kind=${tab === "turns" ? "turns" : "calls"}`;
+  const primaryExport = tab === "turns"
+    ? {
+        href: turnExportUrl,
+        label: "导出问询记录",
+        title: "导出当前筛选下的问询记录 CSV：一行代表一次用户问询。"
+      }
+    : {
+        href: callExportUrl,
+        label: "导出调用流水",
+        title: "导出当前筛选下的调用流水 CSV：一行代表一次工具调用。"
+      };
+  const secondaryExport = tab === "turns"
+    ? {
+        href: callExportUrl,
+        label: "导出调用流水",
+        title: "导出当前筛选下的调用流水 CSV：一行代表一次工具调用。"
+      }
+    : {
+        href: turnExportUrl,
+        label: "导出问询记录",
+        title: "导出当前筛选下的问询记录 CSV：一行代表一次用户问询。"
+      };
 
   const tabLink = (nextTab: AuditTab) => {
     const next = new URLSearchParams(searchParams);
@@ -1702,13 +1739,35 @@ export function Audit() {
               </button>
             </div>
             <a
-              href={exportUrl}
+              href={primaryExport.href}
               download
               className="pl-btn pl-btn--primary text-sm"
-              data-testid="audit-export-csv"
-              title="导出当前筛选下的调用流水 CSV"
+              data-testid="audit-export-primary"
+              title={primaryExport.title}
             >
-              导出 CSV
+              {primaryExport.label}
+            </a>
+            <a
+              href={secondaryExport.href}
+              download
+              className="pl-btn pl-btn--secondary text-sm"
+              data-testid="audit-export-secondary"
+              title={secondaryExport.title}
+            >
+              {secondaryExport.label}
+            </a>
+            <a
+              href={exportPackUrl}
+              download
+              className="pl-btn pl-btn--primary text-sm"
+              data-testid="audit-export-pack"
+              title="导出审计证据包 zip（含 Manifest）"
+            >
+              导出审计证据包
+              <span className="notranslate" translate="no">
+                {" "}
+                Manifest
+              </span>
             </a>
           </div>
         }
@@ -1746,6 +1805,33 @@ export function Audit() {
         >
           调用流水
         </Link>
+      </div>
+
+      <div className="pl-notice flex flex-wrap items-center justify-between gap-3" data-testid="audit-granularity-help">
+        <span>
+          {tab === "turns" ? (
+            <>问询记录按一次用户问询聚合，适合查看整体结果、涉及数据表和慢调用概况。</>
+          ) : (
+            <>
+              调用流水按一次工具调用展开，适合排查权限裁决、生成{" "}
+              <span className="notranslate" translate="no">SQL</span>、访问上下文和单次耗时。
+            </>
+          )}
+        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            className="pl-inline-link"
+            href={metadataUrl}
+            download
+            data-testid="audit-export-metadata"
+            title="下载当前页签 CSV 字段说明"
+          >
+            字段说明
+          </a>
+          <Link className="pl-inline-link" to="/help?section=admin-audit-turns-vs-calls">
+            查看审计口径
+          </Link>
+        </div>
       </div>
 
       {/* Time preset pills */}
