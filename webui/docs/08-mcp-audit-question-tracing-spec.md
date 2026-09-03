@@ -258,6 +258,12 @@ v0.1 采用规则摘要，不强依赖 LLM：
 3. `allowedToolNames()` 里 `acl.ts:769` 的可见性门槛从 `tool === "kx_catalog"` 扩成同时覆盖 `lucy_begin_question`：即使 role 配置里写了，只有 `resolved.permissions.sources.length > 0`（这个 role 至少能看到一个数据源）才会真正出现在 `tools/list`。
 `mcp-proxy.ts` 端复用现成的 `visibleTools.has("lucy_begin_question")` 判断，跟 `kx_catalog` 注入是同一段 `filterAndAddAllowedTools` 逻辑的扩展，不新增判断分支。
 
+发布配置基线补充：仓库内发布的 Lucy 数据角色模板只要包含 `lucy_query`、`lucy_read_source`、
+`lucy_explain_query` 或 `lucy_freshness`，就必须显式包含 `lucy_begin_question`；模板契约测试负责
+防止遗漏。该基线不改变自定义 Role 的显式 ACL 语义，也不允许启动流程静默改写客户已有的
+`access.yaml`。保留配置升级时，`r1:status` 仅报告缺失角色，由管理员通过 Role Admin 的
+dry-run diff 确认后再保存。
+
 Proxy 在 `tools/list` 中注入一个本地工具：
 
 ```json
@@ -439,6 +445,7 @@ POST /api/admin/audit/rebuild-derived
 | unit | 孤立 `kx_catalog` 默认不计为正式问题 |
 | integration | `lucy_begin_question` 出现在 `tools/list` 且本地处理，不转发 KTX |
 | integration | `lucy_begin_question` 后业务调用可近邻关联 |
+| template contract | 所有发布版 Lucy 数据角色显式列出 `lucy_begin_question`，且该工具不进入 `table_touching_tools` |
 | integration | Audit API 返回 turns + sources |
 | security | question preview 脱敏、限长、CSV formula escaping |
 

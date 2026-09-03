@@ -9,7 +9,12 @@ PROXY_PORT="${LUCY_PROXY_PORT:-7879}"
 ktx --version >/dev/null
 
 # P0-3: runtime must be baked in (offline / air-gapped); do not rely on startup download.
-ktx admin runtime status 2>/dev/null | grep -q '^status: ready' || {
+if ! KTX_RUNTIME_STATUS="$(ktx admin runtime status 2>/dev/null)"; then
+  echo "ktx runtime status command failed"
+  exit 1
+fi
+
+grep -Eq '^status:[[:space:]]+ready[[:space:]]*$' <<<"${KTX_RUNTIME_STATUS}" || {
   echo "ktx runtime not ready (uv/core missing — rebuild image with ktx admin runtime install)"
   exit 1
 }

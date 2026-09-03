@@ -79,6 +79,8 @@ async function localSmoke() {
   await run("npm", ["test"], { cwd: "webui" });
   await run("bash", ["-n", "scripts/docker-entrypoint.sh", "scripts/docker-healthcheck.sh"]);
   await run("npm", ["run", "smoke:p0:docker-entrypoint:test"]);
+  await run("npm", ["run", "smoke:p0:docker-healthcheck:test"]);
+  await run("npm", ["run", "smoke:p0:access-template:test"]);
   await run("docker", ["compose", "config"], { capture: true });
 
   const env = {

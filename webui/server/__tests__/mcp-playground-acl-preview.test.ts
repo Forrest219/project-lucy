@@ -4,7 +4,7 @@ import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
-import { decisionReasonDetail, decisionReasonLabel } from "../admin/decision-reason-labels.js";
+import { decisionReasonDetail, decisionReasonLabel } from "../../src/lib/decisionReasonLabels.js";
 
 // Mock audit db so tests don't need a real sqlite (same shape as admin-agents.test.ts).
 vi.mock("../admin/audit.js", () => ({
@@ -29,7 +29,7 @@ const ACCESS_YAML = `roles:
           names:
             - superstore_orders
       tools:
-        - sl_query
+        - lucy_query
 users:
   - id: zhangsan
     name: 张三
@@ -92,6 +92,9 @@ describe("decision-reason-labels", () => {
     expect(decisionReasonLabel("allowed")).toBe("允许执行");
     expect(decisionReasonLabel("tool_forbidden")).toBe("Role 未授权该工具");
     expect(decisionReasonLabel("table_forbidden:dataforai.orders")).toBe("表不在生效权限范围内");
+    expect(decisionReasonLabel("invalid_arguments:lucy_query:filters_serialized_json_invalid")).toBe("筛选条件格式无效");
+    expect(decisionReasonLabel("invalid_arguments:lucy_query:order_by_conflict")).toBe("排序条件互相冲突");
+    expect(decisionReasonLabel("invalid_arguments:lucy_query:query_shape_required")).toBe("工具参数不符合要求");
     expect(decisionReasonDetail("table_forbidden:dataforai.orders")).toContain("dataforai.orders");
   });
 
@@ -139,7 +142,7 @@ describe("POST /api/admin/mcp-playground/acl-preview", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/mcp-playground/acl-preview")
-      .send({ agentId: "zhangsan", tool: "sl_query", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } })
+      .send({ agentId: "zhangsan", tool: "lucy_query", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } })
       .expect(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.data.allowed).toBe(true);
@@ -155,7 +158,7 @@ describe("POST /api/admin/mcp-playground/acl-preview", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/mcp-playground/acl-preview")
-      .send({ agentId: "zhangsan", tool: "lucy_query", arguments: {} })
+      .send({ agentId: "zhangsan", tool: "lucy_read_source", arguments: {} })
       .expect(200);
     expect(res.body.data.allowed).toBe(false);
     expect(res.body.data.decisionReason).toBe("tool_forbidden");
@@ -168,7 +171,7 @@ describe("POST /api/admin/mcp-playground/acl-preview", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/mcp-playground/acl-preview")
-      .send({ agentId: "zhangsan", tool: "sl_query", arguments: { connectionId: "mysql-aliyun", sourceName: "other_table" } })
+      .send({ agentId: "zhangsan", tool: "lucy_query", arguments: { connectionId: "mysql-aliyun", sourceName: "other_table" } })
       .expect(200);
     expect(res.body.data.allowed).toBe(false);
     expect(res.body.data.decisionReason).toMatch(/^table_forbidden:/);
@@ -196,7 +199,7 @@ describe("POST /api/admin/mcp-playground/acl-preview", () => {
     await app.ready();
     await request(app.server)
       .post("/api/admin/mcp-playground/acl-preview")
-      .send({ agentId: "zhangsan", tool: "sl_query", arguments: { sourceName: "superstore_orders" } })
+      .send({ agentId: "zhangsan", tool: "lucy_query", arguments: { sourceName: "superstore_orders" } })
       .expect(200);
     expect(fetchSpy).not.toHaveBeenCalled();
     await app.close();

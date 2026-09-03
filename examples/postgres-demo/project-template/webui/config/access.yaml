@@ -16,6 +16,7 @@ roles:
         - lucy_query
         - lucy_read_source
         - lucy_explain_query
+        - lucy_begin_question
         - wiki_search
         - wiki_read
         - connection_list
@@ -45,6 +46,7 @@ defaults:
     - lucy_explain_query
     - lucy_catalog
     - lucy_freshness
+    - lucy_begin_question
     - wiki_search
     - wiki_read
     - entity_details

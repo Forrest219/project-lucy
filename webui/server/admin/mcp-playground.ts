@@ -3,7 +3,7 @@ import { allowedToolNames, check, effectivePermissions } from "../proxy/acl.js";
 import type { Identity } from "../proxy/identity.js";
 import { getAccessConfig } from "../proxy/identity.js";
 import { resolveProjectRoot } from "../project.js";
-import { decisionReasonDetail, decisionReasonLabel } from "./decision-reason-labels.js";
+import { decisionReasonDetail, decisionReasonLabel } from "../../src/lib/decisionReasonLabels.js";
 
 const TABLE_SAMPLE_LIMIT = 12;
 /** Reserved `x-lucy-platform` / `lucy_platform` value for MCP 调试台受控试调. */

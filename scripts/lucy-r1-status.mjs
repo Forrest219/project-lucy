@@ -71,6 +71,13 @@ const R1_TOOLS = [
   "lucy_freshness",
   "lucy_begin_question"
 ];
+const QUESTION_TOOL = "lucy_begin_question";
+const LUCY_DATA_TOOLS = new Set([
+  "lucy_query",
+  "lucy_read_source",
+  "lucy_explain_query",
+  "lucy_freshness"
+]);
 
 if (values.help) {
   console.log(USAGE);
@@ -180,6 +187,28 @@ function exactRoleStatus(profile) {
   };
 }
 
+function questionToolCoverage() {
+  const config = readYamlIfExists(absolute("webui/config/access.yaml"));
+  if (!config) {
+    return { configPresent: false, dataRoleCount: 0, missingRoleIds: [], complete: false };
+  }
+  const dataRoles = Object.entries(config.roles ?? {})
+    .filter(([, role]) => {
+      const tools = Array.isArray(role?.allow?.tools) ? role.allow.tools : [];
+      return tools.some((tool) => LUCY_DATA_TOOLS.has(tool));
+    });
+  const missingRoleIds = dataRoles
+    .filter(([, role]) => !role.allow.tools.includes(QUESTION_TOOL))
+    .map(([roleId]) => roleId)
+    .sort((a, b) => a.localeCompare(b));
+  return {
+    configPresent: true,
+    dataRoleCount: dataRoles.length,
+    missingRoleIds,
+    complete: missingRoleIds.length === 0
+  };
+}
+
 function buildSummary() {
   const readinessRun = readReadiness();
   const readiness = parseReadiness(readinessRun);
@@ -197,6 +226,7 @@ function buildSummary() {
   const missingExternal = externalEvidence.filter((item) => item.status !== "pass");
   const selectedTarget = targetStatus(TARGET_PROFILE);
   const exactRole = exactRoleStatus(TARGET_PROFILE);
+  const questionReporting = questionToolCoverage();
   const configReady = selectedTarget.ready === true
     && exactRole.present === true
     && exactRole.exactTools === true
@@ -220,6 +250,7 @@ function buildSummary() {
     dorisTarget: TARGET_PROFILE.id === "doris" ? selectedTarget : targetStatus(TARGET_PROFILES.doris),
     selectedTarget,
     exactRole,
+    questionReporting,
     nextCommands: [
       `npm run r1:mcp-contract -- --proxy-url http://127.0.0.1:7879/mcp --token "$LUCY_AGENT_TOKEN" --connection ${TARGET_PROFILE.connectionId} --source ceo_metric_snapshot --measure ceo_metric_snapshot.revenue --dimension ceo_metric_snapshot.biz_date --forbid-tool sl_query --forbid-source hidden_source --forbid-measure hidden_source.revenue --out inbox/lucy-r1-mcp-contract-evidence.json`,
       `npm run ${TARGET_PROFILE.smokeCommand} -- --connection ${TARGET_PROFILE.connectionId} --source ceo_metric_snapshot --measure ceo_metric_snapshot.revenue --dimension ceo_metric_snapshot.biz_date --proxy-url http://127.0.0.1:7879/mcp --token "$LUCY_AGENT_TOKEN" --timeout-evidence ${TARGET_PROFILE.timeoutEvidence} --readonly-account-confirmed --out ${TARGET_PROFILE.out}`,
@@ -243,6 +274,9 @@ function printHuman(summary) {
   console.log(`${TARGET_PROFILE.label} target config: ${summary.selectedTarget.ready ? "ready" : "not ready"}${summary.selectedTarget.reason ? ` — ${summary.selectedTarget.reason}` : ""}`);
   console.log(`Exact R1 role: ${summary.exactRole.present ? "present" : "missing"}; connections=${summary.exactRole.connections.join(",") || "<none>"}; tableSelectorConnections=${summary.exactRole.tableSelectorConnections.join(",") || "<none>"}; exactTools=${summary.exactRole.exactTools}; pointsToTarget=${summary.exactRole.pointsToTarget}; tableSelectorsPointToTarget=${summary.exactRole.tableSelectorsPointToTarget}`);
   console.log(`Config ready: ${summary.configReady}`);
+  if (summary.questionReporting.missingRoleIds.length > 0) {
+    console.log(`Warning: Lucy data roles missing lucy_begin_question: ${summary.questionReporting.missingRoleIds.join(", ")}`);
+  }
   if (summary.readiness.failures.length > 0) {
     console.log("");
     console.log("Failing readiness items:");

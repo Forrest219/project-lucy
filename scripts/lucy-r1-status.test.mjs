@@ -30,29 +30,34 @@ test("R1 status summarizes missing external evidence without marking release rea
       { status: "fail", id: "external.hermes", message: "Hermes >=95% QA accuracy report requires external evidence" }
     ]
   }, async (file) => {
-    const result = spawnSync(process.execPath, [SCRIPT, "--readiness-file", file, "--json"], {
-      cwd: ROOT,
-      env: {
-        ...process.env,
-        LUCY_R1_MCP_CONTRACT_EVIDENCE: "",
-        LUCY_R1_DORIS_EVIDENCE: "",
-        LUCY_R1_HERMES_ACCURACY_REPORT: ""
-      },
-      encoding: "utf8"
-    });
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lucy-r1-missing-config-"));
+    try {
+      const result = spawnSync(process.execPath, [SCRIPT, "--readiness-file", file, "--json"], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          LUCY_R1_MCP_CONTRACT_EVIDENCE: "",
+          LUCY_R1_DORIS_EVIDENCE: "",
+          LUCY_R1_HERMES_ACCURACY_REPORT: ""
+        },
+        encoding: "utf8"
+      });
 
-    assert.equal(result.status, 0, result.stderr);
-    const summary = JSON.parse(result.stdout);
-    assert.equal(summary.releaseReady, false);
-    assert.equal(summary.readiness.counts.pass, 335);
-    assert.equal(summary.readiness.counts.fail, 3);
-    assert.deepEqual(summary.externalEvidence.map((item) => item.status), ["fail", "fail", "fail"]);
-    assert.deepEqual(summary.externalEvidence.map((item) => item.envSet), [false, false, false]);
-    assert.equal(summary.dorisTarget.present, false);
-    assert.equal(summary.exactRole.present, true);
-    assert.equal(summary.exactRole.pointsToDoris, false);
-    assert.equal(summary.configReady, false);
-    assert.ok(summary.nextCommands.some((command) => command.includes("r1:release-bundle")));
+      assert.equal(result.status, 0, result.stderr);
+      const summary = JSON.parse(result.stdout);
+      assert.equal(summary.releaseReady, false);
+      assert.equal(summary.readiness.counts.pass, 335);
+      assert.equal(summary.readiness.counts.fail, 3);
+      assert.deepEqual(summary.externalEvidence.map((item) => item.status), ["fail", "fail", "fail"]);
+      assert.deepEqual(summary.externalEvidence.map((item) => item.envSet), [false, false, false]);
+      assert.equal(summary.dorisTarget.present, false);
+      assert.equal(summary.exactRole.present, false);
+      assert.equal(summary.exactRole.pointsToDoris, false);
+      assert.equal(summary.configReady, false);
+      assert.ok(summary.nextCommands.some((command) => command.includes("r1:release-bundle")));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -204,6 +209,59 @@ roles:
       assert.equal(summary.exactRole.pointsToTarget, true);
       assert.equal(summary.exactRole.tableSelectorsPointToTarget, true);
       assert.equal(summary.externalEvidence[1].id, "external.starrocks");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+test("R1 status reports data roles missing lucy_begin_question without failing readiness", async () => {
+  await withFixtureReadiness({
+    ok: false,
+    strict: true,
+    counts: { pass: 1, fail: 1 },
+    results: []
+  }, async (file) => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lucy-r1-question-tool-config-"));
+    try {
+      await mkdir(path.join(dir, "webui", "config"), { recursive: true });
+      await writeFile(path.join(dir, "webui", "config", "access.yaml"), `
+roles:
+  analyst:
+    allow:
+      tools:
+        - lucy_query
+  governed:
+    allow:
+      tools:
+        - lucy_read_source
+        - lucy_begin_question
+  wiki_only:
+    allow:
+      tools:
+        - wiki_read
+`, "utf8");
+      const result = spawnSync(process.execPath, [SCRIPT, "--readiness-file", file, "--json"], {
+        cwd: dir,
+        encoding: "utf8"
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      const summary = JSON.parse(result.stdout);
+      assert.deepEqual(summary.questionReporting, {
+        configPresent: true,
+        dataRoleCount: 2,
+        missingRoleIds: ["analyst"],
+        complete: false
+      });
+      assert.equal(summary.releaseReady, false);
+
+      const human = spawnSync(process.execPath, [SCRIPT, "--readiness-file", file], {
+        cwd: dir,
+        encoding: "utf8"
+      });
+      assert.equal(human.status, 0, human.stderr);
+      assert.match(human.stdout, /Warning: Lucy data roles missing lucy_begin_question: analyst/);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

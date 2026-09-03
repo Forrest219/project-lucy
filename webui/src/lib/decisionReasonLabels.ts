@@ -16,6 +16,9 @@ export function decisionReasonLabel(code: string | null | undefined): string {
   if (code.startsWith("sensitive_metadata_forbidden:")) return "敏感元数据工具未授权";
   if (code === "raw_query_forbidden") return "禁止原始 SQL 查询";
   if (code === "query_concurrency_exceeded") return "查询并发超限";
+  if (code === "invalid_arguments:lucy_query:filters_serialized_json_invalid") return "筛选条件格式无效";
+  if (code === "invalid_arguments:lucy_query:order_by_conflict") return "排序条件互相冲突";
+  if (code.startsWith("invalid_arguments:")) return "工具参数不符合要求";
   return "未识别裁决原因";
 }
 
