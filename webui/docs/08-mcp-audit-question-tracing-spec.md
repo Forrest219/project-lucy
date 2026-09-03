@@ -406,6 +406,7 @@ UI 文案必须避免把 inferred summary 表述为用户原话。推荐：
 - 自然语言问题为可选审计信息，默认只保存脱敏预览和摘要，不保存完整原文。
 - 脱敏规则至少覆盖 token、password、secret、authorization、手机号、邮箱、身份证样式字符串。
 - `question_preview` 和 `args_summary` 一样，导出 CSV 时必须做公式注入防护。
+- **`access_log.args_summary` 禁止自然语言副本（Spec 137）**：`lucy_begin_question`（及含 `question` / `questionPreview` / `intentSummary` 的参数）写入访问日志时必须删除这三个字段。自然语言只进入受 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS` 管理的 `conversation_turns`。历史行通过带事务 maintenance 留痕的 Admin/CLI scrub 清理。权威算法见 Spec 137 §5。
 - 删除 / retention：
   - `conversation_turns.question_preview` 默认保留 30 天，通过 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS` 配置；清理机制见 §8.4。
   - `inferred_turns` 可长期保留，因为其来源是审计摘要而非用户原文。
@@ -499,7 +500,7 @@ POST /api/admin/audit/rebuild-derived
 2. **`lucy_begin_question` 默认注入范围。决策：完全照搬 `kx_catalog` 的显式 allow-list 机制，不做派生豁免。** 调研确认 `kx_catalog` 在 `acl.ts` 里没有任何绕过 `allow.tools` 的特殊通道——它必须像普通工具一样被显式列在某个 role/user 的 `tools:` 数组里才能通过 `check()`；唯一的"派生条件"只出现在 `allowedToolNames()` 的可见性过滤里（`acl.ts:769`：即使列在 `allow.tools`，也只有 `resolved.permissions.sources.length > 0` 时才出现在 `tools/list`）。`lucy_begin_question` 照此办理：① 加进 `DEFAULT_KNOWN_TOOLS`；② 管理员必须在对应 role 的 `tools:` 里显式加上它（建议跟 `kx_catalog` 一起列，语义上"有数据访问能力的 role 才配两者"，但两者可见性门槛各自独立判定，代码不强制二者必须同时出现）；③ 复用 `acl.ts:769` 的同一条 `sources.length > 0` 可见性门槛（把判断条件从 `tool === "kx_catalog"` 扩成 `tool === "kx_catalog" || tool === "lucy_begin_question"`）。这样"只有真正能查数据的 role 才会看到这个工具"的效果原样达成，但走的是现有架构本来就有的显式 allow-list + 可见性门槛，不引入新的派生逻辑分支，也避免"tools/list 能看见但 tools/call 会被 tool_forbidden 拒绝"的不一致。原计划中"在 mcp-proxy.ts 派生判断"的方案已否决：`check()` 的工具白名单判定在 `kx_catalog`/`lucy_begin_question` 本地短路分支之前执行，新工具名无法绕开它，强行绕开需要在 `check()` 里开一个特殊豁免分支，反而比方案 A 改动更大、更不一致。实现见 §8.1。
 3. **120 秒聚类阈值是否要 per-agent 配置？决策：v1 不做，维持全局 `LUCY_TURN_INFER_GAP_MS`。** 理由：还没有真实数据验证不同 agent 的调用节奏差异有多大；先用全局默认收集 Phase 2 上线后的实际簇分布，有证据再加 per-agent 配置面，避免无依据的过度设计。
 4. **30 天 preview retention 是否过长？决策：默认值不变，但补一个目前 spec 里"可配置"却没有对应开关的缺口。** 新增环境变量 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS`（默认 `30`），并设计一个轻量 purge 机制（见 §8.4）——本地单用户环境和客户部署环境用同一个默认值起步，部署侧需要更短窗口时改环境变量即可，不需要代码分支。
-5. **`access_log_sources` 要不要进 CSV 导出？决策：不做。** 维持只通过 UI/API（`GET /api/admin/audit/:id/sources`）展开。理由：现有 `GET /api/admin/audit/export` 是"一个 access_log 行 = 一行 CSV"的扁平语义；`access_log_sources` 是 1:N 关系，硬塞进同一份 CSV 要么逐 source 复制整行（冗余且容易让人误读成多条独立调用），要么改变现有 CSV 的行语义（破坏已有消费者假设）。如果未来真需要离线分析，应该开一个独立的 source 级 CSV 端点，不是本轮范围。
+5. **`access_log_sources` 要不要进 CSV 导出？决策：不做（主 CSV）；正式证据包另开端点（Spec 137）。** 维持 `GET /api/admin/audit/export` 只通过 UI/API（`GET /api/admin/audit/:id/sources`）展开 sources，保持"一个 access_log 行 = 一行 CSV"的扁平语义。离线分析走独立 `GET /api/admin/audit/export-pack`（zip 内含 `access_log_sources.csv` 等），不得塞进主 CSV。
 
 ## 16. Lucy 侧 soft uplift（问询原文锦上添花）
 

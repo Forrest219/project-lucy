@@ -164,7 +164,7 @@ function initializeRequest(id: string): string {
     jsonrpc: "2.0",
     id,
     method: "initialize",
-    params: { clientInfo: { name: "test-client" } }
+    params: { clientInfo: { name: "test-client", version: "2.3.4" } }
   });
 }
 
@@ -383,6 +383,57 @@ defaults:
       expect(audit.error_detail).toBeNull();
       expect(String(audit.permission_snapshot_hash)).toMatch(/^[0-9a-f]{64}$/);
       expect(Number(audit.response_bytes)).toBeGreaterThan(0);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("binds response mcp-session-id to initialize clientInfo for later calls", async () => {
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as { id: string; method: string };
+      if (body.method === "initialize") {
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "upstream-session-137" });
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { serverInfo: { name: "ktx" }, capabilities: { tools: {} } }
+        }));
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { tools: [] } }));
+    });
+
+    try {
+      const init = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: initializeRequest("init-session-bind")
+      });
+      expect(init.status).toBe(200);
+      expect(init.headers.get("mcp-session-id")).toBe("upstream-session-137");
+      await init.text();
+
+      const list = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`,
+          "mcp-session-id": "upstream-session-137"
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "list-after-init", method: "tools/list" })
+      });
+      expect(list.status).toBe(200);
+      await list.text();
+
+      const initAudit = await waitForAuditRow("init-session-bind");
+      expect(initAudit.lucy_session_id).toBe("upstream-session-137");
+      expect(initAudit.client).toBe("test-client");
+      expect(initAudit.client_version).toBe("2.3.4");
+      const listAudit = await waitForAuditRow("list-after-init");
+      expect(listAudit.lucy_session_id).toBe("upstream-session-137");
+      expect(listAudit.client).toBe("test-client");
+      expect(listAudit.client_version).toBe("2.3.4");
     } finally {
       await closeAll(upstream, server);
     }

@@ -224,6 +224,22 @@ async function waitForAuditSources(accessLogId: number, timeoutMs = 300): Promis
   return [];
 }
 
+function parseStoredZipEntries(zip: Buffer): Map<string, Buffer> {
+  const entries = new Map<string, Buffer>();
+  let offset = 0;
+  while (offset + 30 <= zip.length && zip.readUInt32LE(offset) === 0x04034b50) {
+    const size = zip.readUInt32LE(offset + 18);
+    const nameLength = zip.readUInt16LE(offset + 26);
+    const extraLength = zip.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const name = zip.subarray(nameStart, nameStart + nameLength).toString("utf8");
+    entries.set(name, zip.subarray(dataStart, dataStart + size));
+    offset = dataStart + size;
+  }
+  return entries;
+}
+
 beforeEach(async () => {
   vi.resetModules();
   projectRoot = await makeProject();
@@ -325,6 +341,8 @@ describe("MCP proxy smoke", () => {
       expect(audit.outcome).toBe("ok");
       expect(audit.decision_reason).toBe("allowed");
       expect(audit.permission_snapshot_hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(audit.policy_version).toMatch(/^[0-9a-f]{64}$/);
+      expect(audit.capability_digest).toMatch(/^[0-9a-f]{16,64}$/);
       expect(JSON.parse(String(audit.tables))).toEqual(["dataforai.superstore_orders"]);
       const auditDb = new Database(auditDbPath, { readonly: true });
       try {
@@ -720,6 +738,36 @@ describe("MCP proxy smoke", () => {
       expect(queryAudit.query_length).toBe(generatedSql.length);
       expect(queryAudit.query_operation).toBe("select");
       expect(String(queryAudit.args_summary ?? "")).not.toContain(generatedSql);
+      expect(queryAudit.policy_version).toMatch(/^[0-9a-f]{64}$/);
+      expect(queryAudit.capability_digest).toMatch(/^[0-9a-f]{16,64}$/);
+      expect(queryAudit.response_row_count).toBe(1);
+      const sourceRows = await waitForAuditSources(Number(queryAudit.id));
+      expect(sourceRows).toEqual(expect.arrayContaining([
+        expect.objectContaining({ source_name: "superstore_orders", physical_table: "dataforai.superstore_orders" })
+      ]));
+
+      // AC-W3-02: export the evidence pack from the same DB populated by the
+      // real Proxy call; do not seed a second synthetic access_log row.
+      const { buildServer } = await import("../index");
+      const app = buildServer();
+      await app.ready();
+      try {
+        const pack = await app.inject({
+          method: "GET",
+          url: "/api/admin/audit/export-pack?user=smoke_agent"
+        });
+        expect(pack.statusCode).toBe(200);
+        const entries = parseStoredZipEntries(pack.rawPayload);
+        expect(entries.get("access_log.csv")?.toString("utf8")).toContain("lucy-query");
+        expect(entries.get("access_log.csv")?.toString("utf8")).toContain(generatedSql);
+        expect(entries.get("access_log_sources.csv")?.toString("utf8")).toContain("superstore_orders");
+        const manifest = JSON.parse(entries.get("manifest.json")!.toString("utf8")) as {
+          completeness: { complete: boolean };
+        };
+        expect(manifest.completeness.complete).toBe(true);
+      } finally {
+        await app.close();
+      }
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -1591,6 +1639,13 @@ describe("MCP proxy smoke", () => {
       const beginAudit = await waitForAuditRow("begin-q-1");
       expect(beginAudit.tool).toBe("lucy_begin_question");
       expect(beginAudit.lucy_turn_id).toBe(turnId);
+      expect(String(beginAudit.args_summary ?? "")).not.toContain("alice@example.com");
+      expect(String(beginAudit.args_summary ?? "")).not.toContain("查询客户邮箱相关的订单");
+      expect(String(beginAudit.args_summary ?? "")).not.toContain('"question"');
+      expect(String(beginAudit.args_summary ?? "")).not.toContain('"questionPreview"');
+      expect(String(beginAudit.args_summary ?? "")).not.toContain('"intentSummary"');
+      expect(beginAudit.policy_version).toMatch(/^[0-9a-f]{64}$/);
+      expect(beginAudit.capability_digest).toMatch(/^[0-9a-f]{16,64}$/);
 
       const ctDb = new Database(auditDbPath, { readonly: true });
       try {

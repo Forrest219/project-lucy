@@ -6,6 +6,14 @@ import { identifyRequestDetailed, setSessionClient, type Identity } from "./iden
 import { extractRequestClientMeta } from "./request-client-meta.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import {
+  redactQuestionText,
+  summarizeArgsForAudit,
+  extractQueryTables,
+  questionPreviewMaxChars,
+  storeQuestionPreviewEnabled
+} from "./audit-privacy.js";
+import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { loadAllSkills, getSkillByUri, getSkillByName } from "../skills/loader.js";
 import { canAccessSkill, filterAccessibleSkills } from "./skill-acl.js";
@@ -31,9 +39,7 @@ const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881)
 const LUCY_SKILLS_PATH_PREFIX = "/mcp/skills";
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
-const SENSITIVE_ARG_KEY_RE = /(?:sql|query|password|passwd|pwd|token|secret|api[-_]?key|authorization|credential)/i;
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
-const QUERY_TABLE_RE = /\b(?:from|join|into|update|table)\s+[`"]?([a-zA-Z_][\w]*(?:\.[a-zA-Z_][\w]*){0,2})[`"]?/gi;
 const LUCY_QUERY_DEFAULT_LIMIT = Number(process.env.LUCY_QUERY_DEFAULT_LIMIT ?? 100);
 const LUCY_QUERY_MAX_LIMIT = Number(process.env.LUCY_QUERY_MAX_LIMIT ?? 1000);
 const LUCY_QUERY_MAX_INFLIGHT = Number(process.env.LUCY_QUERY_MAX_INFLIGHT ?? 4);
@@ -372,39 +378,12 @@ function recordMcpTraceForTool(input: {
 }
 
 async function auditMeta(identity: Identity | null | undefined, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
-  if (!identity) return { decisionReason };
-  const snapshot = await permissionSnapshot(identity).catch(() => undefined);
-  const tokenMeta = {
-    tokenLabel: identity.tokenLabel,
-    tokenHashPrefix: identity.tokenHashPrefix,
-    clientVersion: identity.clientVersion,
-    decisionReason
-  };
-  if (!snapshot) return tokenMeta;
-  return {
-    ...tokenMeta,
-    roleIds: snapshot.roleIds,
-    permissionSnapshotHash: snapshot.hash,
-    effectiveTablesCount: snapshot.effectiveTablesCount,
-    permissionSnapshot: {
-      hash: snapshot.hash,
-      rolesJson: snapshot.rolesJson,
-      resolvedJson: snapshot.resolvedJson
-    }
-  };
-}
-
-function summarizeArgs(args: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(args)
-      .filter(([k]) => !SENSITIVE_ARG_KEY_RE.test(k))
-      .slice(0, 8)
-  );
+  return buildAccessLogAuditMeta(identity, decisionReason);
 }
 
 function correlationMeta(headers: IncomingMessage["headers"]): Partial<Parameters<typeof writeLog>[0]> {
   return {
-    lucySessionId: normalizeHeader(headers["x-lucy-session-id"]),
+    lucySessionId: normalizeHeader(headers["x-lucy-session-id"]) || normalizeHeader(headers["mcp-session-id"]),
     lucyTurnId: normalizeHeader(headers["x-lucy-turn-id"]),
     lucyPlatform: normalizeHeader(headers["x-lucy-platform"])
   };
@@ -458,36 +437,12 @@ function redactQueryPreview(query: string): string {
     .slice(0, 180);
 }
 
-const QUESTION_SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential)\b\s*[:=]\s*([^,\s;]+)/gi;
-const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
-const CN_ID_CARD_RE = /\b\d{17}[\dXx]\b/g;
-const CN_MOBILE_RE = /\b1[3-9]\d{9}\b/g;
-
-// Free-text redaction for lucy_begin_question's optional `question` field (spec §10).
-// Distinct from redactQueryPreview (SQL-oriented) and admin/audit.ts's redactSensitive
-// (JSON-key-oriented) — natural language needs pattern-based redaction instead.
-function redactQuestionText(text: string): string {
-  return text
-    .replace(QUESTION_SENSITIVE_PAIR_RE, "$1=[REDACTED]")
-    .replace(EMAIL_RE, "[REDACTED]")
-    .replace(CN_ID_CARD_RE, "[REDACTED]")
-    .replace(CN_MOBILE_RE, "[REDACTED]");
-}
-
 function queryOperation(query: string): string {
   const match = query.trim().match(/^([a-z]+)/i);
   const op = match?.[1]?.toLowerCase();
   if (!op) return "unknown";
   if (["select", "show", "describe", "with"].includes(op)) return op;
   return "unknown";
-}
-
-function extractQueryTables(query: string): string[] {
-  const tables = new Set<string>();
-  for (const match of query.matchAll(QUERY_TABLE_RE)) {
-    if (match[1]) tables.add(match[1]);
-  }
-  return [...tables];
 }
 
 function queryAuditMeta(toolArgs: unknown): Partial<Parameters<typeof writeLog>[0]> & { queryTables?: string[] } {
@@ -556,7 +511,7 @@ function inspectRowsAndColumns(value: unknown, depth = 0): { rows?: number; colu
   return {};
 }
 
-function responseAuditMeta(body: Buffer, contentType: string | string[] | undefined): Partial<Parameters<typeof writeLog>[0]> {
+function responseAuditMeta(body: Buffer, contentType: string | string[] | number | undefined): Partial<Parameters<typeof writeLog>[0]> {
   const meta: Partial<Parameters<typeof writeLog>[0]> = { responseBytes: body.byteLength };
   const type = Array.isArray(contentType) ? contentType.join(",") : String(contentType ?? "");
   if (!type.includes("application/json")) return meta;
@@ -1885,7 +1840,7 @@ async function localToolsListPayload(identity: Identity, requestId: string | num
 }
 
 async function writeToolsListResponse(
-  identity: NonNullable<Awaited<ReturnType<typeof identifyRequest>>>,
+  identity: Identity,
   upstream: IncomingMessage,
   res: ServerResponse,
   requestId: string | number
@@ -2025,6 +1980,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   let queryMeta: Partial<Parameters<typeof writeLog>[0]> = {};
   let queryTables: string[] = [];
   let parsedRpc: Record<string, unknown> | undefined;
+  let initializeClientInfo: { name: string; version?: string } | undefined;
   let queryNormalizationReason: string | undefined;
 
   try {
@@ -2035,11 +1991,14 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
     if (rpcMethod === "initialize") {
       const clientInfo = (parsed.params as Record<string, unknown> | undefined)?.clientInfo as Record<string, unknown> | undefined;
-      if (clientInfo?.name && sessionId) {
+      if (clientInfo?.name) {
         const version = clientInfo.version != null ? String(clientInfo.version) : undefined;
-        setSessionClient(sessionId, identity.userId, identity.tokenLabel, String(clientInfo.name), version);
-        identity.client = String(clientInfo.name);
+        initializeClientInfo = { name: String(clientInfo.name), version };
+        identity.client = initializeClientInfo.name;
         identity.clientVersion = version;
+        if (sessionId) {
+          setSessionClient(sessionId, identity.userId, identity.tokenLabel, initializeClientInfo.name, version);
+        }
       }
     }
 
@@ -2062,8 +2021,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
       const args = params?.arguments as Record<string, unknown> | undefined;
       if (args) {
-        // Keep only a safe subset of args for logging
-        argsSummary = summarizeArgs(args);
+        // Keep only a safe subset of args for logging (Spec 137 — no raw question)
+        argsSummary = summarizeArgsForAudit(toolName, args);
       }
       const rawQueryAudit = queryAuditMeta(toolArgs);
       const { queryTables: extractedQueryTables, ...safeQueryMeta } = rawQueryAudit;
@@ -2410,9 +2369,9 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
 
       const turnId = `lucy_${randomUUID()}`;
-      const storePreview = process.env.LUCY_STORE_QUESTION_PREVIEW !== "false";
+      const storePreview = storeQuestionPreviewEnabled();
       const rawQuestion = typeof args.question === "string" ? args.question : undefined;
-      const maxChars = Number(process.env.LUCY_QUESTION_PREVIEW_MAX_CHARS ?? 500);
+      const maxChars = questionPreviewMaxChars();
       const questionPreview = storePreview && rawQuestion ? redactQuestionText(rawQuestion).slice(0, maxChars) : undefined;
       const questionHash = storePreview && rawQuestion ? createHash("sha256").update(rawQuestion).digest("hex") : undefined;
 
@@ -3130,6 +3089,17 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
 
   if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
+    const responseSessionId = normalizeHeader(upstream.headers["mcp-session-id"]);
+    if (responseSessionId) requestMeta.lucySessionId = responseSessionId;
+    if (responseSessionId && initializeClientInfo) {
+      setSessionClient(
+        responseSessionId,
+        identity.userId,
+        identity.tokenLabel,
+        initializeClientInfo.name,
+        initializeClientInfo.version
+      );
+    }
     const initResult = await writeInitializeResponse(identity, upstream, res, requestId);
     recordRequestAudit({
       ts: new Date().toISOString(),
