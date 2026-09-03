@@ -28,6 +28,8 @@ services:
         # amd64 hosts: TARGETPLATFORM=linux/amd64 TARGETARCH=amd64, or use the script.
         TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
         TARGETARCH: "${TARGETARCH:-arm64}"
+        # Optional PyPI mirror (see Dockerfile ARG block). Empty = official pypi.org.
+        UV_INDEX_URL: "${UV_INDEX_URL:-}"
     image: project-lucy:demo
     environment:
       KTX_PROJECT_ROOT: /data/lucy

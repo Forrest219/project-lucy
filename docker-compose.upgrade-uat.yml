@@ -10,6 +10,8 @@ services:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
         TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
         TARGETARCH: "${TARGETARCH:-arm64}"
+        # Optional PyPI mirror (see Dockerfile ARG block). Empty = official pypi.org.
+        UV_INDEX_URL: "${UV_INDEX_URL:-}"
     image: project-lucy:upgrade-uat-${UPGRADE_TAG:-baseline}
     environment:
       LUCY_DISABLE_TEMPLATE_SYNC: "1"

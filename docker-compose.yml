@@ -8,6 +8,8 @@ services:
         # Customer / production baseline is amd64. Override on arm64 hosts.
         TARGETPLATFORM: "${TARGETPLATFORM:-linux/amd64}"
         TARGETARCH: "${TARGETARCH:-amd64}"
+        # Optional PyPI mirror (see Dockerfile ARG block). Empty = official pypi.org.
+        UV_INDEX_URL: "${UV_INDEX_URL:-}"
     image: project-lucy:local
     environment:
       KTX_PROJECT_ROOT: /data/lucy

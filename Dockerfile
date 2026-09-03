@@ -24,10 +24,20 @@ ARG LUCY_VERSION=0.17.0
 # TARGETARCH is exposed so future architecture-specific steps (e.g. fetching a
 # KTX binary release) can branch on it without changing the rest of the file.
 ARG TARGETARCH=amd64
+# Optional PyPI mirror for `ktx admin runtime install` (China / corporate-VPN
+# networks where files.pythonhosted.org DNS-hijacks to a TLS-blackhole IP).
+# Default empty → uv falls back to official pypi.org. ktx's bundled uv reads
+# this through managedRuntimeUvEnv (process.env spread + UV_NO_CONFIG=1), so
+# no ktx patch is needed. Examples:
+#   UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+#   UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+#   UV_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple/
+ARG UV_INDEX_URL=
 
 ENV NODE_ENV=production \
     LUCY_VERSION=${LUCY_VERSION} \
     LUCY_BUNDLED_KTX_VERSION=${KTX_VERSION} \
+    UV_INDEX_URL=${UV_INDEX_URL} \
     KTX_PROJECT_ROOT=/data/lucy \
     LUCY_WEBUI_HOST=0.0.0.0 \
     LUCY_WEBUI_PORT=5174 \

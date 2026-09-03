@@ -547,6 +547,14 @@ node scripts/release-artifacts.mjs --out release/
 |---|---|
 | `docker pull node:22-bookworm-slim` / `mysql:8.4` 慢 | `~/.docker/daemon.json` 加 `registry-mirrors`：`https://docker.m.daocloud.io` |
 | `npm ci` 慢 | `npm config set registry https://registry.npmmirror.com` |
+| `ktx admin runtime install` 拉 pydantic 等依赖 `tls handshake eof` | 走 PyPI 镜像：`UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/` 后 `docker compose up -d --build`（或显式 `--build-arg UV_INDEX_URL=...`）；可选 `UV_EXTRA_INDEX_URL` 同理。ktx 捆绑的 uv 通过 `managedRuntimeUvEnv`（`process.env` spread + `UV_NO_CONFIG=1`）自动读取，无需改 ktx。空值 = 官方 pypi.org |
 | 终端要走代理 | `export HTTPS_PROXY=http://127.0.0.1:7897` 后再 `docker compose up`；Docker Desktop 还要在 Settings → Resources → Proxies 同步 |
 
 Docker Desktop 用户在镜像构建时不会自动继承 shell 代理，必须显式配置 daemon.json 或 Docker Desktop UI，否则 build 阶段 apt-get / npm install 超时。
+
+可用的 PyPI 镜像（`https://<host>/pypi/simple/` 形式）：
+
+- `mirrors.aliyun.com`（默认推荐）
+- `pypi.tuna.tsinghua.edu.cn`
+- `mirrors.cloud.tencent.com`
+- `mirror.baidu.com/pypi/simple`
