@@ -1,0 +1,21 @@
+# In-place upgrade UAT: enterprise customer-config bind mount on dedicated ports.
+# Usage:
+#   export UPGRADE_CONFIG_ROOT="/path/to/202808-lucy-test/customer-config"
+#   export COMPOSE="-f docker-compose.yml -f docker-compose.upgrade-uat.yml"
+#   UPGRADE_TAG=baseline docker compose $COMPOSE -p lucy-upgrade-uat up -d --build
+services:
+  lucy:
+    build:
+      args:
+        KTX_VERSION: "${KTX_VERSION:-0.16.0}"
+        TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
+        TARGETARCH: "${TARGETARCH:-arm64}"
+    image: project-lucy:upgrade-uat-${UPGRADE_TAG:-baseline}
+    environment:
+      LUCY_DISABLE_TEMPLATE_SYNC: "1"
+      LUCY_PUBLIC_MCP_URL: "http://127.0.0.1:57882/mcp"
+    ports:
+      - "${LUCY_UPGRADE_WEBUI_HOST_PORT:-55177}:5174"
+      - "${LUCY_UPGRADE_PROXY_HOST_PORT:-57882}:7879"
+    volumes:
+      - ${UPGRADE_CONFIG_ROOT}:/data/lucy
