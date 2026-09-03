@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertProductVersion } from "./lucy-version-governance.mjs";
 
 // ---- arg parsing ----
 // Allowed flags: --out <dir>, --tag <tag>, --help / -h.
@@ -72,6 +73,7 @@ const SOURCE_BUNDLE_ENTRIES = [
   "docker-compose.customer-config.yml",
   "docker-compose.secrets.yml",
   "customer-config.example",
+  "VERSION",
   "package.json",
   "package-lock.json",
   "scripts/headless-config-smoke.mjs",
@@ -125,6 +127,21 @@ async function readJson(file) {
 function dockerImageId(image) {
   const id = run("docker", ["image", "inspect", image, "--format", "{{.Id}}"], "");
   return id || "not-built-in-this-environment";
+}
+
+export function assertReleaseVersionProjections(lucyVersion, rootPkg, rootLock) {
+  assertProductVersion(lucyVersion, "VERSION");
+  const versionProjections = [
+    ["package.json", rootPkg.version],
+    ["package-lock.json", rootLock.version],
+    ["package-lock.json packages['']", rootLock.packages?.[""]?.version]
+  ];
+  for (const [label, actual] of versionProjections) {
+    if (actual !== lucyVersion) {
+      throw new Error(`[release-artifacts] ${label} version ${JSON.stringify(actual)} does not match VERSION ${lucyVersion}`);
+    }
+  }
+  return lucyVersion;
 }
 
 function packageComponents(lock, scope) {
@@ -217,7 +234,9 @@ const SOURCE_BUNDLE_STRIPPED_NPM_SCRIPTS = [
   ...A3_NPM_SCRIPTS,
   // The customer bundle keeps the production isolation command, but does not
   // ship maintainer-only node:test sources.
-  "smoke:p0:delivery-isolation:test"
+  "smoke:p0:delivery-isolation:test",
+  "lint:version",
+  "lint:version:test"
 ];
 
 /**
@@ -297,6 +316,11 @@ async function main() {
     readJson("package-lock.json"),
     readJson("webui/package-lock.json")
   ]);
+  const lucyVersion = assertReleaseVersionProjections(
+    (await readFile("VERSION", "utf8")).trim(),
+    rootPkg,
+    rootLock
+  );
   const gitCommit = run("git", ["rev-parse", "HEAD"]);
   const gitShort = run("git", ["rev-parse", "--short", "HEAD"]);
   const imageId = dockerImageId(imageTag);
@@ -306,6 +330,7 @@ async function main() {
     auditWorkspace("webui", "webui")
   ]);
   const repoQualityGates = [
+    "npm run lint:version",
     "npm run lint:spec",
     "npm run smoke:p0",
     "npm run smoke:p0:delivery-isolation",
@@ -329,7 +354,7 @@ async function main() {
       gitCommit,
       gitShort,
       package: rootPkg.name,
-      version: rootPkg.version,
+      version: lucyVersion,
       webuiPackage: webuiPkg.name,
       webuiVersion: webuiPkg.version
     },
@@ -363,7 +388,7 @@ async function main() {
       component: {
         type: "application",
         name: rootPkg.name,
-        version: rootPkg.version,
+        version: lucyVersion,
         commit: gitCommit
       },
       docker: metadata.docker,
@@ -388,6 +413,7 @@ async function main() {
   const notes = `# Lucy ${FINAL_RELEASE_TAG}
 
 - Git commit: ${gitCommit}
+- Lucy product version: ${lucyVersion}
 - Docker image: ${imageTag}
 - Docker image id: ${imageId}
 - Bundled KTX: @kaelio/ktx ${ktxVersion}

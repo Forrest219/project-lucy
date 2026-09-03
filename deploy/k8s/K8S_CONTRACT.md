@@ -12,16 +12,17 @@ in this repository is a **supported delivery artifact** — not a reference snap
 
 ## Compatibility matrix
 
-| Chart version | App (KTX) | Probe model | Notes |
-|---|---|---|---|
-| `0.1.x` | `0.16.0` | startup/readiness exec `docker-healthcheck.sh` | **Deprecated** — do not use for new installs or upgrades |
-| `0.2.0` | `0.16.0` | HTTP `GET /api/health` on port `webui` | Supported; missing UID/git contract — superseded by 0.2.1 for upgrades |
-| `0.2.1` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Current** — use for v3 delivery and in-place upgrades |
+| Chart version | Lucy product | Bundled KTX | Probe model | Notes |
+|---|---|---|---|---|
+| `0.1.x` | legacy/ambiguous | `0.16.0` | startup/readiness exec `docker-healthcheck.sh` | **Deprecated** — do not use for new installs or upgrades |
+| `0.2.0` | legacy/ambiguous | `0.16.0` | HTTP `GET /api/health` on port `webui` | Superseded; missing UID/git contract |
+| `0.2.1` | legacy/ambiguous | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | Superseded by product-version-aware chart 0.2.2 |
+| `0.2.2` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Current** — use for v3+ delivery and in-place upgrades |
 
 Image tags must be **immutable**. Recommended form:
 
 ```text
-project-lucy:customer-amd64-0.16.0-YYYYMMDD-<gitShortSha>
+project-lucy:customer-amd64-0.17.0-YYYYMMDD-<gitShortSha>
 ```
 
 Record the digest in `image/image-digest.txt` and pin via Helm `image.digest` when possible.
@@ -133,6 +134,8 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 |---|---|---|
 | `KTX_PROJECT_ROOT` | yes | `/data/lucy` |
 | `POSTHOG_DISABLED` | yes | `"1"` |
+| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.17.0` |
+| `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |
 
@@ -192,7 +195,7 @@ kubectl delete pvc lucy         # unless backed up and intentionally resetting
 
 Before any K8s delivery:
 
-1. `bash scripts/build-customer-amd64-image.sh` (G1–G4b + **G8** image-only)
+1. `bash scripts/build-customer-amd64-image.sh` (G1–G4c + **G8** image-only)
 2. `bash scripts/helm-lucy-gate.sh` (H1a universal + H1b k3s profile)
 3. `bash scripts/verify-k8s-package.sh` (K6 package integrity)
 4. `bash scripts/k8s-upgrade-gate.sh` (H3; `--test-rollback` for H4)

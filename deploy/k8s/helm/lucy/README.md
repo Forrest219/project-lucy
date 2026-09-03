@@ -13,6 +13,7 @@ This chart installs Lucy as a single-replica Kubernetes workload.
 
 Key constraints:
 
+- Lucy product version: `0.17.0` (`Chart.appVersion` / `lucy.version`; independent of KTX). Rendering fails if those two fields differ.
 - Bundled KTX version: `@kaelio/ktx@0.16.0`.
 - `replicaCount` must be `1` (enforced by the chart template via `fail`).
 - `persistence.enabled` must be `true` (enforced by the chart template via `fail`).

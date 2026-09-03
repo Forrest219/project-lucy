@@ -65,7 +65,7 @@ docker buildx build \
   --build-arg "KTX_VERSION=0.16.0" \
   --build-arg "TARGETPLATFORM=linux/amd64" \
   --build-arg "TARGETARCH=amd64" \
-  --tag "project-lucy:customer-amd64-0.16.0" \
+  --tag "project-lucy:customer-amd64-0.17.0-20260902-b262798" \
   --load \
   --metadata-file release/customer-amd64-buildx-metadata.json \
   .
@@ -76,24 +76,24 @@ docker buildx use default
 
 构建完后做**六层校验**（G1–G4 为交付硬门禁，缺一则禁止 `docker save` / 禁止出包）：
 
-1. **元数据架构校验（G1）**：`docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}'` 必须输出 `linux/amd64`。
-2. **ELF 二进制门禁（G2，必做）**：`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64` 必须通过；检查 **`/usr/local/bin/node` 与 `/usr/bin/tini`**。仅检查 metadata **不够**——历史上出现过「元数据 amd64、ELF 实为 aarch64」，客户报 `exec /usr/bin/tini: exec format error`。
-3. **运行时 smoke（G3，必做）**：`docker run --rm --platform linux/amd64 --entrypoint /bin/sh project-lucy:customer-amd64-0.16.0 -c 'echo ok'` 必须 exit 0。
-4. **KTX 版本（G4）**：`docker run --rm --platform linux/amd64 --entrypoint ktx project-lucy:customer-amd64-0.16.0 --version` 含 `@kaelio/ktx 0.16.0`。
+1. **元数据架构校验（G1）**：`docker image inspect project-lucy:customer-amd64-0.17.0-20260902-b262798 --format '{{.Os}}/{{.Architecture}}'` 必须输出 `linux/amd64`。
+2. **ELF 二进制门禁（G2，必做）**：`bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.17.0-20260902-b262798 amd64` 必须通过；检查 **`/usr/local/bin/node` 与 `/usr/bin/tini`**。仅检查 metadata **不够**——历史上出现过「元数据 amd64、ELF 实为 aarch64」，客户报 `exec /usr/bin/tini: exec format error`。
+3. **运行时 smoke（G3，必做）**：`docker run --rm --platform linux/amd64 --entrypoint /bin/sh project-lucy:customer-amd64-0.17.0-20260902-b262798 -c 'echo ok'` 必须 exit 0。
+4. **KTX 版本（G4）**：`docker run --rm --platform linux/amd64 --entrypoint ktx project-lucy:customer-amd64-0.17.0-20260902-b262798 --version` 含 `@kaelio/ktx 0.16.0`。
 5. **冒烟**：`npm run smoke:p0:docker` 必须全绿。
 6. **客户配置包冒烟**：`npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` 必须全绿。
 
 推荐一键入口：`bash scripts/build-customer-amd64-image.sh`（含 G1–G4）。完整清单见 [`docs/customer-amd64-image-build-checklist.md`](./customer-amd64-image-build-checklist.md)。
 
-> **作废声明**：2026-08-04 前后基于 `FROM --platform=$BUILDPLATFORM` 打出的 `project-lucy:customer-amd64-0.16.0` / `inbox/customer-amd64-offline-package` **不得交付客户**；GitHub Release `lucy-k8s-integration-20260827-v1` 亦因同因作废，须按本规格重建并通过 G2–G4 后再交付。
+> **作废声明**：2026-08-04 前后基于 `FROM --platform=$BUILDPLATFORM` 打出的历史 `project-lucy:customer-amd64-0.16.0` / `inbox/customer-amd64-offline-package` **不得交付客户**；GitHub Release `lucy-k8s-integration-20260827-v1` 亦因同因作废，须按本规格重建并通过 G2–G4c 后再交付。
 
 ### 2.3 镜像导出
 
 ```bash
 # 导出 docker save 格式（标准 image tar），供客户 docker load 使用
 docker save \
-  -o release/project-lucy-customer-amd64-0.16.0-image.tar \
-  project-lucy:customer-amd64-0.16.0
+  -o release/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar \
+  project-lucy:customer-amd64-0.17.0-20260902-b262798
 ```
 
 `docker save` 输出的 tar 是 OCI-compatible docker 仓库格式（manifest + blobs/），客户 `docker load` 后即可使用。
@@ -108,7 +108,7 @@ customer-amd64-offline-package/
 ├── docker-compose.customer-config.yml # 直接来自仓库根（bind mount override）
 ├── .env.example                       # LUCY_PUBLIC_MCP_URL 等可调环境变量样例
 ├── image/
-│   └── project-lucy-customer-amd64-0.16.0-image.tar
+│   └── project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar
 ├── customer-config/
 │   ├── README.md                      # 来自 customer-config.example/README.md
 │   ├── ktx.yaml                       # 来自 customer-config.example/ktx.yaml
@@ -157,7 +157,7 @@ customer-amd64-offline-package/
 
 ```bash
 # 在 customer-amd64-offline-package/ 目录下
-docker load -i image/project-lucy-customer-amd64-0.16.0-image.tar
+docker load -i image/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar
 
 # 编辑 .env，至少设置 LUCY_PUBLIC_MCP_URL
 cp .env.example .env
@@ -180,7 +180,7 @@ docker compose \
   up -d
 ```
 
-`docker-compose.customer-amd64.yml` 是 image tag override——强制 `image: project-lucy:customer-amd64-0.16.0`，避免 compose 沿用 `docker-compose.yml` 里默认的 `image: project-lucy:local`（可能不是本次交付的 amd64 tag）。
+`docker-compose.customer-amd64.yml` 是 image tag override——强制 `image: project-lucy:customer-amd64-0.17.0-20260902-b262798`，避免 compose 沿用 `docker-compose.yml` 里默认的 `image: project-lucy:local`（可能不是本次交付的 amd64 tag）。
 
 ### 4.3 健康检查
 
@@ -216,17 +216,17 @@ docker buildx build --builder lucy-amd64 --platform linux/amd64 \
   --build-arg "KTX_VERSION=0.16.0" \
   --build-arg "TARGETPLATFORM=linux/amd64" \
   --build-arg "TARGETARCH=amd64" \
-  --tag "project-lucy:customer-amd64-0.16.0" --load .
+  --tag "project-lucy:customer-amd64-0.17.0-20260902-b262798" --load .
 docker buildx use default
 
 # 2. 元数据架构断言
-test "$(docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}')" = "linux/amd64"
+test "$(docker image inspect project-lucy:customer-amd64-0.17.0-20260902-b262798 --format '{{.Os}}/{{.Architecture}}')" = "linux/amd64"
 
 # 2b. ELF 二进制门禁（必做）
-bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
+bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.17.0-20260902-b262798 amd64
 
 # 3. 导出 image tar
-docker save -o release/project-lucy-customer-amd64-0.16.0-image.tar project-lucy:customer-amd64-0.16.0
+docker save -o release/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar project-lucy:customer-amd64-0.17.0-20260902-b262798
 
 # 4. 仓库级冒烟
 npm run smoke:p0:docker
@@ -235,7 +235,7 @@ npm run smoke:p0:docker
 npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files
 
 # 6. 装机验证（用本机 image tar 跑一次 docker load + up）
-docker load -i release/project-lucy-customer-amd64-0.16.0-image.tar
+docker load -i release/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar
 docker compose -f docker-compose.yml -f docker-compose.customer-config.yml up -d
 curl -sf http://localhost:5174/api/health
 docker compose -f docker-compose.yml -f docker-compose.customer-config.yml down
@@ -259,7 +259,7 @@ This feature follows `webui/docs/00-product-terminology-standard.md`.
 New terms:
 
 - **customer-amd64-offline-package**: 面向客户 IT 的离线交付包目录，区别于仓库内 `release/`（release artifacts）与 `lucy-docker-source-bundle.tar.gz`（可重建源码包）。
-- **customer-amd64 image tag**: `project-lucy:customer-amd64-0.16.0`，明确 amd64 单架构 + 客户交付语义。
+- **customer-amd64 image tag**: `project-lucy:customer-amd64-0.17.0-20260902-b262798`，明确 amd64 单架构 + 客户交付语义。
 
 UI / 用户可见文案：
 

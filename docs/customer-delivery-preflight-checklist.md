@@ -117,8 +117,8 @@ bash scripts/k8s-release-gate.sh --with-cluster \
 - [ ] **SHA256 核验**：`shasum -a 256 -c *.tar.gz.sha256` 确认包完整。
 - [ ] **架构再次确认**：
   ```bash
-  docker load -i image/project-lucy-customer-amd64-0.16.0-image.tar
-  docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Os}}/{{.Architecture}}'
+  docker load -i image/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar
+  docker image inspect project-lucy:customer-amd64-0.17.0-20260902-b262798 --format '{{.Os}}/{{.Architecture}}'
   # 必须为 linux/amd64
   ```
 

@@ -9,6 +9,7 @@ import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
 import { readKtxRuntimeStatus } from "./ktx-runtime";
+import { resolveLucyVersion } from "./lucy-version.js";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
 import {
   listLiveSchemas,
@@ -460,7 +461,7 @@ export function buildServer() {
       data: {
         // Spec 98 §8.4 — align with /api/admin/policy-runtime; empty policyVersion is not healthy.
         status: healthy ? "ok" : "degraded",
-        lucyVersion: process.env.npm_package_version ?? "unknown",
+        lucyVersion: resolveLucyVersion(),
         bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
         ktxRuntime: {
           ready: ktxRuntime.ready,

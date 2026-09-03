@@ -78,7 +78,7 @@ bash scripts/acceptance.sh \
 
 ## Required values changes when coming from chart 0.1.x / v1/v2 packages
 
-| Old (0.1.x / v1/v2) | New (0.2.1 / v3) |
+| Old (0.1.x / v1/v2) | New (0.2.2 / v3+) |
 |---|---|
 | exec startup/readiness probes | HTTP `/api/health` (chart default) |
 | `service.webuiPort` also used as container port | split: `containerPorts.webui: 5174`, `service.webuiPort: 8276` |
@@ -92,7 +92,7 @@ Example production values overlay:
 ```yaml
 image:
   repository: registry.example.com/data-team/project-lucy
-  tag: customer-amd64-0.16.0-20260902-b262798
+  tag: customer-amd64-0.17.0-20260902-b262798
   digest: sha256:…
   pullPolicy: IfNotPresent
 
@@ -112,6 +112,7 @@ persistence:
   existingClaim: lucy
 
 lucy:
+  version: "0.17.0"  # must equal Chart.appVersion
   projectMigrate:
     enabled: true   # disable only on guaranteed-clean fresh PVC
 ```

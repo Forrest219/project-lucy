@@ -37,6 +37,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm run lint:version
       - run: npm run smoke:p0:delivery-isolation
       - name: Materialize private access.yaml stub for lint
         run: |
@@ -219,11 +220,28 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Resolve Lucy product version
+        id: lucy-version
+        run: |
+          set -euo pipefail
+          LUCY_VERSION="$(tr -d '[:space:]' < VERSION)"
+          npm run lint:version
+          echo "version=${LUCY_VERSION}" >> "$GITHUB_OUTPUT"
       - name: Resolve release tag
         id: release
+        env:
+          LUCY_VERSION: ${{ steps.lucy-version.outputs.version }}
         run: |
+          set -euo pipefail
           TAG="${{ inputs.release_tag }}"
-          if [ -z "$TAG" ]; then TAG="${GITHUB_REF_NAME:-manual-${GITHUB_SHA::7}}"; fi
+          if [ -z "$TAG" ]; then
+            if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+              TAG="${GITHUB_REF_NAME}"
+            else
+              TAG="customer-multiarch-${LUCY_VERSION}-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+            fi
+          fi
+          node scripts/lucy-version-governance.mjs --release-tag "$TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - name: Set up QEMU (for cross-platform builds)
         uses: docker/setup-qemu-action@v3
@@ -243,6 +261,7 @@ jobs:
         env:
           REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
           IMAGE_NAMESPACE: ${{ vars.LUCY_IMAGE_NAMESPACE || 'kaelio' }}
+          LUCY_VERSION: ${{ steps.lucy-version.outputs.version }}
         run: |
           set -euo pipefail
           TAG="${{ steps.release.outputs.tag }}"
@@ -250,6 +269,7 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --build-arg "KTX_VERSION=${KTX_VERSION}" \
+            --build-arg "LUCY_VERSION=${LUCY_VERSION}" \
             --build-arg "TARGETPLATFORM=linux/amd64" \
             --build-arg "TARGETARCH=amd64" \
             --tag "${IMAGE}" \
@@ -265,6 +285,7 @@ jobs:
             echo "git_sha=${GITHUB_SHA}"
             echo "image=${IMAGE}"
             echo "manifest_digest=${DIGEST}"
+            echo "lucy_version=${LUCY_VERSION}"
             echo "ktx_version=${KTX_VERSION}"
             echo "platforms=linux/amd64,linux/arm64"
           } > release/image-identity.txt
@@ -272,6 +293,7 @@ jobs:
         env:
           IMAGE_REF: ${{ steps.build-push.outputs.ref }}
           KTX_VERSION: ${{ env.KTX_VERSION }}
+          LUCY_VERSION: ${{ steps.lucy-version.outputs.version }}
         run: |
           set -euo pipefail
           docker buildx imagetools inspect "${IMAGE_REF}" | tee release/imagetools-inspect.txt
@@ -284,6 +306,9 @@ jobs:
             "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python"
           docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "${IMAGE_REF}" --version | tee release/ktx-version.txt
           grep -q "${KTX_VERSION}" release/ktx-version.txt
+          IMAGE_LUCY_VERSION="$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)"
+          test "${IMAGE_LUCY_VERSION}" = "${LUCY_VERSION}"
+          printf '%s\n' "${IMAGE_LUCY_VERSION}" > release/lucy-version.txt
           bash scripts/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
       - name: Write release notes

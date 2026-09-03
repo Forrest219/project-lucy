@@ -63,7 +63,8 @@ tag always contains the customer architecture:
 docker buildx build \
   --platform linux/amd64 \
   --build-arg KTX_VERSION=0.16.0 \
-  -t registry.example.com/data-team/project-lucy:0.16.0 \
+  --build-arg LUCY_VERSION=0.17.0 \
+  -t registry.example.com/data-team/project-lucy:customer-amd64-0.17.0-20260902-b262798 \
   --push .
 ```
 
@@ -74,14 +75,15 @@ push a multi-arch manifest list in one command:
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --build-arg KTX_VERSION=0.16.0 \
-  -t registry.example.com/data-team/project-lucy:0.16.0 \
+  --build-arg LUCY_VERSION=0.17.0 \
+  -t registry.example.com/data-team/project-lucy:customer-multiarch-0.17.0-20260902-b262798 \
   --push .
 ```
 
 After pushing, verify the manifest list really contains `linux/amd64`:
 
 ```bash
-docker manifest inspect registry.example.com/data-team/project-lucy:0.16.0
+docker manifest inspect registry.example.com/data-team/project-lucy:customer-multiarch-0.17.0-20260902-b262798
 # Look for `manifests[].platform.architecture == "amd64"`.
 ```
 
@@ -91,8 +93,8 @@ For local verification on a kind cluster running on the same architecture as
 your build host, you can use the simpler `docker build` form:
 
 ```bash
-docker build -t project-lucy:0.16.0 --build-arg KTX_VERSION=0.16.0 .
-kind load docker-image project-lucy:0.16.0 --name <kind-cluster>
+docker build -t project-lucy:0.17.0 --build-arg KTX_VERSION=0.16.0 --build-arg LUCY_VERSION=0.17.0 .
+kind load docker-image project-lucy:0.17.0 --name <kind-cluster>
 ```
 
 > If your build host is `arm64` (Apple Silicon) and your kind cluster
@@ -102,9 +104,9 @@ kind load docker-image project-lucy:0.16.0 --name <kind-cluster>
 >
 > ```bash
 > docker buildx build --platform linux/amd64 \
->   -t project-lucy:0.16.0 --build-arg KTX_VERSION=0.16.0 \
+>   -t project-lucy:0.17.0 --build-arg KTX_VERSION=0.16.0 --build-arg LUCY_VERSION=0.17.0 \
 >   --load .
-> kind load docker-image project-lucy:0.16.0 --name <kind-cluster>
+> kind load docker-image project-lucy:0.17.0 --name <kind-cluster>
 > ```
 
 ## 3. Prepare Customer Values
@@ -120,7 +122,7 @@ Edit at least these fields:
 ```yaml
 image:
   repository: registry.example.com/data-team/project-lucy
-  tag: "0.16.0"
+  tag: "customer-amd64-0.17.0-20260902-b262798"
   pullPolicy: IfNotPresent
 
 persistence:
@@ -130,6 +132,10 @@ persistence:
 env:
   LUCY_PUBLIC_MCP_URL: "https://lucy.example.com/mcp"
   LUCY_ALLOW_PLACEHOLDER_KTX: ""
+
+lucy:
+  version: "0.17.0"
+  bundledKtxVersion: "0.16.0"
 
 existingSecret: "lucy-db-secrets"
 extraSecretData: {}

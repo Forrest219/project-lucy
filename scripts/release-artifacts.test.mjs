@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   A3_NPM_SCRIPTS,
+  assertReleaseVersionProjections,
   createSourceBundle,
   SOURCE_BUNDLE_NAME,
   SOURCE_BUNDLE_STRIPPED_NPM_SCRIPTS,
@@ -63,6 +64,7 @@ describe("release-artifacts A3 customer-bundle hygiene", () => {
       assert.doesNotMatch(listing.stdout, /docker-compose\.demo\.yml/);
       assert.doesNotMatch(listing.stdout, /docker-compose\.postgres-demo\.yml/);
       assert.doesNotMatch(listing.stdout, /ktx\.yaml\.example/);
+      assert.match(listing.stdout, /lucy-docker-source-bundle\/VERSION/);
       assert.doesNotMatch(listing.stdout, /lucy-docker-source-bundle\/examples\//);
       assert.doesNotMatch(listing.stdout, /lucy-docker-source-bundle\/evals\//);
       assert.doesNotMatch(listing.stdout, /lucy-docker-source-bundle\/webui\/config\/access\.yaml(?:\n|$)/);
@@ -74,9 +76,15 @@ describe("release-artifacts A3 customer-bundle hygiene", () => {
       const stagedPkg = JSON.parse(
         await readFile(path.join(extractDir, "lucy-docker-source-bundle", "package.json"), "utf8")
       );
+      assert.equal(
+        (await readFile(path.join(extractDir, "lucy-docker-source-bundle", "VERSION"), "utf8")).trim(),
+        stagedPkg.version
+      );
       for (const key of A3_NPM_SCRIPTS) {
         assert.equal(stagedPkg.scripts?.[key], undefined, `staged package.json must not include ${key}`);
       }
+      assert.equal(stagedPkg.scripts?.["lint:version"], undefined);
+      assert.equal(stagedPkg.scripts?.["lint:version:test"], undefined);
       assert.equal(
         stagedPkg.scripts?.["smoke:p0:delivery-isolation"],
         "node scripts/lucy-delivery-isolation-smoke.mjs"
@@ -98,5 +106,24 @@ describe("release-artifacts A3 customer-bundle hygiene", () => {
     } finally {
       await rm(outDir, { recursive: true, force: true });
     }
+  });
+
+  it("rejects release metadata projections that drift from VERSION", () => {
+    assert.equal(
+      assertReleaseVersionProjections(
+        "0.17.0",
+        { version: "0.17.0" },
+        { version: "0.17.0", packages: { "": { version: "0.17.0" } } }
+      ),
+      "0.17.0"
+    );
+    assert.throws(
+      () => assertReleaseVersionProjections(
+        "0.17.0",
+        { version: "0.16.0" },
+        { version: "0.17.0", packages: { "": { version: "0.17.0" } } }
+      ),
+      /package\.json version "0\.16\.0" does not match VERSION 0\.17\.0/
+    );
   });
 });

@@ -18,6 +18,10 @@ test("pack script uses quoted heredocs for README and RELEASE_NOTES", async () =
   const notesBlock = src.slice(src.indexOf("Release Notes"));
   assert.doesNotMatch(notesBlock, /<<EOF\n[\s\S]*`git init`/);
   assert.match(src, /`git init`/);
+  assert.match(src, /CHART_YAML=.*Chart\.yaml/);
+  assert.match(src, /CHART_VERSION=.*CHART_YAML/);
+  assert.match(src, /Chart: `%s` \(appVersion `%s`\)/);
+  assert.doesNotMatch(src, /Chart: `0\.2\.1`/);
 });
 
 test("quoted heredoc preserves literal backticks and does not run git init", async () => {

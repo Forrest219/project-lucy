@@ -7,7 +7,7 @@
 #
 # Usage:
 #   bash scripts/build-k8s-delivery-package.sh \
-#     --image-tag project-lucy:customer-amd64-0.16.0-20260902-b262798 \
+#     --image-tag project-lucy:customer-amd64-0.17.0-20260902-b262798 \
 #     --output inbox/lucy-k8s-integration-delivery-20260902-v3.tar.gz \
 #     [--delivery-mode offline|registry] \
 #     [--image-repository project-lucy] \
@@ -15,6 +15,16 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CHART_YAML="${ROOT}/deploy/k8s/helm/lucy/Chart.yaml"
+CHART_VERSION="$(awk '/^version:/{gsub(/"/, "", $2); print $2; exit}' "${CHART_YAML}")"
+CHART_APP_VERSION="$(awk '/^appVersion:/{gsub(/"/, "", $2); print $2; exit}' "${CHART_YAML}")"
+LUCY_VERSION="$(tr -d '[:space:]' < "${ROOT}/VERSION")"
+[[ "${CHART_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FAIL: invalid Chart.version: ${CHART_VERSION}" >&2; exit 1; }
+[[ "${LUCY_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FAIL: invalid VERSION: ${LUCY_VERSION}" >&2; exit 1; }
+[[ "${CHART_APP_VERSION}" == "${LUCY_VERSION}" ]] || {
+  echo "FAIL: Chart.appVersion=${CHART_APP_VERSION} does not match VERSION=${LUCY_VERSION}" >&2
+  exit 1
+}
 IMAGE_TAG=""
 OUTPUT=""
 VERSION_SUFFIX="20260902-v3"
@@ -55,10 +65,20 @@ command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required" >&2; exit 1;
 docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || { echo "FAIL: image not found: ${IMAGE_TAG}" >&2; exit 1; }
 
 IMAGE_CONFIG_ID="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
-IMAGE_REF_TAG="${IMAGE_TAG#*:}"
+IMAGE_REF_TAG="${IMAGE_TAG##*:}"
 if [[ "${IMAGE_REF_TAG}" == "${IMAGE_TAG}" ]]; then
   IMAGE_REF_TAG="latest"
 fi
+LUCY_VERSION_PATTERN="${LUCY_VERSION//./\\.}"
+[[ "${IMAGE_REF_TAG}" =~ ^customer-amd64-${LUCY_VERSION_PATTERN}-[0-9]{8}-[0-9a-f]{7,}$ ]] || {
+  echo "FAIL: image tag must carry Lucy ${LUCY_VERSION}; got: ${IMAGE_REF_TAG}" >&2
+  exit 1
+}
+IMAGE_LUCY_VERSION="$(docker run --rm --platform linux/amd64 --entrypoint printenv "${IMAGE_TAG}" LUCY_VERSION || true)"
+[[ "${IMAGE_LUCY_VERSION}" == "${LUCY_VERSION}" ]] || {
+  echo "FAIL: image LUCY_VERSION=${IMAGE_LUCY_VERSION:-<empty>} does not match VERSION=${LUCY_VERSION}" >&2
+  exit 1
+}
 if [[ -z "${IMAGE_REPOSITORY}" ]]; then
   if [[ "${IMAGE_TAG}" == *:* ]]; then
     IMAGE_REPOSITORY="${IMAGE_TAG%:*}"
@@ -96,6 +116,7 @@ sha256sum "${PKG_DIR}/image/${TAR_NAME}" | awk '{print $1}' > "${PKG_DIR}/image/
 printf '%s\n' "${IMAGE_REPOSITORY}" > "${PKG_DIR}/image/image-repository.txt"
 printf '%s\n' "${IMAGE_REF_TAG}" > "${PKG_DIR}/image/image-tag.txt"
 printf '%s\n' "${DELIVERY_MODE}" > "${PKG_DIR}/image/delivery-mode.txt"
+printf '%s\n' "${LUCY_VERSION}" > "${PKG_DIR}/image/lucy-version.txt"
 
 HELM_DIGEST=""
 HELM_PULL_POLICY="IfNotPresent"
@@ -179,7 +200,8 @@ EOF
   else
     printf 'Registry manifest digest: _(none — offline tar; do not put config ID in image.digest)_\n'
   fi
-  printf 'Chart: `0.2.1`\n'
+  printf 'Lucy product version: `%s`\n' "${LUCY_VERSION}"
+  printf 'Chart: `%s` (appVersion `%s`)\n' "${CHART_VERSION}" "${CHART_APP_VERSION}"
   printf 'Git: `%s`\n' "${GIT_SHA}"
 } > "${PKG_DIR}/README.md"
 
@@ -190,6 +212,8 @@ EOF
 ## Summary
 
 Fixes K8s in-place upgrade contract failures observed in v1/v2 deliveries (20260902).
+
+Lucy product version and bundled KTX version are independent release identities.
 
 ## Changes
 

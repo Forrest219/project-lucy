@@ -66,6 +66,16 @@ assert_present() {
   fi
 }
 
+assert_env_value() {
+  local file="$1"
+  local name="$2"
+  local value="$3"
+  if ! grep -A1 -- "- name: ${name}" "${file}" | grep -q -- "value: \"${value}\""; then
+    echo "FAIL: rendered manifest must contain ${name}=${value}" >&2
+    exit 1
+  fi
+}
+
 assert_universal_contract() {
   local render="$1"
   local label="$2"
@@ -77,6 +87,8 @@ assert_universal_contract() {
   assert_present "${render}" "runAsUser: 10001"
   assert_present "${render}" "fsGroup: 10001"
   assert_present "${render}" "path: /api/health"
+  assert_env_value "${render}" "LUCY_VERSION" "0.17.0"
+  assert_env_value "${render}" "LUCY_BUNDLED_KTX_VERSION" "0.16.0"
   if grep -E '^[[:space:]]+port: 7878' "${render}" >/dev/null; then
     echo "FAIL (${label}): Service must not expose port 7878" >&2
     exit 1
@@ -91,6 +103,12 @@ for render in "${LOCAL_RENDER}" "${K3S_RENDER}"; do
   [[ -n "${render}" ]] || continue
   assert_universal_contract "${render}" "all profiles"
 done
+
+echo "[helm-lucy-gate] stale lucy.version must fail"
+if helm template lucy "${CHART}" --set-string lucy.version=0.16.0 >/dev/null 2>&1; then
+  echo "FAIL: expected Helm render to reject lucy.version != Chart.appVersion" >&2
+  exit 1
+fi
 
 echo "[helm-lucy-gate] H1b k3s-test profile checks"
 assert_present "${K3S_RENDER}" 'value: "http://10.69.95.109:8277/mcp"'

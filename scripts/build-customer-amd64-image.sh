@@ -13,7 +13,27 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 KTX_VERSION="${KTX_VERSION:-${LUCY_EXPECTED_KTX_VERSION:-0.16.0}}"
-IMAGE="${IMAGE:-project-lucy:customer-amd64-${KTX_VERSION}}"
+# Product version is independent of KTX and is always sourced from repo-root VERSION.
+REPO_LUCY_VERSION="$(tr -d '[:space:]' < "${ROOT}/VERSION" 2>/dev/null || true)"
+[[ "${REPO_LUCY_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "FAIL: VERSION must use numeric X.Y.Z form; got: ${REPO_LUCY_VERSION:-<empty>}" >&2
+  exit 1
+}
+if [[ -n "${LUCY_VERSION:-}" && "${LUCY_VERSION}" != "${REPO_LUCY_VERSION}" ]]; then
+  echo "FAIL: LUCY_VERSION=${LUCY_VERSION} does not match repo VERSION=${REPO_LUCY_VERSION}" >&2
+  exit 1
+fi
+LUCY_VERSION="${REPO_LUCY_VERSION}"
+BUILD_DATE="${BUILD_DATE:-$(date +%Y%m%d)}"
+GIT_SHORT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+# Immutable customer tag: lucy product version + date + sha (KTX no longer owns the tag).
+IMAGE="${IMAGE:-project-lucy:customer-amd64-${LUCY_VERSION}-${BUILD_DATE}-${GIT_SHORT}}"
+IMAGE_REF_TAG="${IMAGE##*:}"
+LUCY_VERSION_PATTERN="${LUCY_VERSION//./\\.}"
+[[ "${IMAGE_REF_TAG}" =~ ^customer-amd64-${LUCY_VERSION_PATTERN}-[0-9]{8}-[0-9a-f]{7,}$ ]] || {
+  echo "FAIL: customer image tag must be customer-amd64-${LUCY_VERSION}-YYYYMMDD-<gitSha>; got: ${IMAGE_REF_TAG}" >&2
+  exit 1
+}
 # Prefer docker-driver builders (desktop-linux/default) so local Hub cache is used.
 # docker-container builders (lucy-amd64) often re-fetch # syntax=docker/dockerfile:1.7
 # and fail on Hub/IPv6 flakes — then wrongly tempt people to reuse bad tars.
@@ -31,6 +51,7 @@ git rev-parse --short HEAD > "${BUILD_DIR}/git-short.txt"
 tail -n +2 Dockerfile > "$DOCKERFILE_GEN"
 
 echo "[build-customer-amd64] image=${IMAGE} builder=${BUILDER}"
+echo "[build-customer-amd64] lucy=${LUCY_VERSION} ktx=${KTX_VERSION}"
 echo "[build-customer-amd64] host=$(uname -m) — customer image MUST pass G2 ELF as amd64"
 
 if ! docker buildx inspect "$BUILDER" >/dev/null 2>&1; then
@@ -44,6 +65,7 @@ docker buildx build \
   --builder "$BUILDER" \
   --platform linux/amd64 \
   --build-arg "KTX_VERSION=${KTX_VERSION}" \
+  --build-arg "LUCY_VERSION=${LUCY_VERSION}" \
   --build-arg "TARGETPLATFORM=linux/amd64" \
   --build-arg "TARGETARCH=amd64" \
   -f "$DOCKERFILE_GEN" \
@@ -118,9 +140,18 @@ docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "$IMA
 }
 echo "  ok offline python + sl validate"
 
+echo "[build-customer-amd64] gate G4c Lucy product version env"
+img_lucy="$(docker run --rm --platform linux/amd64 --entrypoint printenv "$IMAGE" LUCY_VERSION || true)"
+echo "  LUCY_VERSION=${img_lucy}"
+[[ "${img_lucy}" == "${LUCY_VERSION}" ]] || {
+  echo "FAIL G4c: expected LUCY_VERSION=${LUCY_VERSION}, got: ${img_lucy}" >&2
+  exit 1
+}
+echo "  ok product version"
+
 echo "[build-customer-amd64] gate G8 image K8s contract (image-only, no Helm)"
 bash scripts/g8-image-k8s-contract-gate.sh "${IMAGE}"
 
 docker image inspect "$IMAGE" --format '{{.Id}}' > "${BUILD_DIR}/image-id.txt"
-echo "[build-customer-amd64] done image-id=$(cat "${BUILD_DIR}/image-id.txt")"
+echo "[build-customer-amd64] done image=${IMAGE} image-id=$(cat "${BUILD_DIR}/image-id.txt")"
 echo "[build-customer-amd64] next: npm run gate:k8s-static + docker save + G7; see docs/customer-amd64-image-build-checklist.md"

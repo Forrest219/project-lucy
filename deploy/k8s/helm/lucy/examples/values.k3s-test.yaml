@@ -54,6 +54,7 @@ resources:
 
 lucy:
   enabled: true
+  version: "0.17.0"
   bundledKtxVersion: "0.16.0"
   projectMigrate:
     enabled: true

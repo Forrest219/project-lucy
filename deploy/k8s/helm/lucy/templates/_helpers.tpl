@@ -47,6 +47,19 @@ app.kubernetes.io/name: {{ include "lucy.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
+{{/*
+Resolve the customer-facing product version and reject stale values files.
+Chart.appVersion is authoritative inside a packaged chart; lucy.version is
+retained as explicit release metadata but may not override it.
+*/}}
+{{- define "lucy.productVersion" -}}
+{{- $configured := .Values.lucy.version | default .Chart.AppVersion | toString -}}
+{{- if ne $configured .Chart.AppVersion -}}
+{{- fail (printf "Lucy version mismatch: lucy.version=%q must equal Chart.appVersion=%q" $configured .Chart.AppVersion) -}}
+{{- end -}}
+{{- .Chart.AppVersion -}}
+{{- end -}}
+
 {{/* Secret name resolution. */}}
 {{- define "lucy.secretName" -}}
 {{- if .Values.existingSecret -}}
@@ -100,6 +113,8 @@ entry lands on its own line at the correct indent.
   value: "1"
 - name: POSTHOG_DISABLED
   value: {{ .Values.env.POSTHOG_DISABLED | default "1" | quote }}
+- name: LUCY_VERSION
+  value: {{ include "lucy.productVersion" . | quote }}
 - name: LUCY_BUNDLED_KTX_VERSION
   value: {{ .Values.lucy.bundledKtxVersion | default "0.16.0" | quote }}
 {{ if .Values.env.LUCY_PUBLIC_MCP_URL -}}

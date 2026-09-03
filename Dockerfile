@@ -18,11 +18,15 @@ ARG TARGETPLATFORM=linux/amd64
 FROM --platform=$TARGETPLATFORM node:22-bookworm-slim
 
 ARG KTX_VERSION=0.16.0
+# Lucy product version (customer-facing). Independent of bundled KTX.
+# Keep in sync with repo-root VERSION; customer image tags use this, not KTX.
+ARG LUCY_VERSION=0.17.0
 # TARGETARCH is exposed so future architecture-specific steps (e.g. fetching a
 # KTX binary release) can branch on it without changing the rest of the file.
 ARG TARGETARCH=amd64
 
 ENV NODE_ENV=production \
+    LUCY_VERSION=${LUCY_VERSION} \
     LUCY_BUNDLED_KTX_VERSION=${KTX_VERSION} \
     KTX_PROJECT_ROOT=/data/lucy \
     LUCY_WEBUI_HOST=0.0.0.0 \
@@ -64,7 +68,9 @@ COPY . .
 # Never copy repo-root semantic-layer / wiki / skills / webui/config — those may
 # contain internal test DBs and private ACL. Demo stacks override
 # LUCY_TEMPLATE_ROOT to examples/*/project-template instead.
-RUN cd webui && npm run build \
+# Bake product version into the WebUI bundle (sidebar) and keep ENV for /api/health.
+RUN cd webui \
+  && LUCY_VERSION="${LUCY_VERSION}" VITE_LUCY_VERSION="${LUCY_VERSION}" npm run build \
   && cd /app \
   && mkdir -p /app/project-template/webui /app/project-template/semantic-layer /app/project-template/skills /app/project-template/wiki \
   && cp customer-config.example/ktx.yaml /app/project-template/ktx.yaml \

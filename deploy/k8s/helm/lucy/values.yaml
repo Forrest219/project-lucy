@@ -19,7 +19,7 @@
 # non-local install. The default value `project-lucy` is only valid for
 # `kind` / `docker compose` local development where the image is loaded
 # from the local Docker cache. On a real customer K8s cluster the literal
-# default will fail to pull because there is no public `project-lucy:0.16.0`
+# default will fail to pull because there is no public `project-lucy:0.17.0`
 # on Docker Hub.
 #
 # Default platforms shipped from CI:
@@ -38,7 +38,9 @@ image:
   # DEFAULT: bare tag — only valid for kind / docker compose local dev.
   # Production must override to a customer registry path.
   repository: project-lucy
-  tag: "0.16.0"
+  # Lucy product version (see repo-root VERSION). Override with immutable
+  # customer tag e.g. customer-amd64-0.17.0-YYYYMMDD-<sha>.
+  tag: "0.17.0"
   # Optional immutable digest (sha256:…). When set, the chart pins the image
   # by digest and ignores tag for the rendered image reference.
   digest: ""
@@ -239,7 +241,10 @@ lucy:
   # When false, the chart will not include the KTX_PROJECT_ROOT / WebUI /
   # Proxy env block (used by templates to keep parity with Compose).
   enabled: true
+  # Customer-facing Lucy product version — must match Chart.appVersion / VERSION.
+  version: "0.17.0"
   # Bundled KTX version baked into the image — must match the Dockerfile ARG.
+  # Independent of lucy.version; only change when upgrading @kaelio/ktx.
   bundledKtxVersion: "0.16.0"
   # One-shot PVC ownership migration for upgrades from root (runAsUser 0) builds.
   # Git init is owned by the container entrypoint — init only chowns.

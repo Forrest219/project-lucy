@@ -15,9 +15,10 @@ description: |
     * KTX MCP upstream on container port 7878 (NOT exposed via Service)
 
   Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
+  Product version (`appVersion`) is Lucy-facing and independent of KTX.
 type: application
-version: 0.2.1
-appVersion: "0.16.0"
+version: 0.2.2
+appVersion: "0.17.0"
 kubeVersion: ">=1.24.0-0"
 home: https://github.com/kaelio/lucy
 sources:
@@ -37,6 +38,8 @@ annotations:
   category: DataAgent
   licenses: Apache-2.0
   artifacthub.io/changes: |
+    - kind: changed
+      description: Decouple Lucy product version (appVersion 0.17.0) from bundled KTX 0.16.0; inject LUCY_VERSION.
     - kind: changed
       description: Run as UID 10001; workingDir /data/lucy; optional project-migrate init for PVC ownership.
     - kind: changed

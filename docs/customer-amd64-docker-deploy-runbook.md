@@ -20,7 +20,7 @@ customer-amd64-offline-package/
 ├── .env.example
 ├── SHA256SUMS
 ├── image/
-│   └── project-lucy-customer-amd64-0.16.0-image.tar
+│   └── project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar
 ├── customer-config/
 │   ├── README.md
 │   ├── ktx.yaml                          ← 必须改
@@ -74,21 +74,21 @@ sha256sum -c SHA256SUMS 2>&1 | tail -20
 # 期望：所有文件 OK
 
 # 单独校验 image tar
-sha256sum image/project-lucy-customer-amd64-0.16.0-image.tar
+sha256sum image/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar
 # 与 SHA256SUMS 中对应行比对
 ```
 
 ## 3. 加载镜像
 
 ```bash
-docker load -i image/project-lucy-customer-amd64-0.16.0-image.tar
-# 期望输出：Loaded image: project-lucy:customer-amd64-0.16.0
+docker load -i image/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar
+# 期望输出：Loaded image: project-lucy:customer-amd64-0.17.0-20260902-b262798
 
 docker images project-lucy
-# 期望出现 project-lucy  REPOSITORY 行，TAG = customer-amd64-0.16.0
+# 期望出现 project-lucy  REPOSITORY 行，TAG = customer-amd64-0.17.0-20260902-b262798
 
 # 架构断言
-docker image inspect project-lucy:customer-amd64-0.16.0 \
+docker image inspect project-lucy:customer-amd64-0.17.0-20260902-b262798 \
   --format '{{.Os}}/{{.Architecture}}'
 # 期望：linux/amd64
 ```
@@ -161,7 +161,7 @@ docker compose \
   up -d
 ```
 
-`docker-compose.customer-amd64.yml` 是 image tag override，把 `image:` 强制指向本次交付的 `project-lucy:customer-amd64-0.16.0`。如果不加这个 override，compose 会沿用 `docker-compose.yml` 里的 `image: project-lucy:local`，可能拉到错的架构 / 错的镜像。
+`docker-compose.customer-amd64.yml` 是 image tag override，把 `image:` 强制指向本次交付的 `project-lucy:customer-amd64-0.17.0-20260902-b262798`。如果不加这个 override，compose 会沿用 `docker-compose.yml` 里的 `image: project-lucy:local`，可能拉到错的架构 / 错的镜像。
 
 期望输出：
 
@@ -275,9 +275,9 @@ docker run --rm \
 
 ## 10. 升级
 
-本次交付镜像 tag = `customer-amd64-0.16.0`。后续升级：
+本次交付镜像 tag = `customer-amd64-0.17.0-20260902-b262798`。后续升级：
 
-1. 拿到下一个版本（例如 `customer-amd64-0.17.0`）的 image tar + SHA256SUMS。
+1. 拿到下一个版本（例如 `customer-amd64-0.18.0-20261001-c0ffee1`）的 image tar + SHA256SUMS。
 2. `docker load -i <新 tar>`；`project-lucy:<新 tag>` 会与旧 tag 并存。
 3. 修改 `docker-compose.customer-amd64.yml` 的 `image:` 字段切到新 tag；或拷一份新的 override 文件。
 4. `docker compose up -d`；旧容器自动停止、新容器启动。
@@ -301,7 +301,7 @@ docker compose \
   down -v
 
 # 清理镜像（可选）
-docker rmi project-lucy:customer-amd64-0.16.0
+docker rmi project-lucy:customer-amd64-0.17.0-20260902-b262798
 ```
 
 ## 12. 安全合规要点
@@ -318,7 +318,7 @@ docker rmi project-lucy:customer-amd64-0.16.0
 
 1. `docker compose ps` 输出
 2. `docker compose logs --tail=200 lucy` 输出
-3. `docker image inspect project-lucy:customer-amd64-0.16.0 --format '{{.Id}}'`（确认实际镜像 id）
-4. `sha256sum image/project-lucy-customer-amd64-0.16.0-image.tar`（确认收到的 tar 完整）
+3. `docker image inspect project-lucy:customer-amd64-0.17.0-20260902-b262798 --format '{{.Id}}'`（确认实际镜像 id）
+4. `sha256sum image/project-lucy-customer-amd64-0.17.0-20260902-b262798-image.tar`（确认收到的 tar 完整）
 5. 客户现场 `customer-config/ktx.yaml`（**先把 password 行整行删除**再贴出来，避免泄露）
 6. 客户数据库 network 是否能通（`nc -zv <db-host> <db-port>`）

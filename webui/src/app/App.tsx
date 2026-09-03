@@ -72,6 +72,7 @@ import { HelpButton } from "../components/HelpButton";
 import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
 import { CommandPalette } from "../components/CommandPalette";
 import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
+import { formatLucyVersionLabel } from "../lib/lucyVersion";
 import { findGroupIdForPathname, navGroups, topLevelEntry, type NavIconKey } from "./navigation";
 
 const queryClient = new QueryClient();
@@ -388,7 +389,7 @@ export function AppFrame() {
               translate="no"
               data-testid="sidebar-version"
             >
-              v0.16
+              {formatLucyVersionLabel()}
             </span>
           </div>
         </div>
