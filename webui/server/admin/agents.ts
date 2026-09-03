@@ -80,9 +80,10 @@ export interface YamlRole {
   permission_model_version?: 1 | 2;
   allow?: {
     connections?: string[];
+    source_scope?: "catalog_bound";
     tableSelectors?: Array<
-      | { connection?: string; schema: string; names: string[]; row_access?: "all" | "scoped" }
-      | { connection?: string; schema: string; prefix: string; row_access?: "all" | "scoped" }
+      | { connection?: string; schema: string; names: string[]; row_access?: "all" | "scoped"; row_policy?: { predicates: unknown[] } }
+      | { connection?: string; schema: string; prefix: string; row_access?: "all" | "scoped"; row_policy?: { predicates: unknown[] } }
     >;
     tools?: string[];
   };

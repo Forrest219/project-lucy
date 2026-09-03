@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -182,6 +182,8 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Role Connection Allow-list | 允许的连接 | 数据库连接 | Connections（裸露主标签）、链接 | Role 可使用的连接；`allow.connections` |
 | Role MCP Tool Allow-list | 允许的 MCP 工具 | 工具权限 | Tools（裸露）、MCP Tools（无中文主标签） | Role 显式工具清单；禁止 `*` |
 | Role Table Selector | 可访问的表范围 | 表授权范围 | Table Selectors（裸露）、selector（主按钮文案） | `allow.tableSelectors` |
+| Catalog Bound Scope | 启用目录绑定 | catalog_bound、目录通配 | `tables: ["*"]`、静默 prefix 扩权、全连接 `*` | Spec 131：`allow.source_scope: catalog_bound`；仅已声明 connections ∩ enabled_tables |
+| Lucy Admin Role | Lucy 运维数据面角色 | lucy_admin | WebUI 所有者、登录管理员、超管（作本 Role 主称） | Spec 131 预置 MCP 数据面 Role / 参考模板；与 WebUI Admin 正交 |
 | Exact Table Names | 指定表名 | 精确授权这些表 | names（裸露 radio） | selector `names` |
 | Table Name Prefix | 按前缀匹配 | 前缀批量授权 | prefix（裸露 radio） | selector `prefix`；UI 标为高级 |
 | Role Capability Filter | 按能力筛选 | 按连接 / 工具 / 表筛选 | 功能筛选（与状态筛选混淆） | `/admin/roles` 次级筛选维 |
@@ -485,6 +487,12 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 |---|---|---|---|---|
 | Turn Inquiry Tab | 问询记录 | — | 问题簇、turn（裸露） | 默认视图 `?view=turns`（可省略）；兼容旧 `?tab=turns` |
 | Call Log Tab | 调用流水 | — | 明细（旧 Tab 名）、access_log | 取证视图 `?view=calls`；含 CSV 导出；兼容旧 `?tab=calls` |
+| Turn Inquiry CSV Export | 导出问询记录 | 问询记录 CSV | 问题簇导出、导出问句、按当前页签导出（未说明粒度） | Spec 140：`GET /api/admin/audit/turns/export`；一行代表一次用户问询 |
+| Access Call Log CSV Export | 导出调用流水 | 调用流水 CSV | 审计证据导出（指单文件 CSV）、Audit Export（作唯一主按钮） | Spec 137：`GET /api/admin/audit/export`；内部排障流水 |
+| Audit CSV Field Metadata | 字段说明 | CSV 字段说明、字段元数据 | 字段字典（作 UI 主称）、数据字典（与业务数据字典混淆） | Spec 141：`GET /api/admin/audit/export-metadata?kind=calls\|turns`；解释列含义、格式和触发条件 |
+| Local Audit Timestamp | 本地时间 | Excel 友好时间 | 中文时间、北京时间（无时区说明） | Spec 141：`Asia/Shanghai`、`YYYY-MM-DD HH:mm:ss`；与 UTC 原始字段并存 |
+| Audit Evidence Pack | 导出审计证据包 | 证据包 zip | 把单 CSV 称为审计证据包、把 SHA 自检称为防篡改签名 | Spec 137：`GET /api/admin/audit/export-pack`；含 Manifest；仅当 Manifest `complete=true` 才用于正式审计验收 |
+| Export Manifest | Manifest | — | 将 Manifest 翻译成中文主标签 | Spec 137：`manifest.json`；DOM `translate="no"` |
 | Turn / Question cluster | 问询 | 问询摘要 | 问题簇 | 列表行对象；Drawer 标题 |
 | Turn ID | 问询 ID | — | turn id（裸露作主标签）、问题簇 ID | L1 身份列；可复制；关联调用流水 |
 | Audit Event ID | 事件 ID | — | access_log id（裸露作主标签） | 调用流水 L1 身份列；`access_log.id` |
@@ -506,9 +514,9 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | View Query Artifact | 查看查询原文 | — | 作为生成 SQL 的唯一入口 | Spec 124 legacy；Spec 125 改为列表直展 |
 | Generated SQL | 生成 SQL | compiled SQL | 热库 SQL 原文（过宽）、raw SQL | Spec 125：`lucy_query` 编译结果；热库 `generated_sql`；调用流水列 / CSV |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加「导出问询记录」并要求页面同时暴露问询级与调用级 CSV；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 

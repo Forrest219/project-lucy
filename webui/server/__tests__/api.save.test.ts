@@ -316,7 +316,47 @@ describe("connection enabled_tables API", () => {
 
     expect(response.body.data.written).toBe(true);
     expect(response.body.data.auditId).toBeTruthy();
+    expect(typeof response.body.data.policyVersion).toBe("string");
+    expect(typeof response.body.data.runtimeAck).toBe("boolean");
     await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.not.toContain("dataforai.superstore_orders");
+    await app.close();
+  });
+
+  it("recompiles EffectivePolicy after enabled-tables write (Spec 131 P1-1)", async () => {
+    await writeConnectionProject();
+    await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      `roles: {}
+users: []
+defaults:
+  deny_tools: []
+  known_tools: []
+  table_touching_tools: []
+  sensitive_metadata_tools: []
+  sensitive_table_prefixes: []
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const before = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ dryRun: false, enabledTables: ["dataforai.superstore_orders"] })
+      .expect(200);
+    expect(before.body.data.runtimeAck).toBe(true);
+    expect(before.body.data.policyVersion).toMatch(/^[a-f0-9]{64}$/);
+
+    const after = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({
+        dryRun: false,
+        enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+      .expect(200);
+    expect(after.body.data.runtimeAck).toBe(true);
+    expect(after.body.data.policyVersion).toMatch(/^[a-f0-9]{64}$/);
+    expect(after.body.data.policyVersion).not.toBe(before.body.data.policyVersion);
     await app.close();
   });
 

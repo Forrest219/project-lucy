@@ -74,6 +74,7 @@
 | 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |
 | `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
+| 问询记录和调用流水都能导出吗？ | 可以。`/admin/audit` 的「导出问询记录」是一问一行，「导出调用流水」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#问询记录与调用流水怎么选怎么导出) |
 | 调用流水里的「生成 SQL」从哪来？ | `lucy_query` 经语义层编译后的 SQL；热库字段 `generated_sql` 明文保存，调用流水列表与 CSV 可直接 review。不存 deny 路径的 raw `sql`/`query` 攻击载荷。 | [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界)、[3.5 访问治理 Admin](#35-访问治理-admin) |
 | 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |
 
@@ -638,7 +639,7 @@ WebUI 验收：
 | 层 | 配置文件 | 控制内容 |
 | --- | --- | --- |
 | 连接层 | `ktx.yaml` | connection、Schema、`enabled_tables`、secret 路径 |
-| 治理层 | `webui/config/access.yaml` | role 的 `allow.connections`、`tableSelectors`、`tools` |
+| 治理层 | `webui/config/access.yaml` | role 的 `allow.connections`、`tableSelectors` 或 `source_scope: catalog_bound`、`tools` |
 
 通用 role 片段（脱敏占位符）：
 
@@ -663,12 +664,36 @@ roles:
         - lucy_begin_question
 ```
 
+运维数据面预置角色 `lucy_admin`（Spec 131）使用 `source_scope: catalog_bound`，**不是** WebUI 登录账户：
+
+```yaml
+roles:
+  lucy_admin:
+    description: 平台运维数据面（非 WebUI 登录账户）
+    permission_model_version: 2
+    allow:
+      connections:
+        - <connection-id>
+      source_scope: catalog_bound
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        # …显式工具白名单；禁止 *
+```
+
+| Role 类型 | 同连接新增启用表 | 新增 connection |
+| --- | --- | --- |
+| `tableSelectors.names` | 必须改 `tableSelectors` | 必须改 `allow.connections` + selectors |
+| `lucy_admin` / `catalog_bound` | 写入 `enabled_tables` 并完成语义层 + 策略重编译即可（有 `policy_scope_expanded`） | **仍必须**写入 `allow.connections` |
+
 新增连接后必须做的同步动作：
 
 | 动作 | 入口 | 落点 |
 | --- | --- | --- |
 | 在 `access.yaml` 把新连接加进 role | 编辑 YAML 或 WebUI `/admin/roles` | `roles.<role>.allow.connections` |
-| 在 `access.yaml` 把新表白名单加进 role | 编辑 YAML 或 WebUI `/admin/roles` | `roles.<role>.allow.tableSelectors` |
+| 在 `access.yaml` 把新表白名单加进 role（`names` Role） | 编辑 YAML 或 WebUI `/admin/roles` | `roles.<role>.allow.tableSelectors` |
+| `catalog_bound` Role：确认新表已在 `enabled_tables` | `/connections/enabled-tables` | `ktx.yaml`；无需改 names |
 | 确认 role 的 `tools` 列表仍含 `lucy_*` 工具 | 编辑 YAML 或 WebUI `/admin/roles` | `roles.<role>.allow.tools` |
 | Proxy / MCP 重新加载配置 | 改完保存即生效；如未生效，重启 Proxy | 同进程 Fastify / 容器重启 |
 | 跑最小 smoke | `lucy_catalog` + 一条只读 query | 写到 `LUCY_AUDIT_DB` |
@@ -1111,6 +1136,45 @@ PUT /api/wiki/:key
 5. 把 `WebUI` 登录与 `MCP` `Bearer` 混用 → 两套凭证，互不登录对方系统。
 
 YAML 结构、签发规则与裁决链路见下文「Role-first 模型」「Token 发行规则」「权限裁决机制」。客户端粘贴配置见 [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)。
+
+#### 问询记录与调用流水怎么选、怎么导出
+
+深链：`/help?section=admin-audit-turns-vs-calls`。
+
+访问日志有两个审计粒度：**问询记录**用于看一次用户问询的整体链路，**调用流水**用于看单次工具调用的取证细节。两者通过「问询 ID」关联。
+
+```text
+1 条问询记录 -> N 条调用流水
+```
+
+| 要回答的问题 | 看哪个页签 | 用哪个导出 | 一行代表什么 |
+| --- | --- | --- | --- |
+| 用户问了什么、整体是否成功？ | 问询记录 | 导出问询记录 | 一次用户问询 |
+| 这次问询涉及哪些表、用了几个工具、有没有慢调用？ | 问询记录 | 导出问询记录 | 一次用户问询 |
+| 哪个工具调用失败、被拒或变慢？ | 调用流水 | 导出调用流水 | 一次工具调用 |
+| 要看裁决原因、访问上下文或生成 SQL？ | 调用流水 | 导出调用流水 | 一次工具调用 |
+| 要做离线审计闭环与完整性对账？ | 调用流水 / 审计证据包 | 导出审计证据包 | 多个审计文件 + Manifest |
+
+导出时遵循当前筛选条件。「导出问询记录」保留来源标记：`用户原始问询` 来自客户端上报，`系统推断问询` 来自调用流水聚类；不要把推断问询当作用户原文。「导出调用流水」沿用 `access_log` 明细字段，包含工具、裁决原因、生成 SQL、访问上下文、`request_id` 与 `trace_id` 等事件级信息。
+
+CSV 文件名带秒级时间戳和流水号，避免浏览器生成 `(1)` 这类不可审计版本名：
+
+| 导出 | 文件名样式 |
+| --- | --- |
+| 导出问询记录 | `audit-turns-YYYYMMDD-HHmmss-000001.csv` |
+| 导出调用流水 | `audit-calls-YYYYMMDD-HHmmss-000001.csv` |
+| 字段说明 | `audit-turns-fields-YYYYMMDD-HHmmss-000001.json` / `audit-calls-fields-YYYYMMDD-HHmmss-000001.json` |
+
+时间字段采用双轨：`本地时间` 使用 `Asia/Shanghai` 的 `YYYY-MM-DD HH:mm:ss`，方便人工阅读和 Excel 解析；`UTC` 原始字段保留用于跨时区对账、证据复核和脚本处理。调用流水 CSV 中 `ts` 是原始 UTC，`ts_local` 是本地时间；问询记录 CSV 中「开始时间」「结束时间」是本地时间，「开始时间 UTC」「结束时间 UTC」是原始值。
+
+页面上的「字段说明」会下载当前页签对应的 JSON 元数据，解释每一列的含义、格式和触发条件。正式离线审计仍优先下载「导出审计证据包」，字段说明用于帮助人工 review 单个 CSV。
+
+排查建议：
+
+1. 先在「问询记录」找到异常问询，复制「问询 ID」。
+2. 切到「调用流水」用同一个「问询 ID」筛选。
+3. 查看具体事件的工具、裁决原因、生成 SQL 和耗时。
+4. 需要离线复核时，同时导出问询记录与调用流水；正式审计再导出审计证据包。
 
 #### WebUI 管理员登录
 

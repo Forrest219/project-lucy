@@ -1165,7 +1165,39 @@ export function buildServer() {
       diff,
       requestId: request.id
     });
-    return { ok: true, data: { written: true, auditId, oldEnabledTables, newEnabledTables, warnings } };
+
+    // Spec 131 / P1-1: catalog_bound capabilities depend on enabled_tables — recompile now.
+    let policyVersion = "";
+    let runtimeAck = false;
+    try {
+      const { commitEffectivePolicy } = await import("./proxy/acl.js");
+      const status = await commitEffectivePolicy();
+      policyVersion = status.policyVersion;
+      runtimeAck = status.policyVersion !== "" && !status.degradedGlobal;
+      if (!runtimeAck) {
+        console.error("[enabled-tables] ktx.yaml written but policy runtime not acknowledged", {
+          connId,
+          policyVersion: status.policyVersion,
+          degradedGlobal: status.degradedGlobal
+        });
+      }
+    } catch (err) {
+      console.error("[enabled-tables] ktx.yaml written but commitEffectivePolicy failed", err);
+      runtimeAck = false;
+    }
+
+    return {
+      ok: true,
+      data: {
+        written: true,
+        auditId,
+        oldEnabledTables,
+        newEnabledTables,
+        warnings,
+        policyVersion,
+        runtimeAck
+      }
+    };
   });
 
   app.post<{

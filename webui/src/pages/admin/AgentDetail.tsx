@@ -15,6 +15,7 @@ import type {
   RoleRowPolicyPredicate
 } from "../../lib/types";
 import { formatFinalRowsPreviewLabel, formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
+import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
 
 type AgentDetailResponse = { agent: Agent; version: string };
 type PatchDryRunResponse = {
@@ -566,6 +567,8 @@ export function AgentDetail() {
   const formalRoles = roles.filter((r) => r.source !== "template");
   const currentRoleInFormalList = !agent.role || formalRoles.some((r) => r.id === agent.role);
   const currentRole = editRole !== null ? editRole : agent.role;
+  const selectedFormalRole = formalRoles.find((r) => r.id === currentRole);
+  const showLucyAdminWarning = isLucyAdminDataPlaneRole(selectedFormalRole) || currentRole === "lucy_admin";
   const effective = agent.effectivePermissions;
   const legacyWildcard = agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
   const constraintRows = editConstraints !== null ? editConstraints : constraintsFromAgent(agent);
@@ -715,6 +718,22 @@ export function AgentDetail() {
                     <Link to={`/admin/roles/${agent.role}`} className="text-accent underline">
                       前往修复 →
                     </Link>
+                  </div>
+                )}
+                {showLucyAdminWarning && (
+                  <div
+                    className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+                    data-testid="agent-lucy-admin-role-warning"
+                  >
+                    高权限运维数据面：当前 Role 在已声明连接内绑定启用表目录。这是{" "}
+                    <span className="notranslate" translate="no">
+                      MCP
+                    </span>{" "}
+                    数据面权限，不是 WebUI 登录账户；签发{" "}
+                    <span className="notranslate" translate="no">
+                      Token
+                    </span>{" "}
+                    时建议设置过期时间。
                   </div>
                 )}
               </label>

@@ -103,7 +103,7 @@
 | G6 | 工具三分级；未分类默认拒绝；唯一数据闸门 | S5 / U-CLS-* |
 | G7 | Canonical key（含反向映射）；同 connection 内 sourceName 唯一 | S8 |
 | G8 | 收窄 / 禁用 / 撤销失败时不得保留更宽旧权 | S10 |
-| G9 | 语义层变化不得静默改变授权 | S12 |
+| G9 | 语义层变化不得静默改变授权（显式 `catalog_bound` 扩权须审计，见 ADR-AC-07；≠ 静默 prefix） | S12 |
 | G10 | 单 Role Agent 行为与升级前等价 | U-COMPAT-01 |
 
 ### 1.3 非目标
@@ -118,7 +118,7 @@
 
 ### 1.4 设计原则
 
-1. **事实源单一**：权限谓词只来自 `access.yaml`；source map 只提供**授权对象的身份解析**，不得成为「授权范围自动扩张」的入口（故 v2 禁 `prefix`，见 ADR-AC-06 §A0）。
+1. **事实源单一**：权限谓词只来自 `access.yaml`；source map 只提供**授权对象的身份解析**，不得成为「授权范围自动扩张」的入口（故 v2 禁 `prefix`，见 ADR-AC-06 §A0）。**例外（显式特权）**：Role 声明 `source_scope: catalog_bound` 时，授权意图仍写在 `access.yaml`；source map ∩ `enabled_tables` 仅解析对象集合，扩权必须 `policy_scope_expanded`（ADR-AC-07）。
 2. **Fail-closed**：解析 / 合成 / 编译失败，或工具未分类，一律拒绝；「意图收窄」路径上不得继续提供更宽授权。
 3. **dryRun → save**；裁决只在 Proxy；Admin 与 runtime 共用同一解析器。
 4. **Role 可组合** = capability 并集，不是维度笛卡尔积。
@@ -391,6 +391,20 @@ dryRun → 用户确认 → save:
 | 紧急覆盖 | 若提供运维强制加载旧策略的开关，必须显式确认、限时生效、并写入审计；默认不提供 |
 | 影响面 | AC-P0 Spec 须评估「整体 deny」对现网 Agent 的可用性影响，并写入发布检查项 |
 
+### ADR-AC-07 — Catalog-Bound Scope（运维数据面）
+
+**决策：** 允许 Role 显式声明 `allow.source_scope: catalog_bound`，在已声明 `allow.connections` 内将 SourcesGrantedBy 定义为 `source map ∩ enabled_tables`。预置参考模板 / 推荐正式 Role id 为 `lucy_admin`（MCP **数据面**，与 WebUI Admin 控制面正交）。
+
+**规则：**
+
+1. `catalog_bound` 要求 `permission_model_version: 2`；`allow.connections` 非空；禁止并存非空 `tableSelectors`；禁止 `tools: ["*"]`；AbsoluteDeny 不可解。
+2. **新 connection 不自动纳入**；必须写入 `allow.connections`。
+3. 同连接因 `enabled_tables` / source map 增长导致 source 集合变大时，**允许**扩权，但**禁止静默**：必须产生 `policy_scope_expanded`（与 v1 `prefix` 同级可观测性）。
+4. 不得将 `catalog_bound` 表述或实现为 legacy `tables: ["*"]`，也不得借此恢复 v2 `prefix`。
+5. 产品交付：`lucy_admin` 为 Reference Role Template；客户生产包默认不强制落盘 Agent；UI 必须展示高权限运维数据面警示。
+
+**详规：** [`webui/docs/131-lucy-admin-catalog-bound-role-spec.md`](../../webui/docs/131-lucy-admin-catalog-bound-role-spec.md)。
+
 ---
 
 ## 3. 目标配置模型
@@ -643,6 +657,7 @@ Bearer → Identity(userId)
 | 语义层新增一张表，v2 Role 用 `names` | 授权集合不变（`prefix` 已禁用） |
 | 语义层变更导致 `sourceMapVersion` 变化 | 触发重编译；`policyVersion` 变化并写入审计 |
 | v1 legacy `prefix` 命中集合扩大 | 产生 `policy_scope_expanded` 记录，Admin 可见 |
+| `catalog_bound` Role 同连接 enabled 表集合扩大 | 授权可扩大，**必须** `policy_scope_expanded`；新连接未写入 `allow.connections` 则仍不可见（ADR-AC-07） |
 | source map 出现同 connection 重名 | 编译失败，走 §B 降级语义 |
 
 ---

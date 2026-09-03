@@ -68,6 +68,9 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 
 | 工单 | 里程碑 | 主题 |
 | --- | --- | --- |
+| [wo-202609-03-admin-audit-csv-readability-metadata.md](wo-202609-03-admin-audit-csv-readability-metadata.md) | 202609-03 | Spec 141：访问日志 CSV 本地时间、秒级流水号文件名与字段说明元数据 |
+| [wo-202609-03-admin-audit-dual-csv-export.md](wo-202609-03-admin-audit-dual-csv-export.md) | 202609-03 | Spec 140：访问日志双粒度 CSV 导出，问询记录一问一行、调用流水一调用一行 |
+| [wo-202609-03-lucy-query-and-answer-reliability.md](wo-202609-03-lucy-query-and-answer-reliability.md) | 202609-03 | Spec 138/139：查询参数与 Turn 归因可靠性、Data Agent 可回答性和最终交付门禁（Implemented，未部署） |
 | [wo-M0-scaffold.md](wo-M0-scaffold.md) | M0 | 脚手架 + fs-safe 安全基座 |
 | [wo-M1-readonly-catalog.md](wo-M1-readonly-catalog.md) | M1 | 项目读取 + 只读目录/单表 |
 | [wo-M2-table-editor-diff.md](wo-M2-table-editor-diff.md) | M2 | 就地补丁 + 单表编辑 + diff 预览 |

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { glob } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
-import { resolveProjectRoot } from "../project.js";
+import { resolveProjectRoot, readConnections } from "../project.js";
 import {
   getAccessConfig,
   invalidateAccessConfigCache,
@@ -940,6 +940,40 @@ function scopedGrantForSource(
   };
 }
 
+async function loadEnabledTablesByConnection(): Promise<Map<string, Set<string>>> {
+  const root = await resolveProjectRoot();
+  const connections = await readConnections(root);
+  const map = new Map<string, Set<string>>();
+  for (const conn of connections) {
+    map.set(
+      normalizeRef(conn.id),
+      new Set((conn.enabledTables ?? []).map((table) => normalizeRef(table)).filter(Boolean))
+    );
+  }
+  return map;
+}
+
+function catalogBoundSources(
+  declaredConnections: string[],
+  state: SourceMapState,
+  enabledByConnection: Map<string, Set<string>>
+): EffectiveSource[] {
+  const allowedConnections = new Set(declaredConnections);
+  const matches: EffectiveSource[] = [];
+  for (const entry of state.forward.values()) {
+    if (!allowedConnections.has(entry.connectionId)) continue;
+    const enabled = enabledByConnection.get(entry.connectionId);
+    if (!enabled || !enabled.has(normalizeRef(entry.physicalTable))) continue;
+    matches.push({
+      connectionId: entry.connectionId,
+      schema: entry.schema,
+      sourceName: entry.sourceName,
+      table: entry.physicalTable
+    });
+  }
+  return [...new Map(matches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()];
+}
+
 async function compileRole(
   roleId: string,
   role: NonNullable<AccessConfig["roles"]>[string] | undefined,
@@ -959,58 +993,86 @@ async function compileRole(
   if (roleTools.length === 0 || roleTools.includes("*")) return failed;
   for (const tool of roleTools) {
     if (!policy.knownTools.has(tool)) return failed;
+    const absoluteOrUnclassified = absoluteDenyOrUnclassifiedReason(tool);
+    if (absoluteOrUnclassified) {
+      return { ok: false, reason: `role_resolution_failed:${roleId}:${absoluteOrUnclassified}` };
+    }
+  }
+
+  const rawScope = typeof role.allow.source_scope === "string" ? normalizeRef(role.allow.source_scope) : undefined;
+  const catalogBound = rawScope === "catalog_bound";
+  if (rawScope !== undefined && !catalogBound) {
+    return { ok: false, reason: `role_resolution_failed:${roleId}:invalid_source_scope` };
+  }
+  if (catalogBound && modelVersion.version !== 2) {
+    return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_requires_v2` };
   }
 
   const selectors = Array.isArray(role.allow.tableSelectors) ? role.allow.tableSelectors : [];
   const declaredConnections = configList(role.allow.connections, [], { normalize: true });
-  if ((selectors.length > 0 || roleToolsTouchTables(roleTools, policy)) && declaredConnections.length === 0) {
+  if (catalogBound && selectors.length > 0) {
+    return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_selectors_forbidden` };
+  }
+  if ((catalogBound || selectors.length > 0 || roleToolsTouchTables(roleTools, policy)) && declaredConnections.length === 0) {
     return failed;
   }
 
   const sourceMatches: EffectiveSource[] = [];
   const sourceGrants = new Map<string, RowGrant>();
-  for (const selector of selectors) {
-    const versionFailure = selectorVersionFailure(modelVersion.version, selector);
-    if (versionFailure) return { ok: false, reason: `role_resolution_failed:${roleId}:${versionFailure}` };
-    const matches = [...state.forward.values()].filter((entry) => selectorMatches(selector, entry));
+
+  if (catalogBound) {
+    const enabledByConnection = await loadEnabledTablesByConnection();
+    const matches = catalogBoundSources(declaredConnections, state, enabledByConnection);
     if (matches.length === 0) return failed;
-
-    const rowAccess = typeof selector.row_access === "string" ? normalizeRef(selector.row_access) : "all";
-    let multiScoped: Extract<RowGrant, { kind: "scoped" }> | undefined;
-    if (rowAccess === "scoped") {
-      const compiled = await compileScopedRowGrant(
-        selector.row_policy,
-        matches.map((entry) => ({
-          connectionId: entry.connectionId,
-          sourceName: entry.sourceName,
-          schema: entry.schema
-        }))
-      );
-      if (!compiled.ok) return { ok: false, reason: `role_resolution_failed:${roleId}:${compiled.reason}` };
-      if (compiled.grant.kind !== "scoped") {
-        return { ok: false, reason: `role_resolution_failed:${roleId}:row_policy_invalid` };
-      }
-      multiScoped = compiled.grant;
-    }
-
     for (const entry of matches) {
-      // U-CAP-04: a capability source on an undeclared connection is a compile failure.
-      if (!declaredConnections.includes(entry.connectionId)) return failed;
-      const grant: RowGrant = multiScoped
-        ? scopedGrantForSource(multiScoped, entry.sourceName)
-        : { kind: "all" };
-      const key = sourceIndexKey(entry.connectionId, entry.physicalTable);
-      const existing = sourceGrants.get(key);
-      if (existing && grantDigestToken(existing) !== grantDigestToken(grant)) {
-        return { ok: false, reason: `role_resolution_failed:${roleId}:row_grant_conflict` };
+      const key = sourceIndexKey(entry.connectionId, entry.table);
+      sourceGrants.set(key, { kind: "all" });
+      sourceMatches.push(entry);
+    }
+  } else {
+    for (const selector of selectors) {
+      const versionFailure = selectorVersionFailure(modelVersion.version, selector);
+      if (versionFailure) return { ok: false, reason: `role_resolution_failed:${roleId}:${versionFailure}` };
+      const matches = [...state.forward.values()].filter((entry) => selectorMatches(selector, entry));
+      if (matches.length === 0) return failed;
+
+      const rowAccess = typeof selector.row_access === "string" ? normalizeRef(selector.row_access) : "all";
+      let multiScoped: Extract<RowGrant, { kind: "scoped" }> | undefined;
+      if (rowAccess === "scoped") {
+        const compiled = await compileScopedRowGrant(
+          selector.row_policy,
+          matches.map((entry) => ({
+            connectionId: entry.connectionId,
+            sourceName: entry.sourceName,
+            schema: entry.schema
+          }))
+        );
+        if (!compiled.ok) return { ok: false, reason: `role_resolution_failed:${roleId}:${compiled.reason}` };
+        if (compiled.grant.kind !== "scoped") {
+          return { ok: false, reason: `role_resolution_failed:${roleId}:row_policy_invalid` };
+        }
+        multiScoped = compiled.grant;
       }
-      sourceGrants.set(key, grant);
-      sourceMatches.push({
-        connectionId: entry.connectionId,
-        schema: entry.schema,
-        sourceName: entry.sourceName,
-        table: entry.physicalTable
-      });
+
+      for (const entry of matches) {
+        // U-CAP-04: a capability source on an undeclared connection is a compile failure.
+        if (!declaredConnections.includes(entry.connectionId)) return failed;
+        const grant: RowGrant = multiScoped
+          ? scopedGrantForSource(multiScoped, entry.sourceName)
+          : { kind: "all" };
+        const key = sourceIndexKey(entry.connectionId, entry.physicalTable);
+        const existing = sourceGrants.get(key);
+        if (existing && grantDigestToken(existing) !== grantDigestToken(grant)) {
+          return { ok: false, reason: `role_resolution_failed:${roleId}:row_grant_conflict` };
+        }
+        sourceGrants.set(key, grant);
+        sourceMatches.push({
+          connectionId: entry.connectionId,
+          schema: entry.schema,
+          sourceName: entry.sourceName,
+          table: entry.physicalTable
+        });
+      }
     }
   }
 
@@ -1025,7 +1087,7 @@ async function compileRole(
       sources: [...new Map(sourceMatches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()],
       sourceGrants,
       declaredConnections,
-      hasSelectors: selectors.length > 0
+      hasSelectors: catalogBound || selectors.length > 0
     }
   };
 }
@@ -1501,6 +1563,8 @@ export interface PolicyRuntimeStatus {
   degradedAgents: string[];
   accessConfigDigest: string;
   sourceMapVersion: string;
+  /** Spec 131 — sha256 of normalized connections→enabled_tables; feeds policyVersion. */
+  enabledTablesDigest: string;
 }
 
 interface EffectivePolicySnapshot {
@@ -1508,13 +1572,14 @@ interface EffectivePolicySnapshot {
   accessConfigDigest: string;
   sourceMapVersion: string;
   toolClassificationVersion: string;
+  enabledTablesDigest: string;
   degradedGlobal: boolean;
   degradedAgents: Set<string>;
   config: AccessConfig;
   sourceMap: SourceMapState;
   byUserId: Map<string, RoleResolutionResult>;
-  /** Per v1 prefix Role: matched source count at last successful compile. */
-  v1PrefixSourceCounts: Map<string, number>;
+  /** Spec 131 — expandable Roles (v1 prefix / catalog_bound): canonical source keys at last commit. */
+  expandableScopeSourceKeys: Map<string, Set<string>>;
 }
 
 let effectivePolicyRef: EffectivePolicySnapshot | null = null;
@@ -1533,13 +1598,23 @@ export function computeAccessConfigDigest(config: AccessConfig): string {
   return createHash("sha256").update(stableJson(config)).digest("hex");
 }
 
+/** Spec 131 — enabled_tables digest participates in policyVersion for catalog_bound. */
+export function computeEnabledTablesDigest(enabledByConnection: Map<string, Set<string>>): string {
+  const normalized: Record<string, string[]> = {};
+  for (const connectionId of [...enabledByConnection.keys()].sort((a, b) => a.localeCompare(b))) {
+    normalized[connectionId] = [...(enabledByConnection.get(connectionId) ?? [])].sort((a, b) => a.localeCompare(b));
+  }
+  return createHash("sha256").update(stableJson(normalized)).digest("hex");
+}
+
 export function computePolicyVersion(
   accessConfigDigest: string,
   sourceMapVersion: string,
-  toolClassificationVersion: string = TOOL_CLASSIFICATION_VERSION
+  toolClassificationVersion: string = TOOL_CLASSIFICATION_VERSION,
+  enabledTablesDigest: string = ""
 ): string {
   return createHash("sha256")
-    .update(`${accessConfigDigest}||${sourceMapVersion}||${toolClassificationVersion}`)
+    .update(`${accessConfigDigest}||${sourceMapVersion}||${toolClassificationVersion}||${enabledTablesDigest}`)
     .digest("hex");
 }
 
@@ -1549,7 +1624,8 @@ export function getPolicyRuntimeStatus(): PolicyRuntimeStatus {
     degradedGlobal: effectivePolicyRef?.degradedGlobal ?? false,
     degradedAgents: effectivePolicyRef ? [...effectivePolicyRef.degradedAgents].sort() : [],
     accessConfigDigest: effectivePolicyRef?.accessConfigDigest ?? "",
-    sourceMapVersion: effectivePolicyRef?.sourceMapVersion ?? ""
+    sourceMapVersion: effectivePolicyRef?.sourceMapVersion ?? "",
+    enabledTablesDigest: effectivePolicyRef?.enabledTablesDigest ?? ""
   };
 }
 
@@ -1580,30 +1656,64 @@ export function evaluateRuntimeAck(
   );
 }
 
-function countV1PrefixSources(config: AccessConfig, state: SourceMapState): Map<string, number> {
-  const counts = new Map<string, number>();
+function expandableScopeSourceKeys(
+  config: AccessConfig,
+  state: SourceMapState,
+  enabledByConnection?: Map<string, Set<string>>
+): Map<string, Set<string>> {
+  const keysByRole = new Map<string, Set<string>>();
   for (const [roleId, role] of Object.entries(config.roles ?? {})) {
     const modelVersion = normalizePermissionModelVersion(role);
-    if (!modelVersion.ok || modelVersion.version !== 1) continue;
+    if (!modelVersion.ok) continue;
+    const scope = typeof role?.allow?.source_scope === "string" ? normalizeRef(role.allow.source_scope) : undefined;
+    if (scope === "catalog_bound") {
+      if (modelVersion.version !== 2) continue;
+      const declaredConnections = configList(role?.allow?.connections, [], { normalize: true });
+      if (declaredConnections.length === 0 || !enabledByConnection) continue;
+      const keys = new Set(
+        catalogBoundSources(declaredConnections, state, enabledByConnection).map((source) =>
+          canonicalSourceKeyDisplay({
+            connectionId: source.connectionId,
+            schema: source.schema,
+            sourceName: source.sourceName,
+            physicalTable: source.table
+          })
+        )
+      );
+      keysByRole.set(roleId, keys);
+      continue;
+    }
+    if (modelVersion.version !== 1) continue;
     const selectors = Array.isArray(role.allow?.tableSelectors) ? role.allow.tableSelectors : [];
-    let matched = 0;
+    const keys = new Set<string>();
     let hasPrefix = false;
     for (const selector of selectors) {
       if (selector?.prefix === undefined) continue;
       hasPrefix = true;
-      matched += [...state.forward.values()].filter((entry) => selectorMatches(selector, entry)).length;
+      for (const entry of state.forward.values()) {
+        if (!selectorMatches(selector, entry)) continue;
+        keys.add(canonicalSourceKeyDisplay(entry));
+      }
     }
-    if (hasPrefix) counts.set(roleId, matched);
+    if (hasPrefix) keysByRole.set(roleId, keys);
   }
-  return counts;
+  return keysByRole;
 }
 
-function emitPolicyScopeExpanded(roleId: string, before: number, after: number, sourceMapVersion: string): void {
+async function emitPolicyScopeExpanded(
+  roleId: string,
+  beforeKeys: Set<string>,
+  afterKeys: Set<string>,
+  sourceMapVersion: string
+): Promise<void> {
+  const added = [...afterKeys].filter((key) => !beforeKeys.has(key)).sort((a, b) => a.localeCompare(b));
+  const removed = [...beforeKeys].filter((key) => !afterKeys.has(key)).sort((a, b) => a.localeCompare(b));
   console.warn(
-    `[acl] policy_scope_expanded roleId=${roleId} sourcesBefore=${before} sourcesAfter=${after} sourceMapVersion=${sourceMapVersion}`
+    `[acl] policy_scope_expanded roleId=${roleId} sourcesBefore=${beforeKeys.size} sourcesAfter=${afterKeys.size} added=${added.length} sourceMapVersion=${sourceMapVersion}`
   );
-  void import("../admin/audit.js")
-    .then(({ recordConfigChange }) => recordConfigChange({
+  try {
+    const { recordConfigChange } = await import("../admin/audit.js");
+    await recordConfigChange({
       filePath: "webui/config/access.yaml",
       changeType: "policy_scope_expanded",
       actorType: "system",
@@ -1611,12 +1721,12 @@ function emitPolicyScopeExpanded(roleId: string, before: number, after: number, 
       assetKind: "governance",
       targetId: roleId,
       writeStatus: "committed",
-      oldSummary: { sourcesBefore: before, sourceMapVersion },
-      newSummary: { sourcesAfter: after, sourceMapVersion }
-    }))
-    .catch((err) => {
-      console.error("[acl] failed to record policy_scope_expanded", err);
+      oldSummary: { sourcesBefore: beforeKeys.size, sourceMapVersion, keys: [...beforeKeys].sort() },
+      newSummary: { sourcesAfter: afterKeys.size, sourceMapVersion, added, removed, keys: [...afterKeys].sort() }
     });
+  } catch (err) {
+    console.error("[acl] failed to record policy_scope_expanded", err);
+  }
 }
 
 async function recordPolicyDegradeEvent(input: {
@@ -1678,12 +1788,13 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
       accessConfigDigest: previous?.accessConfigDigest ?? "",
       sourceMapVersion: previous?.sourceMapVersion ?? "",
       toolClassificationVersion: TOOL_CLASSIFICATION_VERSION,
+      enabledTablesDigest: previous?.enabledTablesDigest ?? "",
       degradedGlobal: true,
       degradedAgents: new Set(),
       config: previous?.config ?? { users: [] },
       sourceMap: previous?.sourceMap ?? emptySourceMapState(Date.now()),
       byUserId: previous?.byUserId ?? new Map(),
-      v1PrefixSourceCounts: previous?.v1PrefixSourceCounts ?? new Map()
+      expandableScopeSourceKeys: previous?.expandableScopeSourceKeys ?? new Map()
     };
     const wasDegraded = Boolean(previous?.degradedGlobal);
     effectivePolicyRef = degraded;
@@ -1710,17 +1821,15 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
   const state = await loadSourceMap({ fresh: true });
   const policy = aclPolicy(config);
   const accessConfigDigest = computeAccessConfigDigest(config);
-  const policyVersion = computePolicyVersion(accessConfigDigest, state.version);
-  const v1PrefixSourceCounts = countV1PrefixSources(config, state);
-
-  if (previous && !previous.degradedGlobal && previous.sourceMapVersion !== state.version) {
-    for (const [roleId, afterCount] of v1PrefixSourceCounts) {
-      const beforeCount = previous.v1PrefixSourceCounts.get(roleId) ?? 0;
-      if (afterCount > beforeCount) {
-        emitPolicyScopeExpanded(roleId, beforeCount, afterCount, state.version);
-      }
-    }
-  }
+  const enabledByConnection = await loadEnabledTablesByConnection();
+  const enabledTablesDigest = computeEnabledTablesDigest(enabledByConnection);
+  const policyVersion = computePolicyVersion(
+    accessConfigDigest,
+    state.version,
+    TOOL_CLASSIFICATION_VERSION,
+    enabledTablesDigest
+  );
+  const expandableScopeKeys = expandableScopeSourceKeys(config, state, enabledByConnection);
 
   const byUserId = new Map<string, RoleResolutionResult>();
   const degradedAgents = new Set<string>();
@@ -1758,13 +1867,25 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
     accessConfigDigest,
     sourceMapVersion: state.version,
     toolClassificationVersion: TOOL_CLASSIFICATION_VERSION,
+    enabledTablesDigest,
     degradedGlobal: false,
     degradedAgents,
     config,
     sourceMap: state,
     byUserId,
-    v1PrefixSourceCounts
+    expandableScopeSourceKeys: expandableScopeKeys
   };
+
+  // Spec 131 P2-5 — emit expansion audit only after successful atomic switch; compare key sets.
+  if (previous && !previous.degradedGlobal) {
+    for (const [roleId, afterKeys] of expandableScopeKeys) {
+      const beforeKeys = previous.expandableScopeSourceKeys.get(roleId) ?? new Set<string>();
+      const added = [...afterKeys].filter((key) => !beforeKeys.has(key));
+      if (added.length > 0) {
+        await emitPolicyScopeExpanded(roleId, beforeKeys, afterKeys, state.version);
+      }
+    }
+  }
 
   // Spec 98 §8.4 — record global recover, first enter, and subsequent scope changes.
   if (previousDegradedGlobal) {

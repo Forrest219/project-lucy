@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { Agent, CreateTokenResponse, McpEndpointInfo, ProjectInfo } from "../../lib/types";
+import type { Agent, CreateTokenResponse, McpEndpointInfo, ProjectInfo, Role } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
+import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
 
 type ClientId = "hermes" | "claude-code" | "codex" | "generic";
 
@@ -61,10 +62,12 @@ export function NewToken() {
   const [label, setLabel] = useState("");
   const [deviceName, setDeviceName] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [neverExpireAck, setNeverExpireAck] = useState(false);
   const [generatedToken, setGeneratedToken] = useState<CreateTokenResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeSnippet, setActiveSnippet] = useState<ClientId>("hermes");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [privilegedExpirySeeded, setPrivilegedExpirySeeded] = useState(false);
 
   const targetUserId = routeUserId || selectedUserId;
 
@@ -74,6 +77,33 @@ export function NewToken() {
     enabled: !routeUserId
   });
   const agents = agentsQuery.data?.agents ?? [];
+
+  const agentDetailQuery = useQuery({
+    queryKey: ["admin", "agent", targetUserId],
+    queryFn: () => apiGet<{ agent: Agent }>(`/api/admin/agents/${encodeURIComponent(targetUserId)}`),
+    enabled: Boolean(targetUserId)
+  });
+  const rolesQuery = useQuery({
+    queryKey: ["admin", "roles", { includeTemplates: false }],
+    queryFn: () => apiGet<{ roles: Role[] }>("/api/admin/roles?includeTemplates=false"),
+    enabled: Boolean(targetUserId)
+  });
+  const boundRoleId = agentDetailQuery.data?.agent.role;
+  const boundRole = rolesQuery.data?.roles.find((role) => role.id === boundRoleId);
+  const privilegedOpsRole =
+    Boolean(targetUserId) && (isLucyAdminDataPlaneRole(boundRole) || boundRoleId === "lucy_admin");
+
+  useEffect(() => {
+    if (privilegedOpsRole && !privilegedExpirySeeded) {
+      setExpiresAt(computePresetDate(90));
+      setNeverExpireAck(false);
+      setPrivilegedExpirySeeded(true);
+    }
+    if (!privilegedOpsRole) {
+      setPrivilegedExpirySeeded(false);
+      setNeverExpireAck(false);
+    }
+  }, [privilegedOpsRole, privilegedExpirySeeded]);
 
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
@@ -103,6 +133,10 @@ export function NewToken() {
     }
     if (!label.trim()) {
       toast.error("Token 标签不能为空");
+      return;
+    }
+    if (privilegedOpsRole && !expiresAt && !neverExpireAck) {
+      toast.error("高权限运维数据面建议设置过期时间；若确需永不过期，请勾选风险确认。");
       return;
     }
     mutation.mutate({
@@ -380,42 +414,72 @@ export function NewToken() {
             仅用于管理员标识设备或用途（如：张三的 MacBook），不参与权限校验。可留空。
           </span>
         </label>
+        {privilegedOpsRole ? (
+          <div className="pl-notice" data-testid="new-token-privileged-role-notice" role="status">
+            目标 <span className="notranslate" translate="no">Agent</span> 绑定高权限运维数据面（
+            <code className="notranslate" translate="no">
+              {boundRoleId}
+            </code>
+            ）。建议为{" "}
+            <span className="notranslate" translate="no">
+              Token
+            </span>{" "}
+            设置过期时间；默认已引导 90 天。
+          </div>
+        ) : null}
         <label className="grid gap-1">
-          <span className="text-sm font-medium">过期时间（可选；到期后 Proxy 立即拒绝）</span>
+          <span className="text-sm font-medium">
+            过期时间{privilegedOpsRole ? "（高权限运维数据面建议必填；到期后 Proxy 立即拒绝）" : "（可选；到期后 Proxy 立即拒绝）"}
+          </span>
           <input
             className="pl-input"
             aria-label="过期时间"
             type="date"
             value={expiresAt}
-            onChange={(e) => setExpiresAt(e.target.value)}
+            onChange={(e) => {
+              setExpiresAt(e.target.value);
+              if (e.target.value) setNeverExpireAck(false);
+            }}
           />
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <span className="text-xs text-fg-muted mr-1">快捷预设：</span>
             <button
               type="button"
               className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(30))}
+              onClick={() => {
+                setExpiresAt(computePresetDate(30));
+                setNeverExpireAck(false);
+              }}
             >
               30 天
             </button>
             <button
               type="button"
               className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(90))}
+              onClick={() => {
+                setExpiresAt(computePresetDate(90));
+                setNeverExpireAck(false);
+              }}
             >
               90 天
             </button>
             <button
               type="button"
               className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(180))}
+              onClick={() => {
+                setExpiresAt(computePresetDate(180));
+                setNeverExpireAck(false);
+              }}
             >
               180 天
             </button>
             <button
               type="button"
               className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(365))}
+              onClick={() => {
+                setExpiresAt(computePresetDate(365));
+                setNeverExpireAck(false);
+              }}
             >
               1 年
             </button>
@@ -427,6 +491,24 @@ export function NewToken() {
               永不过期
             </button>
           </div>
+          {privilegedOpsRole && !expiresAt ? (
+            <label className="mt-2 flex items-start gap-2 text-xs text-fg-muted">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={neverExpireAck}
+                onChange={(e) => setNeverExpireAck(e.target.checked)}
+                data-testid="new-token-never-expire-ack"
+              />
+              <span>
+                我确认该高权限运维数据面{" "}
+                <span className="notranslate" translate="no">
+                  Token
+                </span>{" "}
+                将永不过期，并接受泄露后的扩大暴露面风险。
+              </span>
+            </label>
+          ) : null}
         </label>
       </div>
 

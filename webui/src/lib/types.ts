@@ -638,6 +638,8 @@ export type Role = {
   source?: "yaml" | "template";
   tools: string[];
   connections: string[];
+  /** Spec 131 — present when Role uses catalog_bound. */
+  source_scope?: "catalog_bound";
   /** Always present; resolved table/source names; [] when resolve failed or zero sources */
   sourceNames: string[];
   sourceCount: number;
@@ -686,6 +688,8 @@ export type RoleSelector =
 
 export type RoleAllowConfig = {
   connections?: string[];
+  /** Spec 131 — when `catalog_bound`, omit tableSelectors; sources = enabled catalog. */
+  source_scope?: "catalog_bound";
   tableSelectors?: RoleSelector[];
   tools?: string[];
 };
@@ -750,6 +754,7 @@ export type PolicyRuntimeStatus = {
   degradedAgents: string[];
   accessConfigDigest: string;
   sourceMapVersion: string;
+  enabledTablesDigest?: string;
   healthy: boolean;
 };
 

@@ -5,6 +5,7 @@ import {
   expandSelectorSourceNames,
   normalizePermissionModelVersion,
   previewRolePermissionsForAdmin,
+  absoluteDenyOrUnclassifiedReason,
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
@@ -209,6 +210,7 @@ function buildRoleSummary(config: YamlAccessConfig, resolved: ResolvedRole) {
     source: resolved.source,
     tools: resolved.role.allow?.tools ?? [],
     connections: resolved.role.allow?.connections ?? [],
+    source_scope: resolved.role.allow?.source_scope,
     usageCount: users.length,
     users: users.map((user) => ({
       id: user.id,
@@ -278,8 +280,19 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
   }
   const allow = obj.allow as Record<string, unknown>;
   for (const key of Object.keys(allow)) {
-    if (key !== "connections" && key !== "tableSelectors" && key !== "tools") {
+    if (key !== "connections" && key !== "tableSelectors" && key !== "tools" && key !== "source_scope") {
       return { ok: false, reason: `allow.${key} is not allowed` };
+    }
+  }
+  let sourceScope: "catalog_bound" | undefined;
+  if (allow.source_scope !== undefined) {
+    if (allow.source_scope !== "catalog_bound") {
+      return { ok: false, reason: "allow.source_scope must be catalog_bound when set" };
+    }
+    sourceScope = "catalog_bound";
+    // Explicit v1 only — missing version is assumed-1 and migrated by migrateRoleToV2 (Spec 131 P1-2).
+    if (modelVersion.version === 1 && !modelVersion.assumed) {
+      return { ok: false, reason: "catalog_bound requires permission_model_version 2" };
     }
   }
   let connections: string[] | undefined;
@@ -293,6 +306,9 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
   if (allow.tableSelectors !== undefined) {
     if (!Array.isArray(allow.tableSelectors)) {
       return { ok: false, reason: "allow.tableSelectors must be an array" };
+    }
+    if (sourceScope === "catalog_bound" && allow.tableSelectors.length > 0) {
+      return { ok: false, reason: "catalog_bound forbids tableSelectors" };
     }
     const built: NonNullable<YamlRole["allow"]>["tableSelectors"] = [];
     for (const raw of allow.tableSelectors as Array<Record<string, unknown>>) {
@@ -388,11 +404,20 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
     if (tools.includes("*")) {
       return { ok: false, reason: "wildcard tools ('*') are not allowed" };
     }
+    for (const tool of tools) {
+      const denyReason = absoluteDenyOrUnclassifiedReason(tool);
+      if (denyReason) {
+        return { ok: false, reason: `allow.tools contains forbidden tool (${denyReason})` };
+      }
+    }
   }
 
   const hasTableTouchingTool = (tools ?? []).some(isTableTouchingTool);
-  if ((tableSelectors && tableSelectors.length > 0 || hasTableTouchingTool) && (!connections || connections.length === 0)) {
-    return { ok: false, reason: "connections must be set when role uses table selectors or table-touching tools" };
+  if (
+    (sourceScope === "catalog_bound" || (tableSelectors && tableSelectors.length > 0) || hasTableTouchingTool)
+    && (!connections || connections.length === 0)
+  ) {
+    return { ok: false, reason: "connections must be set when role uses table selectors, catalog_bound, or table-touching tools" };
   }
 
   return {
@@ -402,6 +427,7 @@ function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok:
       permission_model_version: permissionModelVersion,
       allow: {
         connections,
+        source_scope: sourceScope,
         tableSelectors,
         tools
       }
@@ -649,7 +675,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (typeof roleId !== "string" || !roleId.trim()) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "roleId is required" } });
     }
-    const validated = await resolveRoleForWrite(roleId, role as YamlRole);
+    const validated = await resolveRoleForWrite(roleId, role as YamlRole, { allowTemplateId: true });
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
     }
@@ -1011,7 +1037,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
           allow: source.role.allow
         }
       : (role as YamlRole);
-    const validated = await resolveRoleForWrite(newRoleId, clonedRole);
+    const validated = await resolveRoleForWrite(newRoleId, clonedRole, { allowTemplateId: true });
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });
     }

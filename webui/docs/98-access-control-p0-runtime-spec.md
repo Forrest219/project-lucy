@@ -108,8 +108,9 @@ Role
   ├── permission_model_version: 1 | 2
   └── allow
         ├── tools          # 仅 DataPlane / Meta；含 AbsoluteDeny → lint fail
-        ├── connections    # 含 selectors 时：声明校验；纯 Meta：事实源
-        └── tableSelectors[]
+        ├── connections    # 含 selectors 或 catalog_bound 时：声明校验；纯 Meta：事实源
+        ├── source_scope?  # catalog_bound（Spec 131）；缺省 = tableSelectors 路径
+        └── tableSelectors[]   # catalog_bound 时必须空/缺省
               ├── connection / schema / names   # v2 禁用 prefix
               ├── row_access?: all | scoped     # v2 必填；AC-P0 仅 all
               └── row_policy?: …                # AC-P0 禁止出现
@@ -246,7 +247,8 @@ FinalRows(sourceKey) = TRUE   # AC-P0 占位；无 Agent Constraints / TokenScop
 | 情形 | 规则 |
 |---|---|
 | Role 含 tableSelectors | 有效连接集由 capability 派生：`{ sourceKey.connectionId }`。`allow.connections` 为声明校验：声明的连接未出现在派生集 → **编译告警**；capability 出现未声明连接 → **编译失败** |
-| 纯 Meta Role（无 tableSelectors） | `allow.connections` 为事实源；用于 `connection_list` 等 Meta 输出 |
+| Role `source_scope: catalog_bound`（Spec 131） | SourcesGrantedBy = source map ∩ `allow.connections` ∩ `enabled_tables`；要求 v2；禁止非空 tableSelectors；0 source → 编译失败；扩权须 `policy_scope_expanded`；新连接不自动纳入 |
+| 纯 Meta Role（无 tableSelectors / 非 catalog_bound） | `allow.connections` 为事实源；用于 `connection_list` 等 Meta 输出 |
 | 请求携带未授权 `connectionId` | 维持现网 `unknown_or_forbidden_connection:<id>`，**先于** capability 检查 |
 
 ### 5.5 Meta 输出过滤
@@ -299,9 +301,12 @@ PolicyCompilationInput = {
   accessConfigDigest   : sha256(access.yaml 规范化内容)
   sourceMapVersion     : 现有 acl.ts sourceMapVersion（钉住快照）
   toolClassificationVersion : §4.2 分类表版本常量
+  enabledTablesDigest  : sha256(规范化 connections→enabled_tables)（Spec 131）
 }
-policyVersion = sha256(accessConfigDigest || sourceMapVersion || toolClassificationVersion)
+policyVersion = sha256(accessConfigDigest || sourceMapVersion || toolClassificationVersion || enabledTablesDigest)
 ```
+
+`enabledTablesDigest` 参与哈希：`catalog_bound` 下启用表是编译输入的一部分；仅改 `enabled_tables` 也须改变 `policyVersion`。
 
 规则：
 

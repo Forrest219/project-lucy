@@ -78,6 +78,8 @@ type RoleFormState = {
   description: string;
   connections: string[];
   tools: string[];
+  /** Spec 131 — default names selectors; catalog_bound binds enabled catalog. */
+  sourceScope: "names" | "catalog_bound";
   selectors: Array<{
     connection: string;
     schema: string;
@@ -127,6 +129,7 @@ function serializePredicates(predicates: FormRowPredicate[]): RoleRowPolicyPredi
 }
 
 function validateScopedSelectors(form: RoleFormState): string | null {
+  if (form.sourceScope === "catalog_bound") return null;
   for (let i = 0; i < form.selectors.length; i += 1) {
     const row = form.selectors[i]!;
     if (row.rowAccess !== "scoped") continue;
@@ -151,6 +154,7 @@ function validateScopedSelectors(form: RoleFormState): string | null {
 
 type RoleWritePayload = {
   description?: string;
+  permission_model_version: 2;
   allow: RoleAllowConfig;
 };
 
@@ -188,6 +192,7 @@ const EMPTY_FORM: RoleFormState = {
   description: "",
   connections: [],
   tools: [],
+  sourceScope: "names",
   selectors: []
 };
 
@@ -247,6 +252,13 @@ function selectorsToForm(selectors: RoleSelector[] | undefined): RoleFormState["
 function formToAllow(state: RoleFormState): RoleAllowConfig {
   const connections = state.connections.map((item) => item.trim()).filter(Boolean);
   const tools = state.tools.map((item) => item.trim()).filter(Boolean);
+  if (state.sourceScope === "catalog_bound") {
+    return {
+      connections: connections.length > 0 ? connections : undefined,
+      tools: tools.length > 0 ? tools : undefined,
+      source_scope: "catalog_bound"
+    };
+  }
   const tableSelectors: RoleSelector[] = state.selectors
     .filter((row) => row.schema.trim().length > 0)
     .map((row) => {
@@ -280,12 +292,14 @@ function formToAllow(state: RoleFormState): RoleAllowConfig {
 }
 
 function initFormFromDetail(detail: RoleDetailType): RoleFormState {
+  const catalogBound = detail.role.allow.source_scope === "catalog_bound";
   return {
     roleId: detail.id,
     description: detail.role.description ?? "",
     connections: [...(detail.role.allow.connections ?? [])],
     tools: [...(detail.role.allow.tools ?? [])],
-    selectors: selectorsToForm(detail.role.allow.tableSelectors)
+    sourceScope: catalogBound ? "catalog_bound" : "names",
+    selectors: catalogBound ? [] : selectorsToForm(detail.role.allow.tableSelectors)
   };
 }
 
@@ -314,6 +328,7 @@ function isRoleDirty(form: RoleFormState, detail: RoleDetailType | null, mode: "
   if (form.description !== current.description) return true;
   if (!sameStringList(form.connections, current.connections)) return true;
   if (!sameStringList(form.tools, current.tools)) return true;
+  if (form.sourceScope !== current.sourceScope) return true;
   if (form.selectors.length !== current.selectors.length) return true;
   for (let i = 0; i < form.selectors.length; i += 1) {
     const a = form.selectors[i]!;
@@ -544,6 +559,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     const allowConfig = formToAllow(form);
     return {
       description: form.description.trim() || undefined,
+      permission_model_version: 2,
       allow: allowConfig
     };
   }
@@ -828,6 +844,22 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
             <div className="grid gap-2" data-testid="role-connections-field">
               <div className="text-sm font-medium">允许的连接</div>
               <p className="text-xs text-fg-muted">该 Role 可使用哪些数据库连接。</p>
+              {(form.sourceScope === "catalog_bound" || form.roleId === "lucy_admin") && (
+                <div
+                  className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+                  data-testid="role-catalog-bound-warning"
+                >
+                  高权限运维数据面：在已声明连接内绑定启用表目录。这是{" "}
+                  <span className="notranslate" translate="no">
+                    MCP
+                  </span>{" "}
+                  数据面 Role，不是 WebUI 登录账户。新连接须手工加入「允许的连接」；不建议签发无过期长期{" "}
+                  <span className="notranslate" translate="no">
+                    Token
+                  </span>
+                  。
+                </div>
+              )}
               {connectionsFallback ? (
                 <p className="text-xs text-warning-strong" data-testid="role-connections-fallback-hint">
                   连接候选暂不可用，可手动填写连接 ID。
@@ -860,6 +892,43 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 onChange={(connections) => updateForm({ ...form, connections })}
                 placeholder="输入连接 ID 后回车"
               />
+            </div>
+
+            <div className="grid gap-2" data-testid="role-source-scope-field">
+              <div className="text-sm font-medium">表授权方式</div>
+              <div className="flex flex-col gap-2 text-sm" role="radiogroup" aria-label="表授权方式">
+                <label className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="role-source-scope"
+                    checked={form.sourceScope === "names"}
+                    disabled={isReadOnlyTemplate}
+                    onChange={() => updateForm({ ...form, sourceScope: "names" })}
+                  />
+                  <span>
+                    指定表名
+                    <span className="block text-xs text-fg-muted">使用精确表范围（生产敏感数据推荐）。</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="role-source-scope"
+                    checked={form.sourceScope === "catalog_bound"}
+                    disabled={isReadOnlyTemplate}
+                    onChange={() => updateForm({ ...form, sourceScope: "catalog_bound", selectors: [] })}
+                  />
+                  <span>
+                    启用目录绑定
+                    <span className="block text-xs text-fg-muted">
+                      <span className="notranslate" translate="no">
+                        catalog_bound
+                      </span>
+                      ：已声明连接 ∩ 启用表目录；同连接新启用表自动纳入（有扩权审计）。
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
 
             <div className="grid gap-2" data-testid="role-tools-field">
@@ -926,7 +995,20 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 <div>
                   <div className="text-sm font-medium">可访问的表范围</div>
                   <p className="text-xs text-fg-muted">
-                    限定该 Role 可查询的 <span className="notranslate" translate="no">Schema</span> 与表。未添加任何范围时，不能访问数据表。
+                    {form.sourceScope === "catalog_bound" ? (
+                      <>
+                        当前为启用目录绑定：表范围由已声明连接的{" "}
+                        <span className="notranslate" translate="no">
+                          enabled_tables
+                        </span>{" "}
+                        与语义层目录决定，无需在此列举表名。
+                      </>
+                    ) : (
+                      <>
+                        限定该 Role 可查询的 <span className="notranslate" translate="no">Schema</span>{" "}
+                        与表。未添加任何范围时，不能访问数据表。
+                      </>
+                    )}
                   </p>
                 </div>
                 <button
@@ -949,12 +1031,16 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                       ]
                     })
                   }
-                  disabled={isReadOnlyTemplate}
+                  disabled={isReadOnlyTemplate || form.sourceScope === "catalog_bound"}
                 >
                   + 添加表范围
                 </button>
               </div>
-              {form.selectors.length === 0 ? (
+              {form.sourceScope === "catalog_bound" ? (
+                <p className="text-xs text-fg-muted" data-testid="role-catalog-bound-hint">
+                  已禁用指定表名编辑。若需精确名单，请改回「指定表名」。
+                </p>
+              ) : form.selectors.length === 0 ? (
                 <p className="text-xs text-fg-muted">尚未添加表范围。此 Role 不能访问任何数据表。</p>
               ) : (
                 <div className="grid gap-2">

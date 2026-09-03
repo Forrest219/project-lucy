@@ -9,6 +9,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
+import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
 
 type AgentsResponse = {
   agents: Agent[];
@@ -366,6 +367,22 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
               )}
             </label>
             <RoleSummaryCard role={selectedRole} />
+            {isLucyAdminDataPlaneRole(selectedRole) && (
+              <div
+                className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+                data-testid="agent-lucy-admin-role-warning"
+              >
+                高权限运维数据面：所选 Role 在已声明连接内绑定启用表目录。这是{" "}
+                <span className="notranslate" translate="no">
+                  MCP
+                </span>{" "}
+                数据面权限，不是 WebUI 登录账户；签发{" "}
+                <span className="notranslate" translate="no">
+                  Token
+                </span>{" "}
+                时建议设置过期时间。
+              </div>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={onClose}>取消</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={!canSubmit || previewMutation.isPending}>

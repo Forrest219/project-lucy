@@ -171,11 +171,12 @@ describe("GET /api/admin/roles", () => {
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
 
-    expect(res.body.data.roles).toHaveLength(6);
+    expect(res.body.data.roles).toHaveLength(7);
     expect(res.body.data.roles.map((role: { id: string }) => role.id).sort()).toEqual([
       "dev_superstore",
       "guard_test",
       "kx_readonly",
+      "lucy_admin",
       "lucy_r1_exact_readonly",
       "superstore_readonly",
       "wiki_only"
@@ -186,7 +187,17 @@ describe("GET /api/admin/roles", () => {
       sourceCount: 5
     });
     expect(ROLE_TEMPLATES.lucy_r1_exact_readonly.allow?.tools).toEqual(LUCY_R1_EXACT_TOOLS);
-    expect(res.body.data.roles.every((role: { source: string; invalid: boolean }) => role.source === "template" && !role.invalid)).toBe(true);
+    expect(res.body.data.roles.find((role: { id: string }) => role.id === "lucy_admin")).toMatchObject({
+      source: "template",
+      // Empty connections until copied & configured — compile fails closed (Spec 131).
+      invalid: true
+    });
+    expect(ROLE_TEMPLATES.lucy_admin.allow?.source_scope).toBe("catalog_bound");
+    expect(
+      res.body.data.roles
+        .filter((role: { id: string }) => role.id !== "lucy_admin")
+        .every((role: { source: string; invalid: boolean }) => role.source === "template" && !role.invalid)
+    ).toBe(true);
     await app.close();
   });
 
@@ -199,11 +210,14 @@ describe("GET /api/admin/roles", () => {
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
 
-    expect(res.body.data.roles).toHaveLength(6);
+    expect(res.body.data.roles).toHaveLength(7);
     expect(res.body.data.roles.find((role: { id: string }) => role.id === "kx_readonly")).toMatchObject({
       source: "yaml",
       description: "Custom yaml KX role",
       sourceCount: 1
+    });
+    expect(res.body.data.roles.find((role: { id: string }) => role.id === "lucy_admin")).toMatchObject({
+      source: "template"
     });
     await app.close();
   });
@@ -496,7 +510,7 @@ describe("POST /api/admin/roles", () => {
     await app.close();
   });
 
-  it("rejects role id that collides with a built-in template", async () => {
+  it("allows promoting a built-in template id into a formal yaml role", async () => {
     const app = buildServer();
     await app.ready();
     const res = await request(app.server)
@@ -505,11 +519,122 @@ describe("POST /api/admin/roles", () => {
         dryRun: false,
         roleId: "wiki_only",
         role: {
-          allow: { tools: ["wiki_search"] }
+          allow: { tools: ["wiki_search", "wiki_read"] }
         }
       })
-      .expect(409);
-    expect(res.body.error.code).toBe("ROLE_ID_TAKEN");
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("wiki_only:");
+    await app.close();
+  });
+
+  it("creates formal catalog_bound lucy_admin from template id (Spec 131 P1-2)", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_people
+      - dataforai.superstore_returns
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "lucy_admin",
+        role: {
+          description: "Ops data plane",
+          permission_model_version: 2,
+          allow: {
+            connections: ["mysql-aliyun"],
+            source_scope: "catalog_bound",
+            tools: ["lucy_query", "lucy_read_source", "lucy_catalog", "connection_list"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    const list = await request(app.server).get("/api/admin/roles").expect(200);
+    expect(list.body.data.roles.find((role: { id: string }) => role.id === "lucy_admin")).toMatchObject({
+      source: "yaml",
+      source_scope: "catalog_bound"
+    });
+    await app.close();
+  });
+
+  it("accepts catalog_bound without explicit permission_model_version (migrates to v2)", async () => {
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+`,
+      "utf8"
+    );
+    const app = buildServer();
+    await app.ready();
+    const dry = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: true,
+        roleId: "ops_catalog",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            source_scope: "catalog_bound",
+            tools: ["lucy_query", "lucy_read_source"]
+          }
+        }
+      })
+      .expect(200);
+    expect(dry.body.data.migration?.toVersion).toBe(2);
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "ops_catalog",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            source_scope: "catalog_bound",
+            tools: ["lucy_query", "lucy_read_source"]
+          }
+        }
+      })
+      .expect(200);
+    expect(res.body.data.written).toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toMatch(/ops_catalog:[\s\S]*permission_model_version:\s*2/);
+    await app.close();
+  });
+
+  it("rejects AbsoluteDeny tools with 400 INVALID_ROLE", async () => {
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/roles")
+      .send({
+        dryRun: false,
+        roleId: "deny_tools_role",
+        role: {
+          allow: {
+            connections: ["mysql-aliyun"],
+            tools: ["lucy_query", "sl_query"]
+          }
+        }
+      })
+      .expect(400);
+    expect(res.body.error.code).toBe("INVALID_ROLE");
+    expect(String(res.body.error.message)).toMatch(/tool_absolute_deny:sl_query/);
     await app.close();
   });
 
@@ -818,12 +943,16 @@ describe("POST /api/admin/roles/:roleId/copy", () => {
     await app.close();
   });
 
-  it("rejects copy onto an existing role id", async () => {
+  it("rejects copy onto an existing yaml role id", async () => {
     const app = buildServer();
     await app.ready();
+    await request(app.server)
+      .post("/api/admin/roles/wiki_only/copy")
+      .send({ dryRun: false, newRoleId: "wiki_clone" })
+      .expect(200);
     const res = await request(app.server)
       .post("/api/admin/roles/wiki_only/copy")
-      .send({ dryRun: false, newRoleId: "wiki_only" })
+      .send({ dryRun: false, newRoleId: "wiki_clone" })
       .expect(409);
     expect(res.body.error.code).toBe("ROLE_ID_TAKEN");
     await app.close();

@@ -251,7 +251,7 @@ function accessRolePolicy() {
   const sources = loadSourceEntries();
   const topLevelKeys = new Set(["roles", "users", "defaults"]);
   const roleKeys = new Set(["description", "permission_model_version", "allow"]);
-  const roleAllowKeys = new Set(["connections", "tableSelectors", "tools"]);
+  const roleAllowKeys = new Set(["connections", "tableSelectors", "tools", "source_scope"]);
   // row_policy listed so "all"+row_policy can be rejected explicitly; scoped+row_policy
   // remains blocked by the scoped Gate-B gate below until WP-I1.
   const selectorKeys = new Set(["connection", "schema", "names", "prefix", "row_access", "row_policy"]);
@@ -291,13 +291,60 @@ function accessRolePolicy() {
     }
     const tools = Array.isArray(allow.tools) ? allow.tools : [];
     if (tools.includes("*")) add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains *`);
+    // Spec 98 / 131 — AbsoluteDeny + unclassified fail closed (must match webui/server/proxy/acl.ts).
+    const absoluteDenyTools = new Set([
+      "sl_query",
+      "sl_read_source",
+      "sql_execution",
+      "sql_dialect_notes",
+      "memory_ingest",
+      "memory_ingest_status"
+    ]);
+    const classifiedRoleTools = new Set([
+      "lucy_query",
+      "lucy_read_source",
+      "lucy_explain_query",
+      "lucy_freshness",
+      "entity_details",
+      "sl_validate",
+      "dictionary_search",
+      "discover_data",
+      "lucy_catalog",
+      "kx_catalog",
+      "connection_list",
+      "wiki_search",
+      "wiki_read",
+      "lucy_begin_question",
+      "lucy_skill_search",
+      "lucy_skill_read"
+    ]);
     for (const tool of tools) {
       if (denyTools.has(tool)) add(check, "fail", `webui/config/access.yaml: role ${roleId} allows globally denied tool ${tool}`);
+      if (absoluteDenyTools.has(tool)) {
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains AbsoluteDeny tool ${tool}`);
+      } else if (!classifiedRoleTools.has(tool)) {
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains unclassified tool ${tool}`);
+      }
+    }
+    const sourceScope = typeof allow.source_scope === "string" ? allow.source_scope.trim() : undefined;
+    if (sourceScope !== undefined && sourceScope !== "catalog_bound") {
+      add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.source_scope must be catalog_bound when set`);
+    }
+    const catalogBound = sourceScope === "catalog_bound";
+    if (catalogBound && modelVersion !== 2) {
+      add(check, "fail", `webui/config/access.yaml: role ${roleId} catalog_bound requires permission_model_version 2`);
     }
     const selectors = Array.isArray(allow.tableSelectors) ? allow.tableSelectors : [];
     const connections = Array.isArray(allow.connections) ? allow.connections : [];
-    if ((selectors.length > 0 || tools.some((tool) => tableTouching.has(tool))) && connections.length === 0) {
+    if (catalogBound && selectors.length > 0) {
+      add(check, "fail", `webui/config/access.yaml: role ${roleId} catalog_bound forbids tableSelectors`);
+    }
+    if ((catalogBound || selectors.length > 0 || tools.some((tool) => tableTouching.has(tool))) && connections.length === 0) {
       add(check, "fail", `webui/config/access.yaml: role ${roleId} touches tables but has no allow.connections`);
+    }
+    if (catalogBound) {
+      // Source membership is resolved at runtime against enabled_tables; lint only checks shape.
+      continue;
     }
     for (const selector of selectors) {
       checkAllowedKeys(check, selector, selectorKeys, `role ${roleId}.allow.tableSelectors[]`);

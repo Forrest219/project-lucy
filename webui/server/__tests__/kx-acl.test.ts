@@ -675,13 +675,19 @@ describe("KX financial domain ACL guardrails", () => {
       .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:missing_role" });
 
     await expect(check(identity("missing_connections_role_agent"), "lucy_query", {}))
-      .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:invalid_kx_missing_connections" });
+      .resolves.toEqual({
+        allowed: false,
+        reason: "role_resolution_failed:invalid_kx_missing_connections:tool_absolute_deny:sl_query"
+      });
 
     await expect(check(identity("wildcard_role_agent"), "lucy_query", {}))
       .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:invalid_wildcard_tools" });
 
     await expect(check(identity("empty_selector_role_agent"), "lucy_query", {}))
-      .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:empty_selector" });
+      .resolves.toEqual({
+        allowed: false,
+        reason: "role_resolution_failed:empty_selector:tool_absolute_deny:sl_query"
+      });
   });
 
   it("extracts unauthorized table references from filters, where, and joins", async () => {
@@ -937,5 +943,234 @@ describe("KX financial domain ACL guardrails", () => {
 
     await expect(check(identity("wildcard_agent"), "future_table_export", {}))
       .resolves.toEqual({ allowed: false, reason: "tool_unclassified:future_table_export" });
+  });
+});
+
+describe("catalog_bound lucy_admin scope (Spec 131)", () => {
+  async function seedCatalogBoundAccess(options: {
+    connections: string[];
+    withSelectors?: boolean;
+    tools?: string[];
+  }) {
+    const tools = (options.tools ?? [
+      "lucy_catalog",
+      "lucy_query",
+      "lucy_read_source",
+      "connection_list"
+    ]).map((tool) => `        - ${tool}`).join("\n");
+    const selectors = options.withSelectors
+      ? `      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+          row_access: all
+`
+      : "";
+    const yaml = `roles:
+  lucy_admin:
+    description: ops data plane
+    permission_model_version: 2
+    allow:
+      connections:
+${options.connections.map((id) => `        - ${id}`).join("\n")}
+      source_scope: catalog_bound
+${selectors}      tools:
+${tools}
+users:
+  - id: ops_agent
+    name: Ops
+    enabled: true
+    role: lucy_admin
+    tokens: []
+defaults:
+  deny_tools:
+    - sql_execution
+    - sl_query
+    - sl_read_source
+  known_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_catalog
+    - connection_list
+    - sql_execution
+    - sl_query
+    - sl_read_source
+  table_touching_tools:
+    - lucy_query
+    - lucy_read_source
+  sensitive_metadata_tools: []
+  sensitive_table_prefixes: []
+`;
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), yaml, "utf8");
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - data_agent_poc.poc_metric_catalog
+`,
+      "utf8"
+    );
+  }
+
+  it("grants all enabled sources on declared connections", async () => {
+    await seedCatalogBoundAccess({ connections: ["mysql-aliyun"] });
+    const { check, resolveEffectivePermissionsForAdmin, resetEffectivePolicyForTests, commitEffectivePolicy } = await loadAcl();
+    resetEffectivePolicyForTests();
+    await commitEffectivePolicy();
+
+    const resolved = await resolveEffectivePermissionsForAdmin("ops_agent");
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.permissions.tables.sort()).toEqual([
+      "dataforai.superstore_orders",
+      "dataforai.superstore_returns"
+    ]);
+
+    await expect(check(identity("ops_agent"), "lucy_read_source", {
+      sourceName: "superstore_orders",
+      connectionId: "mysql-aliyun"
+    })).resolves.toEqual({ allowed: true });
+
+    await expect(check(identity("ops_agent"), "lucy_read_source", {
+      sourceName: "superstore_people",
+      connectionId: "mysql-aliyun"
+    })).resolves.toMatchObject({ allowed: false });
+  });
+
+  it("does not auto-include undeclared connections", async () => {
+    await seedCatalogBoundAccess({ connections: ["mysql-aliyun"] });
+    const { check, resetEffectivePolicyForTests, commitEffectivePolicy } = await loadAcl();
+    resetEffectivePolicyForTests();
+    await commitEffectivePolicy();
+
+    await expect(check(identity("ops_agent"), "lucy_read_source", {
+      sourceName: "poc_metric_catalog",
+      connectionId: "poc-mysql-aliyun"
+    })).resolves.toMatchObject({ allowed: false });
+  });
+
+  it("rejects catalog_bound with tableSelectors", async () => {
+    await seedCatalogBoundAccess({ connections: ["mysql-aliyun"], withSelectors: true });
+    const { check, resetEffectivePolicyForTests, commitEffectivePolicy } = await loadAcl();
+    resetEffectivePolicyForTests();
+    await commitEffectivePolicy();
+
+    await expect(check(identity("ops_agent"), "lucy_query", {}))
+      .resolves.toEqual({
+        allowed: false,
+        reason: "role_resolution_failed:lucy_admin:catalog_bound_selectors_forbidden"
+      });
+  });
+
+  it("rejects wildcard tools on catalog_bound roles", async () => {
+    await seedCatalogBoundAccess({ connections: ["mysql-aliyun"], tools: ['"*"'] });
+    const { check, resetEffectivePolicyForTests, commitEffectivePolicy } = await loadAcl();
+    resetEffectivePolicyForTests();
+    await commitEffectivePolicy();
+
+    await expect(check(identity("ops_agent"), "lucy_query", {}))
+      .resolves.toEqual({ allowed: false, reason: "role_resolution_failed:lucy_admin" });
+  });
+
+  it("emits policy_scope_expanded when enabled tables grow", async () => {
+    await seedCatalogBoundAccess({ connections: ["mysql-aliyun"] });
+    const acl = await loadAcl();
+    const audit = await import("../admin/audit.js");
+    const recordSpy = vi.spyOn(audit, "recordConfigChange").mockResolvedValue(1);
+    acl.resetEffectivePolicyForTests();
+    await acl.commitEffectivePolicy();
+    recordSpy.mockClear();
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+      - dataforai.superstore_people
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - data_agent_poc.poc_metric_catalog
+`,
+      "utf8"
+    );
+    await acl.commitEffectivePolicy();
+    expect(warn.mock.calls.some((args) => String(args[0]).includes("policy_scope_expanded"))).toBe(true);
+    expect(recordSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeType: "policy_scope_expanded",
+        targetId: "lucy_admin"
+      })
+    );
+    warn.mockRestore();
+    recordSpy.mockRestore();
+
+    await expect(acl.check(identity("ops_agent"), "lucy_read_source", {
+      sourceName: "superstore_people",
+      connectionId: "mysql-aliyun"
+    })).resolves.toEqual({ allowed: true });
+  });
+
+  it("detects policy_scope_expanded on same-count source key replacement", async () => {
+    await seedCatalogBoundAccess({ connections: ["mysql-aliyun"] });
+    const acl = await loadAcl();
+    const audit = await import("../admin/audit.js");
+    const recordSpy = vi.spyOn(audit, "recordConfigChange").mockResolvedValue(1);
+    acl.resetEffectivePolicyForTests();
+    await acl.commitEffectivePolicy();
+    recordSpy.mockClear();
+
+    // Replace returns with people — same count (2), different key set.
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_people
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - data_agent_poc.poc_metric_catalog
+`,
+      "utf8"
+    );
+    await acl.commitEffectivePolicy();
+    expect(recordSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changeType: "policy_scope_expanded",
+        targetId: "lucy_admin"
+      })
+    );
+    recordSpy.mockRestore();
+  });
+
+  it("rejects AbsoluteDeny tools at compile time", async () => {
+    await seedCatalogBoundAccess({
+      connections: ["mysql-aliyun"],
+      tools: ["lucy_query", "sl_query"]
+    });
+    const { check, resetEffectivePolicyForTests, commitEffectivePolicy } = await loadAcl();
+    resetEffectivePolicyForTests();
+    await commitEffectivePolicy();
+
+    await expect(check(identity("ops_agent"), "lucy_query", {}))
+      .resolves.toMatchObject({
+        allowed: false,
+        reason: expect.stringMatching(/^role_resolution_failed:lucy_admin:/)
+      });
   });
 });

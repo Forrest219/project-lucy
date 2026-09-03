@@ -255,15 +255,38 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
     expect(acl.getPolicyRuntimeStatus().policyVersion).toBe(beforeStatus.policyVersion);
   });
 
-  it("policyVersion formula binds access digest, source map, and tool classification", async () => {
+  it("policyVersion formula binds access digest, source map, tool classification, and enabled_tables", async () => {
     const acl = await loadAcl();
     const status = await acl.commitEffectivePolicy();
     const expected = acl.computePolicyVersion(
       status.accessConfigDigest,
       status.sourceMapVersion,
-      acl.TOOL_CLASSIFICATION_VERSION
+      acl.TOOL_CLASSIFICATION_VERSION,
+      status.enabledTablesDigest
     );
     expect(status.policyVersion).toBe(expected);
+    expect(status.enabledTablesDigest).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("policyVersion changes when only enabled_tables change", async () => {
+    const acl = await loadAcl();
+    const first = await acl.commitEffectivePolicy();
+    const ktxPath = path.join(projectRoot, "ktx.yaml");
+    await writeFile(
+      ktxPath,
+      `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+`,
+      "utf8"
+    );
+    const second = await acl.commitEffectivePolicy();
+    expect(second.accessConfigDigest).toBe(first.accessConfigDigest);
+    expect(second.sourceMapVersion).toBe(first.sourceMapVersion);
+    expect(second.enabledTablesDigest).not.toBe(first.enabledTablesDigest);
+    expect(second.policyVersion).not.toBe(first.policyVersion);
   });
 
   it("hot Meta paths use committed EffectivePolicy (external YAML widen not visible until commit)", async () => {

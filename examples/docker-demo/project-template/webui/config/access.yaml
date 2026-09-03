@@ -20,6 +20,28 @@ roles:
         - wiki_read
         - connection_list
 
+  lucy_admin:
+    description: 平台运维数据面（非 WebUI 登录账户）
+    permission_model_version: 2
+    allow:
+      connections:
+        - demo-mysql
+      source_scope: catalog_bound
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+        - kx_catalog
+        - connection_list
+        - wiki_search
+        - wiki_read
+        - entity_details
+        - dictionary_search
+        - discover_data
+
 users:
   - id: demo_agent
     name: Demo Agent

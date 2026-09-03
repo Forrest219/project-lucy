@@ -122,6 +122,11 @@
 | [128-enterprise-kpi-contract-spec.md](128-enterprise-kpi-contract-spec.md) | Enterprise KPI 合规契约：四状态规则（ok/no_data/unavailable/partial）、D1–D4 锁定口径、HR-1–HR-7 硬规则、MetricCard 渲染规范；Gate A（状态规范化）与 Gate B（公式修正）实施指南 | 产品 / 前端 / Backend / API |
 | [135-admin-usage-and-audit-uiux-refinement-spec.md](135-admin-usage-and-audit-uiux-refinement-spec.md) | 使用概况与访问日志 UI/UX 重构：看板指标分层与复合卡片、排行榜弹性高与 Tooltip、抽屉排版坍塌根治与触达表内聚、主表高密降噪与状态语义解耦、快捷时间预设与单行弹性筛选栏 | 产品 / UX / Frontend |
 | [136-publish-workbench-uiux-refinement-spec.md](136-publish-workbench-uiux-refinement-spec.md) | 发布工作台 UI/UX 重构：Pipeline Stepper 流水线状态机、异常驱动静默校验展示与 Calm UI、左侧变更资产树 (+N/-M 统计) 与右侧双视图联动、全局 Toast 防抖去重 | 产品 / UX / Frontend |
+| [137-access-log-audit-evidence-hardening-spec.md](137-access-log-audit-evidence-hardening-spec.md) | 访问日志隐私、策略证据、Session 归因、可审计历史清理与有界审计证据包（Implemented v1.1） | 产品 / API / Audit / 安全 / Backend / Frontend |
+| [138-lucy-query-execution-and-turn-correlation-reliability-spec.md](138-lucy-query-execution-and-turn-correlation-reliability-spec.md) | `lucy_query` 参数规范化、排序正确性、Session/Turn 隔离与归因可信度（Implemented，待部署） | 产品 / API / Runtime / Audit / Backend |
+| [139-enterprise-data-agent-answerability-and-delivery-standard.md](139-enterprise-data-agent-answerability-and-delivery-standard.md) | 企业级 Data Agent 可回答性门禁、失败预算、情景标注与最终交付合同（Implemented，待生产 UAT） | 产品 / Agent / Eval / Runtime |
+| [140-admin-audit-dual-csv-export-spec.md](140-admin-audit-dual-csv-export-spec.md) | `/admin/audit` 双粒度 CSV 导出：问询记录一问一行、调用流水一调用一行，并在页面与 Help 说明两者关联 | 产品 / UX / API / Audit / Frontend / Backend |
+| [141-admin-audit-csv-readability-metadata-spec.md](141-admin-audit-csv-readability-metadata-spec.md) | `/admin/audit` CSV 可读性增强：本地时间 + UTC 双轨、秒级流水号文件名、字段说明元数据 | 产品 / UX / API / Audit / Frontend / Backend |
 
 ## 与原 README 的关键校正
 

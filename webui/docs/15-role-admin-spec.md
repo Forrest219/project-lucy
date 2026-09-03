@@ -75,12 +75,15 @@ roles:
 
 - `description`：管理员可读说明。
 - `permission_model_version`：**AC-P0 必填口径**见 §0.2 / Spec 98 §7。
-- `allow.connections`：该 role 可访问的 connection id。只要 role 有 table selector 或数据访问工具，必须非空。
+- `allow.connections`：该 role 可访问的 connection id。只要 role 有 table selector、`source_scope: catalog_bound`、或数据访问工具，必须非空。
+- `allow.source_scope`（Spec 131）：缺省 = 使用 `tableSelectors`。唯一合法显式值 `catalog_bound`：在已声明 connections 内授权 `source map ∩ enabled_tables`；要求 `permission_model_version: 2`；禁止并存非空 `tableSelectors`；不得实现为 `tables: ["*"]`。
 - `allow.tableSelectors`：授权 source 选择器。
-  - `names`：精确列出 source name，生产敏感数据推荐；**v2 唯一合法选择器形态**。
+  - `names`：精确列出 source name，生产敏感数据推荐；**v2 在未使用 `catalog_bound` 时的唯一合法选择器形态**。
   - `prefix`：前缀匹配 source name；**仅 v1 legacy 允许**。v2 禁止；Admin 迁移时必须展开为 `names`（§0.2）。开放式授权风险见既有 §5.1.3 叙述，AC-P0 起 v2 用禁用来闭合静默扩权。
   - `row_access`：v2 必填；`all` 或（AC-P1 Gate B 后）`scoped`+`row_policy`；Gate B 前 `scoped` 仍拒绝。
 - `allow.tools`：允许暴露给 Agent 的 MCP 工具，必须显式列名，不能是 `["*"]`；不得包含 AbsoluteDeny / 未分类工具（Spec 98 §4）。
+
+预置参考模板 **`lucy_admin`**（Spec 131）：运维数据面 + `catalog_bound`；与 WebUI 登录账户正交；创建/绑定时须展示高权限警示。允许以模板同名 id 提升为正式 yaml Role（仅禁止与已存在 yaml Role 撞名）。**P1 修复（2026-09）：** 写盘 `enabled_tables` 后须 `commitEffectivePolicy`；`policyVersion` 含 `enabledTablesDigest`；AbsoluteDeny / 未分类工具保存失败；扩权按 source key 集合差审计。
 
 ### 4.2 Template Role
 

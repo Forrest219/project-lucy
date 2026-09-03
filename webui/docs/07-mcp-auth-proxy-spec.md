@@ -70,9 +70,9 @@ Workhorse                --Bearer <token>-->      ├─ Lucy MCP Proxy (:7879) 
 POST /mcp (client)
   → 读 Authorization header → 401 if 缺失
   → sha256(token) 查内存 tokenIndex → 401 if 未识别 / 已撤销
-  → 读 mcp-session-id header，首次创建 session 缓存（用于记录 clientInfo）
+  → 读请求 mcp-session-id header；initialize 时暂存 params.clientInfo
   → 缓冲读取请求 body（单个 JSON-RPC 对象）
-  → if method == "initialize": 缓存 params.clientInfo 到 session
+  → if method == "initialize": 从上游响应 mcp-session-id 取得权威 Session ID，再绑定暂存的 clientInfo
   → if method == "tools/list":
       按 effective permissions 改写下行工具列表；必要时注入 kx_catalog
   → if method == "tools/call":
@@ -88,6 +88,7 @@ POST /mcp (client)
 ### 4.3 MCP Session 透传
 
 - `mcp-session-id` header **双向透传**，代理不生成新 session ID
+- initialize 首次请求通常没有 Session ID；Proxy 必须在上游响应到达后，用响应 `mcp-session-id` 绑定请求 `clientInfo`，并把该 Session ID 写入 initialize 审计行。后续请求再按请求 header 恢复 `client` / `client_version`。
 - 一个 client session → 一个 upstream session（不复用连接）
 - 请求 body 可缓冲（每次工具调用是单个 JSON 对象，通常 < 10KB）
 - 默认非改写路径中，**非** `tools/call` 仍原样 pipe，避免破坏真正的流式 SSE/chunked 语义
@@ -273,6 +274,8 @@ KX role 示例中的工具归属（AC-P0）：
 | `{ connection, schema, prefix }` | 指定 connection/schema 下，source/table 名以 prefix 开头 | **仅 `permission_model_version: 1`（legacy）**；**v2 禁用**（编译失败） |
 | `{ schema, prefix }` | 任一授权 connection 下，schema 内 prefix 匹配 | 同上，仅 v1 |
 
+**`source_scope: catalog_bound`（Spec 131 / ADR-AC-07）：** 与上表选择器互斥。在已声明 `allow.connections` 内授权 `source map ∩ enabled_tables`；**不是** legacy `tables: ["*"]`，**不是** v2 `prefix`。同连接启用表集合扩大须 `policy_scope_expanded`；新连接必须写入 `allow.connections`。预置运维数据面 Role id：`lucy_admin`（非 WebUI 登录账户）。
+
 规则：
 
 - 多个 selector 之间是 union（同 Role 重叠 source 的 rowGrant digest 规则 → Spec 98 §5.6）。
@@ -388,6 +391,8 @@ CREATE TABLE permission_snapshots (
 1. 计算 Effective Policy（含 `policyVersion`、capability digest）与 snapshot hash。
 2. `INSERT OR IGNORE permission_snapshots(hash, ...)`。
 3. 写 `access_log.permission_snapshot_hash` 与 `access_log.policy_version`。
+
+**`auditMeta` 强制契约（Spec 137）**：Proxy 写访问日志时必须经 `auditMeta()` 转发 `policyVersion`；snapshot 成功时一并转发 `capabilityDigest`（及 snapshot 内 `toolClassificationVersion`）。`permissionSnapshot()` 失败时仍须写入 runtime `getPolicyRuntimeStatus().policyVersion`（可为空字符串，表示策略未编译/降级），不得静默省略列。禁止仅靠测试手填 `writeLog({ policyVersion })` 冒充本路径已接通。
 
 审计日志必须足以解释「当时为什么允许或拒绝」。当 role 或 selector 未来变化时，仍应通过 `permission_snapshots.resolved_json` 复盘。
 

@@ -1,4 +1,5 @@
 import type { YamlRole } from "./agents.js";
+import { DATA_PLANE_TOOLS, META_TOOLS } from "../proxy/acl.js";
 
 export interface RoleTemplate extends YamlRole {
   id: string;
@@ -41,7 +42,21 @@ const KX_NAMES = [
   "kx_vw_income_statement_detail"
 ];
 
+/** Spec 131 — lucy_admin tools = DataPlane ∪ Meta (AbsoluteDeny never included). */
+export const LUCY_ADMIN_TOOLS = [...DATA_PLANE_TOOLS, ...META_TOOLS];
+
 export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
+  lucy_admin: {
+    id: "lucy_admin",
+    description:
+      "平台运维数据面（非 WebUI 登录账户）：在已声明连接内绑定启用表目录（catalog_bound）。新连接须手工纳入 allow.connections。",
+    permission_model_version: 2,
+    allow: {
+      connections: [],
+      source_scope: "catalog_bound",
+      tools: LUCY_ADMIN_TOOLS
+    }
+  },
   lucy_r1_exact_readonly: {
     id: "lucy_r1_exact_readonly",
     description:
