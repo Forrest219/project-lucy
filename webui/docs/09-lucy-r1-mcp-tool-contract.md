@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy R1 MCP Tool Contract |
 | 文档类型 | Runtime Contract |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-07-02 |
+| 版本 | v0.2 |
+| 撰写日期 | 2026-07-02；v0.2 修订 2026-09-03（查询 canonicalization、Session/Turn 归因与企业回答交付门禁） |
 | 适用范围 | Lucy MCP Proxy R1 tool surface、Agent 接入、contract eval、审计与发布门禁 |
 
 ## 1. 设计原则
@@ -21,6 +21,13 @@ R1 发布 token 的 `tools/list` 必须是 exact tool surface：只暴露 6 个 
 - instructions 只做行为引导，不作为授权边界。
 - 不可见 connection/source/table/view 不得出现在 catalog、instructions 或 error detail 中。
 - 直接 raw SQL 工具默认不暴露；即使内部存在，也必须被 `defaults.deny_tools` 和 ACL 拦截。
+
+## Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms: None. Turn Attribution 与 Answerability Gate 分别引用 Spec 138 §3 和 Spec 139 §3，
+本契约不新增另一套用户可见名称。
 
 ## 2. 工具面
 
@@ -116,6 +123,8 @@ Policy / Guardrail 拒绝以 MCP tool result 的 `isError: true` 返回，并写
 | `tool_forbidden_global` | 全局 deny tool |
 | `agent_disabled` | Agent 被禁用 |
 | `invalid_arguments:<tool>:<field>` | Lucy 工具参数结构不满足 R1 契约，Proxy 层 fail-closed，且不得转发到上游 |
+| `invalid_arguments:lucy_query:filters_serialized_json_invalid` | JSON 字符串化 filter 无法严格解析；不请求上游 |
+| `invalid_arguments:lucy_query:order_by_conflict` | `order_by` 与兼容别名 `orderBy` 不一致；不静默选边 |
 | `raw_query_forbidden` | 参数包含 `query` / `sql` raw string |
 | `table_forbidden:<table>` | 命中未授权表 |
 | `unknown_or_forbidden_connection:<connection>` | 连接不可见或未授权 |
@@ -190,8 +199,10 @@ Guardrail：
 - Proxy 先校验参数结构；缺少 `connectionId`、查询 shape 为空或类型错误时返回 `invalid_arguments:*`，不得转发到 Doris/目标源。
 - `query` / `sql` raw string 一律拒绝。
 - `filters` 对外支持 string filter 和 `{field, op, value/values}` 结构化 filter；Proxy 转发上游 `sl_query` 前会规范化为 KTX 接受的 string filters。
+  - 兼容少数客户端把整个 filter 对象/数组序列化成 JSON string；Proxy 在 ACL/审计/上游之前严格恢复。看似 JSON 但解析失败时 fail closed。
   - `op` 使用白名单归一化：`eq`/`equals`/`is` → `=`，`neq`/`not_equals`/`is_not` → `!=`，`gt`/`gte`/`lt`/`lte` → `>`/`>=`/`<`/`<=`，`include`/`includes`/`match`/`matches` → `contains`，`startswith`/`prefix` → `starts_with`，`endswith`/`suffix` → `ends_with`。
   - 未知或模糊 `op` 继续 fail closed，返回 `invalid_arguments:*:filters_op_unsupported`。
+- canonical 排序字段为 `order_by`；`orderBy` 仅为兼容别名。两者等价时去重，不等价时返回 `order_by_conflict`。
 - `limit` 默认 `LUCY_QUERY_DEFAULT_LIMIT`，上限 `LUCY_QUERY_MAX_LIMIT`。
 - 并发默认每 token 最多 `LUCY_QUERY_MAX_INFLIGHT=4` 个 in-flight `lucy_query`，超限返回 `query_concurrency_exceeded` 并写 denied audit。
 - DDL/DML 不得通过 Lucy 暴露。
@@ -205,6 +216,7 @@ Guardrail：
 输出：
 
 - `allowed`: 仅表示当前 explain call 已通过 ACL；不代表未来执行一定成功。
+- `executionMode: "plan_only"` 与 `executed: false`：机器可读的非执行声明，缺失时 contract smoke fail closed。
 - `requestedSources`: source resolver 命中的 source refs。
 - `guardrails`: raw SQL、write operation、limit、truncation 策略。
 - `policy`: role ids、connections、source map version、permission snapshot hash。
@@ -246,10 +258,30 @@ Guardrail：
 
 - 写入 `conversation_turns`。
 - 返回 `turnId`。
-- 后续同 identity 的 tool call 会在 attach window 内自动关联该 turn。
+- 后续同 Session 的 tool call 会在 attach window 内自动关联该 Turn；无 Session 时只有 identity 唯一候选可做低置信推断。
+- 显式 `x-lucy-turn-id` 必须能验证属于当前 identity/session；未知或外来值不写入当前调用。
 - `question` 做 PII/sensitive redaction 后才可存 preview。
 - 缺少 `intentSummary` 返回 `isError: true`。
 - **Recommended when available / never blocking**：工具可选但推荐；有用户原话时优先填 `question`。漏调或写库失败不得阻断后续 catalog / query 等业务工具。
+
+## 核心流程（伪代码）
+
+```text
+ON lucy_query(args):
+  canonical = Spec138.canonicalize(args)
+  IF canonical fails: audit stable reason; return isError; do not call upstream
+  ACL check canonical args
+  rewrite order_by and filters for sl_query
+  execute once; capture actual generatedSql and result metadata
+
+ON enterprise multi-part answer:
+  apply Spec139 Answerability Gate before numeric claims
+  enforce retry/call/time budgets
+  always deliver complete or partial final response with per-item status and provenance
+```
+
+查询参数与 Turn 归因的权威算法见 Spec 138；预算、hybrid、实现单价和 partial delivery 的
+权威行为见 Spec 139。本契约只定义 MCP 边界，不重复发明业务公式。
 
 ## 6. Contract Eval 要点
 

@@ -68,6 +68,7 @@ const REQUIRED_CHECKS = [
   "beginQuestion",
   "rawSqlRejected",
   "runtimeArgumentValidation",
+  "queryArgumentNormalization",
   "limitCapped",
   "readSourceMetadata",
   "lucyMetadata"
@@ -306,6 +307,25 @@ function resultContains(body, phrase) {
   return resultText(body).includes(phrase);
 }
 
+function findFieldValue(value, field) {
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text.startsWith("{") && !text.startsWith("[")) return undefined;
+    try {
+      return findFieldValue(JSON.parse(text), field);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!value || typeof value !== "object") return undefined;
+  if (Object.hasOwn(value, field)) return value[field];
+  for (const nested of Object.values(value)) {
+    const found = findFieldValue(nested, field);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 function findNumericField(value, field) {
   if (typeof value === "string") {
     const text = value.trim();
@@ -519,8 +539,16 @@ async function main() {
       arguments: safeQueryArgs()
     });
     const maxConcurrentQueries = findNumericField(explain.body, "maxConcurrentQueries");
-    mark("explainQuery", explain.ok && !explain.body?.error && resultContains(explain.body, "guardrails"), {
+    const explainExecutionMode = findFieldValue(explain.body, "executionMode");
+    const explainExecuted = findFieldValue(explain.body, "executed");
+    mark("explainQuery", explain.ok
+      && !explain.body?.error
+      && resultContains(explain.body, "guardrails")
+      && explainExecutionMode === "plan_only"
+      && explainExecuted === false, {
       httpStatus: explain.status,
+      executionMode: explainExecutionMode,
+      executed: explainExecuted,
       response: tail(explain.body)
     });
     const concurrency = await concurrencyProbe(init.sessionId, maxConcurrentQueries);
@@ -610,6 +638,33 @@ async function main() {
       ...queryProvenance,
       response: tail(query.body)
     });
+
+    const canonicalOrder = [{ field: dimension ?? measure, direction: "desc" }];
+    const normalizationProbe = await rpc(init.sessionId, "tools/call", {
+      name: "lucy_query",
+      arguments: {
+        ...safeQueryArgs(),
+        filters: "[]",
+        orderBy: canonicalOrder
+      }
+    });
+    const normalizationMeta = findLucyMeta(normalizationProbe.body);
+    const normalizationProvenance = normalizationMeta?.provenance;
+    const normalizedFilters = normalizationProvenance?.filters;
+    const normalizedOrder = normalizationProvenance?.orderBy;
+    mark(
+      "queryArgumentNormalization",
+      normalizationProbe.ok
+        && !normalizationProbe.body?.error
+        && Array.isArray(normalizedFilters)
+        && JSON.stringify(normalizedOrder) === JSON.stringify(canonicalOrder),
+      {
+        httpStatus: normalizationProbe.status,
+        serializedFiltersRestored: Array.isArray(normalizedFilters),
+        orderAliasCanonicalized: JSON.stringify(normalizedOrder) === JSON.stringify(canonicalOrder),
+        response: tail(normalizationProbe.body)
+      }
+    );
 
     const readSource = await rpc(init.sessionId, "tools/call", {
       name: "lucy_read_source",

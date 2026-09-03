@@ -54,6 +54,8 @@
 - `measures` 使用 source-qualified 字符串，例如 `source.measure`。
 - `dimensions` / `order_by` 使用对象数组，例如 `[{ "field": "source.field" }]`，不要传字符串数组。
 - `filters` 可以使用字符串数组，也可以使用结构化对象数组，例如 `{ "field": "source.field", "op": "contains", "value": "<公司简称或关键词>" }`；Lucy Proxy 会把结构化对象转换为上游语义层可执行的 filter string。
+- 少数客户端可能把整个 `filters` 数组序列化成 JSON 字符串；Proxy 会严格恢复。不要主动生成这种形态；JSON 损坏会 fail closed。
+- `orderBy` 是兼容别名，Proxy 会统一为 `order_by`；同一请求不要同时传两套不同排序，冲突会 fail closed。
 - 字段、measure、segment、order field 尽量都使用 source-qualified 名称；公司名称等实体名不完全确定时，优先用 `contains`/`LIKE` 类过滤再核对返回行。
 
 ## 输出要求

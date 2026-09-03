@@ -1420,6 +1420,8 @@ describe("MCP proxy smoke", () => {
       const explainBody = await explainRes.json() as { result: { content: Array<{ text: string }> } };
       const explain = JSON.parse(explainBody.result.content[0]?.text ?? "{}");
       expect(explain.allowed).toBe(true);
+      expect(explain.executionMode).toBe("plan_only");
+      expect(explain.executed).toBe(false);
       expect(explain.upstreamTool).toBe("sl_query");
       expect(explain.guardrails.effectiveLimit).toBe(1000);
       expect(explain.requestedSources[0].sourceName).toBe("superstore_orders");

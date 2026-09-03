@@ -1100,6 +1100,8 @@ async function lucyExplainQuery(identity: Identity, args: unknown): Promise<Reco
     : undefined;
   return {
     allowed: true,
+    executionMode: "plan_only",
+    executed: false,
     upstreamTool: "sl_query",
     requestedSources: sourceRefs,
     guardrails: {
@@ -1283,6 +1285,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
       "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
       "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
+      "- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.",
       "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.",
       `- Visible Scope below is captured at MCP initialize; call ${catalogTool} before routing if sources may have changed since this session started.`,
       ...skillSection,

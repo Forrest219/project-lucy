@@ -15,6 +15,7 @@ function startProxyStub({
   omitTool = undefined,
   omitRequiredForTool = undefined,
   omitConcurrencyGuardrail = false,
+  omitExplainExecutionContract = false,
   exposeLegacySemanticTools = false,
   extraTools = [],
   rawSqlReason = "raw_query_forbidden",
@@ -105,6 +106,7 @@ function startProxyStub({
               type: "text",
               text: JSON.stringify({
                 allowed: true,
+                ...(!omitExplainExecutionContract ? { executionMode: "plan_only", executed: false } : {}),
                 guardrails: {
                   rawSqlAllowed: false,
                   ...(omitConcurrencyGuardrail ? {} : { maxConcurrentQueries })
@@ -162,6 +164,14 @@ function startProxyStub({
           activeQueries -= 1;
         }
         const requestedLimit = body.params?.arguments?.limit;
+        const canonicalArgs = { ...(body.params?.arguments ?? {}) };
+        if (typeof canonicalArgs.filters === "string" && /^[\s]*[\[{]/.test(canonicalArgs.filters)) {
+          canonicalArgs.filters = JSON.parse(canonicalArgs.filters);
+        }
+        if (canonicalArgs.order_by === undefined && canonicalArgs.orderBy !== undefined) {
+          canonicalArgs.order_by = canonicalArgs.orderBy;
+        }
+        delete canonicalArgs.orderBy;
         res.end(JSON.stringify({
           jsonrpc: "2.0",
           id: body.id,
@@ -182,13 +192,13 @@ function startProxyStub({
                   },
                   ...(omitProvenance ? {} : {
                     provenance: {
-                      connectionId: body.params?.arguments?.connectionId ?? null,
+                      connectionId: canonicalArgs.connectionId ?? null,
                       sourceName: "ceo_metric_snapshot",
-                      measures: body.params?.arguments?.measures ?? null,
-                      dimensions: body.params?.arguments?.dimensions ?? null,
-                      filters: body.params?.arguments?.filters ?? null,
-                      segments: body.params?.arguments?.segments ?? null,
-                      orderBy: body.params?.arguments?.orderBy ?? body.params?.arguments?.order_by ?? null,
+                      measures: canonicalArgs.measures ?? null,
+                      dimensions: canonicalArgs.dimensions ?? null,
+                      filters: canonicalArgs.filters ?? null,
+                      segments: canonicalArgs.segments ?? null,
+                      orderBy: canonicalArgs.order_by ?? null,
                       freshness: { status: "not_checked", tool: "lucy_freshness" },
                       truncation: "reported from upstream response"
                     }
@@ -281,6 +291,8 @@ test("MCP contract smoke passes against a contract-compatible proxy", async () =
       assert.deepEqual(evidence.checkDetails.toolSchemas.schemaMissing, []);
       assert.deepEqual(evidence.checkDetails.toolSchemas.invalidSchemas, []);
       assert.deepEqual(evidence.checkDetails.toolSchemas.expectedRequired.lucy_read_source, ["connectionId", "sourceName"]);
+      assert.equal(evidence.checkDetails.explainQuery.executionMode, "plan_only");
+      assert.equal(evidence.checkDetails.explainQuery.executed, false);
       assert.equal(evidence.checkDetails.runtimeArgumentValidation.reason, "invalid_arguments:lucy_query:query_shape_required");
       assert.equal(evidence.checkDetails.lucyMetadata.hasProvenance, true);
       assert.equal(evidence.checkDetails.lucyMetadata.hasConnectionId, true);
@@ -293,6 +305,8 @@ test("MCP contract smoke passes against a contract-compatible proxy", async () =
       assert.equal(evidence.checkDetails.lucyMetadata.hasFreshnessStatus, true);
       assert.equal(evidence.checkDetails.lucyMetadata.hasFreshnessTool, true);
       assert.equal(evidence.checkDetails.lucyMetadata.hasTruncation, true);
+      assert.equal(evidence.checkDetails.queryArgumentNormalization.serializedFiltersRestored, true);
+      assert.equal(evidence.checkDetails.queryArgumentNormalization.orderAliasCanonicalized, true);
       assert.deepEqual(
         evidence.checkDetails.runtimeArgumentValidation.probes.map((probe) => [probe.tool, probe.reason, probe.passed]),
         [
@@ -302,6 +316,35 @@ test("MCP contract smoke passes against a contract-compatible proxy", async () =
           ["lucy_freshness", "invalid_arguments:lucy_freshness:source_required", true]
         ]
       );
+    } finally {
+      await proxy.close();
+    }
+  });
+});
+
+test("MCP contract smoke fails closed when explain omits its non-execution contract", async () => {
+  await withTempDir(async (dir) => {
+    const proxy = await startProxyStub({ omitExplainExecutionContract: true });
+    try {
+      const outFile = path.join(dir, "contract.json");
+      const result = await runNodeAsync([
+        SCRIPT,
+        "--proxy-url", proxy.url,
+        "--token", "test-token",
+        "--connection", "doris-r1",
+        "--source", "ceo_metric_snapshot",
+        "--measure", "ceo_metric_snapshot.revenue",
+        "--dimension", "ceo_metric_snapshot.biz_date",
+        "--forbid-tool", "sql_execution",
+        "--forbid-source", "hidden_source",
+        "--forbid-measure", "hidden_source.revenue",
+        "--out", outFile
+      ]);
+      assert.equal(result.status, 1);
+      const evidence = JSON.parse(await readFile(outFile, "utf8"));
+      assert.equal(evidence.checks.explainQuery, "fail");
+      assert.equal(evidence.checkDetails.explainQuery.executionMode, undefined);
+      assert.equal(evidence.checkDetails.explainQuery.executed, undefined);
     } finally {
       await proxy.close();
     }
