@@ -20,6 +20,7 @@ import {
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
 import { assertLicenseAllowsMcp, loadLicenseSnapshot } from "../license/entitlement.js";
+import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -1028,6 +1029,30 @@ function invalidObjectArrayFieldReason(toolName: string, record: Record<string, 
   return undefined;
 }
 
+function invalidOrderByFieldReason(
+  toolName: string,
+  record: Record<string, unknown>,
+  field: "order_by" | "orderBy"
+): string | undefined {
+  const invalidShape = invalidObjectArrayFieldReason(toolName, record, field, "order_by");
+  if (invalidShape) return invalidShape;
+
+  const value = record[field];
+  if (value === undefined) return undefined;
+  for (const item of value as Array<Record<string, unknown>>) {
+    if (!isSafeSemanticFieldRef(item.field)) {
+      return `invalid_arguments:${toolName}:order_by_field_unsafe`;
+    }
+    if (
+      item.direction !== undefined
+      && (typeof item.direction !== "string" || !["asc", "desc"].includes(item.direction))
+    ) {
+      return `invalid_arguments:${toolName}:order_by_direction_unsupported`;
+    }
+  }
+  return undefined;
+}
+
 function invalidStringArrayFieldReason(toolName: string, record: Record<string, unknown>, field: string): string | undefined {
   const value = record[field];
   if (value === undefined) return undefined;
@@ -1077,31 +1102,13 @@ function invalidMeasuresFieldReason(toolName: string, record: Record<string, unk
   return undefined;
 }
 
-function normalizeMeasureItem(item: unknown): unknown {
-  if (hasNonEmptyStringValue(item)) return item;
-  if (!isPlainRecord(item)) return item;
-  if (hasNonEmptyStringValue(item.expr)) return item;
-  if (hasNonEmptyStringValue(item.$text)) return String(item.$text).trim();
-  if (hasNonEmptyStringValue(item.name)) return String(item.name).trim();
-  return item;
-}
-
-function normalizeLucyQueryArgs(args: unknown): unknown {
-  if (!isPlainRecord(args)) return args;
-  const out: Record<string, unknown> = { ...args };
-  if (Array.isArray(out.measures)) {
-    out.measures = out.measures.map(normalizeMeasureItem);
-  }
-  return out;
-}
-
 function invalidLucyQueryShapeReason(toolName: string, record: Record<string, unknown>): string | undefined {
   return invalidMeasuresFieldReason(toolName, record)
     ?? invalidObjectArrayFieldReason(toolName, record, "dimensions")
     ?? invalidFilterFieldReason(toolName, record)
     ?? invalidStringArrayFieldReason(toolName, record, "segments")
-    ?? invalidObjectArrayFieldReason(toolName, record, "order_by")
-    ?? invalidObjectArrayFieldReason(toolName, record, "orderBy", "order_by");
+    ?? invalidOrderByFieldReason(toolName, record, "order_by")
+    ?? invalidOrderByFieldReason(toolName, record, "orderBy");
 }
 
 function validateLucyToolArgs(toolName: string, args: unknown): string | undefined {
@@ -2018,6 +2025,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   let queryMeta: Partial<Parameters<typeof writeLog>[0]> = {};
   let queryTables: string[] = [];
   let parsedRpc: Record<string, unknown> | undefined;
+  let queryNormalizationReason: string | undefined;
 
   try {
     const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
@@ -2038,9 +2046,17 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (rpcMethod === "tools/call") {
       const params = parsed.params as Record<string, unknown> | undefined;
       toolName = params?.name as string | undefined;
-      toolArgs = (toolName === "lucy_query" || toolName === "lucy_explain_query")
-        ? normalizeLucyQueryArgs(params?.arguments)
-        : params?.arguments;
+      if (toolName === "lucy_query" || toolName === "lucy_explain_query") {
+        const normalized = canonicalizeLucyQueryArgs(params?.arguments, toolName);
+        if (normalized.ok) {
+          toolArgs = normalized.args;
+        } else {
+          toolArgs = params?.arguments;
+          queryNormalizationReason = normalized.reason;
+        }
+      } else {
+        toolArgs = params?.arguments;
+      }
       if (toolArgs !== params?.arguments && params) {
         params.arguments = toolArgs;
       }
@@ -2075,9 +2091,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (matched) requestMeta.lucyTurnId = matched;
   }
 
-  const invalidArgumentsReason = rpcMethod === "tools/call" && toolName
-    ? validateLucyToolArgs(toolName, toolArgs)
-    : undefined;
+  const invalidArgumentsReason = queryNormalizationReason ?? (
+    rpcMethod === "tools/call" && toolName
+      ? validateLucyToolArgs(toolName, toolArgs)
+      : undefined
+  );
   if (invalidArgumentsReason) {
     const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${invalidArgumentsReason}`, { isError: true });
     res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });

@@ -590,7 +590,7 @@ describe("MCP proxy smoke", () => {
   });
 
   it("rewrites lucy_read_source and lucy_query to upstream semantic tools while auditing Lucy tools", async () => {
-    const generatedSql = "SELECT SUM(sales) AS sales FROM dataforai.superstore_orders WHERE region = 'East'";
+    const generatedSql = "SELECT SUM(sales) AS sales FROM dataforai.superstore_orders WHERE region = 'East' ORDER BY sales DESC";
     const upstreamSeen: Array<{ body: Record<string, unknown> }> = [];
     const upstream = createServer(async (req, res) => {
       const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
@@ -658,10 +658,10 @@ describe("MCP proxy smoke", () => {
               connectionId: "mysql-aliyun",
               measures: ["superstore_orders.sales"],
               dimensions: [{ field: "superstore_orders.region" }],
-              filters: [
+              filters: JSON.stringify([
                 { field: "superstore_orders.sales", op: "gt", value: 100 },
                 { field: "superstore_orders.region", op: "matches", value: "East" }
-              ],
+              ]),
               segments: ["superstore_orders.active_rows"],
               orderBy: [{ field: "superstore_orders.sales", direction: "desc" }],
               limit: 5000
@@ -701,6 +701,10 @@ describe("MCP proxy smoke", () => {
         "superstore_orders.sales > 100",
         "superstore_orders.region LIKE '%East%'"
       ]);
+      expect(forwardedQueryArgs.order_by).toEqual([
+        { field: "superstore_orders.sales", direction: "desc" }
+      ]);
+      expect(forwardedQueryArgs.orderBy).toBeUndefined();
 
       const readAudit = await waitForAuditRow("lucy-read-source");
       expect(readAudit.tool).toBe("lucy_read_source");
@@ -711,6 +715,7 @@ describe("MCP proxy smoke", () => {
       expect(JSON.parse(String(queryAudit.tables))).toEqual(["dataforai.superstore_orders"]);
       // Spec 125: hot-store plaintext is compiled SQL from the result, not args literals.
       expect(queryAudit.generated_sql).toBe(generatedSql);
+      expect(String(queryAudit.generated_sql)).toMatch(/ORDER BY\s+sales\s+DESC/i);
       expect(queryAudit.query_hash).toMatch(/^[0-9a-f]{64}$/);
       expect(queryAudit.query_length).toBe(generatedSql.length);
       expect(queryAudit.query_operation).toBe("select");
@@ -1088,6 +1093,12 @@ describe("MCP proxy smoke", () => {
           reason: "invalid_arguments:lucy_query:order_by_items_must_be_objects"
         },
         {
+          id: "lucy-query-missing-order-field",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], orderBy: [{}], limit: 10 },
+          reason: "invalid_arguments:lucy_query:order_by_field_required"
+        },
+        {
           id: "lucy-query-invalid-filter-op",
           tool: "lucy_query",
           args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], filters: [{ field: "superstore_orders.region", op: "similar_to", value: "East" }], limit: 10 },
@@ -1106,6 +1117,52 @@ describe("MCP proxy smoke", () => {
           reason: "invalid_arguments:lucy_query:filters_values_required"
         },
         {
+          id: "lucy-query-invalid-filter-serialized-json",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], filters: '[{"field":"superstore_orders.region"}', limit: 10 },
+          reason: "invalid_arguments:lucy_query:filters_serialized_json_invalid"
+        },
+        {
+          id: "lucy-query-invalid-filter-serialized-shape",
+          tool: "lucy_query",
+          args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], filters: '{"op":"eq","value":"East"}', limit: 10 },
+          reason: "invalid_arguments:lucy_query:filters_field_required"
+        },
+        {
+          id: "lucy-query-unsafe-order-field",
+          tool: "lucy_query",
+          args: {
+            connectionId: "mysql-aliyun",
+            measures: ["superstore_orders.sales"],
+            orderBy: [{ field: "superstore_orders.sales;DROP", direction: "desc" }],
+            limit: 10
+          },
+          reason: "invalid_arguments:lucy_query:order_by_field_unsafe"
+        },
+        {
+          id: "lucy-query-unsupported-order-direction",
+          tool: "lucy_query",
+          args: {
+            connectionId: "mysql-aliyun",
+            measures: ["superstore_orders.sales"],
+            order_by: [{ field: "superstore_orders.sales", direction: "descending" }],
+            limit: 10
+          },
+          reason: "invalid_arguments:lucy_query:order_by_direction_unsupported"
+        },
+        {
+          id: "lucy-query-conflicting-order-aliases",
+          tool: "lucy_query",
+          args: {
+            connectionId: "mysql-aliyun",
+            measures: ["superstore_orders.sales"],
+            order_by: [{ field: "superstore_orders.sales", direction: "asc" }],
+            orderBy: [{ field: "superstore_orders.sales", direction: "desc" }],
+            limit: 10
+          },
+          reason: "invalid_arguments:lucy_query:order_by_conflict"
+        },
+        {
           id: "lucy-explain-invalid-args",
           tool: "lucy_explain_query",
           args: { connectionId: "mysql-aliyun", limit: 10 },
@@ -1122,6 +1179,28 @@ describe("MCP proxy smoke", () => {
           tool: "lucy_explain_query",
           args: { connectionId: "mysql-aliyun", measures: ["superstore_orders.sales"], order_by: [""], limit: 10 },
           reason: "invalid_arguments:lucy_explain_query:order_by_items_must_be_objects"
+        },
+        {
+          id: "lucy-explain-unsafe-order-field",
+          tool: "lucy_explain_query",
+          args: {
+            connectionId: "mysql-aliyun",
+            measures: ["superstore_orders.sales"],
+            orderBy: [{ field: "superstore_orders.sales;DROP", direction: "desc" }],
+            limit: 10
+          },
+          reason: "invalid_arguments:lucy_explain_query:order_by_field_unsafe"
+        },
+        {
+          id: "lucy-explain-unsupported-order-direction",
+          tool: "lucy_explain_query",
+          args: {
+            connectionId: "mysql-aliyun",
+            measures: ["superstore_orders.sales"],
+            order_by: [{ field: "superstore_orders.sales", direction: "descending" }],
+            limit: 10
+          },
+          reason: "invalid_arguments:lucy_explain_query:order_by_direction_unsupported"
         },
         {
           id: "lucy-read-source-invalid-args",
