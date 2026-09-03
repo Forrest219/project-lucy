@@ -203,6 +203,12 @@ describe("MCP proxy initialize instructions injection", () => {
       expect(body.result.instructions).toContain("mysql-aliyun.dataforai.superstore_orders");
       expect(body.result.instructions).toContain("source-qualified semantic keys");
       expect(body.result.instructions).toContain("Use `{expr,name}` objects only for ad hoc aggregate expressions");
+      expect(body.result.instructions).toContain("answerability dependency matrix");
+      expect(body.result.instructions).toContain("Never substitute forecast");
+      expect(body.result.instructions).toContain("labeled hybrid");
+      expect(body.result.instructions).toContain("realized unit price");
+      expect(body.result.instructions).toContain("at most 12 business tool calls");
+      expect(body.result.instructions).toContain("Partial evidence still requires a final response");
       expect(body.result.instructions).not.toContain("lucy_begin_question");
     } finally {
       await closeAll(upstream, server);

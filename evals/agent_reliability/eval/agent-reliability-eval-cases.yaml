@@ -1,0 +1,290 @@
+metadata:
+  document_name: Lucy Enterprise Data Agent Reliability Eval Cases
+  document_type: Eval
+  version: v1.0
+  runner_schema_version: v1.4
+  written_date: 2026-09-03
+  author: Codex
+  requester: 张星晨
+  based_on:
+    - webui/docs/138-lucy-query-execution-and-turn-correlation-reliability-spec.md
+    - webui/docs/139-enterprise-data-agent-answerability-and-delivery-standard.md
+    - anonymized failure shapes from the 2026-09-03 interaction review
+  scope: 脱敏合成的可回答性、情景标注、失败预算和最终交付回归；包含配对人工 Quiz；不包含客户原始问句或业务明细
+  output_path: evals/agent_reliability/eval/agent-reliability-eval-cases.yaml
+  snapshot_date: 2026-09-03
+  snapshot_batch: synthetic_contract_v1
+  snapshot_rows: 0
+  data_source: semantic_layer
+  paired_quiz:
+    path: evals/agent_reliability/agent_reliability-quiz-cases.html
+    version: v1.1
+
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - ".ktx/secrets/"
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: "UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE"
+      reason: 可靠性 eval 只能读取，不允许 DDL 或 DML。
+    - type: forbidden_ast
+      value: "cross_source_join"
+      reason: 禁止跨数据源 Join；跨源分析必须拆为独立证据后解释。
+
+quiz_cases:
+  - id: Q1
+    stem: "四个子问题中只有两个已有完整证据，最合适的交付方式是什么？"
+    difficulty: 1
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - agent-reliability-partial-delivery-001
+    options:
+      - key: A
+        text: "等待全部问题有答案后再回复"
+      - key: B
+        text: "逐项标状态并交付已验证结论"
+      - key: C
+        text: "把缺失项统一填为零"
+    answer: "B"
+    explanation: "部分可回答时仍应交付，并用 ok、unavailable 或 partial 标明每个子问题。"
+
+  - id: Q2
+    stem: "没有独立预算指标或公式时，能否用预测值代替预算计算差异？"
+    difficulty: 1.5
+    question_type: boolean
+    display_type: conceptual
+    eval_refs:
+      - agent-reliability-budget-unavailable-001
+    options:
+      - key: A
+        text: "可以，预测和预算含义相近"
+      - key: B
+        text: "不可以，预算差异应标为不可计算"
+    answer: "B"
+    explanation: "预算必须有独立的 measure、source 或已发布公式，forecast 不能替代 budget。"
+
+  - id: Q3
+    stem: "收入除以业务量得到的数值应如何命名？"
+    difficulty: 2
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - agent-reliability-realized-price-001
+    options:
+      - key: A
+        text: "纯价格效应"
+      - key: B
+        text: "实现单价，包含结构影响"
+      - key: C
+        text: "预算单价"
+    answer: "B"
+    explanation: "没有同质组与权威拆解公式时，该比率只能称为包含 mix 影响的实现单价。"
+
+  - id: Q4
+    stem: "同一查询错误指纹已经出现两次，且只是在 eq、=、in 之间切换，下一步是什么？"
+    difficulty: 2
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - agent-reliability-retry-budget-001
+    options:
+      - key: A
+        text: "继续循环尝试直到成功"
+      - key: B
+        text: "停止无增益重试并交付部分结果"
+      - key: C
+        text: "忽略错误并生成估算值"
+    answer: "B"
+    explanation: "同一错误指纹最多一次有信息增益的修正重试，达到预算后必须交付。"
+
+  - id: Q5
+    stem: "上一轮已确认没有预算证据，下一轮用户只追问‘预算差异呢’，应如何处理？"
+    difficulty: 2.5
+    question_type: single
+    display_type: conceptual
+    eval_refs:
+      - agent-reliability-budget-unavailable-001
+    options:
+      - key: A
+        text: "沿用预测值充当预算"
+      - key: B
+        text: "保持 unavailable，说明仍缺预算证据"
+      - key: C
+        text: "默认预算等于上期实际"
+    answer: "B"
+    explanation: "多轮追问不得改变已确认的证据边界，除非获得新的预算来源或公式。"
+
+  - id: Q6
+    stem: "用户问一个简单事实数值，且 Source 已明确，首选执行路径是什么？"
+    difficulty: 1.5
+    question_type: single
+    display_type: conceptual
+    eval_refs: []
+    options:
+      - key: A
+        text: "先调用 explain，再重复读取 Source"
+      - key: B
+        text: "直接调用 lucy_query 并基于结果回答"
+      - key: C
+        text: "只根据 Wiki 内容作答"
+    answer: "B"
+    explanation: "简单事实题应走最短验证路径；lucy_explain_query 只用于权限或 Guardrail 诊断。"
+
+cases:
+  - id: agent-reliability-budget-unavailable-001
+    case_type: single_turn
+    question: 当前可见数据只有实际与预测，没有任何预算 measure、预算 source 或已发布预算公式。请回答“实际、预测与预算差异”，并说明你的处理。
+    domain: agent_reliability
+    skill_version: v1.0
+    semantic_version: synthetic_v1
+    model_id: runtime-default
+    expected_source: semantic_layer
+    expected_measures: []
+    sql_assertions: []
+    tool_assertions:
+      - type: max_total_tool_calls
+        max: 12
+        reason: 复杂分析不得无界调用工具。
+      - type: max_repeated_tool_input
+        tool: lucy_query
+        input_path: filters
+        max_per_value: 1
+        reason: 相同查询输入不得重复碰撞。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - 实际
+            - 预测
+            - 预算差异当前不可计算
+            - unavailable
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-09-03
+    notes: AG-01；预算必须有独立证据，缺失时交付其余部分而不是整轮失答。
+
+  - id: agent-reliability-hybrid-label-001
+    case_type: single_turn
+    question: 已验证结果由一季度、二季度实际与三季度预测组成。请给出年度截至三季度汇总的表达方式和限制。
+    domain: agent_reliability
+    skill_version: v1.0
+    semantic_version: synthetic_v1
+    model_id: runtime-default
+    expected_source: semantic_layer
+    expected_measures: []
+    sql_assertions: []
+    tool_assertions:
+      - type: max_total_tool_calls
+        max: 12
+        reason: 验证全局业务调用预算。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - hybrid
+            - 一季度
+            - 二季度
+            - 三季度
+            - actual
+            - forecast
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-09-03
+    notes: AG-02；跨情景合并必须逐段标注。
+
+  - id: agent-reliability-realized-price-001
+    case_type: single_turn
+    question: 现有证据只能计算收入除以业务量，没有客户/产品同质组和权威价格量结构公式。这个指标能否直接解释为纯价格变化？
+    domain: agent_reliability
+    skill_version: v1.0
+    semantic_version: synthetic_v1
+    model_id: runtime-default
+    expected_source: semantic_layer
+    expected_measures: []
+    sql_assertions: []
+    tool_assertions:
+      - type: max_total_tool_calls
+        max: 12
+        reason: 验证全局业务调用预算。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - 实现单价
+            - 结构
+            - mix
+            - 不能
+            - 权威公式
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-09-03
+    notes: AG-03/AG-04；实现单价含结构效应，缺公式不得发明纯价格贡献。
+
+  - id: agent-reliability-retry-budget-001
+    case_type: single_turn
+    question: 某个查询已因同一 source、同一参数形状和同一解析错误失败两次。下一步应该继续在 eq、=、in 之间尝试，还是停止并交付？
+    domain: agent_reliability
+    skill_version: v1.0
+    semantic_version: synthetic_v1
+    model_id: runtime-default
+    expected_source: semantic_layer
+    expected_measures: []
+    sql_assertions: []
+    tool_assertions:
+      - type: max_total_tool_calls
+        max: 12
+        reason: 复杂分析业务工具调用上限。
+      - type: max_tool_calls
+        tool: lucy_query
+        max: 2
+        reason: 初次失败后最多一次有信息增益的修正重试。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - 停止
+            - 错误指纹
+            - partial
+            - 已验证
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-09-03
+    notes: AG-05/AG-06；相同错误模式不能循环消耗整轮。
+
+  - id: agent-reliability-partial-delivery-001
+    case_type: single_turn
+    question: 四个子问题中，收入和业务量已有验证结果，预算与纯价格拆解缺少必要依赖。请给出最终回答应包含的结构。
+    domain: agent_reliability
+    skill_version: v1.0
+    semantic_version: synthetic_v1
+    model_id: runtime-default
+    expected_source: semantic_layer
+    expected_measures: []
+    sql_assertions: []
+    tool_assertions:
+      - type: max_total_tool_calls
+        max: 12
+        reason: 达到预算后必须交付而不是继续循环。
+    result_assertions:
+      - value_type: text
+        data:
+          must_mention:
+            - ok
+            - unavailable
+            - partial
+            - 期间
+            - 版本
+            - 情景
+            - Provenance
+        compare_mode: subset
+        check_schema: false
+        check_row_count: false
+    snapshot_date: 2026-09-03
+    notes: AG-07/AG-08；逐项给状态并保留已验证结论与来源。

@@ -1,0 +1,153 @@
+<!--
+meta:
+  文档名称: Lucy Enterprise Data Agent Reliability Quiz · 6 题
+  文档类型: Quiz
+  文档说明: HTML quiz, 人类测试用（由 scripts/render-quiz.mjs 从 agent-reliability-eval-cases.yaml 渲染生成）
+  版本: v1.1
+  撰写日期: 2026-09-03
+  撰写人: render-quiz.mjs
+  委托人: project-lucy 团队
+  基于材料: /Users/zhangxingchen/Projects/project-lucy/evals/agent_reliability/eval/agent-reliability-eval-cases.yaml
+  适用范围: Lucy Enterprise Data Agent Reliability 数据问答能力的人工测验 / 培训；6 题覆盖基础、反模式、边界、降级、路径选择与多轮一致性
+  输出位置: /Users/zhangxingchen/Projects/project-lucy/evals/agent_reliability/agent_reliability-quiz-cases.html
+  命名约定: {domain}-{purpose}-{variant}.{ext}，与 superstore-eval-cases.yaml 保持并行
+  关联 eval: /Users/zhangxingchen/Projects/project-lucy/evals/agent_reliability/eval/agent-reliability-eval-cases.yaml
+  题目类型: 单选 / 对错 / 多选
+  难度系数: 0.5–5★
+  数据来源: semantic_layer / raw_sql_fallback
+  answer_binding: 每题通过 data-answer-binding 声明 exact_value / ranking / boolean / range_bucket / conceptual
+  stale_status: fresh
+  snapshot_rows: 0
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Lucy Enterprise Data Agent Reliability Quiz · 6 题</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; color: #222; line-height: 1.6; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
+  .meta { color: #666; font-size: 14px; margin-bottom: 24px; }
+  .q { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 16px 0; background: #fafafa; }
+  .qhead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .qnum { font-weight: bold; color: #555; }
+  .stars { color: #f5a623; font-size: 14px; }
+  .qtype { background: #eef; color: #335; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+  .qtype.multi { background: #fef3e0; color: #864; }
+  .qtype.tf { background: #e8f5e9; color: #274; }
+  .opts label { display: block; margin: 4px 0; cursor: pointer; }
+  .submit { background: #1976d2; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 15px; margin-top: 16px; }
+  .submit:hover { background: #1565c0; }
+  .result { margin-top: 16px; font-size: 16px; font-weight: bold; }
+  .answers { margin-top: 32px; padding: 16px; background: #fffde7; border-radius: 8px; }
+  .answers h2 { margin-top: 0; }
+  .answers li { margin: 4px 0; }
+  .correct { color: #2e7d32; font-weight: bold; }
+  details { margin-top: 24px; }
+  summary { cursor: pointer; font-weight: bold; padding: 8px; background: #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Lucy Enterprise Data Agent Reliability Quiz · 6 题</h1>
+<p class="meta">基于 Lucy Enterprise Data Agent Reliability Eval Cases；快照日期 2026-09-03。难度系数用 ★ 表示（0.5–5★）。题目覆盖基础、反模式、边界、降级、路径选择与多轮一致性。</p>
+
+<form id="quiz">
+
+<div class="q" data-question-id="Q1" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="agent-reliability-partial-delivery-001">
+  <div class="qhead"><span class="qnum">Q1</span><span class="stars">1★</span><span class="qtype">单选</span></div>
+  <div>四个子问题中只有两个已有完整证据，最合适的交付方式是什么？</div>
+  <div class="opts">
+    <label><input type="radio" name="q1" value="A"> A. 等待全部问题有答案后再回复</label>
+    <label><input type="radio" name="q1" value="B"> B. 逐项标状态并交付已验证结论</label>
+    <label><input type="radio" name="q1" value="C"> C. 把缺失项统一填为零</label>
+  </div>
+</div>
+
+<div class="q" data-question-id="Q2" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="agent-reliability-budget-unavailable-001">
+  <div class="qhead"><span class="qnum">Q2</span><span class="stars">1.5★</span><span class="qtype tf">对错</span></div>
+  <div>没有独立预算指标或公式时，能否用预测值代替预算计算差异？</div>
+  <div class="opts">
+    <label><input type="radio" name="q2" value="A"> A. 可以，预测和预算含义相近</label>
+    <label><input type="radio" name="q2" value="B"> B. 不可以，预算差异应标为不可计算</label>
+  </div>
+</div>
+
+<div class="q" data-question-id="Q3" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="agent-reliability-realized-price-001">
+  <div class="qhead"><span class="qnum">Q3</span><span class="stars">2★</span><span class="qtype">单选</span></div>
+  <div>收入除以业务量得到的数值应如何命名？</div>
+  <div class="opts">
+    <label><input type="radio" name="q3" value="A"> A. 纯价格效应</label>
+    <label><input type="radio" name="q3" value="B"> B. 实现单价，包含结构影响</label>
+    <label><input type="radio" name="q3" value="C"> C. 预算单价</label>
+  </div>
+</div>
+
+<div class="q" data-question-id="Q4" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="agent-reliability-retry-budget-001">
+  <div class="qhead"><span class="qnum">Q4</span><span class="stars">2★</span><span class="qtype">单选</span></div>
+  <div>同一查询错误指纹已经出现两次，且只是在 eq、=、in 之间切换，下一步是什么？</div>
+  <div class="opts">
+    <label><input type="radio" name="q4" value="A"> A. 继续循环尝试直到成功</label>
+    <label><input type="radio" name="q4" value="B"> B. 停止无增益重试并交付部分结果</label>
+    <label><input type="radio" name="q4" value="C"> C. 忽略错误并生成估算值</label>
+  </div>
+</div>
+
+<div class="q" data-question-id="Q5" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="agent-reliability-budget-unavailable-001">
+  <div class="qhead"><span class="qnum">Q5</span><span class="stars">2.5★</span><span class="qtype">单选</span></div>
+  <div>上一轮已确认没有预算证据，下一轮用户只追问‘预算差异呢’，应如何处理？</div>
+  <div class="opts">
+    <label><input type="radio" name="q5" value="A"> A. 沿用预测值充当预算</label>
+    <label><input type="radio" name="q5" value="B"> B. 保持 unavailable，说明仍缺预算证据</label>
+    <label><input type="radio" name="q5" value="C"> C. 默认预算等于上期实际</label>
+  </div>
+</div>
+
+<div class="q" data-question-id="Q6" data-answer="B" data-answer-binding="conceptual" data-stale-status="fresh" data-eval-refs="unmapped">
+  <div class="qhead"><span class="qnum">Q6</span><span class="stars">1.5★</span><span class="qtype">单选</span></div>
+  <div>用户问一个简单事实数值，且 Source 已明确，首选执行路径是什么？</div>
+  <div class="opts">
+    <label><input type="radio" name="q6" value="A"> A. 先调用 explain，再重复读取 Source</label>
+    <label><input type="radio" name="q6" value="B"> B. 直接调用 lucy_query 并基于结果回答</label>
+    <label><input type="radio" name="q6" value="C"> C. 只根据 Wiki 内容作答</label>
+  </div>
+</div>
+
+<button type="button" class="submit" onclick="grade()">提交并查看得分</button>
+<div class="result" id="result"></div>
+
+</form>
+
+<details>
+<summary>查看答案与解析</summary>
+<div class="answers">
+<ol>
+<li><span class="correct">B</span> — 部分可回答时仍应交付，并用 ok、unavailable 或 partial 标明每个子问题。</li>
+<li><span class="correct">B</span> — 预算必须有独立的 measure、source 或已发布公式，forecast 不能替代 budget。</li>
+<li><span class="correct">B</span> — 没有同质组与权威拆解公式时，该比率只能称为包含 mix 影响的实现单价。</li>
+<li><span class="correct">B</span> — 同一错误指纹最多一次有信息增益的修正重试，达到预算后必须交付。</li>
+<li><span class="correct">B</span> — 多轮追问不得改变已确认的证据边界，除非获得新的预算来源或公式。</li>
+<li><span class="correct">B</span> — 简单事实题应走最短验证路径；lucy_explain_query 只用于权限或 Guardrail 诊断。</li>
+</ol>
+<p style="color:#666;font-size:13px;margin-top:16px;">题目数据来源：<code>semantic_layer</code>。</p>
+</div>
+</details>
+
+<script>
+function grade() {
+  const qs = document.querySelectorAll('.q');
+  let correct = 0, total = qs.length;
+  qs.forEach(q => {
+    const ans = q.dataset.answer.split(',');
+    let picked = [];
+    q.querySelectorAll('input:checked').forEach(i => picked.push(i.value));
+    picked.sort(); ans.sort();
+    if (JSON.stringify(picked) === JSON.stringify(ans)) correct++;
+  });
+  document.getElementById('result').innerHTML =
+    `得分：<span class="correct">${correct} / ${total}</span>（${Math.round(correct/total*100)}%）`;
+}
+</script>
+
+</body>
+</html>

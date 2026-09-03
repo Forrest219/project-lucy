@@ -179,6 +179,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | 访问日志审计证据硬化 | `webui/docs/137-access-log-audit-evidence-hardening-spec.md`、`webui/docs/plans/wo-202609-02-access-log-audit-evidence-hardening.md` |
 | Lucy 查询执行与轮次归因可靠性 | `webui/docs/138-lucy-query-execution-and-turn-correlation-reliability-spec.md`、`webui/docs/plans/wo-202609-03-lucy-query-and-answer-reliability.md` |
+| 企业级 Data Agent 可回答性与交付标准 | `webui/docs/139-enterprise-data-agent-answerability-and-delivery-standard.md` |
 | **访问权限域档案（入口）** | **`docs/access-control/README.md`** |
 | 访问权限升级设计 v1.1.2 | `docs/access-control/design-upgrade.md` |
 | 企业完整性 P0 决策备忘 | `docs/access-control/integrity-p0-decision.md` |
