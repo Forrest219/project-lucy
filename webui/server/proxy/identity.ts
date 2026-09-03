@@ -37,6 +37,8 @@ interface TableSelector {
 interface RoleAllow {
   connections?: string[];
   tableSelectors?: TableSelector[];
+  /** Spec 131 — catalog_bound: sources = source map ∩ connections ∩ enabled_tables. */
+  source_scope?: "catalog_bound";
   tools?: string[];
 }
 

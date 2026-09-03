@@ -178,7 +178,8 @@ defaults:
     const snap = await acl.permissionSnapshot(identity("bad_agent"));
     expect(snap).toBeUndefined();
 
-    // Mimic mcp-proxy auditMeta fallback: policyVersion from runtime, no digest.
+    // Schema persistence when policyVersion is supplied to writeLog (storage contract).
+    // Live Proxy path coverage is in mcp-proxy-audit-meta.test.ts via buildAccessLogAuditMeta.
     const id = await audit.writeLog({
       ts: new Date().toISOString(),
       userId: "bad_agent",

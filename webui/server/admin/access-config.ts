@@ -54,6 +54,7 @@ export interface YamlRole {
   permission_model_version?: YamlPermissionModelVersion;
   allow?: {
     connections?: string[];
+    source_scope?: "catalog_bound";
     tableSelectors?: YamlTableSelector[];
     tools?: string[];
   };

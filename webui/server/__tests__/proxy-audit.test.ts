@@ -47,23 +47,45 @@ describe("proxy audit log", () => {
           duration_ms INTEGER NOT NULL,
           request_id TEXT NOT NULL
         );
+        CREATE TABLE conversation_turns (
+          turn_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          token_hash_prefix TEXT,
+          platform TEXT,
+          client TEXT,
+          question_hash TEXT,
+          question_preview TEXT,
+          question_summary TEXT,
+          question_source TEXT NOT NULL,
+          redaction_version TEXT,
+          created_at TEXT NOT NULL
+        );
       `);
     } finally {
       legacyDb.close();
     }
 
-    const { writeLog } = await import("../proxy/audit");
+    const { writeConversationTurn, writeLog } = await import("../proxy/audit");
     await writeLog({
       ts: new Date().toISOString(),
       userId: "legacy-test",
       tokenLabel: "legacy-token",
       tokenHashPrefix: "sha256:legacy",
       lucySessionId: "session-legacy",
+      turnAttributionMode: "unassigned",
+      turnAttributionConfidence: "none",
+      turnAttributionReason: "turn_attribution_rejected",
       tool: "sl_query",
       outcome: "ok",
       durationMs: 1,
       responseBytes: 12,
       requestId: "legacy-migration"
+    });
+    await writeConversationTurn({
+      turnId: "legacy-turn-migration",
+      sessionId: "legacy-session-migration",
+      userId: "legacy-test",
+      questionSource: "reported_tool"
     });
 
     const migratedDb = new Database(auditDbPath, { readonly: true });
@@ -72,10 +94,33 @@ describe("proxy audit log", () => {
       expect(columns.map((column) => column.name)).toContain("lucy_session_id");
       expect(columns.map((column) => column.name)).toContain("response_bytes");
       expect(columns.map((column) => column.name)).toContain("trace_id");
-      const row = migratedDb.prepare("SELECT lucy_session_id, response_bytes, trace_id FROM access_log WHERE request_id = ?").get("legacy-migration") as { lucy_session_id: string; response_bytes: number; trace_id: string | null };
+      expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining([
+        "turn_attribution_mode",
+        "turn_attribution_confidence",
+        "turn_attribution_reason"
+      ]));
+      const turnColumns = migratedDb.prepare("PRAGMA table_info(conversation_turns)").all() as Array<{ name: string }>;
+      expect(turnColumns.map((column) => column.name)).toContain("session_id");
+      const row = migratedDb.prepare(`
+        SELECT lucy_session_id, response_bytes, trace_id,
+               turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason
+        FROM access_log WHERE request_id = ?
+      `).get("legacy-migration") as {
+        lucy_session_id: string;
+        response_bytes: number;
+        trace_id: string | null;
+        turn_attribution_mode: string;
+        turn_attribution_confidence: string;
+        turn_attribution_reason: string;
+      };
       expect(row.lucy_session_id).toBe("session-legacy");
       expect(row.response_bytes).toBe(12);
       expect(row.trace_id).toBeNull();
+      expect(row.turn_attribution_mode).toBe("unassigned");
+      expect(row.turn_attribution_confidence).toBe("none");
+      expect(row.turn_attribution_reason).toBe("turn_attribution_rejected");
+      const turn = migratedDb.prepare("SELECT session_id FROM conversation_turns WHERE turn_id = ?").get("legacy-turn-migration") as { session_id: string };
+      expect(turn.session_id).toBe("legacy-session-migration");
     } finally {
       migratedDb.close();
     }

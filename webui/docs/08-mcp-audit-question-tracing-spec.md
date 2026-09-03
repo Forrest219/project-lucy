@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | MCP Audit Source & Question Tracing Spec |
 | 文档类型 | Spec |
-| 版本 | v0.6 |
-| 撰写日期 | 2026-06-22；v0.2 修订 2026-06-22（补 acl.ts 导出面、access_log_id 回填设计、并发归并已知限制、Phase 1 任务清单细化）；v0.3 修订 2026-06-22（§15 五条开放问题拍板，进入 Phase 2/3 实现）；v0.4 修订 2026-06-22（二次代码审阅发现 5 处问题修复后，澄清 §8.1 "跟 kx_catalog 一起列" 为建议而非强制约束）；v0.5 修订 2026-06-22（三次审阅 nit 跟进：detail 视图 accessLogs 排除自身、debounce key 修正、§8.4 purge 触发时机措辞与实现对齐）；v0.6 修订 2026-08-20（§16 Lucy 侧 soft uplift：instructions 软引导、工具文案、Admin 上报覆盖率；漏报非错误） |
+| 版本 | v0.7 |
+| 撰写日期 | 2026-06-22；v0.2–v0.6 修订见 Git 历史；v0.7 修订 2026-09-03（真实并发串 Turn 证据推翻旧假设，改为 Session 优先归因并增加归因方式/置信度） |
 | 委托人 | 张星晨 |
 | 基于材料 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/{mcp-proxy,acl,audit}.ts`、`semantic-layer/mysql-aliyun/_schema/dataforai.yaml`、2026-06-22 workhorse MCP 审计查询 |
 | 适用范围 | Lucy MCP Proxy 审计增强：调用数据源正规化、问题簇推断、可选自然语言问题上报 |
@@ -56,6 +56,13 @@ MCP client
                ├─ conversation_turns      # 可选自然语言上报
                └─ inferred_turns          # Lucy 基于调用簇推断
 ```
+
+## Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms: Turn Attribution、Attribution Mode、Attribution Confidence 的定义与用户可见约束以
+[Spec 138 §3](138-lucy-query-execution-and-turn-correlation-reliability-spec.md#3-terminology-compliance) 为准。
 
 设计分三层：
 
@@ -296,15 +303,39 @@ Proxy 在 `tools/list` 中注入一个本地工具：
 
 ### 8.2 与 access_log 的关联
 
-因为不能要求 Hermes workhorse 传 header，v0.1 采用 proxy 侧近邻关联：
+v0.7 起采用分级归因：
 
-- 同一 `user_id + token_hash_prefix`。
-- `lucy_begin_question.created_at` 后 `LUCY_REPORTED_TURN_ATTACH_WINDOW_MS` 内的业务调用。
-- 若期间出现新的 `lucy_begin_question`，后续调用归属新 turn。
+1. 显式 `x-lucy-turn-id` 只有在已知 owner 与当前 identity/session 一致时才接受；未知或外来 Turn 不关联。
+2. 有 Session 时，只匹配同一 `user_id + token_hash_prefix + lucy_session_id` 的 active Turn。
+3. 无 Session 时，仅当当前 identity 在窗口内恰有一个 active Turn，才做 `identity_inferred/low` 弱推断。
+4. 多候选、无候选或显式归属冲突均为 `unassigned/none`；业务调用可继续，审计不得伪造 Turn。
 
 默认 attach window：`10 分钟`。
 
-**已知限制（并发归并风险）**：近邻关联假设同一 `user_id + token_hash_prefix` 在 attach window 内是串行提问。若同一 token 被并发或交织调用（多线程 agent、多个并行会话共用一个 token），窗口期内后到的业务调用可能被错误归并到前一个 `lucy_begin_question`，产生错误的问题归属。v0.1 不处理此场景；是否需要更细的并发隔离（如要求上报方携带自生成的临时关联 id）留作 Phase 3 后续评估项，见 §15 开放问题。
+审计新增 nullable `turn_attribution_mode` / `turn_attribution_confidence`。历史行保持 null；不得批量回填为
+`explicit/high`。完整契约与验收以 Spec 138 §5、§8 为准。
+
+## 核心流程（伪代码）
+
+```text
+ON lucy_begin_question(identity, session):
+  persist conversation_turn(session_id=session)
+  registry.record(identity, session, turnId, now)
+  audit(turnId, mode=explicit, confidence=high)
+
+ON subsequent business call(identity, session, explicitTurnId):
+  IF explicitTurnId is owned by current identity/session:
+    attribution = explicit/high
+  ELSE IF explicitTurnId exists:
+    attribution = unassigned/none
+  ELSE IF session has one latest active Turn:
+    attribution = session_bound/high
+  ELSE IF no session AND identity has exactly one active Turn:
+    attribution = identity_inferred/low
+  ELSE:
+    attribution = unassigned/none
+  write attribution to access_log; continue normal ACL and execution
+```
 
 ### 8.3 开关
 
@@ -445,7 +476,7 @@ POST /api/admin/audit/rebuild-derived
 | unit | 两段业务调用间隔超过阈值 -> 两个 inferred turns |
 | unit | 孤立 `kx_catalog` 默认不计为正式问题 |
 | integration | `lucy_begin_question` 出现在 `tools/list` 且本地处理，不转发 KTX |
-| integration | `lucy_begin_question` 后业务调用可近邻关联 |
+| integration | `lucy_begin_question` 后仅同 Session 业务调用可高置信关联；无 Session 唯一候选仅弱推断 |
 | template contract | 所有发布版 Lucy 数据角色显式列出 `lucy_begin_question`，且该工具不进入 `table_touching_tools` |
 | integration | Audit API 返回 turns + sources |
 | security | question preview 脱敏、限长、CSV formula escaping |
@@ -473,7 +504,7 @@ POST /api/admin/audit/rebuild-derived
 
 - 在 `mcp-proxy.ts` 按 §8.1 决策的权限条件注入 `lucy_begin_question`（复用 `allowedToolNames`），本地短路处理（不转发 KTX），写 `conversation_turns`。
 - 新增 `conversation_turns` 表迁移（同样两处镜像）。
-- 实现 §8.2 近邻关联（`LUCY_REPORTED_TURN_ATTACH_WINDOW_MS` 默认 10 分钟）：把 `conversation_turns.turn_id` 写入后续业务调用的 `access_log.lucy_turn_id`。
+- 实现 §8.2 Session 优先关联（`LUCY_REPORTED_TURN_ATTACH_WINDOW_MS` 默认 10 分钟）：同 identity + Session 写入后续业务调用；无 Session 唯一候选只作低置信弱推断。
 - 实现 §8.4 retention purge 函数 + admin 手动触发端点。
 - Audit UI 标注 `reported` vs `inferred` 来源（§9.2 文案要求）。
 
@@ -496,7 +527,7 @@ POST /api/admin/audit/rebuild-derived
 
 ## 15. 开放问题 — 决策记录（v0.3）
 
-1. **并发归并风险是否需要临时关联 id？决策：不做。** v1 维持 §8.2 的近邻关联 + 已知限制声明。理由：当前唯一已知调用方（workhorse）是单 token 顺序提问场景，没有观测到并发交织调用；临时关联 id 需要上报方（模型）自己在后续调用里带回 `turn_id`，但当前没有客户端会这么做，先做这套机制是为假设场景增加复杂度。留作 Phase 3 上线后如果真观测到错误归并再评估（不是"做不到"，是"还不需要"）。
+1. **并发归并风险是否需要隔离？v0.7 决策：需要，旧决策废止。** 2026-09-03 旧版审计已观测到同一 Token 下不同客户端/Session 的 Turn 污染。采用 §8.2 的 Session 优先 registry；无 Session 只允许唯一候选弱推断。暂不要求客户端新增临时参数，复用已有 MCP/`x-lucy-session-id`。
 2. **`lucy_begin_question` 默认注入范围。决策：完全照搬 `kx_catalog` 的显式 allow-list 机制，不做派生豁免。** 调研确认 `kx_catalog` 在 `acl.ts` 里没有任何绕过 `allow.tools` 的特殊通道——它必须像普通工具一样被显式列在某个 role/user 的 `tools:` 数组里才能通过 `check()`；唯一的"派生条件"只出现在 `allowedToolNames()` 的可见性过滤里（`acl.ts:769`：即使列在 `allow.tools`，也只有 `resolved.permissions.sources.length > 0` 时才出现在 `tools/list`）。`lucy_begin_question` 照此办理：① 加进 `DEFAULT_KNOWN_TOOLS`；② 管理员必须在对应 role 的 `tools:` 里显式加上它（建议跟 `kx_catalog` 一起列，语义上"有数据访问能力的 role 才配两者"，但两者可见性门槛各自独立判定，代码不强制二者必须同时出现）；③ 复用 `acl.ts:769` 的同一条 `sources.length > 0` 可见性门槛（把判断条件从 `tool === "kx_catalog"` 扩成 `tool === "kx_catalog" || tool === "lucy_begin_question"`）。这样"只有真正能查数据的 role 才会看到这个工具"的效果原样达成，但走的是现有架构本来就有的显式 allow-list + 可见性门槛，不引入新的派生逻辑分支，也避免"tools/list 能看见但 tools/call 会被 tool_forbidden 拒绝"的不一致。原计划中"在 mcp-proxy.ts 派生判断"的方案已否决：`check()` 的工具白名单判定在 `kx_catalog`/`lucy_begin_question` 本地短路分支之前执行，新工具名无法绕开它，强行绕开需要在 `check()` 里开一个特殊豁免分支，反而比方案 A 改动更大、更不一致。实现见 §8.1。
 3. **120 秒聚类阈值是否要 per-agent 配置？决策：v1 不做，维持全局 `LUCY_TURN_INFER_GAP_MS`。** 理由：还没有真实数据验证不同 agent 的调用节奏差异有多大；先用全局默认收集 Phase 2 上线后的实际簇分布，有证据再加 per-agent 配置面，避免无依据的过度设计。
 4. **30 天 preview retention 是否过长？决策：默认值不变，但补一个目前 spec 里"可配置"却没有对应开关的缺口。** 新增环境变量 `LUCY_QUESTION_PREVIEW_RETENTION_DAYS`（默认 `30`），并设计一个轻量 purge 机制（见 §8.4）——本地单用户环境和客户部署环境用同一个默认值起步，部署侧需要更短窗口时改环境变量即可，不需要代码分支。

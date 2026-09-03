@@ -1639,6 +1639,8 @@ describe("MCP proxy smoke", () => {
       const beginAudit = await waitForAuditRow("begin-q-1");
       expect(beginAudit.tool).toBe("lucy_begin_question");
       expect(beginAudit.lucy_turn_id).toBe(turnId);
+      expect(beginAudit.turn_attribution_mode).toBe("explicit");
+      expect(beginAudit.turn_attribution_confidence).toBe("high");
       expect(String(beginAudit.args_summary ?? "")).not.toContain("alice@example.com");
       expect(String(beginAudit.args_summary ?? "")).not.toContain("查询客户邮箱相关的订单");
       expect(String(beginAudit.args_summary ?? "")).not.toContain('"question"');
@@ -1673,6 +1675,70 @@ describe("MCP proxy smoke", () => {
 
       const followUpAudit = await waitForAuditRow("after-begin-1");
       expect(followUpAudit.lucy_turn_id).toBe(turnId);
+      expect(followUpAudit.turn_attribution_mode).toBe("identity_inferred");
+      expect(followUpAudit.turn_attribution_confidence).toBe("low");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("isolates auto-attached turns across two sessions sharing one token", async () => {
+    const upstream = createServer(async (req, res) => {
+      const parsed = JSON.parse(await readRequestBody(req)) as { id?: string };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id ?? null,
+        result: { content: [{ type: "text", text: "ok" }] }
+      }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    const call = async (id: string, session: string, name: string, args: Record<string, unknown>) => {
+      const response = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`,
+          "x-lucy-session-id": session
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+      });
+      expect(response.status).toBe(200);
+      return response.json() as Promise<{ result: { content: Array<{ text: string }> } }>;
+    };
+
+    try {
+      const beginA = await call("begin-session-a", "session-a", "lucy_begin_question", { intentSummary: "A" });
+      const turnA = (JSON.parse(beginA.result.content[0]?.text ?? "{}") as { turnId: string }).turnId;
+      const beginB = await call("begin-session-b", "session-b", "lucy_begin_question", { intentSummary: "B" });
+      const turnB = (JSON.parse(beginB.result.content[0]?.text ?? "{}") as { turnId: string }).turnId;
+
+      await call("follow-session-a", "session-a", "lucy_read_source", {
+        connectionId: "mysql-aliyun",
+        sourceName: "superstore_orders"
+      });
+      await call("follow-session-b", "session-b", "lucy_read_source", {
+        connectionId: "mysql-aliyun",
+        sourceName: "superstore_orders"
+      });
+
+      const auditA = await waitForAuditRow("follow-session-a");
+      const auditB = await waitForAuditRow("follow-session-b");
+      expect(auditA.lucy_turn_id).toBe(turnA);
+      expect(auditB.lucy_turn_id).toBe(turnB);
+      expect(auditA.turn_attribution_mode).toBe("session_bound");
+      expect(auditB.turn_attribution_mode).toBe("session_bound");
+      expect(auditA.turn_attribution_confidence).toBe("high");
+      expect(auditB.turn_attribution_confidence).toBe("high");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -1733,6 +1799,8 @@ describe("MCP proxy smoke", () => {
       expect(audit.tool).toBe("lucy_query");
       expect(audit.outcome).toBe("ok");
       expect(audit.lucy_turn_id == null || audit.lucy_turn_id === "").toBe(true);
+      expect(audit.turn_attribution_mode).toBe("unassigned");
+      expect(audit.turn_attribution_confidence).toBe("none");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -2023,7 +2091,10 @@ describe("MCP proxy smoke", () => {
       await res.text();
       const audit = await waitForAuditRow("query-audit");
       expect(audit.lucy_session_id).toBe("tg-session-1");
-      expect(audit.lucy_turn_id).toBe("turn-42");
+      expect(audit.lucy_turn_id).toBeNull();
+      expect(audit.turn_attribution_mode).toBe("unassigned");
+      expect(audit.turn_attribution_confidence).toBe("none");
+      expect(audit.turn_attribution_reason).toBe("turn_attribution_rejected");
       expect(audit.lucy_platform).toBe("telegram");
       expect(audit.query_hash).toMatch(/^[0-9a-f]{64}$/);
       expect(audit.query_length).toBe(rawQuery.length);

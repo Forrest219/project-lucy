@@ -29,6 +29,7 @@ import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
 import { assertLicenseAllowsMcp, loadLicenseSnapshot } from "../license/entitlement.js";
 import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
+import { TurnCorrelationRegistry } from "./turn-correlation.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -48,31 +49,13 @@ function getInternalToken(): string {
   return process.env.KTX_INTERNAL_TOKEN ?? "";
 }
 
-// ─── Phase 3: near-neighbor correlation for lucy_begin_question (spec §8.2) ──
-// In-memory only (not persisted) — mirrors identity.ts's sessionClients pattern.
-const reportedTurns = new Map<string, { turnId: string; createdAt: number }>();
 const lucyQueryInflight = new Map<string, number>();
-
-function reportedTurnKey(identity: Identity): string {
-  return `${identity.userId}:${identity.tokenHashPrefix}`;
-}
 
 function reportedTurnWindowMs(): number {
   return Number(process.env.LUCY_REPORTED_TURN_ATTACH_WINDOW_MS ?? 600_000);
 }
 
-function purgeExpiredReportedTurns(now = Date.now()): void {
-  const windowMs = reportedTurnWindowMs();
-  for (const [key, value] of reportedTurns.entries()) {
-    if (now - value.createdAt > windowMs) reportedTurns.delete(key);
-  }
-}
-
-function recordReportedTurn(identity: Identity, turnId: string): void {
-  const now = Date.now();
-  purgeExpiredReportedTurns(now);
-  reportedTurns.set(reportedTurnKey(identity), { turnId, createdAt: now });
-}
+const reportedTurns = new TurnCorrelationRegistry(reportedTurnWindowMs);
 
 function queryConcurrencyKey(identity: Identity): string {
   return `${identity.userId}:${identity.tokenHashPrefix}`;
@@ -113,12 +96,6 @@ function releaseOnResponseEnd(res: ServerResponse, release: () => void): void {
   };
   res.once("finish", once);
   res.once("close", once);
-}
-
-function matchReportedTurn(identity: Identity): string | undefined {
-  const now = Date.now();
-  purgeExpiredReportedTurns(now);
-  return reportedTurns.get(reportedTurnKey(identity))?.turnId;
 }
 
 class BodyTooLargeError extends Error {
@@ -384,7 +361,6 @@ async function auditMeta(identity: Identity | null | undefined, decisionReason: 
 function correlationMeta(headers: IncomingMessage["headers"]): Partial<Parameters<typeof writeLog>[0]> {
   return {
     lucySessionId: normalizeHeader(headers["x-lucy-session-id"]) || normalizeHeader(headers["mcp-session-id"]),
-    lucyTurnId: normalizeHeader(headers["x-lucy-turn-id"]),
     lucyPlatform: normalizeHeader(headers["x-lucy-platform"])
   };
 }
@@ -1951,6 +1927,7 @@ async function writeInitializeResponse(
 
 async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
+  const explicitTurnId = normalizeHeader(req.headers["x-lucy-turn-id"]);
   const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
   const networkMeta = extractRequestClientMeta(req);
   const requestMeta: Partial<Parameters<typeof writeLog>[0]> = {
@@ -2041,13 +2018,18 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     recordAudit(withTrace, sources);
   };
 
-  // Near-neighbor turn correlation (spec §8.2): if the client didn't send an explicit
-  // x-lucy-turn-id header, fall back to the most recent lucy_begin_question report for
-  // this identity within the attach window. lucy_begin_question itself is the start of a
-  // turn, not a follow-up call, so it doesn't consume a match.
-  if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question" && !requestMeta.lucyTurnId) {
-    const matched = matchReportedTurn(identity);
-    if (matched) requestMeta.lucyTurnId = matched;
+  // Spec 138: Session-bound matching is authoritative. Identity-only matching
+  // remains a low-confidence compatibility fallback only when one candidate exists.
+  if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question") {
+    const attribution = reportedTurns.resolve({
+      identity,
+      sessionId: requestMeta.lucySessionId,
+      explicitTurnId
+    });
+    requestMeta.lucyTurnId = attribution.turnId;
+    requestMeta.turnAttributionMode = attribution.mode;
+    requestMeta.turnAttributionConfidence = attribution.confidence;
+    requestMeta.turnAttributionReason = attribution.reason;
   }
 
   const invalidArgumentsReason = queryNormalizationReason ?? (
@@ -2378,6 +2360,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       try {
         await writeConversationTurn({
           turnId,
+          sessionId: requestMeta.lucySessionId,
           userId: identity.userId,
           tokenHashPrefix: identity.tokenHashPrefix,
           platform: requestMeta.lucyPlatform,
@@ -2427,7 +2410,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         });
         return;
       }
-      recordReportedTurn(identity, turnId);
+      reportedTurns.record({
+        identity,
+        sessionId: requestMeta.lucySessionId,
+        turnId
+      });
       // spec §8.4: lazy, sampled purge trigger on the (low-frequency) report path — no background worker.
       if (Math.random() < Number(process.env.LUCY_QUESTION_PREVIEW_PURGE_SAMPLE_RATE ?? 0.01)) {
         purgeExpiredConversationTurns().catch((err) => {
@@ -2462,6 +2449,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         lucyTurnId: turnId,
+        turnAttributionMode: "explicit",
+        turnAttributionConfidence: "high",
         ...(await auditMeta(identity, "allowed")),
       });
       recordMcpTraceForTool({
@@ -2798,7 +2787,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       argsSummary,
       allowed: true,
       reason: "allowed",
-      policySource: "skill_acl"
+      policySource: "access_policy"
     });
     return;
   }
@@ -2879,7 +2868,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       argsSummary,
       allowed: true,
       reason: "allowed",
-      policySource: "skill_acl"
+      policySource: "access_policy"
     });
     return;
   }

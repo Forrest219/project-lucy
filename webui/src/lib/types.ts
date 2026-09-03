@@ -903,6 +903,9 @@ export type AuditLogEntry = {
   tokenHashPrefix?: string;
   lucySessionId?: string;
   lucyTurnId?: string;
+  turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
+  turnAttributionConfidence?: "high" | "low" | "none";
+  turnAttributionReason?: "turn_attribution_rejected";
   lucyPlatform?: string;
   client?: string;
   clientVersion?: string;

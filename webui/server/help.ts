@@ -39,6 +39,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/业务文档 Wiki|业务 Wiki/, "business-wiki"],
   [/访问治理 Admin/, "admin-governance"],
   [/什么时候配置角色、Agent 和 Token|Role \/ Agent \/ Token 怎么选/, "admin-role-agent-token-guide"],
+  [/问询记录与调用流水怎么选|问询.*调用流水/, "admin-audit-turns-vs-calls"],
   [/^Agent$/, "admin-agents"],
   [/Role 权限模板|角色配置/, "admin-roles"],
   [/Bearer Token|Token 发行/, "admin-tokens"],
@@ -92,6 +93,7 @@ const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事�
 
 const ADMIN_GOVERNANCE_HEADING_TITLES = new Set([
   "什么时候配置角色、Agent 和 Token",
+  "问询记录与调用流水怎么选、怎么导出",
   "审计热库与冷库（SQL 留存边界）"
 ]);
 
