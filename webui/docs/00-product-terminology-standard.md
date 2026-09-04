@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 142 增补调用监控与运行状态分组术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -472,12 +472,21 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 |---|---|---|---|
 | System Overview | 系统概览 | 系统总览混用 | 全局运行状态页 |
 | Runtime Status | 运行状态 | 运行时间状态 | 服务运行健康情况 |
+| Runtime Status Group | 运行状态 | 把「系统概览」继续当作分组名承载多页；监控中心 | 侧栏分组；含系统概览 + 调用监控；见 Spec 142 |
+| Call Monitoring Page | 调用监控 | 日志调用监控看板、调用看板、流量大屏、监控看板（作 H1） | 主路由 `/ops/calls`；侧栏与 H1；准实时 MCP 工具调用盯盘；见 Spec 142 |
+| Call Monitor Success Rate | 成功率 | 与评测「通过率」混用 | MCP 工具调用 `ok / businessCalls`；仅调用监控主标签 |
+| Call Monitor Error Rate | 错误率 | 失败率（与拒绝混用） | `error / businessCalls` |
+| Call Monitor Denied Rate | 拒绝率 | 拦截率作唯一主标签 | `denied / businessCalls`；叙述可写 ACL 拒绝率 |
+| Recent Failures List | 最近失败与拒绝 | 告警列表、incident | 调用监控有界短表；非通知通道 |
+| Auto Refresh | 自动刷新 | 实时推送（暗示 SSE） | 默认 30s 轮询；hint 可写「30 秒刷新」 |
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
-| Sidebar Group | 系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 / 系统设置 | 6+1 主导航混用其它分组名 | Lucy WebUI 侧边栏固定 IA |
+| Sidebar Group | 运行状态 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 / 系统设置 | 6+1 主导航混用其它分组名；继续用「系统概览」作多页分组名 | Lucy WebUI 侧边栏固定 IA；Spec 142 起置顶分组为「运行状态」 |
 | Semantic Completion Incomplete | 未完成 | partial / not_started（作用户主文案）、status=partial | Catalog / overview 深链 value=`incomplete`（`!== done`）；见 Spec 100 |
 | Action Impact | 影响 | impact（裸露） | 待办行必填次级文案；Spec 100 |
 | Action Evidence | 证据来源 | evidence（裸露） | 待办行必填；Spec 100 |
+
+调用监控沿用访问治理既有口径：**近 N 调用量**、**多数请求耗时**（P95 次级括注）、**慢于多数请求**、**统计时间**；时效只计单次 MCP 工具调用 `durationMs`，不计 Turn 端到端。Protected DOM 另含 tool name、`requestId`、`traceId`。详见 Spec 142。
 
 ### 4.7 访问日志 / Admin Audit
 
