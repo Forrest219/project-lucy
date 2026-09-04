@@ -127,6 +127,7 @@
 | [139-enterprise-data-agent-answerability-and-delivery-standard.md](139-enterprise-data-agent-answerability-and-delivery-standard.md) | 企业级 Data Agent 可回答性门禁、失败预算、情景标注与最终交付合同（Implemented，待生产 UAT） | 产品 / Agent / Eval / Runtime |
 | [140-admin-audit-dual-csv-export-spec.md](140-admin-audit-dual-csv-export-spec.md) | `/admin/audit` 双粒度 CSV 导出：问询记录一问一行、调用流水一调用一行，并在页面与 Help 说明两者关联 | 产品 / UX / API / Audit / Frontend / Backend |
 | [141-admin-audit-csv-readability-metadata-spec.md](141-admin-audit-csv-readability-metadata-spec.md) | `/admin/audit` CSV 可读性增强：本地时间 + UTC 双轨、秒级流水号文件名、字段说明元数据 | 产品 / UX / API / Audit / Frontend / Backend |
+| [142-call-monitoring-ops-page-spec.md](142-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Draft） | 产品 / UX / API / Ops / Frontend / Backend |
 
 ## 与原 README 的关键校正
 
