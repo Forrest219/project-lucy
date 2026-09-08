@@ -5,6 +5,17 @@
 
 Vibe coding 双核角色协作（thinker / builder）的角色库见 [`agents/README.md`](agents/README.md)，按需调用，非必经流程。
 
+## KTX 依赖边界与开发优先级
+
+KTX 是 Lucy 引用的上游依赖。本仓库只使用 KTX 提供的 CLI、接口和配置约定，
+不修改 KTX 源码。功能开发、缺陷修复、兼容适配和体验优化均以 Lucy 为实施主体；
+遇到 KTX 相关问题时，优先在 Lucy 的代理层、适配层、配置或文档中解决。
+
+需要了解 KTX 时，直接查阅以下资料，避免重复搜索：
+
+- [KTX 源码仓库](https://github.com/Kaelio/ktx)
+- [KTX Quickstart](https://docs.kaelio.com/ktx/docs/getting-started/quickstart)
+
 ## 浏览器测试约束
 
 正式治理见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 的“验证策略：浏览器测试约束”。
