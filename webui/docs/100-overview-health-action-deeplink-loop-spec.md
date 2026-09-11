@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Overview Health-to-Action Deep Link Closed Loop Spec |
 | 文档类型 | Spec |
-| 版本 | v1.3 |
+| 版本 | v1.4 |
 | 撰写日期 | 2026-08-06 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -35,6 +35,7 @@
 | v1.1 | 补充 Attu Overview 指标卡（含小 icon）视觉借鉴；纳入质量/访问快照 metric 呈现要求（§8） |
 | v1.2 | 交叉审阅补齐：修正 §5.1/`incomplete` 自相矛盾；新增共享深链登记表与弃用表；`impact`/`evidence` 升为必填；Catalog URL 读写原子交付；待办回写刷新约定；与 Spec 99 接口对齐 |
 | v1.3 | 待处理事项移除 `acl-deny`：近 7 天 ACL 拒绝仅由「访问风险」指标卡展示（滚动窗口不可闭环处理） |
+| v1.4 | **修订（Spec 142）：** 删除首页「质量快照 / 访问风险」分区与 `catalog-pending` 待办；ACL 拒绝次数不再出现在 `/overview`。§5.1 / §5.4 / §6 以 Spec 142 为准。 |
 
 ## 0. 与 Spec 99 的组合关系（非重复）
 
@@ -121,11 +122,11 @@ Protected：`Lucy MCP`、`KTX Runtime`、`Agent`、`Token`、`ACL`、`Catalog`�
 | id | 条件 | actionText | Canonical `actionUrl` | 目标页必须 |
 |---|---|---|---|---|
 | `semantic-gap` | 语义未完成 | 前往补全 | `/catalog?completion=incomplete` | 筛「未完成」=`!== done`；URL↔state 双向 |
-| `catalog-pending` | Catalog 待处理 > 0 | 查看连接 | `/connections` | 已有 |
 | `publish-pending` | 待发布文件 > 0 | 打开发布工作台 | `/publish/workbench` | 已有 |
 | `eval-gap` | 近 30 天 run = 0 | 查看趋势监控 | `/eval/monitor` | 已有 |
 
-> **v1.3：** `acl-deny` 已从待处理事项移除。近 7 天 ACL 拒绝只走 §5.4「访问风险」指标卡 CTA；`opsDashboard.buildActionRequiredItems` **不得**再生产 `id: "acl-deny"`。
+> **v1.3：** `acl-deny` 已从待处理事项移除。
+> **v1.4 / Spec 142：** `catalog-pending` 亦已从待处理事项移除（与 `semantic-gap` 同口径）。近 7 天 ACL 拒绝 **不** 在 `/overview` 展示；`opsDashboard.buildActionRequiredItems` **不得**再生产 `id: "acl-deny"` 或 `id: "catalog-pending"`。
 
 ### 5.2 语义缺口筛选语义
 
@@ -161,14 +162,16 @@ Overview「待补语义」计数 = `total - done`，深链 **只生产** `incomp
 | `!ktxAvailable` | `查看连接概览` → `/connections` |
 | 两者皆不可用 | 同时给出以上动作 |
 
-### 5.4 质量快照 / 访问风险
+### 5.4 质量快照 / 访问风险（Spec 142：首页不再渲染）
 
-| 区块 | Canonical 目标 |
-|---|---|
-| 待发布变更 | `/publish/workbench` |
-| 评测数据 | `/eval/monitor` |
-| Agent 启用与禁用 | `/admin/agents` |
-| 近 7 天 ACL 拒绝 | `/admin/audit?tab=calls&outcome=denied&hours=168` |
+`/overview` **不再** 渲染质量快照或访问风险分区。下表深链仍是治理页 / 历史 Registry 形态，**禁止**再作为 overview 指标卡 CTA 生产者。
+
+| 原区块 | Canonical 目标 | 现入口 |
+|---|---|---|
+| 待发布变更 | `/publish/workbench` | 待处理事项 `publish-pending` |
+| 评测数据 | `/eval/monitor` | 待处理事项 `eval-gap` |
+| Agent 启用与禁用 | `/admin/agents` | 系统状态摘要 CTA（仅 Agent 缺口时） |
+| 近 7 天 ACL 拒绝 | `/admin/audit?view=calls&range=7d&outcome=denied` | `/admin/audit`；不进首页 |
 
 ### 5.5 Spec 99 共用审计 / 调试台形态
 
@@ -199,7 +202,6 @@ export type ActionRequiredItem = {
 | id | impact | evidence |
 |---|---|---|
 | semantic-gap | Agent 可能无法回答相关表问题 | 语义资产 |
-| catalog-pending | 本地目录与启用表范围可能不一致 | 数据接入 |
 | publish-pending | 变更尚未进入 KTX 索引 | 语义发布 |
 | eval-gap | 缺少质量回归基线 | 质量评测 |
 
@@ -274,7 +276,7 @@ PageHeader / panel / `pl-card-cta` / `pl-metric-card` / alert；状态不靠单�
 
 - [ ] 仓库内 overview/opsDashboard **不生产** §5.0 弃用路径；`semantic-gap` = `/catalog?completion=incomplete`。
 - [ ] Catalog：`completion=incomplete` 过滤正确；URL↔state 双向；与 overview 新链同 PR。
-- [ ] 访问风险「近 7 天 ACL 拒绝」CTA = `/admin/audit?tab=calls&outcome=denied&hours=168`（或 Spec 106 的 `view=calls&range=7d`）；待处理事项 **不**含 `acl-deny`。
+- [ ] `/overview` **不**渲染访问风险 / ACL 拒绝次数（Spec 142）；待处理事项 **不**含 `acl-deny` 或 `catalog-pending`。审计深链仍为 `/admin/audit?view=calls&range=7d&outcome=denied`。
 - [ ] `ActionRequiredItem` 每条含非空 `impact`/`evidence`；UI 可见。
 - [ ] 返回 `/overview` 触发待办相关 refetch（§7.2）。
 - [ ] Warning/Danger CTA 符合 §5.3。

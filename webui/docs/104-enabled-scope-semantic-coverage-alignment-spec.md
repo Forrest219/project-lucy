@@ -28,6 +28,7 @@
 | 版本 | 变更 |
 |---|---|
 | v1.0 | 初稿并落地：启用范围对齐语义覆盖 / Catalog 默认筛选 |
+| v1.1 | **修订（Spec 142）：** `/overview` 删除质量快照与 `catalog-pending` 待办；语义缺口口径仍按 §5.2。 |
 
 ## 1. 背景
 
@@ -104,13 +105,15 @@ total = enabledSources.length
 gap = max(0, total - done)
 ```
 
-- Overview 待办 `semantic-gap`、质量快照「语义覆盖」、`buildServiceHealth` / `summarizeServiceHealth` 的 coverage **一律用上述 done/total**。
+- Overview 待办 `semantic-gap`、`buildServiceHealth` / `summarizeServiceHealth` 的 coverage **一律用上述 done/total**（Spec 142：首页不再渲染质量快照卡）。
 - `total === 0`（无启用表或启用表均无 Manifest）：不造「待补语义」项；沿用既有「限定表范围」类就绪提示，不把 Manifest 未启用缺口算进 gap。
 - **已启用但不在 Manifest**：不进入 `enabledSources`（无法在语义资产维护）；连接概览 / 启用表范围继续暴露 drift。启用表范围页的无效启用可见性、保存差分门禁与一键移出见 **Spec 116**。本单不把该类计入 gap。
 
 ### 5.3 Catalog 对象待处理（本单收窄）
 
 当前实现中 `pendingCatalogItems` 与语义缺口同公式。本单将其同步改为 **已启用集上的 `gap`**，避免 overview 再出现「覆盖 1/3」与「只启用 1 张」双信号。独立「Manifest ↔ enabled_tables drift」指标列为后续 Non-Goal 外演进。
+
+**Spec 142：** 待办不再生产 `catalog-pending`；只保留 `semantic-gap`。§5.2 口径不变。
 
 ### 5.4 对 Spec 100 的修订
 
@@ -161,9 +164,9 @@ Spec 100 §3 原「不改待处理事项计数口径」被本 Spec **显式修�
 
 ## 8. `/overview` UX
 
-- 使用 §5.2 计算 coverage；demo 期望：**覆盖 1/1，待补 0**（在仅 `orders` 启用且 done 时）。
+- 使用 §5.2 计算 coverage；demo 期望：仅 `orders` 启用且 done 时 **待补 0**（不出现 `semantic-gap`）。
 - 待办「前往补全」仍指向 `/catalog?completion=incomplete`（默认已启用 + 未完成）。
-- 质量快照文案「D/T 语义完成」的 T 为已启用分母；ⓘ / 手册说明口径。
+- Spec 142：首页不再展示「D/T 语义完成」快照卡；分母口径仍为已启用 ∩ Manifest。
 
 ## 9. Help / 手册
 

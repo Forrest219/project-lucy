@@ -76,7 +76,7 @@
 
 | | List KPI（本章） | Ops Metric Row（Spec 102） |
 |---|---|---|
-| 页面 | connections / eval / admin 列表概览 | `/overview` 快照 |
+| 页面 | connections / eval / admin 列表概览 | 历史 `/overview` 快照（Spec 102；Spec 142 已从首页删除） |
 | Icon | 无（仅 ⓘ） | 左侧 outline icon |
 | CTA | 无 | 右侧居中深链 |
 | Help | 必有 ⓘ | 可选 |

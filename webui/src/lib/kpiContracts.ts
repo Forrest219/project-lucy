@@ -151,8 +151,8 @@ export const KPI_REGISTRY: MetricContract[] = [
     kind: "list_kpi",
     // Task 4: 30-day bounded summary of succeeded runs only.
     label: "近 30 天评测运行",
-    help: "近 30 天内 status='succeeded' 的评测运行次数；window=[started_at ≥ windowStart AND started_at < windowEnd]。",
-    pages: ["/overview"],
+    help: "近 30 天内 status='succeeded' 的评测运行次数；window=[started_at ≥ windowStart AND started_at < windowEnd]。首页仅用该计数判定待处理事项「近 30 天无评测数据」（Spec 142）。",
+    pages: ["/overview", "/eval/monitor"],
     windowed: true
   },
   {

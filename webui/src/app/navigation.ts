@@ -64,8 +64,8 @@ export const topLevelEntry: NavItem = {
   to: "/overview",
   iconKey: "overview",
   active: (path) => path === "/overview",
-  description: "查看 Lucy MCP、KTX Runtime、语义资产和 Agent 接入状态，集中处理异常与待办。",
-  keywords: ["控制台", "Dashboard", "健康", "巡检"]
+  description: "确认系统可用，处理当前待办。",
+  keywords: ["控制台", "Dashboard", "健康", "巡检", "MCP", "KTX", "Agent"]
 };
 
 export const navGroups: Array<{

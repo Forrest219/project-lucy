@@ -65,7 +65,7 @@ KTX WebUI
 
 | 分组 | 导航项 | 路由 | 说明 |
 | --- | --- | --- | --- |
-| 系统概览 | 系统概览 | `/overview` | 查看 Lucy MCP、KTX Runtime、语义资产和 Agent 接入状态，集中处理异常与待办 |
+| 系统概览 | 系统概览 | `/overview` | 确认系统可用，处理当前待办 |
 | 数据接入 | 连接概览 | `/connections` | 管理数据库连接、Schema 与 Schema Manifest，并查看连通性和本地目录同步状态 |
 | 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更 |
 | 数据接入 | 连通测试（兼容） | `/connections/test` | 兼容入口；v1.9.0 在 M25 测试 Drawer 上线且稳定后彻底移除主导航，路由继续保留 |

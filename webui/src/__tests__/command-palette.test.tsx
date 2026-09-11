@@ -459,9 +459,9 @@ describe("CommandPalette", () => {
     fireEvent.change(screen.getByTestId("command-palette-input"), {
       target: { value: "mcp" }
     });
-    const overviewOption = screen.getByTestId("command-palette-option-overview");
+    const playgroundOption = screen.getByTestId("command-palette-option-admin-mcp-playground");
     const highlightedProtectedTerm = Array.from(
-      overviewOption.querySelectorAll(".pl-command-palette-highlight.notranslate")
+      playgroundOption.querySelectorAll(".pl-command-palette-highlight.notranslate")
     ).find((node) => node.textContent === "MCP");
     expect(highlightedProtectedTerm).toBeTruthy();
     expect(highlightedProtectedTerm?.getAttribute("translate")).toBe("no");

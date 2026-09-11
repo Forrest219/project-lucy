@@ -1,59 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Activity,
-  KeyRound,
-  Layers,
-  ShieldAlert,
-  Upload,
-  Users
-} from "lucide-react";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import type { Agent, ChangedFilesResponse, McpEndpointInfo, ProjectInfo, SourcesResponse } from "../lib/types";
 import { buildMcpConfig } from "../lib/mcpEndpoint";
 import { PageHeader } from "../components/PageHeader";
 import {
-  availableTokenCount,
   buildActionRequiredItems,
-  buildServiceHealth,
   DEEP_LINKS,
   NO_ACTION_REQUIRED_MESSAGE,
-  pendingSemanticCount,
   summarizeServiceHealth,
   systemAlertText,
   warningSummaryCta,
   type ActionRequiredItem,
   type Severity,
-  type ServiceHealthItem,
   type ServiceHealthSummary,
   severityLabelBySeverity
 } from "../lib/opsDashboard";
 
 type AgentsResponse = { agents: Agent[] };
-type HealthTone = "ready" | "warning" | "info" | "danger";
-
-function isLegacyAllowAgent(agent: Agent): boolean {
-  return !agent.role && Boolean(agent.allow);
-}
-
-function mcpAccessReason(agents: Agent[], availableTokenCount: number): string | undefined {
-  if (agents.length === 0) return "尚未创建 Agent";
-  const enabledAgents = agents.filter((agent) => agent.enabled);
-  if (enabledAgents.length === 0) return "所有 Agent 均已禁用";
-  if (agents.every(isLegacyAllowAgent)) return "所有 Agent 仍为 legacy allow，需迁移到 role";
-  if (availableTokenCount === 0) return "启用的 Agent 暂无可用 token";
-  return undefined;
-}
-
-function diagnosticStatusClass(tone: HealthTone) {
-  if (tone === "ready") return "pl-status-done";
-  if (tone === "danger") return "pl-status-validation_failed";
-  return "pl-status-partial";
-}
 
 function severityBadgeClass(severity: Severity): string {
   if (severity === "critical") return "pl-status-validation_failed";
@@ -66,7 +33,7 @@ function severityBadgeClass(severity: Severity): string {
  * Render a Severity as a Chinese-language status badge. The badge colour
  * still tracks the underlying severity bucket for non-colour signals
  * (icon, text label, icon shape), but the user-visible label is always
- * one of `高风险 / 待处理 / 提醒 / 就绪`.
+ * one of `待处理 / 提醒 / 就绪` on this page (Spec 142: no 「高风险」).
  */
 function SeverityBadge({
   severity
@@ -81,41 +48,6 @@ function SeverityBadge({
       {severityLabelBySeverity[severity]}
     </span>
   );
-}
-
-function HealthDiagnosticItem({
-  title,
-  description,
-  tone,
-  statusLabel,
-  children
-}: {
-  title: string;
-  description: string;
-  tone: HealthTone;
-  statusLabel: string;
-  children?: ReactNode;
-}) {
-  return (
-    <section className="pl-health-item" data-tone={tone}>
-      <div className="pl-health-item-status" aria-hidden="true" />
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="pl-panel-title mb-0">{title}</h3>
-          <span className={`pl-status-badge ${diagnosticStatusClass(tone)}`} translate="no">
-            {statusLabel}
-          </span>
-        </div>
-        <p className="pl-notice mt-1">{description}</p>
-        {children ? <div className="mt-4">{children}</div> : null}
-      </div>
-    </section>
-  );
-}
-
-function percent(done: number, total: number) {
-  if (total <= 0) return 0;
-  return Math.round((done / total) * 100);
 }
 
 function fallbackNotice(endpointInfo: McpEndpointInfo | undefined) {
@@ -170,61 +102,6 @@ function ServiceHealthSummaryView({ summary }: { summary: ServiceHealthSummary }
       </Link>
     </section>
   );
-}
-
-/**
- * Compact Service Health strip. M41 replaces this with `ServiceHealthSummaryView`
- * on `/overview`; the helper is retained here in case other surfaces need
- * the per-component breakdown.
- */
-function ServiceHealthStrip({ items }: { items: ServiceHealthItem[] }) {
-  return (
-    <section
-      className="pl-panel pl-service-health-panel"
-      data-testid="ops-service-health"
-    >
-      <div className="pl-service-health-compact" role="status" aria-live="polite">
-        <span className="pl-service-health-compact-dot" aria-hidden="true" data-overall={overallTone(items)} />
-        <span className="pl-service-health-compact-label">系统状态</span>
-        <ul className="pl-service-health-compact-list">
-          {items.map((item) => (
-            <li
-              key={item.key}
-              className="pl-service-health-compact-item"
-              data-status={item.status}
-            >
-              <span
-                className="notranslate pl-service-health-compact-name"
-                translate="no"
-              >
-                {item.label}
-              </span>
-              <span
-                className="notranslate pl-service-health-compact-detail"
-                translate="no"
-              >
-                {item.detail}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <Link
-          to="/admin/audit"
-          className="pl-service-health-compact-log"
-          data-testid="ops-service-health-log-link"
-        >
-          [控制台日志]
-        </Link>
-      </div>
-    </section>
-  );
-}
-
-function overallTone(items: ServiceHealthItem[]): HealthTone {
-  if (items.some((item) => item.status === "danger")) return "danger";
-  if (items.some((item) => item.status === "warning")) return "warning";
-  if (items.every((item) => item.status === "ready")) return "ready";
-  return "info";
 }
 
 /**
@@ -367,114 +244,6 @@ function ActionRequiredRow({ item }: { item: ActionRequiredItem }) {
   );
 }
 
-/**
- * Spec 102: shared metric row for 质量快照 / 访问风险.
- * Title top-left, primary value bottom-left, CTA right-center (对齐待处理事项).
- */
-function OpsMetricRow({
-  icon,
-  title,
-  value,
-  hint,
-  extra,
-  cta,
-  tone = "default",
-  testId
-}: {
-  icon: ReactNode;
-  title: ReactNode;
-  value: ReactNode;
-  hint?: ReactNode;
-  extra?: ReactNode;
-  cta?: { to: string; label: ReactNode; className?: string; translateNo?: boolean };
-  tone?: "default" | "warning" | "danger";
-  testId?: string;
-}) {
-  return (
-    <div
-      className="pl-ops-metric-row pl-metric-card pl-metric-card--with-icon"
-      data-tone={tone}
-      data-testid={testId}
-    >
-      <div className="pl-ops-metric-row-body">
-        <div className="pl-metric-card-title">
-          {icon}
-          <span>{title}</span>
-        </div>
-        <div className="pl-ops-metric-row-value">
-          <strong className="pl-ops-metric-row-strong">{value}</strong>
-          {extra}
-          {hint != null ? <div className="text-xs text-fg-muted">{hint}</div> : null}
-        </div>
-      </div>
-      {cta ? (
-        <Link
-          to={cta.to}
-          className={["pl-ops-metric-row-cta", "pl-card-cta", cta.className].filter(Boolean).join(" ")}
-          {...(cta.translateNo ? { translate: "no" as const } : {})}
-        >
-          {cta.label}
-        </Link>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Metric-first semantic-coverage card. M39 spec 41 §8 requires a standalone
- * percent + progressbar with `role="progressbar"` and aria-valuenow /
- * aria-valuemin / aria-valuemax, plus a text label so screen-reader users
- * do not rely on colour or bar length alone. Spec 102 wraps it in OpsMetricRow.
- */
-function SemanticCoverageCard({
-  done,
-  total
-}: {
-  done: number;
-  total: number;
-}) {
-  const percentValue = percent(done, total);
-  const gap = pendingSemanticCount({ done, total });
-  return (
-    <OpsMetricRow
-      testId="ops-metric-semantic"
-      icon={<Layers className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-semantic" />}
-      title="语义覆盖率"
-      value={
-        <span className="notranslate" translate="no" data-testid="ops-semantic-percent">
-          {percentValue}%
-        </span>
-      }
-      extra={
-        <div
-          className="pl-progress"
-          role="progressbar"
-          aria-label={`语义覆盖率 ${percentValue}%`}
-          aria-valuenow={percentValue}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          data-testid="ops-semantic-progress"
-        >
-          <span
-            className="pl-progress-bar"
-            style={{ width: `${percentValue}%` }}
-          />
-        </div>
-      }
-      hint={
-        <>
-          <span className="notranslate" translate="no">{done}</span>/<span className="notranslate" translate="no">{total}</span> 语义完成，
-          <span className="notranslate" translate="no">{gap}</span> 张表待补
-        </>
-      }
-      cta={{
-        to: DEEP_LINKS.catalogIncomplete,
-        label: "查看语义资产 ↗"
-      }}
-    />
-  );
-}
-
 export function Onboarding() {
   // M39 polish (SEVERE-4): auto-reset the main copy label after 1.5s so
   // the user sees a brief "已复制" flash before the label reverts.
@@ -541,23 +310,6 @@ export function Onboarding() {
     refetchOnMount: "always"
   });
 
-  // Spec 128 Task 7: ACL denials come from audit DB via governance overview, not per-Agent stats sum.
-  const aclOverviewQuery = useQuery({
-    queryKey: ["admin", "governance", "overview", 168],
-    queryFn: () =>
-      apiGet<{
-        usageOverview: {
-          denied?: number | null;
-          metricsState?: "ok" | "unavailable";
-        };
-      }>("/api/admin/governance/overview?hours=168"),
-    retry: false,
-    staleTime: 60_000,
-    refetchOnMount: "always"
-  });
-
-  const connections = projectQuery.data?.connections ?? [];
-  const enabledTables = connections.reduce((sum, conn) => sum + conn.enabledTables.length, 0);
   const sources = sourcesQuery.data?.tables ?? [];
   // Spec 104: semantic coverage / gap only count Manifest tables that are enabled.
   const enabledSources = sources.filter((source) => source.enabled);
@@ -566,11 +318,6 @@ export function Onboarding() {
   const changedFiles = diffQuery.data?.files ?? [];
   const agents = agentsQuery.data?.agents ?? [];
   const enabledAgents = agents.filter((agent) => agent.enabled);
-  // M41: token count follows new "可用 Token" semantics — excluded are
-  // `enabled=false` parents, `revoked=true` tokens, expired tokens
-  // (`expires_at <= now`), and tokens with unparseable `expires_at`.
-  const availableTokenCountValue = availableTokenCount(agents);
-  const mcpNotReadyReason = mcpAccessReason(agents, availableTokenCountValue);
   const endpointInfo = projectQuery.data?.mcpEndpoint;
   const endpoint = endpointInfo?.url ?? null;
   const mcpConfig = useMemo(
@@ -654,47 +401,13 @@ export function Onboarding() {
       : badgeState === "warning"
         ? "text-xs text-warning-strong whitespace-nowrap"
         : "text-xs text-fg-muted whitespace-nowrap";
-  const connectionReady = connections.length > 0 && projectQuery.data?.ktxAvailable === true;
-  const tableScopeReady = enabledTables > 0;
-  const semanticReady = coverageTotal > 0 && doneSources > 0;
-  const validationReady = changedFiles.length === 0;
   // Only a configured LUCY_PUBLIC_MCP_URL counts as MCP-ready for deployment.
   // Local fallback remains copyable for npm-run-dev, but is not "ready".
   const mcpEndpointReady = endpointInfo?.status === "configured";
-  const mcpAccessReady = !mcpNotReadyReason && mcpEndpointReady;
-  const semanticPendingCount = coverageTotal - doneSources;
-  const semanticTone: HealthTone =
-    semanticReady && tableScopeReady
-      ? semanticPendingCount > 0
-        ? "warning"
-        : "ready"
-      : "warning";
-  const semanticStatusLabel =
-    semanticPendingCount > 0
-      ? `${semanticPendingCount} 待完善`
-      : semanticReady && tableScopeReady
-        ? "就绪"
-        : "需要完善";
-
-  // M36: Ops Dashboard view-model inputs.
-  // Spec 104: catalog-pending stays same formula as semantic gap, on enabled set.
-  const pendingCatalogItems = Math.max(0, coverageTotal - doneSources);
-  const aclDeniedState = !aclOverviewQuery.isSuccess
-    ? aclOverviewQuery.isError
-      ? "unavailable"
-      : "loading"
-    : aclOverviewQuery.data?.usageOverview?.metricsState === "unavailable"
-      ? "unavailable"
-      : aclOverviewQuery.data?.usageOverview
-        ? "ok"
-        : "unavailable";
-  const aclDenied7d =
-    aclDeniedState === "ok" ? (aclOverviewQuery.data?.usageOverview?.denied ?? 0) : null;
   const actionItems = useMemo(
     () =>
       buildActionRequiredItems({
         semanticCoverage: { done: doneSources, total: coverageTotal },
-        pendingCatalogItems,
         pendingPublishFiles: changedFiles.length,
         // Spec 128 Task 4: only confirmed 0 triggers the eval-gap item.
         // state='unavailable' or still loading → null (no fabricated alert).
@@ -707,30 +420,9 @@ export function Onboarding() {
     [
       doneSources,
       coverageTotal,
-      pendingCatalogItems,
       changedFiles.length,
       evalLastRunQuery.isSuccess,
       evalLastRunQuery.data
-    ]
-  );
-  const serviceHealth = useMemo(
-    () =>
-      buildServiceHealth({
-        ktxAvailable: projectQuery.data?.ktxAvailable === true,
-        mcpReady: mcpAccessReady,
-        semanticCoverage: { done: doneSources, total: coverageTotal },
-        agentsEnabled: enabledAgents.length,
-        agentsTotal: agents.length,
-        availableTokenCount: availableTokenCountValue
-      }),
-    [
-      projectQuery.data?.ktxAvailable,
-      mcpAccessReady,
-      doneSources,
-      coverageTotal,
-      enabledAgents.length,
-      agents.length,
-      availableTokenCountValue
     ]
   );
   // M41: structured view model for the one-line "系统状态" summary.
@@ -747,7 +439,6 @@ export function Onboarding() {
     [mcpEndpointReady, projectQuery.data?.ktxAvailable, doneSources, coverageTotal, enabledAgents.length, agents.length]
   );
   const ktxAvailable = projectQuery.data?.ktxAvailable === true;
-  const semanticPercent = percent(doneSources, coverageTotal);
 
   /**
    * M39 polish (SEVERE-4): the main page button and the Drawer button
@@ -798,8 +489,7 @@ export function Onboarding() {
       sourcesQuery.refetch(),
       diffQuery.refetch(),
       agentsQuery.refetch(),
-      evalLastRunQuery.refetch(),
-      aclOverviewQuery.refetch()
+      evalLastRunQuery.refetch()
     ]);
     const failed = settled.find((result) => result.status === "rejected");
     if (failed) {
@@ -869,9 +559,7 @@ export function Onboarding() {
         title="系统概览"
         description={
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span>
-              查看 Lucy <span className="notranslate" translate="no">MCP</span>、<span className="notranslate" translate="no">KTX</span> <span className="notranslate" translate="no">Runtime</span>、语义资产和 <span className="notranslate" translate="no">Agent</span> 接入状态，集中处理异常与待办。
-            </span>
+            <span>确认系统可用，处理当前待办。</span>
             {/*
               A11y announce channel (UX-OVERVIEW-003): writes only when status
               actually changes (mount, refresh success/failure). sr-only so
@@ -954,7 +642,7 @@ export function Onboarding() {
         <div className="pl-section-heading">
           <div>
             <h2 className="pl-panel-title mb-1">待处理事项</h2>
-            <p className="pl-notice">聚合语义缺口、待发布变更、评测缺口。点击任一项可直接进入处理页面。ACL 拒绝见下方访问风险。</p>
+            <p className="pl-notice">语义缺口、待发布变更、评测缺口。点击任一项进入处理页面。</p>
           </div>
           <span className="pl-notice" data-testid="ops-action-required-count">
             {actionItems.length} 项
@@ -972,133 +660,6 @@ export function Onboarding() {
           </div>
         )}
       </section>
-
-      <div className="pl-ops-grid">
-        <section className="pl-panel" data-testid="ops-quality-snapshot">
-          <div className="pl-section-heading">
-            <div>
-              <h2 className="pl-panel-title mb-1">质量快照</h2>
-              <p className="pl-notice">语义覆盖、发布审阅与评测基线，决定发布前的最后一道关。</p>
-            </div>
-          </div>
-          <div className="pl-snapshot-list">
-            <SemanticCoverageCard done={doneSources} total={coverageTotal} />
-            <OpsMetricRow
-              testId="ops-metric-publish"
-              icon={<Upload className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-publish" />}
-              title="待发布变更"
-              value={<span className="notranslate" translate="no">{changedFiles.length}</span>}
-              hint={validationReady ? "当前无未审阅变更" : "需要进入发布工作台审阅"}
-              cta={{ to: DEEP_LINKS.publishWorkbench, label: "打开发布工作台 ↗" }}
-            />
-            <OpsMetricRow
-              testId="ops-metric-eval"
-              icon={<Activity className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-eval" />}
-              title="近 30 天评测运行"
-              value={
-                <span className="notranslate" translate="no">
-                  {evalLastRunQuery.isSuccess && evalLastRunQuery.data?.runCount.state !== "unavailable"
-                    ? (evalLastRunQuery.data?.runCount.value ?? 0)
-                    : "—"}
-                </span>
-              }
-              hint={
-                evalLastRunQuery.isSuccess && evalLastRunQuery.data?.runCount.state !== "unavailable"
-                  ? (evalLastRunQuery.data?.runCount.value ?? 0) > 0
-                    ? "近 30 天已成功完成的评测运行数"
-                    : "近 30 天无评测数据"
-                  : "评测状态待刷新"
-              }
-              cta={{ to: DEEP_LINKS.evalMonitor, label: "查看趋势监控 ↗" }}
-            />
-          </div>
-        </section>
-
-        <section className="pl-panel" data-testid="ops-access-risk">
-          <div className="pl-section-heading">
-            <div>
-              <h2 className="pl-panel-title mb-1">访问风险</h2>
-              <p className="pl-notice"><span className="notranslate" translate="no">Agent</span> / token / ACL 风险摘要，触发条件来自近 7 天访问统计。</p>
-            </div>
-          </div>
-          <div className="pl-risk-list">
-            <OpsMetricRow
-              testId="ops-metric-agents"
-              tone={enabledAgents.length === 0 ? "danger" : "default"}
-              icon={<Users className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-agents" />}
-              title={
-                <>
-                  <span className="notranslate" translate="no">Agent</span> 启用与禁用
-                </>
-              }
-              value={
-                <>
-                  <span className="notranslate" translate="no">{enabledAgents.length}</span>
-                  {" / "}
-                  <span className="notranslate" translate="no">{agents.length}</span>
-                </>
-              }
-              hint="启用 / 总数"
-              cta={{
-                to: DEEP_LINKS.agents,
-                label: (
-                  <>
-                    查看 <span className="notranslate" translate="no">Agent</span> 管理 ↗
-                  </>
-                ),
-                className: "notranslate",
-                translateNo: true
-              }}
-            />
-            <OpsMetricRow
-              testId="ops-metric-acl"
-              tone={aclDenied7d != null && aclDenied7d > 0 ? "danger" : "default"}
-              icon={<ShieldAlert className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-acl" />}
-              title="近 7 天 ACL 拒绝"
-              value={
-                <span className="notranslate" translate="no">
-                  {aclDeniedState === "ok" ? (aclDenied7d ?? 0) : "—"}
-                </span>
-              }
-              hint={
-                aclDeniedState === "unavailable"
-                  ? "数据源不可用"
-                  : aclDeniedState === "loading"
-                    ? "统计加载中"
-                    : "次拒绝（审计库直查）"
-              }
-              cta={{ to: DEEP_LINKS.auditDenied, label: "查看访问日志 ↗" }}
-            />
-            <OpsMetricRow
-              testId="ops-metric-tokens"
-              tone={availableTokenCountValue === 0 && agents.length > 0 ? "warning" : "default"}
-              icon={<KeyRound className="pl-metric-card-icon" size={16} aria-hidden="true" data-testid="ops-metric-icon-token" />}
-              title={
-                <>
-                  可用 <span className="notranslate" translate="no">Token</span>
-                </>
-              }
-              value={<span className="notranslate" translate="no">{availableTokenCountValue}</span>}
-              hint={
-                <>
-                  <span className="notranslate" translate="no">{availableTokenCountValue}</span> 个可用{" "}
-                  <span className="notranslate" translate="no">Token</span>
-                </>
-              }
-              cta={{
-                to: DEEP_LINKS.agents,
-                label: (
-                  <>
-                    管理 <span className="notranslate" translate="no">Token</span> ↗
-                  </>
-                ),
-                className: "notranslate",
-                translateNo: true
-              }}
-            />
-          </div>
-        </section>
-      </div>
 
       <section className="pl-panel" id="overview-mcp" data-testid="ops-mcp-access">
         <div className="pl-section-heading">

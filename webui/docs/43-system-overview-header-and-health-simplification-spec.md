@@ -55,7 +55,7 @@ M39 / M40 之后，`/overview`（`Onboarding.tsx`）顶部信息密度仍偏高�
 - 不修改 `/overview` 路由（仍由 `webui/src/app/App.tsx` `<Route path="/overview" element={<Onboarding />} />`）。
 - 不修改 Lucy MCP Proxy 鉴权语义（`webui/docs/07-mcp-auth-proxy-spec.md`）。
 - 不修改 KTX 上游 API（`/api/admin/agents` 返回结构）。
-- 不新增或删除 `/overview` 上的任何主要区块（待处理事项 / 质量快照 / 访问风险 / MCP 接入全部保留）。
+- 不新增或删除 `/overview` 上的任何主要区块（待处理事项 / 质量快照 / 访问风险 / MCP 接入全部保留）。**已由 Spec 142 修订：质量快照与访问风险从首页删除。**
 - 不调整 M40 已落地的 PageHeader 组件契约（仅 Onboarding 这一处调用方收敛）。
 - 不引入自动刷新相关的新测试场景。
 

@@ -235,10 +235,9 @@ describe("Onboarding", () => {
     // a high-weight alert. With the default fixture the page is ready.
     expect(await screen.findByTestId("ops-service-health-summary")).toBeInTheDocument();
     expect(document.querySelector('[data-testid="ops-service-health"]')).toBeNull();
-    // 访问风险区使用「可用 Token」；MCP 接入区只保留 Endpoint 固定配置。
-    const accessRisk = await screen.findByTestId("ops-access-risk");
-    expect(accessRisk.textContent ?? "").toContain("可用");
-    expect(accessRisk.textContent ?? "").toContain("Token");
+    // Spec 142: homepage no longer shows 访问风险 / Token 计数。
+    expect(screen.queryByTestId("ops-access-risk")).not.toBeInTheDocument();
+    expect(screen.queryByText("访问风险")).not.toBeInTheDocument();
     const mcpSection = screen.getByRole("heading", { name: "MCP 接入" }).closest("section");
     expect(mcpSection?.textContent ?? "").not.toMatch(/Agent:\s*\d+/);
     expect(mcpSection?.textContent ?? "").not.toMatch(/Token:\s*\d+/);
@@ -321,7 +320,8 @@ describe("Onboarding", () => {
     expect(items.length).toBeGreaterThan(0);
     for (const item of items) {
       const text = item.textContent ?? "";
-      expect(text).toMatch(/高风险|待处理|提醒/);
+      expect(text).toMatch(/待处理|提醒/);
+      expect(text).not.toContain("高风险");
       expect(text).not.toMatch(/(^|\s)Critical(\s|$)/);
       expect(text).not.toMatch(/(^|\s)Warning(\s|$)/);
       expect(text).not.toMatch(/(^|\s)Ready(\s|$)/);
@@ -385,24 +385,14 @@ describe("Onboarding", () => {
     // Action required queue
     expect(screen.getByTestId("ops-action-required")).toBeInTheDocument();
     expect(screen.getByText("待处理事项")).toBeInTheDocument();
-    // Quality + Access snapshots
-    expect(screen.getByTestId("ops-quality-snapshot")).toBeInTheDocument();
-    expect(screen.getByTestId("ops-access-risk")).toBeInTheDocument();
-    expect(screen.getByText("质量快照")).toBeInTheDocument();
-    expect(screen.getByText("访问风险")).toBeInTheDocument();
-    // 质量快照只覆盖语义 / 发布 / 评测；访问风险负责 Agent / ACL / Token。
-    const qualitySnapshot = screen.getByTestId("ops-quality-snapshot");
-    const accessRisk = screen.getByTestId("ops-access-risk");
-    expect(qualitySnapshot.textContent ?? "").toContain("语义覆盖率");
-    expect(qualitySnapshot.textContent ?? "").toContain("待发布变更");
-    expect(qualitySnapshot.textContent ?? "").toContain("近 30 天评测运行");
-    expect(qualitySnapshot.textContent ?? "").not.toContain("Agent 启用");
-    expect(qualitySnapshot.textContent ?? "").not.toContain("ACL 拒绝");
-    expect(accessRisk.textContent ?? "").toContain("Agent 启用与禁用");
-    expect(accessRisk.textContent ?? "").toContain("近 7 天 ACL 拒绝");
-    expect(accessRisk.textContent ?? "").toContain("可用");
-    expect(accessRisk.textContent ?? "").toContain("Token");
-    expect(screen.queryByText(/活跃\s*Token/)).not.toBeInTheDocument();
+    // Spec 142: homepage keeps health + queue + MCP only.
+    expect(screen.queryByTestId("ops-quality-snapshot")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ops-access-risk")).not.toBeInTheDocument();
+    expect(screen.queryByText("质量快照")).not.toBeInTheDocument();
+    expect(screen.queryByText("访问风险")).not.toBeInTheDocument();
+    expect(screen.queryByText("近 7 天 ACL 拒绝")).not.toBeInTheDocument();
+    expect(screen.queryByText("高风险")).not.toBeInTheDocument();
+    expect(screen.getByText("确认系统可用，处理当前待办。")).toBeInTheDocument();
     // The MCP section uses its own heading now (no more "实时状态与诊断").
     expect(screen.getByRole("heading", { name: "MCP 接入" })).toBeInTheDocument();
   });
@@ -634,67 +624,23 @@ describe("Onboarding", () => {
     });
   });
 
-  it("excludes revoked and expired tokens from the 可用 Token count", async () => {
-    const now = new Date("2026-08-01T00:00:00Z");
-    const future = new Date("2027-01-01T00:00:00Z").toISOString();
-    const past = new Date("2026-06-24T00:00:00Z").toISOString();
-
+  it("does not surface token inventory on the homepage (Spec 142)", async () => {
     renderPage({
       agents: [
         {
           ...readyAgent,
-          id: "agent-enabled",
-          name: "enabled-agent",
-          enabled: true,
           tokens: [
-            { hash: "h1", label: "fresh", created: now.toISOString(), expires_at: future }, // counts
-            { hash: "h2", label: "expired", created: now.toISOString(), expires_at: past, revoked: true }, // revoked + expired
-            { hash: "h3", label: "past", created: now.toISOString(), expires_at: past } // expired
-            // unparseable expires_at → unparseable strings need explicit fixture; see next test
-          ]
-        },
-        {
-          ...readyAgent,
-          id: "agent-disabled",
-          name: "disabled-agent",
-          enabled: false,
-          tokens: [
-            { hash: "h4", label: "future", created: now.toISOString(), expires_at: future }
+            { hash: "h1", label: "fresh", created: "2026-08-01T00:00:00Z", expires_at: "2027-01-01T00:00:00Z" }
           ]
         }
       ]
     });
-
-    // 访问风险区显示「可用 Token：1 个」
-    const accessRisk = await screen.findByTestId("ops-access-risk");
-    expect(accessRisk.textContent ?? "").toMatch(/1/);
-    expect(accessRisk.textContent ?? "").toContain("可用");
-    expect(accessRisk.textContent ?? "").toContain("Token");
-    expect(accessRisk.textContent ?? "").not.toContain("活跃");
-    // MCP 接入区不再同步显示 Token / Agent 汇总。
+    await screen.findByTestId("ops-service-health-summary");
+    expect(screen.queryByTestId("ops-metric-tokens")).not.toBeInTheDocument();
+    expect(screen.queryByText("可用 Token")).not.toBeInTheDocument();
     const mcpSection = screen.getByRole("heading", { name: "MCP 接入" }).closest("section");
     expect(mcpSection?.textContent ?? "").not.toMatch(/Token:\s*1\s*可用/);
     expect(mcpSection?.textContent ?? "").not.toMatch(/Agent:\s*\d+/);
-  });
-
-  it("treats unparseable expires_at as NOT available", async () => {
-    renderPage({
-      agents: [
-        {
-          ...readyAgent,
-          id: "agent-bad-expires",
-          name: "bad-expires-agent",
-          enabled: true,
-          tokens: [
-            { hash: "h5", label: "no-expires", created: "2026-01-01T00:00:00Z", expires_at: null }, // counts (永不过期)
-            { hash: "h6", label: "bad-string", created: "2026-01-01T00:00:00Z", expires_at: "not-a-date" } // ignored
-          ]
-        }
-      ]
-    });
-    const accessRisk = await screen.findByTestId("ops-access-risk");
-    expect(accessRisk.textContent ?? "").toMatch(/1/);
-    expect(accessRisk.textContent ?? "").toContain("可用");
   });
 
   it("renders the danger alert with component-specific copy when KTX is unavailable", async () => {
@@ -739,7 +685,7 @@ describe("Onboarding", () => {
     expect(document.querySelector('[data-testid="ops-service-health"]')).toBeNull();
   });
 
-  it("shows ACL denials on access risk only, not in action-required", async () => {
+  it("does not show ACL denials on the homepage or in action-required", async () => {
     renderPage({
       agents: [{ ...readyAgent, stats: { callsLast7d: 10, deniedLast7d: 0, topTables: [] } }],
       aclDenied7d: 3
@@ -748,14 +694,9 @@ describe("Onboarding", () => {
     const queue = await screen.findByTestId("ops-action-required");
     expect(queue.textContent ?? "").not.toContain("近 7 天存在 ACL 拒绝");
     expect(screen.queryByTestId("ops-action-acl-deny")).not.toBeInTheDocument();
-
-    const accessRisk = screen.getByTestId("ops-access-risk");
-    expect(accessRisk.textContent ?? "").toContain("近 7 天 ACL 拒绝");
-    expect(accessRisk.textContent ?? "").toContain("3");
-    expect(screen.getByTestId("ops-metric-acl").querySelector("a")).toHaveAttribute(
-      "href",
-      expect.stringMatching(/outcome=denied/)
-    );
+    expect(screen.queryByTestId("ops-access-risk")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ops-metric-acl")).not.toBeInTheDocument();
+    expect(screen.queryByText("近 7 天 ACL 拒绝")).not.toBeInTheDocument();
   });
 
   it("uses Chinese severity labels (no bare Critical / Warning / Ready / Info) for action items", async () => {
@@ -787,8 +728,9 @@ describe("Onboarding", () => {
     expect(items.length).toBeGreaterThan(0);
     for (const item of Array.from(items)) {
       const itemText = item.textContent ?? "";
-      expect(itemText).toMatch(/高风险|待处理|提醒/);
-      expect(itemText).toMatch(/语义覆盖|Catalog 同步|语义变更|评测运行/);
+      expect(itemText).toMatch(/待处理|提醒/);
+      expect(itemText).not.toContain("高风险");
+      expect(itemText).toMatch(/语义覆盖|语义变更|评测运行/);
       expect(itemText).not.toMatch(/近 7 天存在 ACL 拒绝/);
       expect(itemText).toMatch(/影响：/);
       expect(itemText).toMatch(/证据来源：/);
@@ -802,31 +744,7 @@ describe("Onboarding", () => {
     }
   });
 
-  it("renders the semantic coverage progress bar with accessible aria attributes", async () => {
-    renderPage({
-      sources: [
-        readySource,
-        { ...readySource, table: "customers", qualifiedName: "demo.customers", completion: "done" },
-        { ...readySource, table: "products", qualifiedName: "demo.products", completion: "not_started" },
-        { ...readySource, table: "orders2", qualifiedName: "demo.orders2", completion: "partial" }
-      ]
-    });
-
-    const snapshot = await screen.findByTestId("ops-quality-snapshot");
-    const progress = snapshot.querySelector('[role="progressbar"]');
-    expect(progress).toBeInTheDocument();
-    // 2 done / 4 total → 50%.
-    expect(progress?.getAttribute("aria-valuenow")).toBe("50");
-    expect(progress?.getAttribute("aria-valuemin")).toBe("0");
-    expect(progress?.getAttribute("aria-valuemax")).toBe("100");
-    // The main metric should be visible as a large standalone percent.
-    expect(snapshot.textContent ?? "").toMatch(/\d+%/);
-    // The label must describe the metric in text so screen readers don't
-    // rely solely on color/length.
-    expect(progress?.getAttribute("aria-label") ?? snapshot.textContent ?? "").toMatch(/语义/);
-  });
-
-  it("scopes semantic coverage to enabled tables only (Spec 104)", async () => {
+  it("scopes semantic-gap to enabled tables only (Spec 104 / 142)", async () => {
     renderPage({
       sources: [
         readySource,
@@ -847,51 +765,26 @@ describe("Onboarding", () => {
       ]
     });
 
-    const snapshot = await screen.findByTestId("ops-quality-snapshot");
-    expect(snapshot.textContent ?? "").toMatch(/1\/1/);
-    expect(snapshot.textContent ?? "").not.toMatch(/1\/3/);
-    expect(screen.queryByText(/张表待补语义/)).not.toBeInTheDocument();
-    expect(snapshot.textContent ?? "").toMatch(/0\s*张表待补/);
+    const queue = await screen.findByTestId("ops-action-required");
+    expect(queue.textContent ?? "").not.toMatch(/张表待补语义/);
+    expect(queue.textContent ?? "").not.toContain("Catalog 对象待处理");
+    expect(screen.queryByTestId("ops-quality-snapshot")).not.toBeInTheDocument();
   });
 
-  it("unifies quality and access metric rows with right-center CTAs (Spec 102)", async () => {
+  it("keeps a large semantic gap as 待处理, not 高风险 (Spec 142)", async () => {
     renderPage({
       sources: [
         readySource,
-        { ...readySource, table: "customers", completion: "done" },
-        { ...readySource, table: "products", completion: "not_started" }
+        { ...readySource, table: "customers", completion: "not_started" },
+        { ...readySource, table: "products", completion: "not_started" },
+        { ...readySource, table: "returns", completion: "not_started" }
       ]
     });
-
-    const quality = await screen.findByTestId("ops-quality-snapshot");
-    const risk = screen.getByTestId("ops-access-risk");
-
-    expect(quality.querySelectorAll(".pl-ops-metric-row")).toHaveLength(3);
-    expect(risk.querySelectorAll(".pl-ops-metric-row")).toHaveLength(3);
-    // 左右列表仍挂在 panel 下；lg+ 用 display:contents + subgrid 做行对齐，DOM 结构不变。
-    expect(quality.querySelector(".pl-snapshot-list")).toBeTruthy();
-    expect(risk.querySelector(".pl-risk-list")).toBeTruthy();
-    expect(quality.parentElement).toHaveClass("pl-ops-grid");
-    expect(risk.parentElement).toHaveClass("pl-ops-grid");
-
-    const semantic = screen.getByTestId("ops-metric-semantic");
-    const semanticCta = semantic.querySelector("a.pl-ops-metric-row-cta");
-    expect(semanticCta).toHaveAttribute("href", "/catalog?completion=incomplete");
-    expect(semanticCta?.textContent ?? "").toMatch(/查看语义资产/);
-    expect(semantic.querySelector(".pl-ops-metric-row-cta")).toBeTruthy();
-    expect(semantic.querySelector(".pl-ops-metric-row-body .pl-ops-metric-row-strong")).toBeTruthy();
-
-    const publishCta = screen.getByTestId("ops-metric-publish").querySelector("a.pl-ops-metric-row-cta");
-    expect(publishCta).toHaveAttribute("href", "/publish/workbench");
-
-    const aclCta = screen.getByTestId("ops-metric-acl").querySelector("a.pl-ops-metric-row-cta");
-    expect(aclCta).toHaveAttribute("href", "/admin/audit?view=calls&range=7d&outcome=denied");
-
-    const tokenRow = screen.getByTestId("ops-metric-tokens");
-    expect(tokenRow.querySelector('[data-testid="ops-metric-icon-token"]')).toBeInTheDocument();
-    expect(tokenRow.querySelector("a.pl-ops-metric-row-cta")).toHaveAttribute("href", "/admin/agents");
-    expect(tokenRow.textContent ?? "").toContain("可用");
-    expect(tokenRow.textContent ?? "").toContain("Token");
+    const queue = await screen.findByTestId("ops-action-required");
+    expect(queue.textContent ?? "").toContain("张表待补语义");
+    expect(queue.textContent ?? "").toContain("待处理");
+    expect(queue.textContent ?? "").not.toContain("高风险");
+    expect(screen.queryByTestId("ops-action-catalog-pending")).not.toBeInTheDocument();
   });
 
   it("does not render the raw MCP config JSON code block by default", async () => {

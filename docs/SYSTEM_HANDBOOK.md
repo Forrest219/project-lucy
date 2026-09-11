@@ -64,7 +64,7 @@
 | 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
 | `/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」有什么关系？ | 共用 `GET /api/sources` 的 `completion`。`/catalog` 展示四态完成度；启用表范围页先看 `enabled_tables`，再把非 `done` 收成「已启用，待补语义」。 | [语义状态与启用表范围状态](#语义状态与启用表范围状态)、[系统概览待处理事项](#系统概览待处理事项) |
 | `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |
-| 「待处理事项」其它条目分别统计什么？ | `Catalog` 待处理当前与语义缺口同数；待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录。近 7 天 `ACL` 拒绝只在「访问风险」指标卡展示，不进入待处理事项。计数为 0 不展示。 | [系统概览待处理事项](#系统概览待处理事项) |
+| 「待处理事项」其它条目分别统计什么？ | 只保留三类：待补语义、待发布文件、近 30 天无评测。待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录。计数为 0 不展示。近 7 天 `ACL` 拒绝不在首页展示，到 `/admin/audit` 或使用概况查看。 | [系统概览待处理事项](#系统概览待处理事项) |
 
 ### 0.2 面向管理员
 
@@ -180,7 +180,7 @@ KTX CLI / MCP daemon
 
 | 分组 | 二级菜单 | 路径 | 一句话用途 |
 | --- | --- | --- | --- |
-| 系统概览 | 系统概览 | `/overview` | 查看 Lucy `MCP`、`KTX` `Runtime`、语义资产和 `Agent` 接入状态，集中处理异常与待办。 |
+| 系统概览 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |
 | 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |
 | 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |
 | 语义建模 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |
@@ -321,12 +321,11 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 | 条目 | 计数来源 | 口径说明 |
 | --- | --- | --- |
-| N 张表待补语义 | `GET /api/sources`（`enabled === true`） | **已启用 ∩ `Manifest`** 中 `completion !== done` 的表数。按**表**计数；未启用 `Manifest` 表不计入。 |
-| N 个 Catalog 对象待处理 | 同上 | **当前实现与「待补语义」使用同一公式**（已启用集上的 `total − done`）；文案写 Catalog 同步不完整，但数字并非独立 Catalog 同步指标。 |
+| N 张表待补语义 | `GET /api/sources`（`enabled === true`） | **已启用 ∩ `Manifest`** 中 `completion !== done` 的表数。按**表**计数；未启用 `Manifest` 表不计入。徽章为「待处理」，不因缺口比例升为「高风险」。 |
 | 存在 N 个待发布文件 | `GET /api/diff` | 返回的可审阅变更文件数（`files.length`）。 |
-| 近 30 天无评测数据 | `GET /api/eval/runs/summary?days=30` | 仅在接口成功且返回 `state='no_data'`（确认 **0 条** `status='succeeded'` 运行）时出现。时间窗为 `[started_at ≥ windowStart, started_at < windowEnd]`（30 天半开区间）；加载中、接口失败或 `state='unavailable'` 时均不展示该项。 |
+| 近 30 天无评测数据 | `GET /api/eval/runs/summary?days=30` | 仅在接口成功且返回 `state='no_data'`（确认 **0 条** `status='succeeded'` 运行）时出现。时间窗为 `[started_at ≥ windowStart, started_at < windowEnd]`（30 天半开区间）；加载中、接口失败或 `state='unavailable'` 时均不展示该项。徽章为「提醒」。 |
 
-近 7 天 ACL 拒绝（各 `Agent` 的 `stats.deniedLast7d` 求和）只在「访问风险」指标卡展示，**不进入**「待处理事项」——滚动窗口无法通过「查看访问日志」闭环消除。
+首页 **不再** 并列「Catalog 对象待处理」（曾与待补语义同数）或「访问风险 / 近 7 天 ACL 拒绝」。`ACL` 拒绝次数到 `/admin/audit` 或使用概况查看——滚动窗口无法通过「查看访问日志」闭环消除，故不进入待处理事项，也不占首页第一屏。
 
 一张表何时算 `done`（`webui/server/completion.ts`）：
 

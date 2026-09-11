@@ -85,7 +85,6 @@ export type SemanticCoverage = { done: number; total: number };
 
 export type ActionRequiredInput = {
   semanticCoverage: SemanticCoverage;
-  pendingCatalogItems: number;
   pendingPublishFiles: number;
   /**
    * Number of eval runs in the last 30 days. Pass `null` when we don't yet
@@ -123,18 +122,14 @@ export function pendingSemanticCount(coverage: SemanticCoverage): number {
 /**
  * Decide the severity for a semantic-gap item.
  *
- * - `total <= 0`: no item.
- * - gap ratio ≥ 2/3 (`done < total/3`): critical ("高风险").
- * - otherwise: warning ("待处理").
- *
- * The 2/3 threshold matches spec 41 §6.2 "待发布变更、Catalog 待处理、语义
- * 覆盖不足" warning bucket; large gaps surface as `高风险` so users see the
- * governance posture immediately.
+ * Spec 142: any unfinished enabled ∩ Manifest table is a work-queue item
+ * (`warning` / 「待处理」). Large gaps must not escalate to `critical` /
+ * 「高风险」 on the homepage — that label is reserved for system unavailability.
  */
 function semanticGapSeverity(coverage: SemanticCoverage): Exclude<Severity, "ready"> | null {
   if (coverage.total <= 0) return null;
   if (coverage.done >= coverage.total) return null;
-  return coverage.done * 3 < coverage.total ? "critical" : "warning";
+  return "warning";
 }
 
 /**
@@ -148,7 +143,6 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
   // payload (e.g. an ETL miscount) used to surface as a phantom
   // "X 张表待补语义" item with a negative number. Clamp here so the
   // helper stays total: a downstream caller can trust the result.
-  const safePendingCatalog = Math.max(0, input.pendingCatalogItems);
   const safePendingPublish = Math.max(0, input.pendingPublishFiles);
   // `evalRunsLast30d === null` means we have no data yet — never
   // collapse that to 0, or the helper would fabricate a misleading
@@ -158,9 +152,9 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
   const semanticGap = pendingSemanticCount(input.semanticCoverage);
   const semanticSeverity = semanticGapSeverity(input.semanticCoverage);
 
-  // ACL deny counts stay on the 访问风险 metric card only: a rolling
-  // 7-day window is not an actionable queue item (viewing logs cannot
-  // clear historical denials).
+  // Spec 142: homepage queue is semantic / publish / eval only.
+  // catalog-pending duplicated semantic-gap. ACL denials are not
+  // actionable (rolling window) and must not appear on /overview.
   const items: Array<ActionRequiredItem | null> = [
     semanticSeverity
       ? {
@@ -174,18 +168,6 @@ export function buildActionRequiredItems(input: ActionRequiredInput): ActionRequ
           actionUrl: DEEP_LINKS.catalogIncomplete,
           impact: "Agent 可能无法回答相关表问题",
           evidence: "语义资产"
-        }
-      : null,
-    safePendingCatalog > 0
-      ? {
-          id: "catalog-pending",
-          title: `${formatCount(safePendingCatalog)} 个 Catalog 对象待处理`,
-          description: `Catalog 同步发现 ${formatCount(safePendingCatalog)} 个对象同步不完整（部分字段或元数据缺失）`,
-          severity: "warning",
-          actionText: "查看连接",
-          actionUrl: DEEP_LINKS.connections,
-          impact: "本地目录与启用表范围可能不一致",
-          evidence: "数据接入"
         }
       : null,
     safePendingPublish > 0
