@@ -53,6 +53,7 @@
 | `uat-agent-permissions-v1.md` | Module 1 UAT（表级 ACL；不含 Row Policy） |
 | `review-agent-permissions-v1.md` | Module 1 代码审查报告 |
 | `gap-analysis-202608.md` | 202608 Governance 差距分析（不含 Dynamic RLS） |
+| `proposal-access-onboarding-simplification-202609.md` | **待审批**：访问治理「加人 / 开权限」体验简化（意图优先 + 渐进披露；与 Spec 133 顺序裁决） |
 | `integrity-p0-decision.md` | 企业完整性 P0 决策备忘（承诺表 / 已知限制 / 与工程 P0 对齐） |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
