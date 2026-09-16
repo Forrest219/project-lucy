@@ -1,3 +1,4 @@
+import { LOCAL_MCP_ENDPOINT } from "../runtime-config.js";
 import type { SkillAsset, SkillClientTarget, SkillExportBundle } from "./types.js";
 
 export function exportSkillsForClaudeCode(skills: SkillAsset[]): Record<string, string> {
@@ -20,7 +21,7 @@ export function exportSkillsForCursor(skills: SkillAsset[]): Record<string, stri
 
 export function exportSkillsForMcpJson(
   skills: SkillAsset[],
-  proxyUrl = "http://127.0.0.1:7879/mcp"
+  proxyUrl = LOCAL_MCP_ENDPOINT
 ): Record<string, unknown> {
   return {
     mcpServers: {
@@ -44,7 +45,7 @@ export function exportSkillPackage(
   target: SkillClientTarget,
   options?: { proxyUrl?: string }
 ): SkillExportBundle {
-  const proxyUrl = options?.proxyUrl ?? "http://127.0.0.1:7879/mcp";
+  const proxyUrl = options?.proxyUrl ?? LOCAL_MCP_ENDPOINT;
   let files: Record<string, string> = {};
   let mcpConfig: Record<string, unknown> | undefined;
 

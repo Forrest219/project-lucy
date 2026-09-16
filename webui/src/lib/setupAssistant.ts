@@ -118,15 +118,23 @@ export function formatAssistantProgressLabel(step: SetupStep): string {
   return `向导进度: ${step}/6 · 待${meta ? meta.title : "继续配置"}`;
 }
 
+/** Placeholder when callers have not yet loaded `GET /api/project.mcpEndpoint.url`. */
+export const MCP_ENDPOINT_PLACEHOLDER = "<LUCY_PUBLIC_MCP_URL>";
+
 /**
  * Build copy-pasteable client configurations for MCP.
+ *
+ * Endpoint must come from `GET /api/project.mcpEndpoint.url` (or an explicit
+ * caller-supplied URL). Do not invent `localhost` / `127.0.0.1` defaults here —
+ * those are only produced by the backend local-dev fallback in
+ * `resolveMcpEndpoint`.
  */
 export function buildClientConfigs(
   endpointUrl: string,
   token: string = MCP_TOKEN_PLACEHOLDER,
   connectionId?: string
 ): Record<ClientType, ClientConfigItem> {
-  const safeEndpoint = endpointUrl || "http://127.0.0.1:7879/mcp";
+  const safeEndpoint = endpointUrl.trim() || MCP_ENDPOINT_PLACEHOLDER;
   const serverName = connectionId ? `lucy-${connectionId}` : "lucy-data-agent";
 
   const cursorJson = JSON.stringify(

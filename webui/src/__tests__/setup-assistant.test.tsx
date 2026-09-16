@@ -92,12 +92,21 @@ describe("Setup Assistant Library & Utilities", () => {
   });
 
   it("builds client configurations for Cursor, Claude Code, Codex, and Generic JSON", () => {
-    const configs = buildClientConfigs("http://127.0.0.1:7879/mcp", "test-token-123", "mysql-test");
+    const configs = buildClientConfigs("https://lucy.example.com/mcp", "test-token-123", "mysql-test");
     expect(configs.cursor.snippet).toContain("lucy-mysql-test");
     expect(configs.cursor.snippet).toContain("Bearer test-token-123");
     expect(configs.claude_code.snippet).toContain("claude mcp add");
     expect(configs.codex.snippet).toContain("[mcp_servers.lucy-mysql-test]");
-    expect(configs.json.snippet).toContain("http://127.0.0.1:7879/mcp");
+    expect(configs.json.snippet).toContain("https://lucy.example.com/mcp");
+    expect(configs.cursor.snippet).not.toContain("localhost");
+    expect(configs.cursor.snippet).not.toContain("127.0.0.1");
+  });
+
+  it("does not invent a localhost MCP endpoint when url is empty", () => {
+    const configs = buildClientConfigs("", "test-token-123");
+    expect(configs.cursor.snippet).toContain("<LUCY_PUBLIC_MCP_URL>");
+    expect(configs.cursor.snippet).not.toContain("localhost");
+    expect(configs.cursor.snippet).not.toContain("127.0.0.1:7879");
   });
 
   it("builds Hello World prompt", () => {
@@ -212,7 +221,13 @@ describe("SetupAssistantModal Component", () => {
             JSON.stringify({
               ok: true,
               data: {
-                mcpEndpoint: { url: "http://127.0.0.1:7879/mcp" },
+                mcpEndpoint: {
+                  url: "https://lucy.example.com/mcp",
+                  status: "configured",
+                  source: "env",
+                  configured: true,
+                  diagnostics: []
+                },
                 connections: []
               }
             })
@@ -333,9 +348,14 @@ describe("SetupAssistantModal Component", () => {
       expect(screen.getByTestId("setup-step-6")).toBeInTheDocument();
     });
 
-    // Before token generation, config snippet has placeholder
+    // Before token generation, config snippet has placeholder token but real Advertise URL
     const configSnippet = screen.getByTestId("setup-mcp-config-snippet");
+    await waitFor(() => {
+      expect(configSnippet).toHaveTextContent("https://lucy.example.com/mcp");
+    });
     expect(configSnippet).toHaveTextContent("<YOUR_LUCY_AGENT_TOKEN>");
+    expect(configSnippet).not.toHaveTextContent("localhost");
+    expect(configSnippet).not.toHaveTextContent("127.0.0.1");
 
     // Check token card is rendered in "待签发" state
     expect(screen.getByTestId("setup-token-card")).toBeInTheDocument();

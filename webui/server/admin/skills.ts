@@ -3,7 +3,14 @@ import { loadAllSkills, getSkillByUri, getSkillByName, parseSkillMarkdown, inval
 import { validateSkill } from "../skills/validator.js";
 import { exportSkillPackage } from "../skills/exporter.js";
 import { resolveProjectRoot } from "../project.js";
+import { resolveMcpEndpoint } from "../runtime-config.js";
 import type { SkillAsset, SkillClientTarget, SkillWithValidation } from "../skills/types.js";
+
+function advertisedMcpUrl(override?: string): string | null {
+  const trimmed = override?.trim();
+  if (trimmed) return trimmed;
+  return resolveMcpEndpoint().url;
+}
 
 export function registerSkillsRoutes(app: FastifyInstance): void {
   // 1. List all skills with validation status
@@ -107,7 +114,13 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
   // 4. Export skill bundle
   app.get("/api/skills/export", async (req: FastifyRequest<{ Querystring: { target?: string; proxyUrl?: string } }>, reply: FastifyReply) => {
     const target = (req.query.target as SkillClientTarget) || "all";
-    const proxyUrl = req.query.proxyUrl || "http://127.0.0.1:7879/mcp";
+    const proxyUrl = advertisedMcpUrl(req.query.proxyUrl);
+    if (!proxyUrl) {
+      return reply.status(400).send({
+        ok: false,
+        error: "Lucy MCP endpoint is unavailable. Configure LUCY_PUBLIC_MCP_URL or pass proxyUrl."
+      });
+    }
     try {
       const skills = await loadAllSkills();
       const bundle = exportSkillPackage(skills, target, { proxyUrl });
@@ -125,7 +138,13 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
 
   app.post("/api/skills/export", async (req: FastifyRequest<{ Body: { target?: string; proxyUrl?: string; skills?: string[] } }>, reply: FastifyReply) => {
     const target = (req.body?.target as SkillClientTarget) || "all";
-    const proxyUrl = req.body?.proxyUrl || "http://127.0.0.1:7879/mcp";
+    const proxyUrl = advertisedMcpUrl(req.body?.proxyUrl);
+    if (!proxyUrl) {
+      return reply.status(400).send({
+        ok: false,
+        error: "Lucy MCP endpoint is unavailable. Configure LUCY_PUBLIC_MCP_URL or pass proxyUrl."
+      });
+    }
     const requestedNames = req.body?.skills;
     try {
       let skills = await loadAllSkills();

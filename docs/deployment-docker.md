@@ -262,14 +262,14 @@ docker compose exec lucy ktx --version
 
 ## 8. MCP Agent Config
 
-Agent 平台应接入 Lucy MCP Proxy：
+Agent 平台应接入 Lucy MCP Proxy。URL **必须**使用部署方配置的 `LUCY_PUBLIC_MCP_URL`（WebUI 展示/复制的同一个值），不要手写 `localhost` / `127.0.0.1`：
 
 ```json
 {
   "mcpServers": {
     "lucy": {
       "type": "http",
-      "url": "http://localhost:7879/mcp",
+      "url": "<LUCY_PUBLIC_MCP_URL>",
       "headers": {
         "Authorization": "Bearer <LUCY_AGENT_TOKEN>"
       }
@@ -278,7 +278,7 @@ Agent 平台应接入 Lucy MCP Proxy：
 }
 ```
 
-`<LUCY_AGENT_TOKEN>` 来自持久化目录中的 `webui/config/access.yaml` agent/token 配置或一次性 token 创建流程。不要把内部 `KTX_INTERNAL_TOKEN` 配给外部 agent。
+`<LUCY_PUBLIC_MCP_URL>` 来自运行时 Advertise 配置（见 §9）；`<LUCY_AGENT_TOKEN>` 来自持久化目录中的 `webui/config/access.yaml` agent/token 配置或一次性 token 创建流程。不要把内部 `KTX_INTERNAL_TOKEN` 配给外部 agent。
 
 ## 9. Runtime Environment
 
