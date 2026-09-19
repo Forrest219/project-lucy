@@ -77,11 +77,15 @@ export function Step6ConnectAgent({
     tokenMutation.mutate(activeAgentId);
   };
 
-  const endpointUrl = projectData?.mcpEndpoint?.url || "http://127.0.0.1:7879/mcp";
+  const endpointInfo = projectData?.mcpEndpoint;
+  // Only consume the backend Advertise URL. Never invent localhost / 127.0.0.1.
+  const endpointUrl = endpointInfo?.url ?? "";
   const activeToken = generatedToken?.token || "<YOUR_LUCY_AGENT_TOKEN>";
   const configs = buildClientConfigs(endpointUrl, activeToken, connectionId);
   const currentConfig = configs[activeTab];
   const helloPrompt = buildHelloWorldPrompt(connectionId, defaultTable);
+  const endpointFallback = endpointInfo?.status === "fallback";
+  const endpointInvalid = endpointInfo?.status === "invalid" || (!endpointUrl && Boolean(projectData));
 
   const copyToClipboard = async (text: string, isPrompt = false, isToken = false) => {
     try {
@@ -265,6 +269,29 @@ export function Step6ConnectAgent({
           </div>
         </div>
 
+        {endpointFallback ? (
+          <div className="pl-notice text-xs" data-testid="setup-mcp-fallback-notice">
+            当前为本地开发 <span className="notranslate" translate="no">fallback</span>
+            ，不可用于客户交付。请配置{" "}
+            <code className="notranslate" translate="no">
+              LUCY_PUBLIC_MCP_URL
+            </code>{" "}
+            为 <span className="notranslate" translate="no">Agent</span> 可达的对外{" "}
+            <span className="notranslate" translate="no">MCP</span>{" "}
+            <span className="notranslate" translate="no">Endpoint</span>。
+          </div>
+        ) : null}
+        {endpointInvalid ? (
+          <div className="pl-error text-xs" data-testid="setup-mcp-endpoint-diagnostic">
+            {(endpointInfo?.diagnostics?.length
+              ? endpointInfo.diagnostics.map((d) => d.message)
+              : ["无法加载 Lucy MCP Endpoint，请配置 LUCY_PUBLIC_MCP_URL 后重试。"]
+            ).map((message, i) => (
+              <div key={`${message}-${i}`}>{message}</div>
+            ))}
+          </div>
+        ) : null}
+
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-fg-muted">
             <span className="notranslate" translate="no">{currentConfig.filenameHint}</span>
@@ -274,6 +301,7 @@ export function Step6ConnectAgent({
               translate="no"
               onClick={() => copyToClipboard(currentConfig.snippet, false)}
               data-testid="setup-copy-config-btn"
+              disabled={!endpointUrl || endpointInvalid}
             >
               {copiedSnippet ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               <span className="notranslate" translate="no">{copiedSnippet ? "已复制配置" : "复制配置"}</span>

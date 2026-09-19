@@ -101,7 +101,7 @@ This is the markdown body.
 
   it("exports skills package for claude-code, cursor and mcp-json", async () => {
     const skills = await loadAllSkills();
-    const bundleAll = exportSkillPackage(skills, "all", { proxyUrl: "http://localhost:7879/mcp" });
+    const bundleAll = exportSkillPackage(skills, "all", { proxyUrl: "https://lucy.example.com/mcp" });
     expect(bundleAll.count).toBe(skills.length);
     expect(bundleAll.mcpConfig).toBeDefined();
     expect(Object.keys(bundleAll.files).length).toBeGreaterThan(0);

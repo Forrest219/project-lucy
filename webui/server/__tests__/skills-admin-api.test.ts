@@ -112,26 +112,35 @@ status: draft
   });
 
   it("GET /api/skills/export and POST /api/skills/export generate bundle", async () => {
-    const resGet = await app.inject({
-      method: "GET",
-      url: "/api/skills/export?target=cursor",
-    });
-    expect(resGet.statusCode).toBe(200);
-    const jsonGet = resGet.json();
-    expect(jsonGet.ok).toBe(true);
-    expect(jsonGet.bundle.target).toBe("cursor");
+    const prevPublic = process.env.LUCY_PUBLIC_MCP_URL;
+    process.env.LUCY_PUBLIC_MCP_URL = "https://lucy.example.com/mcp";
+    try {
+      const resGet = await app.inject({
+        method: "GET",
+        url: "/api/skills/export?target=cursor",
+      });
+      expect(resGet.statusCode).toBe(200);
+      const jsonGet = resGet.json();
+      expect(jsonGet.ok).toBe(true);
+      expect(jsonGet.bundle.target).toBe("cursor");
 
-    const resPost = await app.inject({
-      method: "POST",
-      url: "/api/skills/export",
-      payload: {
-        target: "mcp-json",
-        skills: ["superstore-profit"],
-      },
-    });
-    expect(resPost.statusCode).toBe(200);
-    const jsonPost = resPost.json();
-    expect(jsonPost.bundle.target).toBe("mcp-json");
-    expect(jsonPost.bundle.mcpConfig).toBeDefined();
+      const resPost = await app.inject({
+        method: "POST",
+        url: "/api/skills/export",
+        payload: {
+          target: "mcp-json",
+          skills: ["superstore-profit"],
+        },
+      });
+      expect(resPost.statusCode).toBe(200);
+      const jsonPost = resPost.json();
+      expect(jsonPost.bundle.target).toBe("mcp-json");
+      expect(jsonPost.bundle.mcpConfig).toBeDefined();
+      expect(JSON.stringify(jsonPost.bundle.mcpConfig)).toContain("https://lucy.example.com/mcp");
+      expect(JSON.stringify(jsonPost.bundle.mcpConfig)).not.toContain("localhost");
+    } finally {
+      if (prevPublic === undefined) delete process.env.LUCY_PUBLIC_MCP_URL;
+      else process.env.LUCY_PUBLIC_MCP_URL = prevPublic;
+    }
   });
 });
