@@ -693,9 +693,6 @@
 | `mcp-config-drawer-title` | mcp-config-drawer-title | `pages/Onboarding.tsx` |
 | `mcp-config-drawer-close` | mcp-config-drawer-close | `pages/Onboarding.tsx` |
 | `mcp-config-drawer-agent-link` | mcp-config-drawer-agent-link | `pages/Onboarding.tsx` |
-| `ops-metric-icon-semantic` | ops-metric-icon-semantic | `pages/Onboarding.tsx` |
-| `ops-semantic-percent` | ops-semantic-percent | `pages/Onboarding.tsx` |
-| `ops-semantic-progress` | ops-semantic-progress | `pages/Onboarding.tsx` |
 | `onboarding-last-updated-announce` | onboarding-last-updated-announce | `pages/Onboarding.tsx` |
 | `onboarding-refresh-controls` | onboarding-refresh-controls | `pages/Onboarding.tsx` |
 | `onboarding-last-updated` | onboarding-last-updated | `pages/Onboarding.tsx` |
@@ -705,13 +702,6 @@
 | `ops-action-required` | ops-action-required | `pages/Onboarding.tsx` |
 | `ops-action-required-count` | ops-action-required-count | `pages/Onboarding.tsx` |
 | `ops-action-required-empty` | ops-action-required-empty | `pages/Onboarding.tsx` |
-| `ops-quality-snapshot` | ops-quality-snapshot | `pages/Onboarding.tsx` |
-| `ops-metric-icon-publish` | ops-metric-icon-publish | `pages/Onboarding.tsx` |
-| `ops-metric-icon-eval` | ops-metric-icon-eval | `pages/Onboarding.tsx` |
-| `ops-access-risk` | ops-access-risk | `pages/Onboarding.tsx` |
-| `ops-metric-icon-agents` | ops-metric-icon-agents | `pages/Onboarding.tsx` |
-| `ops-metric-icon-acl` | ops-metric-icon-acl | `pages/Onboarding.tsx` |
-| `ops-metric-icon-token` | ops-metric-icon-token | `pages/Onboarding.tsx` |
 | `ops-mcp-access` | ops-mcp-access | `pages/Onboarding.tsx` |
 | `mcp-config-copy-button` | mcp-config-copy-button | `pages/Onboarding.tsx` |
 | `mcp-config-view-button` | mcp-config-view-button | `pages/Onboarding.tsx` |

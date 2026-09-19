@@ -92,7 +92,7 @@
 | [98-agent-admin-kpi-column-order-and-identity-header-spec.md](98-agent-admin-kpi-column-order-and-identity-header-spec.md) | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 | 产品 / UX / Frontend |
 | [99-mcp-playground-acl-decision-visibility-spec.md](99-mcp-playground-acl-decision-visibility-spec.md) | MCP 调试台：ACL 裁决预览、裁决原因双行可读化、必达 `tools/list` smoke（Implemented v1.1） | 产品 / API / UX / 安全 / Frontend |
 | [100-overview-health-action-deeplink-loop-spec.md](100-overview-health-action-deeplink-loop-spec.md) | `/overview` 深链 Registry 闭环；Catalog query 原子交付；回写 refetch；Attu 指标卡 icon（Implemented v1.2） | 产品 / UX / Frontend |
-| [102-overview-quality-risk-metric-row-unification-spec.md](102-overview-quality-risk-metric-row-unification-spec.md) | `/overview` 质量快照 / 访问风险六卡 Metric Row 统一；CTA 右中（Implemented v1.0） | 产品 / UX / Frontend |
+| [102-overview-quality-risk-metric-row-unification-spec.md](102-overview-quality-risk-metric-row-unification-spec.md) | `/overview` 质量快照 / 访问风险六卡 Metric Row 统一（历史；首页分区已被 Spec 142 删除） | 产品 / UX / Frontend |
 | [103-list-page-kpi-metric-card-unification-spec.md](103-list-page-kpi-metric-card-unification-spec.md) | 列表页 KPI 以 Connections 为基准；每卡 ⓘ；共享 MetricCard；允许 3/4/8 网格（Implemented v1.0） | 产品 / UX / Design System / Frontend |
 | [104-enabled-scope-semantic-coverage-alignment-spec.md](104-enabled-scope-semantic-coverage-alignment-spec.md) | 语义覆盖 / 待补语义 / Catalog 默认范围对齐 `enabled_tables`（Implemented v1.0） | 产品 / UX / API / Frontend |
 | [105-wiki-directory-selection-explorer-ia-spec.md](105-wiki-directory-selection-explorer-ia-spec.md) | `/wiki` Attu 式目录选中驱动右栏、中栏面板视觉、空态；重命名延期（Implemented v1.0） | 产品 / UX / IA / Frontend |
@@ -127,7 +127,8 @@
 | [139-enterprise-data-agent-answerability-and-delivery-standard.md](139-enterprise-data-agent-answerability-and-delivery-standard.md) | 企业级 Data Agent 可回答性门禁、失败预算、情景标注与最终交付合同（Implemented，待生产 UAT） | 产品 / Agent / Eval / Runtime |
 | [140-admin-audit-dual-csv-export-spec.md](140-admin-audit-dual-csv-export-spec.md) | `/admin/audit` 双粒度 CSV 导出：问询记录一问一行、调用流水一调用一行，并在页面与 Help 说明两者关联 | 产品 / UX / API / Audit / Frontend / Backend |
 | [141-admin-audit-csv-readability-metadata-spec.md](141-admin-audit-csv-readability-metadata-spec.md) | `/admin/audit` CSV 可读性增强：本地时间 + UTC 双轨、秒级流水号文件名、字段说明元数据 | 产品 / UX / API / Audit / Frontend / Backend |
-| [142-call-monitoring-ops-page-spec.md](142-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Draft） | 产品 / UX / API / Ops / Frontend / Backend |
+| [142-overview-focus-and-restraint-spec.md](142-overview-focus-and-restraint-spec.md) | `/overview` 聚焦精简：只保留系统状态 / 待处理事项 / MCP 接入；删除质量快照与访问风险（Implemented v1.0） | 产品 / UX / Frontend |
+| [143-call-monitoring-ops-page-spec.md](143-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Draft） | 产品 / UX / API / Ops / Frontend / Backend |
 
 ## 与原 README 的关键校正
 

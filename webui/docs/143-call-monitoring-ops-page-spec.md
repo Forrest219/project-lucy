@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | 调用监控运维页 Spec (Call Monitoring Ops Page Spec) |
 | 文档类型 | Product / API / UX Spec |
-| Spec 编号 | 142 |
+| Spec 编号 | 143 |
 | 版本 | v0.1 |
 | 撰写日期 | 2026-09-04 |
 | 委托人 | xingchen |
 | 状态 | Draft / Ready for Review |
-| 输出位置 | `webui/docs/142-call-monitoring-ops-page-spec.md` |
+| 输出位置 | `webui/docs/143-call-monitoring-ops-page-spec.md` |
 | 上游 Spec / 事实源 | Spec 07（MCP Proxy audit）、Spec 08（问询追溯）、Spec 19/41/100（系统概览 / 运行状态）、Spec 69（governance observability）、Spec 75/78/86/87（使用概况）、Spec 89/94/106（访问日志）、`webui/server/observability.ts`、`webui/server/proxy/audit.ts` |
 | 关联术语 | `webui/docs/00-product-terminology-standard.md` §4.6 / 本 Spec Terminology Compliance |
 | 关联 IA | `webui/docs/06-navigation-ia.md`（本 Spec 修订「运行状态」分组） |

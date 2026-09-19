@@ -1,38 +1,36 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import {
+  availableTokenCount,
   buildActionRequiredItems,
   buildServiceHealth,
   EVAL_MONITOR_EMPTY_ACTIONS,
+  isTokenAvailable,
   NO_ACTION_REQUIRED_MESSAGE,
   pendingSemanticCount,
   severityOrder
 } from "../lib/opsDashboard";
+import type { Agent, TokenSummary } from "../lib/types";
 
 describe("opsDashboard view model", () => {
   it("prioritizes semantic gaps, pending changes, and eval gaps", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 4, total: 16 },
-      pendingCatalogItems: 10,
       pendingPublishFiles: 3,
       evalRunsLast30d: 0
     });
     expect(items.map((item) => item.title)).toEqual([
       "12 张表待补语义",
-      "10 个 Catalog 对象待处理",
       "存在 3 个待发布文件",
       "近 30 天无评测数据"
     ]);
-    expect(items[0]?.severity).toBe("critical");
-    // 12/16 = 0.75 done, 0.25 gap ratio > 2/3 → the semantic-gap is now
-    // classified as `critical` per M39 severity policy.
-    expect(items.find((item) => item.id === "semantic-gap")?.severity).toBe("critical");
+    expect(items.find((item) => item.id === "semantic-gap")?.severity).toBe("warning");
+    expect(items.find((item) => item.id === "catalog-pending")).toBeUndefined();
   });
 
   it("returns an empty queue when every input is healthy", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 8, total: 8 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: 5
     });
@@ -93,7 +91,6 @@ describe("opsDashboard view model", () => {
   it("keeps action items fact-based with required impact/evidence and Registry URLs", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 2, total: 16 },
-      pendingCatalogItems: 4,
       pendingPublishFiles: 2,
       evalRunsLast30d: 0
     });
@@ -112,95 +109,55 @@ describe("opsDashboard view model", () => {
     const semantic = items.find((item) => item.id === "semantic-gap");
     expect(semantic?.actionUrl).toBe("/catalog?completion=incomplete");
     expect(items.find((item) => item.id === "acl-deny")).toBeUndefined();
+    expect(items.find((item) => item.id === "catalog-pending")).toBeUndefined();
   });
 
-  it("never surfaces acl-deny in the action-required queue", () => {
-    // Rolling 7-day ACL deny is shown only on the 访问风险 metric card;
-    // viewing audit logs cannot clear historical denials.
+  it("never surfaces acl-deny or catalog-pending in the action-required queue", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 16, total: 16 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: 5
     });
     expect(items.find((item) => item.id === "acl-deny")).toBeUndefined();
+    expect(items.find((item) => item.id === "catalog-pending")).toBeUndefined();
     expect(items.some((item) => item.title.includes("ACL"))).toBe(false);
   });
 
-  it("labels a large semantic gap as critical and a small gap as warning", () => {
+  it("labels every semantic gap as warning, including large gaps (Spec 142)", () => {
     const large = buildActionRequiredItems({
       semanticCoverage: { done: 2, total: 16 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: 5
     });
-    const gapLarge = large.find((item) => item.id === "semantic-gap");
-    expect(gapLarge).toBeDefined();
-    expect(gapLarge?.severity).toBe("critical");
+    expect(large.find((item) => item.id === "semantic-gap")?.severity).toBe("warning");
 
     const small = buildActionRequiredItems({
       semanticCoverage: { done: 12, total: 16 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: 5
     });
-    const gapSmall = small.find((item) => item.id === "semantic-gap");
-    expect(gapSmall).toBeDefined();
-    expect(gapSmall?.severity).toBe("warning");
+    expect(small.find((item) => item.id === "semantic-gap")?.severity).toBe("warning");
 
     const none = buildActionRequiredItems({
       semanticCoverage: { done: 16, total: 16 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: 5
     });
     expect(none.find((item) => item.id === "semantic-gap")).toBeUndefined();
   });
 
-  // M39 polish (MAJOR-2): boundary tests for the 2/3 threshold. The
-  // helper treats `done * 3 < total` as critical and everything else
-  // (where `done * 3 >= total` but `done < total`) as warning. These
-  // three cases pin the exact behaviour at the boundary.
-  it("boundary: done=5 total=15 -> warning (5*3=15 not < 15)", () => {
-    const items = buildActionRequiredItems({
-      semanticCoverage: { done: 5, total: 15 },
-      pendingCatalogItems: 0,
-      pendingPublishFiles: 0,
-      evalRunsLast30d: 5
-    });
-    const gap = items.find((item) => item.id === "semantic-gap");
-    expect(gap).toBeDefined();
-    expect(gap?.severity).toBe("warning");
-  });
-
-  it("boundary: done=5 total=16 -> critical (5*3=15 < 16)", () => {
+  it("does not escalate a large gap to critical at the old 2/3 boundary", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 5, total: 16 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: 5
     });
-    const gap = items.find((item) => item.id === "semantic-gap");
-    expect(gap).toBeDefined();
-    expect(gap?.severity).toBe("critical");
-  });
-
-  it("boundary: done=4 total=13 -> critical (4*3=12 < 13)", () => {
-    const items = buildActionRequiredItems({
-      semanticCoverage: { done: 4, total: 13 },
-      pendingCatalogItems: 0,
-      pendingPublishFiles: 0,
-      evalRunsLast30d: 5
-    });
-    const gap = items.find((item) => item.id === "semantic-gap");
-    expect(gap).toBeDefined();
-    expect(gap?.severity).toBe("critical");
+    expect(items.find((item) => item.id === "semantic-gap")?.severity).toBe("warning");
   });
 
   it("downgrades the eval-gap severity from warning to info", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 8, total: 8 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: 0
     });
@@ -210,15 +167,8 @@ describe("opsDashboard view model", () => {
   });
 
   it("omits the eval-gap item when evalRunsLast30d is null (still loading or errored)", () => {
-    // M39 review follow-up (P2-B): when the eval probe hasn't returned
-    // data yet, passing `null` must suppress the item entirely so the
-    // dashboard never fabricates a misleading "近 30 天无评测数据"
-    // against unknown data. Collapsing `null` to `0` (the previous
-    // behaviour) used to surface that item during both initial load and
-    // errored states.
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 8, total: 8 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: 0,
       evalRunsLast30d: null
     });
@@ -229,7 +179,6 @@ describe("opsDashboard view model", () => {
   it("folds real supporting counts into title or description", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 4, total: 16 },
-      pendingCatalogItems: 5,
       pendingPublishFiles: 3,
       evalRunsLast30d: 0
     });
@@ -237,7 +186,6 @@ describe("opsDashboard view model", () => {
       "semantic-gap": {
         text: "当前语义覆盖 4/16，仍有 12 张表缺少可用语义"
       },
-      "catalog-pending": { text: "Catalog 同步发现 5 个对象同步不完整（部分字段或元数据缺失）" },
       "publish-pending": { text: "当前有 3 个语义变更尚未发布" },
       "eval-gap": { text: "尚未检测到近 30 天评测运行记录" }
     };
@@ -248,30 +196,60 @@ describe("opsDashboard view model", () => {
     }
   });
 
-  // M39 polish (MINOR-1): negative-input guards. A buggy upstream ETL
-  // payload (e.g. an unsigned int that overflowed into a negative value)
-  // used to leak a phantom "−5 张表待补语义" item into the queue. The
-  // helper now clamps every count to >= 0 so downstream rendering can
-  // trust the numbers.
-  it("clamps negative pendingCatalogItems to zero", () => {
-    const items = buildActionRequiredItems({
-      semanticCoverage: { done: 16, total: 16 },
-      pendingCatalogItems: -5,
-      pendingPublishFiles: 0,
-      evalRunsLast30d: 5
-    });
-    const catalog = items.find((item) => item.id === "catalog-pending");
-    expect(catalog).toBeUndefined();
-  });
-
   it("clamps negative pendingPublishFiles to zero", () => {
     const items = buildActionRequiredItems({
       semanticCoverage: { done: 16, total: 16 },
-      pendingCatalogItems: 0,
       pendingPublishFiles: -3,
       evalRunsLast30d: 5
     });
     const publish = items.find((item) => item.id === "publish-pending");
     expect(publish).toBeUndefined();
+  });
+
+  it("counts only usable tokens on enabled agents", () => {
+    const now = new Date("2026-08-01T00:00:00Z");
+    const future = "2027-01-01T00:00:00Z";
+    const past = "2026-06-24T00:00:00Z";
+    const agents: Agent[] = [
+      {
+        id: "agent-enabled",
+        name: "enabled-agent",
+        enabled: true,
+        role: "analyst",
+        tokens: [
+          { hash: "h1", label: "fresh", created: now.toISOString(), expires_at: future },
+          { hash: "h2", label: "expired", created: now.toISOString(), expires_at: past, revoked: true },
+          { hash: "h3", label: "past", created: now.toISOString(), expires_at: past }
+        ]
+      },
+      {
+        id: "agent-disabled",
+        name: "disabled-agent",
+        enabled: false,
+        role: "analyst",
+        tokens: [
+          { hash: "h4", label: "future", created: now.toISOString(), expires_at: future }
+        ]
+      }
+    ];
+    expect(availableTokenCount(agents, now)).toBe(1);
+  });
+
+  it("treats unparseable expires_at as not available", () => {
+    const now = new Date("2026-08-01T00:00:00Z");
+    const bad: TokenSummary = {
+      hash: "h6",
+      label: "bad-string",
+      created: "2026-01-01T00:00:00Z",
+      expires_at: "not-a-date"
+    };
+    const forever: TokenSummary = {
+      hash: "h5",
+      label: "no-expires",
+      created: "2026-01-01T00:00:00Z",
+      expires_at: null
+    };
+    expect(isTokenAvailable(forever, now)).toBe(true);
+    expect(isTokenAvailable(bad, now)).toBe(false);
   });
 });

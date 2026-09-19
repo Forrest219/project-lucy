@@ -264,7 +264,7 @@ docs/ui-ux-feedback/
 - 用户可见文案不得直接暴露内部状态枚举（如 `partial` / `done` / `stale` / `invalid`）；须改写为中文、可理解的影响描述，并尽量给出下一步动作入口。页头 description 只保留“页面能力 + 用户动作价值”，不得写内部实现叙事（如 data agent 可交付状态判断）。
 - 发布 / 审计类历史表必须优先展示业务变更范围（连接、变更源）与规模（文件数、语义源数）；纯运维触发信息不得挤掉主列。手动索引重建且无资产变更时，须用明确空态文案，不得留白。
 - 「导出当前语义资产包」类动作若导出的是当前工作区而非历史批次，只能放在 Header（或页级辅助区）；禁止在历史行内用「下载快照」等文案冒充该批次存档。按 releaseId 的历史包下载未交付前，不得放假按钮。
-- 运维驾驶舱并排快照卡（如质量快照 / 访问风险）必须共用同一 Metric Row 骨架：标题左上、主值左下并拉开间距、CTA 右侧垂直居中对齐「待处理事项」；禁止同栏内混用「主值右上 / CTA 左下 / Token 特例」多套模板（主题 `ops metric-row symmetry`；样板见 Spec 102）。
+- `/overview` 只保留系统状态、待处理事项、MCP 接入；不得再并排「质量快照 / 访问风险」，不得把 ACL 拒绝次数标红放进第一屏（主题 `overview focus restraint`；样板见 Spec 142）。历史六卡 Metric Row 见 Spec 102，不再约束首页。
 - 列表/概览页顶部 KPI 指标卡必须以 `/connections` 为基准线：标题行（12px muted）+ 必有 ⓘ（口径 tooltip）+ 主值 + 单一副文；使用共享 `MetricCard` / `--with-help` 保持卡高一致。允许网格数量差异（3 / 4 / 2×4），禁止 5–7 残缺行。warning 只染主值；成功健康态默认不整卡染色；禁止未定义 tone 修饰符。`/overview` Ops Metric Row（icon+CTA）不在此模板（主题 `list-page kpi metric-card`；样板见 Spec 103）。
 - 运维「语义覆盖 / 待补语义」与语义资产默认列表必须以 `enabled_tables` 为分母（已启用 ∩ Manifest）；不得把未启用 Manifest 表算进待办。Catalog 可切换查看全量，但未启用行不得主推「维护语义」（主题 `enabled-scope semantic coverage`；样板见 Spec 104）。
 - 连接概览 Schema 计数必须三分：`库内表数`（物理库）、`已发现表数`（Manifest）、`已启用表数`（`enabled_tables`）；禁止合并或互用文案。「重新拉取库内目录」会连库；「同步配置变更 / 刷新本地目录」不连库（主题 `live catalog vs local inventory`；样板见 Spec 107）。

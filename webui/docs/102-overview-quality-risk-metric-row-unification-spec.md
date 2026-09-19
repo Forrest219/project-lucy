@@ -19,7 +19,7 @@
 | 关联页面 | `/overview`（`ops-quality-snapshot` / `ops-access-risk`） |
 | 关联台账 | `docs/ui-ux-feedback/pages/overview.md`（`UX-OVERVIEW-016`～`018`） |
 | 上游 Spec | Spec 100 §8（Attu 式 icon + 主值）；Spec 41 / 43（系统概览快照区） |
-| 状态 | Implemented |
+| 状态 | Superseded on `/overview` by Spec 142；本文保留为历史布局记录 |
 | 日期 | 2026-08-05 |
 | 范围 | 统一 Metric Row 骨架；CTA 右中对齐待处理事项；标题左上 / 数值左下；Token 卡对齐；语义卡保留 progress |
 
@@ -28,6 +28,7 @@
 | 版本 | 变更 |
 |---|---|
 | v1.0 | 初稿并落地：统一质量/访问六卡布局与 CTA |
+| v1.1 | **修订（Spec 142）：** `/overview` 删除质量快照与访问风险分区，六卡不再渲染。本 Spec 不再约束首页布局。 |
 
 ## 1. 背景
 
