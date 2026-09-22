@@ -170,6 +170,16 @@ function forwardToUpstream(
   });
 }
 
+function readUpstreamBody(upstream: IncomingMessage): Promise<string> {
+  return (async () => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of upstream as AsyncIterable<Buffer>) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString();
+  })();
+}
+
 function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
   return refs.map((ref) => ({
     connectionId: ref.connectionId,
@@ -1530,6 +1540,88 @@ function upstreamFailureReason(error: unknown): "source_timeout" | "upstream_una
   return /timeout/i.test(message) ? "source_timeout" : "upstream_unavailable";
 }
 
+/** KTX rejects session traffic that arrives before a successful `initialize`
+ * with a plain-text 400. Matching the text is the only signal available: the
+ * rejection happens in KTX's transport layer, outside the JSON-RPC envelope. */
+const UPSTREAM_SESSION_REQUIRED_RE = /initialize request is required/i;
+const UPSTREAM_BODY_EXCERPT_MAX = 200;
+
+export type UpstreamFailureReason = "upstream_session_required" | "upstream_protocol_error";
+
+type UpstreamFailure = {
+  reason: UpstreamFailureReason;
+  upstreamStatus: number;
+  errorDetail: string;
+  responseBody: string;
+};
+
+function isJsonRpcShaped(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const record = payload as Record<string, unknown>;
+  return "result" in record || "error" in record;
+}
+
+function decodeUpstreamPayload(body: string, contentType: string, requestId: string | number): unknown | undefined {
+  try {
+    if (contentType.includes("text/event-stream")) return decodeSseMessage(body, requestId);
+    if (contentType.includes("application/json")) return JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+/** The upstream body stays in the audit trail only — client-facing errors carry
+ * a reason code and status, never raw upstream text (Spec 07 §6.1). */
+function upstreamErrorResponse(requestId: string | number, failure: Omit<UpstreamFailure, "responseBody">): string {
+  return JSON.stringify({
+    jsonrpc: "2.0",
+    id: requestId,
+    error: {
+      code: -32003,
+      message: "KTX upstream rejected the request",
+      data: {
+        reason: failure.reason,
+        upstreamStatus: failure.upstreamStatus,
+        hint: failure.reason === "upstream_session_required"
+          ? "The upstream MCP session was not established. Lucy re-establishes it automatically; a persistent failure means the upstream refused the proxy handshake."
+          : undefined
+      }
+    }
+  });
+}
+
+/**
+ * Classify a failed upstream response so it never reaches the client verbatim.
+ *
+ * KTX signals transport faults as `text/plain` with a 4xx status. Forwarding
+ * that status and body unchanged gives MCP clients something they cannot parse
+ * as JSON-RPC, and the audit sniff (which only parses JSON) silently recorded
+ * the call as `ok`. Returns undefined when the body already carries a usable
+ * JSON-RPC envelope — those keep their own error shape.
+ */
+function classifyUpstreamFailure(
+  statusCode: number | undefined,
+  contentType: string,
+  body: string,
+  requestId: string | number
+): UpstreamFailure | undefined {
+  const upstreamStatus = statusCode ?? 200;
+  if (upstreamStatus < 400) return undefined;
+  if (isJsonRpcShaped(decodeUpstreamPayload(body, contentType, requestId))) return undefined;
+  const bodyExcerpt = body.trim().slice(0, UPSTREAM_BODY_EXCERPT_MAX);
+  const reason: UpstreamFailureReason = UPSTREAM_SESSION_REQUIRED_RE.test(body)
+    ? "upstream_session_required"
+    : "upstream_protocol_error";
+  const partial = {
+    reason,
+    upstreamStatus,
+    errorDetail: `${reason}:upstream_status=${upstreamStatus}${bodyExcerpt ? `;body=${bodyExcerpt}` : ""}`
+  };
+  return { ...partial, responseBody: upstreamErrorResponse(requestId, partial) };
+}
+
+
 function ensureJsonRpcEnvelope(payload: unknown, requestId: string | number): unknown {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
   const record = payload as Record<string, unknown>;
@@ -1673,9 +1765,74 @@ function filterAndAddAllowedTools(payload: unknown, visibleTools: Set<string>, r
   };
 }
 
+/**
+ * Emit a classified upstream failure as JSON-RPC and record it as an error.
+ *
+ * Both were previously wrong for KTX's plain-text 4xx: the raw status and body
+ * were forwarded to the client, and the audit sniff only parsed JSON so the
+ * call was stored with `outcome=ok` and an `errorDetail` about result
+ * enrichment rather than the rejection.
+ */
+async function writeUpstreamFailureResponse(
+  failure: UpstreamFailure,
+  context: {
+    identity: Identity;
+    upstream: IncomingMessage;
+    res: ServerResponse;
+    requestId: string | number;
+    toolName: string;
+    start: number;
+    requestMeta: Partial<Parameters<typeof writeLog>[0]>;
+    argsSummary: Record<string, unknown> | undefined;
+    queryMeta: Partial<Parameters<typeof writeLog>[0]>;
+    tables: string[];
+    traceId: string;
+  }
+): Promise<void> {
+  const responseBytes = Buffer.byteLength(failure.responseBody);
+  context.res.writeHead(200, {
+    ...bufferedJsonHeaders(context.upstream),
+    "content-length": responseBytes
+  });
+  context.res.end(failure.responseBody);
+
+  recordAudit({
+    ts: new Date().toISOString(),
+    userId: context.identity.userId,
+    client: context.identity.client,
+    tool: context.toolName,
+    tables: context.tables.length > 0 ? context.tables : undefined,
+    argsSummary: context.argsSummary,
+    ...context.queryMeta,
+    outcome: "error",
+    errorDetail: failure.errorDetail,
+    durationMs: Date.now() - context.start,
+    responseBytes,
+    requestId: context.requestId,
+    traceId: context.traceId,
+    ...context.requestMeta,
+    ...(await auditMeta(context.identity, failure.reason)),
+  });
+  recordMcpTraceForTool({
+    traceId: context.traceId,
+    identity: context.identity,
+    toolName: context.toolName,
+    status: "error",
+    startedAt: new Date(context.start).toISOString(),
+    turnId: context.requestMeta.lucyTurnId ?? null,
+    sessionId: context.requestMeta.lucySessionId ?? null,
+    requestId: context.requestId,
+    argsSummary: context.argsSummary,
+    allowed: true,
+    reason: failure.reason,
+    policySource: "other"
+  });
+}
+
 async function writeLucySemanticResponse(
   identity: Identity,
   upstream: IncomingMessage,
+  upstreamBody: string,
   res: ServerResponse,
   requestId: string | number,
   toolName: string,
@@ -1687,14 +1844,26 @@ async function writeLucySemanticResponse(
   queryTables: string[],
   traceId: string
 ): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of upstream as AsyncIterable<Buffer>) {
-    chunks.push(chunk);
-  }
-
-  const originalBody = Buffer.concat(chunks).toString();
+  const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
+  const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId);
+  if (upstreamFailure) {
+    await writeUpstreamFailureResponse(upstreamFailure, {
+      identity,
+      upstream,
+      res,
+      requestId,
+      toolName,
+      start,
+      requestMeta,
+      argsSummary,
+      queryMeta,
+      tables: [...new Set([...sourceRefs.map((ref) => ref.physicalTable), ...queryTables])],
+      traceId
+    });
+    return;
+  }
   let body = originalBody;
   let metaFailed: string | undefined;
   // Buffered tools/call responses are always normalized to application/json when
@@ -1726,8 +1895,13 @@ async function writeLucySemanticResponse(
   res.writeHead(upstream.statusCode ?? 200, headers);
   res.end(body);
 
-  let outcome: "ok" | "error" = "ok";
-  let errorDetail = metaFailed;
+  // A 4xx/5xx that still carries a JSON-RPC envelope keeps its own body, but the
+  // audit row must reflect the failure rather than the enrichment outcome.
+  const upstreamStatus = upstream.statusCode ?? 200;
+  let outcome: "ok" | "error" = upstreamStatus >= 400 ? "error" : "ok";
+  let errorDetail = upstreamStatus >= 400
+    ? `upstream_status=${upstreamStatus}${metaFailed ? `;${metaFailed}` : ""}`
+    : metaFailed;
   let parsedBody: Record<string, unknown> | undefined;
   try {
     const parsed = (!metaFailed || contentType.includes("application/json"))
@@ -1828,16 +2002,27 @@ async function localToolsListPayload(identity: Identity, requestId: string | num
 async function writeToolsListResponse(
   identity: Identity,
   upstream: IncomingMessage,
+  upstreamBody: string,
   res: ServerResponse,
   requestId: string | number
-): Promise<{ filterFailed: boolean; errorDetail?: string; responseBytes: number }> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of upstream as AsyncIterable<Buffer>) {
-    chunks.push(chunk);
-  }
-
-  const originalBody = Buffer.concat(chunks).toString();
+): Promise<{ filterFailed: boolean; errorDetail?: string; responseBytes: number; upstreamFailure?: UpstreamFailureReason }> {
+  const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
+  const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId);
+  if (upstreamFailure) {
+    const responseBytes = Buffer.byteLength(upstreamFailure.responseBody);
+    res.writeHead(200, {
+      ...bufferedJsonHeaders(upstream),
+      "content-length": responseBytes
+    });
+    res.end(upstreamFailure.responseBody);
+    return {
+      filterFailed: true,
+      errorDetail: upstreamFailure.errorDetail,
+      responseBytes,
+      upstreamFailure: upstreamFailure.reason
+    };
+  }
   const visibleTools = new Set(await allowedToolNames(identity));
   let body = originalBody;
   let filterFailed = false;
@@ -1878,15 +2063,11 @@ async function writeToolsListResponse(
 async function writeInitializeResponse(
   identity: Identity,
   upstream: IncomingMessage,
+  upstreamBody: string,
   res: ServerResponse,
   requestId: string | number
 ): Promise<{ injectionFailed: boolean; errorDetail?: string; responseBytes: number }> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of upstream as AsyncIterable<Buffer>) {
-    chunks.push(chunk);
-  }
-
-  const originalBody = Buffer.concat(chunks).toString();
+  const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const instructions = await buildRoleAwareInstructions(identity);
   const isSse = contentType.includes("text/event-stream");
@@ -2951,9 +3132,15 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     outboundBody = rewriteToolCall(parsedRpc, "sl_query", lucyQueryUpstreamArgs(toolArgs));
   }
 
+  // `initialize`, `tools/list` and `tools/call` responses are all buffered before
+  // being rewritten, so they are read here once and passed down. Only these paths
+  // can recover a refused upstream session (a piped response cannot be retried).
+  const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call";
   let upstream: IncomingMessage;
+  let upstreamBody = "";
   try {
     upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, outboundBody);
+    if (bufferedUpstream) upstreamBody = await readUpstreamBody(upstream);
   } catch (err) {
     if (rpcMethod === "initialize") {
       const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
@@ -3087,7 +3274,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     throw err;
   }
 
-  if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
+  if (rpcMethod === "initialize") {
     const responseSessionId = normalizeHeader(upstream.headers["mcp-session-id"]);
     if (responseSessionId) requestMeta.lucySessionId = responseSessionId;
     if (responseSessionId && initializeClientInfo) {
@@ -3099,7 +3286,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         initializeClientInfo.version
       );
     }
-    const initResult = await writeInitializeResponse(identity, upstream, res, requestId);
+  }
+
+  if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
+    const initResult = await writeInitializeResponse(identity, upstream, upstreamBody, res, requestId);
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -3117,30 +3307,46 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
 
   if (rpcMethod === "tools/list") {
-    const toolsList = await writeToolsListResponse(identity, upstream, res, requestId);
+    const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId);
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
       client: identity.client,
       tool: rpcMethod,
-      outcome: "ok",
+      outcome: toolsList.upstreamFailure ? "error" : "ok",
       errorDetail: toolsList.errorDetail,
       durationMs: Date.now() - start,
       responseBytes: toolsList.responseBytes,
       requestId,
       ...requestMeta,
-      ...(await auditMeta(identity, toolsList.filterFailed ? "tools_list_filter_failed" : "allowed")),
+      ...(await auditMeta(
+        identity,
+        toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed")
+      )),
     });
     return;
   }
 
   if (rpcMethod === "tools/call" && toolName === "wiki_search") {
-    const chunks: Buffer[] = [];
-    for await (const chunk of upstream as AsyncIterable<Buffer>) {
-      chunks.push(chunk);
-    }
-    const originalBody = Buffer.concat(chunks).toString();
+    const originalBody = upstreamBody;
     const contentType = String(upstream.headers["content-type"] ?? "");
+    const wikiUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId);
+    if (wikiUpstreamFailure) {
+      await writeUpstreamFailureResponse(wikiUpstreamFailure, {
+        identity,
+        upstream,
+        res,
+        requestId,
+        toolName,
+        start,
+        requestMeta,
+        argsSummary,
+        queryMeta,
+        tables: queryTables,
+        traceId
+      });
+      return;
+    }
     let body = originalBody;
     let filterFailed: string | undefined;
     let filteredCount = 0;
@@ -3219,20 +3425,33 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
 
   if (rpcMethod === "tools/call" && (toolName === "lucy_query" || toolName === "lucy_read_source")) {
-    await writeLucySemanticResponse(identity, upstream, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables, traceId);
+    await writeLucySemanticResponse(identity, upstream, upstreamBody, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables, traceId);
     return;
   }
 
-  // For tool calls: buffer then normalize finite SSE to JSON (Streamable HTTP
-  // clients such as Cursor / Claude Code hang on Content-Length + keep-alive SSE).
+  // For tool calls: normalize finite SSE to JSON (Streamable HTTP clients such as
+  // Cursor / Claude Code hang on Content-Length + keep-alive SSE).
   // Non-SSE JSON still passes through with original headers.
   if (rpcMethod === "tools/call") {
-    const chunks: Buffer[] = [];
-    for await (const chunk of upstream as AsyncIterable<Buffer>) {
-      chunks.push(chunk);
-    }
-    const responseBody = Buffer.concat(chunks);
+    const responseBody = Buffer.from(upstreamBody);
     const contentType = String(upstream.headers["content-type"] ?? "");
+    const callUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, upstreamBody, requestId);
+    if (callUpstreamFailure) {
+      await writeUpstreamFailureResponse(callUpstreamFailure, {
+        identity,
+        upstream,
+        res,
+        requestId,
+        toolName: toolName ?? "tools/call",
+        start,
+        requestMeta,
+        argsSummary,
+        queryMeta,
+        tables: queryTables,
+        traceId
+      });
+      return;
+    }
 
     let outBody = responseBody;
     let headers: Record<string, string | string[] | number>;
@@ -3266,8 +3485,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     res.writeHead(upstream.statusCode ?? 200, headers);
     res.end(outBody);
 
-    let outcome: "ok" | "error" = "ok";
-    let errorDetail: string | undefined;
+    const callUpstreamStatus = upstream.statusCode ?? 200;
+    let outcome: "ok" | "error" = callUpstreamStatus >= 400 ? "error" : "ok";
+    let errorDetail: string | undefined = callUpstreamStatus >= 400
+      ? `upstream_status=${callUpstreamStatus}`
+      : undefined;
     let tables: string[] | undefined;
     try {
       const sniffType = forceJson ? "application/json" : contentType;
@@ -3275,7 +3497,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         const parsed = JSON.parse(outBody.toString()) as Record<string, unknown>;
         if (parsed.error || (parsed.result as Record<string, unknown> | undefined)?.isError) {
           outcome = "error";
-          errorDetail = JSON.stringify(parsed.error ?? (parsed.result as Record<string, unknown>)?.content);
+          const parsedDetail = JSON.stringify(parsed.error ?? (parsed.result as Record<string, unknown>)?.content);
+          errorDetail = errorDetail ? `${errorDetail};${parsedDetail}` : parsedDetail;
         }
       }
     } catch {
@@ -3340,18 +3563,29 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
     });
   } else {
-    pipeResponse(upstream, res);
+    if (bufferedUpstream) {
+      // Body was already consumed for session handling (e.g. `initialize` with
+      // instructions injection disabled); replay it instead of piping an empty
+      // stream.
+      const headers = passthroughBodyHeaders(upstream);
+      headers["content-length"] = Buffer.byteLength(upstreamBody);
+      res.writeHead(upstream.statusCode ?? 200, headers);
+      res.end(upstreamBody);
+    } else {
+      pipeResponse(upstream, res);
+    }
     if (rpcMethod) {
       recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
         client: identity.client,
         tool: rpcMethod,
-        outcome: "ok",
+        outcome: (upstream.statusCode ?? 200) >= 400 ? "error" : "ok",
+        errorDetail: (upstream.statusCode ?? 200) >= 400 ? `upstream_status=${upstream.statusCode}` : undefined,
         durationMs: Date.now() - start,
         requestId,
         ...requestMeta,
-        ...(await auditMeta(identity, "allowed")),
+        ...(await auditMeta(identity, (upstream.statusCode ?? 200) >= 400 ? "upstream_error" : "allowed")),
       });
     }
   }
