@@ -85,11 +85,19 @@ POST /mcp (client)
   → 写 access_log（userId, tool, tables, outcome, durationMs）
 ```
 
-### 4.3 MCP Session 透传
+### 4.3 MCP Session 透传与上游 Session 归属
 
 - `mcp-session-id` header **双向透传**，代理不生成新 session ID
 - initialize 首次请求通常没有 Session ID；Proxy 必须在上游响应到达后，用响应 `mcp-session-id` 绑定请求 `clientInfo`，并把该 Session ID 写入 initialize 审计行。后续请求再按请求 header 恢复 `client` / `client_version`。
-- 一个 client session → 一个 upstream session（不复用连接）
+- **v1.6 起，KTX 传输 session 由 Proxy 按用户持有**（此前的口径是"一个 client session → 一个 upstream session"，已由本条取代）：
+  - KTX 把 MCP session 当作传输状态，任何在成功 `initialize` 之前到达的 session 流量都会被拒为 `400 MCP initialize request is required before session traffic.`（`text/plain`，非 JSON-RPC）。
+  - 纯透传把"能否取数"变成了"客户端是否回传 `Mcp-Session-Id`"。`lucy_catalog` 等由 Proxy 本地服务的工具不受影响，而 `lucy_query` / `lucy_read_source` 必须走 KTX——于是丢掉该 header 的客户端会**看得到目录、查不了数**，并把故障误判成数据库问题。Proxy 既然已经终结身份、ACL 与工具改写，就同时持有上游 session。
+  - 缓存键是 Lucy `userId`，**不是** client session：同一用户的多个脚本共用一条 KTX 传输 session。审计归因仍以 `lucy_session_id` / `lucy_turn_id` 为准，不受影响。
+  - 客户端请求**自带** `mcp-session-id` 时一律透传，Proxy 不覆盖；只有缺失时才补上自己持有的值。
+  - 补值后 KTX 仍拒绝时，Proxy 自己发一份完整 `initialize`（`protocolVersion` + `capabilities` + `clientInfo` 三项必填）加 `notifications/initialized` 重新握手，并**只重试一次**；仍失败则按 §6.1 返回 `upstream_session_required`。
+  - `initialize` 自身**不**注入 session（它就是建立 session 的那一步）。`DELETE /mcp` 以及 KTX 不可达时走本地 initialize 兜底，都必须清掉该用户的缓存，避免把已失效或从未存在的 session 重放到下一次取数。
+  - Kill switch `LUCY_ENABLE_UPSTREAM_SESSION_KEEPALIVE=false` 退回 v1.6 之前的纯透传行为。
+  - 已知边界：缓存在进程内存。KTX 若横向扩容为多进程，需要改共享存储或粘性路由，届时再定。
 - 请求 body 可缓冲（每次工具调用是单个 JSON 对象，通常 < 10KB）
 - 默认非改写路径中，**非** `tools/call` 仍原样 pipe，避免破坏真正的流式 SSE/chunked 语义
 - 下列路径会**有限缓冲并改写**响应，改写成功后统一以 `application/json` 返回（即使上游是 `text/event-stream`），且不继承上游的 SSE/`x-accel-buffering` 等帧头（保留 `mcp-session-id`）：
@@ -473,6 +481,18 @@ v1.2 / AC-P0 连接裁决：
 4. 改写成功后以 `application/json` 返回（见 §4.3），不重发有限 SSE。Progress 透传与客户端超时续命是独立议题，不在本条范围内。
 5. 实现锚点：`decodeSseJsonRpcResponse`（`webui/server/proxy/mcp-proxy.ts`）。回归：`webui/server/__tests__/mcp-proxy-smoke.test.ts`（progress→result 用例）。
 
+### 6.1.2 上游传输层失败必须转成 JSON-RPC（v1.6）
+
+**背景**：KTX 的传输层故障走 JSON-RPC 信封**之外**——典型是 `400 text/plain`。Proxy 早期把上游状态码和响应体原样转回客户端，于是 MCP 客户端拿到一段无法按 JSON-RPC 解析的裸文本，只能靠人猜原因（实际现场把 session 问题误判成了数据库查不了）；同时审计的 sniff 只解析 JSON，这类调用被记成 `outcome=ok`，`error_detail` 写的还是结果加工失败，导致失败在 `access_log` 里不可见。
+
+**强制规则**：
+
+1. 上游状态码 `>= 400` 时，先尝试把响应体解码成 JSON-RPC 信封（`application/json` 或按 §6.1.0 取 SSE response 帧）。**已经**是可用信封的，保留其自身错误形状。
+2. 否则必须合成 JSON-RPC error 返回，携带原因码（`upstream_session_required` / `upstream_protocol_error`）与上游状态码；HTTP 层以 `200` + `application/json` 返回，遵循 MCP 的错误约定。
+3. 客户端可见错误**不得**携带上游响应体原文；原文只进 `access_log.error_detail`（与"不暴露上游细节"的既有口径一致）。
+4. 上游状态码 `>= 400` 的调用，审计一律 `outcome='error'`，`decision_reason` 用上述原因码；不得因为改写路径成功就记成 `ok`。
+5. 实现锚点：`classifyUpstreamFailure` / `writeUpstreamFailureResponse`（`webui/server/proxy/mcp-proxy.ts`）。回归：`webui/server/__tests__/mcp-proxy-upstream-failure.test.ts`。
+
 ### 6.1.1 `decision_reason` 枚举
 
 | Code | 语义 |
@@ -494,6 +514,8 @@ v1.2 / AC-P0 连接裁决：
 | `token_revoked` | token 已撤销 |
 | `token_expired` | token 已过期（`expires_at` 到期或不可解析；Proxy `identifyRequest` 强制校验，见 WO-202608-62） |
 | `tools_list_rewrite_failed` | `tools/list` 改写失败，拒绝透传 |
+| `upstream_session_required` | **v1.6 新增**：KTX 以传输层 `400`（`text/plain`，非 JSON-RPC）拒绝 session 流量，且 Proxy 重新握手后仍未恢复（见 §4.3 / §6.1.2） |
+| `upstream_protocol_error` | **v1.6 新增**：上游返回 `>= 400` 且响应体不是可用的 JSON-RPC 信封（见 §6.1.2） |
 
 > AC-P0 完整裁决码表、流水线与审计字段以 Spec 98 §10 为准；上表是 Spec 07 既有枚举的**就地补丁**，避免两套互相矛盾的主码定义。
 
@@ -557,6 +579,8 @@ webui/
 | `.mcp.json` | `url` 改为 `http://localhost:7879/mcp`；加 `headers.Authorization`；v1.3：key 名改为 `lucy`，本地仓库切到走 proxy（见 §10） |
 | `webui/package.json` | 新增依赖：`better-sqlite3`、`@types/better-sqlite3` |
 | `webui/server/proxy/mcp-proxy.ts`（v1.3） | 新增 `loadDataQaInstructions()`、`instructionsInjectionEnabled()`、`writeInitializeResponse()`；`handlePost()` 新增 `initialize` 分支（见 §4.4） |
+| `webui/server/proxy/upstream-session.ts`（v1.6） | 新增：按 `userId` 持有 KTX 传输 session（见 §4.3） |
+| `webui/server/proxy/mcp-proxy.ts`（v1.6） | 新增 `classifyUpstreamFailure()` / `writeUpstreamFailureResponse()`（见 §6.1.2）、`handshakeUpstreamSession()` / `forwardToKtxWithSession()`（见 §4.3）；`handlePost()` 的上游响应缓冲上移到转发处 |
 
 ### 不改动
 
@@ -606,6 +630,7 @@ function writeLog(entry: AccessLogEntry): void
 | `LUCY_PROXY_PORT` | 代理监听端口，默认 7879 | `7879` |
 | `LUCY_AUDIT_DB` | SQLite 文件路径，默认 `.ktx-ui/audit.sqlite` | 可自定义 |
 | `LUCY_ENABLE_INSTRUCTIONS_INJECTION` | v1.3 新增：`initialize` instructions 注入开关，`!== "false"` 即启用，默认开启 | `false`（关闭时退化为 v1.3 上线前的透传行为） |
+| `LUCY_ENABLE_UPSTREAM_SESSION_KEEPALIVE` | v1.6 新增：Proxy 按用户持有 KTX 传输 session 的开关（见 §4.3），`!== "false"` 即启用，默认开启 | `false`（关闭时退化为纯透传） |
 
 ## 10. 实施阶段
 

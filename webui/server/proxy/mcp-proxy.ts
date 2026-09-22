@@ -3,6 +3,12 @@ import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
+import {
+  clearUpstreamSession,
+  getUpstreamSession,
+  setUpstreamSession,
+  upstreamSessionKeepaliveEnabled
+} from "./upstream-session.js";
 import { extractRequestClientMeta } from "./request-client-meta.js";
 import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
@@ -44,6 +50,8 @@ const QUERY_KEY_RE = /^(?:sql|query)$/i;
 const LUCY_QUERY_DEFAULT_LIMIT = Number(process.env.LUCY_QUERY_DEFAULT_LIMIT ?? 100);
 const LUCY_QUERY_MAX_LIMIT = Number(process.env.LUCY_QUERY_MAX_LIMIT ?? 1000);
 const LUCY_QUERY_MAX_INFLIGHT = Number(process.env.LUCY_QUERY_MAX_INFLIGHT ?? 4);
+const UPSTREAM_PROTOCOL_VERSION = process.env.LUCY_PROXY_UPSTREAM_PROTOCOL_VERSION ?? "2024-11-05";
+const UPSTREAM_HANDSHAKE_CLIENT_VERSION = "1.0";
 
 function getInternalToken(): string {
   return process.env.KTX_INTERNAL_TOKEN ?? "";
@@ -131,9 +139,10 @@ function forwardToKtx(
   method: string,
   url: string,
   incomingHeaders: IncomingMessage["headers"],
-  body?: Buffer
+  body?: Buffer,
+  sessionId?: string
 ): Promise<IncomingMessage> {
-  return forwardToUpstream({ host: KTX_HOST, port: KTX_PORT }, method, url, incomingHeaders, body, "KTX");
+  return forwardToUpstream({ host: KTX_HOST, port: KTX_PORT }, method, url, incomingHeaders, body, "KTX", sessionId);
 }
 
 function forwardToUpstream(
@@ -142,7 +151,8 @@ function forwardToUpstream(
   url: string,
   incomingHeaders: IncomingMessage["headers"],
   body: Buffer | undefined,
-  label: string
+  label: string,
+  sessionId?: string
 ): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const headers: Record<string, string | string[]> = {};
@@ -151,6 +161,11 @@ function forwardToUpstream(
       const lower = k.toLowerCase();
       if (!["content-type", "mcp-session-id", "mcp-protocol-version"].includes(lower)) continue;
       headers[k] = v;
+    }
+    // Only supply the gateway-held session when the client did not send one;
+    // native clients that retain `Mcp-Session-Id` keep their own session.
+    if (sessionId && !Object.keys(headers).some((key) => key.toLowerCase() === "mcp-session-id")) {
+      headers["mcp-session-id"] = sessionId;
     }
     headers["accept"] = "application/json, text/event-stream";
     const internalToken = getInternalToken();
@@ -178,6 +193,109 @@ function readUpstreamBody(upstream: IncomingMessage): Promise<string> {
     }
     return Buffer.concat(chunks).toString();
   })();
+}
+
+/**
+ * Establish a KTX transport session on the gateway's own behalf.
+ *
+ * Sends a complete `initialize` (`protocolVersion`, `capabilities` and
+ * `clientInfo` are all required — KTX rejects a partial one with the same
+ * plain-text 400 as missing session traffic), then the `notifications/initialized`
+ * the protocol requires before session traffic is accepted.
+ */
+async function handshakeUpstreamSession(identity: Identity): Promise<string | undefined> {
+  const handshakeHeaders = { "content-type": "application/json" } satisfies IncomingMessage["headers"];
+  const initializeBody = Buffer.from(JSON.stringify({
+    jsonrpc: "2.0",
+    id: `lucy-upstream-session-${randomUUID()}`,
+    method: "initialize",
+    params: {
+      protocolVersion: UPSTREAM_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: "lucy-mcp-proxy", version: UPSTREAM_HANDSHAKE_CLIENT_VERSION }
+    }
+  }));
+
+  const initializeResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializeBody);
+  const initializeResponseBody = await readUpstreamBody(initializeResponse);
+  const sessionId = normalizeHeader(initializeResponse.headers["mcp-session-id"]);
+  if ((initializeResponse.statusCode ?? 200) >= 400 || !sessionId) return undefined;
+  if (!isJsonRpcShaped(decodeUpstreamPayload(
+    initializeResponseBody,
+    String(initializeResponse.headers["content-type"] ?? ""),
+    ""
+  ))) {
+    return undefined;
+  }
+
+  const initializedBody = Buffer.from(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
+  const initializedResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializedBody, sessionId);
+  await readUpstreamBody(initializedResponse);
+
+  setUpstreamSession(identity.userId, sessionId);
+  return sessionId;
+}
+
+type SessionAwareUpstream = {
+  upstream: IncomingMessage;
+  body: string;
+  /** Set when the first attempt was refused and a fresh handshake recovered it. */
+  recovered: boolean;
+  /** Set when recovery was attempted and still failed. */
+  recoveryFailed: boolean;
+};
+
+/**
+ * Forward a KTX-bound request with the gateway-held session, buffering the
+ * response so a `upstream_session_required` refusal can be recovered by
+ * re-handshaking and retrying exactly once.
+ *
+ * Only for buffered paths (`tools/list`, `tools/call`). Streaming passthrough
+ * keeps using `forwardToKtx` directly.
+ */
+async function forwardToKtxWithSession(
+  identity: Identity,
+  method: string,
+  url: string,
+  incomingHeaders: IncomingMessage["headers"],
+  body: Buffer | undefined
+): Promise<SessionAwareUpstream> {
+  const keepalive = upstreamSessionKeepaliveEnabled();
+  // Lazy on purpose: a client that completed `initialize` already has a cached
+  // session, so the normal path costs no extra upstream round-trip. The
+  // handshake only runs once KTX actually refuses the request.
+  const sessionId = keepalive ? getUpstreamSession(identity.userId) : undefined;
+
+  let upstream = await forwardToKtx(method, url, incomingHeaders, body, sessionId);
+  let upstreamBody = await readUpstreamBody(upstream);
+  if (!keepalive) return { upstream, body: upstreamBody, recovered: false, recoveryFailed: false };
+
+  const refused = isSessionRequiredFailure(
+    upstream.statusCode,
+    String(upstream.headers["content-type"] ?? ""),
+    upstreamBody,
+    ""
+  );
+  if (!refused) return { upstream, body: upstreamBody, recovered: false, recoveryFailed: false };
+
+  clearUpstreamSession(identity.userId);
+  const freshSession = await handshakeUpstreamSession(identity).catch(() => undefined);
+  if (!freshSession) return { upstream, body: upstreamBody, recovered: false, recoveryFailed: true };
+
+  // Retry once with the fresh session, dropping the stale client-supplied one.
+  const retryHeaders: IncomingMessage["headers"] = { ...incomingHeaders };
+  for (const key of Object.keys(retryHeaders)) {
+    if (key.toLowerCase() === "mcp-session-id") delete retryHeaders[key];
+  }
+  upstream = await forwardToKtx(method, url, retryHeaders, body, freshSession);
+  upstreamBody = await readUpstreamBody(upstream);
+  const stillRefused = isSessionRequiredFailure(
+    upstream.statusCode,
+    String(upstream.headers["content-type"] ?? ""),
+    upstreamBody,
+    ""
+  );
+  return { upstream, body: upstreamBody, recovered: !stillRefused, recoveryFailed: stillRefused };
 }
 
 function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
@@ -1621,6 +1739,15 @@ function classifyUpstreamFailure(
   return { ...partial, responseBody: upstreamErrorResponse(requestId, partial) };
 }
 
+/** True when KTX refused the request because no upstream session exists. */
+function isSessionRequiredFailure(
+  statusCode: number | undefined,
+  contentType: string,
+  body: string,
+  requestId: string | number
+): boolean {
+  return classifyUpstreamFailure(statusCode, contentType, body, requestId)?.reason === "upstream_session_required";
+}
 
 function ensureJsonRpcEnvelope(payload: unknown, requestId: string | number): unknown {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
@@ -3138,11 +3265,39 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call";
   let upstream: IncomingMessage;
   let upstreamBody = "";
+  let sessionRecovered = false;
+  let sessionRecoveryFailed = false;
   try {
-    upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, outboundBody);
-    if (bufferedUpstream) upstreamBody = await readUpstreamBody(upstream);
+    if (rpcMethod === "initialize") {
+      // `initialize` is what establishes the session; never inject one into it.
+      upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, outboundBody);
+      upstreamBody = await readUpstreamBody(upstream);
+    } else if (bufferedUpstream) {
+      const forwarded = await forwardToKtxWithSession(
+        identity,
+        req.method ?? "POST",
+        req.url ?? "/mcp",
+        req.headers,
+        outboundBody
+      );
+      upstream = forwarded.upstream;
+      upstreamBody = forwarded.body;
+      sessionRecovered = forwarded.recovered;
+      sessionRecoveryFailed = forwarded.recoveryFailed;
+    } else {
+      upstream = await forwardToKtx(
+        req.method ?? "POST",
+        req.url ?? "/mcp",
+        req.headers,
+        outboundBody,
+        upstreamSessionKeepaliveEnabled() ? getUpstreamSession(identity.userId) : undefined
+      );
+    }
   } catch (err) {
     if (rpcMethod === "initialize") {
+      // The client gets a 200 but KTX holds no session, so anything cached for
+      // this user is stale; drop it and let the next data call re-handshake.
+      clearUpstreamSession(identity.userId);
       const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
       const payload = localInitializePayload(requestId, instructions);
       const responseBody = JSON.stringify(payload);
@@ -3274,8 +3429,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     throw err;
   }
 
+  if (sessionRecovered) {
+    console.warn(`[lucy-proxy] re-established KTX upstream session user=${identity.userId} tool=${toolName ?? rpcMethod}`);
+  }
+  if (sessionRecoveryFailed) {
+    console.error(`[lucy-proxy] KTX upstream session recovery failed user=${identity.userId} tool=${toolName ?? rpcMethod}`);
+  }
+
   if (rpcMethod === "initialize") {
     const responseSessionId = normalizeHeader(upstream.headers["mcp-session-id"]);
+    // Hold the session KTX just created, so a client that does not retain
+    // `Mcp-Session-Id` still reaches KTX-bound tools on its next call.
+    if (responseSessionId && (upstream.statusCode ?? 200) < 400) {
+      setUpstreamSession(identity.userId, responseSessionId);
+    }
     if (responseSessionId) requestMeta.lucySessionId = responseSessionId;
     if (responseSessionId && initializeClientInfo) {
       setSessionClient(
@@ -3600,7 +3767,12 @@ async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Pro
     res.end(JSON.stringify({ error: "Unauthorized" }));
     return;
   }
-  const upstream = await forwardToKtx(req.method ?? "GET", req.url ?? "/mcp", req.headers);
+  const keepalive = upstreamSessionKeepaliveEnabled();
+  const heldSession = keepalive ? getUpstreamSession(identify.identity.userId) : undefined;
+  // `DELETE /mcp` terminates the MCP session; a cached id would otherwise be
+  // replayed on the next data call against a session KTX has already dropped.
+  if (keepalive && req.method === "DELETE") clearUpstreamSession(identify.identity.userId);
+  const upstream = await forwardToKtx(req.method ?? "GET", req.url ?? "/mcp", req.headers, undefined, heldSession);
   pipeResponse(upstream, res);
 }
 
