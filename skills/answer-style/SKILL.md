@@ -7,7 +7,7 @@ domain: answer-style
 status: draft
 description: >
   把已经查实的数据回答写成麦肯锡 exhibit：一句结论标题、一行单位副题、一张表、白话注和资料来源。
-  排名和对比用结论表，单位收到万或亿，主结论行加粗并排在第一行。
+  排名和对比用结论表，单位收到万或亿，主结论行加粗。分类按指标排序，期间保持时间顺序。
   用户要精确到元、对账或导出时改用查数表。
   计算仍遵守 warehouse-knowledge 与 metrics-policy。
 triggers:
