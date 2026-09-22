@@ -10,12 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 //
 // KTX rejects session traffic that arrives before `initialize` with a plain-text
-// 400. These tests cover both halves of that failure:
+// 400. These tests cover the session half of that failure:
 //
-//   P0 — the rejection is surfaced as JSON-RPC and audited as an error instead of
-//        being forwarded verbatim and recorded as `outcome=ok`.
 //   P1 — the gateway holds the KTX session, so a client that does not retain
 //        `Mcp-Session-Id` still reaches KTX-bound tools.
+//   P2 — non-conformant clients are measurable in the audit trail, a refusal
+//        says which side must fix what, and tool availability does not depend on
+//        whether a tool happens to be served locally or upstream.
+//
+// The response-shape half lives in `mcp-proxy-upstream-failure.test.ts`.
 
 const TOKEN = "upstream-session-token";
 const INTERNAL_TOKEN = "upstream-session-internal-token";
@@ -412,6 +415,192 @@ describe("P1 — the gateway holds the KTX transport session", () => {
       await post(proxyPort, lucyQueryBody("p1-delete-query"));
       // Nothing cached after the DELETE, so no stale session is replayed.
       expect(seen.find((entry) => entry.toolName === "sl_query")?.sessionId).toBeUndefined();
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+});
+
+describe("P2 — non-conformance is measurable, diagnosable, and cannot split the tool surface", () => {
+  it("audits a recovered call as upstream_session_recovered so client non-conformance is countable", async () => {
+    let acceptedSession = "";
+    let issuedSessions = 0;
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const raw = await readRequestBody(req);
+      const body = JSON.parse(raw || "{}") as Record<string, unknown>;
+      if (body.method === "initialize") {
+        issuedSessions += 1;
+        acceptedSession = `ktx-session-${issuedSessions}`;
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": acceptedSession });
+        res.end(okInitializeResult(body.id));
+        return;
+      }
+      if (body.method === "notifications/initialized") {
+        res.writeHead(202, { "content-type": "application/json" });
+        res.end("");
+        return;
+      }
+      if (req.headers["mcp-session-id"] !== acceptedSession) {
+        res.writeHead(400, { "content-type": "text/plain" });
+        res.end(SESSION_REQUIRED_BODY);
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(okToolResult(body.id));
+    });
+
+    try {
+      await post(proxyPort, initializeBody("p2-recovered-init"));
+      acceptedSession = "ktx-session-stale";
+
+      const queryRes = await post(proxyPort, lucyQueryBody("p2-recovered-query"));
+      expect((await queryRes.json() as { error?: unknown }).error).toBeUndefined();
+
+      // The call succeeded, so outcome stays ok — but the reason records that the
+      // transport session had to be rebuilt, which is what makes the rate of
+      // non-conformant clients countable in access_log.
+      const audit = await waitForAuditRow("p2-recovered-query");
+      expect(audit.outcome).toBe("ok");
+      expect(audit.decision_reason).toBe("upstream_session_recovered");
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("keeps the real reason when a recovered call is then denied downstream", async () => {
+    // A session note must never overwrite an actual policy or upstream verdict.
+    let acceptedSession = "";
+    let issuedSessions = 0;
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const raw = await readRequestBody(req);
+      const body = JSON.parse(raw || "{}") as Record<string, unknown>;
+      if (body.method === "initialize") {
+        issuedSessions += 1;
+        acceptedSession = `ktx-session-${issuedSessions}`;
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": acceptedSession });
+        res.end(okInitializeResult(body.id));
+        return;
+      }
+      if (body.method === "notifications/initialized") {
+        res.writeHead(202, { "content-type": "application/json" });
+        res.end("");
+        return;
+      }
+      if (req.headers["mcp-session-id"] !== acceptedSession) {
+        res.writeHead(400, { "content-type": "text/plain" });
+        res.end(SESSION_REQUIRED_BODY);
+        return;
+      }
+      // Session is fine now; the tool itself reports an error.
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: body.id,
+        error: { code: -32000, message: "semantic layer rejected the measure" }
+      }));
+    });
+
+    try {
+      await post(proxyPort, initializeBody("p2-reason-init"));
+      acceptedSession = "ktx-session-stale";
+
+      await post(proxyPort, lucyQueryBody("p2-reason-query"));
+
+      const audit = await waitForAuditRow("p2-reason-query");
+      expect(audit.outcome).toBe("error");
+      expect(audit.decision_reason).toBe("upstream_error");
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("tells a stuck client which side is missing the session header", async () => {
+    // Refuses everything, so recovery cannot succeed and the client sees the error.
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(400, { "content-type": "text/plain" });
+      res.end(SESSION_REQUIRED_BODY);
+    });
+
+    try {
+      const noHeader = await post(proxyPort, lucyQueryBody("p2-diag-no-header"));
+      const noHeaderBody = await noHeader.json() as {
+        error?: { data?: { hint?: string; session?: Record<string, boolean> } }
+      };
+      // The gateway tried on the client's behalf, so this is an upstream fault.
+      expect(noHeaderBody.error?.data?.session?.clientSuppliedSessionId).toBe(false);
+      expect(noHeaderBody.error?.data?.session?.handshakeAttempted).toBe(true);
+      expect(noHeaderBody.error?.data?.hint).toContain("upstream refused the handshake");
+
+      const withHeader = await post(proxyPort, lucyQueryBody("p2-diag-with-header"), {
+        "mcp-session-id": "client-supplied-session"
+      });
+      const withHeaderBody = await withHeader.json() as {
+        error?: { data?: { hint?: string; session?: Record<string, boolean> } }
+      };
+      // The client chose the session, so the client is the one to re-initialize.
+      expect(withHeaderBody.error?.data?.session?.clientSuppliedSessionId).toBe(true);
+      expect(withHeaderBody.error?.data?.hint).toContain("Re-run initialize");
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  // Invariant: a tool's availability must not depend on whether the gateway
+  // serves it locally or forwards it to KTX. Breaking this is what produced the
+  // original report — a visible catalog that could not be queried, which reads as
+  // a database fault. Add KTX-bound tools to this table as they are introduced.
+  it("gives a client that never sends Mcp-Session-Id the same availability for local and upstream tools", async () => {
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const raw = await readRequestBody(req);
+      const body = JSON.parse(raw || "{}") as Record<string, unknown>;
+      if (body.method === "initialize") {
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "ktx-session-1" });
+        res.end(okInitializeResult(body.id));
+        return;
+      }
+      // Stands in for KTX: no session header means no session.
+      if (!req.headers["mcp-session-id"]) {
+        res.writeHead(400, { "content-type": "text/plain" });
+        res.end(SESSION_REQUIRED_BODY);
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(okToolResult(body.id));
+    });
+
+    const calls: Array<{ id: string; servedBy: "gateway" | "upstream"; body: unknown }> = [
+      {
+        id: "p2-invariant-catalog",
+        servedBy: "gateway",
+        body: { jsonrpc: "2.0", id: "p2-invariant-catalog", method: "tools/call", params: { name: "lucy_catalog", arguments: {} } }
+      },
+      {
+        id: "p2-invariant-read-source",
+        servedBy: "upstream",
+        body: {
+          jsonrpc: "2.0",
+          id: "p2-invariant-read-source",
+          method: "tools/call",
+          params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } }
+        }
+      },
+      { id: "p2-invariant-query", servedBy: "upstream", body: lucyQueryBody("p2-invariant-query") }
+    ];
+
+    try {
+      await post(proxyPort, initializeBody("p2-invariant-init"));
+
+      for (const call of calls) {
+        const res = await post(proxyPort, call.body);
+        expect(res.status, `${call.id} (${call.servedBy}) HTTP status`).toBe(200);
+        const body = await res.json() as { error?: { data?: { reason?: string } }; result?: { isError?: boolean } };
+        expect(body.error, `${call.id} (${call.servedBy}) must not fail at the transport layer`).toBeUndefined();
+        expect(body.result?.isError, `${call.id} (${call.servedBy}) must not report a tool error`).not.toBe(true);
+
+        const audit = await waitForAuditRow(call.id);
+        expect(audit.outcome, `${call.id} (${call.servedBy}) audit outcome`).toBe("ok");
+      }
     } finally {
       await closeAll(upstream, server);
     }

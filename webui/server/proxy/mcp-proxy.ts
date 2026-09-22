@@ -236,13 +236,40 @@ async function handshakeUpstreamSession(identity: Identity): Promise<string | un
   return sessionId;
 }
 
+/**
+ * What happened to the KTX transport session on this request.
+ *
+ * Carried into the audit row (so the rate of non-conformant clients is
+ * measurable) and into `upstream_session_required` error payloads (so a stuck
+ * client is told what to fix instead of being handed a bare status code).
+ */
+type UpstreamSessionState = {
+  /** The client sent its own `Mcp-Session-Id`. */
+  clientSupplied: boolean;
+  /** The gateway filled in a held session because the client sent none. */
+  gatewaySupplied: boolean;
+  /** A recovery handshake ran after KTX refused the first attempt. */
+  handshakeAttempted: boolean;
+  /** The handshake produced a session and the single retry was accepted. */
+  recovered: boolean;
+  /** The handshake ran and the request was still refused. */
+  recoveryFailed: boolean;
+};
+
+function emptyUpstreamSessionState(clientSupplied = false): UpstreamSessionState {
+  return {
+    clientSupplied,
+    gatewaySupplied: false,
+    handshakeAttempted: false,
+    recovered: false,
+    recoveryFailed: false
+  };
+}
+
 type SessionAwareUpstream = {
   upstream: IncomingMessage;
   body: string;
-  /** Set when the first attempt was refused and a fresh handshake recovered it. */
-  recovered: boolean;
-  /** Set when recovery was attempted and still failed. */
-  recoveryFailed: boolean;
+  session: UpstreamSessionState;
 };
 
 /**
@@ -261,14 +288,16 @@ async function forwardToKtxWithSession(
   body: Buffer | undefined
 ): Promise<SessionAwareUpstream> {
   const keepalive = upstreamSessionKeepaliveEnabled();
+  const session = emptyUpstreamSessionState(Boolean(normalizeHeader(incomingHeaders["mcp-session-id"])));
   // Lazy on purpose: a client that completed `initialize` already has a cached
   // session, so the normal path costs no extra upstream round-trip. The
   // handshake only runs once KTX actually refuses the request.
   const sessionId = keepalive ? getUpstreamSession(identity.userId) : undefined;
+  session.gatewaySupplied = Boolean(sessionId) && !session.clientSupplied;
 
   let upstream = await forwardToKtx(method, url, incomingHeaders, body, sessionId);
   let upstreamBody = await readUpstreamBody(upstream);
-  if (!keepalive) return { upstream, body: upstreamBody, recovered: false, recoveryFailed: false };
+  if (!keepalive) return { upstream, body: upstreamBody, session };
 
   const refused = isSessionRequiredFailure(
     upstream.statusCode,
@@ -276,11 +305,15 @@ async function forwardToKtxWithSession(
     upstreamBody,
     ""
   );
-  if (!refused) return { upstream, body: upstreamBody, recovered: false, recoveryFailed: false };
+  if (!refused) return { upstream, body: upstreamBody, session };
 
   clearUpstreamSession(identity.userId);
+  session.handshakeAttempted = true;
   const freshSession = await handshakeUpstreamSession(identity).catch(() => undefined);
-  if (!freshSession) return { upstream, body: upstreamBody, recovered: false, recoveryFailed: true };
+  if (!freshSession) {
+    session.recoveryFailed = true;
+    return { upstream, body: upstreamBody, session };
+  }
 
   // Retry once with the fresh session, dropping the stale client-supplied one.
   const retryHeaders: IncomingMessage["headers"] = { ...incomingHeaders };
@@ -295,7 +328,19 @@ async function forwardToKtxWithSession(
     upstreamBody,
     ""
   );
-  return { upstream, body: upstreamBody, recovered: !stillRefused, recoveryFailed: stillRefused };
+  session.recovered = !stillRefused;
+  session.recoveryFailed = stillRefused;
+  return { upstream, body: upstreamBody, session };
+}
+
+/** Audit reason for an otherwise-allowed call whose transport session had to be
+ * re-established — the measure of how many clients do not retain the header. */
+const UPSTREAM_SESSION_RECOVERED_REASON = "upstream_session_recovered";
+
+/** Replaces a plain `allowed` with the session note; real denials keep theirs. */
+function withUpstreamSessionNote(reason: string, session: UpstreamSessionState | undefined): string {
+  if (!session?.recovered) return reason;
+  return reason === "allowed" ? UPSTREAM_SESSION_RECOVERED_REASON : reason;
 }
 
 function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
@@ -1689,9 +1734,32 @@ function decodeUpstreamPayload(body: string, contentType: string, requestId: str
   return undefined;
 }
 
+/**
+ * Turn a session refusal into a self-diagnosing message.
+ *
+ * A bare status code made callers guess, and the guess observed in the field was
+ * "the database cannot be queried" — the session never came up. These say which
+ * side is missing the header, since that decides who fixes what.
+ */
+function sessionRequiredHint(session: UpstreamSessionState | undefined): string {
+  if (session?.clientSupplied) {
+    return "The Mcp-Session-Id your client sent is not an established upstream session. Re-run initialize and use the Mcp-Session-Id from that response.";
+  }
+  if (session?.handshakeAttempted) {
+    return "Your client did not send Mcp-Session-Id, so Lucy tried to establish the upstream session itself and the upstream refused the handshake. This is an upstream fault, not a client one.";
+  }
+  return "No upstream MCP session is established. Retain the Mcp-Session-Id header returned by initialize and send it on every later request.";
+}
+
 /** The upstream body stays in the audit trail only — client-facing errors carry
- * a reason code and status, never raw upstream text (Spec 07 §6.1). */
-function upstreamErrorResponse(requestId: string | number, failure: Omit<UpstreamFailure, "responseBody">): string {
+ * a reason code, status and session diagnostics, never raw upstream text
+ * (Spec 07 §6.1). */
+function upstreamErrorResponse(
+  requestId: string | number,
+  failure: Omit<UpstreamFailure, "responseBody">,
+  session: UpstreamSessionState | undefined
+): string {
+  const sessionRequired = failure.reason === "upstream_session_required";
   return JSON.stringify({
     jsonrpc: "2.0",
     id: requestId,
@@ -1701,8 +1769,13 @@ function upstreamErrorResponse(requestId: string | number, failure: Omit<Upstrea
       data: {
         reason: failure.reason,
         upstreamStatus: failure.upstreamStatus,
-        hint: failure.reason === "upstream_session_required"
-          ? "The upstream MCP session was not established. Lucy re-establishes it automatically; a persistent failure means the upstream refused the proxy handshake."
+        hint: sessionRequired ? sessionRequiredHint(session) : undefined,
+        session: sessionRequired && session
+          ? {
+            clientSuppliedSessionId: session.clientSupplied,
+            gatewayHeldSession: session.gatewaySupplied,
+            handshakeAttempted: session.handshakeAttempted
+          }
           : undefined
       }
     }
@@ -1722,7 +1795,8 @@ function classifyUpstreamFailure(
   statusCode: number | undefined,
   contentType: string,
   body: string,
-  requestId: string | number
+  requestId: string | number,
+  session?: UpstreamSessionState
 ): UpstreamFailure | undefined {
   const upstreamStatus = statusCode ?? 200;
   if (upstreamStatus < 400) return undefined;
@@ -1736,7 +1810,7 @@ function classifyUpstreamFailure(
     upstreamStatus,
     errorDetail: `${reason}:upstream_status=${upstreamStatus}${bodyExcerpt ? `;body=${bodyExcerpt}` : ""}`
   };
-  return { ...partial, responseBody: upstreamErrorResponse(requestId, partial) };
+  return { ...partial, responseBody: upstreamErrorResponse(requestId, partial, session) };
 }
 
 /** True when KTX refused the request because no upstream session exists. */
@@ -1969,12 +2043,13 @@ async function writeLucySemanticResponse(
   argsSummary: Record<string, unknown> | undefined,
   queryMeta: Partial<Parameters<typeof writeLog>[0]>,
   queryTables: string[],
-  traceId: string
+  traceId: string,
+  session: UpstreamSessionState | undefined
 ): Promise<void> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
-  const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId);
+  const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, session);
   if (upstreamFailure) {
     await writeUpstreamFailureResponse(upstreamFailure, {
       identity,
@@ -2064,7 +2139,10 @@ async function writeLucySemanticResponse(
     requestId,
     traceId,
     ...requestMeta,
-    ...(await auditMeta(identity, outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error")),
+    ...(await auditMeta(identity, withUpstreamSessionNote(
+      outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error",
+      session
+    ))),
   };
   recordAudit(baseEntry, outcome === "ok" ? sourceRefs : undefined);
   recordMcpTraceForTool({
@@ -2078,7 +2156,10 @@ async function writeLucySemanticResponse(
     requestId,
     argsSummary,
     allowed: true,
-    reason: outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error",
+    reason: withUpstreamSessionNote(
+      outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error",
+      session
+    ),
     resultSnapshot: resultSnapshotFromAuditMeta(responseMeta),
     sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
   });
@@ -2131,11 +2212,12 @@ async function writeToolsListResponse(
   upstream: IncomingMessage,
   upstreamBody: string,
   res: ServerResponse,
-  requestId: string | number
+  requestId: string | number,
+  session: UpstreamSessionState | undefined
 ): Promise<{ filterFailed: boolean; errorDetail?: string; responseBytes: number; upstreamFailure?: UpstreamFailureReason }> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
-  const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId);
+  const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, session);
   if (upstreamFailure) {
     const responseBytes = Buffer.byteLength(upstreamFailure.responseBody);
     res.writeHead(200, {
@@ -3265,8 +3347,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call";
   let upstream: IncomingMessage;
   let upstreamBody = "";
-  let sessionRecovered = false;
-  let sessionRecoveryFailed = false;
+  let upstreamSession: UpstreamSessionState | undefined;
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
@@ -3282,8 +3363,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       );
       upstream = forwarded.upstream;
       upstreamBody = forwarded.body;
-      sessionRecovered = forwarded.recovered;
-      sessionRecoveryFailed = forwarded.recoveryFailed;
+      upstreamSession = forwarded.session;
     } else {
       upstream = await forwardToKtx(
         req.method ?? "POST",
@@ -3429,10 +3509,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     throw err;
   }
 
-  if (sessionRecovered) {
+  if (upstreamSession?.recovered) {
     console.warn(`[lucy-proxy] re-established KTX upstream session user=${identity.userId} tool=${toolName ?? rpcMethod}`);
   }
-  if (sessionRecoveryFailed) {
+  if (upstreamSession?.recoveryFailed) {
     console.error(`[lucy-proxy] KTX upstream session recovery failed user=${identity.userId} tool=${toolName ?? rpcMethod}`);
   }
 
@@ -3474,7 +3554,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
 
   if (rpcMethod === "tools/list") {
-    const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId);
+    const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession);
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -3486,10 +3566,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       responseBytes: toolsList.responseBytes,
       requestId,
       ...requestMeta,
-      ...(await auditMeta(
-        identity,
-        toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed")
-      )),
+      ...(await auditMeta(identity, withUpstreamSessionNote(
+        toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed"),
+        upstreamSession
+      ))),
     });
     return;
   }
@@ -3497,7 +3577,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "tools/call" && toolName === "wiki_search") {
     const originalBody = upstreamBody;
     const contentType = String(upstream.headers["content-type"] ?? "");
-    const wikiUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId);
+    const wikiUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, upstreamSession);
     if (wikiUpstreamFailure) {
       await writeUpstreamFailureResponse(wikiUpstreamFailure, {
         identity,
@@ -3572,7 +3652,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       responseBytes,
       requestId,
       ...requestMeta,
-      ...(await auditMeta(identity, filterFailed ? "wiki_search_filter_failed" : filteredCount > 0 ? `wiki_filtered:${filteredCount}` : "allowed")),
+      ...(await auditMeta(identity, withUpstreamSessionNote(
+        filterFailed ? "wiki_search_filter_failed" : filteredCount > 0 ? `wiki_filtered:${filteredCount}` : "allowed",
+        upstreamSession
+      ))),
     });
     recordMcpTraceForTool({
       traceId,
@@ -3585,14 +3668,17 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       argsSummary,
       allowed: !filterFailed,
-      reason: filterFailed ?? (filteredCount > 0 ? `wiki_filtered:${filteredCount}` : "allowed"),
+      reason: withUpstreamSessionNote(
+        filterFailed ?? (filteredCount > 0 ? `wiki_filtered:${filteredCount}` : "allowed"),
+        upstreamSession
+      ),
       policySource: "wiki_acl"
     });
     return;
   }
 
   if (rpcMethod === "tools/call" && (toolName === "lucy_query" || toolName === "lucy_read_source")) {
-    await writeLucySemanticResponse(identity, upstream, upstreamBody, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables, traceId);
+    await writeLucySemanticResponse(identity, upstream, upstreamBody, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables, traceId, upstreamSession);
     return;
   }
 
@@ -3602,7 +3688,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "tools/call") {
     const responseBody = Buffer.from(upstreamBody);
     const contentType = String(upstream.headers["content-type"] ?? "");
-    const callUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, upstreamBody, requestId);
+    const callUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, upstreamBody, requestId, upstreamSession);
     if (callUpstreamFailure) {
       await writeUpstreamFailureResponse(callUpstreamFailure, {
         identity,
@@ -3712,7 +3798,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       ...responseMeta,
       requestId,
       ...requestMeta,
-      ...(await auditMeta(identity, outcome === "ok" ? "allowed" : "upstream_error")),
+      ...(await auditMeta(identity, withUpstreamSessionNote(outcome === "ok" ? "allowed" : "upstream_error", upstreamSession))),
     }, outcome === "ok" ? sourceRefs : undefined);
     recordMcpTraceForTool({
       traceId,
@@ -3725,7 +3811,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       argsSummary,
       allowed: true,
-      reason: outcome === "ok" ? "allowed" : "upstream_error",
+      reason: withUpstreamSessionNote(outcome === "ok" ? "allowed" : "upstream_error", upstreamSession),
       resultSnapshot: resultSnapshotFromAuditMeta(responseMeta),
       sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
     });

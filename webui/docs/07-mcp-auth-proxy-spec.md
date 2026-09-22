@@ -493,6 +493,21 @@ v1.2 / AC-P0 连接裁决：
 4. 上游状态码 `>= 400` 的调用，审计一律 `outcome='error'`，`decision_reason` 用上述原因码；不得因为改写路径成功就记成 `ok`。
 5. 实现锚点：`classifyUpstreamFailure` / `writeUpstreamFailureResponse`（`webui/server/proxy/mcp-proxy.ts`）。回归：`webui/server/__tests__/mcp-proxy-upstream-failure.test.ts`。
 
+### 6.1.3 工具可用性一致性不变量（v1.6）
+
+**不变量**：**同一个工具的可用性不得取决于它是由 Proxy 本地服务还是转发到上游。** 客户端只应因为权限或参数而失败，不应因为"这个工具恰好走上游"而失败。
+
+**为什么立这条**：现场事故正是这条被打破——`lucy_catalog` 由 Proxy 本地用 ACL 拼出，`lucy_query` / `lucy_read_source` 必须走 KTX。客户端丢掉 `Mcp-Session-Id` 时前者照常返回、后者被传输层拒掉，用户看到"目录里有 5 张表却一行都查不出来"，合理推断是底层数据库有问题。**半通是数据产品最糟的失败形状**：它把一次配置问题误导成对整个语义层的不信任。
+
+**强制规则**：
+
+1. 新增走上游的 `tools/call` 分支时，必须接入 §4.3 的 session 持有与重试路径；不得新开一条绕过 session 处理的转发。
+2. 回归必须覆盖"从不回传 `Mcp-Session-Id` 的客户端"这一 fixture，且对本地服务工具与上游工具**一并**断言，锚点：`webui/server/__tests__/mcp-proxy-upstream-session.test.ts`（P2 不变量用例的工具表；新增上游工具时往该表里加）。
+3. 客户端非合规必须**可计量**：走了重新握手才成功的调用记 `decision_reason='upstream_session_recovered'`（见 §6.1.1）。该码只取代 `allowed`——ACL 拒绝、上游错误等真实裁决码优先，不得被 session 备注覆盖。运营侧用既有 `access_log` 过滤与 CSV 导出统计，不新增端点。
+4. 客户端非合规必须**可诊断**：`upstream_session_required` 的 JSON-RPC error 必须说明是哪一侧缺 header——客户端自带 session 被拒（客户端重新 `initialize`）、还是 Proxy 代持握手也被拒（上游故障）。仍不得回传上游响应体原文（§6.1.2 规则 3）。
+
+**已知边界**：session 缓存在进程内存（§4.3）。KTX 横向扩容为多进程时需改共享存储或粘性路由；在那之前，本不变量只在单 KTX 进程下成立。
+
 ### 6.1.1 `decision_reason` 枚举
 
 | Code | 语义 |
@@ -516,6 +531,7 @@ v1.2 / AC-P0 连接裁决：
 | `tools_list_rewrite_failed` | `tools/list` 改写失败，拒绝透传 |
 | `upstream_session_required` | **v1.6 新增**：KTX 以传输层 `400`（`text/plain`，非 JSON-RPC）拒绝 session 流量，且 Proxy 重新握手后仍未恢复（见 §4.3 / §6.1.2） |
 | `upstream_protocol_error` | **v1.6 新增**：上游返回 `>= 400` 且响应体不是可用的 JSON-RPC 信封（见 §6.1.2） |
+| `upstream_session_recovered` | **v1.6 新增**：调用本身成功（`outcome='ok'`），但传输 session 是 Proxy 重新握手后才建立的——即该客户端没有回传 `Mcp-Session-Id`。**只取代 `allowed`**，不得覆盖任何真实裁决码（见 §6.1.3） |
 
 > AC-P0 完整裁决码表、流水线与审计字段以 Spec 98 §10 为准；上表是 Spec 07 既有枚举的**就地补丁**，避免两套互相矛盾的主码定义。
 
@@ -580,7 +596,7 @@ webui/
 | `webui/package.json` | 新增依赖：`better-sqlite3`、`@types/better-sqlite3` |
 | `webui/server/proxy/mcp-proxy.ts`（v1.3） | 新增 `loadDataQaInstructions()`、`instructionsInjectionEnabled()`、`writeInitializeResponse()`；`handlePost()` 新增 `initialize` 分支（见 §4.4） |
 | `webui/server/proxy/upstream-session.ts`（v1.6） | 新增：按 `userId` 持有 KTX 传输 session（见 §4.3） |
-| `webui/server/proxy/mcp-proxy.ts`（v1.6） | 新增 `classifyUpstreamFailure()` / `writeUpstreamFailureResponse()`（见 §6.1.2）、`handshakeUpstreamSession()` / `forwardToKtxWithSession()`（见 §4.3）；`handlePost()` 的上游响应缓冲上移到转发处 |
+| `webui/server/proxy/mcp-proxy.ts`（v1.6） | 新增 `classifyUpstreamFailure()` / `writeUpstreamFailureResponse()`（见 §6.1.2）、`handshakeUpstreamSession()` / `forwardToKtxWithSession()`（见 §4.3）、`UpstreamSessionState` / `withUpstreamSessionNote()` / `sessionRequiredHint()`（见 §6.1.3）；`handlePost()` 的上游响应缓冲上移到转发处 |
 
 ### 不改动
 
