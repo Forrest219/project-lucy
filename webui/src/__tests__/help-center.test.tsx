@@ -157,8 +157,9 @@ function renderHelp(path = "/help") {
               "| 系统概览 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |",
               "| 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |",
               "| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |",
-              "| 语义建模 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |",
-              "| 语义建模 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明与分析指引等业务文档。 |",
+              "| 业务上下文 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |",
+              "| 业务上下文 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明与分析指引等业务文档。 |",
+              "| 业务上下文 | 业务 Skill | `/skills` | 查看受治理的业务 Skill 资产及其发布状态与角色授权。 |",
               "| 语义发布 | 发布工作台 | `/publish/workbench` | 审阅并校验语义与 `Wiki` 变更，同步索引后使其对 `Agent` 生效。 |",
               "| 语义发布 | 发布记录 | `/publish/history` | 查看历次语义发布的变更范围、执行结果与操作记录。 |",
               "| 质量评测 | 评测用例 | `/eval/cases` | 管理数据问答与语义质量的评测用例及预期结果。 |",
@@ -868,7 +869,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 21 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 22 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
@@ -887,7 +888,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(21);
+    expect(bodyRows.length).toBe(22);
 
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.
@@ -903,8 +904,8 @@ describe("HelpCenter", () => {
       expect(cells[3]?.textContent).toBe(expectedItems[idx]?.description);
     });
 
-    // Path column (3rd cell) must be wrapped in <code> for each of the 19
-    // sidebar-visible entries — translation defense contract.
+    // Path column (3rd cell) must be wrapped in <code> for each
+    // sidebar-visible entry — translation defense contract.
     const expectedPaths = [
       topLevelEntry.to,
       ...navGroups.flatMap((g) => g.items.map((i) => i.to))

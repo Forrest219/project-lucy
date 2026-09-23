@@ -361,27 +361,27 @@ describe("CommandPalette", () => {
 
   // M70 command palette result context: each result is a page-search-result
   // row with breadcrumb + title + description, not a navigation menu row.
-  it("renders search-result context (breadcrumb / title / description) for the 语义 query", () => {
+  it("renders search-result context (breadcrumb / title / description) for the 业务 query", () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
-      target: { value: "语义" }
+      target: { value: "业务" }
     });
     const list = screen.getByTestId("command-palette-list");
-    // 语义资产 and 业务 Wiki both live under 语义建模; both must surface
+    // 业务 Wiki and 业务 Skill both live under 业务上下文; both must surface
     // the page-search-result layout, not just the label + group title.
-    const semanticCatalog = screen.getByTestId("command-palette-option-semantic-catalog");
-    expect(semanticCatalog.querySelector(".pl-command-palette-breadcrumb")).not.toBeNull();
-    expect(semanticCatalog.querySelector(".pl-command-palette-title-row")).not.toBeNull();
-    expect(semanticCatalog.querySelector(".pl-command-palette-item-description")).not.toBeNull();
-    // 语义资产's breadcrumb must reference its owning group so users see
-    // why a 语义 modeling entry shows up.
-    expect(semanticCatalog.textContent).toContain("语义建模");
-    expect(semanticCatalog.textContent).toContain("管理表、字段、指标、分群与关联等结构化语义资产");
-    // 业务 Wiki lives in the same group, so its breadcrumb must also surface.
-    const wikiOption = screen.getByTestId("command-palette-option-semantic-wiki");
-    expect(wikiOption.querySelector(".pl-command-palette-breadcrumb")).not.toBeNull();
-    expect(wikiOption.textContent).toContain("管理业务口径、指标说明与分析指引等业务文档");
+    const semanticWiki = screen.getByTestId("command-palette-option-semantic-wiki");
+    expect(semanticWiki.querySelector(".pl-command-palette-breadcrumb")).not.toBeNull();
+    expect(semanticWiki.querySelector(".pl-command-palette-title-row")).not.toBeNull();
+    expect(semanticWiki.querySelector(".pl-command-palette-item-description")).not.toBeNull();
+    // 业务 Wiki's breadcrumb must reference its owning group so users see
+    // why this entry shows up under 业务上下文.
+    expect(semanticWiki.textContent).toContain("业务上下文");
+    expect(semanticWiki.textContent).toContain("管理业务口径、指标说明与分析指引等业务文档");
+    // 业务 Skill lives in the same group, so its breadcrumb must also surface.
+    const skillsOption = screen.getByTestId("command-palette-option-semantic-skills");
+    expect(skillsOption.querySelector(".pl-command-palette-breadcrumb")).not.toBeNull();
+    expect(skillsOption.textContent).toContain("查看受治理的业务 Skill 资产及其发布状态与角色授权");
     // No result row may render the legacy right-side group label as the
     // primary visual (M61's `.pl-command-palette-item-meta` was promoted to
     // the secondary breadcrumb line in M70).
@@ -391,14 +391,14 @@ describe("CommandPalette", () => {
   });
 
   // M70: direct label hits must rank above same-group hits that only match
-  // through the group title. 语义资产 starts with 语义 (score 100) while
-  // 业务 Wiki only matches through its parent group 语义建模 (score 40),
-  // so 语义资产 must come first.
+  // through the group title. 业务 Wiki and 业务 Skill start with 业务 (score 100)
+  // while 语义资产 only matches via its parent group 业务上下文 (score 40),
+  // so the direct-label entries must come first.
   it("ranks direct label hits above same-group title-only hits", () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
-      target: { value: "语义" }
+      target: { value: "业务" }
     });
     const list = screen.getByTestId("command-palette-list");
     const options = within(list).getAllByRole("option");
@@ -406,9 +406,14 @@ describe("CommandPalette", () => {
     const ids = options.map((option) => option.getAttribute("data-testid"));
     const semanticCatalogIndex = ids.indexOf("command-palette-option-semantic-catalog");
     const semanticWikiIndex = ids.indexOf("command-palette-option-semantic-wiki");
-    expect(semanticCatalogIndex).toBeGreaterThanOrEqual(0);
+    const semanticSkillsIndex = ids.indexOf("command-palette-option-semantic-skills");
     expect(semanticWikiIndex).toBeGreaterThanOrEqual(0);
-    expect(semanticCatalogIndex).toBeLessThan(semanticWikiIndex);
+    expect(semanticSkillsIndex).toBeGreaterThanOrEqual(0);
+    expect(semanticCatalogIndex).toBeGreaterThanOrEqual(0);
+    // Wiki and Skills match via direct label, so they outrank catalog which
+    // only matches via its parent group 业务上下文.
+    expect(semanticWikiIndex).toBeLessThan(semanticCatalogIndex);
+    expect(semanticSkillsIndex).toBeLessThan(semanticCatalogIndex);
   });
 
   // M70: matched query text must be wrapped in a highlight node so the user

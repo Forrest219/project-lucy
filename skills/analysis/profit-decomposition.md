@@ -1,6 +1,7 @@
 ---
 name: profit-decomposition
 version: v1.0
+status: published
 triggers:
   - 利润
   - profit

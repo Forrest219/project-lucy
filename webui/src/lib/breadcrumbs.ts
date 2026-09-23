@@ -7,25 +7,28 @@
 export function breadcrumbItems(pathname: string): string[] {
   const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (parts.length === 0) {
-    return ["语义建模", "语义资产"];
+    return ["业务上下文", "语义资产"];
   }
   if (parts[0] === "onboarding") {
     return ["系统概览"];
   }
   if (parts[0] === "sources") {
-    return ["语义建模", parts[2] ?? "表语义", parts[3] ?? "表语义"];
+    return ["业务上下文", parts[2] ?? "表语义", parts[3] ?? "表语义"];
   }
   if (parts[0] === "catalog") {
     if (parts.length === 1) {
-      return ["语义建模", "语义资产"];
+      return ["业务上下文", "语义资产"];
     }
-    return ["语义建模", "语义资产", parts[1], parts[2], parts[3]].filter((item): item is string => Boolean(item));
+    return ["业务上下文", "语义资产", parts[1], parts[2], parts[3]].filter((item): item is string => Boolean(item));
   }
   if (parts[0] === "joins") {
-    return ["语义建模", "关联关系", parts[3] ?? "当前表"];
+    return ["业务上下文", "关联关系", parts[3] ?? "当前表"];
   }
   if (parts[0] === "wiki") {
-    return ["语义建模", "业务 Wiki"];
+    return ["业务上下文", "业务 Wiki"];
+  }
+  if (parts[0] === "skills") {
+    return ["业务上下文", "业务 Skill"];
   }
   if (parts[0] === "review") {
     return ["审阅与校验", "变更审阅"];

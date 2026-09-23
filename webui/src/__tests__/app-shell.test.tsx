@@ -50,6 +50,7 @@ vi.mock("../pages/TableEditor", async () => {
   };
 });
 vi.mock("../pages/WikiEditor", () => ({ WikiEditor: () => <StubPage name="WikiEditor" /> }));
+vi.mock("../pages/skills/SkillList", () => ({ SkillList: () => <StubPage name="SkillList" /> }));
 vi.mock("../pages/admin/AgentList", () => ({ AgentList: () => <StubPage name="AgentList" /> }));
 vi.mock("../pages/admin/AgentDetail", () => ({ AgentDetail: () => <StubPage name="AgentDetail" /> }));
 vi.mock("../pages/admin/NewToken", () => ({ NewToken: () => <StubPage name="NewToken" /> }));
@@ -264,7 +265,7 @@ describe("AppFrame shell", () => {
     // <button>s with `aria-expanded`, not <h2>s. There must still be one
     // titled button per group so the sidebar reads as 6 sections.
     renderAt("/overview");
-    const groupTitles = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理", "系统设置"];
+    const groupTitles = ["数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"];
     for (const title of groupTitles) {
       expect(screen.getAllByRole("button", { name: title })).toHaveLength(1);
     }
@@ -340,7 +341,7 @@ describe("AppFrame shell", () => {
     renderAt("/");
 
     // M60: group titles are buttons, not headings.
-    const groups = ["数据接入", "语义建模", "语义发布", "质量评测", "访问治理", "系统设置"];
+    const groups = ["数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"];
     for (const group of groups) {
       expect(screen.getByRole("button", { name: group })).toBeInTheDocument();
     }
@@ -356,7 +357,7 @@ describe("AppFrame shell", () => {
       expect(screen.queryByRole("heading", { name: title })).not.toBeInTheDocument();
     }
 
-    for (const label of ["启用表范围", "业务 Wiki", "评测用例", "角色权限", "配置审计", "品牌外观", "登录账户"]) {
+    for (const label of ["启用表范围", "业务 Wiki", "业务 Skill", "评测用例", "角色权限", "配置审计", "品牌外观", "登录账户"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
 

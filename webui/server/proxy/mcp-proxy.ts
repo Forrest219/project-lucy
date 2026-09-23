@@ -40,6 +40,12 @@ const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
 const LUCY_SKILLS_HOST = process.env.LUCY_PROXY_LUCY_SKILLS_HOST ?? "127.0.0.1";
 const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881);
 const LUCY_SKILLS_PATH_PREFIX = "/mcp/skills";
+// Spec 144: governed skills are served through the ACL-enforced interceptions on `/mcp`.
+// The legacy lucy-skills upstream has no auth or per-skill ACL of its own, so the
+// passthrough stays disabled unless explicitly enabled for local development.
+const SKILLS_PASSTHROUGH_ENABLED = ["1", "true", "yes"].includes(
+  (process.env.LUCY_PROXY_SKILLS_PASSTHROUGH ?? "").toLowerCase()
+);
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
@@ -3553,6 +3559,12 @@ export function buildProxy() {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       if (isSkillsPath(req.url)) {
+        if (!SKILLS_PASSTHROUGH_ENABLED) {
+          const body = JSON.stringify({ error: "Not found" });
+          res.writeHead(404, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+          res.end(body);
+          return;
+        }
         await handleSkillsPassthrough(req, res);
       } else if (req.method === "POST") {
         await handlePost(req, res);

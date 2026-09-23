@@ -1,6 +1,7 @@
 ---
 name: discount-analysis
 version: v1.0
+status: published
 triggers:
   - 折扣
   - discount

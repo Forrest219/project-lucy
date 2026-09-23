@@ -30,7 +30,7 @@ describe("navigation (shared sidebar config)", () => {
   it("navGroups has exactly 6 first-level groups in canonical order", () => {
     expect(navGroups.length).toBe(6);
     const titles = navGroups.map((g) => g.title);
-    expect(titles).toEqual(["数据接入", "语义建模", "语义发布", "质量评测", "访问治理", "系统设置"]);
+    expect(titles).toEqual(["数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"]);
   });
 
   it("every group has a unique stable id", () => {
@@ -64,28 +64,29 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 20 second-level items in total", () => {
+  it("navGroups contains 21 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(20);
+    expect(totalItems).toBe(21);
   });
 
   it("flat sidebar entries match Handbook §1.5 rows (top + second-level)", () => {
-    // 顶部 1 + 6 组共 20 项二级菜单 = 21 个侧栏可见入口
+    // 顶部 1 + 6 组共 21 项二级菜单 = 22 个侧栏可见入口
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = [
       { group: topLevelEntry.label, id: topLevelEntry.id, label: topLevelEntry.label, to: topLevelEntry.to },
       ...navGroups.flatMap((g) =>
         g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
       )
     ];
-    expect(flat.length).toBe(21);
+    expect(flat.length).toBe(22);
 
     // 顺序与侧栏自上而下严格一致
     expect(flat).toEqual([
       { group: "系统概览", id: "overview", label: "系统概览", to: "/overview" },
       { group: "数据接入", id: "connections-overview", label: "连接概览", to: "/connections" },
       { group: "数据接入", id: "connections-enabled-tables", label: "启用表范围", to: "/connections/enabled-tables" },
-      { group: "语义建模", id: "semantic-catalog", label: "语义资产", to: "/catalog" },
-      { group: "语义建模", id: "semantic-wiki", label: "业务 Wiki", to: "/wiki" },
+      { group: "业务上下文", id: "semantic-catalog", label: "语义资产", to: "/catalog" },
+      { group: "业务上下文", id: "semantic-wiki", label: "业务 Wiki", to: "/wiki" },
+      { group: "业务上下文", id: "semantic-skills", label: "业务 Skill", to: "/skills" },
       { group: "语义发布", id: "publish-workbench", label: "发布工作台", to: "/publish/workbench" },
       { group: "语义发布", id: "publish-history", label: "发布记录", to: "/publish/history" },
       { group: "质量评测", id: "eval-cases", label: "评测用例", to: "/eval/cases" },
@@ -146,6 +147,7 @@ describe("navigation (shared sidebar config)", () => {
       "connections-enabled-tables": "配置各连接进入语义层的表范围，并审阅保存前变更。",
       "semantic-catalog": "管理表、字段、指标、分群与关联等结构化语义资产。",
       "semantic-wiki": "管理业务口径、指标说明与分析指引等业务文档。",
+      "semantic-skills": "查看受治理的业务 Skill 资产及其发布状态与角色授权。",
       "publish-workbench": "审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。",
       "publish-history": "查看历次语义发布的变更范围、执行结果与操作记录。",
       "eval-cases": "管理数据问答与语义质量的评测用例及预期结果。",
@@ -223,6 +225,7 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/catalog/foo/bar/baz")).toBe("semantic-modeling");
       expect(findGroupIdForPathname("/joins/foo/bar/baz")).toBe("semantic-modeling");
       expect(findGroupIdForPathname("/wiki")).toBe("semantic-modeling");
+      expect(findGroupIdForPathname("/skills")).toBe("semantic-modeling");
       expect(findGroupIdForPathname("/publish/workbench")).toBe("publish");
       expect(findGroupIdForPathname("/publish/history")).toBe("publish");
       expect(findGroupIdForPathname("/eval/cases")).toBe("evaluation");

@@ -29,6 +29,14 @@ export async function canAccessSkill(
     };
   }
 
+  // Spec 144: only published skills are agent-visible; drafts (incl. missing status) are denied
+  if (skill.status !== "published") {
+    return {
+      allowed: false,
+      reason: "skill_not_published",
+    };
+  }
+
   // 2. Check skill's roles_allowed list
   const rolesAllowed = skill.roles_allowed || ["*"];
   if (!rolesAllowed.includes("*")) {

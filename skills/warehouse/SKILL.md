@@ -1,6 +1,7 @@
 ---
 name: warehouse-knowledge
 version: v1.0
+status: published
 owner: forrest
 triggers:
   - 数据

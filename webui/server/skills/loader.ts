@@ -52,7 +52,7 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
   const domain = String(inferredDomain).trim();
   const title = parsed.title ? String(parsed.title).trim() : name;
   const version = parsed.version ? String(parsed.version).trim() : "1.0.0";
-  const status = parsed.status === "draft" || parsed.status === "deprecated" ? parsed.status : "published";
+  const status = parsed.status === "published" || parsed.status === "deprecated" ? parsed.status : "draft";
   const roles_allowed = Array.isArray(parsed.roles_allowed)
     ? parsed.roles_allowed.map(r => String(r).trim()).filter(Boolean)
     : ["*"];

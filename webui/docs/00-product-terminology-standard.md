@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词） |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -158,7 +158,8 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Whitelist | 启用表范围 | 白名单、表白名单（兼容） | 表白、白表 | 控制进入语义层的表范围 |
 | Enabled Tables | 启用表范围 | 启用的表 | 表白名单（主导航禁用）、白表、表白 | 控制进入语义层的表范围 |
 | Semantic Layer | 语义层 | semantic-layer | 语义图层 | 表、指标、维度、业务语义定义层 |
-| Semantic Modeling | 语义建模 | 语义模型 | 语义层维护 + 业务文档作为两个分组 | 涵盖结构化语义（YAML Overlay）与非结构化业务文档（Markdown Wiki） |
+| Semantic Modeling | 语义建模 | 语义模型 | 语义层维护 + 业务文档作为两个分组 | 建模活动概念词；涵盖结构化语义（YAML Overlay）与非结构化业务文档（Markdown Wiki）；原侧栏组名，2026-09-23 起组名改为「业务上下文」（Spec 144 v1.1） |
+| Business Context | 业务上下文 | 上下文中心、业务知识库（作导航组名） | 侧栏分组；下辖 语义资产 / 业务 Wiki / 业务 Skill（Spec 144 v1.1，原「语义建模」组更名） |
 | Semantic Asset | 语义资产 | 表语义资产、结构化 YAML 模型 | 表目录（主导航 / PageHeader 禁用） | 语义建模下的结构化 YAML 模型维护入口 |
 | Semantic Coverage | 语义覆盖 | 完成度（作 overview 主标签） | 分母 = 已启用 ∩ Manifest（`SourceSummary.enabled`）；不含未启用 Manifest 表（Spec 104） |
 | Enabled Scope Filter | 启用范围 | 白名单筛选 | Catalog 工具栏：已启用 / 全部 / 未启用 |
@@ -174,6 +175,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Schema Manifest Table Snippet | Schema Manifest 表片段 | 含字段的表 YAML | 把 overlay 叫 Manifest | 含 `columns`/`descriptions`/`joins` 的导入内容 |
 | Semantic Overlay (table editor) | 表级 semantic overlay | overlay（指标/分群/行粒度） | 暗示导入会改字段列表 | 仅 grain/measures/segments（Spec 114） |
 | Business Wiki | 业务 Wiki | Wiki 文档 | 维基文档可用于导航 | 业务解释和口径文档 |
+| Skill | Skill | 业务 Skill（页面名） | 技能、技巧、Scale、Skill Hub（作导航主标签） | 经 Lucy 向 Agent 提供的受治理分析规程；资产在 `skills/`（Spec 144） |
 | Evaluation | 质量评测 | 评测 | 质量评价混用 | 数据问答或语义质量评测 |
 | Evaluation Case | 评测用例 | 评测集 | Case 管理、案例管理 | 数据问答 / 语义质量评测的单条样例 |
 | Role Permission | 角色权限 | Role、RBAC 角色 | 角色配置、角色模板 | access.yaml 中的 role 模板 |
@@ -253,6 +255,14 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Capability Forbidden | 能力未授权 | `capability_forbidden` | 仅用 table_forbidden 作文案主码（AC-P0 DataPlane） | 裁决码 `capability_forbidden:<tool>:<sourceKey>` |
 | Policy Scope Expanded | 授权范围扩大 | `policy_scope_expanded`、前缀扩权记录 | 静默扩权、无审计扩权 | legacy v1 `prefix` 因语义层变化扩权时的可观测事件 |
 | Policy Degraded | 策略降级 | 权限降级态、DataPlane 整体拒绝 | 服务不可用、完全健康（降级时） | 编译失败导致受影响 Agent 或整体 DataPlane deny |
+| Table & Row Policy Access | 可访问的表与行策略 | 表授权与行策略 | 资产边界、数据范围 | Role 详情中展示可访问表范围及行级策略配置的区域；对应 `allow.tableSelectors` + `row_policy` |
+| Read-only QA Preset | 只读问答 | 问答预设 | 纯只读、Viewer | 预设工具集：`lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness`、`lucy_begin_question`，共 6 个；不含 `sl_validate` |
+| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | 预设工具集：只读问答 6 个加 `wiki_search`、`wiki_read`，共 8 个 |
+| Matches Preset | 当前与{预设名}一致 | 与预设匹配 | 已绑定预设、跟随预设 | 当前工具集合与某预设完全相等时的界面提示文案；集合比较与顺序无关 |
+| Row Access: All Rows | 行权限：全部行 | 不限制行 | 全部行 all、row_access 作界面主文案 | 表未配置 `row_policy` 时的显示文案；`row_access` 字段只作存储，不作为界面主文案 |
+| Equals / In | 等于 / 属于 | 等于、属于（单独使用） | eq / in / op 作界面主文案（存储仍为 eq / in） | 行级策略条件的界面展示；存储用 `op: eq` 或 `op: in`，界面主文案用「等于」「属于」 |
+| System Denied | 系统禁止 | 系统不可授予 | 全局禁止作该行主标题（单项禁用态仍可用既有「全局禁止」） | AbsoluteDeny 工具集说明文案；页底固定句为「原始 SQL、旧版 sl_query / sl_read_source、记忆注入由系统禁止，不能授予。」 |
+| Published Measures | 已发布指标 | 已发布的指标 | 可授权指标、指标组 | 已通过发布工作台激活的 Measure 集合；权限摘要中用「对应 N 个已发布指标」；非授权对象，不新增指标授权字段 |
 
 ### 3.0 弃用别名（仅供溯源，不允许出现在新代码 / 新文档）
 
@@ -410,6 +420,8 @@ Connection (连接)
 | Confirm Sync Drawer | 确认同步索引并生效 | 确认发布并重建索引；发布语义资产（作本确认侧栏标题） | 确认路径（Spec 121+123）；非上传 |
 | Upload Semantic Assets | 上传语义资产 | — | Catalog / 连接等入口；**禁止**作为 `/publish/workbench` 本页入口（Spec 123） |
 | Publish Semantic Assets Drawer | 发布语义资产 | — | 仅上传路径 Drawer 标题；不在工作台本页 |
+| Pending Sync File Count | N 个待同步文件 | 把该数字称为校验通过的文件数 | 本批一并同步的文件数，含 Wiki 与其它非表文件（Spec 145） |
+| Table Validation Result | 表语义校验通过 A/B | 校验成功（不说明校验对象）；校验通过 N 张（不写分母） | 进行态为「正在校验表语义…」。B 为本批进入表语义校验的表数，A 为通过数；与待同步文件数分列（Spec 145） |
 
 审阅与审批的流程分工必须与第 3.1 节一致：
 
@@ -481,7 +493,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Auto Refresh | 自动刷新 | 实时推送（暗示 SSE） | 默认 30s 轮询；hint 可写「30 秒刷新」 |
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
-| Sidebar Group | 运行状态 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理 / 系统设置 | 6+1 主导航混用其它分组名；继续用「系统概览」作多页分组名 | Lucy WebUI 侧边栏固定 IA；Spec 143 起置顶分组为「运行状态」 |
+| Sidebar Group | 运行状态 / 数据接入 / 业务上下文 / 语义发布 / 质量评测 / 访问治理 / 系统设置 | 6+1 主导航混用其它分组名；继续用「系统概览」作多页分组名 | Lucy WebUI 侧边栏固定 IA；Spec 143 起置顶分组为「运行状态」；Spec 144 v1.1 起「语义建模」组更名「业务上下文」 |
 | Semantic Completion Incomplete | 未完成 | partial / not_started（作用户主文案）、status=partial | Catalog / overview 深链 value=`incomplete`（`!== done`）；见 Spec 100 |
 | Action Impact | 影响 | impact（裸露） | 待办行必填次级文案；Spec 100 |
 | Action Evidence | 证据来源 | evidence（裸露） | 待办行必填；Spec 100 |
@@ -587,6 +599,19 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`
 | SSE | SSE | 流式（叙述） | 服务器推送事件（作唯一主标签） | Chat Completions streaming 传输 |
 
 Protected terms（若未来任何 Lucy WebUI / 文档用户可见 DOM 提及本能力，须 `translate="no"` + `notranslate`）：`Agent Chat`、`lucy-data-agent`、`Open WebUI`、`Hermes`、`API Server`、`MCP`、`SSE`。
+
+### 4.10 业务 Skill（Spec 144）
+
+Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与页面标题用「业务 Skill」；正文、URI、工具名保留英文 `Skill`。
+
+| Canonical Term | UI 主术语 | 禁止文案 | 说明 |
+|---|---|---|---|
+| Business Skill | 业务 Skill | 技能中心、技巧库、Skill Hub（作导航或页标题） | 侧栏位于「业务上下文」；路由 `/skills` |
+| Skill Status | 草稿 / 已发布 / 已停用 | 未上线、已下架（作状态 Tag） | 对应 `draft` / `published` / `deprecated`；Tag 旁可保留技术值 |
+| Skill URI | Skill URI | 技能链接 | `lucy-skill://<domain>/<name>` |
+| Read Skill | 查看 Skill | 调用技能、执行 Skill | 本周只读；不表示 Agent 在 Lucy 内执行脚本 |
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、Skill 文件路径、`SKILL.md`。
 
 ## 5. 新术语登记流程
 

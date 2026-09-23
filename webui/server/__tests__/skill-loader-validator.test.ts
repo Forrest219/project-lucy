@@ -47,6 +47,18 @@ This is the markdown body.
     expect(skill?.content).toBe("# Test Content\nThis is the markdown body.");
   });
 
+  it("defaults missing or unknown status to draft (fail-closed, Spec 144)", () => {
+    const raw = `---
+name: no-status-skill
+domain: test_domain
+---
+# Body
+`;
+    const skill = parseSkillMarkdown(raw, "/workspace/skills/domains/test_domain/no-status.skill.md", "/workspace");
+    expect(skill).not.toBeNull();
+    expect(skill?.status).toBe("draft");
+  });
+
   it("returns null for invalid markdown without frontmatter", () => {
     const raw = `# Just a title\nNo frontmatter here`;
     const skill = parseSkillMarkdown(raw, "/workspace/skills/readme.md", "/workspace");

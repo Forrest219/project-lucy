@@ -41,6 +41,7 @@ export type NavIconKey =
   | "whitelist"
   | "catalog"
   | "wiki"
+  | "skills"
   | "publish"
   | "history"
   | "evalCases"
@@ -102,7 +103,7 @@ export const navGroups: Array<{
   },
   {
     id: "semantic-modeling",
-    title: "语义建模",
+    title: "业务上下文",
     items: [
       {
         id: "semantic-catalog",
@@ -126,6 +127,15 @@ export const navGroups: Array<{
         active: (path) => path === "/wiki",
         description: "管理业务口径、指标说明与分析指引等业务文档。",
         keywords: ["文档", "Markdown", "Wiki"]
+      },
+      {
+        id: "semantic-skills",
+        label: "业务 Skill",
+        to: "/skills",
+        iconKey: "skills",
+        active: (path) => path === "/skills" || path.startsWith("/skills/"),
+        description: "查看受治理的业务 Skill 资产及其发布状态与角色授权。",
+        keywords: ["Skill", "SOP", "业务 Skill"]
       }
     ]
   },

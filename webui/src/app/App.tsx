@@ -25,6 +25,7 @@ import {
   KeyRound,
   ScrollText,
   Settings,
+  Sparkles,
   Terminal,
   Users,
   Image,
@@ -39,6 +40,7 @@ import { PublishWorkbench } from "../pages/publish/PublishWorkbench";
 import { PublishHistory } from "../pages/publish/PublishHistory";
 import { TableEditor } from "../pages/TableEditor";
 import { WikiEditor } from "../pages/WikiEditor";
+import { SkillList } from "../pages/skills/SkillList";
 import { AgentList } from "../pages/admin/AgentList";
 import { AgentDetail } from "../pages/admin/AgentDetail";
 import { Tokens } from "../pages/admin/Tokens";
@@ -133,6 +135,7 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   whitelist: TableProperties,
   catalog: Boxes,
   wiki: BookOpen,
+  skills: Sparkles,
   publish: Rocket,
   history: History,
   evalCases: ClipboardList,
@@ -414,6 +417,7 @@ export function AppFrame() {
             <Route path="/publish/history" element={<PublishHistory />} />
             <Route path="/review" element={<Navigate to="/publish/workbench" replace />} />
             <Route path="/wiki" element={<WikiEditor />} />
+            <Route path="/skills" element={<SkillList />} />
             <Route path="/admin/usage" element={<GovernanceOverview />} />
             <Route path="/admin/governance" element={<Navigate to="/admin/usage" replace />} />
             <Route path="/admin/agents" element={<AgentList />} />

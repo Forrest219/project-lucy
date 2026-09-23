@@ -108,6 +108,12 @@ describe("Skill ACL", () => {
     status: "deprecated",
   };
 
+  const draftSkill: SkillAsset = {
+    ...publicSkill,
+    name: "draft-skill",
+    status: "draft",
+  };
+
   beforeEach(async () => {
     previousRoot = process.env.KTX_PROJECT_ROOT;
     projectRoot = await mkdtemp(path.join(os.tmpdir(), "skill-acl-test-"));
@@ -149,13 +155,20 @@ describe("Skill ACL", () => {
     expect(decision.reason).toBe("skill_deprecated");
   });
 
+  it("blocks draft skills with skill_not_published (Spec 144)", async () => {
+    const decision = await canAccessSkill(mockIdentity, draftSkill);
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe("skill_not_published");
+  });
+
   it("filters accessible skills according to role permissions", async () => {
-    const skills = [publicSkill, matchingRoleSkill, restrictedSkill, deprecatedSkill];
+    const skills = [publicSkill, matchingRoleSkill, restrictedSkill, deprecatedSkill, draftSkill];
     const accessible = await filterAccessibleSkills(mockIdentity, skills);
     const names = accessible.map((s) => s.name);
     expect(names).toContain("public-skill");
     expect(names).toContain("analyst-skill");
     expect(names).not.toContain("finance-audit");
     expect(names).not.toContain("deprecated-skill");
+    expect(names).not.toContain("draft-skill");
   });
 });
