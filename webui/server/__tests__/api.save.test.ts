@@ -318,6 +318,15 @@ describe("connection enabled_tables API", () => {
     expect(response.body.data.auditId).toBeTruthy();
     expect(typeof response.body.data.policyVersion).toBe("string");
     expect(typeof response.body.data.runtimeAck).toBe("boolean");
+    expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
+    expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
+    expect(typeof response.body.data.executionRuntimeAck).toBe("boolean");
+    expect(["unknown", "ok", "stale", "unavailable", "error"]).toContain(
+      response.body.data.executionRuntimeStatus
+    );
+    if (!response.body.data.executionRuntimeAck) {
+      expect(response.body.data.executionDecisionReason).toBeTruthy();
+    }
     await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.not.toContain("dataforai.superstore_orders");
     await app.close();
   });
@@ -345,6 +354,7 @@ defaults:
       .send({ dryRun: false, enabledTables: ["dataforai.superstore_orders"] })
       .expect(200);
     expect(before.body.data.runtimeAck).toBe(true);
+    expect(before.body.data.policyRuntimeAck).toBe(true);
     expect(before.body.data.policyVersion).toMatch(/^[a-f0-9]{64}$/);
 
     const after = await request(app.server)
@@ -355,6 +365,7 @@ defaults:
       })
       .expect(200);
     expect(after.body.data.runtimeAck).toBe(true);
+    expect(after.body.data.policyRuntimeAck).toBe(true);
     expect(after.body.data.policyVersion).toMatch(/^[a-f0-9]{64}$/);
     expect(after.body.data.policyVersion).not.toBe(before.body.data.policyVersion);
     await app.close();

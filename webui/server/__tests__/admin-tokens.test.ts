@@ -95,6 +95,8 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(hash).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(label).toBe("cursor-test");
+    expect(res.body.data.policyRuntimeAck).toBe(true);
+    expect(res.body.data.runtimeAck).toBe(res.body.data.policyRuntimeAck);
     await app.close();
   });
 
@@ -179,6 +181,8 @@ describe("DELETE /api/admin/agents/:userId/tokens/:label", () => {
     expect(res.body.ok).toBe(true);
     expect(res.body.data.written).toBe(true);
     expect(res.body.data.revokedAt).toBeTruthy();
+    expect(res.body.data.policyRuntimeAck).toBe(true);
+    expect(res.body.data.runtimeAck).toBe(res.body.data.policyRuntimeAck);
 
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).not.toContain("hermes-laptop");

@@ -45,6 +45,28 @@ function actorIpFromRequest(request: FastifyRequest): string | undefined {
   return request.ip || undefined;
 }
 
+async function commitPolicyRuntimeAck(content: string): Promise<{
+  policyVersion: string;
+  policyRuntimeAck: boolean;
+  runtimeAck: boolean;
+}> {
+  const {
+    commitEffectivePolicy,
+    computeAccessConfigDigest,
+    evaluateRuntimeAck
+  } = await import("../proxy/acl.js");
+  const expectedDigest = computeAccessConfigDigest(
+    parse(content) as Parameters<typeof computeAccessConfigDigest>[0]
+  );
+  const status = await commitEffectivePolicy();
+  const policyRuntimeAck = evaluateRuntimeAck(status, expectedDigest);
+  return {
+    policyVersion: status.policyVersion,
+    policyRuntimeAck,
+    runtimeAck: policyRuntimeAck
+  };
+}
+
 async function writeGateTrace(
   decision: AccessGovernanceGateDecision,
   override: { ok: boolean } | undefined,
@@ -392,16 +414,19 @@ export function registerTokenRoutes(app: FastifyInstance) {
       requestId: request.id
     });
     invalidateAccessConfigCache();
+    const runtime = await commitPolicyRuntimeAck(content);
 
     return {
       ok: true,
       data: {
+        written: true,
         token: plainToken,
         hash: tokenHash,
         label,
         device_name: deviceName,
         created,
         expires_at: expires_at ?? null,
+        ...runtime,
         gate
       }
     };
@@ -493,7 +518,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
       requestId: request.id
     });
     invalidateAccessConfigCache();
+    const runtime = await commitPolicyRuntimeAck(content);
 
-    return { ok: true, data: { written: true, revokedAt, gate } };
+    return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };
   });
 }

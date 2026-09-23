@@ -125,7 +125,12 @@ async function writeAccessYaml(
     requestId?: string;
     source?: string;
   }
-): Promise<{ auditId?: number; policyVersion: string; runtimeAck: boolean }> {
+): Promise<{
+  auditId?: number;
+  policyVersion: string;
+  policyRuntimeAck: boolean;
+  runtimeAck: boolean;
+}> {
   const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
   let previousRaw: string | undefined;
   try {
@@ -179,6 +184,7 @@ async function writeAccessYaml(
   return {
     ...writeResult,
     policyVersion: status.policyVersion,
+    policyRuntimeAck: runtimeAck,
     runtimeAck
   };
 }
@@ -961,6 +967,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       data: {
         written: true,
         policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
         gate,
         agent: await userToAgentWithPermissions(newUser)
@@ -1203,6 +1210,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       data: {
         written: true,
         policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
         gate,
         agent: await userToAgentWithPermissions(updatedUser),
@@ -1284,6 +1292,15 @@ export function registerAgentRoutes(app: FastifyInstance) {
       requestId: request.id
     });
     invalidateAccessConfigCache();
-    return { ok: true, data: { written: true, gate } };
+    return {
+      ok: true,
+      data: {
+        written: true,
+        policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
+        runtimeAck: writeResult.runtimeAck,
+        gate
+      }
+    };
   });
 }

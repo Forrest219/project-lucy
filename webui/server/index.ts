@@ -102,6 +102,11 @@ import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
+import {
+  readMcpRuntimeStatus,
+  registerMcpRuntimeRoutes,
+  runMcpRuntimeCanary
+} from "./admin/mcp-runtime.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { registerLicenseRoutes } from "./license/routes.js";
@@ -426,6 +431,42 @@ function validateEnabledTables(
   return { tables: valid, warnings };
 }
 
+async function executionAckForConnection(connectionId: string): Promise<{
+  executionRuntimeAck: boolean;
+  executionRuntimeStatus: "unknown" | "ok" | "stale" | "unavailable" | "error";
+  executionDecisionReason: string;
+  executionRuntimeError?: string;
+}> {
+  try {
+    const canary = await runMcpRuntimeCanary({ connectionId, mode: "connection" });
+    const executionRuntimeStatus = canary.executionRuntimeAck
+      ? "ok"
+      : canary.decisionReason === "execution_config_stale"
+        ? "stale"
+        : canary.decisionReason === "execution_runtime_unavailable"
+          ? "unavailable"
+          : canary.decisionReason === "upstream_error"
+            ? "error"
+            : "unknown";
+    const executionRuntimeError = canary.checks.slice().reverse().find(
+      (check) => check.status !== "pass"
+    )?.detail;
+    return {
+      executionRuntimeAck: canary.executionRuntimeAck,
+      executionRuntimeStatus,
+      executionDecisionReason: canary.decisionReason,
+      ...(executionRuntimeError ? { executionRuntimeError } : {})
+    };
+  } catch (error) {
+    return {
+      executionRuntimeAck: false,
+      executionRuntimeStatus: "error",
+      executionDecisionReason: "upstream_error",
+      executionRuntimeError: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 export function buildServer() {
   const app = Fastify({ logger: true });
   const writtenFiles: SessionWrittenFile[] = [];
@@ -453,9 +494,21 @@ export function buildServer() {
 
   app.get("/api/health", async () => {
     const policy = getPolicyRuntimeStatus();
-    const ktxRuntime = await readKtxRuntimeStatus();
+    const [ktxRuntime, mcpRuntime] = await Promise.all([
+      readKtxRuntimeStatus(),
+      readMcpRuntimeStatus().catch((error) => ({
+        execution: {
+          status: "error" as const,
+          lastCheckedAt: new Date().toISOString(),
+          lastError: error instanceof Error ? error.message : String(error)
+        }
+      }))
+    ]);
     const policyHealthy = isPolicyRuntimeHealthy(policy);
-    const healthy = policyHealthy && ktxRuntime.ready;
+    const executionHardFailure = ["stale", "unavailable", "error"].includes(
+      mcpRuntime.execution.status
+    );
+    const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
     return {
       ok: true,
       data: {
@@ -473,7 +526,8 @@ export function buildServer() {
           degradedGlobal: policy.degradedGlobal,
           degradedAgents: policy.degradedAgents,
           healthy: policyHealthy
-        }
+        },
+        execution: mcpRuntime.execution
       }
     };
   });
@@ -1020,6 +1074,41 @@ export function buildServer() {
       if ("secretRelPath" in result) {
         writtenFiles.push({ filePath: result.secretRelPath });
       }
+
+      let catalogRuntimeAck = false;
+      try {
+        const catalogRun = await reloadCatalog(projectRoot, { connectionId: body.id });
+        catalogRuntimeAck = catalogRun.status === "success" && !catalogRun.warnings.some(
+          (warning) => warning.code === "SCHEMA_MANIFEST_MISSING"
+        );
+      } catch (error) {
+        console.error("[connection-create] catalog reload failed", error);
+      }
+
+      let policyVersion = "";
+      let policyRuntimeAck = false;
+      try {
+        const { commitEffectivePolicy } = await import("./proxy/acl.js");
+        const status = await commitEffectivePolicy();
+        policyVersion = status.policyVersion;
+        policyRuntimeAck = status.policyVersion !== "" && !status.degradedGlobal;
+      } catch (error) {
+        console.error("[connection-create] policy runtime commit failed", error);
+      }
+
+      const executionAck = await executionAckForConnection(body.id);
+
+      return {
+        ok: true,
+        data: {
+          ...result,
+          policyVersion,
+          policyRuntimeAck,
+          catalogRuntimeAck,
+          ...executionAck,
+          runtimeAck: policyRuntimeAck
+        }
+      };
     }
     return { ok: true, data: result };
   });
@@ -1166,15 +1255,25 @@ export function buildServer() {
       requestId: request.id
     });
 
+    let catalogRuntimeAck = false;
+    try {
+      const catalogRun = await reloadCatalog(projectRoot, { connectionId: connId });
+      catalogRuntimeAck = catalogRun.status === "success" && !catalogRun.warnings.some(
+        (warning) => warning.code === "SCHEMA_MANIFEST_MISSING"
+      );
+    } catch (err) {
+      console.error("[enabled-tables] ktx.yaml written but catalog reload failed", err);
+    }
+
     // Spec 131 / P1-1: catalog_bound capabilities depend on enabled_tables — recompile now.
     let policyVersion = "";
-    let runtimeAck = false;
+    let policyRuntimeAck = false;
     try {
       const { commitEffectivePolicy } = await import("./proxy/acl.js");
       const status = await commitEffectivePolicy();
       policyVersion = status.policyVersion;
-      runtimeAck = status.policyVersion !== "" && !status.degradedGlobal;
-      if (!runtimeAck) {
+      policyRuntimeAck = status.policyVersion !== "" && !status.degradedGlobal;
+      if (!policyRuntimeAck) {
         console.error("[enabled-tables] ktx.yaml written but policy runtime not acknowledged", {
           connId,
           policyVersion: status.policyVersion,
@@ -1183,8 +1282,10 @@ export function buildServer() {
       }
     } catch (err) {
       console.error("[enabled-tables] ktx.yaml written but commitEffectivePolicy failed", err);
-      runtimeAck = false;
+      policyRuntimeAck = false;
     }
+
+    const executionAck = await executionAckForConnection(connId);
 
     return {
       ok: true,
@@ -1195,7 +1296,10 @@ export function buildServer() {
         newEnabledTables,
         warnings,
         policyVersion,
-        runtimeAck
+        policyRuntimeAck,
+        catalogRuntimeAck,
+        ...executionAck,
+        runtimeAck: policyRuntimeAck
       }
     };
   });
@@ -1735,6 +1839,7 @@ export function buildServer() {
   registerAuditRoutes(app);
   registerMcpToolsRoutes(app);
   registerMcpPlaygroundRoutes(app);
+  registerMcpRuntimeRoutes(app);
   registerGovernanceObservabilityRoutes(app);
   registerCaseRoutes(app);
   registerSecurityCandidateRoutes(app);

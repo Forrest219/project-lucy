@@ -165,6 +165,8 @@ GET    /api/admin/trace/events
 GET    /api/admin/mcp-tools
 POST   /api/admin/mcp-playground/acl-preview
 POST   /api/admin/mcp-playground/live-smoke
+GET    /api/admin/mcp-runtime/status
+POST   /api/admin/mcp-runtime/canary
 GET    /api/admin/governance/overview
 GET    /api/admin/governance/agents
 GET    /api/admin/governance/roles
@@ -865,6 +867,10 @@ Query：
 ```
 
 `GET /api/admin/mcp-tools` 返回当前已知 MCP tool 列表，并标记全局 deny 状态。
+
+`GET /api/admin/mcp-runtime/status` 返回 Config、Catalog、Policy Runtime 与常驻 KTX MCP Execution Runtime 的分层状态；Catalog 同时返回 `lastByConnection` 的最近 reload 摘要。响应只包含 `ktx.yaml` 的 SHA-256 摘要和连接 ID，不返回密码、Token 或 `.ktx/secrets/**` 内容。执行层状态为 `unknown | ok | stale | unavailable | error`；MCP 上游可达但无法证明某连接已加载时必须返回 `unknown`，不得把独立 `ktx connection test` CLI 的成功当作运行时确认。
+
+`POST /api/admin/mcp-runtime/canary` 请求体为 `{ connectionId, agentId?, sourceName?, mode? }`，其中 `mode` 为 `connection | tools_list | catalog | query`。响应逐项返回 `config`、`catalog`、`policy`、`execution_tools_list`、`execution_query` 检查及 `executionRuntimeAck`。当当前 KTX 版本无连接加载自省且当前配置摘要没有成功查询证据时，返回 `status="blocked"`、`executionRuntimeAck=false`、`decisionReason="execution_canary_blocked"`；上游不可达返回 `execution_runtime_unavailable`。
 
 ### MCP Proxy
 

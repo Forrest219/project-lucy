@@ -134,11 +134,18 @@ describe("WP-I6 audit + policy-runtime", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as {
       ok: boolean;
-      data: { status: string; policy: { healthy: boolean; policyVersion: string } };
+      data: {
+        status: string;
+        policy: { healthy: boolean; policyVersion: string };
+        execution: { status: string };
+      };
     };
     expect(body.data.status).toBe("degraded");
     expect(body.data.policy.healthy).toBe(false);
     expect(body.data.policy.policyVersion).toBe("");
+    expect(body.data.execution).toMatchObject({
+      status: expect.stringMatching(/^(unknown|ok|stale|unavailable|error)$/)
+    });
     await app.close();
   });
 

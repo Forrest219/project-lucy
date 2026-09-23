@@ -17,7 +17,8 @@ import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { loadAllSkills, getSkillByUri, getSkillByName } from "../skills/loader.js";
 import { canAccessSkill, filterAccessibleSkills } from "./skill-acl.js";
-import { resolveProjectRoot } from "../project.js";
+import { readProject, resolveProjectRoot } from "../project.js";
+import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
   recordMcpToolsCall,
   purgeTraceEvidence,
@@ -1530,6 +1531,82 @@ function upstreamFailureReason(error: unknown): "source_timeout" | "upstream_una
   return /timeout/i.test(message) ? "source_timeout" : "upstream_unavailable";
 }
 
+function toolConnectionId(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+  return firstStringField(args as Record<string, unknown>, ["connectionId", "connection_id", "connection"]);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function collectTextValues(value: unknown, output: string[], depth = 0): void {
+  if (depth > 8 || output.length >= 100) return;
+  if (typeof value === "string") {
+    output.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectTextValues(item, output, depth + 1);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const item of Object.values(value as Record<string, unknown>)) {
+    collectTextValues(item, output, depth + 1);
+  }
+}
+
+function containsConnectionMissingError(body: string, connectionId: string): boolean {
+  const escaped = escapeRegExp(connectionId);
+  const pattern = new RegExp(`Connection\\s+["']${escaped}["']\\s+is not configured in ktx\\.yaml`, "i");
+  const candidates = [body];
+  try {
+    collectTextValues(JSON.parse(body), candidates);
+  } catch {
+    for (const payload of decodeSseMessages(body)) collectTextValues(payload, candidates);
+  }
+  return candidates.some((candidate) => pattern.test(candidate));
+}
+
+async function classifyUpstreamToolError(body: string, args: unknown): Promise<string> {
+  const connectionId = toolConnectionId(args);
+  if (!connectionId || !containsConnectionMissingError(body, connectionId)) return "upstream_error";
+  try {
+    const projectRoot = await resolveProjectRoot();
+    const project = await readProject(projectRoot);
+    if (!project.connections.some((connection) => connection.id === connectionId)) {
+      return "upstream_error";
+    }
+    recordExecutionRuntimeObservation({
+      connectionId,
+      configDigest: await readKtxYamlDigest(projectRoot),
+      status: "stale",
+      checkedAt: new Date().toISOString(),
+      detail: `Connection "${connectionId}" is present on disk but missing from the KTX MCP Runtime.`
+    });
+    return "execution_config_stale";
+  } catch {
+    return "upstream_error";
+  }
+}
+
+async function recordSuccessfulQueryObservation(toolName: string, args: unknown): Promise<void> {
+  if (toolName !== "lucy_query") return;
+  const connectionId = toolConnectionId(args);
+  if (!connectionId) return;
+  try {
+    const projectRoot = await resolveProjectRoot();
+    recordExecutionRuntimeObservation({
+      connectionId,
+      configDigest: await readKtxYamlDigest(projectRoot),
+      status: "ok",
+      checkedAt: new Date().toISOString()
+    });
+  } catch {
+    // Runtime acknowledgement is best-effort and must never affect a query response.
+  }
+}
+
 function ensureJsonRpcEnvelope(payload: unknown, requestId: string | number): unknown {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
   const record = payload as Record<string, unknown>;
@@ -1747,6 +1824,12 @@ async function writeLucySemanticResponse(
   const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
   const tables = [...new Set([...structuredTables, ...queryTables])];
   const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"]);
+  const decisionReason = outcome === "ok"
+    ? (metaFailed ? "lucy_result_meta_failed" : "allowed")
+    : await classifyUpstreamToolError(originalBody, toolArgs);
+  if (outcome === "ok") {
+    await recordSuccessfulQueryObservation(toolName, toolArgs);
+  }
   const baseEntry: Parameters<typeof writeLog>[0] = {
     ts: new Date().toISOString(),
     userId: identity.userId,
@@ -1763,7 +1846,7 @@ async function writeLucySemanticResponse(
     requestId,
     traceId,
     ...requestMeta,
-    ...(await auditMeta(identity, outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error")),
+    ...(await auditMeta(identity, decisionReason)),
   };
   recordAudit(baseEntry, outcome === "ok" ? sourceRefs : undefined);
   recordMcpTraceForTool({
@@ -1777,7 +1860,7 @@ async function writeLucySemanticResponse(
     requestId,
     argsSummary,
     allowed: true,
-    reason: outcome === "ok" ? (metaFailed ? "lucy_result_meta_failed" : "allowed") : "upstream_error",
+    reason: decisionReason,
     resultSnapshot: resultSnapshotFromAuditMeta(responseMeta),
     sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
   });

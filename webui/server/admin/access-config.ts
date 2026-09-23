@@ -119,7 +119,12 @@ export async function writeAccessYaml(
     operation?: string;
     assetKind?: ConfigAuditAssetKind;
   }
-): Promise<{ auditId?: number; policyVersion: string; runtimeAck: boolean }> {
+): Promise<{
+  auditId?: number;
+  policyVersion: string;
+  policyRuntimeAck: boolean;
+  runtimeAck: boolean;
+}> {
   const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
   let previousRaw: string | undefined;
   try {
@@ -175,6 +180,7 @@ export async function writeAccessYaml(
   return {
     ...writeResult,
     policyVersion: status.policyVersion,
+    policyRuntimeAck: runtimeAck,
     runtimeAck
   };
 }

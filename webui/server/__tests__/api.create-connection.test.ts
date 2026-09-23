@@ -151,6 +151,13 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(response.body.ok).toBe(true);
     expect(response.body.data.written).toBe(true);
     expect(response.body.data.test.status).toBe("ok");
+    expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
+    expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
+    expect(response.body.data.executionRuntimeAck).toBe(false);
+    expect(["unknown", "unavailable", "error"]).toContain(
+      response.body.data.executionRuntimeStatus
+    );
+    expect(response.body.data.executionDecisionReason).toBeTruthy();
     expect(JSON.stringify(response.body)).not.toContain("plain-secret-value");
 
     await expect(
@@ -324,7 +331,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
 
     expect(response.body.ok).toBe(true);
     expect(response.body.data.status).toBe("error");
-    expect(response.body.data.message).toContain("Access denied");
+    expect(response.body.data.message).toContain("用户名或密码不正确");
     expect(JSON.stringify(response.body)).not.toContain("wrong-password");
   });
 });

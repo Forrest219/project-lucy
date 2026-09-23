@@ -738,6 +738,8 @@ describe("AC-P1.5 Agent Admin constraints (WP-I4)", () => {
       .expect(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.data.runtimeAck).toBe(true);
+    expect(res.body.data.policyRuntimeAck).toBe(true);
+    expect(res.body.data.policyRuntimeAck).toBe(res.body.data.runtimeAck);
     expect(res.body.data.policyVersion).toBeTruthy();
     expect(res.body.data.agent.constraints).toMatchObject({
       sources: [

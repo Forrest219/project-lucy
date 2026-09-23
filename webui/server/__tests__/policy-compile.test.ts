@@ -205,6 +205,8 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
     });
 
     expect(result.runtimeAck).toBe(true);
+    expect(result.policyRuntimeAck).toBe(true);
+    expect(result.policyRuntimeAck).toBe(result.runtimeAck);
     expect(result.policyVersion).toMatch(/^[a-f0-9]{64}$/);
     expect(acl.getPolicyRuntimeStatus().policyVersion).toBe(result.policyVersion);
     expect(acl.getPolicyRuntimeStatus().degradedGlobal).toBe(false);
@@ -248,6 +250,7 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
     });
 
     expect(result.runtimeAck).toBe(false);
+    expect(result.policyRuntimeAck).toBe(false);
     expect(evalCalls).toBeGreaterThanOrEqual(1);
     const after = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
     expect(after).toBe(before);

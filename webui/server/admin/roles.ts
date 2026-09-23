@@ -761,6 +761,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         written: true,
         version: detail.version,
         policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
         gate,
         role: {
@@ -894,6 +895,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         written: true,
         version: detail.version,
         policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
         gate
       }
@@ -1002,6 +1004,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
           written: true,
           version: (await readAccessYaml(projectRoot)).version,
           policyVersion: writeResult.policyVersion,
+          policyRuntimeAck: writeResult.policyRuntimeAck,
           runtimeAck: writeResult.runtimeAck,
           gate
         }
@@ -1119,6 +1122,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         written: true,
         version: detail.version,
         policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
         gate,
         role: {

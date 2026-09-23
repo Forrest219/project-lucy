@@ -761,7 +761,68 @@ export type PolicyRuntimeStatus = {
 export type AccessWriteAck = {
   written: boolean;
   policyVersion?: string;
+  policyRuntimeAck?: boolean;
   runtimeAck?: boolean;
+};
+
+export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";
+
+export type RuntimeAcks = Omit<AccessWriteAck, "policyRuntimeAck"> & {
+  policyRuntimeAck: boolean;
+  catalogRuntimeAck?: boolean;
+  executionRuntimeAck?: boolean;
+  executionRuntimeStatus?: ExecutionRuntimeStatus;
+  executionRuntimeError?: string;
+  executionDecisionReason?: string;
+};
+
+export type McpRuntimeStatus = {
+  endpoint: {
+    publicUrl?: string;
+    upstreamHost: string;
+    upstreamPort: number;
+  };
+  config: {
+    projectRoot: string;
+    ktxYamlDigest: string;
+    connectionIds: string[];
+    updatedAt: string;
+  };
+  catalog: {
+    lastReloadId?: string;
+    lastReloadAt?: string;
+    connectionIds: string[];
+    lastByConnection: Record<string, {
+      id: string;
+      status: "success" | "failed";
+      finishedAt: string;
+    }>;
+  };
+  policy: PolicyRuntimeStatus;
+  execution: {
+    status: ExecutionRuntimeStatus;
+    lastCheckedAt: string;
+    loadedConnectionIds?: string[];
+    missingConnections?: string[];
+    unknownConnections?: string[];
+    lastError?: string;
+  };
+};
+
+export type McpRuntimeCanaryResult = {
+  connectionId: string;
+  agentId?: string;
+  status: "pass" | "fail" | "blocked";
+  checks: Array<{
+    name: string;
+    status: "pass" | "fail" | "blocked";
+    detail: string;
+    durationMs?: number;
+  }>;
+  executionRuntimeAck: boolean;
+  decisionReason: string;
+  remediation?: { label: string; detail: string };
+  durationMs?: number;
 };
 
 export type TokenSummary = {
