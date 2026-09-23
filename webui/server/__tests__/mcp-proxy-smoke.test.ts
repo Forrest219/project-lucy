@@ -1994,6 +1994,91 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("rewrites wiki_search q alias to query before forwarding to upstream", async () => {
+    const upstreamSeen: Array<Record<string, unknown>> = [];
+    const upstream = createServer(async (req, res) => {
+      const body = await readRequestBody(req);
+      const parsed = JSON.parse(body) as {
+        id: string;
+        params?: { arguments?: Record<string, unknown> };
+      };
+      upstreamSeen.push(parsed.params?.arguments ?? {});
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id,
+        result: {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              hits: [
+                { key: "superstore", path: "wiki/global/superstore.md", title: "Superstore Wiki", snippet: "Authorized superstore context" },
+                { key: "kx-secret", path: "wiki/global/kx-secret.md", title: "KX Secret Wiki", snippet: "Unauthorized KX context" }
+              ]
+            })
+          }]
+        }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    try {
+      const aliasSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "wiki-search-q-alias",
+          method: "tools/call",
+          params: { name: "wiki_search", arguments: { q: "revenue", limit: 5 } }
+        })
+      });
+      expect(aliasSearch.status).toBe(200);
+      const aliasBody = await aliasSearch.json() as {
+        error?: { message?: string };
+        result?: { content: Array<{ text: string }> };
+      };
+      expect(aliasBody.error).toBeUndefined();
+      const aliasText = aliasBody.result?.content[0]?.text ?? "";
+      expect(aliasText).toContain("global/superstore.md");
+      expect(aliasText).not.toContain("KX Secret Wiki");
+      expect(upstreamSeen[0]).toEqual({ query: "revenue", limit: 5 });
+      expect(upstreamSeen[0]).not.toHaveProperty("q");
+
+      const querySearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "wiki-search-query-kept",
+          method: "tools/call",
+          params: { name: "wiki_search", arguments: { query: "superstore", q: "ignored-alias", limit: 3 } }
+        })
+      });
+      expect(querySearch.status).toBe(200);
+      const queryBody = await querySearch.json() as {
+        error?: { message?: string };
+        result?: { content: Array<{ text: string }> };
+      };
+      expect(queryBody.error).toBeUndefined();
+      expect(queryBody.result?.content[0]?.text ?? "").toContain("global/superstore.md");
+      expect(upstreamSeen[1]).toEqual({ query: "superstore", limit: 3 });
+      expect(upstreamSeen[1]).not.toHaveProperty("q");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("does not inject lucy_begin_question or kx_catalog for an agent whose role doesn't list them", async () => {
     const upstream = createServer(async (req, res) => {
       await readRequestBody(req);

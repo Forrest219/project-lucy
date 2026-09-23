@@ -813,6 +813,17 @@ function lucyReadSourceUpstreamArgs(args: unknown): Record<string, unknown> {
   };
 }
 
+/** Normalize wiki_search args for KTX: prefer query, else lift q/text/keyword, drop aliases. */
+function wikiSearchUpstreamArgs(args: unknown): Record<string, unknown> {
+  const record = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
+  const { q: _q, text: _text, keyword: _keyword, ...rest } = record;
+  const existingQuery = typeof rest.query === "string" && rest.query.trim() ? rest.query : undefined;
+  if (existingQuery) return { ...rest, query: existingQuery };
+  const aliasQuery = firstStringValue(record, ["q", "text", "keyword"]);
+  if (aliasQuery) return { ...rest, query: aliasQuery };
+  return rest;
+}
+
 function isSafeSemanticFieldRef(value: unknown): value is string {
   if (!hasNonEmptyStringValue(value)) return false;
   return !/[^\p{L}\p{N}_.$]/u.test(String(value).trim());
@@ -3083,6 +3094,9 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
   if (rpcMethod === "tools/call" && parsedRpc && toolName === "lucy_query") {
     outboundBody = rewriteToolCall(parsedRpc, "sl_query", lucyQueryUpstreamArgs(toolArgs));
+  }
+  if (rpcMethod === "tools/call" && parsedRpc && toolName === "wiki_search") {
+    outboundBody = rewriteToolCall(parsedRpc, "wiki_search", wikiSearchUpstreamArgs(toolArgs));
   }
 
   let upstream: IncomingMessage;
