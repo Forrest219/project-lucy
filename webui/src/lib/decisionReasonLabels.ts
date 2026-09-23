@@ -16,6 +16,10 @@ export function decisionReasonLabel(code: string | null | undefined): string {
   if (code.startsWith("sensitive_metadata_forbidden:")) return "敏感元数据工具未授权";
   if (code === "raw_query_forbidden") return "禁止原始 SQL 查询";
   if (code === "query_concurrency_exceeded") return "查询并发超限";
+  if (code === "execution_config_stale") return "MCP 执行层配置未加载";
+  if (code === "execution_connection_not_loaded") return "MCP 执行层未加载该连接";
+  if (code === "execution_runtime_unavailable") return "MCP 执行层不可用";
+  if (code === "execution_canary_blocked") return "MCP 执行层尚未确认";
   if (code === "invalid_arguments:lucy_query:filters_serialized_json_invalid") return "筛选条件格式无效";
   if (code === "invalid_arguments:lucy_query:order_by_conflict") return "排序条件互相冲突";
   if (code.startsWith("invalid_arguments:")) return "工具参数不符合要求";
@@ -30,6 +34,9 @@ export function decisionReasonDetail(code: string | null | undefined): string | 
   }
   if (code.startsWith("unknown_or_forbidden_connection:")) {
     return `连接：${code.slice("unknown_or_forbidden_connection:".length)}`;
+  }
+  if (code === "execution_config_stale") {
+    return "磁盘配置包含该连接，但常驻 KTX MCP Runtime 报告未加载。";
   }
   return undefined;
 }

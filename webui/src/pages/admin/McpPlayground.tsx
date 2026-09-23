@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { DecisionReasonCell } from "../../components/DecisionReasonCell";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent } from "../../lib/types";
+import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
+import type { Agent, McpRuntimeCanaryResult, McpRuntimeStatus } from "../../lib/types";
+import { queryKeys } from "../../lib/queryKeys";
 
 type AgentsResponse = { agents: Agent[] };
 type McpToolsResponse = { tools: Array<{ name: string; description?: string }> };
@@ -54,6 +56,7 @@ export function McpPlayground() {
   const [bearerToken, setBearerToken] = useState("");
   const [confirmLive, setConfirmLive] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [runtimeConnectionId, setRuntimeConnectionId] = useState("");
 
   const agentsQuery = useQuery({
     queryKey: ["admin", "agents"],
@@ -63,6 +66,30 @@ export function McpPlayground() {
     queryKey: ["admin", "mcp-tools"],
     queryFn: () => apiGet<McpToolsResponse>("/api/admin/mcp-tools")
   });
+  const runtimeQuery = useQuery({
+    queryKey: queryKeys.mcpRuntime,
+    queryFn: () => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status")
+  });
+  const runtimeCanaryMutation = useMutation({
+    mutationFn: (connectionId: string) =>
+      apiPost<McpRuntimeCanaryResult>("/api/admin/mcp-runtime/canary", {
+        connectionId,
+        ...(agentId ? { agentId } : {}),
+        mode: "connection"
+      }),
+    onSuccess: () => {
+      void runtimeQuery.refetch();
+    }
+  });
+
+  useEffect(() => {
+    const connectionIds = runtimeQuery.data?.config.connectionIds ?? [];
+    if (!runtimeConnectionId && connectionIds[0]) {
+      setRuntimeConnectionId(connectionIds[0]);
+    } else if (runtimeConnectionId && !connectionIds.includes(runtimeConnectionId)) {
+      setRuntimeConnectionId(connectionIds[0] ?? "");
+    }
+  }, [runtimeConnectionId, runtimeQuery.data]);
 
   const agents = agentsQuery.data?.agents ?? [];
   const selectedAgent = agents.find((a) => a.id === agentId);
@@ -139,6 +166,38 @@ export function McpPlayground() {
             <span className="notranslate" translate="no">MCP</span> 工具权限裁决，并执行受控接入试调。
           </>
         }
+      />
+
+      <McpRuntimeStatusPanel
+        status={runtimeQuery.data}
+        connectionId={runtimeConnectionId}
+        canary={runtimeCanaryMutation.data}
+        pending={runtimeCanaryMutation.isPending}
+        error={
+          runtimeQuery.error instanceof Error
+            ? runtimeQuery.error.message
+            : runtimeCanaryMutation.error instanceof Error
+              ? runtimeCanaryMutation.error.message
+              : undefined
+        }
+        controls={
+          <label className="flex items-center gap-2 text-xs">
+            <span>连接</span>
+            <select
+              className="pl-input notranslate"
+              translate="no"
+              value={runtimeConnectionId}
+              data-testid="mcp-runtime-connection"
+              onChange={(event) => setRuntimeConnectionId(event.target.value)}
+            >
+              <option value="">选择连接</option>
+              {(runtimeQuery.data?.config.connectionIds ?? []).map((connectionId) => (
+                <option key={connectionId} value={connectionId}>{connectionId}</option>
+              ))}
+            </select>
+          </label>
+        }
+        onRecheck={() => runtimeCanaryMutation.mutate(runtimeConnectionId)}
       />
 
       <section className="pl-panel">

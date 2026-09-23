@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -87,7 +87,8 @@ function stubOverviewFetch({
 	  catalogReloadsError,
 	  catalogReloadPostError,
 	  mcpEndpoint,
-	  connectionTestById
+	  connectionTestById,
+	  mcpExecutionStatus = "unknown"
 	}: {
 	  connections?: ConnectionInfo[];
 	  ktxAvailable?: boolean;
@@ -116,6 +117,7 @@ function stubOverviewFetch({
       stderr?: string;
     }
   >;
+  mcpExecutionStatus?: "unknown" | "ok" | "stale" | "unavailable" | "error";
 } = {}) {
   const resolvedMcpEndpoint = mcpEndpoint ?? {
     url: "https://lucy.example.com/mcp",
@@ -161,6 +163,56 @@ function stubOverviewFetch({
 	  // tables override
 	  handlers["GET /api/sources"] = () =>
 	    new Response(JSON.stringify({ ok: true, data: { tables } }));
+	  handlers["GET /api/admin/mcp-runtime/status"] = () =>
+	    new Response(JSON.stringify({
+	      ok: true,
+	      data: {
+	        endpoint: { upstreamHost: "127.0.0.1", upstreamPort: 7878 },
+	        config: {
+	          projectRoot: "/tmp/project-lucy",
+	          ktxYamlDigest: "a".repeat(64),
+	          connectionIds: connections.map((connection) => connection.id),
+	          updatedAt: "2026-09-08T00:00:00.000Z"
+	        },
+	        catalog: {
+	          connectionIds: connections.map((connection) => connection.id),
+	          lastByConnection: Object.fromEntries(connections.map((connection) => [
+	            connection.id,
+	            { id: `rel_${connection.id}`, status: "success", finishedAt: "2026-09-08T00:00:00.000Z" }
+	          ]))
+	        },
+	        policy: {
+	          policyVersion: "b".repeat(64),
+	          degradedGlobal: false,
+	          degradedAgents: [],
+	          accessConfigDigest: "c".repeat(64),
+	          sourceMapVersion: "d".repeat(64),
+	          healthy: true
+	        },
+	        execution: {
+	          status: mcpExecutionStatus,
+	          lastCheckedAt: "2026-09-08T00:00:00.000Z",
+	          ...(mcpExecutionStatus === "stale"
+	            ? { missingConnections: connections.map((connection) => connection.id) }
+	            : mcpExecutionStatus === "ok"
+	              ? { loadedConnectionIds: connections.map((connection) => connection.id) }
+	              : { unknownConnections: connections.map((connection) => connection.id) })
+	        }
+	      }
+	    }));
+	  handlers["POST /api/admin/mcp-runtime/canary"] = (body) => {
+	    const connectionId = (body as { connectionId?: string })?.connectionId ?? "mysql-aliyun";
+	    return new Response(JSON.stringify({
+	      ok: true,
+	      data: {
+	        connectionId,
+	        status: "blocked",
+	        checks: [{ name: "execution_query", status: "blocked", detail: "尚无查询证据" }],
+	        executionRuntimeAck: false,
+	        decisionReason: "execution_canary_blocked"
+	      }
+	    }));
+	  };
 	  if (catalogReloadPostError) {
 	    handlers["POST /api/catalog/reload"] = () =>
 	      new Response(
@@ -268,6 +320,26 @@ afterEach(() => {
 });
 
 describe("ConnectionOverview", () => {
+  it("shows layered runtime state and preserves stale remediation", async () => {
+    const fetchMock = stubOverviewFetch({ mcpExecutionStatus: "stale" });
+    renderOverview();
+
+    const runtime = await screen.findByTestId("mcp-runtime-status-mysql-aliyun");
+    expect(within(runtime).getByText("Config")).toHaveAttribute("translate", "no");
+    expect(within(runtime).getByText("Catalog")).toHaveClass("notranslate");
+    expect(within(runtime).getByText("Policy Runtime")).toHaveAttribute("translate", "no");
+    expect(within(runtime).getByText("MCP Execution")).toHaveClass("notranslate");
+    expect(within(runtime).getByTestId("mcp-runtime-remediation")).toHaveTextContent(
+      "配置已写入，但 MCP 执行层尚未确认加载。请重启或 reload MCP 执行进程后重新检测。"
+    );
+
+    fireEvent.click(within(runtime).getByRole("button", { name: "重新检测执行层" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/mcp-runtime/canary",
+      expect.objectContaining({ method: "POST" })
+    ));
+  });
+
   it("renders sourced status metrics and quick actions", async () => {
     stubOverviewFetch();
 

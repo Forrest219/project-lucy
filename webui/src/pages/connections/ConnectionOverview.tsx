@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { useState } from "react";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -21,6 +21,8 @@ import type {
   ConnectionInfo,
   ConnectionTestResult,
   LiveSchemasResponse,
+  McpRuntimeCanaryResult,
+  McpRuntimeStatus,
   ProjectInfo,
   SourceSummary,
   SourcesResponse
@@ -45,6 +47,7 @@ import {
 import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
+import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
 
 /** Spec 107: client staleTime aligned with server TTL. */
 const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
@@ -384,6 +387,27 @@ export function ConnectionOverview() {
   const catalogReloadsQuery = useQuery({
     queryKey: queryKeys.catalogReloads,
     queryFn: () => apiGet<CatalogReloadsResponse>("/api/catalog/reloads")
+  });
+  const mcpRuntimeQuery = useQuery({
+    queryKey: queryKeys.mcpRuntime,
+    queryFn: () => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status")
+  });
+  const [runtimeCanaryByConnection, setRuntimeCanaryByConnection] = useState<
+    Record<string, McpRuntimeCanaryResult>
+  >({});
+  const runtimeCanaryMutation = useMutation({
+    mutationFn: (connectionId: string) =>
+      apiPost<McpRuntimeCanaryResult>("/api/admin/mcp-runtime/canary", {
+        connectionId,
+        mode: "connection"
+      }),
+    onSuccess: (data) => {
+      setRuntimeCanaryByConnection((current) => ({
+        ...current,
+        [data.connectionId]: data
+      }));
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpRuntime });
+    }
   });
 
   const connections = projectQuery.data?.connections ?? [];
@@ -1161,6 +1185,25 @@ export function ConnectionOverview() {
                   )}
                 </div>
                 <div className="pl-connection-card-footer">
+                  <McpRuntimeStatusPanel
+                    status={mcpRuntimeQuery.data}
+                    connectionId={conn.id}
+                    canary={runtimeCanaryByConnection[conn.id]}
+                    pending={
+                      runtimeCanaryMutation.isPending &&
+                      runtimeCanaryMutation.variables === conn.id
+                    }
+                    error={
+                      mcpRuntimeQuery.error instanceof Error
+                        ? mcpRuntimeQuery.error.message
+                        : runtimeCanaryMutation.error instanceof Error &&
+                            runtimeCanaryMutation.variables === conn.id
+                          ? runtimeCanaryMutation.error.message
+                          : undefined
+                    }
+                    compact
+                    onRecheck={() => runtimeCanaryMutation.mutate(conn.id)}
+                  />
                   {showCatalogRunStatus ? (
                     <div
                       className={`pl-catalog-reload-status pl-catalog-reload-status--${catalogState.tone} notranslate`}
