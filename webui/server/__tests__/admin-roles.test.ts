@@ -988,6 +988,10 @@ describe("GET /api/admin/mcp-tools", () => {
     ]));
     const dialectNotes = res.body.data.tools.find((tool: { name: string }) => tool.name === "sql_dialect_notes");
     expect(dialectNotes).toMatchObject({ globalDenied: true });
+    const slQuery = res.body.data.tools.find((tool: { name: string }) => tool.name === "sl_query");
+    expect(slQuery).toMatchObject({ globalDenied: true });
+    const slReadSource = res.body.data.tools.find((tool: { name: string }) => tool.name === "sl_read_source");
+    expect(slReadSource).toMatchObject({ globalDenied: true });
     await app.close();
   });
 });

@@ -16,9 +16,18 @@ import type {
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { TagInput } from "../../components/TagInput";
-import { AssetHierarchyPicker } from "../../components/AssetHierarchyPicker";
-import { CheckboxCandidatePicker } from "../../components/CheckboxCandidatePicker";
-import { formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
+import { RoleTableGrants } from "../../components/RoleTableGrants";
+import { RoleToolGrants } from "../../components/RoleToolGrants";
+import { RoleEffectiveDigest } from "../../components/RoleEffectiveDigest";
+import {
+  partitionGrantableTools,
+  expansionNotice,
+  type TableAllowOutput,
+  type ScopeMode,
+  type RowPolicyDigestEntry,
+  type TableGrant,
+  type RowPolicyPredicateDraft,
+} from "../../lib/rolePermissionDraft";
 
 type Tab = "identity" | "permissions" | "effective" | "usage" | "diff";
 
@@ -291,6 +300,113 @@ function formToAllow(state: RoleFormState): RoleAllowConfig {
   };
 }
 
+/** Convert RoleSelector[] to TableGrant[] for RoleTableGrants initialTables. */
+function selectorsToTableGrants(selectors: RoleSelector[] | undefined): TableGrant[] {
+  if (!selectors) return [];
+  const result: TableGrant[] = [];
+  for (const sel of selectors) {
+    if (!("names" in sel)) continue; // skip prefix selectors (can't reconstruct table list)
+    const predicates: RowPolicyPredicateDraft[] | undefined =
+      sel.row_access === "scoped" && sel.row_policy?.predicates?.length
+        ? sel.row_policy.predicates.map((p) => ({
+            field: String(p.field),
+            op: p.op,
+            value:
+              p.op === "in"
+                ? (p.values?.map((v) => String(v)) ?? [])
+                : String(p.value ?? ""),
+          }))
+        : undefined;
+    for (const name of sel.names) {
+      result.push({
+        connection: sel.connection ?? "",
+        schema: sel.schema,
+        name,
+        predicates,
+      });
+    }
+  }
+  return result;
+}
+
+/** Convert TableAllowOutput + mode to RoleAllowConfig (strips sourceName from predicates, handles prefix). */
+function tableAllowToAllowConfig(
+  output: TableAllowOutput,
+  mode: ScopeMode
+): Pick<RoleAllowConfig, "connections" | "tableSelectors" | "source_scope"> {
+  if (output.source_scope === "catalog_bound") {
+    return {
+      connections: output.connections.length > 0 ? output.connections : undefined,
+      source_scope: "catalog_bound",
+    };
+  }
+
+  const connections = output.connections.length > 0 ? output.connections : undefined;
+  const rawSelectors = output.tableSelectors ?? [];
+
+  if (mode === "prefix") {
+    // Convert to prefix selectors: one per unique {connection, schema}.
+    // Requires a non-empty prefixRule; empty prefix must not enter the payload.
+    const prefixValue = output.prefixRule ?? "";
+    if (!prefixValue) {
+      return { connections, tableSelectors: undefined };
+    }
+    const seen = new Set<string>();
+    const prefixSelectors: RoleSelector[] = [];
+    for (const sel of rawSelectors) {
+      const key = `${sel.connection ?? ""}\0${sel.schema}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const conn: string | undefined = sel.connection || undefined;
+        if (sel.row_access === "scoped" && sel.row_policy) {
+          const preds = sel.row_policy.predicates.map(
+            ({ sourceName: _s, ...rest }) => rest as RoleRowPolicyPredicate
+          );
+          prefixSelectors.push({ connection: conn, schema: sel.schema, prefix: prefixValue, row_access: "scoped", row_policy: { predicates: preds } });
+        } else {
+          prefixSelectors.push({ connection: conn, schema: sel.schema, prefix: prefixValue, row_access: "all" });
+        }
+      }
+    }
+    return { connections, tableSelectors: prefixSelectors.length > 0 ? prefixSelectors : undefined };
+  }
+
+  // Names mode: strip sourceName from predicates
+  const tableSelectors: RoleSelector[] = rawSelectors.map((sel) => {
+    const conn: string | undefined = sel.connection || undefined;
+    if (sel.row_access === "scoped" && sel.row_policy) {
+      const preds = sel.row_policy.predicates.map(
+        ({ sourceName: _s, ...rest }) => rest as RoleRowPolicyPredicate
+      );
+      return { connection: conn, schema: sel.schema, names: sel.names, row_access: "scoped", row_policy: { predicates: preds } };
+    }
+    return { connection: conn, schema: sel.schema, names: sel.names };
+  });
+
+  return { connections, tableSelectors: tableSelectors.length > 0 ? tableSelectors : undefined };
+}
+
+/** Derive RowPolicyDigestEntry[] from a loaded RoleDetail for RoleEffectiveDigest. */
+function deriveRowPolicies(detail: RoleDetailType): RowPolicyDigestEntry[] {
+  const result: RowPolicyDigestEntry[] = [];
+  for (const sel of detail.role.allow.tableSelectors ?? []) {
+    if (!("names" in sel)) continue;
+    if (sel.row_access !== "scoped" || !sel.row_policy?.predicates?.length) continue;
+    for (const name of sel.names) {
+      const pred = sel.row_policy.predicates[0]!;
+      result.push({
+        table: name,
+        field: String(pred.field),
+        value:
+          pred.op === "in"
+            ? (pred.values?.map((v) => String(v)).join(", ") ?? "")
+            : String(pred.value ?? ""),
+      });
+    }
+  }
+  return result;
+}
+
 function initFormFromDetail(detail: RoleDetailType): RoleFormState {
   const catalogBound = detail.role.allow.source_scope === "catalog_bound";
   return {
@@ -383,6 +499,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   const [diffPreview, setDiffPreview] = useState<PatchPreview | null>(null);
   const [createPreview, setCreatePreview] = useState<CreatePreview | CopyPreview | null>(null);
   const [deletePreview, setDeletePreview] = useState<DeletePreview | null>(null);
+  // Table allow output from RoleTableGrants (null = user hasn't touched the tree yet)
+  const [tableAllowOutput, setTableAllowOutput] = useState<TableAllowOutput | null>(null);
+  const [tableGrantsMode, setTableGrantsMode] = useState<ScopeMode>("names");
 
   const connectionsQuery = useQuery({
     queryKey: ["connections"],
@@ -401,12 +520,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   const showToolPicker = mcpTools.length > 0;
   const toolsFallback = mcpToolsQuery.isError || (!mcpToolsQuery.isLoading && mcpTools.length === 0);
 
-  const selectorConnIds = useMemo(
-    () => [...new Set(form.selectors.map((row) => row.connection.trim()).filter(Boolean))],
-    [form.selectors]
+  // Load tables for ALL connections (tree needs candidates for every connection)
+  const allConnectionIds = useMemo(
+    () => connectionCandidates.map((c) => c.id),
+    [connectionCandidates]
   );
   const tableQueries = useQueries({
-    queries: selectorConnIds.map((connId) => ({
+    queries: allConnectionIds.map((connId) => ({
       queryKey: ["connection-tables", connId],
       queryFn: () => apiGet<ConnectionTablesResponse>(`/api/connections/${encodeURIComponent(connId)}/tables`),
       enabled: connId.length > 0
@@ -414,7 +534,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   });
   const tablesByConnection = useMemo(() => {
     const map = new Map<string, { tables: string[]; isError: boolean; isLoading: boolean }>();
-    selectorConnIds.forEach((connId, index) => {
+    allConnectionIds.forEach((connId, index) => {
       const result = tableQueries[index];
       map.set(connId, {
         tables: result?.data?.tables ?? [],
@@ -423,7 +543,29 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       });
     });
     return map;
-  }, [selectorConnIds, tableQueries]);
+  }, [allConnectionIds, tableQueries]);
+
+  // Build candidateTablesByKey for RoleTableGrants: Record<"conn\0schema", string[]>
+  const candidateTablesByKey = useMemo(() => {
+    const rec: Record<string, string[]> = {};
+    connectionCandidates.forEach((conn) => {
+      const ts = tablesByConnection.get(conn.id);
+      (conn.schemas ?? []).forEach((schema) => {
+        const key = `${conn.id}\0${schema}`;
+        rec[key] = ts ? tablesForSchema(ts.tables, schema) : [];
+      });
+    });
+    return rec;
+  }, [connectionCandidates, tablesByConnection]);
+
+  // candidatesLoaded: true when all connections have table data (or no connections)
+  const candidatesLoaded = useMemo(() => {
+    if (allConnectionIds.length === 0) return !connectionsQuery.isLoading;
+    return allConnectionIds.every((connId) => {
+      const ts = tablesByConnection.get(connId);
+      return ts && !ts.isLoading && !ts.isError;
+    });
+  }, [allConnectionIds, tablesByConnection, connectionsQuery.isLoading]);
 
   function clearPreviews() {
     setCreatePreview(null);
@@ -439,15 +581,18 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   useEffect(() => {
     if (mode === "edit" && detail) {
       setForm(initFormFromDetail(detail));
+      setTableAllowOutput(null);
+      setTableGrantsMode(detail.role.allow.source_scope === "catalog_bound" ? "catalog_bound" : "names");
       clearPreviews();
     } else if (mode === "copy" && detail) {
-      setForm({
-        ...initFormFromDetail(detail),
-        roleId: ""
-      });
+      setForm({ ...initFormFromDetail(detail), roleId: "" });
+      setTableAllowOutput(null);
+      setTableGrantsMode(detail.role.allow.source_scope === "catalog_bound" ? "catalog_bound" : "names");
       clearPreviews();
     } else if (mode === "create") {
       setForm(EMPTY_FORM);
+      setTableAllowOutput(null);
+      setTableGrantsMode("names");
       clearPreviews();
     }
   }, [mode, detail]);
@@ -456,8 +601,17 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     () => /^[A-Za-z0-9_-]{1,64}$/.test(form.roleId),
     [form.roleId]
   );
-  const toolsCount = form.tools.filter((item) => item.trim().length > 0).length;
-  const dirty = isRoleDirty(form, detail, mode);
+  const toolsCount = useMemo(
+    () => partitionGrantableTools(form.tools).grantable.filter((t) => t.trim()).length,
+    [form.tools]
+  );
+  // Rejected tools (for T6 diff preview notice)
+  const rejectedToolsInForm = useMemo(
+    () => partitionGrantableTools(form.tools).rejected,
+    [form.tools]
+  );
+  const dirty =
+    isRoleDirty(form, detail, mode) || (mode === "edit" && tableAllowOutput !== null);
 
   const createMutation = useMutation({
     mutationFn: (body: { dryRun: boolean; payload: { roleId: string; role: RoleWritePayload } }) =>
@@ -556,11 +710,27 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   });
 
   function buildRolePayload(): RoleWritePayload {
-    const allowConfig = formToAllow(form);
+    // Tools: only grantable (strip AbsoluteDeny)
+    const { grantable } = partitionGrantableTools(form.tools);
+    const tools = grantable.filter((t) => t.trim()).length > 0
+      ? grantable.filter((t) => t.trim())
+      : undefined;
+
+    // Table/connection allow: prefer RoleTableGrants output; fall back to form state
+    let tableAllowPart: Pick<RoleAllowConfig, "connections" | "tableSelectors" | "source_scope">;
+    if (tableAllowOutput) {
+      tableAllowPart = tableAllowToAllowConfig(tableAllowOutput, tableGrantsMode);
+    } else {
+      // Fall back to old formToAllow (form.selectors / connections from initFormFromDetail)
+      const base = formToAllow(form);
+      const { tools: _t, ...rest } = base;
+      tableAllowPart = rest;
+    }
+
     return {
       description: form.description.trim() || undefined,
       permission_model_version: 2,
-      allow: allowConfig
+      allow: { ...tableAllowPart, tools },
     };
   }
 
@@ -577,10 +747,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       toast.error("禁止使用 * 通配符");
       return;
     }
-    const scopedError = validateScopedSelectors(form);
-    if (scopedError) {
-      toast.error(scopedError);
-      return;
+    // Only validate old-form selectors when tableAllowOutput is not set
+    if (!tableAllowOutput) {
+      const scopedError = validateScopedSelectors(form);
+      if (scopedError) {
+        toast.error(scopedError);
+        return;
+      }
     }
     const payload = {
       roleId: form.roleId,
@@ -602,10 +775,12 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
   function handlePatchPreview() {
     if (!detail) return;
-    const scopedError = validateScopedSelectors(form);
-    if (scopedError) {
-      toast.error(scopedError);
-      return;
+    if (!tableAllowOutput) {
+      const scopedError = validateScopedSelectors(form);
+      if (scopedError) {
+        toast.error(scopedError);
+        return;
+      }
     }
     patchMutation.mutate({
       dryRun: true,
@@ -632,10 +807,12 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       toast.error("禁止使用 * 通配符");
       return;
     }
-    const scopedError = validateScopedSelectors(form);
-    if (scopedError) {
-      toast.error(scopedError);
-      return;
+    if (!tableAllowOutput) {
+      const scopedError = validateScopedSelectors(form);
+      if (scopedError) {
+        toast.error(scopedError);
+        return;
+      }
     }
     copyMutation.mutate({ dryRun: true, newRoleId: form.roleId, role: buildRolePayload() });
   }
@@ -657,6 +834,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   function resetToForm() {
     if (detail) setForm(initFormFromDetail(detail));
     else setForm(EMPTY_FORM);
+    setTableAllowOutput(null);
+    setTableGrantsMode("names");
     clearPreviews();
   }
 
@@ -841,10 +1020,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
         {activeTab === "permissions" && (
           <div className="grid gap-4 max-w-2xl pb-32">
-            <div className="grid gap-2" data-testid="role-connections-field">
-              <div className="text-sm font-medium">允许的连接</div>
-              <p className="text-xs text-fg-muted">该 Role 可使用哪些数据库连接。</p>
-              {(form.sourceScope === "catalog_bound" || form.roleId === "lucy_admin") && (
+            {/* Catalog-bound / high-privilege warning */}
+            {(tableGrantsMode === "catalog_bound" || form.roleId === "lucy_admin") && (
                 <div
                   className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
                   data-testid="role-catalog-bound-warning"
@@ -862,587 +1039,52 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
               )}
               {connectionsFallback ? (
                 <p className="text-xs text-warning-strong" data-testid="role-connections-fallback-hint">
-                  连接候选暂不可用，可手动填写连接 ID。
+                  连接候选暂不可用，表树不可加载。
                 </p>
               ) : null}
-              {!connectionsFallback && showConnectionPicker ? (
-                <div className="grid gap-1 rounded-md border border-border-default bg-bg-base p-3" role="group" aria-label="允许的连接">
-                  {connectionCandidates.map((conn: ConnectionInfo) => (
-                    <label key={conn.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={form.connections.includes(conn.id)}
-                        disabled={isReadOnlyTemplate}
-                        onChange={(e) =>
-                          updateForm({
-                            ...form,
-                            connections: toggleInList(form.connections, conn.id, e.target.checked)
-                          })
-                        }
-                      />
-                      <span className="notranslate font-mono text-xs" translate="no">
-                        {conn.id}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              ) : null}
-              <TagInput
-                value={form.connections}
-                onChange={(connections) => updateForm({ ...form, connections })}
-                placeholder="输入连接 ID 后回车"
-              />
-            </div>
 
-            <div className="grid gap-2" data-testid="role-source-scope-field">
-              <div className="text-sm font-medium">表授权方式</div>
-              <div className="flex flex-col gap-2 text-sm" role="radiogroup" aria-label="表授权方式">
-                <label className="flex items-start gap-2">
-                  <input
-                    type="radio"
-                    name="role-source-scope"
-                    checked={form.sourceScope === "names"}
-                    disabled={isReadOnlyTemplate}
-                    onChange={() => updateForm({ ...form, sourceScope: "names" })}
-                  />
-                  <span>
-                    指定表名
-                    <span className="block text-xs text-fg-muted">使用精确表范围（生产敏感数据推荐）。</span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2">
-                  <input
-                    type="radio"
-                    name="role-source-scope"
-                    checked={form.sourceScope === "catalog_bound"}
-                    disabled={isReadOnlyTemplate}
-                    onChange={() => updateForm({ ...form, sourceScope: "catalog_bound", selectors: [] })}
-                  />
-                  <span>
-                    启用目录绑定
-                    <span className="block text-xs text-fg-muted">
-                      <span className="notranslate" translate="no">
-                        catalog_bound
-                      </span>
-                      ：已声明连接 ∩ 启用表目录；同连接新启用表自动纳入（有扩权审计）。
-                    </span>
-                  </span>
-                </label>
-              </div>
-            </div>
+              {/* RoleTableGrants: mount once detail is loaded (or immediately for create) */}
+              {(mode === "create" || mode === "copy" || detail !== null) && (
+                <RoleTableGrants
+                  key={`table-grants-${roleId || "new"}-${detail ? "loaded" : "empty"}`}
+                  initialMode={
+                    detail?.role.allow.source_scope === "catalog_bound" ? "catalog_bound" : "names"
+                  }
+                  initialTables={selectorsToTableGrants(detail?.role.allow.tableSelectors)}
+                  connections={connectionCandidates.map((c) => ({ id: c.id, schemas: c.schemas ?? [] }))}
+                  candidateTablesByKey={candidateTablesByKey}
+                  candidatesLoaded={candidatesLoaded}
+                  initialManualConnections={detail?.role.allow.connections ?? []}
+                  onAllowChange={(allow, tableMode) => {
+                    setTableAllowOutput(allow);
+                    setTableGrantsMode(tableMode);
+                    clearPreviews();
+                  }}
+                />
+              )}
 
             <div className="grid gap-2" data-testid="role-tools-field">
-              <div className="text-sm font-medium">
-                允许的 <span className="notranslate" translate="no">MCP</span> 工具
-              </div>
-              <p className="text-xs text-fg-muted">
-                <span className="notranslate" translate="no">Agent</span> 可调用的能力清单；须显式勾选，禁止使用{" "}
-                <code>*</code>。
-              </p>
               {toolsFallback ? (
                 <p className="text-xs text-warning-strong" data-testid="role-tools-fallback-hint">
                   工具候选暂不可用，可手动填写工具名。
                 </p>
               ) : null}
-              {!toolsFallback && showToolPicker ? (
-                <div className="notranslate" translate="no">
-                  <CheckboxCandidatePicker
-                    items={mcpTools.map((tool) => ({
-                      id: tool.name,
-                      disabled: tool.globalDenied,
-                      description: tool.description,
-                      filterText: tool.description,
-                      label: (
-                        <>
-                          <span className="notranslate font-mono text-xs" translate="no">
-                            {tool.name}
-                          </span>
-                          {tool.globalDenied ? (
-                            <span className="ml-2 text-xs text-danger">全局禁止</span>
-                          ) : null}
-                        </>
-                      )
-                    }))}
-                    value={form.tools}
-                    onChange={(tools) => updateForm({ ...form, tools })}
-                    ariaLabel="允许的 MCP 工具"
-                    testIdPrefix="role-tools"
-                    disabled={isReadOnlyTemplate}
-                    filterPlaceholder="筛选工具名…"
-                    listClassName="grid max-h-72 gap-1 overflow-auto rounded-md border border-border-default bg-bg-base p-3 notranslate"
-                  />
-                </div>
-              ) : null}
-              <div id="role-tools-input">
+              <RoleToolGrants
+                candidates={mcpTools}
+                value={form.tools}
+                onChange={(tools) => updateForm({ ...form, tools })}
+                disabled={isReadOnlyTemplate}
+              />
+              {/* TagInput fallback: only shown when candidates failed to load */}
+              {toolsFallback && (
                 <TagInput
                   value={form.tools}
-                  onChange={(tools) => {
-                    const denied = new Set(
-                      mcpTools.filter((tool) => tool.globalDenied).map((tool) => tool.name)
-                    );
-                    updateForm({
-                      ...form,
-                      tools: denied.size > 0 ? tools.filter((name) => !denied.has(name)) : tools
-                    });
-                  }}
+                  onChange={(tools) => updateForm({ ...form, tools })}
                   placeholder="输入工具名后回车"
                 />
-              </div>
-            </div>
-
-            <div className="grid gap-2" data-testid="role-table-ranges-field">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium">可访问的表范围</div>
-                  <p className="text-xs text-fg-muted">
-                    {form.sourceScope === "catalog_bound" ? (
-                      <>
-                        当前为启用目录绑定：表范围由已声明连接的{" "}
-                        <span className="notranslate" translate="no">
-                          enabled_tables
-                        </span>{" "}
-                        与语义层目录决定，无需在此列举表名。
-                      </>
-                    ) : (
-                      <>
-                        限定该 Role 可查询的 <span className="notranslate" translate="no">Schema</span>{" "}
-                        与表。未添加任何范围时，不能访问数据表。
-                      </>
-                    )}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="pl-btn pl-btn--ghost text-xs"
-                  onClick={() =>
-                    updateForm({
-                      ...form,
-                      selectors: [
-                        ...form.selectors,
-                        {
-                          connection: form.connections[0] ?? "",
-                          schema: "",
-                          kind: "names",
-                          names: [],
-                          prefix: "",
-                          rowAccess: "all",
-                          predicates: []
-                        }
-                      ]
-                    })
-                  }
-                  disabled={isReadOnlyTemplate || form.sourceScope === "catalog_bound"}
-                >
-                  + 添加表范围
-                </button>
-              </div>
-              {form.sourceScope === "catalog_bound" ? (
-                <p className="text-xs text-fg-muted" data-testid="role-catalog-bound-hint">
-                  已禁用指定表名编辑。若需精确名单，请改回「指定表名」。
-                </p>
-              ) : form.selectors.length === 0 ? (
-                <p className="text-xs text-fg-muted">尚未添加表范围。此 Role 不能访问任何数据表。</p>
-              ) : (
-                <div className="grid gap-2">
-                  {form.selectors.map((row, idx) => {
-                    const connMeta = connectionCandidates.find((item) => item.id === row.connection);
-                    const schemaOptions = connMeta?.schemas ?? [];
-                    const schemaFallback = Boolean(row.connection) && schemaOptions.length === 0;
-                    const tableState = row.connection
-                      ? tablesByConnection.get(row.connection)
-                      : undefined;
-                    const tableCandidates =
-                      row.schema && tableState ? tablesForSchema(tableState.tables, row.schema) : [];
-                    const tablesFallback =
-                      row.kind === "names" &&
-                      Boolean(row.connection && row.schema) &&
-                      (tableState?.isError ||
-                        (!tableState?.isLoading && tableCandidates.length === 0));
-
-                    return (
-                      <div
-                        key={idx}
-                        className="grid gap-2 rounded-md border border-border-default bg-bg-base p-3"
-                        data-testid={`role-table-range-${idx + 1}`}
-                      >
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="grid gap-1">
-                            <span className="text-xs text-fg-muted">连接</span>
-                            <select
-                              className="pl-input notranslate"
-                              translate="no"
-                              value={row.connection}
-                              aria-label={`表范围 ${idx + 1} 连接`}
-                              disabled={isReadOnlyTemplate}
-                              onChange={(e) => {
-                                const next = [...form.selectors];
-                                next[idx] = { ...row, connection: e.target.value, schema: "", names: [] };
-                                updateForm({ ...form, selectors: next });
-                              }}
-                            >
-                              <option value="">选择连接</option>
-                              {(form.connections.length > 0 ? form.connections : connectionCandidates.map((c) => c.id)).map(
-                                (id) => (
-                                  <option key={id} value={id}>
-                                    {id}
-                                  </option>
-                                )
-                              )}
-                            </select>
-                          </label>
-                          <label className="grid gap-1">
-                            <span className="text-xs text-fg-muted">
-                              <span className="notranslate" translate="no">
-                                Schema
-                              </span>
-                              （必填）
-                            </span>
-                            {schemaFallback ? (
-                              <input
-                                className="pl-input notranslate"
-                                translate="no"
-                                placeholder="手动输入 Schema"
-                                value={row.schema}
-                                aria-label={`表范围 ${idx + 1} Schema`}
-                                disabled={isReadOnlyTemplate}
-                                onChange={(e) => {
-                                  const next = [...form.selectors];
-                                  next[idx] = { ...row, schema: e.target.value, names: [] };
-                                  updateForm({ ...form, selectors: next });
-                                }}
-                              />
-                            ) : (
-                              <select
-                                className="pl-input notranslate"
-                                translate="no"
-                                value={row.schema}
-                                aria-label={`表范围 ${idx + 1} Schema`}
-                                disabled={isReadOnlyTemplate || !row.connection}
-                                onChange={(e) => {
-                                  const next = [...form.selectors];
-                                  next[idx] = { ...row, schema: e.target.value, names: [] };
-                                  updateForm({ ...form, selectors: next });
-                                }}
-                              >
-                                <option value="" className="notranslate" translate="no">
-                                  选择 Schema
-                                </option>
-                                {schemaOptions.map((schema) => (
-                                  <option key={schema} value={schema}>
-                                    {schema}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                          </label>
-                        </div>
-                        {schemaFallback ? (
-                          <p className="text-xs text-warning-strong">
-                            当前连接无 <span className="notranslate" translate="no">Schema</span> 候选，可手动填写。
-                          </p>
-                        ) : null}
-                        <div className="flex items-center gap-3">
-                          <label className="flex items-center gap-1 text-xs">
-                            <input
-                              type="radio"
-                              checked={row.kind === "names"}
-                              onChange={() => {
-                                const next = [...form.selectors];
-                                next[idx] = { ...row, kind: "names" };
-                                updateForm({ ...form, selectors: next });
-                              }}
-                              disabled={isReadOnlyTemplate}
-                            />
-                            指定表名
-                          </label>
-                          <label className="flex items-center gap-1 text-xs">
-                            <input
-                              type="radio"
-                              checked={row.kind === "prefix"}
-                              onChange={() => {
-                                const next = [...form.selectors];
-                                next[idx] = { ...row, kind: "prefix" };
-                                updateForm({ ...form, selectors: next });
-                              }}
-                              disabled={isReadOnlyTemplate}
-                            />
-                            按前缀匹配（高级）
-                          </label>
-                          <button
-                            type="button"
-                            className="pl-btn pl-btn--ghost text-xs ml-auto"
-                            onClick={() => {
-                              const next = form.selectors.filter((_, i) => i !== idx);
-                              updateForm({ ...form, selectors: next });
-                            }}
-                            disabled={isReadOnlyTemplate}
-                          >
-                            删除
-                          </button>
-                        </div>
-                        {row.kind === "names" ? (
-                          <div className="grid gap-2">
-                            {tablesFallback ? (
-                              <p className="text-xs text-warning-strong" data-testid={`role-table-names-fallback-${idx + 1}`}>
-                                表候选暂不可用，可手动填写表名。
-                              </p>
-                            ) : null}
-                            {!tablesFallback && tableCandidates.length > 0 ? (
-                              <CheckboxCandidatePicker
-                                items={tableCandidates.map((tableName) => ({
-                                  id: tableName,
-                                  label: (
-                                    <span className="notranslate font-mono" translate="no">
-                                      {tableName}
-                                    </span>
-                                  )
-                                }))}
-                                value={row.names}
-                                onChange={(names) => {
-                                  const next = [...form.selectors];
-                                  next[idx] = { ...row, names };
-                                  updateForm({ ...form, selectors: next });
-                                }}
-                                ariaLabel={`表范围 ${idx + 1} 指定表名`}
-                                testIdPrefix={`role-table-names-${idx + 1}`}
-                                disabled={isReadOnlyTemplate}
-                                filterPlaceholder="筛选表名…"
-                                listClassName="grid max-h-72 gap-1 overflow-auto rounded-md border border-border-subtle p-2"
-                                itemClassName="flex items-center gap-2 text-xs"
-                              />
-                            ) : null}
-                            <TagInput
-                              value={row.names}
-                              onChange={(names) => {
-                                const next = [...form.selectors];
-                                next[idx] = { ...row, names };
-                                updateForm({ ...form, selectors: next });
-                              }}
-                              placeholder="输入表名后回车"
-                            />
-                          </div>
-                        ) : (
-                          <label className="grid gap-1">
-                            <span className="text-xs text-fg-muted">表名前缀</span>
-                            <input
-                              className="pl-input notranslate"
-                              translate="no"
-                              placeholder="例如 poc_"
-                              value={row.prefix}
-                              aria-label={`表范围 ${idx + 1} 按前缀匹配`}
-                              onChange={(e) => {
-                                const next = [...form.selectors];
-                                next[idx] = { ...row, prefix: e.target.value };
-                                updateForm({ ...form, selectors: next });
-                              }}
-                              disabled={isReadOnlyTemplate}
-                            />
-                            <span className="text-xs text-fg-muted">
-                              授权所有以此前缀开头的表，例如 <code className="notranslate" translate="no">poc_</code>
-                            </span>
-                          </label>
-                        )}
-
-                        <div
-                          className="grid gap-2 border-t border-border-subtle pt-2"
-                          data-testid={`role-row-access-${idx + 1}`}
-                        >
-                          <div className="flex flex-wrap items-center gap-3">
-                            <span className="text-xs font-medium">
-                              行访问
-                              <span className="ml-1 font-mono text-fg-muted notranslate" translate="no">
-                                row_access
-                              </span>
-                            </span>
-                            <label className="flex items-center gap-1 text-xs">
-                              <input
-                                type="radio"
-                                name={`role-row-access-${idx}`}
-                                checked={row.rowAccess === "all"}
-                                disabled={isReadOnlyTemplate}
-                                onChange={() => {
-                                  const next = [...form.selectors];
-                                  next[idx] = { ...row, rowAccess: "all", predicates: [] };
-                                  updateForm({ ...form, selectors: next });
-                                }}
-                              />
-                              全部行
-                              <span className="font-mono text-fg-muted notranslate" translate="no">
-                                all
-                              </span>
-                            </label>
-                            <label className="flex items-center gap-1 text-xs">
-                              <input
-                                type="radio"
-                                name={`role-row-access-${idx}`}
-                                checked={row.rowAccess === "scoped"}
-                                disabled={isReadOnlyTemplate}
-                                onChange={() => {
-                                  const next = [...form.selectors];
-                                  next[idx] = {
-                                    ...row,
-                                    rowAccess: "scoped",
-                                    predicates: row.predicates.length > 0 ? row.predicates : [{ ...EMPTY_PREDICATE }]
-                                  };
-                                  updateForm({ ...form, selectors: next });
-                                }}
-                              />
-                              限定行
-                              <span className="font-mono text-fg-muted notranslate" translate="no">
-                                scoped
-                              </span>
-                            </label>
-                          </div>
-                          {row.rowAccess === "scoped" ? (
-                            <div className="grid gap-2" data-testid={`role-row-policy-${idx + 1}`}>
-                              <p className="text-xs text-fg-muted">
-                                编辑
-                                <span className="mx-1 font-mono notranslate" translate="no">
-                                  row_policy
-                                </span>
-                                条件（op 仅
-                                <span className="mx-1 font-mono notranslate" translate="no">
-                                  eq
-                                </span>
-                                /
-                                <span className="mx-1 font-mono notranslate" translate="no">
-                                  in
-                                </span>
-                                ；字段须为行级列，禁止 measure）。Preview 显示 digest；本页不宣称取数已行级生效。
-                              </p>
-                              {row.predicates.map((pred, predIdx) => (
-                                <div
-                                  key={predIdx}
-                                  className="grid gap-2 rounded-md border border-border-subtle bg-bg-subtle p-2"
-                                  data-testid={`role-row-predicate-${idx + 1}-${predIdx + 1}`}
-                                >
-                                  <div className="grid grid-cols-[1fr_auto_1fr_auto] items-end gap-2">
-                                    <label className="grid gap-1">
-                                      <span className="text-xs text-fg-muted">字段</span>
-                                      <input
-                                        className="pl-input notranslate font-mono text-xs"
-                                        translate="no"
-                                        placeholder="region"
-                                        value={pred.field}
-                                        aria-label={`表范围 ${idx + 1} 条件 ${predIdx + 1} 字段`}
-                                        disabled={isReadOnlyTemplate}
-                                        onChange={(e) => {
-                                          const next = [...form.selectors];
-                                          const predicates = [...row.predicates];
-                                          predicates[predIdx] = { ...pred, field: e.target.value };
-                                          next[idx] = { ...row, predicates };
-                                          updateForm({ ...form, selectors: next });
-                                        }}
-                                      />
-                                    </label>
-                                    <label className="grid gap-1">
-                                      <span className="text-xs text-fg-muted">
-                                        <span className="notranslate" translate="no">
-                                          op
-                                        </span>
-                                      </span>
-                                      <select
-                                        className="pl-input notranslate"
-                                        translate="no"
-                                        value={pred.op}
-                                        aria-label={`表范围 ${idx + 1} 条件 ${predIdx + 1} op`}
-                                        disabled={isReadOnlyTemplate}
-                                        onChange={(e) => {
-                                          const op = e.target.value === "in" ? "in" : "eq";
-                                          const next = [...form.selectors];
-                                          const predicates = [...row.predicates];
-                                          predicates[predIdx] = {
-                                            ...pred,
-                                            op,
-                                            value: op === "eq" ? pred.value : "",
-                                            values: op === "in" ? pred.values : []
-                                          };
-                                          next[idx] = { ...row, predicates };
-                                          updateForm({ ...form, selectors: next });
-                                        }}
-                                      >
-                                        <option value="eq">eq</option>
-                                        <option value="in">in</option>
-                                      </select>
-                                    </label>
-                                    {pred.op === "eq" ? (
-                                      <label className="grid gap-1">
-                                        <span className="text-xs text-fg-muted">取值</span>
-                                        <input
-                                          className="pl-input notranslate font-mono text-xs"
-                                          translate="no"
-                                          placeholder="East"
-                                          value={pred.value}
-                                          aria-label={`表范围 ${idx + 1} 条件 ${predIdx + 1} 取值`}
-                                          disabled={isReadOnlyTemplate}
-                                          onChange={(e) => {
-                                            const next = [...form.selectors];
-                                            const predicates = [...row.predicates];
-                                            predicates[predIdx] = { ...pred, value: e.target.value };
-                                            next[idx] = { ...row, predicates };
-                                            updateForm({ ...form, selectors: next });
-                                          }}
-                                        />
-                                      </label>
-                                    ) : (
-                                      <div className="grid gap-1">
-                                        <span className="text-xs text-fg-muted">取值列表</span>
-                                        <TagInput
-                                          value={pred.values}
-                                          onChange={(values) => {
-                                            const next = [...form.selectors];
-                                            const predicates = [...row.predicates];
-                                            predicates[predIdx] = { ...pred, values };
-                                            next[idx] = { ...row, predicates };
-                                            updateForm({ ...form, selectors: next });
-                                          }}
-                                          placeholder="输入取值后回车"
-                                        />
-                                      </div>
-                                    )}
-                                    <button
-                                      type="button"
-                                      className="pl-btn pl-btn--ghost text-xs"
-                                      aria-label={`删除表范围 ${idx + 1} 条件 ${predIdx + 1}`}
-                                      disabled={isReadOnlyTemplate || row.predicates.length <= 1}
-                                      onClick={() => {
-                                        const next = [...form.selectors];
-                                        next[idx] = {
-                                          ...row,
-                                          predicates: row.predicates.filter((_, i) => i !== predIdx)
-                                        };
-                                        updateForm({ ...form, selectors: next });
-                                      }}
-                                    >
-                                      删除
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                              <button
-                                type="button"
-                                className="pl-btn pl-btn--ghost text-xs justify-self-start"
-                                disabled={isReadOnlyTemplate}
-                                onClick={() => {
-                                  const next = [...form.selectors];
-                                  next[idx] = {
-                                    ...row,
-                                    predicates: [...row.predicates, { ...EMPTY_PREDICATE }]
-                                  };
-                                  updateForm({ ...form, selectors: next });
-                                }}
-                              >
-                                + 添加条件
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
               )}
             </div>
+
           </div>
         )}
 
@@ -1481,74 +1123,16 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 ) : null}
               </div>
             ) : (
-              <>
-                <div>
-                  <p className="text-xs font-semibold tracking-wider text-fg-muted uppercase mb-2">权限摘要</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="pl-metric-card"><span>工具</span><strong>{detail.effectivePermissions?.tools.length ?? 0}</strong><small>{detail.id}</small></div>
-                    <div className="pl-metric-card"><span>连接</span><strong>{detail.effectivePermissions?.connections.length ?? 0}</strong><small>{detail.effectivePermissions?.connections.join(", ") || "—"}</small></div>
-                    <div className="pl-metric-card"><span className="notranslate" translate="no">Source</span><strong>{detail.effectivePermissions?.sources.length ?? 0}</strong><small>{detail.effectivePermissions?.snapshotHash.slice(0, 12)}</small></div>
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <div
-                    className="text-sm font-medium notranslate"
-                    translate="no"
-                    data-testid="role-allowed-tools-label"
-                  >
-                    允许的 MCP 工具（过滤 <code>tools/list</code>，并拦截未授权 <code>tools/call</code>）
-                  </div>
-                  <p className="text-xs text-fg-muted">
-                    这些 <span className="notranslate" translate="no">tool</span> 会在 <span className="notranslate" translate="no">Lucy MCP Proxy</span> 中拦截未授权的{" "}
-                    <code className="notranslate" translate="no">tools/call</code>
-                    ，并在{" "}
-                    <code className="notranslate" translate="no">tools/list</code>
-                    中只暴露 role 列出的工具名。
-                  </p>
-                  <div className="flex flex-wrap gap-2" data-testid="role-allowed-tools-list">
-                    {(detail.effectivePermissions?.tools ?? []).map((tool) => (
-                      <span
-                        key={tool}
-                        className="pl-status-badge pl-status-included notranslate"
-                        translate="no"
-                      >
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <div className="text-sm font-medium">解析的 Source</div>
-                  <div className="grid gap-1">
-                    {(detail.effectivePermissions?.sources ?? []).map((src) => (
-                      <div key={`${src.connectionId}:${src.sourceName}:${src.table}`} className="font-mono text-xs text-fg-muted">
-                        {src.connectionId} / {src.schema} / {src.sourceName} / {src.table}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid gap-2" data-testid="capability-preview">
-                  <div className="text-sm font-medium">
-                    Data Capability Preview
-                    {detail.effectivePermissions?.capabilityDigest ? (
-                      <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
-                        digest={detail.effectivePermissions.capabilityDigest}
-                      </span>
-                    ) : null}
-                  </div>
-                  {(detail.effectivePermissions?.capabilities?.length ?? 0) === 0 ? (
-                    <p className="text-sm text-fg-muted">无 DataPlane capability。</p>
-                  ) : (
-                    <ul className="grid gap-1 font-mono text-xs">
-                      {detail.effectivePermissions!.capabilities!.map((cap) => (
-                        <li key={`${cap.tool}:${cap.sourceKey}`} className="notranslate" translate="no">
-                          {cap.tool} × {cap.sourceKey} · rowGrant={formatRowGrantPreviewLabel(cap.rowGrant)}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </>
+              <RoleEffectiveDigest
+                effectiveToolCount={detail.effectivePermissions?.tools.length ?? 0}
+                connections={detail.effectivePermissions?.connections ?? []}
+                tableCount={detail.effectivePermissions?.sources.length ?? 0}
+                publishedMeasureCount={null}
+                mode={detail.role.allow.source_scope === "catalog_bound" ? "catalog_bound" : "names"}
+                rowPolicies={deriveRowPolicies(detail)}
+                capabilities={detail.effectivePermissions?.capabilities ?? []}
+                capabilityDigest={detail.effectivePermissions?.capabilityDigest}
+              />
             )}
           </div>
         )}
@@ -1584,26 +1168,51 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         {activeTab === "diff" && (
           <div className="grid gap-4 pb-32">
             {createPreview || diffPreview || deletePreview ? (
-              <DiffTabContent
-                diff={(deletePreview ?? createPreview ?? diffPreview)!.diff}
-                proposedYaml={(deletePreview ?? createPreview ?? diffPreview)!.proposedYaml}
-                primaryLabel={showDeleteDiff ? "确认删除" : showCreateDiff ? "确认创建" : "保存"}
-                onSave={() => {
-                  if (showDeleteDiff) handleDeleteSave();
-                  else if (showCreateDiff && mode === "copy") handleCopySave();
-                  else if (showCreateDiff) handleCreateSave();
-                  else handlePatchSave();
-                }}
-                onCancel={() => {
-                  if (showDeleteDiff) setDeletePreview(null);
-                  else if (showCreateDiff) setCreatePreview(null);
-                  else setDiffPreview(null);
-                  setActiveTab("identity");
-                }}
-                isPending={
-                  createMutation.isPending || patchMutation.isPending || deleteMutation.isPending || copyMutation.isPending
-                }
-              />
+              <>
+                {/* T6: Rejected tools notice (outside diff block) */}
+                {!showDeleteDiff && rejectedToolsInForm.length > 0 && (
+                  <div
+                    data-testid="role-diff-rejected-tools"
+                    className="rounded-md border border-warning-strong bg-warning-soft p-3"
+                  >
+                    <p className="text-xs font-medium text-warning-strong mb-1">系统禁止工具：</p>
+                    {rejectedToolsInForm.map((tool) => (
+                      <p key={tool} className="text-xs text-warning-strong">
+                        <span className="notranslate font-mono" translate="no">
+                          {tool}
+                        </span>
+                        ：系统拒绝，保存后从授权中移除
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {/* T6: Expansion notice when prefix/catalog_bound mode */}
+                {!showDeleteDiff && expansionNotice(tableGrantsMode) && (
+                  <div className="rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-sm text-warning-strong">
+                    {expansionNotice(tableGrantsMode)}
+                  </div>
+                )}
+                <DiffTabContent
+                  diff={(deletePreview ?? createPreview ?? diffPreview)!.diff}
+                  proposedYaml={(deletePreview ?? createPreview ?? diffPreview)!.proposedYaml}
+                  primaryLabel={showDeleteDiff ? "确认删除" : showCreateDiff ? "确认创建" : "保存"}
+                  onSave={() => {
+                    if (showDeleteDiff) handleDeleteSave();
+                    else if (showCreateDiff && mode === "copy") handleCopySave();
+                    else if (showCreateDiff) handleCreateSave();
+                    else handlePatchSave();
+                  }}
+                  onCancel={() => {
+                    if (showDeleteDiff) setDeletePreview(null);
+                    else if (showCreateDiff) setCreatePreview(null);
+                    else setDiffPreview(null);
+                    setActiveTab("identity");
+                  }}
+                  isPending={
+                    createMutation.isPending || patchMutation.isPending || deleteMutation.isPending || copyMutation.isPending
+                  }
+                />
+              </>
             ) : (
               <p className="text-sm text-fg-muted">在「基本信息」或「权限配置」编辑后，点「预览保存」生成 diff。</p>
             )}

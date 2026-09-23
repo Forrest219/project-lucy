@@ -123,6 +123,7 @@ function stubCatalogApis(
           ok: true,
           data: {
             tools: overrides?.tools ?? [
+              { name: "sl_query", description: "sl query (system deny)", globalDenied: true },
               { name: "lucy_query", description: "query", globalDenied: false },
               { name: "lucy_read_source", description: "read", globalDenied: false },
               { name: "wiki_search", description: "wiki", globalDenied: false },
@@ -174,13 +175,15 @@ describe("RoleDetail", () => {
     expect(screen.queryByRole("button", { name: "使用情况" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "生效边界" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
-    expect(screen.getByText("允许的连接")).toBeInTheDocument();
+    // New UI: RoleTableGrants + RoleToolGrants replace old connection/tools/range sections
     expect(screen.getByTestId("role-tools-field")).toBeInTheDocument();
-    expect(screen.getByText("可访问的表范围")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "+ 添加表范围" })).toBeInTheDocument();
+    expect(screen.getByTestId("role-table-grants")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /预览保存/ })).toBeInTheDocument();
+    // lucy_query appears as a checkbox in RoleToolGrants
     expect(await screen.findByRole("checkbox", { name: /lucy_query/ })).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: /sql_execution/ })).toBeDisabled();
+    // sl_query and sql_execution are globalDenied and must NOT appear as checkboxes
+    expect(screen.queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /sql_execution/ })).not.toBeInTheDocument();
   });
 
   it("create flow calls POST /api/admin/roles dryRun first, then dryRun:false on confirm", async () => {
@@ -214,7 +217,8 @@ describe("RoleDetail", () => {
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "new_role" } });
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /lucy_query/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /mysql-aliyun/ }));
+    // Select a table in the tree to set connections via RoleTableGrants
+    fireEvent.click(await screen.findByRole("checkbox", { name: "superstore_orders" }));
 
     fireEvent.click(screen.getByRole("button", { name: /预览保存/ }));
 
@@ -246,8 +250,11 @@ describe("RoleDetail", () => {
     );
     renderAt("/admin/roles/new");
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
+    // Connections fallback appears when connections API fails
     expect(await screen.findByTestId("role-connections-fallback-hint")).toBeInTheDocument();
+    // Tools fallback appears and TagInput is shown for manual entry
     expect(screen.getByTestId("role-tools-fallback-hint")).toBeInTheDocument();
+    // TagInput fallback is only rendered when tools API fails (toolsFallback=true)
     const toolInput = within(screen.getByTestId("role-tools-field")).getByLabelText("添加标签");
     fireEvent.change(toolInput, { target: { value: "lucy_query" } });
     fireEvent.keyDown(toolInput, { key: "Enter" });
@@ -258,16 +265,16 @@ describe("RoleDetail", () => {
     vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: /mysql-aliyun/ }));
-    fireEvent.click(screen.getByRole("button", { name: "+ 添加表范围" }));
-    const range = await screen.findByTestId("role-table-range-1");
-    fireEvent.change(within(range).getByLabelText(/表范围 1 连接/), { target: { value: "mysql-aliyun" } });
-    fireEvent.change(within(range).getByLabelText(/表范围 1 Schema/), { target: { value: "dataforai" } });
-    expect(within(range).getByLabelText(/表范围 1 Schema/).tagName).toBe("SELECT");
-    expect(await within(range).findByRole("checkbox", { name: /superstore_orders/ })).toBeInTheDocument();
-    fireEvent.click(within(range).getByRole("radio", { name: /^指定表名$/ }));
-    fireEvent.click(within(range).getByRole("radio", { name: /按前缀匹配/ }));
-    expect(within(range).getByLabelText(/表范围 1 按前缀匹配/)).toBeInTheDocument();
+    // New UI: RoleTableGrants shows tree with connections and tables
+    const tableGrants = await screen.findByTestId("role-table-grants");
+    // Tables load from API: superstore_orders available
+    expect(await within(tableGrants).findByRole("checkbox", { name: "superstore_orders" })).toBeInTheDocument();
+    // Advanced section has prefix mode toggle
+    fireEvent.click(within(tableGrants).getByText("高级"));
+    fireEvent.click(within(tableGrants).getByRole("checkbox", { name: "按前缀匹配" }));
+    // Expansion notice appears outside advanced section
+    expect(screen.getByTestId("table-grants-expansion-notice")).toBeInTheDocument();
+    expect(screen.getByTestId("table-grants-expansion-notice").textContent).toContain("此后同前缀的新表自动进入");
   });
 
   it("renders edit form for yaml role and dirty state triggers sticky save bar", async () => {
@@ -366,10 +373,15 @@ describe("RoleDetail", () => {
   });
 
   it("rejects wildcard tools before submit", async () => {
-    vi.stubGlobal("fetch", stubCatalogApis());
+    // All APIs fail → tools fallback TagInput is shown
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ ok: false, error: { code: "DOWN", message: "down" } }), { status: 500 }))
+    );
     renderAt("/admin/roles/new");
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "wildcard_role" } });
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
+    // TagInput fallback appears when tools API fails (toolsFallback=true)
     const toolInput = within(await screen.findByTestId("role-tools-field")).getByLabelText("添加标签");
     fireEvent.change(toolInput, { target: { value: "*" } });
     fireEvent.keyDown(toolInput, { key: "Enter" });
@@ -377,12 +389,16 @@ describe("RoleDetail", () => {
     expect(screen.queryByTestId("role-diff")).not.toBeInTheDocument();
   });
 
-  it("effective permissions tab renders tools and sources", async () => {
+  it("effective permissions tab renders digest with RoleEffectiveDigest", async () => {
     stubSingleRole(makeYamlRole());
     renderAt("/admin/roles/analyst");
     fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
-    expect(screen.getByText("lucy_query")).toBeInTheDocument();
-    expect(screen.getByText(/dataforai/)).toBeInTheDocument();
+    // RoleEffectiveDigest shows the natural-language digest
+    const digestText = await screen.findByTestId("role-effective-digest-text");
+    expect(digestText.textContent).toContain("生效 1 个 MCP 工具");
+    expect(digestText.textContent).toContain("mysql-aliyun");
+    // System boundary sentence is always present
+    expect(digestText.textContent).toContain("系统禁止能力");
   });
 
   it("Data Capability Preview shows scoped digest, not hardcoded TRUE", async () => {
@@ -424,10 +440,11 @@ describe("RoleDetail", () => {
     );
     renderAt("/admin/roles/analyst");
     fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
-    const preview = await screen.findByTestId("capability-preview");
-    expect(preview).toHaveTextContent("rowGrant=scoped:883501db707ba111 · region=East");
-    expect(preview.textContent ?? "").not.toMatch(/rowGrant=TRUE/);
-    expect(preview.textContent ?? "").not.toMatch(/行级已生效/);
+    // RoleEffectiveDigest renders capabilities inside a <details> with testid "capability-preview-details"
+    const capDetails = await screen.findByTestId("capability-preview-details");
+    expect(capDetails).toHaveTextContent("rowGrant=scoped:883501db707ba111 · region=East");
+    expect(capDetails.textContent ?? "").not.toMatch(/rowGrant=TRUE/);
+    expect(capDetails.textContent ?? "").not.toMatch(/行级已生效/);
   });
 
   it("loads scoped selectors into 行级策略 editor and round-trips on dryRun", async () => {
@@ -476,15 +493,20 @@ describe("RoleDetail", () => {
 
     renderAt("/admin/roles/scoped_east");
     fireEvent.click(await screen.findByRole("button", { name: "权限配置" }));
-    const range = await screen.findByTestId("role-table-range-1");
-    expect(within(range).getByRole("radio", { name: /限定行/ })).toBeChecked();
-    expect(within(range).getByDisplayValue("region")).toBeInTheDocument();
-    expect(within(range).getByDisplayValue("East")).toBeInTheDocument();
+    // RoleTableGrants initializes with the scoped selector
+    // The collapsed row policy label should show the predicate
+    const collapsedLabel = await screen.findByTestId("row-policy-collapsed-label-superstore_orders");
+    expect(collapsedLabel.textContent).toContain("region 等于 East");
 
-    fireEvent.change(within(range).getByLabelText(/表范围 1 条件 1 取值/), {
-      target: { value: "West" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: /预览并保存/ }));
+    // Expand the row policy editor
+    fireEvent.click(screen.getByRole("button", { name: "展开 superstore_orders 行策略" }));
+    expect(screen.getByDisplayValue("East")).toBeInTheDocument();
+
+    // Change value from East to West
+    fireEvent.change(screen.getByLabelText("superstore_orders 条件 1 取值"), { target: { value: "West" } });
+
+    // After the change, dirty bar should appear, click preview
+    fireEvent.click(await screen.findByRole("button", { name: /预览并保存/ }));
 
     await waitFor(() => {
       const dryRunCall = fetchMock.mock.calls.find(
@@ -531,19 +553,14 @@ describe("RoleDetail", () => {
     fireEvent.change(await screen.findByLabelText(/^角色标识/), { target: { value: "scoped_new" } });
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /lucy_query/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /mysql-aliyun/ }));
-    fireEvent.click(screen.getByRole("button", { name: "+ 添加表范围" }));
-    const range = await screen.findByTestId("role-table-range-1");
-    fireEvent.change(within(range).getByLabelText(/表范围 1 连接/), { target: { value: "mysql-aliyun" } });
-    fireEvent.change(within(range).getByLabelText(/表范围 1 Schema/), { target: { value: "dataforai" } });
-    fireEvent.click(await within(range).findByRole("checkbox", { name: /superstore_orders/ }));
-    fireEvent.click(within(range).getByRole("radio", { name: /限定行/ }));
-    fireEvent.change(within(range).getByLabelText(/表范围 1 条件 1 字段/), {
-      target: { value: "region" }
-    });
-    fireEvent.change(within(range).getByLabelText(/表范围 1 条件 1 取值/), {
-      target: { value: "East" }
-    });
+    // Select table in tree
+    fireEvent.click(await screen.findByRole("checkbox", { name: "superstore_orders" }));
+    // Expand row policy editor and add a predicate
+    fireEvent.click(screen.getByRole("button", { name: "展开 superstore_orders 行策略" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ 添加条件" }));
+    fireEvent.change(screen.getByLabelText("superstore_orders 条件 1 字段"), { target: { value: "region" } });
+    fireEvent.change(screen.getByLabelText("superstore_orders 条件 1 取值"), { target: { value: "East" } });
+
     fireEvent.click(screen.getByRole("button", { name: /预览保存/ }));
 
     await waitFor(() => {
@@ -559,18 +576,20 @@ describe("RoleDetail", () => {
     });
   });
 
-  it("M55: 生效边界 explains that allowed MCP tools filter tools/list and intercept tools/call", async () => {
+  it("M55: 生效边界摘要包含工具数和系统边界句（RoleEffectiveDigest）", async () => {
     stubSingleRole(makeYamlRole());
     renderAt("/admin/roles/analyst");
     fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
-    const label = await screen.findByTestId("role-allowed-tools-label");
-    // 标签需明确 runtime 影响，且不能丢失 tools/list、tools/call 提示
-    expect(label.textContent ?? "").toContain("允许的 MCP 工具");
-    expect(label.textContent ?? "").toContain("tools/list");
-    expect(label.textContent ?? "").toContain("tools/call");
-    // 工具 chip 列表数据-testid 保持
-    const toolList = screen.getByTestId("role-allowed-tools-list");
-    expect(toolList).toHaveTextContent("lucy_query");
+    // RoleEffectiveDigest replaces the old tool badge list
+    const digestText = await screen.findByTestId("role-effective-digest-text");
+    // 摘要应包含生效工具数
+    expect(digestText.textContent).toContain("生效 1 个 MCP 工具");
+    // 系统边界句固定
+    expect(digestText.textContent).toContain("系统禁止能力，不可授予");
+    // 摘要不含「行级已生效」等不该有的断言
+    expect(digestText.textContent).not.toContain("行级已生效");
+    // 能力元组默认在 details 内（Data Capability Preview）
+    expect(screen.getByTestId("capability-preview-details")).toBeInTheDocument();
   });
 
   it("usage tab lists agents that reference the role", async () => {
@@ -701,76 +720,163 @@ describe("RoleDetail", () => {
     expect(screen.queryByText(/该 role 当前无法解析：role_resolution_failed/)).not.toBeInTheDocument();
   });
 
-  it("MCP tools picker supports 全选 / 取消全选 without selecting globalDenied", async () => {
+  it("MCP tools picker (RoleToolGrants): globalDenied tools absent, grantable tools appear", async () => {
     vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
     const toolsField = await screen.findByTestId("role-tools-field");
-    expect(await within(toolsField).findByTestId("role-tools-batch-actions")).toBeInTheDocument();
-    expect(within(toolsField).getByTestId("role-tools-selection-summary")).toHaveTextContent("已选 0/4");
-
-    fireEvent.click(within(toolsField).getByRole("button", { name: "全选" }));
-    expect(await within(toolsField).findByRole("checkbox", { name: /lucy_query/ })).toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /lucy_read_source/ })).toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /wiki_search/ })).toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /wiki_read/ })).toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /sql_execution/ })).not.toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /sql_execution/ })).toBeDisabled();
-    expect(within(toolsField).getByTestId("role-tools-selection-summary")).toHaveTextContent("已选 4/4");
-
-    fireEvent.click(within(toolsField).getByRole("button", { name: "取消全选" }));
-    expect(within(toolsField).getByRole("checkbox", { name: /lucy_query/ })).not.toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /wiki_read/ })).not.toBeChecked();
-    expect(within(toolsField).getByTestId("role-tools-selection-summary")).toHaveTextContent("已选 0/4");
+    // RoleToolGrants: grantable tools appear as checkboxes, globalDenied do NOT
+    expect(await within(toolsField).findByRole("checkbox", { name: /lucy_query/ })).toBeInTheDocument();
+    expect(within(toolsField).getByRole("checkbox", { name: /lucy_read_source/ })).toBeInTheDocument();
+    expect(within(toolsField).getByRole("checkbox", { name: /wiki_search/ })).toBeInTheDocument();
+    expect(within(toolsField).getByRole("checkbox", { name: /wiki_read/ })).toBeInTheDocument();
+    // sl_query and sql_execution are globalDenied: no checkbox rendered
+    expect(within(toolsField).queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
+    expect(within(toolsField).queryByRole("checkbox", { name: /sql_execution/ })).not.toBeInTheDocument();
+    // Count shows "已选 N 个" (no denominator)
+    expect(within(toolsField).getByText(/^已选 \d+ 个$/)).toBeInTheDocument();
+    // Static system-denied sentence at bottom
+    expect(within(toolsField).getByText(/原始 SQL.*系统禁止/s)).toBeInTheDocument();
   });
 
-  it("MCP tools filter limits 全选 to visible candidates when tools >= 10", async () => {
-    const manyTools = Array.from({ length: 12 }, (_, i) => ({
-      name: i < 3 ? `lucy_tool_${i}` : `other_tool_${i}`,
-      description: i < 3 ? "lucy family" : "other",
-      globalDenied: false
-    }));
-    manyTools.push({ name: "sql_execution", description: "raw sql", globalDenied: true });
-
-    vi.stubGlobal("fetch", stubCatalogApis(undefined, { tools: manyTools }));
-    renderAt("/admin/roles/new");
-    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
-    const toolsField = await screen.findByTestId("role-tools-field");
-    const filter = await within(toolsField).findByTestId("role-tools-filter");
-    fireEvent.change(filter, { target: { value: "lucy" } });
-
-    expect(within(toolsField).getByRole("checkbox", { name: /lucy_tool_0/ })).toBeInTheDocument();
-    expect(within(toolsField).queryByRole("checkbox", { name: /other_tool_3/ })).not.toBeInTheDocument();
-
-    fireEvent.click(within(toolsField).getByRole("button", { name: "全选" }));
-    expect(within(toolsField).getByRole("checkbox", { name: /lucy_tool_0/ })).toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /lucy_tool_2/ })).toBeChecked();
-
-    fireEvent.change(filter, { target: { value: "" } });
-    expect(within(toolsField).getByRole("checkbox", { name: /other_tool_3/ })).not.toBeChecked();
-    expect(within(toolsField).getByRole("checkbox", { name: /sql_execution/ })).not.toBeChecked();
-  });
-
-  it("table names picker supports 全选 / 取消全选", async () => {
+  it("MCP tools (RoleToolGrants): preset buttons work and count shows 已选 N 个", async () => {
     vi.stubGlobal("fetch", stubCatalogApis());
     renderAt("/admin/roles/new");
     fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
-    fireEvent.click(await screen.findByRole("checkbox", { name: /mysql-aliyun/ }));
-    fireEvent.click(screen.getByRole("button", { name: "+ 添加表范围" }));
-    const range = await screen.findByTestId("role-table-range-1");
-    fireEvent.change(within(range).getByLabelText(/表范围 1 连接/), { target: { value: "mysql-aliyun" } });
-    fireEvent.change(within(range).getByLabelText(/表范围 1 Schema/), { target: { value: "dataforai" } });
+    const toolsField = await screen.findByTestId("role-tools-field");
+    // Initially 0 tools selected
+    expect(await within(toolsField).findByText("已选 0 个")).toBeInTheDocument();
+    // Click "只读问答" preset
+    fireEvent.click(within(toolsField).getByRole("button", { name: "只读问答" }));
+    // After preset: "当前与只读问答一致" message appears
+    expect(await within(toolsField).findByText(/当前与只读问答一致/)).toBeInTheDocument();
+    // Count updates (only grantable tools counted, no denominator)
+    expect(within(toolsField).getByText(/^已选 \d+ 个$/)).toBeInTheDocument();
+    // Grantable tools like lucy_query are checked
+    expect(within(toolsField).getByRole("checkbox", { name: /lucy_query/ })).toBeChecked();
+  });
 
-    expect(await within(range).findByTestId("role-table-names-1-batch-actions")).toBeInTheDocument();
-    expect(within(range).getByTestId("role-table-names-1-selection-summary")).toHaveTextContent("已选 0/2");
+  // ── T6 新增测试 ────────────────────────────────────────────────────────────────
 
-    fireEvent.click(within(range).getByRole("button", { name: "全选" }));
-    expect(within(range).getByRole("checkbox", { name: /superstore_orders/ })).toBeChecked();
-    expect(within(range).getByRole("checkbox", { name: /superstore_returns/ })).toBeChecked();
-    expect(within(range).getByTestId("role-table-names-1-selection-summary")).toHaveTextContent("已选 2/2");
+  it("T6: sl_query 在权限配置无 checkbox；预览 allow.tools 不含 sl_query；diff 含「系统拒绝」通知", async () => {
+    // Role's existing allow already has sl_query (e.g. from older config)
+    const roleWithSlQuery = makeYamlRole({
+      id: "analyst",
+      role: {
+        description: "Analyst role",
+        allow: { connections: ["mysql-aliyun"], tools: ["sl_query", "lucy_query"] }
+      }
+    });
+    const fetchMock = stubCatalogApis(
+      async (input, init) => {
+        const url = String(input);
+        if (url === "/api/admin/roles/analyst" && (!init?.method || init.method === "GET")) {
+          return new Response(JSON.stringify({ ok: true, data: roleWithSlQuery }));
+        }
+        if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body));
+          if (body.dryRun) {
+            return new Response(JSON.stringify({ ok: true, data: { diff: "+ tools", proposedYaml: "yaml", version: "v1" } }));
+          }
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      },
+      {
+        tools: [
+          { name: "sl_query", description: "sl query", globalDenied: true },
+          { name: "lucy_query", description: "query", globalDenied: false },
+        ]
+      }
+    );
+    vi.stubGlobal("fetch", fetchMock);
 
-    fireEvent.click(within(range).getByRole("button", { name: "取消全选" }));
-    expect(within(range).getByRole("checkbox", { name: /superstore_orders/ })).not.toBeChecked();
-    expect(within(range).getByRole("checkbox", { name: /superstore_returns/ })).not.toBeChecked();
+    renderAt("/admin/roles/analyst");
+    fireEvent.click(await screen.findByRole("button", { name: "权限配置" }));
+
+    // sl_query must NOT appear as a checkbox (globalDenied)
+    expect(screen.queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
+    // lucy_query checkbox is present
+    expect(await screen.findByRole("checkbox", { name: /lucy_query/ })).toBeInTheDocument();
+
+    // Trigger preview (description change makes it dirty)
+    fireEvent.click(screen.getByRole("button", { name: "基本信息" }));
+    fireEvent.change(screen.getByDisplayValue("Analyst role"), { target: { value: "Updated" } });
+    fireEvent.click(screen.getByRole("button", { name: /预览并保存/ }));
+
+    await waitFor(() => {
+      const dryRunCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === true
+      );
+      expect(dryRunCall).toBeTruthy();
+      const body = JSON.parse(String((dryRunCall![1] as RequestInit).body));
+      // sl_query must NOT be in the preview payload's allow.tools
+      expect(body.patch.allow.tools).not.toContain("sl_query");
+      expect(body.patch.allow.tools).toContain("lucy_query");
+    });
+
+    // Diff tab should show the rejected tools notice
+    const rejectedDiv = await screen.findByTestId("role-diff-rejected-tools");
+    expect(rejectedDiv.textContent).toContain("系统拒绝，保存后从授权中移除");
+    expect(rejectedDiv.textContent).toContain("sl_query");
+  });
+
+  it("T6: 未生成预览时，diff tab 不显示确认保存按钮", async () => {
+    stubSingleRole(makeYamlRole());
+    renderAt("/admin/roles/analyst");
+    await screen.findByRole("heading", { name: "analyst" });
+    // Navigate to diff tab without previewing
+    fireEvent.click(screen.getByRole("button", { name: "变更预览" }));
+    // No save/confirm button (no preview generated)
+    expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "确认创建" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "确认删除" })).not.toBeInTheDocument();
+  });
+
+  it("T7: 生效边界摘要的工具数 = effectivePermissions.tools.length，不是 form.tools 数量", async () => {
+    // Role allow has sl_query + lucy_query (2 tools in form),
+    // but effectivePermissions.tools only has lucy_query (1 effective tool)
+    const role = makeYamlRole({
+      role: {
+        description: "Analyst role",
+        allow: {
+          connections: ["mysql-aliyun"],
+          tools: ["sl_query", "lucy_query"],
+          tableSelectors: [{ connection: "mysql-aliyun", schema: "dataforai", names: ["superstore_orders"] }]
+        }
+      },
+      effectivePermissions: {
+        roleIds: ["analyst"],
+        snapshotHash: "abc",
+        sourceMapVersion: "v1",
+        tools: ["lucy_query"],  // only 1 effective tool
+        connections: ["mysql-aliyun"],
+        sources: [{ connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "dataforai", table: "dataforai.superstore_orders" }],
+        legacyAllow: false
+      }
+    });
+    stubSingleRole(role);
+    renderAt("/admin/roles/analyst");
+    fireEvent.click(await screen.findByRole("button", { name: "生效边界" }));
+
+    const digestText = await screen.findByTestId("role-effective-digest-text");
+    // Must show 1 (from effectivePermissions.tools.length), not 2 (from form.tools)
+    expect(digestText.textContent).toContain("生效 1 个 MCP 工具");
+    expect(digestText.textContent).not.toContain("生效 2 个 MCP 工具");
+  });
+
+  it("table names picker (RoleTableGrants): table tree shows and tables can be checked", async () => {
+    vi.stubGlobal("fetch", stubCatalogApis());
+    renderAt("/admin/roles/new");
+    fireEvent.click(screen.getByRole("button", { name: "权限配置" }));
+    const tableGrants = await screen.findByTestId("role-table-grants");
+    // Both tables are available in the tree
+    expect(await within(tableGrants).findByRole("checkbox", { name: "superstore_orders" })).toBeInTheDocument();
+    expect(within(tableGrants).getByRole("checkbox", { name: "superstore_returns" })).toBeInTheDocument();
+    // Check a table
+    fireEvent.click(within(tableGrants).getByRole("checkbox", { name: "superstore_orders" }));
+    expect(within(tableGrants).getByRole("checkbox", { name: "superstore_orders" })).toBeChecked();
+    // Uncheck
+    fireEvent.click(within(tableGrants).getByRole("checkbox", { name: "superstore_orders" }));
+    expect(within(tableGrants).getByRole("checkbox", { name: "superstore_orders" })).not.toBeChecked();
   });
 });
