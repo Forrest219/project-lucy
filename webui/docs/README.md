@@ -129,6 +129,7 @@
 | [141-admin-audit-csv-readability-metadata-spec.md](141-admin-audit-csv-readability-metadata-spec.md) | `/admin/audit` CSV 可读性增强：本地时间 + UTC 双轨、秒级流水号文件名、字段说明元数据 | 产品 / UX / API / Audit / Frontend / Backend |
 | [142-overview-focus-and-restraint-spec.md](142-overview-focus-and-restraint-spec.md) | `/overview` 聚焦精简：只保留系统状态 / 待处理事项 / MCP 接入；删除质量快照与访问风险（Implemented v1.0） | 产品 / UX / Frontend |
 | [143-call-monitoring-ops-page-spec.md](143-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Draft） | 产品 / UX / API / Ops / Frontend / Backend |
+| [146-restore-row-policy-proxy-wiring-spec.md](146-restore-row-policy-proxy-wiring-spec.md) | Row Policy Proxy 接线恢复：修复 `68db68a` 抹掉的 `forced_filters` 注入与 explain 诊断（安全修复） | Backend / Security |
 
 ## 与原 README 的关键校正
 
