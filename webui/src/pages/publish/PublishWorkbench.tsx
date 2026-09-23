@@ -216,7 +216,7 @@ function gateNextStepCopy(gate: PublishGate, failedCount: number, hasValidate: b
   if (gate.state === "pending") {
     return "当前变更无可校验对象或校验未通过，同步已阻断。";
   }
-  return "校验已通过，可使用顶部「同步索引并生效」。";
+  return "表语义校验已通过，可使用顶部「同步索引并生效」。";
 }
 
 export function countDiffLines(diff?: string): { added: number; deleted: number } {
@@ -252,7 +252,7 @@ export function PublishWorkbench() {
         if (data.results.length === 0) {
           toast.message("校验完成：本次无可校验的表变更", { id: "workbench-validation" });
         } else {
-          toast.success(`校验通过：${data.results.length} 张表全部通过`, { id: "workbench-validation" });
+          toast.success(`表语义校验通过：${data.results.length}/${data.results.length}`, { id: "workbench-validation" });
         }
       } else {
         const firstFailed = data.results.find((item) => !item.validation.ok);
@@ -262,9 +262,9 @@ export function PublishWorkbench() {
             /^校验未通过：?/,
             ""
           );
-          toast.error(`校验未通过（${failed}/${data.results.length}）：${detail}`, { id: "workbench-validation" });
+          toast.error(`表语义校验失败（${failed}/${data.results.length}）：${detail}`, { id: "workbench-validation" });
         } else {
-          toast.error(`校验未通过：${failed} / ${data.results.length} 张表未通过`, { id: "workbench-validation" });
+          toast.error(`表语义校验失败：${failed} / ${data.results.length} 张表未通过`, { id: "workbench-validation" });
         }
       }
     },
@@ -293,12 +293,27 @@ export function PublishWorkbench() {
     queryFn: () => apiGet<SourcesResponse>("/api/sources")
   });
 
+  const [validateElapsedSeconds, setValidateElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (!validateMutation.isPending) {
+      setValidateElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setValidateElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [validateMutation.isPending]);
+
   const files = diffQuery.data?.files ?? [];
   const fileSignature = files.map((file) => file.filePath).join("\n");
   const hasPendingFiles = files.length > 0;
   const boundaryChecklist = boundaryChecklistForChangedFiles(files.map((file) => file.filePath));
   const active = selected ? files.find((file) => file.filePath === selected) ?? null : null;
   const failedCount = validateMutation.data?.results.filter((item) => !item.validation.ok).length ?? 0;
+  const totalValidated = validateMutation.data?.results.length ?? 0;
+  const passedCount = totalValidated - failedCount;
   const publishGate = derivePublishGate(files.length, validateMutation.data);
   const publishCtaDisabled = publishGate.state !== "ready";
   const classified = useMemo(
@@ -432,12 +447,12 @@ export function PublishWorkbench() {
                 : "暂无待同步变更"}
             </span>
             {validateMutation.data ? (
-              <span>
+              <span data-testid="workbench-validation-badge">
                 {failedCount > 0
-                  ? `校验失败 ${failedCount} 张`
-                  : validateMutation.data.results.length === 0
+                  ? `表语义校验失败 ${failedCount} 张`
+                  : totalValidated === 0
                     ? "无可校验表"
-                    : `校验通过 ${validateMutation.data.results.length} 张`}
+                    : `表语义校验通过 ${passedCount}/${totalValidated}`}
               </span>
             ) : null}
           </>
@@ -453,7 +468,7 @@ export function PublishWorkbench() {
                   disabled={validateMutation.isPending}
                   data-testid="workbench-validate"
                 >
-                  {validateMutation.isPending ? "校验中…" : "校验变更"}
+                  {validateMutation.isPending ? "正在校验表语义…" : "校验变更"}
                 </button>
                 <button
                   type="button"
@@ -632,11 +647,13 @@ export function PublishWorkbench() {
                   </span>
                   <span className="pl-pipeline-step__sub">
                     {validateMutation.isPending
-                      ? "校验中…"
+                      ? "正在校验表语义…"
                       : validateMutation.data
                         ? failedCount > 0
-                          ? `${failedCount} 项阻断`
-                          : `${validateMutation.data.results.length}/${validateMutation.data.results.length} 通过`
+                          ? `表语义校验失败 ${failedCount} 张`
+                          : validateMutation.data.results.length === 0
+                            ? "无可校验表"
+                            : `表语义校验通过 ${passedCount}/${totalValidated}`
                         : "待校验"}
                   </span>
                 </div>
@@ -788,7 +805,9 @@ export function PublishWorkbench() {
               ) : null}
             </div>
             {validateMutation.isPending && !validateMutation.data ? (
-              <p className="pl-notice">正在校验变更…</p>
+              <p className="pl-notice" data-testid="workbench-validation-pending">
+                正在校验表语义…（已等待 {validateElapsedSeconds} 秒）
+              </p>
             ) : validateMutation.data ? (
               <div className="grid gap-2">
                 <div
@@ -799,6 +818,7 @@ export function PublishWorkbench() {
                         ? "pl-validation-banner"
                         : "pl-validation-banner pl-validation-banner--success flex items-center justify-between"
                   }
+                  data-testid="workbench-validation-banner"
                 >
                   <div className="flex items-center gap-2">
                     {failedCount === 0 && validateMutation.data.results.length > 0 ? (
@@ -806,13 +826,18 @@ export function PublishWorkbench() {
                     ) : null}
                     <span>
                       {failedCount > 0
-                        ? `${failedCount} 张表未通过`
+                        ? `表语义校验失败 ${failedCount} 张`
                         : validateMutation.data.results.length === 0
-                          ? "无可校验的表变更"
-                          : `${validateMutation.data.results.length} 张表全部通过`}
+                          ? "无可校验表"
+                          : `表语义校验通过 ${passedCount}/${totalValidated}`}
                     </span>
                   </div>
                 </div>
+                {failedCount === 0 && totalValidated > 0 && files.length > totalValidated ? (
+                  <p className="pl-notice text-xs" data-testid="workbench-validation-rest-files">
+                    其余 {files.length - totalValidated} 个文件随本批同步，不逐份做表语义校验。
+                  </p>
+                ) : null}
                 {(failedCount > 0 || showValidationDetails || validateMutation.data.results.length <= 4) &&
                   validateMutation.data.results.map((item) => (
                     <WorkbenchValidationRow

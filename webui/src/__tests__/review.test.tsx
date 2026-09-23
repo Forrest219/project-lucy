@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -174,7 +174,9 @@ describe("PublishWorkbench", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /customers\.yaml/ }));
     expect(await within(screen.getByTestId("workbench-change-detail-drawer")).findByText(/\+ customers diff/)).toBeInTheDocument();
-    expect(await screen.findByText("1 张表未通过")).toBeInTheDocument();
+    expect(await screen.findByTestId("workbench-validation-banner")).toHaveTextContent(
+      "表语义校验失败 1 张"
+    );
     await waitFor(() => expect(screen.getByText("未通过")).toBeInTheDocument());
     expect(screen.queryByText("FAIL")).not.toBeInTheDocument();
   });
@@ -835,6 +837,220 @@ describe("PublishWorkbench", () => {
     expect(screen.getByText("-1")).toBeInTheDocument();
 
     // Calm UI all-pass banner
-    expect(await screen.findByText("1 张表全部通过")).toBeInTheDocument();
+    expect(await screen.findByTestId("workbench-validation-banner")).toHaveTextContent(
+      "表语义校验通过 1/1"
+    );
+  });
+
+  it("SC-145-01 shows in-progress copy scoped to table semantics with elapsed seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          if (url === "/api/diff") {
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                data: {
+                  files: [
+                    {
+                      filePath: "semantic-layer/demo-mysql/superstore_orders.yaml",
+                      status: "modified",
+                      diff: "+ diff"
+                    }
+                  ]
+                }
+              })
+            );
+          }
+          if (url === "/api/validate-changed" && init?.method === "POST") {
+            return new Promise<Response>(() => {});
+          }
+          if (url === "/api/sources") {
+            return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+          }
+          return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+        })
+      );
+
+      renderWorkbench();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const validateButton = screen.getByTestId("workbench-validate");
+      expect(validateButton).toHaveTextContent("正在校验表语义…");
+      expect(validateButton).toBeDisabled();
+      expect(screen.getByTestId("workbench-publish-and-reindex")).toBeDisabled();
+      expect(screen.getByTestId("workbench-validation-pending")).toHaveTextContent(
+        "正在校验表语义…"
+      );
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByTestId("workbench-validation-pending")).toHaveTextContent("已等待 3 秒");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("SC-145-02/03 splits pending file count from table validation count and discloses rest files", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  {
+                    filePath: "semantic-layer/demo-mysql/superstore_orders.yaml",
+                    status: "modified",
+                    diff: "+ diff"
+                  },
+                  { filePath: "wiki/global/guide.md", status: "modified", diff: "+ wiki" },
+                  { filePath: "webui/config/data-qa-instructions.md", status: "modified", diff: "+ cfg" }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  {
+                    conn: "demo-mysql",
+                    schema: "chatbi",
+                    table: "superstore_orders",
+                    validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByText("3 个待同步文件")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-pending-count")).toHaveTextContent("3 个待同步文件");
+    expect(await screen.findByTestId("workbench-validation-badge")).toHaveTextContent(
+      "表语义校验通过 1/1"
+    );
+    expect(screen.getByTestId("workbench-validation-banner")).toHaveTextContent(
+      "表语义校验通过 1/1"
+    );
+    expect(screen.getByTestId("workbench-validation-rest-files")).toHaveTextContent(
+      "其余 2 个文件随本批同步，不逐份做表语义校验。"
+    );
+    expect(screen.getByTestId("workbench-publish-and-reindex")).not.toBeDisabled();
+  });
+
+  it("SC-145-04 keeps sync blocked and shows failure count when a table fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [
+                  {
+                    filePath: "semantic-layer/demo-mysql/superstore_orders.yaml",
+                    status: "modified",
+                    diff: "+ diff"
+                  },
+                  { filePath: "wiki/global/guide.md", status: "modified", diff: "+ wiki" }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                results: [
+                  {
+                    conn: "demo-mysql",
+                    schema: "chatbi",
+                    table: "superstore_orders",
+                    validation: { ok: false, exitCode: 1, stdout: "", stderr: "bad" }
+                  }
+                ]
+              }
+            })
+          );
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByTestId("workbench-validation-banner")).toHaveTextContent(
+      "表语义校验失败 1 张"
+    );
+    expect(screen.getByTestId("workbench-validation-badge")).toHaveTextContent(
+      "表语义校验失败 1 张"
+    );
+    expect(screen.getByTestId("workbench-publish-and-reindex")).toBeDisabled();
+    expect(screen.queryByTestId("workbench-validation-rest-files")).not.toBeInTheDocument();
+  });
+
+  it("SC-145-05 shows zero-table state without claiming a pass", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [{ filePath: "wiki/global/guide.md", status: "modified", diff: "+ wiki" }]
+              }
+            })
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return new Response(JSON.stringify({ ok: true, data: { results: [] } }));
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByTestId("workbench-validation-badge")).toHaveTextContent(
+      "无可校验表"
+    );
+    expect(screen.getByTestId("workbench-validation-banner")).toHaveTextContent("无可校验表");
+    expect(screen.queryByText(/校验通过/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("workbench-publish-and-reindex")).toBeDisabled();
   });
 });
