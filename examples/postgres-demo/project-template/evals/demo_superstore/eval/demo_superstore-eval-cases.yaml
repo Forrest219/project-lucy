@@ -1,0 +1,289 @@
+lucy_eval_schema_version: 1
+kind: lucy_eval_suite
+suite_id: demo_superstore_v1
+domain: demo_superstore
+title: Docker Demo Superstore Eval Suite
+description: |
+  POC 演示专用 eval：对齐 examples/postgres-demo/postgres/_baseline.json（seed=42, rows=1000）。
+  禁止与 evals/superstore/（Aliyun 全量快照）混跑。
+metadata:
+  document_name: Docker Demo Superstore Eval Cases
+  document_type: Eval
+  version: v0.1
+  runner_schema_version: v1.4
+  written_date: '2026-08-28'
+  author: Cursor Agent
+  requester: xingchen
+  based_on:
+    - examples/postgres-demo/postgres/_baseline.json
+    - examples/postgres-demo/project-template/semantic-layer/demo-postgres/superstore_orders.yaml
+    - wiki/global/demo-superstore.md
+    - docs/eval-quiz-conventions.md v1.4
+  scope: demo-postgres 自包含 Superstore：基础指标、区域、segment、反模式
+  output_path: evals/demo_superstore/eval/demo_superstore-eval-cases.yaml
+  data_source: semantic_layer
+  result_assertions_status: filled_v0.1
+  snapshot_date: '2026-06-23'
+  snapshot_batch: docker_demo_seed42_rows1000
+  snapshot_rows: 1000
+  baseline_ref: examples/postgres-demo/postgres/_baseline.json
+  connectionId: demo-postgres
+  coverage_matrix:
+    basic:
+      - demo-ss-total-sales-001
+      - demo-ss-order-count-001
+      - demo-ss-profit-margin-001
+      - demo-ss-east-sales-001
+    anti_pattern:
+      - demo-ss-margin-sum-not-avg-001
+    boundary:
+      - demo-ss-loss-rows-001
+      - demo-ss-high-discount-001
+safety_contract:
+  readonly: true
+  forbid_secret_paths:
+    - .ktx/secrets/
+  forbid_cross_source_join: true
+  forbidden_ast:
+    - type: forbidden_ast
+      value: UPDATE | DELETE | INSERT | MERGE | DROP | ALTER | TRUNCATE | CREATE
+      reason: eval 只能只读，不允许 DDL 或 DML。
+    - type: forbidden_ast
+      value: cross_source_join
+      reason: 禁止跨数据源 Join。
+
+quiz_cases:
+  - id: Q1
+    stem: Demo Superstore 分析正常订单时应使用哪个 segment？
+    difficulty: 0.3
+    question_type: single
+    display_type: conceptual
+    eval_refs: [demo-ss-total-sales-001]
+    options:
+      - key: A
+        text: superstore_orders.active_rows
+      - key: B
+        text: superstore_orders.loss_rows
+      - key: C
+        text: 不加 segment
+      - key: D
+        text: superstore_orders.high_discount
+    answer: A
+    explanation: 普通分析必须排除逻辑删除行，使用 active_rows。
+
+  - id: Q2
+    stem: 利润率 profit_margin 应如何计算？
+    difficulty: 0.5
+    question_type: single
+    display_type: conceptual
+    eval_refs: [demo-ss-margin-sum-not-avg-001]
+    options:
+      - key: A
+        text: SUM(profit) / SUM(sales)
+      - key: B
+        text: AVG(profit / sales)
+      - key: C
+        text: SUM(profit) / COUNT(*)
+      - key: D
+        text: MAX(profit) / SUM(sales)
+    answer: A
+    explanation: 利润率必须用 SUM/SUM 重算，禁止 AVG(profit/sales)。
+
+cases:
+
+- id: demo-ss-total-sales-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: Demo 数据集的销售总额是多少？
+  domain: demo_superstore
+  trace_required: true
+  context_required:
+    keys:
+      - global/demo-superstore.md
+  risk_tags: [basic, numeric, revenue]
+  expected_source: semantic_layer
+  expected_measures: [total_sales]
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-postgres
+    measures: [superstore_orders.total_sales]
+    segments: [superstore_orders.active_rows]
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        total_sales: 1459476.0953
+  notes: Gold 来自 _baseline.json#measures.total_sales
+  snapshot_date: '2026-06-23'
+
+- id: demo-ss-order-count-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: Demo 数据集有多少个 distinct 订单？
+  domain: demo_superstore
+  trace_required: true
+  risk_tags: [basic, numeric, count]
+  expected_source: semantic_layer
+  expected_measures: [order_count]
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-postgres
+    measures: [superstore_orders.order_count]
+    segments: [superstore_orders.active_rows]
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: exact
+      data:
+        order_count: 1000
+  notes: 必须用 COUNT(DISTINCT order_id)，禁止 COUNT(*)。
+  snapshot_date: '2026-06-23'
+
+- id: demo-ss-profit-margin-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: Demo 数据集整体利润率是多少？
+  domain: demo_superstore
+  trace_required: true
+  risk_tags: [basic, ratio, numeric]
+  expected_source: semantic_layer
+  expected_measures: [profit_margin]
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-postgres
+    measures: [superstore_orders.profit_margin]
+    segments: [superstore_orders.active_rows]
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.0001
+      data:
+        profit_margin: 0.201572
+  notes: Gold 来自 _baseline.json#measures.profit_margin
+  snapshot_date: '2026-06-23'
+
+- id: demo-ss-east-sales-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: Demo 数据集中 East 区域的销售总额是多少？
+  domain: demo_superstore
+  trace_required: true
+  risk_tags: [basic, region, numeric]
+  expected_source: semantic_layer
+  expected_measures: [total_sales]
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-postgres
+    measures: [superstore_orders.total_sales]
+    dimensions: [superstore_orders.region]
+    filters:
+      - superstore_orders.region = 'East'
+    segments: [superstore_orders.active_rows]
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: approx
+      numeric_tolerance: 0.01
+      data:
+        total_sales: 550670.8159
+  notes: East 为四区最高；Gold 来自 _baseline.json#sales_by_region.East
+  snapshot_date: '2026-06-23'
+
+- id: demo-ss-margin-sum-not-avg-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: 计算 Demo 数据集利润率时，为什么不能用 AVG(profit/sales)？
+  domain: demo_superstore
+  trace_required: true
+  risk_tags: [anti_pattern, ratio]
+  expected_source: semantic_layer
+  comparison_mode: logic_only
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 需结合语义层 measure 定义说明。
+  result_assertions:
+    - value_type: text
+      compare_mode: subset
+      check_schema: false
+      check_row_count: false
+      data:
+        must_mention:
+          - SUM
+          - 重算
+  notes: profit_margin measure 定义为 sum(profit)/nullif(sum(sales),0)
+  snapshot_date: '2026-06-23'
+
+- id: demo-ss-loss-rows-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: Demo 数据集中有多少行亏损明细（profit 小于 0）？
+  domain: demo_superstore
+  trace_required: true
+  risk_tags: [boundary, segment, numeric]
+  expected_source: semantic_layer
+  expected_measures: [order_count]
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-postgres
+    measures: [superstore_orders.order_count]
+    segments: [superstore_orders.loss_rows]
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: exact
+      data:
+        order_count: 49
+  notes: Gold 来自 _baseline.json#counts.loss_rows；segment loss_rows 已含 profit<0
+  snapshot_date: '2026-06-23'
+
+- id: demo-ss-high-discount-001
+  case_type: single_turn
+  skill_version: v0.1
+  semantic_version: v0.1
+  question: Demo 数据集中折扣超过 20% 的行有多少？
+  domain: demo_superstore
+  trace_required: true
+  risk_tags: [boundary, segment, numeric]
+  expected_source: semantic_layer
+  expected_measures: [order_count]
+  comparison_mode: numeric
+  lucy_query:
+    connectionId: demo-postgres
+    measures: [superstore_orders.order_count]
+    segments: [superstore_orders.high_discount]
+  tool_assertions:
+    - type: required_tool
+      value: sl_query
+      reason: 取数题必须走语义查询。
+  result_assertions:
+    - value_type: scalar
+      compare_mode: exact
+      data:
+        order_count: 132
+  notes: Gold 来自 _baseline.json#counts.high_discount_rows
+  snapshot_date: '2026-06-23'

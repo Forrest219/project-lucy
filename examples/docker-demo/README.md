@@ -1,6 +1,8 @@
-# Lucy Docker Demo
+# Lucy Docker Demo (POC)
 
-This demo lets a customer or CI runner try Lucy without a production database.
+Self-contained POC stack: **independent database**, **YAML context**, **eval suite**, and **smoke gates** — not part of the default `docker-compose.yml` customer path.
+
+See `docs/lucy-poc-demo-isolation-spec.md` for the full boundary between customer default and POC demo.
 
 ## Contents
 
@@ -8,7 +10,14 @@ This demo lets a customer or CI runner try Lucy without a production database.
 |---|---|
 | `docker-compose.demo.yml` | Runs Lucy plus demo MySQL |
 | `examples/docker-demo/mysql/01-init.sql` | Seeds Superstore-style demo data |
-| `examples/docker-demo/project-template/ktx.yaml` | Demo KTX project config mounted into Lucy |
+| `examples/docker-demo/mysql/_baseline.json` | Numeric gold for smoke / demo eval |
+| `examples/docker-demo/project-template/ktx.yaml` | Demo KTX project (`demo-mysql` → `demo-db`) |
+| `examples/docker-demo/project-template/semantic-layer/` | Demo-only semantic layer |
+| `examples/docker-demo/project-template/wiki/` | Demo-only wiki |
+| `examples/docker-demo/project-template/evals/` | Demo-only eval (`demo_superstore`, aligned to `_baseline.json`) |
+| `examples/docker-demo/project-template/webui/config/access.yaml` | Demo ACL / agent token |
+
+**Do not** mount repo-root `evals/superstore/` here — that suite is calibrated for Aliyun 10,194-row snapshots.
 
 ## Run
 
@@ -50,9 +59,21 @@ The smoke test validates:
 ## Template Root
 
 `LUCY_TEMPLATE_ROOT` points Lucy at the demo project template baked into the
-Docker image. It is a demo-only bootstrap setting. Customers editing their own
+Docker image. It is a **demo-only** bootstrap setting. Customers editing their own
 compose file should remove this variable; Lucy will fall back to the on-disk
 `/data/lucy` project root after the first initialization.
+
+## Eval
+
+POC eval lives under `project-template/evals/demo_superstore/`. Compose bind-mounts
+`./examples/docker-demo/project-template/evals` → `/data/lucy/evals` (read-only).
+
+Regenerate data baseline after changing seed/rows:
+
+```bash
+node examples/docker-demo/scripts/gen-demo-data.mjs
+# then update demo_superstore-eval-cases.yaml gold to match _baseline.json
+```
 
 ## KTX Candidate Version
 
