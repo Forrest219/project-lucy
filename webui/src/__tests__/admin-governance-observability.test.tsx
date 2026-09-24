@@ -103,6 +103,30 @@ function stubFetch() {
         }
       }));
     }
+    if (url.includes("/api/admin/ui-usage/overview")) {
+      return new Response(JSON.stringify({
+        ok: true,
+        data: {
+          windowHours: hours,
+          pageViews: hours === 24 ? 2 : 5,
+          visitorCount: 1,
+          activeMenuCount: 1,
+          unmappedViews: 1,
+          groups: [
+            { id: "semantic-modeling", label: "业务上下文", visits: hours === 24 ? 2 : 4 },
+            { id: "evaluation", label: "质量评测", visits: 0 }
+          ],
+          menus: [
+            { id: "semantic-catalog", label: "语义资产", visits: hours === 24 ? 2 : 4 },
+            { id: "eval-monitor", label: "趋势监控", visits: 0 }
+          ],
+          pages: [
+            { id: "table-editor", label: "表语义编辑", visits: hours === 24 ? 2 : 4 },
+            { id: "eval-monitor", label: "趋势监控", visits: 0 }
+          ]
+        }
+      }));
+    }
     return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -264,5 +288,26 @@ describe("GovernanceOverview", () => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : String(input);
       return url.includes("hours=24");
     })).toBe(true);
+  });
+
+  it("shows interface rankings including zero-visit menus and pages", async () => {
+    stubFetch();
+    renderPage();
+
+    fireEvent.click(await screen.findByTestId("governance-view-interface"));
+    expect(await screen.findByRole("heading", { name: "菜单访问排行 · 近 7 天" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "页面访问排行 · 近 7 天" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "分组访问 · 近 7 天" })).toBeInTheDocument();
+    expect(screen.getByTestId("metric-interface-page-views")).toHaveTextContent("5");
+    expect(screen.getByTestId("governance-interface-unmapped")).toHaveTextContent("另有 1 次页面打开未能对应到已知页面");
+    expect(within(screen.getByTestId("governance-interface-menu-rank")).getByText("趋势监控")).toBeInTheDocument();
+    expect(within(screen.getByTestId("governance-interface-page-rank")).getByText("趋势监控")).toBeInTheDocument();
+    expect(screen.queryByTestId("governance-usage-rank-grid")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("governance-window-24h"));
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-interface-page-views")).toHaveTextContent("2");
+    });
+    expect(screen.getByRole("heading", { name: "菜单访问排行 · 近 24 小时" })).toBeInTheDocument();
   });
 });

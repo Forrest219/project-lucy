@@ -57,6 +57,7 @@ import { BrandingSettings } from "../pages/admin/BrandingSettings";
 import { LicenseSettings } from "../pages/admin/LicenseSettings";
 import { LoginPage } from "../pages/Login";
 import { AuthProvider, useAuth, useAuthOptional } from "../lib/auth";
+import { useUiPageViewBeacon } from "./ui-usage-beacon";
 import { BrandMark } from "../components/BrandMark";
 import { useBranding } from "../lib/useBranding";
 import { isPublicUiPath } from "../lib/publicAccess";
@@ -193,6 +194,8 @@ function writeCollapsedGroups(ids: Set<string>) {
 
 export function AppFrame() {
   const location = useLocation();
+  const auth = useAuthOptional();
+  useUiPageViewBeacon(location.pathname, auth?.status ?? null);
   const { data: branding } = useBranding();
   const isHelpRoute = location.pathname === "/help";
   const appShellClass = [

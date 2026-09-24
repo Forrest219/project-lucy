@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { apiGet } from "../../lib/apiClient";
@@ -69,6 +69,20 @@ type TokenRow = {
 };
 
 type WindowHours = 24 | 168;
+type UsageView = "access" | "interface";
+
+type InterfaceRankRow = { id: string; label: string; visits: number };
+
+type InterfaceUsageResponse = {
+  windowHours: number;
+  pageViews: number;
+  visitorCount: number;
+  activeMenuCount: number;
+  unmappedViews: number;
+  groups: InterfaceRankRow[];
+  menus: InterfaceRankRow[];
+  pages: InterfaceRankRow[];
+};
 
 const RANK_LIMIT = 10;
 
@@ -125,7 +139,7 @@ function RankingBarList({
 }) {
   const maxCalls = rows.reduce((max, row) => Math.max(max, row.calls), 0);
   const totalCalls = rows.reduce((sum, row) => sum + row.calls, 0);
-  if (rows.length === 0 || maxCalls <= 0) {
+  if (rows.length === 0) {
     return (
       <div className="pl-usage-rank-body" data-testid={`${testId}-body`}>
         <p className="pl-usage-rank-empty" data-testid={testId}>
@@ -138,7 +152,9 @@ function RankingBarList({
     <div className="pl-usage-rank-body" data-testid={`${testId}-body`}>
       <ul className="pl-usage-rank-list" data-testid={testId}>
         {rows.map((row) => {
-          const widthPct = Math.max(4, Math.round((row.calls / maxCalls) * 100));
+          const widthPct = maxCalls <= 0 || row.calls <= 0
+            ? 0
+            : Math.max(4, Math.round((row.calls / maxCalls) * 100));
           const sharePct = totalCalls > 0 ? Math.round((row.calls / totalCalls) * 100) : 0;
           return (
             <li className="pl-usage-rank-row" key={row.key}>
@@ -161,6 +177,15 @@ function RankingBarList({
 export function GovernanceOverview() {
   const [hours, setHours] = useState<WindowHours>(168);
   const [now, setNow] = useState(() => new Date());
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view: UsageView = searchParams.get("view") === "interface" ? "interface" : "access";
+
+  const setView = (next: UsageView) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === "interface") params.set("view", "interface");
+    else params.delete("view");
+    setSearchParams(params, { replace: true });
+  };
 
   const overviewQuery = useQuery({
     queryKey: ["admin", "governance", "overview", hours],
@@ -174,19 +199,27 @@ export function GovernanceOverview() {
     queryKey: ["admin", "governance", "tokens", hours],
     queryFn: () => apiGet<{ tokens: TokenRow[] }>(`/api/admin/governance/tokens?hours=${hours}`)
   });
+  const interfaceQuery = useQuery({
+    queryKey: ["admin", "ui-usage", hours],
+    queryFn: () => apiGet<InterfaceUsageResponse>(`/api/admin/ui-usage/overview?hours=${hours}`),
+    enabled: view === "interface"
+  });
 
   const overview = overviewQuery.data;
   const agentsData = agentsQuery.data;
   const tokensData = tokensQuery.data;
 
-  const statsReady =
-    overviewQuery.isSuccess && agentsQuery.isSuccess && tokensQuery.isSuccess;
+  const statsReady = view === "interface"
+    ? interfaceQuery.isSuccess
+    : overviewQuery.isSuccess && agentsQuery.isSuccess && tokensQuery.isSuccess;
   const statsUpdatedAtMs = statsReady
-    ? Math.max(
-        overviewQuery.dataUpdatedAt,
-        agentsQuery.dataUpdatedAt,
-        tokensQuery.dataUpdatedAt
-      )
+    ? (view === "interface"
+      ? interfaceQuery.dataUpdatedAt
+      : Math.max(
+          overviewQuery.dataUpdatedAt,
+          agentsQuery.dataUpdatedAt,
+          tokensQuery.dataUpdatedAt
+        ))
     : 0;
   const statsAt = statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null;
 
@@ -366,6 +399,43 @@ export function GovernanceOverview() {
         }
       />
 
+      <div
+        className="pl-segmented-control pl-segmented-control--cols-2 w-fit"
+        role="tablist"
+        aria-label="使用视图"
+        data-testid="governance-usage-view"
+      >
+        <button
+          type="button"
+          role="tab"
+          className={view === "access" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+          aria-selected={view === "access"}
+          data-testid="governance-view-access"
+          onClick={() => setView("access")}
+        >
+          数据访问
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={view === "interface" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+          aria-selected={view === "interface"}
+          data-testid="governance-view-interface"
+          onClick={() => setView("interface")}
+        >
+          界面使用
+        </button>
+      </div>
+
+      {view === "interface" ? (
+        <InterfaceUsagePanel
+          windowText={windowText}
+          data={interfaceQuery.data}
+          failed={interfaceQuery.isError}
+        />
+      ) : null}
+
+      {view === "access" ? <>
       <div className="pl-usage-metric-groups" data-testid="governance-usage-metrics">
         {/* ── Tier 1: 运行体征（Primary） ── */}
         <div
@@ -517,6 +587,105 @@ export function GovernanceOverview() {
             rows={tableRankRows}
             emptyLabel={<span>{windowText}暂无调用</span>}
             testId="governance-table-rank"
+          />
+        </section>
+      </div>
+      </> : null}
+    </div>
+  );
+}
+
+function InterfaceUsagePanel({
+  windowText,
+  data,
+  failed
+}: {
+  windowText: string;
+  data: InterfaceUsageResponse | undefined;
+  failed: boolean;
+}) {
+  if (failed) {
+    return <p className="pl-notice" data-testid="governance-interface-error">界面使用暂时无法统计。</p>;
+  }
+  if (!data) {
+    return <p className="pl-notice" data-testid="governance-interface-loading">正在统计界面使用。</p>;
+  }
+  const toRows = (rows: InterfaceRankRow[]) => rows.map((row) => ({
+    key: row.id,
+    calls: row.visits,
+    label: <span className="notranslate" translate="no">{row.label}</span>
+  }));
+  return (
+    <div data-testid="governance-interface-usage">
+      <div className="pl-metric-grid pl-metric-grid--three" data-testid="governance-interface-metrics">
+        <MetricCard
+          label={<span>{windowText}页面访问</span>}
+          labelText={`${windowText}页面访问`}
+          value={data.pageViews}
+          help={`当前时间窗（${windowText}）内已记录的页面打开次数。`}
+          helpId="interface-page-views"
+          testId="metric-interface-page-views"
+        />
+        <MetricCard
+          label={<span>{windowText}访问账户</span>}
+          labelText={`${windowText}访问账户`}
+          value={data.visitorCount}
+          help="当前时间窗内打开过页面的登录账户数。未启用登录时记为本地管理员。"
+          helpId="interface-visitors"
+          testId="metric-interface-visitors"
+        />
+        <MetricCard
+          label={<span>{windowText}活跃菜单</span>}
+          labelText={`${windowText}活跃菜单`}
+          value={data.activeMenuCount}
+          help="当前时间窗内至少被打开 1 次的侧栏菜单数，含从深层页面归入的菜单。"
+          helpId="interface-active-menus"
+          testId="metric-interface-active-menus"
+        />
+      </div>
+      {data.unmappedViews > 0 ? (
+        <p className="pl-notice" data-testid="governance-interface-unmapped">
+          另有 {data.unmappedViews} 次页面打开未能对应到已知页面。
+        </p>
+      ) : null}
+      <div className="pl-usage-rank-grid" data-testid="governance-interface-rank-grid">
+        <section className="pl-panel" data-testid="governance-interface-groups">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title">分组访问 · {windowText}</h2>
+              <p className="pl-notice">看哪些侧栏分组被打开，含尚未访问的分组。</p>
+            </div>
+          </div>
+          <RankingBarList
+            rows={toRows(data.groups)}
+            emptyLabel={<span>{windowText}暂无页面打开</span>}
+            testId="governance-interface-group-rank"
+          />
+        </section>
+        <section className="pl-panel" data-testid="governance-interface-menus">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title">菜单访问排行 · {windowText}</h2>
+              <p className="pl-notice">看哪些菜单被打开最多。深层页面计入所属菜单。</p>
+            </div>
+          </div>
+          <RankingBarList
+            rows={toRows(data.menus)}
+            emptyLabel={<span>{windowText}暂无页面打开</span>}
+            testId="governance-interface-menu-rank"
+          />
+        </section>
+        <section className="pl-panel" data-testid="governance-interface-pages">
+          <div className="pl-section-heading">
+            <div>
+              <h2 className="pl-panel-title">页面访问排行 · {windowText}</h2>
+              <p className="pl-notice">看哪些页面被打开最多，含尚未访问的页面。</p>
+            </div>
+          </div>
+          <RankingBarList
+            rows={toRows(data.pages)}
+            emptyLabel={<span>{windowText}暂无页面打开</span>}
+            testId="governance-interface-page-rank"
           />
         </section>
       </div>
