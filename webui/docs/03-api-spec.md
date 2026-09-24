@@ -175,6 +175,9 @@ GET    /api/admin/governance/denials
 GET    /api/admin/governance/risk-review
 POST   /api/admin/governance/risk-review/:id/review
 GET    /api/admin/governance/release-readiness-package
+GET    /api/admin/ui-usage/overview
+POST   /api/admin/ui-usage/page-view
+GET    /api/ops/call-monitor
 GET    /api/admin/governance/overview
 GET    /api/admin/governance/agents
 GET    /api/admin/governance/roles
@@ -871,6 +874,16 @@ Query：
 `GET /api/admin/mcp-runtime/status` 返回 Config、Catalog、Policy Runtime 与常驻 KTX MCP Execution Runtime 的分层状态；Catalog 同时返回 `lastByConnection` 的最近 reload 摘要。响应只包含 `ktx.yaml` 的 SHA-256 摘要和连接 ID，不返回密码、Token 或 `.ktx/secrets/**` 内容。执行层状态为 `unknown | ok | stale | unavailable | error`；MCP 上游可达但无法证明某连接已加载时必须返回 `unknown`，不得把独立 `ktx connection test` CLI 的成功当作运行时确认。
 
 `POST /api/admin/mcp-runtime/canary` 请求体为 `{ connectionId, agentId?, sourceName?, mode? }`，其中 `mode` 为 `connection | tools_list | catalog | query`。响应逐项返回 `config`、`catalog`、`policy`、`execution_tools_list`、`execution_query` 检查及 `executionRuntimeAck`。当当前 KTX 版本无连接加载自省且当前配置摘要没有成功查询证据时，返回 `status="blocked"`、`executionRuntimeAck=false`、`decisionReason="execution_canary_blocked"`；上游不可达返回 `execution_runtime_unavailable`。
+
+### 界面使用（Spec 148）
+
+`POST /api/admin/ui-usage/page-view` 记录一次 WebUI 页面打开。请求体 `{ "pathname": "/catalog" }`。走现有 WebUI 管理员鉴权；required 且未登录返回 401。成功 `{ ok: true, data: { recorded: true | false } }`（跳转路径可为 `recorded: false`）。非法路径返回 400，错误文案不回显路径。
+
+`GET /api/admin/ui-usage/overview?hours=24|168` 返回界面使用聚合：`pageViews`、`visitorCount`、`activeMenuCount`、`unmappedViews`，以及 `groups` / `menus` / `pages` 排行（`{ id, label, visits }`）。仅接受 24 与 168，缺省或其他值按 168。权威契约见 Spec 148。
+
+### 调用监控（Spec 143）
+
+`GET /api/ops/call-monitor?range=24h|1h&slowMs=` 返回 MCP 业务工具调用的准实时聚合：吞吐、成功率 / 错误率 / 拒绝率、多数请求耗时（P95）、慢于多数请求计数、SLO 违规、Top 工具（≤10）与最近失败与拒绝短表（≤20）。事实源为 `audit.sqlite` access_log，排除协议工具；响应不得包含 Eval / Hermes 字段。权威契约见 Spec 143。
 
 ### MCP Proxy
 

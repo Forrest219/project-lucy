@@ -30,6 +30,7 @@ import {
   Users,
   Image,
   BadgeCheck,
+  Radio,
   type LucideIcon
 } from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
@@ -76,7 +77,8 @@ import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
 import { CommandPalette } from "../components/CommandPalette";
 import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
-import { findGroupIdForPathname, navGroups, topLevelEntry, type NavIconKey } from "./navigation";
+import { findGroupIdForPathname, navGroups, type NavIconKey } from "./navigation";
+import { CallMonitor } from "../pages/ops/CallMonitor";
 
 const queryClient = new QueryClient();
 
@@ -132,6 +134,7 @@ function navLinkClass(isActive: boolean, level: "top" | "child" = "top") {
 // into tests that only care about the IA shape.
 const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   overview: LayoutDashboard,
+  callMonitor: Radio,
   connections: Cable,
   whitelist: TableProperties,
   catalog: Boxes,
@@ -156,6 +159,7 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
 };
 
 const GROUP_ICONS: Record<string, LucideIcon> = {
+  "runtime-status": LayoutDashboard,
   connections: Database,
   "semantic-modeling": Share2,
   publish: Rocket,
@@ -262,8 +266,6 @@ export function AppFrame() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const OverviewIcon = NAV_ICONS[topLevelEntry.iconKey];
-
   return (
     <div className="pl-app-root">
       <div className={appShellClass}>
@@ -315,19 +317,6 @@ export function AppFrame() {
         </div>
 
         <nav className="pl-nav" aria-label="主导航">
-          <section className="pl-nav-section pl-nav-section--top" key="top">
-            <div className="grid gap-0.5">
-              <Link
-                aria-current={topLevelEntry.active(location.pathname) ? "page" : undefined}
-                className={navLinkClass(topLevelEntry.active(location.pathname))}
-                to={topLevelEntry.to}
-                data-testid={`nav-link-${topLevelEntry.id}`}
-              >
-                <OverviewIcon aria-hidden="true" className="size-4" />
-                <span>{topLevelEntry.label}</span>
-              </Link>
-            </div>
-          </section>
           {navGroups.map((group) => {
             const isOpen = !collapsedGroups.has(group.id);
             const GroupIcon = GROUP_ICONS[group.id];
@@ -406,6 +395,7 @@ export function AppFrame() {
           <div className="pl-workspace-body">
             <Routes>
             <Route path="/overview" element={<Onboarding />} />
+            <Route path="/ops/calls" element={<CallMonitor />} />
             <Route path="/onboarding" element={<OnboardingRedirect />} />
             <Route path="/connections" element={<ConnectionOverview />} />
             <Route path="/connections/enabled-tables" element={<TableWhitelist />} />

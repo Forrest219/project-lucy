@@ -720,6 +720,160 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
   };
 }
 
+export type CallMonitorRange = "24h" | "1h";
+
+export type CallMonitorSnapshot = {
+  generatedAt: string;
+  window: { range: CallMonitorRange; hours: number; since: string; slowMs: number };
+  traffic: {
+    businessCalls: number;
+    okCalls: number;
+    errorCalls: number;
+    deniedCalls: number;
+    successRate: number;
+    errorRate: number;
+    deniedRate: number;
+  };
+  latency: {
+    p50Ms: number | null;
+    p95Ms: number | null;
+    slowCalls: number;
+  };
+  slo: {
+    thresholds: {
+      p95LatencyMs: number;
+      maxErrorRate: number;
+      maxDeniedRate: number;
+    };
+    status: "ok" | "warn" | "no_data";
+    violations: Array<"latency_p95" | "error_rate" | "denied_rate">;
+  };
+  topTools: Array<{ tool: string; calls: number; errors: number; denied: number }>;
+  recentFailures: Array<{
+    id: number;
+    ts: string;
+    tool: string;
+    outcome: "error" | "denied";
+    durationMs: number;
+    userId: string;
+    decisionReason?: string;
+    requestId: string;
+    traceId?: string;
+  }>;
+};
+
+/** Spec 143: MCP-only call monitor aggregate (no Eval / Hermes fields). */
+export async function readCallMonitorSnapshot(options: {
+  range?: CallMonitorRange;
+  hours?: number;
+  slowMs?: number;
+} = {}): Promise<CallMonitorSnapshot> {
+  const range: CallMonitorRange = options.range === "1h" ? "1h" : "24h";
+  const hours = Math.min(
+    Math.max(Math.floor(options.hours ?? (range === "1h" ? 1 : 24)), 1),
+    24 * 90
+  );
+  const slowMs = Math.max(
+    Math.floor(options.slowMs ?? Number(process.env.LUCY_OBSERVABILITY_SLOW_MS ?? 30_000)),
+    1
+  );
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const database = await getDb();
+
+  const rows = database.prepare(`
+    SELECT id, ts, user_id, tool, outcome, duration_ms, request_id, trace_id, decision_reason
+    FROM access_log
+    WHERE ts >= ?
+    ORDER BY ts DESC, id DESC
+  `).all(since) as Array<{
+    id: number;
+    ts: string;
+    user_id: string;
+    tool: string;
+    outcome: "ok" | "error" | "denied";
+    duration_ms: number;
+    request_id: string;
+    trace_id: string | null;
+    decision_reason: string | null;
+  }>;
+
+  const protocolTools = new Set<string>(PROTOCOL_TOOLS);
+  const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
+  const okCalls = businessRows.filter((row) => row.outcome === "ok").length;
+  const errorCalls = businessRows.filter((row) => row.outcome === "error").length;
+  const deniedCalls = businessRows.filter((row) => row.outcome === "denied").length;
+  const durations = businessRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
+  // Spec 143: slow call is strictly greater than slowMs (not capped by preview slice).
+  const slowCalls = businessRows.filter((row) => row.duration_ms > slowMs).length;
+
+  const tools = new Map<string, { tool: string; calls: number; denied: number; errors: number }>();
+  for (const row of businessRows) {
+    const tool = tools.get(row.tool) ?? { tool: row.tool, calls: 0, denied: 0, errors: 0 };
+    tool.calls += 1;
+    if (row.outcome === "denied") tool.denied += 1;
+    if (row.outcome === "error") tool.errors += 1;
+    tools.set(row.tool, tool);
+  }
+
+  const recentFailures = businessRows
+    .filter((row): row is typeof row & { outcome: "error" | "denied" } =>
+      row.outcome === "error" || row.outcome === "denied")
+    .slice(0, 20)
+    .map((row) => ({
+      id: row.id,
+      ts: row.ts,
+      tool: row.tool,
+      outcome: row.outcome,
+      durationMs: row.duration_ms,
+      userId: row.user_id,
+      decisionReason: row.decision_reason ?? undefined,
+      requestId: row.request_id,
+      traceId: row.trace_id ?? undefined
+    }));
+
+  const thresholds = {
+    p95LatencyMs: slowMs,
+    maxErrorRate: Number(process.env.LUCY_OBSERVABILITY_MAX_ERROR_RATE ?? 0.02),
+    maxDeniedRate: Number(process.env.LUCY_OBSERVABILITY_MAX_DENIED_RATE ?? 0.1)
+  };
+  const p95Ms = percentile(durations, 0.95);
+  const successRate = rate(okCalls, businessRows.length);
+  const errorRate = rate(errorCalls, businessRows.length);
+  const deniedRate = rate(deniedCalls, businessRows.length);
+  const violations: Array<"latency_p95" | "error_rate" | "denied_rate"> = [];
+  let status: "ok" | "warn" | "no_data" = "ok";
+  if (businessRows.length <= 0) {
+    status = "no_data";
+  } else {
+    if ((p95Ms ?? 0) > thresholds.p95LatencyMs) violations.push("latency_p95");
+    if (errorRate > thresholds.maxErrorRate) violations.push("error_rate");
+    if (deniedRate > thresholds.maxDeniedRate) violations.push("denied_rate");
+    if (violations.length > 0) status = "warn";
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    window: { range, hours, since, slowMs },
+    traffic: {
+      businessCalls: businessRows.length,
+      okCalls,
+      errorCalls,
+      deniedCalls,
+      successRate,
+      errorRate,
+      deniedRate
+    },
+    latency: {
+      p50Ms: percentile(durations, 0.5),
+      p95Ms,
+      slowCalls
+    },
+    slo: { thresholds, status, violations },
+    topTools: [...tools.values()].sort((a, b) => b.calls - a.calls).slice(0, 10),
+    recentFailures
+  };
+}
+
 export async function searchAccessLogs(options: {
   hours?: number;
   trace?: string;

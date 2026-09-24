@@ -31,7 +31,7 @@ export const FORBIDDEN_TERMS: ReadonlyArray<string> = [
   // Mixed/legacy phrases that already accumulated in earlier M-stories
   "运行连通测试",
   // M34 sidebar IA and title-layer terminology
-  "运行状态",
+  // Spec 143: 「运行状态」is now the canonical Runtime Status group title — allowed.
   "语义层维护",
   "业务文档",
   "数据库接入",

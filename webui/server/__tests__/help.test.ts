@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { navGroups, topLevelEntry } from "../../src/app/navigation";
+import { navGroups } from "../../src/app/navigation";
 import { handbookPathForTests, parseHelpToc, readHelpHandbook, searchHelpHandbook, searchHelpMarkdown, HelpQueryTooLongError } from "../help";
 
 let projectRoot: string | undefined;
@@ -420,11 +420,8 @@ describe("Help handbook", () => {
     const tableHeaderIndex = lines.indexOf("| 分组 | 二级菜单 | 路径 | 一句话用途 |");
     expect(tableHeaderIndex).toBeGreaterThanOrEqual(0);
 
-    const expectedItems = [topLevelEntry, ...navGroups.flatMap((group) => group.items)];
-    const expectedGroups = [
-      topLevelEntry.label,
-      ...navGroups.flatMap((group) => group.items.map(() => group.title))
-    ];
+    const expectedItems = navGroups.flatMap((group) => group.items);
+    const expectedGroups = navGroups.flatMap((group) => group.items.map(() => group.title));
 
     const rows = lines.slice(tableHeaderIndex + 2, tableHeaderIndex + 2 + expectedItems.length).map((line) =>
       line
@@ -521,7 +518,8 @@ describe("Help handbook", () => {
 
     expect(handbook.markdown).toContain("#### 系统概览待处理事项");
     expect(handbook.markdown).toContain("N 张表待补语义");
-    expect(handbook.markdown).toContain("当前实现与「待补语义」使用同一公式");
+    expect(handbook.markdown).toContain("已启用 ∩ `Manifest`");
+    expect(handbook.markdown).toContain("首页 **不再** 并列「Catalog 对象待处理」");
     // Task 4: old limit=1 limitation removed; handbook now documents the real 30-day contract
     expect(handbook.markdown).toContain("GET /api/eval/runs/summary?days=30");
     expect(handbook.markdown).toContain(

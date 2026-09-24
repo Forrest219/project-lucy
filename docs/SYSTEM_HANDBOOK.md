@@ -11,7 +11,7 @@
 
 - [0. 常见问题速查](#0-常见问题速查)
 - [1. 系统概述与架构拓扑](#1-系统概述与架构拓扑)
-  - [1.5 WebUI 入口速查（6+1 侧栏地图）](#15-webui-入口速查6+1-侧栏地图)
+  - [1.5 WebUI 入口速查（运行状态侧栏地图）](#15-webui-入口速查运行状态侧栏地图)
 - [2. 快速上手](#2-快速上手)
 - [3. 功能模块操作指南](#3-功能模块操作指南)
   - [3.1 部署向导与上线检查](#31-部署向导与上线检查)
@@ -171,16 +171,16 @@ KTX CLI / MCP daemon
 | `.ktx-ui/catalog-reloads.json` | 最近静态 Catalog reload 记录 | 系统生成 |
 | `.ktx-ui/eval/runs.sqlite`（或 `LUCY_EVAL_DB`） | Eval run 历史 | 系统生成 |
 
-### 1.5 WebUI 入口速查（6+1 侧栏地图）
+### 1.5 WebUI 入口速查（运行状态侧栏地图）
 
 本节是侧栏可见入口的镜像视图。
-事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（v0.2 起由 `webui/src/app/navigation.ts` 导出）。
-`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档（含旧路径），不与代码并列称为权威源。
-架构调整时，请先改 `webui/src/app/navigation.ts`，再同步 §1.5 表格，最后开 follow-up 工单修 06 spec §3 / §4。
+事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`（Spec 143 起不再使用置顶 `topLevelEntry` 渲染）。
+`webui/docs/06-navigation-ia.md` §3 与代码对齐；架构调整时请先改 `navigation.ts`，再同步 §1.5 表格。
 
 | 分组 | 二级菜单 | 路径 | 一句话用途 |
 | --- | --- | --- | --- |
-| 系统概览 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |
+| 运行状态 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |
+| 运行状态 | 调用监控 | `/ops/calls` | 准实时查看 MCP 工具调用量、成败与请求时效。 |
 | 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |
 | 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |
 | 业务上下文 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |
@@ -203,7 +203,7 @@ KTX CLI / MCP daemon
 | 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |
 | 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
 
-> 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
+> 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。
 
 ## 2. 快速上手
 
