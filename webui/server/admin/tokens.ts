@@ -21,6 +21,19 @@ import { actorIdFromRequest } from "../auth/guard.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
+// Serialize token create/revoke read-modify-write against access.yaml.
+// agents/roles writers are out of scope for this lock.
+let tokenWriteTail: Promise<unknown> = Promise.resolve();
+
+function withTokenWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = tokenWriteTail.then(fn, fn);
+  tokenWriteTail = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
 function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
@@ -303,133 +316,135 @@ export function registerTokenRoutes(app: FastifyInstance) {
         ? deviceNameRaw.trim().slice(0, 128)
         : null;
 
-    const projectRoot = await resolveProjectRoot();
-    const filePath = path.join(projectRoot, ACCESS_YAML_REL);
-    const raw = await readFile(filePath, "utf-8");
-    const config = parse(raw) as YamlAccessConfig;
-    if (!config.users) config.users = [];
+    return withTokenWriteLock(async () => {
+      const projectRoot = await resolveProjectRoot();
+      const filePath = path.join(projectRoot, ACCESS_YAML_REL);
+      const raw = await readFile(filePath, "utf-8");
+      const config = parse(raw) as YamlAccessConfig;
+      if (!config.users) config.users = [];
 
-    const userIndex = config.users.findIndex((u) => u.id === userId);
-    if (userIndex === -1) {
-      return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${userId}' not found` } });
-    }
+      const userIndex = config.users.findIndex((u) => u.id === userId);
+      if (userIndex === -1) {
+        return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${userId}' not found` } });
+      }
 
-    const user = config.users[userIndex];
-    if (user.tokens.some((t) => t.label === label)) {
-      return reply.status(409).send({ ok: false, error: { code: "TOKEN_LABEL_TAKEN", message: `Token label '${label}' already exists for this agent` } });
-    }
+      const user = config.users[userIndex];
+      if (user.tokens.some((t) => t.label === label)) {
+        return reply.status(409).send({ ok: false, error: { code: "TOKEN_LABEL_TAKEN", message: `Token label '${label}' already exists for this agent` } });
+      }
 
-    // Access Governance Gate — Token create escalates to P1 when the
-    // owning Agent is high-traffic. We feed the gate an empty `newValue`
-    // so the rules that look at sources / roles stay neutral; the high-
-    // traffic P1 trigger is the only signal we expect here.
-    const callsLast7d = await agentCallsLast7d(userId);
-    const gate = evaluateAccessGovernanceGate({
-      targetKind: "token",
-      targetId: `${userId}:${label}`,
-      newValue: { userId, label, hashPrefix: null },
-      highTrafficCalls7d: callsLast7d
-    });
-
-    if (dryRun) {
-      return {
-        ok: true,
-        data: {
-          dryRun: true,
-          gate,
-          proposed: {
-            userId,
-            label,
-            device_name: deviceName,
-            expires_at: expires_at ?? null
-          }
-        }
-      };
-    }
-
-    if (gate.decision === "block") {
-      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
-      return reply.status(409).send({
-        ok: false,
-        error: {
-          code: "GOVERNANCE_GATE_BLOCKED",
-          message: "Access Governance Gate blocked this token create",
-          detail: { gate }
-        }
+      // Access Governance Gate — Token create escalates to P1 when the
+      // owning Agent is high-traffic. We feed the gate an empty `newValue`
+      // so the rules that look at sources / roles stay neutral; the high-
+      // traffic P1 trigger is the only signal we expect here.
+      const callsLast7d = await agentCallsLast7d(userId);
+      const gate = evaluateAccessGovernanceGate({
+        targetKind: "token",
+        targetId: `${userId}:${label}`,
+        newValue: { userId, label, hashPrefix: null },
+        highTrafficCalls7d: callsLast7d
       });
-    }
 
-    if (gate.decision === "override_required") {
-      const override = evaluateGovernanceOverride(request.body?.override, gate);
-      if (!override.ok) {
-        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+      if (dryRun) {
+        return {
+          ok: true,
+          data: {
+            dryRun: true,
+            gate,
+            proposed: {
+              userId,
+              label,
+              device_name: deviceName,
+              expires_at: expires_at ?? null
+            }
+          }
+        };
+      }
+
+      if (gate.decision === "block") {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
         return reply.status(409).send({
           ok: false,
           error: {
-            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
-            message: `Override required: ${override.reason ?? "missing override fields"}`,
-            detail: { gate, override }
+            code: "GOVERNANCE_GATE_BLOCKED",
+            message: "Access Governance Gate blocked this token create",
+            detail: { gate }
           }
         });
       }
-      await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
-    } else {
-      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
-    }
 
-    // Generate token — plaintext never written anywhere except the HTTP response
-    const plainToken = randomBytes(32).toString("hex");
-    const tokenHash = hashToken(plainToken);
-    const created = new Date().toISOString().slice(0, 10);
+      if (gate.decision === "override_required") {
+        const override = evaluateGovernanceOverride(request.body?.override, gate);
+        if (!override.ok) {
+          await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+              message: `Override required: ${override.reason ?? "missing override fields"}`,
+              detail: { gate, override }
+            }
+          });
+        }
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+      } else {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
+      }
 
-    const newToken = {
-      hash: tokenHash,
-      label,
-      created,
-      ...(deviceName ? { device_name: deviceName } : {}),
-      ...(expires_at !== undefined ? { expires_at: expires_at ?? null } : {})
-    };
+      // Generate token — plaintext never written anywhere except the HTTP response
+      const plainToken = randomBytes(32).toString("hex");
+      const tokenHash = hashToken(plainToken);
+      const created = new Date().toISOString().slice(0, 10);
 
-    const updatedUser = { ...user, tokens: [...user.tokens, newToken] };
-    const newUsers = [...config.users];
-    newUsers[userIndex] = updatedUser;
-    const newConfig: YamlAccessConfig = { ...config, users: newUsers };
-    const content = stringify(newConfig, { lineWidth: 0 });
-    await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
-      enabled: true,
-      changeType: "token_create",
-      assetKind: "governance",
-      actorType: "ui_admin",
-      actorIp: actorIpFromRequest(request),
-      source: "admin_tokens_api",
-      targetId: userId,
-      oldSummary: { tokenCount: user.tokens.length },
-      newSummary: {
-        tokenCount: updatedUser.tokens.length,
-        label,
-        device_name: deviceName,
-        hashPrefix: tokenHash.slice(0, 19),
-        expires_at: expires_at ?? null
-      },
-      requestId: request.id
-    });
-    invalidateAccessConfigCache();
-    const runtime = await commitPolicyRuntimeAck(content);
-
-    return {
-      ok: true,
-      data: {
-        written: true,
-        token: plainToken,
+      const newToken = {
         hash: tokenHash,
         label,
-        device_name: deviceName,
         created,
-        expires_at: expires_at ?? null,
-        ...runtime,
-        gate
-      }
-    };
+        ...(deviceName ? { device_name: deviceName } : {}),
+        ...(expires_at !== undefined ? { expires_at: expires_at ?? null } : {})
+      };
+
+      const updatedUser = { ...user, tokens: [...user.tokens, newToken] };
+      const newUsers = [...config.users];
+      newUsers[userIndex] = updatedUser;
+      const newConfig: YamlAccessConfig = { ...config, users: newUsers };
+      const content = stringify(newConfig, { lineWidth: 0 });
+      await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+        enabled: true,
+        changeType: "token_create",
+        assetKind: "governance",
+        actorType: "ui_admin",
+        actorIp: actorIpFromRequest(request),
+        source: "admin_tokens_api",
+        targetId: userId,
+        oldSummary: { tokenCount: user.tokens.length },
+        newSummary: {
+          tokenCount: updatedUser.tokens.length,
+          label,
+          device_name: deviceName,
+          hashPrefix: tokenHash.slice(0, 19),
+          expires_at: expires_at ?? null
+        },
+        requestId: request.id
+      });
+      invalidateAccessConfigCache();
+      const runtime = await commitPolicyRuntimeAck(content);
+
+      return {
+        ok: true,
+        data: {
+          written: true,
+          token: plainToken,
+          hash: tokenHash,
+          label,
+          device_name: deviceName,
+          created,
+          expires_at: expires_at ?? null,
+          ...runtime,
+          gate
+        }
+      };
+    });
   });
 
   // DELETE /api/admin/agents/:userId/tokens/:label
@@ -438,88 +453,90 @@ export function registerTokenRoutes(app: FastifyInstance) {
     Body?: { override?: AccessGovernanceOverrideRequest };
   }>("/api/admin/agents/:userId/tokens/:label", async (request, reply) => {
     const { userId, label } = request.params;
-    const projectRoot = await resolveProjectRoot();
-    const filePath = path.join(projectRoot, ACCESS_YAML_REL);
-    const raw = await readFile(filePath, "utf-8");
-    const config = parse(raw) as YamlAccessConfig;
-    if (!config.users) config.users = [];
+    return withTokenWriteLock(async () => {
+      const projectRoot = await resolveProjectRoot();
+      const filePath = path.join(projectRoot, ACCESS_YAML_REL);
+      const raw = await readFile(filePath, "utf-8");
+      const config = parse(raw) as YamlAccessConfig;
+      if (!config.users) config.users = [];
 
-    const userIndex = config.users.findIndex((u) => u.id === userId);
-    if (userIndex === -1) {
-      return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${userId}' not found` } });
-    }
+      const userIndex = config.users.findIndex((u) => u.id === userId);
+      if (userIndex === -1) {
+        return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${userId}' not found` } });
+      }
 
-    const user = config.users[userIndex];
-    const token = user.tokens.find((t) => t.label === label);
-    if (!token) {
-      return reply.status(404).send({ ok: false, error: { code: "TOKEN_NOT_FOUND", message: `Token '${label}' not found` } });
-    }
+      const user = config.users[userIndex];
+      const token = user.tokens.find((t) => t.label === label);
+      if (!token) {
+        return reply.status(404).send({ ok: false, error: { code: "TOKEN_NOT_FOUND", message: `Token '${label}' not found` } });
+      }
 
-    // Access Governance Gate — Token revoke is a P2 cleanup. We still
-    // classify so the trace / evidence chain captures the decision.
-    const gate = evaluateAccessGovernanceGate({
-      targetKind: "token",
-      targetId: `${userId}:${label}`
-    });
-
-    if (gate.decision === "block") {
-      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
-      return reply.status(409).send({
-        ok: false,
-        error: {
-          code: "GOVERNANCE_GATE_BLOCKED",
-          message: "Access Governance Gate blocked this token revoke",
-          detail: { gate }
-        }
+      // Access Governance Gate — Token revoke is a P2 cleanup. We still
+      // classify so the trace / evidence chain captures the decision.
+      const gate = evaluateAccessGovernanceGate({
+        targetKind: "token",
+        targetId: `${userId}:${label}`
       });
-    }
 
-    if (gate.decision === "override_required") {
-      const override = evaluateGovernanceOverride(request.body?.override, gate);
-      if (!override.ok) {
-        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+      if (gate.decision === "block") {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
         return reply.status(409).send({
           ok: false,
           error: {
-            code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
-            message: `Override required: ${override.reason ?? "missing override fields"}`,
-            detail: { gate, override }
+            code: "GOVERNANCE_GATE_BLOCKED",
+            message: "Access Governance Gate blocked this token revoke",
+            detail: { gate }
           }
         });
       }
-      await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
-    } else {
-      await writeGateTrace(gate, undefined, undefined, defaultActor(request));
-    }
 
-    const revokedAt = new Date().toISOString();
+      if (gate.decision === "override_required") {
+        const override = evaluateGovernanceOverride(request.body?.override, gate);
+        if (!override.ok) {
+          await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+              message: `Override required: ${override.reason ?? "missing override fields"}`,
+              detail: { gate, override }
+            }
+          });
+        }
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+      } else {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
+      }
 
-    // Write revoked_tokens to sqlite — must succeed before yaml is updated
-    const db = await getAuditDb();
-    db.prepare("INSERT OR REPLACE INTO revoked_tokens (token_hash, revoked_at, reason) VALUES (?, ?, ?)").run(
-      token.hash, revokedAt, "manual_revoke"
-    );
+      const revokedAt = new Date().toISOString();
 
-    const updatedUser = { ...user, tokens: user.tokens.filter((t) => t.label !== label) };
-    const newUsers = [...config.users];
-    newUsers[userIndex] = updatedUser;
-    const newConfig: YamlAccessConfig = { ...config, users: newUsers };
-    const content = stringify(newConfig, { lineWidth: 0 });
-    await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
-      enabled: true,
-      changeType: "token_revoke",
-      assetKind: "governance",
-      actorType: "ui_admin",
-      actorIp: actorIpFromRequest(request),
-      source: "admin_tokens_api",
-      targetId: userId,
-      oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
-      newSummary: { tokenCount: updatedUser.tokens.length, label },
-      requestId: request.id
+      // Write revoked_tokens to sqlite — must succeed before yaml is updated
+      const db = await getAuditDb();
+      db.prepare("INSERT OR REPLACE INTO revoked_tokens (token_hash, revoked_at, reason) VALUES (?, ?, ?)").run(
+        token.hash, revokedAt, "manual_revoke"
+      );
+
+      const updatedUser = { ...user, tokens: user.tokens.filter((t) => t.label !== label) };
+      const newUsers = [...config.users];
+      newUsers[userIndex] = updatedUser;
+      const newConfig: YamlAccessConfig = { ...config, users: newUsers };
+      const content = stringify(newConfig, { lineWidth: 0 });
+      await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+        enabled: true,
+        changeType: "token_revoke",
+        assetKind: "governance",
+        actorType: "ui_admin",
+        actorIp: actorIpFromRequest(request),
+        source: "admin_tokens_api",
+        targetId: userId,
+        oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
+        newSummary: { tokenCount: updatedUser.tokens.length, label },
+        requestId: request.id
+      });
+      invalidateAccessConfigCache();
+      const runtime = await commitPolicyRuntimeAck(content);
+
+      return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };
     });
-    invalidateAccessConfigCache();
-    const runtime = await commitPolicyRuntimeAck(content);
-
-    return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };
   });
 }

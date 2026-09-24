@@ -168,6 +168,26 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     expect(res.body.error.code).toBe("AGENT_NOT_FOUND");
     await app.close();
   });
+
+  it("serializes concurrent creates so both tokens land in yaml", async () => {
+    const app = buildServer();
+    await app.ready();
+    const [resA, resB] = await Promise.all([
+      request(app.server).post("/api/admin/agents/zhangsan/tokens").send({ label: "concurrent-a" }),
+      request(app.server).post("/api/admin/agents/zhangsan/tokens").send({ label: "concurrent-b" })
+    ]);
+
+    expect(resA.status).toBe(200);
+    expect(resB.status).toBe(200);
+    expect(resA.body.ok).toBe(true);
+    expect(resB.body.ok).toBe(true);
+
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("label: concurrent-a");
+    expect(yaml).toContain("label: concurrent-b");
+    expect(yaml).toContain("label: hermes-laptop");
+    await app.close();
+  });
 });
 
 describe("DELETE /api/admin/agents/:userId/tokens/:label", () => {
@@ -201,6 +221,49 @@ describe("DELETE /api/admin/agents/:userId/tokens/:label", () => {
       .delete("/api/admin/agents/zhangsan/tokens/not-a-label")
       .expect(404);
     expect(res.body.error.code).toBe("TOKEN_NOT_FOUND");
+    await app.close();
+  });
+
+  it("serializes concurrent revokes so both tokens are removed", async () => {
+    const twoTokensYaml = `users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    tokens:
+      - hash: "sha256:aaaa0000"
+        label: hermes-laptop
+        created: 2026-06-18
+      - hash: "sha256:bbbb0000"
+        label: cursor-desk
+        created: 2026-06-19
+    allow:
+      tables:
+        - dataforai.superstore_orders
+      tools:
+        - sl_query
+defaults:
+  deny_tools:
+    - sql_execution
+`;
+    await writeFile(path.join(projectRoot, "webui/config/access.yaml"), twoTokensYaml, "utf8");
+
+    const app = buildServer();
+    await app.ready();
+    const [resA, resB] = await Promise.all([
+      request(app.server).delete("/api/admin/agents/zhangsan/tokens/hermes-laptop"),
+      request(app.server).delete("/api/admin/agents/zhangsan/tokens/cursor-desk")
+    ]);
+
+    expect(resA.status).toBe(200);
+    expect(resB.status).toBe(200);
+    expect(resA.body.ok).toBe(true);
+    expect(resB.body.ok).toBe(true);
+
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("hermes-laptop");
+    expect(yaml).not.toContain("cursor-desk");
+    expect(revokedRows).toHaveLength(2);
+    expect(revokedRows.map((r) => r.token_hash).sort()).toEqual(["sha256:aaaa0000", "sha256:bbbb0000"]);
     await app.close();
   });
 });
