@@ -111,6 +111,7 @@ import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { registerLicenseRoutes } from "./license/routes.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
+import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { requireWebuiAuthHook } from "./auth/guard.js";
@@ -121,6 +122,7 @@ import { registerSuiteImportRoutes } from "./eval/suite-import.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
 import { registerR1ObservabilityRoutes } from "./observability.js";
+import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
 import {
   publishSemanticAssets,
@@ -1841,12 +1843,14 @@ export function buildServer() {
   registerMcpPlaygroundRoutes(app);
   registerMcpRuntimeRoutes(app);
   registerGovernanceObservabilityRoutes(app);
+  registerUiUsageRoutes(app);
   registerCaseRoutes(app);
   registerSecurityCandidateRoutes(app);
   registerSuiteImportRoutes(app);
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
   registerR1ObservabilityRoutes(app);
+  registerCallMonitorRoutes(app);
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
   registerLicenseRoutes(app);

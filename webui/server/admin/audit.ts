@@ -1050,7 +1050,7 @@ type TurnListResult = {
     reportedShare: number;
   };
   referenceLatency: {
-    windowHours: 24 | 168;
+    windowHours: 1 | 24 | 168;
     p95Ms: number;
     totalCallsInWindow: number;
     slowCallsInFilter: number;
@@ -1061,8 +1061,10 @@ function sinceIsoFromHours(hours: number): string {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
-function parseWindowHours(raw: string | undefined): 24 | 168 {
-  return raw === "24" ? 24 : 168;
+function parseWindowHours(raw: string | undefined): 1 | 24 | 168 {
+  if (raw === "1") return 1;
+  if (raw === "24") return 24;
+  return 168;
 }
 
 /** True p95 over all window rows — same algorithm as governance-observability. */

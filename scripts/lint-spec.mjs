@@ -83,6 +83,7 @@ function apiSpec() {
     "webui/server/index.ts",
     ...walk("webui/server/admin", (file) => file.endsWith(".ts")),
     ...walk("webui/server/eval", (file) => file.endsWith(".ts")),
+    ...walk("webui/server/ops", (file) => file.endsWith(".ts")),
     ...walk("webui/server/proxy", (file) => file.endsWith(".ts"))
   ];
   const routes = new Set();
