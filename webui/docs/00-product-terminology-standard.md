@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -542,10 +542,12 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Query Artifact Ref | 查询原文引用 | artifact ref | 把 ref 当生成 SQL 展示 | Spec 124 legacy 指针 |
 | View Query Artifact | 查看查询原文 | — | 作为生成 SQL 的唯一入口 | Spec 124 legacy；Spec 125 改为列表直展 |
 | Generated SQL | 生成 SQL | compiled SQL | 热库 SQL 原文（过宽）、raw SQL | Spec 125：`lucy_query` 编译结果；热库 `generated_sql`；调用流水列 / CSV |
+| Ops Evidence Connection | 运维问数连接 | 连接 ID `lucy-ops` | 管理员连接、默认业务连接、审计库连接（作卡片主称） | Spec 149：指向审计热库只读视图的系统连接；不进入 `database_connection_ids` |
+| Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149：只授权 `ops_calls` / `ops_call_tables` 的参考模板；与 `lucy_admin` 正交 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加「导出问询记录」并要求页面同时暴露问询级与调用级 CSV；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加「导出问询记录」并要求页面同时暴露问询级与调用级 CSV；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色，问数仍沿用调用流水、生成 SQL、裁决原因。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 
