@@ -29,13 +29,30 @@ async function loadOrCreateSecret(): Promise<string> {
       secretCache = existing;
       return existing;
     }
-  } catch {
-    // create below
+    // A short or empty file is still the deployed secret. Replacing it would
+    // log out every existing WebUI session on the next smooth upgrade.
+    if (existing.length > 0) {
+      secretCache = existing;
+      return existing;
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      throw error;
+    }
   }
 
   const created = randomBytes(32).toString("hex");
   await mkdir(path.dirname(abs), { recursive: true });
-  await writeFile(abs, created, { encoding: "utf8", mode: 0o600 });
+  try {
+    await writeFile(abs, `${created}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const existing = (await readFile(abs, "utf8")).trim();
+    if (!existing) throw error;
+    secretCache = existing;
+    return existing;
+  }
   secretCache = created;
   return created;
 }

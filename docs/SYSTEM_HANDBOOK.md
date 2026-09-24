@@ -2235,7 +2235,7 @@ setup:
 | 变量 | 默认 | 用途 |
 | --- | --- | --- |
 | `KTX_PROJECT_ROOT` | 向上查找 `ktx.yaml` | 指定 Lucy/KTX 项目根 |
-| `KTX_INTERNAL_TOKEN` | 空 | Lucy Proxy 转发到 KTX upstream 时使用的内部 Bearer |
+| `KTX_INTERNAL_TOKEN` | 卷内 `.ktx-ui/ktx-internal-token` | Lucy Proxy 转发到 KTX upstream 时使用的内部 Bearer。平滑升级复用该文件 |
 | `LUCY_AGENT_TOKEN` | 无 | 推荐客户端配置占位；由本机 secret store 或 shell 环境注入 |
 | `LUCY_WEBUI_HOST` | `127.0.0.1` | Fastify 绑定 host |
 | `LUCY_WEBUI_PORT` | `5174` | Fastify API / 静态 WebUI 端口 |

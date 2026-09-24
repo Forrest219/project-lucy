@@ -446,9 +446,9 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 ### TC-FAIL-001 KTX_INTERNAL_TOKEN 漂移
 
 - 优先级：P2
-- 操作：手工改 `KTX_INTERNAL_TOKEN` 环境变量后只重启 lucy
-- 期望：proxy 仍可用（token 由 entrypoint 每次启动重生成）
-- Pass 条件：重启后 `TC-PROXY-001` 仍能握手
+- 操作：不设置 `KTX_INTERNAL_TOKEN` 时重启 lucy；再手工设置该环境变量后重启
+- 期望：未设置时复用 `/data/lucy/.ktx-ui/ktx-internal-token`；显式环境变量优先。两种情况下 proxy 与 upstream 使用同一 token
+- Pass 条件：重启后 `TC-PROXY-001` 仍能握手，且卷内 token 文件内容不变（除非环境变量显式覆盖）
 
 ### TC-FAIL-002 demo-db 短暂不可用
 

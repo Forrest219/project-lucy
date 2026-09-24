@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isTokenExpired, normalizeExpiresAtInput } from "../proxy/identity.js";
 import { hashPassword, verifyPassword } from "../auth/password.js";
 import { resetAdminsCache } from "../auth/admins-store.js";
-import { resetSessionSecretCache } from "../auth/session.js";
+import { createAdminSession, readAdminSession, resetSessionSecretCache } from "../auth/session.js";
+import { readFile } from "node:fs/promises";
 import { isPublicApi } from "../auth/guard.js";
 
 vi.mock("../admin/audit.js", () => ({
@@ -65,6 +66,45 @@ describe("password hashing", () => {
     expect(hash.startsWith("scrypt:")).toBe(true);
     expect(await verifyPassword("correct-horse", hash)).toBe(true);
     expect(await verifyPassword("wrong-password", hash)).toBe(false);
+  });
+});
+
+describe("webui session secret persistence", () => {
+  let tempRoot: string;
+  let previousProjectDir: string | undefined;
+  let previousSessionSecret: string | undefined;
+
+  beforeEach(async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-session-"));
+    await mkdir(path.join(tempRoot, ".ktx-ui"), { recursive: true });
+    await writeFile(path.join(tempRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+    previousProjectDir = process.env.KTX_PROJECT_ROOT;
+    previousSessionSecret = process.env.LUCY_WEBUI_SESSION_SECRET;
+    process.env.KTX_PROJECT_ROOT = tempRoot;
+    delete process.env.LUCY_WEBUI_SESSION_SECRET;
+    resetSessionSecretCache();
+  });
+
+  afterEach(async () => {
+    if (previousProjectDir === undefined) delete process.env.KTX_PROJECT_ROOT;
+    else process.env.KTX_PROJECT_ROOT = previousProjectDir;
+    if (previousSessionSecret === undefined) delete process.env.LUCY_WEBUI_SESSION_SECRET;
+    else process.env.LUCY_WEBUI_SESSION_SECRET = previousSessionSecret;
+    resetSessionSecretCache();
+    await rm(tempRoot, { recursive: true, force: true });
+  });
+
+  it("keeps the same secret file across process restarts", async () => {
+    const first = await createAdminSession("xingchen");
+    const secretPath = path.join(tempRoot, ".ktx-ui/webui-session-secret");
+    const stored = await readFile(secretPath, "utf8");
+    resetSessionSecretCache();
+    const second = await createAdminSession("xingchen");
+    expect(await readFile(secretPath, "utf8")).toBe(stored);
+    const session = await readAdminSession({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(first.token)}` } } as never);
+    expect(session?.adminId).toBe("xingchen");
+    const again = await readAdminSession({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(second.token)}` } } as never);
+    expect(again?.adminId).toBe("xingchen");
   });
 });
 

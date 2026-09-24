@@ -62,6 +62,31 @@ describe("identifyRequestDetailed", () => {
     }
   });
 
+  it("accepts historical plaintext value tokens after upgrade", async () => {
+    const plain = "legacy-user-token";
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      `users:
+  - id: legacy
+    name: Legacy
+    enabled: true
+    tokens:
+      - value: "${plain}"
+        label: old-laptop
+        created: "2026-01-01"
+`,
+      "utf8"
+    );
+
+    const { identifyRequestDetailed } = await import("../proxy/identity");
+    const result = await identifyRequestDetailed(`Bearer ${plain}`);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.identity.userId).toBe("legacy");
+      expect(result.identity.tokenLabel).toBe("old-laptop");
+    }
+  });
+
   it("invalidateAccessConfigCache drops stale yaml hits after revoke-style rewrite", async () => {
     const plain = "b".repeat(64);
     const hash = hashToken(plain);
