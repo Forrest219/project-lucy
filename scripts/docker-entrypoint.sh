@@ -12,12 +12,8 @@ KTX_MCP_PORT="${KTX_MCP_PORT:-7878}"
 LUCY_PROXY_UPSTREAM_HOST="${LUCY_PROXY_UPSTREAM_HOST:-127.0.0.1}"
 LUCY_PROXY_UPSTREAM_PORT="${LUCY_PROXY_UPSTREAM_PORT:-${KTX_MCP_PORT}}"
 
-if [[ -z "${KTX_INTERNAL_TOKEN:-}" ]]; then
-  KTX_INTERNAL_TOKEN="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
-fi
-
-export KTX_PROJECT_ROOT PROJECT_ROOT
-export KTX_INTERNAL_TOKEN
+export KTX_PROJECT_ROOT="${KTX_PROJECT_ROOT:-${PROJECT_ROOT}}"
+PROJECT_ROOT="${KTX_PROJECT_ROOT}"
 export LUCY_PROXY_UPSTREAM_HOST LUCY_PROXY_UPSTREAM_PORT
 export LUCY_WEBUI_HOST="${LUCY_WEBUI_HOST:-0.0.0.0}"
 export LUCY_WEBUI_PORT="${LUCY_WEBUI_PORT:-5174}"
@@ -70,12 +66,35 @@ sync_context_from_template() {
 seed_project() {
   mkdir -p "${PROJECT_ROOT}"
   if [[ ! -f "${PROJECT_ROOT}/ktx.yaml" ]]; then
-    echo "[lucy] seeding project files into ${PROJECT_ROOT}"
-    cp -R "${TEMPLATE_ROOT}/." "${PROJECT_ROOT}/"
+    echo "[lucy] seeding missing project files into ${PROJECT_ROOT}"
+    # Missing paths only. An existing access.yaml / admins.yaml must keep its tokens.
+    sync_template_tree "${TEMPLATE_ROOT}" "${PROJECT_ROOT}" "project"
   fi
   sync_context_from_template
   mkdir -p "${PROJECT_ROOT}/.ktx/secrets" "${PROJECT_ROOT}/.ktx-ui" "${SEED_STATE_DIR}"
   printf "%s\n" "${LUCY_BUNDLED_KTX_VERSION:-unknown}" > "${SEED_STATE_DIR}/bundled-ktx-version"
+}
+
+# Reuse the volume-backed internal token across container recreate. Generating a
+# new one on every start invalidates clients that were given this credential.
+load_or_create_internal_token() {
+  local token_file="${PROJECT_ROOT}/.ktx-ui/ktx-internal-token"
+  if [[ -n "${KTX_INTERNAL_TOKEN:-}" ]]; then
+    export KTX_INTERNAL_TOKEN
+    return 0
+  fi
+  if [[ -f "${token_file}" ]]; then
+    KTX_INTERNAL_TOKEN="$(tr -d '[:space:]' < "${token_file}")"
+  fi
+  if [[ -z "${KTX_INTERNAL_TOKEN:-}" ]]; then
+    KTX_INTERNAL_TOKEN="$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("hex"))')"
+    printf '%s\n' "${KTX_INTERNAL_TOKEN}" > "${token_file}"
+    chmod 600 "${token_file}" || true
+    echo "[lucy] created persistent KTX internal token"
+  else
+    echo "[lucy] reused persistent KTX internal token"
+  fi
+  export KTX_INTERNAL_TOKEN
 }
 
 count_files() {
@@ -189,6 +208,7 @@ ensure_git_repo() {
 
 ensure_git_repo
 seed_project
+load_or_create_internal_token
 validate_project_context
 
 if [[ "${LUCY_ENTRYPOINT_SEED_ONLY:-0}" == "1" ]]; then

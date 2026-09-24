@@ -10,6 +10,7 @@ export const PRESERVE_REL_PATHS = [
   "webui/config/admins.yaml",
   ".ktx-ui/audit.sqlite",
   ".ktx-ui/webui-session-secret",
+  ".ktx-ui/ktx-internal-token",
   ".ktx/secrets"
 ];
 

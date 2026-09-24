@@ -216,3 +216,47 @@ test("entrypoint does not re-init when .git already exists", async () => {
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("entrypoint keeps historical access.yaml tokens when ktx.yaml is missing", async () => {
+  const root = await makeRoot("lucy-entrypoint-tokens-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(path.join(templateRoot, "webui/config"), { recursive: true });
+  await mkdir(path.join(projectRoot, "webui/config"), { recursive: true });
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+  await writeFile(path.join(templateRoot, "webui/config/access.yaml"), "users:\n  - id: demo\n    tokens: []\n");
+  const historical = "users:\n  - id: alice\n    tokens:\n      - hash: sha256:historical\n        label: laptop\n";
+  await writeFile(path.join(projectRoot, "webui/config/access.yaml"), historical);
+
+  const result = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8"), historical);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("entrypoint reuses the persistent KTX internal token across starts", async () => {
+  const root = await makeRoot("lucy-entrypoint-internal-token-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(projectRoot, { recursive: true });
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+
+  const first = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /created persistent KTX internal token/);
+  const tokenPath = path.join(projectRoot, ".ktx-ui/ktx-internal-token");
+  const persisted = (await readFile(tokenPath, "utf8")).trim();
+  assert.match(persisted, /^[a-f0-9]{64}$/);
+
+  const second = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(second.status, 0, second.stderr);
+  assert.match(second.stdout, /reused persistent KTX internal token/);
+  assert.equal((await readFile(tokenPath, "utf8")).trim(), persisted);
+
+  await rm(root, { recursive: true, force: true });
+});

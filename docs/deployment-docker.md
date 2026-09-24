@@ -285,7 +285,7 @@ Agent 平台应接入 Lucy MCP Proxy。URL **必须**使用部署方配置的 `L
 | Env | Default | Meaning |
 |---|---|---|
 | `KTX_PROJECT_ROOT` | `/data/lucy` | KTX/Lucy 项目根目录 |
-| `KTX_INTERNAL_TOKEN` | auto-generated on start | Lucy proxy 调用 KTX upstream 的内部 token |
+| `KTX_INTERNAL_TOKEN` | 卷内 `.ktx-ui/ktx-internal-token`，缺省才生成 | Lucy proxy 调用 KTX upstream 的内部 token。平滑升级复用该文件，避免历史客户端被注销 |
 | `KTX_MCP_HOST` | `127.0.0.1` | KTX upstream bind host |
 | `KTX_MCP_PORT` | `7878` | KTX upstream port |
 | `LUCY_WEBUI_HOST` | `0.0.0.0` | health/API service bind host |

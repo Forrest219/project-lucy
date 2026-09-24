@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -6,10 +6,12 @@ import { resolveProjectRoot } from "../project.js";
 import { isTokenRevoked } from "./audit.js";
 
 interface UserToken {
-  hash: string; // format: "sha256:<hex>"
+  hash?: string | Record<string, unknown>; // format: "sha256:<hex>"
+  /** Pre-hash access.yaml field. Kept so smooth upgrades do not reject old tokens. */
+  value?: string;
   label: string;
   created?: string;
-  expires_at?: string | null;
+  expires_at?: string | null | Date;
   device_name?: string | null;
 }
 
@@ -160,16 +162,52 @@ function hashToken(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
 }
 
+function configuredTokenHashes(token: UserToken): string[] {
+  const hashes: string[] = [];
+  const raw = token.hash;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return hashes;
+    hashes.push(trimmed);
+    if (!trimmed.toLowerCase().startsWith("sha256:")) hashes.push(`sha256:${trimmed}`);
+    return hashes;
+  }
+  if (raw && typeof raw === "object") {
+    for (const [key, value] of Object.entries(raw)) {
+      if (key.toLowerCase() !== "sha256") continue;
+      if (typeof value === "string" || typeof value === "number") {
+        hashes.push(`sha256:${String(value).trim()}`);
+      }
+    }
+  }
+  return hashes;
+}
+
+function plaintextTokenMatches(configured: string | undefined, presented: string): boolean {
+  if (!configured) return false;
+  const left = Buffer.from(configured);
+  const right = Buffer.from(presented);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
 /**
  * Token expiry enforcement (WO-202608-62 / Spec 07 `token_expired`).
  * - null/empty → never expires
  * - unparseable → fail-closed (treat as expired)
  * - date-only `YYYY-MM-DD` → end of that UTC day
  */
-export function isTokenExpired(expiresAt: string | null | undefined, nowMs = Date.now()): boolean {
+export function isTokenExpired(expiresAt: string | number | Date | null | undefined, nowMs = Date.now()): boolean {
   if (expiresAt == null || expiresAt === "") return false;
-  const normalized =
-    /^\d{4}-\d{2}-\d{2}$/.test(expiresAt) ? `${expiresAt}T23:59:59.999Z` : expiresAt;
+  if (expiresAt instanceof Date) {
+    const ts = expiresAt.getTime();
+    return Number.isNaN(ts) || ts <= nowMs;
+  }
+  if (typeof expiresAt === "number") {
+    return !Number.isFinite(expiresAt) || expiresAt <= nowMs;
+  }
+  const trimmed = expiresAt.trim();
+  if (!trimmed || /^(never|none|null|permanent)$/i.test(trimmed)) return false;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T23:59:59.999Z` : trimmed;
   const ts = Date.parse(normalized);
   if (Number.isNaN(ts)) return true;
   return ts <= nowMs;
@@ -261,8 +299,11 @@ export async function identifyRequestDetailed(
 
   const config = await loadConfig();
   for (const user of config.users) {
-    for (const t of user.tokens) {
-      if (t.hash !== tokenHash) continue;
+    for (const t of user.tokens ?? []) {
+      const hashes = configuredTokenHashes(t);
+      const hashHit = hashes.some((candidate) => candidate === tokenHash || candidate.toLowerCase() === tokenHash);
+      const legacyHit = !hashHit && plaintextTokenMatches(t.value, token);
+      if (!hashHit && !legacyHit) continue;
       if (isTokenExpired(t.expires_at)) {
         return {
           ok: false,
