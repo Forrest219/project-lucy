@@ -71,6 +71,7 @@ seed_project() {
     sync_template_tree "${TEMPLATE_ROOT}" "${PROJECT_ROOT}" "project"
   fi
   sync_context_from_template
+  patch_demo_skill_tools
   mkdir -p "${PROJECT_ROOT}/.ktx/secrets" "${PROJECT_ROOT}/.ktx-ui" "${SEED_STATE_DIR}"
   printf "%s\n" "${LUCY_BUNDLED_KTX_VERSION:-unknown}" > "${SEED_STATE_DIR}/bundled-ktx-version"
 }
@@ -95,6 +96,49 @@ load_or_create_internal_token() {
     echo "[lucy] reused persistent KTX internal token"
   fi
   export KTX_INTERNAL_TOKEN
+}
+
+# Spec 147 T7: smooth upgrade keeps an existing access.yaml. Idempotently add
+# lucy_skill_read / lucy_skill_search under demo_readonly when running the demo template.
+patch_demo_skill_tools() {
+  case "${TEMPLATE_ROOT}" in
+    */examples/docker-demo/project-template) ;;
+    *) return 0 ;;
+  esac
+  local access_yaml="${PROJECT_ROOT}/webui/config/access.yaml"
+  [[ -f "${access_yaml}" ]] || return 0
+  node - "${access_yaml}" <<'JS'
+const fs = require("fs");
+const path = process.argv[2];
+let text = fs.readFileSync(path, "utf8");
+const tools = ["lucy_skill_read", "lucy_skill_search"];
+const roleMarker = /^(\s*)demo_readonly:\s*$/m;
+const match = roleMarker.exec(text);
+if (!match) {
+  process.exit(0);
+}
+const roleIndent = match[1] ?? "";
+const roleStart = match.index;
+const afterRole = text.slice(roleStart + match[0].length);
+const nextRole = afterRole.search(new RegExp(`^${roleIndent}\\S`, "m"));
+const roleBlockEnd = nextRole === -1 ? text.length : roleStart + match[0].length + nextRole;
+let roleBlock = text.slice(roleStart, roleBlockEnd);
+const toolsMatch = roleBlock.match(/^(\s*)tools:\s*$/m);
+if (!toolsMatch) {
+  process.exit(0);
+}
+const listIndent = `${toolsMatch[1]}  `;
+let inserted = 0;
+for (const tool of tools) {
+  if (roleBlock.includes(`- ${tool}`)) continue;
+  roleBlock = roleBlock.replace(/^(\s*tools:\s*\n)/m, `$1${listIndent}- ${tool}\n`);
+  inserted += 1;
+}
+if (inserted === 0) process.exit(0);
+const out = text.slice(0, roleStart) + roleBlock + text.slice(roleBlockEnd);
+fs.writeFileSync(path, out);
+console.log(`[lucy] patched demo_readonly tools (+${inserted}) in ${path}`);
+JS
 }
 
 count_files() {

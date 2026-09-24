@@ -609,7 +609,10 @@ Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与�
 | Business Skill | 业务 Skill | 技能中心、技巧库、Skill Hub（作导航或页标题） | 侧栏位于「业务上下文」；路由 `/skills` |
 | Skill Status | 草稿 / 已发布 / 已停用 | 未上线、已下架（作状态 Tag） | 对应 `draft` / `published` / `deprecated`；Tag 旁可保留技术值 |
 | Skill URI | Skill URI | 技能链接 | `lucy-skill://<domain>/<name>` |
-| Read Skill | 查看 Skill | 调用技能、执行 Skill | 本周只读；不表示 Agent 在 Lucy 内执行脚本 |
+| Read Skill | 查看 Skill | 调用技能、执行 Skill | 打开只读详情；不表示 Agent 在 Lucy 内执行脚本 |
+| Create Skill | 新建 Skill | 新建技能、创建技巧 | Spec 147；写入 `skills/<domain>/<name>.md` |
+| Save Skill | 保存 Skill | 发布技能（作保存按钮文案） | Spec 147；写回 frontmatter + Markdown；状态字段仍是 `status` |
+| Delete Skill | 删除 Skill | 删除技能、移除技巧 | Spec 147；删除入口文件，不删共享 `references/` |
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、Skill 文件路径、`SKILL.md`。
 

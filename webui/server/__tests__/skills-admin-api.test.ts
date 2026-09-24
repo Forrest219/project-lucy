@@ -143,4 +143,106 @@ status: draft
       else process.env.LUCY_PUBLIC_MCP_URL = prevPublic;
     }
   });
+
+  it("POST /api/skills creates a skill file (SC-147-02)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: {
+        name: "new-skill",
+        domain: "acceptance",
+        title: "New Skill",
+        status: "draft",
+        content: "# Hello\n"
+      }
+    });
+    expect(res.statusCode).toBe(201);
+    const json = res.json();
+    expect(json.ok).toBe(true);
+    expect(json.skill.uri).toBe("lucy-skill://acceptance/new-skill");
+    const { readFile } = await import("node:fs/promises");
+    const text = await readFile(path.join(projectRoot, "skills", "acceptance", "new-skill.md"), "utf8");
+    expect(text).toContain("name: new-skill");
+  });
+
+  it("rejects create with path traversal or missing name (SC-147-02)", async () => {
+    const badPath = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "../evil", domain: "acceptance", content: "# x\n" }
+    });
+    expect(badPath.statusCode).toBe(400);
+
+    const missing = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "", domain: "acceptance", content: "# x\n" }
+    });
+    expect(missing.statusCode).toBe(400);
+  });
+
+  it("PUT renames skill and removes old path (SC-147-03)", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "rename-me", domain: "acceptance", status: "draft", content: "# A\n" }
+    });
+    expect(created.statusCode).toBe(201);
+
+    const updated = await app.inject({
+      method: "PUT",
+      url: "/api/skills/acceptance/rename-me",
+      payload: { name: "renamed", domain: "acceptance", status: "draft", content: "# B\n" }
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().skill.name).toBe("renamed");
+
+    const { access } = await import("node:fs/promises");
+    await expect(access(path.join(projectRoot, "skills", "acceptance", "rename-me.md"))).rejects.toThrow();
+    await access(path.join(projectRoot, "skills", "acceptance", "renamed.md"));
+  });
+
+  it("DELETE removes skill (SC-147-04)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "to-delete", domain: "acceptance", status: "draft", content: "# D\n" }
+    });
+    const del = await app.inject({
+      method: "DELETE",
+      url: "/api/skills/acceptance/to-delete"
+    });
+    expect(del.statusCode).toBe(200);
+    const get = await app.inject({
+      method: "GET",
+      url: "/api/skills/acceptance/to-delete"
+    });
+    expect(get.statusCode).toBe(404);
+  });
+
+  it("allows save of published skill without eval_cases and returns validation false (SC-147-06)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: {
+        name: "pub-no-eval",
+        domain: "acceptance",
+        status: "published",
+        content: "# Body\n"
+      }
+    });
+    expect(res.statusCode).toBe(201);
+    const json = res.json();
+    expect(json.skill.validation.valid).toBe(false);
+    expect(json.skill.validation.issues.some((i: { field: string }) => i.field === "eval_cases")).toBe(true);
+  });
+
+  it("rejects broken frontmatter on create (SC-147-06)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { rawContent: "# No Frontmatter\n" }
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

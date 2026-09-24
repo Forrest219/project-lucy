@@ -20,6 +20,8 @@ roles:
         - wiki_search
         - wiki_read
         - connection_list
+        - lucy_skill_read
+        - lucy_skill_search
 
   lucy_admin:
     description: 平台运维数据面（非 WebUI 登录账户）

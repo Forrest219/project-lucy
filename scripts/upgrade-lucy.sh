@@ -156,6 +156,9 @@ wipe_named_volume() {
 }
 
 build_and_up() {
+  if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'docker-compose.demo.yml'; then
+    bash "${ROOT}/scripts/sync-demo-skills-template.sh"
+  fi
   if [[ "${NO_CACHE}" -eq 1 ]]; then
     "${COMPOSE[@]}" build --no-cache "${SERVICE}"
     "${COMPOSE[@]}" up -d --force-recreate --no-deps "${SERVICE}"

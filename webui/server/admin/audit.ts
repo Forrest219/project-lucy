@@ -188,7 +188,7 @@ const CONFIG_AUDIT_DIFF_MAX_BYTES = 256 * 1024;
 const AUDIT_EXPORT_TIMEZONE = "Asia/Shanghai";
 let auditExportSequence = 0;
 
-export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish";
+export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish" | "skill";
 export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system";
 export type ConfigAuditWriteStatus = "pending" | "committed" | "failed";
 

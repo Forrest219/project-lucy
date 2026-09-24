@@ -1,23 +1,91 @@
-import { useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { MarkdownPreview } from "../../components/MarkdownPreview";
 import { queryKeys } from "../../lib/queryKeys";
 import {
+  createSkill,
+  deleteSkill,
   fetchSkills,
   rolesAllowedSummary,
   skillStatusBadgeClass,
   SKILL_STATUS_LABELS,
-  type SkillAsset
+  updateSkill,
+  type SkillAsset,
+  type SkillStatus,
+  type SkillWritePayload
 } from "../../lib/skills";
 
 /**
- * Spec 144（业务 Skill MVP）只读列表页。
- * 页面不提供新建 / 保存 / 删除 / 导出入口；Skill 资产由 `skills/` 目录文件入库，
- * 发布状态直接来自 frontmatter 的 `status` 字段，不经过发布工作台。
+ * Spec 144 / 147：业务 Skill 列表与文件管理。
+ * 资产写入项目 `skills/`；「已发布」是 frontmatter status，不经过发布工作台。
  */
+
+type EditorMode = "view" | "edit" | "create";
+
+type DraftForm = {
+  name: string;
+  domain: string;
+  title: string;
+  version: string;
+  status: SkillStatus;
+  rolesAllowedText: string;
+  triggersText: string;
+  description: string;
+  content: string;
+};
+
+function emptyDraft(): DraftForm {
+  return {
+    name: "",
+    domain: "custom",
+    title: "",
+    version: "1.0.0",
+    status: "draft",
+    rolesAllowedText: "*",
+    triggersText: "",
+    description: "",
+    content: ""
+  };
+}
+
+function draftFromSkill(skill: SkillAsset): DraftForm {
+  return {
+    name: skill.name,
+    domain: skill.domain,
+    title: skill.title,
+    version: skill.version,
+    status: skill.status,
+    rolesAllowedText: skill.roles_allowed.join(", "),
+    triggersText: skill.triggers.join(", "),
+    description: skill.description,
+    content: skill.content
+  };
+}
+
+function payloadFromDraft(draft: DraftForm): SkillWritePayload {
+  const roles = draft.rolesAllowedText
+    .split(/[,，]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const triggers = draft.triggersText
+    .split(/[,，]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return {
+    name: draft.name.trim(),
+    domain: draft.domain.trim(),
+    title: draft.title.trim() || draft.name.trim(),
+    version: draft.version.trim() || "1.0.0",
+    status: draft.status,
+    roles_allowed: roles.length > 0 ? roles : ["*"],
+    triggers,
+    description: draft.description.trim(),
+    content: draft.content
+  };
+}
 
 function findSelectedSkill(skills: SkillAsset[], selector: string | null): SkillAsset | null {
   if (!selector) return null;
@@ -69,13 +137,15 @@ function ValidationCell({ skill }: { skill: SkillAsset }) {
   );
 }
 
-type DetailRowProps = {
+function DetailRow({
+  label,
+  children,
+  testId
+}: {
   label: string;
   children: ReactNode;
   testId?: string;
-};
-
-function DetailRow({ label, children, testId }: DetailRowProps) {
+}) {
   return (
     <div className="grid gap-1" data-testid={testId}>
       <span className="pl-eyebrow">{label}</span>
@@ -84,12 +154,11 @@ function DetailRow({ label, children, testId }: DetailRowProps) {
   );
 }
 
-function SkillDetailBody({ skill }: { skill: SkillAsset }) {
-  const prerequisites = skill.prerequisites;
+function SkillViewBody({ skill }: { skill: SkillAsset }) {
   const prerequisiteGroups: Array<{ label: string; values: string[] }> = [
-    { label: "语义源", values: prerequisites.sources ?? [] },
-    { label: "指标", values: prerequisites.measures ?? [] },
-    { label: "Wiki 文档", values: prerequisites.wiki_docs ?? [] }
+    { label: "语义源", values: skill.prerequisites.sources ?? [] },
+    { label: "指标", values: skill.prerequisites.measures ?? [] },
+    { label: "Wiki 文档", values: skill.prerequisites.wiki_docs ?? [] }
   ].filter((group) => group.values.length > 0);
 
   return (
@@ -99,7 +168,6 @@ function SkillDetailBody({ skill }: { skill: SkillAsset }) {
           {skill.uri}
         </code>
       </DetailRow>
-
       <div className="flex flex-wrap gap-4">
         <DetailRow label="状态" testId="skill-detail-status">
           <span className={skillStatusBadgeClass(skill.status)} data-status={skill.status}>
@@ -117,11 +185,9 @@ function SkillDetailBody({ skill }: { skill: SkillAsset }) {
           </code>
         </DetailRow>
       </div>
-
       <DetailRow label="角色授权" testId="skill-detail-roles">
         <RolesAllowedCell skill={skill} />
       </DetailRow>
-
       <DetailRow label="触发词" testId="skill-detail-triggers">
         {skill.triggers.length === 0 ? (
           <span className="text-fg-muted">—</span>
@@ -131,7 +197,6 @@ function SkillDetailBody({ skill }: { skill: SkillAsset }) {
           </span>
         )}
       </DetailRow>
-
       <DetailRow label="前置依赖" testId="skill-detail-prerequisites">
         {prerequisiteGroups.length === 0 ? (
           <span className="text-fg-muted">—</span>
@@ -148,7 +213,6 @@ function SkillDetailBody({ skill }: { skill: SkillAsset }) {
           </ul>
         )}
       </DetailRow>
-
       {skill.validation.issues.length > 0 ? (
         <DetailRow label="校验问题" testId="skill-detail-validation-issues">
           <ul className="m-0 grid list-none gap-1 p-0">
@@ -172,7 +236,6 @@ function SkillDetailBody({ skill }: { skill: SkillAsset }) {
           </ul>
         </DetailRow>
       ) : null}
-
       <div className="grid gap-1" data-testid="skill-detail-content">
         <span className="pl-eyebrow">正文</span>
         <MarkdownPreview markdown={skill.content} hideLeadingHeading={skill.title} />
@@ -181,9 +244,128 @@ function SkillDetailBody({ skill }: { skill: SkillAsset }) {
   );
 }
 
+function Field({
+  label,
+  children
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="grid gap-1 text-sm">
+      <span className="pl-eyebrow">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function SkillEditorForm({
+  draft,
+  onChange,
+  nameLocked
+}: {
+  draft: DraftForm;
+  onChange: (next: DraftForm) => void;
+  nameLocked: boolean;
+}) {
+  return (
+    <div className="grid gap-3" data-testid="skill-editor-form">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="名称">
+          <input
+            className="pl-input notranslate"
+            translate="no"
+            value={draft.name}
+            disabled={nameLocked}
+            onChange={(e) => onChange({ ...draft, name: e.target.value })}
+            data-testid="skill-field-name"
+          />
+        </Field>
+        <Field label="域">
+          <input
+            className="pl-input notranslate"
+            translate="no"
+            value={draft.domain}
+            onChange={(e) => onChange({ ...draft, domain: e.target.value })}
+            data-testid="skill-field-domain"
+          />
+        </Field>
+        <Field label="标题">
+          <input
+            className="pl-input"
+            value={draft.title}
+            onChange={(e) => onChange({ ...draft, title: e.target.value })}
+            data-testid="skill-field-title"
+          />
+        </Field>
+        <Field label="版本">
+          <input
+            className="pl-input notranslate"
+            translate="no"
+            value={draft.version}
+            onChange={(e) => onChange({ ...draft, version: e.target.value })}
+            data-testid="skill-field-version"
+          />
+        </Field>
+        <Field label="状态">
+          <select
+            className="pl-input"
+            value={draft.status}
+            onChange={(e) => onChange({ ...draft, status: e.target.value as SkillStatus })}
+            data-testid="skill-field-status"
+          >
+            <option value="draft">草稿</option>
+            <option value="published">已发布</option>
+            <option value="deprecated">已停用</option>
+          </select>
+        </Field>
+        <Field label="角色授权">
+          <input
+            className="pl-input notranslate"
+            translate="no"
+            value={draft.rolesAllowedText}
+            onChange={(e) => onChange({ ...draft, rolesAllowedText: e.target.value })}
+            placeholder="* 或 role-a, role-b"
+            data-testid="skill-field-roles"
+          />
+        </Field>
+      </div>
+      <Field label="触发词">
+        <input
+          className="pl-input"
+          value={draft.triggersText}
+          onChange={(e) => onChange({ ...draft, triggersText: e.target.value })}
+          data-testid="skill-field-triggers"
+        />
+      </Field>
+      <Field label="说明">
+        <textarea
+          className="pl-input min-h-[4rem]"
+          value={draft.description}
+          onChange={(e) => onChange({ ...draft, description: e.target.value })}
+          data-testid="skill-field-description"
+        />
+      </Field>
+      <Field label="正文">
+        <textarea
+          className="pl-input min-h-[16rem] font-mono text-sm"
+          value={draft.content}
+          onChange={(e) => onChange({ ...draft, content: e.target.value })}
+          data-testid="skill-field-content"
+        />
+      </Field>
+    </div>
+  );
+}
+
 export function SkillList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<EditorMode>("view");
+  const [draft, setDraft] = useState<DraftForm>(emptyDraft());
+  const [formError, setFormError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const skillsQuery = useQuery({
     queryKey: queryKeys.skills,
@@ -195,31 +377,100 @@ export function SkillList() {
     () => findSelectedSkill(skills, searchParams.get("skill")),
     [skills, searchParams]
   );
+  const creating = searchParams.get("new") === "1";
+
+  useEffect(() => {
+    if (creating) {
+      setMode("create");
+      setDraft(emptyDraft());
+      setFormError(null);
+      setConfirmDelete(false);
+      return;
+    }
+    if (selectedSkill) {
+      setMode("view");
+      setDraft(draftFromSkill(selectedSkill));
+      setFormError(null);
+      setConfirmDelete(false);
+    }
+  }, [creating, selectedSkill]);
 
   function openSkill(skill: SkillAsset) {
     const next = new URLSearchParams(searchParams);
+    next.delete("new");
     next.set("skill", `${skill.domain}/${skill.name}`);
     setSearchParams(next);
   }
 
-  function closeSkill() {
+  function openCreate() {
     const next = new URLSearchParams(searchParams);
     next.delete("skill");
-    setSearchParams(next, { replace: true });
+    next.set("new", "1");
+    setSearchParams(next);
   }
+
+  function closeDrawer() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("skill");
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+    setMode("view");
+    setConfirmDelete(false);
+    setFormError(null);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const payload = payloadFromDraft(draft);
+      if (mode === "create") {
+        return createSkill(payload);
+      }
+      if (!selectedSkill) throw new Error("未选择 Skill");
+      return updateSkill(selectedSkill.domain, selectedSkill.name, payload);
+    },
+    onSuccess: async (result) => {
+      setFormError(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+      const next = new URLSearchParams();
+      next.set("skill", `${result.skill.domain}/${result.skill.name}`);
+      setSearchParams(next, { replace: true });
+      setMode("view");
+    },
+    onError: (err) => {
+      setFormError(err instanceof Error ? err.message : String(err));
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedSkill) throw new Error("未选择 Skill");
+      return deleteSkill(selectedSkill.domain, selectedSkill.name);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.skills });
+      closeDrawer();
+    },
+    onError: (err) => {
+      setFormError(err instanceof Error ? err.message : String(err));
+    }
+  });
+
+  const drawerOpen = creating || selectedSkill !== null;
 
   return (
     <div className="pl-page-stack" data-testid="skills-page">
       <PageHeader
         title="业务 Skill"
         breadcrumbs={["业务上下文", "业务 Skill"]}
-        description="查看受治理的业务 Skill 资产及其发布状态与角色授权。"
+        description="查看并管理受治理的业务 Skill 资产及其发布状态与角色授权。"
+        actions={
+          <button type="button" className="pl-btn pl-btn--primary text-sm" onClick={openCreate} data-testid="skills-create">
+            新建 Skill
+          </button>
+        }
       />
 
-      <section
-        className="rounded-md border border-border-default bg-bg-surface p-4"
-        data-testid="skills-section"
-      >
+      <section className="rounded-md border border-border-default bg-bg-surface p-4" data-testid="skills-section">
         {skillsQuery.isLoading ? <p className="pl-notice">正在加载业务 Skill…</p> : null}
         {skillsQuery.error ? (
           <p className="pl-error" data-testid="skills-error">
@@ -235,7 +486,7 @@ export function SkillList() {
               <code className="notranslate ml-1" translate="no">
                 skills/
               </code>
-              。
+              ，或点击「新建 Skill」。
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -303,9 +554,9 @@ export function SkillList() {
       </section>
 
       <Dialog.Root
-        open={selectedSkill !== null}
+        open={drawerOpen}
         onOpenChange={(open) => {
-          if (!open) closeSkill();
+          if (!open) closeDrawer();
         }}
       >
         <Dialog.Portal>
@@ -319,46 +570,120 @@ export function SkillList() {
               closeButtonRef.current?.focus();
             }}
           >
-            {selectedSkill ? (
-              <>
-                <header className="pl-drawer-header">
-                  <div className="grid min-w-0 gap-1">
-                    <span className="pl-eyebrow">业务 Skill</span>
-                    <Dialog.Title asChild>
-                      <h2 className="pl-panel-title mb-0" data-testid="skill-detail-title">
-                        {selectedSkill.title || selectedSkill.name}
-                      </h2>
-                    </Dialog.Title>
-                    <Dialog.Description id="skill-detail-description" className="sr-only">
-                      业务 Skill 只读详情
-                    </Dialog.Description>
-                  </div>
+            <header className="pl-drawer-header">
+              <div className="grid min-w-0 gap-1">
+                <span className="pl-eyebrow">业务 Skill</span>
+                <Dialog.Title asChild>
+                  <h2 className="pl-panel-title mb-0" data-testid="skill-detail-title">
+                    {mode === "create"
+                      ? "新建 Skill"
+                      : selectedSkill?.title || selectedSkill?.name || "业务 Skill"}
+                  </h2>
+                </Dialog.Title>
+                <Dialog.Description id="skill-detail-description" className="sr-only">
+                  业务 Skill 详情
+                </Dialog.Description>
+              </div>
+              <button
+                ref={closeButtonRef}
+                type="button"
+                className="pl-drawer-close"
+                onClick={closeDrawer}
+                aria-label="关闭 Skill 详情"
+                data-testid="skill-detail-close"
+              >
+                关闭
+              </button>
+            </header>
+            <div className="pl-drawer-body">
+              {formError ? (
+                <p className="pl-error mb-3" data-testid="skill-form-error">
+                  {formError}
+                </p>
+              ) : null}
+              {mode === "view" && selectedSkill ? <SkillViewBody skill={selectedSkill} /> : null}
+              {(mode === "edit" || mode === "create") && (
+                <SkillEditorForm draft={draft} onChange={setDraft} nameLocked={false} />
+              )}
+              {mode === "view" && selectedSkill && !selectedSkill.validation.valid ? (
+                <p className="pl-notice mt-3" data-testid="skill-validation-banner">
+                  当前校验未通过；仍可编辑并保存 Skill。
+                </p>
+              ) : null}
+            </div>
+            <footer className="pl-drawer-footer pl-drawer-footer-border-t flex flex-wrap gap-2">
+              {mode === "view" && selectedSkill ? (
+                <>
                   <button
-                    ref={closeButtonRef}
                     type="button"
-                    className="pl-drawer-close"
-                    onClick={closeSkill}
-                    aria-label="关闭 Skill 详情"
-                    data-testid="skill-detail-close"
+                    className="pl-btn pl-btn--primary text-sm"
+                    onClick={() => {
+                      setDraft(draftFromSkill(selectedSkill));
+                      setMode("edit");
+                    }}
+                    data-testid="skill-edit"
                   >
-                    关闭
+                    编辑
                   </button>
-                </header>
-                <div className="pl-drawer-body">
-                  <SkillDetailBody skill={selectedSkill} />
-                </div>
-                <footer className="pl-drawer-footer pl-drawer-footer-border-t">
+                  {!confirmDelete ? (
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--ghost text-sm"
+                      onClick={() => setConfirmDelete(true)}
+                      data-testid="skill-delete"
+                    >
+                      删除 Skill
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--danger text-sm"
+                      onClick={() => deleteMutation.mutate()}
+                      disabled={deleteMutation.isPending}
+                      data-testid="skill-delete-confirm"
+                    >
+                      确认删除
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="pl-btn pl-btn--ghost text-sm"
-                    onClick={closeSkill}
+                    onClick={closeDrawer}
                     data-testid="skill-detail-footer-close"
                   >
                     关闭
                   </button>
-                </footer>
-              </>
-            ) : null}
+                </>
+              ) : null}
+              {(mode === "edit" || mode === "create") && (
+                <>
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--primary text-sm"
+                    onClick={() => saveMutation.mutate()}
+                    disabled={saveMutation.isPending}
+                    data-testid="skill-save"
+                  >
+                    保存 Skill
+                  </button>
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost text-sm"
+                    onClick={() => {
+                      if (mode === "create") closeDrawer();
+                      else if (selectedSkill) {
+                        setDraft(draftFromSkill(selectedSkill));
+                        setMode("view");
+                        setFormError(null);
+                      }
+                    }}
+                    data-testid="skill-cancel-edit"
+                  >
+                    取消
+                  </button>
+                </>
+              )}
+            </footer>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
