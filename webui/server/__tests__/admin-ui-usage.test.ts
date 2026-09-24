@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { navGroups, topLevelEntry } from "../../src/app/navigation";
+import { navGroups } from "../../src/app/navigation";
 import { getAuditDb, resetAuditDbForTests } from "../admin/audit";
 import {
   UI_USAGE_GROUPS,
@@ -47,7 +47,7 @@ afterEach(async () => {
 
 describe("ui usage catalog", () => {
   it("matches sidebar menus and groups", () => {
-    const menus = [topLevelEntry, ...navGroups.flatMap((group) => group.items)];
+    const menus = navGroups.flatMap((group) => group.items);
     expect(UI_USAGE_MENUS.map((item) => item.id)).toEqual(menus.map((item) => item.id));
     expect(UI_USAGE_MENUS.map((item) => item.label)).toEqual(menus.map((item) => item.label));
     expect(UI_USAGE_GROUPS.map((group) => [group.id, group.label])).toEqual(

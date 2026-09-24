@@ -29,6 +29,7 @@ type MenuDefinition = { id: string; label: string };
 type GroupDefinition = { id: string; label: string };
 
 export const UI_USAGE_GROUPS: GroupDefinition[] = [
+  { id: "runtime-status", label: "运行状态" },
   { id: "connections", label: "数据接入" },
   { id: "semantic-modeling", label: "业务上下文" },
   { id: "publish", label: "语义发布" },
@@ -39,6 +40,7 @@ export const UI_USAGE_GROUPS: GroupDefinition[] = [
 
 export const UI_USAGE_MENUS: MenuDefinition[] = [
   { id: "overview", label: "系统概览" },
+  { id: "ops-calls", label: "调用监控" },
   { id: "connections-overview", label: "连接概览" },
   { id: "connections-enabled-tables", label: "启用表范围" },
   { id: "semantic-catalog", label: "语义资产" },
@@ -63,7 +65,8 @@ export const UI_USAGE_MENUS: MenuDefinition[] = [
 ];
 
 const PAGE = {
-  overview: { pageKey: "overview", label: "系统概览", menuId: "overview", groupId: null },
+  overview: { pageKey: "overview", label: "系统概览", menuId: "overview", groupId: "runtime-status" },
+  callMonitor: { pageKey: "ops-calls", label: "调用监控", menuId: "ops-calls", groupId: "runtime-status" },
   connections: { pageKey: "connections", label: "连接概览", menuId: "connections-overview", groupId: "connections" },
   enabledTables: { pageKey: "enabled-tables", label: "启用表范围", menuId: "connections-enabled-tables", groupId: "connections" },
   connectionTest: { pageKey: "connection-test", label: "连通测试", menuId: "connections-overview", groupId: "connections" },
@@ -101,6 +104,7 @@ const PAGE = {
 /** Unique pages for the ranking. Route variants that share a page key appear once. */
 export const UI_USAGE_PAGES: UiPageDefinition[] = [
   PAGE.overview,
+  PAGE.callMonitor,
   PAGE.connections,
   PAGE.enabledTables,
   PAGE.connectionTest,
@@ -136,6 +140,7 @@ export const UI_USAGE_PAGES: UiPageDefinition[] = [
 
 const EXACT_PAGES = new Map<string, UiPageDefinition>([
   ["/overview", PAGE.overview],
+  ["/ops/calls", PAGE.callMonitor],
   ["/connections", PAGE.connections],
   ["/connections/enabled-tables", PAGE.enabledTables],
   ["/connections/test", PAGE.connectionTest],
