@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { navGroups, topLevelEntry, type NavItem } from "../app/navigation";
+import { navGroups, type NavItem } from "../app/navigation";
 
 /**
  * M60 Sidebar Brand Navigation Polish — Command Palette MVP.
@@ -105,9 +105,7 @@ function toEntry(item: NavItem, groupTitle: string, breadcrumb: string[]): Comma
 }
 
 function flattenEntries(): CommandEntry[] {
-  const entries: CommandEntry[] = [
-    toEntry(topLevelEntry, topLevelEntry.label, [BRAND_LABEL])
-  ];
+  const entries: CommandEntry[] = [];
   for (const group of navGroups) {
     for (const item of group.items) {
       entries.push(toEntry(item, group.title, [BRAND_LABEL, group.title]));
@@ -282,7 +280,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   // M70: scoring is deterministic. We compute the score once per entry per
   // query and keep only matches with score > 0, sorted by score desc. Ties
   // preserve the IA order returned by flattenEntries(), which mirrors the
-  // canonical `topLevelEntry + navGroups` order so the result ordering is
+  // canonical `navGroups` order so the result ordering is
   // both predictable and locale-independent.
   const filtered = useMemo(() => {
     const q = normalize(query);

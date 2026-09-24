@@ -1,11 +1,5 @@
-// M59 Help Sidebar Entry Map — shared nav config invariants.
-// Imports `topLevelEntry` / `navGroups` / `NavItem` from the production module
-// so the 6+1 IA cannot drift without breaking these tests. Handbook §1.5 and
-// `help-center.test.tsx` consume the same module.
-//
-// M60 Sidebar Brand Navigation Polish: extended to cover stable `id` fields,
-// per-item `iconKey` and the `findGroupIdForPathname` helper consumed by
-// the collapsible sidebar + command palette.
+// Shared sidebar config invariants.
+// Spec 143: Runtime Status group owns 系统概览 + 调用监控; no pinned top-level entry.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -17,27 +11,35 @@ import {
 } from "../app/navigation";
 
 describe("navigation (shared sidebar config)", () => {
-  it("topLevelEntry matches Handbook §1.5 row 1", () => {
+  it("topLevelEntry remains the overview alias used by Runtime Status", () => {
     expect(topLevelEntry.id).toBe("overview");
     expect(topLevelEntry.label).toBe("系统概览");
     expect(topLevelEntry.to).toBe("/overview");
     expect(topLevelEntry.iconKey).toBe("overview");
     expect(topLevelEntry.active("/overview")).toBe(true);
     expect(topLevelEntry.active("/catalog")).toBe(false);
-    expect(topLevelEntry.active("/connections")).toBe(false);
+    expect(navGroups[0]?.items[0]).toBe(topLevelEntry);
   });
 
-  it("navGroups has exactly 6 first-level groups in canonical order", () => {
-    expect(navGroups.length).toBe(6);
+  it("navGroups has exactly 7 first-level groups in canonical order", () => {
+    expect(navGroups.length).toBe(7);
     const titles = navGroups.map((g) => g.title);
-    expect(titles).toEqual(["数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"]);
+    expect(titles).toEqual([
+      "运行状态",
+      "数据接入",
+      "业务上下文",
+      "语义发布",
+      "质量评测",
+      "访问治理",
+      "系统设置"
+    ]);
   });
 
   it("every group has a unique stable id", () => {
     const ids = navGroups.map((g) => g.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // Spot-check the canonical ids; the AppFrame and command palette rely on these strings.
     expect(ids).toEqual([
+      "runtime-status",
       "connections",
       "semantic-modeling",
       "publish",
@@ -47,41 +49,32 @@ describe("navigation (shared sidebar config)", () => {
     ]);
   });
 
-  it("every nav item has a unique stable id across topLevelEntry + navGroups", () => {
-    const ids = [topLevelEntry.id, ...navGroups.flatMap((g) => g.items.map((i) => i.id))];
+  it("every nav item has a unique stable id across navGroups", () => {
+    const ids = navGroups.flatMap((g) => g.items.map((i) => i.id));
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("every nav item declares an iconKey and the keys are unique per item", () => {
     const iconKeys: NavIconKey[] = [];
-    const pushItem = (item: NavItem) => iconKeys.push(item.iconKey);
-    pushItem(topLevelEntry);
     for (const group of navGroups) {
-      for (const item of group.items) pushItem(item);
+      for (const item of group.items) iconKeys.push(item.iconKey);
     }
-    // No two items share the same icon (mapping icons 1:1 keeps the sidebar
-    // scan-friendly; reused icons are visually fine but indicate drift in IA).
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 21 second-level items in total", () => {
+  it("navGroups contains 23 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(21);
+    expect(totalItems).toBe(23);
   });
 
-  it("flat sidebar entries match Handbook §1.5 rows (top + second-level)", () => {
-    // 顶部 1 + 6 组共 21 项二级菜单 = 22 个侧栏可见入口
-    const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = [
-      { group: topLevelEntry.label, id: topLevelEntry.id, label: topLevelEntry.label, to: topLevelEntry.to },
-      ...navGroups.flatMap((g) =>
-        g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
-      )
-    ];
-    expect(flat.length).toBe(22);
-
-    // 顺序与侧栏自上而下严格一致
+  it("flat sidebar entries match Spec 143 Runtime Status IA", () => {
+    const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = navGroups.flatMap(
+      (g) => g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
+    );
+    expect(flat.length).toBe(23);
     expect(flat).toEqual([
-      { group: "系统概览", id: "overview", label: "系统概览", to: "/overview" },
+      { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
+      { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
       { group: "数据接入", id: "connections-overview", label: "连接概览", to: "/connections" },
       { group: "数据接入", id: "connections-enabled-tables", label: "启用表范围", to: "/connections/enabled-tables" },
       { group: "业务上下文", id: "semantic-catalog", label: "语义资产", to: "/catalog" },
@@ -106,43 +99,35 @@ describe("navigation (shared sidebar config)", () => {
     ]);
   });
 
-  it("every path is unique across topLevelEntry + navGroups items", () => {
-    const paths = [topLevelEntry.to, ...navGroups.flatMap((g) => g.items.map((i) => i.to))];
+  it("every path is unique across navGroups items", () => {
+    const paths = navGroups.flatMap((g) => g.items.map((i) => i.to));
     expect(new Set(paths).size).toBe(paths.length);
   });
 
   it("no navGroups item uses an obsolete 06-navigation-ia.md path", () => {
     const forbiddenPaths = ["/onboarding", "/connections/whitelist"];
-    const allPaths = [topLevelEntry.to, ...navGroups.flatMap((g) => g.items.map((i) => i.to))];
+    const allPaths = navGroups.flatMap((g) => g.items.map((i) => i.to));
     for (const path of forbiddenPaths) {
       expect(allPaths).not.toContain(path);
     }
   });
 
-  // M70 command palette result context: every nav item must carry a non-empty
-  // `description` so the command palette can render "page search result"
-  // context (breadcrumb / title / description / route hint). Items without a
-  // description would degrade back to the pre-M70 navigation-list look.
   it("every nav item has a non-empty description for command palette context", () => {
-    const collectItem = (item: NavItem, _group: string) => {
-      expect(typeof item.description).toBe("string");
-      expect((item.description ?? "").trim().length).toBeGreaterThan(0);
-    };
-    collectItem(topLevelEntry, topLevelEntry.label);
     for (const group of navGroups) {
-      for (const item of group.items) collectItem(item, group.title);
+      for (const item of group.items) {
+        expect(typeof item.description).toBe("string");
+        expect((item.description ?? "").trim().length).toBeGreaterThan(0);
+      }
     }
   });
 
   it("keeps command palette descriptions aligned with the approved PageHeader copy", () => {
     const descriptions = new Map(
-      [topLevelEntry, ...navGroups.flatMap((group) => group.items)].map((item) => [
-        item.id,
-        item.description
-      ])
+      navGroups.flatMap((group) => group.items).map((item) => [item.id, item.description])
     );
     expect(Object.fromEntries(descriptions)).toEqual({
       overview: "确认系统可用，处理当前待办。",
+      "ops-calls": "准实时查看 MCP 工具调用量、成败与请求时效。",
       "connections-overview": "管理数据库连接、Schema 与 Schema Manifest，并查看连通性和本地目录同步状态。",
       "connections-enabled-tables": "配置各连接进入语义层的表范围，并审阅保存前变更。",
       "semantic-catalog": "管理表、字段、指标、分群与关联等结构化语义资产。",
@@ -167,45 +152,32 @@ describe("navigation (shared sidebar config)", () => {
     });
   });
 
-  // M70: keyword aliases help the user find a page by short terms that are
-  // not part of the visible label (e.g. 指标, Role, Wiki). An empty string
-  // in the keyword list would silently widen the search to everything.
   it("nav item keywords (when present) never contain an empty string", () => {
-    const collectKeywords = (item: NavItem) => {
-      if (item.keywords === undefined) return;
-      expect(Array.isArray(item.keywords)).toBe(true);
-      for (const kw of item.keywords) {
-        expect(typeof kw).toBe("string");
-        expect(kw.trim().length).toBeGreaterThan(0);
-      }
-    };
-    collectKeywords(topLevelEntry);
     for (const group of navGroups) {
-      for (const item of group.items) collectKeywords(item);
+      for (const item of group.items) {
+        if (item.keywords === undefined) continue;
+        expect(Array.isArray(item.keywords)).toBe(true);
+        for (const kw of item.keywords) {
+          expect(typeof kw).toBe("string");
+          expect(kw.trim().length).toBeGreaterThan(0);
+        }
+      }
     }
   });
 
-  // M70: descriptions live on a single line in the result row, so anything
-  // longer than ~48 CJK glyphs / 96 ASCII chars creates layout shift. This
-  // cap keeps every result row visually compact.
   it("nav item descriptions fit within the command palette single-line budget", () => {
     const DESCRIPTION_CHAR_BUDGET = 96;
-    const collectLength = (item: NavItem, label: string) => {
-      const value = item.description ?? "";
-      // Count CJK glyphs as 2 units (display width) and ASCII as 1 unit so
-      // we approximate the visual line length rather than the codepoint
-      // length. The cap is permissive on purpose — only extreme cases fail.
-      let width = 0;
-      for (const ch of value) {
-        width += /[\u3400-\u9fff\uf900-\ufaff]/.test(ch) ? 2 : 1;
-      }
-      expect(width, `description for "${label}" is too long`).toBeLessThanOrEqual(
-        DESCRIPTION_CHAR_BUDGET
-      );
-    };
-    collectLength(topLevelEntry, topLevelEntry.label);
     for (const group of navGroups) {
-      for (const item of group.items) collectLength(item, item.label);
+      for (const item of group.items) {
+        const value = item.description ?? "";
+        let width = 0;
+        for (const ch of value) {
+          width += /[\u3400-\u9fff\uf900-\ufaff]/.test(ch) ? 2 : 1;
+        }
+        expect(width, `description for "${item.label}" is too long`).toBeLessThanOrEqual(
+          DESCRIPTION_CHAR_BUDGET
+        );
+      }
     }
   });
 
@@ -216,10 +188,10 @@ describe("navigation (shared sidebar config)", () => {
     });
 
     it("returns the owning group id for representative routes", () => {
+      expect(findGroupIdForPathname("/overview")).toBe("runtime-status");
+      expect(findGroupIdForPathname("/ops/calls")).toBe("runtime-status");
       expect(findGroupIdForPathname("/connections")).toBe("connections");
       expect(findGroupIdForPathname("/connections/enabled-tables")).toBe("connections");
-      // /connections/whitelist is a compat alias; should still resolve to the
-      // canonical 数据接入 group so its members stay expanded on legacy URLs.
       expect(findGroupIdForPathname("/connections/whitelist")).toBe("connections");
       expect(findGroupIdForPathname("/catalog")).toBe("semantic-modeling");
       expect(findGroupIdForPathname("/catalog/foo/bar/baz")).toBe("semantic-modeling");

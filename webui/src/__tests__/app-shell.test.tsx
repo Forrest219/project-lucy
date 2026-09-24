@@ -35,6 +35,7 @@ vi.mock("../pages/Onboarding", async () => {
     }
   };
 });
+vi.mock("../pages/ops/CallMonitor", () => ({ CallMonitor: () => <StubPage name="CallMonitor" /> }));
 vi.mock("../pages/publish/PublishWorkbench", () => ({ PublishWorkbench: () => <StubPage name="PublishWorkbench" /> }));
 vi.mock("../pages/publish/PublishHistory", () => ({ PublishHistory: () => <StubPage name="PublishHistory" /> }));
 vi.mock("../pages/TableEditor", async () => {
@@ -163,6 +164,7 @@ beforeEach(() => {
 describe("AppFrame shell", () => {
   it.each([
     ["/overview", "Onboarding", "系统概览"],
+    ["/ops/calls", "CallMonitor", "调用监控"],
     ["/connections", "ConnectionOverview", "连接概览"],
     ["/connections/enabled-tables", "TableWhitelist", "启用表范围"],
     ["/", "Catalog", "语义资产"],
@@ -260,12 +262,10 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("exposes each 6+1 navigation group heading exactly once", () => {
-    // M60 Sidebar Brand Navigation Polish: group titles are now collapsible
-    // <button>s with `aria-expanded`, not <h2>s. There must still be one
-    // titled button per group so the sidebar reads as 6 sections.
+  it("exposes each navigation group heading exactly once", () => {
+    // Group titles are collapsible <button>s with `aria-expanded`.
     renderAt("/overview");
-    const groupTitles = ["数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"];
+    const groupTitles = ["运行状态", "数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"];
     for (const title of groupTitles) {
       expect(screen.getAllByRole("button", { name: title })).toHaveLength(1);
     }
@@ -337,23 +337,21 @@ describe("AppFrame shell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders the M34 6+1 lifecycle sidebar shape with renamed second-level items", () => {
+  it("renders the Runtime Status sidebar shape with Spec 143 call monitor", () => {
     renderAt("/");
 
-    // M60: group titles are buttons, not headings.
-    const groups = ["数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"];
+    // Group titles are buttons, not headings.
+    const groups = ["运行状态", "数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"];
     for (const group of groups) {
       expect(screen.getByRole("button", { name: group })).toBeInTheDocument();
     }
 
     const overviewLink = screen.getByRole("link", { name: "系统概览" });
     expect(overviewLink).toBeInTheDocument();
-    // 系统概览 is a sibling link inside the top section, not wrapped by a
-    // nav-section-title element (that class only exists for the group
-    // button variant now).
-    expect(overviewLink.closest(".pl-nav-section")?.querySelector(".pl-nav-section-title")).toBeNull();
+    expect(overviewLink.closest("[data-testid='nav-group-runtime-status']")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "调用监控" })).toHaveAttribute("href", "/ops/calls");
 
-    for (const title of ["运行状态", "语义层维护", "业务文档", "数据库接入"]) {
+    for (const title of ["语义层维护", "业务文档", "数据库接入"]) {
       expect(screen.queryByRole("heading", { name: title })).not.toBeInTheDocument();
     }
 
@@ -574,12 +572,13 @@ describe("AppFrame shell", () => {
       renderAt("/connections");
       const groupItems = screen.getByTestId("nav-group-items-connections");
       const childLink = screen.getByRole("link", { name: "连接概览" });
-      const topLink = screen.getByRole("link", { name: "系统概览" });
+      const overviewLink = screen.getByRole("link", { name: "系统概览" });
 
       expect(groupItems).toHaveClass("pl-nav-group-items");
       expect(childLink).toHaveClass("pl-nav-link", "pl-nav-link--child", "pl-nav-link--active");
-      expect(topLink).toHaveClass("pl-nav-link");
-      expect(topLink).not.toHaveClass("pl-nav-link--child");
+      // Spec 143: overview is a Runtime Status child, not a pinned top-level link.
+      expect(overviewLink).toHaveClass("pl-nav-link", "pl-nav-link--child");
+      expect(overviewLink.closest("[data-testid='nav-group-runtime-status']")).not.toBeNull();
     });
 
     it("does not break the 系统手册 footer entry after the sidebar rewrite", () => {

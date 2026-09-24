@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HelpCenter } from "../pages/HelpCenter";
-import { navGroups, topLevelEntry } from "../app/navigation";
+import { navGroups } from "../app/navigation";
 
 function renderHelp(path = "/help") {
   const client = new QueryClient({
@@ -82,7 +82,7 @@ function renderHelp(path = "/help") {
               { id: "configuration-reference", level: 2, title: "5. 配置与环境变量速查" },
               { id: "troubleshooting", level: 2, title: "6. FAQ 与排障指南" },
               { id: "mcp-401", level: 3, title: "6.5 MCP 返回 401" },
-              { id: "webui-entry-map", level: 3, title: "1.5 WebUI 入口速查（6+1 侧栏地图）" }
+              { id: "webui-entry-map", level: 3, title: "1.5 WebUI 入口速查（运行状态侧栏地图）" }
             ],
             markdown: [
               "# Project Lucy 系统使用与运维手册",
@@ -145,16 +145,16 @@ function renderHelp(path = "/help") {
               "",
               "Lucy 是本地语义补充工作台。",
               "",
-              "### 1.5 WebUI 入口速查（6+1 侧栏地图）",
+              "### 1.5 WebUI 入口速查（运行状态侧栏地图）",
               "",
               "本节是侧栏可见入口的镜像视图。",
-              "事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（v0.2 起由 `webui/src/app/navigation.ts` 导出）。",
-              "`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档（含旧路径），不与代码并列称为权威源。",
-              "架构调整时，请先改 `webui/src/app/navigation.ts`，再同步 §1.5 表格，最后开 follow-up 工单修 06 spec §3 / §4。",
+              "事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`（Spec 143 起不再使用置顶 `topLevelEntry` 渲染）。",
+              "`webui/docs/06-navigation-ia.md` §3 与代码对齐；架构调整时请先改 `navigation.ts`，再同步 §1.5 表格。",
               "",
               "| 分组 | 二级菜单 | 路径 | 一句话用途 |",
               "| --- | --- | --- | --- |",
-              "| 系统概览 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |",
+              "| 运行状态 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |",
+              "| 运行状态 | 调用监控 | `/ops/calls` | 准实时查看 MCP 工具调用量、成败与请求时效。 |",
               "| 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |",
               "| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |",
               "| 业务上下文 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |",
@@ -177,7 +177,7 @@ function renderHelp(path = "/help") {
               "| 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |",
               "| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |",
               "",
-              "> 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。",
+              "> 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。",
               "",
               "## 2. 快速上手",
               "",
@@ -861,18 +861,18 @@ describe("HelpCenter", () => {
     }
   });
 
-  it("§1.5 renders the 6+1 WebUI Entry Map heading and section id", async () => {
+  it("§1.5 renders the Runtime Status WebUI Entry Map heading and section id", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
     );
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 22 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 23 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
     );
 
     const section = document.querySelector("section#webui-entry-map");
@@ -888,15 +888,12 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(22);
+    expect(bodyRows.length).toBe(23);
 
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.
-    const expectedItems = [topLevelEntry, ...navGroups.flatMap((g) => g.items)];
-    const expectedGroups = [
-      topLevelEntry.label,
-      ...navGroups.flatMap((g) => g.items.map(() => g.title))
-    ];
+    const expectedItems = navGroups.flatMap((g) => g.items);
+    const expectedGroups = navGroups.flatMap((g) => g.items.map(() => g.title));
     bodyRows.forEach((tr, idx) => {
       const cells = tr.querySelectorAll("td");
       expect(cells[0]?.textContent).toBe(expectedGroups[idx]);
@@ -906,20 +903,17 @@ describe("HelpCenter", () => {
 
     // Path column (3rd cell) must be wrapped in <code> for each
     // sidebar-visible entry — translation defense contract.
-    const expectedPaths = [
-      topLevelEntry.to,
-      ...navGroups.flatMap((g) => g.items.map((i) => i.to))
-    ];
+    const expectedPaths = navGroups.flatMap((g) => g.items.map((i) => i.to));
     bodyRows.forEach((tr, idx) => {
       const pathCell = tr.querySelectorAll("td")[2];
       expect(pathCell?.querySelector("code")?.textContent).toBe(expectedPaths[idx]);
     });
   });
 
-  it("§1.5 blockquote cites the single source of truth (App.tsx + navigation.ts)", async () => {
+  it("§1.5 blockquote cites navigation.ts navGroups as the single source of truth", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
     );
     const section = document.querySelector("section#webui-entry-map");
     if (!section) throw new Error("section#webui-entry-map missing");
@@ -928,16 +922,14 @@ describe("HelpCenter", () => {
     const codeRefs = Array.from(blockquote?.querySelectorAll("code") ?? []).map(
       (c) => c.textContent
     );
-    expect(codeRefs).toContain("webui/src/app/App.tsx");
     expect(codeRefs).toContain("webui/src/app/navigation.ts");
-    // 06 spec is explicitly flagged as 旧路径 / 待同步 IA 文档
-    expect(codeRefs).toContain("webui/docs/06-navigation-ia.md");
+    expect(codeRefs).toContain("navGroups");
   });
 
   it("§1.5 contains no forbidden terms", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
-      screen.getByRole("heading", { name: /WebUI 入口速查（6\+1 侧栏地图）/ })
+      screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
     );
     const section = document.querySelector("section#webui-entry-map");
     const text = section?.textContent ?? "";

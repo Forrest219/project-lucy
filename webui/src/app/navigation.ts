@@ -1,6 +1,9 @@
 // Single source of truth for the WebUI sidebar IA. Help Center §1.5 (Handbook) and
 // `webui/src/__tests__/navigation.test.ts` both import from this module so the
-// 6+1 structure cannot drift without breaking the test.
+// Runtime Status + 6 domain groups structure cannot drift without breaking the test.
+//
+// Spec 143: pinned top-level「系统概览」was folded into the「运行状态」group
+// together with「调用监控」(`/ops/calls`).
 //
 // Extracted in M59 to satisfy Help Sidebar Entry Map spec v0.2 §4.1.
 // M60 Sidebar Brand Navigation Polish: added stable `id` fields + `iconKey`
@@ -37,6 +40,7 @@ export type NavItem = {
 
 export type NavIconKey =
   | "overview"
+  | "callMonitor"
   | "connections"
   | "whitelist"
   | "catalog"
@@ -59,6 +63,11 @@ export type NavIconKey =
   | "branding"
   | "license";
 
+/**
+ * Spec 143: overview is no longer a pinned top-level entry. Kept as a named
+ * export alias of the Runtime Status → 系统概览 item for transitional imports
+ * (Help handbook copy, older tests). Prefer iterating `navGroups` for IA.
+ */
 export const topLevelEntry: NavItem = {
   id: "overview",
   label: "系统概览",
@@ -75,6 +84,22 @@ export const navGroups: Array<{
   title: string;
   items: NavItem[];
 }> = [
+  {
+    id: "runtime-status",
+    title: "运行状态",
+    items: [
+      topLevelEntry,
+      {
+        id: "ops-calls",
+        label: "调用监控",
+        to: "/ops/calls",
+        iconKey: "callMonitor",
+        active: (path) => path === "/ops/calls" || path.startsWith("/ops/calls/"),
+        description: "准实时查看 MCP 工具调用量、成败与请求时效。",
+        keywords: ["MCP", "调用", "延迟", "P95", "失败", "拒绝"]
+      }
+    ]
+  },
   {
     id: "connections",
     title: "数据接入",

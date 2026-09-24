@@ -513,8 +513,8 @@ function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "ar
   return `/admin/mcp-playground?${params.toString()}`;
 }
 type AuditTab = "turns" | "calls";
-type WindowHours = 24 | 168;
-type RangePreset = "24h" | "7d";
+type WindowHours = 1 | 24 | 168;
+type RangePreset = "1h" | "24h" | "7d";
 type TimePreset = "1h" | "24h" | "7d" | "today" | "custom";
 
 const TIME_PRESET_LABELS: Record<TimePreset, string> = {
@@ -543,16 +543,20 @@ function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
   return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
-/** Spec 106: prefer `range=24h|7d`; accept legacy `hours=24|168`. */
+/** Spec 106 + Spec 143: prefer `range=1h|24h|7d`; accept legacy `hours=1|24|168`. */
 function parseRangePreset(searchParams: URLSearchParams): RangePreset {
   const range = searchParams.get("range");
-  if (range === "24h" || range === "7d") return range;
+  if (range === "1h" || range === "24h" || range === "7d") return range;
   const hours = searchParams.get("hours");
-  return hours === "24" ? "24h" : "7d";
+  if (hours === "1") return "1h";
+  if (hours === "24") return "24h";
+  return "7d";
 }
 
 function rangeToHours(range: RangePreset): WindowHours {
-  return range === "24h" ? 24 : 168;
+  if (range === "1h") return 1;
+  if (range === "24h") return 24;
+  return 168;
 }
 
 /** Spec 106: prefer `view=turns|calls`; accept legacy `tab=`. */
@@ -1295,8 +1299,12 @@ export function Audit() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [timePreset, setTimePreset] = useState<TimePreset>(() => {
     const r = searchParams.get("range");
+    if (r === "1h") return "1h";
     if (r === "24h") return "24h";
     if (r === "7d") return "7d";
+    const hours = searchParams.get("hours");
+    if (hours === "1") return "1h";
+    if (hours === "24") return "24h";
     return "7d";
   });
 
@@ -1428,17 +1436,15 @@ export function Audit() {
 
   function setRange(nextRange: RangePreset) {
     setUntil("");
+    setTimePreset(nextRange === "1h" ? "1h" : nextRange === "24h" ? "24h" : "7d");
     updateParam("range", nextRange);
   }
 
   function applyTimePreset(preset: TimePreset) {
     setTimePreset(preset);
     if (preset === "1h") {
-      const nowTs = new Date();
-      const sinceTs = new Date(nowTs.getTime() - 60 * 60 * 1000);
-      setSince(toLocalDateTimeValue(sinceTs));
-      setUntil(toLocalDateTimeValue(nowTs));
-      setPage(0);
+      setUntil("");
+      updateParam("range", "1h");
     } else if (preset === "24h") {
       setUntil("");
       updateParam("range", "24h");
